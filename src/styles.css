@@ -1,0 +1,178 @@
+* { box-sizing: border-box; }
+:root {
+  --xl-green: #217346;
+  --xl-green-dark: #185c37;
+  --hdr-navy: #1f4e79;
+  --grid-line: #d4d4d4;
+  --header-fill: #f3f2f1;
+  --select-fill: #eaf3ee;
+  --won-fill: #c6efce; --won-text: #276738;
+  --lost-fill: #ffc7ce; --lost-text: #9c0006;
+  --amber-fill: #ffeb9c; --amber-text: #9c6500;
+}
+body {
+  margin: 0;
+  font-family: 'Segoe UI', 'Calibri', -apple-system, sans-serif;
+  font-size: 13px;
+  color: #252423;
+  background: #f5f5f5;
+}
+
+/* Excel-green ribbon */
+.ribbon { background: var(--xl-green); color: #fff; padding: 0 12px; }
+.ribbon .title-row { display: flex; align-items: center; gap: 10px; padding: 8px 4px 4px; }
+.ribbon .logo { font-weight: 700; font-size: 15px; letter-spacing: .3px; }
+.ribbon .subtitle { opacity: .85; font-size: 11px; }
+.ribbon .spacer { flex: 1; }
+.ribbon button.reset { background: transparent; border: 1px solid rgba(255,255,255,.5); color: #fff; border-radius: 3px; padding: 2px 8px; font-size: 11px; cursor: pointer; }
+.nav-tabs { display: flex; gap: 2px; flex-wrap: wrap; }
+.nav-tabs a { color: #fff; text-decoration: none; padding: 6px 14px; font-size: 12.5px; border-radius: 4px 4px 0 0; }
+.nav-tabs a.active { background: #fff; color: var(--xl-green-dark); font-weight: 600; }
+.nav-tabs a:hover:not(.active) { background: rgba(255,255,255,.15); }
+
+.formula-bar {
+  display: flex; align-items: center; gap: 8px;
+  background: #fff; border-bottom: 1px solid var(--grid-line);
+  padding: 4px 12px; font-size: 12px; color: #666;
+}
+.formula-bar .cell-ref { border: 1px solid var(--grid-line); padding: 1px 10px; min-width: 70px; font-family: Consolas, monospace; }
+
+.page { padding: 14px 16px 64px; }
+.page h2 { font-size: 15px; margin: 4px 0 10px; color: var(--xl-green-dark); }
+
+.toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+.toolbar .spacer { flex: 1; }
+button, .btn {
+  background: #fff; border: 1px solid #8a8886; border-radius: 2px;
+  padding: 4px 12px; font-size: 12.5px; cursor: pointer; font-family: inherit;
+  color: #252423; text-decoration: none; display: inline-block;
+}
+button.primary, .btn.primary { background: var(--xl-green); border-color: var(--xl-green-dark); color: #fff; }
+button:hover, .btn:hover { filter: brightness(.96); }
+select, input[type=text], input[type=number], input[type=date], input[type=tel], textarea {
+  border: 1px solid #8a8886; border-radius: 2px; padding: 3px 6px; font-size: 12.5px; font-family: inherit; background: #fff;
+}
+
+/* Pipeline-report grid: navy header band like the real sheet */
+.sheet-wrap { overflow-x: auto; background: #fff; border: 1px solid var(--grid-line); }
+table.sheet { border-collapse: collapse; width: 100%; background: #fff; }
+table.sheet th, table.sheet td {
+  border: 1px solid var(--grid-line); padding: 3px 7px; font-size: 12px;
+  white-space: nowrap; text-align: left;
+}
+table.sheet th {
+  background: var(--hdr-navy); font-weight: 600; color: #fff;
+  position: sticky; top: 0; z-index: 1;
+}
+table.sheet th .filter-caret { opacity: .7; font-size: 9px; margin-left: 4px; }
+table.sheet th.rowhead, table.sheet td.rowhead {
+  background: var(--header-fill); color: #666; text-align: center; width: 34px; font-size: 11px;
+}
+table.sheet tbody tr:nth-child(even) td { background: #f7f7f7; }
+table.sheet tbody tr:hover td { background: var(--select-fill); }
+table.sheet td.num { text-align: right; font-variant-numeric: tabular-nums; }
+table.sheet td input, table.sheet td select {
+  border: none; background: transparent; width: 100%; font-size: 12px; padding: 1px 2px;
+}
+table.sheet td input:focus, table.sheet td select:focus { outline: 2px solid var(--xl-green); background: #fff; }
+table.sheet td.oppid { font-weight: 600; }
+table.sheet tbody tr td.oppid.won  { background: var(--won-fill) !important; color: var(--won-text); }
+table.sheet tbody tr td.oppid.lost { background: var(--lost-fill) !important; color: var(--lost-text); }
+table.sheet td.cstat { text-align: center; font-weight: 600; }
+table.sheet td.cstat.Green { background: var(--won-fill) !important; color: var(--won-text); }
+table.sheet td.cstat.Amber { background: var(--amber-fill) !important; color: var(--amber-text); }
+table.sheet td.cstat.Red   { background: var(--lost-fill) !important; color: var(--lost-text); }
+table.sheet td.err { background: var(--lost-fill) !important; color: var(--lost-text); text-align: center; }
+table.sheet tfoot td { font-weight: 700; background: #eef6f0; }
+
+.pill { display: inline-block; padding: 1px 8px; border-radius: 8px; font-size: 11px; font-weight: 600; }
+.pill.Green, .pill.won { background: var(--won-fill); color: var(--won-text); }
+.pill.Amber { background: var(--amber-fill); color: var(--amber-text); }
+.pill.Red, .pill.lost { background: var(--lost-fill); color: var(--lost-text); }
+.pill.Blue { background: #dbe9f5; color: #1f4e79; }
+
+/* Excel bottom sheet-tab strip */
+.sheet-tabs {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: var(--header-fill); border-top: 1px solid var(--grid-line);
+  display: flex; padding: 0 8px; z-index: 5;
+}
+.sheet-tabs .tab {
+  padding: 5px 16px; border: 1px solid var(--grid-line); border-top: none;
+  background: #e6e6e6; cursor: pointer; font-size: 12px; margin-right: 2px; color: #444;
+}
+.sheet-tabs .tab.active { background: #fff; font-weight: 700; color: var(--xl-green-dark); box-shadow: inset 0 2px 0 var(--xl-green); }
+
+/* OneDrive-style folder wall */
+.folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+.folder-card { padding: 8px 6px; cursor: pointer; text-align: center; border-radius: 4px; }
+.folder-card:hover { background: #e5f1fb; }
+.folder-icon { font-size: 40px; line-height: 1; display: block; }
+.folder-icon.won { filter: hue-rotate(75deg) saturate(1.4); }     /* green folder */
+.folder-icon.lost { filter: hue-rotate(-40deg) saturate(2); }     /* red folder */
+.folder-card .fname { font-weight: 600; font-size: 12px; margin-top: 4px; word-break: break-all; }
+.folder-card .fmeta { font-size: 10.5px; color: #777; }
+.explorer-bar {
+  display: flex; align-items: center; gap: 10px; background: #fff;
+  border: 1px solid var(--grid-line); padding: 6px 10px; margin-bottom: 10px; font-size: 12.5px;
+}
+.explorer-bar a { color: #1f4e79; cursor: pointer; text-decoration: none; }
+.explorer-bar a:hover { text-decoration: underline; }
+.legend { display: flex; gap: 16px; font-size: 11.5px; color: #666; margin: 8px 0; }
+
+/* Microsoft-Forms-style intake */
+.forms-bg {
+  min-height: calc(100vh - 110px);
+  background: linear-gradient(120deg, #cfe6e6 0%, #d9e8e8 40%, #e8b9a8 100%);
+  padding: 24px 0 80px;
+}
+.forms-card {
+  background: rgba(255,255,255,.92); max-width: 640px; margin: 0 auto;
+  border-radius: 6px; box-shadow: 0 2px 12px rgba(0,0,0,.12); padding: 28px 36px;
+}
+.forms-card h1 { font-size: 22px; color: #0b6a6f; margin: 0 0 6px; }
+.forms-card .forms-note { font-size: 12px; color: #666; margin-bottom: 4px; }
+.forms-card .req-note { font-size: 12px; color: #b00020; margin-bottom: 18px; }
+.q { margin-bottom: 22px; }
+.q .q-label { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+.q .q-label .star { color: #b00020; }
+.q input[type=text], .q input[type=tel], .q input[type=number], .q input[type=date], .q textarea {
+  width: 100%; border: none; border-bottom: 1.5px solid #999; border-radius: 0;
+  padding: 6px 2px; font-size: 13px; background: transparent;
+}
+.q input:focus, .q textarea:focus { outline: none; border-bottom-color: #0b6a6f; }
+.q input::placeholder { color: #949494; }
+.q select { width: 100%; padding: 8px 6px; border: 1px solid #ccc; }
+.q .radio-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; font-size: 13px; }
+.forms-actions { display: flex; gap: 10px; margin-top: 24px; }
+.forms-actions button.submit { background: #0b6a6f; color: #fff; border: none; padding: 8px 26px; font-size: 13.5px; border-radius: 3px; }
+
+/* Proposal cover letter */
+.cover-sheet { background: #fff; border: 1px solid var(--grid-line); max-width: 820px; padding: 34px 46px; }
+.cover-head { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #333; padding-bottom: 10px; margin-bottom: 18px; }
+.cover-head .brand { font-size: 26px; font-weight: 800; color: #c0392b; letter-spacing: 2px; }
+.cover-head .tagline { color: #1f4e79; font-style: italic; font-weight: 600; }
+.cover-meta { margin-bottom: 14px; }
+.cover-meta div { padding: 1px 0; }
+.cover-meta b { display: inline-block; min-width: 90px; }
+.cover-body p { line-height: 1.5; }
+.cover-field input { border: none; border-bottom: 1px dashed #aaa; font-size: 13px; min-width: 300px; padding: 2px; }
+
+/* Costing factors box (Priced BoQ) */
+.factors { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 14px; }
+.factors table { border-collapse: collapse; background: #fff; }
+.factors th { background: var(--hdr-navy); color: #fff; padding: 4px 12px; font-size: 12px; border: 1px solid var(--grid-line); }
+.factors td { border: 1px solid var(--grid-line); padding: 3px 10px; font-size: 12.5px; }
+.factors td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.factors td input { width: 80px; border: none; text-align: right; font-size: 12.5px; background: #fdf6e3; }
+.factors td input:focus { outline: 2px solid var(--xl-green); }
+
+.stat-row { display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.stat-card { background: #fff; border: 1px solid var(--grid-line); border-top: 3px solid var(--xl-green); padding: 10px 16px; min-width: 160px; }
+.stat-card .label { font-size: 11px; color: #777; text-transform: uppercase; letter-spacing: .4px; }
+.stat-card .value { font-size: 20px; font-weight: 700; color: var(--xl-green-dark); margin-top: 2px; }
+
+.section-title { font-weight: 700; margin: 16px 0 6px; font-size: 13px; color: #333; }
+.hint { font-size: 11.5px; color: #888; }
+.costing-note { font-size: 11.5px; color: #777; margin-top: 6px; font-style: italic; }
+.form-card { background: #fff; border: 1px solid var(--grid-line); padding: 18px 22px; max-width: 760px; }
