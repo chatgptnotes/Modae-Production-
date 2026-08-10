@@ -1,10 +1,12 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
 import {
   seedOpportunities, seedFiles, seedPriceLists, seedAdhocParts,
   seedRateSheet, seedCustomers, SUBFOLDERS, newProposal,
 } from './seed.js'
 
-const KEY = 'wintrack-modae-v2'
+// v3: schema updated after the Aug 10 meeting review (prob column, Partner Docs
+// key, corrected products, costing.usdBase/financeCostK) — bump forces a reseed.
+const KEY = 'wintrack-modae-v3'
 const StoreCtx = createContext(null)
 
 function initialState() {
@@ -12,7 +14,9 @@ function initialState() {
     const saved = localStorage.getItem(KEY)
     if (saved) {
       const s = JSON.parse(saved)
-      if (s && Array.isArray(s.opportunities) && s.opportunities[0]?.sellTo !== undefined) return s
+      // An empty opportunities array is a legitimate state (everything deleted),
+      // not a corrupt one — don't silently reseed over the user's data.
+      if (s && Array.isArray(s.opportunities) && (s.opportunities.length === 0 || s.opportunities[0].sellTo !== undefined)) return s
     }
   } catch { /* fall through to seed */ }
   return {
@@ -28,6 +32,9 @@ function initialState() {
 
 export function StoreProvider({ children }) {
   const [state, setState] = useState(initialState)
+  // Ref mirror so read APIs (getProposal) see same-tick mutations, not the render closure.
+  const stateRef = useRef(state)
+  stateRef.current = state
 
   useEffect(() => {
     localStorage.setItem(KEY, JSON.stringify(state))
@@ -53,22 +60,67 @@ export function StoreProvider({ children }) {
       }))
     },
 
-    addFile(oppId, folder, file) {
+    // Folder-wall delete: removes the opportunity everywhere (tracker row,
+    // folder tree, proposal). The real sheet never deletes rows — this exists
+    // for cleaning up mistakes/demo data, so callers must confirm first.
+    deleteOpportunity(id) {
+      setState(s => {
+        const { [id]: _f, ...files } = s.files
+        const { [id]: _p, ...proposals } = s.proposals
+        return { ...s, opportunities: s.opportunities.filter(o => o.id !== id), files, proposals }
+      })
+    },
+
+    addSubfolder(oppId, name) {
       setState(s => {
         const oppFiles = s.files[oppId] || Object.fromEntries(SUBFOLDERS.map(f => [f, []]))
+        if (oppFiles[name]) return s
+        return { ...s, files: { ...s.files, [oppId]: { ...oppFiles, [name]: [] } } }
+      })
+    },
+
+    deleteSubfolder(oppId, name) {
+      setState(s => {
+        // Materialize the standard subfolders first — otherwise deleting one
+        // folder on an opp with no files record wipes all three from view.
+        const oppFiles = s.files[oppId] || Object.fromEntries(SUBFOLDERS.map(f => [f, []]))
+        const { [name]: _, ...rest } = oppFiles
+        return { ...s, files: { ...s.files, [oppId]: rest } }
+      })
+    },
+
+    deleteFile(oppId, folder, fileName) {
+      setState(s => {
+        const oppFiles = s.files[oppId] || {}
         return {
           ...s,
           files: {
             ...s.files,
-            [oppId]: { ...oppFiles, [folder]: [...(oppFiles[folder] || []), file] },
+            [oppId]: { ...oppFiles, [folder]: (oppFiles[folder] || []).filter(f => f.name !== fileName) },
+          },
+        }
+      })
+    },
+
+    addFile(oppId, folder, file) {
+      setState(s => {
+        const oppFiles = s.files[oppId] || Object.fromEntries(SUBFOLDERS.map(f => [f, []]))
+        // Re-uploading a name overwrites (matches the storage bucket's upsert).
+        const rest = (oppFiles[folder] || []).filter(f => f.name !== file.name)
+        return {
+          ...s,
+          files: {
+            ...s.files,
+            [oppId]: { ...oppFiles, [folder]: [...rest, file] },
           },
         }
       })
     },
 
     getProposal(oppId) {
-      if (state.proposals[oppId]) return state.proposals[oppId]
-      const opp = state.opportunities.find(o => o.id === oppId)
+      const s = stateRef.current
+      if (s.proposals[oppId]) return s.proposals[oppId]
+      const opp = s.opportunities.find(o => o.id === oppId)
       return newProposal(oppId, opp)
     },
 
@@ -78,6 +130,13 @@ export function StoreProvider({ children }) {
 
     addAdhocPart(part) {
       setState(s => ({ ...s, adhocParts: [part, ...s.adhocParts] }))
+    },
+
+    // New customers land in the master Blue (pending admin verification).
+    addCustomer(cust) {
+      setState(s => s.customers.some(c => c.name.toLowerCase() === cust.name.toLowerCase())
+        ? s
+        : { ...s, customers: [...s.customers, cust] })
     },
 
     resetDemo() {

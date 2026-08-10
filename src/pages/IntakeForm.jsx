@@ -17,7 +17,7 @@ export default function IntakeForm() {
 
   const knownCustomer = store.customers.find(c => c.name.toLowerCase() === f.sellTo.trim().toLowerCase())
 
-  const required = ['sellTo', 'category', 'eucName', 'eucLocation', 'oppName', 'owner', 'oppType', 'bu', 'segment', 'product', 'contactPerson']
+  const required = ['sellTo', 'category', 'eucName', 'eucLocation', 'oppName', 'owner', 'oppType', 'bu', 'segment', 'product', 'contactPerson', 'contactPhone']
   const missing = required.filter(k => !f[k])
 
   const submit = e => {
@@ -28,19 +28,25 @@ export default function IntakeForm() {
     const maxSl = Math.max(0, ...store.opportunities.map(o => o.sl || 0))
     // Two things happen on submit: the tracker row is added AND the
     // opportunity folder is created (same as the current manual process).
+    const sellTo = f.sellTo.trim()
+    if (!knownCustomer) {
+      store.addCustomer({ name: sellTo, category: f.category, status: 'Blue', kyc: 'Pending', payment: '—' })
+    }
     store.addOpportunity({
       sl: maxSl + 1, id,
-      sellTo: f.sellTo, category: f.category, location: f.location,
-      customerStatus: knownCustomer ? knownCustomer.status : 'Green',
+      sellTo, category: f.category, location: f.location,
+      customerStatus: knownCustomer ? knownCustomer.status : 'Blue',
       eucName: f.eucName, eucLocation: f.eucLocation, oppName: f.oppName,
       owner: f.owner, oppType: f.oppType, bu: f.bu, segment: f.segment, product: f.product,
+      // prob is salesperson-set later — the form does not collect it (audio 00:24)
+      prob: '',
       valueK: +f.valueK || 0, cogsK: 0,
       createDate: today, proposalDate: '', orderDate: '', invoiceDate: '',
       status: 'Open', stage: 'Lead', closedReason: '',
       contactPerson: f.contactPerson, contactPhone: f.contactPhone,
       lastUpdated: today, forecast: false, remarks: '',
     })
-    alert(`Opportunity ${id} created.\n\n1) Row added to the Sales Pipeline sheet\n2) Folder ${id} created with Customer Specs / PartnerDocs / Proposal`)
+    alert(`Opportunity ${id} created.\n\n1) Row added to the Sales Pipeline sheet\n2) Folder ${id} created with Customer Specs / Partner Docs / Proposal`)
     nav(`/folders/${id}`)
   }
 
@@ -142,7 +148,7 @@ export default function IntakeForm() {
         </div>
 
         <div className="q">
-          <div className="q-label">13. Contact Phone #</div>
+          <div className="q-label">13. Contact Phone #<span className="star">*</span></div>
           <input type="tel" placeholder="Enter your answer" value={f.contactPhone} onChange={set('contactPhone')} />
         </div>
 

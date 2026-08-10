@@ -1,6 +1,7 @@
 import React from 'react'
-import { Routes, Route, NavLink, useLocation } from 'react-router-dom'
+import { Routes, Route, NavLink } from 'react-router-dom'
 import { useStore } from './store.jsx'
+import { FormulaBar } from './formulabar.jsx'
 import Tracker from './pages/Tracker.jsx'
 import IntakeForm from './pages/IntakeForm.jsx'
 import Folders from './pages/Folders.jsx'
@@ -20,7 +21,6 @@ const TABS = [
 
 export default function App() {
   const store = useStore()
-  const loc = useLocation()
   return (
     <>
       <div className="ribbon">
@@ -41,16 +41,13 @@ export default function App() {
           ))}
         </nav>
       </div>
-      <div className="formula-bar">
-        <span className="cell-ref">A1</span>
-        <span>fx</span>
-        <span style={{ color: '#999' }}>{loc.pathname}</span>
-      </div>
+      <FormulaBar />
       <Routes>
         <Route path="/" element={<Tracker />} />
         <Route path="/new" element={<IntakeForm />} />
         <Route path="/folders" element={<Folders />} />
         <Route path="/folders/:oppId" element={<Folders />} />
+        <Route path="/folders/:oppId/:sub" element={<Folders />} />
         <Route path="/proposal/:oppId" element={<Proposal />} />
         <Route path="/pricelists" element={<PriceLists />} />
         <Route path="/dashboard" element={<Dashboard />} />

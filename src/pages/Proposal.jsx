@@ -1,34 +1,128 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
+import { defaultCosting } from '../seed.js'
 import { effectiveRate, unitCostINR, unitSellINR, fmt, exportCSV } from '../utils.js'
+import { useFormulaBar } from '../formulabar.jsx'
 
 const TABS = ['Cover Letter', 'Signal List', 'Rack Layout', 'Priced BoQ']
+
+// Older saved proposals (and newProposal before this change) used a single
+// `qty`; the real BoQ splits quantities into Qty/Unit × units + Common + Spares.
+function normalize(pr) {
+  return {
+    ...pr,
+    units: pr.units || 7,
+    costing: { ...defaultCosting, ...pr.costing },
+    terms: pr.terms || [],
+    bom: (pr.bom || []).map(l => ({
+      itemCategory: '', qtyPerUnit: 0, common: 0, spares: 0, quoted: '',
+      list: 'BNK', currency: 'EUR',
+      ...l,
+      ...(l.qtyPerUnit === undefined && l.qty != null ? { common: l.qty } : {}),
+    })),
+  }
+}
 
 export default function Proposal() {
   const { oppId } = useParams()
   const store = useStore()
+  const fb = useFormulaBar()
   const opp = store.opportunities.find(o => o.id === oppId)
   const [tab, setTab] = useState('Cover Letter')
-  const [p, setP] = useState(() => store.getProposal(oppId))
+  const [p, setP] = useState(() => normalize(store.getProposal(oppId)))
+  // Ref mirror: deferred commits (formula bar) must patch the CURRENT proposal,
+  // never a click-time snapshot — a stale snapshot would silently revert edits.
+  const pRef = React.useRef(p)
+  pRef.current = p
+
+  // /proposal/:oppId reuses this component instance — reload state per opportunity.
+  useEffect(() => { setP(normalize(store.getProposal(oppId))); setTab('Cover Letter') }, [oppId]) // eslint-disable-line
 
   if (!opp) return <div className="page"><h2>Unknown opportunity</h2><Link to="/">Back to tracker</Link></div>
 
-  const save = next => { setP(next); store.saveProposal(oppId, next) }
+  const units = p.units || 7
+
+  const allParts = [
+    ...Object.entries(store.priceLists).flatMap(([list, pl]) =>
+      pl.parts.map(part => ({ ...part, list, currency: pl.currency }))),
+    // Trader quotes captured on Price Lists → Ad-hoc parts (latest first = reference price)
+    ...store.adhocParts.map(a => ({
+      pn: a.pn, desc: a.note ? `${a.note} (${a.supplier})` : a.supplier,
+      price: a.price, adders: [], list: 'Ad-hoc', currency: a.currency,
+    })),
+  ]
+
+  const totalQty = (l, u = units) => (l.qtyPerUnit || 0) * u + (l.common || 0) + (l.spares || 0)
+  const linePrice = l => {
+    const part = allParts.find(x => x.pn === l.pn && (x.list === l.list || !l.list))
+    const adderSum = (part?.adders || []).filter(a => l.adders.includes(a.code)).reduce((s, a) => s + a.price, 0)
+    return l.listPrice + adderSum
+  }
+  const isBnk = l => (l.list || 'BNK') === 'BNK'
+  const lineCost = (l, c = p.costing) => unitCostINR(linePrice(l), c, l.currency || 'EUR', isBnk(l))
+  const lineComputed = (l, c = p.costing) => unitSellINR(linePrice(l), c, l.currency || 'EUR', isBnk(l))
+  // Customer-facing (target) price — editable; defaults to the computed GM price.
+  const lineQuoted = (l, c = p.costing) => (l.quoted !== '' && l.quoted != null ? +l.quoted : Math.round(lineComputed(l, c)))
+
+  const computeTotals = pr => pr.bom.reduce((t, l) => {
+    const q = totalQty(l, pr.units || 7)
+    return { cost: t.cost + lineCost(l, pr.costing) * q, target: t.target + lineQuoted(l, pr.costing) * q }
+  }, { cost: 0, target: 0 })
+
+  const totals = computeTotals(p)
+  const financeCost = (p.costing.financeCostK || 0) * 1000
+  const netGM = totals.target - totals.cost - financeCost
+  const totalSignals = p.signals.reduce((s, r) => s + r.perUnit * r.units, 0)
+
+  const save = next => {
+    // Once a BoQ has ever been priced, keep syncing even down to 0 — an emptied
+    // BoQ must not leave stale Value/COGS on the tracker. Never-priced proposals
+    // don't overwrite the intake estimate.
+    next = { ...next, pricedOnce: pRef.current.pricedOnce || next.bom.length > 0 }
+    setP(next)
+    store.saveProposal(oppId, next)
+    if (next.pricedOnce) {
+      const t = computeTotals(next)
+      const valueK = Math.round(t.target / 1000)
+      const cogsK = Math.round(t.cost / 1000)
+      if (isFinite(valueK) && isFinite(cogsK) && (valueK !== opp.valueK || cogsK !== opp.cogsK || !opp.proposalDate)) {
+        store.updateOpportunity(oppId, {
+          valueK, cogsK,
+          ...(opp.proposalDate ? {} : { proposalDate: new Date().toISOString().slice(0, 10) }),
+        })
+      }
+    }
+  }
   const set = k => e => save({ ...p, [k]: e.target.value })
   const setCosting = k => e => save({ ...p, costing: { ...p.costing, [k]: +e.target.value || 0 } })
 
-  const allParts = Object.entries(store.priceLists).flatMap(([list, pl]) =>
-    pl.parts.map(part => ({ ...part, list, currency: pl.currency })))
+  // Formula-bar selection for the costing block — the same cell refs and
+  // formulas as the real Priced BoQ sheet (O4 is literally =8.5%+2.5%+5%).
+  const selCosting = (ref, formula, key, kind = 'number') => () => fb.select({
+    ref, formula,
+    // Patch against pRef.current, not the render-time p — the commit may fire
+    // long after other edits (BoQ lines, units, terms) have changed the proposal.
+    commit: key ? v => { const cur = pRef.current; save({ ...cur, costing: { ...cur.costing, [key]: v } }) } : null,
+    kind,
+  })
 
-  const addBomLine = pn => {
-    const part = allParts.find(x => x.pn === pn)
+  // Add by index into allParts — part numbers are NOT unique across lists
+  // (ad-hoc quotes can duplicate a BNK/Metrics PN, and repeat over time).
+  const addBomLine = idx => {
+    const part = allParts[+idx]
     if (!part) return
-    save({ ...p, bom: [...p.bom, { pn: part.pn, desc: part.desc, listPrice: part.price, adders: [], qty: 1 }] })
+    save({
+      ...p,
+      bom: [...p.bom, {
+        itemCategory: '', pn: part.pn, desc: part.desc, listPrice: part.price, adders: [],
+        qtyPerUnit: 0, common: 1, spares: 0, quoted: '', list: part.list, currency: part.currency,
+      }],
+    })
   }
-  const updLine = (i, k) => e => {
-    const bom = p.bom.map((l, j) => (j === i ? { ...l, [k]: +e.target.value || 0 } : l))
-    save({ ...p, bom })
+  const updLine = (i, k, numeric = true) => e => {
+    const v = numeric ? (+e.target.value || 0) : e.target.value
+    save({ ...p, bom: p.bom.map((l, j) => (j === i ? { ...l, [k]: v } : l)) })
   }
   const toggleAdder = (i, adder) => () => {
     const bom = p.bom.map((l, j) => {
@@ -40,23 +134,14 @@ export default function Proposal() {
   }
   const removeLine = i => () => save({ ...p, bom: p.bom.filter((_, j) => j !== i) })
 
-  const linePriceEUR = l => {
-    const part = allParts.find(x => x.pn === l.pn)
-    const adderSum = (part?.adders || []).filter(a => l.adders.includes(a.code)).reduce((s, a) => s + a.price, 0)
-    return l.listPrice + adderSum
-  }
-  const effRate = effectiveRate(p.costing)
-  const totals = p.bom.reduce((t, l) => {
-    const eur = linePriceEUR(l) * l.qty
-    return { eur: t.eur + eur, cost: t.cost + unitCostINR(linePriceEUR(l), p.costing) * l.qty, sell: t.sell + unitSellINR(linePriceEUR(l), p.costing) * l.qty }
-  }, { eur: 0, cost: 0, sell: 0 })
-  const netGM = totals.sell - totals.cost
-  const totalSignals = p.signals.reduce((s, r) => s + r.perUnit * r.units, 0)
+  const updTerm = (i, k) => e => save({ ...p, terms: p.terms.map((t, j) => (j === i ? { ...t, [k]: e.target.value } : t)) })
+  const addTerm = () => save({ ...p, terms: [...p.terms, { term: '', customerAsk: '', ourResponse: '', status: 'Comply' }] })
+  const removeTerm = i => () => save({ ...p, terms: p.terms.filter((_, j) => j !== i) })
 
   const exportBoQ = () => exportCSV(
     `${oppId}_Priced_BoQ.csv`,
-    ['Proposed Model & Part Number', 'Description', 'Adders', 'Qty', 'Unit Price €', 'Unit Cost ₹', 'Unit Price ₹', 'Total Price ₹'],
-    p.bom.map(l => [l.pn, l.desc, l.adders.join('+'), l.qty, linePriceEUR(l), unitCostINR(linePriceEUR(l), p.costing), Math.round(unitSellINR(linePriceEUR(l), p.costing)), Math.round(unitSellINR(linePriceEUR(l), p.costing) * l.qty)])
+    ['Sl.', 'Item Category', 'Item/Scope Description', 'Proposed Model & Part Number', 'Adders', 'Qty/Unit', 'Common', 'Spares', 'Total Qty', 'Unit Price ₹', 'Total Price ₹', 'Unit Cost ₹', 'Total Cost ₹', `List Price`, 'Currency'],
+    p.bom.map((l, i) => [i + 1, l.itemCategory, l.desc, l.pn, l.adders.join('+'), l.qtyPerUnit, l.common, l.spares, totalQty(l), lineQuoted(l), lineQuoted(l) * totalQty(l), Math.round(lineCost(l)), Math.round(lineCost(l) * totalQty(l)), linePrice(l), l.currency])
   )
 
   return (
@@ -97,6 +182,32 @@ export default function Proposal() {
             <p>With reference to your RFQ {p.rfqNumber && `# ${p.rfqNumber}`} we are pleased to submit our Techno-Commercial Proposal for your review and consideration.</p>
             <p>Based on our understanding of the requirement and the information shared by your team, we have prepared the enclosed proposal to support your planning, budgeting, and technical evaluation activities.</p>
           </div>
+
+          <div className="section-title">Commercial Terms &amp; Compliance</div>
+          <table className="sheet" style={{ marginBottom: 8 }}>
+            <thead>
+              <tr><th>Term</th><th>Customer Ask</th><th>Our Response</th><th>Comply / Deviation</th><th></th></tr>
+            </thead>
+            <tbody>
+              {p.terms.map((t, i) => (
+                <tr key={i}>
+                  <td><input value={t.term} onChange={updTerm(i, 'term')} placeholder="e.g. Payment" /></td>
+                  <td><input value={t.customerAsk} onChange={updTerm(i, 'customerAsk')} /></td>
+                  <td><input value={t.ourResponse} onChange={updTerm(i, 'ourResponse')} /></td>
+                  <td className={t.status === 'Deviation' ? 'err' : ''}>
+                    <select value={t.status} onChange={updTerm(i, 'status')}>
+                      <option>Comply</option><option>Deviation</option>
+                    </select>
+                  </td>
+                  <td><button onClick={removeTerm(i)} title="Remove term">✕</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <button onClick={addTerm}>+ Add term</button>
+          <div className="costing-note">
+            Every deviation from the customer's preferred commercial terms is called out here — deviations need approval before submission.
+          </div>
         </div>
       )}
 
@@ -130,7 +241,7 @@ export default function Proposal() {
         <div className="form-card">
           <div className="section-title">Rack Layout (engineering output — placeholder in Phase 1)</div>
           <pre style={{ background: '#f7f7f7', border: '1px solid #ddd', padding: 14, fontSize: 12 }}>
-{`┌─────────────────────── 16-SLOT RACK (RK16-BASE + CE) ───────────────────────┐
+{`┌─────────────────────── 16-SLOT RACK (VC-8000/RCK) ───────────────────────────┐
 │ PSU │ PSU │ RCM │ UMM │ UMM │ UMM │ UMM │ eSAM │ ... │ ... │ ... │ spare... │
 └──────────────────────────────────────────────────────────────────────────────┘`}
           </pre>
@@ -144,88 +255,108 @@ export default function Proposal() {
             <table>
               <thead><tr><th colSpan={2}>Imported Items Pricing &amp; Costing Factors</th></tr></thead>
               <tbody>
-                <tr><td>Euro-₹ Base</td><td className="num"><input type="number" step="0.01" value={p.costing.baseRate} onChange={setCosting('baseRate')} /></td></tr>
-                <tr><td>CD+ERV+Cont.</td><td className="num"><input type="number" step="0.1" value={p.costing.cdErvContPct} onChange={setCosting('cdErvContPct')} />%</td></tr>
-                <tr><td>B&amp;K Disc%</td><td className="num"><input type="number" step="0.1" value={p.costing.bnkDiscPct} onChange={setCosting('bnkDiscPct')} />%</td></tr>
-                <tr><td><b>Eff. Rate</b></td><td className="num"><b>₹ {fmt(effRate, 2)}</b></td></tr>
-                <tr><td>Input GM%</td><td className="num"><input type="number" step="0.1" value={p.costing.inputGMPct} onChange={setCosting('inputGMPct')} />%</td></tr>
+                <tr onClick={selCosting('O3', p.costing.baseRate, 'baseRate')}><td>Euro-₹ Base</td><td className="num"><input type="number" step="0.01" value={p.costing.baseRate} onChange={setCosting('baseRate')} /></td></tr>
+                <tr onClick={selCosting('P3', p.costing.usdBase, 'usdBase')}><td>USD-₹ Base</td><td className="num"><input type="number" step="0.01" value={p.costing.usdBase} onChange={setCosting('usdBase')} /></td></tr>
+                <tr onClick={selCosting('O4', p.costing.cdErvContPct === 16 ? '=8.5%+2.5%+5%' : p.costing.cdErvContPct, 'cdErvContPct', 'pct')}><td>CD+ERV+Cont.</td><td className="num"><input type="number" step="0.1" value={p.costing.cdErvContPct} onChange={setCosting('cdErvContPct')} />%</td></tr>
+                <tr onClick={selCosting('O5', p.costing.bnkDiscPct, 'bnkDiscPct', 'pct')}><td>B&amp;K Disc%</td><td className="num"><input type="number" step="0.1" value={p.costing.bnkDiscPct} onChange={setCosting('bnkDiscPct')} />%</td></tr>
+                <tr onClick={selCosting('O6', '=ROUNDUP((O3*(1+O4)*(1-O5)),0)', null)}><td><b>Eff. Rate</b></td><td className="num"><b>₹ {fmt(effectiveRate(p.costing))} / €&nbsp;·&nbsp;₹ {fmt(effectiveRate(p.costing, 'USD', false))} / $</b></td></tr>
+                <tr onClick={selCosting('O7', p.costing.inputGMPct, 'inputGMPct', 'pct')}><td>Input GM%</td><td className="num"><input type="number" step="0.1" value={p.costing.inputGMPct} onChange={setCosting('inputGMPct')} />%</td></tr>
               </tbody>
             </table>
             <table>
-              <thead><tr><th colSpan={2}>Roll-up</th></tr></thead>
+              <thead><tr><th colSpan={2}>Roll-up (internal)</th></tr></thead>
               <tbody>
-                <tr><td>ModAE Costs</td><td className="num">₹ {fmt(totals.cost)}</td></tr>
-                <tr><td>Target Price</td><td className="num">₹ {fmt(totals.sell)}</td></tr>
-                <tr><td>Net GM ₹</td><td className="num">₹ {fmt(netGM)}</td></tr>
-                <tr><td>Net GM %</td><td className="num">{totals.sell ? ((netGM / totals.sell) * 100).toFixed(2) + '%' : '—'}</td></tr>
+                <tr onClick={selCosting('Q3', '=SUM(Total Cost ₹)', null)}><td>ModAE Costs</td><td className="num">₹ {fmt(totals.cost)}</td></tr>
+                <tr onClick={selCosting('Q4', '=SUM(Total Price ₹)', null)}><td>Target Price</td><td className="num">₹ {fmt(totals.target)}</td></tr>
+                <tr onClick={selCosting('Q5', p.costing.financeCostK, 'financeCostK')}><td>Finance Cost (K₹)</td><td className="num"><input type="number" step="1" value={p.costing.financeCostK} onChange={setCosting('financeCostK')} /></td></tr>
+                <tr onClick={selCosting('Q6', '=Q4-Q3-Q5*1000', null)}><td><b>Net GM ₹</b></td><td className="num"><b>₹ {fmt(netGM)}</b></td></tr>
+                <tr onClick={selCosting('Q7', '=Q6/Q4', null)}><td><b>Net GM %</b></td><td className="num"><b>{totals.target ? ((netGM / totals.target) * 100).toFixed(2) + '%' : '—'}</b></td></tr>
+              </tbody>
+            </table>
+            <table>
+              <thead><tr><th colSpan={2}>Project</th></tr></thead>
+              <tbody>
+                <tr><td>№ of Units</td><td className="num"><input type="number" min="1" value={units} onChange={e => save({ ...p, units: +e.target.value || 1 })} /></td></tr>
               </tbody>
             </table>
           </div>
           <div className="costing-note">
-            Eff. Rate = ROUNDUP(Euro-₹ Base × (1 + CD+ERV+Cont.) × (1 − B&amp;K Disc)) — e.g. 112 × 1.16 × 0.50 → ₹65. Unit ₹ price = € list × Eff. Rate ÷ (1 − GM).
+            Eff. Rate = ROUNDUP(base × (1 + CD+ERV+Cont.) × (1 − B&amp;K Disc)) — e.g. 112 × 1.16 × 0.50 → ₹65 (B&amp;K discount applies to the B&amp;K list only).
+            Unit ₹ price = list × Eff. Rate ÷ (1 − GM). Net GM = Target − ModAE Costs − Finance Cost, so quoting below the computed price or adding finance cost pulls Net GM% under the Input GM%.
           </div>
 
           <div className="toolbar">
             <label>Add part from price list:{' '}
-              <select value="" onChange={e => addBomLine(e.target.value)}>
+              <select value="" onChange={e => e.target.value !== '' && addBomLine(e.target.value)}>
                 <option value="">— select part number —</option>
-                {allParts.map(x => <option key={x.pn} value={x.pn}>{x.list} · {x.pn} — {x.desc} ({x.currency} {fmt(x.price)})</option>)}
+                {allParts.map((x, i) => <option key={i} value={i}>{x.list} · {x.pn} — {x.desc} ({x.currency} {fmt(x.price)})</option>)}
               </select>
             </label>
-            <span className="hint">Non-B&amp;K parts: capture the trader quote in Price Lists → Ad-hoc parts first.</span>
+            <span className="hint">Ad-hoc trader quotes captured in Price Lists appear here too (latest entry = reference price).</span>
           </div>
 
           <div className="sheet-wrap">
             <table className="sheet">
               <thead>
                 <tr>
-                  <th>Proposed Model &amp; Part Number</th><th>Description</th><th>Configurable Adders</th>
-                  <th>Qty</th><th>Unit Price €</th><th>Unit Cost ₹</th><th>Unit Price ₹</th><th>Total Price ₹</th><th></th>
+                  <th>Sl.</th><th>Item Category</th><th>Item/Scope Description</th><th>Proposed Model &amp; Part Number</th><th>Configurable Adders</th>
+                  <th>Qty/Unit</th><th>Common</th><th>Spares</th><th>Total Qty</th>
+                  <th>Unit Price ₹</th><th>Total Price ₹</th>
+                  <th className="internal">Unit Cost ₹</th><th className="internal">Total Cost ₹</th><th className="internal">Computed ₹</th><th className="internal">List Price</th><th></th>
                 </tr>
               </thead>
               <tbody>
                 {p.bom.map((l, i) => {
-                  const part = allParts.find(x => x.pn === l.pn)
-                  const eur = linePriceEUR(l)
+                  const part = allParts.find(x => x.pn === l.pn && (x.list === l.list || !l.list))
+                  const q = totalQty(l)
                   return (
                     <tr key={i}>
+                      <td className="rowhead">{i + 1}</td>
+                      <td><input value={l.itemCategory} onChange={updLine(i, 'itemCategory', false)} placeholder="e.g. Proximity Transducer" style={{ minWidth: 140 }} /></td>
+                      <td><input value={l.desc} onChange={updLine(i, 'desc', false)} style={{ minWidth: 180 }} /></td>
                       <td>{l.pn}</td>
-                      <td>{l.desc}</td>
                       <td>
                         {(part?.adders || []).length
                           ? part.adders.map(a => (
                             <label key={a.code} style={{ marginRight: 10 }}>
                               <input type="checkbox" checked={l.adders.includes(a.code)} onChange={toggleAdder(i, a)} />
-                              {' '}{a.desc} (+€{a.price})
+                              {' '}{a.desc} (+{l.currency === 'USD' ? '$' : l.currency === 'INR' ? '₹' : '€'}{a.price})
                             </label>
                           ))
                           : <span className="hint">—</span>}
                       </td>
-                      <td className="num"><input type="number" min="1" value={l.qty} onChange={updLine(i, 'qty')} style={{ width: 56, textAlign: 'right' }} /></td>
-                      <td className="num">€ {fmt(eur)}</td>
-                      <td className="num">₹ {fmt(unitCostINR(eur, p.costing))}</td>
-                      <td className="num">₹ {fmt(unitSellINR(eur, p.costing))}</td>
-                      <td className="num">₹ {fmt(unitSellINR(eur, p.costing) * l.qty)}</td>
+                      <td className="num"><input type="number" min="0" value={l.qtyPerUnit || ''} onChange={updLine(i, 'qtyPerUnit')} style={{ width: 52, textAlign: 'right' }} placeholder="-" /></td>
+                      <td className="num"><input type="number" min="0" value={l.common || ''} onChange={updLine(i, 'common')} style={{ width: 52, textAlign: 'right' }} placeholder="-" /></td>
+                      <td className="num"><input type="number" min="0" value={l.spares || ''} onChange={updLine(i, 'spares')} style={{ width: 52, textAlign: 'right' }} placeholder="-" /></td>
+                      <td className="num"><b>{q}</b></td>
+                      <td className="num"><input type="number" min="0" value={l.quoted} onChange={updLine(i, 'quoted', false)} placeholder={fmt(Math.round(lineComputed(l)))} style={{ width: 90, textAlign: 'right' }} title="Customer-facing (target) price — blank = computed price" /></td>
+                      <td className="num">₹ {fmt(lineQuoted(l) * q)}</td>
+                      <td className="num internal">₹ {fmt(lineCost(l))}</td>
+                      <td className="num internal">₹ {fmt(lineCost(l) * q)}</td>
+                      <td className="num internal">₹ {fmt(Math.round(lineComputed(l)))}</td>
+                      <td className="num internal">{l.currency === 'USD' ? '$' : l.currency === 'INR' ? '₹' : '€'} {fmt(linePrice(l))}</td>
                       <td><button onClick={removeLine(i)} title="Remove line">✕</button></td>
                     </tr>
                   )
                 })}
-                {!p.bom.length && <tr><td colSpan={9} className="hint">No lines yet — add parts from the price list above. Try RK16-BASE and tick CE mark + Flush mount kit: €2000 + €110 + €65 = €2175.</td></tr>}
+                {!p.bom.length && <tr><td colSpan={16} className="hint">No lines yet — add parts from the price list above. Quantities work like the sheet: Total Qty = Qty/Unit × {units} units + Common + Spares.</td></tr>}
               </tbody>
               {p.bom.length > 0 && (
                 <tfoot>
                   <tr>
-                    <td colSpan={4}>Totals</td>
-                    <td className="num">€ {fmt(totals.eur)}</td>
-                    <td className="num">₹ {fmt(totals.cost)}</td>
+                    <td colSpan={9}>Totals</td>
                     <td></td>
-                    <td className="num">₹ {fmt(totals.sell)}</td>
+                    <td className="num">₹ {fmt(totals.target)}</td>
+                    <td className="internal"></td>
+                    <td className="num internal">₹ {fmt(totals.cost)}</td>
+                    <td className="internal" colSpan={2}></td>
                     <td></td>
                   </tr>
                 </tfoot>
               )}
             </table>
           </div>
+          <div className="costing-note">Grey columns are the internal costing block (never shown to the customer); the white columns are the customer-facing BoQ, quoted in ₹ only.</div>
         </>
       )}
 

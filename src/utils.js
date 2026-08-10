@@ -1,17 +1,32 @@
 // Costing math per the "Imported Items Pricing & Costing Factors" box on the
-// Priced BoQ sheet: Euro-₹ Base 112.00 × (1 + 16% CD+ERV+Cont.) × (1 − 50% B&K
-// disc) → Eff. Rate 65 (rounded up). Euro list price × Eff. Rate = landed ₹ cost.
-export function effectiveRate(c) {
-  return Math.ceil(c.baseRate * (1 + c.cdErvContPct / 100) * (1 - c.bnkDiscPct / 100))
+// Priced BoQ sheet: Eff. Rate = ROUNDUP(base × (1 + CD+ERV+Cont.) × (1 − B&K
+// disc)) — e.g. 112 × 1.16 × 0.50 → ₹65. List price × Eff. Rate = landed ₹ cost.
+// Imports come in € or $ (separate base rates); the 50% discount is B&K-list
+// only; INR-quoted parts (ad-hoc/local) are already landed cost.
+export function effectiveRate(c, currency = 'EUR', applyBnkDisc = true) {
+  if (currency === 'INR') return 1
+  // A cleared/legacy usdBase falls back to the default $ rate, never the € rate.
+  const base = currency === 'USD' ? (c.usdBase > 0 ? c.usdBase : 90) : c.baseRate
+  const disc = applyBnkDisc ? c.bnkDiscPct / 100 : 0
+  return Math.ceil(base * (1 + c.cdErvContPct / 100) * (1 - disc))
 }
 
-export function unitCostINR(listPriceEUR, costing) {
-  return listPriceEUR * effectiveRate(costing)
+export function unitCostINR(listPrice, costing, currency = 'EUR', applyBnkDisc = true) {
+  return listPrice * effectiveRate(costing, currency, applyBnkDisc)
 }
 
-// Target (sell) price applies Input GM% on top of landed cost.
-export function unitSellINR(listPriceEUR, costing) {
-  return unitCostINR(listPriceEUR, costing) / (1 - costing.inputGMPct / 100)
+// Target (sell) price applies Input GM% on top of landed cost. GM is clamped
+// below 100% so a typo can't push Infinity into totals and the tracker.
+export function unitSellINR(listPrice, costing, currency = 'EUR', applyBnkDisc = true) {
+  const gm = Math.min(costing.inputGMPct || 0, 95)
+  return unitCostINR(listPrice, costing, currency, applyBnkDisc) / (1 - gm / 100)
+}
+
+// Folder-wall / tracker colour convention: green = Won, red = Lost, plain =
+// Open. (The real OneDrive wall uses four colours with unconfirmed meaning —
+// pending Swami's answer — so the app keeps this three-state scheme for now.)
+export function stageClass(o) {
+  return o.stage === 'Won' ? 'won' : o.stage === 'Lost' ? 'lost' : 'open'
 }
 
 export function fmt(n, digits = 0) {
@@ -42,6 +57,35 @@ export function mmmYY(dateStr) {
 
 export function monthLabel(key) {
   return mmmYY(key + '-01')
+}
+
+// "28-Jul-26" style, as the sheet's Last Updated column shows day-level dates.
+export function ddMmmYY(dateStr) {
+  if (!dateStr) return ''
+  const [y, m, d] = dateStr.split('-')
+  return `${d}-${MONTHS[parseInt(m, 10) - 1]}-${y.slice(2)}`
+}
+
+// Evaluate an Excel-style formula ("=8.5%+2.5%+5%", "=112*1.16*0.5", "4299").
+// Arithmetic + parentheses + percent literals only. Returns { value, usedPct }
+// or null if the text isn't a valid formula.
+export function evalFormula(text) {
+  let s = String(text ?? '').trim()
+  if (!s) return null
+  if (s.startsWith('=')) s = s.slice(1)
+  const usedPct = /%/.test(s)
+  s = s.replace(/(?<=\d),(?=\d)/g, '')                       // strip 4,299-style grouping commas
+  s = s.replace(/(\d+(?:\.\d+)?)\s*%/g, '($1/100)')
+  s = s.replace(/ROUNDUP\s*\(((?:[^(),]|\([^()]*\))*),\s*0\s*\)/gi, 'C($1)')
+  if (s.includes(',')) return null                           // any leftover comma would be the JS comma operator
+  if (!/^[-+*/().\d\sC]+$/.test(s)) return null
+  try {
+    // C = Excel ROUNDUP(x, 0): away from zero, unlike Math.ceil for negatives.
+    const value = Function('C', '"use strict"; return (' + s + ')')(x => (x < 0 ? Math.floor(x) : Math.ceil(x)))
+    return typeof value === 'number' && isFinite(value) ? { value, usedPct } : null
+  } catch {
+    return null
+  }
 }
 
 // "Extract to Excel" — CSV download (opens directly in Excel).

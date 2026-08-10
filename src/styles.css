@@ -36,6 +36,28 @@ body {
   padding: 4px 12px; font-size: 12px; color: #666;
 }
 .formula-bar .cell-ref { border: 1px solid var(--grid-line); padding: 1px 10px; min-width: 70px; font-family: Consolas, monospace; }
+.formula-bar .fx-input { flex: 1; border: none; outline: none; font-family: Consolas, monospace; font-size: 12px; color: #252423; background: transparent; }
+.formula-bar .fx-input:read-only { color: #777; }
+
+/* Excel-style header filter dropdowns */
+.th-filter { position: relative; }
+.th-filter .filter-caret { cursor: pointer; }
+.th-filter.filtered .filter-caret { opacity: 1; color: #ffd54f; }
+.filter-overlay { position: fixed; inset: 0; z-index: 25; }
+.filter-pop {
+  /* positioned fixed via inline style so it escapes the .sheet-wrap scroll clip */
+  z-index: 30;
+  background: #fff; color: #252423; font-weight: 400; text-align: left;
+  border: 1px solid #999; box-shadow: 2px 3px 10px rgba(0,0,0,.28);
+  min-width: 190px; max-height: 320px; overflow-y: auto; padding: 5px;
+}
+.filter-pop .fitem { display: block; padding: 3px 8px; cursor: pointer; white-space: nowrap; font-size: 12px; }
+.filter-pop .fitem:hover { background: var(--select-fill); }
+.filter-pop hr { border: none; border-top: 1px solid #ddd; margin: 4px 0; }
+.filter-pop input[type=checkbox] { margin-right: 6px; }
+
+/* Selected cell, like Excel's active-cell border */
+table.sheet td.cell-sel { outline: 2px solid var(--xl-green); outline-offset: -2px; }
 
 .page { padding: 14px 16px 64px; }
 .page h2 { font-size: 15px; margin: 4px 0 10px; color: var(--xl-green-dark); }
@@ -82,8 +104,13 @@ table.sheet td.cstat { text-align: center; font-weight: 600; }
 table.sheet td.cstat.Green { background: var(--won-fill) !important; color: var(--won-text); }
 table.sheet td.cstat.Amber { background: var(--amber-fill) !important; color: var(--amber-text); }
 table.sheet td.cstat.Red   { background: var(--lost-fill) !important; color: var(--lost-text); }
+table.sheet td.cstat.Blue  { background: #dbe9f5 !important; color: #1f4e79; }
+table.sheet th.num { text-align: right; }
 table.sheet td.err { background: var(--lost-fill) !important; color: var(--lost-text); text-align: center; }
 table.sheet tfoot td { font-weight: 700; background: #eef6f0; }
+/* Internal costing block on the Priced BoQ — grey like the real sheet's hidden area */
+table.sheet th.internal { background: #6d6d6d; }
+table.sheet td.internal { background: #ececec !important; color: #555; }
 
 .pill { display: inline-block; padding: 1px 8px; border-radius: 8px; font-size: 11px; font-weight: 600; }
 .pill.Green, .pill.won { background: var(--won-fill); color: var(--won-text); }
@@ -105,20 +132,40 @@ table.sheet tfoot td { font-weight: 700; background: #eef6f0; }
 
 /* OneDrive-style folder wall */
 .folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
-.folder-card { padding: 8px 6px; cursor: pointer; text-align: center; border-radius: 4px; }
+.folder-card { position: relative; padding: 8px 6px; cursor: pointer; text-align: center; border-radius: 4px; }
 .folder-card:hover { background: #e5f1fb; }
-.folder-icon { font-size: 40px; line-height: 1; display: block; }
-.folder-icon.won { filter: hue-rotate(75deg) saturate(1.4); }     /* green folder */
-.folder-icon.lost { filter: hue-rotate(-40deg) saturate(2); }     /* red folder */
+.folder-del {
+  position: absolute; top: 3px; right: 3px; display: none;
+  border: 1px solid #bbb; background: #fff; color: #666; border-radius: 3px;
+  font-size: 10px; line-height: 1; padding: 2px 5px; cursor: pointer;
+}
+.folder-card:hover .folder-del, table.sheet tr:hover .folder-del { display: inline-block; }
+table.sheet .folder-del { position: static; }
+.folder-del.arm, .folder-del:hover { background: var(--lost-fill); color: var(--lost-text); border-color: var(--lost-text); }
+.folder-del.arm { display: inline-block; font-weight: 700; }
+.folder-card.new-folder { border: 1.5px dashed #b5bac2; color: #8a8f98; }
+.folder-card.new-folder:hover { border-color: #1f4e79; color: #1f4e79; background: #f4f8fc; }
+.new-folder-plus { font-size: 26px; line-height: 34px; display: block; }
+.folder-icon { display: block; margin: 0 auto; }
+.folder-icon path { stroke-width: 1.5; }
+.folder-icon.open path { fill: #cfd4db; stroke: #8a8f98; }
+.folder-icon.won  path { fill: var(--won-fill); stroke: var(--won-text); }
+.folder-icon.lost path { fill: var(--lost-fill); stroke: var(--lost-text); }
 .folder-card .fname { font-weight: 600; font-size: 12px; margin-top: 4px; word-break: break-all; }
 .folder-card .fmeta { font-size: 10.5px; color: #777; }
+.folder-section-head {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+  color: #666; border-bottom: 1px solid var(--grid-line); padding-bottom: 3px; margin: 14px 0 8px;
+}
+section:first-of-type .folder-section-head { margin-top: 4px; }
 .explorer-bar {
   display: flex; align-items: center; gap: 10px; background: #fff;
   border: 1px solid var(--grid-line); padding: 6px 10px; margin-bottom: 10px; font-size: 12.5px;
 }
 .explorer-bar a { color: #1f4e79; cursor: pointer; text-decoration: none; }
 .explorer-bar a:hover { text-decoration: underline; }
-.legend { display: flex; gap: 16px; font-size: 11.5px; color: #666; margin: 8px 0; }
+.legend { display: flex; align-items: center; gap: 16px; font-size: 11.5px; color: #666; margin: 8px 0; }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
 
 /* Microsoft-Forms-style intake */
 .forms-bg {
