@@ -109,187 +109,248 @@ function AiLeadDetail({ lead }) {
 
   const qualifyBlocked = isRed && !redCleared
   const canAct = !['Converted', 'Dropped'].includes(lead.status)
+  // Read-only progress readout for the fields column footer.
+  const decided = ai.fields.filter(f => f.state !== 'pending').length
+  const attachments = lead.attachments || []
 
   return (
-    <div className="threepanel">
-      <div className="panel">
-        <div className="panel-title"><Icon name="mail" size={14} /> Original email</div>
-        <p className="hint" style={{ margin: '2px 0 4px' }}>
-          <b>{lead.sender || lead.from}</b><br />{lead.from}
-        </p>
-        <p style={{ margin: '4px 0' }}><b>{lead.subject}</b></p>
-        {lead.ref && <p className="hint" style={{ margin: '0 0 6px' }}>Ref: {lead.ref}</p>}
-        <div className="email-body">{lead.body}</div>
-        {(lead.attachments || []).map((a, i) => (
-          <div key={i} className="attach-row">
-            <Icon name="fileText" size={13} /> {a.name} <span className="hint">{a.pages} p.</span>
+    <div className="ws-grid">
+      {/* ---- Column 1 — original email ---- */}
+      <section className="ws-col">
+        <header className="ws-head">
+          <span className="ws-head-icon blue"><Icon name="mail" size={13} /></span>
+          <span className="ws-head-title">Original email</span>
+          <span className="ws-head-meta">{lead.source || lead.channel || 'Common mailbox'}</span>
+        </header>
+        <div className="ws-body">
+          <div className="ws-sender">
+            <b>{lead.sender || lead.from}</b>
+            <span>{lead.from}</span>
           </div>
-        ))}
-      </div>
-
-      <div className="panel">
-        <div className="panel-title"><Icon name="bot" size={14} /> AI-extracted fields <span className="hint">AI proposes · humans decide</span></div>
-        {groups.map(g => (
-          <div key={g}>
-            <div className="af-group">{g}</div>
-            {ai.fields.map((f, idx) => f.group === g && (
-              <div key={idx} className="ai-field">
-                <div className="af-top">
-                  <span className="af-key">{f.k}</span>
-                  <ConfChip conf={f.conf} thresholds={store.config.aiThresholds} />
-                  {fieldChip(f, med)}
+          <div className="ws-subject">{lead.subject}</div>
+          {lead.ref && <div className="ws-tag">Ref {lead.ref}</div>}
+          <div className="email-body">{lead.body}</div>
+          {attachments.length > 0 && (
+            <>
+              <div className="ws-group">Attachments</div>
+              {attachments.map((a, i) => (
+                <div key={i} className="attach-row">
+                  <span className="attach-icon"><Icon name="fileText" size={13} /></span>
+                  <span className="attach-name">{a.name}</span>
+                  <span className="attach-meta">{a.pages} p.</span>
                 </div>
-                {editFor?.idx === idx
-                  ? <div style={{ display: 'grid', gap: 4, margin: '4px 0' }}>
-                      <input value={editFor.val} onChange={e => setEditFor({ ...editFor, val: e.target.value })} />
-                      <input placeholder="Edit note (why the value changed)" value={editFor.note}
-                        onChange={e => setEditFor({ ...editFor, note: e.target.value })} />
-                      <div style={{ display: 'flex', gap: 6 }}>
-                        <button className="primary" onClick={saveEdit}>Save</button>
-                        <button onClick={() => setEditFor(null)}>Cancel</button>
+              ))}
+            </>
+          )}
+        </div>
+        <footer className="ws-foot ws-foot-meta">
+          <span><Icon name="clock" size={12} /> {ddMmmYY((lead.ts || '').slice(0, 10))}</span>
+          <span>{attachments.length} attachment{attachments.length === 1 ? '' : 's'}</span>
+        </footer>
+      </section>
+
+      {/* ---- Column 2 — AI-extracted fields ---- */}
+      <section className="ws-col">
+        <header className="ws-head">
+          <span className="ws-head-icon violet"><Icon name="bot" size={13} /></span>
+          <span className="ws-head-title">AI-extracted fields</span>
+          <span className="ws-head-meta">AI proposes · humans decide</span>
+        </header>
+        <div className="ws-body">
+          {groups.map(g => (
+            <div key={g}>
+              <div className="ws-group">{g}</div>
+              {ai.fields.map((f, idx) => f.group === g && (
+                <div key={idx} className={`ai-field state-${f.state}${f.state === 'pending' && f.conf < med ? ' low' : ''}`}>
+                  <div className="af-top">
+                    <span className="af-key">{f.k}</span>
+                    <span className="af-chips">
+                      <ConfChip conf={f.conf} thresholds={store.config.aiThresholds} />
+                      {fieldChip(f, med)}
+                    </span>
+                  </div>
+                  {editFor?.idx === idx
+                    ? <div className="af-edit">
+                        <input value={editFor.val} onChange={e => setEditFor({ ...editFor, val: e.target.value })} />
+                        <input placeholder="Edit note (why the value changed)" value={editFor.note}
+                          onChange={e => setEditFor({ ...editFor, note: e.target.value })} />
+                        <div className="af-edit-actions">
+                          <button className="primary" onClick={saveEdit}>Save</button>
+                          <button onClick={() => setEditFor(null)}>Cancel</button>
+                        </div>
                       </div>
-                    </div>
-                  : <div className="af-val">{f.v}</div>}
-                <button className="af-ev" onClick={() => setEvOpen(evOpen === idx ? null : idx)}>
-                  <Icon name="eye" size={11} /> Evidence
-                </button>
-                {evOpen === idx && (
-                  <div className="hint" style={{ margin: '2px 0 4px', padding: '4px 8px', background: 'rgba(0,0,0,0.04)', borderRadius: 4 }}>
-                    {f.ev}{f.note ? ` — ${f.note}` : ''}
-                  </div>
-                )}
-                {rejFor?.idx === idx && (
-                  <div style={{ display: 'flex', gap: 6, margin: '4px 0' }}>
-                    <input style={{ flex: 1 }} placeholder="Rejection note (required)" value={rejFor.note}
-                      onChange={e => setRejFor({ ...rejFor, note: e.target.value })} />
-                    <button className="primary" disabled={!rejFor.note.trim()} onClick={saveReject}>Reject</button>
-                    <button onClick={() => setRejFor(null)}>Cancel</button>
-                  </div>
-                )}
-                {f.state === 'pending' && canAct && editFor?.idx !== idx && rejFor?.idx !== idx && (
-                  <div className="af-actions">
-                    <button onClick={() => patchField(idx, { state: 'accepted' })}><Icon name="check" size={11} /> Accept</button>
-                    <button onClick={() => { setRejFor(null); setEditFor({ idx, val: f.v, note: '' }) }}>Edit</button>
-                    <button onClick={() => { setEditFor(null); setRejFor({ idx, note: '' }) }}><Icon name="x" size={11} /> Reject</button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
-
-      <div className="panel">
-        <div className="panel-title"><Icon name="sparkles" size={14} /> AI summary &amp; actions</div>
-        <p style={{ marginTop: 4 }}>{ai.summary}</p>
-
-        {ai.missing?.length > 0 && (
-          <WarnBox>
-            <b>Missing information</b>
-            <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
-              {ai.missing.map((m, i) => <li key={i}>{m}</li>)}
-            </ul>
-          </WarnBox>
-        )}
-
-        {ai.duplicates?.length > 0 && (
-          <WarnBox>
-            <b>Duplicate candidates</b>
-            {ai.duplicates.map((d, i) => (
-              <div key={i} style={{ marginTop: 4 }}>
-                {d.leadId} — {d.note}
-                <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                  <button onClick={() => store.updateLead(lead.id, {
-                    ai: { ...ai, duplicates: ai.duplicates.filter((_, j) => j !== i) },
-                  })}>Not a duplicate</button>
-                  <button onClick={() => store.updateLead(lead.id, { status: 'Dropped', droppedReason: 'Duplicate' })}>
-                    Mark duplicate
+                    : <div className="af-val">{f.v}</div>}
+                  <button className="af-ev" onClick={() => setEvOpen(evOpen === idx ? null : idx)}>
+                    <Icon name="eye" size={11} /> Evidence
                   </button>
+                  {evOpen === idx && (
+                    <div className="af-evidence">{f.ev}{f.note ? ` — ${f.note}` : ''}</div>
+                  )}
+                  {rejFor?.idx === idx && (
+                    <div className="af-reject">
+                      <input placeholder="Rejection note (required)" value={rejFor.note}
+                        onChange={e => setRejFor({ ...rejFor, note: e.target.value })} />
+                      <button className="primary" disabled={!rejFor.note.trim()} onClick={saveReject}>Reject</button>
+                      <button onClick={() => setRejFor(null)}>Cancel</button>
+                    </div>
+                  )}
+                  {f.state === 'pending' && canAct && editFor?.idx !== idx && rejFor?.idx !== idx && (
+                    <div className="af-actions">
+                      <button className="act-accept" onClick={() => patchField(idx, { state: 'accepted' })}>
+                        <Icon name="check" size={11} /> Accept
+                      </button>
+                      <button onClick={() => { setRejFor(null); setEditFor({ idx, val: f.v, note: '' }) }}>Edit</button>
+                      <button className="act-reject" onClick={() => { setEditFor(null); setRejFor({ idx, note: '' }) }}>
+                        <Icon name="x" size={11} /> Reject
+                      </button>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
-          </WarnBox>
-        )}
+              ))}
+            </div>
+          ))}
+        </div>
+        <footer className="ws-foot ws-foot-meta">
+          <span><b>{decided}</b> of {ai.fields.length} fields decided</span>
+          <span className="ws-progress">
+            <span style={{ width: `${ai.fields.length ? (decided / ai.fields.length) * 100 : 0}%` }} />
+          </span>
+        </footer>
+      </section>
 
-        <div className="section-title" style={{ marginTop: 10 }}>Qualification &amp; ownership</div>
-        <p className="hint">
-          Customer match: <b>{customer ? customer.name : 'Unmatched (new — Blue)'}</b>
-          {customer && <> <span className={`pill ${customer.status}`}>{customer.status}</span></>}
-        </p>
-        <p className="hint">
-          Suggested owner: <b>{lead.suggestedOwner}</b>
-          {rule ? ` — ${rule.region} rule.` : ' — regional rule.'} Override needs LJS/AH + reason.
-        </p>
-        {ai.next?.length > 0 && (
-          <ul style={{ margin: '6px 0', paddingLeft: 18 }}>
-            {ai.next.map((n, i) => <li key={i}>{n}</li>)}
-          </ul>
-        )}
+      {/* ---- Column 3 — AI summary, alerts, actions ---- */}
+      <section className="ws-col">
+        <header className="ws-head">
+          <span className="ws-head-icon emerald"><Icon name="sparkles" size={13} /></span>
+          <span className="ws-head-title">AI summary &amp; actions</span>
+        </header>
+        <div className="ws-body">
+          <p className="ws-summary">{ai.summary}</p>
 
-        {isRed && !redCleared && (
-          <ErrBox>
-            Red-class customer — continuation needs joint LJS + AH approval (AP-1).
-            No opportunity ID until approved.{' '}
-            {redApproval
-              ? <>Approval <b>{redApproval.id}</b> is <b>{redApproval.status}</b>.{' '}
-                  <button onClick={() => nav('/approvals')}>Open approvals</button></>
-              : <button onClick={() => store.requestApproval({
-                  leadId: lead.id, oppId: '', type: 'Red customer clearance',
-                  detail: `${customer?.name || lead.sender || lead.from} (Red) — ${lead.subject}. Continuation needs joint LJS + AH clearance before any opportunity ID is generated.`,
-                  approver: 'LJS', needed: ['LJS', 'AH'],
-                })}>Request joint approval</button>}
-          </ErrBox>
-        )}
-        {isRed && redCleared && (
-          <div className="okbox">
-            Red gate cleared — {redApproval.id} <b>{redApproval.status}</b>.
-            {redApproval.status === 'Approved with conditions' && ' Proceed on prepayment-only conditions.'}
-          </div>
-        )}
+          {ai.missing?.length > 0 && (
+            <WarnBox>
+              <b>Missing information</b>
+              <ul>{ai.missing.map((m, i) => <li key={i}>{m}</li>)}</ul>
+            </WarnBox>
+          )}
 
-        {lead.status === 'Converted' && (
-          <div className="okbox" style={{ marginTop: 8 }}>
-            Qualified and converted{lead.oppId && <> — <span className="oppid-link" style={{ cursor: 'pointer' }}
-              onClick={() => drawer.open({ type: 'opp', id: lead.oppId })}>{lead.oppId}</span></>}.
-          </div>
-        )}
-        {lead.status === 'Dropped' && (
-          <div className="warn-box" style={{ marginTop: 8 }}>
-            Dropped — {lead.droppedReason || 'no reason recorded'}. Kept minimally for analytics.
-          </div>
-        )}
-
-        {canAct && lead.status !== 'Qualified' && (
-          <div className="toolbar" style={{ marginTop: 10, marginBottom: 0 }}>
-            <button className="primary" disabled={qualifyBlocked}
-              title={qualifyBlocked ? 'Blocked: Red continuation approval required first' : undefined}
-              onClick={() => store.updateLead(lead.id, { status: 'Qualified' })}>
-              <Icon name="check" size={13} /> Qualify
-            </button>
-          </div>
-        )}
-
-        {lead.status === 'Qualified' && (
-          pendingLow.length
-            ? <WarnBox>
-                <b>Qualified, but registration is still blocked</b> by {pendingLow.length} low-confidence
-                field{pendingLow.length > 1 ? 's' : ''} that still need{pendingLow.length > 1 ? '' : 's'} a decision:
-                <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
-                  {pendingLow.map((f, i) => <li key={i}>{f.k} ({f.conf}% confidence)</li>)}
-                </ul>
-                Registration blocked until each is accepted, edited or rejected.
-                <div style={{ marginTop: 6 }}>
-                  <button disabled>Continue to registration</button>
+          {ai.duplicates?.length > 0 && (
+            <WarnBox>
+              <b>Duplicate candidates</b>
+              {ai.duplicates.map((d, i) => (
+                <div key={i} className="ws-dup">
+                  <span>{d.leadId} — {d.note}</span>
+                  <div className="ws-dup-actions">
+                    <button onClick={() => store.updateLead(lead.id, {
+                      ai: { ...ai, duplicates: ai.duplicates.filter((_, j) => j !== i) },
+                    })}>Not a duplicate</button>
+                    <button onClick={() => store.updateLead(lead.id, { status: 'Dropped', droppedReason: 'Duplicate' })}>
+                      Mark duplicate
+                    </button>
+                  </div>
                 </div>
-              </WarnBox>
-            : <div className="okbox" style={{ marginTop: 8 }}>
-                Qualified.{' '}
-                <button className="primary" onClick={() => nav('/register/' + lead.id)}>
-                  Continue to registration <Icon name="arrowRight" size={12} />
-                </button>
-              </div>
-        )}
-      </div>
+              ))}
+            </WarnBox>
+          )}
+
+          <div className="ws-group">Qualification &amp; ownership</div>
+          <div className="ws-kv">
+            <span className="ws-kv-k">Customer match</span>
+            <span className="ws-kv-v">
+              {customer ? customer.name : 'Unmatched (new — Blue)'}
+              {customer && <span className={`pill ${customer.status}`}>{customer.status}</span>}
+            </span>
+          </div>
+          <div className="ws-kv">
+            <span className="ws-kv-k">Suggested owner</span>
+            <span className="ws-kv-v">
+              {lead.suggestedOwner}
+              <span className="ws-kv-note">{rule ? `${rule.region} rule` : 'regional rule'} · override needs LJS/AH + reason</span>
+            </span>
+          </div>
+
+          {ai.next?.length > 0 && (
+            <>
+              <div className="ws-group">Suggested next actions</div>
+              <ul className="ws-next">{ai.next.map((n, i) => <li key={i}>{n}</li>)}</ul>
+            </>
+          )}
+
+          {isRed && !redCleared && (
+            <ErrBox>
+              <b>Red-class customer</b> — continuation needs joint LJS + AH approval (AP-1).
+              No opportunity ID until approved.{' '}
+              {redApproval
+                ? <>Approval <b>{redApproval.id}</b> is <b>{redApproval.status}</b>.{' '}
+                    <button onClick={() => nav('/approvals')}>Open approvals</button></>
+                : <button onClick={() => store.requestApproval({
+                    leadId: lead.id, oppId: '', type: 'Red customer clearance',
+                    detail: `${customer?.name || lead.sender || lead.from} (Red) — ${lead.subject}. Continuation needs joint LJS + AH clearance before any opportunity ID is generated.`,
+                    approver: 'LJS', needed: ['LJS', 'AH'],
+                  })}>Request joint approval</button>}
+            </ErrBox>
+          )}
+          {isRed && redCleared && (
+            <div className="okbox">
+              Red gate cleared — {redApproval.id} <b>{redApproval.status}</b>.
+              {redApproval.status === 'Approved with conditions' && ' Proceed on prepayment-only conditions.'}
+            </div>
+          )}
+
+          {lead.status === 'Converted' && (
+            <div className="okbox">
+              Qualified and converted{lead.oppId && <> — <span className="oppid-link" style={{ cursor: 'pointer' }}
+                onClick={() => drawer.open({ type: 'opp', id: lead.oppId })}>{lead.oppId}</span></>}.
+            </div>
+          )}
+          {lead.status === 'Dropped' && (
+            <div className="warn-box">
+              Dropped — {lead.droppedReason || 'no reason recorded'}. Kept minimally for analytics.
+            </div>
+          )}
+
+          {lead.status === 'Qualified' && pendingLow.length > 0 && (
+            <WarnBox>
+              <b>Registration still blocked</b> by {pendingLow.length} low-confidence
+              field{pendingLow.length > 1 ? 's' : ''} awaiting a decision:
+              <ul>{pendingLow.map((f, i) => <li key={i}>{f.k} ({f.conf}% confidence)</li>)}</ul>
+              Each must be accepted, edited or rejected.
+            </WarnBox>
+          )}
+        </div>
+
+        <footer className="ws-foot">
+          {canAct && lead.status !== 'Qualified' && (
+            <>
+              <button className="primary ws-action" disabled={qualifyBlocked}
+                title={qualifyBlocked ? 'Blocked: Red continuation approval required first' : undefined}
+                onClick={() => store.updateLead(lead.id, { status: 'Qualified' })}>
+                <Icon name="check" size={14} /> Qualify lead
+              </button>
+              {qualifyBlocked && <p className="ws-foot-note">Blocked — Red continuation approval required first.</p>}
+            </>
+          )}
+          {lead.status === 'Qualified' && (
+            <>
+              <button className="primary ws-action" disabled={pendingLow.length > 0}
+                title={pendingLow.length ? 'Resolve the low-confidence fields first' : undefined}
+                onClick={() => nav('/register/' + lead.id)}>
+                Continue to registration <Icon name="arrowRight" size={14} />
+              </button>
+              {pendingLow.length > 0 && (
+                <p className="ws-foot-note">
+                  Blocked — {pendingLow.length} field{pendingLow.length > 1 ? 's' : ''} below the {med}% confidence threshold.
+                </p>
+              )}
+            </>
+          )}
+          {!canAct && (
+            <p className="ws-foot-note">
+              Lead {lead.status.toLowerCase()} — no further action required.
+            </p>
+          )}
+        </footer>
+      </section>
     </div>
   )
 }
@@ -414,16 +475,30 @@ export default function Inbox() {
 
   const sel = leadId ? store.leads.find(l => l.id === leadId) : null
   if (sel) {
+    const age = ageDays((sel.ts || '').slice(0, 10))
     return (
-      <div className="page">
-        <div className="toolbar">
-          <button onClick={() => nav('/inbox')}><Icon name="inbox" size={13} /> Back to inbox</button>
-          <span className="spacer" />
+      <div className="lead-workspace">
+        <div className="ws-topbar">
+          <button className="ws-back" onClick={() => nav('/inbox')}>
+            <Icon name="inbox" size={13} /> Back to inbox
+          </button>
+          <div className="ws-topbar-title">
+            <h2>{sel.subject}</h2>
+            <div className="ws-topbar-meta">
+              {sel.ref && <span className="ws-tag">{sel.ref}</span>}
+              <span>{sel.sender || sel.from}</span>
+              <span>·</span>
+              <span>{ddMmmYY((sel.ts || '').slice(0, 10))}</span>
+              {age != null && <><span>·</span><span>{age} d old</span></>}
+            </div>
+          </div>
           <span className={`pill ${PILL[sel.status] || 'Blue'}`}>{sel.status}</span>
         </div>
-        <h2><Icon name="mail" size={18} /> {sel.ref ? `Lead — ${sel.ref}` : 'Lead'}</h2>
-        <p className="hint" style={{ marginTop: -4 }}>{sel.subject}</p>
-        {sel.ai ? <AiLeadDetail lead={sel} /> : <LegacyLeadDetail lead={sel} />}
+        {sel.ai
+          ? <AiLeadDetail lead={sel} />
+          : <div className="ws-grid single"><section className="ws-col"><div className="ws-body">
+              <LegacyLeadDetail lead={sel} />
+            </div></section></div>}
       </div>
     )
   }
