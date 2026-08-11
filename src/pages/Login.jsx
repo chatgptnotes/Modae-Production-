@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
-import { ROLES, OWNERS } from '../seed.js'
+import { ROLES, OWNERS, DEMO_PASSWORD } from '../seed.js'
 import { WarnBox } from '../ui.jsx'
+import { Icon } from '../icons.jsx'
 
 // Roles a new registrant may request: the sales owners plus the technical
 // reviewer. Approvers/admin accounts are provisioned by a super admin.
@@ -18,6 +19,15 @@ export default function Login() {
   const [ok, setOk] = useState('')
 
   const switchMode = m => { setMode(m); setErr(''); setOk('') }
+
+  // One-click demo sign-in — every ACTIVE account, same audited login path.
+  const quickAccounts = (store.users || []).filter(u => u.status === 'Active')
+  const quickLogin = u => {
+    setErr('')
+    const res = store.login(u.email, u.pw || DEMO_PASSWORD)
+    if (!res.ok) setErr(res.err)
+  }
+  const shortLabel = u => (ROLES[u.role]?.label || u.role).split('—')[0].trim()
 
   const submitSignIn = e => {
     e.preventDefault()
@@ -89,11 +99,25 @@ export default function Login() {
           </form>
         )}
 
+        {mode === 'signin' && (
+          <div className="quick-login">
+            <div className="ql-title"><Icon name="sparkles" size={12} /> Quick login — one tap, no password</div>
+            <div className="ql-grid">
+              {quickAccounts.map(u => (
+                <button key={u.id} type="button" className="ql-btn" onClick={() => quickLogin(u)}
+                  title={`${u.name} — ${u.email}`}>
+                  <b>{shortLabel(u)}</b>
+                  <span>{u.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         <div className="login-demo">
-          Demo accounts — password Demo@1234 for all: admin@modae.demo (Super Admin),
-          ljs@modae.demo (Strategic Approver), ah@modae.demo (Commercial &amp; Ops),
-          rs@modae.demo / pp@modae.demo (Sales), tech@modae.demo (Technical),
-          customer@portal.demo (Customer portal).
+          Demo accounts — password Demo@1234 for all. Manual sign-in above works too:
+          admin@modae.demo (Super Admin), ljs@modae.demo (Strategic Approver),
+          ah@modae.demo (Commercial &amp; Ops), rs@modae.demo / pp@modae.demo (Sales),
+          tech@modae.demo (Technical), customer@portal.demo (Customer portal).
         </div>
         <WarnBox>Demo authentication — passwords are stored in plain text in this browser only. Not for production.</WarnBox>
       </div>

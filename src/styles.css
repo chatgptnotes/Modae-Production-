@@ -734,3 +734,12 @@ input.needs-input, select.needs-input { background: #fff8e1; border-color: #bf90
 /* Topbar acting-as dropdown (full-site header) */
 .topbar-user { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: .5px; white-space: nowrap; }
 .topbar-user select { max-width: 220px; font-size: 12px; padding: 3px 6px; text-transform: none; letter-spacing: 0; }
+
+/* Quick login (demo) — one-tap account buttons on the sign-in card */
+.quick-login { margin-top: 14px; }
+.ql-title { display: flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: #666; margin-bottom: 7px; }
+.ql-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.ql-btn { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 7px 10px; border: 1px solid #cfd8d2; border-radius: 5px; background: #f6faf7; cursor: pointer; text-align: left; min-height: 0; }
+.ql-btn:hover { border-color: var(--xl-green); background: #eef6f0; }
+.ql-btn b { font-size: 12px; color: var(--xl-green-dark); }
+.ql-btn span { font-size: 10.5px; color: #777; }
