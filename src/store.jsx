@@ -17,9 +17,11 @@ function initialState() {
       // An empty opportunities array is a legitimate state (everything deleted),
       // not a corrupt one — don't silently reseed over the user's data.
       if (s && Array.isArray(s.opportunities) && (s.opportunities.length === 0 || s.opportunities[0].sellTo !== undefined)) {
-        // Backfill fields added after the v3 key (users/role) without reseeding.
+        // Backfill fields added after the v3 key (users/role/communications)
+        // without reseeding.
         if (!Array.isArray(s.users)) s.users = seedUsers
         if (!ROLES[s.role]) s.role = 'SUPER'
+        if (!s.communications) s.communications = {}
         return s
       }
     }
@@ -32,6 +34,7 @@ function initialState() {
     rateSheet: seedRateSheet,
     customers: seedCustomers,
     proposals: {},
+    communications: {},
     users: seedUsers,
     role: 'SUPER',
   }
@@ -74,7 +77,8 @@ export function StoreProvider({ children }) {
       setState(s => {
         const { [id]: _f, ...files } = s.files
         const { [id]: _p, ...proposals } = s.proposals
-        return { ...s, opportunities: s.opportunities.filter(o => o.id !== id), files, proposals }
+        const { [id]: _c, ...communications } = s.communications || {}
+        return { ...s, opportunities: s.opportunities.filter(o => o.id !== id), files, proposals, communications }
       })
     },
 
@@ -137,6 +141,17 @@ export function StoreProvider({ children }) {
 
     addAdhocPart(part) {
       setState(s => ({ ...s, adhocParts: [part, ...s.adhocParts] }))
+    },
+
+    // communications[oppId] = [{ ts, to, subject, kind }], newest first.
+    addCommunication(oppId, entry) {
+      setState(s => ({
+        ...s,
+        communications: {
+          ...(s.communications || {}),
+          [oppId]: [{ ts: new Date().toISOString(), ...entry }, ...((s.communications || {})[oppId] || [])],
+        },
+      }))
     },
 
     // New customers land in the master Blue (pending admin verification).

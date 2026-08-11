@@ -18,17 +18,44 @@ body {
   background: #f5f5f5;
 }
 
-/* Excel-green ribbon */
-.ribbon { background: var(--xl-green); color: #fff; padding: 0 12px; }
-.ribbon .title-row { display: flex; align-items: center; gap: 10px; padding: 8px 4px 4px; }
-.ribbon .logo { font-weight: 700; font-size: 15px; letter-spacing: .3px; }
-.ribbon .subtitle { opacity: .85; font-size: 11px; }
-.ribbon .spacer { flex: 1; }
-.ribbon button.reset { background: transparent; border: 1px solid rgba(255,255,255,.5); color: #fff; border-radius: 3px; padding: 2px 8px; font-size: 11px; cursor: pointer; }
-.nav-tabs { display: flex; gap: 2px; flex-wrap: wrap; }
-.nav-tabs a { color: #fff; text-decoration: none; padding: 6px 14px; font-size: 12.5px; border-radius: 4px 4px 0 0; }
-.nav-tabs a.active { background: #fff; color: var(--xl-green-dark); font-weight: 600; }
-.nav-tabs a:hover:not(.active) { background: rgba(255,255,255,.15); }
+/* App shell: modern left sidebar + main column */
+.shell { display: flex; min-height: 100vh; }
+.sidenav {
+  width: 216px; flex: 0 0 216px; background: #0d211a; color: #b7c6bf;
+  display: flex; flex-direction: column;
+  position: sticky; top: 0; height: 100vh; z-index: 44;
+}
+.brand {
+  padding: 16px 16px 14px; color: #fff; font-weight: 800; font-size: 17px;
+  letter-spacing: .3px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.brand span { display: block; font-weight: 400; font-size: 10.5px; color: #7e948a; letter-spacing: 1px; text-transform: uppercase; margin-top: 2px; }
+.side-nav { flex: 1; overflow-y: auto; padding: 8px 0; }
+.side-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 16px; color: #a9bab1; font-size: 13px; text-decoration: none;
+  border-left: 3px solid transparent;
+}
+.side-item .ic { flex: 0 0 auto; opacity: .85; }
+.side-item:hover { background: rgba(255,255,255,.06); color: #fff; }
+.side-item.active { background: rgba(255,255,255,.08); color: #fff; border-left-color: #2ecc71; font-weight: 600; }
+.side-foot { padding: 12px 14px; border-top: 1px solid rgba(255,255,255,.08); display: flex; flex-direction: column; gap: 8px; }
+.side-foot label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .6px; color: #7e948a; display: flex; flex-direction: column; gap: 4px; }
+.side-foot select { width: 100%; font-size: 12px; padding: 5px 6px; border-radius: 4px; border: 1px solid rgba(255,255,255,.2); background: #12291f; color: #e6ede9; }
+.side-foot button.reset { background: transparent; border: 1px solid rgba(255,255,255,.25); color: #b7c6bf; border-radius: 4px; padding: 5px 8px; font-size: 11px; cursor: pointer; }
+.side-foot button.reset:hover { color: #fff; border-color: rgba(255,255,255,.5); }
+.main-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.topbar {
+  display: flex; align-items: center; gap: 10px; background: #fff;
+  border-bottom: 1px solid var(--grid-line); padding: 8px 14px; min-height: 40px;
+}
+.topbar-title { font-size: 12px; color: #888; }
+.nav-burger { display: none; background: transparent; border: none; padding: 4px; cursor: pointer; color: #333; }
+.nav-backdrop {
+  position: fixed; inset: 0; background: rgba(10,20,15,.45); z-index: 43;
+  opacity: 0; pointer-events: none; transition: opacity .2s;
+}
+.ic { vertical-align: -3px; }
 
 .formula-bar {
   display: flex; align-items: center; gap: 8px;
@@ -118,9 +145,9 @@ table.sheet td.internal { background: #ececec !important; color: #555; }
 .pill.Red, .pill.lost { background: var(--lost-fill); color: var(--lost-text); }
 .pill.Blue { background: #dbe9f5; color: #1f4e79; }
 
-/* Excel bottom sheet-tab strip */
+/* Excel bottom sheet-tab strip (offset by the sidebar) */
 .sheet-tabs {
-  position: fixed; bottom: 0; left: 0; right: 0;
+  position: fixed; bottom: 0; left: 216px; right: 0;
   background: var(--header-fill); border-top: 1px solid var(--grid-line);
   display: flex; padding: 0 8px; z-index: 5;
 }
@@ -219,9 +246,6 @@ section:first-of-type .folder-section-head { margin-top: 4px; }
 .stat-card .label { font-size: 11px; color: #777; text-transform: uppercase; letter-spacing: .4px; }
 .stat-card .value { font-size: 20px; font-weight: 700; color: var(--xl-green-dark); margin-top: 2px; }
 
-/* Header role switcher */
-.role-switch { font-size: 11.5px; color: #fff; opacity: .95; }
-.role-switch select { margin-left: 4px; font-size: 11.5px; padding: 2px 4px; border-radius: 3px; border: 1px solid rgba(255,255,255,.5); background: #fff; color: #252423; max-width: 240px; }
 
 /* Analytics card grid + bar charts */
 .ana-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 12px; }
@@ -268,3 +292,223 @@ table.sheet td.locked { color: #999; text-align: center; background: #f5f5f5 !im
 .hint { font-size: 11.5px; color: #888; }
 .costing-note { font-size: 11.5px; color: #777; margin-top: 6px; font-style: italic; }
 .form-card { background: #fff; border: 1px solid var(--grid-line); padding: 18px 22px; max-width: 760px; }
+
+/* Slide-in record-detail drawer */
+tr.rowclick { cursor: pointer; }
+.drawer-backdrop {
+  position: fixed; inset: 0; background: rgba(24,33,47,.35);
+  z-index: 39; opacity: 0; pointer-events: none; transition: opacity .2s;
+  display: none; /* desktop is non-modal — backdrop appears on tablet */
+}
+.drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; width: min(480px, 96vw);
+  background: #fff; z-index: 40; box-shadow: -4px 0 18px rgba(0,0,0,.18);
+  display: flex; flex-direction: column;
+  transform: translateX(102%); transition: transform .25s ease;
+}
+.drawer.open { transform: translateX(0); }
+.drawer-head {
+  display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+  background: var(--hdr-navy); color: #fff; font-weight: 700; font-size: 13px;
+}
+.drawer-x {
+  margin-left: auto; background: transparent; border: 1px solid rgba(255,255,255,.5);
+  color: #fff; border-radius: 3px; cursor: pointer; padding: 2px 9px;
+}
+.drawer-body { flex: 1; overflow-y: auto; padding: 0 0 20px; }
+.drawer-tabs {
+  display: flex; background: var(--header-fill); border-bottom: 1px solid var(--grid-line);
+  position: sticky; top: 0; z-index: 2;
+}
+.drawer-tabs .dtab {
+  padding: 8px 12px; font-size: 12.5px; cursor: pointer; border: none;
+  border-right: 1px solid var(--grid-line); background: #e6e6e6; color: #444; border-radius: 0;
+}
+.drawer-tabs .dtab.active { background: #fff; font-weight: 700; color: var(--xl-green-dark); box-shadow: inset 0 2px 0 var(--xl-green); }
+.drawer-files { padding: 10px 14px; border-bottom: 1px solid var(--grid-line); }
+.drawer-files-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.drawer-propsum { margin-top: 10px; }
+.drawer-form { padding: 4px 14px 10px; }
+.drawer-form .fgroup, .drawer-propsum .fgroup, .drawer-body .fgroup {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+  color: #666; border-bottom: 1px solid var(--grid-line);
+  padding-bottom: 3px; margin: 16px 0 8px;
+}
+.drawer-form label, .drawer-propsum label, .drawer-body .dgrid2 label {
+  display: block; font-size: 11px; color: #666; margin-bottom: 2px;
+}
+.drawer-form input[type=text], .drawer-form input[type=number], .drawer-form input[type=date],
+.drawer-form select, .drawer-form textarea { width: 100%; }
+.dgrid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+.drawer .ro {
+  background: var(--header-fill); color: #555; border: 1px solid var(--grid-line);
+  border-radius: 2px; padding: 3px 6px; font-size: 12.5px; min-height: 22px;
+}
+
+/* Tender → Proposal wizard */
+.tender-steps { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.tender-steps .step {
+  padding: 4px 12px; border: 1px solid var(--grid-line); border-radius: 12px;
+  font-size: 12px; color: #888; background: #fff;
+}
+.tender-steps .step.active { border-color: var(--xl-green); color: var(--xl-green-dark); font-weight: 700; }
+.tender-steps .step.done { color: var(--won-text); background: var(--won-fill); border-color: var(--won-fill); }
+.tender-drop {
+  max-width: 560px; border: 2px dashed #b5bac2; border-radius: 6px; background: #fff;
+  padding: 34px 20px; text-align: center; cursor: pointer; font-size: 14px;
+}
+.tender-drop:hover, .tender-drop.drag { border-color: var(--xl-green); background: #f2faf5; }
+.tender-drop-icon { font-size: 34px; margin-bottom: 6px; }
+.conf-badge {
+  display: inline-block; padding: 1px 8px; border-radius: 8px;
+  font-size: 10.5px; font-weight: 600; vertical-align: middle;
+}
+.conf-badge.hi { background: var(--won-fill); color: var(--won-text); }
+.conf-badge.med { background: var(--amber-fill); color: var(--amber-text); }
+.conf-badge.lo { background: var(--lost-fill); color: var(--lost-text); }
+.evidence { font-size: 11px; }
+.evidence.ok { color: var(--won-text); }
+.evidence.warn { color: var(--amber-text); }
+input.needs-input, select.needs-input { background: #fff8e1; border-color: #bf9000; }
+
+/* Tile-based Home — every tile is a door into an existing screen */
+.tile-search {
+  width: 100%; max-width: 560px; padding: 8px 12px; font-size: 14px;
+  border: 1px solid #8a8886; border-radius: 4px; margin-bottom: 4px;
+}
+.tile-hits {
+  max-width: 560px; background: #fff; border: 1px solid var(--grid-line);
+  box-shadow: 0 4px 14px rgba(0,0,0,.12); margin-bottom: 8px;
+}
+.tile-hit { padding: 8px 12px; font-size: 12.5px; cursor: pointer; border-bottom: 1px solid #f0f0f2; }
+.tile-hit:hover { background: var(--select-fill); }
+.tile-section {
+  font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+  color: #666; border-bottom: 1px solid var(--grid-line); padding-bottom: 3px; margin: 18px 0 10px;
+}
+.tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; max-width: 1100px; }
+.tile-grid.primary { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); max-width: 1000px; }
+.tile {
+  position: relative; background: #fff; border: 1px solid var(--grid-line);
+  border-top: 3px solid var(--xl-green); border-radius: 4px;
+  padding: 14px 14px 12px; min-height: 96px; cursor: pointer;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.tile.big { min-height: 120px; }
+.tile:hover { background: var(--select-fill); }
+.tile-icon { color: var(--xl-green-dark); line-height: 1; }
+.tender-drop-icon { color: #8a8f98; margin-bottom: 6px; }
+.tile-label { font-weight: 700; font-size: 13px; color: var(--xl-green-dark); }
+.tile-hint { font-size: 11px; color: #888; }
+.tile-badge {
+  position: absolute; top: 8px; right: 8px; background: #c0392b; color: #fff;
+  border-radius: 10px; min-width: 20px; text-align: center;
+  font-size: 11px; font-weight: 700; padding: 2px 6px;
+}
+.pick-list { max-height: 300px; overflow-y: auto; border: 1px solid var(--grid-line); }
+
+/* Opportunity cards (My Opportunities) */
+.opp-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 10px; max-width: 1100px; }
+.opp-card {
+  background: #fff; border: 1px solid var(--grid-line); border-left: 4px solid var(--xl-green);
+  border-radius: 3px; padding: 10px 12px; cursor: pointer;
+}
+.opp-card:hover { background: var(--select-fill); }
+.opp-card .oc-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; }
+.opp-card .oc-name {
+  font-size: 12.5px; margin-bottom: 6px; overflow: hidden; display: -webkit-box;
+  -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+}
+.opp-card .oc-meta { font-size: 11.5px; color: #666; padding: 1px 0; }
+
+/* Print: only the customer-facing proposal document leaves the building */
+@media print {
+  .sidenav, .topbar, .nav-backdrop, .formula-bar, .sheet-tabs, .toolbar,
+  .explorer-bar, .legend, .no-print, .costing-note, .comms-log, .factors,
+  .modal, .restricted, .drawer, .drawer-backdrop, .hint { display: none !important; }
+  body { background: #fff; }
+  .page { padding: 0; }
+  .page h2 { color: #000; }
+  .cover-sheet, .form-card, .sheet-wrap { border: none; box-shadow: none; max-width: none; }
+  .cover-sheet { padding: 0 0 18px; break-inside: avoid; }
+  .sheet-wrap { overflow: visible; }
+  table.sheet th {
+    position: static; background: #e8e8e8 !important; color: #000;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact;
+  }
+  /* Internal costing never prints */
+  table.sheet th.internal, table.sheet td.internal { display: none; }
+  table.sheet button, .cover-sheet button { display: none !important; }
+  input, select, textarea {
+    border: none !important; background: transparent !important;
+    appearance: none; -webkit-appearance: none;
+  }
+  @page { margin: 16mm 13mm; }
+}
+
+/* Tablet (iPad-class) — the drawer becomes the primary editing surface */
+@media (max-width: 1024px) {
+  body { font-size: 15px; }
+  button, .btn { min-height: 42px; padding: 9px 14px; font-size: 14px; }
+  select, input[type=text], input[type=number], input[type=date], input[type=tel], textarea {
+    min-height: 42px; font-size: 16px; /* 16px stops iOS focus-zoom */
+  }
+  /* Grid cells stay compact — tap a row and edit in the drawer instead */
+  table.sheet td input, table.sheet td select { min-height: 30px; font-size: 13px; }
+  table.sheet th, table.sheet td { padding: 6px 8px; font-size: 13px; }
+
+  /* Sidebar becomes off-canvas, opened by the burger */
+  .sidenav {
+    position: fixed; left: 0; top: 0; bottom: 0; height: 100vh;
+    transform: translateX(-100%); transition: transform .25s ease;
+    box-shadow: 4px 0 18px rgba(0,0,0,.25);
+  }
+  .sidenav.open { transform: translateX(0); }
+  .nav-backdrop.open { opacity: 1; pointer-events: auto; }
+  .nav-burger { display: inline-flex; }
+  .sheet-tabs { left: 0; }
+  .side-item { padding: 13px 18px; font-size: 14px; }
+
+  /* Tracker: Sl + Opp ID stay pinned while the rest scrolls. The rowhead is
+     forced to 36px and the Opp ID pinned at 35px — 1px overlap, no see-through
+     seam between the two sticky columns. */
+  table.sheet th.rowhead, table.sheet td.rowhead {
+    position: sticky; left: 0; z-index: 2;
+    width: 36px; min-width: 36px; max-width: 36px;
+  }
+  table.sheet td.oppid { position: sticky; left: 35px; z-index: 2; background: #fff; }
+  table.sheet thead th.rowhead { z-index: 4; }
+  table.sheet thead tr th:nth-child(2) { position: sticky; left: 35px; z-index: 4; }
+  table.sheet tbody tr:nth-child(even) td.oppid { background: #f7f7f7; }
+
+  .drawer { width: min(680px, 100vw); }
+  .drawer-backdrop { display: block; }
+  .drawer-backdrop.open { opacity: 1; pointer-events: auto; }
+  .drawer-tabs .dtab { padding: 11px 14px; font-size: 13.5px; }
+
+  .folder-card { padding: 14px 8px; }
+  .folder-del { display: inline-block; }
+  .forms-card { margin: 0 12px; padding: 22px 18px; }
+  .stat-card { flex: 1 1 45%; }
+}
+
+/* Tile grid: 2-up portrait, 3-up landscape on tablets */
+@media (max-width: 1024px) and (orientation: portrait) {
+  .tile-grid.primary { grid-template-columns: repeat(2, 1fr); }
+  .tile { min-height: 120px; }
+}
+@media (max-width: 1024px) and (orientation: landscape) {
+  .tile-grid.primary { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* Phone fallback */
+@media (max-width: 700px) {
+  .page { padding: 10px 8px 64px; }
+  .drawer { width: 100vw; }
+  .toolbar .hint { display: none; }
+  .forms-card { padding: 18px 12px; margin: 0 6px; }
+  .cover-sheet { padding: 18px 14px; }
+  .stat-card { flex: 1 1 100%; }
+  .role-switch select { max-width: 130px; }
+  .dgrid2 { grid-template-columns: 1fr; }
+}

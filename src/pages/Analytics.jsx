@@ -10,7 +10,7 @@ const FUNNEL_RAMP = ['#8db1d3', '#729fc6', '#588cb8', '#4477a4', '#2f608c', '#12
 const PROB_WEIGHT = { Low: 0.25, Medium: 0.5, High: 0.75 }
 
 function Restricted() {
-  return <div className="restricted">🔒 Restricted — commercial data (approvers/admin only)</div>
+  return <div className="restricted">Restricted — commercial data (approvers/admin only)</div>
 }
 
 // Single-hue horizontal bars (counts by category); clicking a bar opens the

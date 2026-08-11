@@ -4,6 +4,7 @@ import { useStore } from '../store.jsx'
 import { defaultCosting } from '../seed.js'
 import { effectiveRate, unitCostINR, unitSellINR, fmt, exportCSV, canViewCommercial } from '../utils.js'
 import { useFormulaBar } from '../formulabar.jsx'
+import { Icon } from '../icons.jsx'
 
 const TABS = ['Cover Letter', 'Signal List', 'Rack Layout', 'Priced BoQ']
 
@@ -30,6 +31,11 @@ export default function Proposal() {
   const fb = useFormulaBar()
   const opp = store.opportunities.find(o => o.id === oppId)
   const [tab, setTab] = useState('Cover Letter')
+  const [printing, setPrinting] = useState(false)
+  const [emailOpen, setEmailOpen] = useState(false)
+  const [emailTo, setEmailTo] = useState('')
+  const [emailSubject, setEmailSubject] = useState('')
+  const [emailNote, setEmailNote] = useState('')
   const [p, setP] = useState(() => normalize(store.getProposal(oppId)))
   // Ref mirror: deferred commits (formula bar) must patch the CURRENT proposal,
   // never a click-time snapshot — a stale snapshot would silently revert edits.
@@ -38,6 +44,16 @@ export default function Proposal() {
 
   // /proposal/:oppId reuses this component instance — reload state per opportunity.
   useEffect(() => { setP(normalize(store.getProposal(oppId))); setTab('Cover Letter') }, [oppId]) // eslint-disable-line
+
+  // Print-all: render the full customer document (cover + terms + BoQ) first,
+  // then open the dialog; afterprint restores the tabbed view.
+  useEffect(() => {
+    if (!printing) return
+    const done = () => setPrinting(false)
+    window.addEventListener('afterprint', done, { once: true })
+    const t = setTimeout(() => window.print(), 60)
+    return () => { clearTimeout(t); window.removeEventListener('afterprint', done) }
+  }, [printing])
 
   if (!opp) return <div className="page"><h2>Unknown opportunity</h2><Link to="/">Back to tracker</Link></div>
 
@@ -140,6 +156,37 @@ export default function Proposal() {
   const addTerm = () => save({ ...p, terms: [...p.terms, { term: '', customerAsk: '', ourResponse: '', status: 'Comply' }] })
   const removeTerm = i => () => save({ ...p, terms: p.terms.filter((_, j) => j !== i) })
 
+  const comms = (store.communications || {})[oppId] || []
+
+  const sendEmail = () => {
+    const body = [
+      'Dear Sir/Madam,',
+      '',
+      ...(emailNote.trim() ? [emailNote.trim(), ''] : []),
+      `Please find our Techno-Commercial Proposal ${oppId}${p.project ? ' for ' + p.project : ''}.`,
+      ...(p.rfqNumber ? [`Ref: ${p.rfqNumber}`] : []),
+      '',
+      ...p.bom.slice(0, 6).map((l, i) => `${i + 1}. ${l.desc} — ${totalQty(l)} nos`),
+      ...(p.bom.length > 6 ? [`…and ${p.bom.length - 6} more items`] : []),
+      '',
+      'The detailed proposal PDF is attached separately.',
+      '',
+      'Best regards,',
+      'ModAE India Pvt Ltd',
+    ].join('\n')
+    // mailto URLs are unreliable past ~2000 chars — cap the encoded body and
+    // never cut through a %XX escape.
+    const encBody = encodeURIComponent(body).slice(0, 1600).replace(/%[0-9A-F]?$/i, '')
+    window.location.href = `mailto:${encodeURIComponent(emailTo.trim())}?subject=${encodeURIComponent(emailSubject)}&body=${encBody}`
+    store.addCommunication(oppId, { to: emailTo.trim(), subject: emailSubject, kind: 'proposal-email' })
+    setEmailOpen(false)
+  }
+
+  const openEmail = () => {
+    setEmailSubject(`${oppId} — Techno-Commercial Proposal${p.project ? ' — ' + p.project.slice(0, 60) : ''}`)
+    setEmailOpen(true)
+  }
+
   const exportBoQ = () => exportCSV(
     `${oppId}_Priced_BoQ.csv`,
     ['Sl.', 'Item Category', 'Item/Scope Description', 'Proposed Model & Part Number', 'Adders', 'Qty/Unit', 'Common', 'Spares', 'Total Qty', 'Unit Price ₹', 'Total Price ₹', 'Unit Cost ₹', 'Total Cost ₹', `List Price`, 'Currency'],
@@ -153,10 +200,11 @@ export default function Proposal() {
         <Link className="btn" to={`/folders/${oppId}`}>◂ Back to folder</Link>
         <span className="spacer" />
         {tab === 'Priced BoQ' && comm && <button onClick={exportBoQ}>Extract to Excel</button>}
-        <button className="primary" onClick={() => window.print()}>Print / PDF proposal</button>
+        <button onClick={openEmail}><Icon name="mail" size={13} /> Email proposal</button>
+        <button className="primary" onClick={() => setPrinting(true)}><Icon name="printer" size={13} /> Print / PDF proposal</button>
       </div>
 
-      {tab === 'Cover Letter' && (
+      {(tab === 'Cover Letter' || printing) && (
         <div className="cover-sheet">
           <div className="cover-head">
             <span className="brand">‖a·e‖</span>
@@ -206,14 +254,29 @@ export default function Proposal() {
               ))}
             </tbody>
           </table>
-          <button onClick={addTerm}>+ Add term</button>
+          <button onClick={addTerm} className="no-print">+ Add term</button>
           <div className="costing-note">
             Every deviation from the customer's preferred commercial terms is called out here — deviations need approval before submission.
           </div>
+          {comms.length > 0 && (
+            <div className="comms-log">
+              <div className="section-title">Communications</div>
+              <table className="sheet">
+                <thead><tr><th>When</th><th>To</th><th>Subject</th></tr></thead>
+                <tbody>
+                  {comms.map((c, i) => (
+                    <tr key={i}>
+                      <td>{c.ts.slice(0, 16).replace('T', ' ')}</td><td>{c.to}</td><td>{c.subject}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
-      {tab === 'Signal List' && (
+      {tab === 'Signal List' && !printing && (
         <div className="form-card">
           <div className="section-title">Signal List {['Spares', 'Service', 'Training', 'AMC'].includes(opp.oppType) && <span className="hint">(not applicable for spares/service proposals — shown for reference)</span>}</div>
           <table className="sheet">
@@ -239,7 +302,7 @@ export default function Proposal() {
         </div>
       )}
 
-      {tab === 'Rack Layout' && (
+      {tab === 'Rack Layout' && !printing && (
         <div className="form-card">
           <div className="section-title">Rack Layout (engineering output — placeholder in Phase 1)</div>
           <pre style={{ background: '#f7f7f7', border: '1px solid #ddd', padding: 14, fontSize: 12 }}>
@@ -253,11 +316,11 @@ export default function Proposal() {
 
       {tab === 'Priced BoQ' && !comm && (
         <div className="restricted" style={{ maxWidth: 640 }}>
-          🔒 Restricted — the Priced BoQ (costing factors, landed costs, margins) is visible to approvers/admin only.
+          <Icon name="lock" size={13} /> Restricted — the Priced BoQ (costing factors, landed costs, margins) is visible to approvers/admin only.
         </div>
       )}
 
-      {tab === 'Priced BoQ' && comm && (
+      {(tab === 'Priced BoQ' || printing) && comm && (
         <>
           <div className="factors">
             <table>
@@ -366,6 +429,31 @@ export default function Proposal() {
           </div>
           <div className="costing-note">Grey columns are the internal costing block (never shown to the customer); the white columns are the customer-facing BoQ, quoted in ₹ only.</div>
         </>
+      )}
+
+      {emailOpen && (
+        <div className="modal form-card no-print">
+          <div className="section-title"><Icon name="mail" size={15} /> Email proposal — {oppId}</div>
+          <div className="q">
+            <div className="q-label">To</div>
+            <input type="text" value={emailTo} onChange={e => setEmailTo(e.target.value)} placeholder="customer@company.com" autoFocus />
+          </div>
+          <div className="q">
+            <div className="q-label">Subject</div>
+            <input type="text" value={emailSubject} onChange={e => setEmailSubject(e.target.value)} />
+          </div>
+          <div className="q">
+            <div className="q-label">Note (optional, one line)</div>
+            <input type="text" value={emailNote} onChange={e => setEmailNote(e.target.value)} placeholder="e.g. Submitted within due date — happy to discuss." />
+          </div>
+          <div className="costing-note">
+            Opens your mail app with a summary body — attach the printed PDF before sending. The send is recorded in the communications log.
+          </div>
+          <div className="forms-actions">
+            <button className="primary" disabled={!emailTo.trim()} onClick={sendEmail}>Open in mail app ▸</button>
+            <button onClick={() => setEmailOpen(false)}>Cancel</button>
+          </div>
+        </div>
       )}
 
       <div className="sheet-tabs">

@@ -4,6 +4,7 @@ import { useStore } from '../store.jsx'
 import { SUBFOLDERS } from '../seed.js'
 import { stageClass } from '../utils.js'
 import { supabase, uploadFile, removePaths, removePrefix } from '../supabase.js'
+import { Icon } from '../icons.jsx'
 
 function FolderIcon({ cls = 'open', size = 44 }) {
   return (
@@ -146,11 +147,11 @@ export default function Folders() {
             <>
               <input ref={fileInput} type="file" multiple style={{ display: 'none' }} onChange={onUpload} />
               <button onClick={() => fileInput.current.click()} disabled={busy}>
-                {busy ? 'Uploading…' : '⬆ Upload'}
+                <Icon name="upload" size={13} /> {busy ? 'Uploading…' : 'Upload'}
               </button>
             </>
           ) : (
-            <button onClick={addMockFile}>⬆ Upload (mock)</button>
+            <button onClick={addMockFile}><Icon name="upload" size={13} /> Upload (mock)</button>
           )}
         </div>
         <div className="sheet-wrap" style={{ maxWidth: 720 }}>
@@ -159,7 +160,7 @@ export default function Folders() {
             <tbody>
               {subfolder === 'Proposal' && !(files.Proposal || []).some(fl => fl.name.endsWith('.xlsx')) && (
                 <tr onClick={() => nav(`/proposal/${opp.id}`)} style={{ cursor: 'pointer' }} title="Open the proposal workbook">
-                  <td>📊 <b>{opp.id} Proposal Workbook.xlsx</b> <span className="hint">Cover Letter · Signal List · Rack Layout · Priced BoQ</span></td>
+                  <td><Icon name="fileSheet" size={13} /> <b>{opp.id} Proposal Workbook.xlsx</b> <span className="hint">Cover Letter · Signal List · Rack Layout · Priced BoQ</span></td>
                   <td>{opp.lastUpdated}</td><td>247 KB</td><td></td>
                 </tr>
               )}
@@ -172,7 +173,7 @@ export default function Folders() {
                     style={isWorkbook ? { cursor: 'pointer' } : undefined}
                     title={isWorkbook ? 'Open the proposal workbook' : undefined}>
                     <td>
-                      {isWorkbook ? '📊 ' : '📄 '}
+                      <Icon name={isWorkbook ? 'fileSheet' : 'fileText'} size={13} />{' '}
                       {isWorkbook ? <b>{fl.name}</b>
                         : fl.url ? <a href={fl.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>{fl.name}</a>
                         : fl.name}

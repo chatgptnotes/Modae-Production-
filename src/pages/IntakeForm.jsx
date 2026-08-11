@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useStore, nextOppId } from '../store.jsx'
 import { CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS } from '../seed.js'
 
@@ -66,6 +66,7 @@ export default function IntakeForm() {
       <form className="forms-card" onSubmit={submit}>
         <h1>New Sales Opportunity Intake 2026-2027</h1>
         <div className="forms-note">Use this form to register a new sales opportunity. When you submit this form, a pipeline row and an opportunity folder are created automatically.</div>
+        <div className="forms-note">Have a tender / RFQ PDF? <Link to="/tender">Let AI extract it for you ▸</Link></div>
         <div className="req-note">* Required</div>
 
         <div className="q">

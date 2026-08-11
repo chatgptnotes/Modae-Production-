@@ -4,6 +4,8 @@ import { useStore } from '../store.jsx'
 import { STAGES, CLOSE_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS } from '../seed.js'
 import { fmt, mmmYY, ddMmmYY, exportCSV, stageClass, canViewCommercial } from '../utils.js'
 import { useFormulaBar } from '../formulabar.jsx'
+import { useDrawer } from '../drawer.jsx'
+import { Icon } from '../icons.jsx'
 
 const OPEN_STAGES = STAGES.filter(s => s !== 'Won' && s !== 'Lost')
 
@@ -45,6 +47,7 @@ export default function Tracker() {
   const store = useStore()
   const nav = useNavigate()
   const fb = useFormulaBar()
+  const drawer = useDrawer()
   const [sheet, setSheet] = useState('Opportunities') // Pivot | Opportunities | Old Closed Opps
   const [ownerFilter, setOwnerFilter] = useState('All')
   const [filters, setFilters] = useState({})           // col key -> Set of allowed display values
@@ -236,7 +239,13 @@ export default function Tracker() {
           </thead>
           <tbody>
             {rows.map(o => (
-              <tr key={o.id}>
+              <tr key={o.id} className="rowclick"
+                onClick={e => {
+                  // Row click opens the detail drawer — but never when the click
+                  // landed on an inline editor, link, or the filter popover.
+                  if (e.target.closest('input,select,a,button,label,.filter-pop')) return
+                  drawer.open({ type: 'opp', id: o.id })
+                }}>
                 <td className="rowhead">{o.sl}</td>
                 <td onClick={selectCell(o, COLS[0])} className={`oppid ${stageClass(o) === 'open' ? '' : stageClass(o)} ${isSel(o, COLS[0]) ? 'cell-sel' : ''}`}>
                   <Link to={`/folders/${o.id}`}>{o.id}</Link>
@@ -274,10 +283,10 @@ export default function Tracker() {
                 </td>
                 {!comm ? (
                   <>
-                    <td className="num locked" title="Commercial data — approvers/admin only">🔒</td>
-                    <td className="num locked">🔒</td>
-                    <td className="num locked">🔒</td>
-                    <td className="num locked">🔒</td>
+                    <td className="num locked" title="Commercial data — approvers/admin only"><Icon name="lock" size={12} /></td>
+                    <td className="num locked"><Icon name="lock" size={12} /></td>
+                    <td className="num locked"><Icon name="lock" size={12} /></td>
+                    <td className="num locked"><Icon name="lock" size={12} /></td>
                   </>
                 ) : (
                   <>
@@ -328,10 +337,10 @@ export default function Tracker() {
             <tr>
               <td className="rowhead"></td>
               <td colSpan={14}>Totals {rows.length < base.length && <span className="hint">({rows.length} of {base.length} rows shown — filters active)</span>}</td>
-              <td className="num">{comm ? `₹ ${fmt(totals.v)}` : '🔒'}</td>
-              <td className="num">{comm ? `₹ ${fmt(totals.c)}` : '🔒'}</td>
-              <td className="num">{comm ? `₹ ${fmt(totals.v - totals.c)}` : '🔒'}</td>
-              <td className="num" style={{ color: '#bf9000' }}>{comm && totals.v ? Math.round(((totals.v - totals.c) / totals.v) * 100) + '%' : comm ? '' : '🔒'}</td>
+              <td className="num">{comm ? `₹ ${fmt(totals.v)}` : <Icon name="lock" size={12} />}</td>
+              <td className="num">{comm ? `₹ ${fmt(totals.c)}` : <Icon name="lock" size={12} />}</td>
+              <td className="num">{comm ? `₹ ${fmt(totals.v - totals.c)}` : <Icon name="lock" size={12} />}</td>
+              <td className="num" style={{ color: '#bf9000' }}>{comm && totals.v ? Math.round(((totals.v - totals.c) / totals.v) * 100) + '%' : comm ? '' : <Icon name="lock" size={12} />}</td>
               <td colSpan={13}></td>
             </tr>
           </tfoot>

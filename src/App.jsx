@@ -1,9 +1,11 @@
-import React from 'react'
-import { Routes, Route, NavLink } from 'react-router-dom'
+import React, { useEffect, useState } from 'react'
+import { Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from './store.jsx'
 import { ROLES } from './seed.js'
 import { isAdminRole } from './utils.js'
 import { FormulaBar } from './formulabar.jsx'
+import { DrawerHost } from './drawer.jsx'
+import { Icon } from './icons.jsx'
 import Tracker from './pages/Tracker.jsx'
 import IntakeForm from './pages/IntakeForm.jsx'
 import Folders from './pages/Folders.jsx'
@@ -13,30 +15,59 @@ import Dashboard from './pages/Dashboard.jsx'
 import Customers from './pages/Customers.jsx'
 import Analytics from './pages/Analytics.jsx'
 import Users from './pages/Users.jsx'
+import TenderIntake from './pages/TenderIntake.jsx'
+import Home from './pages/Home.jsx'
+import MyOpps from './pages/MyOpps.jsx'
 
-const TABS = [
-  { to: '/', label: 'Opportunity Tracker' },
-  { to: '/new', label: '+ New Opportunity' },
-  { to: '/folders', label: 'Folders' },
-  { to: '/pricelists', label: 'Price Lists' },
-  { to: '/dashboard', label: 'Dashboard' },
-  { to: '/analytics', label: 'Analytics' },
-  { to: '/customers', label: 'Customers' },
-  { to: '/users', label: 'Users & Roles', adminOnly: true },
+// Left-sidebar navigation (modern shell, mirrors the WinTrack Ver 1.1 wireframe).
+const NAV = [
+  { to: '/home', label: 'Home', icon: 'home' },
+  { to: '/', label: 'Opportunity Tracker', icon: 'sheet' },
+  { to: '/my', label: 'My Opportunities', icon: 'cards' },
+  { to: '/new', label: 'New Opportunity', icon: 'plus' },
+  { to: '/tender', label: 'Tender → Proposal', icon: 'bot' },
+  { to: '/folders', label: 'Folders', icon: 'folder' },
+  { to: '/pricelists', label: 'Price Lists', icon: 'tag' },
+  { to: '/dashboard', label: 'Dashboard', icon: 'chartBar' },
+  { to: '/analytics', label: 'Analytics', icon: 'chartLine' },
+  { to: '/customers', label: 'Customers', icon: 'users' },
+  { to: '/users', label: 'Users & Roles', icon: 'shield', adminOnly: true },
 ]
 
 export default function App() {
   const store = useStore()
-  const tabs = TABS.filter(t => !t.adminOnly || isAdminRole(store.role))
+  const nav = useNavigate()
+  const loc = useLocation()
+  const [navOpen, setNavOpen] = useState(false)
+  const items = NAV.filter(t => !t.adminOnly || isAdminRole(store.role))
+
+  // Off-canvas nav closes on navigation (tablet).
+  useEffect(() => { setNavOpen(false) }, [loc.pathname])
+
+  // On tablets the tile Home is the landing page; desktop keeps the tracker.
+  useEffect(() => {
+    const hash = window.location.hash
+    if (window.innerWidth <= 1024 && (hash === '' || hash === '#/')) nav('/home', { replace: true })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
-    <>
-      <div className="ribbon">
-        <div className="title-row">
-          <span className="logo">WinTrack</span>
-          <span className="subtitle">Modae — sales opportunity &amp; proposal workspace (prototype)</span>
-          <span className="spacer" />
-          <label className="role-switch" title="Acting-as persona — commercial data is visible to approvers/admins only">
-            Acting as{' '}
+    <div className="shell">
+      <div className={`nav-backdrop ${navOpen ? 'open' : ''}`} onClick={() => setNavOpen(false)} />
+      <aside className={`sidenav ${navOpen ? 'open' : ''}`}>
+        <div className="brand" onClick={() => nav('/home')}>
+          WinTrack <span>by ModAE</span>
+        </div>
+        <nav className="side-nav">
+          {items.map(t => (
+            <NavLink key={t.to} to={t.to} end={t.to === '/'}
+              className={({ isActive }) => `side-item ${isActive ? 'active' : ''}`}>
+              <Icon name={t.icon} size={17} /> {t.label}
+            </NavLink>
+          ))}
+        </nav>
+        <div className="side-foot">
+          <label title="Acting-as persona — commercial data is visible to approvers/admins only">
+            Acting as
             <select value={store.role} onChange={e => store.setRole(e.target.value)}>
               {Object.entries(ROLES).map(([id, r]) => <option key={id} value={id}>{r.label}</option>)}
             </select>
@@ -45,29 +76,34 @@ export default function App() {
             Reset demo data
           </button>
         </div>
-        <nav className="nav-tabs">
-          {tabs.map(t => (
-            <NavLink key={t.to} to={t.to} end={t.to === '/'}
-              className={({ isActive }) => (isActive ? 'active' : '')}>
-              {t.label}
-            </NavLink>
-          ))}
-        </nav>
+      </aside>
+
+      <div className="main-col">
+        <header className="topbar">
+          <button className="nav-burger" onClick={() => setNavOpen(true)} title="Menu">
+            <Icon name="menu" size={20} />
+          </button>
+          <span className="topbar-title">Modae — sales opportunity &amp; proposal workspace</span>
+        </header>
+        <FormulaBar />
+        <Routes>
+          <Route path="/" element={<Tracker />} />
+          <Route path="/home" element={<Home />} />
+          <Route path="/my" element={<MyOpps />} />
+          <Route path="/new" element={<IntakeForm />} />
+          <Route path="/tender" element={<TenderIntake />} />
+          <Route path="/folders" element={<Folders />} />
+          <Route path="/folders/:oppId" element={<Folders />} />
+          <Route path="/folders/:oppId/:sub" element={<Folders />} />
+          <Route path="/proposal/:oppId" element={<Proposal />} />
+          <Route path="/pricelists" element={<PriceLists />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/analytics" element={<Analytics />} />
+          <Route path="/customers" element={<Customers />} />
+          <Route path="/users" element={<Users />} />
+        </Routes>
       </div>
-      <FormulaBar />
-      <Routes>
-        <Route path="/" element={<Tracker />} />
-        <Route path="/new" element={<IntakeForm />} />
-        <Route path="/folders" element={<Folders />} />
-        <Route path="/folders/:oppId" element={<Folders />} />
-        <Route path="/folders/:oppId/:sub" element={<Folders />} />
-        <Route path="/proposal/:oppId" element={<Proposal />} />
-        <Route path="/pricelists" element={<PriceLists />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/analytics" element={<Analytics />} />
-        <Route path="/customers" element={<Customers />} />
-        <Route path="/users" element={<Users />} />
-      </Routes>
-    </>
+      <DrawerHost />
+    </div>
   )
 }

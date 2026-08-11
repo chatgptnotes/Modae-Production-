@@ -12,7 +12,7 @@ export default function PriceLists() {
       <div className="page">
         <h2>Price Lists (Admin)</h2>
         <div className="restricted" style={{ maxWidth: 640 }}>
-          🔒 Restricted — supplier price lists, trader quotes and rate sheets are visible to approvers/admin only.
+          Restricted — supplier price lists, trader quotes and rate sheets are visible to approvers/admin only.
         </div>
       </div>
     )
@@ -39,7 +39,7 @@ export default function PriceLists() {
         <span className="hint">Version {pl.version} · uploaded {pl.uploaded} · {pl.currency}. Admin uploads the current file; the tool uses whatever is uploaded.</span>
         <span className="spacer" />
         <button onClick={() => exportCSV(`${list}_pricelist.csv`, ['Part Number','Description',`Price (${pl.currency})`,'Adders'], pl.parts.map(x => [x.pn, x.desc, x.price, x.adders.map(a => `${a.desc} +${a.price}`).join('; ')]))}>Extract to Excel</button>
-        <button onClick={() => alert('Upload new version (mock): in Phase 1 the admin uploads the yearly B&K / Metrics Excel here; the latest upload becomes current and older versions are kept.')}>⬆ Upload new version</button>
+        <button onClick={() => alert('Upload new version (mock): in Phase 1 the admin uploads the yearly B&K / Metrics Excel here; the latest upload becomes current and older versions are kept.')}>Upload new version</button>
       </div>
 
       <div className="sheet-wrap" style={{ maxWidth: 900 }}>

@@ -4,6 +4,7 @@ import { HashRouter } from 'react-router-dom'
 import App from './App.jsx'
 import { StoreProvider } from './store.jsx'
 import { FormulaBarProvider } from './formulabar.jsx'
+import { DrawerProvider } from './drawer.jsx'
 import './styles.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -11,7 +12,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <HashRouter>
       <StoreProvider>
         <FormulaBarProvider>
-          <App />
+          <DrawerProvider>
+            <App />
+          </DrawerProvider>
         </FormulaBarProvider>
       </StoreProvider>
     </HashRouter>

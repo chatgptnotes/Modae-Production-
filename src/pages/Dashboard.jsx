@@ -24,7 +24,7 @@ export default function Dashboard() {
       <div className="page">
         <h2>Pivot — Sum of Value (K₹) by Customer × Order Month</h2>
         <div className="restricted" style={{ maxWidth: 640 }}>
-          🔒 Restricted — the forecast pivot rolls up commercial values and is visible to approvers/admin only.
+          Restricted — the forecast pivot rolls up commercial values and is visible to approvers/admin only.
           Switch the acting-as persona in the header to view it.
         </div>
       </div>
