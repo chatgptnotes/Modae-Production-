@@ -3,16 +3,34 @@ import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { SUBFOLDERS } from '../seed.js'
 import { stageClass } from '../utils.js'
-import { supabase, uploadFile, removePaths, removePrefix } from '../supabase.js'
+import { removePrefix } from '../supabase.js'
+import * as filestore from '../filestore.js'
+import { getConfig } from '../sharepoint.js'
 import { Icon } from '../icons.jsx'
 
-function FolderIcon({ cls = 'open', size = 44 }) {
+// The client's four real SharePoint status folders and their Excel-ish colors.
+const OPEN_FOLDER = { fill: '#ffeb9c', stroke: '#9c6500' }
+const BLUE_FOLDER = { fill: '#dbe9f5', stroke: '#1f4e79' }
+
+function FolderIcon({ cls = 'open', size = 44, pathStyle }) {
   return (
     <svg className={`folder-icon ${cls}`} width={size} height={size * 0.78}
       viewBox="0 0 44 34" aria-hidden="true">
-      <path d="M2 6.5 Q2 4 4.5 4 H15.5 L19 8 H39.5 Q42 8 42 10.5 V29.5 Q42 32 39.5 32 H4.5 Q2 32 2 29.5 Z" />
+      <path style={pathStyle} d="M2 6.5 Q2 4 4.5 4 H15.5 L19 8 H39.5 Q42 8 42 10.5 V29.5 Q42 32 39.5 32 H4.5 Q2 32 2 29.5 Z" />
     </svg>
   )
+}
+
+// SharePoint folder group: stage Won → WON; stage Lost or Closed non-won → Closed; else Open.
+const groupFor = o => (o.stage === 'Won' ? 'WON' : (o.stage === 'Lost' || o.status === 'Closed') ? 'Closed' : 'Open')
+
+function SyncPill({ sync, style }) {
+  if (!sync || !sync.state) return null
+  const tone = sync.state === 'synced' ? 'conf-hi' : sync.state === 'error' ? 'conf-lo' : 'grey'
+  const title = sync.state === 'synced' ? 'Folder synced to SharePoint'
+    : sync.state === 'error' ? `SharePoint sync error: ${sync.error || sync.message || 'unknown'}`
+    : 'Local only — not yet synced to SharePoint'
+  return <span className={`chip ${tone}`} title={title} style={style}>SP</span>
 }
 
 // Two-step inline delete: first click arms ("Delete?"), second click fires.
@@ -46,11 +64,26 @@ export default function Folders() {
   const fileInput = useRef(null)
   const [busy, setBusy] = useState(false)
   const [cloudErr, setCloudErr] = useState('')
+  const backend = filestore.activeBackend()
+  const spConnected = backend === 'sharepoint'
   // Cloud deletes run best-effort behind the store update; a failure surfaces
   // in the explorer bar but never blocks the UI.
-  const cloud = fn => { if (supabase) fn().catch(e => setCloudErr(`Cloud delete failed: ${e.message}`)) }
+  const cloud = fn => { if (backend !== 'mock') fn().catch(e => setCloudErr(`Cloud delete failed: ${e.message}`)) }
 
-  const fmtSize = b => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`)
+  // Files LIVE in SharePoint — merge its listing into the local cache so the
+  // subfolder views show them. Best-effort: a failure shows in the bar.
+  useEffect(() => {
+    if (!opp || filestore.activeBackend() !== 'sharepoint') return
+    let alive = true
+    filestore.listOppFiles(opp).then(map => {
+      if (!alive || !map) return
+      Object.entries(map).forEach(([sf, rows]) => {
+        const have = ((store.files[opp.id] || {})[sf] || []).map(f => f.name)
+        rows.forEach(r => { if (!have.includes(r.name)) store.addFile(opp.id, sf, r) })
+      })
+    }).catch(e => { if (alive) setCloudErr(e.message) })
+    return () => { alive = false }
+  }, [oppId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const onUpload = async e => {
     const picked = [...e.target.files]
@@ -58,13 +91,10 @@ export default function Folders() {
     setCloudErr(''); setBusy(true)
     for (const f of picked) {
       try {
-        const path = `${opp.id}/${subfolder}/${f.name}`
-        const url = await uploadFile(path, f)
-        store.addFile(opp.id, subfolder, {
-          name: f.name, date: new Date().toISOString().slice(0, 10), size: fmtSize(f.size), url, path,
-        })
+        const rec = await filestore.uploadOppFile(opp, subfolder, f)
+        store.addFile(opp.id, subfolder, rec)
       } catch (ex) {
-        setCloudErr(`Upload of ${f.name} failed: ${ex.message}`)
+        setCloudErr(ex.message)
       }
     }
     setBusy(false)
@@ -84,43 +114,71 @@ export default function Folders() {
     store.addSubfolder(opp.id, name.trim())
   }
 
-  // Root: the OneDrive "Sales - Opportunities" wall of folders
+  // Root: the "Sales - Opportunities" wall, grouped by the four SharePoint status folders
   if (!opp) {
+    const cfg = spConnected ? getConfig() : null
     const newestFirst = [...store.opportunities].sort((a, b) => b.id.localeCompare(a.id))
     const sections = [
-      ['Open', newestFirst.filter(o => stageClass(o) === 'open')],
-      ['Won', newestFirst.filter(o => stageClass(o) === 'won')],
-      ['Lost', newestFirst.filter(o => stageClass(o) === 'lost')],
-    ].filter(([, opps]) => opps.length)
+      { label: 'Open', opps: newestFirst.filter(o => groupFor(o) === 'Open'), cls: 'open', pathStyle: OPEN_FOLDER },
+      { label: 'WON', opps: newestFirst.filter(o => groupFor(o) === 'WON'), cls: 'won' },
+      { label: 'Closed', opps: newestFirst.filter(o => groupFor(o) === 'Closed'), cls: 'lost' },
+    ].filter(s => s.opps.length)
+    // Deleted opps whose SharePoint folder was preserved (moved, never deleted).
+    const notInList = Object.entries(store.spSync || {})
+      .filter(([, e]) => e && e.folder === 'Not In Opp List')
+      .sort(([a], [b]) => b.localeCompare(a))
     return (
       <div className="page">
         <div className="explorer-bar">
           <FolderIcon size={18} />
-          <Link to="/folders">OneDrive - ModAE India Pvt Ltd</Link> ›
-          <b>Sales - Opportunities</b>
+          {spConnected ? (
+            <>
+              <Link to="/folders">{cfg.siteHostname}</Link> › {cfg.sitePath} ›{' '}
+              <b>{cfg.rootFolder || 'Opportunities'}</b>
+            </>
+          ) : (
+            <>
+              <Link to="/folders">OneDrive - ModAE India Pvt Ltd</Link> ›{' '}
+              <b>Sales - Opportunities</b>
+            </>
+          )}
           <span className="spacer" style={{ flex: 1 }} />
+          {cloudErr && <span className="hint" style={{ color: 'var(--lost-text)' }}>{cloudErr}</span>}
           <button onClick={() => nav('/new')} title="Folders are 1:1 with opportunities — creating one goes through the intake form">
             ＋ New folder
           </button>
           <span className="hint">{newestFirst.length} items</span>
         </div>
         <div className="legend">
-          <span><FolderIcon cls="won" size={16} /> Won</span>
-          <span><FolderIcon cls="lost" size={16} /> Lost</span>
-          <span><FolderIcon cls="open" size={16} /> Open</span>
-          <span className="hint">One folder per opportunity, created automatically on intake submit. Deleting a folder also removes its tracker row.</span>
+          <span><FolderIcon size={16} pathStyle={OPEN_FOLDER} /> Open</span>
+          <span><FolderIcon cls="won" size={16} /> WON</span>
+          <span><FolderIcon cls="lost" size={16} /> Closed</span>
+          {notInList.length > 0 && <span><FolderIcon size={16} pathStyle={BLUE_FOLDER} /> Not In Opp List</span>}
+          <span className="hint">
+            One folder per opportunity, created automatically on intake submit.
+            {spConnected
+              ? ' Deleting removes the tracker row — the SharePoint folder is moved to Not In Opp List, never deleted.'
+              : ' Deleting a folder also removes its tracker row.'}
+          </span>
         </div>
-        {sections.map(([label, opps]) => (
+        {sections.map(({ label, opps, cls, pathStyle }) => (
           <section key={label}>
             <div className="folder-section-head">{label} ({opps.length})</div>
             <div className="folder-grid">
               {opps.map(o => (
                 <div className="folder-card" key={o.id} onClick={() => nav(`/folders/${o.id}`)}
                   onMouseLeave={disarm(o.id)} title={o.oppName}>
+                  <SyncPill sync={(store.spSync || {})[o.id]} style={{ position: 'absolute', top: 3, left: 3 }} />
                   <DeleteButton id={o.id} armed={confirmDel === o.id} onArm={setConfirmDel}
-                    onDelete={() => { setConfirmDel(null); cloud(() => removePrefix(o.id)); store.deleteOpportunity(o.id) }}
-                    title={`Permanently delete ${o.id} — folder, files, proposal AND its tracker row`} />
-                  <FolderIcon cls={stageClass(o)} />
+                    onDelete={() => {
+                      setConfirmDel(null)
+                      if (backend === 'supabase') cloud(() => removePrefix(o.id))
+                      store.deleteOpportunity(o.id)
+                    }}
+                    title={spConnected
+                      ? `Delete ${o.id} — tracker row, proposal and local cache; its SharePoint folder is MOVED to 'Not In Opp List', never deleted`
+                      : `Permanently delete ${o.id} — folder, files, proposal AND its tracker row`} />
+                  <FolderIcon cls={cls} pathStyle={pathStyle} />
                   <div className="fname">{o.id}</div>
                   <div className="fmeta">{o.sellTo}</div>
                 </div>
@@ -128,6 +186,22 @@ export default function Folders() {
             </div>
           </section>
         ))}
+        {notInList.length > 0 && (
+          <section>
+            <div className="folder-section-head">Not In Opp List ({notInList.length})</div>
+            <div className="folder-grid">
+              {notInList.map(([id, e]) => (
+                <div className="folder-card" key={id}
+                  onClick={e.webUrl ? () => window.open(e.webUrl, '_blank', 'noopener') : undefined}
+                  title={e.webUrl ? `${id} — open the preserved SharePoint folder` : `${id} — folder preserved in SharePoint`}>
+                  <FolderIcon pathStyle={BLUE_FOLDER} />
+                  <div className="fname">{id}</div>
+                  <div className="fmeta">deleted opp · folder preserved{e.ts ? ` · ${String(e.ts).slice(0, 10)}` : ''}</div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     )
   }
@@ -143,7 +217,7 @@ export default function Folders() {
           <b>{subfolder}</b>
           <span style={{ flex: 1 }} />
           {cloudErr && <span className="hint" style={{ color: 'var(--lost-text)' }}>{cloudErr}</span>}
-          {supabase ? (
+          {backend !== 'mock' ? (
             <>
               <input ref={fileInput} type="file" multiple style={{ display: 'none' }} onChange={onUpload} />
               <button onClick={() => fileInput.current.click()} disabled={busy}>
@@ -166,16 +240,17 @@ export default function Folders() {
               )}
               {(files[subfolder] || []).map(fl => {
                 const isWorkbook = subfolder === 'Proposal' && fl.name.endsWith('.xlsx')
+                const href = fl.webUrl || fl.url
                 const delId = `${opp.id}/${subfolder}/${fl.name}`
                 return (
                   <tr key={fl.name} onClick={isWorkbook ? () => nav(`/proposal/${opp.id}`) : undefined}
                     onMouseLeave={disarm(delId)}
                     style={isWorkbook ? { cursor: 'pointer' } : undefined}
-                    title={isWorkbook ? 'Open the proposal workbook' : undefined}>
+                    title={isWorkbook ? 'Open the proposal workbook' : fl.webUrl ? 'Opens in SharePoint' : undefined}>
                     <td>
                       <Icon name={isWorkbook ? 'fileSheet' : 'fileText'} size={13} />{' '}
                       {isWorkbook ? <b>{fl.name}</b>
-                        : fl.url ? <a href={fl.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>{fl.name}</a>
+                        : href ? <a href={href} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>{fl.name}</a>
                         : fl.name}
                     </td>
                     <td>{fl.date}</td><td>{fl.size}</td>
@@ -183,7 +258,7 @@ export default function Folders() {
                       <DeleteButton id={delId} armed={confirmDel === delId} onArm={setConfirmDel}
                         onDelete={() => {
                           setConfirmDel(null)
-                          if (fl.path) cloud(() => removePaths([fl.path]))
+                          cloud(() => filestore.deleteOppFile(opp, subfolder, fl))
                           store.deleteFile(opp.id, subfolder, fl.name)
                         }}
                         title={`Permanently delete ${fl.name}`} />
@@ -208,7 +283,9 @@ export default function Folders() {
         <FolderIcon cls={stageClass(opp)} size={18} />
         <Link to="/folders">Sales - Opportunities</Link> ›
         <b>{opp.id}</b>
+        <SyncPill sync={(store.spSync || {})[opp.id]} />
         <span style={{ flex: 1 }} />
+        {cloudErr && <span className="hint" style={{ color: 'var(--lost-text)' }}>{cloudErr}</span>}
         <button onClick={addSubfolder}>＋ New subfolder</button>
         <span className={`pill ${opp.stage === 'Won' ? 'won' : opp.stage === 'Lost' ? 'lost' : 'Blue'}`}>
           {opp.status === 'Closed' ? opp.stage : 'Open — ' + opp.stage}
@@ -225,7 +302,11 @@ export default function Folders() {
             <div className="folder-card" key={sf} onClick={() => nav(`/folders/${opp.id}/${encodeURIComponent(sf)}`)}
               onMouseLeave={disarm(`${opp.id}:${sf}`)}>
               <DeleteButton id={`${opp.id}:${sf}`} armed={confirmDel === `${opp.id}:${sf}`} onArm={setConfirmDel}
-                onDelete={() => { setConfirmDel(null); cloud(() => removePrefix(`${opp.id}/${sf}`)); store.deleteSubfolder(opp.id, sf) }}
+                onDelete={() => {
+                  setConfirmDel(null)
+                  if (backend === 'supabase') cloud(() => removePrefix(`${opp.id}/${sf}`))
+                  store.deleteSubfolder(opp.id, sf)
+                }}
                 title={count ? `Permanently delete ${sf} and its ${count} file(s)` : `Delete empty folder ${sf}`} />
               <FolderIcon />
               <div className="fname">{sf}</div>

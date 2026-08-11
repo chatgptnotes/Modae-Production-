@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useStore, nextOppId } from '../store.jsx'
 import { CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS } from '../seed.js'
 import { extractPdfText, parseTender, matchParts, buildProposal, buildOpportunityDraft } from '../tenderParse.js'
-import { supabase, uploadFile } from '../supabase.js'
+import { uploadOppFile } from '../filestore.js'
 import { fmt } from '../utils.js'
 import { Icon } from '../icons.jsx'
 
@@ -135,19 +135,15 @@ export default function TenderIntake() {
       id = opp.id
     }
 
-    // The raw tender lands in Customer Specs, like the manual process.
+    // The raw tender lands in Customer Specs, like the manual process. The
+    // filestore facade picks the backend (SharePoint → Supabase → mock).
     const meta = { name: file.name, date: today, size: fmtSize(file.size) }
-    if (supabase) {
-      try {
-        const path = `${id}/Customer Specs/${file.name}`
-        const url = await uploadFile(path, file)
-        store.addFile(id, 'Customer Specs', { ...meta, url, path })
-      } catch (e) {
-        store.addFile(id, 'Customer Specs', meta)
-        setWarn(`Cloud upload failed (${e.message}) — file recorded locally only.`)
-      }
-    } else {
+    try {
+      const rec = await uploadOppFile(opp, 'Customer Specs', file)
+      store.addFile(id, 'Customer Specs', rec)
+    } catch (e) {
       store.addFile(id, 'Customer Specs', meta)
+      setWarn(`Cloud upload failed (${e.message}) — file recorded locally only.`)
     }
 
     // Unpriced items become ad-hoc registry entries awaiting a trader quote,

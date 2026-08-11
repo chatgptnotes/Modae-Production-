@@ -5,7 +5,10 @@ import App from './App.jsx'
 import { StoreProvider } from './store.jsx'
 import { FormulaBarProvider } from './formulabar.jsx'
 import { DrawerProvider } from './drawer.jsx'
+import { registerSW } from './pwa.js'
 import './styles.css'
+
+registerSW()
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>

@@ -4,7 +4,102 @@
 // confirms each condition is incorporated in the proposal.
 //
 // Blocker shape: { key, severity: 'block'|'wait'|'info', text,
-//                  approvalType?, approver?, approvalId?, condIdx? }
+//                  approvalType?, approver?, approvalId?, condIdx?, kyc? }
+
+import { unitCostINR, unitSellINR } from './utils.js'
+import { defaultCosting } from './seed.js'
+
+// Total quantity of a BoQ line, matching the workbook: Qty/Unit × units +
+// Common + Spares (legacy rows carried a single qty — treated as common).
+function lineQty(l, units) {
+  if (l.qtyPerUnit === undefined && l.qty != null) return l.qty
+  return (l.qtyPerUnit || 0) * units + (l.common || 0) + (l.spares || 0)
+}
+
+// Customer-facing value / landed cost / GM% straight off the proposal's BoQ,
+// with the same costing math the Priced BoQ sheet uses. A hand-quoted price
+// (l.quoted) wins over the computed GM price, as in the workbook.
+export function computeProposalTotals(proposal) {
+  if (!proposal) return { value: 0, cogs: 0, gmPct: 0 }
+  const costing = { ...defaultCosting, ...(proposal.costing || {}) }
+  const units = proposal.units || 7
+  let value = 0
+  let cogs = 0
+  for (const l of proposal.bom || []) {
+    const q = lineQty(l, units)
+    const isBnk = (l.list || 'BNK') === 'BNK'
+    const sell = l.quoted !== '' && l.quoted != null
+      ? +l.quoted
+      : unitSellINR(l.listPrice || 0, costing, l.currency || 'EUR', isBnk)
+    value += sell * q
+    cogs += unitCostINR(l.listPrice || 0, costing, l.currency || 'EUR', isBnk) * q
+  }
+  const gmPct = value ? ((value - cogs) / value) * 100 : 0
+  return { value, cogs, gmPct }
+}
+
+// Commercial approval routing from the Admin thresholds: healthy margin and
+// discount → LJS releases directly; a notch below → LJS approval; anything
+// worse → joint LJS + AH.
+export function commercialGate(opp, proposal, config) {
+  const { value, cogs, gmPct } = computeProposalTotals(proposal)
+  const disc = proposal?.discountPct || 0
+  const t = config?.approvalThresholds || { gmAuto: 25, discAuto: 5, gmLjs: 20, discLjs: 10 }
+  if (gmPct >= t.gmAuto && disc <= t.discAuto) {
+    return { gmPct, disc, value, cogs, needed: ['LJS'], label: 'LJS final release' }
+  }
+  if (gmPct >= t.gmLjs && disc <= t.discLjs) {
+    return { gmPct, disc, value, cogs, needed: ['LJS'], label: 'LJS approval' }
+  }
+  return { gmPct, disc, value, cogs, needed: ['LJS', 'AH'], label: 'LJS + AH approval' }
+}
+
+// Full workbench readiness: everything oppBlockers raises, plus KYC, the
+// Amber pre-quote fee, and route-specific checks (spares part matching /
+// price sources, service travel confirmation, empty BoQ).
+export function readiness(opp, proposal, state) {
+  if (!opp) return []
+  const b = [...oppBlockers(opp, proposal, state.approvals || [])]
+
+  if (opp.customerStatus === 'Blue' && !opp.kycOverride) {
+    const items = (state.kyc || {})[opp.sellTo]
+    const unverified = !items || !items.length
+      || items.some(k => k.state === 'Missing' || k.state === 'Expired')
+    if (unverified) {
+      b.push({
+        key: 'kyc-block', severity: 'block', kyc: true,
+        text: 'KYC verification pending (AH) — or override with reason',
+      })
+    }
+  }
+
+  if (opp.customerStatus === 'Amber' && opp.amberFeePaid !== true) {
+    b.push({ key: 'amber-fee', severity: 'info', text: 'Amber ₹25K pre-quote fee pending' })
+  }
+
+  if (opp.route === 'Spares') {
+    for (const l of (state.sparesLines || []).filter(x => x.oppId === opp.id)) {
+      if (!l.confirmed) {
+        b.push({ key: `sp-conf-${l.id}`, severity: 'block', text: `Unconfirmed part match — ${l.custRef || l.pn}` })
+      } else if (l.priceState === 'Expired') {
+        b.push({ key: `sp-price-${l.id}`, severity: 'block', text: `Expired price source — request price update (${l.pn})` })
+      }
+    }
+  }
+
+  if (opp.route === 'Service') {
+    const est = (state.svcEstimates || []).find(e => e.oppId === opp.id)
+    if (est && !est.travelConfirmed) {
+      b.push({ key: 'svc-travel', severity: 'block', text: 'Manual travel estimate not confirmed' })
+    }
+  }
+
+  if ((opp.route === 'Spares' || opp.route === 'Project') && !(proposal?.bom || []).length) {
+    b.push({ key: 'no-bom', severity: 'block', text: 'No priced lines in proposal' })
+  }
+
+  return b
+}
 
 export function oppBlockers(opp, proposal, approvals) {
   if (!opp) return []

@@ -6,7 +6,7 @@ import {
   PROB_LEVELS, STAGES, CLOSE_REASONS,
 } from './seed.js'
 import { fmt, mmmYY, ddMmmYY, canViewCommercial, stageClass } from './utils.js'
-import { supabase, uploadFile } from './supabase.js'
+import * as filestore from './filestore.js'
 import { Icon } from './icons.jsx'
 
 const OPEN_STAGES = STAGES.filter(s => s !== 'Won' && s !== 'Lost')
@@ -14,6 +14,15 @@ const OPEN_STAGES = STAGES.filter(s => s !== 'Won' && s !== 'Lost')
 const Field = ({ label, children }) => (
   <div><label>{label}</label>{children}</div>
 )
+
+const SyncPill = ({ sync }) => {
+  if (!sync || !sync.state) return null
+  const tone = sync.state === 'synced' ? 'conf-hi' : sync.state === 'error' ? 'conf-lo' : 'grey'
+  const title = sync.state === 'synced' ? 'Folder synced to SharePoint'
+    : sync.state === 'error' ? `SharePoint sync error: ${sync.error || sync.message || 'unknown'}`
+    : 'Local only — not yet synced to SharePoint'
+  return <span className={`chip ${tone}`} title={title}>SP</span>
+}
 
 export default function OppPanel({ oppId }) {
   const store = useStore()
@@ -48,22 +57,18 @@ export default function OppPanel({ oppId }) {
     store.updateOpportunity(oppId, patch)
   }
 
-  const fmtSize = b => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`)
-
   // Same bucket keys as the Folders page, so both surfaces list the same objects.
+  // The filestore facade picks the backend (SharePoint → Supabase → mock).
   const onUpload = async e => {
     const picked = [...e.target.files]
     e.target.value = ''
     setCloudErr(''); setBusy(true)
     for (const f of picked) {
       try {
-        const path = `${oppId}/${activeTab}/${f.name}`
-        const url = await uploadFile(path, f)
-        store.addFile(oppId, activeTab, {
-          name: f.name, date: new Date().toISOString().slice(0, 10), size: fmtSize(f.size), url, path,
-        })
+        const rec = await filestore.uploadOppFile(opp, activeTab, f)
+        store.addFile(oppId, activeTab, rec)
       } catch (ex) {
-        setCloudErr(`Upload of ${f.name} failed: ${ex.message}`)
+        setCloudErr(ex.message)
       }
     }
     setBusy(false)
@@ -94,9 +99,10 @@ export default function OppPanel({ oppId }) {
       <div className="drawer-files">
         <div className="drawer-files-bar">
           <span className="hint">{oppId} › {activeTab}</span>
+          <SyncPill sync={(store.spSync || {})[oppId]} />
           <span style={{ flex: 1 }} />
           {cloudErr && <span className="hint" style={{ color: 'var(--lost-text)' }}>{cloudErr}</span>}
-          {supabase ? (
+          {filestore.activeBackend() !== 'mock' ? (
             <>
               <input ref={fileInput} type="file" multiple style={{ display: 'none' }} onChange={onUpload} />
               <button onClick={() => fileInput.current.click()} disabled={busy}>
@@ -118,14 +124,15 @@ export default function OppPanel({ oppId }) {
             )}
             {tabFiles.map(fl => {
               const isWorkbook = activeTab === 'Proposal' && fl.name.endsWith('.xlsx')
+              const href = fl.webUrl || fl.url
               return (
                 <tr key={fl.name} className={isWorkbook ? 'rowclick' : ''}
                   onClick={isWorkbook ? () => nav(`/proposal/${oppId}`) : undefined}
-                  title={isWorkbook ? 'Open the proposal workbook' : undefined}>
+                  title={isWorkbook ? 'Open the proposal workbook' : fl.webUrl ? 'Opens in SharePoint' : undefined}>
                   <td>
                     <Icon name={isWorkbook ? 'fileSheet' : 'fileText'} size={13} />{' '}
                     {isWorkbook ? <b>{fl.name}</b>
-                      : fl.url ? <a href={fl.url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>{fl.name}</a>
+                      : href ? <a href={href} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>{fl.name}</a>
                       : fl.name}
                   </td>
                   <td>{fl.date}</td><td>{fl.size}</td>

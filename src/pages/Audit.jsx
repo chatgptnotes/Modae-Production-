@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { ROLES } from '../seed.js'
-import { ddMmmYY, exportCSV, isAdminRole } from '../utils.js'
+import { ddMmmYY, exportCSV, canSeePage } from '../utils.js'
 
 const when = ts => `${ddMmmYY(ts.slice(0, 10))} ${ts.slice(11, 16)}`
 // Labels read "LJS — Strategic Approver"; the table only needs the short part.
@@ -15,14 +15,15 @@ export default function Audit() {
   const [role, setRole] = useState('All')
   const [action, setAction] = useState('All')
 
-  // The sidebar hides this page from non-admins, but the route itself must be
-  // gated too — decision notes carry commercially sensitive history.
-  if (!isAdminRole(store.role)) {
+  // The sidebar hides this page per PERMS, but the route itself must be gated
+  // too — decision notes carry commercially sensitive history. PERMS grants
+  // audit to admins AND the LJS/AH approvers (per the BT permission matrix).
+  if (!canSeePage(store.role, 'audit')) {
     return (
       <div className="page">
         <h2>Audit Trail</h2>
         <div className="restricted" style={{ maxWidth: 520 }}>
-          Restricted — the audit trail is visible to administrators only.
+          Restricted — your role does not have access to the audit trail.
         </div>
       </div>
     )

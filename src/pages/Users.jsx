@@ -1,16 +1,37 @@
 import React, { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { ROLES } from '../seed.js'
+import { ROLES, PERMS, DEMO_PASSWORD } from '../seed.js'
 import { ddMmmYY, isAdminRole } from '../utils.js'
+import { Icon } from '../icons.jsx'
 
-// Roles assignable through the UI — SUPER is deliberately not offered.
+// Roles assignable through the UI (incl. TECH and CUST) — SUPER is deliberately not offered.
 const ASSIGNABLE = Object.keys(ROLES).filter(r => r !== 'SUPER')
+
+// Page keys shown in the permissions matrix, in navigation order.
+const PAGE_KEYS = ['home', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders',
+  'pricelists', 'dashboard', 'analytics', 'customers', 'po', 'aimap', 'admin', 'audit', 'users',
+  'launcher', 'notes', 'voice', 'portal']
 
 export default function Users() {
   const store = useStore()
+  const nav = useNavigate()
   const canManage = isAdminRole(store.role)
   const [modal, setModal] = useState(false)
   const [err, setErr] = useState('')
+
+  // Route-level gate: the account roster (names, emails, roles) is restricted
+  // directory data — non-admins get a restricted block, not a read-only view.
+  if (!canManage) {
+    return (
+      <div className="page">
+        <h2>User management</h2>
+        <div className="restricted" style={{ maxWidth: 520 }}>
+          Restricted — user accounts and role assignments are visible to administrators only.
+        </div>
+      </div>
+    )
+  }
 
   const pending = store.users.filter(u => u.status === 'Pending')
   const nextId = () => {
@@ -35,6 +56,8 @@ export default function Users() {
       id: nextId(), name, email, role: f.get('role'),
       status: f.get('active') ? 'Active' : 'Pending',
       created: new Date().toISOString().slice(0, 10),
+      // Without a pw the login screen would reject the account until reload.
+      pw: DEMO_PASSWORD,
     })
     setErr('')
     setModal(false)
@@ -46,14 +69,8 @@ export default function Users() {
       <div className="toolbar">
         <span className="hint">Admin creates accounts, assigns roles and approves registrations. Demo accounts — stored only in this browser, nothing is transmitted.</span>
         <span className="spacer" />
-        {canManage && <button className="primary" onClick={() => { setErr(''); setModal(true) }}>＋ Register user</button>}
+        {canManage && <button className="primary" onClick={() => { setErr(''); setModal(true) }}><Icon name="plus" size={13} /> Register user</button>}
       </div>
-
-      {!canManage && (
-        <div className="warn-box">
-          Only an administrator can change accounts. You are acting as <b>{ROLES[store.role]?.label}</b>.
-        </div>
-      )}
 
       {canManage && pending.length > 0 && (
         <>
@@ -101,6 +118,8 @@ export default function Users() {
                   <td>
                     {u.status === 'Active' && u.role !== 'SUPER' &&
                       <button onClick={() => store.updateUser(u.id, { status: 'Suspended' })}>Suspend</button>}
+                    {u.status === 'Active' &&
+                      <> <button onClick={() => { store.signInAs(u.id); nav('/home') }}>Sign in as</button></>}
                     {u.status === 'Suspended' &&
                       <button onClick={() => store.updateUser(u.id, { status: 'Active' })}>Reactivate</button>}
                     {u.status === 'Pending' &&
@@ -112,6 +131,28 @@ export default function Users() {
           </tbody>
         </table>
       </div>
+
+      <div className="section-title">Page permissions</div>
+      <div className="sheet-wrap">
+        <table className="sheet">
+          <thead>
+            <tr><th>Role</th>{PAGE_KEYS.map(p => <th key={p}>{p}</th>)}</tr>
+          </thead>
+          <tbody>
+            {Object.keys(ROLES).map(r => (
+              <tr key={r}>
+                <td style={{ whiteSpace: 'nowrap' }}><b>{ROLES[r].label}</b></td>
+                {PAGE_KEYS.map(p => (
+                  <td key={p} style={{ textAlign: 'center' }}>
+                    {(PERMS[r] || []).includes(p) && <Icon name="check" size={12} />}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="hint">Matrix is configuration-as-code in this demo; editable per-tenant in production.</p>
 
       {modal && (
         <>

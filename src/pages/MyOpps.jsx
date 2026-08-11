@@ -30,8 +30,8 @@ export default function MyOpps() {
       <div className="toolbar">
         <span className="hint">Tap a card to view and edit every field of its sheet row.</span>
         <span className="spacer" />
-        <button className="primary"><Icon name="cards" size={13} /> Cards</button>
-        <button onClick={() => nav('/')}><Icon name="sheet" size={13} /> Sheet</button>
+        <span className="btn primary"><Icon name="cards" size={13} /> Cards</span>
+        <button onClick={() => nav(mine ? `/?owner=${role}` : '/')}><Icon name="sheet" size={13} /> Sheet</button>
       </div>
 
       <div className="opp-card-grid">

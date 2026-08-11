@@ -29,12 +29,16 @@ export function stageClass(o) {
   return o.stage === 'Won' ? 'won' : o.stage === 'Lost' ? 'lost' : 'open'
 }
 
-import { ROLES } from './seed.js'
+import { ROLES, PERMS } from './seed.js'
 
 // Commercial visibility (Value/COGS/GM, forecast, pricing) follows the active
 // persona, per the wireframe's "Restricted — commercial data" rule.
 export const canViewCommercial = role => !!ROLES[role]?.commercial
 export const isAdminRole = role => !!ROLES[role]?.admin
+// LJS (strategic) and AH (commercial & ops) decide gates; admins can see the queue.
+export const isApprover = role => role === 'LJS' || role === 'AH' || isAdminRole(role)
+// Page-level permission from the PERMS matrix (unknown role sees nothing).
+export const canSeePage = (role, page) => (PERMS[role] || []).includes(page)
 
 export function ageDays(dateStr) {
   if (!dateStr) return null

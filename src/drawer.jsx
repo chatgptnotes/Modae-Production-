@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useStore } from './store.jsx'
 import OppPanel from './opppanel.jsx'
 
@@ -19,6 +19,7 @@ export const useDrawer = () => useContext(DrawerCtx)
 export function DrawerHost() {
   const { sel, open, close } = useDrawer()
   const loc = useLocation()
+  const nav = useNavigate()
 
   // Navigating away (e.g. opening the workbook from inside the panel) closes
   // the drawer, same as the formula bar clears its selection per route.
@@ -44,7 +45,14 @@ export function DrawerHost() {
           <>
             <div className="drawer-head">
               <span>{shown.type === 'opp' ? `${shown.id} — details` : shown.id}</span>
-              <button className="drawer-x" onClick={close} title="Close (Esc)">✕</button>
+              {shown.type === 'opp' && (
+                <button className="drawer-x" style={{ marginLeft: 'auto' }}
+                  onClick={() => nav(`/opp/${shown.id}`)} title="Full lifecycle workbench — 11 tabs">
+                  Open workbench
+                </button>
+              )}
+              <button className="drawer-x" style={shown.type === 'opp' ? { marginLeft: 0 } : undefined}
+                onClick={close} title="Close (Esc)">✕</button>
             </div>
             {shown.type === 'opp'
               ? <OppPanel oppId={shown.id} />

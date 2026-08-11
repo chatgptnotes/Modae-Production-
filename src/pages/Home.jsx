@@ -2,15 +2,15 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES } from '../seed.js'
-import { canViewCommercial, isAdminRole, ageDays } from '../utils.js'
+import { isApprover } from '../utils.js'
+import { buildTiles, roleGroup } from '../tiles.js'
 import { useDrawer } from '../drawer.jsx'
+import { KpiCard } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 
-// Every tile is a door into a screen the app already has — one registry,
-// filtered and ordered by the signed-in role. No duplicated screens.
-const roleGroup = role =>
-  isAdminRole(role) ? 'admin' : role === 'LJS' || role === 'AH' ? 'approver' : 'sales'
-
+// Tiles come from the shared registry (src/tiles.js) so the desktop Home and
+// the tablet launcher never drift; only the "Generate Proposal" action tile is
+// local (it needs the pick modal).
 const FOR_YOU = {
   sales: ['inbox', 'new', 'tender', 'my'],
   approver: ['approvals', 'inbox', 'dashboard', 'tracker'],
@@ -25,33 +25,19 @@ export default function Home() {
   const [pick, setPick] = useState(false)
 
   const role = store.role
-  const comm = canViewCommercial(role)
-  const admin = isAdminRole(role)
+  const approver = isApprover(role)
 
   const openOpps = store.opportunities.filter(o => o.status === 'Open')
-  const stale = openOpps.filter(o => (ageDays(o.lastUpdated) ?? 0) > 30).length
+  const myOpen = openOpps.filter(o => o.owner === role).length
   const unproposed = openOpps.filter(o => !o.proposalDate).length
   const newLeads = (store.leads || []).filter(l => l.status === 'New').length
   const pendingApprovals = (store.approvals || []).filter(a => a.status === 'Pending').length
-  const openConditions = (store.approvals || []).filter(a => a.status === 'Approved with conditions'
-    && a.conditions.some(c => !c.incorporated)).length
 
-  const TILES = [
-    { key: 'new', icon: 'plus', label: 'Add Lead', hint: 'Intake form — row + folder created on submit', to: '/new' },
-    { key: 'tender', icon: 'bot', label: 'Tender → Proposal', hint: 'Upload an RFQ PDF, AI extracts it', to: '/tender' },
-    { key: 'my', icon: 'cards', label: 'My Opportunities', hint: 'Your pipeline as cards', to: '/my', badge: stale, badgeHint: 'not updated in 30+ days' },
-    { key: 'genprop', icon: 'fileText', label: 'Generate Proposal', hint: 'Pick an open opportunity', action: () => setPick(true), badge: unproposed, badgeHint: 'open opportunities without a proposal' },
-    { key: 'inbox', icon: 'inbox', label: 'Lead Inbox', hint: 'Incoming inquiries, AI-parsed', to: '/inbox', badge: newLeads, badgeHint: 'new leads to qualify' },
-    { key: 'approvals', icon: 'checkCircle', label: 'Approvals', hint: 'Deviations, clearances, conditions', to: '/approvals', show: role === 'LJS' || role === 'AH' || admin, badge: pendingApprovals + openConditions, badgeHint: 'pending decisions + unconfirmed conditions' },
-    { key: 'audit', icon: 'list', label: 'Audit Trail', hint: 'Who changed what, when', to: '/audit', show: admin },
-    { key: 'tracker', icon: 'sheet', label: 'All Opportunities', hint: 'The pipeline sheet', to: '/' },
-    { key: 'folders', icon: 'folder', label: 'Folders', hint: 'Customer Specs · Partner Docs · Proposal', to: '/folders' },
-    { key: 'dashboard', icon: 'chartBar', label: 'Pivot / Forecast', hint: 'Order intake by month', to: '/dashboard', show: comm },
-    { key: 'analytics', icon: 'chartLine', label: 'Analytics', hint: 'Funnel, ageing, win/loss', to: '/analytics' },
-    { key: 'pricelists', icon: 'tag', label: 'Price Lists', hint: 'B&K · Metrix · ad-hoc quotes', to: '/pricelists', show: comm },
-    { key: 'customers', icon: 'users', label: 'Customers', hint: 'Master + classification', to: '/customers' },
-    { key: 'users', icon: 'shield', label: 'Users & Roles', hint: 'Accounts and approvals', to: '/users', show: admin },
-  ].filter(t => t.show !== false)
+  const TILES = [...buildTiles(store)]
+  TILES.splice(2, 0, {
+    key: 'genprop', icon: 'fileText', label: 'Generate Proposal', hint: 'Pick an open opportunity',
+    action: () => setPick(true), badge: unproposed, badgeHint: 'open opportunities without a proposal',
+  })
 
   const primaryKeys = FOR_YOU[roleGroup(role)]
   const primary = primaryKeys.map(k => TILES.find(t => t.key === k)).filter(Boolean)
@@ -81,6 +67,15 @@ export default function Home() {
   return (
     <div className="page">
       <h2>Home — {ROLES[role]?.name}</h2>
+
+      <div className="kpi-row">
+        <KpiCard label="New leads" value={newLeads} hint="Leads to qualify in the inbox" onClick={() => nav('/inbox')} />
+        {approver && (
+          <KpiCard label="Pending approvals" value={pendingApprovals} hint="Decisions waiting on an approver" onClick={() => nav('/approvals')} />
+        )}
+        <KpiCard label="My open opportunities" value={myOpen} hint="Open opportunities you own" onClick={() => nav('/my')} />
+      </div>
+
       <input className="tile-search" type="text" placeholder="Search opportunities, customers…"
         value={q} onChange={e => setQ(e.target.value)} />
       {hits.length > 0 && (

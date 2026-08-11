@@ -1,11 +1,22 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Null when the env vars are absent — the Folders page then falls back to the
-// original mock (prompt-a-filename) behavior, so the prototype still runs
-// without a Supabase project.
-const url = import.meta.env.VITE_SUPABASE_URL
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
-export const supabase = url && anonKey ? createClient(url, anonKey) : null
+// Null when the env vars are absent OR malformed — the Folders page then falls
+// back to the original mock (prompt-a-filename) behavior, so the prototype
+// still runs without a Supabase project. createClient throws on a bad URL at
+// module load, which would blank the whole app (seen on Vercel when the env
+// var held a placeholder) — so validate and try/catch instead of trusting it.
+const url = (import.meta.env.VITE_SUPABASE_URL || '').trim()
+const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim()
+function makeClient() {
+  if (!/^https?:\/\/.+/i.test(url) || !anonKey) return null
+  try {
+    return createClient(url, anonKey)
+  } catch (e) {
+    console.warn('Supabase disabled — invalid configuration:', e?.message)
+    return null
+  }
+}
+export const supabase = makeClient()
 
 export const BUCKET = 'opportunity-files'
 

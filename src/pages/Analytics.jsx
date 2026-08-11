@@ -110,6 +110,29 @@ export default function Analytics() {
   // Bar click-throughs land on the Tracker pre-filtered via query params.
   const toTracker = (key, val) => nav(`/?${key}=${encodeURIComponent(val)}`)
 
+  // ---- Sales targets vs booked orders (Indian FY, quarters start April) ----
+  const sales = store.sales || { fy: '', targets: {}, orders: [] }
+  const fyQuarter = dateStr => {
+    const m = parseInt((dateStr || '').split('-')[1], 10)
+    if (!m) return -1
+    return m >= 4 ? Math.floor((m - 4) / 3) : 3
+  }
+  const Q_LABELS = ['Q1 Apr-Jun', 'Q2 Jul-Sep', 'Q3 Oct-Dec', 'Q4 Jan-Mar']
+  const teamQ = [0, 1, 2, 3].map(i => ({
+    label: Q_LABELS[i],
+    target: Object.values(sales.targets || {}).reduce((s, t) => s + (t.q?.[i] || 0), 0),
+    actual: (sales.orders || []).filter(o => fyQuarter(o.booked) === i)
+      .reduce((s, o) => s + (+o.valueK || 0), 0),
+  }))
+  const attainment = Object.entries(sales.targets || {})
+    .filter(([, t]) => (t.annual || 0) > 0)
+    .map(([owner, t]) => {
+      const booked = (sales.orders || []).filter(o => o.owner === owner)
+        .reduce((s, o) => s + (+o.valueK || 0), 0)
+      return { owner, booked, annual: t.annual, pct: Math.round((booked / t.annual) * 100) }
+    })
+    .sort((a, b) => b.pct - a.pct)
+
   return (
     <div className="page">
       <h2>Analytics</h2>
@@ -203,6 +226,47 @@ export default function Analytics() {
               ))}
               {!margins.length && <div className="hint">No open opportunities with a value yet.</div>}
               <div className="hint" style={{ marginTop: 6 }}>Green ≥ 25% · amber ≥ 20% · red below 20% (Net GM heuristic; the Priced BoQ holds the exact number).</div>
+            </>
+          ) : <Restricted />}
+        </div>
+
+        <div className="ana-card c-6">
+          <div className="ana-title">Team target vs actual — {sales.fy}</div>
+          {comm ? (
+            <>
+              {teamQ.map(q => (
+                <div key={q.label} className="mbar">
+                  <span className="mb-lbl wide">{q.label}</span>
+                  <span className="mb-track">
+                    <span className="mb-fill" style={{ width: `${Math.min(100, Math.max(2, q.target ? (q.actual / q.target) * 100 : 0))}%`, background: '#1f4e79' }} />
+                  </span>
+                  <span className="mb-val" style={{ flexBasis: 140 }}>{fmtLakh(q.actual)} / {fmtLakh(q.target)}</span>
+                </div>
+              ))}
+              <div className="hint" style={{ marginTop: 6 }}>
+                Booked orders vs the summed owner targets per quarter (Indian FY, April start).
+              </div>
+            </>
+          ) : <Restricted />}
+        </div>
+
+        <div className="ana-card c-6">
+          <div className="ana-title">Attainment by owner</div>
+          {comm ? (
+            <>
+              {attainment.map(a => (
+                <div key={a.owner} className="mbar">
+                  <span className="mb-lbl">{a.owner}</span>
+                  <span className="mb-track">
+                    <span className="mb-fill" style={{ width: `${Math.min(100, Math.max(2, a.pct))}%`, background: a.pct >= 50 ? '#217346' : a.pct >= 25 ? '#bf9000' : '#9c0006' }} />
+                  </span>
+                  <span className="mb-val" style={{ flexBasis: 140 }}>{a.pct}% · {fmtLakh(a.booked)}</span>
+                </div>
+              ))}
+              {!attainment.length && <div className="hint">No sales targets configured.</div>}
+              <div className="hint" style={{ marginTop: 6 }}>
+                Booked order value as a share of each owner's annual target, best first.
+              </div>
             </>
           ) : <Restricted />}
         </div>
