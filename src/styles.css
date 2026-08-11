@@ -730,3 +730,7 @@ input.needs-input, select.needs-input { background: #fff8e1; border-color: #bf90
 @media print {
   .tablet-bar, .tab-bottom, .ttile-grid, .mode-switch { display: none !important; }
 }
+
+/* Topbar acting-as dropdown (full-site header) */
+.topbar-user { display: flex; align-items: center; gap: 6px; font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: .5px; white-space: nowrap; }
+.topbar-user select { max-width: 220px; font-size: 12px; padding: 3px 6px; text-transform: none; letter-spacing: 0; }

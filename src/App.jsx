@@ -152,8 +152,9 @@ export default function App() {
   )
 
   // Customer accounts never get the persona switcher (store.setRole also
-  // refuses the escalation — this just removes the dead control).
-  const roleSwitcher = custAccount ? null : (
+  // refuses the escalation — this just removes the dead control). Rendered in
+  // the tablet bar, the full-site topbar AND the sidebar footer.
+  const RoleSwitcher = () => custAccount ? null : (
     <select value={store.role} onChange={e => store.setRole(e.target.value)} title="Acting-as persona">
       {Object.entries(ROLES).map(([id, r]) => <option key={id} value={id}>{r.label}</option>)}
     </select>
@@ -165,7 +166,7 @@ export default function App() {
         <span className="tb-brand" onClick={() => nav('/home')}>WinTrack<span>by ModAE</span></span>
         <span className="spacer" />
         <InstallButton />
-        {roleSwitcher}
+        <RoleSwitcher />
         <button onClick={() => { store.setViewMode('full') }} title="Switch to the full desktop site">
           <Icon name="monitor" size={14} /> Full site
         </button>
@@ -203,10 +204,10 @@ export default function App() {
           ))}
         </nav>
         <div className="side-foot">
-          {roleSwitcher && (
+          {!custAccount && (
             <label title="Acting-as persona — commercial data is visible to approvers/admins only">
               Acting as
-              {roleSwitcher}
+              <RoleSwitcher />
             </label>
           )}
           {store.auth?.user && (
@@ -227,6 +228,12 @@ export default function App() {
           </button>
           <span className="topbar-title">Modae — sales opportunity &amp; proposal workspace</span>
           <span className="spacer" style={{ flex: 1 }} />
+          {!custAccount && (
+            <label className="topbar-user" title="Acting-as persona — commercial data is visible to approvers/admins only">
+              Acting as
+              <RoleSwitcher />
+            </label>
+          )}
           <button className="mode-switch" onClick={() => { store.setViewMode('tablet'); nav('/home') }}>
             <Icon name="tablet" size={15} /> Switch to tablet view
           </button>
