@@ -79,7 +79,7 @@ export default function PurchaseOrders() {
                       <td>{o?.sellTo || '—'}</td>
                       <td>{o?.owner || '—'}</td>
                       <td>
-                        {blocking > 0 && <span style={{ color: '#9c0006', fontWeight: 700 }}>{blocking} blocking</span>}
+                        {blocking > 0 && <span style={{ color: 'var(--lost-text)', fontWeight: 700 }}>{blocking} blocking</span>}
                         {blocking > 0 && review > 0 && ' · '}
                         {review > 0 && <span>{review} to review</span>}
                         {blocking === 0 && review === 0 && <span className="hint">All lines resolved</span>}

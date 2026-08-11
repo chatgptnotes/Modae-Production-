@@ -51,7 +51,7 @@ function DecisionForm({ a, role, onDecide }) {
   }
 
   return (
-    <form onSubmit={submit} style={{ marginTop: 10, borderTop: '1px solid #e3e3e3', paddingTop: 8 }}>
+    <form onSubmit={submit} style={{ marginTop: 10, borderTop: '1px solid var(--border-soft)', paddingTop: 8 }}>
       <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>
         Your decision as {ROLES[role]?.label || role}
       </div>
@@ -245,7 +245,7 @@ export default function Approvals() {
           {(a.conditions || []).map((c, i) => (
             <div key={i} style={{ fontSize: 12.5, margin: '4px 0' }}>
               {c.incorporated
-                ? <span style={{ color: '#1e7145' }}><Icon name="check" size={12} /> {c.text}{c.note && <span className="hint"> — {c.note}</span>}</span>
+                ? <span style={{ color: '#15803d' }}><Icon name="check" size={12} /> {c.text}{c.note && <span className="hint"> — {c.note}</span>}</span>
                 : <span><Icon name="alert" size={12} /> {c.text}</span>}
             </div>
           ))}

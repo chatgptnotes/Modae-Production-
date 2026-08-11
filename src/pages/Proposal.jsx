@@ -365,7 +365,7 @@ export default function Proposal() {
       {tab === 'Rack Layout' && !printing && (
         <div className="form-card">
           <div className="section-title">Rack Layout (engineering output — placeholder in Phase 1)</div>
-          <pre style={{ background: '#f7f7f7', border: '1px solid #ddd', padding: 14, fontSize: 12 }}>
+          <pre style={{ background: '#f6f9fc', border: '1px solid var(--border-soft)', padding: 14, fontSize: 12 }}>
 {`┌─────────────────────── 16-SLOT RACK (VC-8000/RCK) ───────────────────────────┐
 │ PSU │ PSU │ RCM │ UMM │ UMM │ UMM │ UMM │ eSAM │ ... │ ... │ ... │ spare... │
 └──────────────────────────────────────────────────────────────────────────────┘`}

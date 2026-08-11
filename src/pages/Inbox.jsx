@@ -393,7 +393,7 @@ function LegacyLeadDetail({ lead }) {
       <p className="hint" style={{ margin: '4px 0 10px' }}>
         From {lead.from} · {lead.channel} · {ddMmmYY((lead.ts || '').slice(0, 10))}
       </p>
-      <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', background: '#fafafa', border: '1px solid var(--grid-line)', padding: '10px 12px', fontSize: 12.5 }}>
+      <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', background: '#f8fafc', border: '1px solid var(--grid-line)', padding: '10px 12px', fontSize: 12.5 }}>
         {lead.body}
       </pre>
 

@@ -340,7 +340,7 @@ export default function Tracker() {
               <td className="num">{comm ? `₹ ${fmt(totals.v)}` : <Icon name="lock" size={12} />}</td>
               <td className="num">{comm ? `₹ ${fmt(totals.c)}` : <Icon name="lock" size={12} />}</td>
               <td className="num">{comm ? `₹ ${fmt(totals.v - totals.c)}` : <Icon name="lock" size={12} />}</td>
-              <td className="num" style={{ color: '#bf9000' }}>{comm && totals.v ? Math.round(((totals.v - totals.c) / totals.v) * 100) + '%' : comm ? '' : <Icon name="lock" size={12} />}</td>
+              <td className="num" style={{ color: 'var(--amber-text)' }}>{comm && totals.v ? Math.round(((totals.v - totals.c) / totals.v) * 100) + '%' : comm ? '' : <Icon name="lock" size={12} />}</td>
               <td colSpan={13}></td>
             </tr>
           </tfoot>

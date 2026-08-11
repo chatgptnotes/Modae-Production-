@@ -6,7 +6,7 @@ import { fmt, fmtLakh, ageDays, canViewCommercial } from '../utils.js'
 
 // Funnel ramp validated with the dataviz palette checker (ordinal, light
 // surface): monotone lightness, ≥0.06 step gaps, light end ≥2:1 on white.
-const FUNNEL_RAMP = ['#8db1d3', '#729fc6', '#588cb8', '#4477a4', '#2f608c', '#123a5e']
+const FUNNEL_RAMP = ['#7dd3fc', '#38bdf8', '#0ea5e9', '#0284c7', '#0369a1', '#075985']
 const PROB_WEIGHT = { Low: 0.25, Medium: 0.5, High: 0.75 }
 
 function Restricted() {
@@ -48,14 +48,14 @@ function Funnel({ stages }) {
   return (
     <svg viewBox={`0 0 ${W} ${H}`} role="img" style={{ width: '100%', maxWidth: 560 }}
       aria-label={`Stage funnel: ${stages.map(s => `${s.label} ${s.count}`).join(', ')}`}>
-      <polygon fill="none" stroke="#b5bac2" strokeDasharray="5 4"
+      <polygon fill="none" stroke="#cbd5e1" strokeDasharray="5 4"
         points={stages.map((_, i) => `${LBL + (plotW - idealW(i)) / 2},${y(i) + ROW / 2}`).join(' ') + ' ' +
           stages.map((_, i) => `${LBL + (plotW + idealW(i)) / 2},${y(i) + ROW / 2}`).reverse().join(' ')} />
       {stages.map((s, i) => {
         const w = Math.max(plotW * 0.05, (s.count / max) * plotW)
         return (
           <g key={s.label}>
-            <text x={LBL - 10} y={y(i) + ROW / 2 - 2} textAnchor="end" fontSize="12" fontWeight="600" fill="#252423">{s.label}</text>
+            <text x={LBL - 10} y={y(i) + ROW / 2 - 2} textAnchor="end" fontSize="12" fontWeight="600" fill="#0f172a">{s.label}</text>
             {i > 0 && (
               <text x={LBL - 10} y={y(i) + ROW / 2 + 12} textAnchor="end" fontSize="10.5" fill="#888">
                 {stages[i - 1].count ? Math.round((s.count / stages[i - 1].count) * 100) : 0}% of prior
@@ -63,7 +63,7 @@ function Funnel({ stages }) {
             )}
             <rect x={LBL + (plotW - w) / 2} y={y(i) + 6} width={w} height={ROW - 12} rx="4" fill={FUNNEL_RAMP[i]} />
             <text x={LBL + plotW / 2} y={y(i) + ROW / 2 + 4} textAnchor="middle" fontSize="13" fontWeight="700"
-              fill={i < 2 ? '#252423' : '#fff'}>{s.count}</text>
+              fill={i < 2 ? '#0f172a' : '#fff'}>{s.count}</text>
           </g>
         )
       })}
@@ -143,8 +143,8 @@ export default function Analytics() {
           <div className="ana-title">Funnel &amp; conversion</div>
           <Funnel stages={funnel} />
           <div className="legend">
-            <span><svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="#b5bac2" strokeDasharray="4 3" strokeWidth="1.5" /></svg> Ideal funnel shape</span>
-            <span><span style={{ width: 12, height: 12, background: '#4477a4', borderRadius: 3, display: 'inline-block' }} /> Actual stage volume (at or beyond)</span>
+            <span><svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="#cbd5e1" strokeDasharray="4 3" strokeWidth="1.5" /></svg> Ideal funnel shape</span>
+            <span><span style={{ width: 12, height: 12, background: '#0284c7', borderRadius: 3, display: 'inline-block' }} /> Actual stage volume (at or beyond)</span>
           </div>
         </div>
 
@@ -160,11 +160,11 @@ export default function Analytics() {
           ) : <Restricted />}
         </div>
 
-        <BarCard title="Owner" entries={countBy(open, 'owner')} color="#1f4e79"
+        <BarCard title="Owner" entries={countBy(open, 'owner')} color="#0369a1"
           onPick={v => toTracker('owner', v)} hint="Open opportunities per owner." />
-        <BarCard title="Opp type" entries={countBy(open, 'oppType')} color="#217346"
+        <BarCard title="Opp type" entries={countBy(open, 'oppType')} color="#0d9488"
           onPick={v => toTracker('oppType', v)} />
-        <BarCard title="BU / business area" entries={countBy(open, 'bu')} color="#6d6d6d"
+        <BarCard title="BU / business area" entries={countBy(open, 'bu')} color="#475569"
           onPick={v => toTracker('bu', v)} />
 
         <div className="ana-card c-4">
@@ -219,7 +219,7 @@ export default function Analytics() {
                   onClick={() => nav(`/proposal/${o.id}`)} onKeyDown={e => { if (e.key === 'Enter') nav(`/proposal/${o.id}`) }}>
                   <span className="mb-lbl wide"><span className="oppid-link">{o.id}</span> <span className="hint">{fmtLakh(o.valueK)}</span></span>
                   <span className="mb-track">
-                    <span className="mb-fill" style={{ width: `${Math.min(100, Math.max(4, o.gm))}%`, background: o.gm >= 25 ? '#217346' : o.gm >= 20 ? '#bf9000' : '#9c0006' }} />
+                    <span className="mb-fill" style={{ width: `${Math.min(100, Math.max(4, o.gm))}%`, background: o.gm >= 25 ? '#15803d' : o.gm >= 20 ? '#b45309' : '#b91c1c' }} />
                   </span>
                   <span className="mb-val">{o.gm}%</span>
                 </div>
@@ -238,7 +238,7 @@ export default function Analytics() {
                 <div key={q.label} className="mbar">
                   <span className="mb-lbl wide">{q.label}</span>
                   <span className="mb-track">
-                    <span className="mb-fill" style={{ width: `${Math.min(100, Math.max(2, q.target ? (q.actual / q.target) * 100 : 0))}%`, background: '#1f4e79' }} />
+                    <span className="mb-fill" style={{ width: `${Math.min(100, Math.max(2, q.target ? (q.actual / q.target) * 100 : 0))}%`, background: '#0284c7' }} />
                   </span>
                   <span className="mb-val" style={{ flexBasis: 140 }}>{fmtLakh(q.actual)} / {fmtLakh(q.target)}</span>
                 </div>
@@ -258,7 +258,7 @@ export default function Analytics() {
                 <div key={a.owner} className="mbar">
                   <span className="mb-lbl">{a.owner}</span>
                   <span className="mb-track">
-                    <span className="mb-fill" style={{ width: `${Math.min(100, Math.max(2, a.pct))}%`, background: a.pct >= 50 ? '#217346' : a.pct >= 25 ? '#bf9000' : '#9c0006' }} />
+                    <span className="mb-fill" style={{ width: `${Math.min(100, Math.max(2, a.pct))}%`, background: a.pct >= 50 ? '#15803d' : a.pct >= 25 ? '#b45309' : '#b91c1c' }} />
                   </span>
                   <span className="mb-val" style={{ flexBasis: 140 }}>{a.pct}% · {fmtLakh(a.booked)}</span>
                 </div>

@@ -227,7 +227,7 @@ export default function TenderIntake() {
         <div className="form-card" style={{ maxWidth: 560 }}>
           <div className="section-title">Extracting {file?.name}</div>
           {STAGES_MSG.map((m, i) => (
-            <div key={m} className="hint" style={{ padding: '3px 0', color: i <= stage ? '#217346' : '#bbb' }}>
+            <div key={m} className="hint" style={{ padding: '3px 0', color: i <= stage ? 'var(--primary-hover)' : 'var(--text-subtle)' }}>
               {i < stage ? <Icon name="check" size={12} /> : i === stage ? <Icon name="clock" size={12} /> : '·'} {m}
             </div>
           ))}
