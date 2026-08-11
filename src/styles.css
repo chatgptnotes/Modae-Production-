@@ -297,6 +297,99 @@ section:first-of-type .folder-section-head { margin-top: 4px; }
 .stat-list.scrolly { max-height: 240px; overflow-y: auto; }
 .oppid-link { font-weight: 700; color: var(--hdr-navy); text-decoration: none; }
 a.oppid-link:hover { text-decoration: underline; }
+
+/* =========================================================================
+   Analytics page — modern card chrome.
+   Everything here is scoped to .ana-page because .ana-card / .ana-title /
+   .stat-list are shared with Portal, Workbench, WbService and TenderIntake;
+   those pages keep the flat classic chrome above.
+   ========================================================================= */
+/* dashviz.jsx primitives read only --dash-*; those are declared on .tablet-mode,
+   so map the light values here to reuse ArcGauge/DonutGauge on this page. */
+.ana-page {
+  --dash-track: var(--border-soft);
+  --dash-accent: var(--primary-hover);
+  --dash-teal: var(--teal-dark);
+  --dash-text: var(--text-main);
+  --dash-text-2: var(--text-muted);
+  --dash-text-3: var(--text-subtle);
+}
+.ana-page .ana-grid { gap: 14px; }
+.ana-page .ana-card {
+  border: 1px solid var(--border-soft); border-top: 1px solid var(--border-soft);
+  border-radius: 14px; padding: 14px 16px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .05);
+}
+.ana-page .ana-card.c-8 { grid-column: span 8; }
+@media (max-width: 1100px) { .ana-page .ana-card.c-8 { grid-column: span 12; } }
+
+/* Title becomes a header row: icon chip + label + optional count pill */
+.ana-page .ana-title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 700; color: var(--text-main); margin-bottom: 12px;
+}
+.ana-ico {
+  flex: 0 0 auto; width: 26px; height: 26px; border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--primary-soft); color: var(--primary-hover);
+}
+.ana-ico .ic { vertical-align: 0; }
+.ana-ico.tone-teal { background: var(--teal-soft); color: var(--teal-dark); }
+.ana-ico.tone-green { background: var(--won-fill); color: var(--won-text); }
+.ana-ico.tone-amber { background: var(--amber-fill); color: var(--amber-text); }
+.ana-ico.tone-slate { background: #eef2f7; color: #475569; }
+.ana-count {
+  margin-left: auto; font-size: 10.5px; font-weight: 700; color: var(--text-muted);
+  background: var(--bg-app); border: 1px solid var(--border-soft);
+  border-radius: 999px; padding: 1px 9px; font-variant-numeric: tabular-nums;
+}
+
+/* Bar rows: roomier track, aligned label + value columns */
+.ana-page .mbar { gap: 10px; padding: 5px 6px; border-radius: 8px; }
+.ana-page .mbar.clickable:hover { background: var(--primary-soft); outline: none; }
+.ana-page .mbar.clickable:focus-visible { background: var(--primary-soft); outline: 2px solid var(--primary-accent); outline-offset: -2px; }
+.ana-page .mb-lbl { flex: 0 0 104px; }
+.ana-page .mb-lbl.wide { flex-basis: 190px; }
+.ana-page .mb-track { height: 10px; background: var(--border-soft); }
+.ana-page .mb-fill { transition: width .3s ease; }
+.ana-page .mb-val { flex: 0 0 48px; }
+
+/* Row-based cards rendered as real tables */
+.ana-table { width: 100%; border-collapse: collapse; font-size: 12.5px; table-layout: fixed; }
+.ana-table thead th {
+  position: sticky; top: 0; z-index: 1; background: var(--card-bg);
+  text-align: left; padding: 4px 6px; font-size: 10.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .05em; color: var(--text-subtle);
+  border-bottom: 1px solid var(--border-color); white-space: nowrap;
+}
+.ana-table tbody tr { border-bottom: 1px solid var(--border-soft); }
+.ana-table tbody tr:last-child { border-bottom: none; }
+.ana-table tbody tr:hover { background: var(--primary-soft); }
+.ana-table td {
+  padding: 5px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ana-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.ana-table td.muted { color: var(--text-muted); }
+.ana-table tbody tr.stale td:first-child { box-shadow: inset 3px 0 0 var(--amber-text); }
+.ana-table .empty { color: var(--text-subtle); font-size: 11.5px; white-space: normal; }
+.ana-scroll { max-height: 246px; overflow-y: auto; margin: 0 -6px; padding: 0 6px; }
+
+/* Funnel: numbered rail, tapered bands and the stage detail all live in one
+   SVG so the detail text stays aligned to its band at every card width. */
+.funnel-svg { display: block; max-width: 760px; margin: 2px auto 0; }
+
+/* Pipeline headline card */
+.ana-headline { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ana-headline .ah-value { font-size: 26px; font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; color: var(--text-main); }
+.ana-headline .ah-label { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); margin-top: 2px; }
+.ana-splits { display: flex; gap: 8px; margin-top: 12px; }
+.ana-splits div {
+  flex: 1; padding: 8px 6px; border-radius: 10px; text-align: center;
+  background: var(--bg-app); border: 1px solid var(--border-soft);
+}
+.ana-splits b { display: block; font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.ana-splits span { font-size: 10px; color: var(--text-muted); }
+
 table.sheet td.locked { color: var(--text-subtle); text-align: center; background: var(--bg-app) !important; }
 .restricted { background: #fef2f2; border: 1px dashed #fca5a5; color: var(--lost-text); padding: 14px; font-size: 12.5px; border-radius: 3px; }
 
@@ -464,6 +557,8 @@ input.needs-input, select.needs-input { background: #fffbeb; border-color: var(-
   .page { padding: 0; }
   .page h2 { color: #000; }
   .cover-sheet, .form-card, .sheet-wrap { border: none; box-shadow: none; max-width: none; }
+  .ana-page .ana-card { box-shadow: none; break-inside: avoid; }
+  .ana-scroll { max-height: none; overflow: visible; }
   .cover-sheet { padding: 0 0 18px; break-inside: avoid; }
   .sheet-wrap { overflow: visible; }
   table.sheet th {

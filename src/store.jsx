@@ -14,7 +14,9 @@ import {
 
 // v3: schema updated after the Aug 10 meeting review (prob column, Partner Docs
 // key, corrected products, costing.usdBase/financeCostK) — bump forces a reseed.
-const KEY = 'wintrack-modae-v3'
+// Bumped to v4 with the expanded FY26 history + FY27 pipeline seed — v3 caches
+// hold the old 14-row dataset and would never show it.
+const KEY = 'wintrack-modae-v4'
 const StoreCtx = createContext(null)
 
 const defaultViewMode = () => (typeof window !== 'undefined' && window.innerWidth <= 1024 ? 'tablet' : 'full')
