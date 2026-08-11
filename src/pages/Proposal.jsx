@@ -5,6 +5,7 @@ import { defaultCosting } from '../seed.js'
 import { effectiveRate, unitCostINR, unitSellINR, fmt, exportCSV, canViewCommercial } from '../utils.js'
 import { useFormulaBar } from '../formulabar.jsx'
 import { Icon } from '../icons.jsx'
+import { oppBlockers, isBlocked } from '../gates.js'
 
 const TABS = ['Cover Letter', 'Signal List', 'Rack Layout', 'Priced BoQ']
 
@@ -158,6 +159,28 @@ export default function Proposal() {
 
   const comms = (store.communications || {})[oppId] || []
 
+  // Submission gates: red-customer clearance, deviation approvals, and
+  // approved-with-conditions confirmations, per the Aug 10 review.
+  const blockers = oppBlockers(opp, p, store.approvals || [])
+  const blocked = isBlocked(blockers)
+  const submitted = comms.some(c => c.kind === 'submission')
+
+  const requestApproval = bl => () => store.requestApproval({
+    oppId, type: bl.approvalType, approver: bl.approver, detail: bl.text,
+  })
+  const confirmCond = bl => () => {
+    const note = prompt('How was this condition incorporated in the proposal?', '')
+    if (note && note.trim()) store.confirmCondition(bl.approvalId, bl.condIdx, note.trim())
+  }
+  const markSubmitted = () => {
+    store.addCommunication(oppId, {
+      to: opp.contactPerson || opp.sellTo,
+      subject: `${oppId} — Proposal Rev ${p.revision} submitted to customer`,
+      kind: 'submission',
+    })
+    if (!opp.proposalDate) store.updateOpportunity(oppId, { proposalDate: new Date().toISOString().slice(0, 10) })
+  }
+
   const sendEmail = () => {
     const body = [
       'Dear Sir/Madam,',
@@ -203,6 +226,43 @@ export default function Proposal() {
         <button onClick={openEmail}><Icon name="mail" size={13} /> Email proposal</button>
         <button className="primary" onClick={() => setPrinting(true)}><Icon name="printer" size={13} /> Print / PDF proposal</button>
       </div>
+
+      {opp.status === 'Open' && !printing && (
+        <div className={`gate-strip ${blocked ? 'blocked' : 'ready'}`}>
+          {blockers.length === 0 && (
+            <div className="gate-row">
+              <Icon name="checkCircle" size={15} />
+              <span>No blockers — the proposal is clear to go to the customer.</span>
+              <span className="spacer" />
+              {submitted
+                ? <span className="pill won">Submitted</span>
+                : <button className="primary" onClick={markSubmitted}>Mark submitted to customer</button>}
+            </div>
+          )}
+          {blockers.map(bl => (
+            <div key={bl.key} className={`gate-row ${bl.severity}`}>
+              <Icon name={bl.severity === 'info' ? 'alert' : bl.severity === 'wait' ? 'clock' : 'lock'} size={15} />
+              <span>{bl.text}</span>
+              <span className="spacer" />
+              {bl.approvalType && bl.severity !== 'wait' && (
+                <button onClick={requestApproval(bl)}>Request {bl.approver} approval</button>
+              )}
+              {bl.approvalId != null && bl.condIdx != null && (
+                <button onClick={confirmCond(bl)}>Confirm incorporated</button>
+              )}
+            </div>
+          ))}
+          {blockers.length > 0 && !blocked && !submitted && (
+            <div className="gate-row">
+              <span className="spacer" />
+              <button className="primary" onClick={markSubmitted}>Mark submitted to customer</button>
+            </div>
+          )}
+          {blockers.length > 0 && !blocked && submitted && (
+            <div className="gate-row"><span className="spacer" /><span className="pill won">Submitted</span></div>
+          )}
+        </div>
+      )}
 
       {(tab === 'Cover Letter' || printing) && (
         <div className="cover-sheet">

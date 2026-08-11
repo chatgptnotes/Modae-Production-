@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useStore, nextOppId } from '../store.jsx'
 import { CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS } from '../seed.js'
 
@@ -12,7 +12,9 @@ const empty = {
 export default function IntakeForm() {
   const store = useStore()
   const nav = useNavigate()
-  const [f, setF] = useState(empty)
+  // The Lead Inbox pre-fills the form via router state ("Qualify" action).
+  const loc = useLocation()
+  const [f, setF] = useState(() => ({ ...empty, ...(loc.state?.prefill || {}) }))
   const set = k => e => setF({ ...f, [k]: e.target.value })
 
   const knownCustomer = store.customers.find(c => c.name.toLowerCase() === f.sellTo.trim().toLowerCase())
@@ -46,6 +48,8 @@ export default function IntakeForm() {
       contactPerson: f.contactPerson, contactPhone: f.contactPhone,
       lastUpdated: today, forecast: false, remarks: '',
     })
+    // A lead qualified from the inbox converts only on actual submit.
+    if (loc.state?.leadId) store.updateLead(loc.state.leadId, { status: 'Qualified', oppId: id })
     alert(`Opportunity ${id} created.\n\n1) Row added to the Sales Pipeline sheet\n2) Folder ${id} created with Customer Specs / Partner Docs / Proposal`)
     nav(`/folders/${id}`)
   }

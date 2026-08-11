@@ -275,6 +275,77 @@ export const seedCustomers = [
   { name: 'New customer (auto-flagged)', category: '—', status: 'Blue', kyc: '—', payment: '—' },
 ]
 
+// Lead inbox — inquiries land here (common mailbox intake); most never become
+// opportunities and that history is kept minimally, per the Aug 10 meeting.
+export const seedLeads = [
+  {
+    id: 'LD-101', ts: '2026-08-10T09:12:00Z', channel: 'Email',
+    from: 'purchase.simhadri@ntpc.example.in',
+    subject: 'RFQ — Bently 3300 XL proximity probe spares for Unit 2',
+    body: 'Dear ModAE team,\n\nWe require 8 nos Bently 3300 XL 8mm proximity probes (P/N 330101-00-08-10-02-00) with 5m extension cables for Simhadri STPP Unit 2 TG condition monitoring. Kindly quote your best price with delivery to Visakhapatnam within 8 weeks.\n\nRegards,\nPurchase Cell, NTPC Simhadri',
+    status: 'New',
+    parse: {
+      sellTo: 'NTPC Simhadri', category: 'EUC', location: 'Visakhapatnam',
+      eucName: 'NTPC Simhadri', eucLocation: 'Visakhapatnam',
+      oppName: 'Bently 3300 XL proximity probe spares — Unit 2',
+      oppType: 'Spares', bu: 'Energy', segment: 'Thermal', product: 'Bently',
+      contactPerson: 'Purchase Cell', contactPhone: '',
+      items: [{ desc: 'Bently 3300 XL 8mm proximity probe + 5m ext. cable', pn: '330101-00-08-10-02-00', qty: 8 }],
+      confidence: 0.92,
+      note: 'Bently part number recognised — no Bently price list; ad-hoc trader quote will be needed.',
+    },
+  },
+  {
+    id: 'LD-102', ts: '2026-08-11T06:40:00Z', channel: 'Email',
+    from: 'maintenance@bmms.example.in',
+    subject: 'Field balancing visit — BFP-2A high vibration',
+    body: 'Hi,\n\nOur BFP-2A is showing high 1x vibration after overhaul. Need a ModAE engineer for field balancing, likely 2-3 days on site in Bangalore next week. Please send your service offer.\n\nR. Iyer, BMMS',
+    status: 'New',
+    parse: {
+      sellTo: 'BMMS', category: 'EUC', location: 'Bangalore',
+      eucName: 'BMMS', eucLocation: 'Bangalore',
+      oppName: 'Field balancing — BFP-2A, 2-3 days on site',
+      oppType: 'Service', bu: 'Service', segment: 'Industrial', product: 'ModAE',
+      contactPerson: 'R. Iyer', contactPhone: '+91 98450 22222',
+      items: [{ desc: 'Service Engineer — field balancing, on site', pn: '', qty: 3 }],
+      confidence: 0.85,
+      note: 'Existing Amber customer — service rate sheet applies (Service Engineer 45 K₹/day).',
+    },
+  },
+  {
+    id: 'LD-103', ts: '2026-08-09T14:05:00Z', channel: 'Email',
+    from: 'info@greenfieldwind.example.com',
+    subject: 'Wind turbine installation partner required',
+    body: 'Hello, we are looking for an installation partner for 12 wind turbines in Karnataka. Can you handle turbine erection and grid connection?\n\nGreenfield Wind LLP',
+    status: 'New',
+    parse: {
+      sellTo: 'Greenfield Wind LLP', category: 'EPC', location: 'Karnataka',
+      eucName: '', eucLocation: '', oppName: 'Wind turbine installation (12 units)',
+      oppType: 'Project', bu: 'Energy', segment: 'Others', product: 'Various',
+      contactPerson: '', contactPhone: '', items: [], confidence: 0.4,
+      note: 'Outside current business scope (turbine erection) — suggest Drop, keep for future analytics.',
+    },
+  },
+]
+
+// Approval requests routed to LJS / AH; "Approved with conditions" must have
+// every condition confirmed incorporated before the proposal can go out.
+export const seedApprovals = [
+  {
+    id: 'AP-101', oppId: '2606213RS', type: 'Commercial deviation',
+    detail: 'Customer asks 90-day credit on Upgr. of VC-4000-Koyna; proposal quotes 30 days from invoice (deviation).',
+    requestedBy: 'RS', ts: '2026-08-08T10:30:00Z', approver: 'AH', status: 'Pending',
+    conditions: [], decisionTs: '', decisionNote: '',
+  },
+  {
+    id: 'AP-102', oppId: '2607215RS', type: 'Amber credit terms',
+    detail: 'BHEL Bhopal is Amber (avg 60-day payment). Credit terms for ARUN-3 AGMS proposal need clearance.',
+    requestedBy: 'RS', ts: '2026-08-06T08:00:00Z', approver: 'AH', status: 'Approved with conditions',
+    conditions: [{ text: '100% advance payment — add "100% advance along with PO" to the payment term', incorporated: false, note: '' }],
+    decisionTs: '2026-08-07T09:15:00Z', decisionNote: 'Approved based on prior unpaid-invoice history — prepay only.',
+  },
+]
+
 // Imported Items Pricing & Costing Factors — as on the Priced BoQ sheet.
 export const defaultCosting = {
   baseRate: 112.0,      // Euro-₹ Base (spot + ₹1 buffer, rounded up)

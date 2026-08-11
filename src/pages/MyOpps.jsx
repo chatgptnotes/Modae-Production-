@@ -1,5 +1,5 @@
 import React from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { OWNERS } from '../seed.js'
 import { canViewCommercial, fmt, ddMmmYY } from '../utils.js'
@@ -13,8 +13,6 @@ export default function MyOpps() {
   const store = useStore()
   const nav = useNavigate()
   const drawer = useDrawer()
-  const [params] = useSearchParams()
-  const devOnly = params.get('filter') === 'deviations'
 
   const role = store.role
   const comm = canViewCommercial(role)
@@ -22,24 +20,15 @@ export default function MyOpps() {
 
   let rows = [...store.opportunities]
     .sort((a, b) => (b.lastUpdated || '').localeCompare(a.lastUpdated || ''))
-  if (devOnly) {
-    rows = rows.filter(o => o.status === 'Open'
-      && ((store.proposals[o.id] || {}).terms || []).some(t => t.status === 'Deviation'))
-  } else if (mine) {
-    rows = rows.filter(o => o.owner === role)
-  }
+  if (mine) rows = rows.filter(o => o.owner === role)
 
   const devCount = o => ((store.proposals[o.id] || {}).terms || []).filter(t => t.status === 'Deviation').length
 
   return (
     <div className="page">
-      <h2>{devOnly ? 'Approvals / Deviations' : mine ? `My Opportunities — ${role}` : 'Opportunities — cards'}</h2>
+      <h2>{mine ? `My Opportunities — ${role}` : 'Opportunities — cards'}</h2>
       <div className="toolbar">
-        <span className="hint">
-          {devOnly
-            ? 'Open opportunities whose proposal carries commercial deviations — each needs approval before submission.'
-            : 'Tap a card to view and edit every field of its sheet row.'}
-        </span>
+        <span className="hint">Tap a card to view and edit every field of its sheet row.</span>
         <span className="spacer" />
         <button className="primary"><Icon name="cards" size={13} /> Cards</button>
         <button onClick={() => nav('/')}><Icon name="sheet" size={13} /> Sheet</button>
@@ -66,7 +55,7 @@ export default function MyOpps() {
             </div>
           )
         })}
-        {!rows.length && <p className="hint">Nothing here — {devOnly ? 'no open deviations.' : 'no opportunities for this owner yet.'}</p>}
+        {!rows.length && <p className="hint">Nothing here — no opportunities for this owner yet.</p>}
       </div>
     </div>
   )

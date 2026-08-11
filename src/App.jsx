@@ -18,19 +18,26 @@ import Users from './pages/Users.jsx'
 import TenderIntake from './pages/TenderIntake.jsx'
 import Home from './pages/Home.jsx'
 import MyOpps from './pages/MyOpps.jsx'
+import Inbox from './pages/Inbox.jsx'
+import Approvals from './pages/Approvals.jsx'
+import Audit from './pages/Audit.jsx'
 
 // Left-sidebar navigation (modern shell, mirrors the WinTrack Ver 1.1 wireframe).
 const NAV = [
   { to: '/home', label: 'Home', icon: 'home' },
+  { to: '/inbox', label: 'Lead Inbox', icon: 'inbox' },
   { to: '/', label: 'Opportunity Tracker', icon: 'sheet' },
   { to: '/my', label: 'My Opportunities', icon: 'cards' },
   { to: '/new', label: 'New Opportunity', icon: 'plus' },
   { to: '/tender', label: 'Tender → Proposal', icon: 'bot' },
+  // Visible to everyone: approvers decide here; sales owners track their own requests.
+  { to: '/approvals', label: 'Approvals', icon: 'checkCircle' },
   { to: '/folders', label: 'Folders', icon: 'folder' },
   { to: '/pricelists', label: 'Price Lists', icon: 'tag' },
   { to: '/dashboard', label: 'Dashboard', icon: 'chartBar' },
   { to: '/analytics', label: 'Analytics', icon: 'chartLine' },
   { to: '/customers', label: 'Customers', icon: 'users' },
+  { to: '/audit', label: 'Audit Trail', icon: 'list', adminOnly: true },
   { to: '/users', label: 'Users & Roles', icon: 'shield', adminOnly: true },
 ]
 
@@ -39,7 +46,9 @@ export default function App() {
   const nav = useNavigate()
   const loc = useLocation()
   const [navOpen, setNavOpen] = useState(false)
-  const items = NAV.filter(t => !t.adminOnly || isAdminRole(store.role))
+  const approver = store.role === 'LJS' || store.role === 'AH' || isAdminRole(store.role)
+  const items = NAV.filter(t =>
+    (!t.adminOnly || isAdminRole(store.role)) && (!t.approverOnly || approver))
 
   // Off-canvas nav closes on navigation (tablet).
   useEffect(() => { setNavOpen(false) }, [loc.pathname])
@@ -90,6 +99,10 @@ export default function App() {
           <Route path="/" element={<Tracker />} />
           <Route path="/home" element={<Home />} />
           <Route path="/my" element={<MyOpps />} />
+          <Route path="/inbox" element={<Inbox />} />
+          <Route path="/inbox/:leadId" element={<Inbox />} />
+          <Route path="/approvals" element={<Approvals />} />
+          <Route path="/audit" element={<Audit />} />
           <Route path="/new" element={<IntakeForm />} />
           <Route path="/tender" element={<TenderIntake />} />
           <Route path="/folders" element={<Folders />} />

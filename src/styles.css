@@ -371,6 +371,19 @@ tr.rowclick { cursor: pointer; }
 .evidence.warn { color: var(--amber-text); }
 input.needs-input, select.needs-input { background: #fff8e1; border-color: #bf9000; }
 
+/* Proposal readiness gate strip */
+.gate-strip {
+  border: 1px solid var(--grid-line); border-left: 4px solid var(--won-text);
+  background: #f4faf6; padding: 6px 12px; margin-bottom: 12px; max-width: 980px;
+  border-radius: 3px;
+}
+.gate-strip.blocked { border-left-color: var(--lost-text); background: #fdf6f5; }
+.gate-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 12.5px; }
+.gate-row .spacer { flex: 1; }
+.gate-row.info { color: #8a6d00; }
+.gate-row.wait { color: #666; }
+.gate-row.block { color: var(--lost-text); }
+
 /* Tile-based Home — every tile is a door into an existing screen */
 .tile-search {
   width: 100%; max-width: 560px; padding: 8px 12px; font-size: 14px;

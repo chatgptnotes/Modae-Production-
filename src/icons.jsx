@@ -27,6 +27,8 @@ const PATHS = {
   menu: <path d="M4 7h16M4 12h16M4 17h16" />,
   clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
   download: <><path d="M12 4v11.5" /><path d="m6.5 10.5 5.5 5 5.5-5" /><path d="M4 20h16" /></>,
+  inbox: <><path d="M21 13v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5" /><path d="M5.5 5h13L21 13h-5l-1.5 2.5h-5L8 13H3Z" /></>,
+  list: <><path d="M8.5 6h12M8.5 12h12M8.5 18h12" /><path d="M4 6h.01M4 12h.01M4 18h.01" /></>,
 }
 
 export function Icon({ name, size = 18, className = '' }) {

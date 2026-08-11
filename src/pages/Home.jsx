@@ -12,9 +12,9 @@ const roleGroup = role =>
   isAdminRole(role) ? 'admin' : role === 'LJS' || role === 'AH' ? 'approver' : 'sales'
 
 const FOR_YOU = {
-  sales: ['new', 'tender', 'my', 'genprop'],
-  approver: ['approvals', 'dashboard', 'tracker', 'analytics'],
-  admin: ['users', 'pricelists', 'customers', 'tender'],
+  sales: ['inbox', 'new', 'tender', 'my'],
+  approver: ['approvals', 'inbox', 'dashboard', 'tracker'],
+  admin: ['users', 'audit', 'pricelists', 'tender'],
 }
 
 export default function Home() {
@@ -31,15 +31,19 @@ export default function Home() {
   const openOpps = store.opportunities.filter(o => o.status === 'Open')
   const stale = openOpps.filter(o => (ageDays(o.lastUpdated) ?? 0) > 30).length
   const unproposed = openOpps.filter(o => !o.proposalDate).length
-  const deviations = openOpps.filter(o =>
-    ((store.proposals[o.id] || {}).terms || []).some(t => t.status === 'Deviation')).length
+  const newLeads = (store.leads || []).filter(l => l.status === 'New').length
+  const pendingApprovals = (store.approvals || []).filter(a => a.status === 'Pending').length
+  const openConditions = (store.approvals || []).filter(a => a.status === 'Approved with conditions'
+    && a.conditions.some(c => !c.incorporated)).length
 
   const TILES = [
     { key: 'new', icon: 'plus', label: 'Add Lead', hint: 'Intake form — row + folder created on submit', to: '/new' },
     { key: 'tender', icon: 'bot', label: 'Tender → Proposal', hint: 'Upload an RFQ PDF, AI extracts it', to: '/tender' },
     { key: 'my', icon: 'cards', label: 'My Opportunities', hint: 'Your pipeline as cards', to: '/my', badge: stale, badgeHint: 'not updated in 30+ days' },
     { key: 'genprop', icon: 'fileText', label: 'Generate Proposal', hint: 'Pick an open opportunity', action: () => setPick(true), badge: unproposed, badgeHint: 'open opportunities without a proposal' },
-    { key: 'approvals', icon: 'checkCircle', label: 'Approvals / Deviations', hint: 'Proposals with commercial deviations', to: '/my?filter=deviations', show: role === 'LJS' || role === 'AH' || admin, badge: deviations, badgeHint: 'open deviations' },
+    { key: 'inbox', icon: 'inbox', label: 'Lead Inbox', hint: 'Incoming inquiries, AI-parsed', to: '/inbox', badge: newLeads, badgeHint: 'new leads to qualify' },
+    { key: 'approvals', icon: 'checkCircle', label: 'Approvals', hint: 'Deviations, clearances, conditions', to: '/approvals', show: role === 'LJS' || role === 'AH' || admin, badge: pendingApprovals + openConditions, badgeHint: 'pending decisions + unconfirmed conditions' },
+    { key: 'audit', icon: 'list', label: 'Audit Trail', hint: 'Who changed what, when', to: '/audit', show: admin },
     { key: 'tracker', icon: 'sheet', label: 'All Opportunities', hint: 'The pipeline sheet', to: '/' },
     { key: 'folders', icon: 'folder', label: 'Folders', hint: 'Customer Specs · Partner Docs · Proposal', to: '/folders' },
     { key: 'dashboard', icon: 'chartBar', label: 'Pivot / Forecast', hint: 'Order intake by month', to: '/dashboard', show: comm },
