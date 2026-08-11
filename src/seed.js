@@ -170,6 +170,30 @@ export const seedOpportunities = [
   },
 ]
 
+// Personas for the header role switcher (from the WinTrack Ver 1.1 wireframe's
+// Users & Roles). `commercial` gates Value/COGS/GM, forecasts and pricing.
+export const ROLES = {
+  SUPER: { name: 'System Owner', label: 'Super Admin — Platform Owner', commercial: true, admin: true },
+  ADMIN: { name: 'Admin', label: 'Admin — System Administrator', commercial: true, admin: true },
+  LJS: { name: 'L. J. Swaminathan', label: 'LJS — Strategic Approver', commercial: true },
+  AH: { name: 'A. Hameed', label: 'AH — Commercial & Ops Approver', commercial: true },
+  RS: { name: 'R. Sundaram', label: 'RS — Sales Owner', commercial: false },
+  PP: { name: 'P. Prakash', label: 'PP — Sales Owner', commercial: false },
+  SS: { name: 'S. Subramanian', label: 'SS — Sales Owner', commercial: false },
+  PJS: { name: 'P. J. Sharma', label: 'PJS — Sales Owner', commercial: false },
+  RJS: { name: 'R. J. Singh', label: 'RJS — Sales Owner', commercial: false },
+  SR: { name: 'S. Rao', label: 'SR — Sales Owner', commercial: false },
+}
+
+export const seedUsers = [
+  { id: 'U-001', name: 'System Owner', email: 'admin@modae.demo', role: 'SUPER', status: 'Active', created: '2026-04-01' },
+  { id: 'U-002', name: 'L. J. Swaminathan', email: 'ljs@modae.demo', role: 'LJS', status: 'Active', created: '2026-04-01' },
+  { id: 'U-003', name: 'A. Hameed', email: 'ah@modae.demo', role: 'AH', status: 'Active', created: '2026-04-01' },
+  { id: 'U-004', name: 'R. Sundaram', email: 'rs@modae.demo', role: 'RS', status: 'Active', created: '2026-04-15' },
+  { id: 'U-005', name: 'P. Prakash', email: 'pp@modae.demo', role: 'PP', status: 'Active', created: '2026-04-15' },
+  { id: 'U-006', name: 'S. Rao', email: 'sr@modae.demo', role: 'SR', status: 'Pending', created: '2026-08-08' },
+]
+
 export const SUBFOLDERS = ['Customer Specs', 'Partner Docs', 'Proposal']
 
 export const seedFiles = {

@@ -1,11 +1,22 @@
 import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
-import { fmt, exportCSV } from '../utils.js'
+import { fmt, exportCSV, canViewCommercial } from '../utils.js'
 
 export default function PriceLists() {
   const store = useStore()
   const [list, setList] = useState('BNK')
   const pl = store.priceLists[list]
+
+  if (!canViewCommercial(store.role)) {
+    return (
+      <div className="page">
+        <h2>Price Lists (Admin)</h2>
+        <div className="restricted" style={{ maxWidth: 640 }}>
+          🔒 Restricted — supplier price lists, trader quotes and rate sheets are visible to approvers/admin only.
+        </div>
+      </div>
+    )
+  }
 
   const addAdhoc = e => {
     e.preventDefault()

@@ -29,6 +29,19 @@ export function stageClass(o) {
   return o.stage === 'Won' ? 'won' : o.stage === 'Lost' ? 'lost' : 'open'
 }
 
+import { ROLES } from './seed.js'
+
+// Commercial visibility (Value/COGS/GM, forecast, pricing) follows the active
+// persona, per the wireframe's "Restricted — commercial data" rule.
+export const canViewCommercial = role => !!ROLES[role]?.commercial
+export const isAdminRole = role => !!ROLES[role]?.admin
+
+export function ageDays(dateStr) {
+  if (!dateStr) return null
+  const d = Math.round((Date.now() - new Date(dateStr + 'T00:00:00').getTime()) / 86400000)
+  return d < 0 ? 0 : d
+}
+
 export function fmt(n, digits = 0) {
   if (n === '' || n == null || isNaN(n)) return ''
   return Number(n).toLocaleString('en-IN', { maximumFractionDigits: digits })

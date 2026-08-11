@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { fmt, fmtLakh, monthKey, monthLabel, exportCSV } from '../utils.js'
+import { fmt, fmtLakh, monthKey, monthLabel, exportCSV, canViewCommercial } from '../utils.js'
 
 // The "Pivot" sheet, shaped like the real one: rows = customers, columns =
 // Order Date months, values = Sum of Value (K₹), with an Order Date quarter
@@ -17,6 +17,19 @@ export default function Dashboard() {
   const [fromQ, setFromQ] = useState('2026-Q2')
   const [toQ, setToQ] = useState('2027-Q4')
   const [forecastOnly, setForecastOnly] = useState(true)
+
+  // The whole pivot is Sum of Value — commercial data, restricted per role.
+  if (!canViewCommercial(store.role)) {
+    return (
+      <div className="page">
+        <h2>Pivot — Sum of Value (K₹) by Customer × Order Month</h2>
+        <div className="restricted" style={{ maxWidth: 640 }}>
+          🔒 Restricted — the forecast pivot rolls up commercial values and is visible to approvers/admin only.
+          Switch the acting-as persona in the header to view it.
+        </div>
+      </div>
+    )
+  }
 
   const owners = ['All', ...new Set(store.opportunities.map(o => o.owner))]
 

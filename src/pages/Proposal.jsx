@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { defaultCosting } from '../seed.js'
-import { effectiveRate, unitCostINR, unitSellINR, fmt, exportCSV } from '../utils.js'
+import { effectiveRate, unitCostINR, unitSellINR, fmt, exportCSV, canViewCommercial } from '../utils.js'
 import { useFormulaBar } from '../formulabar.jsx'
 
 const TABS = ['Cover Letter', 'Signal List', 'Rack Layout', 'Priced BoQ']
@@ -40,6 +40,8 @@ export default function Proposal() {
   useEffect(() => { setP(normalize(store.getProposal(oppId))); setTab('Cover Letter') }, [oppId]) // eslint-disable-line
 
   if (!opp) return <div className="page"><h2>Unknown opportunity</h2><Link to="/">Back to tracker</Link></div>
+
+  const comm = canViewCommercial(store.role)
 
   const units = p.units || 7
 
@@ -150,7 +152,7 @@ export default function Proposal() {
       <div className="toolbar">
         <Link className="btn" to={`/folders/${oppId}`}>◂ Back to folder</Link>
         <span className="spacer" />
-        {tab === 'Priced BoQ' && <button onClick={exportBoQ}>Extract to Excel</button>}
+        {tab === 'Priced BoQ' && comm && <button onClick={exportBoQ}>Extract to Excel</button>}
         <button className="primary" onClick={() => window.print()}>Print / PDF proposal</button>
       </div>
 
@@ -249,7 +251,13 @@ export default function Proposal() {
         </div>
       )}
 
-      {tab === 'Priced BoQ' && (
+      {tab === 'Priced BoQ' && !comm && (
+        <div className="restricted" style={{ maxWidth: 640 }}>
+          🔒 Restricted — the Priced BoQ (costing factors, landed costs, margins) is visible to approvers/admin only.
+        </div>
+      )}
+
+      {tab === 'Priced BoQ' && comm && (
         <>
           <div className="factors">
             <table>

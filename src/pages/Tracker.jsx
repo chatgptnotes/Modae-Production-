@@ -1,8 +1,8 @@
-import React, { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import React, { useEffect, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { STAGES, CLOSE_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS } from '../seed.js'
-import { fmt, mmmYY, ddMmmYY, exportCSV, stageClass } from '../utils.js'
+import { fmt, mmmYY, ddMmmYY, exportCSV, stageClass, canViewCommercial } from '../utils.js'
 import { useFormulaBar } from '../formulabar.jsx'
 
 const OPEN_STAGES = STAGES.filter(s => s !== 'Won' && s !== 'Lost')
@@ -52,6 +52,7 @@ export default function Tracker() {
   const [sort, setSort] = useState(null)               // { key, dir: 1 | -1 }
   const [openFilter, setOpenFilter] = useState(null)   // { key, x, y } of the open dropdown
 
+  const comm = canViewCommercial(store.role)
   const gmK = o => (o.valueK || 0) - (o.cogsK || 0)
   const gmPct = o => (o.valueK ? Math.round((gmK(o) / o.valueK) * 100) + '%' : null)
 
@@ -93,7 +94,20 @@ export default function Tracker() {
       : null)
   }
 
-  // Dates sort chronologically on the raw ISO value, not the "Jul-26" label.
+  // Analytics bars land here pre-filtered via query params (?owner= / ?oppType= / ?bu=).
+  const [params, setParams] = useSearchParams()
+  useEffect(() => {
+    if (![...params.keys()].length) return
+    const owner = params.get('owner')
+    if (owner) setOwnerFilter(owner)
+    const next = {}
+    for (const key of ['oppType', 'bu']) {
+      const v = params.get(key)
+      if (v) next[key] = new Set([v])
+    }
+    if (Object.keys(next).length) applyFilters(next)
+    setParams({}, { replace: true })
+  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
   const DATE_KEYS = ['createDate', 'proposalDate', 'orderDate', 'invoiceDate', 'lastUpdated']
   const sortVal = (o, key) => (DATE_KEYS.includes(key) ? (o[key] || '') : cellVal(o, key))
 
@@ -192,7 +206,8 @@ export default function Tracker() {
         </label>
         <span className="hint">Rows are never deleted — close them via Stage (Won/Lost) with a mandatory Closed Reason. Click ▼ on a header to sort/filter; click a cell to see its formula.</span>
         <span className="spacer" />
-        <button onClick={exportRows}>Extract to Excel</button>
+        <button onClick={exportRows} disabled={!comm}
+          title={comm ? '' : 'Export includes commercial columns — restricted to approvers/admin'}>Extract to Excel</button>
         <Link className="btn primary" to="/new">+ New Opportunity</Link>
       </div>
 
@@ -257,12 +272,23 @@ export default function Tracker() {
                     {PROB_LEVELS.map(p => <option key={p}>{p}</option>)}
                   </select>
                 </td>
-                <td onClick={selectCell(o, COLS[14])} className={`num ${isSel(o, COLS[14]) ? 'cell-sel' : ''}`}><input type="number" value={o.valueK || ''} onChange={upd(o.id, 'valueK')} style={{ textAlign: 'right', width: 70 }} placeholder="-" /></td>
-                <td onClick={selectCell(o, COLS[15])} className={`num ${isSel(o, COLS[15]) ? 'cell-sel' : ''}`}><input type="number" value={o.cogsK || ''} onChange={upd(o.id, 'cogsK')} style={{ textAlign: 'right', width: 70 }} placeholder="-" /></td>
-                <td onClick={selectCell(o, COLS[16])} className={`num ${isSel(o, COLS[16]) ? 'cell-sel' : ''}`}>{o.valueK ? fmt(gmK(o)) : '-'}</td>
-                {gmPct(o)
-                  ? <td onClick={selectCell(o, COLS[17])} className={`num ${isSel(o, COLS[17]) ? 'cell-sel' : ''}`}>{gmPct(o)}</td>
-                  : <td onClick={selectCell(o, COLS[17])} className={`err ${isSel(o, COLS[17]) ? 'cell-sel' : ''}`}>#DIV/0!</td>}
+                {!comm ? (
+                  <>
+                    <td className="num locked" title="Commercial data — approvers/admin only">🔒</td>
+                    <td className="num locked">🔒</td>
+                    <td className="num locked">🔒</td>
+                    <td className="num locked">🔒</td>
+                  </>
+                ) : (
+                  <>
+                    <td onClick={selectCell(o, COLS[14])} className={`num ${isSel(o, COLS[14]) ? 'cell-sel' : ''}`}><input type="number" value={o.valueK || ''} onChange={upd(o.id, 'valueK')} style={{ textAlign: 'right', width: 70 }} placeholder="-" /></td>
+                    <td onClick={selectCell(o, COLS[15])} className={`num ${isSel(o, COLS[15]) ? 'cell-sel' : ''}`}><input type="number" value={o.cogsK || ''} onChange={upd(o.id, 'cogsK')} style={{ textAlign: 'right', width: 70 }} placeholder="-" /></td>
+                    <td onClick={selectCell(o, COLS[16])} className={`num ${isSel(o, COLS[16]) ? 'cell-sel' : ''}`}>{o.valueK ? fmt(gmK(o)) : '-'}</td>
+                    {gmPct(o)
+                      ? <td onClick={selectCell(o, COLS[17])} className={`num ${isSel(o, COLS[17]) ? 'cell-sel' : ''}`}>{gmPct(o)}</td>
+                      : <td onClick={selectCell(o, COLS[17])} className={`err ${isSel(o, COLS[17]) ? 'cell-sel' : ''}`}>#DIV/0!</td>}
+                  </>
+                )}
                 <td onClick={selectCell(o, COLS[18])} className={isSel(o, COLS[18]) ? 'cell-sel' : ''}>{mmmYY(o.createDate)}</td>
                 <td onClick={selectCell(o, COLS[19])} className={isSel(o, COLS[19]) ? 'cell-sel' : ''}>{mmmYY(o.proposalDate)}</td>
                 <td onClick={selectCell(o, COLS[20])} className={isSel(o, COLS[20]) ? 'cell-sel' : ''}><input type="date" value={o.orderDate} onChange={upd(o.id, 'orderDate')} style={{ width: 108 }} /></td>
@@ -302,10 +328,10 @@ export default function Tracker() {
             <tr>
               <td className="rowhead"></td>
               <td colSpan={14}>Totals {rows.length < base.length && <span className="hint">({rows.length} of {base.length} rows shown — filters active)</span>}</td>
-              <td className="num">₹ {fmt(totals.v)}</td>
-              <td className="num">₹ {fmt(totals.c)}</td>
-              <td className="num">₹ {fmt(totals.v - totals.c)}</td>
-              <td className="num" style={{ color: '#bf9000' }}>{totals.v ? Math.round(((totals.v - totals.c) / totals.v) * 100) + '%' : ''}</td>
+              <td className="num">{comm ? `₹ ${fmt(totals.v)}` : '🔒'}</td>
+              <td className="num">{comm ? `₹ ${fmt(totals.c)}` : '🔒'}</td>
+              <td className="num">{comm ? `₹ ${fmt(totals.v - totals.c)}` : '🔒'}</td>
+              <td className="num" style={{ color: '#bf9000' }}>{comm && totals.v ? Math.round(((totals.v - totals.c) / totals.v) * 100) + '%' : comm ? '' : '🔒'}</td>
               <td colSpan={13}></td>
             </tr>
           </tfoot>

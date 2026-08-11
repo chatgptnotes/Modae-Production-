@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
 import {
   seedOpportunities, seedFiles, seedPriceLists, seedAdhocParts,
-  seedRateSheet, seedCustomers, SUBFOLDERS, newProposal,
+  seedRateSheet, seedCustomers, seedUsers, ROLES, SUBFOLDERS, newProposal,
 } from './seed.js'
 
 // v3: schema updated after the Aug 10 meeting review (prob column, Partner Docs
@@ -16,7 +16,12 @@ function initialState() {
       const s = JSON.parse(saved)
       // An empty opportunities array is a legitimate state (everything deleted),
       // not a corrupt one — don't silently reseed over the user's data.
-      if (s && Array.isArray(s.opportunities) && (s.opportunities.length === 0 || s.opportunities[0].sellTo !== undefined)) return s
+      if (s && Array.isArray(s.opportunities) && (s.opportunities.length === 0 || s.opportunities[0].sellTo !== undefined)) {
+        // Backfill fields added after the v3 key (users/role) without reseeding.
+        if (!Array.isArray(s.users)) s.users = seedUsers
+        if (!ROLES[s.role]) s.role = 'SUPER'
+        return s
+      }
     }
   } catch { /* fall through to seed */ }
   return {
@@ -27,6 +32,8 @@ function initialState() {
     rateSheet: seedRateSheet,
     customers: seedCustomers,
     proposals: {},
+    users: seedUsers,
+    role: 'SUPER',
   }
 }
 
@@ -137,6 +144,26 @@ export function StoreProvider({ children }) {
       setState(s => s.customers.some(c => c.name.toLowerCase() === cust.name.toLowerCase())
         ? s
         : { ...s, customers: [...s.customers, cust] })
+    },
+
+    setRole(role) {
+      setState(s => (ROLES[role] ? { ...s, role } : s))
+    },
+
+    addUser(user) {
+      setState(s => s.users.some(u => u.email.toLowerCase() === user.email.toLowerCase())
+        ? s
+        : { ...s, users: [...s.users, user] })
+    },
+
+    updateUser(id, patch) {
+      setState(s => ({ ...s, users: s.users.map(u => (u.id === id ? { ...u, ...patch } : u)) }))
+    },
+
+    // Only used to reject a pending registration — active accounts are
+    // suspended, never deleted.
+    deleteUser(id) {
+      setState(s => ({ ...s, users: s.users.filter(u => u.id !== id) }))
     },
 
     resetDemo() {
