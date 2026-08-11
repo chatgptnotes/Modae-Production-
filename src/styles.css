@@ -1184,3 +1184,90 @@ input.needs-input, select.needs-input { background: #fffbeb; border-color: var(-
 .tab-bottom { position: fixed; }
 
 @media print { .tablet-dash, .tab-fab { display: none !important; } }
+
+/* =========================================================================
+   Desktop Home — brand header, sparkline stat cards, grouped tool columns
+   ========================================================================= */
+.home-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.home-head h2 { margin: 4px 0 10px; }
+.brandmark { display: inline-flex; align-items: center; gap: 9px; color: var(--text-subtle); opacity: .8; }
+.brandmark b { font-size: 21px; font-weight: 800; letter-spacing: .12em; color: var(--text-muted); }
+
+/* Stat cards with an inline trend sparkline */
+.stat-cards { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.stat-card-v2 {
+  position: relative; flex: 0 1 232px; min-height: 0; text-align: left; cursor: pointer;
+  display: grid; grid-template-columns: 1fr auto; grid-template-areas: 'value spark' 'label spark';
+  align-items: center; gap: 0 10px; padding: 12px 14px; border-radius: 12px;
+  border: 1px solid var(--border-soft); background: var(--card-bg);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .05);
+}
+.stat-card-v2:hover { border-color: var(--border-color); filter: none; }
+.sc-value { grid-area: value; font-size: 26px; font-weight: 800; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.sc-label { grid-area: label; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); }
+.sc-spark { grid-area: spark; width: 84px; align-self: center; }
+.stat-card-v2.tone-good { background: #f0fdf4; border-color: #bbf7d0; }
+.stat-card-v2.tone-good .sc-value { color: #15803d; }
+.stat-card-v2.tone-good .sc-spark { color: #22c55e; }
+.stat-card-v2.tone-warn { background: #fffbeb; border-color: #fde68a; }
+.stat-card-v2.tone-warn .sc-value { color: var(--amber-text); }
+.stat-card-v2.tone-warn .sc-spark { color: #f59e0b; }
+.stat-card-v2.tone-neutral .sc-value { color: var(--text-main); }
+.stat-card-v2.tone-neutral .sc-spark { color: var(--text-subtle); }
+
+/* Tool wall in labelled columns */
+.tool-columns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; max-width: 1320px; align-items: start; }
+.tool-col-head {
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--text-subtle); margin-bottom: 8px;
+}
+.tool-col .tile-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (max-width: 1280px) { .tool-columns { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 900px) { .tool-columns { grid-template-columns: 1fr; } }
+
+/* Decorative tile artwork + richer hover */
+.tile { overflow: hidden; transition: border-color .14s, transform .08s, box-shadow .14s; }
+.tile-art {
+  position: absolute; right: -14px; bottom: -18px; color: var(--primary-accent);
+  opacity: .07; pointer-events: none; line-height: 0;
+}
+.tile:hover { transform: translateY(-1px); box-shadow: 0 6px 18px -10px rgba(15, 23, 42, .35); }
+.tile .tile-icon {
+  width: 34px; height: 34px; border-radius: 10px; display: inline-flex; align-items: center;
+  justify-content: center; background: var(--primary-soft); color: var(--primary-hover);
+  transition: background .14s, color .14s;
+}
+.tile.big .tile-icon { width: 40px; height: 40px; border-radius: 12px; }
+.tile:hover .tile-icon { background: var(--primary-accent); color: #fff; }
+.tile.tone-teal .tile-icon { background: var(--teal-soft); color: var(--teal-dark); }
+.tile.tone-teal:hover .tile-icon { background: var(--teal-dark); color: #fff; }
+.tile.tone-teal:hover { background: #f0fdfa; }
+.tile.tone-green .tile-icon { background: #dcfce7; color: #15803d; }
+.tile.tone-green:hover .tile-icon { background: #15803d; color: #fff; }
+.tile.tone-amber .tile-icon { background: var(--amber-fill); color: var(--amber-text); }
+.tile.tone-amber:hover .tile-icon { background: var(--amber-text); color: #fff; }
+.tile.tone-wine .tile-icon, .tile.tone-rust .tile-icon { background: #ffe4e6; color: #be123c; }
+.tile.tone-wine:hover .tile-icon, .tile.tone-rust:hover .tile-icon { background: #be123c; color: #fff; }
+.tile.tone-purple .tile-icon { background: #ede9fe; color: #6d28d9; }
+.tile.tone-purple:hover .tile-icon { background: #6d28d9; color: #fff; }
+.tile.tone-slate .tile-icon { background: #eef2f7; color: #475569; }
+.tile.tone-slate:hover .tile-icon { background: #475569; color: #fff; }
+.tile.tone-navy .tile-icon { background: #e0e7ff; color: #4338ca; }
+.tile.tone-navy:hover .tile-icon { background: #4338ca; color: #fff; }
+
+/* AI & Automation reads as the flagship tile */
+.tile.tile-ai {
+  background:
+    repeating-linear-gradient(90deg, rgba(56,189,248,.10) 0 1px, transparent 1px 22px),
+    repeating-linear-gradient(0deg, rgba(56,189,248,.10) 0 1px, transparent 1px 22px),
+    linear-gradient(135deg, #0f172a 0%, #14304d 100%);
+  border-color: #0f172a;
+}
+.tile.tile-ai .tile-label { color: #fff; }
+.tile.tile-ai .tile-hint { color: #94a3b8; }
+.tile.tile-ai .tile-icon { background: rgba(56,189,248,.18); color: #38bdf8; }
+.tile.tile-ai:hover { background-color: #0f172a; }
+.tile.tile-ai:hover .tile-icon { background: var(--primary-accent); color: #fff; }
+.tile.tile-ai .tile-art { color: #38bdf8; opacity: .16; }
+
+@media print { .brandmark, .tile-art { display: none !important; } }

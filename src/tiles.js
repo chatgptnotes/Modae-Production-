@@ -70,3 +70,10 @@ export const TABLET_SECTIONS = {
     { title: 'Intelligence', kpis: [], keys: ['aimap', 'analytics', 'dashboard', 'pricelists', 'launcher', 'notes'] },
   ],
 }
+
+// Desktop Home groups the tool wall into labelled columns.
+export const HOME_GROUPS = [
+  { title: 'Sales & opportunities', keys: ['new', 'my', 'status', 'voice', 'notes', 'approvals'] },
+  { title: 'Document flow', keys: ['genprop', 'tender', 'inbox', 'tracker', 'folders', 'po'] },
+  { title: 'Insights & AI', keys: ['aimap', 'analytics', 'dashboard', 'customers', 'pricelists', 'users', 'admin', 'audit', 'launcher'] },
+]

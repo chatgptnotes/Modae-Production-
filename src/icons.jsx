@@ -62,6 +62,21 @@ const PATHS = {
   trendDown: <><path d="M3.5 7 10 13.5l3.5-3.5L20.5 17" /><path d="M15.5 17h5v-5" /></>,
 }
 
+// Geometric placeholder wordmark for the Home header — swap for the official
+// ModAE asset when brand guidelines arrive.
+export function BrandMark({ height = 30, className = '' }) {
+  return (
+    <span className={`brandmark ${className}`} aria-label="ModAE">
+      <svg viewBox="0 0 48 34" height={height} fill="none" aria-hidden="true">
+        <path d="M3 31 15 6l9 16 9-16 12 25" stroke="currentColor" strokeWidth="4.5"
+          strokeLinejoin="round" strokeLinecap="round" opacity=".55" />
+        <path d="M15 31 24 14l9 17Z" fill="currentColor" opacity=".9" />
+      </svg>
+      <b>MODAE</b>
+    </span>
+  )
+}
+
 export function Icon({ name, size = 18, className = '' }) {
   return (
     <svg className={`ic ${className}`} width={size} height={size} viewBox="0 0 24 24"

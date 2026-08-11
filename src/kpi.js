@@ -85,3 +85,42 @@ export function turnaround(store) {
     avgDays: quoted.length ? Math.round(daysTotal / quoted.length) : 0,
   }
 }
+
+// Small count-per-month series for the Home stat cards' sparklines.
+export function miniSeries(items, dateOf, buckets = 6) {
+  const map = new Map()
+  for (const it of items || []) {
+    const k = monthKey(String(dateOf(it) || '').slice(0, 10))
+    if (!k) continue
+    map.set(k, (map.get(k) || 0) + 1)
+  }
+  const keys = [...map.keys()].sort().slice(-buckets)
+  // A single bucket can't draw a line — pad with a leading zero so the card
+  // still shows a shape on sparse demo data.
+  const pts = keys.map(k => ({ key: k, label: monthLabel(k), value: map.get(k) }))
+  return pts.length === 1 ? [{ key: 'pad', label: '', value: 0 }, ...pts] : pts
+}
+
+// The three headline cards on the desktop Home.
+export function homeKpis(store, role) {
+  const c = counts(store, role)
+  const leads = store.leads || []
+  const approvals = store.approvals || []
+  return [
+    {
+      key: 'leads', label: 'New leads', value: c.newLeads, tone: 'good', to: '/inbox',
+      hint: 'Leads to qualify in the inbox',
+      series: miniSeries(leads, l => l.ts),
+    },
+    {
+      key: 'approvals', label: 'Pending approvals', value: c.pending, tone: 'warn', to: '/approvals',
+      hint: 'Decisions waiting on an approver',
+      series: miniSeries(approvals, a => a.ts),
+    },
+    {
+      key: 'mine', label: 'My open opportunities', value: c.mine, tone: 'neutral', to: '/my',
+      hint: 'Open opportunities you own',
+      series: miniSeries(c.openOpps.filter(o => o.owner === role), o => o.createDate),
+    },
+  ]
+}
