@@ -54,6 +54,12 @@ const PATHS = {
   logout: <><path d="M14 4.5h4A1.5 1.5 0 0 1 19.5 6v12a1.5 1.5 0 0 1-1.5 1.5h-4" /><path d="M10 8l-4 4 4 4M6 12h9.5" /></>,
   building: <><rect x="4" y="3.5" width="12" height="17" rx="1" /><path d="M16 9.5h4v11H4" /><path d="M7.5 7.5h2M7.5 11h2M7.5 14.5h2M11 7.5h2M11 11h2M11 14.5h2" /></>,
   wallet: <><rect x="3" y="6" width="18" height="14" rx="2" /><path d="M3 9.5h18" /><path d="M16 14.5h2" /></>,
+  bell: <><path d="M18 8.5a6 6 0 1 0-12 0c0 5-2 6.5-2 6.5h16s-2-1.5-2-6.5Z" /><path d="M13.7 19a2 2 0 0 1-3.4 0" /></>,
+  wifi: <><path d="M2.5 9a16 16 0 0 1 19 0" /><path d="M5.5 12.5a11.5 11.5 0 0 1 13 0" /><path d="M8.5 16a7 7 0 0 1 7 0" /><circle cx="12" cy="19.5" r="1" fill="currentColor" /></>,
+  sun: <><circle cx="12" cy="12" r="4.2" /><path d="M12 2.5v2.2M12 19.3v2.2M21.5 12h-2.2M4.7 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9 5.3 5.3" /></>,
+  moon: <path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z" />,
+  trendUp: <><path d="M3.5 17 10 10.5l3.5 3.5L20.5 7" /><path d="M15.5 7h5v5" /></>,
+  trendDown: <><path d="M3.5 7 10 13.5l3.5-3.5L20.5 17" /><path d="M15.5 17h5v-5" /></>,
 }
 
 export function Icon({ name, size = 18, className = '' }) {

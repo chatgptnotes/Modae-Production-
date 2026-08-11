@@ -3,11 +3,12 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { STAGES, CUSTOMER_STATUSES } from '../seed.js'
 import { fmt, fmtLakh, ageDays, canViewCommercial } from '../utils.js'
+import { PROB_WEIGHT } from '../kpi.js'
 
 // Funnel ramp validated with the dataviz palette checker (ordinal, light
 // surface): monotone lightness, ≥0.06 step gaps, light end ≥2:1 on white.
 const FUNNEL_RAMP = ['#7dd3fc', '#38bdf8', '#0ea5e9', '#0284c7', '#0369a1', '#075985']
-const PROB_WEIGHT = { Low: 0.25, Medium: 0.5, High: 0.75 }
+// Weighting lives in src/kpi.js so the dashboard and this page agree.
 
 function Restricted() {
   return <div className="restricted">Restricted — commercial data (approvers/admin only)</div>

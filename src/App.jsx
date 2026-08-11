@@ -7,6 +7,8 @@ import { FormulaBar } from './formulabar.jsx'
 import { DrawerHost } from './drawer.jsx'
 import { Icon } from './icons.jsx'
 import { usePwaInstall } from './pwa.js'
+import { counts } from './kpi.js'
+import { activeBackend } from './filestore.js'
 import Tracker from './pages/Tracker.jsx'
 import IntakeForm from './pages/IntakeForm.jsx'
 import Folders from './pages/Folders.jsx'
@@ -58,12 +60,12 @@ const NAV = [
   { to: '/launcher', label: 'Demo Launcher', icon: 'play', page: 'launcher' },
 ]
 
-// App-like bottom tab bar shown in tablet mode.
+// App-like bottom tab bar shown in tablet mode — four tabs around a raised
+// centre action (voice update), like a native app.
 const BOTTOM = [
   { to: '/home', label: 'Home', icon: 'home', page: 'home' },
-  { to: '/inbox', label: 'Inbox', icon: 'inbox', page: 'inbox', badge: s => (s.leads || []).filter(l => l.status === 'New').length },
-  { to: '/my', label: 'My Opps', icon: 'cards', page: 'my' },
-  { to: '/approvals', label: 'Approvals', icon: 'checkCircle', page: 'approvals', badge: s => (s.approvals || []).filter(a => a.status === 'Pending').length },
+  { to: '/inbox', label: 'Inbox', icon: 'inbox', page: 'inbox', badge: s => counts(s).newLeads },
+  { to: '/approvals', label: 'Approvals', icon: 'checkCircle', page: 'approvals', badge: s => counts(s).pending },
   { to: '/notes', label: 'Notes', icon: 'note', page: 'notes' },
 ]
 
@@ -160,31 +162,64 @@ export default function App() {
     </select>
   )
 
+  const c = counts(store, role)
+  const theme = store.tabletTheme === 'light' ? 'light' : 'dark'
+  const backend = activeBackend()
+  const online = backend === 'sharepoint'
+    ? { label: 'SharePoint', tone: 'ok' }
+    : backend === 'supabase' ? { label: 'Cloud', tone: 'ok' } : { label: 'Local demo', tone: 'idle' }
+
   const shell = tablet ? (
-    <div className="shell tablet-mode" style={{ display: 'block' }}>
+    <div className={`shell tablet-mode theme-${theme}`} style={{ display: 'block' }}>
       <header className="tablet-bar">
         <span className="tb-brand" onClick={() => nav('/home')}>WinTrack<span>by ModAE</span></span>
         <span className="spacer" />
+        <button className="tb-bell" onClick={() => nav('/inbox')} title={`${c.newLeads} new leads`}>
+          <Icon name="bell" size={15} />
+          {c.newLeads > 0 && <span className="tb-dot amber">{c.newLeads}</span>}
+        </button>
+        <button className="tb-bell" onClick={() => nav('/approvals')} title={`${c.pending} approvals pending`}>
+          <Icon name="checkCircle" size={15} />
+          {c.pending > 0 && <span className="tb-dot red">{c.pending}</span>}
+        </button>
+        <span className={`tb-online ${online.tone}`} title={`File storage: ${online.label}`}>
+          <Icon name="wifi" size={13} /> {online.label}
+        </span>
         <InstallButton />
+        <button className="tb-icon" title={theme === 'dark' ? 'Switch to light dashboard' : 'Switch to dark dashboard'}
+          onClick={() => store.setTabletTheme(theme === 'dark' ? 'light' : 'dark')}>
+          <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={15} />
+        </button>
         <RoleSwitcher />
         <button onClick={() => { store.setViewMode('full') }} title="Switch to the full desktop site">
-          <Icon name="monitor" size={14} /> Full site
+          <Icon name="monitor" size={14} /> <span className="tb-label">Full site</span>
         </button>
         {store.auth?.user && (
-          <button onClick={store.logout} title={`Sign out ${store.auth.user.email}`}><Icon name="logout" size={14} /></button>
+          <button onClick={store.logout} title={`Sign out ${store.auth.user.email}`}>
+            <Icon name="logout" size={14} /> <span className="tb-label">Exit</span>
+          </button>
         )}
       </header>
       {routes}
       <nav className="tab-bottom">
-        {BOTTOM.filter(t => canSeePage(role, t.page)).map(t => {
+        {BOTTOM.filter(t => canSeePage(role, t.page)).map((t, i) => {
           const badge = t.badge ? t.badge(store) : 0
           return (
-            <NavLink key={t.to} to={t.to} className={({ isActive }) => (isActive ? 'active' : '')}>
-              {badge > 0 && <span className="tb-badge">{badge}</span>}
-              <Icon name={t.icon} size={20} />{t.label}
-            </NavLink>
+            <React.Fragment key={t.to}>
+              {i === 2 && <span className="tab-fab-slot" />}
+              <NavLink to={t.to} className={({ isActive }) => (isActive ? 'active' : '')}>
+                {badge > 0 && <span className="tb-badge">{badge}</span>}
+                <Icon name={t.icon} size={20} />{t.label}
+              </NavLink>
+            </React.Fragment>
           )
         })}
+        {canSeePage(role, 'voice') && (
+          <button className="tab-fab" title="Voice update — speak a lead or status change"
+            onClick={() => nav('/voice')}>
+            <Icon name="mic" size={22} />
+          </button>
+        )}
       </nav>
       <DrawerHost />
     </div>

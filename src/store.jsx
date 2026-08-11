@@ -66,6 +66,7 @@ function migrate(s) {
   if (!s.handover) s.handover = seedHandover && Object.keys(seedHandover).length ? seedHandover : {}
   if (!Array.isArray(s.notes)) s.notes = seedNotes
   if (s.viewMode !== 'tablet' && s.viewMode !== 'full') s.viewMode = defaultViewMode()
+  if (s.tabletTheme !== 'dark' && s.tabletTheme !== 'light') s.tabletTheme = 'dark'
   if (!s.spSync) s.spSync = {}
   if (!s.auth) s.auth = { user: null }
   // AI-shaped leads + the AP-1 joint gate land once, without disturbing
@@ -511,6 +512,11 @@ export function StoreProvider({ children }) {
     // suspended, never deleted.
     deleteUser(id) {
       setState(s => ({ ...s, users: s.users.filter(u => u.id !== id) }))
+    },
+
+    // Cosmetic only — deliberately not audited, toggling would flood the log.
+    setTabletTheme(theme) {
+      setState(s => ((theme === 'dark' || theme === 'light') ? { ...s, tabletTheme: theme } : s))
     },
 
     // ---- View mode (tablet / full site) -----------------------------------
