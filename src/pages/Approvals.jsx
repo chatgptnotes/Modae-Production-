@@ -101,7 +101,13 @@ export default function Approvals() {
   )
   const RefLink = ({ a }) => a.oppId
     ? <OppLink id={a.oppId} />
-    : a.leadId
+    : a.customerName
+      ? (
+        <a onClick={() => drawer.open({ type: 'customer', id: a.customerName })} style={{ cursor: 'pointer' }}>
+          <b>{a.customerName}</b> <span className="hint">(customer master)</span>
+        </a>
+      )
+      : a.leadId
       ? (
         <a onClick={() => nav('/inbox/' + a.leadId)} style={{ cursor: 'pointer' }}>
           <b>{a.leadId}</b> <span className="hint">(AI lead)</span>

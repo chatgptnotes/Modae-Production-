@@ -203,6 +203,15 @@ function applyApprovalEffects(s, appr) {
         : null
     if (leadPatch) next = { ...next, leads: next.leads.map(l => (l.id === appr.leadId ? { ...l, ...leadPatch } : l)) }
   }
+  // A sales-raised customer-master change only lands once the gate clears.
+  if (appr.type === 'Customer master change' && appr.customerName && appr.patch) {
+    if (appr.status === 'Approved' || appr.status === 'Approved with conditions') {
+      next = {
+        ...next,
+        customers: next.customers.map(c => (c.name === appr.customerName ? { ...c, ...appr.patch } : c)),
+      }
+    }
+  }
   if (appr.type === 'Final quote release' && appr.oppId) {
     if (appr.status === 'Approved' || appr.status === 'Approved with conditions') {
       const p = next.proposals[appr.oppId]
@@ -521,6 +530,17 @@ export function StoreProvider({ children }) {
         ...s,
         approvals: s.approvals.map(a => (a.leadId === leadId && !a.oppId ? { ...a, oppId } : a)),
       }))
+    },
+
+    // Direct write to the customer master — admins only (the Customers page
+    // routes every other role through a 'Customer master change' approval).
+    updateCustomer(name, patch, reason = '') {
+      setState(s => (ROLES[s.role]?.admin
+        ? withAudit(
+            { ...s, customers: s.customers.map(c => (c.name === name ? { ...c, ...patch } : c)) },
+            'Customer updated', name,
+            [Object.entries(patch).map(([k, v]) => `${k} → ${v}`).join(', '), reason].filter(Boolean).join(' · '))
+        : s))
     },
 
     // New customers land in the master Blue (pending admin verification).

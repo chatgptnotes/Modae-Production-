@@ -68,6 +68,8 @@ function CustomerPanel({ name, openDrawer }) {
   const store = useStore()
   const c = store.customers.find(x => x.name === name)
   const opps = store.opportunities.filter(o => o.sellTo === name)
+  const pending = store.approvals.find(
+    a => a.status === 'Pending' && a.type === 'Customer master change' && a.customerName === name)
   if (!c) return <div className="drawer-body"><p className="hint">Customer not found.</p></div>
   return (
     <div className="drawer-body">
@@ -84,6 +86,11 @@ function CustomerPanel({ name, openDrawer }) {
           <div><label>Payment pattern</label><div className="ro">{c.payment}</div></div>
         </div>
         <p className="hint">Status comes from the accounting upload — changes need AH / BU head approval.</p>
+        {pending && (
+          <p className="hint">
+            <b>{pending.id}</b> pending — {pending.detail}
+          </p>
+        )}
 
         <div className="fgroup">Opportunities ({opps.length})</div>
         {opps.length ? (
