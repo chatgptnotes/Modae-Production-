@@ -10,6 +10,8 @@ import { ArcGauge } from '../dashviz.jsx'
 // Funnel ramp validated with the dataviz palette checker (ordinal, light
 // surface): monotone lightness, ≥0.06 step gaps, light end ≥2:1 on white.
 const FUNNEL_RAMP = ['#7dd3fc', '#38bdf8', '#0ea5e9', '#0284c7', '#0369a1', '#075985']
+// The funnel only holds live enquiries — Won and Lost have left it.
+const OPEN_STAGES = STAGES.filter(s => s !== 'Won' && s !== 'Lost')
 // Weighting lives in src/kpi.js so the dashboard and this page agree.
 
 // ---- Filter model -------------------------------------------------------
@@ -154,80 +156,64 @@ function BarCard({ title, icon, tone, span = 4, entries, color, onPick, hint, sh
   )
 }
 
-// Stage funnel. Each stage is a tapered band whose top edge is its own volume
-// and whose bottom edge is the next stage's — so the silhouette *is* the
-// conversion — over a dashed "ideal shape". A numbered rail sits on the left
-// and the per-stage detail on the right. The metric is the summed opportunity
-// value when the role may see commercials, else the plain row count.
+// Stage funnel. A snapshot of where the live enquiries are sitting right now, so
+// the bands carry no conversion meaning between them: the silhouette is a fixed
+// taper set by row position alone — widest at the top, narrowest at the bottom,
+// shading light to dark — and only the figure inside each band moves with the
+// data. A numbered rail sits on the left and the per-stage detail on the right.
+// The metric is the summed opportunity value when the role may see commercials,
+// else the plain row count.
 function Funnel({ stages, showValue }) {
-  // The detail column has to hold "89% of prior · ₹2.27 Cr dropped" without
-  // clipping — wider than the count-only version needed.
   const W = 620, ROW = 46, GAP = 7, NUM = 46, DETAIL = 190
   const H = stages.length * ROW + (stages.length - 1) * GAP
   const plotW = W - NUM - DETAIL
   const metric = s => (showValue ? s.valueK : s.count)
   const label = s => (showValue ? fmtLakh(s.valueK) : String(s.count))
-  const max = Math.max(1, ...stages.map(metric))
   const cx = NUM + plotW / 2
   const y = i => i * (ROW + GAP)
-  // Width is strictly proportional to the metric — no minimum that would flatter
-  // the thin end of the funnel. Narrow bands move their figure outside instead.
-  const bandW = i => (metric(stages[i]) / max) * plotW
-  // Below this a centred figure no longer fits inside the band. A "₹9.67 Cr"
-  // string needs far more room than a two-digit count.
-  const FITS = showValue ? 76 : 30
-  const idealEnd = 0.28
-  const idealW = i => plotW * (1 - (1 - idealEnd) * (i / (stages.length - 1)))
-  const conv = i => (i > 0 && metric(stages[i - 1])
-    ? Math.round((metric(stages[i]) / metric(stages[i - 1])) * 100)
-    : null)
+  // Purely positional taper: band i runs from wAt(i) down to wAt(i + 1), so the
+  // rows meet edge to edge and read as one funnel whatever the numbers say. The
+  // narrowest edge still holds a centred "₹9.67 Cr".
+  const END = 0.34
+  const wAt = i => plotW * (1 - (1 - END) * (i / stages.length))
+  // Each band's weight in the open pipeline — the only comparison a snapshot
+  // distribution supports, and it changes the caption, never the geometry.
+  const total = stages.reduce((t, s) => t + metric(s), 0)
+  const share = s => (total ? Math.round((metric(s) / total) * 100) : 0)
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} role="img" className="funnel-svg" style={{ width: '100%' }}
-      aria-label={`Stage funnel: ${stages.map(s => `${s.label} ${label(s)}`).join(', ')}`}>
+      aria-label={`Enquiries by current stage: ${stages.map(s => `${s.label} ${label(s)}`).join(', ')}`}>
       <defs>
-        {stages.map((s, i) => (
-          <linearGradient key={s.label} id={`fnl${i}`} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={FUNNEL_RAMP[i]} />
-            <stop offset="100%" stopColor={FUNNEL_RAMP[Math.min(i + 1, FUNNEL_RAMP.length - 1)]} />
-          </linearGradient>
-        ))}
+        {/* One ramp over the whole figure rather than per band, so the shade
+            deepens smoothly top to bottom with no seam at the joins. */}
+        <linearGradient id="fnlRamp" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2={H}>
+          {FUNNEL_RAMP.map((c, i) => (
+            <stop key={c} offset={`${(i / (FUNNEL_RAMP.length - 1)) * 100}%`} stopColor={c} />
+          ))}
+        </linearGradient>
       </defs>
 
-      <polygon fill="none" stroke="#cbd5e1" strokeDasharray="5 4"
-        points={stages.map((_, i) => `${cx - idealW(i) / 2},${y(i) + ROW / 2}`).join(' ') + ' ' +
-          stages.map((_, i) => `${cx + idealW(i) / 2},${y(i) + ROW / 2}`).reverse().join(' ')} />
-
       {stages.map((s, i) => {
-        const wTop = bandW(i)
-        // Last band tapers to a point-ish tail, echoing a real funnel spout.
-        const wBot = i < stages.length - 1 ? bandW(i + 1) : wTop * 0.45
         const top = y(i) + 3, bot = y(i) + ROW - 3
-        const pct = conv(i)
+        const wTop = wAt(i), wBot = wAt(i + 1)
         return (
           <g key={s.label}>
             <text x={NUM - 12} y={y(i) + ROW / 2 + 9} textAnchor="end" fontSize="25" fontWeight="800"
               fill={FUNNEL_RAMP[i]} opacity=".7">{String(i + 1).padStart(2, '0')}</text>
 
-            <polygon fill={`url(#fnl${i})`}
+            <polygon fill="url(#fnlRamp)"
               points={`${cx - wTop / 2},${top} ${cx + wTop / 2},${top} ${cx + wBot / 2},${bot} ${cx - wBot / 2},${bot}`} />
-            {wTop >= FITS
-              ? <text x={cx} y={y(i) + ROW / 2 + 5} textAnchor="middle" fontSize={showValue ? 12.5 : 14} fontWeight="800"
-                fill={i < 2 ? '#0f172a' : '#fff'}>{label(s)}</text>
-              : <text x={cx + wTop / 2 + 7} y={y(i) + ROW / 2 + 5} fontSize={showValue ? 12.5 : 14} fontWeight="800"
-                fill={FUNNEL_RAMP[i]}>{label(s)}</text>}
+            <text x={cx} y={y(i) + ROW / 2 + 5} textAnchor="middle" fontSize={showValue ? 12.5 : 14} fontWeight="800"
+              fill={i < 2 ? '#0f172a' : '#fff'}>{label(s)}</text>
 
-            <line x1={cx + wTop / 2 + (wTop >= FITS ? 6 : showValue ? 76 : 30)} y1={y(i) + ROW / 2} x2={W - DETAIL + 4} y2={y(i) + ROW / 2}
+            <line x1={cx + wTop / 2 + 6} y1={y(i) + ROW / 2} x2={W - DETAIL + 4} y2={y(i) + ROW / 2}
               stroke="#e2e8f0" strokeWidth="1" strokeDasharray="3 3" />
             <text x={W - DETAIL + 12} y={y(i) + ROW / 2 - 3} fontSize="12" fontWeight="700" fill="#0f172a">
               {s.label}{showValue ? ` (${s.count})` : ''}
             </text>
             <text x={W - DETAIL + 12} y={y(i) + ROW / 2 + 12} fontSize="10.5" fill="#64748b">
-              {pct == null
-                ? (showValue ? 'starting value' : 'starting volume')
-                : `${pct}% of prior · ${showValue
-                  ? fmtLakh(stages[i - 1].valueK - s.valueK)
-                  : stages[i - 1].count - s.count} dropped`}
+              {share(s)}% of open pipeline
             </text>
           </g>
         )
@@ -298,17 +284,12 @@ export default function Analytics() {
     ? setF(p => ({ ...p, range: 'all', from: '', to: '' }))
     : set(k, 'All'))
 
-  // Opps at or beyond each stage, carrying both the row count and the money on
-  // them; Lost opps register only in the total.
-  const stageIdx = o => (o.stage === 'Lost' ? -1 : STAGES.indexOf(o.stage))
-  const atStage = s => opps.filter(o => stageIdx(o) >= STAGES.indexOf(s))
-  const funnel = [
-    { label: 'All opps', count: opps.length, valueK: sumK(opps) },
-    ...['RFI', 'Budgetary', 'RFQ', 'Firm Bid', 'Negotiation', 'Won'].map(s => {
-      const rows = atStage(s)
-      return { label: s, count: rows.length, valueK: sumK(rows) }
-    }),
-  ]
+  // Live snapshot: each band holds only the enquiries sitting in that stage right
+  // now. Won and Lost have left the funnel and are counted nowhere.
+  const funnel = OPEN_STAGES.map(s => {
+    const rows = opps.filter(o => o.stage === s)
+    return { label: s, count: rows.length, valueK: sumK(rows) }
+  })
 
   // [label, valueK, count][], ordered by whichever metric is on display.
   const groupBy = (rows, key) => {
@@ -453,11 +434,10 @@ export default function Analytics() {
 
       <div className="ana-grid">
         <div className="ana-card c-8">
-          <CardHead icon="layers">Funnel &amp; conversion</CardHead>
+          <CardHead icon="layers">Funnel by stage</CardHead>
           <Funnel stages={funnel} showValue={comm} />
           <div className="legend">
-            <span><svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke="#cbd5e1" strokeDasharray="4 3" strokeWidth="1.5" /></svg> Ideal funnel shape</span>
-            <span><span style={{ width: 12, height: 12, background: `linear-gradient(${FUNNEL_RAMP[1]}, ${FUNNEL_RAMP[4]})`, borderRadius: 3, display: 'inline-block' }} /> Actual stage {comm ? 'value' : 'volume'} (at or beyond)</span>
+            <span><span style={{ width: 12, height: 12, background: `linear-gradient(${FUNNEL_RAMP[1]}, ${FUNNEL_RAMP[4]})`, borderRadius: 3, display: 'inline-block' }} /> Enquiries currently in each stage (Won/Lost excluded)</span>
           </div>
         </div>
 

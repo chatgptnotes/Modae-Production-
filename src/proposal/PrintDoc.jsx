@@ -2,7 +2,7 @@ import React from 'react'
 import { fmt, ddMmmYY } from '../utils.js'
 import { Icon, ModaeMark } from '../icons.jsx'
 import {
-  MODAE_COMPANY, DOC_BODY_SECTIONS, addDays, amountInWords, lineQty, standardFor,
+  MODAE_COMPANY, DOC_BODY_SECTIONS, addDays, amountInWords, lineQty, standardFor, customerResponse,
 } from '../proposalDoc.js'
 
 // The customer-facing document. Pure presentation, no form controls anywhere —
@@ -144,7 +144,9 @@ export default function PrintDoc({ p, opp, doc, priced, totals, lineQuoted }) {
           )}
 
           <p className="doc-letter-subject">
-            <b>Sub:</b> {p.project || p.subject || opp.oppName}
+            {/* nbsp, not a plain space: the anonymous table box `display:table`
+                creates on this <p> collapses a space at the inline boundary. */}
+            <b>Sub:</b>&nbsp;{p.project || p.subject || opp.oppName}
           </p>
 
           <p className="doc-letter-salutation">{doc.letterSalutation}</p>
@@ -220,7 +222,8 @@ export default function PrintDoc({ p, opp, doc, priced, totals, lineQuoted }) {
               </div>
               <div className="ic-grid">
                 <div><span className="k">Offered model</span><span className="pn">{it.pn || '—'}</span></div>
-                {it.custRef && <div><span className="k">Your item code</span><span>{it.custRef}</span></div>}
+                {/* The customer's own SAP code is deliberately NOT printed —
+                    it stays on the workbench and in the Excel extract. */}
               </div>
               {it.specs.length > 0 && (
                 <>
@@ -264,7 +267,6 @@ export default function PrintDoc({ p, opp, doc, priced, totals, lineQuoted }) {
                     </td>
                     <td>
                       <span className="pn">{l.pn || '—'}</span>
-                      {l.custRef && <span className="cust-ref">Your code: {l.custRef}</span>}
                     </td>
                     <td className="num">{q} {l.uom}</td>
                     {priced && <td className="num">{fmt(lineQuoted(l))}</td>}
@@ -397,7 +399,7 @@ export default function PrintDoc({ p, opp, doc, priced, totals, lineQuoted }) {
                   <StatusChip status="Deviation" />
                 </div>
                 <div className="dev-row"><span className="k">Your requirement</span><span>{t.customerAsk}</span></div>
-                <div className="dev-row"><span className="k">Our offer</span><span>{t.ourResponse}</span></div>
+                <div className="dev-row"><span className="k">Our offer</span><span>{customerResponse(t.ourResponse, t.key)}</span></div>
                 <div className="dev-row"><span className="k">Why</span><span>{t.rationale.why}</span></div>
                 <div className="dev-row"><span className="k">Impact</span><span>{t.rationale.impact}</span></div>
                 <div className="dev-row proposal">
@@ -453,7 +455,7 @@ export default function PrintDoc({ p, opp, doc, priced, totals, lineQuoted }) {
                       </td>
                       <td>{t.customerAsk}</td>
                       <td>
-                        {t.ourResponse}
+                        {customerResponse(t.ourResponse, t.key, t.status === 'Deviation')}
                         {standardFor(t.key) && (
                           <span className="cust-ref">ModAE standard: {standardFor(t.key)}</span>
                         )}

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { defaultCosting } from '../seed.js'
+import { defaultCosting, newProposal } from '../seed.js'
 import { effectiveRate, unitCostINR, unitSellINR, fmt, exportCSV, canViewCommercial } from '../utils.js'
 import { useFormulaBar } from '../formulabar.jsx'
 import { Icon, ModaeLogo } from '../icons.jsx'
@@ -9,23 +9,37 @@ import { oppBlockers, isBlocked } from '../gates.js'
 import { docModel } from '../proposalDoc.js'
 import DocEditor from '../proposal/DocEditor.jsx'
 import PrintDoc from '../proposal/PrintDoc.jsx'
+import { signalsFromBom, countSignals, signalsAreEmpty, rackLayout, UMM_CHANNELS, RACK_SLOTS } from '../rack.js'
 
 const TABS = ['Cover Letter', 'Document', 'Signal List', 'Rack Layout', 'Priced BoQ']
+
+// Qty/Unit × units + Common + Spares — the BoQ quantity rule, in one place so
+// the signal-list derivation reads the same totals the sheet shows.
+const lineQty = (l, u) => (l.qtyPerUnit || 0) * u + (l.common || 0) + (l.spares || 0)
 
 // Older saved proposals (and newProposal before this change) used a single
 // `qty`; the real BoQ splits quantities into Qty/Unit × units + Common + Spares.
 function normalize(pr) {
+  const units = pr.units || 7
+  const bom = (pr.bom || []).map(l => ({
+    itemCategory: '', qtyPerUnit: 0, common: 0, spares: 0, quoted: '',
+    list: 'BNK', currency: 'EUR', uom: 'EA', custRef: '',
+    ...l,
+    ...(l.qtyPerUnit === undefined && l.qty != null ? { common: l.qty } : {}),
+  }))
+  // Tender intake saves the signal rows zeroed (spares quantities are absolute,
+  // not per-unit), which left the tab blank. Counts are implied by the BoQ, so
+  // adopt them as the default until someone types a figure of their own.
+  const stored = pr.signals || newProposal(pr.oppId).signals
+  const derived = signalsFromBom(bom, units, l => lineQty(l, units))
+  const signals = signalsAreEmpty(stored) && !signalsAreEmpty(derived) ? derived : stored
   return {
     ...pr,
-    units: pr.units || 7,
+    signals,
+    bom,
+    units,
     costing: { ...defaultCosting, ...pr.costing },
     terms: (pr.terms || []).map(t => ({ key: '', clauseRef: '', ...t })),
-    bom: (pr.bom || []).map(l => ({
-      itemCategory: '', qtyPerUnit: 0, common: 0, spares: 0, quoted: '',
-      list: 'BNK', currency: 'EUR', uom: 'EA', custRef: '',
-      ...l,
-      ...(l.qtyPerUnit === undefined && l.qty != null ? { common: l.qty } : {}),
-    })),
   }
 }
 
@@ -75,7 +89,7 @@ export default function Proposal() {
     })),
   ]
 
-  const totalQty = (l, u = units) => (l.qtyPerUnit || 0) * u + (l.common || 0) + (l.spares || 0)
+  const totalQty = (l, u = units) => lineQty(l, u)
   const linePrice = l => {
     const part = allParts.find(x => x.pn === l.pn && (x.list === l.list || !l.list))
     const adderSum = (part?.adders || []).filter(a => l.adders.includes(a.code)).reduce((s, a) => s + a.price, 0)
@@ -95,7 +109,13 @@ export default function Proposal() {
   const totals = computeTotals(p)
   const financeCost = (p.costing.financeCostK || 0) * 1000
   const netGM = totals.target - totals.cost - financeCost
-  const totalSignals = p.signals.reduce((s, r) => s + r.perUnit * r.units, 0)
+  // The BoQ's own reading of the signal count — offered as the default and as a
+  // "recalculate" action, but never forced over a figure the user has typed.
+  const derivedSignals = signalsFromBom(p.bom, units, totalQty)
+  const derivedTotal = countSignals(derivedSignals)
+  const totalSignals = countSignals(p.signals)
+  const signalsStale = derivedTotal > 0 && derivedTotal !== totalSignals
+  const rack = rackLayout(totalSignals)
 
   const save = next => {
     // Once a BoQ has ever been priced, keep syncing even down to 0 — an emptied
@@ -363,7 +383,19 @@ export default function Proposal() {
 
       {tab === 'Signal List' && (
         <div className="form-card">
-          <div className="section-title">Signal List {['Spares', 'Service', 'Training', 'AMC'].includes(opp.oppType) && <span className="hint">(not applicable for spares/service proposals — shown for reference)</span>}</div>
+          <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span>Signal List</span>
+            {derivedTotal > 0
+              ? <span className="hint">(counted from the priced BoQ — edit any cell to override)</span>
+              : ['Spares', 'Service', 'Training', 'AMC'].includes(opp.oppType) &&
+                <span className="hint">(not applicable for spares/service proposals — shown for reference)</span>}
+            {signalsStale && (
+              <button style={{ marginLeft: 'auto', fontSize: 12, padding: '3px 10px' }}
+                onClick={() => save({ ...p, signals: derivedSignals })}>
+                Recalculate from BoQ ({derivedTotal})
+              </button>
+            )}
+          </div>
           <table className="sheet">
             <thead><tr><th>Signal</th><th>Per Unit</th><th>Units</th><th>Total</th><th>PI Tags (×15)</th></tr></thead>
             <tbody>
@@ -382,20 +414,66 @@ export default function Proposal() {
             </tfoot>
           </table>
           <div className="costing-note">
-            1 vibration signal ≈ 15 AVEVA PI tags. {totalSignals * 15} tags → select the next-higher CMS license tier from the B&K price list (e.g. CMS-TAG-4000).
+            {totalSignals > 0
+              ? <>1 vibration signal ≈ 15 AVEVA PI tags. {totalSignals * 15} tags → select the next-higher CMS license tier from the B&K price list (e.g. CMS-TAG-4000).</>
+              : <>No sensing elements on the priced BoQ yet — add accelerometers, proximity probes or keyphasors there and the counts appear here, or type them in directly.</>}
           </div>
         </div>
       )}
 
       {tab === 'Rack Layout' && (
         <div className="form-card">
-          <div className="section-title">Rack Layout (engineering output — placeholder in Phase 1)</div>
-          <pre style={{ background: '#f6f9fc', border: '1px solid var(--border-soft)', padding: 14, fontSize: 12 }}>
-{`┌─────────────────────── 16-SLOT RACK (VC-8000/RCK) ───────────────────────────┐
-│ PSU │ PSU │ RCM │ UMM │ UMM │ UMM │ UMM │ eSAM │ ... │ ... │ ... │ spare... │
-└──────────────────────────────────────────────────────────────────────────────┘`}
-          </pre>
-          <div className="hint">Module selection follows the signal list; the rack drawing is attached by the engineer.</div>
+          <div className="section-title">Rack Layout <span className="hint">(sized from the signal list)</span></div>
+          {totalSignals === 0 ? (
+            <div className="hint" style={{ padding: '18px 2px' }}>
+              Nothing to size yet — the rack follows the signal count. Add sensing elements to the
+              priced BoQ, or enter counts on the Signal List tab.
+            </div>
+          ) : (
+            <>
+              <div className="costing-note" style={{ marginTop: 0, marginBottom: 12 }}>
+                {totalSignals} signals ÷ {UMM_CHANNELS} channels per UMM → {rack.ummCount} UMM.
+                With 2× PSU, RCM and eSAM fixed in every rack, that is {rack.slotsUsed} of {rack.totalSlots} slots
+                across {rack.rackCount} rack{rack.rackCount > 1 ? 's' : ''} — {rack.spareSlots} spare.
+              </div>
+              <table className="sheet" style={{ maxWidth: 560, marginBottom: 18 }}>
+                <thead><tr><th>Module</th><th>Part Number</th><th>Qty</th></tr></thead>
+                <tbody>
+                  {rack.modules.map(m => (
+                    <tr key={m.key}>
+                      <td>{m.label}</td>
+                      <td>{m.pn}</td>
+                      <td className="num">{m.qty}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {rack.racks.map((slots, r) => (
+                <div key={r} style={{ marginBottom: 14 }}>
+                  <div className="hint" style={{ marginBottom: 6 }}>
+                    Rack {r + 1} of {rack.rackCount} — {RACK_SLOTS}-slot VC-8000/RCK
+                  </div>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                    {slots.map((mod, i) => (
+                      <div key={i} title={`Slot ${i + 1}${mod ? ` — ${mod}` : ' — spare'}`}
+                        style={{
+                          width: 62, padding: '10px 0', textAlign: 'center', fontSize: 12,
+                          borderRadius: 4, border: '1px solid var(--border-soft)',
+                          background: mod ? 'var(--primary-soft)' : 'transparent',
+                          color: mod ? 'var(--primary-deep)' : 'var(--text-subtle)',
+                          borderStyle: mod ? 'solid' : 'dashed',
+                          fontWeight: mod ? 600 : 400,
+                        }}>
+                        {mod || 'spare'}
+                        <div style={{ fontSize: 10, fontWeight: 400, opacity: 0.6 }}>{i + 1}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+          <div className="hint">Module counts must match the hardware BoQ; the final rack drawing is attached by the engineer.</div>
         </div>
       )}
 

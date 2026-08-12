@@ -83,6 +83,25 @@ export function addDays(isoDate, days) {
 // The ModAE standard position behind a compliance row, for the terms table.
 export const standardFor = key => MODAE_STANDARD_TERMS.find(s => s.key === key)?.standard || ''
 
+// The compliance verdicts in MODAE_STANDARD_TERMS are written for the internal
+// reviewer — "needs approval", "confirm stock with supplier", "to be confirmed
+// by engineering before submission" are notes to ourselves, not things to say
+// to a customer. The workbench keeps that raw text so approvers still see the
+// flag; the printed document substitutes the wording below.
+export const CUSTOMER_RESPONSE = {
+  payment: 'We offer 30 days net from the date of invoice.',
+  delivery: 'We will confirm the manufacturer’s stock position on receipt of your intimation and commit to the earliest achievable date in writing.',
+  ld: 'We offer liquidated damages at 0.5% per week of delay, capped at 5% of the order value.',
+  compat: 'The offered models are confirmed by our engineering as form-, fit- and function-compatible with the installed system, and are supplied with manufacturer test certificates.',
+}
+
+// `pointer` adds the cross-reference for the compliance table; the Deviations
+// section itself passes false, since pointing at itself reads as a loop.
+export function customerResponse(text, key, pointer = false) {
+  const base = CUSTOMER_RESPONSE[key] || String(text || '')
+  return pointer ? `${base} Our reasoning and the alternative we propose are set out in the Deviations section.` : base
+}
+
 // ------------------------------------------------------- default section text
 
 // A covering letter, not a summary: what we received, what we understand, what
@@ -129,11 +148,14 @@ export function defaultExecSummary(p, opp) {
   const devs = (p.terms || []).filter(t => t.status === 'Deviation')
   const oem = opp?.product && opp.product !== 'Various' ? opp.product : ''
   const buyer = opp?.sellTo || 'The customer'
-  const site = [opp?.eucName, opp?.eucLocation].filter(Boolean).join(', ')
+  const project = p.project || opp?.oppName || 'the referenced scope'
+  // buildProposal already appends the station to `project` — don't say it twice.
+  const siteRaw = [opp?.eucName, opp?.eucLocation].filter(Boolean).join(', ')
+  const site = siteRaw && !project.includes(opp?.eucName) ? siteRaw : ''
   const days = p.validityDays ?? 30
   return [
     `THE REQUIREMENT\n${buyer} has invited offers vide ${p.rfqNumber || 'the referenced enquiry'} for `
-      + `${p.project || opp?.oppName || 'the referenced scope'}${site ? ` at ${site}` : ''}. The enquiry covers `
+      + `${project}${site ? ` at ${site}` : ''}. The enquiry covers `
       + `${bom.length} line item${bom.length === 1 ? '' : 's'} of vibration measurement hardware`
       + `${oem ? ` to be used with the ${oem} monitoring system already in service` : ''}.`,
 
@@ -172,6 +194,14 @@ export function specBullets(desc) {
   return text
     .split(/,(?![^(]*\))/)
     .map(s => s.replace(/^[\s.;-]+|[\s.;-]+$/g, ''))
+    // The first fragment usually repeats the item name before the first spec
+    // ("Accelerometer(general purpose) = Sensitivity =100 mV/g") — drop it.
+    .map(s => {
+      const eq = s.indexOf('=')
+      if (eq < 0 || !head) return s
+      const lhs = s.slice(0, eq).trim()
+      return lhs.toLowerCase().startsWith(head.toLowerCase()) ? s.slice(eq + 1).trim() : s
+    })
     .filter(s => s && s.toLowerCase() !== head.toLowerCase() && /\d|=/.test(s))
     .map(s => s.replace(/\s*=\s*/g, ': ').replace(/\s{2,}/g, ' '))
 }

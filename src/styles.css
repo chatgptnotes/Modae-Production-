@@ -464,6 +464,8 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .hint { font-size: 11.5px; color: var(--text-subtle); }
 .costing-note { font-size: 11.5px; color: var(--text-muted); margin-top: 6px; font-style: italic; }
 .form-card { background: #fff; border: 1px solid var(--grid-line); padding: 18px 22px; max-width: 760px; }
+/* Cards holding a full grid: fill the content area instead of the 760px form column */
+.form-card.wide { max-width: none; }
 
 /* Slide-in record-detail drawer */
 tr.rowclick { cursor: pointer; }
@@ -1697,11 +1699,13 @@ button.linklike:hover { text-decoration: underline; }
   /* One section per sheet. min-height:auto lets short sections end early; the
      page break does the separating, not the box height. */
   .doc-page {
-    max-width: none; margin: 0; padding: 0; min-height: auto;
+    max-width: none; margin: 0; padding: 0;
     border: 0; box-shadow: none;
     break-after: page; page-break-after: always;
-    /* the footer sits at the foot of the printed sheet, not under the content */
-    height: 264mm;
+    /* min-height, never height: it pushes the footer to the foot of the sheet
+       on a short section, but lets a long one (the compliance table) flow onto
+       a second sheet instead of colliding with its own footer. */
+    min-height: 249mm;
   }
   .doc-page.last { break-after: auto; page-break-after: auto; }
 

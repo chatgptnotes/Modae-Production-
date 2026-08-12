@@ -53,7 +53,7 @@ export default function PurchaseOrders() {
         </WarnBox>
       )}
 
-      <div className="form-card" style={{ marginBottom: 14 }}>
+      <div className="form-card wide" style={{ marginBottom: 14 }}>
         <div className="section-title">PO validation in progress</div>
         {validating.length === 0 && (
           <div className="hint">No purchase orders are in validation right now. Simulate PO receipt from an opportunity workbench.</div>
@@ -95,7 +95,7 @@ export default function PurchaseOrders() {
         )}
       </div>
 
-      <div className="form-card">
+      <div className="form-card wide">
         <div className="section-title">Booked orders</div>
         <div className="sheet-wrap">
           <table className="sheet">
