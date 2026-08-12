@@ -5,7 +5,8 @@ import { OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, routeForType } from '../see
 import { Icon } from '../icons.jsx'
 import { ErrBox } from '../ui.jsx'
 import { matchCustomer } from './Inbox.jsx'
-import { activeBackend } from '../filestore.js'
+import { activeBackend, uploadOppFile, fmtSize } from '../filestore.js'
+import { take } from '../leadFiles.js'
 
 // Registration — the moment a qualified lead becomes an opportunity and the
 // permanent opportunity ID is minted (YYMM + sequence + owner initials).
@@ -41,6 +42,8 @@ export default function Register() {
   const [bu, setBu] = useState(guessFromList(buSegV, BUS) || 'Energy')
   const [segment, setSegment] = useState(guessFromList(buSegV, SEGMENTS) || 'Others')
   const [product, setProduct] = useState(guessFromList(allText, PRODUCTS) || 'Various')
+  const [creating, setCreating] = useState(false)
+  const [uploadWarn, setUploadWarn] = useState('')
 
   if (!lead) {
     return (
@@ -55,6 +58,7 @@ export default function Register() {
     return (
       <div className="page">
         <h2><Icon name="clipboardCheck" size={18} /> Registration — {lead.subject}</h2>
+        {uploadWarn && <ErrBox>{uploadWarn}</ErrBox>}
         <div className="okbox">
           Already registered as <b>{lead.oppId}</b>.{' '}
           <button className="primary" onClick={() => nav('/opp/' + lead.oppId)}>Open opportunity</button>
@@ -79,7 +83,8 @@ export default function Register() {
   const backend = activeBackend()
   const today = new Date().toISOString().slice(0, 10)
 
-  const create = () => {
+  const create = async () => {
+    setCreating(true)
     const sellTo = fieldVal(fields, /sell-to/i) || lead.sender || lead.from
     const contactV = fieldVal(fields, /contact/i)
     const contactPerson = contactV.split(',')[0] || lead.sender || ''
@@ -109,6 +114,24 @@ export default function Register() {
       store.addCustomer({ name: sellTo, category, status: 'Blue', kyc: 'Pending', payment: '—' })
     }
     store.updateLead(lead.id, { status: 'Converted', oppId: opp.id })
+
+    // The enquiry's own attachments land in Customer Specs, like a tender does.
+    // Blobs are held in memory only (see leadFiles.js), so a reloaded tab simply
+    // has nothing to upload — the lead keeps its attachment rows either way.
+    const failed = []
+    for (const file of take(lead.id)) {
+      try {
+        store.addFile(opp.id, 'Customer Specs', await uploadOppFile(opp, 'Customer Specs', file))
+      } catch (e) {
+        store.addFile(opp.id, 'Customer Specs', { name: file.name, date: today, size: fmtSize(file.size) })
+        failed.push(file.name)
+      }
+    }
+    setCreating(false)
+    if (failed.length) {
+      setUploadWarn(`Cloud upload failed for ${failed.join(', ')} — recorded locally only. Opportunity ${opp.id} was created.`)
+      return
+    }
     nav('/opp/' + opp.id)
   }
 
@@ -182,10 +205,10 @@ export default function Register() {
             </ErrBox>
           )}
           <div className="toolbar" style={{ marginTop: 12, marginBottom: 0 }}>
-            <button className="primary" disabled={blocked}
+            <button className="primary" disabled={blocked || creating}
               title={blocked ? 'Blocked — resolve the items above' : undefined}
               onClick={create}>
-              <Icon name="check" size={13} /> Create opportunity
+              <Icon name="check" size={13} /> {creating ? 'Creating…' : 'Create opportunity'}
             </button>
           </div>
         </div>

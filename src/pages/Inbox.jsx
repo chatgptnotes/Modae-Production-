@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ddMmmYY, ageDays } from '../utils.js'
@@ -7,6 +7,9 @@ import { useDrawer } from '../drawer.jsx'
 import { Chip, ConfChip, WarnBox, ErrBox, Modal } from '../ui.jsx'
 import { ROLES } from '../seed.js'
 import { aiEnabled, runJson } from '../ai.js'
+import { extractPdfText } from '../tenderParse.js'
+import { fmtSize } from '../filestore.js'
+import { hold } from '../leadFiles.js'
 
 // Common-mailbox lead inbox: AI parses each inquiry, a human decides whether it
 // becomes an opportunity (Qualify → registration / intake form) or is dropped.
@@ -73,32 +76,89 @@ export async function extractLead({ from, subject, body, attachments = [] }, sto
   }
 }
 
+// Attachment text kept on the lead — the store persists to localStorage, so the
+// whole document is not carried; this is enough for the AI and for evidence.
+const TEXT_PER_FILE = 8000
+const TEXT_TOTAL = 40000
+
+// One picked file → the attachment record. PDFs are read client-side with the
+// same pdfjs path Tender → Proposal uses; anything else attaches by name only.
+async function readAttachment(file) {
+  const rec = { file, name: file.name, size: fmtSize(file.size) }
+  if (!/\.pdf$/i.test(file.name) && file.type !== 'application/pdf') return rec
+  try {
+    const { struct, fullText, charCount } = await extractPdfText(file)
+    if (!charCount) return { ...rec, pages: struct.length, err: 'Scanned — no text layer; the name is attached, not the contents.' }
+    return { ...rec, pages: struct.length, text: fullText.slice(0, TEXT_PER_FILE) }
+  } catch (e) {
+    return { ...rec, err: 'Could not read this PDF (' + (e?.message || e?.code || 'unknown') + ') — the name is attached, not the contents.' }
+  }
+}
+
+// Trim to the shape the lead stores (no File blob) and respect the total cap.
+function attachmentMeta(files) {
+  let budget = TEXT_TOTAL
+  return files.map(f => {
+    const rec = { name: f.name, size: f.size }
+    if (f.pages) rec.pages = f.pages
+    if (f.text && budget > 0) {
+      rec.text = f.text.slice(0, budget)
+      budget -= rec.text.length
+    }
+    return rec
+  })
+}
+
 // Paste a real inbound enquiry and let Gemini structure it.
 function PasteLeadModal({ onClose }) {
   const store = useStore()
   const nav = useNavigate()
+  const fileInput = useRef(null)
   const [from, setFrom] = useState('')
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
+  const [files, setFiles] = useState([])
+  const [drag, setDrag] = useState(false)
+  const [reading, setReading] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
 
+  const addFiles = async picked => {
+    const list = Array.from(picked || [])
+    if (!list.length) return
+    setReading(true)
+    const recs = []
+    for (const f of list) recs.push(await readAttachment(f))
+    setFiles(prev => [...prev, ...recs])
+    setReading(false)
+  }
+
+  const onDrop = e => {
+    e.preventDefault(); setDrag(false)
+    addFiles(e.dataTransfer.files)
+  }
+
+  // Both add paths record the same attachments; only the blobs held for the
+  // registration upload are keyed by the new lead id.
+  const newLead = id => ({
+    id, ts: new Date().toISOString(), channel: 'Email', source: 'Common mailbox',
+    from: from || 'unknown@sender', sender: from || 'Unknown sender',
+    subject: subject || '(no subject)', body, attachments: attachmentMeta(files),
+    status: 'New',
+  })
+
   const add = async () => {
-    if (!body.trim()) { setErr('Paste the email body.'); return }
+    if (!body.trim() && !files.length) { setErr('Paste the email body, or attach the enquiry document.'); return }
     setBusy(true); setErr('')
-    const extracted = await extractLead({ from, subject, body }, store)
+    const extracted = await extractLead({ from, subject, body, attachments: attachmentMeta(files) }, store)
     setBusy(false)
     if (!extracted) {
       setErr('Extraction is unavailable — check the AI configuration on the Admin page, or add the mail unextracted and structure it by hand.')
       return
     }
     const id = 'LD-' + Date.now()
-    store.addLead({
-      id, ts: new Date().toISOString(), channel: 'Email', source: 'Common mailbox',
-      from: from || 'unknown@sender', sender: from || 'Unknown sender',
-      subject: subject || '(no subject)', body, attachments: [],
-      duplicateRisk: 'Low', status: 'New', ...extracted,
-    })
+    store.addLead({ ...newLead(id), duplicateRisk: 'Low', ...extracted })
+    hold(id, files.map(f => f.file))
     onClose()
     nav('/inbox/' + id)
   }
@@ -106,11 +166,10 @@ function PasteLeadModal({ onClose }) {
   const addRaw = () => {
     const id = 'LD-' + Date.now()
     store.addLead({
-      id, ts: new Date().toISOString(), channel: 'Email', source: 'Common mailbox',
-      from: from || 'unknown@sender', sender: from || 'Unknown sender',
-      subject: subject || '(no subject)', body, status: 'New',
+      ...newLead(id),
       parse: { confidence: 0, note: 'Not extracted — AI unavailable; complete by hand.' },
     })
+    hold(id, files.map(f => f.file))
     onClose()
     nav('/inbox/' + id)
   }
@@ -127,6 +186,30 @@ function PasteLeadModal({ onClose }) {
         <label style={{ marginTop: 6 }}>Body</label>
         <textarea rows={12} value={body} onChange={e => setBody(e.target.value)}
           placeholder="Paste the enquiry exactly as received." style={{ width: '100%' }} />
+        <label style={{ marginTop: 6 }}>Attachments</label>
+        <div className={`tender-drop compact ${drag ? 'drag' : ''}`}
+          onDragOver={e => { e.preventDefault(); setDrag(true) }}
+          onDragLeave={() => setDrag(false)}
+          onDrop={onDrop}
+          onClick={() => fileInput.current.click()}>
+          <input ref={fileInput} type="file" multiple style={{ display: 'none' }}
+            onChange={e => { addFiles(e.target.files); e.target.value = '' }} />
+          <div className="tender-drop-icon"><Icon name="fileText" size={22} /></div>
+          <b>Drop the RFQ, BOM or spec here</b>
+          <div className="hint">
+            {reading ? 'Reading…' : 'or tap to choose files — PDF contents are read and sent with the enquiry'}
+          </div>
+        </div>
+        {files.map((f, i) => (
+          <div key={i} className="attach-row">
+            <Icon name="fileText" size={13} />
+            <span className="attach-name" style={{ flex: 1 }}>{f.name}</span>
+            <span className="attach-meta hint">{f.pages ? `${f.pages} p. · ` : ''}{f.size}</span>
+            <button title="Remove"
+              onClick={() => setFiles(files.filter((_, j) => j !== i))}>✕</button>
+            {f.err && <div className="hint" style={{ flexBasis: '100%' }}><Icon name="alert" size={11} /> {f.err}</div>}
+          </div>
+        ))}
         {!aiEnabled() && (
           <WarnBox>AI is not configured — the mail can be added, but nothing will be extracted.</WarnBox>
         )}
@@ -134,7 +217,7 @@ function PasteLeadModal({ onClose }) {
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 10 }}>
           <button onClick={onClose}>Cancel</button>
           {err && <button onClick={addRaw}>Add unextracted</button>}
-          <button className="primary" onClick={add} disabled={busy || !aiEnabled()}>
+          <button className="primary" onClick={add} disabled={busy || reading || !aiEnabled()}>
             <Icon name="bot" size={13} /> {busy ? 'Extracting…' : 'Extract with AI'}
           </button>
         </div>
@@ -253,7 +336,7 @@ function AiLeadDetail({ lead }) {
                 <div key={i} className="attach-row">
                   <span className="attach-icon"><Icon name="fileText" size={13} /></span>
                   <span className="attach-name">{a.name}</span>
-                  <span className="attach-meta">{a.pages} p.</span>
+                  <span className="attach-meta">{a.pages ? a.pages + ' p.' : a.size || ''}</span>
                 </div>
               ))}
             </>
@@ -519,6 +602,13 @@ function LegacyLeadDetail({ lead }) {
       <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', background: '#f8fafc', border: '1px solid var(--grid-line)', padding: '10px 12px', fontSize: 12.5 }}>
         {lead.body}
       </pre>
+      {(lead.attachments || []).map((a, i) => (
+        <div key={i} className="attach-row">
+          <Icon name="fileText" size={13} />
+          <span className="attach-name">{a.name}</span>
+          <span className="attach-meta hint">{a.pages ? a.pages + ' p.' : a.size || ''}</span>
+        </div>
+      ))}
 
       <div className="section-title">
         <Icon name="bot" size={13} /> AI extraction <ConfBadge c={p.confidence} />

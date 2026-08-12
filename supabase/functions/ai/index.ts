@@ -116,6 +116,12 @@ ATTACHMENTS: ${cap((p.attachments || []).map((a: any) => `${a.name} (${a.pages ?
 BODY:
 ${cap(p.body, 20000)}
 
+ATTACHMENT CONTENTS (read these as part of the enquiry — the line items usually
+live here, not in the covering mail; cite the file name in ev for any fact taken
+from one):
+${cap((p.attachments || []).map((a: any) =>
+  `--- ${a.name} ---\n${a.text || '(no text extracted — do not infer its contents)'}`).join('\n\n'), 40000) || 'none'}
+
 Customers already in our master (match against these before proposing a new name):
 ${cap((p.customers || []).join(', '), 3000)}
 

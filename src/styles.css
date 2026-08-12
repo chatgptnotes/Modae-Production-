@@ -532,6 +532,9 @@ tr.rowclick { cursor: pointer; }
   padding: 34px 20px; text-align: center; cursor: pointer; font-size: 14px;
 }
 .tender-drop:hover, .tender-drop.drag { border-color: var(--xl-green); background: #f0f9ff; }
+/* Inside the new-enquiry modal the drop zone sits under the body textarea. */
+.tender-drop.compact { max-width: none; padding: 14px 16px; font-size: 12.5px; }
+.tender-drop.compact .tender-drop-icon { margin-bottom: 2px; }
 .tender-drop-icon { font-size: 34px; margin-bottom: 6px; }
 .conf-badge {
   display: inline-block; padding: 1px 8px; border-radius: 8px;

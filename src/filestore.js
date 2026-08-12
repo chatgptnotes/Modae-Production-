@@ -5,7 +5,7 @@ import * as sp from './sharepoint.js'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
-function fmtSize(bytes) {
+export function fmtSize(bytes) {
   const n = Number(bytes) || 0
   if (n >= 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + ' MB'
   return Math.max(1, Math.round(n / 1024)) + ' KB'
