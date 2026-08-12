@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { defaultCosting, newProposal } from '../seed.js'
-import { effectiveRate, unitCostINR, unitSellINR, fmt, exportCSV, canViewCommercial } from '../utils.js'
+import { effectiveRate, unitCostINR, unitSellINR, fmt, exportCSV, canViewCommercial, clampCosting, clampQty, MAX_GM_PCT } from '../utils.js'
 import { useFormulaBar } from '../formulabar.jsx'
 import { Icon, ModaeLogo } from '../icons.jsx'
 import { oppBlockers, isBlocked } from '../gates.js'
@@ -137,7 +137,7 @@ export default function Proposal() {
     }
   }
   const set = k => e => save({ ...p, [k]: e.target.value })
-  const setCosting = k => e => save({ ...p, costing: { ...p.costing, [k]: +e.target.value || 0 } })
+  const setCosting = k => e => save({ ...p, costing: { ...p.costing, [k]: clampCosting(k, e.target.value) } })
 
   // Formula-bar selection for the costing block — the same cell refs and
   // formulas as the real Priced BoQ sheet (O4 is literally =8.5%+2.5%+5%).
@@ -145,7 +145,9 @@ export default function Proposal() {
     ref, formula,
     // Patch against pRef.current, not the render-time p — the commit may fire
     // long after other edits (BoQ lines, units, terms) have changed the proposal.
-    commit: key ? v => { const cur = pRef.current; save({ ...cur, costing: { ...cur.costing, [key]: v } }) } : null,
+    // Clamped here too — the bar writes to state directly, so the cells' own
+    // min/max attributes never see the value.
+    commit: key ? v => { const cur = pRef.current; save({ ...cur, costing: { ...cur.costing, [key]: clampCosting(key, v) } }) } : null,
     kind,
   })
 
@@ -162,8 +164,18 @@ export default function Proposal() {
       }],
     })
   }
+  // Unit Price ₹ stays a string field — blank means "use the computed price" —
+  // so it can't go through clampQty; it only rejects negatives.
+  const clampQuoted = s => {
+    const t = String(s)
+    if (t.trim() === '') return ''
+    const n = Number(t)
+    if (!isFinite(n)) return ''
+    return n < 0 ? '0' : t
+  }
   const updLine = (i, k, numeric = true) => e => {
-    const v = numeric ? (+e.target.value || 0) : e.target.value
+    const v = k === 'quoted' ? clampQuoted(e.target.value)
+      : numeric ? clampQty(e.target.value) : e.target.value
     save({ ...p, bom: p.bom.map((l, j) => (j === i ? { ...l, [k]: v } : l)) })
   }
   const toggleAdder = (i, adder) => () => {
@@ -402,8 +414,8 @@ export default function Proposal() {
               {p.signals.map((s, i) => (
                 <tr key={i}>
                   <td>{s.signal}</td>
-                  <td className="num"><input type="number" value={s.perUnit} onChange={e => { const signals = p.signals.map((x, j) => j === i ? { ...x, perUnit: +e.target.value || 0 } : x); save({ ...p, signals }) }} style={{ width: 60, textAlign: 'right' }} /></td>
-                  <td className="num"><input type="number" value={s.units} onChange={e => { const signals = p.signals.map((x, j) => j === i ? { ...x, units: +e.target.value || 0 } : x); save({ ...p, signals }) }} style={{ width: 60, textAlign: 'right' }} /></td>
+                  <td className="num"><input type="number" min="0" value={s.perUnit} onChange={e => { const signals = p.signals.map((x, j) => j === i ? { ...x, perUnit: clampQty(e.target.value) } : x); save({ ...p, signals }) }} style={{ width: 60, textAlign: 'right' }} /></td>
+                  <td className="num"><input type="number" min="0" value={s.units} onChange={e => { const signals = p.signals.map((x, j) => j === i ? { ...x, units: clampQty(e.target.value) } : x); save({ ...p, signals }) }} style={{ width: 60, textAlign: 'right' }} /></td>
                   <td className="num">{s.perUnit * s.units}</td>
                   <td className="num">{s.perUnit * s.units * 15}</td>
                 </tr>
@@ -489,12 +501,12 @@ export default function Proposal() {
             <table>
               <thead><tr><th colSpan={2}>Imported Items Pricing &amp; Costing Factors</th></tr></thead>
               <tbody>
-                <tr onClick={selCosting('O3', p.costing.baseRate, 'baseRate')}><td>Euro-₹ Base</td><td className="num"><input type="number" step="0.01" value={p.costing.baseRate} onChange={setCosting('baseRate')} /></td></tr>
-                <tr onClick={selCosting('P3', p.costing.usdBase, 'usdBase')}><td>USD-₹ Base</td><td className="num"><input type="number" step="0.01" value={p.costing.usdBase} onChange={setCosting('usdBase')} /></td></tr>
-                <tr onClick={selCosting('O4', p.costing.cdErvContPct === 16 ? '=8.5%+2.5%+5%' : p.costing.cdErvContPct, 'cdErvContPct', 'pct')}><td>CD+ERV+Cont.</td><td className="num"><input type="number" step="0.1" value={p.costing.cdErvContPct} onChange={setCosting('cdErvContPct')} />%</td></tr>
-                <tr onClick={selCosting('O5', p.costing.bnkDiscPct, 'bnkDiscPct', 'pct')}><td>B&amp;K Disc%</td><td className="num"><input type="number" step="0.1" value={p.costing.bnkDiscPct} onChange={setCosting('bnkDiscPct')} />%</td></tr>
+                <tr onClick={selCosting('O3', p.costing.baseRate, 'baseRate')}><td>Euro-₹ Base</td><td className="num"><input type="number" step="0.01" min="0" value={p.costing.baseRate} onChange={setCosting('baseRate')} /></td></tr>
+                <tr onClick={selCosting('P3', p.costing.usdBase, 'usdBase')}><td>USD-₹ Base</td><td className="num"><input type="number" step="0.01" min="0" value={p.costing.usdBase} onChange={setCosting('usdBase')} /></td></tr>
+                <tr onClick={selCosting('O4', p.costing.cdErvContPct === 16 ? '=8.5%+2.5%+5%' : p.costing.cdErvContPct, 'cdErvContPct', 'pct')}><td>CD+ERV+Cont.</td><td className="num"><input type="number" step="0.1" min="0" value={p.costing.cdErvContPct} onChange={setCosting('cdErvContPct')} />%</td></tr>
+                <tr onClick={selCosting('O5', p.costing.bnkDiscPct, 'bnkDiscPct', 'pct')}><td>B&amp;K Disc%</td><td className="num"><input type="number" step="0.1" min="0" max="100" value={p.costing.bnkDiscPct} onChange={setCosting('bnkDiscPct')} />%</td></tr>
                 <tr onClick={selCosting('O6', '=ROUNDUP((O3*(1+O4)*(1-O5)),0)', null)}><td><b>Eff. Rate</b></td><td className="num"><b>₹ {fmt(effectiveRate(p.costing))} / €&nbsp;·&nbsp;₹ {fmt(effectiveRate(p.costing, 'USD', false))} / $</b></td></tr>
-                <tr onClick={selCosting('O7', p.costing.inputGMPct, 'inputGMPct', 'pct')}><td>Input GM%</td><td className="num"><input type="number" step="0.1" value={p.costing.inputGMPct} onChange={setCosting('inputGMPct')} />%</td></tr>
+                <tr onClick={selCosting('O7', p.costing.inputGMPct, 'inputGMPct', 'pct')}><td>Input GM%</td><td className="num"><input type="number" step="0.1" min="0" max={MAX_GM_PCT} value={p.costing.inputGMPct} onChange={setCosting('inputGMPct')} />%</td></tr>
               </tbody>
             </table>
             <table>
@@ -502,7 +514,7 @@ export default function Proposal() {
               <tbody>
                 <tr onClick={selCosting('Q3', '=SUM(Total Cost ₹)', null)}><td>ModAE Costs</td><td className="num">₹ {fmt(totals.cost)}</td></tr>
                 <tr onClick={selCosting('Q4', '=SUM(Total Price ₹)', null)}><td>Target Price</td><td className="num">₹ {fmt(totals.target)}</td></tr>
-                <tr onClick={selCosting('Q5', p.costing.financeCostK, 'financeCostK')}><td>Finance Cost (K₹)</td><td className="num"><input type="number" step="1" value={p.costing.financeCostK} onChange={setCosting('financeCostK')} /></td></tr>
+                <tr onClick={selCosting('Q5', p.costing.financeCostK, 'financeCostK')}><td>Finance Cost (K₹)</td><td className="num"><input type="number" step="1" min="0" value={p.costing.financeCostK} onChange={setCosting('financeCostK')} /></td></tr>
                 <tr onClick={selCosting('Q6', '=Q4-Q3-Q5*1000', null)}><td><b>Net GM ₹</b></td><td className="num"><b>₹ {fmt(netGM)}</b></td></tr>
                 <tr onClick={selCosting('Q7', '=Q6/Q4', null)}><td><b>Net GM %</b></td><td className="num"><b>{totals.target ? ((netGM / totals.target) * 100).toFixed(2) + '%' : '—'}</b></td></tr>
               </tbody>
@@ -517,6 +529,7 @@ export default function Proposal() {
           <div className="costing-note">
             Eff. Rate = ROUNDUP(base × (1 + CD+ERV+Cont.) × (1 − B&amp;K Disc)) — e.g. 112 × 1.16 × 0.50 → ₹65 (B&amp;K discount applies to the B&amp;K list only).
             Unit ₹ price = list × Eff. Rate ÷ (1 − GM). Net GM = Target − ModAE Costs − Finance Cost, so quoting below the computed price or adding finance cost pulls Net GM% under the Input GM%.
+            Input GM% is capped at {MAX_GM_PCT}%, the discount at 100%, and finance cost cannot be negative — the cells hold at those limits.
           </div>
 
           <div className="toolbar">

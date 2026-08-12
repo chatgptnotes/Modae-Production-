@@ -15,11 +15,39 @@ export function unitCostINR(listPrice, costing, currency = 'EUR', applyBnkDisc =
   return listPrice * effectiveRate(costing, currency, applyBnkDisc)
 }
 
+export const MAX_GM_PCT = 95
+
 // Target (sell) price applies Input GM% on top of landed cost. GM is clamped
 // below 100% so a typo can't push Infinity into totals and the tracker.
 export function unitSellINR(listPrice, costing, currency = 'EUR', applyBnkDisc = true) {
-  const gm = Math.min(costing.inputGMPct || 0, 95)
+  const gm = Math.min(costing.inputGMPct || 0, MAX_GM_PCT)
   return unitCostINR(listPrice, costing, currency, applyBnkDisc) / (1 - gm / 100)
+}
+
+// Ranges for the "Imported Items Pricing & Costing Factors" cells. Both write
+// paths (the inline cell and the formula bar, which commits straight to state)
+// go through this, so no typo or =formula can put a negative landed cost, a
+// >100% discount or a negative finance cost into the roll-up.
+const COSTING_RANGE = {
+  baseRate: [0, 1000],
+  usdBase: [0, 1000],
+  cdErvContPct: [0, 200],
+  bnkDiscPct: [0, 100],
+  inputGMPct: [0, MAX_GM_PCT],
+  financeCostK: [0, Infinity],
+}
+
+export function clampCosting(key, v) {
+  const n = Number(v)
+  if (!isFinite(n)) return 0
+  const r = COSTING_RANGE[key]
+  return r ? Math.min(Math.max(n, r[0]), r[1]) : n
+}
+
+// Quantities (BoQ Qty/Unit · Common · Spares, signal counts) are never negative.
+export const clampQty = v => {
+  const n = Number(v)
+  return isFinite(n) && n > 0 ? n : 0
 }
 
 // Folder-wall / tracker colour convention: green = Won, red = Lost, plain =
