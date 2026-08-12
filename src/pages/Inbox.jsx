@@ -4,7 +4,9 @@ import { useStore } from '../store.jsx'
 import { ddMmmYY, ageDays } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { useDrawer } from '../drawer.jsx'
-import { Chip, ConfChip, WarnBox, ErrBox } from '../ui.jsx'
+import { Chip, ConfChip, WarnBox, ErrBox, Modal } from '../ui.jsx'
+import { ROLES } from '../seed.js'
+import { aiEnabled, runJson } from '../ai.js'
 
 // Common-mailbox lead inbox: AI parses each inquiry, a human decides whether it
 // becomes an opportunity (Qualify → registration / intake form) or is dropped.
@@ -40,6 +42,106 @@ const simulatedLead = () => ({
     note: 'Part numbers matched sensor family; verify cable length variant before quoting.',
   },
 })
+
+// ---------------------------------------------------------------------------
+// Gemini extraction (task 'lead.extract', see supabase/functions/ai/index.ts).
+// The model returns the lead.ai shape the three-panel view already renders; we
+// only stamp state:'pending' on each field, because "AI proposes, humans decide"
+// is enforced by that state — nothing is accepted until someone accepts it.
+export async function extractLead({ from, subject, body, attachments = [] }, store) {
+  const ai = await runJson('lead.extract', {
+    from, subject, body, attachments,
+    customers: (store.customers || []).map(c => c.name),
+    ownershipRules: store.config?.ownershipRules || [],
+  })
+  if (!ai?.fields?.length) return null
+  const owner = ROLES[ai.suggestedOwner]
+    ? ai.suggestedOwner
+    : (store.config?.ownershipRules || [])[0]?.owner || 'RS'
+  return {
+    route: ai.route || 'Spares',
+    urgency: ai.urgency || 'Normal',
+    completeness: Math.max(0, Math.min(100, Math.round(ai.completeness ?? 0))),
+    suggestedOwner: owner,
+    ai: {
+      summary: ai.summary || '',
+      fields: ai.fields.map(f => ({ ...f, conf: Math.max(0, Math.min(100, Math.round(f.conf ?? 0))), state: 'pending' })),
+      missing: ai.missing || [],
+      duplicates: [],
+      next: ai.next || [],
+    },
+  }
+}
+
+// Paste a real inbound enquiry and let Gemini structure it.
+function PasteLeadModal({ onClose }) {
+  const store = useStore()
+  const nav = useNavigate()
+  const [from, setFrom] = useState('')
+  const [subject, setSubject] = useState('')
+  const [body, setBody] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const add = async () => {
+    if (!body.trim()) { setErr('Paste the email body.'); return }
+    setBusy(true); setErr('')
+    const extracted = await extractLead({ from, subject, body }, store)
+    setBusy(false)
+    if (!extracted) {
+      setErr('Extraction is unavailable — check the AI configuration on the Admin page, or add the mail unextracted and structure it by hand.')
+      return
+    }
+    const id = 'LD-' + Date.now()
+    store.addLead({
+      id, ts: new Date().toISOString(), channel: 'Email', source: 'Common mailbox',
+      from: from || 'unknown@sender', sender: from || 'Unknown sender',
+      subject: subject || '(no subject)', body, attachments: [],
+      duplicateRisk: 'Low', status: 'New', ...extracted,
+    })
+    onClose()
+    nav('/inbox/' + id)
+  }
+
+  const addRaw = () => {
+    const id = 'LD-' + Date.now()
+    store.addLead({
+      id, ts: new Date().toISOString(), channel: 'Email', source: 'Common mailbox',
+      from: from || 'unknown@sender', sender: from || 'Unknown sender',
+      subject: subject || '(no subject)', body, status: 'New',
+      parse: { confidence: 0, note: 'Not extracted — AI unavailable; complete by hand.' },
+    })
+    onClose()
+    nav('/inbox/' + id)
+  }
+
+  return (
+    <Modal title="New enquiry — paste the email" onClose={onClose} wide>
+      <div className="drawer-form">
+        <label>From</label>
+        <input value={from} onChange={e => setFrom(e.target.value)}
+          placeholder="name@customer.com" style={{ width: '100%' }} />
+        <label style={{ marginTop: 6 }}>Subject</label>
+        <input value={subject} onChange={e => setSubject(e.target.value)}
+          placeholder="Request for quotation — …" style={{ width: '100%' }} />
+        <label style={{ marginTop: 6 }}>Body</label>
+        <textarea rows={12} value={body} onChange={e => setBody(e.target.value)}
+          placeholder="Paste the enquiry exactly as received." style={{ width: '100%' }} />
+        {!aiEnabled() && (
+          <WarnBox>AI is not configured — the mail can be added, but nothing will be extracted.</WarnBox>
+        )}
+        {err && <ErrBox>{err}</ErrBox>}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 10 }}>
+          <button onClick={onClose}>Cancel</button>
+          {err && <button onClick={addRaw}>Add unextracted</button>}
+          <button className="primary" onClick={add} disabled={busy || !aiEnabled()}>
+            <Icon name="bot" size={13} /> {busy ? 'Extracting…' : 'Extract with AI'}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
 
 const PARSE_FIELDS = [
   ['Sell-to', 'sellTo'], ['Category', 'category'], ['Location', 'location'],
@@ -78,6 +180,20 @@ function AiLeadDetail({ lead }) {
   const [evOpen, setEvOpen] = useState(null)      // field index with evidence expanded
   const [editFor, setEditFor] = useState(null)    // { idx, val, note }
   const [rejFor, setRejFor] = useState(null)      // { idx, note }
+  const [reExtracting, setReExtracting] = useState(false)
+  const [reErr, setReErr] = useState('')
+
+  // Re-read the original mail. Human decisions are discarded with it, so this
+  // is confirmed first — the point of the field states is that they're earned.
+  const reExtract = async () => {
+    if (decided > 0 && !window.confirm(
+      `Re-run extraction? ${decided} field decision(s) on this lead will be replaced.`)) return
+    setReExtracting(true); setReErr('')
+    const extracted = await extractLead(lead, store)
+    setReExtracting(false)
+    if (!extracted) { setReErr('Extraction unavailable — the previous result is unchanged.'); return }
+    store.updateLead(lead.id, extracted)
+  }
 
   const customer = matchCustomer(store.customers, lead)
   const isRed = lead.redFlag || customer?.status === 'Red'
@@ -223,9 +339,16 @@ function AiLeadDetail({ lead }) {
         <header className="ws-head">
           <span className="ws-head-icon emerald"><Icon name="sparkles" size={13} /></span>
           <span className="ws-head-title">AI summary &amp; actions</span>
+          {aiEnabled() && canAct && (
+            <button className="ws-head-meta" onClick={reExtract} disabled={reExtracting}
+              title="Re-read the original email with the configured model">
+              <Icon name="refresh" size={12} /> {reExtracting ? 'Extracting…' : 'Re-run'}
+            </button>
+          )}
         </header>
         <div className="ws-body">
           <p className="ws-summary">{ai.summary}</p>
+          {reErr && <ErrBox>{reErr}</ErrBox>}
 
           {ai.missing?.length > 0 && (
             <WarnBox>
@@ -472,6 +595,7 @@ export default function Inbox() {
   const [q, setQ] = useState('')
   const [statusF, setStatusF] = useState('')
   const [routeF, setRouteF] = useState('')
+  const [pasteOpen, setPasteOpen] = useState(false)
 
   const sel = leadId ? store.leads.find(l => l.id === leadId) : null
   if (sel) {
@@ -534,7 +658,11 @@ export default function Inbox() {
         <button onClick={() => store.addLead(simulatedLead())}>
           <Icon name="mail" size={13} /> Simulate incoming inquiry
         </button>
+        <button className="primary" onClick={() => setPasteOpen(true)}>
+          <Icon name="bot" size={13} /> New enquiry — extract with AI
+        </button>
       </div>
+      {pasteOpen && <PasteLeadModal onClose={() => setPasteOpen(false)} />}
 
       <div className="sheet-wrap">
         <table className="sheet">

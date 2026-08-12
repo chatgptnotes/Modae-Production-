@@ -6,6 +6,7 @@ import { extractPdfText, parseTender, matchParts, buildProposal, buildOpportunit
 import { uploadOppFile } from '../filestore.js'
 import { fmt, sameCustomer } from '../utils.js'
 import { Icon } from '../icons.jsx'
+import { runJson } from '../ai.js'
 
 const STAGES_MSG = [
   'Reading document…',
@@ -18,6 +19,51 @@ const ConfBadge = ({ v }) => {
   const cls = v >= 0.9 ? 'hi' : v >= 0.6 ? 'med' : 'lo'
   const label = v >= 0.9 ? 'High' : v >= 0.6 ? 'Medium' : 'Low'
   return <span className={`conf-badge ${cls}`} title={`AI extraction confidence ${Math.round(v * 100)}%`}>AI · {label}</span>
+}
+
+// Fold a Gemini tender read into the rule-based parse, in place. Blanks only:
+// wherever the deterministic parser produced a value it wins, so the confidence
+// badges keep meaning what they meant. Fields the model supplied are listed in
+// parse.aiFilled so the review screen can say which is which.
+// What each AI header field answers on the parser's "missing from the document"
+// list, so a field the model reads is struck off that list.
+const ANSWERS = {
+  buyer: 'Buyer / customer name', subject: 'Subject', sectionRef: 'RFQ number',
+  contactPerson: 'Contact person', contactPhone: 'Contact phone',
+}
+
+function mergeAi(p, ai) {
+  p.aiFilled = []
+  p.risks = []
+  p.aiNotes = []
+  if (!ai) return
+  const blank = v => !String(v ?? '').trim()
+
+  for (const [k, v] of Object.entries(ai.header || {})) {
+    if (blank(v) || !blank(p.header[k])) continue
+    p.header[k] = v
+    p.aiFilled.push(k)
+    const idx = p.missing.indexOf(ANSWERS[k])
+    if (idx >= 0) p.missing.splice(idx, 1)
+  }
+  // buildOpportunityDraft reads the contact from header.signatory and the
+  // location from guesses — feed the model's values through the same doors.
+  if (blank(p.header.signatory) && !blank(p.header.contactPerson)) p.header.signatory = p.header.contactPerson
+  if (blank(p.guesses.location) && !blank(p.header.location)) p.guesses.location = p.header.location
+
+  // The review screen renders these as <select>s, so a value outside the app's
+  // own lists would silently show as blank. The lists are the authority, not
+  // the prompt — anything off-list keeps the deterministic guess.
+  const ALLOWED = { segment: SEGMENTS, oppType: OPP_TYPES, bu: BUS, category: CATEGORIES, product: PRODUCTS }
+  for (const [k, v] of Object.entries(ai.guesses || {})) {
+    if (blank(v)) continue
+    const list = ALLOWED[k]
+    const hit = list ? list.find(o => o.toLowerCase() === String(v).trim().toLowerCase()) : v
+    if (hit) p.guesses[k] = hit
+  }
+  p.risks = (ai.risks || []).filter(r => r?.clause)
+  for (const m of ai.missing || []) if (!p.missing.includes(m)) p.missing.push(m)
+  p.aiNotes = ai.notes || []
 }
 
 export default function TenderIntake() {
@@ -67,6 +113,14 @@ export default function TenderIntake() {
       const ex = await extractPdfText(f)
       if (ex.charCount < 200) throw { code: 'NO_TEXT_LAYER' }
       const p = parseTender(ex.fullText, ex.struct)
+      // Gemini fills only what the rules could not read, and adds the
+      // commercial risk read the rules never attempted. The deterministic
+      // parse stays authoritative — see mergeAi below.
+      const ai = await runJson('tender.extract', {
+        filename: f.name, pages: ex.struct?.length ?? '', text: ex.fullText,
+        parsed: p.header, products: PRODUCTS,
+      }, { timeoutMs: 90000 })
+      mergeAi(p, ai)
       await minDelay
       clearInterval(timer)
       setParse(p)
@@ -256,7 +310,30 @@ export default function TenderIntake() {
           <div className="hint" style={{ marginBottom: 10 }}>
             AI proposes, you confirm — every field below is editable. Amber fields need your input.
             {parse.missing.length > 0 && <> Missing from the document: <b>{parse.missing.join(', ')}</b>.</>}
+            {parse.aiFilled?.length > 0 && <> Read by the model (the rules could not): <b>{parse.aiFilled.join(', ')}</b>.</>}
           </div>
+
+          {parse.risks?.length > 0 && (
+            <div className="form-card" style={{ maxWidth: 900, marginBottom: 14 }}>
+              <div className="section-title">Commercial risk in the tender terms</div>
+              {parse.risks.map((r, i) => (
+                <div key={i} className="check-row">
+                  <Icon name="alert" size={13} />
+                  <span><b>{r.clause}</b> — {r.why}</span>
+                </div>
+              ))}
+              <div className="costing-note">
+                Model-read, not rule-checked — verify each against the document before you price it in.
+              </div>
+            </div>
+          )}
+
+          {parse.aiNotes?.length > 0 && (
+            <div className="form-card" style={{ maxWidth: 900, marginBottom: 14 }}>
+              <div className="section-title">Estimator notes</div>
+              {parse.aiNotes.map((n, i) => <div key={i} className="check-row"><span>{n}</span></div>)}
+            </div>
+          )}
 
           <div className="form-card" style={{ maxWidth: 900, marginBottom: 14 }}>
             <div className="section-title">Tender reference</div>

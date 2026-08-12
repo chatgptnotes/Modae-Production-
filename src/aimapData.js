@@ -1,15 +1,17 @@
 // AI & automation map — transcribed from the BT clickable prototype (AI_MAP).
-// Each item: t = intervention title, phase = 1 (simulated live in this build) | 2 (direction preview),
+// Each item: t = intervention title, phase = 1 (interactive in this build) | 2 (direction preview),
+// live = genuinely calls Gemini through the ai Edge Function; everything else is
+// deterministic or seeded, and the map says so rather than implying a model ran.
 // d = description, to = route in THIS app where the intervention is demonstrated.
 export const AI_MAP = [
   {
     group: 'Lead & opportunity intelligence (CRM)',
     items: [
-      { t: 'Email intake & NLP parsing', phase: 1, d: 'Reads the common sales mailbox, extracts customer, contact and RFQ details, tags the enquiry as Spares / Services / Mixed.', to: '/inbox' },
-      { t: 'Missing-information detection', phase: 1, d: 'Flags incomplete enquiries and drafts the clarification request automatically.', to: '/inbox/LD-205' },
+      { t: 'Email intake & NLP parsing', phase: 1, live: true, d: 'Reads the common sales mailbox, extracts customer, contact and RFQ details, tags the enquiry as Spares / Services / Mixed.', to: '/inbox' },
+      { t: 'Missing-information detection', phase: 1, live: true, d: 'Flags incomplete enquiries and drafts the clarification request automatically.', to: '/inbox/LD-205' },
       { t: 'Customer classification (Green / Blue / Amber / Red)', phase: 1, d: 'Suggests the customer class that drives KYC, fees and approval routing.', to: '/customers' },
       { t: 'Duplicate lead detection', phase: 1, d: 'Flags likely-duplicate leads before they become separate opportunities.', to: '/inbox' },
-      { t: 'Opportunity ID & owner suggestion', phase: 1, d: 'Suggests the opportunity owner from region/type rules and generates the ID on registration.', to: '/register/LD-203' },
+      { t: 'Opportunity ID & owner suggestion', phase: 1, live: true, d: 'Suggests the opportunity owner from region/type rules and generates the ID on registration.', to: '/register/LD-203' },
       { t: 'Customer health score', phase: 1, d: 'Indicative relationship-health score with supporting evidence, editable by the sales team.', to: '/customers' },
       { t: 'Win-probability / risk suggestion', phase: 1, d: 'Suggested win percentage shown per opportunity, always human-editable.', to: '/' },
       { t: 'Stale-opportunity detection', phase: 1, d: 'Flags opportunities that have passed their due date with no closure.', to: '/' },
@@ -25,7 +27,7 @@ export const AI_MAP = [
       { t: 'Compliance matrix generation', phase: 1, d: 'Drafts the technical compliance matrix against ModAE\'s standard capability list, for engineer review.', to: '/opp/2608222RS/proposal' },
       { t: 'Revision history & comparison', phase: 1, d: 'Tracks and compares quote revisions side by side.', to: '/opp/2607217RS/proposal' },
       { t: 'Commercial-terms recommendation', phase: 1, d: 'Suggests payment, delivery and validity terms from customer class and route, for one-click insertion.', to: '/opp/2607217RS/proposal' },
-      { t: 'RFP / SOW scope parsing', phase: 2, d: 'Parse a full RFP or Scope-of-Work document into structured, confidence-scored requirements, reviewed the same way as lead intake.', to: '/opp/2608222RS/proposal' },
+      { t: 'RFP / SOW scope parsing', phase: 2, live: true, d: 'Parse a full RFP or Scope-of-Work document into structured, confidence-scored requirements, reviewed the same way as lead intake.', to: '/opp/2608222RS/proposal' },
       { t: 'Multi-currency conversion', phase: 2, d: 'Convert the proposal total using a configurable hedge rate for international tenders.', to: '/opp/2608222RS/proposal' },
       { t: 'T&C clause library generator', phase: 2, d: 'Assemble full legal terms from a maintained clause library by opportunity type and jurisdiction.', to: '/opp/2607217RS/proposal' },
     ],
@@ -35,7 +37,7 @@ export const AI_MAP = [
     items: [
       { t: 'Follow-up reminders & validity tracking', phase: 1, d: 'Tracks quote ageing and prompts scheduled follow-up touchpoints.', to: '/opp/2606213RS/proposal' },
       { t: 'Escalation suggestion', phase: 1, d: 'Suggests when a stalled quote should be escalated, and to whom.', to: '/opp/2606213RS/proposal' },
-      { t: 'Draft negotiation response', phase: 1, d: 'Drafts a reply for common follow-up situations, for review before sending — nothing sends automatically.', to: '/opp/2606213RS/proposal' },
+      { t: 'Draft negotiation response', phase: 1, live: true, d: 'Drafts a reply for common follow-up situations, for review before sending — nothing sends automatically.', to: '/opp/2606213RS/proposal' },
     ],
   },
   {

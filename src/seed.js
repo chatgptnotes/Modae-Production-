@@ -932,7 +932,10 @@ export function newProposal(oppId, opp) {
 export const AI_PROVIDERS = {
   Anthropic: ['claude-fable-5', 'claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5', 'Other (enter below)'],
   OpenAI: ['gpt-5-flagship', 'gpt-5-mini', 'gpt-4o', 'Other (enter below)'],
-  Google: ['gemini-pro', 'gemini-flash', 'Other (enter below)'],
+  // Google IDs verified against the credential's own /v1beta/models listing.
+  // The *-latest aliases track Google's current pick without a redeploy.
+  Google: ['gemini-3.6-flash', 'gemini-flash-latest', 'gemini-pro-latest',
+    'gemini-2.5-pro', 'gemini-2.5-flash', 'Other (enter below)'],
   'Mistral AI': ['mistral-large', 'mistral-small', 'Other (enter below)'],
   'Meta (Llama)': ['llama-4-maverick', 'llama-4-scout', 'Other (enter below)'],
   'Azure OpenAI': ['(deployment name — enter below)'],
@@ -966,7 +969,8 @@ export const seedConfig = {
     { id: 'payment', label: 'Payment gateway', state: 'Unavailable' },
     { id: 'bi', label: 'BI', state: 'Healthy' },
   ],
-  aiModel: { provider: '', model: '', customModel: '', endpoint: '', keySet: false, keyMasked: '', updatedBy: '', updatedOn: '' },
+  // No key here by design: it lives in the ai Edge Function's secrets.
+  aiModel: { provider: 'Google', model: 'gemini-3.6-flash', customModel: '', endpoint: '', updatedBy: '', updatedOn: '' },
   // Admin document uploads (metadata only — content stays with the file's home).
   uploads: {
     priceLists: [

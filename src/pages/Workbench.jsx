@@ -7,6 +7,7 @@ import { readiness, isBlocked, computeProposalTotals } from '../gates.js'
 import { COMMERCIAL_RX } from './Approvals.jsx'
 import { Chip, ClassChip, AiBadge, Stepper, WarnBox, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
+import { runJson, runText } from '../ai.js'
 import WbSpares from '../workbench/WbSpares.jsx'
 import WbService from '../workbench/WbService.jsx'
 import WbProject from '../workbench/WbProject.jsx'
@@ -325,17 +326,31 @@ function ClarificationsTab({ opp }) {
   const [draftOpen, setDraftOpen] = useState(false)
   const [draft, setDraft] = useState('')
   const [sentOk, setSentOk] = useState(false)
+  const [busy, setBusy] = useState('') // '' | 'suggest' | 'draft'
 
-  const suggest = () => {
+  // Gemini proposes gap-specific questions; the canned per-route list is the
+  // fallback whenever the AI is unavailable (see src/ai.js).
+  const suggest = async () => {
+    setBusy('suggest')
+    const proposal = store.getProposal(opp.id)
+    const ai = await runJson('clarification.suggest', {
+      oppName: opp.oppName, sellTo: opp.sellTo, route: opp.route, segment: opp.segment,
+      eucName: opp.eucName, location: opp.location, remarks: opp.remarks,
+      lines: (proposal.lines || []).map(l => ({ pn: l.pn, desc: l.desc, qty: l.qty })),
+      existing: rows.map(c => c.q),
+    })
+    setBusy('')
     const due = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
-    for (const s of CLAR_SUGGESTIONS[opp.route] || CLAR_SUGGESTIONS.Project) {
+    const suggestions = ai?.rows?.length ? ai.rows : (CLAR_SUGGESTIONS[opp.route] || CLAR_SUGGESTIONS.Project)
+    for (const s of suggestions) {
       store.addClarification({ ...s, oppId: opp.id, owner: opp.owner, audience: 'Customer', due, status: 'Open' })
     }
   }
 
-  const openDraft = () => {
+  // Deterministic template — also the fallback when Gemini can't be reached.
+  const templateDraft = () => {
     const qs = open.map((c, i) => `${i + 5}. ${c.q}`).join('\n')
-    setDraft([
+    return [
       'Dear Sir,',
       '',
       `Thank you for your inquiry for ${opp.oppName}. To proceed with our proposal, kindly provide the following details:`,
@@ -349,7 +364,18 @@ function ClarificationsTab({ opp }) {
       'Best regards,',
       `${ROLES[opp.owner]?.name || opp.owner}`,
       'ModAE India Pvt Ltd',
-    ].join('\n'))
+    ].join('\n')
+  }
+
+  const openDraft = async () => {
+    setBusy('draft')
+    const text = await runText('email.clarification', {
+      oppName: opp.oppName, sellTo: opp.sellTo, contactPerson: opp.contactPerson,
+      route: opp.route, questions: open.map(c => c.q),
+      senderName: ROLES[opp.owner]?.name || opp.owner,
+    })
+    setBusy('')
+    setDraft(text?.trim() || templateDraft())
     setDraftOpen(true)
   }
 
@@ -367,10 +393,12 @@ function ClarificationsTab({ opp }) {
   return (
     <div>
       <div className="toolbar">
-        <button onClick={suggest}><Icon name="sparkles" size={13} /> AI: suggest questions</button>
-        <button onClick={openDraft} disabled={!open.length}
+        <button onClick={suggest} disabled={!!busy}>
+          <Icon name="sparkles" size={13} /> {busy === 'suggest' ? 'Thinking…' : 'AI: suggest questions'}
+        </button>
+        <button onClick={openDraft} disabled={!open.length || !!busy}
           title={open.length ? '' : 'No open questions to draft from'}>
-          <Icon name="mail" size={13} /> AI: draft email
+          <Icon name="mail" size={13} /> {busy === 'draft' ? 'Drafting…' : 'AI: draft email'}
         </button>
         <span className="spacer" />
       </div>
@@ -528,6 +556,7 @@ function FollowUpPane({ opp }) {
   const [note, setNote] = useState('')
   const [fuOpen, setFuOpen] = useState(false)
   const [fuDraft, setFuDraft] = useState('')
+  const [fuBusy, setFuBusy] = useState(false)
   const [fuSent, setFuSent] = useState(false)
   const [escOpen, setEscOpen] = useState(false)
 
@@ -548,17 +577,28 @@ function FollowUpPane({ opp }) {
     setNote('')
   }
 
-  const openFu = () => {
-    setFuDraft([
-      'Dear Sir,',
-      '',
-      `Trusting our proposal for ${opp.oppName} (${opp.id}) reached you well. We would appreciate your feedback on the technical and commercial aspects, and are happy to arrange a discussion at your convenience.`,
-      '',
-      `The offer remains valid ${left != null && left > 0 ? `for ${left} more day(s)` : `for ${validityDays} days from submission`}.`,
-      '',
-      'Best regards,',
-      `${ROLES[opp.owner]?.name || opp.owner}`,
-    ].join('\n'))
+  const templateFu = () => [
+    'Dear Sir,',
+    '',
+    `Trusting our proposal for ${opp.oppName} (${opp.id}) reached you well. We would appreciate your feedback on the technical and commercial aspects, and are happy to arrange a discussion at your convenience.`,
+    '',
+    `The offer remains valid ${left != null && left > 0 ? `for ${left} more day(s)` : `for ${validityDays} days from submission`}.`,
+    '',
+    'Best regards,',
+    `${ROLES[opp.owner]?.name || opp.owner}`,
+  ].join('\n')
+
+  const openFu = async () => {
+    setFuBusy(true)
+    const text = await runText('email.followup', {
+      oppName: opp.oppName, sellTo: opp.sellTo, contactPerson: opp.contactPerson,
+      quoteRef: opp.id, sentOn: opp.proposalDate, ageDays: age,
+      validity: left != null && left > 0 ? `${left} of ${validityDays} days remaining` : `${validityDays} days from submission`,
+      history: (store.communications?.[opp.id] || []).map(c => `${c.ts?.slice(0, 10)} ${c.kind} → ${c.to}: ${c.subject}`),
+      senderName: ROLES[opp.owner]?.name || opp.owner,
+    })
+    setFuBusy(false)
+    setFuDraft(text?.trim() || templateFu())
     setFuOpen(true)
   }
 
@@ -604,7 +644,9 @@ function FollowUpPane({ opp }) {
           </div>
         ))}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-          <button onClick={openFu}><Icon name="sparkles" size={13} /> AI: draft follow-up</button>
+          <button onClick={openFu} disabled={fuBusy}>
+            <Icon name="sparkles" size={13} /> {fuBusy ? 'Drafting…' : 'AI: draft follow-up'}
+          </button>
           <button onClick={() => setEscOpen(true)}><Icon name="sparkles" size={13} /> AI: escalation suggestion</button>
         </div>
         {fuSent && <div className="okbox">Follow-up sent (simulated) — logged in Communications.</div>}

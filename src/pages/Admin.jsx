@@ -5,6 +5,7 @@ import { OWNERS, AI_PROVIDERS } from '../seed.js'
 import { isAdminRole, canSeePage } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { Chip, WarnBox } from '../ui.jsx'
+import { aiEnabled, testConnection } from '../ai.js'
 import * as sp from '../sharepoint.js'
 
 // Admin — every runtime rule the app obeys, in one card grid. Data lives in
@@ -162,10 +163,8 @@ export default function Admin() {
   const [model, setModel] = useState(ai.model || '')
   const [customModel, setCustomModel] = useState(ai.customModel || '')
   const [endpoint, setEndpoint] = useState(ai.endpoint || '')
-  const [key, setKey] = useState('')
-  const [showKey, setShowKey] = useState(false)
   const [testing, setTesting] = useState(false)
-  const [testOk, setTestOk] = useState(false)
+  const [testResult, setTestResult] = useState(null) // null | { ok, model, ms }
 
   // Uploads card drafts.
   const [supplier, setSupplier] = useState('')
@@ -187,23 +186,16 @@ export default function Admin() {
   }
 
   const saveAi = () => {
-    store.saveAiModel({
-      provider, model, customModel, endpoint,
-      keySet: key ? true : !!ai.keySet,
-      keyMasked: key ? key.slice(0, 4) + '…' : (ai.keyMasked || ''),
-    })
-    setKey(''); setTestOk(false)
+    store.saveAiModel({ provider, model, customModel, endpoint })
+    setTestResult(null)
   }
-  const testAi = () => {
-    setTesting(true); setTestOk(false)
-    setTimeout(() => {
-      setTesting(false); setTestOk(true)
-      store.saveAiModel({ ...ai, provider, model, customModel, endpoint })
-    }, 900)
-  }
-  const removeKey = () => {
-    store.saveAiModel({ provider, model, customModel, endpoint, keySet: false, keyMasked: '' })
-    setKey(''); setTestOk(false)
+  // Real round-trip through the Supabase Edge Function to the model.
+  const testAi = async () => {
+    setTesting(true); setTestResult(null)
+    const res = await testConnection(isCustomModel(model) ? customModel : model)
+    setTesting(false)
+    setTestResult(res)
+    if (res.ok) store.saveAiModel({ ...ai, provider, model, customModel, endpoint })
   }
 
   const patchList = (listKey, i, itemPatch) =>
@@ -265,12 +257,14 @@ export default function Admin() {
           <h3>
             <Icon name="sparkles" size={14} /> AI model configuration
             <span style={{ marginLeft: 'auto' }}>
-              {ai.keySet ? <Chip tone="state-Accepted">Configured</Chip> : <Chip tone="grey">Not configured</Chip>}
+              {aiEnabled() ? <Chip tone="state-Accepted">Proxy reachable</Chip> : <Chip tone="grey">Proxy not configured</Chip>}
             </span>
           </h3>
           <p className="hint">
-            Chooses which frontier LLM powers parsing, matching, drafting and analytics. The demo never calls a real model.
-            {ai.keySet && ai.updatedBy ? <> Active: <b>{ai.provider} — {isCustomModel(ai.model) ? (ai.customModel || '(model id not set)') : ai.model}</b> · set by {ai.updatedBy} on {ai.updatedOn}</> : null}
+            Chooses which model powers lead extraction, tender parsing, clarification suggestions and
+            email drafting. Calls go through the <code>ai</code> Supabase Edge Function — the API key
+            lives in that function's secrets and never reaches this browser.
+            {ai.updatedBy ? <> Active: <b>{ai.provider} — {isCustomModel(ai.model) ? (ai.customModel || '(model id not set)') : ai.model}</b> · set by {ai.updatedBy} on {ai.updatedOn}</> : null}
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '0 12px' }}>
             <label className="afield">Provider
@@ -298,28 +292,33 @@ export default function Admin() {
                 onChange={e => setEndpoint(e.target.value)} />
             </label>
             <label className="afield">API key
-              <span style={{ display: 'flex', gap: 6 }}>
-                <input type={showKey ? 'text' : 'password'} value={key} disabled={!canEdit}
-                  autoComplete="off" style={{ flex: 1 }}
-                  placeholder={ai.keySet ? `•••• ${ai.keyMasked} (paste to replace)` : 'Paste API key'}
-                  onChange={e => setKey(e.target.value)} />
-                <button type="button" disabled={!canEdit} title={showKey ? 'Hide key' : 'Show key'}
-                  onClick={() => setShowKey(v => !v)}>
-                  <Icon name={showKey ? 'eyeOff' : 'eye'} size={12} />
-                </button>
+              <span className="ro" style={{ display: 'block', padding: '5px 0' }}>
+                <Icon name="lock" size={11} /> Managed server-side
               </span>
             </label>
           </div>
           <div className="admin-actions">
             <button className="primary" disabled={!canEdit} onClick={saveAi}>Save configuration</button>
-            <button disabled={!canEdit || testing || !(ai.keySet || key)} onClick={testAi}>
+            <button disabled={!canEdit || testing} onClick={testAi}>
               <Icon name="play" size={11} /> Test connection
             </button>
-            {ai.keySet && <button disabled={!canEdit} onClick={removeKey}><Icon name="x" size={11} /> Remove key</button>}
           </div>
-          {testing && <p className="hint">Contacting model endpoint…</p>}
-          {testOk && <div className="okbox">Connection OK — model responded (simulated)</div>}
-          <WarnBox>In production the key lives server-side; calls are proxied.</WarnBox>
+          {testing && <p className="hint">Calling the model through the proxy…</p>}
+          {testResult?.ok && (
+            <div className="okbox">
+              Connection OK — <b>{testResult.model}</b> responded in {testResult.ms} ms.
+            </div>
+          )}
+          {testResult && !testResult.ok && (
+            <div className="errbox">
+              No response. Check that the <code>ai</code> function is deployed and
+              <code> GEMINI_API_KEY</code> is set in its secrets — details are in the browser console.
+            </div>
+          )}
+          <WarnBox>
+            The key is set with <code>supabase secrets set GEMINI_API_KEY=…</code>, not here.
+            Nothing on this page ever holds it.
+          </WarnBox>
         </div>
 
         {/* 4 — AI confidence thresholds */}

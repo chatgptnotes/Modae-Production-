@@ -9,17 +9,20 @@ export default function AiMap() {
   const all = AI_MAP.flatMap(g => g.items)
   const p1 = all.filter(i => i.phase === 1).length
   const p2 = all.filter(i => i.phase === 2).length
+  const live = all.filter(i => i.live).length
 
   return (
     <div className="page">
       <h2>AI & Automation Map</h2>
       <div className="hint" style={{ marginBottom: 12 }}>
-        Every intervention is demonstrated live in the app — Phase 2 items are direction previews.
+        Every intervention is demonstrated in the app. <b>Live</b> items call the configured
+        Gemini model for real; the rest are deterministic or seeded. Phase 2 items are direction previews.
       </div>
 
       <div className="kpi-row">
         <KpiCard label="AI interventions" value={all.length} hint="across the whole workflow" />
-        <KpiCard label="Phase 1 (Simulated)" value={p1} hint="interactive in this build" />
+        <KpiCard label="Live on Gemini" value={live} hint="real model calls" />
+        <KpiCard label="Phase 1" value={p1} hint="interactive in this build" />
         <KpiCard label="Phase 2" value={p2} hint="proposed direction" />
       </div>
 
@@ -32,7 +35,7 @@ export default function AiMap() {
           </div>
           {g.items.map(i => (
             <div key={i.t} className="aimap-row">
-              <AiBadge label={i.phase === 2 ? 'AI' : 'Simulated'} />
+              <AiBadge label={i.live ? 'Live' : i.phase === 2 ? 'AI' : 'Simulated'} />
               <div>
                 <div className="ai-t">
                   {i.t}

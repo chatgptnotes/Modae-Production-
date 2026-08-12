@@ -57,6 +57,16 @@ function migrate(s) {
   if (!s.config) s.config = seedConfig
   if (!s.config.uploads) s.config.uploads = seedConfig.uploads
   if (!s.config.aiModel) s.config.aiModel = seedConfig.aiModel
+  // Gemini is wired for real now: drop the key fields saved state used to carry
+  // (a key must never live in client state), and retire the placeholder model
+  // IDs the picker offered before the real ones were known.
+  if ('keySet' in s.config.aiModel || 'keyMasked' in s.config.aiModel) {
+    const { keySet, keyMasked, ...rest } = s.config.aiModel
+    s.config.aiModel = rest
+  }
+  if (!s.config.aiModel.model || /^gemini-(pro|flash)$/.test(s.config.aiModel.model)) {
+    s.config.aiModel = { ...seedConfig.aiModel, ...s.config.aiModel, ...{ provider: 'Google', model: seedConfig.aiModel.model } }
+  }
   if (!s.kyc) s.kyc = seedKyc
   if (!s.sales) s.sales = seedSales
   if (!Array.isArray(s.sparesLines)) s.sparesLines = seedSparesLines
