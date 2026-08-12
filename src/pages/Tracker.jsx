@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { STAGES, CLOSE_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS } from '../seed.js'
+import { STAGES, CLOSE_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, CUSTOMER_STATUSES } from '../seed.js'
 import { fmt, mmmYY, ddMmmYY, exportCSV, stageClass, canViewCommercial } from '../utils.js'
 import { useFormulaBar } from '../formulabar.jsx'
 import { useDrawer } from '../drawer.jsx'
@@ -256,7 +256,11 @@ export default function Tracker() {
                 </td>
                 <td onClick={selectCell(o, COLS[3])} className={isSel(o, COLS[3]) ? 'cell-sel' : ''}><input type="text" value={o.location} onChange={upd(o.id, 'location')} style={{ minWidth: 80 }} /></td>
                 <td onClick={selectCell(o, COLS[4])} className={`cstat ${o.customerStatus} ${isSel(o, COLS[4]) ? 'cell-sel' : ''}`}
-                  title="Customer status comes from the accounting upload — changes need AH / BU head approval">{o.customerStatus}</td>
+                  title="Customer status normally comes from the accounting upload — overrides are logged to the audit trail">
+                  <select value={o.customerStatus} onChange={upd(o.id, 'customerStatus')}>
+                    {CUSTOMER_STATUSES.map(c => <option key={c}>{c}</option>)}
+                  </select>
+                </td>
                 <td onClick={selectCell(o, COLS[5])} className={isSel(o, COLS[5]) ? 'cell-sel' : ''}><input type="text" value={o.eucName} onChange={upd(o.id, 'eucName')} style={{ minWidth: 120 }} /></td>
                 <td onClick={selectCell(o, COLS[6])} className={isSel(o, COLS[6]) ? 'cell-sel' : ''}><input type="text" value={o.eucLocation} onChange={upd(o.id, 'eucLocation')} style={{ minWidth: 90 }} /></td>
                 <td onClick={selectCell(o, COLS[7])} className={isSel(o, COLS[7]) ? 'cell-sel' : ''} title={o.oppName} style={{ maxWidth: 280 }}><input type="text" value={o.oppName} onChange={upd(o.id, 'oppName')} style={{ minWidth: 220 }} /></td>
@@ -298,8 +302,8 @@ export default function Tracker() {
                       : <td onClick={selectCell(o, COLS[17])} className={`err ${isSel(o, COLS[17]) ? 'cell-sel' : ''}`}>#DIV/0!</td>}
                   </>
                 )}
-                <td onClick={selectCell(o, COLS[18])} className={isSel(o, COLS[18]) ? 'cell-sel' : ''}>{mmmYY(o.createDate)}</td>
-                <td onClick={selectCell(o, COLS[19])} className={isSel(o, COLS[19]) ? 'cell-sel' : ''}>{mmmYY(o.proposalDate)}</td>
+                <td onClick={selectCell(o, COLS[18])} className={isSel(o, COLS[18]) ? 'cell-sel' : ''}><input type="date" value={o.createDate || ''} onChange={upd(o.id, 'createDate')} style={{ width: 108 }} /></td>
+                <td onClick={selectCell(o, COLS[19])} className={isSel(o, COLS[19]) ? 'cell-sel' : ''}><input type="date" value={o.proposalDate || ''} onChange={upd(o.id, 'proposalDate')} style={{ width: 108 }} /></td>
                 <td onClick={selectCell(o, COLS[20])} className={isSel(o, COLS[20]) ? 'cell-sel' : ''}><input type="date" value={o.orderDate} onChange={upd(o.id, 'orderDate')} style={{ width: 108 }} /></td>
                 <td onClick={selectCell(o, COLS[21])} className={isSel(o, COLS[21]) ? 'cell-sel' : ''}><input type="date" value={o.invoiceDate} onChange={upd(o.id, 'invoiceDate')} style={{ width: 108 }} /></td>
                 <td onClick={selectCell(o, COLS[22])} className={isSel(o, COLS[22]) ? 'cell-sel' : ''}>
@@ -324,7 +328,7 @@ export default function Tracker() {
                 </td>
                 <td onClick={selectCell(o, COLS[25])} className={isSel(o, COLS[25]) ? 'cell-sel' : ''}><input type="text" value={o.contactPerson} onChange={upd(o.id, 'contactPerson')} style={{ minWidth: 120 }} /></td>
                 <td onClick={selectCell(o, COLS[26])} className={isSel(o, COLS[26]) ? 'cell-sel' : ''}><input type="text" value={o.contactPhone} onChange={upd(o.id, 'contactPhone')} style={{ minWidth: 110 }} /></td>
-                <td onClick={selectCell(o, COLS[27])} className={isSel(o, COLS[27]) ? 'cell-sel' : ''}>{ddMmmYY(o.lastUpdated)}</td>
+                <td onClick={selectCell(o, COLS[27])} className={isSel(o, COLS[27]) ? 'cell-sel' : ''}><input type="date" value={o.lastUpdated || ''} onChange={upd(o.id, 'lastUpdated')} style={{ width: 108 }} /></td>
                 <td onClick={selectCell(o, COLS[28])} className={isSel(o, COLS[28]) ? 'cell-sel' : ''} style={{ textAlign: 'center' }}>
                   <input type="checkbox" checked={!!o.forecast} onChange={upd(o.id, 'forecast')} title="Include for roll-up" />
                 </td>

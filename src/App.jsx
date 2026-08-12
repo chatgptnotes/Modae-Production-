@@ -5,8 +5,8 @@ import { ROLES } from './seed.js'
 import { isAdminRole, isApprover, canSeePage } from './utils.js'
 import { FormulaBar } from './formulabar.jsx'
 import { DrawerHost } from './drawer.jsx'
-import { Icon } from './icons.jsx'
-import { usePwaInstall } from './pwa.js'
+import { Icon, ModaeLogo } from './icons.jsx'
+import { InstallButton } from './install.jsx'
 import { counts } from './kpi.js'
 import { activeBackend } from './filestore.js'
 import Tracker from './pages/Tracker.jsx'
@@ -68,30 +68,6 @@ const BOTTOM = [
   { to: '/approvals', label: 'Approvals', icon: 'checkCircle', page: 'approvals', badge: s => counts(s).pending },
   { to: '/notes', label: 'Notes', icon: 'note', page: 'notes' },
 ]
-
-function InstallButton() {
-  const { canInstall, install, isStandalone, isIOS } = usePwaInstall()
-  const [showIos, setShowIos] = useState(false)
-  if (isStandalone) return null
-  if (canInstall) {
-    return <button className="install" onClick={install}><Icon name="install" size={14} /> Install app</button>
-  }
-  if (isIOS) {
-    return (
-      <>
-        <button className="install" onClick={() => setShowIos(v => !v)}><Icon name="install" size={14} /> Install</button>
-        {showIos && (
-          <div className="modal form-card" style={{ top: 70 }}>
-            <div className="section-title">Add WinTrack to your Home Screen</div>
-            <p style={{ fontSize: 13 }}>In Safari: tap the <b>Share</b> button, then <b>"Add to Home Screen"</b>. WinTrack opens full-screen like an app.</p>
-            <div className="forms-actions"><button onClick={() => setShowIos(false)}>Close</button></div>
-          </div>
-        )}
-      </>
-    )
-  }
-  return null
-}
 
 export default function App() {
   const store = useStore()
@@ -172,7 +148,7 @@ export default function App() {
   const shell = tablet ? (
     <div className={`shell tablet-mode theme-${theme}`} style={{ display: 'block' }}>
       <header className="tablet-bar">
-        <span className="tb-brand" onClick={() => nav('/home')}>WinTrack<span>by ModAE</span></span>
+        <ModaeLogo className="tb-brand" size={24} sub="WinTrack" onClick={() => nav('/home')} />
         <span className="spacer" />
         <button className="tb-bell" onClick={() => nav('/inbox')} title={`${c.newLeads} new leads`}>
           <Icon name="bell" size={15} />
@@ -228,7 +204,7 @@ export default function App() {
       <div className={`nav-backdrop ${navOpen ? 'open' : ''}`} onClick={() => setNavOpen(false)} />
       <aside className={`sidenav ${navOpen ? 'open' : ''}`}>
         <div className="brand" onClick={() => nav('/home')}>
-          WinTrack <span>by ModAE</span>
+          <ModaeLogo size={28} sub="WinTrack" />
         </div>
         <nav className="side-nav">
           {items.map(t => (
@@ -269,6 +245,7 @@ export default function App() {
               <RoleSwitcher />
             </label>
           )}
+          <InstallButton />
           <button className="mode-switch" onClick={() => { store.setViewMode('tablet'); nav('/home') }}>
             <Icon name="tablet" size={15} /> Switch to tablet view
           </button>

@@ -4,30 +4,9 @@ import { canViewCommercial, fmt, ddMmmYY } from '../utils.js'
 import { readiness, isBlocked, commercialGate } from '../gates.js'
 import { Chip, AiBadge, Phase2Badge, ErrBox, WarnBox, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
-
-const PROP_SECTIONS = [
-  'Cover', 'Executive summary', 'Scope of supply', 'Line items / BOQ',
-  'Commercial summary', 'Delivery', 'Assumptions', 'Exclusions', 'Deviations',
-  'Terms', 'Validity', 'Attachments',
-]
-
-// Rule-based commercial-term suggestions (AI-labelled in the UI): payment by
-// customer class, delivery by route, standard validity and warranty.
-function recommendTerms(opp) {
-  const payment = opp.customerStatus === 'Green' ? '30 days credit from invoice'
-    : opp.customerStatus === 'Blue' ? '50% advance, balance on delivery'
-    : opp.customerStatus === 'Amber' ? '100% advance before dispatch'
-    : '100% prepayment only'
-  const delivery = opp.route === 'Spares' ? '6-8 weeks ex-works'
-    : opp.route === 'Service' ? 'Engineer mobilisation within 2 weeks of PO'
-    : '16-20 weeks per milestone schedule'
-  return [
-    { term: 'Payment', ourResponse: payment },
-    { term: 'Delivery', ourResponse: delivery },
-    { term: 'Validity', ourResponse: '30 days from proposal date' },
-    { term: 'Warranty', ourResponse: '18 months from supply' },
-  ]
-}
+// Shared with the printed document, so the checklist and the real document
+// can never list different sections.
+import { PROP_SECTIONS, recommendTerms } from '../proposalDoc.js'
 
 // Proposal builder: section checklist, customer-facing excerpt, and the
 // readiness / approval column that gates 'Submit for approval'.
@@ -54,13 +33,11 @@ export default function PropBuilder({ opp }) {
     a.oppId === opp.id && a.type === 'Final quote release'
     && (a.status === 'Approved' || a.status === 'Approved with conditions'))
 
-  const sectionDone = s => {
-    if (s === 'Line items / BOQ') return (p.bom || []).length > 0
-    if (s === 'Terms') return (p.terms || []).length > 0
-    if (s === 'Assumptions' || s === 'Exclusions') return !!p.assumptions || !!manualDone[s]
-    return !!manualDone[s]
-  }
-  const derived = s => s === 'Line items / BOQ' || s === 'Terms'
+  // Content sections come from the workbook; the rest are auto-drafted by
+  // proposalDoc and the checkbox records that a human has read them.
+  const CONTENT = { 'Line items / BOQ': () => (p.bom || []).length > 0, Terms: () => (p.terms || []).length > 0 }
+  const sectionDone = s => (CONTENT[s] ? CONTENT[s]() : !!manualDone[s])
+  const derived = s => !!CONTENT[s]
 
   const requestForBlocker = bl => store.requestApproval({
     oppId: opp.id, type: bl.approvalType, approver: bl.approver,
@@ -118,15 +95,18 @@ export default function PropBuilder({ opp }) {
         {PROP_SECTIONS.map(s => (
           <div key={s} className="check-row">
             <input type="checkbox" checked={sectionDone(s)} disabled={derived(s)}
-              title={derived(s) ? 'Derived from the workbook content' : 'Mark section drafted'}
+              title={derived(s) ? 'Derived from the workbook content' : 'Auto-drafted — tick once reviewed'}
               onChange={e => setManualDone({ ...manualDone, [s]: e.target.checked })} />
             <span>{s}</span>
             {sectionDone(s)
-              ? <Chip tone="state-Accepted">Ready</Chip>
-              : <Chip tone="grey">Open</Chip>}
+              ? <Chip tone="state-Accepted">{derived(s) ? 'Ready' : 'Reviewed'}</Chip>
+              : <Chip tone="grey">{derived(s) ? 'Open' : 'Auto-drafted'}</Chip>}
           </div>
         ))}
-        <p className="hint" style={{ marginTop: 8 }}>Line items and Terms derive from the workbook; the rest is a drafting checklist.</p>
+        <p className="hint" style={{ marginTop: 8 }}>
+          Line items and Terms derive from the workbook. The rest are auto-drafted into the printed
+          document and editable on the proposal's Document tab — tick each once you have read it.
+        </p>
       </div>
 
       <div className="panel">

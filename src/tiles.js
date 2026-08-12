@@ -60,13 +60,13 @@ export const TABLET_SECTIONS = {
     { title: 'Intelligence', kpis: [], keys: ['aimap', 'analytics', 'customers', 'launcher'] },
   ],
   approver: [
-    { title: 'Decisions & gates', kpis: ['command'], keys: ['approvals', 'po', 'inbox'] },
+    { title: 'Decisions & gates', kpis: ['command'], keys: ['new', 'approvals', 'po', 'inbox'] },
     { title: 'Pipeline health', kpis: ['pipeline', 'winrate', 'turnaround'], keys: ['tracker', 'my', 'status', 'dashboard', 'folders'] },
     { title: 'Intelligence & audit', kpis: [], keys: ['analytics', 'aimap', 'customers', 'audit', 'notes', 'launcher'] },
   ],
   admin: [
-    { title: 'Platform', kpis: ['command'], keys: ['users', 'admin', 'audit'] },
-    { title: 'Operations', kpis: ['pipeline', 'winrate', 'turnaround'], keys: ['inbox', 'approvals', 'po', 'tracker', 'folders'] },
+    { title: 'Platform', kpis: ['command'], keys: ['new', 'users', 'admin', 'audit'] },
+    { title: 'Operations', kpis: ['pipeline', 'winrate', 'turnaround'], keys: ['my', 'inbox', 'approvals', 'po', 'tracker', 'folders'] },
     { title: 'Intelligence', kpis: [], keys: ['aimap', 'analytics', 'dashboard', 'pricelists', 'launcher', 'notes'] },
   ],
 }

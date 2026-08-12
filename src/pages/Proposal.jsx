@@ -4,10 +4,13 @@ import { useStore } from '../store.jsx'
 import { defaultCosting } from '../seed.js'
 import { effectiveRate, unitCostINR, unitSellINR, fmt, exportCSV, canViewCommercial } from '../utils.js'
 import { useFormulaBar } from '../formulabar.jsx'
-import { Icon } from '../icons.jsx'
+import { Icon, ModaeLogo } from '../icons.jsx'
 import { oppBlockers, isBlocked } from '../gates.js'
+import { docModel } from '../proposalDoc.js'
+import DocEditor from '../proposal/DocEditor.jsx'
+import PrintDoc from '../proposal/PrintDoc.jsx'
 
-const TABS = ['Cover Letter', 'Signal List', 'Rack Layout', 'Priced BoQ']
+const TABS = ['Cover Letter', 'Document', 'Signal List', 'Rack Layout', 'Priced BoQ']
 
 // Older saved proposals (and newProposal before this change) used a single
 // `qty`; the real BoQ splits quantities into Qty/Unit × units + Common + Spares.
@@ -16,10 +19,10 @@ function normalize(pr) {
     ...pr,
     units: pr.units || 7,
     costing: { ...defaultCosting, ...pr.costing },
-    terms: pr.terms || [],
+    terms: (pr.terms || []).map(t => ({ key: '', clauseRef: '', ...t })),
     bom: (pr.bom || []).map(l => ({
       itemCategory: '', qtyPerUnit: 0, common: 0, spares: 0, quoted: '',
-      list: 'BNK', currency: 'EUR',
+      list: 'BNK', currency: 'EUR', uom: 'EA', custRef: '',
       ...l,
       ...(l.qtyPerUnit === undefined && l.qty != null ? { common: l.qty } : {}),
     })),
@@ -212,9 +215,26 @@ export default function Proposal() {
 
   const exportBoQ = () => exportCSV(
     `${oppId}_Priced_BoQ.csv`,
-    ['Sl.', 'Item Category', 'Item/Scope Description', 'Proposed Model & Part Number', 'Adders', 'Qty/Unit', 'Common', 'Spares', 'Total Qty', 'Unit Price ₹', 'Total Price ₹', 'Unit Cost ₹', 'Total Cost ₹', `List Price`, 'Currency'],
-    p.bom.map((l, i) => [i + 1, l.itemCategory, l.desc, l.pn, l.adders.join('+'), l.qtyPerUnit, l.common, l.spares, totalQty(l), lineQuoted(l), lineQuoted(l) * totalQty(l), Math.round(lineCost(l)), Math.round(lineCost(l) * totalQty(l)), linePrice(l), l.currency])
+    ['Sl.', 'Item Category', 'Item/Scope Description', 'Proposed Model & Part Number', 'Customer Item Code', 'Adders', 'Qty/Unit', 'Common', 'Spares', 'Total Qty', 'UOM', 'Unit Price ₹', 'Total Price ₹', 'Unit Cost ₹', 'Total Cost ₹', `List Price`, 'Currency'],
+    p.bom.map((l, i) => [i + 1, l.itemCategory, l.desc, l.pn, l.custRef, l.adders.join('+'), l.qtyPerUnit, l.common, l.spares, totalQty(l), l.uom, lineQuoted(l), lineQuoted(l) * totalQty(l), Math.round(lineCost(l)), Math.round(lineCost(l) * totalQty(l)), linePrice(l), l.currency])
   )
+
+  // The customer document: sections auto-drafted from the opportunity and BoQ,
+  // each overridable on the Document tab. Attachments pick up whatever the
+  // intake wizard filed under Customer Specs.
+  const specFiles = ((store.files || {})[oppId] || {})['Customer Specs'] || []
+  const doc = docModel(p, opp, { files: specFiles.map(f => f.name).filter(Boolean) })
+  // An unpriced technical bid, or a role that may not see money, prints the
+  // full document with quantities only — never a document with the BoQ missing.
+  const priced = p.bidType !== 'Unpriced (Technical)' && comm
+
+  if (printing) {
+    return (
+      <div className="page">
+        <PrintDoc p={p} opp={opp} doc={doc} priced={priced} totals={totals} lineQuoted={lineQuoted} />
+      </div>
+    )
+  }
 
   return (
     <div className="page">
@@ -227,7 +247,7 @@ export default function Proposal() {
         <button className="primary" onClick={() => setPrinting(true)}><Icon name="printer" size={13} /> Print / PDF proposal</button>
       </div>
 
-      {opp.status === 'Open' && !printing && (
+      {opp.status === 'Open' && (
         <div className={`gate-strip ${blocked ? 'blocked' : 'ready'}`}>
           {blockers.length === 0 && (
             <div className="gate-row">
@@ -264,10 +284,10 @@ export default function Proposal() {
         </div>
       )}
 
-      {(tab === 'Cover Letter' || printing) && (
+      {tab === 'Cover Letter' && (
         <div className="cover-sheet">
           <div className="cover-head">
-            <span className="brand">‖a·e‖</span>
+            <ModaeLogo className="cover-logo" size={34} />
             <span className="tagline">Your Partners In Achieving Excellence</span>
           </div>
           <div className="cover-meta">
@@ -336,7 +356,12 @@ export default function Proposal() {
         </div>
       )}
 
-      {tab === 'Signal List' && !printing && (
+      {tab === 'Document' && (
+        <DocEditor p={p} opp={opp} save={save} files={specFiles.map(f => f.name).filter(Boolean)}
+          totals={totals} priced={priced} />
+      )}
+
+      {tab === 'Signal List' && (
         <div className="form-card">
           <div className="section-title">Signal List {['Spares', 'Service', 'Training', 'AMC'].includes(opp.oppType) && <span className="hint">(not applicable for spares/service proposals — shown for reference)</span>}</div>
           <table className="sheet">
@@ -362,7 +387,7 @@ export default function Proposal() {
         </div>
       )}
 
-      {tab === 'Rack Layout' && !printing && (
+      {tab === 'Rack Layout' && (
         <div className="form-card">
           <div className="section-title">Rack Layout (engineering output — placeholder in Phase 1)</div>
           <pre style={{ background: '#f6f9fc', border: '1px solid var(--border-soft)', padding: 14, fontSize: 12 }}>
@@ -380,7 +405,7 @@ export default function Proposal() {
         </div>
       )}
 
-      {(tab === 'Priced BoQ' || printing) && comm && (
+      {tab === 'Priced BoQ' && comm && (
         <>
           <div className="factors">
             <table>
@@ -431,7 +456,7 @@ export default function Proposal() {
               <thead>
                 <tr>
                   <th>Sl.</th><th>Item Category</th><th>Item/Scope Description</th><th>Proposed Model &amp; Part Number</th><th>Configurable Adders</th>
-                  <th>Qty/Unit</th><th>Common</th><th>Spares</th><th>Total Qty</th>
+                  <th>Qty/Unit</th><th>Common</th><th>Spares</th><th>Total Qty</th><th>UOM</th>
                   <th>Unit Price ₹</th><th>Total Price ₹</th>
                   <th className="internal">Unit Cost ₹</th><th className="internal">Total Cost ₹</th><th className="internal">Computed ₹</th><th className="internal">List Price</th><th></th>
                 </tr>
@@ -445,7 +470,10 @@ export default function Proposal() {
                       <td className="rowhead">{i + 1}</td>
                       <td><input value={l.itemCategory} onChange={updLine(i, 'itemCategory', false)} placeholder="e.g. Proximity Transducer" style={{ minWidth: 140 }} /></td>
                       <td><input value={l.desc} onChange={updLine(i, 'desc', false)} style={{ minWidth: 180 }} /></td>
-                      <td>{l.pn}</td>
+                      <td>
+                        {l.pn || <span className="hint">—</span>}
+                        {l.custRef && <div className="hint" title="Customer's own item code from the tender">{l.custRef}</div>}
+                      </td>
                       <td>
                         {(part?.adders || []).length
                           ? part.adders.map(a => (
@@ -460,6 +488,7 @@ export default function Proposal() {
                       <td className="num"><input type="number" min="0" value={l.common || ''} onChange={updLine(i, 'common')} style={{ width: 52, textAlign: 'right' }} placeholder="-" /></td>
                       <td className="num"><input type="number" min="0" value={l.spares || ''} onChange={updLine(i, 'spares')} style={{ width: 52, textAlign: 'right' }} placeholder="-" /></td>
                       <td className="num"><b>{q}</b></td>
+                      <td>{l.uom}</td>
                       <td className="num"><input type="number" min="0" value={l.quoted} onChange={updLine(i, 'quoted', false)} placeholder={fmt(Math.round(lineComputed(l)))} style={{ width: 90, textAlign: 'right' }} title="Customer-facing (target) price — blank = computed price" /></td>
                       <td className="num">₹ {fmt(lineQuoted(l) * q)}</td>
                       <td className="num internal">₹ {fmt(lineCost(l))}</td>
@@ -470,12 +499,12 @@ export default function Proposal() {
                     </tr>
                   )
                 })}
-                {!p.bom.length && <tr><td colSpan={16} className="hint">No lines yet — add parts from the price list above. Quantities work like the sheet: Total Qty = Qty/Unit × {units} units + Common + Spares.</td></tr>}
+                {!p.bom.length && <tr><td colSpan={17} className="hint">No lines yet — add parts from the price list above. Quantities work like the sheet: Total Qty = Qty/Unit × {units} units + Common + Spares.</td></tr>}
               </tbody>
               {p.bom.length > 0 && (
                 <tfoot>
                   <tr>
-                    <td colSpan={9}>Totals</td>
+                    <td colSpan={10}>Totals</td>
                     <td></td>
                     <td className="num">₹ {fmt(totals.target)}</td>
                     <td className="internal"></td>

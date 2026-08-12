@@ -60,10 +60,39 @@ const PATHS = {
   moon: <path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11Z" />,
   trendUp: <><path d="M3.5 17 10 10.5l3.5 3.5L20.5 7" /><path d="M15.5 7h5v5" /></>,
   trendDown: <><path d="M3.5 7 10 13.5l3.5-3.5L20.5 17" /><path d="M15.5 17h5v-5" /></>,
+  chevronUp: <path d="m5.5 15 6.5-6.5 6.5 6.5" />,
+  chevronDown: <path d="m5.5 9 6.5 6.5L18.5 9" />,
 }
 
-// Geometric placeholder wordmark for the Home header — swap for the official
-// ModAE asset when brand guidelines arrive.
+// The Modae mark — rounded tile, "M" stroke, teal accent dot. Single source for
+// every logo in the app (sidebar, tablet bar, login, letterhead, home header).
+export function ModaeMark({ size = 30, tile = true, className = '' }) {
+  return (
+    <svg className={`modae-mark ${className}`} width={size} height={size} viewBox="0 0 32 32"
+      fill="none" aria-hidden="true">
+      {tile && <rect x="1" y="1" width="30" height="30" rx="8" fill="var(--bg-sidebar)" />}
+      <path d="M8 22V11l4.4 6.2L16.8 11v11" stroke="var(--primary-accent)" strokeWidth="2.4"
+        strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="22.5" cy="20.2" r="2.6" stroke="var(--teal)" strokeWidth="2.4" />
+    </svg>
+  )
+}
+
+// Mark + wordmark lockup. `sub` prints a small caption under the word.
+export function ModaeLogo({ size = 30, sub = '', tile = true, className = '', onClick }) {
+  return (
+    <span className={`modae-logo ${className}`} aria-label="Modae" onClick={onClick}>
+      <ModaeMark size={size} tile={tile} />
+      <span className="ml-text">
+        <b>Modae</b>
+        {sub && <i>{sub}</i>}
+      </span>
+    </span>
+  )
+}
+
+// Home-header wordmark — deliberately kept as-is; the Home page uses this
+// geometric mark rather than the ModaeLogo lockup.
 export function BrandMark({ height = 30, className = '' }) {
   return (
     <span className={`brandmark ${className}`} aria-label="ModAE">

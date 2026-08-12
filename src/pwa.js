@@ -6,48 +6,63 @@ export function registerSW() {
   }
 }
 
-export function usePwaInstall() {
-  const [promptEvent, setPromptEvent] = React.useState(null)
-  const [isStandalone, setIsStandalone] = React.useState(() => {
-    try {
-      return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true
-    } catch (e) {
-      return false
-    }
+// `beforeinstallprompt` fires once per page load, so the event cannot live in
+// component state — the login banner would swallow it and the post-login
+// button, mounted later, would never know the app is installable. Keep it in
+// one module-level slot every consumer subscribes to.
+let deferredPrompt = null
+let installed = false
+const subscribers = new Set()
+
+function broadcast() { subscribers.forEach(fn => fn()) }
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault()
+    deferredPrompt = e
+    broadcast()
   })
+  window.addEventListener('appinstalled', () => {
+    deferredPrompt = null
+    installed = true
+    broadcast()
+  })
+}
+
+function standalone() {
+  try {
+    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true
+  } catch (e) {
+    return false
+  }
+}
+
+export function usePwaInstall() {
+  const [, bump] = React.useReducer(n => n + 1, 0)
 
   React.useEffect(() => {
-    function onBeforeInstall(e) {
-      e.preventDefault()
-      setPromptEvent(e)
-    }
-    function onInstalled() {
-      setPromptEvent(null)
-      setIsStandalone(true)
-    }
-    window.addEventListener('beforeinstallprompt', onBeforeInstall)
-    window.addEventListener('appinstalled', onInstalled)
-    return () => {
-      window.removeEventListener('beforeinstallprompt', onBeforeInstall)
-      window.removeEventListener('appinstalled', onInstalled)
-    }
+    subscribers.add(bump)
+    return () => { subscribers.delete(bump) }
   }, [])
 
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) ||
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
 
   const install = React.useCallback(async () => {
-    if (!promptEvent) return false
+    if (!deferredPrompt) return false
+    const e = deferredPrompt
     try {
-      promptEvent.prompt()
-      const choice = await promptEvent.userChoice
-      setPromptEvent(null)
+      e.prompt()
+      const choice = await e.userChoice
+      deferredPrompt = null
+      broadcast()
       return !!choice && choice.outcome === 'accepted'
-    } catch (e) {
-      setPromptEvent(null)
+    } catch (err) {
+      deferredPrompt = null
+      broadcast()
       return false
     }
-  }, [promptEvent])
+  }, [])
 
-  return { canInstall: !!promptEvent, install, isStandalone, isIOS }
+  return { canInstall: !!deferredPrompt, install, isStandalone: installed || standalone(), isIOS }
 }

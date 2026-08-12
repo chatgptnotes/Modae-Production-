@@ -40,6 +40,22 @@ export const isApprover = role => role === 'LJS' || role === 'AH' || isAdminRole
 // Page-level permission from the PERMS matrix (unknown role sees nothing).
 export const canSeePage = (role, page) => (PERMS[role] || []).includes(page)
 
+// Does a tender's spelled-out buyer name refer to a customer we already hold
+// under a short name? Compares the legal-suffix-stripped forms, and the long
+// name's acronym ("Maharashtra State Power Generation Company Ltd" → MSPGCL).
+const LEGAL_SUFFIX = /\b(pvt|private|ltd|limited|co|company|corporation|corp|inc|llp|plc)\b\.?/g
+const stripName = s => String(s || '').toLowerCase().replace(LEGAL_SUFFIX, '').replace(/[^a-z0-9]/g, '')
+const acronym = s => String(s || '').toLowerCase().replace(/[^a-z\s]/g, ' ')
+  .split(/\s+/).filter(Boolean).map(w => w[0]).join('')
+
+export function sameCustomer(a, b) {
+  const [sa, sb] = [stripName(a), stripName(b)]
+  if (!sa || !sb) return false
+  if (sa === sb) return true
+  // An acronym is only convincing at 3+ letters — "GE" would match far too much.
+  return (sa.length >= 3 && sa === acronym(b)) || (sb.length >= 3 && sb === acronym(a))
+}
+
 export function ageDays(dateStr) {
   if (!dateStr) return null
   const d = Math.round((Date.now() - new Date(dateStr + 'T00:00:00').getTime()) / 86400000)

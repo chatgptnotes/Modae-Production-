@@ -2,7 +2,8 @@ import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS, DEMO_PASSWORD } from '../seed.js'
 import { WarnBox } from '../ui.jsx'
-import { Icon } from '../icons.jsx'
+import { Icon, ModaeLogo } from '../icons.jsx'
+import { InstallBanner } from '../install.jsx'
 
 // Roles a new registrant may request: the sales owners plus the technical
 // reviewer. Approvers/admin accounts are provisioned by a super admin.
@@ -54,8 +55,9 @@ export default function Login() {
   return (
     <div className="login-bg">
       <div className="login-card">
-        <h1>WinTrack</h1>
-        <div className="sub">by ModAE</div>
+        <ModaeLogo className="login-logo" size={38} sub="WinTrack" />
+
+        <InstallBanner />
 
         {ok && <div className="okbox">{ok}</div>}
         {err && <div className="err-text">{err}</div>}

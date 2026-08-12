@@ -10,11 +10,10 @@ const SR = typeof window !== 'undefined'
 
 // Stage keywords, checked in order — first match wins. Multi-word phrases
 // first so "firm bid" is not shadowed by the bare "bid"/"lead" words.
-// STAGES has no Negotiation step, so negotiate/negotiation maps to Firm Bid.
 const STAGE_WORDS = [
   ['firm bid', 'Firm Bid'],
-  ['negotiation', 'Firm Bid'],
-  ['negotiate', 'Firm Bid'],
+  ['negotiation', 'Negotiation'],
+  ['negotiate', 'Negotiation'],
   ['budgetary', 'Budgetary'],
   ['won', 'Won'],
   ['lost', 'Lost'],

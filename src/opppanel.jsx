@@ -249,6 +249,7 @@ export default function OppPanel({ oppId }) {
           <Field label="Proposal Date"><div className="ro">{mmmYY(opp.proposalDate) || '—'}</div></Field>
           <Field label="Order Date"><input type="date" value={opp.orderDate} onChange={upd('orderDate')} /></Field>
           <Field label="Invoice Date"><input type="date" value={opp.invoiceDate} onChange={upd('invoiceDate')} /></Field>
+          <Field label="Last Updated"><div className="ro">{ddMmmYY(opp.lastUpdated)}</div></Field>
         </div>
 
         <div className="fgroup">Status &amp; Stage</div>
@@ -263,15 +264,15 @@ export default function OppPanel({ oppId }) {
               {(opp.status === 'Closed' ? STAGES : OPEN_STAGES.concat(['Won', 'Lost'])).map(s => <option key={s}>{s}</option>)}
             </select>
           </Field>
-          {opp.status === 'Closed' && (
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label>Closed Reason {!opp.closedReason && <span className="err-text">— required</span>}</label>
-              <select value={opp.closedReason} onChange={upd('closedReason')}>
-                <option value="">— required —</option>
-                {CLOSE_REASONS.map(r => <option key={r}>{r}</option>)}
-              </select>
-            </div>
-          )}
+          {/* Always rendered — the drawer mirrors every sheet column, so an open
+              opp shows the field disabled rather than dropping it entirely. */}
+          <div style={{ gridColumn: '1 / -1' }}>
+            <label>Closed Reason {opp.status === 'Closed' && !opp.closedReason && <span className="err-text">— required</span>}</label>
+            <select value={opp.closedReason} onChange={upd('closedReason')} disabled={opp.status !== 'Closed'}>
+              <option value="">{opp.status === 'Closed' ? '— required —' : '—'}</option>
+              {CLOSE_REASONS.map(r => <option key={r}>{r}</option>)}
+            </select>
+          </div>
         </div>
 
         <div className="fgroup">Contact</div>

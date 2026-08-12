@@ -7,7 +7,7 @@ import {
   seedRateSheet, seedCustomers, seedUsers, seedLeads, seedApprovals,
   seedConfig, seedKyc, seedSales, seedSparesLines, seedSparesAlternatives,
   seedRateSheets, seedSvcEstimates, seedClarifications, seedHandover,
-  seedNotes, seedAiLeads, seedJointApprovals,
+  seedNotes, seedAiLeads, seedJointApprovals, seedCatalogRev,
   buildPoCompare, buildHandover, milestoneForStage, routeForType,
   ROLES, SUBFOLDERS, newProposal,
 } from './seed.js'
@@ -71,6 +71,42 @@ function migrate(s) {
   if (s.tabletTheme !== 'dark' && s.tabletTheme !== 'light') s.tabletTheme = 'dark'
   if (!s.spSync) s.spSync = {}
   if (!s.auth) s.auth = { user: null }
+  // Price lists added to the seed after a state was saved (e.g. Meggitt) land
+  // by name — existing lists are the user's data and are never overwritten.
+  if (!s.priceLists) s.priceLists = seedPriceLists
+  for (const [name, pl] of Object.entries(seedPriceLists)) {
+    if (!s.priceLists[name]) s.priceLists = { ...s.priceLists, [name]: pl }
+  }
+  // Catalogue additions — new parts in a list that already exists, new
+  // rate-sheet roles, new seed ad-hoc quotes — fold in by identity (part
+  // number / role / pn+date). Rows already present are left exactly as they
+  // are; nothing is ever removed or repriced.
+  //
+  // Deliberately NOT gated on a revision counter: migrate() also runs on the
+  // Supabase hydrate/focus paths, where a saved state carrying an old
+  // catalogue arrives alongside an already-bumped counter and the additions
+  // would be skipped forever. Part lists and the rate sheet are read-only
+  // reference data (nothing in the app mutates them), so an unconditional,
+  // idempotent union is both safe and self-healing.
+  const mergedLists = { ...s.priceLists }
+  for (const [name, pl] of Object.entries(seedPriceLists)) {
+    const have = mergedLists[name]
+    if (!have || !Array.isArray(have.parts)) continue
+    const known = new Set(have.parts.map(p => p.pn))
+    const added = pl.parts.filter(p => !known.has(p.pn))
+    if (added.length) mergedLists[name] = { ...have, parts: [...have.parts, ...added] }
+  }
+  s.priceLists = mergedLists
+  if (Array.isArray(s.rateSheet)) {
+    const roles = new Set(s.rateSheet.map(r => r.role))
+    s.rateSheet = [...s.rateSheet, ...seedRateSheet.filter(r => !roles.has(r.role))]
+  }
+  if (Array.isArray(s.adhocParts)) {
+    const akey = a => `${a.pn}|${a.date}`
+    const known = new Set(s.adhocParts.map(akey))
+    s.adhocParts = [...s.adhocParts, ...seedAdhocParts.filter(a => !known.has(akey(a)))]
+  }
+  s.catalogRev = seedCatalogRev
   // AI-shaped leads + the AP-1 joint gate land once, without disturbing
   // whatever the user already has in the inbox.
   s.leads = [...seedAiLeads.filter(l => !s.leads.some(x => x.id === l.id)), ...s.leads]
@@ -317,7 +353,9 @@ export function StoreProvider({ children }) {
       setState(s => withAudit({
         ...s,
         opportunities: s.opportunities.map(o =>
-          o.id === id ? { ...o, ...patch, lastUpdated: today } : o),
+          // An explicit lastUpdated in the patch (hand-edited in the tracker)
+          // wins over the auto-stamp; every other edit bumps it to today.
+          o.id === id ? { ...o, ...patch, lastUpdated: patch.lastUpdated ?? today } : o),
       }, 'Opportunity updated', id, Object.keys(patch).join(', ')))
       if (before) {
         const after = { ...before, ...patch }

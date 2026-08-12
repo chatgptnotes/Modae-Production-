@@ -112,6 +112,16 @@ export const MODAE_STANDARD_TERMS = [
     judge: t => (/after|receipt of material|installation|commissioning/i.test(t) || firstDays(t) > 30)
       ? deviate('ModAE standard: 30 days from invoice / advance preferred. 100% post receipt + installation is a deviation — needs approval')
       : comply('Acceptable') },
+  // Placed after `payment` so it cannot steal the payment-terms clause. On a
+  // tender where we raise deviations this is the clause that decides whether
+  // the bid survives, so it earns a row of its own rather than sitting silently
+  // in "other clauses".
+  { key: 'devreject', label: 'Deviation / Rejection Risk',
+    match: /deviation in your offer|liable for rejection/i,
+    standard: 'Deviations are declared up front and cleared with the buyer before bid submission',
+    judge: () => ({ status: 'Comply', needsReview: true,
+      ourResponse: 'All deviations are declared in the Deviations section of this offer; we request that they be '
+        + 'considered as standard for imported instrumentation, and are open to discussion prior to award' }) },
   { key: 'delivery', label: 'Delivery Period', match: /delivery period|delivery/i,
     standard: '10–12 weeks ex-works for imported sensor items',
     judge: t => (minDays(t) > 0 && minDays(t) < 56)
@@ -419,6 +429,20 @@ export function matchParts(items, allParts) {
         }
       }
     }
+    // Tier 4: the tender line gives a specification but no part number (common
+    // for cables and accessories). Score price-list parts by how many of their
+    // `keywords` appear in the description; needs ≥2 hits and a strictly best
+    // candidate, and the UI presents it as a suggestion to confirm, not a match.
+    if (!match && !item.pn) {
+      const d = String(item.description || '').toLowerCase()
+      const scored = allParts
+        .map(p => ({ p, n: (p.keywords || []).filter(k => d.includes(k)).length }))
+        .filter(x => x.n >= 2)
+        .sort((a, b) => b.n - a.n)
+      if (scored.length && (scored.length === 1 || scored[0].n > scored[1].n)) {
+        match = { ...scored[0].p, tier: 4 }
+      }
+    }
     return { item, match }
   })
 }
@@ -459,8 +483,14 @@ export function buildProposal(oppId, opp, parse, matched) {
     signals: p.signals.map(s => ({ ...s, perUnit: 0, units: 0 })),
     bom: matched.map(({ item, match }) => ({
       itemCategory: itemCategory(item.description),
-      pn: item.pn || item.sapCode,
-      desc: item.description.length > 120 ? item.description.slice(0, 119) + '…' : item.description,
+      // The customer's SAP code is their reference, not a part number we offer —
+      // it gets its own column rather than the "proposed model" one.
+      pn: item.pn || match?.pn || '',
+      custRef: item.sapCode,
+      // Never truncated: in a tender BoQ the full tendered wording is the
+      // evidence that what we offer is what was asked for.
+      desc: item.description,
+      uom: item.uom || 'EA',
       listPrice: match ? match.price : 0,
       adders: [],
       qtyPerUnit: 0, common: item.qty, spares: 0, quoted: '',
@@ -468,6 +498,7 @@ export function buildProposal(oppId, opp, parse, matched) {
       currency: match ? match.currency : 'INR',
     })),
     terms: parse.compliance.map(c => ({
+      key: c.key, clauseRef: c.clauseRef,
       term: c.label, customerAsk: c.customerAsk, ourResponse: c.ourResponse, status: c.status,
     })),
   }

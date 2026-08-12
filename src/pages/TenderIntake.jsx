@@ -4,7 +4,7 @@ import { useStore, nextOppId } from '../store.jsx'
 import { CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS } from '../seed.js'
 import { extractPdfText, parseTender, matchParts, buildProposal, buildOpportunityDraft } from '../tenderParse.js'
 import { uploadOppFile } from '../filestore.js'
-import { fmt } from '../utils.js'
+import { fmt, sameCustomer } from '../utils.js'
 import { Icon } from '../icons.jsx'
 
 const STAGES_MSG = [
@@ -34,6 +34,7 @@ export default function TenderIntake() {
   const [include, setInclude] = useState([])
   const [comp, setComp] = useState([])           // editable compliance rows
   const [draft, setDraft] = useState(null)       // editable opportunity fields
+  const [rfqNumber, setRfqNumber] = useState('') // tender ref — often absent from the document itself
   const [replaceArmed, setReplaceArmed] = useState(false)
   const [warn, setWarn] = useState('')
   const [doneId, setDoneId] = useState('')
@@ -73,6 +74,7 @@ export default function TenderIntake() {
       setInclude(p.items.map(() => true))
       setComp(p.compliance.map(c => ({ ...c })))
       setDraft(buildOpportunityDraft(p))
+      setRfqNumber(p.header.sectionRef)
       setReplaceArmed(false)
       setStep('review')
     } catch (e) {
@@ -115,11 +117,19 @@ export default function TenderIntake() {
       id = nextOppId(store.opportunities, draft.owner)
       const maxSl = Math.max(0, ...store.opportunities.map(o => o.sl || 0))
       const sellTo = draft.sellTo.trim()
-      const known = store.customers.find(c => c.name.toLowerCase() === sellTo.toLowerCase())
+      // Tenders spell the buyer out in full ("MAHARASHTRA STATE POWER GENERATION
+      // COMPANY LTD.") where the customer master holds the short name (MSPGCL) —
+      // match on the stripped form too, so we attach to the existing (rated)
+      // customer instead of silently creating a Blue duplicate.
+      const known = store.customers.find(c =>
+        c.name.toLowerCase() === sellTo.toLowerCase() || sameCustomer(c.name, sellTo))
       if (!known) store.addCustomer({ name: sellTo, category: draft.category, status: 'Blue', kyc: 'Pending', payment: '—' })
       opp = {
         sl: maxSl + 1, id,
-        sellTo, category: draft.category, location: draft.location,
+        // Use the master's spelling so the tracker, folders and KYC all key off
+        // one customer rather than two spellings of the same one.
+        sellTo: known ? known.name : sellTo,
+        category: draft.category, location: draft.location,
         customerStatus: known ? known.status : 'Blue',
         eucName: draft.eucName, eucLocation: draft.eucLocation, oppName: draft.oppName,
         owner: draft.owner, oppType: draft.oppType, bu: draft.bu, segment: draft.segment, product: draft.product,
@@ -159,7 +169,11 @@ export default function TenderIntake() {
       }
     }
 
-    store.saveProposal(id, buildProposal(id, opp, { ...parse, compliance: comp }, inc))
+    store.saveProposal(id, buildProposal(id, opp, {
+      ...parse,
+      header: { ...parse.header, sectionRef: rfqNumber.trim() || parse.header.sectionRef },
+      compliance: comp,
+    }, inc))
     setDoneStats({ lines: inc.length, adhoc: inc.filter(x => !x.match).length })
     setDoneId(id)
     setStep('done')
@@ -244,6 +258,16 @@ export default function TenderIntake() {
             {parse.missing.length > 0 && <> Missing from the document: <b>{parse.missing.join(', ')}</b>.</>}
           </div>
 
+          <div className="form-card" style={{ maxWidth: 900, marginBottom: 14 }}>
+            <div className="section-title">Tender reference</div>
+            <div style={{ maxWidth: 420 }}>
+              <label>Tender / RFQ number {!parse.header.sectionRef.match(/\d/) && <span className="hint">(not stated in the document)</span>}</label>
+              <input value={rfqNumber} onChange={e => setRfqNumber(e.target.value)}
+                placeholder="e.g. BTPS/CHP/2026/0417" />
+            </div>
+            <div className="costing-note">Printed on the proposal cover as the reference we are bidding against.</div>
+          </div>
+
           {target === 'new' ? (
             <div className="form-card" style={{ maxWidth: 900, marginBottom: 14 }}>
               <div className="section-title">Opportunity <ConfBadge v={parse.confidence.header} /></div>
@@ -305,7 +329,12 @@ export default function TenderIntake() {
                     <td className="num"><input type="number" min="0" value={it.qty} onChange={setItem(i, 'qty', true)} style={{ width: 60, textAlign: 'right' }} /></td>
                     <td>
                       {matched[i]?.match
-                        ? <span className="evidence ok">{matched[i].match.list} · {matched[i].match.currency} {fmt(matched[i].match.price)} (price list)</span>
+                        ? matched[i].match.tier === 4
+                          ? <span className="evidence warn">
+                              {matched[i].match.list} · {matched[i].match.currency} {fmt(matched[i].match.price)} — {matched[i].match.pn}
+                              {' '}(suggested from the description — confirm)
+                            </span>
+                          : <span className="evidence ok">{matched[i].match.list} · {matched[i].match.currency} {fmt(matched[i].match.price)} (price list)</span>
                         : <span className="evidence warn">No price — ad-hoc part will be created (supplier quote needed)</span>}
                     </td>
                     <td><ConfBadge v={it.confidence} /></td>
