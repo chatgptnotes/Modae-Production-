@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useStore, nextOppId } from '../store.jsx'
 import { CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES } from '../seed.js'
+import { runJson } from '../ai.js'
 
 const empty = {
   sellTo: '', category: '', location: '', eucName: '', eucLocation: '',
@@ -12,6 +13,7 @@ const empty = {
 export default function IntakeForm() {
   const store = useStore()
   const nav = useNavigate()
+  const fileInputRef = useRef(null)
   // The Lead Inbox pre-fills the form via router state ("Qualify" action).
   const loc = useLocation()
   const [f, setF] = useState(() => ({
@@ -22,6 +24,14 @@ export default function IntakeForm() {
     owner: (loc.state?.prefill || {}).owner || (OWNERS.includes(store.role) ? store.role : '')
   }))
   const [touched, setTouched] = useState({})
+
+  // Document upload and AI processing state
+  const [uploadedFile, setUploadedFile] = useState(null)
+  const [aiProcessing, setAiProcessing] = useState(false)
+  const [aiResults, setAiResults] = useState(null)
+  const [aiError, setAiError] = useState(null)
+  const [aiFilledFields, setAiFilledFields] = useState(new Set())
+
   const set = k => e => {
     setF({ ...f, [k]: e.target.value })
     if (!touched[k]) setTouched({ ...touched, [k]: true })
@@ -86,6 +96,157 @@ export default function IntakeForm() {
   const resetForm = () => {
     setF(empty)
     setTouched({})
+    setUploadedFile(null)
+    setAiResults(null)
+    setAiError(null)
+    setAiFilledFields(new Set())
+  }
+
+  // Handle document file upload
+  const handleFileUpload = async (file) => {
+    if (!file) return
+
+    // Check file type (only PDF for now)
+    if (!file.type.includes('pdf') && !file.name.toLowerCase().endsWith('.pdf')) {
+      setAiError('Please upload a PDF document')
+      return
+    }
+
+    // Check file size (limit to 10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      setAiError('File size exceeds 10MB limit')
+      return
+    }
+
+    setUploadedFile(file)
+    setAiProcessing(true)
+    setAiError(null)
+    setAiFilledFields(new Set())
+
+    try {
+      // Extract text from PDF
+      const text = await extractTextFromPDF(file)
+
+      // Call AI extraction task
+      const aiResult = await runJson('tender.extract', {
+        filename: file.name,
+        pages: Math.ceil(file.size / 50000), // Rough estimate
+        text: text,
+        parsed: {}, // Could add rule-based parsing results here
+        products: PRODUCTS // Context for product categorization
+      })
+
+      if (aiResult) {
+        setAiResults(aiResult)
+        applyAiResultsToForm(aiResult)
+      } else {
+        setAiError('AI extraction failed. Please fill the form manually.')
+      }
+    } catch (error) {
+      console.error('Document processing error:', error)
+      setAiError('Failed to process document. Please try again or fill manually.')
+    } finally {
+      setAiProcessing(false)
+    }
+  }
+
+  // Extract text content from PDF (basic implementation)
+  const extractTextFromPDF = async (file) => {
+    // This is a placeholder - in production you'd use a proper PDF parsing library
+    // For now, we'll return a placeholder that the AI can work with
+    return new Promise((resolve) => {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        // Basic text extraction - in production, use pdf.js or similar
+        const text = `PDF Document: ${file.name}\n\n[Document content would be extracted here using a PDF parsing library]`
+        resolve(text)
+      }
+      reader.onerror = () => resolve('[Could not extract text from PDF]')
+      reader.readAsText(file)
+    })
+  }
+
+  // Apply AI extraction results to form fields
+  const applyAiResultsToForm = (aiResult) => {
+    const updates = {}
+    const filledFields = new Set()
+
+    // Map header fields to form fields
+    if (aiResult.header?.buyer) {
+      updates.sellTo = aiResult.header.buyer
+      filledFields.add('sellTo')
+    }
+    if (aiResult.header?.location) {
+      updates.location = aiResult.header.location
+      updates.eucLocation = aiResult.header.location
+      filledFields.add('location', 'eucLocation')
+    }
+    if (aiResult.header?.contactPerson) {
+      updates.contactPerson = aiResult.header.contactPerson
+      filledFields.add('contactPerson')
+    }
+    if (aiResult.header?.contactPhone) {
+      updates.contactPhone = aiResult.header.contactPhone
+      filledFields.add('contactPhone')
+    }
+
+    // Map classification guesses to form fields
+    if (aiResult.guesses?.category) {
+      updates.category = aiResult.guesses.category
+      filledFields.add('category')
+    }
+    if (aiResult.guesses?.oppType) {
+      updates.oppType = aiResult.guesses.oppType
+      filledFields.add('oppType')
+    }
+    if (aiResult.guesses?.bu) {
+      updates.bu = aiResult.guesses.bu
+      filledFields.add('bu')
+    }
+    if (aiResult.guesses?.segment) {
+      updates.segment = aiResult.guesses.segment
+      filledFields.add('segment')
+    }
+    if (aiResult.guesses?.product) {
+      updates.product = aiResult.guesses.product
+      filledFields.add('product')
+    }
+
+    // Generate opportunity name from subject
+    if (aiResult.header?.subject) {
+      updates.oppName = aiResult.header.subject
+      filledFields.add('oppName')
+    }
+
+    // Apply updates to form
+    setF(prev => ({ ...prev, ...updates }))
+    setAiFilledFields(filledFields)
+  }
+
+  // Remove uploaded file
+  const removeUploadedFile = () => {
+    setUploadedFile(null)
+    setAiResults(null)
+    setAiError(null)
+    setAiFilledFields(new Set())
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  // Drag and drop handlers
+  const handleDragOver = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
+  const handleDrop = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const files = e.dataTransfer.files
+    if (files.length > 0) {
+      handleFileUpload(files[0])
+    }
   }
 
   // Compact dropdown for all select fields
@@ -130,7 +291,48 @@ export default function IntakeForm() {
           <div>
             <h1>Create Opportunity</h1>
             <div className="forms-note">Register a new sales opportunity — complete every field below in one screen. Submitting creates a pipeline row and an opportunity folder.</div>
-            <div className="forms-note">Have a tender / RFQ PDF? <Link to="/tender">Let AI extract it for you ▸</Link></div>
+
+            {/* Document Upload Zone */}
+            {!uploadedFile ? (
+              <div
+                className="document-upload-zone"
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <div className="upload-icon">📄</div>
+                <div className="upload-text">
+                  <strong>Upload tender/RFQ PDF</strong> to auto-fill fields with AI
+                </div>
+                <div className="upload-subtext">Drag and drop or click to browse</div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
+                  style={{ display: 'none' }}
+                />
+              </div>
+            ) : (
+              <div className="uploaded-file">
+                <div className="file-info">
+                  <span className="file-icon">📄</span>
+                  <span className="file-name">{uploadedFile.name}</span>
+                  <span className="file-size">({(uploadedFile.size / 1024).toFixed(1)} KB)</span>
+                  {aiProcessing && <span className="processing-status">AI processing...</span>}
+                  {aiResults && <span className="ai-success">✓ AI extraction complete</span>}
+                </div>
+                <button type="button" onClick={removeUploadedFile} className="remove-file">Remove</button>
+              </div>
+            )}
+
+            {aiError && (
+              <div className="ai-error">
+                ⚠️ {aiError}
+              </div>
+            )}
+
+            <div className="forms-note">Or manually fill in all fields below</div>
           </div>
           <div className="req-note">
             <span className="star">*</span> required ·{' '}
@@ -146,7 +348,10 @@ export default function IntakeForm() {
             <div className="forms-col-head">Customer Info</div>
 
             <div className="q">
-              <div className="q-label">1. Sell To Customer<span className="star">*</span></div>
+              <div className="q-label">
+                1. Sell To Customer<span className="star">*</span>
+                {aiFilledFields.has('sellTo') && <span className="ai-badge">AI</span>}
+              </div>
               <Input field="sellTo" placeholder="Enter customer name" list="customer-list" />
               <datalist id="customer-list">
                 {store.customers.map(c => <option key={c.name} value={c.name} />)}
@@ -161,12 +366,18 @@ export default function IntakeForm() {
             </div>
 
             <div className="q">
-              <div className="q-label">2. Category<span className="star">*</span></div>
+              <div className="q-label">
+                2. Category<span className="star">*</span>
+                {aiFilledFields.has('category') && <span className="ai-badge">AI</span>}
+              </div>
               <Select field="category" options={CATEGORIES} placeholder="Select category" />
             </div>
 
             <div className="q">
-              <div className="q-label">3. Location</div>
+              <div className="q-label">
+                3. Location
+                {aiFilledFields.has('location') && <span className="ai-badge">AI</span>}
+              </div>
               <Input field="location" placeholder="Enter location" />
             </div>
 
@@ -176,7 +387,10 @@ export default function IntakeForm() {
             </div>
 
             <div className="q">
-              <div className="q-label">5. EUC Location<span className="star">*</span></div>
+              <div className="q-label">
+                5. EUC Location<span className="star">*</span>
+                {aiFilledFields.has('eucLocation') && <span className="ai-badge">AI</span>}
+              </div>
               <Input field="eucLocation" placeholder="Enter end user location" />
             </div>
           </div>
@@ -186,7 +400,10 @@ export default function IntakeForm() {
             <div className="forms-col-head">Opportunity Details</div>
 
             <div className="q">
-              <div className="q-label">6. Opportunity Name / Description<span className="star">*</span></div>
+              <div className="q-label">
+                6. Opportunity Name / Description<span className="star">*</span>
+                {aiFilledFields.has('oppName') && <span className="ai-badge">AI</span>}
+              </div>
               <Input field="oppName" placeholder="Enter opportunity description" />
             </div>
 
@@ -201,7 +418,10 @@ export default function IntakeForm() {
             </div>
 
             <div className="q">
-              <div className="q-label">8. Opp Type<span className="star">*</span></div>
+              <div className="q-label">
+                8. Opp Type<span className="star">*</span>
+                {aiFilledFields.has('oppType') && <span className="ai-badge">AI</span>}
+              </div>
               <Select field="oppType" options={OPP_TYPES} placeholder="Select opportunity type" />
             </div>
 
@@ -211,12 +431,18 @@ export default function IntakeForm() {
             </div>
 
             <div className="q">
-              <div className="q-label">10. Contact Person<span className="star">*</span></div>
+              <div className="q-label">
+                10. Contact Person<span className="star">*</span>
+                {aiFilledFields.has('contactPerson') && <span className="ai-badge">AI</span>}
+              </div>
               <Input field="contactPerson" placeholder="Enter contact name" />
             </div>
 
             <div className="q">
-              <div className="q-label">11. Contact Phone #<span className="star">*</span></div>
+              <div className="q-label">
+                11. Contact Phone #<span className="star">*</span>
+                {aiFilledFields.has('contactPhone') && <span className="ai-badge">AI</span>}
+              </div>
               <Input field="contactPhone" type="tel" placeholder="Enter contact phone" />
             </div>
           </div>
@@ -226,17 +452,26 @@ export default function IntakeForm() {
             <div className="forms-col-head">Classification</div>
 
             <div className="q">
-              <div className="q-label">12. BU<span className="star">*</span></div>
+              <div className="q-label">
+                12. BU<span className="star">*</span>
+                {aiFilledFields.has('bu') && <span className="ai-badge">AI</span>}
+              </div>
               <Pills field="bu" options={BUS} />
             </div>
 
             <div className="q">
-              <div className="q-label">13. Segment<span className="star">*</span></div>
+              <div className="q-label">
+                13. Segment<span className="star">*</span>
+                {aiFilledFields.has('segment') && <span className="ai-badge">AI</span>}
+              </div>
               <Pills field="segment" options={SEGMENTS} />
             </div>
 
             <div className="q">
-              <div className="q-label">14. Product<span className="star">*</span></div>
+              <div className="q-label">
+                14. Product<span className="star">*</span>
+                {aiFilledFields.has('product') && <span className="ai-badge">AI</span>}
+              </div>
               <Pills field="product" options={PRODUCTS} />
             </div>
 

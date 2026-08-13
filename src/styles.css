@@ -334,6 +334,118 @@ section:first-of-type .folder-section-head { margin-top: 4px; }
   font-weight: 600; display: block;
 }
 
+/* Document upload zone */
+.document-upload-zone {
+  background: var(--primary-soft);
+  border: 2px dashed var(--primary-hover);
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  cursor: pointer;
+  margin-bottom: 12px;
+  transition: border-color .2s, background .2s;
+}
+.document-upload-zone:hover {
+  border-color: var(--primary-accent);
+  background: #e0f2fe;
+}
+.upload-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+.upload-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+  margin-bottom: 4px;
+}
+.upload-subtext {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Uploaded file display */
+.uploaded-file {
+  background: var(--primary-soft);
+  border: 1px solid var(--primary-hover);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+.file-icon {
+  font-size: 20px;
+}
+.file-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+.file-size {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.processing-status {
+  font-size: 11px;
+  color: var(--amber-text);
+  font-weight: 600;
+  margin-left: 8px;
+}
+.ai-success {
+  font-size: 11px;
+  color: var(--won-text);
+  font-weight: 600;
+  margin-left: 8px;
+}
+.remove-file {
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+.remove-file:hover {
+  background: #fff;
+  color: var(--lost-text);
+  border-color: var(--lost-text);
+}
+
+/* AI error message */
+.ai-error {
+  background: var(--amber-fill);
+  border: 1px solid var(--amber-text);
+  border-left: 3px solid var(--amber-text);
+  color: var(--amber-text);
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  border-radius: 4px;
+}
+
+/* AI field indicators */
+.ai-badge {
+  display: inline-block;
+  background: var(--primary-accent);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 999px;
+  margin-left: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 /* Secondary button styling */
 button.secondary, .btn.secondary {
   background: #fff; color: var(--text-main); border-color: var(--border-color);
