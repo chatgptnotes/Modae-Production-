@@ -1,7 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useStore, nextOppId } from '../store.jsx'
-import { CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS } from '../seed.js'
+import { CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES } from '../seed.js'
 
 const empty = {
   sellTo: '', category: '', location: '', eucName: '', eucLocation: '',
@@ -14,17 +14,46 @@ export default function IntakeForm() {
   const nav = useNavigate()
   // The Lead Inbox pre-fills the form via router state ("Qualify" action).
   const loc = useLocation()
-  const [f, setF] = useState(() => ({ ...empty, ...(loc.state?.prefill || {}) }))
-  const set = k => e => setF({ ...f, [k]: e.target.value })
+  const [f, setF] = useState(() => ({
+    ...empty,
+    ...(loc.state?.prefill || {}),
+    // Role-based auto-assignment: sales reps are assigned as owner by default
+    // Admin/System Owner roles can choose any owner
+    owner: (loc.state?.prefill || {}).owner || (OWNERS.includes(store.role) ? store.role : '')
+  }))
+  const [touched, setTouched] = useState({})
+  const set = k => e => {
+    setF({ ...f, [k]: e.target.value })
+    if (!touched[k]) setTouched({ ...touched, [k]: true })
+  }
 
   const knownCustomer = store.customers.find(c => c.name.toLowerCase() === f.sellTo.trim().toLowerCase())
 
   const required = ['sellTo', 'category', 'eucName', 'eucLocation', 'oppName', 'owner', 'oppType', 'bu', 'segment', 'product', 'contactPerson', 'contactPhone']
-  const missing = required.filter(k => !f[k])
+
+  // Calculate validation status in real-time
+  const validation = useMemo(() => {
+    const missing = required.filter(k => !f[k])
+    const filled = required.length - missing.length
+    return {
+      missing,
+      filled,
+      total: required.length,
+      isComplete: missing.length === 0,
+      fields: required.reduce((acc, field) => {
+        acc[field] = {
+          valid: !!f[field],
+          touched: touched[field],
+          error: touched[field] && !f[field] ? 'required' : ''
+        }
+        return acc
+      }, {})
+    }
+  }, [f, touched, required])
 
   const submit = e => {
     e.preventDefault()
-    if (missing.length) return
+    if (!validation.isComplete) return
     const today = new Date().toISOString().slice(0, 10)
     const id = nextOppId(store.opportunities, f.owner)
     const maxSl = Math.max(0, ...store.opportunities.map(o => o.sl || 0))
@@ -54,120 +83,174 @@ export default function IntakeForm() {
     nav(`/folders/${id}`)
   }
 
-  const Radio = ({ field, options }) => (
-    <div>
-      {options.map(o => (
-        <label className="radio-row" key={o}>
-          <input type="radio" name={field} value={o} checked={f[field] === o}
-            onChange={set(field)} /> {o}
-        </label>
-      ))}
-    </div>
+  const resetForm = () => {
+    setF(empty)
+    setTouched({})
+  }
+
+  // Compact dropdown for all select fields
+  const Select = ({ field, options, placeholder }) => (
+    <select
+      value={f[field]}
+      onChange={set(field)}
+      className={validation.fields[field]?.touched && !validation.fields[field]?.valid ? 'error' : ''}
+    >
+      <option value="">{placeholder}</option>
+      {options.map(o => <option key={o}>{o}</option>)}
+    </select>
+  )
+
+  const Input = ({ field, type = 'text', placeholder, list }) => (
+    <input
+      type={type}
+      placeholder={placeholder}
+      value={f[field]}
+      onChange={set(field)}
+      list={list}
+      className={validation.fields[field]?.touched && !validation.fields[field]?.valid ? 'error' : ''}
+    />
   )
 
   return (
     <div className="forms-bg">
-      <form className="forms-card" onSubmit={submit}>
-        <h1>New Sales Opportunity Intake 2026-2027</h1>
-        <div className="forms-note">Use this form to register a new sales opportunity. When you submit this form, a pipeline row and an opportunity folder are created automatically.</div>
-        <div className="forms-note">Have a tender / RFQ PDF? <Link to="/tender">Let AI extract it for you ▸</Link></div>
-        <div className="req-note">* Required</div>
+      <form className="forms-card wide" onSubmit={submit}>
+        <div className="forms-head">
+          <div>
+            <h1>Create Opportunity</h1>
+            <div className="forms-note">Register a new sales opportunity — complete every field below in one screen. Submitting creates a pipeline row and an opportunity folder.</div>
+            <div className="forms-note">Have a tender / RFQ PDF? <Link to="/tender">Let AI extract it for you ▸</Link></div>
+          </div>
+          <div className="req-note">
+            <span className="star">*</span> required ·{' '}
+            {validation.isComplete
+              ? <span className="ok">✓ All {validation.total} required fields complete</span>
+              : <span>{validation.missing.length} of {validation.total} required fields missing</span>}
+          </div>
+        </div>
 
-        <div className="q">
-          <div className="q-label">1. Sell To Customer<span className="star">*</span></div>
-          <input type="text" placeholder="Enter your answer" value={f.sellTo} onChange={set('sellTo')} list="customer-list" />
-          <datalist id="customer-list">
-            {store.customers.map(c => <option key={c.name} value={c.name} />)}
-          </datalist>
-          {f.sellTo && (
-            <div className="hint" style={{ marginTop: 4 }}>
-              {knownCustomer
-                ? <>Existing customer — status <span className={`pill ${knownCustomer.status}`}>{knownCustomer.status}</span></>
-                : <>New customer — will be flagged <span className="pill Blue">Blue</span> for admin verification</>}
+        <div className="forms-grid">
+          {/* ---- Group 1 — Customer Info (Fields 1-5) ---- */}
+          <div className="forms-col">
+            <div className="forms-col-head">Customer Info</div>
+
+            <div className="q">
+              <div className="q-label">1. Sell To Customer<span className="star">*</span></div>
+              <Input field="sellTo" placeholder="Enter customer name" list="customer-list" />
+              <datalist id="customer-list">
+                {store.customers.map(c => <option key={c.name} value={c.name} />)}
+              </datalist>
+              {f.sellTo && (
+                <div className="hint" style={{ marginTop: 2 }}>
+                  {knownCustomer
+                    ? <>Existing customer — status <span className={`pill ${knownCustomer.status}`}>{knownCustomer.status}</span></>
+                    : <>New customer — will be flagged <span className="pill Blue">Blue</span> for admin verification</>}
+                </div>
+              )}
             </div>
-          )}
-        </div>
 
-        <div className="q">
-          <div className="q-label">2. Category<span className="star">*</span></div>
-          <select value={f.category} onChange={set('category')}>
-            <option value="">Select your answer</option>
-            {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-          </select>
-        </div>
+            <div className="q">
+              <div className="q-label">2. Category<span className="star">*</span></div>
+              <Select field="category" options={CATEGORIES} placeholder="Select category" />
+            </div>
 
-        <div className="q">
-          <div className="q-label">3. Location</div>
-          <input type="text" placeholder="Enter your answer" value={f.location} onChange={set('location')} />
-        </div>
+            <div className="q">
+              <div className="q-label">3. Location</div>
+              <Input field="location" placeholder="Enter location" />
+            </div>
 
-        <div className="q">
-          <div className="q-label">4. EUC Name<span className="star">*</span></div>
-          <input type="text" placeholder="Enter your answer" value={f.eucName} onChange={set('eucName')} />
-        </div>
+            <div className="q">
+              <div className="q-label">4. EUC Name<span className="star">*</span></div>
+              <Input field="eucName" placeholder="Enter end user/customer name" />
+            </div>
 
-        <div className="q">
-          <div className="q-label">5. EUC Location<span className="star">*</span></div>
-          <input type="text" placeholder="Enter your answer" value={f.eucLocation} onChange={set('eucLocation')} />
-        </div>
+            <div className="q">
+              <div className="q-label">5. EUC Location<span className="star">*</span></div>
+              <Input field="eucLocation" placeholder="Enter end user location" />
+            </div>
+          </div>
 
-        <div className="q">
-          <div className="q-label">6. Opportunity Name/Description<span className="star">*</span></div>
-          <input type="text" placeholder="Enter your answer" value={f.oppName} onChange={set('oppName')} />
-        </div>
+          {/* ---- Group 2 — Opportunity Details (Fields 6-11) ---- */}
+          <div className="forms-col">
+            <div className="forms-col-head">Opportunity Details</div>
 
-        <div className="q">
-          <div className="q-label">7. Owner<span className="star">*</span></div>
-          <select value={f.owner} onChange={set('owner')}>
-            <option value="">Select your answer</option>
-            {OWNERS.map(o => <option key={o}>{o}</option>)}
-          </select>
-        </div>
+            <div className="q">
+              <div className="q-label">6. Opportunity Name / Description<span className="star">*</span></div>
+              <Input field="oppName" placeholder="Enter opportunity description" />
+            </div>
 
-        <div className="q">
-          <div className="q-label">8. Opp Type<span className="star">*</span></div>
-          <select value={f.oppType} onChange={set('oppType')}>
-            <option value="">Select your answer</option>
-            {OPP_TYPES.map(o => <option key={o}>{o}</option>)}
-          </select>
-        </div>
+            <div className="q">
+              <div className="q-label">7. Owner<span className="star">*</span></div>
+              <Select field="owner" options={OWNERS} placeholder="Select owner" />
+              <div className="hint" style={{ marginTop: 2 }}>
+                {OWNERS.includes(store.role) && f.owner === store.role && (
+                  <>Auto-filled as {store.role} (your role)</>
+                )}
+              </div>
+            </div>
 
-        <div className="q">
-          <div className="q-label">9. BU<span className="star">*</span></div>
-          <Radio field="bu" options={BUS} />
-        </div>
+            <div className="q">
+              <div className="q-label">8. Opp Type<span className="star">*</span></div>
+              <Select field="oppType" options={OPP_TYPES} placeholder="Select opportunity type" />
+            </div>
 
-        <div className="q">
-          <div className="q-label">10. Segment<span className="star">*</span></div>
-          <Radio field="segment" options={SEGMENTS} />
-        </div>
+            <div className="q">
+              <div className="q-label">9. Estimated Value (K₹)</div>
+              <Input field="valueK" type="number" placeholder="Enter estimated value" />
+            </div>
 
-        <div className="q">
-          <div className="q-label">11. Product<span className="star">*</span></div>
-          <Radio field="product" options={PRODUCTS} />
-        </div>
+            <div className="q">
+              <div className="q-label">10. Contact Person<span className="star">*</span></div>
+              <Input field="contactPerson" placeholder="Enter contact name" />
+            </div>
 
-        <div className="q">
-          <div className="q-label">12. Contact Person<span className="star">*</span></div>
-          <input type="text" placeholder="Enter your answer" value={f.contactPerson} onChange={set('contactPerson')} />
-        </div>
+            <div className="q">
+              <div className="q-label">11. Contact Phone #<span className="star">*</span></div>
+              <Input field="contactPhone" type="tel" placeholder="Enter contact phone" />
+            </div>
+          </div>
 
-        <div className="q">
-          <div className="q-label">13. Contact Phone #<span className="star">*</span></div>
-          <input type="tel" placeholder="Enter your answer" value={f.contactPhone} onChange={set('contactPhone')} />
-        </div>
+          {/* ---- Group 3 — Classification (Fields 12-14) ---- */}
+          <div className="forms-col">
+            <div className="forms-col-head">Classification</div>
 
-        <div className="q">
-          <div className="q-label">14. Estimated Value (K₹)</div>
-          <input type="number" placeholder="Enter your answer" value={f.valueK} onChange={set('valueK')} />
+            <div className="q">
+              <div className="q-label">12. BU<span className="star">*</span></div>
+              <Select field="bu" options={BUS} placeholder="Select business unit" />
+            </div>
+
+            <div className="q">
+              <div className="q-label">13. Segment<span className="star">*</span></div>
+              <Select field="segment" options={SEGMENTS} placeholder="Select segment" />
+            </div>
+
+            <div className="q">
+              <div className="q-label">14. Product<span className="star">*</span></div>
+              <Select field="product" options={PRODUCTS} placeholder="Select product" />
+            </div>
+
+            {/* Progress indicator */}
+            <div className="q" style={{ marginTop: 'auto' }}>
+              <div className="progress-indicator">
+                <div className="progress-bar">
+                  <div
+                    className="progress-fill"
+                    style={{ width: `${(validation.filled / validation.total) * 100}%` }}
+                  />
+                </div>
+                <div className="progress-text">
+                  {validation.filled} of {validation.total} fields complete
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         <div className="forms-actions">
-          <button type="submit" className="submit" disabled={missing.length > 0}
-            title={missing.length ? `Missing: ${missing.join(', ')}` : ''}>
-            Submit
+          <button type="button" onClick={resetForm} className="secondary">Clear Form</button>
+          <button type="submit" className="submit" disabled={!validation.isComplete} style={{ marginLeft: '8px' }}
+            title={validation.isComplete ? 'Create Opportunity' : `Missing: ${validation.missing.join(', ')}`}>
+            Create Opportunity
           </button>
-          <button type="button" onClick={() => setF(empty)}>Clear form</button>
         </div>
       </form>
     </div>
