@@ -59,6 +59,7 @@ export default function MyOpps() {
                   <td>{o.sellTo}</td>
                   <td style={{ maxWidth: 360 }}>
                     {o.oppName}
+                    {store.approvals.some(a => a.oppId === o.id && a.status === 'Pending') && <span className="pill Amber" style={{ marginLeft: 6 }}>Approval pending</span>}
                     {dc > 0 && <span className="pill Red" style={{ marginLeft: 6 }}>{dc} deviation{dc > 1 ? 's' : ''}</span>}
                   </td>
                   <td><span className={`pill ${stageClass(o)}`}>{o.stage}</span></td>

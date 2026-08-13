@@ -129,6 +129,7 @@ function migrate(s) {
     route: routeForType(o.oppType),
     revisions: [], validityDays: 30, followUps: [],
     ...o,
+    nextActionOwner: o.nextActionOwner || '',
   }))
   s.approvals = s.approvals.map(a => ({
     needed: a.needed || [a.approver].filter(Boolean),

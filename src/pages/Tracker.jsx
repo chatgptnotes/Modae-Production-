@@ -31,8 +31,8 @@ const COLS = [
   { key: 'gmPct', letter: 'T', label: 'GM%', num: true },
   { key: 'createDate', letter: 'U', label: 'Create Date' },
   { key: 'proposalDate', letter: 'V', label: 'Proposal Date' },
-  { key: 'orderDate', letter: 'W', label: 'Order Date' },
-  { key: 'invoiceDate', letter: 'X', label: 'Invoice Date' },
+  { key: 'orderDate', letter: 'W', label: 'Expected Order Date' },
+  { key: 'invoiceDate', letter: 'X', label: 'Expected Ship Date' },
   { key: 'status', letter: 'Y', label: 'Status*' },
   { key: 'stage', letter: 'Z', label: 'Stage*' },
   { key: 'closedReason', letter: 'AA', label: 'Closed Reason*' },
@@ -41,6 +41,7 @@ const COLS = [
   { key: 'lastUpdated', letter: 'AD', label: 'Last Updated' },
   { key: 'forecast', letter: 'AE', label: 'Forecast' },
   { key: 'remarks', letter: 'AF', label: 'Update/Remarks' },
+  { key: 'nextActionOwner', letter: 'AG', label: 'Next Action Pending Owner' },
 ]
 
 export default function Tracker() {
@@ -163,8 +164,8 @@ export default function Tracker() {
 
   const exportRows = () => exportCSV(
     'Sales_Pipeline_Report.csv',
-    ['Sl','Opp ID','Sell To Customer','Category','Location','Customer Status','EUC Name','EUC Location','Opportunity Name/Description','Owner','Opp Type','BU','Segment','Product','Prob (%)','Value (K₹)','COGS (K₹)','GM (K₹)','GM%','Create Date','Proposal Date','Order Date','Invoice Date','Status','Stage','Closed Reason','Contact Person','Contact Phone #','Last Updated','Forecast','Update/Remarks'],
-    rows.map(o => [o.sl,o.id,o.sellTo,o.category,o.location,o.customerStatus,o.eucName,o.eucLocation,o.oppName,o.owner,o.oppType,o.bu,o.segment,o.product,o.prob||'',o.valueK,o.cogsK,gmK(o),gmPct(o)||'',o.createDate,o.proposalDate,o.orderDate,o.invoiceDate,o.status,o.stage,o.closedReason,o.contactPerson,o.contactPhone,o.lastUpdated,o.forecast?'Y':'N',o.remarks])
+    ['Sl','Opp ID','Sell To Customer','Category','Location','Customer Status','EUC Name','EUC Location','Opportunity Name/Description','Owner','Opp Type','BU','Segment','Product','Prob (%)','Value (K₹)','COGS (K₹)','GM (K₹)','GM%','Create Date','Proposal Date','Expected Order Date','Expected Ship Date','Status','Stage','Closed Reason','Contact Person','Contact Phone #','Last Updated','Forecast','Update/Remarks','Next Action Pending Owner'],
+    rows.map(o => [o.sl,o.id,o.sellTo,o.category,o.location,o.customerStatus,o.eucName,o.eucLocation,o.oppName,o.owner,o.oppType,o.bu,o.segment,Array.isArray(o.product) ? o.product.join(', ') : o.product,o.prob||'',o.valueK,o.cogsK,gmK(o),gmPct(o)||'',o.createDate,o.proposalDate,o.orderDate,o.invoiceDate,o.status,o.stage,o.closedReason,o.contactPerson,o.contactPhone,o.lastUpdated,o.forecast?'Y':'N',o.remarks,o.nextActionOwner||''])
   )
 
   // Plain render function (not a component type) so the open dropdown's DOM is
@@ -342,6 +343,12 @@ export default function Tracker() {
                   <input type="checkbox" checked={!!o.forecast} onChange={upd(o.id, 'forecast')} title="Include for roll-up" />
                 </td>
                 <td onClick={selectCell(o, COLS[29])} className={isSel(o, COLS[29]) ? 'cell-sel' : ''}><input type="text" value={o.remarks} onChange={upd(o.id, 'remarks')} style={{ minWidth: 220 }} /></td>
+                <td onClick={selectCell(o, COLS[30])} className={isSel(o, COLS[30]) ? 'cell-sel' : ''}>
+                  <select value={o.nextActionOwner || ''} onChange={upd(o.id, 'nextActionOwner')}>
+                    <option value="">— none —</option>
+                    {OWNERS.map(owner => <option key={owner}>{owner}</option>)}
+                  </select>
+                </td>
                 <td><Link to={`/proposal/${o.id}`}>Open ▸</Link></td>
               </tr>
             ))}

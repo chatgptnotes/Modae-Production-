@@ -140,7 +140,7 @@ function SharePointCard({ canEdit }) {
         <ol className="hint" style={{ margin: '6px 0 0 18px', lineHeight: 1.7 }}>
           <li>Azure Portal → App registrations → New registration</li>
           <li>Supported account types: multitenant (accounts in any organisational directory)</li>
-          <li>Authentication → add a Single-page application platform with redirect URIs <b>http://localhost:5173</b> and the Vercel URL</li>
+          <li>Authentication → add a Single-page application platform with the deployed staging and production URLs</li>
           <li>API permissions → Microsoft Graph → delegated: <b>User.Read</b>, <b>Files.ReadWrite.All</b>, <b>Sites.ReadWrite.All</b></li>
           <li>Copy the Application (client) ID into this card</li>
         </ol>

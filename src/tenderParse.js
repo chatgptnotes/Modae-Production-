@@ -301,14 +301,17 @@ export function parseTender(fullText, struct = null) {
   // The captured ref must contain a digit — "Tender Notice / Destruction"
   // must not yield a bogus "tice".
   const rfqM = fullText.match(/(?:Tender|RFQ|Enquiry)\s*(?:No\.?\b|Number|Ref\.?\b|#)\s*[:\-]?\s*([A-Z0-9\/\-.]*\d[A-Z0-9\/\-.]*)/i)
+  const rfqDateM = fullText.match(/(?:RFQ|Tender|Enquiry)[^\n]{0,80}?(?:dated?|date)\s*[:\-]?\s*(\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4}|\d{4}[\/\-.]\d{1,2}[\/\-.]\d{1,2})/i)
   const sectionRef = rfqM ? rfqM[1] : sectionM ? `Section-${sectionM[1].replace(/\s/g, '')}` : ''
   if (!rfqM) missing.push('RFQ number')
   const signM = fullText.match(/^\s*((?:Chief|Executive|Superintend\w*|Dy\.?)[^\n]{0,60}Engineer[^\n]*)/im)
   const signatory = signM ? collapse(signM[1]) : ''
   const location = station.includes(',') ? station.slice(station.lastIndexOf(',') + 1).trim() : ''
-  const header = { buyer, station, subject, sectionRef, signatory }
+  const rfqDate = rfqDateM ? rfqDateM[1] : ''
+  const header = { buyer, station, subject, sectionRef, rfqDate, signatory }
   if (!buyer) missing.push('Buyer / customer name')
   if (!subject) missing.push('Subject')
+  if (!rfqDate) missing.push('RFQ date')
   missing.push('Contact person', 'Contact phone')
 
   // Material schedule — positional parsing when we have it, flat-text otherwise.
@@ -394,7 +397,7 @@ export function parseTender(fullText, struct = null) {
     location,
   }
 
-  const headerFound = [buyer, station, subject, sectionRef, signatory].filter(Boolean).length
+  const headerFound = [buyer, station, subject, sectionRef, rfqDate, signatory].filter(Boolean).length
   const confidence = {
     header: headerFound / 5,
     items: items.length ? items.reduce((s, i) => s + i.confidence, 0) / items.length : 0,
@@ -474,7 +477,7 @@ export function buildProposal(oppId, opp, parse, matched) {
   const p = newProposal(oppId, opp)
   return {
     ...p,
-    rfqNumber: [parse.header.sectionRef, `recd. ${today}`].filter(Boolean).join(' / '),
+    rfqNumber: [parse.header.sectionRef, parse.header.rfqDate || `recd. ${today}`].filter(Boolean).join(' / '),
     subject: `Proposal For ${parse.header.subject || opp.oppName}`,
     project: [parse.header.subject, parse.header.station].filter(Boolean).join(' — '),
     kindAttn: parse.header.signatory || opp.contactPerson,

@@ -38,6 +38,12 @@ body {
   color: var(--text-main);
   background: var(--bg-app);
 }
+.dashboard-action {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  width: 100%; text-align: left; margin: 0; padding: 8px 0;
+  border: 0; border-bottom: 1px solid var(--border-soft); background: transparent;
+}
+.dashboard-action:last-of-type { border-bottom: 0; }
 
 /* App shell: modern left sidebar + main column */
 .shell { display: flex; min-height: 100vh; }
@@ -88,15 +94,6 @@ body {
   opacity: 0; pointer-events: none; transition: opacity .2s;
 }
 .ic { vertical-align: -3px; }
-
-.formula-bar {
-  display: flex; align-items: center; gap: 8px;
-  background: #fff; border-bottom: 1px solid var(--grid-line);
-  padding: 4px 12px; font-size: 12px; color: var(--text-muted);
-}
-.formula-bar .cell-ref { border: 1px solid var(--grid-line); padding: 1px 10px; min-width: 70px; font-family: Consolas, monospace; }
-.formula-bar .fx-input { flex: 1; border: none; outline: none; font-family: Consolas, monospace; font-size: 12px; color: var(--text-main); background: transparent; }
-.formula-bar .fx-input:read-only { color: var(--text-muted); }
 
 /* Excel-style header filter dropdowns */
 .th-filter { position: relative; }
@@ -405,6 +402,12 @@ section:first-of-type .folder-section-head { margin-top: 4px; }
   font-weight: 600;
   margin-left: 8px;
 }
+.ai-fallback {
+  font-size: 11px;
+  color: var(--amber-text);
+  font-weight: 600;
+  margin-left: 8px;
+}
 .remove-file {
   background: none;
   border: 1px solid var(--border-color);
@@ -426,6 +429,16 @@ section:first-of-type .folder-section-head { margin-top: 4px; }
   border: 1px solid var(--amber-text);
   border-left: 3px solid var(--amber-text);
   color: var(--amber-text);
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  border-radius: 4px;
+}
+.ai-notice {
+  background: #eff6ff;
+  border: 1px solid #93c5fd;
+  border-left: 3px solid var(--primary-accent);
+  color: #1e40af;
   padding: 8px 10px;
   margin-bottom: 8px;
   font-size: 11px;
@@ -825,7 +838,7 @@ input.needs-input, select.needs-input { background: #fffbeb; border-color: var(-
 
 /* Print: only the customer-facing proposal document leaves the building */
 @media print {
-  .sidenav, .topbar, .nav-backdrop, .formula-bar, .sheet-tabs, .toolbar,
+  .sidenav, .topbar, .nav-backdrop, .sheet-tabs, .toolbar,
   .explorer-bar, .legend, .no-print, .costing-note, .comms-log, .factors,
   .modal, .restricted, .drawer, .drawer-backdrop, .hint { display: none !important; }
   body { background: #fff; }
@@ -1089,7 +1102,6 @@ button.install:hover { background: var(--primary-hover); }
 .tablet-bar button:hover { color: #fff; border-color: rgba(255,255,255,.6); }
 .tablet-bar button.install { background: var(--primary-accent); border-color: var(--primary-accent); color: #fff; font-weight: 700; }
 .mode-switch { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; white-space: nowrap; }
-
 /* Colorful task tiles */
 .tablet-home h2 { font-size: 17px; }
 .ttile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 13px; max-width: 1100px; }
@@ -1168,7 +1180,7 @@ button.install:hover { background: var(--primary-hover); }
    Palette is scoped to .lead-workspace so no other screen is affected.
    ========================================================================= */
 .lead-workspace {
-  --ws-chrome: 70px;                /* topbar + formula bar */
+  --ws-chrome: 0px;                 /* full-site shell has no global chrome */
   --ws-bg: var(--bg-app);
   --ws-surface: #ffffff;
   --ws-surface-2: #f8fafc;

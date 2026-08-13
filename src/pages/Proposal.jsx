@@ -5,6 +5,7 @@ import { defaultCosting, newProposal } from '../seed.js'
 import { effectiveRate, unitCostINR, unitSellINR, fmt, exportCSV, canViewCommercial, clampCosting, clampQty, MAX_GM_PCT } from '../utils.js'
 import { useFormulaBar } from '../formulabar.jsx'
 import { Icon, ModaeLogo } from '../icons.jsx'
+import { Modal } from '../ui.jsx'
 import { oppBlockers, isBlocked } from '../gates.js'
 import { docModel } from '../proposalDoc.js'
 import DocEditor from '../proposal/DocEditor.jsx'
@@ -19,7 +20,7 @@ const lineQty = (l, u) => (l.qtyPerUnit || 0) * u + (l.common || 0) + (l.spares 
 
 // Older saved proposals (and newProposal before this change) used a single
 // `qty`; the real BoQ splits quantities into Qty/Unit × units + Common + Spares.
-function normalize(pr) {
+function normalize(pr, opp) {
   const units = pr.units || 7
   const bom = (pr.bom || []).map(l => ({
     itemCategory: '', qtyPerUnit: 0, common: 0, spares: 0, quoted: '',
@@ -35,6 +36,7 @@ function normalize(pr) {
   const signals = signalsAreEmpty(stored) && !signalsAreEmpty(derived) ? derived : stored
   return {
     ...pr,
+    proposalType: pr.proposalType || (opp?.oppType === 'Spares' ? 'Spares' : opp?.oppType === 'Service' ? 'Services' : 'Project'),
     signals,
     bom,
     units,
@@ -52,16 +54,20 @@ export default function Proposal() {
   const [printing, setPrinting] = useState(false)
   const [emailOpen, setEmailOpen] = useState(false)
   const [emailTo, setEmailTo] = useState('')
+  const [emailCc, setEmailCc] = useState('')
   const [emailSubject, setEmailSubject] = useState('')
   const [emailNote, setEmailNote] = useState('')
-  const [p, setP] = useState(() => normalize(store.getProposal(oppId)))
+  const [emailPreview, setEmailPreview] = useState(false)
+  const [conditionTarget, setConditionTarget] = useState(null)
+  const [conditionNote, setConditionNote] = useState('')
+  const [p, setP] = useState(() => normalize(store.getProposal(oppId), opp))
   // Ref mirror: deferred commits (formula bar) must patch the CURRENT proposal,
   // never a click-time snapshot — a stale snapshot would silently revert edits.
   const pRef = React.useRef(p)
   pRef.current = p
 
   // /proposal/:oppId reuses this component instance — reload state per opportunity.
-  useEffect(() => { setP(normalize(store.getProposal(oppId))); setTab('Cover Letter') }, [oppId]) // eslint-disable-line
+  useEffect(() => { setP(normalize(store.getProposal(oppId), opp)); setTab('Cover Letter') }, [oppId]) // eslint-disable-line
 
   // Print-all: render the full customer document (cover + terms + BoQ) first,
   // then open the dialog; afterprint restores the tabbed view.
@@ -76,6 +82,8 @@ export default function Proposal() {
   if (!opp) return <div className="page"><h2>Unknown opportunity</h2><Link to="/">Back to tracker</Link></div>
 
   const comm = canViewCommercial(store.role)
+  const customer = store.customers.find(c => c.name === opp.sellTo)
+  const pendingForOpp = (store.approvals || []).filter(a => a.oppId === oppId && a.status === 'Pending')
 
   const units = p.units || 7
 
@@ -204,8 +212,14 @@ export default function Proposal() {
     oppId, type: bl.approvalType, approver: bl.approver, detail: bl.text,
   })
   const confirmCond = bl => () => {
-    const note = prompt('How was this condition incorporated in the proposal?', '')
-    if (note && note.trim()) store.confirmCondition(bl.approvalId, bl.condIdx, note.trim())
+    setConditionTarget(bl)
+    setConditionNote('')
+  }
+  const saveCondition = () => {
+    if (!conditionNote.trim() || !conditionTarget) return
+    store.confirmCondition(conditionTarget.approvalId, conditionTarget.condIdx, conditionNote.trim())
+    setConditionTarget(null)
+    setConditionNote('')
   }
   const markSubmitted = () => {
     store.addCommunication(oppId, {
@@ -235,13 +249,20 @@ export default function Proposal() {
     // mailto URLs are unreliable past ~2000 chars — cap the encoded body and
     // never cut through a %XX escape.
     const encBody = encodeURIComponent(body).slice(0, 1600).replace(/%[0-9A-F]?$/i, '')
-    window.location.href = `mailto:${encodeURIComponent(emailTo.trim())}?subject=${encodeURIComponent(emailSubject)}&body=${encBody}`
-    store.addCommunication(oppId, { to: emailTo.trim(), subject: emailSubject, kind: 'proposal-email' })
+    const cc = emailCc.trim() ? `&cc=${encodeURIComponent(emailCc.trim())}` : ''
+    window.location.href = `mailto:${encodeURIComponent(emailTo.trim())}?subject=${encodeURIComponent(emailSubject)}${cc}&body=${encBody}`
+    store.addCommunication(oppId, {
+      to: emailTo.trim(), cc: emailCc.trim(), subject: emailSubject,
+      kind: 'proposal-email', attachment: `${oppId}_Proposal_Rev_${p.revision}.pdf`,
+    })
     setEmailOpen(false)
   }
 
   const openEmail = () => {
     setEmailSubject(`${oppId} — Techno-Commercial Proposal${p.project ? ' — ' + p.project.slice(0, 60) : ''}`)
+    setEmailTo(opp.contactEmail || customer?.email || '')
+    setEmailCc('')
+    setEmailPreview(false)
     setEmailOpen(true)
   }
 
@@ -274,6 +295,12 @@ export default function Proposal() {
       <div className="toolbar">
         <Link className="btn" to={`/folders/${oppId}`}>◂ Back to folder</Link>
         <span className="spacer" />
+        <label className="hint">Proposal type:{' '}
+          <select value={p.proposalType || 'Project'} onChange={set('proposalType')}>
+            <option>Project</option><option>Spares</option><option>Services</option>
+          </select>
+        </label>
+        {pendingForOpp.length > 0 && <span className="pill Amber">{pendingForOpp.length} approval{pendingForOpp.length > 1 ? 's' : ''} pending</span>}
         {tab === 'Priced BoQ' && comm && <button onClick={exportBoQ}>Extract to Excel</button>}
         <button onClick={openEmail}><Icon name="mail" size={13} /> Email proposal</button>
         <button className="primary" onClick={() => setPrinting(true)}><Icon name="printer" size={13} /> Print / PDF proposal</button>
@@ -313,6 +340,12 @@ export default function Proposal() {
           {blockers.length > 0 && !blocked && submitted && (
             <div className="gate-row"><span className="spacer" /><span className="pill won">Submitted</span></div>
           )}
+        </div>
+      )}
+
+      {p.proposalType !== 'Project' && (
+        <div className="ai-notice" style={{ marginBottom: 10 }}>
+          <b>{p.proposalType} proposal route selected.</b> Final {p.proposalType} template layout will be applied when the client sample is received; the current workbook remains available for data preparation.
         </div>
       )}
 
@@ -619,6 +652,10 @@ export default function Proposal() {
             <input type="text" value={emailTo} onChange={e => setEmailTo(e.target.value)} placeholder="customer@company.com" autoFocus />
           </div>
           <div className="q">
+            <div className="q-label">CC</div>
+            <input type="text" value={emailCc} onChange={e => setEmailCc(e.target.value)} placeholder="name@company.com, another@company.com" />
+          </div>
+          <div className="q">
             <div className="q-label">Subject</div>
             <input type="text" value={emailSubject} onChange={e => setEmailSubject(e.target.value)} />
           </div>
@@ -626,14 +663,30 @@ export default function Proposal() {
             <div className="q-label">Note (optional, one line)</div>
             <input type="text" value={emailNote} onChange={e => setEmailNote(e.target.value)} placeholder="e.g. Submitted within due date — happy to discuss." />
           </div>
-          <div className="costing-note">
-            Opens your mail app with a summary body — attach the printed PDF before sending. The send is recorded in the communications log.
-          </div>
+          <div className="costing-note">Attachment ready: <b>{oppId}_Proposal_Rev_{p.revision}.pdf</b>. The mail app may require final attachment confirmation.</div>
+          <button type="button" onClick={() => setEmailPreview(!emailPreview)}>{emailPreview ? 'Hide preview' : 'Preview proposal'}</button>
+          {emailPreview && <div className="cover-body" style={{ marginTop: 8, maxHeight: 220, overflow: 'auto' }}>
+            <b>{emailSubject}</b>
+            <p>To: {emailTo || 'No recipient selected'}</p>
+            <p>Attached: {oppId}_Proposal_Rev_{p.revision}.pdf</p>
+            <p>{emailNote || `Proposal for ${opp.oppName} with ${p.bom.length} quoted line(s).`}</p>
+          </div>}
           <div className="forms-actions">
-            <button className="primary" disabled={!emailTo.trim()} onClick={sendEmail}>Open in mail app ▸</button>
+            <button className="primary" disabled={!emailTo.trim() || !emailPreview} onClick={sendEmail}>Open in mail app ▸</button>
             <button onClick={() => setEmailOpen(false)}>Cancel</button>
           </div>
         </div>
+      )}
+
+      {conditionTarget && (
+        <Modal title="Confirm approval condition incorporated" onClose={() => setConditionTarget(null)}>
+          <p className="hint">Record how this condition was incorporated in the proposal before release.</p>
+          <textarea rows={4} value={conditionNote} onChange={e => setConditionNote(e.target.value)} placeholder="Describe the proposal change..." style={{ width: '100%' }} />
+          <div className="forms-actions">
+            <button className="primary" disabled={!conditionNote.trim()} onClick={saveCondition}>Confirm incorporated</button>
+            <button onClick={() => setConditionTarget(null)}>Cancel</button>
+          </div>
+        </Modal>
       )}
 
       <div className="sheet-tabs">

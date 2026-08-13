@@ -3,7 +3,6 @@ import { Routes, Route, NavLink, Navigate, useNavigate, useLocation } from 'reac
 import { useStore } from './store.jsx'
 import { ROLES } from './seed.js'
 import { isAdminRole, isApprover, canSeePage } from './utils.js'
-import { FormulaBar } from './formulabar.jsx'
 import { DrawerHost } from './drawer.jsx'
 import { Icon, ModaeLogo } from './icons.jsx'
 import { InstallButton } from './install.jsx'
@@ -15,6 +14,7 @@ import Folders from './pages/Folders.jsx'
 import Proposal from './pages/Proposal.jsx'
 import PriceLists from './pages/PriceLists.jsx'
 import Dashboard from './pages/Dashboard.jsx'
+import MyDashboard from './pages/MyDashboard.jsx'
 import Customers from './pages/Customers.jsx'
 import Analytics from './pages/Analytics.jsx'
 import Users from './pages/Users.jsx'
@@ -40,6 +40,7 @@ import Portal from './pages/Portal.jsx'
 // the acting role's permission set (seed.js PERMS).
 const NAV = [
   { to: '/home', label: 'Home', icon: 'home', page: 'home' },
+  { to: '/my-dashboard', label: 'My Dashboard', icon: 'chartBar', page: 'mydashboard' },
   { to: '/inbox', label: 'Lead Inbox', icon: 'inbox', page: 'inbox' },
   { to: '/', label: 'Opportunity Tracker', icon: 'sheet', page: 'tracker' },
   { to: '/my', label: 'My Opportunities', icon: 'cards', page: 'my' },
@@ -117,6 +118,7 @@ export default function App() {
       <Route path="/proposal/:oppId" element={<Proposal />} />
       <Route path="/pricelists" element={<PriceLists />} />
       <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/my-dashboard" element={<MyDashboard />} />
       <Route path="/analytics" element={<Analytics />} />
       <Route path="/customers" element={<Customers />} />
       <Route path="/users" element={<Users />} />
@@ -131,7 +133,7 @@ export default function App() {
 
   // Customer accounts never get the persona switcher (store.setRole also
   // refuses the escalation — this just removes the dead control). Rendered in
-  // the tablet bar, the full-site topbar AND the sidebar footer.
+  // the tablet bar and the sidebar footer.
   const RoleSwitcher = () => custAccount ? null : (
     <select value={store.role} onChange={e => store.setRole(e.target.value)} title="Acting-as persona">
       {Object.entries(ROLES).map(([id, r]) => <option key={id} value={id}>{r.label}</option>)}
@@ -250,7 +252,6 @@ export default function App() {
             <Icon name="tablet" size={15} /> Switch to tablet view
           </button>
         </header>
-        <FormulaBar />
         {routes}
       </div>
       <DrawerHost />

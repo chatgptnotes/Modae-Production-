@@ -499,19 +499,19 @@ export const ROLES = {
 
 // Page-permission matrix (from the BT prototype's PERMS). Sales owners all get
 // the same set; CUST sees the external portal only.
-const SALES_PAGES = ['home', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders',
+const SALES_PAGES = ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders',
   'analytics', 'customers', 'po', 'aimap', 'launcher', 'notes', 'voice']
 export const PERMS = {
-  SUPER: ['home', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'pricelists',
+  SUPER: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'pricelists',
     'dashboard', 'analytics', 'customers', 'audit', 'users', 'aimap', 'admin', 'po', 'launcher', 'notes', 'voice', 'portal'],
-  ADMIN: ['home', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'pricelists',
+  ADMIN: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'pricelists',
     'dashboard', 'analytics', 'customers', 'audit', 'users', 'aimap', 'admin', 'po', 'launcher', 'notes', 'voice'],
-  LJS: ['home', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'pricelists',
+  LJS: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'pricelists',
     'dashboard', 'analytics', 'customers', 'audit', 'aimap', 'admin', 'po', 'launcher', 'notes', 'voice', 'portal'],
-  AH: ['home', 'tracker', 'my', 'approvals', 'folders', 'pricelists', 'dashboard', 'analytics',
+  AH: ['home', 'mydashboard', 'tracker', 'my', 'approvals', 'folders', 'pricelists', 'dashboard', 'analytics',
     'customers', 'audit', 'aimap', 'po', 'launcher', 'notes'],
   RS: SALES_PAGES, PP: SALES_PAGES, SS: SALES_PAGES, PJS: SALES_PAGES, RJS: SALES_PAGES, SR: SALES_PAGES,
-  TECH: ['home', 'inbox', 'tracker', 'my', 'approvals', 'aimap', 'launcher', 'notes'],
+  TECH: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'approvals', 'aimap', 'launcher', 'notes'],
   CUST: ['portal'],
 }
 
@@ -895,6 +895,7 @@ export const defaultCosting = {
 export function newProposal(oppId, opp) {
   return {
     oppId,
+    proposalType: opp?.oppType === 'Spares' ? 'Spares' : opp?.oppType === 'Service' ? 'Services' : 'Project',
     ourRef: oppId,
     bidStage: 'Binding',
     bidType: 'Priced',

@@ -3,11 +3,12 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useStore, nextOppId } from '../store.jsx'
 import { CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES } from '../seed.js'
 import { runJson } from '../ai.js'
+import { extractPdfText, parseTender, buildOpportunityDraft } from '../tenderParse.js'
 
 const empty = {
   sellTo: '', category: '', location: '', eucName: '', eucLocation: '',
-  oppName: '', owner: '', oppType: '', bu: '', segment: '', product: '',
-  contactPerson: '', contactPhone: '', valueK: '',
+  oppName: '', owner: '', oppType: '', bu: '', segment: '', product: [],
+  contactPerson: '', contactPhone: '', valueK: '', rfqNumber: '', rfqDate: '',
 }
 
 export default function IntakeForm() {
@@ -29,8 +30,13 @@ export default function IntakeForm() {
   const [uploadedFile, setUploadedFile] = useState(null)
   const [aiProcessing, setAiProcessing] = useState(false)
   const [aiResults, setAiResults] = useState(null)
+  const [aiNotice, setAiNotice] = useState(null)
   const [aiError, setAiError] = useState(null)
   const [aiFilledFields, setAiFilledFields] = useState(new Set())
+
+  const selectedProducts = Array.isArray(f.product)
+    ? f.product
+    : String(f.product || '').split(',').map(x => x.trim()).filter(Boolean)
 
   const set = k => e => {
     setF({ ...f, [k]: e.target.value })
@@ -43,7 +49,7 @@ export default function IntakeForm() {
 
   // Calculate validation status in real-time
   const validation = useMemo(() => {
-    const missing = required.filter(k => !f[k])
+    const missing = required.filter(k => k === 'product' ? selectedProducts.length === 0 : !f[k])
     const filled = required.length - missing.length
     return {
       missing,
@@ -59,7 +65,7 @@ export default function IntakeForm() {
         return acc
       }, {})
     }
-  }, [f, touched, required])
+  }, [f, touched, required, selectedProducts.length])
 
   const submit = e => {
     e.preventDefault()
@@ -78,14 +84,16 @@ export default function IntakeForm() {
       sellTo, category: f.category, location: f.location,
       customerStatus: knownCustomer ? knownCustomer.status : 'Blue',
       eucName: f.eucName, eucLocation: f.eucLocation, oppName: f.oppName,
-      owner: f.owner, oppType: f.oppType, bu: f.bu, segment: f.segment, product: f.product,
+      owner: f.owner, oppType: f.oppType, bu: f.bu, segment: f.segment,
+      product: selectedProducts.join(', '),
       // prob is salesperson-set later — the form does not collect it (audio 00:24)
       prob: '',
       valueK: +f.valueK || 0, cogsK: 0,
+      rfqNumber: f.rfqNumber || '', rfqDate: f.rfqDate || '',
       createDate: today, proposalDate: '', orderDate: '', invoiceDate: '',
       status: 'Open', stage: 'Lead', closedReason: '',
       contactPerson: f.contactPerson, contactPhone: f.contactPhone,
-      lastUpdated: today, forecast: false, remarks: '',
+      lastUpdated: today, forecast: false, remarks: '', nextActionOwner: '',
     })
     // A lead qualified from the inbox converts only on actual submit.
     if (loc.state?.leadId) store.updateLead(loc.state.leadId, { status: 'Qualified', oppId: id })
@@ -94,10 +102,11 @@ export default function IntakeForm() {
   }
 
   const resetForm = () => {
-    setF(empty)
+    setF({ ...empty })
     setTouched({})
     setUploadedFile(null)
     setAiResults(null)
+    setAiNotice(null)
     setAiError(null)
     setAiFilledFields(new Set())
   }
@@ -120,27 +129,35 @@ export default function IntakeForm() {
 
     setUploadedFile(file)
     setAiProcessing(true)
+    setAiNotice(null)
     setAiError(null)
     setAiFilledFields(new Set())
 
     try {
-      // Extract text from PDF
-      const text = await extractTextFromPDF(file)
+      // Extract real text and positional data from the PDF. The deterministic
+      // parser is also the fallback when the optional AI proxy is unavailable.
+      const extracted = await extractPdfText(file)
+      const parsed = parseTender(extracted.fullText, extracted.struct)
+      const localDraft = buildOpportunityDraft(parsed)
 
       // Call AI extraction task
       const aiResult = await runJson('tender.extract', {
         filename: file.name,
-        pages: Math.ceil(file.size / 50000), // Rough estimate
-        text: text,
-        parsed: {}, // Could add rule-based parsing results here
+        pages: extracted.struct.length,
+        text: extracted.fullText,
+        parsed,
         products: PRODUCTS // Context for product categorization
       })
 
       if (aiResult) {
-        setAiResults(aiResult)
-        applyAiResultsToForm(aiResult)
+        const enriched = { ...aiResult, extractedHeader: parsed.header, missing: [...new Set([...(aiResult.missing || []), ...parsed.missing])] }
+        setAiResults(enriched)
+        applyAiResultsToForm(enriched)
       } else {
-        setAiError('AI extraction failed. Please fill the form manually.')
+        const enriched = { local: true, extractedHeader: parsed.header, missing: parsed.missing, localDraft }
+        setAiResults(enriched)
+        applyAiResultsToForm(enriched)
+        setAiNotice('AI is unavailable, so the PDF was parsed locally. Review the filled fields before submitting.')
       }
     } catch (error) {
       console.error('Document processing error:', error)
@@ -150,73 +167,73 @@ export default function IntakeForm() {
     }
   }
 
-  // Extract text content from PDF (basic implementation)
-  const extractTextFromPDF = async (file) => {
-    // This is a placeholder - in production you'd use a proper PDF parsing library
-    // For now, we'll return a placeholder that the AI can work with
-    return new Promise((resolve) => {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        // Basic text extraction - in production, use pdf.js or similar
-        const text = `PDF Document: ${file.name}\n\n[Document content would be extracted here using a PDF parsing library]`
-        resolve(text)
-      }
-      reader.onerror = () => resolve('[Could not extract text from PDF]')
-      reader.readAsText(file)
-    })
-  }
-
   // Apply AI extraction results to form fields
   const applyAiResultsToForm = (aiResult) => {
     const updates = {}
     const filledFields = new Set()
+    const header = aiResult.localDraft
+      ? {
+          buyer: aiResult.localDraft.sellTo,
+          location: aiResult.localDraft.location,
+          contactPerson: aiResult.localDraft.contactPerson,
+          contactPhone: aiResult.localDraft.contactPhone,
+          subject: aiResult.localDraft.oppName,
+        }
+      : (aiResult.header || {})
+    const guesses = aiResult.localDraft
+      ? aiResult.localDraft
+      : (aiResult.guesses || {})
 
     // Map header fields to form fields
-    if (aiResult.header?.buyer) {
-      updates.sellTo = aiResult.header.buyer
+    if (header.buyer) {
+      updates.sellTo = header.buyer
       filledFields.add('sellTo')
     }
-    if (aiResult.header?.location) {
-      updates.location = aiResult.header.location
-      updates.eucLocation = aiResult.header.location
+    if (header.location) {
+      updates.location = header.location
+      updates.eucLocation = header.location
       filledFields.add('location', 'eucLocation')
     }
-    if (aiResult.header?.contactPerson) {
-      updates.contactPerson = aiResult.header.contactPerson
+    if (header.contactPerson) {
+      updates.contactPerson = header.contactPerson
       filledFields.add('contactPerson')
     }
-    if (aiResult.header?.contactPhone) {
-      updates.contactPhone = aiResult.header.contactPhone
+    if (header.contactPhone) {
+      updates.contactPhone = header.contactPhone
       filledFields.add('contactPhone')
     }
 
     // Map classification guesses to form fields
-    if (aiResult.guesses?.category) {
-      updates.category = aiResult.guesses.category
+    if (guesses.category) {
+      updates.category = guesses.category
       filledFields.add('category')
     }
-    if (aiResult.guesses?.oppType) {
-      updates.oppType = aiResult.guesses.oppType
+    if (guesses.oppType) {
+      updates.oppType = guesses.oppType
       filledFields.add('oppType')
     }
-    if (aiResult.guesses?.bu) {
-      updates.bu = aiResult.guesses.bu
+    if (guesses.bu) {
+      updates.bu = guesses.bu
       filledFields.add('bu')
     }
-    if (aiResult.guesses?.segment) {
-      updates.segment = aiResult.guesses.segment
+    if (guesses.segment) {
+      updates.segment = guesses.segment
       filledFields.add('segment')
     }
-    if (aiResult.guesses?.product) {
-      updates.product = aiResult.guesses.product
+    if (guesses.product) {
+      updates.product = guesses.product
       filledFields.add('product')
     }
 
     // Generate opportunity name from subject
-    if (aiResult.header?.subject) {
-      updates.oppName = aiResult.header.subject
+    if (header.subject) {
+      updates.oppName = header.subject
       filledFields.add('oppName')
     }
+
+    const extractedHeader = aiResult.extractedHeader || {}
+    if (extractedHeader.sectionRef) updates.rfqNumber = extractedHeader.sectionRef
+    if (extractedHeader.rfqDate) updates.rfqDate = extractedHeader.rfqDate
 
     // Apply updates to form
     setF(prev => ({ ...prev, ...updates }))
@@ -227,6 +244,7 @@ export default function IntakeForm() {
   const removeUploadedFile = () => {
     setUploadedFile(null)
     setAiResults(null)
+    setAiNotice(null)
     setAiError(null)
     setAiFilledFields(new Set())
     if (fileInputRef.current) {
@@ -265,8 +283,14 @@ export default function IntakeForm() {
   const Pills = ({ field, options }) => (
     <div className="pill-group">
       {options.map(o => (
-        <label key={o} className={`pill-opt ${f[field] === o ? 'on' : ''}`}>
-          <input type="radio" name={field} value={o} checked={f[field] === o} onChange={set(field)} />
+        <label key={o} className={`pill-opt ${field === 'product' ? (selectedProducts.includes(o) ? 'on' : '') : (f[field] === o ? 'on' : '')}`}>
+          <input type={field === 'product' ? 'checkbox' : 'radio'} name={field} value={o}
+            checked={field === 'product' ? selectedProducts.includes(o) : f[field] === o}
+            onChange={field === 'product'
+              ? e => setF(prev => ({ ...prev, product: e.target.checked
+                  ? [...selectedProducts, o]
+                  : selectedProducts.filter(x => x !== o) }))
+              : set(field)} />
           {o}
         </label>
       ))}
@@ -320,7 +344,9 @@ export default function IntakeForm() {
                   <span className="file-name">{uploadedFile.name}</span>
                   <span className="file-size">({(uploadedFile.size / 1024).toFixed(1)} KB)</span>
                   {aiProcessing && <span className="processing-status">AI processing...</span>}
-                  {aiResults && <span className="ai-success">✓ AI extraction complete</span>}
+                  {aiResults && <span className={aiResults.local ? 'ai-fallback' : 'ai-success'}>
+                    {aiResults.local ? 'Local extraction complete' : '✓ AI extraction complete'}
+                  </span>}
                 </div>
                 <button type="button" onClick={removeUploadedFile} className="remove-file">Remove</button>
               </div>
@@ -329,6 +355,12 @@ export default function IntakeForm() {
             {aiError && (
               <div className="ai-error">
                 ⚠️ {aiError}
+              </div>
+            )}
+            {aiNotice && <div className="ai-notice">{aiNotice}</div>}
+            {aiResults?.missing?.length > 0 && (
+              <div className="ai-notice" style={{ color: 'var(--amber-text)' }}>
+                <b>Missing from document:</b> {aiResults.missing.join(', ')}
               </div>
             )}
 
@@ -346,6 +378,16 @@ export default function IntakeForm() {
           {/* ---- Group 1 — Customer Info (Fields 1-5) ---- */}
           <div className="forms-col">
             <div className="forms-col-head">Customer Info</div>
+
+            <div className="q">
+              <div className="q-label">RFQ Number</div>
+              <Input field="rfqNumber" placeholder="Extracted or enter RFQ number" />
+            </div>
+
+            <div className="q">
+              <div className="q-label">RFQ Date</div>
+              <Input field="rfqDate" placeholder="Extracted or enter RFQ date" />
+            </div>
 
             <div className="q">
               <div className="q-label">
@@ -466,10 +508,11 @@ export default function IntakeForm() {
 
             <div className="q">
               <div className="q-label">
-                14. Product<span className="star">*</span>
+                14. Products<span className="star">*</span>
                 {aiFilledFields.has('product') && <span className="ai-badge">AI</span>}
               </div>
               <Pills field="product" options={PRODUCTS} />
+              <div className="hint" style={{ marginTop: 4 }}>Select all products included in this inquiry.</div>
             </div>
 
             {/* Progress indicator */}

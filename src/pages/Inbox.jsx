@@ -5,7 +5,7 @@ import { ddMmmYY, ageDays } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { Chip, ConfChip, WarnBox, ErrBox, Modal } from '../ui.jsx'
-import { ROLES } from '../seed.js'
+import { ROLES, OWNERS } from '../seed.js'
 import { isAdminRole, isApprover } from '../utils.js'
 import { aiEnabled, runJson } from '../ai.js'
 import { extractPdfText } from '../tenderParse.js'
@@ -266,6 +266,9 @@ function AiLeadDetail({ lead }) {
   const [rejFor, setRejFor] = useState(null)      // { idx, note }
   const [reExtracting, setReExtracting] = useState(false)
   const [reErr, setReErr] = useState('')
+  const [dropping, setDropping] = useState(false)
+  const [dropReason, setDropReason] = useState(DROP_REASONS[0])
+  const [reassignTo, setReassignTo] = useState(lead.suggestedOwner || OWNERS[0])
 
   // Re-read the original mail. Human decisions are discarded with it, so this
   // is confirmed first — the point of the field states is that they're earned.
@@ -312,6 +315,9 @@ function AiLeadDetail({ lead }) {
   // Read-only progress readout for the fields column footer.
   const decided = ai.fields.filter(f => f.state !== 'pending').length
   const attachments = lead.attachments || []
+  const reassign = () => {
+    store.updateLead(lead.id, { suggestedOwner: reassignTo, assignedOwner: reassignTo, reassignedFrom: lead.suggestedOwner || '', reassignedAt: new Date().toISOString() })
+  }
 
   return (
     <div className="ws-grid">
@@ -537,6 +543,26 @@ function AiLeadDetail({ lead }) {
               {qualifyBlocked && <p className="ws-foot-note">Blocked — Red continuation approval required first.</p>}
             </>
           )}
+          {canAct && (
+            <div className="toolbar" style={{ margin: '8px 0 0' }}>
+              {!dropping
+                ? <button onClick={() => setDropping(true)}><Icon name="x" size={13} /> Disqualify</button>
+                : <>
+                    <select value={dropReason} onChange={e => setDropReason(e.target.value)}>
+                      {DROP_REASONS.map(r => <option key={r}>{r}</option>)}
+                    </select>
+                    <button onClick={() => { store.updateLead(lead.id, { status: 'Dropped', droppedReason: dropReason }); setDropping(false) }}>Confirm</button>
+                    <button onClick={() => setDropping(false)}>Cancel</button>
+                  </>}
+              <select value={reassignTo} onChange={e => setReassignTo(e.target.value)} title="Assign lead to another salesperson">
+                {OWNERS.map(owner => <option key={owner}>{owner}</option>)}
+              </select>
+              <button onClick={reassign}>Reassign</button>
+            </div>
+          )}
+          {lead.status === 'Qualified' && !lead.oppId && (
+            <button onClick={() => store.updateLead(lead.id, { status: 'New' })}>Revert to Lead</button>
+          )}
           {lead.status === 'Qualified' && (
             <>
               <button className="primary ws-action" disabled={pendingLow.length > 0}
@@ -571,7 +597,12 @@ function LegacyLeadDetail({ lead }) {
   const drawer = useDrawer()
   const [dropping, setDropping] = useState(false)
   const [dropReason, setDropReason] = useState(DROP_REASONS[0])
+  const [reassignTo, setReassignTo] = useState(lead.suggestedOwner || OWNERS[0])
   const p = lead.parse || {}
+  const reassign = () => store.updateLead(lead.id, {
+    suggestedOwner: reassignTo, assignedOwner: reassignTo,
+    reassignedFrom: lead.suggestedOwner || '', reassignedAt: new Date().toISOString(),
+  })
 
   // The lead stays 'New' until the intake form is actually submitted —
   // IntakeForm flips it to Qualified and records the created oppId.
@@ -670,6 +701,19 @@ function LegacyLeadDetail({ lead }) {
                 </button>
                 <button onClick={() => setDropping(false)}>Cancel</button>
               </>}
+        </div>
+      )}
+      {lead.status === 'Qualified' && !lead.oppId && (
+        <div className="toolbar" style={{ marginTop: 10, marginBottom: 0 }}>
+          <button onClick={() => store.updateLead(lead.id, { status: 'New' })}>Revert to Lead</button>
+        </div>
+      )}
+      {lead.status !== 'Dropped' && lead.status !== 'Converted' && (
+        <div className="toolbar" style={{ marginTop: 8, marginBottom: 0 }}>
+          <select value={reassignTo} onChange={e => setReassignTo(e.target.value)}>
+            {OWNERS.map(owner => <option key={owner}>{owner}</option>)}
+          </select>
+          <button onClick={reassign}>Reassign</button>
         </div>
       )}
     </div>
