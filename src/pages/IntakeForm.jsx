@@ -100,6 +100,18 @@ export default function IntakeForm() {
     </select>
   )
 
+  // Pill/bubble selection for Classification fields
+  const Pills = ({ field, options }) => (
+    <div className="pill-group">
+      {options.map(o => (
+        <label key={o} className={`pill-opt ${f[field] === o ? 'on' : ''}`}>
+          <input type="radio" name={field} value={o} checked={f[field] === o} onChange={set(field)} />
+          {o}
+        </label>
+      ))}
+    </div>
+  )
+
   const Input = ({ field, type = 'text', placeholder, list }) => (
     <input
       type={type}
@@ -215,17 +227,17 @@ export default function IntakeForm() {
 
             <div className="q">
               <div className="q-label">12. BU<span className="star">*</span></div>
-              <Select field="bu" options={BUS} placeholder="Select business unit" />
+              <Pills field="bu" options={BUS} />
             </div>
 
             <div className="q">
               <div className="q-label">13. Segment<span className="star">*</span></div>
-              <Select field="segment" options={SEGMENTS} placeholder="Select segment" />
+              <Pills field="segment" options={SEGMENTS} />
             </div>
 
             <div className="q">
               <div className="q-label">14. Product<span className="star">*</span></div>
-              <Select field="product" options={PRODUCTS} placeholder="Select product" />
+              <Pills field="product" options={PRODUCTS} />
             </div>
 
             {/* Progress indicator */}

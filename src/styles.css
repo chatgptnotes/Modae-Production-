@@ -285,6 +285,26 @@ section:first-of-type .folder-section-head { margin-top: 4px; }
 .chip-opt:hover { border-color: var(--primary-hover); color: var(--text); }
 .chip-opt.on { background: var(--primary-soft, #e0e7ff); border-color: var(--primary-hover); color: var(--primary-hover); font-weight: 600; }
 .chip-opt input { position: absolute; opacity: 0; width: 0; height: 0; }
+
+/* Pill groups for Classification section — larger, more prominent than chips */
+.pill-group {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  margin-top: 4px;
+}
+.pill-opt {
+  display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
+  font-size: 12px; padding: 6px 12px; border: 1px solid #cbd5e1;
+  border-radius: 999px; background: #fff; color: var(--text-muted);
+  transition: border-color .12s, background .12s, color .12s;
+  font-weight: 500;
+}
+.pill-opt:hover { border-color: var(--primary-hover); color: var(--text); background: var(--primary-soft); }
+.pill-opt.on {
+  background: var(--primary-hover); border-color: var(--primary-hover);
+  color: #fff; font-weight: 600; box-shadow: 0 1px 3px rgba(14,165,233,.3);
+}
+.pill-opt input { position: absolute; opacity: 0; width: 0; height: 0; }
+
 /* Inline toolbar checkbox (lead inbox "Show all") */
 .cb-inline { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer; }
 
