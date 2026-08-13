@@ -43,7 +43,7 @@ const NAV = [
   { to: '/inbox', label: 'Lead Inbox', icon: 'inbox', page: 'inbox' },
   { to: '/', label: 'Opportunity Tracker', icon: 'sheet', page: 'tracker' },
   { to: '/my', label: 'My Opportunities', icon: 'cards', page: 'my' },
-  { to: '/new', label: 'New Opportunity', icon: 'plus', page: 'new' },
+  { to: '/new', label: 'Create Opportunity', icon: 'plus', page: 'new' },
   { to: '/tender', label: 'Tender → Proposal', icon: 'bot', page: 'tender' },
   { to: '/approvals', label: 'Approvals', icon: 'checkCircle', page: 'approvals' },
   { to: '/po', label: 'Purchase Orders', icon: 'clipboardCheck', page: 'po' },

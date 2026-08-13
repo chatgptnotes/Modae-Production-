@@ -39,7 +39,7 @@ export default function TabletHome() {
 
   // ---- KPI feature tiles --------------------------------------------------
   const QUICK = [
-    { icon: 'plus', to: '/new', title: 'New intake form' },
+    { icon: 'plus', to: '/new', title: 'Create opportunity' },
     { icon: 'inbox', to: '/inbox', title: 'Lead inbox' },
     { icon: 'mic', to: '/voice', title: 'Voice update' },
     { icon: 'checkCircle', to: '/approvals', title: 'Approvals' },

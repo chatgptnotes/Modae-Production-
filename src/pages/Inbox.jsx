@@ -6,6 +6,7 @@ import { Icon } from '../icons.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { Chip, ConfChip, WarnBox, ErrBox, Modal } from '../ui.jsx'
 import { ROLES } from '../seed.js'
+import { isAdminRole, isApprover } from '../utils.js'
 import { aiEnabled, runJson } from '../ai.js'
 import { extractPdfText } from '../tenderParse.js'
 import { fmtSize } from '../filestore.js'
@@ -658,14 +659,14 @@ function LegacyLeadDetail({ lead }) {
           </button>
           {!dropping
             ? <button onClick={() => { setDropping(true); setDropReason(DROP_REASONS[0]) }}>
-                <Icon name="x" size={13} /> Drop lead
+                <Icon name="x" size={13} /> Disqualify lead
               </button>
             : <>
                 <select value={dropReason} onChange={e => setDropReason(e.target.value)}>
                   {DROP_REASONS.map(r => <option key={r}>{r}</option>)}
                 </select>
                 <button onClick={() => { store.updateLead(lead.id, { status: 'Dropped', droppedReason: dropReason }); setDropping(false) }}>
-                  Confirm drop
+                  Confirm disqualify
                 </button>
                 <button onClick={() => setDropping(false)}>Cancel</button>
               </>}
@@ -686,6 +687,10 @@ export default function Inbox() {
   const [statusF, setStatusF] = useState('')
   const [routeF, setRouteF] = useState('')
   const [pasteOpen, setPasteOpen] = useState(false)
+  // Sales owners see only their assigned leads by default; a "Show all" toggle
+  // reveals the team's. Managers (LJS/AH) and admins always see everything.
+  const [showAll, setShowAll] = useState(false)
+  const seesAll = isAdminRole(store.role) || isApprover(store.role)
 
   const sel = leadId ? store.leads.find(l => l.id === leadId) : null
   if (sel) {
@@ -718,6 +723,8 @@ export default function Inbox() {
   }
 
   const rows = store.leads.filter(l => {
+    // Sales owners: only their assigned leads unless "Show all" is ticked.
+    if (!seesAll && !showAll && l.suggestedOwner !== store.role) return false
     if (q) {
       const hay = `${l.subject} ${l.sender || ''} ${l.from} ${l.ref || ''}`.toLowerCase()
       if (!hay.includes(q.toLowerCase())) return false
@@ -744,6 +751,11 @@ export default function Inbox() {
           <option value="">All routes</option>
           {ROUTE_OPTIONS.map(r => <option key={r}>{r}</option>)}
         </select>
+        {!seesAll && (
+          <label className="cb-inline" title="Show every team member's leads, not just yours">
+            <input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)} /> Show all
+          </label>
+        )}
         <span className="spacer" />
         <button onClick={() => store.addLead(simulatedLead())}>
           <Icon name="mail" size={13} /> Simulate incoming inquiry

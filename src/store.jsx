@@ -372,9 +372,7 @@ export function StoreProvider({ children }) {
       setState(s => withAudit({
         ...s,
         opportunities: s.opportunities.map(o =>
-          // An explicit lastUpdated in the patch (hand-edited in the tracker)
-          // wins over the auto-stamp; every other edit bumps it to today.
-          o.id === id ? { ...o, ...patch, lastUpdated: patch.lastUpdated ?? today } : o),
+          o.id === id ? { ...o, ...patch, lastUpdated: today } : o),
       }, 'Opportunity updated', id, Object.keys(patch).join(', ')))
       if (before) {
         const after = { ...before, ...patch }

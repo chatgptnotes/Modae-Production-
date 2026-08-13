@@ -352,10 +352,7 @@ export default function IntakeForm() {
                 1. Sell To Customer<span className="star">*</span>
                 {aiFilledFields.has('sellTo') && <span className="ai-badge">AI</span>}
               </div>
-              <Input field="sellTo" placeholder="Enter customer name" list="customer-list" />
-              <datalist id="customer-list">
-                {store.customers.map(c => <option key={c.name} value={c.name} />)}
-              </datalist>
+              <Select field="sellTo" options={store.customers.map(c => c.name)} placeholder="Select customer" />
               {f.sellTo && (
                 <div className="hint" style={{ marginTop: 2 }}>
                   {knownCustomer
@@ -426,7 +423,7 @@ export default function IntakeForm() {
             </div>
 
             <div className="q">
-              <div className="q-label">9. Estimated Value (K₹)</div>
+              <div className="q-label">9. Estimated Value (₹)</div>
               <Input field="valueK" type="number" placeholder="Enter estimated value" />
             </div>
 
@@ -440,7 +437,7 @@ export default function IntakeForm() {
 
             <div className="q">
               <div className="q-label">
-                11. Contact Phone #<span className="star">*</span>
+                11. Contact Phone<span className="star">*</span>
                 {aiFilledFields.has('contactPhone') && <span className="ai-badge">AI</span>}
               </div>
               <Input field="contactPhone" type="tel" placeholder="Enter contact phone" />

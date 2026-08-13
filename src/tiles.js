@@ -19,7 +19,7 @@ export function buildTiles(store) {
   const c = counts(store, role)
 
   return [
-    { key: 'new', page: 'new', icon: 'plus', label: 'New Intake Form', hint: 'Register a sales opportunity', to: '/new', color: 'teal' },
+    { key: 'new', page: 'new', icon: 'plus', label: 'Create Opportunity', hint: 'Register a sales opportunity', to: '/new', color: 'teal' },
     { key: 'my', page: 'my', icon: 'cards', label: 'My Opportunities', hint: 'Your pipeline as cards', to: '/my', color: 'navy', badge: approver ? 0 : c.myStale, badgeHint: 'your opportunities needing an update' },
     { key: 'inbox', page: 'inbox', icon: 'inbox', label: 'Lead Inbox', hint: 'AI-parsed incoming inquiries', to: '/inbox', color: 'sky', badge: c.newLeads, badgeHint: 'new leads to qualify' },
     { key: 'status', page: 'my', icon: 'clock', label: 'Update Status', hint: 'Opportunities not updated in 30+ days', to: '/my', color: 'amber', badge: approver ? c.stale : c.myStale, badgeHint: 'stale opportunities' },

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { STAGES, CLOSE_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, CUSTOMER_STATUSES } from '../seed.js'
+import { STAGES, CLOSE_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, CUSTOMER_STATUSES, ROLES } from '../seed.js'
 import { fmt, mmmYY, ddMmmYY, exportCSV, stageClass, canViewCommercial } from '../utils.js'
 import { useFormulaBar } from '../formulabar.jsx'
 import { useDrawer } from '../drawer.jsx'
@@ -49,7 +49,14 @@ export default function Tracker() {
   const fb = useFormulaBar()
   const drawer = useDrawer()
   const [sheet, setSheet] = useState('Opportunities') // Pivot | Opportunities | Old Closed Opps
-  const [ownerFilter, setOwnerFilter] = useState('All')
+
+  // Role-based default filtering for owner:
+  // Sales reps default to their own opportunities, admins see all
+  const isAdmin = ROLES[store.role]?.admin || ROLES[store.role]?.commercial
+  const isSalesRep = OWNERS.includes(store.role)
+  const defaultOwnerFilter = (isSalesRep && !isAdmin) ? store.role : 'All'
+  const [ownerFilter, setOwnerFilter] = useState(defaultOwnerFilter)
+
   const [filters, setFilters] = useState({})           // col key -> Set of allowed display values
   const [frozenIds, setFrozenIds] = useState(null)     // row ids captured when a filter was applied
   const [sort, setSort] = useState(null)               // { key, dir: 1 | -1 }
@@ -211,7 +218,7 @@ export default function Tracker() {
         <span className="spacer" />
         <button onClick={exportRows} disabled={!comm}
           title={comm ? '' : 'Export includes commercial columns — restricted to approvers/admin'}>Extract to Excel</button>
-        <Link className="btn primary" to="/new">+ New Opportunity</Link>
+        <Link className="btn primary" to="/new">Create Opportunity</Link>
       </div>
 
       <div className="sheet-wrap">
@@ -328,7 +335,9 @@ export default function Tracker() {
                 </td>
                 <td onClick={selectCell(o, COLS[25])} className={isSel(o, COLS[25]) ? 'cell-sel' : ''}><input type="text" value={o.contactPerson} onChange={upd(o.id, 'contactPerson')} style={{ minWidth: 120 }} /></td>
                 <td onClick={selectCell(o, COLS[26])} className={isSel(o, COLS[26]) ? 'cell-sel' : ''}><input type="text" value={o.contactPhone} onChange={upd(o.id, 'contactPhone')} style={{ minWidth: 110 }} /></td>
-                <td onClick={selectCell(o, COLS[27])} className={isSel(o, COLS[27]) ? 'cell-sel' : ''}><input type="date" value={o.lastUpdated || ''} onChange={upd(o.id, 'lastUpdated')} style={{ width: 108 }} /></td>
+                <td onClick={selectCell(o, COLS[27])} className={isSel(o, COLS[27]) ? 'cell-sel' : ''}>
+                  <div className="ro" title="Auto-stamped — read only">{ddMmmYY(o.lastUpdated)}</div>
+                </td>
                 <td onClick={selectCell(o, COLS[28])} className={isSel(o, COLS[28]) ? 'cell-sel' : ''} style={{ textAlign: 'center' }}>
                   <input type="checkbox" checked={!!o.forecast} onChange={upd(o.id, 'forecast')} title="Include for roll-up" />
                 </td>

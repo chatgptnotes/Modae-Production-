@@ -1,18 +1,17 @@
-import React from 'react'
-import { useNavigate } from 'react-router-dom'
+import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
-import { OWNERS } from '../seed.js'
-import { canViewCommercial, fmt, ddMmmYY } from '../utils.js'
+import { OWNERS, ROLES } from '../seed.js'
+import { canViewCommercial, fmt, ddMmmYY, stageClass } from '../utils.js'
 import { useDrawer } from '../drawer.jsx'
 import { Icon } from '../icons.jsx'
 
-// Each tracker row as a card; tapping opens the same slide-in drawer as the
-// grid, so every Excel field stays viewable and editable — nothing is lost
-// versus the sheet, which stays one tap away.
+// My Opportunities — a single table view of the pipeline (no Cards/Sheet
+// toggle). Each row opens the same slide-in drawer the tracker uses, so every
+// sheet field stays viewable and editable.
 export default function MyOpps() {
   const store = useStore()
-  const nav = useNavigate()
   const drawer = useDrawer()
+  const [showAll, setShowAll] = useState(false)
 
   const role = store.role
   const comm = canViewCommercial(role)
@@ -20,42 +19,61 @@ export default function MyOpps() {
 
   let rows = [...store.opportunities]
     .sort((a, b) => (b.lastUpdated || '').localeCompare(a.lastUpdated || ''))
-  if (mine) rows = rows.filter(o => o.owner === role)
+  // Role-based filtering: sales reps see only their opportunities by default
+  // Admin/System Owner/Management roles see all opportunities by default
+  const isAdmin = ROLES[role]?.admin || ROLES[role]?.commercial
+  if (mine && !isAdmin && !showAll) rows = rows.filter(o => o.owner === role)
 
   const devCount = o => ((store.proposals[o.id] || {}).terms || []).filter(t => t.status === 'Deviation').length
 
   return (
     <div className="page">
-      <h2>{mine ? `My Opportunities — ${role}` : 'Opportunities — cards'}</h2>
+      <h2>{mine ? `My Opportunities — ${role}` : 'Opportunities'}</h2>
       <div className="toolbar">
-        <span className="hint">Tap a card to view and edit every field of its sheet row.</span>
-        <span className="spacer" />
-        <span className="btn primary"><Icon name="cards" size={13} /> Cards</span>
-        <button onClick={() => nav(mine ? `/?owner=${role}` : '/')}><Icon name="sheet" size={13} /> Sheet</button>
+        {mine && !isAdmin && (
+          <label className="show-all-toggle">
+            <input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)} />
+            Show All Opportunities
+          </label>
+        )}
+        <span className="hint">{mine
+          ? 'Your pipeline — click a row to view and edit every field.'
+          : 'Click a row to view and edit every field of its sheet row.'}</span>
       </div>
 
-      <div className="opp-card-grid">
-        {rows.map(o => {
-          const gmK = (o.valueK || 0) - (o.cogsK || 0)
-          const dc = devCount(o)
-          return (
-            <div key={o.id} className="opp-card" onClick={() => drawer.open({ type: 'opp', id: o.id })}>
-              <div className="oc-top">
-                <b>{o.id}</b>
-                <span className={`pill ${o.customerStatus}`}>{o.customerStatus}</span>
-              </div>
-              <div className="oc-name" title={o.oppName}>{o.sellTo} — {o.oppName}</div>
-              <div className="oc-meta">
-                Stage: <b>{o.status === 'Closed' ? o.stage : o.stage}</b> · Prob: {o.prob || '—'} · {o.owner}
-                {dc > 0 && <span className="pill Red" style={{ marginLeft: 6 }}>{dc} deviation{dc > 1 ? 's' : ''}</span>}
-              </div>
-              <div className="oc-meta">
-                Value: {comm ? (o.valueK ? `₹ ${fmt(o.valueK)} K` : '—') : <Icon name="lock" size={11} />} · Updated {ddMmmYY(o.lastUpdated)}
-              </div>
-            </div>
-          )
-        })}
-        {!rows.length && <p className="hint">Nothing here — no opportunities for this owner yet.</p>}
+      <div className="sheet-wrap">
+        <table className="sheet">
+          <thead>
+            <tr>
+              <th>Opp ID</th><th>Customer</th><th>Opportunity</th>
+              <th>Stage</th><th>Prob</th><th>Owner</th>
+              <th>{comm ? 'Value (K₹)' : ''}</th><th>Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(o => {
+              const dc = devCount(o)
+              return (
+                <tr key={o.id} className="rowclick" onClick={() => drawer.open({ type: 'opp', id: o.id })}>
+                  <td><b>{o.id}</b></td>
+                  <td>{o.sellTo}</td>
+                  <td style={{ maxWidth: 360 }}>
+                    {o.oppName}
+                    {dc > 0 && <span className="pill Red" style={{ marginLeft: 6 }}>{dc} deviation{dc > 1 ? 's' : ''}</span>}
+                  </td>
+                  <td><span className={`pill ${stageClass(o)}`}>{o.stage}</span></td>
+                  <td>{o.prob || '—'}</td>
+                  <td>{o.owner}</td>
+                  <td>{comm ? (o.valueK ? `₹ ${fmt(o.valueK)}` : '—') : ''}</td>
+                  <td>{ddMmmYY(o.lastUpdated)}</td>
+                </tr>
+              )
+            })}
+            {!rows.length && (
+              <tr><td colSpan={8}>Nothing here — no opportunities for this owner yet.</td></tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   )

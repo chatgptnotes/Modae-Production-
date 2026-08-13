@@ -12,7 +12,9 @@ import { Icon, BrandMark } from '../icons.jsx'
 // the tablet launcher never drift; only the "Generate Proposal" action tile is
 // local (it needs the pick modal).
 const FOR_YOU = {
-  sales: ['inbox', 'new', 'tender', 'my'],
+  // Salesperson daily workflow, in order: capture the lead, create the
+  // opportunity, build the proposal, manage my pipeline, clear approvals, book POs.
+  sales: ['inbox', 'new', 'genprop', 'my', 'approvals', 'po'],
   approver: ['approvals', 'inbox', 'dashboard', 'tracker'],
   admin: ['users', 'audit', 'pricelists', 'tender'],
 }
