@@ -80,6 +80,9 @@ export default function App() {
   const nav = useNavigate()
   const loc = useLocation()
   const [navOpen, setNavOpen] = useState(false)
+  const [sidebarCompact, setSidebarCompact] = useState(() => {
+    try { return window.localStorage.getItem('modae_sidebar_compact') === '1' } catch { return false }
+  })
   const tablet = store.viewMode === 'tablet'
   const role = store.role
   const items = NAV.filter(t => canSeePage(role, t.page))
@@ -109,6 +112,11 @@ export default function App() {
   // Customer accounts/persona only ever see the portal. Route-level, not a
   // post-render effect — internal pages must never mount for a customer.
   const custAccount = store.auth?.user?.role === 'CUST'
+  const toggleSidebar = () => setSidebarCompact(value => {
+    const next = !value
+    try { window.localStorage.setItem('modae_sidebar_compact', next ? '1' : '0') } catch { /* storage is optional */ }
+    return next
+  })
 
   const routes = (role === 'CUST' || custAccount) ? (
     <Routes>
@@ -220,11 +228,15 @@ export default function App() {
       <DrawerHost />
     </div>
   ) : (
-    <div className="shell">
+    <div className={`shell ${sidebarCompact ? 'sidebar-compact' : ''}`}>
       <div className={`nav-backdrop ${navOpen ? 'open' : ''}`} onClick={() => setNavOpen(false)} />
       <aside className={`sidenav ${navOpen ? 'open' : ''}`}>
         <div className="brand" onClick={() => nav('/home')}>
           <ModaeLogo size={28} sub="WinTrack" />
+          <button className="sidebar-toggle" onClick={e => { e.stopPropagation(); toggleSidebar() }}
+            title={sidebarCompact ? 'Expand sidebar' : 'Collapse sidebar'} aria-label={sidebarCompact ? 'Expand sidebar' : 'Collapse sidebar'}>
+            <Icon name={sidebarCompact ? 'chevronRight' : 'chevronLeft'} size={15} />
+          </button>
         </div>
         <nav className="side-nav">
           {items.map(t => {
@@ -233,8 +245,8 @@ export default function App() {
             const badge = t.badge ? t.badge(c) : 0
             return (
               <NavLink key={t.to} to={t.to} end={t.to === '/'}
-                className={({ isActive }) => `side-item ${isActive ? 'active' : ''}`}>
-                <Icon name={t.icon} size={17} /> {t.label}
+                className={({ isActive }) => `side-item ${isActive ? 'active' : ''}`} title={sidebarCompact ? t.label : undefined}>
+                <Icon name={t.icon} size={17} /> <span className="side-label">{t.label}</span>
                 {badge > 0 && <span className="side-badge" title={t.badgeHint}>{badge}</span>}
               </NavLink>
             )
@@ -249,11 +261,11 @@ export default function App() {
           )}
           {store.auth?.user && (
             <button className="reset" onClick={store.logout} title={store.auth.user.email}>
-              Sign out ({store.auth.user.name})
+              <Icon name="logout" size={14} /> <span className="side-label">Sign out ({store.auth.user.name})</span>
             </button>
           )}
           <button className="reset" onClick={store.resetDemo} title="Clear local changes and reload seed data">
-            Reset demo data
+            <Icon name="refresh" size={14} /> <span className="side-label">Reset demo data</span>
           </button>
         </div>
       </aside>

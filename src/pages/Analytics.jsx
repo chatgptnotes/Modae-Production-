@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { STAGES, CUSTOMER_STATUSES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, PROB_LEVELS, ROLES } from '../seed.js'
-import { fmtLakh, ageDays, canViewCommercial, isAdminRole, isApprover, sameCustomer, productList } from '../utils.js'
+import { fmtLakh, ageDays, canViewCommercial, isAdminRole, isApprover, isSalesOwner, sameCustomer, productList } from '../utils.js'
 import { PROB_WEIGHT } from '../kpi.js'
 import { Icon } from '../icons.jsx'
 import { ArcGauge } from '../dashviz.jsx'
@@ -225,7 +225,9 @@ function Funnel({ stages, showValue }) {
 export default function Analytics() {
   const store = useStore()
   const nav = useNavigate()
-  const comm = canViewCommercial(store.role)
+  // Sales owners may see commercial analytics for their locked own-owner scope;
+  // team-wide commercial reporting remains limited to approvers/admins.
+  const comm = canViewCommercial(store.role) || isSalesOwner(store.role)
 
   const [f, setF] = useState(DEFAULTS)
   // Typing a custom date implies the custom preset — otherwise the input looks

@@ -62,6 +62,8 @@ const PATHS = {
   trendDown: <><path d="M3.5 7 10 13.5l3.5-3.5L20.5 17" /><path d="M15.5 17h5v-5" /></>,
   chevronUp: <path d="m5.5 15 6.5-6.5 6.5 6.5" />,
   chevronDown: <path d="m5.5 9 6.5 6.5L18.5 9" />,
+  chevronLeft: <path d="m14.5 5.5-6.5 6.5 6.5 6.5" />,
+  chevronRight: <path d="m9.5 5.5 6.5 6.5-6.5 6.5" />,
   edit: <><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3Z" /><path d="m14.5 6.5 3 3" /></>,
 }
 
