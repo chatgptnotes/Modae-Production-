@@ -1,9 +1,9 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { ROLES } from '../seed.js'
-import { readiness, isBlocked } from '../gates.js'
-import { isApprover, isAdminRole, isSalesOwner, canViewCommercial, canPriceProposal, fmtLakh } from '../utils.js'
+import { ROLES, STAGES } from '../seed.js'
+import { readiness, isBlocked, nextActionWith } from '../gates.js'
+import { isApprover, isAdminRole, isSalesOwner, canViewCommercial, canPriceProposal, fmtLakh, ddMmmYY } from '../utils.js'
 import { analyticsSnapshot, counts, salesPerformance, FY_QUARTERS, FY_MONTHS } from '../kpi.js'
 import { ArcGauge, Sparkline } from '../dashviz.jsx'
 import { Icon } from '../icons.jsx'
@@ -113,6 +113,79 @@ function QuarterBars({ perf }) {
   )
 }
 
+function RunRateChart({ perf }) {
+  const points = perf.monthly.map((actual, i) => ({ label: FY_MONTHS[i], actual, target: perf.annual / 12 }))
+  const max = Math.max(1, ...points.flatMap(p => [p.actual, p.target]))
+  const x = i => 26 + (i * 668 / Math.max(1, points.length - 1))
+  const y = value => 132 - ((value / max) * 104)
+  const line = key => points.map((p, i) => `${x(i)},${y(p[key])}`).join(' ')
+  return (
+    <div className="runrate-chart">
+      <svg viewBox="0 0 720 166" role="img" aria-label="Monthly performance against run rate">
+        <line x1="26" y1="132" x2="694" y2="132" stroke="var(--border-color)" />
+        <line x1="26" y1="80" x2="694" y2="80" stroke="var(--border-soft)" strokeDasharray="3 4" />
+        <polyline points={line('target')} fill="none" stroke="#94a3b8" strokeWidth="2" strokeDasharray="5 4" />
+        <polyline points={line('actual')} fill="none" stroke="var(--primary-accent)" strokeWidth="2.5" />
+        {points.map((p, i) => <g key={p.label}><circle cx={x(i)} cy={y(p.actual)} r="3.5" fill="var(--primary-accent)" /><text x={x(i)} y="153" textAnchor="middle" fontSize="10" fill="var(--text-subtle)">{p.label}</text></g>)}
+      </svg>
+      <div className="chart-legend"><span><i className="legend-line target" />Target run rate</span><span><i className="legend-line actual" />Actual</span></div>
+    </div>
+  )
+}
+
+function SalesFunnel({ open, nav }) {
+  const stages = STAGES.filter(s => s !== 'Won' && s !== 'Lost')
+  const rows = stages.map(stage => ({ stage, count: open.filter(o => o.stage === stage).length }))
+  return (
+    <div className="sales-funnel">
+      <div className="funnel-legend"><span>Ideal funnel shape</span><span>Actual stage volume</span></div>
+      {rows.map((row, i) => (
+        <button key={row.stage} className="sales-funnel-row" onClick={() => nav(`/?stage=${encodeURIComponent(row.stage)}`)}>
+          <span className="funnel-stage-label">{row.stage}</span>
+          <span className="ideal-funnel" style={{ width: `${100 - i * 9}%` }} />
+          <span className="actual-funnel" style={{ width: `${Math.max(row.count ? 7 : 0, Math.min(100, row.count * 18))}%` }}>{row.count || ''}</span>
+        </button>
+      ))}
+      {!rows.some(row => row.count) && <div className="hint">No open opportunities in your funnel.</div>}
+    </div>
+  )
+}
+
+function ViewSwitch({ value, onChange }) {
+  return <div className="dashboard-view-switch" role="group" aria-label="View mode">
+    {['table', 'cards', 'compact'].map(mode => <button key={mode} className={value === mode ? 'active' : ''} onClick={() => onChange(mode)}>{mode === 'table' ? '▤ Table' : mode === 'cards' ? '▦ Cards' : '☰ Compact'}</button>)}
+  </div>
+}
+
+function SalesOpportunitySection({ store, open, nav, money }) {
+  const [view, setView] = useState('table')
+  const rows = [...open].sort((a, b) => (b.lastUpdated || '').localeCompare(a.lastUpdated || ''))
+  const action = o => nextActionWith(o, store.getProposal(o.id), store)
+  return (
+    <Card title="My opportunities" icon="sheet" tone="tone-sky" span={12} action={<ViewSwitch value={view} onChange={setView} />}>
+      {view === 'table' && <div className="dashboard-table-scroll"><table className="dashboard-table"><thead><tr><th>ID</th><th>Opportunity</th><th>Customer</th><th>Stage</th><th>Value</th><th>Win %</th><th>Next action</th><th>Due</th></tr></thead><tbody>{rows.map(o => { const na = action(o); return <tr key={o.id} onClick={() => nav(`/opp/${o.id}`)}><td><b>{o.id}</b></td><td>{o.oppName}</td><td>{o.sellTo}</td><td><span className="pill open">{o.stage}</span></td><td>{money ? fmtLakh(o.valueK) : '—'}</td><td>{o.prob || '—'}</td><td title={na.text}>{na.text || o.remarks || 'Review next step'}</td><td>{o.orderDate ? ddMmmYY(o.orderDate) : '—'}</td></tr>})}</tbody></table></div>}
+      {view === 'cards' && <div className="sales-opportunity-cards">{rows.map(o => { const na = action(o); return <button key={o.id} onClick={() => nav(`/opp/${o.id}`)}><b>{o.id}</b><strong>{o.oppName}</strong><span>{o.sellTo} · {o.stage}</span><span>{money ? fmtLakh(o.valueK) : '—'} · {o.prob || 'No probability'}</span><small>{na.text || o.remarks || 'Review next step'}</small></button> })}</div>}
+      {view === 'compact' && <div className="sales-compact-list">{rows.map(o => <button key={o.id} onClick={() => nav(`/opp/${o.id}`)}><b>{o.id}</b><span>{o.oppName}</span><span>{o.stage}</span><span>{money ? fmtLakh(o.valueK) : '—'}</span></button>)}</div>}
+      {!rows.length && <div className="dashboard-empty">No open opportunities are assigned to you.</div>}
+    </Card>
+  )
+}
+
+function SalesCustomerSection({ store, open, orders, nav, money }) {
+  const names = [...new Set([...open.map(o => o.sellTo), ...orders.map(o => o.customer)])]
+  const rows = names.map(name => {
+    const customer = store.customers.find(c => c.name === name)
+    const opps = open.filter(o => o.sellTo === name)
+    const booked = orders.filter(o => o.customer === name)
+    const region = opps[0]?.location || '—'
+    return { name, status: customer?.status || '—', region, open: opps.length, value: opps.reduce((s, o) => s + (+o.valueK || 0), 0), orders: booked.length }
+  }).sort((a, b) => b.value - a.value)
+  return <Card title="My customers" icon="users" tone="tone-green" span={12} action={<button onClick={() => nav('/customers')}>Open customer master</button>}>
+    <div className="dashboard-table-scroll"><table className="dashboard-table customer-table"><thead><tr><th>Customer</th><th>Class</th><th>Region</th><th>Open opportunities</th><th>Open value</th><th>Orders</th></tr></thead><tbody>{rows.map(row => <tr key={row.name} onClick={() => nav('/customers')}><td><b>{row.name}</b></td><td><span className={`pill ${row.status}`}>{row.status}</span></td><td>{row.region}</td><td>{row.open}</td><td>{money ? fmtLakh(row.value) : '—'}</td><td>{row.orders}</td></tr>)}</tbody></table></div>
+    {!rows.length && <div className="dashboard-empty">Customers will appear here when you have an opportunity or booked order.</div>}
+  </Card>
+}
+
 // Shared across every role: what is stuck, and what to do next.
 function useWorkQueue(store, role, mine) {
   const opportunities = mine ? store.opportunities.filter(o => o.owner === role) : store.opportunities
@@ -213,7 +286,12 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
         <Metric label="Run rate, annualised" value={fmtLakh(perf.runRate)} tone={perf.runRate >= perf.annual ? 'green' : 'amber'} />
       </div>
 
-      <AnalyticsOverview {...{ store, role, nav }} />
+      <div className="sales-kpi-strip">
+        <Metric label="Open value" value={money ? fmtLakh(openValue) : '—'} tone="sky" onClick={() => nav('/my')} />
+        <Metric label="Weighted forecast" value={money ? fmtLakh(open.reduce((s, o) => s + (+o.valueK || 0) * ({ Low: .25, Medium: .5, High: .75 }[o.prob] || .25), 0)) : '—'} tone="teal" onClick={() => nav('/analytics')} />
+        <Metric label="Booked orders" value={money ? fmtLakh(perf.achieved) : '—'} tone="green" onClick={() => nav('/po')} />
+        <Metric label="Active customers" value={new Set([...open.map(o => o.sellTo), ...perf.orders.map(o => o.customer)]).size} tone="slate" onClick={() => nav('/customers')} />
+      </div>
 
       <div className="ana-grid">
         <Card title="Annual attainment" icon="target" tone="tone-green" span={4}>
@@ -235,6 +313,14 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
         <Card title="Quarterly target vs actual" icon="chartBar" tone="tone-sky" span={8}>
           <QuarterBars perf={perf} />
           <div className="hint" style={{ marginTop: 8 }}>Booked orders against your quarterly number.</div>
+        </Card>
+
+        <Card title="Monthly performance against run rate" icon="chartLine" tone="tone-sky" span={8}>
+          <RunRateChart perf={perf} />
+        </Card>
+
+        <Card title="My funnel" icon="layers" tone="tone-teal" span={4}>
+          <SalesFunnel open={open} nav={nav} />
         </Card>
 
         <Card title="Monthly bookings" icon="chartLine" tone="tone-violet" span={6}>
@@ -280,6 +366,11 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
           </table>
           {perf.orders.length > 6 && <button style={{ marginTop: 8 }} onClick={() => nav('/po')}>All {perf.orders.length} orders</button>}
         </Card>
+      </div>
+
+      <div className="ana-grid sales-detail-grid">
+        <SalesOpportunitySection {...{ store, open, nav, money }} />
+        <SalesCustomerSection store={store} open={open} orders={perf.orders} nav={nav} money={money} />
       </div>
     </div>
   )
