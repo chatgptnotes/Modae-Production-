@@ -5,8 +5,12 @@ import { createClient } from '@supabase/supabase-js'
 // still runs without a Supabase project. createClient throws on a bad URL at
 // module load, which would blank the whole app (seen on Vercel when the env
 // var held a placeholder) — so validate and try/catch instead of trusting it.
-const url = (import.meta.env.VITE_SUPABASE_URL || '').trim()
-const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim()
+// `import.meta.env` is injected by Vite and simply absent under plain Node, so
+// importing this module from a test used to throw before the guard below ever
+// ran. Treat "no env at all" the same as "not configured".
+const env = import.meta.env || {}
+const url = (env.VITE_SUPABASE_URL || '').trim()
+const anonKey = (env.VITE_SUPABASE_ANON_KEY || '').trim()
 function makeClient() {
   if (!/^https?:\/\/.+/i.test(url) || !anonKey) return null
   try {

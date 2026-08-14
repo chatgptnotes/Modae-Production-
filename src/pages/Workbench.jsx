@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS } from '../seed.js'
-import { canViewCommercial, isAdminRole, fmt, ageDays, ddMmmYY } from '../utils.js'
+import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY } from '../utils.js'
 import { readiness, isBlocked, computeProposalTotals } from '../gates.js'
 import { COMMERCIAL_RX } from './Approvals.jsx'
 import { Chip, ClassChip, AiBadge, Stepper, WarnBox, Modal } from '../ui.jsx'
@@ -105,7 +105,7 @@ function OverviewTab({ opp, goTab }) {
     ? `Resolve blocker: ${firstBlock.text}`
     : NEXT_ACTION[opp.milestone] || 'Progress the opportunity'
 
-  const comm = canViewCommercial(store.role)
+  const comm = canPriceProposal(store.role)
   const summary = [
     `${opp.oppName} for ${opp.sellTo} (${opp.customerStatus} customer, ${opp.category}) runs on the ${opp.route} route and sits at ${opp.milestone}.`,
     comm && opp.valueK > 0
@@ -521,7 +521,7 @@ function ProposalTab({ opp }) {
 
 function PreviewPane({ opp }) {
   const store = useStore()
-  const comm = canViewCommercial(store.role)
+  const comm = canPriceProposal(store.role)
   const p = store.getProposal(opp.id)
   const t = computeProposalTotals(p)
   return (
@@ -686,9 +686,9 @@ function ApprovalsTab({ opp }) {
             <span className={`pill ${statusPill(a.status)}`}>{a.status}</span>
             <span className="hint" style={{ marginLeft: 'auto' }}>requested by {a.requestedBy} · {ddMmmYY((a.ts || '').slice(0, 10))}</span>
           </div>
-          {COMMERCIAL_RX.test(a.detail || '') && !canViewCommercial(store.role) ? (
+          {COMMERCIAL_RX.test(a.detail || '') && !canPriceProposal(store.role) ? (
             <div className="restricted" style={{ fontSize: 12.5, margin: '6px 0' }}>
-              <Icon name="lock" size={11} /> Commercial exception — trigger values (GM% / discount / value) visible to LJS / AH only.
+              <Icon name="lock" size={11} /> Commercial exception — trigger values (GM% / discount / value) visible to approvers and the opportunity owner only.
             </div>
           ) : (
             <div style={{ fontSize: 12.5, margin: '6px 0' }}>{a.detail}</div>

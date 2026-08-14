@@ -1943,3 +1943,105 @@ button.linklike:hover { text-decoration: underline; }
   /* Belt and braces: internal costing can never reach paper. */
   .internal, table.sheet th.internal, table.sheet td.internal { display: none !important; }
 }
+
+/* Multi-value cell picker (Product on the tracker). Looks like the grid's other
+   inline controls but opens the .filter-pop checkbox list instead of a select. */
+.cell-pick {
+  width: 100%; min-height: 22px; padding: 1px 4px; text-align: left;
+  background: transparent; border: 1px solid transparent; border-radius: 2px;
+  font: inherit; color: inherit; cursor: pointer; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.cell-pick:hover { border-color: var(--text-subtle); background: var(--select-fill); }
+
+/* Proposal preview inside the Email dialog: the real printed document, scaled
+   down to fit the modal, so what the salesperson approves is what gets sent. */
+.email-preview { margin-top: 8px; border: 1px solid var(--border-soft); border-radius: 4px; }
+.email-preview-doc {
+  max-height: 46vh; overflow: auto; background: var(--surface-sunken, #eceff3); padding: 8px;
+}
+.email-preview-doc .propdoc { transform: scale(.52); transform-origin: top left; width: 192%; }
+
+/* Sidebar count badge — the desktop nav carried none, so an approver had no
+   sign that a gate was waiting on them until they opened the page. */
+.side-item .side-badge {
+  margin-left: auto; background: #c0392b; color: #fff; border-radius: 9px;
+  min-width: 17px; padding: 1px 5px; font-size: 10.5px; line-height: 1.5;
+  text-align: center; font-weight: 600;
+}
+.side-item { display: flex; align-items: center; gap: 8px; }
+
+/* Quarterly target-vs-actual cards on My Dashboard. Four across on desktop,
+   wrapping to two and then one as the viewport narrows. */
+.qcards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.qcard {
+  border: 1px solid var(--border-soft); border-radius: 6px; padding: 8px 10px;
+  background: var(--surface-raised, transparent); min-width: 0;
+}
+.qcard.cur { border-color: var(--primary-accent); box-shadow: inset 0 0 0 1px var(--primary-accent); }
+.qcard .q-t { font-size: 11px; color: var(--text-subtle); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qcard .q-a { font-size: 17px; font-weight: 650; margin: 2px 0 1px; }
+.qcard .q-s { font-size: 11px; color: var(--text-subtle); }
+.qcard .q-bar { height: 5px; border-radius: 3px; background: var(--border-soft); margin-top: 6px; overflow: hidden; }
+.qcard .q-bar i { display: block; height: 100%; background: var(--primary-accent); }
+.qcard .q-bar i.ok { background: var(--won-text, #2E9E4F); }
+.qcard .q-bar i.miss { background: var(--amber-text, #D99200); }
+@media (max-width: 900px) { .qcards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 460px) { .qcards { grid-template-columns: 1fr; } }
+
+/* Metric tiles are buttons when they navigate. */
+.stat-card-v2.clickable { cursor: pointer; text-align: left; font: inherit; }
+.stat-card-v2.clickable:hover { border-color: var(--primary-accent); }
+
+/* Disqualify / revert reason capture — a category alone never says why. */
+.reason-box {
+  margin-top: 8px; padding: 10px; border: 1px solid var(--border-soft);
+  border-radius: 6px; display: flex; flex-direction: column; gap: 6px;
+}
+.reason-box textarea { width: 100%; resize: vertical; font: inherit; }
+
+/* A derived Next Action Pending owner reads greyed until someone overrides it. */
+.sheet select.derived { color: var(--text-subtle); font-style: italic; }
+/* A mandatory expected date that has not been filled in yet. */
+.sheet td.need input { outline: 1px solid var(--amber-text); outline-offset: -1px; }
+
+/* A field the uploaded document did not contain. Amber, not red: nothing is
+   wrong yet, it just still needs a human. Red stays for a field the user
+   emptied themselves. */
+.forms-card .not-extracted,
+.forms-card input.not-extracted,
+.forms-card select.not-extracted {
+  border-color: var(--amber-text);
+  background: color-mix(in srgb, var(--amber-text) 7%, transparent);
+}
+.forms-card .pill-group.not-extracted {
+  outline: 1px dashed var(--amber-text); outline-offset: 3px; border-radius: 6px;
+}
+
+/* Derived customer health score — hover carries the reasons that moved it. */
+.health { font-weight: 600; white-space: nowrap; cursor: help; }
+.health.ok { color: var(--won-text); }
+.health.warn { color: var(--amber-text); }
+.health.bad { color: var(--lost-text); }
+
+/* ---------------------------------------------------------------- overflow
+   Wide content scrolls inside its own container (.sheet-wrap, .ana-scroll);
+   the page itself must never scroll sideways. Without this a single nowrap
+   element in the tablet bar dragged the whole document with it at 390px. */
+html, body { overflow-x: hidden; max-width: 100%; }
+
+/* The tablet bar carries brand + two bells + connection chip + install + theme
+   + role select + two mode buttons. That never fit on a phone in one nowrap
+   row, so it wraps, and the button labels collapse to their icons first. */
+.tablet-bar { flex-wrap: wrap; row-gap: 6px; }
+.tablet-bar select { max-width: min(150px, 38vw); }
+@media (max-width: 720px) {
+  .tablet-bar { gap: 7px; padding-left: 10px; padding-right: 10px; }
+  .tablet-bar .tb-label { display: none; }
+  .tablet-bar .tb-online span:not(.hint) { display: none; }
+  .tablet-bar button { padding: 6px 8px; }
+}
+@media (max-width: 460px) {
+  .tablet-bar .tb-brand i { display: none; }
+  .tablet-bar select { max-width: 34vw; }
+}

@@ -8,7 +8,72 @@ import { extractPdfText, parseTender, buildOpportunityDraft } from '../tenderPar
 const empty = {
   sellTo: '', category: '', location: '', eucName: '', eucLocation: '',
   oppName: '', owner: '', oppType: '', bu: '', segment: '', product: [],
-  contactPerson: '', contactPhone: '', valueK: '', rfqNumber: '', rfqDate: '',
+  contactPerson: '', contactPhone: '', contactEmail: '', valueK: '', rfqNumber: '', rfqDate: '',
+}
+
+// Shared by the submit gate and by the post-extraction check, so "required" and
+// "the document should have given us this" can never drift apart.
+const REQUIRED_FIELDS = ['sellTo', 'category', 'eucName', 'eucLocation', 'oppName', 'owner',
+  'oppType', 'bu', 'segment', 'product', 'contactPerson', 'contactPhone']
+
+// Select/Pills/Input live at module scope, not inside IntakeForm. A component
+// declared in the render body is a brand-new element type on every render, so
+// React unmounts and remounts each input — which meant every text field lost
+// focus after a single keystroke. The form state reaches them through context so
+// the call sites stay as short as `<Input field="eucName" />`.
+const FormCtx = React.createContext(null)
+
+// Red once the user has emptied a field they touched; amber when the uploaded
+// document simply did not contain it and nobody has filled it in yet.
+const fieldClass = (validation, field, aiMissing) => {
+  if (validation.fields[field]?.touched && !validation.fields[field]?.valid) return 'error'
+  return aiMissing?.has(field) ? 'not-extracted' : ''
+}
+
+// Compact dropdown for all select fields
+function Select({ field, options, placeholder }) {
+  const { f, set, validation, aiMissing } = React.useContext(FormCtx)
+  return (
+    <select value={f[field]} onChange={set(field)} className={fieldClass(validation, field, aiMissing)}>
+      <option value="">{placeholder}</option>
+      {options.map(o => <option key={o}>{o}</option>)}
+    </select>
+  )
+}
+
+// Pill/bubble selection for Classification fields. Product is multi-select
+// (several products can sit on one opportunity); business unit and segment stay
+// single-select, per the 13 Aug review.
+function Pills({ field, options }) {
+  const { f, set, selectedProducts, setF, aiMissing } = React.useContext(FormCtx)
+  const isProduct = field === 'product'
+  return (
+    <div className={'pill-group' + (aiMissing?.has(field) ? ' not-extracted' : '')}>
+      {options.map(o => {
+        const on = isProduct ? selectedProducts.includes(o) : f[field] === o
+        return (
+          <label key={o} className={`pill-opt ${on ? 'on' : ''}`}>
+            <input type={isProduct ? 'checkbox' : 'radio'} name={field} value={o} checked={on}
+              onChange={isProduct
+                ? e => setF(prev => ({ ...prev, product: e.target.checked
+                    ? [...selectedProducts, o]
+                    : selectedProducts.filter(x => x !== o) }))
+                : set(field)} />
+            {o}
+          </label>
+        )
+      })}
+    </div>
+  )
+}
+
+function Input({ field, type = 'text', placeholder, list }) {
+  const { f, set, validation, aiMissing } = React.useContext(FormCtx)
+  return (
+    <input type={type} placeholder={placeholder} value={f[field]} onChange={set(field)}
+      list={list} className={fieldClass(validation, field, aiMissing)}
+      title={aiMissing?.has(field) ? 'Not found in the uploaded document — please fill this in' : undefined} />
+  )
 }
 
 export default function IntakeForm() {
@@ -33,6 +98,7 @@ export default function IntakeForm() {
   const [aiNotice, setAiNotice] = useState(null)
   const [aiError, setAiError] = useState(null)
   const [aiFilledFields, setAiFilledFields] = useState(new Set())
+  const [aiMissingFields, setAiMissingFields] = useState(new Set())
 
   const selectedProducts = Array.isArray(f.product)
     ? f.product
@@ -45,7 +111,7 @@ export default function IntakeForm() {
 
   const knownCustomer = store.customers.find(c => c.name.toLowerCase() === f.sellTo.trim().toLowerCase())
 
-  const required = ['sellTo', 'category', 'eucName', 'eucLocation', 'oppName', 'owner', 'oppType', 'bu', 'segment', 'product', 'contactPerson', 'contactPhone']
+  const required = REQUIRED_FIELDS
 
   // Calculate validation status in real-time
   const validation = useMemo(() => {
@@ -85,14 +151,14 @@ export default function IntakeForm() {
       customerStatus: knownCustomer ? knownCustomer.status : 'Blue',
       eucName: f.eucName, eucLocation: f.eucLocation, oppName: f.oppName,
       owner: f.owner, oppType: f.oppType, bu: f.bu, segment: f.segment,
-      product: selectedProducts.join(', '),
+      product: selectedProducts,
       // prob is salesperson-set later — the form does not collect it (audio 00:24)
       prob: '',
       valueK: +f.valueK || 0, cogsK: 0,
       rfqNumber: f.rfqNumber || '', rfqDate: f.rfqDate || '',
       createDate: today, proposalDate: '', orderDate: '', invoiceDate: '',
       status: 'Open', stage: 'Lead', closedReason: '',
-      contactPerson: f.contactPerson, contactPhone: f.contactPhone,
+      contactPerson: f.contactPerson, contactPhone: f.contactPhone, contactEmail: f.contactEmail || '',
       lastUpdated: today, forecast: false, remarks: '', nextActionOwner: '',
     })
     // A lead qualified from the inbox converts only on actual submit.
@@ -109,15 +175,21 @@ export default function IntakeForm() {
     setAiNotice(null)
     setAiError(null)
     setAiFilledFields(new Set())
+    setAiMissingFields(new Set())
   }
 
   // Handle document file upload
   const handleFileUpload = async (file) => {
     if (!file) return
 
-    // Check file type (only PDF for now)
-    if (!file.type.includes('pdf') && !file.name.toLowerCase().endsWith('.pdf')) {
-      setAiError('Please upload a PDF document')
+    // PDF or a saved email. Enquiries reach the common mailbox as .eml far more
+    // often than as a tender PDF (see the sample set in "modae doc/"), and
+    // rejecting them sent the salesperson back to typing everything by hand.
+    const name = file.name.toLowerCase()
+    const isPdf = file.type.includes('pdf') || name.endsWith('.pdf')
+    const isEmail = name.endsWith('.eml') || name.endsWith('.msg') || file.type === 'message/rfc822'
+    if (!isPdf && !isEmail) {
+      setAiError('Upload the enquiry as a PDF or a saved email (.eml)')
       return
     }
 
@@ -136,7 +208,10 @@ export default function IntakeForm() {
     try {
       // Extract real text and positional data from the PDF. The deterministic
       // parser is also the fallback when the optional AI proxy is unavailable.
-      const extracted = await extractPdfText(file)
+      // A saved email is already text, so it skips pdfjs entirely.
+      const extracted = isEmail
+        ? { fullText: await file.text(), struct: [] }
+        : await extractPdfText(file)
       const parsed = parseTender(extracted.fullText, extracted.struct)
       const localDraft = buildOpportunityDraft(parsed)
 
@@ -192,7 +267,7 @@ export default function IntakeForm() {
     if (header.location) {
       updates.location = header.location
       updates.eucLocation = header.location
-      filledFields.add('location', 'eucLocation')
+      filledFields.add('location'); filledFields.add('eucLocation')
     }
     if (header.contactPerson) {
       updates.contactPerson = header.contactPerson
@@ -231,13 +306,31 @@ export default function IntakeForm() {
       filledFields.add('oppName')
     }
 
+    // The regex parser reads the enquiry reference; the model fills what it
+    // missed. Biji, 13 Aug: "AI has to extract the RFQ number. If the RFQ number
+    // is missing, AI can say that missing RFQ number — or if there is no RFQ
+    // number, can simply say email dated so-and-so." Many enquiries genuinely
+    // carry no reference, so the fallback names the document instead of leaving
+    // the covering letter with a blank "Your Ref".
     const extractedHeader = aiResult.extractedHeader || {}
-    if (extractedHeader.sectionRef) updates.rfqNumber = extractedHeader.sectionRef
-    if (extractedHeader.rfqDate) updates.rfqDate = extractedHeader.rfqDate
+    const rfqNumber = extractedHeader.sectionRef || header.sectionRef || ''
+    const rfqDate = extractedHeader.rfqDate || header.rfqDate || ''
+    if (rfqNumber) { updates.rfqNumber = rfqNumber; filledFields.add('rfqNumber') }
+    else if (rfqDate) { updates.rfqNumber = `Email dated ${rfqDate}`; filledFields.add('rfqNumber') }
+    if (rfqDate) { updates.rfqDate = rfqDate; filledFields.add('rfqDate') }
+
+    if (header.senderEmail) {
+      updates.contactEmail = header.senderEmail
+      filledFields.add('contactEmail')
+    }
 
     // Apply updates to form
     setF(prev => ({ ...prev, ...updates }))
     setAiFilledFields(filledFields)
+    // Anything the document was supposed to give us and did not is marked on the
+    // field itself — a comma-joined sentence at the top of the form was easy to
+    // miss, and nothing went red because nothing had been "touched" yet.
+    setAiMissingFields(new Set(REQUIRED_FIELDS.filter(k => !filledFields.has(k))))
   }
 
   // Remove uploaded file
@@ -267,48 +360,8 @@ export default function IntakeForm() {
     }
   }
 
-  // Compact dropdown for all select fields
-  const Select = ({ field, options, placeholder }) => (
-    <select
-      value={f[field]}
-      onChange={set(field)}
-      className={validation.fields[field]?.touched && !validation.fields[field]?.valid ? 'error' : ''}
-    >
-      <option value="">{placeholder}</option>
-      {options.map(o => <option key={o}>{o}</option>)}
-    </select>
-  )
-
-  // Pill/bubble selection for Classification fields
-  const Pills = ({ field, options }) => (
-    <div className="pill-group">
-      {options.map(o => (
-        <label key={o} className={`pill-opt ${field === 'product' ? (selectedProducts.includes(o) ? 'on' : '') : (f[field] === o ? 'on' : '')}`}>
-          <input type={field === 'product' ? 'checkbox' : 'radio'} name={field} value={o}
-            checked={field === 'product' ? selectedProducts.includes(o) : f[field] === o}
-            onChange={field === 'product'
-              ? e => setF(prev => ({ ...prev, product: e.target.checked
-                  ? [...selectedProducts, o]
-                  : selectedProducts.filter(x => x !== o) }))
-              : set(field)} />
-          {o}
-        </label>
-      ))}
-    </div>
-  )
-
-  const Input = ({ field, type = 'text', placeholder, list }) => (
-    <input
-      type={type}
-      placeholder={placeholder}
-      value={f[field]}
-      onChange={set(field)}
-      list={list}
-      className={validation.fields[field]?.touched && !validation.fields[field]?.valid ? 'error' : ''}
-    />
-  )
-
   return (
+    <FormCtx.Provider value={{ f, setF, set, validation, selectedProducts, aiMissing: aiMissingFields }}>
     <div className="forms-bg">
       <form className="forms-card wide" onSubmit={submit}>
         <div className="forms-head">
@@ -326,13 +379,13 @@ export default function IntakeForm() {
               >
                 <div className="upload-icon">📄</div>
                 <div className="upload-text">
-                  <strong>Upload tender/RFQ PDF</strong> to auto-fill fields with AI
+                  <strong>Upload the enquiry — tender PDF or saved email</strong> to auto-fill fields with AI
                 </div>
                 <div className="upload-subtext">Drag and drop or click to browse</div>
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".pdf,application/pdf"
+                  accept=".pdf,application/pdf,.eml,.msg,message/rfc822"
                   onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
                   style={{ display: 'none' }}
                 />
@@ -541,5 +594,6 @@ export default function IntakeForm() {
         </div>
       </form>
     </div>
+    </FormCtx.Provider>
   )
 }

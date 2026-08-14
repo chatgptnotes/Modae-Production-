@@ -2,9 +2,11 @@ import React, { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { STAGES, CLOSE_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, CUSTOMER_STATUSES, ROLES } from '../seed.js'
-import { fmt, mmmYY, ddMmmYY, exportCSV, stageClass, canViewCommercial } from '../utils.js'
+import { fmt, mmmYY, ddMmmYY, exportCSV, stageClass, canViewCommercial, canPriceProposal, productList, productLabel } from '../utils.js'
 import { useFormulaBar } from '../formulabar.jsx'
 import { useDrawer } from '../drawer.jsx'
+import { nextActionWith } from '../gates.js'
+import { suggestProbability } from '../insights.js'
 import { Icon } from '../icons.jsx'
 
 const OPEN_STAGES = STAGES.filter(s => s !== 'Won' && s !== 'Lost')
@@ -44,6 +46,26 @@ const COLS = [
   { key: 'nextActionOwner', letter: 'AG', label: 'Next Action Pending Owner' },
 ]
 
+// The columns a sales owner actually works from, in Biji's words on 13 Aug:
+// "Opportunity ID, Customer, Opportunity Name, Stage, Probability… I need
+// value, value and expected order date… and I should know where is the next
+// action pending." He was explicit that Opportunity Owner and Updated are not
+// required — a rep filtered to their own rows already knows the owner.
+const KEY_COLS = ['id', 'sellTo', 'oppName', 'stage', 'prob', 'valueK', 'orderDate', 'nextActionOwner']
+
+// Hiding a spreadsheet column means hiding the header and the matching cell in
+// every row. The cells are written out in COLS order, so one generated rule per
+// hidden column does it — the same thing Excel's "hide column" does, and it
+// keeps the row markup untouched. <tfoot> carries colSpan cells, so the
+// key-column view hides it rather than misaligning it.
+function hiddenColumnCss(hidden) {
+  if (!hidden.length) return ''
+  const sel = hidden
+    .map(i => `.sheet.cols-key thead tr > :nth-child(${i + 2}), .sheet.cols-key tbody tr > :nth-child(${i + 2})`)
+    .join(',')
+  return `${sel} { display: none; } .sheet.cols-key tfoot { display: none; }`
+}
+
 export default function Tracker() {
   const store = useStore()
   const nav = useNavigate()
@@ -62,8 +84,14 @@ export default function Tracker() {
   const [frozenIds, setFrozenIds] = useState(null)     // row ids captured when a filter was applied
   const [sort, setSort] = useState(null)               // { key, dir: 1 | -1 }
   const [openFilter, setOpenFilter] = useState(null)   // { key, x, y } of the open dropdown
+  const [productPick, setProductPick] = useState(null) // { id, x, y } of the open product picker
+  // Sales owners open on the eight columns they work from; everyone else on the
+  // full sheet. Either can switch — nothing is taken away, only folded.
+  const [colView, setColView] = useState(() => ((OWNERS.includes(store.role)
+    && !(ROLES[store.role]?.admin || ROLES[store.role]?.commercial)) ? 'key' : 'all'))
 
   const comm = canViewCommercial(store.role)
+  const showValue = canPriceProposal(store.role)
   const gmK = o => (o.valueK || 0) - (o.cogsK || 0)
   const gmPct = o => (o.valueK ? Math.round((gmK(o) / o.valueK) * 100) + '%' : null)
 
@@ -79,6 +107,8 @@ export default function Tracker() {
       case 'lastUpdated': return ddMmmYY(o[key])
       case 'forecast': return o.forecast ? '✓ Checked' : '☐ Unchecked'
       case 'prob': return o.prob || ''
+      case 'product': return productLabel(o.product)
+      case 'nextActionOwner': return o.nextActionOwner || nextActionWith(o, store.getProposal(o.id), store).owner || ''
       default: return o[key] ?? ''
     }
   }
@@ -165,11 +195,35 @@ export default function Tracker() {
   const exportRows = () => exportCSV(
     'Sales_Pipeline_Report.csv',
     ['Sl','Opp ID','Sell To Customer','Category','Location','Customer Status','EUC Name','EUC Location','Opportunity Name/Description','Owner','Opp Type','BU','Segment','Product','Prob (%)','Value (K₹)','COGS (K₹)','GM (K₹)','GM%','Create Date','Proposal Date','Expected Order Date','Expected Ship Date','Status','Stage','Closed Reason','Contact Person','Contact Phone #','Last Updated','Forecast','Update/Remarks','Next Action Pending Owner'],
-    rows.map(o => [o.sl,o.id,o.sellTo,o.category,o.location,o.customerStatus,o.eucName,o.eucLocation,o.oppName,o.owner,o.oppType,o.bu,o.segment,Array.isArray(o.product) ? o.product.join(', ') : o.product,o.prob||'',o.valueK,o.cogsK,gmK(o),gmPct(o)||'',o.createDate,o.proposalDate,o.orderDate,o.invoiceDate,o.status,o.stage,o.closedReason,o.contactPerson,o.contactPhone,o.lastUpdated,o.forecast?'Y':'N',o.remarks,o.nextActionOwner||''])
+    rows.map(o => [o.sl,o.id,o.sellTo,o.category,o.location,o.customerStatus,o.eucName,o.eucLocation,o.oppName,o.owner,o.oppType,o.bu,o.segment,productLabel(o.product),o.prob||'',o.valueK,o.cogsK,gmK(o),gmPct(o)||'',o.createDate,o.proposalDate,o.orderDate,o.invoiceDate,o.status,o.stage,o.closedReason,o.contactPerson,o.contactPhone,o.lastUpdated,o.forecast?'Y':'N',o.remarks,o.nextActionOwner||''])
   )
 
   // Plain render function (not a component type) so the open dropdown's DOM is
   // diffed in place — checkbox focus and scroll position survive toggles.
+  // Checkbox picker for the multi-value Product cell. Reuses the filter
+  // popover's overlay + positioning so the grid keeps one dropdown idiom.
+  const renderProductPop = (o, pos) => {
+    const chosen = productList(o.product)
+    const toggle = p => {
+      const next = chosen.includes(p) ? chosen.filter(x => x !== p) : [...chosen, p]
+      store.updateOpportunity(o.id, { product: next })
+    }
+    return (
+      <>
+        <div className="filter-overlay" onClick={() => setProductPick(null)} />
+        <div className="filter-pop" style={{ position: 'fixed', left: pos.x, top: pos.y + 4 }} onClick={e => e.stopPropagation()}>
+          {PRODUCTS.map(p => (
+            <label className="fitem" key={p}>
+              <input type="checkbox" checked={chosen.includes(p)} onChange={() => toggle(p)} /> {p}
+            </label>
+          ))}
+          <hr />
+          <div className="fitem" onClick={() => setProductPick(null)}>Done</div>
+        </div>
+      </>
+    )
+  }
+
   const renderFilterPop = (col, pos) => {
     const rowsForVals = rowsFilteredExcept(col.key)
     const values = DATE_KEYS.includes(col.key)
@@ -217,13 +271,23 @@ export default function Tracker() {
         </label>
         <span className="hint">Rows are never deleted — close them via Stage (Won/Lost) with a mandatory Closed Reason. Click ▼ on a header to sort/filter; click a cell to see its formula.</span>
         <span className="spacer" />
+        {colView === 'key' && showValue && (
+          <span className="pill Blue" title="Total value of the rows shown">₹ {fmt(totals.v)}K</span>
+        )}
+        <button onClick={() => setColView(colView === 'key' ? 'all' : 'key')}
+          title={colView === 'key'
+            ? 'Show every column in the pipeline sheet'
+            : `Show only the working columns: ${KEY_COLS.length} of ${COLS.length}`}>
+          {colView === 'key' ? `All ${COLS.length} columns` : 'Key columns'}
+        </button>
         <button onClick={exportRows} disabled={!comm}
           title={comm ? '' : 'Export includes commercial columns — restricted to approvers/admin'}>Extract to Excel</button>
         <Link className="btn primary" to="/new">Create Opportunity</Link>
       </div>
 
       <div className="sheet-wrap">
-        <table className="sheet">
+        {colView === 'key' && <style>{hiddenColumnCss(COLS.map((c, i) => (KEY_COLS.includes(c.key) ? -1 : i)).filter(i => i >= 0))}</style>}
+        <table className={`sheet${colView === 'key' ? ' cols-key' : ''}`}>
           <thead>
             <tr>
               <th className="rowhead">Sl</th>
@@ -284,25 +348,52 @@ export default function Tracker() {
                 <td onClick={selectCell(o, COLS[11])} className={isSel(o, COLS[11]) ? 'cell-sel' : ''}>
                   <select value={o.segment} onChange={upd(o.id, 'segment')}>{SEGMENTS.map(c => <option key={c}>{c}</option>)}</select>
                 </td>
+                {/* Product is multi-value, so the cell is a checkbox popover
+                    rather than a single-value <select> that would render blank
+                    for any opportunity carrying more than one product. */}
                 <td onClick={selectCell(o, COLS[12])} className={isSel(o, COLS[12]) ? 'cell-sel' : ''}>
-                  <select value={o.product} onChange={upd(o.id, 'product')}>{PRODUCTS.map(c => <option key={c}>{c}</option>)}</select>
+                  <button type="button" className="cell-pick"
+                    title={productLabel(o.product) || 'No product selected'}
+                    onClick={e => {
+                      e.stopPropagation()
+                      if (productPick?.id === o.id) { setProductPick(null); return }
+                      const r = e.currentTarget.getBoundingClientRect()
+                      setProductPick({ id: o.id, x: r.left, y: r.bottom })
+                    }}>
+                    {productLabel(o.product) || <span className="hint">— select —</span>}
+                  </button>
+                  {productPick?.id === o.id && renderProductPop(o, productPick)}
                 </td>
+                {/* Suggested from stage, account class and how long the row has
+                    sat still — always a suggestion, never a write. */}
                 <td onClick={selectCell(o, COLS[13])} className={isSel(o, COLS[13]) ? 'cell-sel' : ''}>
-                  <select value={o.prob || ''} onChange={upd(o.id, 'prob')}>
-                    <option value=""></option>
-                    {PROB_LEVELS.map(p => <option key={p}>{p}</option>)}
-                  </select>
+                  {(() => {
+                    const sug = suggestProbability(o, store.getProposal(o.id))
+                    return (
+                      <select value={o.prob || ''} onChange={upd(o.id, 'prob')}
+                        className={!o.prob && sug ? 'derived' : ''}
+                        title={sug ? `Suggested ${sug.level} — ${sug.why}` : ''}>
+                        <option value="">{sug ? `${sug.level} (suggested)` : ''}</option>
+                        {PROB_LEVELS.map(p => <option key={p}>{p}</option>)}
+                      </select>
+                    )
+                  })()}
                 </td>
+                {/* Value is the salesperson's own forecast — they type it at intake, so
+                    they keep it here. COGS/GM stay commercial. */}
+                {showValue ? (
+                  <td onClick={selectCell(o, COLS[14])} className={`num ${isSel(o, COLS[14]) ? 'cell-sel' : ''}`}><input type="number" value={o.valueK || ''} onChange={upd(o.id, 'valueK')} style={{ textAlign: 'right', width: 70 }} placeholder="-" /></td>
+                ) : (
+                  <td className="num locked" title="Commercial data — approvers/admin only"><Icon name="lock" size={12} /></td>
+                )}
                 {!comm ? (
                   <>
-                    <td className="num locked" title="Commercial data — approvers/admin only"><Icon name="lock" size={12} /></td>
-                    <td className="num locked"><Icon name="lock" size={12} /></td>
+                    <td className="num locked" title="Cost and margin — approvers/admin only"><Icon name="lock" size={12} /></td>
                     <td className="num locked"><Icon name="lock" size={12} /></td>
                     <td className="num locked"><Icon name="lock" size={12} /></td>
                   </>
                 ) : (
                   <>
-                    <td onClick={selectCell(o, COLS[14])} className={`num ${isSel(o, COLS[14]) ? 'cell-sel' : ''}`}><input type="number" value={o.valueK || ''} onChange={upd(o.id, 'valueK')} style={{ textAlign: 'right', width: 70 }} placeholder="-" /></td>
                     <td onClick={selectCell(o, COLS[15])} className={`num ${isSel(o, COLS[15]) ? 'cell-sel' : ''}`}><input type="number" value={o.cogsK || ''} onChange={upd(o.id, 'cogsK')} style={{ textAlign: 'right', width: 70 }} placeholder="-" /></td>
                     <td onClick={selectCell(o, COLS[16])} className={`num ${isSel(o, COLS[16]) ? 'cell-sel' : ''}`}>{o.valueK ? fmt(gmK(o)) : '-'}</td>
                     {gmPct(o)
@@ -310,10 +401,23 @@ export default function Tracker() {
                       : <td onClick={selectCell(o, COLS[17])} className={`err ${isSel(o, COLS[17]) ? 'cell-sel' : ''}`}>#DIV/0!</td>}
                   </>
                 )}
-                <td onClick={selectCell(o, COLS[18])} className={isSel(o, COLS[18]) ? 'cell-sel' : ''}><input type="date" value={o.createDate || ''} onChange={upd(o.id, 'createDate')} style={{ width: 108 }} /></td>
-                <td onClick={selectCell(o, COLS[19])} className={isSel(o, COLS[19]) ? 'cell-sel' : ''}><input type="date" value={o.proposalDate || ''} onChange={upd(o.id, 'proposalDate')} style={{ width: 108 }} /></td>
-                <td onClick={selectCell(o, COLS[20])} className={isSel(o, COLS[20]) ? 'cell-sel' : ''}><input type="date" value={o.orderDate} onChange={upd(o.id, 'orderDate')} style={{ width: 108 }} /></td>
-                <td onClick={selectCell(o, COLS[21])} className={isSel(o, COLS[21]) ? 'cell-sel' : ''}><input type="date" value={o.invoiceDate} onChange={upd(o.id, 'invoiceDate')} style={{ width: 108 }} /></td>
+                {/* Created and Proposal are system-stamped — read only, like Last Updated. */}
+                <td onClick={selectCell(o, COLS[18])} className={isSel(o, COLS[18]) ? 'cell-sel' : ''}>
+                  <div className="ro" title="Stamped when the opportunity was created — read only">{mmmYY(o.createDate) || '—'}</div>
+                </td>
+                <td onClick={selectCell(o, COLS[19])} className={isSel(o, COLS[19]) ? 'cell-sel' : ''}>
+                  <div className="ro" title="Stamped when the proposal was first priced — read only">{mmmYY(o.proposalDate) || '—'}</div>
+                </td>
+                {/* The salesperson's own forecast dates — mandatory, per the 13 Aug review:
+                    "he has to put some date. It can be wrong, but he has to put some date." */}
+                <td onClick={selectCell(o, COLS[20])}
+                  className={`${isSel(o, COLS[20]) ? 'cell-sel ' : ''}${o.status === 'Open' && !o.orderDate ? 'need' : ''}`.trim()}>
+                  <input type="date" value={o.orderDate} onChange={upd(o.id, 'orderDate')} style={{ width: 108 }}
+                    title={o.orderDate ? '' : 'Expected order date is required on an open opportunity'} /></td>
+                <td onClick={selectCell(o, COLS[21])}
+                  className={`${isSel(o, COLS[21]) ? 'cell-sel ' : ''}${o.status === 'Open' && !o.invoiceDate ? 'need' : ''}`.trim()}>
+                  <input type="date" value={o.invoiceDate} onChange={upd(o.id, 'invoiceDate')} style={{ width: 108 }}
+                    title={o.invoiceDate ? '' : 'Expected ship date is required on an open opportunity'} /></td>
                 <td onClick={selectCell(o, COLS[22])} className={isSel(o, COLS[22]) ? 'cell-sel' : ''}>
                   <select value={o.status} onChange={upd(o.id, 'status')}>
                     <option>Open</option><option>Closed</option>
@@ -343,11 +447,21 @@ export default function Tracker() {
                   <input type="checkbox" checked={!!o.forecast} onChange={upd(o.id, 'forecast')} title="Include for roll-up" />
                 </td>
                 <td onClick={selectCell(o, COLS[29])} className={isSel(o, COLS[29]) ? 'cell-sel' : ''}><input type="text" value={o.remarks} onChange={upd(o.id, 'remarks')} style={{ minWidth: 220 }} /></td>
+                {/* Derived from the live blockers, so the column is never the
+                    "— none —" it read on every row before. Typing a value
+                    overrides the derivation. */}
                 <td onClick={selectCell(o, COLS[30])} className={isSel(o, COLS[30]) ? 'cell-sel' : ''}>
-                  <select value={o.nextActionOwner || ''} onChange={upd(o.id, 'nextActionOwner')}>
-                    <option value="">— none —</option>
-                    {OWNERS.map(owner => <option key={owner}>{owner}</option>)}
-                  </select>
+                  {(() => {
+                    const na = nextActionWith(o, store.getProposal(o.id), store)
+                    return (
+                      <select value={o.nextActionOwner || ''} onChange={upd(o.id, 'nextActionOwner')}
+                        className={!o.nextActionOwner && na.owner ? 'derived' : ''}
+                        title={na.text || 'No blocker — set an owner if someone else owes you an action'}>
+                        <option value="">{na.owner ? `${na.owner} (auto)` : '— none —'}</option>
+                        {OWNERS.map(owner => <option key={owner}>{owner}</option>)}
+                      </select>
+                    )
+                  })()}
                 </td>
                 <td><Link to={`/proposal/${o.id}`}>Open ▸</Link></td>
               </tr>
@@ -357,7 +471,7 @@ export default function Tracker() {
             <tr>
               <td className="rowhead"></td>
               <td colSpan={14}>Totals {rows.length < base.length && <span className="hint">({rows.length} of {base.length} rows shown — filters active)</span>}</td>
-              <td className="num">{comm ? `₹ ${fmt(totals.v)}` : <Icon name="lock" size={12} />}</td>
+              <td className="num">{showValue ? `₹ ${fmt(totals.v)}` : <Icon name="lock" size={12} />}</td>
               <td className="num">{comm ? `₹ ${fmt(totals.c)}` : <Icon name="lock" size={12} />}</td>
               <td className="num">{comm ? `₹ ${fmt(totals.v - totals.c)}` : <Icon name="lock" size={12} />}</td>
               <td className="num" style={{ color: 'var(--amber-text)' }}>{comm && totals.v ? Math.round(((totals.v - totals.c) / totals.v) * 100) + '%' : comm ? '' : <Icon name="lock" size={12} />}</td>

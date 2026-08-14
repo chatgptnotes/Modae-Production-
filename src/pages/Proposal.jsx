@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { defaultCosting, newProposal } from '../seed.js'
-import { effectiveRate, unitCostINR, unitSellINR, fmt, exportCSV, canViewCommercial, clampCosting, clampQty, MAX_GM_PCT } from '../utils.js'
+import { defaultCosting, newProposal, proposalTypeForOpp } from '../seed.js'
+import { effectiveRate, unitCostINR, unitSellINR, fmt, exportCSV, canPriceProposal, clampCosting, clampQty, MAX_GM_PCT } from '../utils.js'
 import { useFormulaBar } from '../formulabar.jsx'
 import { Icon, ModaeLogo } from '../icons.jsx'
 import { Modal } from '../ui.jsx'
 import { oppBlockers, isBlocked } from '../gates.js'
-import { docModel } from '../proposalDoc.js'
+import { docModel, docRoute } from '../proposalDoc.js'
 import DocEditor from '../proposal/DocEditor.jsx'
 import PrintDoc from '../proposal/PrintDoc.jsx'
 import { signalsFromBom, countSignals, signalsAreEmpty, rackLayout, UMM_CHANNELS, RACK_SLOTS } from '../rack.js'
@@ -36,7 +36,7 @@ function normalize(pr, opp) {
   const signals = signalsAreEmpty(stored) && !signalsAreEmpty(derived) ? derived : stored
   return {
     ...pr,
-    proposalType: pr.proposalType || (opp?.oppType === 'Spares' ? 'Spares' : opp?.oppType === 'Service' ? 'Services' : 'Project'),
+    proposalType: pr.proposalType || proposalTypeForOpp(opp),
     signals,
     bom,
     units,
@@ -81,7 +81,7 @@ export default function Proposal() {
 
   if (!opp) return <div className="page"><h2>Unknown opportunity</h2><Link to="/">Back to tracker</Link></div>
 
-  const comm = canViewCommercial(store.role)
+  const comm = canPriceProposal(store.role)
   const customer = store.customers.find(c => c.name === opp.sellTo)
   const pendingForOpp = (store.approvals || []).filter(a => a.oppId === oppId && a.status === 'Pending')
 
@@ -230,6 +230,8 @@ export default function Proposal() {
     if (!opp.proposalDate) store.updateOpportunity(oppId, { proposalDate: new Date().toISOString().slice(0, 10) })
   }
 
+  const attachmentName = `${oppId}_Proposal_Rev_${p.revision}.pdf`
+
   const sendEmail = () => {
     const body = [
       'Dear Sir/Madam,',
@@ -241,7 +243,7 @@ export default function Proposal() {
       ...p.bom.slice(0, 6).map((l, i) => `${i + 1}. ${l.desc} — ${totalQty(l)} nos`),
       ...(p.bom.length > 6 ? [`…and ${p.bom.length - 6} more items`] : []),
       '',
-      'The detailed proposal PDF is attached separately.',
+      `The detailed proposal is attached as ${attachmentName}.`,
       '',
       'Best regards,',
       'ModAE India Pvt Ltd',
@@ -253,7 +255,7 @@ export default function Proposal() {
     window.location.href = `mailto:${encodeURIComponent(emailTo.trim())}?subject=${encodeURIComponent(emailSubject)}${cc}&body=${encBody}`
     store.addCommunication(oppId, {
       to: emailTo.trim(), cc: emailCc.trim(), subject: emailSubject,
-      kind: 'proposal-email', attachment: `${oppId}_Proposal_Rev_${p.revision}.pdf`,
+      kind: 'proposal-email', attachment: attachmentName,
     })
     setEmailOpen(false)
   }
@@ -280,6 +282,14 @@ export default function Proposal() {
   // An unpriced technical bid, or a role that may not see money, prints the
   // full document with quantities only — never a document with the BoQ missing.
   const priced = p.bidType !== 'Unpriced (Technical)' && comm
+
+  // Signal List and Rack Layout are project artefacts. Biji, 13 Aug: "in the
+  // spare parts case, there will not be any signal list, there will not be
+  // rack layout." Hide the tabs rather than show them with an apology.
+  const route = docRoute(p, opp)
+  const visibleTabs = route === 'Project' ? TABS : TABS.filter(t => t !== 'Signal List' && t !== 'Rack Layout')
+  // Switching route while sitting on a now-hidden tab must not blank the page.
+  if (!visibleTabs.includes(tab)) { setTab('Cover Letter'); return null }
 
   if (printing) {
     return (
@@ -343,9 +353,11 @@ export default function Proposal() {
         </div>
       )}
 
-      {p.proposalType !== 'Project' && (
+      {route !== 'Project' && (
         <div className="ai-notice" style={{ marginBottom: 10 }}>
-          <b>{p.proposalType} proposal route selected.</b> Final {p.proposalType} template layout will be applied when the client sample is received; the current workbook remains available for data preparation.
+          <b>{route} proposal route.</b> The printed document uses the short {route.toLowerCase()} section
+          set — no signal list or rack layout, and no project front matter. Section wording will be
+          re-cut once the client's own {route.toLowerCase()} sample proposal arrives.
         </div>
       )}
 
@@ -524,7 +536,7 @@ export default function Proposal() {
 
       {tab === 'Priced BoQ' && !comm && (
         <div className="restricted" style={{ maxWidth: 640 }}>
-          <Icon name="lock" size={13} /> Restricted — the Priced BoQ (costing factors, landed costs, margins) is visible to approvers/admin only.
+          <Icon name="lock" size={13} /> Restricted — the Priced BoQ (costing factors, landed costs, margins) is visible to the sales owner, approvers and admin — technical reviewers see quantities only.
         </div>
       )}
 
@@ -663,14 +675,30 @@ export default function Proposal() {
             <div className="q-label">Note (optional, one line)</div>
             <input type="text" value={emailNote} onChange={e => setEmailNote(e.target.value)} placeholder="e.g. Submitted within due date — happy to discuss." />
           </div>
-          <div className="costing-note">Attachment ready: <b>{oppId}_Proposal_Rev_{p.revision}.pdf</b>. The mail app may require final attachment confirmation.</div>
-          <button type="button" onClick={() => setEmailPreview(!emailPreview)}>{emailPreview ? 'Hide preview' : 'Preview proposal'}</button>
-          {emailPreview && <div className="cover-body" style={{ marginTop: 8, maxHeight: 220, overflow: 'auto' }}>
-            <b>{emailSubject}</b>
-            <p>To: {emailTo || 'No recipient selected'}</p>
-            <p>Attached: {oppId}_Proposal_Rev_{p.revision}.pdf</p>
-            <p>{emailNote || `Proposal for ${opp.oppName} with ${p.bom.length} quoted line(s).`}</p>
-          </div>}
+          {/* Honest about the mechanism: a mailto: link cannot carry a file, so
+              the PDF is produced here and attached by the user in the mail app. */}
+          <div className="costing-note">
+            Attachment: <b>{attachmentName}</b>. Save the PDF with <b>Save proposal PDF</b> below,
+            then attach it in your mail app — a mail link cannot carry the file itself.
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button type="button" onClick={() => setEmailPreview(!emailPreview)}>
+              {emailPreview ? 'Hide proposal preview' : 'Preview proposal'}
+            </button>
+            <button type="button" onClick={() => { setEmailOpen(false); setPrinting(true) }}>
+              <Icon name="printer" size={13} /> Save proposal PDF
+            </button>
+          </div>
+          {emailPreview && (
+            <div className="email-preview">
+              <div className="hint" style={{ padding: '6px 0' }}>
+                To {emailTo || '— no recipient —'}{emailCc.trim() ? ` · CC ${emailCc}` : ''} · Subject: {emailSubject}
+              </div>
+              <div className="email-preview-doc">
+                <PrintDoc p={p} opp={opp} doc={doc} priced={priced} totals={totals} lineQuoted={lineQuoted} />
+              </div>
+            </div>
+          )}
           <div className="forms-actions">
             <button className="primary" disabled={!emailTo.trim() || !emailPreview} onClick={sendEmail}>Open in mail app ▸</button>
             <button onClick={() => setEmailOpen(false)}>Cancel</button>
@@ -690,7 +718,7 @@ export default function Proposal() {
       )}
 
       <div className="sheet-tabs">
-        {TABS.map(t => (
+        {visibleTabs.map(t => (
           <div key={t} className={`tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>{t}</div>
         ))}
         <div className="tab">＋</div>

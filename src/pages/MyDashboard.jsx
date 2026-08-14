@@ -3,108 +3,379 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES } from '../seed.js'
 import { readiness, isBlocked } from '../gates.js'
-import { isApprover, canViewCommercial, fmt, ddMmmYY } from '../utils.js'
-import { AI_MAP } from '../aimapData.js'
+import { isApprover, isAdminRole, isSalesOwner, canViewCommercial, canPriceProposal, fmtLakh } from '../utils.js'
+import { counts, salesPerformance, FY_QUARTERS, FY_MONTHS } from '../kpi.js'
+import { ArcGauge, Sparkline } from '../dashviz.jsx'
 import { Icon } from '../icons.jsx'
+
+// My Dashboard — "there has to be something called My Dashboard… it will be
+// different for all the roles" (13 Aug review). The salesperson's version is
+// the one the client walked through in the HTML prototype: target, attainment,
+// quarterly performance, then their own work queue.
 
 const roleLabel = role => ROLES[role]?.label || role
 
-function Metric({ label, value, hint, tone = '' }) {
-  return <div className={`stat-card-v2 tone-${tone}`}><span className="sc-value">{value}</span><span className="sc-label">{label}</span>{hint && <span className="hint">{hint}</span>}</div>
+function Metric({ label, value, hint, tone = '', onClick }) {
+  const El = onClick ? 'button' : 'div'
+  return (
+    <El className={`stat-card-v2 tone-${tone}${onClick ? ' clickable' : ''}`} onClick={onClick}>
+      <span className="sc-value">{value}</span>
+      <span className="sc-label">{label}</span>
+      {hint && <span className="hint">{hint}</span>}
+    </El>
+  )
+}
+
+function Card({ title, icon, tone = '', span = 6, children, action }) {
+  return (
+    <section className={`ana-card c-${span}`}>
+      <div className="ana-title">
+        {icon && <span className={`ana-ico ${tone}`}><Icon name={icon} size={15} /></span>}
+        {title}
+        {action && <span style={{ marginLeft: 'auto' }}>{action}</span>}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+// Quarterly target vs actual, the prototype's quarter cards.
+function QuarterBars({ perf }) {
+  return (
+    <div className="qcards">
+      {FY_QUARTERS.map((q, i) => {
+        const target = perf.quarterTarget[i] || 0
+        const actual = perf.quarterActual[i] || 0
+        const pct = target ? Math.min(100, (actual / target) * 100) : 0
+        const met = target > 0 && actual >= target
+        const past = i < perf.currentQ
+        return (
+          <div key={q} className={`qcard ${i === perf.currentQ ? 'cur' : ''}`}>
+            <div className="q-t">{q}{i === perf.currentQ ? ' · now' : ''}</div>
+            <div className="q-a">{fmtLakh(actual)}</div>
+            <div className="q-s">of {fmtLakh(target)} · {Math.round(pct)}%</div>
+            <div className="q-bar">
+              <i style={{ width: `${pct}%` }} className={met ? 'ok' : past ? 'miss' : ''} />
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// Shared across every role: what is stuck, and what to do next.
+function useWorkQueue(store, role, mine) {
+  const opportunities = mine ? store.opportunities.filter(o => o.owner === role) : store.opportunities
+  const open = opportunities.filter(o => o.status === 'Open')
+  const withBlockers = open.map(o => ({ opp: o, blockers: readiness(o, store.getProposal(o.id), store) }))
+  const blocked = withBlockers.filter(x => isBlocked(x.blockers))
+  const nextActions = withBlockers
+    .map(({ opp, blockers }) => {
+      const b = blockers.find(x => x.severity === 'block' || x.severity === 'wait')
+      return {
+        opp,
+        text: b?.text || (opp.nextActionOwner ? `Follow up with ${opp.nextActionOwner}` : 'Review and set the next action'),
+        owner: b?.approver || opp.nextActionOwner || '',
+        severity: b?.severity || 'info',
+      }
+    })
+    // Blocked first, then oldest-touched — the ones going stale.
+    .sort((a, b) => (a.severity === 'block' ? -1 : 1) - (b.severity === 'block' ? -1 : 1)
+      || (a.opp.lastUpdated || '').localeCompare(b.opp.lastUpdated || ''))
+    .slice(0, 6)
+  return { opportunities, open, blocked, nextActions }
+}
+
+function NextActions({ nextActions, nav }) {
+  if (!nextActions.length) return <p className="hint">Nothing is waiting — no open opportunity needs an action.</p>
+  return nextActions.map(({ opp, text, severity }) => (
+    <button key={opp.id} className="dashboard-action" onClick={() => nav(`/opp/${opp.id}`)}>
+      <span>
+        {severity === 'block' && <span className="pill Red" style={{ marginRight: 6 }}>Blocked</span>}
+        <b>{opp.id}</b> — {opp.oppName}
+      </span>
+      <span className="hint">{text}</span>
+    </button>
+  ))
 }
 
 export default function MyDashboard() {
   const store = useStore()
   const nav = useNavigate()
   const role = store.role
-  const isSales = !!ROLES[role] && !isApprover(role) && !ROLES[role].admin && !ROLES[role].commercial
-  const opportunities = isSales
-    ? store.opportunities.filter(o => o.owner === role)
-    : store.opportunities
-  const open = opportunities.filter(o => o.status === 'Open')
-  const pendingApprovals = store.approvals.filter(a => a.status === 'Pending' && (isSales ? a.requestedBy === role : true))
-  const pendingConditions = store.approvals.filter(a => a.status === 'Approved with conditions' && (a.conditions || []).some(c => !c.incorporated))
-  const leads = store.leads.filter(l => !isSales || (l.assignedOwner || l.suggestedOwner) === role)
-  const newLeads = leads.filter(l => l.status === 'New')
-  const blocked = open.map(o => ({ opp: o, blockers: readiness(o, store.getProposal(o.id), store) }))
-    .filter(x => isBlocked(x.blockers))
-  const unproposed = open.filter(o => !o.proposalDate)
-  const liveAi = AI_MAP.flatMap(g => g.items).filter(i => i.live).length
-  const allAi = AI_MAP.flatMap(g => g.items).length
+  const c = counts(store, role)
 
-  const nextActions = open
-    .map(o => {
-      const blockers = readiness(o, store.getProposal(o.id), store)
-      const blocker = blockers.find(b => b.severity === 'block' || b.severity === 'wait')
-      return { opp: o, text: blocker?.text || (o.nextActionOwner ? `Follow up with ${o.nextActionOwner}` : 'Review opportunity and update next action') }
-    })
-    .sort((a, b) => (b.opp.lastUpdated || '').localeCompare(a.opp.lastUpdated || ''))
-    .slice(0, 6)
+  const sales = isSalesOwner(role)
+  const approver = isApprover(role) && !isAdminRole(role)
+  const admin = isAdminRole(role)
+  const tech = role === 'TECH'
+
+  const { open, blocked, nextActions } = useWorkQueue(store, role, sales || tech)
+  const head = (
+    <div className="home-head">
+      <div>
+        <h2>My Dashboard</h2>
+        <p className="hint">{roleLabel(role)}{store.sales?.fy ? ` · ${store.sales.fy}` : ''}</p>
+      </div>
+      <button onClick={() => nav('/home')}><Icon name="home" size={13} /> Home</button>
+    </div>
+  )
+
+  if (sales) return <SalesDashboard {...{ store, nav, role, c, open, blocked, nextActions, head }} />
+  if (approver) return <ApproverDashboard {...{ store, nav, role, c, open, blocked, nextActions, head }} />
+  if (admin) return <AdminDashboard {...{ store, nav, role, c, open, blocked, nextActions, head }} />
+  if (tech) return <TechDashboard {...{ store, nav, role, c, open, blocked, nextActions, head }} />
+
+  // Any future role still gets the work queue rather than a blank page.
+  return (
+    <div className="page">
+      {head}
+      <div className="stat-cards">
+        <Metric label="Open opportunities" value={open.length} tone="sky" />
+        <Metric label="Blockers" value={blocked.length} tone={blocked.length ? 'red' : 'green'} />
+      </div>
+      <div className="ana-grid">
+        <Card title="Next best actions" icon="target" tone="tone-amber"><NextActions {...{ nextActions, nav }} /></Card>
+      </div>
+    </div>
+  )
+}
+
+// ------------------------------------------------------------------- sales
+function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head }) {
+  const perf = salesPerformance(store, role)
+  const money = canPriceProposal(role)
+  const openValue = open.reduce((s, o) => s + (+o.valueK || 0), 0)
+  const leads = store.leads.filter(l => (l.assignedOwner || l.suggestedOwner) === role && l.status === 'New')
+  const unproposed = open.filter(o => !o.proposalDate)
+  const monthPoints = FY_MONTHS.map((m, i) => ({ key: m, label: m, value: perf.monthly[i] }))
+  const variance = perf.achieved - perf.expected
 
   return (
     <div className="page">
-      <div className="home-head">
-        <div>
-          <h2>My Dashboard</h2>
-          <p className="hint">{roleLabel(role)} · role-specific work queue and next actions</p>
-        </div>
-        <button onClick={() => nav('/home')}><Icon name="home" size={13} /> Home</button>
-      </div>
+      {head}
 
       <div className="stat-cards">
-        <Metric label="Open opportunities" value={open.length} tone="sky" />
-        <Metric label={isSales ? 'My pending approvals' : 'Pending approvals'} value={pendingApprovals.length} tone={pendingApprovals.length ? 'amber' : 'green'} />
-        <Metric label="Blockers" value={blocked.length} tone={blocked.length ? 'red' : 'green'} />
-        <Metric label={isSales ? 'New leads' : 'Open leads'} value={newLeads.length} tone="violet" />
+        <Metric label="Annual target" value={fmtLakh(perf.annual)} tone="slate" />
+        <Metric label="Achieved to date" value={fmtLakh(perf.achieved)} tone={variance >= 0 ? 'green' : 'amber'}
+          hint={`${variance >= 0 ? '+' : ''}${fmtLakh(variance)} vs pace`} />
+        <Metric label="Gap to target" value={fmtLakh(perf.gap)} tone="sky" />
+        <Metric label="Run rate, annualised" value={fmtLakh(perf.runRate)} tone={perf.runRate >= perf.annual ? 'green' : 'amber'} />
       </div>
 
       <div className="ana-grid">
-        <section className="ana-card c-6">
-          <div className="ana-title">Next best actions</div>
-          {nextActions.map(({ opp, text }) => (
-            <button key={opp.id} className="dashboard-action" onClick={() => nav(`/opp/${opp.id}`)}>
-              <span><b>{opp.id}</b> — {opp.oppName}</span>
-              <span className="hint">{text}</span>
-            </button>
-          ))}
-          {!nextActions.length && <p className="hint">No open opportunities require action.</p>}
-        </section>
-
-        <section className="ana-card c-6">
-          <div className="ana-title">Proposal and approval status</div>
+        <Card title="Annual attainment" icon="target" tone="tone-green" span={4}>
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0 10px' }}>
+            <ArcGauge pct={perf.attainPct} value={`${Math.round(perf.attainPct)}%`} caption={`of ${fmtLakh(perf.annual)}`} />
+          </div>
           <table className="cost-table" style={{ width: '100%' }}>
             <tbody>
-              <tr><td>Without proposal</td><td className="num">{unproposed.length}</td></tr>
-              <tr><td>Blocked opportunities</td><td className="num">{blocked.length}</td></tr>
-              <tr><td>Conditions awaiting confirmation</td><td className="num">{pendingConditions.length}</td></tr>
-              <tr><td>Latest update</td><td className="num">{ddMmmYY(open[0]?.lastUpdated) || '—'}</td></tr>
+              <tr><td>Expected by now</td><td className="num">{fmtLakh(perf.expected)}</td></tr>
+              <tr><td>Achieved</td><td className="num">{fmtLakh(perf.achieved)}</td></tr>
+              <tr className="total"><td>Variance</td>
+                <td className="num" style={{ color: variance >= 0 ? 'var(--won-text)' : 'var(--amber-text)' }}>
+                  {variance >= 0 ? '+' : ''}{fmtLakh(variance)}
+                </td></tr>
+            </tbody>
+          </table>
+        </Card>
+
+        <Card title="Quarterly target vs actual" icon="chartBar" tone="tone-sky" span={8}>
+          <QuarterBars perf={perf} />
+          <div className="hint" style={{ marginTop: 8 }}>Booked orders against your quarterly number.</div>
+        </Card>
+
+        <Card title="Monthly bookings" icon="chartLine" tone="tone-violet" span={6}>
+          <div style={{ color: 'var(--primary-accent)' }}><Sparkline points={monthPoints} height={64} /></div>
+          <div className="hint">{FY_MONTHS[0]} – {FY_MONTHS[FY_MONTHS.length - 1]} · {perf.orders.length} order{perf.orders.length === 1 ? '' : 's'} booked</div>
+        </Card>
+
+        <Card title="Pipeline snapshot" icon="chartBar" tone="tone-teal" span={6}>
+          <table className="cost-table" style={{ width: '100%' }}>
+            <tbody>
+              <tr><td>Open opportunities</td><td className="num">{open.length}</td></tr>
+              {money && <tr><td>Open value</td><td className="num">{fmtLakh(openValue)}</td></tr>}
+              <tr><td>Without a proposal</td><td className="num">{unproposed.length}</td></tr>
+              <tr><td>New leads in your queue</td><td className="num">{leads.length}</td></tr>
+              <tr className="total"><td>Blocked</td><td className="num">{blocked.length}</td></tr>
             </tbody>
           </table>
           <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button onClick={() => nav('/approvals')}>Open approvals</button>
-            <button onClick={() => nav('/my')}>Open opportunities</button>
+            <button onClick={() => nav('/my')}>My opportunities</button>
+            <button onClick={() => nav('/inbox')}>Lead inbox</button>
           </div>
-        </section>
+        </Card>
 
-        <section className="ana-card c-6">
-          <div className="ana-title">Lead queue</div>
-          {newLeads.slice(0, 5).map(l => (
-            <button key={l.id} className="dashboard-action" onClick={() => nav(`/inbox/${l.id}`)}>
-              <span><b>{l.id}</b> — {l.subject}</span>
-              <span className="hint">{l.route || l.parse?.oppType || 'Unclassified'} · {l.suggestedOwner || 'Unassigned'}</span>
+        <Card title="Next best actions" icon="target" tone="tone-amber" span={6}
+          action={c.myPending > 0 ? <span className="pill Amber">{c.myPending} approval{c.myPending === 1 ? '' : 's'} pending</span> : null}>
+          <NextActions {...{ nextActions, nav }} />
+        </Card>
+
+        <Card title="My orders" icon="clipboardCheck" tone="tone-green" span={6}>
+          <table className="ana-table">
+            <thead><tr><th>Order</th><th>Customer</th><th className="num">Value</th><th>Status</th></tr></thead>
+            <tbody>
+              {perf.orders.slice(0, 6).map(o => (
+                <tr key={o.id}>
+                  <td>{o.id}</td>
+                  <td title={o.title}>{o.customer}</td>
+                  <td className="num">{money ? fmtLakh(o.valueK) : '—'}</td>
+                  <td>{o.status}</td>
+                </tr>
+              ))}
+              {!perf.orders.length && <tr><td className="empty" colSpan={4}>No orders booked this year.</td></tr>}
+            </tbody>
+          </table>
+          {perf.orders.length > 6 && <button style={{ marginTop: 8 }} onClick={() => nav('/po')}>All {perf.orders.length} orders</button>}
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+// --------------------------------------------------------------- approvers
+function ApproverDashboard({ store, nav, role, c, open, blocked, nextActions, head }) {
+  const perf = salesPerformance(store)   // whole company
+  const mine = (store.approvals || []).filter(a => a.status === 'Pending'
+    && (a.needed?.length ? a.needed : [a.approver]).includes(role) && !(a.decisions || {})[role])
+  const openValue = open.reduce((s, o) => s + (+o.valueK || 0), 0)
+
+  return (
+    <div className="page">
+      {head}
+      <div className="stat-cards">
+        <Metric label="Waiting on you" value={mine.length} tone={mine.length ? 'red' : 'green'} onClick={() => nav('/approvals')} />
+        <Metric label="All pending gates" value={c.pending} tone="amber" onClick={() => nav('/approvals')} />
+        <Metric label="Open opportunities" value={open.length} tone="sky" onClick={() => nav('/')} />
+        {canViewCommercial(role) && <Metric label="Open pipeline" value={fmtLakh(openValue)} tone="slate" />}
+      </div>
+
+      <div className="ana-grid">
+        <Card title="Your approval queue" icon="checkCircle" tone="tone-green" span={6}>
+          {mine.map(a => (
+            <button key={a.id} className="dashboard-action" onClick={() => nav('/approvals')}>
+              <span><b>{a.id}</b> — {a.type}</span>
+              <span className="hint">{a.oppId || '—'} · requested by {a.requestedBy}</span>
             </button>
           ))}
-          {!newLeads.length && <p className="hint">No new leads in your queue.</p>}
-          {newLeads.length > 5 && <button onClick={() => nav('/inbox')}>View all {newLeads.length} leads</button>}
-        </section>
+          {!mine.length && <p className="hint">Nothing is waiting on you right now.</p>}
+        </Card>
 
-        <section className="ana-card c-6">
-          <div className="ana-title">Automation coverage</div>
-          <p><b>{liveAi}</b> live AI automations · <b>{allAi}</b> mapped interventions</p>
-          <p className="hint">Use the AI &amp; Automation page to open each demonstration and review its status.</p>
-          <button onClick={() => nav('/aimap')}>Open AI &amp; Automation</button>
-          {canViewCommercial(role) && <p className="hint" style={{ marginTop: 8 }}>Open pipeline value: ₹ {fmt(open.reduce((s, o) => s + (+o.valueK || 0), 0))}K</p>}
-        </section>
+        <Card title="Company attainment" icon="target" tone="tone-sky" span={6}>
+          <QuarterBars perf={perf} />
+          <div className="hint" style={{ marginTop: 8 }}>
+            {fmtLakh(perf.achieved)} booked of {fmtLakh(perf.annual)} · {Math.round(perf.attainPct)}% attained
+          </div>
+        </Card>
+
+        <Card title="Blocked opportunities" icon="alert" tone="tone-red" span={6}
+          action={<span className="pill Red">{blocked.length}</span>}>
+          {blocked.slice(0, 6).map(({ opp }) => (
+            <button key={opp.id} className="dashboard-action" onClick={() => nav(`/opp/${opp.id}`)}>
+              <span><b>{opp.id}</b> — {opp.oppName}</span>
+              <span className="hint">{opp.owner} · {opp.stage}</span>
+            </button>
+          ))}
+          {!blocked.length && <p className="hint">No opportunity is currently blocked.</p>}
+        </Card>
+
+        <Card title="Next best actions" icon="target" tone="tone-amber" span={6}>
+          <NextActions {...{ nextActions, nav }} />
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+// ------------------------------------------------------------------- admin
+function AdminDashboard({ store, nav, role, c, open, blocked, head }) {
+  const users = store.auth?.users || []
+  const pendingUsers = users.filter(u => u.status === 'Pending')
+  const perf = salesPerformance(store)
+
+  return (
+    <div className="page">
+      {head}
+      <div className="stat-cards">
+        <Metric label="User accounts" value={users.length} tone="slate" onClick={() => nav('/users')} />
+        <Metric label="Awaiting approval" value={pendingUsers.length} tone={pendingUsers.length ? 'amber' : 'green'} onClick={() => nav('/users')} />
+        <Metric label="Audit entries" value={(store.audit || []).length} tone="sky" onClick={() => nav('/audit')} />
+        <Metric label="Open opportunities" value={open.length} tone="violet" onClick={() => nav('/')} />
+      </div>
+
+      <div className="ana-grid">
+        <Card title="Registrations awaiting a decision" icon="shield" tone="tone-violet" span={6}>
+          {pendingUsers.slice(0, 6).map(u => (
+            <button key={u.id || u.email} className="dashboard-action" onClick={() => nav('/users')}>
+              <span><b>{u.name || u.email}</b></span>
+              <span className="hint">{u.email} · requested {u.role || 'no role'}</span>
+            </button>
+          ))}
+          {!pendingUsers.length && <p className="hint">No registrations are waiting.</p>}
+        </Card>
+
+        <Card title="Platform health" icon="gear" tone="tone-slate" span={6}>
+          <table className="cost-table" style={{ width: '100%' }}>
+            <tbody>
+              <tr><td>Connectors configured</td><td className="num">{(store.config?.connectors || []).length}</td></tr>
+              <tr><td>Reminder rules</td><td className="num">{(store.config?.reminders || []).length}</td></tr>
+              <tr><td>Customers on the master</td><td className="num">{store.customers.length}</td></tr>
+              <tr><td>Pending approvals (all)</td><td className="num">{c.pending}</td></tr>
+              <tr className="total"><td>Blocked opportunities</td><td className="num">{blocked.length}</td></tr>
+            </tbody>
+          </table>
+          <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button onClick={() => nav('/admin')}>Admin settings</button>
+            <button onClick={() => nav('/audit')}>Audit trail</button>
+          </div>
+        </Card>
+
+        <Card title="Company attainment" icon="target" tone="tone-sky" span={12}>
+          <QuarterBars perf={perf} />
+          <div className="hint" style={{ marginTop: 8 }}>
+            {fmtLakh(perf.achieved)} booked of {fmtLakh(perf.annual)} · {Math.round(perf.attainPct)}% attained
+          </div>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
+// --------------------------------------------------- technical reviewer
+function TechDashboard({ store, nav, open, blocked, nextActions, head }) {
+  // The reviewer works the technical content of live proposals, not a pipeline
+  // of their own — so this is scoped by what needs review, not by ownership.
+  const projects = store.opportunities.filter(o => o.status === 'Open' && o.route === 'Project')
+  const forReview = store.opportunities.filter(o => o.status === 'Open')
+    .map(o => ({ opp: o, p: store.getProposal(o.id) }))
+    .filter(({ p }) => (p?.bom || []).length > 0)
+  const deviations = forReview.reduce((s, { p }) => s + (p.terms || []).filter(t => t.status === 'Deviation').length, 0)
+
+  return (
+    <div className="page">
+      {head}
+      <div className="stat-cards">
+        <Metric label="Proposals with a BoQ" value={forReview.length} tone="sky" />
+        <Metric label="Open deviations" value={deviations} tone={deviations ? 'amber' : 'green'} />
+        <Metric label="Project opportunities" value={projects.length} tone="violet" onClick={() => nav('/')} />
+        <Metric label="Blocked" value={blocked.length} tone={blocked.length ? 'red' : 'green'} />
+      </div>
+
+      <div className="ana-grid">
+        <Card title="Proposals to review" icon="fileText" tone="tone-sky" span={6}>
+          {forReview.slice(0, 8).map(({ opp, p }) => (
+            <button key={opp.id} className="dashboard-action" onClick={() => nav(`/proposal/${opp.id}`)}>
+              <span><b>{opp.id}</b> — {opp.oppName}</span>
+              <span className="hint">{(p.bom || []).length} BoQ line(s) · Rev {p.revision} · {opp.route}</span>
+            </button>
+          ))}
+          {!forReview.length && <p className="hint">No proposal has a BoQ to review yet.</p>}
+        </Card>
+
+        <Card title="Next best actions" icon="target" tone="tone-amber" span={6}>
+          <NextActions {...{ nextActions, nav }} />
+        </Card>
       </div>
     </div>
   )

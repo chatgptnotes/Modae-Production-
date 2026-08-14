@@ -4,7 +4,7 @@ import { useStore } from '../store.jsx'
 import { fmt, fmtLakh, monthKey, monthLabel, exportCSV, canViewCommercial } from '../utils.js'
 
 // The "Pivot" sheet, shaped like the real one: rows = customers, columns =
-// Order Date months, values = Sum of Value (K₹), with an Order Date quarter
+// Expected Order Date months, values = Sum of Value (K₹), with an Expected Order Date quarter
 // range slicer on top.
 const quarterOf = k => `${k.slice(0, 4)}-Q${Math.ceil(parseInt(k.slice(5, 7), 10) / 3)}`
 const QUARTERS = []
@@ -79,7 +79,7 @@ export default function Dashboard() {
             {owners.map(p => <option key={p}>{p}</option>)}
           </select>
         </label>
-        <label>Order Date:{' '}
+        <label>Expected Order Date:{' '}
           <select value={fromQ} onChange={e => setFromQ(e.target.value)}>
             {QUARTERS.map(q => <option key={q}>{q}</option>)}
           </select>
@@ -122,7 +122,7 @@ export default function Dashboard() {
             ))}
             {!customers.length && (
               <tr><td colSpan={months.length + 2} className="hint">
-                Nothing in this window — tick Forecast on tracker rows and set likely Order Dates.
+                Nothing in this window — tick Forecast on tracker rows and set likely Expected Order Dates.
               </td></tr>
             )}
           </tbody>

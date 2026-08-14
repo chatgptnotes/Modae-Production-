@@ -8,7 +8,7 @@ import {
   seedConfig, seedKyc, seedSales, seedSparesLines, seedSparesAlternatives,
   seedRateSheets, seedSvcEstimates, seedClarifications, seedHandover,
   seedNotes, seedAiLeads, seedJointApprovals, seedCatalogRev,
-  buildPoCompare, buildHandover, milestoneForStage, routeForType,
+  seedPoCompare, buildPoCompare, buildHandover, milestoneForStage, routeForType,
   ROLES, SUBFOLDERS, newProposal,
 } from './seed.js'
 
@@ -74,7 +74,13 @@ function migrate(s) {
   if (!s.rateSheets) s.rateSheets = seedRateSheets
   if (!Array.isArray(s.svcEstimates)) s.svcEstimates = seedSvcEstimates
   if (!Array.isArray(s.clarifications)) s.clarifications = seedClarifications
+  // Demo Launcher scenario 6 needs a PO already in review to open onto. Backfill
+  // by key so a saved state that predates the seed picks it up, without ever
+  // overwriting a PO the user has been working on.
   if (!s.poCompare) s.poCompare = {}
+  for (const [oppId, po] of Object.entries(seedPoCompare)) {
+    if (!s.poCompare[oppId]) s.poCompare = { ...s.poCompare, [oppId]: po }
+  }
   if (!s.handover) s.handover = seedHandover && Object.keys(seedHandover).length ? seedHandover : {}
   if (!Array.isArray(s.notes)) s.notes = seedNotes
   if (s.viewMode !== 'tablet' && s.viewMode !== 'full') s.viewMode = defaultViewMode()
@@ -496,6 +502,25 @@ export function StoreProvider({ children }) {
       })
     },
 
+    // Take a lead back to the inbox so it can be qualified, disqualified or
+    // reassigned again. Biji, 13 Aug: "by mistake I qualify — I should take it
+    // back to the lead list… then I can again qualify, disqualify or reassign."
+    // The old Revert button was hidden the moment an opportunity existed, which
+    // is exactly the case it was needed for, so this removes the opportunity it
+    // created (and its folder, proposal and approvals) rather than orphaning it.
+    revertLead(id, reason = '') {
+      const lead = stateRef.current.leads.find(l => l.id === id)
+      if (lead?.oppId) api.deleteOpportunity(lead.oppId)
+      setState(s => withAudit(
+        {
+          ...s,
+          leads: s.leads.map(l => (l.id === id
+            ? { ...l, status: 'New', oppId: null, droppedReason: '', revertedAt: new Date().toISOString(), revertReason: reason }
+            : l)),
+        },
+        'Lead reverted to inbox', id, [lead?.oppId && `removed ${lead.oppId}`, reason].filter(Boolean).join(' — ')))
+    },
+
     // ---- Approvals --------------------------------------------------------
     requestApproval(req) {
       setState(s => {
@@ -589,10 +614,22 @@ export function StoreProvider({ children }) {
     },
 
     // ---- View mode (tablet / full site) -----------------------------------
+    // An explicit switch is remembered (`viewModePinned`) and never overridden.
     setViewMode(mode) {
       setState(s => (mode === 'tablet' || mode === 'full'
-        ? { ...withAudit(s, 'View switched', mode, `from ${s.viewMode}`), viewMode: mode }
+        ? { ...withAudit(s, 'View switched', mode, `from ${s.viewMode}`), viewMode: mode, viewModePinned: true }
         : s))
+    },
+
+    // Rotating a tablet, or dragging a desktop window narrow, used to leave the
+    // wrong shell in place: the mode was read from the viewport once on first
+    // visit and never again. Only follows the viewport until someone chooses.
+    syncViewMode() {
+      setState(s => {
+        if (s.viewModePinned) return s
+        const next = defaultViewMode()
+        return next === s.viewMode ? s : { ...s, viewMode: next }
+      })
     },
 
     // ---- Shared marketing notes board -------------------------------------

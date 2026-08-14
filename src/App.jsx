@@ -41,12 +41,12 @@ import Portal from './pages/Portal.jsx'
 const NAV = [
   { to: '/home', label: 'Home', icon: 'home', page: 'home' },
   { to: '/my-dashboard', label: 'My Dashboard', icon: 'chartBar', page: 'mydashboard' },
-  { to: '/inbox', label: 'Lead Inbox', icon: 'inbox', page: 'inbox' },
+  { to: '/inbox', label: 'Lead Inbox', icon: 'inbox', page: 'inbox', badge: c => c.newLeads, badgeHint: 'new leads to qualify' },
   { to: '/', label: 'Opportunity Tracker', icon: 'sheet', page: 'tracker' },
   { to: '/my', label: 'My Opportunities', icon: 'cards', page: 'my' },
   { to: '/new', label: 'Create Opportunity', icon: 'plus', page: 'new' },
   { to: '/tender', label: 'Tender → Proposal', icon: 'bot', page: 'tender' },
-  { to: '/approvals', label: 'Approvals', icon: 'checkCircle', page: 'approvals' },
+  { to: '/approvals', label: 'Approvals', icon: 'checkCircle', page: 'approvals', badge: c => c.forMe + c.myPending, badgeHint: 'gates waiting on you, plus your own requests' },
   { to: '/po', label: 'Purchase Orders', icon: 'clipboardCheck', page: 'po' },
   { to: '/folders', label: 'Folders', icon: 'folder', page: 'folders' },
   { to: '/notes', label: 'Marketing Notes', icon: 'note', page: 'notes' },
@@ -63,11 +63,16 @@ const NAV = [
 
 // App-like bottom tab bar shown in tablet mode — four tabs around a raised
 // centre action (voice update), like a native app.
+// My Dashboard sits directly after Home, matching the sidebar — on a phone the
+// tablet shell renders no sidebar, so without a tab here the page was reachable
+// only by typing the URL. Notes keeps its Home tile.
+// The approvals badge counts the gates *this* persona has to decide (`forMe`),
+// not every pending approval in the company.
 const BOTTOM = [
   { to: '/home', label: 'Home', icon: 'home', page: 'home' },
+  { to: '/my-dashboard', label: 'Dashboard', icon: 'chartBar', page: 'mydashboard' },
   { to: '/inbox', label: 'Inbox', icon: 'inbox', page: 'inbox', badge: s => counts(s).newLeads },
-  { to: '/approvals', label: 'Approvals', icon: 'checkCircle', page: 'approvals', badge: s => counts(s).pending },
-  { to: '/notes', label: 'Notes', icon: 'note', page: 'notes' },
+  { to: '/approvals', label: 'Approvals', icon: 'checkCircle', page: 'approvals', badge: s => counts(s).forMe },
 ]
 
 export default function App() {
@@ -81,6 +86,19 @@ export default function App() {
 
   // Off-canvas nav closes on navigation (tablet).
   useEffect(() => { setNavOpen(false) }, [loc.pathname])
+
+  // Follow the viewport until the user picks a mode themselves — a tablet turned
+  // to landscape, or a browser window dragged wider, should land in the right
+  // shell rather than keeping whatever the first visit happened to measure.
+  useEffect(() => {
+    const onResize = () => store.syncViewMode()
+    window.addEventListener('resize', onResize)
+    window.addEventListener('orientationchange', onResize)
+    return () => {
+      window.removeEventListener('resize', onResize)
+      window.removeEventListener('orientationchange', onResize)
+    }
+  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Tablet mode lands on the task tiles once per mount.
   useEffect(() => {
@@ -156,12 +174,12 @@ export default function App() {
           <Icon name="bell" size={15} />
           {c.newLeads > 0 && <span className="tb-dot amber">{c.newLeads}</span>}
         </button>
-        <button className="tb-bell" onClick={() => nav('/approvals')} title={`${c.pending} approvals pending`}>
+        <button className="tb-bell" onClick={() => nav('/approvals')} title={`${c.forMe} approvals waiting on you`}>
           <Icon name="checkCircle" size={15} />
-          {c.pending > 0 && <span className="tb-dot red">{c.pending}</span>}
+          {c.forMe > 0 && <span className="tb-dot red">{c.forMe}</span>}
         </button>
         <span className={`tb-online ${online.tone}`} title={`File storage: ${online.label}`}>
-          <Icon name="wifi" size={13} /> {online.label}
+          <Icon name="wifi" size={13} /> <span className="tb-label">{online.label}</span>
         </span>
         <InstallButton />
         <button className="tb-icon" title={theme === 'dark' ? 'Switch to light dashboard' : 'Switch to dark dashboard'}
@@ -209,12 +227,18 @@ export default function App() {
           <ModaeLogo size={28} sub="WinTrack" />
         </div>
         <nav className="side-nav">
-          {items.map(t => (
-            <NavLink key={t.to} to={t.to} end={t.to === '/'}
-              className={({ isActive }) => `side-item ${isActive ? 'active' : ''}`}>
-              <Icon name={t.icon} size={17} /> {t.label}
-            </NavLink>
-          ))}
+          {items.map(t => {
+            // Same badges the tablet bar carries — the desktop sidebar had none,
+            // so an approver saw no sign that a gate was waiting on them.
+            const badge = t.badge ? t.badge(c) : 0
+            return (
+              <NavLink key={t.to} to={t.to} end={t.to === '/'}
+                className={({ isActive }) => `side-item ${isActive ? 'active' : ''}`}>
+                <Icon name={t.icon} size={17} /> {t.label}
+                {badge > 0 && <span className="side-badge" title={t.badgeHint}>{badge}</span>}
+              </NavLink>
+            )
+          })}
         </nav>
         <div className="side-foot">
           {!custAccount && (

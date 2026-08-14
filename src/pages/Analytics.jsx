@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { STAGES, CUSTOMER_STATUSES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, PROB_LEVELS, ROLES } from '../seed.js'
-import { fmtLakh, ageDays, canViewCommercial, isAdminRole, isApprover, sameCustomer } from '../utils.js'
+import { fmtLakh, ageDays, canViewCommercial, isAdminRole, isApprover, sameCustomer, productList } from '../utils.js'
 import { PROB_WEIGHT } from '../kpi.js'
 import { Icon } from '../icons.jsx'
 import { ArcGauge } from '../dashviz.jsx'
@@ -20,8 +20,8 @@ const OPEN_STAGES = STAGES.filter(s => s !== 'Won' && s !== 'Lost')
 const DATE_FIELDS = [
   { key: 'createDate', label: 'Create date' },
   { key: 'proposalDate', label: 'Proposal date' },
-  { key: 'orderDate', label: 'Order date' },
-  { key: 'invoiceDate', label: 'Invoice date' },
+  { key: 'orderDate', label: 'Expected order date' },
+  { key: 'invoiceDate', label: 'Expected ship date' },
 ]
 const RANGES = [
   { key: 'all', label: 'All time' },
@@ -253,7 +253,7 @@ export default function Analytics() {
     (f.bu === 'All' || o.bu === f.bu) &&
     (f.oppType === 'All' || o.oppType === f.oppType) &&
     (f.segment === 'All' || o.segment === f.segment) &&
-    (f.product === 'All' || o.product === f.product) &&
+    (f.product === 'All' || productList(o.product).includes(f.product)) &&
     (f.stage === 'All' || o.stage === f.stage) &&
     (f.prob === 'All' || (o.prob || 'Low') === f.prob) &&
     (f.status === 'All' || o.status === f.status) &&

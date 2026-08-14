@@ -101,6 +101,25 @@ export function readiness(opp, proposal, state) {
   return b
 }
 
+// Who the next action actually sits with. Biji, 13 Aug: "I should know where is
+// the next action pending — not with me, but with someone… then I need to go to
+// [them] and get those actions done." Derived from the live blockers so the
+// column is true by construction; a value typed into the sheet still wins, since
+// a salesperson may know something the gates do not.
+export function nextActionWith(opp, proposal, state) {
+  if (!opp) return { owner: '', text: '', derived: false }
+  if (opp.nextActionOwner) {
+    return { owner: opp.nextActionOwner, text: `Follow up with ${opp.nextActionOwner}`, derived: false }
+  }
+  const blockers = readiness(opp, proposal, state)
+  const b = blockers.find(x => x.severity === 'block' || x.severity === 'wait')
+  if (!b) return { owner: '', text: '', derived: true }
+  // An approval gate names its approver; KYC always sits with AH; everything
+  // else is work the opportunity owner has to do themselves.
+  const owner = b.approver || (b.kyc ? 'AH' : opp.owner || '')
+  return { owner, text: b.text, derived: true }
+}
+
 export function oppBlockers(opp, proposal, approvals) {
   if (!opp) return []
   const b = []

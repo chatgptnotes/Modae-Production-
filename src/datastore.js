@@ -6,7 +6,7 @@ import { supabase } from './supabase.js'
 // original localStorage-only behavior without env vars.
 
 // Per-device/session state that must never be shared across browsers.
-export const LOCAL_ONLY = ['viewMode', 'tabletTheme', 'spSync', 'auth', 'role']
+export const LOCAL_ONLY = ['viewMode', 'viewModePinned', 'tabletTheme', 'spSync', 'auth', 'role']
 
 export const dbEnabled = () => !!supabase
 

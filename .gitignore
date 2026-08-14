@@ -4,4 +4,7 @@ dist
 .DS_Store
 .env
 .env.*
+# ...but the template documenting the required variables is committed; it holds
+# no secrets, and a new environment is unconfigurable without it.
+!.env.example
 CLAUDE.md

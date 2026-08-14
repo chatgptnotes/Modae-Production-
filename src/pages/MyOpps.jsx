@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
 import { OWNERS, ROLES } from '../seed.js'
-import { canViewCommercial, fmt, ddMmmYY, stageClass } from '../utils.js'
+import { canPriceProposal, fmt, mmmYY, stageClass } from '../utils.js'
+import { nextActionWith } from '../gates.js'
 import { useDrawer } from '../drawer.jsx'
 import { Icon } from '../icons.jsx'
 
@@ -14,8 +15,11 @@ export default function MyOpps() {
   const [showAll, setShowAll] = useState(false)
 
   const role = store.role
-  const comm = canViewCommercial(role)
+  const comm = canPriceProposal(role)
   const mine = OWNERS.includes(role)
+  // Where the next action sits — derived from the live blockers, overridden by
+  // anything typed into the sheet's Next Action Pending Owner column.
+  const na = o => nextActionWith(o, store.getProposal(o.id), store)
 
   let rows = [...store.opportunities]
     .sort((a, b) => (b.lastUpdated || '').localeCompare(a.lastUpdated || ''))
@@ -44,10 +48,14 @@ export default function MyOpps() {
       <div className="sheet-wrap">
         <table className="sheet">
           <thead>
+            {/* Exactly the columns Biji listed on 13 Aug. Owner and Updated are
+                deliberately absent: this list is already filtered to one owner,
+                and Last Updated is system noise on a working list. */}
             <tr>
               <th>Opp ID</th><th>Customer</th><th>Opportunity</th>
-              <th>Stage</th><th>Prob</th><th>Owner</th>
-              <th>{comm ? 'Value (K₹)' : ''}</th><th>Updated</th>
+              <th>Stage</th><th>Prob</th>
+              <th>{comm ? 'Value (K₹)' : ''}</th>
+              <th>Expected Order Date</th><th>Next Action Pending</th>
             </tr>
           </thead>
           <tbody>
@@ -64,9 +72,16 @@ export default function MyOpps() {
                   </td>
                   <td><span className={`pill ${stageClass(o)}`}>{o.stage}</span></td>
                   <td>{o.prob || '—'}</td>
-                  <td>{o.owner}</td>
                   <td>{comm ? (o.valueK ? `₹ ${fmt(o.valueK)}` : '—') : ''}</td>
-                  <td>{ddMmmYY(o.lastUpdated)}</td>
+                  <td className={o.status === 'Open' && !o.orderDate ? 'need' : ''}
+                    title={o.orderDate ? '' : 'No expected order date set'}>
+                    {o.orderDate ? mmmYY(o.orderDate) : '— set —'}
+                  </td>
+                  <td title={na(o).text}>
+                    {na(o).owner
+                      ? <span className={na(o).derived ? 'hint' : ''}>{na(o).owner}</span>
+                      : <span className="hint">—</span>}
+                  </td>
                 </tr>
               )
             })}

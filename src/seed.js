@@ -487,12 +487,12 @@ export const ROLES = {
   ADMIN: { name: 'Admin', label: 'Admin — System Administrator', commercial: true, admin: true },
   LJS: { name: 'L. J. Swaminathan', label: 'LJS — Strategic Approver', commercial: true },
   AH: { name: 'A. Hameed', label: 'AH — Commercial & Ops Approver', commercial: true },
-  RS: { name: 'R. Sundaram', label: 'RS — Sales Owner', commercial: false },
-  PP: { name: 'P. Prakash', label: 'PP — Sales Owner', commercial: false },
-  SS: { name: 'S. Subramanian', label: 'SS — Sales Owner', commercial: false },
-  PJS: { name: 'P. J. Sharma', label: 'PJS — Sales Owner', commercial: false },
-  RJS: { name: 'R. J. Singh', label: 'RJS — Sales Owner', commercial: false },
-  SR: { name: 'S. Rao', label: 'SR — Sales Owner', commercial: false },
+  RS: { name: 'R. Sundaram', label: 'RS — Sales Owner', commercial: false, sales: true },
+  PP: { name: 'P. Prakash', label: 'PP — Sales Owner', commercial: false, sales: true },
+  SS: { name: 'S. Subramanian', label: 'SS — Sales Owner', commercial: false, sales: true },
+  PJS: { name: 'P. J. Sharma', label: 'PJS — Sales Owner', commercial: false, sales: true },
+  RJS: { name: 'R. J. Singh', label: 'RJS — Sales Owner', commercial: false, sales: true },
+  SR: { name: 'S. Rao', label: 'SR — Sales Owner', commercial: false, sales: true },
   TECH: { name: 'T. Rao', label: 'TECH — Technical Reviewer', commercial: false },
   CUST: { name: 'Customer contact', label: 'Customer — External portal', commercial: false, external: true },
 }
@@ -539,6 +539,14 @@ export function routeForType(oppType) {
   if (oppType === 'Spares') return 'Spares'
   if (oppType === 'Service' || oppType === 'AMC' || oppType === 'Training') return 'Service'
   return 'Project'
+}
+
+// Proposal template flavour, derived from the same route the workbench uses.
+// Deriving it here rather than re-testing oppType keeps AMC, Training and
+// Upgrade off the heavy project template — they used to fall through to it.
+export function proposalTypeForOpp(opp) {
+  const route = routeForType(opp?.oppType)
+  return route === 'Spares' ? 'Spares' : route === 'Service' ? 'Services' : 'Project'
 }
 
 // Demo accounts — password is plaintext in localStorage on purpose (demo only,
@@ -773,7 +781,7 @@ export const seedRateSheet = [
   { role: 'Emergency callout (within 48 hrs)', ratePerDayK: 95 },
 ]
 
-export const seedCustomers = [
+const CUSTOMER_ROWS = [
   { name: 'Andritz Hydro', category: 'EUC/OEM', status: 'Green', kyc: 'Valid', payment: 'On time' },
   { name: 'Prime Engineering/PECO', category: 'ACP', status: 'Green', kyc: 'Valid', payment: 'On time' },
   { name: 'BHEL Bhopal', category: 'OEM', status: 'Amber', kyc: 'Renewal due', payment: 'Avg 60 days' },
@@ -810,6 +818,19 @@ export const seedCustomers = [
   { name: 'GAIL India', category: 'EUC', status: 'Amber', kyc: 'Valid', payment: 'Avg 60 days' },
   { name: 'ISRO Propulsion Complex', category: 'EUC', status: 'Blue', kyc: 'Pending', payment: '—' },
 ]
+
+// Every customer carries a purchase-desk address so the Email Proposal dialog
+// resolves a recipient without anyone retyping it. The real recipient is the
+// sender of the original enquiry (carried onto the opportunity as contactEmail);
+// this is the fallback when an opportunity was raised without a lead.
+// Demo addresses use .example.in, which cannot receive mail.
+const purchaseAddress = name => 'purchase@' + String(name)
+  .toLowerCase()
+  .replace(/\(.*?\)/g, ' ')            // drop parenthetical sites
+  .replace(/[^a-z0-9]+/g, ' ')
+  .trim().split(/\s+/).slice(0, 2).join('') + '.example.in'
+
+export const seedCustomers = CUSTOMER_ROWS.map(c => ({ ...c, email: c.email || purchaseAddress(c.name) }))
 
 // Lead inbox — inquiries land here (common mailbox intake); most never become
 // opportunities and that history is kept minimally, per the Aug 10 meeting.
@@ -895,7 +916,7 @@ export const defaultCosting = {
 export function newProposal(oppId, opp) {
   return {
     oppId,
-    proposalType: opp?.oppType === 'Spares' ? 'Spares' : opp?.oppType === 'Service' ? 'Services' : 'Project',
+    proposalType: proposalTypeForOpp(opp),
     ourRef: oppId,
     bidStage: 'Binding',
     bidType: 'Priced',
@@ -1097,7 +1118,17 @@ export const seedClarifications = [
 
 // Proposal-vs-PO comparison, seeded on the Won LiMAK order (the meeting's
 // 3310-vs-3300 part-number example included).
-export const seedPoCompare = {}
+// Demo Launcher scenario 6 ("PO validation & handover") opens straight on this
+// opportunity, so a PO has to already be in review — otherwise the scenario
+// landed on an empty "no PO received" state and the demo had to click Simulate
+// first. Every other opportunity still starts with no PO, as it should.
+export const seedPoCompare = {
+  '2601122LJS': {
+    ...buildPoCompare('2601122LJS'),
+    received: '2026-08-06',
+    status: 'In review',
+  },
+}
 export function buildPoCompare(oppId) {
   return {
     oppId, poNo: 'PO-46990', received: '', status: 'Not received',
@@ -1282,6 +1313,30 @@ export const seedAiLeads = [
       missing: ['End-user disclosure (trader — who operates the equipment?)'],
       duplicates: [],
       next: ['AP-1: request joint LJS + AH continuation approval', 'If approved: 100% prepayment terms only'],
+    },
+  },
+  // A genuine duplicate of LD-201: the customer chased the same RFQ two days
+  // later and a second person forwarded it to the common mailbox. Same buyer
+  // reference, same sender domain — exactly what duplicate detection is for, and
+  // the reason the detector has something real to find in the demo.
+  {
+    id: 'LD-207', ts: '2026-08-12T04:40:00Z', channel: 'Email', source: 'Common mailbox — forwarded',
+    from: 'akhil.umesh@tatapower.example.in', sender: 'Akhil Umesh — Tata Power',
+    subject: 'Reminder: Request for quotation — Meggitt VMS spares (retrofit)',
+    ref: 'RFQ/TP/2026/0814', route: 'Spares', urgency: 'Normal', duplicateRisk: 'High',
+    completeness: 94, suggestedOwner: 'RS', status: 'New',
+    body: 'Dear sir,\n\nKindly refer our RFQ/TP/2026/0814 sent on 10.08.2026 for Meggitt VMS retrofit spares. We have not received your offer. Request you to expedite as our shutdown window is fixed.\n\nItem list is unchanged (7 lines, as per our earlier mail).\n\nBest regards\nAkhil Umesh\nLead Engineer — Instrumentation Maintenance, Tata Power',
+    attachments: [{ name: 'Meggitt_BOM_Unit2.xlsx', pages: 3 }],
+    ai: {
+      summary: 'Chaser on RFQ/TP/2026/0814 — the same Tata Power retrofit spares enquiry already in the inbox as LD-201. No new scope; the customer is asking for the offer.',
+      fields: [
+        { group: 'Customer', k: 'Sell-to customer', v: 'The Tata Power Company Ltd', conf: 97, ev: 'Sender domain + signature block', state: 'pending' },
+        { group: 'RFQ', k: 'Buyer reference', v: 'RFQ/TP/2026/0814', conf: 99, ev: 'Quoted in the first line', state: 'pending' },
+        { group: 'RFQ', k: 'Opp type', v: 'Spares (retrofit)', conf: 95, ev: 'Refers to the original item list', state: 'pending' },
+      ],
+      missing: [],
+      duplicates: [],
+      next: ['Confirm against LD-201 and drop this one', 'Reply on the existing opportunity, not a new one'],
     },
   },
 ]

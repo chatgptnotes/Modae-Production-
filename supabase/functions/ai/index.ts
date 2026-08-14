@@ -232,6 +232,11 @@ ModAE India Pvt Ltd`,
             buyer: STR, station: STR, subject: STR, sectionRef: STR, signatory: STR,
             location: STR, contactPerson: STR, contactPhone: STR,
             deliveryPeriod: STR, validity: STR, paymentTerms: STR,
+            // The proposal's covering letter quotes the RFQ number and its date
+            // back to the buyer, and the proposal is emailed to whoever sent the
+            // enquiry. Without these the regex parser was the only source, and
+            // the AI could not fill the gap when it missed.
+            rfqDate: STR, senderEmail: STR,
           },
         },
         // Enumerated because the review screen renders these as dropdowns; the
@@ -278,6 +283,10 @@ ${cap(p.text, 120000)}
 
 Produce:
 - header: leave a field as an empty string unless the document states it.
+  sectionRef is the buyer's own enquiry/tender/RFQ reference. rfqDate is the
+  date that enquiry carries, as YYYY-MM-DD; if the document shows only a letter
+  or email date, use that. senderEmail is the address the enquiry came from, if
+  the document shows one.
 - guesses: pick only from the enumerated values. product must be one of
   ${cap((p.products || []).join(', '), 600) || 'the product names we sell'} —
   use "Various" when the tender spans several.

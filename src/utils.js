@@ -63,6 +63,24 @@ import { ROLES, PERMS } from './seed.js'
 // persona, per the wireframe's "Restricted — commercial data" rule.
 export const canViewCommercial = role => !!ROLES[role]?.commercial
 export const isAdminRole = role => !!ROLES[role]?.admin
+export const isSalesOwner = role => !!ROLES[role]?.sales
+// A sales owner writes their own proposal, so they must see the numbers that go
+// into it — BoQ rates, landed cost, margin — even though they stay outside the
+// org-wide commercial reporting that canViewCommercial guards. Only *sending*
+// is approval-gated. (13 Aug client review: "the salesperson himself is making
+// their proposal, so he is the one who should see it… he can only request
+// approval.") Use this on proposal- and workbench-building surfaces; use
+// canViewCommercial for cross-pipeline money that is not theirs to price.
+export const canPriceProposal = role => canViewCommercial(role) || isSalesOwner(role)
+
+// Product is multi-value on an opportunity (13 Aug review: "can select multiple
+// products because there are various products can happen in a single project").
+// Seed rows and anything created before that change still hold a comma-joined
+// string, so every reader normalises through here rather than assuming a shape.
+export const productList = v => (Array.isArray(v)
+  ? v.filter(Boolean)
+  : String(v || '').split(',').map(s => s.trim()).filter(Boolean))
+export const productLabel = v => productList(v).join(', ')
 // LJS (strategic) and AH (commercial & ops) decide gates; admins can see the queue.
 export const isApprover = role => role === 'LJS' || role === 'AH' || isAdminRole(role)
 // Page-level permission from the PERMS matrix (unknown role sees nothing).

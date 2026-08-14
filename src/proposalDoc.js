@@ -4,6 +4,8 @@
 // Everything here is a pure function of the saved proposal + opportunity. The
 // drafting checklist (PropBuilder) and the printed document (PrintDoc) both
 // import PROP_SECTIONS from here so the two can never drift apart.
+import { productLabel } from './utils.js'
+import { routeForType } from './seed.js'
 import { MODAE_STANDARD_TERMS } from './tenderParse.js'
 
 // ⚠ PLACEHOLDER LETTERHEAD. Swap these for ModAE India's registered details
@@ -111,7 +113,7 @@ export function DEFAULT_LETTER_BODY(p, opp) {
   const nos = bom.reduce((s, l) => s + lineQty(l, p.units), 0)
   const cats = [...new Set(bom.map(l => l.itemCategory).filter(Boolean))]
   const devs = (p.terms || []).filter(t => t.status === 'Deviation').length
-  const oem = opp?.product && opp.product !== 'Various' ? opp.product : ''
+  const oem = productLabel(opp?.product) === 'Various' ? '' : productLabel(opp?.product)
   const days = p.validityDays ?? 30
   return [
     `We thank you for the above enquiry and for the opportunity to quote. We are pleased to enclose our Techno-Commercial Proposal covering the complete scope called for.`,
@@ -141,12 +143,33 @@ export function DEFAULT_LETTER_BODY(p, opp) {
   ].join('\n\n')
 }
 
+// How we describe the customer's situation back to them, per route.
+const UNDERSTANDING = {
+  Spares: oem =>
+    `OUR UNDERSTANDING\nThese are replacement and spare sensing elements for an operating machine. What matters `
+    + `is not the sensor in isolation but that it drops into the existing signal chain without change to the `
+    + `monitor, the cabling or the alarm settings — same sensitivity, same connector, same electrical `
+    + `characteristics. We have selected each model on that basis rather than on nearest-equivalent specification.`,
+
+  Services: () =>
+    `OUR UNDERSTANDING\nThis is work to be carried out on plant that is in service, so the constraint is the `
+    + `outage window rather than the task itself. We have scoped the visit around a single mobilisation — `
+    + `measurement, diagnosis and the written finding — so that the machine is released once and not held `
+    + `pending a second trip. Site access, permits and the availability of the machine remain with the purchaser.`,
+
+  Project: oem =>
+    `OUR UNDERSTANDING\nThis is a system supply, not a parts list: the value is in the instrumentation, the `
+    + `monitoring rack and the signal routing working as one chain against the tendered tag schedule. `
+    + `We have engineered the offer from the signal list upwards${oem ? `, on ${oem} hardware,` : ','} so that `
+    + `channel counts, rack capacity and spare provision are consistent with each other and with the specification.`,
+}
+
 export function defaultExecSummary(p, opp) {
   const bom = p.bom || []
   const nos = bom.reduce((s, l) => s + lineQty(l, p.units), 0)
   const cats = [...new Set(bom.map(l => l.itemCategory).filter(Boolean))]
   const devs = (p.terms || []).filter(t => t.status === 'Deviation')
-  const oem = opp?.product && opp.product !== 'Various' ? opp.product : ''
+  const oem = productLabel(opp?.product) === 'Various' ? '' : productLabel(opp?.product)
   const buyer = opp?.sellTo || 'The customer'
   const project = p.project || opp?.oppName || 'the referenced scope'
   // buildProposal already appends the station to `project` — don't say it twice.
@@ -159,10 +182,11 @@ export function defaultExecSummary(p, opp) {
       + `${bom.length} line item${bom.length === 1 ? '' : 's'} of vibration measurement hardware`
       + `${oem ? ` to be used with the ${oem} monitoring system already in service` : ''}.`,
 
-    `OUR UNDERSTANDING\nThese are replacement and spare sensing elements for an operating machine. What matters `
-      + `is not the sensor in isolation but that it drops into the existing signal chain without change to the `
-      + `monitor, the cabling or the alarm settings — same sensitivity, same connector, same electrical `
-      + `characteristics. We have selected each model on that basis rather than on nearest-equivalent specification.`,
+    // "Our understanding" is the one paragraph that cannot be route-neutral: a
+    // spares refill, a site service call and a greenfield package are understood
+    // in completely different terms. It used to describe spares on every
+    // proposal, including projects.
+    UNDERSTANDING[docRoute(p, opp)](oem),
 
     `WHAT WE OFFER\n${MODAE_COMPANY.name} offers ${bom.length} item${bom.length === 1 ? '' : 's'}`
       + `${nos ? `, ${nos} nos in total` : ''}${cats.length ? ` — ${cats.join(', ').toLowerCase()}` : ''}. `
@@ -436,6 +460,63 @@ export const DOC_BODY_SECTIONS = [
   'Validity of offer',
   'Attachments & enclosures',
 ]
+
+// ---------------------------------------------------------------------------
+// Route-driven document layout
+//
+// 13 Aug client review: the full section set above is the *project* proposal —
+// "this is perfect, they go in this role. If it is not a project, then we have
+// to have another template, simple template, because this is very complicated."
+// Spares and services therefore print a shorter document and skip the project
+// front matter (a two-page spares quote does not need a table of contents).
+//
+// ⚠ PROVISIONAL. The client's own spares and services sample proposals had not
+// arrived when this was written. These section sets are a defensible lean
+// default; swap them for the sample layouts when the samples land. The route
+// plumbing below does not change when they do — only the arrays.
+const PROJECT_SECTIONS = DOC_BODY_SECTIONS
+
+const SPARES_SECTIONS = [
+  'Executive summary',
+  'Scope of supply',
+  'Bill of quantities',
+  'Commercial summary',
+  'Delivery schedule',
+  'Terms & conditions',
+  'Validity of offer',
+]
+
+const SERVICES_SECTIONS = [
+  'Executive summary',
+  'Scope of supply',
+  'Bill of quantities',
+  'Commercial summary',
+  'Delivery schedule',
+  'Assumptions',
+  'Exclusions',
+  'Terms & conditions',
+  'Validity of offer',
+]
+
+export const DOC_ROUTES = {
+  Project: { sections: PROJECT_SECTIONS, contents: true, about: true, scopeTitle: 'Scope of supply', boqTitle: 'Bill of quantities' },
+  Spares: { sections: SPARES_SECTIONS, contents: false, about: false, scopeTitle: 'Scope of supply', boqTitle: 'Bill of quantities' },
+  Services: { sections: SERVICES_SECTIONS, contents: true, about: false, scopeTitle: 'Scope of work', boqTitle: 'Schedule of charges' },
+}
+
+// One canonical route for the document. The opportunity's own route is the
+// source of truth (it is what the workbench already branches on at
+// Workbench.jsx), and the proposal's Proposal type selector is the explicit
+// override. Opportunity types the seed maps to the service route — AMC,
+// Training — must not fall through to the project template.
+export function docRoute(p, opp) {
+  const raw = p?.proposalType || routeForType(opp?.oppType) || opp?.route
+  if (raw === 'Spares') return 'Spares'
+  if (raw === 'Service' || raw === 'Services') return 'Services'
+  return 'Project'
+}
+
+export const docLayout = (p, opp) => DOC_ROUTES[docRoute(p, opp)] || DOC_ROUTES.Project
 
 // The keys docModel can auto-draft — used by the editor's "reset to auto-draft".
 export const DOC_FIELDS = [

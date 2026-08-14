@@ -36,6 +36,60 @@ export function counts(store, role = store.role) {
   }
 }
 
+// ---------------------------------------------------------------- FY targets
+// Indian financial year: Q1 is Apr-Jun. Shared so My Dashboard and Analytics
+// bucket a booking date the same way.
+export const FY_QUARTERS = ['Q1 Apr–Jun', 'Q2 Jul–Sep', 'Q3 Oct–Dec', 'Q4 Jan–Mar']
+export const FY_MONTHS = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar']
+
+const fyMonthIndex = dateStr => {
+  const m = parseInt((dateStr || '').split('-')[1], 10)
+  if (!m) return -1
+  return m >= 4 ? m - 4 : m + 8
+}
+export const fyQuarter = dateStr => {
+  const i = fyMonthIndex(dateStr)
+  return i < 0 ? -1 : Math.floor(i / 3)
+}
+
+// One owner's target-versus-booked picture for the year. `owner` null means the
+// whole company (an approver or admin looking at the team). All money is K₹, as
+// everywhere else in the app.
+export function salesPerformance(store, owner = null) {
+  const sales = store.sales || { targets: {}, orders: [] }
+  const owners = owner ? [owner] : Object.keys(sales.targets || {})
+  const target = owners.reduce((t, o) => {
+    const own = sales.targets?.[o] || {}
+    return {
+      annual: t.annual + (own.annual || 0),
+      q: t.q.map((v, i) => v + ((own.q || [])[i] || 0)),
+    }
+  }, { annual: 0, q: [0, 0, 0, 0] })
+
+  const orders = (sales.orders || []).filter(o => !owner || o.owner === owner)
+  const bucket = pick => orders.filter(pick).reduce((s, o) => s + (+o.valueK || 0), 0)
+  const quarterActual = [0, 1, 2, 3].map(i => bucket(o => fyQuarter(o.booked) === i))
+  const monthly = FY_MONTHS.map((_, i) => bucket(o => fyMonthIndex(o.booked) === i))
+
+  const achieved = quarterActual.reduce((a, b) => a + b, 0)
+  const elapsed = sales.monthsElapsed || 0
+  return {
+    fy: sales.fy || '',
+    currentQ: Math.max(0, (sales.currentQ || 1) - 1),
+    orders,
+    annual: target.annual,
+    quarterTarget: target.q,
+    quarterActual,
+    monthly,
+    achieved,
+    gap: Math.max(0, target.annual - achieved),
+    attainPct: target.annual ? (achieved / target.annual) * 100 : 0,
+    // Where the number should be if the year ran evenly, and where this pace lands.
+    expected: elapsed ? (target.annual / 12) * elapsed : 0,
+    runRate: elapsed ? (achieved / elapsed) * 12 : 0,
+  }
+}
+
 // Order intake by month for the sparkline. Non-commercial roles get a count
 // series instead of a value series, so the tile works without leaking ₹.
 export function pipelineSeries(store, comm, months = 6) {

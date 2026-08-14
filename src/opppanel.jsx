@@ -5,7 +5,8 @@ import {
   SUBFOLDERS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS,
   PROB_LEVELS, STAGES, CLOSE_REASONS,
 } from './seed.js'
-import { fmt, mmmYY, ddMmmYY, canViewCommercial, stageClass } from './utils.js'
+import { fmt, mmmYY, ddMmmYY, canViewCommercial, canPriceProposal, stageClass, productList } from './utils.js'
+import { nextActionWith } from './gates.js'
 import * as filestore from './filestore.js'
 import { Icon } from './icons.jsx'
 
@@ -44,6 +45,8 @@ export default function OppPanel({ oppId }) {
   // A custom subfolder can be deleted (on the Folders page) while its tab is active.
   const activeTab = subNames.includes(tab) ? tab : subNames[0]
   const comm = canViewCommercial(store.role)
+  const showValue = canPriceProposal(store.role)
+  const na = nextActionWith(opp, store.getProposal(oppId), store)
   const gmK = (opp.valueK || 0) - (opp.cogsK || 0)
   const gmPct = opp.valueK ? Math.round((gmK / opp.valueK) * 100) + '%' : '#DIV/0!'
 
@@ -150,13 +153,14 @@ export default function OppPanel({ oppId }) {
             <div className="dgrid2">
               <div><label>Revision</label><div className="ro">{proposal.revision} · {proposal.bidStage} · {proposal.bidType}</div></div>
               <div><label>BoQ lines</label><div className="ro">{(proposal.bom || []).length}</div></div>
+              {showValue && <div><label>Value (K₹)</label><div className="ro">₹ {fmt(opp.valueK)}</div></div>}
               {comm ? (
                 <>
-                  <div><label>Value / COGS (K₹)</label><div className="ro">₹ {fmt(opp.valueK)} / ₹ {fmt(opp.cogsK)}</div></div>
+                  <div><label>COGS (K₹)</label><div className="ro">₹ {fmt(opp.cogsK)}</div></div>
                   <div><label>GM</label><div className="ro">₹ {fmt(gmK)} K · {gmPct}</div></div>
                 </>
               ) : (
-                <div style={{ gridColumn: '1 / -1' }} className="restricted"><Icon name="lock" size={13} /> Commercial data — approvers/admin only</div>
+                <div style={{ gridColumn: '1 / -1' }} className="restricted"><Icon name="lock" size={13} /> Cost and margin — approvers/admin only</div>
               )}
             </div>
             {comms.length > 0 && (
@@ -217,8 +221,23 @@ export default function OppPanel({ oppId }) {
           <Field label="Segment">
             <select value={opp.segment} onChange={upd('segment')}>{SEGMENTS.map(x => <option key={x}>{x}</option>)}</select>
           </Field>
+          {/* Multi-select: one opportunity can carry several products. */}
           <Field label="Product">
-            <select value={opp.product} onChange={upd('product')}>{PRODUCTS.map(x => <option key={x}>{x}</option>)}</select>
+            <div className="pill-group">
+              {PRODUCTS.map(x => {
+                const chosen = productList(opp.product)
+                const on = chosen.includes(x)
+                return (
+                  <label key={x} className={`pill-opt ${on ? 'on' : ''}`}>
+                    <input type="checkbox" checked={on} onChange={() =>
+                      store.updateOpportunity(oppId, {
+                        product: on ? chosen.filter(p => p !== x) : [...chosen, x],
+                      })} />
+                    {x}
+                  </label>
+                )
+              })}
+            </div>
           </Field>
           <Field label="Prob (%)">
             <select value={opp.prob || ''} onChange={upd('prob')}>
@@ -229,15 +248,16 @@ export default function OppPanel({ oppId }) {
         </div>
 
         <div className="fgroup">Commercial</div>
-        {comm ? (
+        {showValue ? (
           <div className="dgrid2">
             <Field label="Value (K₹)"><input type="number" value={opp.valueK || ''} onChange={upd('valueK')} placeholder="-" /></Field>
-            <Field label="COGS (K₹)"><input type="number" value={opp.cogsK || ''} onChange={upd('cogsK')} placeholder="-" /></Field>
-            <Field label="GM (K₹)"><div className="ro">{opp.valueK ? fmt(gmK) : '-'}</div></Field>
-            <Field label="GM%"><div className="ro">{gmPct}</div></Field>
+            {comm && <Field label="COGS (K₹)"><input type="number" value={opp.cogsK || ''} onChange={upd('cogsK')} placeholder="-" /></Field>}
+            {comm && <Field label="GM (K₹)"><div className="ro">{opp.valueK ? fmt(gmK) : '-'}</div></Field>}
+            {comm && <Field label="GM%"><div className="ro">{gmPct}</div></Field>}
             <Field label="Forecast">
               <div><input type="checkbox" checked={!!opp.forecast} onChange={upd('forecast')} /> Include for roll-up</div>
             </Field>
+            {!comm && <div style={{ gridColumn: '1 / -1' }} className="restricted"><Icon name="lock" size={13} /> Cost and margin — approvers/admin only</div>}
           </div>
         ) : (
           <div className="restricted"><Icon name="lock" size={13} /> Commercial data — approvers/admin only</div>
@@ -247,8 +267,16 @@ export default function OppPanel({ oppId }) {
         <div className="dgrid2">
           <Field label="Create Date"><div className="ro">{mmmYY(opp.createDate)}</div></Field>
           <Field label="Proposal Date"><div className="ro">{mmmYY(opp.proposalDate) || '—'}</div></Field>
-          <Field label="Order Date"><input type="date" value={opp.orderDate} onChange={upd('orderDate')} /></Field>
-          <Field label="Invoice Date"><input type="date" value={opp.invoiceDate} onChange={upd('invoiceDate')} /></Field>
+          <Field label="Expected Order Date *"><input type="date" value={opp.orderDate} onChange={upd('orderDate')} /></Field>
+          <Field label="Expected Ship Date *"><input type="date" value={opp.invoiceDate} onChange={upd('invoiceDate')} /></Field>
+          {/* Where the next action sits — derived from the live blockers unless
+              someone has named an owner themselves. */}
+          <Field label="Next Action Pending">
+            <select value={opp.nextActionOwner || ''} onChange={upd('nextActionOwner')} title={na.text}>
+              <option value="">{na.owner ? `${na.owner} (auto)` : '— none —'}</option>
+              {OWNERS.map(x => <option key={x}>{x}</option>)}
+            </select>
+          </Field>
           <Field label="Last Updated"><div className="ro">{ddMmmYY(opp.lastUpdated)}</div></Field>
         </div>
 

@@ -11,6 +11,7 @@ import { aiEnabled, runJson } from '../ai.js'
 import { extractPdfText } from '../tenderParse.js'
 import { fmtSize } from '../filestore.js'
 import { hold } from '../leadFiles.js'
+import { findDuplicates } from '../insights.js'
 
 // Common-mailbox lead inbox: AI parses each inquiry, a human decides whether it
 // becomes an opportunity (Qualify → registration / intake form) or is dropped.
@@ -19,6 +20,34 @@ const STATUS_OPTIONS = ['New', 'Qualified', 'Converted', 'Dropped']
 const ROUTE_OPTIONS = ['Project', 'Spares', 'Service']
 const DROP_REASONS = ['Outside business scope', 'Window shopping / budgetary only',
   'Duplicate inquiry', 'No response from customer', 'Other']
+
+// Disqualifying and reverting both need a written reason. Biji, 13 Aug: "there
+// has to be a place for me to write the reason why you're trying to disqualify."
+// The category alone was pre-selected, so Confirm always succeeded and the
+// record never said why. Both lead panels use this one component, so the rule
+// cannot drift between them.
+function ReasonBox({ title, categories, confirmLabel, tone = '', onConfirm, onCancel }) {
+  const [category, setCategory] = React.useState(categories ? categories[0] : '')
+  const [note, setNote] = React.useState('')
+  const ready = note.trim().length > 0
+  return (
+    <div className="reason-box">
+      <div className="q-label">{title}</div>
+      {categories && (
+        <select value={category} onChange={e => setCategory(e.target.value)}>
+          {categories.map(r => <option key={r}>{r}</option>)}
+        </select>
+      )}
+      <textarea rows={2} value={note} onChange={e => setNote(e.target.value)}
+        placeholder="Why? This is recorded against the lead and shown in the audit trail." />
+      <div className="toolbar" style={{ margin: 0 }}>
+        <button className={tone} disabled={!ready} title={ready ? undefined : 'A written reason is required'}
+          onClick={() => onConfirm(category, note.trim())}>{confirmLabel}</button>
+        <button onClick={onCancel}>Cancel</button>
+      </div>
+    </div>
+  )
+}
 
 const confClass = c => (c >= 0.9 ? 'hi' : c >= 0.6 ? 'med' : 'lo')
 const confLabel = c => (c >= 0.9 ? 'High' : c >= 0.6 ? 'Medium' : 'Low')
@@ -267,7 +296,7 @@ function AiLeadDetail({ lead }) {
   const [reExtracting, setReExtracting] = useState(false)
   const [reErr, setReErr] = useState('')
   const [dropping, setDropping] = useState(false)
-  const [dropReason, setDropReason] = useState(DROP_REASONS[0])
+  const [reverting, setReverting] = useState(false)
   const [reassignTo, setReassignTo] = useState(lead.suggestedOwner || OWNERS[0])
 
   // Re-read the original mail. Human decisions are discarded with it, so this
@@ -315,6 +344,11 @@ function AiLeadDetail({ lead }) {
   // Read-only progress readout for the fields column footer.
   const decided = ai.fields.filter(f => f.state !== 'pending').length
   const attachments = lead.attachments || []
+  // Duplicate candidates, computed live against the rest of the inbox and
+  // minus anything already dismissed on this lead.
+  const dupes = findDuplicates(lead, store.leads)
+    .filter(d => !(lead.dismissedDuplicates || []).includes(d.leadId))
+
   const reassign = () => {
     store.updateLead(lead.id, { suggestedOwner: reassignTo, assignedOwner: reassignTo, reassignedFrom: lead.suggestedOwner || '', reassignedAt: new Date().toISOString() })
   }
@@ -447,19 +481,27 @@ function AiLeadDetail({ lead }) {
             </WarnBox>
           )}
 
-          {ai.duplicates?.length > 0 && (
+          {/* Computed against the live inbox, not read from a seeded list —
+              a lead added today is checked the same way a seeded one is. Any
+              candidate the user has dismissed stays dismissed. */}
+          {dupes.length > 0 && (
             <WarnBox>
               <b>Duplicate candidates</b>
-              {ai.duplicates.map((d, i) => (
-                <div key={i} className="ws-dup">
-                  <span>{d.leadId} — {d.note}</span>
+              {dupes.map(d => (
+                <div key={d.leadId} className="ws-dup">
+                  <span>
+                    <b>{d.leadId}</b> — {d.note}
+                    <span className="hint"> · {Math.round(d.confidence * 100)}% confident</span>
+                  </span>
                   <div className="ws-dup-actions">
+                    <button onClick={() => nav('/inbox/' + d.leadId)}>Open {d.leadId}</button>
                     <button onClick={() => store.updateLead(lead.id, {
-                      ai: { ...ai, duplicates: ai.duplicates.filter((_, j) => j !== i) },
+                      dismissedDuplicates: [...(lead.dismissedDuplicates || []), d.leadId],
                     })}>Not a duplicate</button>
-                    <button onClick={() => store.updateLead(lead.id, { status: 'Dropped', droppedReason: 'Duplicate' })}>
-                      Mark duplicate
-                    </button>
+                    <button onClick={() => store.updateLead(lead.id, {
+                      status: 'Dropped',
+                      droppedReason: `${DROP_REASONS[2]} — same enquiry as ${d.leadId}`,
+                    })}>Mark duplicate</button>
                   </div>
                 </div>
               ))}
@@ -543,25 +585,33 @@ function AiLeadDetail({ lead }) {
               {qualifyBlocked && <p className="ws-foot-note">Blocked — Red continuation approval required first.</p>}
             </>
           )}
-          {canAct && (
+          {canAct && !dropping && (
             <div className="toolbar" style={{ margin: '8px 0 0' }}>
-              {!dropping
-                ? <button onClick={() => setDropping(true)}><Icon name="x" size={13} /> Disqualify</button>
-                : <>
-                    <select value={dropReason} onChange={e => setDropReason(e.target.value)}>
-                      {DROP_REASONS.map(r => <option key={r}>{r}</option>)}
-                    </select>
-                    <button onClick={() => { store.updateLead(lead.id, { status: 'Dropped', droppedReason: dropReason }); setDropping(false) }}>Confirm</button>
-                    <button onClick={() => setDropping(false)}>Cancel</button>
-                  </>}
+              <button onClick={() => setDropping(true)}><Icon name="x" size={13} /> Disqualify</button>
               <select value={reassignTo} onChange={e => setReassignTo(e.target.value)} title="Assign lead to another salesperson">
                 {OWNERS.map(owner => <option key={owner}>{owner}</option>)}
               </select>
               <button onClick={reassign}>Reassign</button>
             </div>
           )}
-          {lead.status === 'Qualified' && !lead.oppId && (
-            <button onClick={() => store.updateLead(lead.id, { status: 'New' })}>Revert to Lead</button>
+          {canAct && dropping && (
+            <ReasonBox title="Disqualify this lead" categories={DROP_REASONS} confirmLabel="Confirm disqualify"
+              onCancel={() => setDropping(false)}
+              onConfirm={(category, note) => {
+                store.updateLead(lead.id, { status: 'Dropped', droppedReason: `${category} — ${note}` })
+                setDropping(false)
+              }} />
+          )}
+          {/* Revert works after registration too — that is the case it is for. */}
+          {(lead.status === 'Qualified' || lead.status === 'Converted') && !reverting && (
+            <button style={{ marginTop: 8 }} onClick={() => setReverting(true)}>
+              <Icon name="refresh" size={13} /> Revert to Lead
+            </button>
+          )}
+          {reverting && (
+            <ReasonBox title={lead.oppId ? `Revert to the lead list — this removes opportunity ${lead.oppId}` : 'Revert to the lead list'}
+              confirmLabel="Revert to lead" onCancel={() => setReverting(false)}
+              onConfirm={(_c, note) => { store.revertLead(lead.id, note); setReverting(false) }} />
           )}
           {lead.status === 'Qualified' && (
             <>
@@ -596,7 +646,7 @@ function LegacyLeadDetail({ lead }) {
   const nav = useNavigate()
   const drawer = useDrawer()
   const [dropping, setDropping] = useState(false)
-  const [dropReason, setDropReason] = useState(DROP_REASONS[0])
+  const [reverting, setReverting] = useState(false)
   const [reassignTo, setReassignTo] = useState(lead.suggestedOwner || OWNERS[0])
   const p = lead.parse || {}
   const reassign = () => store.updateLead(lead.id, {
@@ -616,6 +666,8 @@ function LegacyLeadDetail({ lead }) {
           eucName: pick('eucName'), eucLocation: pick('eucLocation'), oppName: pick('oppName'),
           owner: '', oppType: pick('oppType'), bu: pick('bu'), segment: pick('segment'),
           product: pick('product'), contactPerson: pick('contactPerson'), contactPhone: pick('contactPhone'),
+          // The enquiry's sender becomes the proposal's recipient.
+          contactEmail: lead.from || '',
         },
       },
     })
@@ -683,30 +735,33 @@ function LegacyLeadDetail({ lead }) {
         </div>
       )}
 
-      {lead.status === 'New' && (
+      {lead.status === 'New' && !dropping && (
         <div className="toolbar" style={{ marginTop: 14, marginBottom: 0 }}>
           <button className="primary" onClick={qualify}>
             <Icon name="check" size={13} /> Qualify → intake form
           </button>
-          {!dropping
-            ? <button onClick={() => { setDropping(true); setDropReason(DROP_REASONS[0]) }}>
-                <Icon name="x" size={13} /> Disqualify lead
-              </button>
-            : <>
-                <select value={dropReason} onChange={e => setDropReason(e.target.value)}>
-                  {DROP_REASONS.map(r => <option key={r}>{r}</option>)}
-                </select>
-                <button onClick={() => { store.updateLead(lead.id, { status: 'Dropped', droppedReason: dropReason }); setDropping(false) }}>
-                  Confirm disqualify
-                </button>
-                <button onClick={() => setDropping(false)}>Cancel</button>
-              </>}
+          <button onClick={() => setDropping(true)}>
+            <Icon name="x" size={13} /> Disqualify lead
+          </button>
         </div>
       )}
-      {lead.status === 'Qualified' && !lead.oppId && (
+      {dropping && (
+        <ReasonBox title="Disqualify this lead" categories={DROP_REASONS} confirmLabel="Confirm disqualify"
+          onCancel={() => setDropping(false)}
+          onConfirm={(category, note) => {
+            store.updateLead(lead.id, { status: 'Dropped', droppedReason: `${category} — ${note}` })
+            setDropping(false)
+          }} />
+      )}
+      {(lead.status === 'Qualified' || lead.status === 'Converted') && !reverting && (
         <div className="toolbar" style={{ marginTop: 10, marginBottom: 0 }}>
-          <button onClick={() => store.updateLead(lead.id, { status: 'New' })}>Revert to Lead</button>
+          <button onClick={() => setReverting(true)}><Icon name="refresh" size={13} /> Revert to Lead</button>
         </div>
+      )}
+      {reverting && (
+        <ReasonBox title={lead.oppId ? `Revert to the lead list — this removes opportunity ${lead.oppId}` : 'Revert to the lead list'}
+          confirmLabel="Revert to lead" onCancel={() => setReverting(false)}
+          onConfirm={(_c, note) => { store.revertLead(lead.id, note); setReverting(false) }} />
       )}
       {lead.status !== 'Dropped' && lead.status !== 'Converted' && (
         <div className="toolbar" style={{ marginTop: 8, marginBottom: 0 }}>

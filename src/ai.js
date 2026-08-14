@@ -15,7 +15,8 @@ import { supabase } from './supabase.js'
 //   deno run --allow-net --allow-env supabase/functions/ai/index.ts
 //   VITE_AI_FUNCTION_URL=http://localhost:8000 npm run dev
 // Unset in every deployed build — then calls go through Supabase as normal.
-const DEV_URL = (import.meta.env.VITE_AI_FUNCTION_URL || '').trim()
+// Guarded the same way as supabase.js — `import.meta.env` is Vite-only.
+const DEV_URL = ((import.meta.env || {}).VITE_AI_FUNCTION_URL || '').trim()
 
 export const aiEnabled = () => !!supabase || !!DEV_URL
 

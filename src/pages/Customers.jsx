@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { isAdminRole } from '../utils.js'
+import { customerHealth } from '../insights.js'
 import { Icon } from '../icons.jsx'
 import { Modal, ErrBox } from '../ui.jsx'
 
@@ -132,7 +133,7 @@ export default function Customers() {
       </div>
       <div className="sheet-wrap" style={{ maxWidth: 980 }}>
         <table className="sheet">
-          <thead><tr><th>Customer</th><th>Category</th><th>Status</th><th>KYC</th><th>Payment Pattern</th><th></th></tr></thead>
+          <thead><tr><th>Customer</th><th>Category</th><th>Status</th><th>KYC</th><th>Payment Pattern</th><th>Health</th><th></th></tr></thead>
           <tbody>
             {store.customers.map(c => (
               <tr key={c.name} className="rowclick"
@@ -145,6 +146,19 @@ export default function Customers() {
                 <td className={`cstat ${c.status}`}><span className={`pill ${c.status}`}>{c.status}</span></td>
                 <td>{c.kyc}</td>
                 <td>{c.payment}</td>
+                {/* Derived from class, KYC, payment behaviour and win/loss history —
+                    hover for the reasons that moved it. */}
+                <td>{(() => {
+                  const h = customerHealth(c, store.opportunities)
+                  const why = h.reasons
+                    .map(r => (r.delta ? `${r.delta > 0 ? '+' : ''}${r.delta}  ` : '     ') + r.why)
+                    .join('\n')
+                  return (
+                    <span className={`health ${h.band === 'Healthy' ? 'ok' : h.band === 'Watch' ? 'warn' : 'bad'}`} title={why}>
+                      {h.score} · {h.band}
+                    </span>
+                  )
+                })()}</td>
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                   {pendingFor(c.name)
                     ? <span className="pill Blue" title="A change request is awaiting approval">Change pending</span>

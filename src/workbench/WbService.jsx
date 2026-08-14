@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
-import { canViewCommercial, fmt } from '../utils.js'
+import { canPriceProposal, fmt } from '../utils.js'
 import { Chip } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 
@@ -19,7 +19,7 @@ const NUM_FIELDS = [
 // travel-estimate confirmation gate.
 export default function WbService({ opp, openBuilder }) {
   const store = useStore()
-  const comm = canViewCommercial(store.role)
+  const comm = canPriceProposal(store.role)
   const est = store.svcEstimates.find(e => e.oppId === opp.id) || { oppId: opp.id, ...DEFAULT_EST }
   const sheet = est.sheet === 'International' ? 'International' : 'India'
   const rs = store.rateSheets[sheet]
@@ -138,7 +138,7 @@ export default function WbService({ opp, openBuilder }) {
             </tbody>
           </table>
         ) : (
-          <div className="restricted"><Icon name="lock" size={12} /> Cost build-up and rates restricted — LJS / AH only</div>
+          <div className="restricted"><Icon name="lock" size={12} /> Cost build-up and rates restricted — sales owners, approvers and admin only</div>
         )}
         <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button className="primary" onClick={sendToProposal}>

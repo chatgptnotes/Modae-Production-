@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
 import { defaultCosting } from '../seed.js'
-import { canViewCommercial, unitCostINR, unitSellINR, fmt } from '../utils.js'
+import { canPriceProposal, unitCostINR, unitSellINR, fmt } from '../utils.js'
 import { Chip, ConfChip, AiBadge, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 
@@ -9,7 +9,7 @@ import { Icon } from '../icons.jsx'
 // confidence, price-source freshness, and the merge into the proposal BoQ.
 export default function WbSpares({ opp, openBuilder }) {
   const store = useStore()
-  const comm = canViewCommercial(store.role)
+  const comm = canPriceProposal(store.role)
   const lines = store.sparesLines.filter(l => l.oppId === opp.id)
   const [compareFor, setCompareFor] = useState(null)
   const [evidence, setEvidence] = useState(null)
@@ -158,7 +158,7 @@ export default function WbSpares({ opp, openBuilder }) {
             </tbody>
           </table>
         ) : (
-          <div className="restricted"><Icon name="lock" size={12} /> Totals and margin are restricted — LJS / AH only</div>
+          <div className="restricted"><Icon name="lock" size={12} /> Totals and margin are restricted — sales owners, approvers and admin only</div>
         )}
 
         <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>

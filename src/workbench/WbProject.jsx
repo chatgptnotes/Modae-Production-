@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { seedPriceLists } from '../seed.js'
-import { canViewCommercial, fmt } from '../utils.js'
+import { canPriceProposal, fmt } from '../utils.js'
 import { computeProposalTotals } from '../gates.js'
 import { Chip, AiBadge, Phase2Badge } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
@@ -27,7 +27,7 @@ const TERM_STATUSES = ['Comply', 'Deviation', 'Clarification Required']
 // Project workbench — pragmatic 10-section view over the proposal workbook.
 export default function WbProject({ opp, openBuilder }) {
   const store = useStore()
-  const comm = canViewCommercial(store.role)
+  const comm = canPriceProposal(store.role)
   const p = store.getProposal(opp.id)
   const [sec, setSec] = useState(0)
   const [rfpSim, setRfpSim] = useState(false)
@@ -197,7 +197,7 @@ export default function WbProject({ opp, openBuilder }) {
               </tbody>
             </table>
           ) : (
-            <div className="restricted"><Icon name="lock" size={12} /> Pricing summary restricted — LJS / AH only</div>
+            <div className="restricted"><Icon name="lock" size={12} /> Pricing summary restricted — sales owners, approvers and admin only</div>
           )}
           {unpriced > 0 && <div className="warnbox">{unpriced} unpriced line{unpriced === 1 ? '' : 's'} in the BoQ — blocks readiness until priced.</div>}
           {!(p.bom || []).length && <div className="warnbox">No priced lines in the proposal — blocks readiness.</div>}

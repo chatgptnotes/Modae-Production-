@@ -19,6 +19,7 @@ export function buildTiles(store) {
   const c = counts(store, role)
 
   return [
+    { key: 'mydashboard', page: 'mydashboard', icon: 'chartBar', label: 'My Dashboard', hint: 'Your targets, blockers and next actions', to: '/my-dashboard', color: 'sky' },
     { key: 'new', page: 'new', icon: 'plus', label: 'Create Opportunity', hint: 'Register a sales opportunity', to: '/new', color: 'teal' },
     { key: 'my', page: 'my', icon: 'cards', label: 'My Opportunities', hint: 'Your pipeline as cards', to: '/my', color: 'navy', badge: approver ? 0 : c.myStale, badgeHint: 'your opportunities needing an update' },
     { key: 'inbox', page: 'inbox', icon: 'inbox', label: 'Lead Inbox', hint: 'AI-parsed incoming inquiries', to: '/inbox', color: 'sky', badge: c.newLeads, badgeHint: 'new leads to qualify' },
@@ -45,9 +46,9 @@ export function buildTiles(store) {
 // Task ordering on the tablet landing, per role group — the tasks the user
 // actually has to do come first.
 export const TABLET_TASKS = {
-  sales: ['new', 'my', 'inbox', 'status', 'voice', 'notes', 'approvals', 'tender'],
-  approver: ['approvals', 'inbox', 'po', 'tracker', 'my', 'status', 'notes', 'dashboard'],
-  admin: ['approvals', 'inbox', 'users', 'admin', 'audit', 'notes', 'po', 'launcher'],
+  sales: ['mydashboard', 'new', 'my', 'inbox', 'status', 'voice', 'notes', 'approvals'],
+  approver: ['mydashboard', 'approvals', 'inbox', 'po', 'tracker', 'my', 'status', 'notes'],
+  admin: ['mydashboard', 'approvals', 'inbox', 'users', 'admin', 'audit', 'notes', 'po'],
 }
 
 // Grouped sections for the tablet command deck. `kpis` names the feature
@@ -55,17 +56,17 @@ export const TABLET_TASKS = {
 // a trailing "More tools" group, so the registry can grow safely.
 export const TABLET_SECTIONS = {
   sales: [
-    { title: 'Sales operations', kpis: ['command', 'turnaround'], keys: ['new', 'inbox', 'my', 'status', 'voice', 'notes'] },
+    { title: 'Sales operations', kpis: ['command', 'turnaround'], keys: ['mydashboard', 'new', 'inbox', 'my', 'status', 'voice', 'notes'] },
     { title: 'Pipeline & proposals', kpis: ['pipeline', 'winrate'], keys: ['tracker', 'tender', 'approvals', 'po', 'folders'] },
     { title: 'Intelligence', kpis: [], keys: ['aimap', 'analytics', 'customers', 'launcher'] },
   ],
   approver: [
-    { title: 'Decisions & gates', kpis: ['command'], keys: ['new', 'approvals', 'po', 'inbox'] },
+    { title: 'Decisions & gates', kpis: ['command'], keys: ['mydashboard', 'new', 'approvals', 'po', 'inbox'] },
     { title: 'Pipeline health', kpis: ['pipeline', 'winrate', 'turnaround'], keys: ['tracker', 'my', 'status', 'dashboard', 'folders'] },
     { title: 'Intelligence & audit', kpis: [], keys: ['analytics', 'aimap', 'customers', 'audit', 'notes', 'launcher'] },
   ],
   admin: [
-    { title: 'Platform', kpis: ['command'], keys: ['new', 'users', 'admin', 'audit'] },
+    { title: 'Platform', kpis: ['command'], keys: ['mydashboard', 'new', 'users', 'admin', 'audit'] },
     { title: 'Operations', kpis: ['pipeline', 'winrate', 'turnaround'], keys: ['my', 'inbox', 'approvals', 'po', 'tracker', 'folders'] },
     { title: 'Intelligence', kpis: [], keys: ['aimap', 'analytics', 'dashboard', 'pricelists', 'launcher', 'notes'] },
   ],
@@ -73,7 +74,7 @@ export const TABLET_SECTIONS = {
 
 // Desktop Home groups the tool wall into labelled columns.
 export const HOME_GROUPS = [
-  { title: 'Sales & opportunities', keys: ['new', 'my', 'status', 'voice', 'notes', 'approvals'] },
+  { title: 'Sales & opportunities', keys: ['mydashboard', 'new', 'my', 'status', 'voice', 'notes', 'approvals'] },
   { title: 'Document flow', keys: ['genprop', 'tender', 'inbox', 'tracker', 'folders', 'po'] },
   { title: 'Insights & AI', keys: ['aimap', 'analytics', 'dashboard', 'customers', 'pricelists', 'users', 'admin', 'audit', 'launcher'] },
 ]

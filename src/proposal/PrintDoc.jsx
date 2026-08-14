@@ -2,7 +2,7 @@ import React from 'react'
 import { fmt, ddMmmYY } from '../utils.js'
 import { Icon, ModaeMark } from '../icons.jsx'
 import {
-  MODAE_COMPANY, DOC_BODY_SECTIONS, addDays, amountInWords, lineQty, standardFor, customerResponse,
+  MODAE_COMPANY, docLayout, addDays, amountInWords, lineQty, standardFor, customerResponse,
 } from '../proposalDoc.js'
 
 // The customer-facing document. Pure presentation, no form controls anywhere —
@@ -59,6 +59,10 @@ const PageFoot = ({ text }) => (
   <div className="doc-pagefoot"><span>{text}</span><span>Confidential</span></div>
 )
 
+// Sections a route renames rather than drops — a services proposal quotes a
+// scope of work and a schedule of charges, not a scope of supply and a BoQ.
+const TITLE_KEY = { 'Scope of supply': 'scopeTitle', 'Bill of quantities': 'boqTitle' }
+
 // `n` prints the section number badge; omit it for front matter.
 function Page({ p, foot, head = true, title, n, last, children }) {
   return (
@@ -88,12 +92,39 @@ export default function PrintDoc({ p, opp, doc, priced, totals, lineQuoted }) {
     (p.project || '').slice(0, 55),
   ].filter(Boolean).join('  ·  ')
 
-  // Every numbered page shares the same signature, so the section number and
-  // the contents listing come from one array.
-  const S = Object.fromEntries(DOC_BODY_SECTIONS.map((t, i) => [t, i + 1]))
-  const page = (title, children) => (
-    <Page key={title} p={p} foot={foot} title={title} n={S[title]}>{children}</Page>
-  )
+  // The route decides which sections the document carries: the full project set,
+  // or the shorter spares / services set. Everything downstream — the section
+  // numbers, the contents listing and which pages render at all — comes from
+  // this one array, so the three can never disagree.
+  const layout = docLayout(p, opp)
+  const sections = layout.sections
+  const S = Object.fromEntries(sections.map((t, i) => [t, i + 1]))
+  // A section not in this route's set simply does not print. `last` follows
+  // whichever section actually ends the document once the drops are applied, and
+  // that page carries the sign-off — on a spares quote the document ends at
+  // Validity, not at the project template's Attachments page.
+  const page = (title, children) => {
+    if (!S[title]) return null
+    const isLast = S[title] === sections.length
+    return (
+      <Page key={title} p={p} foot={foot} title={layout[TITLE_KEY[title]] || title}
+        n={S[title]} last={isLast}>
+        {children}
+        {isLast && (
+          <div className="doc-endnote">
+            <div className="doc-block-h">For any clarification</div>
+            <p>
+              {doc.preparedBy.name ? <><b>{doc.preparedBy.name}</b>, </> : null}
+              {doc.preparedBy.title} · {MODAE_COMPANY.name}<br />
+              {[doc.preparedBy.email, doc.preparedBy.phone].filter(Boolean).join(' · ')}<br />
+              {MODAE_COMPANY.web} · CIN {MODAE_COMPANY.cin}
+            </p>
+            <p className="doc-muted">— End of proposal {p.ourRef} Rev {p.revision} —</p>
+          </div>
+        )}
+      </Page>
+    )
+  }
 
   const addressLines = [
     opp.eucName && opp.eucName !== opp.sellTo ? opp.eucName : '',
@@ -178,15 +209,16 @@ export default function PrintDoc({ p, opp, doc, priced, totals, lineQuoted }) {
         <PageFoot text={foot} />
       </section>
 
-      {/* ================================================ page 2 — contents */}
+      {/* ============================ page 2 — contents (project/services only) */}
+      {layout.contents && (
       <Page p={p} foot={foot} title="Contents">
         <p className="doc-lead">
           Techno-Commercial Proposal {p.ourRef} Rev {p.revision}, {priced ? 'priced bid' : 'unpriced technical bid'},
           submitted against {p.rfqNumber || 'your enquiry'} and valid up to {ddMmmYY(validUntil)}.
         </p>
         <ol className="doc-toc">
-          {DOC_BODY_SECTIONS.map((t, i) => (
-            <li key={t}><span className="toc-n">{i + 1}</span><span className="toc-t">{t}</span></li>
+          {sections.map((t, i) => (
+            <li key={t}><span className="toc-n">{i + 1}</span><span className="toc-t">{layout[TITLE_KEY[t]] || t}</span></li>
           ))}
         </ol>
         <div className="doc-callout">
@@ -194,14 +226,17 @@ export default function PrintDoc({ p, opp, doc, priced, totals, lineQuoted }) {
           the property of {MODAE_COMPANY.name}.
         </div>
       </Page>
+      )}
 
-      {/* ============================================== page 3 — about ModAE */}
+      {/* ================================= page 3 — about ModAE (project only) */}
+      {layout.about && (
       <Page p={p} foot={foot} title={`About ${MODAE_COMPANY.name}`}>
         <p>{doc.about.intro}</p>
         <div className="doc-block-h">Capability relevant to this enquiry</div>
         <Bullets items={doc.about.capabilities} />
         <p>{doc.about.closing}</p>
       </Page>
+      )}
 
       {/* ------------------------------------------------ 1 executive summary */}
       {page('Executive summary', <HeadedBody text={doc.execSummary} />)}
@@ -486,26 +521,17 @@ export default function PrintDoc({ p, opp, doc, priced, totals, lineQuoted }) {
         </>
       ))}
 
-      {/* ---------------------------------------------- 11 attachments (last page) */}
-      <Page p={p} foot={foot} title="Attachments & enclosures" n={S['Attachments & enclosures']} last>
-        <p className="doc-lead">The following documents accompany this offer. The same list appears as the
-          enclosures to our covering letter.</p>
-        <ol className="doc-encl-list">
-          {doc.attachments.map((a, i) => <li key={i}>{a}</li>)}
-        </ol>
-        {!doc.attachments.length && <p className="doc-muted">No enclosures.</p>}
-
-        <div className="doc-endnote">
-          <div className="doc-block-h">For any clarification</div>
-          <p>
-            {doc.preparedBy.name ? <><b>{doc.preparedBy.name}</b>, </> : null}
-            {doc.preparedBy.title} · {MODAE_COMPANY.name}<br />
-            {[doc.preparedBy.email, doc.preparedBy.phone].filter(Boolean).join(' · ')}<br />
-            {MODAE_COMPANY.web} · CIN {MODAE_COMPANY.cin}
-          </p>
-          <p className="doc-muted">— End of proposal {p.ourRef} Rev {p.revision} —</p>
-        </div>
-      </Page>
+      {/* ------------------------------------------ 11 attachments (project only) */}
+      {page('Attachments & enclosures', (
+        <>
+          <p className="doc-lead">The following documents accompany this offer. The same list appears as the
+            enclosures to our covering letter.</p>
+          <ol className="doc-encl-list">
+            {doc.attachments.map((a, i) => <li key={i}>{a}</li>)}
+          </ol>
+          {!doc.attachments.length && <p className="doc-muted">No enclosures.</p>}
+        </>
+      ))}
     </div>
   )
 }

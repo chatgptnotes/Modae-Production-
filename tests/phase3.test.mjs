@@ -16,7 +16,7 @@ test('AI automation map has the agreed 23 + 5 coverage', () => {
   assert.equal(items.length, 28)
   assert.equal(items.filter(item => item.phase === 1).length, 23)
   assert.equal(items.filter(item => item.phase === 2).length, 5)
-  assert.equal(items.filter(item => item.live).length, 5)
+  // `live` was replaced by `kind` — see tests/aimap.test.mjs for the coverage.
   for (const item of items) assert.match(item.to, /^\//, `${item.t} must have a demo route`)
 })
 
@@ -63,7 +63,8 @@ test('dashboard and Phase 1 UI wiring are present', () => {
   const inbox = read('src/pages/Inbox.jsx')
   const tracker = read('src/pages/Tracker.jsx')
   assert.match(app, /path="\/my-dashboard"/)
-  assert.match(intake, /field === 'product' \? 'checkbox'/)
+  // Products are multi-select; see tests/intake.test.mjs for the field-level checks.
+  assert.match(intake, /'checkbox' : 'radio'/)
   assert.match(inbox, /Revert to Lead/)
   assert.match(inbox, /Reassign/)
   assert.match(tracker, /Expected Order Date/)

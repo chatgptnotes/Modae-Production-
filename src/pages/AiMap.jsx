@@ -4,26 +4,37 @@ import { Icon } from '../icons.jsx'
 import { AiBadge, Phase2Badge, KpiCard } from '../ui.jsx'
 import { AI_MAP } from '../aimapData.js'
 
+// What each kind means, in one place — the badge, the tooltip and the counters
+// all read from here, so the page can never overstate what is behind a row.
+const KIND = {
+  ai: { label: 'Live AI', title: 'Calls the configured Gemini model for real.' },
+  rule: { label: 'Rule-based', title: 'Real behaviour computed from your data — deterministic, no model call.' },
+  preview: { label: 'Preview', title: 'Illustrative only — the behaviour is not built yet.' },
+}
+
 export default function AiMap() {
   const nav = useNavigate()
   const all = AI_MAP.flatMap(g => g.items)
   const p1 = all.filter(i => i.phase === 1).length
   const p2 = all.filter(i => i.phase === 2).length
-  const live = all.filter(i => i.live).length
+  const byKind = k => all.filter(i => i.kind === k).length
 
   return (
     <div className="page">
       <h2>AI & Automation Map</h2>
       <div className="hint" style={{ marginBottom: 12 }}>
-        Every intervention is demonstrated in the app. <b>Live</b> items call the configured
-        Gemini model for real; the rest are deterministic or seeded. Phase 2 items are direction previews.
+        Every intervention opens where it actually runs. <b>Live AI</b> calls the configured Gemini
+        model; <b>Rule-based</b> is real behaviour computed from your own data without a model;
+        <b> Preview</b> shows the intended direction and is not built yet. Phase 2 items are the
+        next stage of the roadmap.
       </div>
 
       <div className="kpi-row">
         <KpiCard label="AI interventions" value={all.length} hint="across the whole workflow" />
-        <KpiCard label="Live on Gemini" value={live} hint="real model calls" />
-        <KpiCard label="Phase 1" value={p1} hint="interactive in this build" />
-        <KpiCard label="Phase 2" value={p2} hint="proposed direction" />
+        <KpiCard label="Live on Gemini" value={byKind('ai')} hint="real model calls" />
+        <KpiCard label="Rule-based" value={byKind('rule')} hint="computed from your data" />
+        <KpiCard label="Preview" value={byKind('preview')} hint="direction, not yet built" />
+        <KpiCard label="Phase 1 / 2" value={`${p1} / ${p2}`} hint="in this build / roadmap" />
       </div>
 
       {AI_MAP.map(g => (
@@ -34,8 +45,8 @@ export default function AiMap() {
             <span className="chip grey">{g.items.length}</span>
           </div>
           {g.items.map(i => (
-            <div key={i.t} className="aimap-row">
-              <AiBadge label={i.live ? 'Live' : i.phase === 2 ? 'AI' : 'Simulated'} />
+            <div key={i.t} className="aimap-row" title={KIND[i.kind]?.title}>
+              <AiBadge label={KIND[i.kind]?.label || 'Preview'} />
               <div>
                 <div className="ai-t">
                   {i.t}

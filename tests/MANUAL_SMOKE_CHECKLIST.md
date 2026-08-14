@@ -1,35 +1,69 @@
 # Manual browser and device smoke checklist
 
-Use a clean seeded demo state before each scenario. Record browser, viewport, role, result, and console errors.
+`npm test` covers the logic; this covers what only a person at a screen can see.
+Start each scenario from a clean **Reset demo data** (Demo Launcher or Admin).
+Record browser, viewport, role, result and console errors.
 
-## Desktop
+## The two journeys the client walked on 13 Aug
 
-- Sign in and switch between RS, PP, LJS, AH, ADMIN, SUPER, TECH, and CUST.
-- Confirm CUST is redirected only to `/portal`.
-- Open `/my-dashboard` for each internal role and confirm role-specific cards render.
-- Run Demo Launcher scenarios 1, 2, 3, and 5.
-- Open a lead and test Qualify, Disqualify with reason, Reassign, and Revert to Lead.
-- Create an opportunity with multiple products and verify the tracker record.
-- Upload a PDF with an RFQ number/date and verify extraction plus missing-field warnings.
-- Open a proposal, select Project/Spares/Services, open Preview, enter To/CC, and verify the attachment name.
-- Request an approval and verify the pending badge and approval-condition modal.
+**As RS (sales owner) — this is the run that used to fail.**
 
-## Mobile and tablet
+1. Lead Inbox → open a lead. Qualify, Disqualify and Reassign are all on the lead.
+2. Disqualify → Confirm stays disabled until a reason is typed. Cancel out.
+3. Qualify → Create Opportunity. Type into every text field: **focus must not jump
+   after each keystroke.** Select two or more Products; BU and Segment stay single.
+4. Submit → the tracker row shows both products, and Expected Order / Ship Date
+   are outlined amber until filled.
+5. Open the proposal. **Priced BoQ is visible and editable.** Extract to Excel is
+   there. Print / PDF shows prices.
+6. Email proposal → To is already filled, Subject is built, CC is available,
+   Preview shows the real document, and the attachment wording matches what
+   actually happens.
+7. Request approval → the sidebar Approvals badge counts it.
 
-Test at 390×844 and 768×1024:
+**As LJS (approver).** My Dashboard shows the gate queue and company attainment.
+Approve with a condition; back as RS, confirm the condition in the modal — no
+browser prompt, no localhost URL.
 
-- Open the shared link from WhatsApp.
-- Switch to tablet mode.
-- Navigate Home, Inbox, My Dashboard, Approvals, and Proposal.
-- Confirm no horizontal page overflow.
-- Confirm tables scroll within their containers.
-- Confirm modal actions remain visible above the bottom navigation.
+## Per role
 
-## PWA
+- Sign in as RS, PP, LJS, AH, ADMIN, SUPER, TECH, CUST.
+- CUST is redirected to `/portal` only.
+- `/my-dashboard` renders a different, populated page for each internal role.
+  TECH must not land on an empty sales dashboard.
 
-- Open the deployed HTTPS URL in Chrome.
-- Confirm the install prompt or install option appears.
-- Install the application.
-- Relaunch it from the installed app icon.
-- Confirm it opens at the configured home route.
-- Refresh a deep link and confirm the application remains usable.
+## Route-driven proposals
+
+- A Spares opportunity: no Signal List or Rack Layout tab; the printed document
+  is short and has no contents page or company profile.
+- A Services opportunity: prints "Scope of work" and "Schedule of charges".
+- A Project opportunity: unchanged, full section set.
+- An AMC or Training opportunity must not print the project template.
+
+## Extraction
+
+- Upload a tender PDF **and** a `.eml` from `modae doc/`. Both are accepted.
+- RFQ number and date land in the form; with no reference, RFQ Number reads
+  "Email dated …".
+- Fields the document did not contain are outlined amber on the field.
+
+## Demo Launcher
+
+- Scenarios 1, 2, 3 and 5 from a clean reset.
+- Scenario 6 opens on a PO already in review — no "Simulate" click needed first.
+- Scenario 4 is the deferred project deep-dive.
+
+## AI & Automation
+
+- Every row badges Live AI / Rule-based / Preview, and "Open in demo" lands where
+  that thing actually happens.
+- Customer health scores on `/customers`, hover shows the reasons.
+- `/inbox/LD-207` flags LD-201 as a duplicate.
+
+## Mobile and tablet — 390×844 and 768×1024
+
+- Open the shared link from WhatsApp; install as a Chrome PWA and relaunch.
+- **My Dashboard is on the bottom tab bar** — reachable without typing a URL.
+- No horizontal page scroll anywhere. Tables scroll inside their own container.
+- Rotate the device: the layout follows, unless "Full site" was chosen.
+- Modal actions stay visible above the bottom navigation.

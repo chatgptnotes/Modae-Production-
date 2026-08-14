@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
-import { canViewCommercial, fmt, ddMmmYY } from '../utils.js'
+import { canPriceProposal, fmt, ddMmmYY } from '../utils.js'
 import { readiness, isBlocked, commercialGate } from '../gates.js'
 import { Chip, AiBadge, Phase2Badge, ErrBox, WarnBox, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
@@ -12,7 +12,7 @@ import { PROP_SECTIONS, recommendTerms } from '../proposalDoc.js'
 // readiness / approval column that gates 'Submit for approval'.
 export default function PropBuilder({ opp }) {
   const store = useStore()
-  const comm = canViewCommercial(store.role)
+  const comm = canPriceProposal(store.role)
   const p = store.getProposal(opp.id)
   const blockers = readiness(opp, p, store)
   const blocked = isBlocked(blockers)
@@ -118,7 +118,7 @@ export default function PropBuilder({ opp }) {
           <p style={{ margin: '6px 0' }}><b>Subject:</b> {p.subject || `Proposal For ${opp.oppName}`}</p>
           <p style={{ margin: '6px 0' }}><b>Ref:</b> {opp.id} · Rev {p.revision}</p>
           <p style={{ margin: '6px 0' }}><b>Line items:</b> {totalLine}</p>
-          {!comm && <p className="hint"><Icon name="lock" size={11} /> Commercial totals restricted — LJS / AH only.</p>}
+          {!comm && <p className="hint"><Icon name="lock" size={11} /> Commercial totals restricted — sales owners, approvers and admin only.</p>}
           <p className="hint">Full document includes: {PROP_SECTIONS.join(' · ')}.</p>
         </div>
       </div>
