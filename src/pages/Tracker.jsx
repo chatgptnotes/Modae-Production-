@@ -135,14 +135,14 @@ export default function Tracker() {
       : null)
   }
 
-  // Analytics bars land here pre-filtered via query params (?owner= / ?oppType= / ?bu=).
+  // Analytics bars land here pre-filtered via query params (?owner= / ?oppType= / ?bu= / ?stage=).
   const [params, setParams] = useSearchParams()
   useEffect(() => {
     if (![...params.keys()].length) return
     const owner = params.get('owner')
     if (owner) setOwnerFilter(owner)
     const next = {}
-    for (const key of ['oppType', 'bu']) {
+    for (const key of ['oppType', 'bu', 'stage']) {
       const v = params.get(key)
       if (v) next[key] = new Set([v])
     }

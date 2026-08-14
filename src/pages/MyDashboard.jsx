@@ -4,7 +4,7 @@ import { useStore } from '../store.jsx'
 import { ROLES } from '../seed.js'
 import { readiness, isBlocked } from '../gates.js'
 import { isApprover, isAdminRole, isSalesOwner, canViewCommercial, canPriceProposal, fmtLakh } from '../utils.js'
-import { counts, salesPerformance, FY_QUARTERS, FY_MONTHS } from '../kpi.js'
+import { analyticsSnapshot, counts, salesPerformance, FY_QUARTERS, FY_MONTHS } from '../kpi.js'
 import { ArcGauge, Sparkline } from '../dashviz.jsx'
 import { Icon } from '../icons.jsx'
 
@@ -35,6 +35,55 @@ function Card({ title, icon, tone = '', span = 6, children, action }) {
         {action && <span style={{ marginLeft: 'auto' }}>{action}</span>}
       </div>
       {children}
+    </section>
+  )
+}
+
+function AnalyticsOverview({ store, role, nav }) {
+  const snapshot = analyticsSnapshot(store, role)
+  const metric = row => snapshot.comm ? fmtLakh(row.valueK) : row.count
+  const max = Math.max(1, ...snapshot.funnel.map(row => snapshot.comm ? row.valueK : row.count))
+  const scope = snapshot.owner ? `Your pipeline · ${snapshot.owner}` : 'Company pipeline'
+  return (
+    <section className="home-analytics dashboard-analytics" aria-labelledby="dashboard-analytics-title">
+      <div className="home-analytics-head">
+        <div>
+          <div className="eyebrow">Live business view</div>
+          <h3 id="dashboard-analytics-title">Pipeline overview</h3>
+          <p>{scope} · Open opportunities and current stage distribution</p>
+        </div>
+        <button className="home-analytics-link" onClick={() => nav('/analytics')}>Open detailed analytics <span aria-hidden="true">↗</span></button>
+      </div>
+      <div className="home-analytics-grid">
+        <div className="home-funnel-panel">
+          <div className="home-panel-title"><span>Pipeline by stage</span><span className="home-panel-note">{snapshot.openCount} open</span></div>
+          <div className="home-funnel" role="list" aria-label="Open opportunities by stage">
+            {snapshot.funnel.map((row, index) => (
+              <button key={row.label} className="home-funnel-row" onClick={() => nav(`/?stage=${encodeURIComponent(row.label)}`)} role="listitem">
+                <span className="home-funnel-stage"><span className="home-funnel-index">{String(index + 1).padStart(2, '0')}</span>{row.label}</span>
+                <span className="home-funnel-track"><span className="home-funnel-fill" style={{ width: `${Math.max(row.count ? 5 : 0, ((snapshot.comm ? row.valueK : row.count) / max) * 100)}%` }} /></span>
+                <span className="home-funnel-value">{metric(row)}</span>
+              </button>
+            ))}
+          </div>
+          {!snapshot.funnel.some(row => row.count) && <div className="home-empty">No open opportunities in the current scope.</div>}
+        </div>
+        <div className="home-forecast-panel">
+          <div className="home-panel-title"><span>Forecast signal</span><span className="home-signal-dot" /><span className="home-panel-note">live</span></div>
+          <div className="home-forecast-value">{snapshot.comm ? fmtLakh(snapshot.pipelineK) : snapshot.openCount}</div>
+          <div className="home-forecast-label">{snapshot.comm ? 'Open pipeline' : 'Open opportunities'}</div>
+          <div className="home-forecast-split">
+            <div><b>{snapshot.comm ? fmtLakh(snapshot.weightedK) : `${snapshot.openCount} open`}</b><span>{snapshot.comm ? 'Weighted forecast' : 'Current scope'}</span></div>
+            <div><b>{snapshot.decided ? `${snapshot.winPct}%` : '—'}</b><span>{snapshot.decided ? 'Win rate' : 'No closed data'}</span></div>
+          </div>
+          <button className="home-forecast-action" onClick={() => nav(snapshot.comm ? '/dashboard' : '/my')}>{snapshot.comm ? 'Review forecast' : 'Review my opportunities'} <span aria-hidden="true">→</span></button>
+        </div>
+      </div>
+      <div className="home-alert-rail" aria-label="Work queue summary">
+        <button onClick={() => nav('/inbox')}><span className="home-alert-value">{snapshot.counts.newLeads}</span><span>New leads</span></button>
+        <button onClick={() => nav('/approvals')}><span className="home-alert-value">{snapshot.counts.forMe || snapshot.counts.myPending}</span><span>{snapshot.counts.forMe ? 'Awaiting your decision' : 'Your requests'}</span></button>
+        <button onClick={() => nav('/my')}><span className="home-alert-value">{snapshot.counts.myStale}</span><span>Need an update</span></button>
+      </div>
     </section>
   )
 }
@@ -164,6 +213,8 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
         <Metric label="Run rate, annualised" value={fmtLakh(perf.runRate)} tone={perf.runRate >= perf.annual ? 'green' : 'amber'} />
       </div>
 
+      <AnalyticsOverview {...{ store, role, nav }} />
+
       <div className="ana-grid">
         <Card title="Annual attainment" icon="target" tone="tone-green" span={4}>
           <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0 10px' }}>
@@ -251,6 +302,8 @@ function ApproverDashboard({ store, nav, role, c, open, blocked, nextActions, he
         {canViewCommercial(role) && <Metric label="Open pipeline" value={fmtLakh(openValue)} tone="slate" />}
       </div>
 
+      <AnalyticsOverview {...{ store, role, nav }} />
+
       <div className="ana-grid">
         <Card title="Your approval queue" icon="checkCircle" tone="tone-green" span={6}>
           {mine.map(a => (
@@ -303,6 +356,8 @@ function AdminDashboard({ store, nav, role, c, open, blocked, head }) {
         <Metric label="Audit entries" value={(store.audit || []).length} tone="sky" onClick={() => nav('/audit')} />
         <Metric label="Open opportunities" value={open.length} tone="violet" onClick={() => nav('/')} />
       </div>
+
+      <AnalyticsOverview {...{ store, role, nav }} />
 
       <div className="ana-grid">
         <Card title="Registrations awaiting a decision" icon="shield" tone="tone-violet" span={6}>
@@ -361,6 +416,8 @@ function TechDashboard({ store, nav, open, blocked, nextActions, head }) {
         <Metric label="Project opportunities" value={projects.length} tone="violet" onClick={() => nav('/')} />
         <Metric label="Blocked" value={blocked.length} tone={blocked.length ? 'red' : 'green'} />
       </div>
+
+      <AnalyticsOverview {...{ store, role: store.role, nav }} />
 
       <div className="ana-grid">
         <Card title="Proposals to review" icon="fileText" tone="tone-sky" span={6}>

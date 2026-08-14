@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS, DEMO_PASSWORD } from '../seed.js'
 import { WarnBox } from '../ui.jsx'
@@ -11,6 +12,7 @@ const REG_ROLES = [...OWNERS, 'TECH']
 
 export default function Login() {
   const store = useStore()
+  const nav = useNavigate()
   const [mode, setMode] = useState('signin')
   const [email, setEmail] = useState('')
   const [pw, setPw] = useState('')
@@ -27,6 +29,7 @@ export default function Login() {
     setErr('')
     const res = store.login(u.email, u.pw || DEMO_PASSWORD)
     if (!res.ok) setErr(res.err)
+    else nav('/my-dashboard', { replace: true })
   }
   const shortLabel = u => (ROLES[u.role]?.label || u.role).split('—')[0].trim()
 
@@ -35,6 +38,7 @@ export default function Login() {
     setErr('')
     const res = store.login(email, pw)
     if (!res.ok) setErr(res.err)
+    else nav('/my-dashboard', { replace: true })
     // on ok the integrator's App reacts to store.auth.user
   }
 

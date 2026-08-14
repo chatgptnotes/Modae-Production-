@@ -1,5 +1,5 @@
-import { ageDays, monthKey, monthLabel } from './utils.js'
-import { routeForType } from './seed.js'
+import { ageDays, monthKey, monthLabel, canViewCommercial } from './utils.js'
+import { OWNERS, STAGES, routeForType } from './seed.js'
 
 // Dashboard metrics. Kept as pure functions so the tablet command deck and the
 // Analytics page can never disagree — the formulas below are the ones Analytics
@@ -111,6 +111,46 @@ export function pipelineSeries(store, comm, months = 6) {
   const deltaPct = prev && prev.value && last ? Math.round(((last.value - prev.value) / prev.value) * 100) : null
 
   return { points, total, weighted, deltaPct, comm }
+}
+
+// Compact, permission-aware snapshot for landing pages. Keep this beside the
+// detailed KPI formulas so Home and Analytics never tell different stories.
+export function analyticsSnapshot(store, role = store.role) {
+  const comm = canViewCommercial(role)
+  const owner = OWNERS.includes(role) ? role : null
+  const scoped = (store.opportunities || []).filter(o => !owner || o.owner === owner)
+  const open = scoped.filter(o => o.status === 'Open')
+  const sum = rows => rows.reduce((total, o) => total + (+o.valueK || 0), 0)
+  const funnel = STAGES.filter(s => s !== 'Won' && s !== 'Lost').map(stage => {
+    const rows = open.filter(o => o.stage === stage)
+    return { label: stage, count: rows.length, valueK: sum(rows) }
+  })
+  const won = scoped.filter(o => o.stage === 'Won').length
+  const lost = scoped.filter(o => o.stage === 'Lost').length
+  const decided = won + lost
+  const pipelineK = sum(open)
+  const weightedK = open.reduce((total, o) => total + (+o.valueK || 0) * (PROB_WEIGHT[o.prob] ?? PROB_WEIGHT.Low), 0)
+  const byOwner = [...new Set(open.map(o => o.owner).filter(Boolean))]
+    .map(name => {
+      const rows = open.filter(o => o.owner === name)
+      return { name, count: rows.length, valueK: sum(rows) }
+    })
+    .sort((a, b) => comm ? b.valueK - a.valueK : b.count - a.count)
+
+  return {
+    comm,
+    owner,
+    openCount: open.length,
+    pipelineK,
+    weightedK,
+    funnel,
+    won,
+    lost,
+    decided,
+    winPct: decided ? Math.round((won / decided) * 100) : 0,
+    byOwner,
+    counts: counts(store, role),
+  }
 }
 
 export function winRate(store) {
