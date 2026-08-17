@@ -93,6 +93,7 @@ export default function IntakeForm({ destinationPicker = null }) {
 
   // Document upload and AI processing state
   const [uploadedFile, setUploadedFile] = useState(null)
+  const [uploadOpen, setUploadOpen] = useState(false)
   const [aiProcessing, setAiProcessing] = useState(false)
   const [aiResults, setAiResults] = useState(null)
   const [aiNotice, setAiNotice] = useState(null)
@@ -171,6 +172,7 @@ export default function IntakeForm({ destinationPicker = null }) {
     setF({ ...empty })
     setTouched({})
     setUploadedFile(null)
+    setUploadOpen(false)
     setAiResults(null)
     setAiNotice(null)
     setAiError(null)
@@ -200,6 +202,7 @@ export default function IntakeForm({ destinationPicker = null }) {
     }
 
     setUploadedFile(file)
+    setUploadOpen(true)
     setAiProcessing(true)
     setAiNotice(null)
     setAiError(null)
@@ -365,47 +368,68 @@ export default function IntakeForm({ destinationPicker = null }) {
     <div className="forms-bg">
       <form className="forms-card wide" onSubmit={submit}>
         <div className="forms-head">
-          <div>
+          <div className="forms-head-top">
             <h1>Create Opportunity</h1>
+            <div className="req-note">
+              <span className="star">*</span> required ·{' '}
+              {validation.isComplete
+                ? <span className="ok">✓ All {validation.total} required fields complete</span>
+                : <span>{validation.missing.length} of {validation.total} required fields missing</span>}
+            </div>
+          </div>
+          <div className="forms-head-content">
             <div className="forms-note">Register a new sales opportunity — complete every field below in one screen. Submitting creates a pipeline row and an opportunity folder.</div>
 
-            {/* Document Upload Zone */}
-            {!uploadedFile ? (
-              <div
-                className="document-upload-zone"
-                onDragOver={handleDragOver}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <div className="upload-icon">📄</div>
-                <div className="upload-text">
-                  <strong>Upload the enquiry — tender PDF or saved email</strong> to auto-fill fields with AI
-                </div>
-                <div className="upload-subtext">Drag and drop or click to browse</div>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".pdf,application/pdf,.eml,.msg,message/rfc822"
-                  onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
-                  style={{ display: 'none' }}
-                />
-              </div>
-            ) : (
-              <div className="uploaded-file">
-                <div className="file-info">
-                  <span className="file-icon">📄</span>
-                  <span className="file-name">{uploadedFile.name}</span>
-                  <span className="file-size">({(uploadedFile.size / 1024).toFixed(1)} KB)</span>
-                  {aiProcessing && <span className="processing-status">AI processing...</span>}
-                  {aiResults && <span className={aiResults.local ? 'ai-fallback' : 'ai-success'}>
-                    {aiResults.local ? 'Local extraction complete' : '✓ AI extraction complete'}
-                  </span>}
-                </div>
-                <button type="button" onClick={removeUploadedFile} className="remove-file">Remove</button>
-              </div>
-            )}
+            <button
+              type="button"
+              className={`upload-section-toggle ${uploadOpen ? 'open' : ''}`}
+              aria-expanded={uploadOpen}
+              aria-controls="opportunity-upload-panel"
+              onClick={() => setUploadOpen(value => !value)}
+            >
+              <span>Upload</span>
+              <span className="upload-section-toggle-icon" aria-hidden="true">{uploadOpen ? '−' : '+'}</span>
+            </button>
 
-            {destinationPicker}
+            {uploadOpen && <div className="intake-setup" id="opportunity-upload-panel">
+              {/* Document Upload Zone */}
+              {!uploadedFile ? (
+                <div
+                  className="document-upload-zone"
+                  onDragOver={handleDragOver}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <div className="upload-icon">📄</div>
+                  <div className="upload-text">
+                    <strong>Upload the enquiry — tender PDF or saved email</strong> to auto-fill fields with AI
+                  </div>
+                  <div className="upload-subtext">Drag and drop or click to browse</div>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,application/pdf,.eml,.msg,message/rfc822"
+                    onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
+                    style={{ display: 'none' }}
+                  />
+                </div>
+              ) : (
+                <div className="uploaded-file">
+                  <div className="file-info">
+                    <span className="file-icon">📄</span>
+                    <span className="file-name">{uploadedFile.name}</span>
+                    <span className="file-size">({(uploadedFile.size / 1024).toFixed(1)} KB)</span>
+                    {aiProcessing && <span className="processing-status">AI processing...</span>}
+                    {aiResults && <span className={aiResults.local ? 'ai-fallback' : 'ai-success'}>
+                      {aiResults.local ? 'Local extraction complete' : '✓ AI extraction complete'}
+                    </span>}
+                  </div>
+                  <button type="button" onClick={removeUploadedFile} className="remove-file">Remove</button>
+                </div>
+              )}
+
+              {destinationPicker}
+            </div>}
 
             {aiError && (
               <div className="ai-error">
@@ -420,12 +444,6 @@ export default function IntakeForm({ destinationPicker = null }) {
             )}
 
             <div className="forms-note">Or manually fill in all fields below</div>
-          </div>
-          <div className="req-note">
-            <span className="star">*</span> required ·{' '}
-            {validation.isComplete
-              ? <span className="ok">✓ All {validation.total} required fields complete</span>
-              : <span>{validation.missing.length} of {validation.total} required fields missing</span>}
           </div>
         </div>
 

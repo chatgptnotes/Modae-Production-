@@ -84,6 +84,7 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
   const [replaceArmed, setReplaceArmed] = useState(false)
   const [warn, setWarn] = useState('')
   const [doneId, setDoneId] = useState('')
+  const [uploadOpen, setUploadOpen] = useState(false)
   // Snapshot at confirm time — afterwards the new ad-hoc entries make the live
   // re-match "find" every part, which would zero this count.
   const [doneStats, setDoneStats] = useState({ lines: 0, adhoc: 0 })
@@ -111,7 +112,7 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
   const openOpps = store.opportunities.filter(o => o.status === 'Open')
 
   const startParse = async f => {
-    setError(null); setFile(f); setStep('parsing'); setStage(0)
+    setError(null); setFile(f); setUploadOpen(true); setStep('parsing'); setStage(0)
     const timer = setInterval(() => setStage(s => Math.min(s + 1, STAGES_MSG.length - 1)), 650)
     const minDelay = new Promise(r => setTimeout(r, 2400))
     try {
@@ -263,18 +264,29 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
               {error.code === 'PDF_ERROR' && <>Could not read this PDF ({error.message}). <Link to="/new">Enter manually ▸</Link></>}
             </div>
           )}
-          <div className={`tender-drop ${drag ? 'drag' : ''}`}
-            onDragOver={e => { e.preventDefault(); setDrag(true) }}
-            onDragLeave={() => setDrag(false)}
-            onDrop={onDrop}
-            onClick={() => fileInput.current.click()}>
-            <input ref={fileInput} type="file" accept="application/pdf,.pdf" style={{ display: 'none' }} onChange={onPick} />
-            <div className="tender-drop-icon"><Icon name="fileText" size={40} /></div>
-            <b>Drop the tender / RFQ PDF here</b>
-            <div className="hint">or tap to choose a file</div>
-          </div>
-          {destinationPicker}
-          {!fixedTarget && <div className="form-card" style={{ marginTop: 12, maxWidth: 560 }}>
+          <button
+            type="button"
+            className={`upload-section-toggle ${uploadOpen ? 'open' : ''}`}
+            aria-expanded={uploadOpen}
+            aria-controls="tender-upload-panel"
+            onClick={() => setUploadOpen(value => !value)}
+          >
+            <span>Upload</span>
+            <span className="upload-section-toggle-icon" aria-hidden="true">{uploadOpen ? '−' : '+'}</span>
+          </button>
+          {uploadOpen && <div className="tender-upload-panel" id="tender-upload-panel">
+            <div className={`tender-drop ${drag ? 'drag' : ''}`}
+              onDragOver={e => { e.preventDefault(); setDrag(true) }}
+              onDragLeave={() => setDrag(false)}
+              onDrop={onDrop}
+              onClick={() => fileInput.current.click()}>
+              <input ref={fileInput} type="file" accept="application/pdf,.pdf" style={{ display: 'none' }} onChange={onPick} />
+              <div className="tender-drop-icon"><Icon name="fileText" size={40} /></div>
+              <b>Drop the tender / RFQ PDF here</b>
+              <div className="hint">or tap to choose a file</div>
+            </div>
+            {destinationPicker}
+            {!fixedTarget && <div className="form-card" style={{ marginTop: 12, maxWidth: 560 }}>
             <div className="section-title">Where should the extracted proposal go?</div>
             <label className="radio-row">
               <input type="radio" checked={target === 'new'} onChange={() => setTarget('new')} />
@@ -293,6 +305,7 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
               AI reads the document, extracts line items and commercial terms, checks them against ModAE standards —
               and you confirm every field before anything is created.
             </div>
+            </div>}
           </div>}
         </>
       )}

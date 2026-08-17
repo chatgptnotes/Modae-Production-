@@ -178,6 +178,14 @@ table.sheet td input:focus, table.sheet td select:focus { outline: 2px solid var
 table.sheet td.oppid { font-weight: 600; }
 table.sheet tbody tr td.oppid.won  { background: var(--won-fill) !important; color: var(--won-text); }
 table.sheet tbody tr td.oppid.lost { background: var(--lost-fill) !important; color: var(--lost-text); }
+table.sheet tbody tr td.oppid.Green { background: var(--won-fill) !important; color: var(--won-text); }
+table.sheet tbody tr td.oppid.Amber { background: var(--amber-fill) !important; color: var(--amber-text); }
+table.sheet tbody tr td.oppid.Red   { background: var(--lost-fill) !important; color: var(--lost-text); }
+table.sheet tbody tr td.oppid.Blue  { background: var(--primary-soft) !important; color: var(--bg-sidebar); }
+table.sheet tbody tr td.oppid.Green a,
+table.sheet tbody tr td.oppid.Amber a,
+table.sheet tbody tr td.oppid.Red a,
+table.sheet tbody tr td.oppid.Blue a { color: inherit; }
 table.sheet td.cstat { text-align: center; font-weight: 600; }
 table.sheet td.cstat.Green { background: var(--won-fill) !important; color: var(--won-text); }
 table.sheet td.cstat.Amber { background: var(--amber-fill) !important; color: var(--amber-text); }
@@ -232,6 +240,7 @@ table.sheet td.internal { background: var(--border-soft) !important; color: var(
 .opportunities-tabs button.active { background: #fff; border-color: var(--grid-line); color: var(--xl-green-dark); font-weight: 700; box-shadow: inset 0 2px 0 var(--xl-green); }
 .opportunities-tabs button svg, .opportunities-actions button svg { vertical-align: -2px; margin-right: 4px; }
 .opportunities-page > .page { padding: 0; }
+.owner-view-label { white-space: nowrap; }
 .create-opportunity-workspace { margin-top: 4px; }
 .destination-picker { background: #fff; border: 1px solid var(--grid-line); border-radius: 6px; padding: 12px 14px; margin-bottom: 12px; }
 .destination-options { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -241,7 +250,10 @@ table.sheet td.internal { background: var(--border-soft) !important; color: var(
 .destination-option span { display: grid; gap: 3px; }
 .destination-option small { color: var(--text-muted); }
 .destination-target { display: grid; gap: 4px; max-width: 760px; margin-top: 10px; }
-.destination-target select { width: 100%; }
+.destination-target input,
+.destination-target select { width: 100%; min-width: 0; }
+.destination-target input[type=search] { padding: 8px 9px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; }
+.destination-target input[type=search]:focus { outline: 2px solid rgba(14,165,233,.22); border-color: var(--primary-hover); }
 @media (max-width: 700px) {
   .opportunities-head { display: block; }
   .opportunities-actions { justify-content: flex-start; margin-top: 10px; }
@@ -745,6 +757,17 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .pill.status-Pending { background: var(--amber-fill); color: var(--amber-text); }
 .pill.status-Suspended { background: var(--lost-fill); color: var(--lost-text); }
 .modal { position: fixed; z-index: 30; top: 90px; left: 50%; transform: translateX(-50%); width: 420px; max-width: 92vw; box-shadow: 0 6px 24px rgba(0,0,0,.25); }
+.opportunity-create-modal {
+  top: 3vh;
+  width: min(1500px, 96vw);
+  max-width: none;
+  max-height: 94vh;
+  overflow: auto;
+  padding: 14px 16px 18px;
+}
+.opportunity-create-modal > .section-title { margin: 0 0 8px; font-size: 15px; }
+.opportunity-create-modal .create-opportunity-workspace { margin-top: 0; }
+.opportunity-create-modal .forms-card.wide { margin: 0; width: 100%; max-width: none; }
 .proposal-preview-modal {
   top: 4vh; width: min(1180px, 94vw); max-width: none; max-height: 92vh;
   overflow: hidden; padding: 16px 18px 18px;
@@ -2393,6 +2416,31 @@ button.linklike:hover { text-decoration: underline; }
    element in the tablet bar dragged the whole document with it at 390px. */
 html, body { overflow-x: hidden; max-width: 100%; }
 
+/* Keep the fixed sidebar and the content column inside the viewport. */
+@media (min-width: 1025px) {
+  .shell > .main-col {
+    width: auto;
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-left: 216px;
+    overflow-x: clip;
+  }
+
+  .sidebar-compact .shell > .main-col,
+  .shell.sidebar-compact > .main-col {
+    margin-left: 68px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .shell > .main-col {
+    width: 100%;
+    min-width: 0;
+    margin-left: 0;
+    overflow-x: clip;
+  }
+}
+
 /* Create Opportunity workspace: use the full main panel without allowing
    nested form content to create a page-level horizontal scrollbar. */
 .opportunities-page,
@@ -2420,9 +2468,132 @@ html, body { overflow-x: hidden; max-width: 100%; }
   max-width: 1520px;
   margin-left: auto;
   margin-right: auto;
+  padding-top: 18px;
   padding-left: clamp(18px, 2.2vw, 32px);
   padding-right: clamp(18px, 2.2vw, 32px);
   overflow-x: clip;
+}
+
+.opportunities-page .forms-head {
+  display: block;
+  min-width: 0;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+}
+
+.opportunities-page .forms-card h1 {
+  font-size: 20px;
+  margin-bottom: 3px;
+}
+
+.opportunities-page .forms-head-content > .forms-note:first-child {
+  margin-bottom: 2px;
+}
+
+.opportunities-page .forms-head-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  min-width: 0;
+}
+
+.opportunities-page .forms-head-top h1 {
+  min-width: 0;
+}
+
+.opportunities-page .forms-head-top .req-note {
+  flex: 0 0 auto;
+  margin: 0;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.opportunities-page .forms-head-content {
+  min-width: 0;
+}
+
+.opportunities-page .upload-section-toggle,
+.page .upload-section-toggle {
+  width: fit-content;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 10px;
+  margin: 7px 0 0;
+  border: 1px solid var(--grid-line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text-main);
+  font-size: 12px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.opportunities-page .upload-section-toggle:hover,
+.page .upload-section-toggle:hover,
+.opportunities-page .upload-section-toggle.open,
+.page .upload-section-toggle.open {
+  border-color: var(--primary-accent);
+  background: var(--primary-soft);
+}
+
+.upload-section-toggle-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.tender-upload-panel {
+  max-width: 100%;
+  padding-top: 10px;
+}
+
+.opportunities-page .intake-setup {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(280px, .85fr);
+  align-items: stretch;
+  gap: 12px;
+  min-width: 0;
+  margin: 7px 0 10px;
+}
+
+.opportunities-page .intake-setup .document-upload-zone {
+  display: flex;
+  flex-direction: column;
+  align-self: start;
+  min-height: 112px;
+  height: auto;
+  margin: 0;
+  padding: 14px 18px;
+  align-items: flex-start;
+  justify-content: center;
+  text-align: left;
+}
+
+.opportunities-page .intake-setup .upload-icon {
+  font-size: 24px;
+  line-height: 1;
+  margin-bottom: 6px;
+}
+
+.opportunities-page .intake-setup .upload-text,
+.opportunities-page .intake-setup .upload-subtext {
+  max-width: 100%;
+  white-space: normal;
+}
+
+.opportunities-page .intake-setup .destination-picker {
+  height: 100%;
+  margin: 0;
 }
 
 .opportunities-page .forms-grid {
@@ -2457,7 +2628,7 @@ html, body { overflow-x: hidden; max-width: 100%; }
 
 .opportunities-page .destination-options {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .opportunities-page .destination-option {
@@ -2471,8 +2642,22 @@ html, body { overflow-x: hidden; max-width: 100%; }
 }
 
 @media (max-width: 760px) {
+  .opportunities-page .forms-head-top {
+    display: block;
+  }
+
+  .opportunities-page .forms-head-top .req-note {
+    margin-top: 6px;
+    text-align: left;
+    white-space: normal;
+  }
+
   .opportunities-page .forms-grid,
   .opportunities-page .destination-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .opportunities-page .intake-setup {
     grid-template-columns: minmax(0, 1fr);
   }
 
@@ -2481,6 +2666,11 @@ html, body { overflow-x: hidden; max-width: 100%; }
     margin-right: 0;
     padding-left: 14px;
     padding-right: 14px;
+  }
+
+  .opportunities-page .upload-section-toggle,
+  .page .upload-section-toggle {
+    width: 100%;
   }
 }
 

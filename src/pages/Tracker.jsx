@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { STAGES, CLOSE_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, CUSTOMER_STATUSES, ROLES } from '../seed.js'
-import { fmt, mmmYY, ddMmmYY, exportCSV, stageClass, canViewCommercial, canPriceProposal, productList, productLabel } from '../utils.js'
+import { STAGES, CLOSE_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES } from '../seed.js'
+import { fmt, mmmYY, ddMmmYY, exportCSV, stageClass, canViewCommercial, canPriceProposal, productList, productLabel, sameCustomer } from '../utils.js'
 import { useFormulaBar } from '../formulabar.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { nextActionWith } from '../gates.js'
@@ -66,19 +66,16 @@ function hiddenColumnCss(hidden) {
   return `${sel} { display: none; } .sheet.cols-key tfoot { display: none; }`
 }
 
-export default function Tracker() {
+export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const store = useStore()
   const nav = useNavigate()
   const fb = useFormulaBar()
   const drawer = useDrawer()
   const [sheet, setSheet] = useState('Opportunities') // Pivot | Opportunities | Old Closed Opps
 
-  // Role-based default filtering for owner:
-  // Sales reps default to their own opportunities, admins see all
-  const isAdmin = ROLES[store.role]?.admin || ROLES[store.role]?.commercial
   const isSalesRep = OWNERS.includes(store.role)
-  const defaultOwnerFilter = (isSalesRep && !isAdmin) ? store.role : 'All'
-  const [ownerFilter, setOwnerFilter] = useState(defaultOwnerFilter)
+  const isManager = ROLES[store.role]?.admin || ROLES[store.role]?.commercial
+  const [ownerFilter, setOwnerFilter] = useState(() => initialOwnerFilter || (isSalesRep && !isManager ? store.role : 'All'))
 
   const [filters, setFilters] = useState({})           // col key -> Set of allowed display values
   const [frozenIds, setFrozenIds] = useState(null)     // row ids captured when a filter was applied
@@ -94,10 +91,12 @@ export default function Tracker() {
   const showValue = canPriceProposal(store.role)
   const gmK = o => (o.valueK || 0) - (o.cogsK || 0)
   const gmPct = o => (o.valueK ? Math.round((gmK(o) / o.valueK) * 100) + '%' : null)
+  const customerStatusFor = o => store.customers.find(c => sameCustomer(c.name, o.sellTo))?.status || o.customerStatus || 'Blue'
 
   // Display value used for filtering & sorting (what the user sees in the cell).
   const cellVal = (o, key) => {
     switch (key) {
+      case 'customerStatus': return customerStatusFor(o)
       case 'gmK': return gmK(o)
       case 'gmPct': return gmPct(o) || '#DIV/0!'
       case 'valueK': return o.valueK || 0
@@ -198,7 +197,7 @@ export default function Tracker() {
   const exportRows = () => exportCSV(
     'Sales_Pipeline_Report.csv',
     ['Sl','Opp ID','Sell To Customer','Category','Location','Customer Status','EUC Name','EUC Location','Opportunity Name/Description','Owner','Opp Type','BU','Segment','Product','Prob (%)','Value (₹)','COGS (K₹)','GM (K₹)','GM%','Create Date','Proposal Date','Expected Order Date','Expected Ship Date','Status','Stage','Closed Reason','Contact Person','Contact Phone #','Last Updated','Forecast','Update/Remarks','Next Action Pending Owner'],
-    rows.map(o => [o.sl,o.id,o.sellTo,o.category,o.location,o.customerStatus,o.eucName,o.eucLocation,o.oppName,o.owner,o.oppType,o.bu,o.segment,productLabel(o.product),o.prob||'',o.valueK,o.cogsK,gmK(o),gmPct(o)||'',o.createDate,o.proposalDate,o.orderDate,o.invoiceDate,o.status,o.stage,o.closedReason,o.contactPerson,o.contactPhone,o.lastUpdated,o.forecast?'Y':'N',o.remarks,o.nextActionOwner||''])
+    rows.map(o => [o.sl,o.id,o.sellTo,o.category,o.location,customerStatusFor(o),o.eucName,o.eucLocation,o.oppName,o.owner,o.oppType,o.bu,o.segment,productLabel(o.product),o.prob||'',o.valueK,o.cogsK,gmK(o),gmPct(o)||'',o.createDate,o.proposalDate,o.orderDate,o.invoiceDate,o.status,o.stage,o.closedReason,o.contactPerson,o.contactPhone,o.lastUpdated,o.forecast?'Y':'N',o.remarks,o.nextActionOwner||''])
   )
 
   // Plain render function (not a component type) so the open dropdown's DOM is
@@ -265,13 +264,19 @@ export default function Tracker() {
 
   return (
     <div className="page">
-      <h2>Sales Pipeline Report FY26–27 {sheet === 'Old Closed Opps' && '— Old Closed Opps'}</h2>
+      <h2>Opportunities {sheet === 'Old Closed Opps' && '— Old Closed Opps'}</h2>
       <div className="toolbar">
-        <label>Owner:{' '}
-          <select value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)}>
-            {owners.map(p => <option key={p}>{p}</option>)}
-          </select>
-        </label>
+        {isSalesRep && ownerFilter === store.role ? (
+          <button type="button" onClick={() => setOwnerFilter('All')}>Show All Opportunities</button>
+        ) : (
+          <>
+            <label className="owner-view-label" htmlFor="opportunities-owner-filter">View opportunities for:</label>
+            <select id="opportunities-owner-filter" value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)}>
+              {owners.map(p => <option key={p} value={p}>{p === 'All' ? 'All Opportunities' : p}</option>)}
+            </select>
+            {isSalesRep && <button type="button" onClick={() => setOwnerFilter(store.role)}>My Opportunities</button>}
+          </>
+        )}
         <span className="hint">Rows are never deleted — close them via Stage (Won/Lost) with a mandatory Closed Reason. Click ▼ on a header to sort/filter; click a cell to see its formula.</span>
         <span className="spacer" />
         {colView === 'key' && showValue && (
@@ -285,7 +290,9 @@ export default function Tracker() {
         </button>
         <button onClick={exportRows} disabled={!comm}
           title={comm ? '' : 'Export includes commercial columns — restricted to approvers/admin'}>Extract to Excel</button>
-        <Link className="btn primary" to="/new">Create Opportunity</Link>
+        {onCreateOpportunity
+          ? <button className="primary" onClick={onCreateOpportunity}>Create Opportunity</button>
+          : <Link className="btn primary" to="/new">Create Opportunity</Link>}
       </div>
 
       <div className="sheet-wrap">
@@ -322,7 +329,7 @@ export default function Tracker() {
                   drawer.open({ type: 'opp', id: o.id })
                 }}>
                 <td className="rowhead">{o.sl}</td>
-                <td onClick={selectCell(o, COLS[0])} className={`oppid ${stageClass(o) === 'open' ? '' : stageClass(o)} ${isSel(o, COLS[0]) ? 'cell-sel' : ''}`}>
+                <td onClick={selectCell(o, COLS[0])} className={`oppid ${customerStatusFor(o)} ${stageClass(o) === 'open' ? '' : stageClass(o)} ${isSel(o, COLS[0]) ? 'cell-sel' : ''}`}>
                   <Link to={`/folders/${o.id}`}>{o.id}</Link>
                 </td>
                 <td onClick={selectCell(o, COLS[1])} className={isSel(o, COLS[1]) ? 'cell-sel' : ''}><input type="text" value={o.sellTo} onChange={upd(o.id, 'sellTo')} style={{ minWidth: 150 }} /></td>
@@ -330,11 +337,9 @@ export default function Tracker() {
                   <select value={o.category} onChange={upd(o.id, 'category')}>{CATEGORIES.map(c => <option key={c}>{c}</option>)}</select>
                 </td>
                 <td onClick={selectCell(o, COLS[3])} className={isSel(o, COLS[3]) ? 'cell-sel' : ''}><input type="text" value={o.location} onChange={upd(o.id, 'location')} style={{ minWidth: 80 }} /></td>
-                <td onClick={selectCell(o, COLS[4])} className={`cstat ${o.customerStatus} ${isSel(o, COLS[4]) ? 'cell-sel' : ''}`}
-                  title="Customer status normally comes from the accounting upload — overrides are logged to the audit trail">
-                  <select value={o.customerStatus} onChange={upd(o.id, 'customerStatus')}>
-                    {CUSTOMER_STATUSES.map(c => <option key={c}>{c}</option>)}
-                  </select>
+                <td onClick={selectCell(o, COLS[4])} className={`cstat ${customerStatusFor(o)} ${isSel(o, COLS[4]) ? 'cell-sel' : ''}`}
+                  title="Customer status is managed from the Customer master">
+                  {customerStatusFor(o)}
                 </td>
                 <td onClick={selectCell(o, COLS[5])} className={isSel(o, COLS[5]) ? 'cell-sel' : ''}><input type="text" value={o.eucName} onChange={upd(o.id, 'eucName')} style={{ minWidth: 120 }} /></td>
                 <td onClick={selectCell(o, COLS[6])} className={isSel(o, COLS[6]) ? 'cell-sel' : ''}><input type="text" value={o.eucLocation} onChange={upd(o.id, 'eucLocation')} style={{ minWidth: 90 }} /></td>
