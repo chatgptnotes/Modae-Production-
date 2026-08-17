@@ -119,7 +119,7 @@ export default function Users() {
                     {u.status === 'Active' && u.role !== 'SUPER' &&
                       <button onClick={() => store.updateUser(u.id, { status: 'Suspended' })}>Suspend</button>}
                     {u.status === 'Active' &&
-                      <> <button onClick={() => { store.signInAs(u.id); nav('/home') }}>Sign in as</button></>}
+                      <> <button onClick={() => { store.signInAs(u.id); nav('/opportunities') }}>Sign in as</button></>}
                     {u.status === 'Suspended' &&
                       <button onClick={() => store.updateUser(u.id, { status: 'Active' })}>Reactivate</button>}
                     {u.status === 'Pending' &&

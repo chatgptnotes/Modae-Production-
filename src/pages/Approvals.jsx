@@ -51,13 +51,13 @@ function DecisionForm({ a, role, onDecide }) {
   }
 
   return (
-    <form onSubmit={submit} style={{ marginTop: 10, borderTop: '1px solid var(--border-soft)', paddingTop: 8 }}>
-      <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 4 }}>
+    <form onSubmit={submit} className="approval-decision-form">
+      <div className="approval-decision-title">
         Your decision as {ROLES[role]?.label || role}
       </div>
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+      <div className="approval-decision-options">
         {DECISIONS.map(v => (
-          <label key={v} style={{ fontSize: 12.5, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <label key={v}>
             <input type="radio" name={`dec-${a.id}`} checked={d === v} onChange={() => setD(v)} />
             {DECISION_LABELS[v]}
           </label>
@@ -66,17 +66,17 @@ function DecisionForm({ a, role, onDecide }) {
       <textarea
         rows={2} value={comment} onChange={e => setComment(e.target.value)}
         placeholder="Decision note (required)"
-        style={{ width: '100%', maxWidth: 560, marginTop: 6 }}
+        className="approval-decision-input"
       />
       {d === 'Approved with conditions' && (
         <textarea
           rows={2} value={conds} onChange={e => setConds(e.target.value)}
           placeholder="Conditions the salesperson must incorporate — one condition per line"
-          style={{ width: '100%', maxWidth: 560, marginTop: 6 }}
+          className="approval-decision-input"
         />
       )}
-      {err && <div className="errbox" style={{ marginTop: 6 }}>{err}</div>}
-      <div style={{ marginTop: 8 }}>
+      {err && <div className="errbox approval-decision-error">{err}</div>}
+      <div className="approval-decision-submit">
         <button className="primary" type="submit"><Icon name="clipboardCheck" size={13} /> Record decision</button>
       </div>
     </form>
@@ -140,9 +140,9 @@ export default function Approvals() {
     <div className="approval-links">
       {a.oppId && <>
         <button onClick={() => drawer.open({ type: 'opp', id: a.oppId })}><Icon name="eye" size={12} /> Preview opportunity</button>
-        <button onClick={() => nav('/opp/' + a.oppId + '/approvals')}><Icon name="arrowRight" size={12} /> Open workbench</button>
+        <button className="primary" title="Open this opportunity's Approvals tab" onClick={() => nav('/opp/' + a.oppId + '/approvals')}><Icon name="arrowRight" size={12} /> Open approval workspace</button>
       </>}
-      {a.leadId && <button onClick={() => nav('/inbox/' + a.leadId)}><Icon name="inbox" size={12} /> Open lead</button>}
+      {a.leadId && <button className="primary" onClick={() => nav('/inbox/' + a.leadId)}><Icon name="inbox" size={12} /> Open workspace</button>}
       {a.customerName && <button onClick={() => drawer.open({ type: 'customer', id: a.customerName })}><Icon name="users" size={12} /> Open customer</button>}
     </div>
   )
@@ -152,17 +152,30 @@ export default function Approvals() {
     return (!q || hay.includes(q.toLowerCase())) && (!statusF || a.status === statusF) && (!typeF || a.type === typeF)
   }
   const typeOptions = [...new Set(store.approvals.map(a => a.type).filter(Boolean))].sort()
+  const clearFilters = () => { setQ(''); setStatusF(''); setTypeF('') }
+  const hasFilters = Boolean(q || statusF || typeF)
+  const FilterBar = () => (
+    <div className="approval-filters" role="search">
+      <label className="approval-search">
+        <Icon name="search" size={14} />
+        <input aria-label="Search approvals" placeholder="Search by request, opportunity, customer or type" value={q} onChange={e => setQ(e.target.value)} />
+      </label>
+      <select aria-label="Filter by status" value={statusF} onChange={e => setStatusF(e.target.value)}><option value="">All statuses</option>{['Pending', 'Approved', 'Approved with conditions', 'Returned', 'Rejected'].map(s => <option key={s}>{s}</option>)}</select>
+      <select aria-label="Filter by type" value={typeF} onChange={e => setTypeF(e.target.value)}><option value="">All types</option>{typeOptions.map(t => <option key={t}>{t}</option>)}</select>
+      {hasFilters && <button type="button" className="approval-clear" onClick={clearFilters}>Clear filters</button>}
+    </div>
+  )
 
   // ---- Salespeople: read-only view of their own requests ------------------
   if (!approverView) {
     const mine = store.approvals.filter(a => a.requestedBy === role && matches(a)).sort(byTsDesc)
     return (
       <div className="page approvals-page">
-        <div className="approval-head"><div><h2><Icon name="checkCircle" size={18} /> Approvals — my requests</h2><p className="hint">Track requests, approvers, decisions, and linked records from one place.</p></div></div>
-        <div className="approval-summary"><div><b>{store.approvals.filter(a => a.requestedBy === role && a.status === 'Pending').length}</b><span>Pending</span></div><div><b>{store.approvals.filter(a => a.requestedBy === role && a.status === 'Approved').length}</b><span>Approved</span></div><div><b>{store.approvals.filter(a => a.requestedBy === role && a.status === 'Rejected').length}</b><span>Rejected</span></div></div>
-        <div className="approval-filters"><input placeholder="Search approvals" value={q} onChange={e => setQ(e.target.value)} /><select value={statusF} onChange={e => setStatusF(e.target.value)}><option value="">All statuses</option>{['Pending', 'Approved', 'Approved with conditions', 'Returned', 'Rejected'].map(s => <option key={s}>{s}</option>)}</select><select value={typeF} onChange={e => setTypeF(e.target.value)}><option value="">All types</option>{typeOptions.map(t => <option key={t}>{t}</option>)}</select></div>
-        <div className="restricted approval-notice">
-          Approvals are decided by LJS / AH
+        <div className="approval-head"><div><div className="approval-eyebrow">REQUEST TRACKING</div><h2><Icon name="checkCircle" size={18} /> My approval requests</h2><p className="hint">Track decisions and approvers for requests raised by you.</p></div></div>
+        <div className="approval-summary approval-summary-three"><div className="approval-summary-card summary-pending"><b>{store.approvals.filter(a => a.requestedBy === role && a.status === 'Pending').length}</b><span>Pending</span></div><div className="approval-summary-card summary-approved"><b>{store.approvals.filter(a => a.requestedBy === role && a.status === 'Approved').length}</b><span>Approved</span></div><div className="approval-summary-card summary-rejected"><b>{store.approvals.filter(a => a.requestedBy === role && a.status === 'Rejected').length}</b><span>Rejected</span></div></div>
+        <FilterBar />
+        <div className="approval-notice approval-notice-info">
+          <Icon name="info" size={14} /> Approvals are decided by LJS / AH. Your requests remain visible here until resolved.
         </div>
         <div className="approval-list">{mine.map(a => <div key={a.id} className="approval-card"><div className="approval-card-top"><b>{a.id}</b><span className={`pill ${pillFor(a.status)}`}>{a.status}</span><span className="approval-type">{a.type}</span><span className="hint">requested {day(a.ts)}</span></div><div className="approval-ref"><RefLink a={a} /></div><Detail a={a} /><div className="approval-meta"><div><span>Approvers</span><RoleChips a={a} /></div><div><span>Decision note</span><p>{COMMERCIAL_RX.test(a.decisionNote || '') && !comm ? 'Restricted' : (a.decisionNote || 'No decision yet')}</p></div></div><QuickLinks a={a} /></div>)}</div>
         {!mine.length && <p className="hint">No approval requests yet — raise one from the proposal workbench when a deviation needs clearance.</p>}
@@ -186,27 +199,27 @@ export default function Approvals() {
     const remaining = neededOf(a).filter(r => !(a.decisions || {})[r])
     const myDecision = (a.decisions || {})[role]
     return (
-      <div className="form-card approval-card" style={{ marginBottom: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <div className="form-card approval-card approval-pending-card">
+        <div className="approval-card-top">
           <b>{a.id}</b>
           <span className="pill Blue">Pending</span>
-          <span style={{ fontSize: 12.5 }}>{a.type}</span>
-          <span className="hint" style={{ marginLeft: 'auto' }}>requested by {a.requestedBy} · {day(a.ts)}</span>
+          <span className="approval-type">{a.type}</span>
+          <span className="hint">requested by {a.requestedBy} · {day(a.ts)}</span>
         </div>
-        <div style={{ margin: '6px 0' }}><RefLink a={a} /></div>
+        <div className="approval-ref"><RefLink a={a} /></div>
         <Detail a={a} />
-        <RoleChips a={a} />
+        <div className="approval-approvers"><span>Approvers</span><RoleChips a={a} /></div>
         <QuickLinks a={a} />
         {myTurn(a)
           ? <DecisionForm a={a} role={role} onDecide={dec => store.recordDecision(a.id, dec)} />
           : myDecision
             ? (
-              <div className="hint" style={{ marginTop: 8 }}>
+              <div className="approval-awaiting hint">
                 You decided <b>{myDecision.d}</b> — "{myDecision.c}" · waiting on {remaining.join(' + ') || 'no one'}
               </div>
             )
             : (
-              <div className="hint" style={{ marginTop: 8 }}>
+              <div className="approval-awaiting hint">
                 Awaiting {remaining.map(r => ROLES[r]?.label || r).join(' + ')}
               </div>
             )}
@@ -216,27 +229,27 @@ export default function Approvals() {
 
   return (
     <div className="page approvals-page">
-      <div className="approval-head"><div><h2><Icon name="checkCircle" size={18} /> Approvals — {ROLES[role]?.label || role}</h2><p className="hint">Review the request, inspect the linked record, then decide without leaving this page.</p></div></div>
-      <div className="approval-summary"><div><b>{forMe.length}</b><span>Waiting on me</span></div><div><b>{others.length}</b><span>Awaiting others</span></div><div><b>{condOpen.length}</b><span>Open conditions</span></div><div><b>{decided.length}</b><span>Decided</span></div></div>
-      <div className="approval-filters"><input placeholder="Search approvals" value={q} onChange={e => setQ(e.target.value)} /><select value={statusF} onChange={e => setStatusF(e.target.value)}><option value="">All statuses</option>{['Pending', 'Approved', 'Approved with conditions', 'Returned', 'Rejected'].map(s => <option key={s}>{s}</option>)}</select><select value={typeF} onChange={e => setTypeF(e.target.value)}><option value="">All types</option>{typeOptions.map(t => <option key={t}>{t}</option>)}</select></div>
+      <div className="approval-head"><div><div className="approval-eyebrow">DECISION WORKSPACE</div><h2><Icon name="checkCircle" size={18} /> Approvals — {ROLES[role]?.label || role}</h2><p className="hint">Resolve requests, inspect linked records, and keep the pipeline moving.</p></div></div>
+      <div className="approval-summary"><div className="approval-summary-card summary-pending"><b>{forMe.length}</b><span>Needs your decision</span></div><div className="approval-summary-card summary-waiting"><b>{others.length}</b><span>Awaiting others</span></div><div className="approval-summary-card summary-conditions"><b>{condOpen.length}</b><span>Open conditions</span></div><div className="approval-summary-card summary-decided"><b>{decided.length}</b><span>Decided</span></div></div>
+      <FilterBar />
       <div className="approval-explainer"><span className="hint">
           Commercial deviations and credit-term clearances routed to LJS / AH. Joint gates resolve once every
           named approver has decided. "Approved with conditions" blocks proposal submission until every
           condition is confirmed incorporated.
         </span></div>
 
-      <div className="section-title">Pending — your decision ({forMe.length})</div>
+      <div className="approval-section-heading approval-section-primary"><div><span className="approval-section-kicker">ACTION REQUIRED</span><h3>Needs your decision <span>{forMe.length}</span></h3></div><span className="hint">Review and record a decision</span></div>
       {forMe.map(a => <PendingCard key={a.id} a={a} />)}
       {!forMe.length && <p className="hint">Nothing pending for you — all clear.</p>}
 
       {others.length > 0 && (
         <>
-          <div className="section-title">Pending — awaiting other approvers ({others.length})</div>
+          <div className="approval-section-heading"><div><span className="approval-section-kicker">IN PROGRESS</span><h3>Awaiting other approvers <span>{others.length}</span></h3></div></div>
           {others.map(a => <PendingCard key={a.id} a={a} />)}
         </>
       )}
 
-      <div className="section-title">Conditions awaiting incorporation ({condOpen.length})</div>
+      <div className="approval-section-heading"><div><span className="approval-section-kicker">FOLLOW-UP</span><h3>Conditions awaiting incorporation <span>{condOpen.length}</span></h3></div></div>
       {condOpen.map(a => (
         <div key={a.id} className="form-card approval-card" style={{ marginBottom: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -255,7 +268,7 @@ export default function Approvals() {
           <div className="hint" style={{ marginTop: 6 }}>The salesperson confirms this in the proposal workbench.</div>
           {a.oppId && (
             <button style={{ marginTop: 6 }} onClick={() => nav('/proposal/' + a.oppId)}>
-              <Icon name="fileText" size={13} /> Open proposal workbench
+              <Icon name="fileText" size={13} /> Open workspace
             </button>
           )}
           <QuickLinks a={a} />
@@ -263,7 +276,7 @@ export default function Approvals() {
       ))}
       {!condOpen.length && <p className="hint">No open conditions — everything decided is fully incorporated.</p>}
 
-      <div className="section-title">Decided ({decided.length})</div>
+      <div className="approval-section-heading"><div><span className="approval-section-kicker">HISTORY</span><h3>Decided <span>{decided.length}</span></h3></div></div>
       {decided.map(a => (
         <div key={a.id} className="form-card approval-card" style={{ marginBottom: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>

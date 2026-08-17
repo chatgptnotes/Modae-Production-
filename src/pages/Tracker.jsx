@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { STAGES, CLOSE_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES } from '../seed.js'
 import { fmt, mmmYY, ddMmmYY, exportCSV, stageClass, canViewCommercial, canPriceProposal, productList, productLabel, sameCustomer } from '../utils.js'
@@ -68,10 +68,9 @@ function hiddenColumnCss(hidden) {
 
 export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const store = useStore()
-  const nav = useNavigate()
   const fb = useFormulaBar()
   const drawer = useDrawer()
-  const [sheet, setSheet] = useState('Opportunities') // Pivot | Opportunities | Old Closed Opps
+  const [sheet, setSheet] = useState('Opportunities') // Opportunities | Old Closed Opps
 
   const isSalesRep = OWNERS.includes(store.role)
   const isManager = ROLES[store.role]?.admin || ROLES[store.role]?.commercial
@@ -197,7 +196,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const exportRows = () => exportCSV(
     'Sales_Pipeline_Report.csv',
     ['Sl','Opp ID','Sell To Customer','Category','Location','Customer Status','EUC Name','EUC Location','Opportunity Name/Description','Owner','Opp Type','BU','Segment','Product','Prob (%)','Value (₹)','COGS (K₹)','GM (K₹)','GM%','Create Date','Proposal Date','Expected Order Date','Expected Ship Date','Status','Stage','Closed Reason','Contact Person','Contact Phone #','Last Updated','Forecast','Update/Remarks','Next Action Pending Owner'],
-    rows.map(o => [o.sl,o.id,o.sellTo,o.category,o.location,customerStatusFor(o),o.eucName,o.eucLocation,o.oppName,o.owner,o.oppType,o.bu,o.segment,productLabel(o.product),o.prob||'',o.valueK,o.cogsK,gmK(o),gmPct(o)||'',o.createDate,o.proposalDate,o.orderDate,o.invoiceDate,o.status,o.stage,o.closedReason,o.contactPerson,o.contactPhone,o.lastUpdated,o.forecast?'Y':'N',o.remarks,o.nextActionOwner||''])
+    rows.map((o, index) => [index + 1,o.id,o.sellTo,o.category,o.location,customerStatusFor(o),o.eucName,o.eucLocation,o.oppName,o.owner,o.oppType,o.bu,o.segment,productLabel(o.product),o.prob||'',o.valueK,o.cogsK,gmK(o),gmPct(o)||'',o.createDate,o.proposalDate,o.orderDate,o.invoiceDate,o.status,o.stage,o.closedReason,o.contactPerson,o.contactPhone,o.lastUpdated,o.forecast?'Y':'N',o.remarks,o.nextActionOwner||''])
   )
 
   // Plain render function (not a component type) so the open dropdown's DOM is
@@ -320,7 +319,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map(o => (
+            {rows.map((o, index) => (
               <tr key={o.id} className="rowclick"
                 onClick={e => {
                   // Row click opens the detail drawer — but never when the click
@@ -328,7 +327,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                   if (e.target.closest('input,select,a,button,label,.filter-pop')) return
                   drawer.open({ type: 'opp', id: o.id })
                 }}>
-                <td className="rowhead">{o.sl}</td>
+                <td className="rowhead">{index + 1}</td>
                 <td onClick={selectCell(o, COLS[0])} className={`oppid ${customerStatusFor(o)} ${stageClass(o) === 'open' ? '' : stageClass(o)} ${isSel(o, COLS[0]) ? 'cell-sel' : ''}`}>
                   <Link to={`/folders/${o.id}`}>{o.id}</Link>
                 </td>
@@ -490,9 +489,9 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
       </div>
 
       <div className="sheet-tabs">
-        {['Pivot', 'Opportunities', 'Old Closed Opps'].map(t => (
+        {['Opportunities', 'Old Closed Opps'].map(t => (
           <div key={t} className={`tab ${sheet === t ? 'active' : ''}`}
-            onClick={() => (t === 'Pivot' ? nav('/dashboard') : setSheet(t))}>
+            onClick={() => setSheet(t)}>
             {t}
           </div>
         ))}

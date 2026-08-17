@@ -19,12 +19,10 @@ import Customers from './pages/Customers.jsx'
 import Analytics from './pages/Analytics.jsx'
 import Users from './pages/Users.jsx'
 import TenderIntake from './pages/TenderIntake.jsx'
-import Home from './pages/Home.jsx'
 import MyOpps from './pages/MyOpps.jsx'
 import Inbox from './pages/Inbox.jsx'
 import Approvals from './pages/Approvals.jsx'
 import Audit from './pages/Audit.jsx'
-import TabletHome from './pages/TabletHome.jsx'
 import VoiceUpdate from './pages/VoiceUpdate.jsx'
 import AiMap from './pages/AiMap.jsx'
 import Admin from './pages/Admin.jsx'
@@ -38,14 +36,13 @@ import Opportunities from './pages/Opportunities.jsx'
 
 function PageGate({ page, children }) {
   const store = useStore()
-  if (!canSeePage(store.role, page)) return <Navigate to="/home" replace />
+  if (!canSeePage(store.role, page)) return <Navigate to="/opportunities" replace />
   return children
 }
 
 // Left-sidebar navigation. `page` is the PERMS matrix key — visibility follows
 // the acting role's permission set (seed.js PERMS).
 const NAV = [
-  { to: '/home', label: 'Home', icon: 'home', page: 'home' },
   { to: '/my-dashboard', label: 'My Dashboard', icon: 'chartBar', page: 'mydashboard' },
   { to: '/inbox', label: 'Lead Inbox', icon: 'inbox', page: 'inbox', badge: c => c.newLeads, badgeHint: 'new leads to qualify' },
   { to: '/opportunities', label: 'Opportunities', icon: 'cards', page: 'tracker' },
@@ -65,13 +62,12 @@ const NAV = [
 
 // App-like bottom tab bar shown in tablet mode — four tabs around a raised
 // centre action (voice update), like a native app.
-// My Dashboard sits directly after Home, matching the sidebar — on a phone the
+// My Dashboard stays near the top of the sidebar — on a phone the
 // tablet shell renders no sidebar, so without a tab here the page was reachable
 // only by typing the URL.
 // The approvals badge counts the gates *this* persona has to decide (`forMe`),
 // not every pending approval in the company.
 const BOTTOM = [
-  { to: '/home', label: 'Home', icon: 'home', page: 'home' },
   { to: '/my-dashboard', label: 'Dashboard', icon: 'chartBar', page: 'mydashboard' },
   { to: '/inbox', label: 'Inbox', icon: 'inbox', page: 'inbox', badge: s => counts(s).newLeads },
   { to: '/approvals', label: 'Approvals', icon: 'checkCircle', page: 'approvals', badge: s => counts(s).forMe },
@@ -107,10 +103,10 @@ export default function App() {
     }
   }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Tablet mode lands on the task tiles once per mount.
+  // Tablet mode lands on the opportunities workspace once per mount.
   useEffect(() => {
     const hash = window.location.hash
-    if (tablet && (hash === '' || hash === '#/')) nav('/home', { replace: true })
+    if (tablet && (hash === '' || hash === '#/')) nav('/opportunities', { replace: true })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Customer accounts/persona only ever see the portal. Route-level, not a
@@ -131,7 +127,8 @@ export default function App() {
     <Routes>
       <Route path="/" element={<PageGate page="tracker"><Tracker /></PageGate>} />
       <Route path="/opportunities" element={<PageGate page="tracker"><Opportunities /></PageGate>} />
-      <Route path="/home" element={<PageGate page="home">{tablet ? <TabletHome /> : <Home />}</PageGate>} />
+      {/* Keep the old URL as a compatibility redirect while Home is hidden. */}
+      <Route path="/home" element={<Navigate to="/opportunities" replace />} />
       <Route path="/my" element={<PageGate page="my"><MyOpps /></PageGate>} />
       <Route path="/inbox" element={<PageGate page="inbox"><Inbox /></PageGate>} />
       <Route path="/inbox/:leadId" element={<PageGate page="inbox"><Inbox /></PageGate>} />
@@ -180,7 +177,7 @@ export default function App() {
   const shell = tablet ? (
     <div className={`shell tablet-mode theme-${theme}`} style={{ display: 'block' }}>
       <header className="tablet-bar">
-        <ModaeLogo className="tb-brand" size={24} sub="WinTrack" onClick={() => nav('/home')} />
+        <ModaeLogo className="tb-brand" size={24} sub="WinTrack" onClick={() => nav('/opportunities')} />
         <span className="spacer" />
         <button className="tb-bell" onClick={() => nav('/inbox')} title={`${c.newLeads} new leads`}>
           <Icon name="bell" size={15} />
@@ -235,7 +232,7 @@ export default function App() {
     <div className={`shell ${sidebarCompact ? 'sidebar-compact' : ''}`}>
       <div className={`nav-backdrop ${navOpen ? 'open' : ''}`} onClick={() => setNavOpen(false)} />
       <aside className={`sidenav ${navOpen ? 'open' : ''}`}>
-        <div className="brand" onClick={() => nav('/home')}>
+        <div className="brand" onClick={() => nav('/opportunities')}>
           <ModaeLogo size={28} sub="WinTrack" />
           <button className="sidebar-toggle" onClick={e => { e.stopPropagation(); toggleSidebar() }}
             title={sidebarCompact ? 'Expand sidebar' : 'Collapse sidebar'} aria-label={sidebarCompact ? 'Expand sidebar' : 'Collapse sidebar'}>
@@ -288,7 +285,7 @@ export default function App() {
             </label>
           )}
           <InstallButton />
-          <button className="mode-switch" onClick={() => { store.setViewMode('tablet'); nav('/home') }}>
+          <button className="mode-switch" onClick={() => { store.setViewMode('tablet'); nav('/opportunities') }}>
             <Icon name="tablet" size={15} /> Switch to tablet view
           </button>
         </header>

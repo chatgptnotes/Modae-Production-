@@ -63,7 +63,7 @@ export function Modal({ title, onClose, children, wide, className = '' }) {
 
   return (
     <>
-      <div className="filter-overlay" onClick={onClose} />
+      <div className="filter-overlay modal-overlay" onClick={onClose} />
       <div className={`modal form-card ${wide ? 'wide' : ''} ${className}`.trim()} role="dialog" aria-modal="true" aria-label={title}>
         {title && <div className="section-title">{title}</div>}
         {children}

@@ -240,7 +240,7 @@ export default function MyDashboard() {
         <h2>My Dashboard</h2>
         <p className="hint">{roleLabel(role)}{store.sales?.fy ? ` · ${store.sales.fy}` : ''}</p>
       </div>
-      <button onClick={() => nav('/home')}><Icon name="home" size={13} /> Home</button>
+      <button onClick={() => nav('/opportunities')}><Icon name="cards" size={13} /> Opportunities</button>
     </div>
   )
 
