@@ -67,7 +67,7 @@ test('proposal pricing surfaces use the proposal gate, not the reporting gate', 
 
 // Biji, on the salesperson's tracker columns: "I need value, value and expected
 // order date". Value follows the proposal gate; COGS/GM stay commercial.
-test('tracker shows value to sales owners but keeps cost and margin restricted', () => {
+test('tracker shows value to sales owners while opportunity surfaces expose proposal cost and margin', () => {
   const tracker = read('src/pages/Tracker.jsx')
   assert.match(tracker, /const showValue = canPriceProposal\(store\.role\)/)
   assert.match(tracker, /const comm = canViewCommercial\(store\.role\)/)

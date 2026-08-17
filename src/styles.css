@@ -186,6 +186,19 @@ table.sheet td.cstat.Blue  { background: var(--primary-soft) !important; color: 
 table.sheet th.num { text-align: right; }
 table.sheet td.err { background: var(--lost-fill) !important; color: var(--lost-text); text-align: center; }
 table.sheet tfoot td { font-weight: 700; background: var(--primary-soft); }
+.opportunity-list { table-layout: fixed; }
+.opportunity-list th:nth-child(1), .opportunity-list td:nth-child(1) { width: 124px; }
+.opportunity-list th:nth-child(2), .opportunity-list td:nth-child(2) { width: 270px; }
+.opportunity-list th:nth-child(3), .opportunity-list td:nth-child(3) { width: auto; }
+.opportunity-list th:nth-child(4), .opportunity-list td:nth-child(4) { width: 132px; }
+.opportunity-list th:nth-child(5), .opportunity-list td:nth-child(5) { width: 92px; }
+.opportunity-list th:nth-child(6), .opportunity-list td:nth-child(6) { width: 100px; }
+.opportunity-list th:nth-child(7), .opportunity-list td:nth-child(7) { width: 208px; }
+.opportunity-list th:nth-child(8), .opportunity-list td:nth-child(8) { width: 190px; }
+.opportunity-list td { overflow: hidden; text-overflow: ellipsis; }
+.opportunity-list .opportunity-cell { display: flex; align-items: center; min-width: 0; gap: 6px; }
+.opportunity-list .opportunity-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.opportunity-list .opportunity-cell .pill { flex: 0 0 auto; margin-left: 0 !important; }
 /* Internal costing block on the Priced BoQ — grey like the real sheet's hidden area */
 table.sheet th.internal { background: #6d6d6d; }
 table.sheet td.internal { background: var(--border-soft) !important; color: var(--text-muted); }

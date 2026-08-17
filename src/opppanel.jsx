@@ -44,7 +44,9 @@ export default function OppPanel({ oppId }) {
 
   // A custom subfolder can be deleted (on the Folders page) while its tab is active.
   const activeTab = subNames.includes(tab) ? tab : subNames[0]
-  const comm = canViewCommercial(store.role)
+  // Sales owners need cost and margin while building their proposals;
+  // org-wide commercial reports remain protected by canViewCommercial.
+  const comm = canViewCommercial(store.role) || canPriceProposal(store.role)
   const showValue = canPriceProposal(store.role)
   const na = nextActionWith(opp, store.getProposal(oppId), store)
   const gmK = (opp.valueK || 0) - (opp.cogsK || 0)

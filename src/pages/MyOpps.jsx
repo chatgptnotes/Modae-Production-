@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
 import { OWNERS, ROLES } from '../seed.js'
-import { canPriceProposal, canViewCommercial, fmt, mmmYY, ddMmmYY, stageClass, productLabel } from '../utils.js'
+import { canPriceProposal, canViewCommercial, isSalesOwner, fmt, mmmYY, ddMmmYY, stageClass, productLabel } from '../utils.js'
 import { nextActionWith } from '../gates.js'
 import { useDrawer } from '../drawer.jsx'
 import { Icon } from '../icons.jsx'
@@ -18,7 +18,9 @@ export default function MyOpps() {
 
   const role = store.role
   const comm = canPriceProposal(role)
-  const canSeeCommercial = canViewCommercial(role)
+  // Sales owners may see cost and margin for proposal work; org-wide reports
+  // remain protected by canViewCommercial elsewhere.
+  const canSeeCommercial = canViewCommercial(role) || isSalesOwner(role)
   const mine = OWNERS.includes(role)
   // Where the next action sits — derived from the live blockers, overridden by
   // anything typed into the sheet's Next Action Pending Owner column.
@@ -85,7 +87,7 @@ export default function MyOpps() {
             </tbody>
           </table>
         ) : (
-        <table className="sheet">
+        <table className="sheet opportunity-list">
           <thead>
             {/* Exactly the columns Biji listed on 13 Aug. Owner and Updated are
                 deliberately absent: this list is already filtered to one owner,
@@ -104,8 +106,8 @@ export default function MyOpps() {
                 <tr key={o.id} className="rowclick" onClick={() => drawer.open({ type: 'opp', id: o.id })}>
                   <td><b>{o.id}</b></td>
                   <td>{o.sellTo}</td>
-                  <td style={{ maxWidth: 360 }}>
-                    {o.oppName}
+                  <td className="opportunity-cell">
+                    <span className="opportunity-name">{o.oppName}</span>
                     {store.approvals.some(a => a.oppId === o.id && a.status === 'Pending') && <span className="pill Amber" style={{ marginLeft: 6 }}>Approval pending</span>}
                     {dc > 0 && <span className="pill Red" style={{ marginLeft: 6 }}>{dc} deviation{dc > 1 ? 's' : ''}</span>}
                   </td>
