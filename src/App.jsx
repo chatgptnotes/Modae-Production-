@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Routes, Route, NavLink, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from './store.jsx'
 import { ROLES } from './seed.js'
-import { isAdminRole, isApprover, canSeePage } from './utils.js'
+import { isAdminRole, isApprover, isSalesOwner, canSeePage } from './utils.js'
 import { DrawerHost } from './drawer.jsx'
 import { Icon, ModaeLogo } from './icons.jsx'
 import { InstallButton } from './install.jsx'
@@ -25,7 +25,6 @@ import Inbox from './pages/Inbox.jsx'
 import Approvals from './pages/Approvals.jsx'
 import Audit from './pages/Audit.jsx'
 import TabletHome from './pages/TabletHome.jsx'
-import Notes from './pages/Notes.jsx'
 import VoiceUpdate from './pages/VoiceUpdate.jsx'
 import AiMap from './pages/AiMap.jsx'
 import Admin from './pages/Admin.jsx'
@@ -35,6 +34,7 @@ import Workbench from './pages/Workbench.jsx'
 import PurchaseOrders from './pages/PurchaseOrders.jsx'
 import Launcher from './pages/Launcher.jsx'
 import Portal from './pages/Portal.jsx'
+import Opportunities from './pages/Opportunities.jsx'
 
 function PageGate({ page, children }) {
   const store = useStore()
@@ -48,30 +48,26 @@ const NAV = [
   { to: '/home', label: 'Home', icon: 'home', page: 'home' },
   { to: '/my-dashboard', label: 'My Dashboard', icon: 'chartBar', page: 'mydashboard' },
   { to: '/inbox', label: 'Lead Inbox', icon: 'inbox', page: 'inbox', badge: c => c.newLeads, badgeHint: 'new leads to qualify' },
-  { to: '/', label: 'Opportunity Tracker', icon: 'sheet', page: 'tracker' },
-  { to: '/my', label: 'My Opportunities', icon: 'cards', page: 'my' },
-  { to: '/new', label: 'Create Opportunity', icon: 'plus', page: 'new' },
-  { to: '/tender', label: 'Tender → Proposal', icon: 'bot', page: 'tender' },
+  { to: '/opportunities', label: 'Opportunities', icon: 'cards', page: 'tracker' },
   { to: '/approvals', label: 'Approvals', icon: 'checkCircle', page: 'approvals', badge: c => c.forMe + c.myPending, badgeHint: 'gates waiting on you, plus your own requests' },
   { to: '/po', label: 'Purchase Orders', icon: 'clipboardCheck', page: 'po' },
-  { to: '/folders', label: 'Folders', icon: 'folder', page: 'folders' },
-  { to: '/notes', label: 'Marketing Notes', icon: 'note', page: 'notes' },
+  { to: '/folders', label: 'SharePoint Folders', icon: 'folder', page: 'folders' },
   { to: '/pricelists', label: 'Price Lists', icon: 'tag', page: 'pricelists' },
   { to: '/dashboard', label: 'Dashboard', icon: 'chartBar', page: 'dashboard' },
   { to: '/analytics', label: 'Analytics', icon: 'chartLine', page: 'analytics' },
   { to: '/customers', label: 'Customers', icon: 'users', page: 'customers' },
-  { to: '/aimap', label: 'AI & Automation', icon: 'sparkles', page: 'aimap' },
+  { to: '/aimap', label: 'AI & Automation', icon: 'sparkles', page: 'aimap', show: role => isAdminRole(role) || role === 'AH' || role === 'LJS' },
   { to: '/admin', label: 'Admin', icon: 'gear', page: 'admin' },
   { to: '/audit', label: 'Audit Trail', icon: 'list', page: 'audit' },
   { to: '/users', label: 'Users & Roles', icon: 'shield', page: 'users' },
-  { to: '/launcher', label: 'Demo Launcher', icon: 'play', page: 'launcher' },
+  { to: '/launcher', label: 'Demo Launcher', icon: 'play', page: 'launcher', show: role => isAdminRole(role) },
 ]
 
 // App-like bottom tab bar shown in tablet mode — four tabs around a raised
 // centre action (voice update), like a native app.
 // My Dashboard sits directly after Home, matching the sidebar — on a phone the
 // tablet shell renders no sidebar, so without a tab here the page was reachable
-// only by typing the URL. Notes keeps its Home tile.
+// only by typing the URL.
 // The approvals badge counts the gates *this* persona has to decide (`forMe`),
 // not every pending approval in the company.
 const BOTTOM = [
@@ -91,7 +87,9 @@ export default function App() {
   })
   const tablet = store.viewMode === 'tablet'
   const role = store.role
-  const items = NAV.filter(t => canSeePage(role, t.page))
+  const items = NAV
+    .filter(t => canSeePage(role, t.page) && (typeof t.show !== 'function' || t.show(role)))
+    .map(t => t.to === '/po' && isSalesOwner(role) ? { ...t, label: 'My Purchase Orders' } : t)
 
   // Off-canvas nav closes on navigation (tablet).
   useEffect(() => { setNavOpen(false) }, [loc.pathname])
@@ -132,6 +130,7 @@ export default function App() {
   ) : (
     <Routes>
       <Route path="/" element={<PageGate page="tracker"><Tracker /></PageGate>} />
+      <Route path="/opportunities" element={<PageGate page="tracker"><Opportunities /></PageGate>} />
       <Route path="/home" element={<PageGate page="home">{tablet ? <TabletHome /> : <Home />}</PageGate>} />
       <Route path="/my" element={<PageGate page="my"><MyOpps /></PageGate>} />
       <Route path="/inbox" element={<PageGate page="inbox"><Inbox /></PageGate>} />
@@ -158,7 +157,6 @@ export default function App() {
       <Route path="/admin" element={<PageGate page="admin"><Admin /></PageGate>} />
       <Route path="/launcher" element={<PageGate page="launcher"><Launcher /></PageGate>} />
       <Route path="/portal" element={<PageGate page="portal"><Portal /></PageGate>} />
-      <Route path="/notes" element={<PageGate page="notes"><Notes /></PageGate>} />
       <Route path="/voice" element={<PageGate page="voice"><VoiceUpdate /></PageGate>} />
     </Routes>
   )
@@ -260,8 +258,8 @@ export default function App() {
         </nav>
         <div className="side-foot">
           {!custAccount && (
-            <label title="Acting-as persona — commercial data is visible to approvers/admins only">
-              Acting as
+            <label title="Logged-in persona — commercial data is visible to approvers/admins only">
+              Logged in as
               <RoleSwitcher />
             </label>
           )}
@@ -284,8 +282,8 @@ export default function App() {
           <span className="topbar-title">Modae — sales opportunity &amp; proposal workspace</span>
           <span className="spacer" style={{ flex: 1 }} />
           {!custAccount && (
-            <label className="topbar-user" title="Acting-as persona — commercial data is visible to approvers/admins only">
-              Acting as
+            <label className="topbar-user" title="Logged-in persona — commercial data is visible to approvers/admins only">
+              Logged in as
               <RoleSwitcher />
             </label>
           )}

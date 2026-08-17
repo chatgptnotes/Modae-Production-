@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useStore, nextOppId } from '../store.jsx'
-import { OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, routeForType } from '../seed.js'
+import { OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, routeForType, ownerForOppType } from '../seed.js'
 import { Icon } from '../icons.jsx'
 import { ErrBox } from '../ui.jsx'
 import { matchCustomer } from './Inbox.jsx'
@@ -32,7 +32,7 @@ export default function Register() {
 
   // Prefills derived from the AI extraction.
   const ownerFieldV = fields.find(f => /owner/i.test(f.k) && f.state === 'accepted')?.v || ''
-  const suggested = guessFromList(ownerFieldV, OWNERS) || lead?.suggestedOwner || OWNERS[0]
+  const suggested = guessFromList(ownerFieldV, OWNERS) || lead?.suggestedOwner || ownerForOppType(lead?.route === 'Spares' ? 'Spares' : lead?.route === 'Service' ? 'Service' : 'Project')
   const typeV = fieldVal(fields, /opp type/i)
   const buSegV = fieldVal(fields, /bu|segment/i)
   const allText = fields.map(f => f.v).join(' ') + ' ' + (lead?.subject || '')

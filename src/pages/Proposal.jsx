@@ -37,6 +37,12 @@ function normalize(pr, opp) {
   return {
     ...pr,
     proposalType: pr.proposalType || proposalTypeForOpp(opp),
+    route: pr.route || docRoute(pr, opp),
+    artifactSheets: pr.artifactSheets || (docRoute(pr, opp) === 'Project'
+      ? ['Cover Letter', 'Signal List', 'Rack Layout', 'Priced BoQ', 'Compliance Table']
+      : docRoute(pr, opp) === 'Service'
+        ? ['Cover Letter', 'Scope of Work', 'Issues List', 'Proposal', 'Service Rate Schedule']
+        : ['Cover Letter', 'Firm Offer', 'Clarifications', 'Sensor Comparison', 'Priced BoQ']),
     signals,
     bom,
     units,
@@ -365,7 +371,7 @@ export default function Proposal() {
         <div className="ai-notice" style={{ marginBottom: 10 }}>
           <b>{route} proposal route.</b> The printed document uses the short {route.toLowerCase()} section
           set — no signal list or rack layout, and no project front matter. Section wording will be
-          re-cut once the client's own {route.toLowerCase()} sample proposal arrives.
+          based on the supplied {p.templateSource || `${route.toLowerCase()} sample`} structure: {p.artifactSheets.filter(x => !['Cover Letter', 'Priced BoQ'].includes(x)).join(' · ')}.
         </div>
       )}
 

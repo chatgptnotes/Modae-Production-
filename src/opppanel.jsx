@@ -55,6 +55,8 @@ export default function OppPanel({ oppId }) {
   // Same write-through + coupling rules as the tracker grid (Tracker.jsx upd).
   const upd = field => e => {
     let value = e.target.type === 'checkbox' ? e.target.checked : e.target.value
+    if (field === 'invoiceDate' && value && opp.orderDate && value <= opp.orderDate) return
+    if (field === 'orderDate' && value && opp.invoiceDate && value >= opp.invoiceDate) return
     if (field === 'valueK' || field === 'cogsK') value = e.target.value === '' ? 0 : +e.target.value
     const patch = { [field]: value }
     if (field === 'status' && value === 'Open') Object.assign(patch, { closedReason: '', stage: 'Firm Bid' })
@@ -269,8 +271,8 @@ export default function OppPanel({ oppId }) {
         <div className="dgrid2">
           <Field label="Create Date"><div className="ro">{mmmYY(opp.createDate)}</div></Field>
           <Field label="Proposal Date"><div className="ro">{mmmYY(opp.proposalDate) || '—'}</div></Field>
-          <Field label="Expected Order Date *"><input type="date" value={opp.orderDate} onChange={upd('orderDate')} /></Field>
-          <Field label="Expected Ship Date *"><input type="date" value={opp.invoiceDate} onChange={upd('invoiceDate')} /></Field>
+          <Field label="Expected Order Date *"><input type="date" value={opp.orderDate} max={opp.invoiceDate ? new Date(new Date(`${opp.invoiceDate}T00:00:00`).getTime() - 86400000).toISOString().slice(0, 10) : undefined} onChange={upd('orderDate')} /></Field>
+          <Field label="Expected Ship Date *"><input type="date" value={opp.invoiceDate} min={opp.orderDate ? new Date(new Date(`${opp.orderDate}T00:00:00`).getTime() + 86400000).toISOString().slice(0, 10) : undefined} onChange={upd('invoiceDate')} /></Field>
           {/* Where the next action sits — derived from the live blockers unless
               someone has named an owner themselves. */}
           <Field label="Next Action Pending">
@@ -286,7 +288,7 @@ export default function OppPanel({ oppId }) {
         <div className="dgrid2">
           <Field label="Status">
             <select value={opp.status} onChange={upd('status')}>
-              <option>Open</option><option>Closed</option>
+              <option>Open</option><option>On Hold</option><option>Closed</option>
             </select>
           </Field>
           <Field label="Stage">
@@ -315,7 +317,7 @@ export default function OppPanel({ oppId }) {
         <textarea rows={3} value={opp.remarks} onChange={upd('remarks')} />
         <p className="hint">
           <span className={`pill ${stageClass(opp) === 'won' ? 'won' : stageClass(opp) === 'lost' ? 'lost' : 'Blue'}`}>
-            {opp.status === 'Closed' ? opp.stage : `Open — ${opp.stage}`}
+            {opp.status === 'Closed' ? opp.stage : `${opp.status} — ${opp.stage}`}
           </span>{' '}
           Last updated {ddMmmYY(opp.lastUpdated)} · edits save instantly to the sheet.
         </p>

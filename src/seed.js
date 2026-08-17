@@ -3,10 +3,10 @@
 // as shown in the Aug 10 meeting screenshots).
 
 export const CATEGORIES = ['EUC', 'OEM', 'EPC', 'MAC', 'SI', 'ACP', 'RE/TR']
-// Active sales owners available for new assignment. Historical records may
-// still contain retired owner codes (SS/PJS/RJS/SR) and remain readable.
-export const OWNERS = ['PP', 'RS']
-export const OPP_TYPES = ['Project', 'Spares', 'Service', 'Upgrade', 'AMC', 'Training']
+// Active sales owners from the client field list. Historical rows and new
+// enquiries use the same catalogue so ownership remains assignable.
+export const OWNERS = ['LJS', 'PP', 'RS', 'SS', 'PJS', 'RJS', 'SR']
+export const OPP_TYPES = ['Project', 'Spares', 'Service', 'Upgrade', 'Retrofit', 'Flow', 'AMC', 'Training']
 export const BUS = ['Aero', 'Energy', 'Service']
 export const SEGMENTS = ['Thermal', 'Nuclear', 'Hydro', 'Industrial', 'O&G-US', 'O&G-MS', 'O&G-DS', 'Petrochem', 'Test Bed', 'Others']
 // Product options exactly as on the intake form (Wilcoxon/ABB fell in a scroll
@@ -21,7 +21,7 @@ export const STAGES = ['Lead', 'RFI', 'Budgetary', 'RFQ', 'Firm Bid', 'Negotiati
 export const CLOSE_REASONS = [
   'Relationship', 'Unique Product', 'Pedigree', 'Best Price', 'Trade Compliance',
   'Technical Compliance', 'Commercial Compliance', 'Capability', 'Lead Time',
-  'No Bid', 'Abandoned/Delayed', 'Duplicate Opportunity',
+  'No Bid', 'Abandoned/Delayed', 'Duplicate Opportunity', 'Validity Expired', 'Others',
 ]
 // Blue = new customer pending admin verification (per the meeting's
 // green/amber/red/blue qualification rules).
@@ -491,6 +491,10 @@ export const ROLES = {
   AH: { name: 'A. Hameed', label: 'AH — Commercial & Ops Approver', commercial: true },
   RS: { name: 'R. Sundaram', label: 'RS — Sales Owner', commercial: false, sales: true },
   PP: { name: 'P. Prakash', label: 'PP — Sales Owner', commercial: false, sales: true },
+  SS: { name: 'S. Service Owner', label: 'SS — Service Sales Owner', commercial: false, sales: true },
+  PJS: { name: 'P. J. Sales', label: 'PJS — Parts Sales Owner', commercial: false, sales: true },
+  RJS: { name: 'R. J. Sales', label: 'RJS — Flow Sales Owner', commercial: false, sales: true },
+  SR: { name: 'S. R. Sales', label: 'SR — Service Sales Owner', commercial: false, sales: true },
   TECH: { name: 'T. Rao', label: 'TECH — Technical Reviewer', commercial: false },
   CUST: { name: 'Customer contact', label: 'Customer — External portal', commercial: false, external: true },
 }
@@ -498,18 +502,18 @@ export const ROLES = {
 // Page-permission matrix (from the BT prototype's PERMS). Sales owners all get
 // the same set; CUST sees the external portal only.
 const SALES_PAGES = ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders',
-  'proposal', 'analytics', 'customers', 'po', 'aimap', 'launcher', 'notes', 'voice']
+  'proposal', 'analytics', 'customers', 'po', 'aimap', 'launcher', 'voice']
 export const PERMS = {
   SUPER: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'pricelists',
-    'dashboard', 'analytics', 'customers', 'audit', 'users', 'aimap', 'admin', 'po', 'launcher', 'notes', 'voice', 'portal'],
+    'dashboard', 'analytics', 'customers', 'audit', 'users', 'aimap', 'admin', 'po', 'launcher', 'voice', 'portal'],
   ADMIN: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'pricelists',
-    'dashboard', 'analytics', 'customers', 'audit', 'users', 'aimap', 'admin', 'po', 'launcher', 'notes', 'voice'],
+    'dashboard', 'analytics', 'customers', 'audit', 'users', 'aimap', 'admin', 'po', 'launcher', 'voice'],
   LJS: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'pricelists',
-    'dashboard', 'analytics', 'customers', 'audit', 'aimap', 'admin', 'po', 'launcher', 'notes', 'voice', 'portal'],
+    'dashboard', 'analytics', 'customers', 'audit', 'aimap', 'admin', 'po', 'launcher', 'voice', 'portal'],
   AH: ['home', 'mydashboard', 'tracker', 'my', 'approvals', 'folders', 'proposal', 'pricelists', 'dashboard', 'analytics',
-    'customers', 'audit', 'aimap', 'po', 'launcher', 'notes'],
-  RS: SALES_PAGES, PP: SALES_PAGES,
-  TECH: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'proposal', 'approvals', 'aimap', 'launcher', 'notes'],
+    'customers', 'audit', 'aimap', 'po', 'launcher'],
+  RS: SALES_PAGES, PP: SALES_PAGES, SS: SALES_PAGES, PJS: SALES_PAGES, RJS: SALES_PAGES, SR: SALES_PAGES,
+  TECH: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'proposal', 'approvals', 'aimap', 'launcher'],
   CUST: ['portal'],
 }
 
@@ -539,6 +543,15 @@ export function routeForType(oppType) {
   return 'Project'
 }
 
+// Ownership is driven by the opportunity type, while routeForType controls
+// which document workbench is shown. These are intentionally separate rules.
+export function ownerForOppType(oppType) {
+  return {
+    Project: 'LJS', Upgrade: 'PP', Retrofit: 'RS', Service: 'SS',
+    Spares: 'PJS', Flow: 'RJS', AMC: 'SS', Training: 'SS',
+  }[oppType] || 'LJS'
+}
+
 // Proposal template flavour, derived from the same route the workbench uses.
 // Deriving it here rather than re-testing oppType keeps AMC, Training and
 // Upgrade off the heavy project template — they used to fall through to it.
@@ -556,6 +569,10 @@ export const seedUsers = [
   { id: 'U-003', name: 'A. Hameed', email: 'ah@modae.demo', role: 'AH', status: 'Active', created: '2026-04-01', pw: DEMO_PASSWORD },
   { id: 'U-004', name: 'R. Sundaram', email: 'rs@modae.demo', role: 'RS', status: 'Active', created: '2026-04-15', pw: DEMO_PASSWORD },
   { id: 'U-005', name: 'P. Prakash', email: 'pp@modae.demo', role: 'PP', status: 'Active', created: '2026-04-15', pw: DEMO_PASSWORD },
+  { id: 'U-009', name: 'S. Service Owner', email: 'ss@modae.demo', role: 'SS', status: 'Active', created: '2026-08-17', pw: DEMO_PASSWORD },
+  { id: 'U-010', name: 'P. J. Sales', email: 'pjs@modae.demo', role: 'PJS', status: 'Active', created: '2026-08-17', pw: DEMO_PASSWORD },
+  { id: 'U-011', name: 'R. J. Sales', email: 'rjs@modae.demo', role: 'RJS', status: 'Active', created: '2026-08-17', pw: DEMO_PASSWORD },
+  { id: 'U-012', name: 'S. R. Sales', email: 'sr@modae.demo', role: 'SR', status: 'Active', created: '2026-08-17', pw: DEMO_PASSWORD },
   { id: 'U-007', name: 'T. Rao', email: 'tech@modae.demo', role: 'TECH', status: 'Active', created: '2026-08-01', pw: DEMO_PASSWORD },
   { id: 'U-008', name: 'Customer contact', email: 'customer@portal.demo', role: 'CUST', status: 'Active', created: '2026-08-01', pw: DEMO_PASSWORD },
 ]
@@ -911,9 +928,18 @@ export const defaultCosting = {
 }
 
 export function newProposal(oppId, opp) {
+  const route = routeForType(opp?.oppType)
+  const artifactSheets = route === 'Project'
+    ? ['Cover Letter', 'Signal List', 'Rack Layout', 'Priced BoQ', 'Compliance Table']
+    : route === 'Service'
+      ? ['Cover Letter', 'Scope of Work', 'Issues List', 'Proposal', 'Service Rate Schedule']
+      : ['Cover Letter', 'Firm Offer', 'Clarifications', 'Sensor Comparison', 'Priced BoQ']
   return {
     oppId,
     proposalType: proposalTypeForOpp(opp),
+    route,
+    artifactSheets,
+    templateSource: route === 'Project' ? 'Project proposal workbook' : route === 'Service' ? 'Service proposal and SOW' : 'Spares firm offer and comparison',
     ourRef: oppId,
     bidStage: 'Binding',
     bidType: 'Priced',
@@ -1161,18 +1187,6 @@ export function buildHandover() {
   }
 }
 export const seedHandover = {}
-
-// Shared marketing notes board — every role can read and post.
-export const seedNotes = [
-  {
-    id: 'N-1', ts: '2026-08-10T10:30:00Z', role: 'PP', author: 'P. Prakash',
-    text: 'APGENCO Srisailam site visit done — customer keen on air-gap monitoring for all 7 units. Budget approval expected Sept. Follow up with signal list.',
-  },
-  {
-    id: 'N-2', ts: '2026-08-11T07:15:00Z', role: 'LJS', author: 'L. J. Swaminathan',
-    text: 'Reminder: all Gandikota PSP communications go through Andritz Mandideep, not Adani directly. Bid due 11 Aug — priority.',
-  },
-]
 
 // ---------------------------------------------------------------------------
 // AI-parsed leads modeled on the client's REAL sample emails (modae doc/*.eml,

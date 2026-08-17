@@ -76,7 +76,7 @@ function Input({ field, type = 'text', placeholder, list }) {
   )
 }
 
-export default function IntakeForm() {
+export default function IntakeForm({ destinationPicker = null }) {
   const store = useStore()
   const nav = useNavigate()
   const fileInputRef = useRef(null)
@@ -404,6 +404,8 @@ export default function IntakeForm() {
                 <button type="button" onClick={removeUploadedFile} className="remove-file">Remove</button>
               </div>
             )}
+
+            {destinationPicker}
 
             {aiError && (
               <div className="ai-error">

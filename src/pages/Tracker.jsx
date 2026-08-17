@@ -43,7 +43,7 @@ export const COLS = [
   { key: 'lastUpdated', letter: 'AD', label: 'Last Updated' },
   { key: 'forecast', letter: 'AE', label: 'Forecast' },
   { key: 'remarks', letter: 'AF', label: 'Update/Remarks' },
-  { key: 'nextActionOwner', letter: 'AG', label: 'Next Action Pending Owner' },
+  { key: 'nextActionOwner', letter: 'AG', label: 'Next Action' },
 ]
 
 // The columns a sales owner actually works from, in Biji's words on 13 Aug:
@@ -51,7 +51,7 @@ export const COLS = [
 // value, value and expected order date… and I should know where is the next
 // action pending." He was explicit that Opportunity Owner and Updated are not
 // required — a rep filtered to their own rows already knows the owner.
-const KEY_COLS = ['id', 'sellTo', 'oppName', 'stage', 'prob', 'valueK', 'orderDate', 'nextActionOwner']
+const KEY_COLS = ['id', 'sellTo', 'oppName', 'stage', 'oppType', 'prob', 'valueK', 'orderDate', 'nextActionOwner']
 
 // Hiding a spreadsheet column means hiding the header and the matching cell in
 // every row. The cells are written out in COLS order, so one generated rule per
@@ -166,6 +166,9 @@ export default function Tracker() {
 
   const upd = (id, field) => e => {
     let value = e.target.type === 'checkbox' ? e.target.checked : e.target.value
+    const current = store.opportunities.find(o => o.id === id)
+    if (field === 'invoiceDate' && value && current?.orderDate && value <= current.orderDate) return
+    if (field === 'orderDate' && value && current?.invoiceDate && value >= current.invoiceDate) return
     // Numeric columns must store numbers — a string "0" is truthy and breaks
     // the GM% #DIV/0! branch (and the proposal-writeback equality guard).
     if (field === 'valueK' || field === 'cogsK') value = e.target.value === '' ? 0 : +e.target.value
@@ -412,15 +415,15 @@ export default function Tracker() {
                     "he has to put some date. It can be wrong, but he has to put some date." */}
                 <td onClick={selectCell(o, COLS[20])}
                   className={`${isSel(o, COLS[20]) ? 'cell-sel ' : ''}${o.status === 'Open' && !o.orderDate ? 'need' : ''}`.trim()}>
-                  <input type="date" value={o.orderDate} onChange={upd(o.id, 'orderDate')} style={{ width: 108 }}
+                  <input type="date" value={o.orderDate} max={o.invoiceDate ? new Date(new Date(`${o.invoiceDate}T00:00:00`).getTime() - 86400000).toISOString().slice(0, 10) : undefined} onChange={upd(o.id, 'orderDate')} style={{ width: 108 }}
                     title={o.orderDate ? '' : 'Expected order date is required on an open opportunity'} /></td>
                 <td onClick={selectCell(o, COLS[21])}
                   className={`${isSel(o, COLS[21]) ? 'cell-sel ' : ''}${o.status === 'Open' && !o.invoiceDate ? 'need' : ''}`.trim()}>
-                  <input type="date" value={o.invoiceDate} onChange={upd(o.id, 'invoiceDate')} style={{ width: 108 }}
+                  <input type="date" value={o.invoiceDate} min={o.orderDate ? new Date(new Date(`${o.orderDate}T00:00:00`).getTime() + 86400000).toISOString().slice(0, 10) : undefined} onChange={upd(o.id, 'invoiceDate')} style={{ width: 108 }}
                     title={o.invoiceDate ? '' : 'Expected ship date is required on an open opportunity'} /></td>
                 <td onClick={selectCell(o, COLS[22])} className={isSel(o, COLS[22]) ? 'cell-sel' : ''}>
                   <select value={o.status} onChange={upd(o.id, 'status')}>
-                    <option>Open</option><option>Closed</option>
+                    <option>Open</option><option>On Hold</option><option>Closed</option>
                   </select>
                 </td>
                 <td onClick={selectCell(o, COLS[23])} className={isSel(o, COLS[23]) ? 'cell-sel' : ''}>

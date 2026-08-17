@@ -43,7 +43,6 @@ export default function TabletHome() {
     { icon: 'inbox', to: '/inbox', title: 'Lead inbox' },
     { icon: 'mic', to: '/voice', title: 'Voice update' },
     { icon: 'checkCircle', to: '/approvals', title: 'Approvals' },
-    { icon: 'note', to: '/notes', title: 'Marketing notes' },
     { icon: 'folder', to: '/folders', title: 'Files & folders' },
   ]
 

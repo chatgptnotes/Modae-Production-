@@ -11,7 +11,7 @@ const ASSIGNABLE = Object.keys(ROLES).filter(r => r !== 'SUPER')
 // Page keys shown in the permissions matrix, in navigation order.
 const PAGE_KEYS = ['home', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders',
   'pricelists', 'dashboard', 'analytics', 'customers', 'po', 'aimap', 'admin', 'audit', 'users',
-  'launcher', 'notes', 'voice', 'portal']
+  'launcher', 'voice', 'portal']
 
 export default function Users() {
   const store = useStore()

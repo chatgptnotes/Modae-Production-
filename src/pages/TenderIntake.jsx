@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useStore, nextOppId } from '../store.jsx'
 import { CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS } from '../seed.js'
@@ -66,7 +66,7 @@ function mergeAi(p, ai) {
   p.aiNotes = ai.notes || []
 }
 
-export default function TenderIntake() {
+export default function TenderIntake({ fixedTarget = null, destinationPicker = null }) {
   const store = useStore()
   const nav = useNavigate()
 
@@ -74,7 +74,7 @@ export default function TenderIntake() {
   const [error, setError] = useState(null)
   const [stage, setStage] = useState(0)
   const [file, setFile] = useState(null)
-  const [target, setTarget] = useState('new')    // 'new' | existing opp id
+  const [target, setTarget] = useState(fixedTarget || 'new')    // 'new' | existing opp id
   const [parse, setParse] = useState(null)
   const [items, setItems] = useState([])         // editable copies of parsed items
   const [include, setInclude] = useState([])
@@ -89,6 +89,11 @@ export default function TenderIntake() {
   const [doneStats, setDoneStats] = useState({ lines: 0, adhoc: 0 })
   const fileInput = useRef(null)
   const [drag, setDrag] = useState(false)
+
+  useEffect(() => {
+    setTarget(fixedTarget || 'new')
+    setReplaceArmed(false)
+  }, [fixedTarget])
 
   const allParts = useMemo(() => [
     ...Object.entries(store.priceLists).flatMap(([list, pl]) =>
@@ -268,7 +273,8 @@ export default function TenderIntake() {
             <b>Drop the tender / RFQ PDF here</b>
             <div className="hint">or tap to choose a file</div>
           </div>
-          <div className="form-card" style={{ marginTop: 12, maxWidth: 560 }}>
+          {destinationPicker}
+          {!fixedTarget && <div className="form-card" style={{ marginTop: 12, maxWidth: 560 }}>
             <div className="section-title">Where should the extracted proposal go?</div>
             <label className="radio-row">
               <input type="radio" checked={target === 'new'} onChange={() => setTarget('new')} />
@@ -287,7 +293,7 @@ export default function TenderIntake() {
               AI reads the document, extracts line items and commercial terms, checks them against ModAE standards —
               and you confirm every field before anything is created.
             </div>
-          </div>
+          </div>}
         </>
       )}
 

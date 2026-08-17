@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 import { AI_MAP } from '../src/aimapData.js'
 import { parseTender } from '../src/tenderParse.js'
-import { newProposal, PERMS, ROLES, seedAiLeads, seedOpportunities } from '../src/seed.js'
+import { newProposal, PERMS, ROLES, OWNERS, ownerForOppType, seedAiLeads, seedOpportunities } from '../src/seed.js'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
@@ -41,6 +41,31 @@ test('proposal type defaults follow the opportunity route', () => {
   assert.equal(newProposal('V', { oppType: 'Service' }).proposalType, 'Services')
 })
 
+test('client owner catalogue and type routing are complete', () => {
+  assert.deepEqual(OWNERS, ['LJS', 'PP', 'RS', 'SS', 'PJS', 'RJS', 'SR'])
+  assert.equal(ownerForOppType('Project'), 'LJS')
+  assert.equal(ownerForOppType('Upgrade'), 'PP')
+  assert.equal(ownerForOppType('Retrofit'), 'RS')
+  assert.equal(ownerForOppType('Service'), 'SS')
+  assert.equal(ownerForOppType('Spares'), 'PJS')
+  assert.equal(ownerForOppType('Flow'), 'RJS')
+  assert.equal(ownerForOppType('Unknown'), 'LJS')
+  for (const owner of OWNERS) assert.ok(ROLES[owner], `${owner} must be a configured role`)
+  for (const owner of OWNERS.filter(owner => owner !== 'LJS')) assert.equal(ROLES[owner].sales, true, `${owner} must be a sales role`)
+})
+
+test('proposal records the supplied route-specific artifact set', () => {
+  assert.deepEqual(newProposal('P', { oppType: 'Project' }).artifactSheets, [
+    'Cover Letter', 'Signal List', 'Rack Layout', 'Priced BoQ', 'Compliance Table',
+  ])
+  assert.deepEqual(newProposal('V', { oppType: 'Service' }).artifactSheets, [
+    'Cover Letter', 'Scope of Work', 'Issues List', 'Proposal', 'Service Rate Schedule',
+  ])
+  assert.deepEqual(newProposal('S', { oppType: 'Spares' }).artifactSheets, [
+    'Cover Letter', 'Firm Offer', 'Clarifications', 'Sensor Comparison', 'Priced BoQ',
+  ])
+})
+
 test('tender extraction reports RFQ number/date and missing fields', () => {
   const parsed = parseTender([
     'Request for Quotation',
@@ -69,7 +94,7 @@ test('dashboard and Phase 1 UI wiring are present', () => {
   assert.match(inbox, /Reassign/)
   assert.match(tracker, /Expected Order Date/)
   assert.match(tracker, /Expected Ship Date/)
-  assert.match(tracker, /Next Action Pending Owner/)
+  assert.match(tracker, /Next Action/)
 })
 
 test('PWA metadata and service worker registration are configured', () => {

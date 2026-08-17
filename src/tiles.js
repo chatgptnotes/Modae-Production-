@@ -20,35 +20,31 @@ export function buildTiles(store) {
 
   return [
     { key: 'mydashboard', page: 'mydashboard', icon: 'chartBar', label: 'My Dashboard', hint: 'Your targets, blockers and next actions', to: '/my-dashboard', color: 'sky' },
-    { key: 'new', page: 'new', icon: 'plus', label: 'Create Opportunity', hint: 'Register a sales opportunity', to: '/new', color: 'teal' },
-    { key: 'my', page: 'my', icon: 'cards', label: 'My Opportunities', hint: 'Your pipeline as cards', to: '/my', color: 'navy', badge: approver ? 0 : c.myStale, badgeHint: 'your opportunities needing an update' },
+    { key: 'opportunities', page: 'tracker', icon: 'cards', label: 'Opportunities', hint: 'My pipeline and opportunity creation workspace', to: '/opportunities', color: 'navy', badge: approver ? 0 : c.myStale, badgeHint: 'your opportunities needing an update' },
     { key: 'inbox', page: 'inbox', icon: 'inbox', label: 'Lead Inbox', hint: 'AI-parsed incoming inquiries', to: '/inbox', color: 'sky', badge: c.newLeads, badgeHint: 'new leads to qualify' },
     { key: 'status', page: 'my', icon: 'clock', label: 'Update Status', hint: 'Opportunities not updated in 30+ days', to: '/my', color: 'amber', badge: approver ? c.stale : c.myStale, badgeHint: 'stale opportunities' },
     { key: 'voice', page: 'voice', icon: 'mic', label: 'Voice Update', hint: 'Speak a lead or status update', to: '/voice', color: 'wine' },
-    { key: 'notes', page: 'notes', icon: 'note', label: 'Marketing Notes', hint: 'Shared board — everyone can post', to: '/notes', color: 'rust', },
     { key: 'approvals', page: 'approvals', icon: 'checkCircle', label: approver ? 'Approvals' : 'My Approvals', hint: 'Gates, clearances, conditions', to: '/approvals', color: 'green', badge: approver ? c.pending + c.openConditions : c.myPending, badgeHint: 'pending decisions + unconfirmed conditions' },
-    { key: 'tender', page: 'tender', icon: 'bot', label: 'Tender → Proposal', hint: 'Upload an RFQ PDF, AI extracts it', to: '/tender', color: 'purple' },
-    { key: 'tracker', page: 'tracker', icon: 'sheet', label: 'All Opportunities', hint: 'The pipeline sheet', to: '/', color: 'slate' },
-    { key: 'folders', page: 'folders', icon: 'folder', label: 'Files & Folders', hint: 'SharePoint-backed opportunity folders', to: '/folders', color: 'teal' },
-    { key: 'po', page: 'po', icon: 'clipboardCheck', label: 'Purchase Orders', hint: 'PO validation & booked orders', to: '/po', color: 'navy', badge: approver ? c.poReview : 0, badgeHint: 'POs in validation' },
-    { key: 'aimap', page: 'aimap', icon: 'sparkles', label: 'AI & Automation', hint: '28 AI interventions, live demos', to: '/aimap', color: 'purple' },
+    { key: 'folders', page: 'folders', icon: 'folder', label: 'SharePoint Folders', hint: 'SharePoint-backed opportunity folders', to: '/folders', color: 'teal' },
+    { key: 'po', page: 'po', icon: 'clipboardCheck', label: isSalesOwner(role) ? 'My Purchase Orders' : 'Purchase Orders', hint: 'PO validation & booked orders', to: '/po', color: 'navy', badge: approver ? c.poReview : 0, badgeHint: 'POs in validation' },
+    { key: 'aimap', page: 'aimap', icon: 'sparkles', label: 'AI & Automation', hint: '28 AI interventions, live demos', to: '/aimap', color: 'purple', show: admin || role === 'AH' || role === 'LJS' },
     { key: 'dashboard', page: 'dashboard', icon: 'chartBar', label: 'Pivot / Forecast', hint: 'Order intake by month', to: '/dashboard', color: 'green', show: comm },
     { key: 'analytics', page: 'analytics', icon: 'chartLine', label: 'Analytics', hint: 'Funnel, targets, win/loss', to: '/analytics', color: 'sky' },
     { key: 'pricelists', page: 'pricelists', icon: 'tag', label: 'Price Lists', hint: 'B&K · Metrix · ad-hoc quotes', to: '/pricelists', color: 'amber', show: comm },
     { key: 'customers', page: 'customers', icon: 'users', label: 'Customers', hint: 'Master + Green/Blue/Amber/Red', to: '/customers', color: 'rust' },
-    { key: 'launcher', page: 'launcher', icon: 'play', label: 'Demo Launcher', hint: 'Guided demo scenarios', to: '/launcher', color: 'slate' },
+    { key: 'launcher', page: 'launcher', icon: 'play', label: 'Demo Launcher', hint: 'Guided demo scenarios', to: '/launcher', color: 'slate', show: admin },
     { key: 'admin', page: 'admin', icon: 'gear', label: 'Admin', hint: 'Rules, AI model, SharePoint, uploads', to: '/admin', color: 'wine', show: admin || role === 'LJS' },
     { key: 'audit', page: 'audit', icon: 'list', label: 'Audit Trail', hint: 'Who changed what, when', to: '/audit', color: 'slate', show: admin },
     { key: 'users', page: 'users', icon: 'shield', label: 'Users & Roles', hint: 'Accounts, registrations, permissions', to: '/users', color: 'navy', show: admin },
-  ].filter(t => t.show !== false && canSeePage(role, t.page))
+  ].filter(t => t.show !== false && (!('show' in t) || t.show === true) && canSeePage(role, t.page))
 }
 
 // Task ordering on the tablet landing, per role group — the tasks the user
 // actually has to do come first.
 export const TABLET_TASKS = {
-  sales: ['mydashboard', 'new', 'my', 'inbox', 'status', 'voice', 'notes', 'approvals'],
-  approver: ['mydashboard', 'approvals', 'inbox', 'po', 'tracker', 'my', 'status', 'notes'],
-  admin: ['mydashboard', 'approvals', 'inbox', 'users', 'admin', 'audit', 'notes', 'po'],
+  sales: ['mydashboard', 'opportunities', 'inbox', 'status', 'voice', 'approvals'],
+  approver: ['mydashboard', 'approvals', 'inbox', 'po', 'opportunities', 'status'],
+  admin: ['mydashboard', 'approvals', 'inbox', 'users', 'admin', 'audit', 'po', 'opportunities'],
 }
 
 // Grouped sections for the tablet command deck. `kpis` names the feature
@@ -56,25 +52,25 @@ export const TABLET_TASKS = {
 // a trailing "More tools" group, so the registry can grow safely.
 export const TABLET_SECTIONS = {
   sales: [
-    { title: 'Sales operations', kpis: ['command', 'turnaround'], keys: ['mydashboard', 'new', 'inbox', 'my', 'status', 'voice', 'notes'] },
-    { title: 'Pipeline & proposals', kpis: ['pipeline', 'winrate'], keys: ['tracker', 'tender', 'approvals', 'po', 'folders'] },
+    { title: 'Sales operations', kpis: ['command', 'turnaround'], keys: ['mydashboard', 'opportunities', 'inbox', 'status', 'voice'] },
+    { title: 'Pipeline & proposals', kpis: ['pipeline', 'winrate'], keys: ['opportunities', 'approvals', 'po', 'folders'] },
     { title: 'Intelligence', kpis: [], keys: ['aimap', 'analytics', 'customers', 'launcher'] },
   ],
   approver: [
-    { title: 'Decisions & gates', kpis: ['command'], keys: ['mydashboard', 'new', 'approvals', 'po', 'inbox'] },
-    { title: 'Pipeline health', kpis: ['pipeline', 'winrate', 'turnaround'], keys: ['tracker', 'my', 'status', 'dashboard', 'folders'] },
-    { title: 'Intelligence & audit', kpis: [], keys: ['analytics', 'aimap', 'customers', 'audit', 'notes', 'launcher'] },
+    { title: 'Decisions & gates', kpis: ['command'], keys: ['mydashboard', 'opportunities', 'approvals', 'po', 'inbox'] },
+    { title: 'Pipeline health', kpis: ['pipeline', 'winrate', 'turnaround'], keys: ['opportunities', 'status', 'dashboard', 'folders'] },
+    { title: 'Intelligence & audit', kpis: [], keys: ['analytics', 'aimap', 'customers', 'audit', 'launcher'] },
   ],
   admin: [
-    { title: 'Platform', kpis: ['command'], keys: ['mydashboard', 'new', 'users', 'admin', 'audit'] },
-    { title: 'Operations', kpis: ['pipeline', 'winrate', 'turnaround'], keys: ['my', 'inbox', 'approvals', 'po', 'tracker', 'folders'] },
-    { title: 'Intelligence', kpis: [], keys: ['aimap', 'analytics', 'dashboard', 'pricelists', 'launcher', 'notes'] },
+    { title: 'Platform', kpis: ['command'], keys: ['mydashboard', 'opportunities', 'users', 'admin', 'audit'] },
+    { title: 'Operations', kpis: ['pipeline', 'winrate', 'turnaround'], keys: ['opportunities', 'inbox', 'approvals', 'po', 'folders'] },
+    { title: 'Intelligence', kpis: [], keys: ['aimap', 'analytics', 'dashboard', 'pricelists', 'launcher'] },
   ],
 }
 
 // Desktop Home groups the tool wall into labelled columns.
 export const HOME_GROUPS = [
-  { title: 'Sales & opportunities', keys: ['mydashboard', 'new', 'my', 'status', 'voice', 'notes', 'approvals'] },
-  { title: 'Document flow', keys: ['genprop', 'tender', 'inbox', 'tracker', 'folders', 'po'] },
+  { title: 'Sales & opportunities', keys: ['mydashboard', 'opportunities', 'status', 'voice', 'approvals'] },
+  { title: 'Document flow', keys: ['inbox', 'folders', 'po'] },
   { title: 'Insights & AI', keys: ['aimap', 'analytics', 'dashboard', 'customers', 'pricelists', 'users', 'admin', 'audit', 'launcher'] },
 ]

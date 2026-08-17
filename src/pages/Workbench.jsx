@@ -234,9 +234,7 @@ function OverviewTab({ opp, goTab }) {
   ]
 
   const saveAction = () => {
-    if (action === 'note' && actionText.trim()) {
-      store.addNote(`${opp.id} — ${actionText.trim()}`)
-    } else if (action === 'call') {
+    if (action === 'call') {
       store.addCommunication(opp.id, {
         to: opp.contactPerson || opp.sellTo,
         subject: `Call recorded — ${opp.oppName}`,
@@ -259,7 +257,6 @@ function OverviewTab({ opp, goTab }) {
           <strong>{nextAction.text || NEXT_ACTION[opp.milestone] || 'Progress the opportunity'}</strong>
           <p className="hint">Due {ddMmmYY(opp.orderDate || opp.lastUpdated) || '—'}</p>
           <div className="workbench-actions">
-            <button onClick={() => openAction('note')}><Icon name="note" size={13} /> Add note</button>
             <button onClick={() => goTab('clarifications')}><Icon name="mail" size={13} /> Create clarification</button>
             <button className="primary" onClick={() => nav(`/proposal/${opp.id}`)}><Icon name="fileSheet" size={13} /> Open workbench</button>
             <button onClick={() => goTab('approvals')}><Icon name="checkCircle" size={13} /> Request approval</button>
@@ -310,11 +307,11 @@ function OverviewTab({ opp, goTab }) {
       </div>
 
       {action && (
-        <Modal title={action === 'note' ? 'Add opportunity note' : action === 'call' ? 'Record customer call' : 'Change opportunity owner'} onClose={() => setAction(null)}>
+        <Modal title={action === 'call' ? 'Record customer call' : 'Change opportunity owner'} onClose={() => setAction(null)}>
           {action === 'owner' ? (
             <label>New owner<select value={owner} onChange={e => setOwner(e.target.value)}>{OWNERS.map(r => <option key={r} value={r}>{r} — {ROLES[r]?.name || r}</option>)}</select></label>
           ) : (
-            <label>Details<textarea rows={4} value={actionText} onChange={e => setActionText(e.target.value)} placeholder={action === 'note' ? 'What should the team know?' : 'Summarise the call and next commitment.'} /></label>
+            <label>Details<textarea rows={4} value={actionText} onChange={e => setActionText(e.target.value)} placeholder="Summarise the call and next commitment." /></label>
           )}
           <div className="forms-actions"><button className="primary" disabled={action !== 'owner' && !actionText.trim()} onClick={saveAction}>Save</button><button onClick={() => setAction(null)}>Cancel</button></div>
         </Modal>

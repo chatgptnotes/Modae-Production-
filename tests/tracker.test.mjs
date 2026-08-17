@@ -27,7 +27,7 @@ test('the key-column set is exactly the columns the client asked for', () => {
   const m = tracker.match(/const KEY_COLS = \[([^\]]*)\]/)
   assert.ok(m, 'KEY_COLS must exist')
   const keys = m[1].split(',').map(s => s.trim().replace(/'/g, '')).filter(Boolean)
-  assert.deepEqual(keys, ['id', 'sellTo', 'oppName', 'stage', 'prob', 'valueK', 'orderDate', 'nextActionOwner'])
+  assert.deepEqual(keys, ['id', 'sellTo', 'oppName', 'stage', 'oppType', 'prob', 'valueK', 'orderDate', 'nextActionOwner'])
   assert.ok(!keys.includes('owner'), 'Owner is not required for a sales owner')
   assert.ok(!keys.includes('lastUpdated'), 'Updated is not required for a sales owner')
 })
@@ -40,7 +40,7 @@ test('sales owners open on the key columns, everyone else on the full sheet', ()
 })
 
 test('My Opportunities shows the same working columns', () => {
-  assert.match(myOpps, /<th>Expected Order Date<\/th><th>Next Action Pending<\/th>/)
+  assert.match(myOpps, /<th>Expected Order Date<\/th><th>Next Action<\/th>/)
   assert.doesNotMatch(myOpps, /<th>Owner<\/th>/)
   assert.doesNotMatch(myOpps, /<th>Updated<\/th>/)
 })

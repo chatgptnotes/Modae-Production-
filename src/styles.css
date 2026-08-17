@@ -191,10 +191,11 @@ table.sheet tfoot td { font-weight: 700; background: var(--primary-soft); }
 .opportunity-list th:nth-child(2), .opportunity-list td:nth-child(2) { width: 270px; }
 .opportunity-list th:nth-child(3), .opportunity-list td:nth-child(3) { width: auto; }
 .opportunity-list th:nth-child(4), .opportunity-list td:nth-child(4) { width: 132px; }
-.opportunity-list th:nth-child(5), .opportunity-list td:nth-child(5) { width: 92px; }
-.opportunity-list th:nth-child(6), .opportunity-list td:nth-child(6) { width: 100px; }
-.opportunity-list th:nth-child(7), .opportunity-list td:nth-child(7) { width: 208px; }
-.opportunity-list th:nth-child(8), .opportunity-list td:nth-child(8) { width: 190px; }
+.opportunity-list th:nth-child(5), .opportunity-list td:nth-child(5) { width: 90px; }
+.opportunity-list th:nth-child(6), .opportunity-list td:nth-child(6) { width: 78px; }
+.opportunity-list th:nth-child(7), .opportunity-list td:nth-child(7) { width: 100px; }
+.opportunity-list th:nth-child(8), .opportunity-list td:nth-child(8) { width: 208px; }
+.opportunity-list th:nth-child(9), .opportunity-list td:nth-child(9) { width: 190px; }
 .opportunity-list td { overflow: hidden; text-overflow: ellipsis; }
 .opportunity-list .opportunity-cell { display: flex; align-items: center; min-width: 0; gap: 6px; }
 .opportunity-list .opportunity-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -220,6 +221,31 @@ table.sheet td.internal { background: var(--border-soft) !important; color: var(
   background: #e8eef6; cursor: pointer; font-size: 12px; margin-right: 2px; color: #334155;
 }
 .sheet-tabs .tab.active { background: #fff; font-weight: 700; color: var(--xl-green-dark); box-shadow: inset 0 2px 0 var(--xl-green); }
+
+/* Combined Opportunities workspace */
+.opportunities-head { display: flex; align-items: flex-start; gap: 18px; justify-content: space-between; margin-bottom: 14px; }
+.opportunities-head h2 { margin: 3px 0 2px; }
+.opportunities-head .hint { margin: 0; max-width: 620px; }
+.opportunities-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.opportunities-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--grid-line); margin: 0 0 12px; overflow-x: auto; }
+.opportunities-tabs button { border: 1px solid transparent; border-bottom: 0; border-radius: 5px 5px 0 0; background: transparent; color: var(--text-muted); white-space: nowrap; }
+.opportunities-tabs button.active { background: #fff; border-color: var(--grid-line); color: var(--xl-green-dark); font-weight: 700; box-shadow: inset 0 2px 0 var(--xl-green); }
+.opportunities-tabs button svg, .opportunities-actions button svg { vertical-align: -2px; margin-right: 4px; }
+.opportunities-page > .page { padding: 0; }
+.create-opportunity-workspace { margin-top: 4px; }
+.destination-picker { background: #fff; border: 1px solid var(--grid-line); border-radius: 6px; padding: 12px 14px; margin-bottom: 12px; }
+.destination-options { display: flex; gap: 10px; flex-wrap: wrap; }
+.destination-option { display: flex; align-items: flex-start; gap: 8px; flex: 1 1 290px; border: 1px solid var(--grid-line); border-radius: 5px; padding: 10px; cursor: pointer; background: #f8fafc; }
+.destination-option.selected { border-color: var(--primary-accent); background: var(--primary-soft); }
+.destination-option input { margin-top: 3px; }
+.destination-option span { display: grid; gap: 3px; }
+.destination-option small { color: var(--text-muted); }
+.destination-target { display: grid; gap: 4px; max-width: 760px; margin-top: 10px; }
+.destination-target select { width: 100%; }
+@media (max-width: 700px) {
+  .opportunities-head { display: block; }
+  .opportunities-actions { justify-content: flex-start; margin-top: 10px; }
+}
 
 /* OneDrive-style folder wall */
 .folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
@@ -1300,13 +1326,6 @@ button.install:hover { background: var(--primary-hover); }
 .install-banner .ib-close:hover { color: var(--text-main); }
 .install-banner .ib-steps { font-size: 12px; color: var(--text-main); margin-top: 9px; line-height: 1.4; }
 
-/* Notes board */
-.note-card { background: #fffbe8; border: 1px solid #e8dc9a; border-radius: 4px; padding: 10px 14px; margin-bottom: 10px; max-width: 760px; }
-.note-meta { font-size: 11px; color: #8a7a2f; margin-bottom: 4px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
-.note-text { font-size: 13px; white-space: pre-wrap; }
-.note-compose { max-width: 760px; margin-bottom: 16px; }
-.note-compose textarea { width: 100%; min-height: 74px; }
-
 /* Voice update */
 .voice-wrap { max-width: 640px; }
 .voice-mic { width: 108px; height: 108px; border-radius: 50%; border: none; background: var(--xl-green); color: #fff; display: flex; align-items: center; justify-content: center; margin: 18px auto; cursor: pointer; box-shadow: 0 4px 18px rgba(33,115,70,.4); }
@@ -2373,6 +2392,97 @@ button.linklike:hover { text-decoration: underline; }
    the page itself must never scroll sideways. Without this a single nowrap
    element in the tablet bar dragged the whole document with it at 390px. */
 html, body { overflow-x: hidden; max-width: 100%; }
+
+/* Create Opportunity workspace: use the full main panel without allowing
+   nested form content to create a page-level horizontal scrollbar. */
+.opportunities-page,
+.opportunities-page .create-opportunity-workspace,
+.opportunities-page .forms-bg,
+.opportunities-page .forms-card {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.opportunities-page .create-opportunity-workspace {
+  margin-top: 4px;
+  overflow-x: clip;
+}
+
+.opportunities-page .forms-bg {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.opportunities-page .forms-card.wide {
+  width: min(100%, 1520px);
+  max-width: 1520px;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: clamp(18px, 2.2vw, 32px);
+  padding-right: clamp(18px, 2.2vw, 32px);
+  overflow-x: clip;
+}
+
+.opportunities-page .forms-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-width: 0;
+}
+
+.opportunities-page .forms-col,
+.opportunities-page .q,
+.opportunities-page .destination-picker,
+.opportunities-page .document-upload-zone,
+.opportunities-page .progress-indicator {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.opportunities-page .q input,
+.opportunities-page .q select,
+.opportunities-page .q textarea,
+.opportunities-page .destination-target select {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.opportunities-page .chip-group,
+.opportunities-page .pill-group,
+.opportunities-page .destination-options {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.opportunities-page .destination-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.opportunities-page .destination-option {
+  min-width: 0;
+}
+
+@media (max-width: 1180px) {
+  .opportunities-page .forms-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .opportunities-page .forms-grid,
+  .opportunities-page .destination-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .opportunities-page .forms-card.wide {
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}
 
 /* The tablet bar carries brand + two bells + connection chip + install + theme
    + role select + two mode buttons. That never fit on a phone in one nowrap

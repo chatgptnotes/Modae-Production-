@@ -7,7 +7,7 @@ import {
   seedRateSheet, seedCustomers, seedUsers, seedLeads, seedApprovals,
   seedConfig, seedKyc, seedSales, seedSparesLines, seedSparesAlternatives,
   seedRateSheets, seedSvcEstimates, seedClarifications, seedHandover,
-  seedNotes, seedAiLeads, seedJointApprovals, seedCatalogRev,
+  seedAiLeads, seedJointApprovals, seedCatalogRev,
   seedPoCompare, buildPoCompare, buildHandover, milestoneForStage, routeForType,
   ROLES, SUBFOLDERS, newProposal,
 } from './seed.js'
@@ -25,9 +25,6 @@ const defaultViewMode = () => (typeof window !== 'undefined' && window.innerWidt
 // never reseeds over the user's data.
 function migrate(s) {
   if (!Array.isArray(s.users)) s.users = seedUsers
-  // Retire personas removed from the active role catalogue. Historical
-  // opportunity/order owner codes are intentionally left untouched.
-  s.users = s.users.filter(u => !['SS', 'PJS', 'RJS', 'SR'].includes(u.role))
   s.users = s.users.map(u => (u.pw ? u : { ...u, pw: 'Demo@1234' }))
   // Backfill new seed accounts (TECH/CUST) by email; saved states may already
   // hold self-registered users on the same U-nnn ids, so reassign on collision.
@@ -85,7 +82,6 @@ function migrate(s) {
     if (!s.poCompare[oppId]) s.poCompare = { ...s.poCompare, [oppId]: po }
   }
   if (!s.handover) s.handover = seedHandover && Object.keys(seedHandover).length ? seedHandover : {}
-  if (!Array.isArray(s.notes)) s.notes = seedNotes
   if (s.viewMode !== 'tablet' && s.viewMode !== 'full') s.viewMode = defaultViewMode()
   if (s.tabletTheme !== 'dark' && s.tabletTheme !== 'light') s.tabletTheme = 'dark'
   if (!s.spSync) s.spSync = {}
@@ -636,23 +632,6 @@ export function StoreProvider({ children }) {
         const next = defaultViewMode()
         return next === s.viewMode ? s : { ...s, viewMode: next }
       })
-    },
-
-    // ---- Shared marketing notes board -------------------------------------
-    addNote(text) {
-      setState(s => withAudit({
-        ...s,
-        notes: [{ id: `N-${Date.now()}`, ts: new Date().toISOString(), role: s.role, author: ROLES[s.role]?.name || s.role, text }, ...(s.notes || [])],
-      }, 'Note posted', 'notes', text.slice(0, 60)))
-    },
-    updateNote(id, text) {
-      setState(s => withAudit({
-        ...s,
-        notes: s.notes.map(n => (n.id === id ? { ...n, text, edited: new Date().toISOString(), editedBy: s.role } : n)),
-      }, 'Note updated', id, text.slice(0, 60)))
-    },
-    deleteNote(id) {
-      setState(s => withAudit({ ...s, notes: s.notes.filter(n => n.id !== id) }, 'Note deleted', id))
     },
 
     // ---- Joint approvals (BT flow: needed:[roles] × decisions) ------------

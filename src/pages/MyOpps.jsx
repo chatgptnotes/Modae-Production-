@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { OWNERS, ROLES } from '../seed.js'
 import { canPriceProposal, canViewCommercial, isSalesOwner, fmt, mmmYY, ddMmmYY, stageClass, productLabel } from '../utils.js'
@@ -67,6 +68,7 @@ export default function MyOpps() {
         <button type="button" onClick={() => setColView(colView === 'key' ? 'all' : 'key')}>
           {colView === 'key' ? 'All columns' : 'Key columns'}
         </button>
+        <Link className="btn primary" to="/new">Create Opportunity</Link>
       </div>
 
       <div className="sheet-wrap">
@@ -94,9 +96,9 @@ export default function MyOpps() {
                 and Last Updated is system noise on a working list. */}
             <tr>
               <th>Opp ID</th><th>Customer</th><th>Opportunity</th>
-              <th>Stage</th><th>Prob</th>
+              <th>Stage</th><th>Type</th><th>Prob</th>
               <th>{comm ? 'Value (₹)' : ''}</th>
-              <th>Expected Order Date</th><th>Next Action Pending</th>
+              <th>Expected Order Date</th><th>Next Action</th>
             </tr>
           </thead>
           <tbody>
@@ -112,6 +114,7 @@ export default function MyOpps() {
                     {dc > 0 && <span className="pill Red" style={{ marginLeft: 6 }}>{dc} deviation{dc > 1 ? 's' : ''}</span>}
                   </td>
                   <td><span className={`pill ${stageClass(o)}`}>{o.stage}</span></td>
+                  <td>{o.oppType || '—'}</td>
                   <td>{o.prob || '—'}</td>
                   <td>{comm ? (o.valueK ? `₹ ${fmt(o.valueK)}` : '—') : ''}</td>
                   <td className={o.status === 'Open' && !o.orderDate ? 'need' : ''}
@@ -127,7 +130,7 @@ export default function MyOpps() {
               )
             })}
             {!rows.length && (
-              <tr><td colSpan={8}>Nothing here — no opportunities for this owner yet.</td></tr>
+              <tr><td colSpan={9}>Nothing here — no opportunities for this owner yet.</td></tr>
             )}
           </tbody>
         </table>

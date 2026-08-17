@@ -5,7 +5,7 @@ import { ddMmmYY, ageDays } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { Chip, ConfChip, WarnBox, ErrBox, Modal } from '../ui.jsx'
-import { ROLES, OWNERS } from '../seed.js'
+import { ROLES, OWNERS, ownerForOppType } from '../seed.js'
 import { isAdminRole, isApprover } from '../utils.js'
 import { aiEnabled, runJson } from '../ai.js'
 import { extractPdfText } from '../tenderParse.js'
@@ -111,7 +111,7 @@ export async function extractLead({ from, subject, body, attachments = [] }, sto
       route,
       urgency: 'Normal',
       completeness: fields.length ? 20 : 0,
-      suggestedOwner: (store.config?.ownershipRules || [])[0]?.owner || 'RS',
+      suggestedOwner: ownerForOppType(route === 'Spares' ? 'Spares' : route === 'Service' ? 'Service' : 'Project'),
       ai: {
         summary: 'AI extraction was unavailable. The original enquiry was saved for manual structuring.',
         fields: fields.map(f => ({ ...f, state: 'pending' })),
@@ -121,9 +121,10 @@ export async function extractLead({ from, subject, body, attachments = [] }, sto
       },
     }
   }
-  const owner = ROLES[ai.suggestedOwner]
+  const inferredOwner = ownerForOppType(ai.route === 'Spares' ? 'Spares' : ai.route === 'Service' ? 'Service' : 'Project')
+  const owner = ROLES[ai.suggestedOwner]?.sales
     ? ai.suggestedOwner
-    : (store.config?.ownershipRules || [])[0]?.owner || 'RS'
+    : inferredOwner
   return {
     route: ai.route || 'Spares',
     urgency: ai.urgency || 'Normal',
