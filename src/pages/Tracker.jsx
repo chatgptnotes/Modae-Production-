@@ -12,7 +12,7 @@ import { Icon } from '../icons.jsx'
 const OPEN_STAGES = STAGES.filter(s => s !== 'Won' && s !== 'Lost')
 
 // Columns with their real-sheet letters (row number = Sl + 2, as in the sheet).
-const COLS = [
+export const COLS = [
   { key: 'id', letter: 'C', label: 'Opp ID' },
   { key: 'sellTo', letter: 'D', label: 'Sell To Customer*' },
   { key: 'category', letter: 'E', label: 'Category' },

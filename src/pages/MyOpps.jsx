@@ -1,10 +1,11 @@
 import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
 import { OWNERS, ROLES } from '../seed.js'
-import { canPriceProposal, fmt, mmmYY, stageClass } from '../utils.js'
+import { canPriceProposal, canViewCommercial, fmt, mmmYY, ddMmmYY, stageClass, productLabel } from '../utils.js'
 import { nextActionWith } from '../gates.js'
 import { useDrawer } from '../drawer.jsx'
 import { Icon } from '../icons.jsx'
+import { COLS } from './Tracker.jsx'
 
 // My Opportunities — a single table view of the pipeline (no Cards/Sheet
 // toggle). Each row opens the same slide-in drawer the tracker uses, so every
@@ -13,9 +14,11 @@ export default function MyOpps() {
   const store = useStore()
   const drawer = useDrawer()
   const [showAll, setShowAll] = useState(false)
+  const [colView, setColView] = useState('key')
 
   const role = store.role
   const comm = canPriceProposal(role)
+  const canSeeCommercial = canViewCommercial(role)
   const mine = OWNERS.includes(role)
   // Where the next action sits — derived from the live blockers, overridden by
   // anything typed into the sheet's Next Action Pending Owner column.
@@ -30,6 +33,21 @@ export default function MyOpps() {
 
   const devCount = o => ((store.proposals[o.id] || {}).terms || []).filter(t => t.status === 'Deviation').length
 
+  const fullCell = (o, key) => {
+    if (['cogsK', 'gmK', 'gmPct'].includes(key) && !canSeeCommercial) return <Icon name="lock" size={12} />
+    if (key === 'id') return <b>{o.id}</b>
+    if (key === 'product') return productLabel(o.product) || '—'
+    if (key === 'valueK') return o.valueK ? `₹ ${fmt(o.valueK)}` : '—'
+    if (key === 'cogsK') return o.cogsK ? `₹ ${fmt(o.cogsK)}` : '—'
+    if (key === 'gmK') return o.valueK ? `₹ ${fmt((o.valueK || 0) - (o.cogsK || 0))}` : '—'
+    if (key === 'gmPct') return o.valueK ? `${Math.round((((o.valueK || 0) - (o.cogsK || 0)) / o.valueK) * 100)}%` : '—'
+    if (key === 'createDate' || key === 'proposalDate' || key === 'orderDate' || key === 'invoiceDate') return o[key] ? mmmYY(o[key]) : '—'
+    if (key === 'lastUpdated') return ddMmmYY(o[key]) || '—'
+    if (key === 'forecast') return o.forecast ? 'Checked' : '—'
+    if (key === 'nextActionOwner') return na(o).owner || '—'
+    return o[key] || '—'
+  }
+
   return (
     <div className="page">
       <h2>{mine ? `My Opportunities — ${role}` : 'Opportunities'}</h2>
@@ -43,9 +61,30 @@ export default function MyOpps() {
         <span className="hint">{mine
           ? 'Your pipeline — click a row to view and edit every field.'
           : 'Click a row to view and edit every field of its sheet row.'}</span>
+        <span className="spacer" />
+        <button type="button" onClick={() => setColView(colView === 'key' ? 'all' : 'key')}>
+          {colView === 'key' ? 'All columns' : 'Key columns'}
+        </button>
       </div>
 
       <div className="sheet-wrap">
+        {colView === 'all' ? (
+          <table className="sheet">
+            <thead>
+              <tr><th>Sl</th>{COLS.map(col => <th key={col.key}>{col.label}</th>)}<th>Proposal</th></tr>
+            </thead>
+            <tbody>
+              {rows.map(o => (
+                <tr key={o.id} className="rowclick" onClick={() => drawer.open({ type: 'opp', id: o.id })}>
+                  <td>{o.sl || '—'}</td>
+                  {COLS.map(col => <td key={col.key} title={String(fullCell(o, col.key))}>{fullCell(o, col.key)}</td>)}
+                  <td>Open ▸</td>
+                </tr>
+              ))}
+              {!rows.length && <tr><td colSpan={COLS.length + 2}>Nothing here — no opportunities for this owner yet.</td></tr>}
+            </tbody>
+          </table>
+        ) : (
         <table className="sheet">
           <thead>
             {/* Exactly the columns Biji listed on 13 Aug. Owner and Updated are
@@ -90,6 +129,7 @@ export default function MyOpps() {
             )}
           </tbody>
         </table>
+        )}
       </div>
     </div>
   )
