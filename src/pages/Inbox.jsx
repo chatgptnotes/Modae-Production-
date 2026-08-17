@@ -92,7 +92,35 @@ export async function extractLead({ from, subject, body, attachments = [] }, sto
     customers: (store.customers || []).map(c => c.name),
     ownershipRules: store.config?.ownershipRules || [],
   })
-  if (!ai?.fields?.length) return null
+  // The proxy is optional in demo/staging builds. Keep the intake usable when
+  // it is absent or temporarily unavailable: preserve only facts present in
+  // the pasted mail and leave the lead visibly pending human structure.
+  if (!ai?.fields?.length) {
+    const text = `${subject || ''}\n${body || ''}`
+    const lower = text.toLowerCase()
+    const route = /spare|sensor|probe|cable|replacement|part number/.test(lower)
+      ? 'Spares'
+      : /service|repair|maintenance|amc|troubleshoot/.test(lower)
+        ? 'Service'
+        : 'Project'
+    const fields = []
+    if (from?.trim()) fields.push({ group: 'Customer', k: 'Sender', v: from.trim(), conf: 45, ev: 'From address', note: 'Confirm the customer and contact person.' })
+    if (subject?.trim()) fields.push({ group: 'RFQ', k: 'Subject', v: subject.trim(), conf: 55, ev: 'Email subject', note: 'Confirm the opportunity name and route.' })
+    if (body?.trim()) fields.push({ group: 'RFQ', k: 'Email body', v: body.trim().slice(0, 500), conf: 35, ev: 'Email body', note: 'Structure the requested scope and quantities.' })
+    return {
+      route,
+      urgency: 'Normal',
+      completeness: fields.length ? 20 : 0,
+      suggestedOwner: (store.config?.ownershipRules || [])[0]?.owner || 'RS',
+      ai: {
+        summary: 'AI extraction was unavailable. The original enquiry was saved for manual structuring.',
+        fields: fields.map(f => ({ ...f, state: 'pending' })),
+        missing: ['Customer name', 'Opportunity scope', 'Required quantities and specifications'],
+        duplicates: [],
+        next: ['Confirm the customer and opportunity route', 'Structure the requested scope', 'Add missing quantities and specifications'],
+      },
+    }
+  }
   const owner = ROLES[ai.suggestedOwner]
     ? ai.suggestedOwner
     : (store.config?.ownershipRules || [])[0]?.owner || 'RS'
@@ -246,13 +274,13 @@ function PasteLeadModal({ onClose }) {
           </div>
         ))}
         {!aiEnabled() && (
-          <WarnBox>AI is not configured — the mail can be added, but nothing will be extracted.</WarnBox>
+          <WarnBox>AI proxy is not configured — extraction will use the built-in email fallback and remain pending human review.</WarnBox>
         )}
         {err && <ErrBox>{err}</ErrBox>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 10 }}>
           <button onClick={onClose}>Cancel</button>
           {err && <button onClick={addRaw}>Add unextracted</button>}
-          <button className="primary" onClick={add} disabled={busy || reading || !aiEnabled()}>
+          <button className="primary" onClick={add} disabled={busy || reading}>
             <Icon name="bot" size={13} /> {busy ? 'Extracting…' : 'Extract with AI'}
           </button>
         </div>
