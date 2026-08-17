@@ -27,7 +27,7 @@ const COLS = [
   { key: 'segment', letter: 'N', label: 'Segment' },
   { key: 'product', letter: 'O', label: 'Product' },
   { key: 'prob', letter: 'P', label: 'Prob (%)' },
-  { key: 'valueK', letter: 'Q', label: 'Value (K₹)*', num: true },
+  { key: 'valueK', letter: 'Q', label: 'Value (₹)*', num: true },
   { key: 'cogsK', letter: 'R', label: 'COGS (K₹)*', num: true },
   { key: 'gmK', letter: 'S', label: 'GM (K₹)', num: true },
   { key: 'gmPct', letter: 'T', label: 'GM%', num: true },
@@ -194,7 +194,7 @@ export default function Tracker() {
 
   const exportRows = () => exportCSV(
     'Sales_Pipeline_Report.csv',
-    ['Sl','Opp ID','Sell To Customer','Category','Location','Customer Status','EUC Name','EUC Location','Opportunity Name/Description','Owner','Opp Type','BU','Segment','Product','Prob (%)','Value (K₹)','COGS (K₹)','GM (K₹)','GM%','Create Date','Proposal Date','Expected Order Date','Expected Ship Date','Status','Stage','Closed Reason','Contact Person','Contact Phone #','Last Updated','Forecast','Update/Remarks','Next Action Pending Owner'],
+    ['Sl','Opp ID','Sell To Customer','Category','Location','Customer Status','EUC Name','EUC Location','Opportunity Name/Description','Owner','Opp Type','BU','Segment','Product','Prob (%)','Value (₹)','COGS (K₹)','GM (K₹)','GM%','Create Date','Proposal Date','Expected Order Date','Expected Ship Date','Status','Stage','Closed Reason','Contact Person','Contact Phone #','Last Updated','Forecast','Update/Remarks','Next Action Pending Owner'],
     rows.map(o => [o.sl,o.id,o.sellTo,o.category,o.location,o.customerStatus,o.eucName,o.eucLocation,o.oppName,o.owner,o.oppType,o.bu,o.segment,productLabel(o.product),o.prob||'',o.valueK,o.cogsK,gmK(o),gmPct(o)||'',o.createDate,o.proposalDate,o.orderDate,o.invoiceDate,o.status,o.stage,o.closedReason,o.contactPerson,o.contactPhone,o.lastUpdated,o.forecast?'Y':'N',o.remarks,o.nextActionOwner||''])
   )
 

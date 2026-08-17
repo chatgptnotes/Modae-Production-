@@ -52,6 +52,7 @@ export default function Proposal() {
   const opp = store.opportunities.find(o => o.id === oppId)
   const [tab, setTab] = useState('Cover Letter')
   const [printing, setPrinting] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
   const [emailOpen, setEmailOpen] = useState(false)
   const [emailTo, setEmailTo] = useState('')
   const [emailCc, setEmailCc] = useState('')
@@ -232,8 +233,7 @@ export default function Proposal() {
 
   const attachmentName = `${oppId}_Proposal_Rev_${p.revision}.pdf`
 
-  const sendEmail = () => {
-    const body = [
+  const emailBody = [
       'Dear Sir/Madam,',
       '',
       ...(emailNote.trim() ? [emailNote.trim(), ''] : []),
@@ -243,19 +243,26 @@ export default function Proposal() {
       ...p.bom.slice(0, 6).map((l, i) => `${i + 1}. ${l.desc} — ${totalQty(l)} nos`),
       ...(p.bom.length > 6 ? [`…and ${p.bom.length - 6} more items`] : []),
       '',
-      `The detailed proposal is attached as ${attachmentName}.`,
+      'The proposal PDF can be saved from the workbook using Print / PDF proposal.',
       '',
       'Best regards,',
       'ModAE India Pvt Ltd',
-    ].join('\n')
-    // mailto URLs are unreliable past ~2000 chars — cap the encoded body and
-    // never cut through a %XX escape.
-    const encBody = encodeURIComponent(body).slice(0, 1600).replace(/%[0-9A-F]?$/i, '')
+  ].join('\n')
+  // Gmail compose URLs are reliable in the browser and do not depend on the
+  // Mac's default mail application. Keep the body compact and never cut through
+  // a %XX escape.
+  const gmailComposeHref = (() => {
+    if (!emailTo.trim()) return ''
+    const encBody = encodeURIComponent(emailBody).slice(0, 1600).replace(/%[0-9A-F]?$/i, '')
     const cc = emailCc.trim() ? `&cc=${encodeURIComponent(emailCc.trim())}` : ''
-    window.location.href = `mailto:${encodeURIComponent(emailTo.trim())}?subject=${encodeURIComponent(emailSubject)}${cc}&body=${encBody}`
+    return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(emailTo.trim())}&su=${encodeURIComponent(emailSubject)}${cc}&body=${encBody}`
+  })()
+
+  const sendEmail = () => {
+    if (!emailTo.trim()) return
     store.addCommunication(oppId, {
       to: emailTo.trim(), cc: emailCc.trim(), subject: emailSubject,
-      kind: 'proposal-email', attachment: attachmentName,
+      kind: 'proposal-email-compose', pdfName: attachmentName,
     })
     setEmailOpen(false)
   }
@@ -312,6 +319,7 @@ export default function Proposal() {
         </label>
         {pendingForOpp.length > 0 && <span className="pill Amber">{pendingForOpp.length} approval{pendingForOpp.length > 1 ? 's' : ''} pending</span>}
         {tab === 'Priced BoQ' && comm && <button onClick={exportBoQ}>Extract to Excel</button>}
+        <button onClick={() => setPreviewOpen(true)}><Icon name="eye" size={13} /> Preview proposal</button>
         <button onClick={openEmail}><Icon name="mail" size={13} /> Email proposal</button>
         <button className="primary" onClick={() => setPrinting(true)}><Icon name="printer" size={13} /> Print / PDF proposal</button>
       </div>
@@ -675,11 +683,10 @@ export default function Proposal() {
             <div className="q-label">Note (optional, one line)</div>
             <input type="text" value={emailNote} onChange={e => setEmailNote(e.target.value)} placeholder="e.g. Submitted within due date — happy to discuss." />
           </div>
-          {/* Honest about the mechanism: a mailto: link cannot carry a file, so
-              the PDF is produced here and attached by the user in the mail app. */}
+          {/* Honest about the mechanism: a mailto: link opens Gmail compose but
+              cannot send or carry the generated PDF. */}
           <div className="costing-note">
-            Attachment: <b>{attachmentName}</b>. Save the PDF with <b>Save proposal PDF</b> below,
-            then attach it in your mail app — a mail link cannot carry the file itself.
+            Save <b>{attachmentName}</b> with <b>Save proposal PDF</b> below, then add it in Gmail if needed.
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button type="button" onClick={() => setEmailPreview(!emailPreview)}>
@@ -700,10 +707,31 @@ export default function Proposal() {
             </div>
           )}
           <div className="forms-actions">
-            <button className="primary" disabled={!emailTo.trim() || !emailPreview} onClick={sendEmail}>Open in mail app ▸</button>
+            <a className={`primary email-launch-link${!gmailComposeHref ? ' disabled' : ''}`} href={gmailComposeHref || undefined}
+              onClick={event => { if (!gmailComposeHref) event.preventDefault(); else sendEmail() }}
+              aria-disabled={!gmailComposeHref} target="_blank" rel="noreferrer">
+              Open Gmail compose ▸
+            </a>
             <button onClick={() => setEmailOpen(false)}>Cancel</button>
           </div>
         </div>
+      )}
+
+      {previewOpen && (
+        <Modal title={`Proposal preview — ${oppId}`} onClose={() => setPreviewOpen(false)} wide className="proposal-preview-modal">
+          <div className="proposal-preview-toolbar">
+            <span className="hint">Customer-facing document · Rev {p.revision} · Read-only preview</span>
+            <div className="forms-actions">
+              <button onClick={() => setPreviewOpen(false)}>Close</button>
+              <button className="primary" onClick={() => { setPreviewOpen(false); setPrinting(true) }}>
+                <Icon name="printer" size={13} /> Print / PDF proposal
+              </button>
+            </div>
+          </div>
+          <div className="proposal-preview-scroll">
+            <PrintDoc p={p} opp={opp} doc={doc} priced={priced} totals={totals} lineQuoted={lineQuoted} />
+          </div>
+        </Modal>
       )}
 
       {conditionTarget && (

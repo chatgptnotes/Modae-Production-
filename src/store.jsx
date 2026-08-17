@@ -25,6 +25,9 @@ const defaultViewMode = () => (typeof window !== 'undefined' && window.innerWidt
 // never reseeds over the user's data.
 function migrate(s) {
   if (!Array.isArray(s.users)) s.users = seedUsers
+  // Retire personas removed from the active role catalogue. Historical
+  // opportunity/order owner codes are intentionally left untouched.
+  s.users = s.users.filter(u => !['SS', 'PJS', 'RJS', 'SR'].includes(u.role))
   s.users = s.users.map(u => (u.pw ? u : { ...u, pw: 'Demo@1234' }))
   // Backfill new seed accounts (TECH/CUST) by email; saved states may already
   // hold self-registered users on the same U-nnn ids, so reassign on collision.
@@ -482,7 +485,10 @@ export function StoreProvider({ children }) {
           ...(s.communications || {}),
           [oppId]: [{ ts: new Date().toISOString(), ...entry }, ...((s.communications || {})[oppId] || [])],
         },
-      }, entry.kind === 'submission' ? 'Proposal submitted' : 'Proposal emailed', oppId, entry.subject))
+      }, entry.kind === 'submission'
+        ? 'Proposal submitted'
+        : entry.kind === 'proposal-email-compose' ? 'Proposal email compose opened' : 'Proposal emailed',
+      oppId, entry.subject))
     },
 
     // ---- Lead inbox -------------------------------------------------------
@@ -849,11 +855,11 @@ export function StoreProvider({ children }) {
       })
     },
 
-    setMilestone(oppId, milestone) {
+    setMilestone(oppId, milestone, reason = '') {
       setState(s => withAudit({
         ...s,
         opportunities: s.opportunities.map(o => (o.id === oppId ? { ...o, milestone } : o)),
-      }, 'Milestone moved', oppId, milestone))
+      }, 'Milestone moved', oppId, reason ? `${milestone} — ${reason}` : milestone))
     },
 
     // ---- Admin config ------------------------------------------------------

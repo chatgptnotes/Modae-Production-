@@ -1,4 +1,4 @@
-import { ageDays, monthKey, monthLabel, canViewCommercial } from './utils.js'
+import { ageDays, monthKey, monthLabel, canViewCommercial, isSalesOwner } from './utils.js'
 import { OWNERS, STAGES, routeForType } from './seed.js'
 
 // Dashboard metrics. Kept as pure functions so the tablet command deck and the
@@ -18,13 +18,17 @@ export function counts(store, role = store.role) {
   const stale = openOpps.filter(o => (ageDays(o.lastUpdated) ?? 0) > 30)
   const approvals = store.approvals || []
   const pending = approvals.filter(a => a.status === 'Pending')
+  const newLeads = (store.leads || []).filter(l => l.status === 'New')
   return {
     openOpps,
     open: openOpps.length,
     mine: openOpps.filter(o => o.owner === role).length,
     stale: stale.length,
     myStale: stale.filter(o => o.owner === role).length,
-    newLeads: (store.leads || []).filter(l => l.status === 'New').length,
+    // Keep the badge aligned with the inbox: sales owners see their assigned
+    // New leads by default, while approvers/admins see the whole mailbox.
+    newLeads: (isSalesOwner(role) ? newLeads.filter(l => l.suggestedOwner === role) : newLeads)
+      .filter(l => !l.readAt).length,
     pending: pending.length,
     myPending: pending.filter(a => a.requestedBy === role).length,
     // Gates this persona is personally expected to decide.

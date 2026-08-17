@@ -89,6 +89,9 @@ export default function Approvals() {
   const drawer = useDrawer()
   const role = store.role
   const comm = canViewCommercial(role)
+  const [q, setQ] = useState('')
+  const [statusF, setStatusF] = useState('')
+  const [typeF, setTypeF] = useState('')
   // Approver workbench for LJS/AH/admins, plus any role named on a joint gate.
   const approverView = isApprover(role) || store.approvals.some(a => neededOf(a).includes(role))
   const canDecide = a => neededOf(a).includes(role)
@@ -133,63 +136,57 @@ export default function Approvals() {
     </div>
   )
 
+  const QuickLinks = ({ a }) => (
+    <div className="approval-links">
+      {a.oppId && <>
+        <button onClick={() => drawer.open({ type: 'opp', id: a.oppId })}><Icon name="eye" size={12} /> Preview opportunity</button>
+        <button onClick={() => nav('/opp/' + a.oppId + '/approvals')}><Icon name="arrowRight" size={12} /> Open workbench</button>
+      </>}
+      {a.leadId && <button onClick={() => nav('/inbox/' + a.leadId)}><Icon name="inbox" size={12} /> Open lead</button>}
+      {a.customerName && <button onClick={() => drawer.open({ type: 'customer', id: a.customerName })}><Icon name="users" size={12} /> Open customer</button>}
+    </div>
+  )
+
+  const matches = a => {
+    const hay = [a.id, a.type, a.detail, a.oppId, a.customerName, a.leadId, a.requestedBy].join(' ').toLowerCase()
+    return (!q || hay.includes(q.toLowerCase())) && (!statusF || a.status === statusF) && (!typeF || a.type === typeF)
+  }
+  const typeOptions = [...new Set(store.approvals.map(a => a.type).filter(Boolean))].sort()
+
   // ---- Salespeople: read-only view of their own requests ------------------
   if (!approverView) {
-    const mine = store.approvals.filter(a => a.requestedBy === role).sort(byTsDesc)
+    const mine = store.approvals.filter(a => a.requestedBy === role && matches(a)).sort(byTsDesc)
     return (
-      <div className="page">
-        <h2>Approvals — my requests ({mine.length})</h2>
-        <div className="restricted" style={{ maxWidth: 640, marginBottom: 12 }}>
+      <div className="page approvals-page">
+        <div className="approval-head"><div><h2><Icon name="checkCircle" size={18} /> Approvals — my requests</h2><p className="hint">Track requests, approvers, decisions, and linked records from one place.</p></div></div>
+        <div className="approval-summary"><div><b>{store.approvals.filter(a => a.requestedBy === role && a.status === 'Pending').length}</b><span>Pending</span></div><div><b>{store.approvals.filter(a => a.requestedBy === role && a.status === 'Approved').length}</b><span>Approved</span></div><div><b>{store.approvals.filter(a => a.requestedBy === role && a.status === 'Rejected').length}</b><span>Rejected</span></div></div>
+        <div className="approval-filters"><input placeholder="Search approvals" value={q} onChange={e => setQ(e.target.value)} /><select value={statusF} onChange={e => setStatusF(e.target.value)}><option value="">All statuses</option>{['Pending', 'Approved', 'Approved with conditions', 'Returned', 'Rejected'].map(s => <option key={s}>{s}</option>)}</select><select value={typeF} onChange={e => setTypeF(e.target.value)}><option value="">All types</option>{typeOptions.map(t => <option key={t}>{t}</option>)}</select></div>
+        <div className="restricted approval-notice">
           Approvals are decided by LJS / AH
         </div>
-        <div className="sheet-wrap" style={{ maxWidth: 980 }}>
-          <table className="sheet">
-            <thead><tr><th>ID</th><th>Opportunity</th><th>Type</th><th>Detail</th><th>Approvers</th><th>Status</th><th>Requested</th><th>Decision note</th></tr></thead>
-            <tbody>
-              {mine.map(a => (
-                <tr key={a.id}>
-                  <td>{a.id}</td>
-                  <td><RefLink a={a} /></td>
-                  <td>{a.type}</td>
-                  <td><Detail a={a} /></td>
-                  <td>
-                    {neededOf(a).map(r => {
-                      const d = (a.decisions || {})[r]?.d
-                      return <Chip key={r} tone={chipTone(d)}>{r} {d || 'pending'}</Chip>
-                    })}
-                  </td>
-                  <td><span className={`pill ${pillFor(a.status)}`}>{a.status}</span></td>
-                  <td>{day(a.ts)}</td>
-                  <td>{COMMERCIAL_RX.test(a.decisionNote || '') && !comm
-                    ? <span className="restricted"><Icon name="lock" size={11} /> restricted</span>
-                    : a.decisionNote}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <div className="approval-list">{mine.map(a => <div key={a.id} className="approval-card"><div className="approval-card-top"><b>{a.id}</b><span className={`pill ${pillFor(a.status)}`}>{a.status}</span><span className="approval-type">{a.type}</span><span className="hint">requested {day(a.ts)}</span></div><div className="approval-ref"><RefLink a={a} /></div><Detail a={a} /><div className="approval-meta"><div><span>Approvers</span><RoleChips a={a} /></div><div><span>Decision note</span><p>{COMMERCIAL_RX.test(a.decisionNote || '') && !comm ? 'Restricted' : (a.decisionNote || 'No decision yet')}</p></div></div><QuickLinks a={a} /></div>)}</div>
         {!mine.length && <p className="hint">No approval requests yet — raise one from the proposal workbench when a deviation needs clearance.</p>}
       </div>
     )
   }
 
   // ---- Approver / admin workbench ----------------------------------------
-  const pending = store.approvals.filter(a => a.status === 'Pending').sort(byTsDesc)
+  const pending = store.approvals.filter(a => a.status === 'Pending' && matches(a)).sort(byTsDesc)
   const myTurn = a => canDecide(a) && !(a.decisions || {})[role]
   const forMe = pending.filter(myTurn)
   const others = pending.filter(a => !myTurn(a))
   const condOpen = store.approvals
-    .filter(a => a.status === 'Approved with conditions' && (a.conditions || []).some(c => !c.incorporated))
+    .filter(a => a.status === 'Approved with conditions' && matches(a) && (a.conditions || []).some(c => !c.incorporated))
     .sort(byTsDesc)
   const decided = store.approvals
-    .filter(a => a.status !== 'Pending')
+    .filter(a => a.status !== 'Pending' && matches(a))
     .sort((a, b) => (b.decisionTs || '').localeCompare(a.decisionTs || ''))
 
   const PendingCard = ({ a }) => {
     const remaining = neededOf(a).filter(r => !(a.decisions || {})[r])
     const myDecision = (a.decisions || {})[role]
     return (
-      <div className="form-card" style={{ marginBottom: 10 }}>
+      <div className="form-card approval-card" style={{ marginBottom: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <b>{a.id}</b>
           <span className="pill Blue">Pending</span>
@@ -199,6 +196,7 @@ export default function Approvals() {
         <div style={{ margin: '6px 0' }}><RefLink a={a} /></div>
         <Detail a={a} />
         <RoleChips a={a} />
+        <QuickLinks a={a} />
         {myTurn(a)
           ? <DecisionForm a={a} role={role} onDecide={dec => store.recordDecision(a.id, dec)} />
           : myDecision
@@ -217,16 +215,15 @@ export default function Approvals() {
   }
 
   return (
-    <div className="page">
-      <h2>Approvals — {ROLES[role]?.label || role}</h2>
-      <div className="toolbar">
-        <span className="hint">
+    <div className="page approvals-page">
+      <div className="approval-head"><div><h2><Icon name="checkCircle" size={18} /> Approvals — {ROLES[role]?.label || role}</h2><p className="hint">Review the request, inspect the linked record, then decide without leaving this page.</p></div></div>
+      <div className="approval-summary"><div><b>{forMe.length}</b><span>Waiting on me</span></div><div><b>{others.length}</b><span>Awaiting others</span></div><div><b>{condOpen.length}</b><span>Open conditions</span></div><div><b>{decided.length}</b><span>Decided</span></div></div>
+      <div className="approval-filters"><input placeholder="Search approvals" value={q} onChange={e => setQ(e.target.value)} /><select value={statusF} onChange={e => setStatusF(e.target.value)}><option value="">All statuses</option>{['Pending', 'Approved', 'Approved with conditions', 'Returned', 'Rejected'].map(s => <option key={s}>{s}</option>)}</select><select value={typeF} onChange={e => setTypeF(e.target.value)}><option value="">All types</option>{typeOptions.map(t => <option key={t}>{t}</option>)}</select></div>
+      <div className="approval-explainer"><span className="hint">
           Commercial deviations and credit-term clearances routed to LJS / AH. Joint gates resolve once every
           named approver has decided. "Approved with conditions" blocks proposal submission until every
           condition is confirmed incorporated.
-        </span>
-        <span className="spacer" />
-      </div>
+        </span></div>
 
       <div className="section-title">Pending — your decision ({forMe.length})</div>
       {forMe.map(a => <PendingCard key={a.id} a={a} />)}
@@ -241,7 +238,7 @@ export default function Approvals() {
 
       <div className="section-title">Conditions awaiting incorporation ({condOpen.length})</div>
       {condOpen.map(a => (
-        <div key={a.id} className="form-card" style={{ marginBottom: 10 }}>
+        <div key={a.id} className="form-card approval-card" style={{ marginBottom: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <b>{a.id}</b>
             <span className="pill Amber">Approved with conditions</span>
@@ -261,13 +258,14 @@ export default function Approvals() {
               <Icon name="fileText" size={13} /> Open proposal workbench
             </button>
           )}
+          <QuickLinks a={a} />
         </div>
       ))}
       {!condOpen.length && <p className="hint">No open conditions — everything decided is fully incorporated.</p>}
 
       <div className="section-title">Decided ({decided.length})</div>
       {decided.map(a => (
-        <div key={a.id} className="form-card" style={{ marginBottom: 10 }}>
+        <div key={a.id} className="form-card approval-card" style={{ marginBottom: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <b>{a.id}</b>
             <span className={`pill ${pillFor(a.status)}`}>{a.status}</span>
@@ -284,6 +282,7 @@ export default function Approvals() {
           {!Object.keys(a.decisions || {}).length && a.decisionNote && (
             <div style={{ fontSize: 12.5, margin: '4px 0' }}>{a.decisionNote}</div>
           )}
+          <QuickLinks a={a} />
         </div>
       ))}
       {!decided.length && <p className="hint">No decisions yet.</p>}

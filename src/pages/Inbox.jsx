@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ddMmmYY, ageDays } from '../utils.js'
@@ -20,6 +20,11 @@ const STATUS_OPTIONS = ['New', 'Qualified', 'Converted', 'Dropped']
 const ROUTE_OPTIONS = ['Project', 'Spares', 'Service']
 const DROP_REASONS = ['Outside business scope', 'Window shopping / budgetary only',
   'Duplicate inquiry', 'No response from customer', 'Other']
+
+const receivedTime = ts => {
+  if (!ts) return '—'
+  return new Date(ts).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })
+}
 
 // Disqualifying and reverting both need a written reason. Biji, 13 Aug: "there
 // has to be a place for me to write the reason why you're trying to disqualify."
@@ -785,6 +790,15 @@ export default function Inbox() {
   const [q, setQ] = useState('')
   const [statusF, setStatusF] = useState('')
   const [routeF, setRouteF] = useState('')
+  const [receivedF, setReceivedF] = useState('')
+  const [sourceF, setSourceF] = useState('')
+  const [urgencyF, setUrgencyF] = useState('')
+  const [duplicateF, setDuplicateF] = useState('')
+  const [completenessF, setCompletenessF] = useState('')
+  const [ownerF, setOwnerF] = useState('')
+  const [ageF, setAgeF] = useState('')
+  const [mailTab, setMailTab] = useState('primary')
+  const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [pasteOpen, setPasteOpen] = useState(false)
   // Sales owners see only their assigned leads by default; a "Show all" toggle
   // reveals the team's. Managers (LJS/AH) and admins always see everything.
@@ -792,6 +806,15 @@ export default function Inbox() {
   const seesAll = isAdminRole(store.role) || isApprover(store.role)
 
   const sel = leadId ? store.leads.find(l => l.id === leadId) : null
+  // Opening a New lead marks it read, but does not qualify or otherwise change
+  // its workflow status. The notification badge therefore behaves like mail:
+  // it clears when the message is opened, while the lead remains New until a
+  // salesperson makes a decision.
+  useEffect(() => {
+    if (sel?.status === 'New' && !sel.readAt) {
+      store.updateLead(sel.id, { readAt: new Date().toISOString() })
+    }
+  }, [sel?.id]) // eslint-disable-line react-hooks/exhaustive-deps
   if (sel) {
     const age = ageDays((sel.ts || '').slice(0, 10))
     return (
@@ -829,88 +852,142 @@ export default function Inbox() {
       if (!hay.includes(q.toLowerCase())) return false
     }
     if (statusF && l.status !== statusF) return false
-    if (routeF && (l.route || l.parse?.oppType || '') !== routeF) return false
+    const source = l.source || l.channel || ''
+    const route = l.route || l.parse?.oppType || ''
+    const completeness = l.completeness ?? (l.parse?.confidence != null ? Math.round(l.parse.confidence * 100) : null)
+    const age = ageDays((l.ts || '').slice(0, 10))
+    if (sourceF && source !== sourceF) return false
+    if (routeF && route !== routeF) return false
+    if (urgencyF && (l.urgency || 'Normal') !== urgencyF) return false
+    if (duplicateF && (l.duplicateRisk || 'Low') !== duplicateF) return false
+    if (ownerF && (l.suggestedOwner || 'Unassigned') !== ownerF) return false
+    if (completenessF) {
+      if (completeness == null) return false
+      if (completenessF === 'high' && completeness < 90) return false
+      if (completenessF === 'medium' && (completeness < 60 || completeness >= 90)) return false
+      if (completenessF === 'low' && completeness >= 60) return false
+    }
+    if (receivedF) {
+      const maxAge = receivedF === 'today' ? 0 : receivedF === '7' ? 6 : 29
+      if (age == null || age > maxAge) return false
+    }
+    if (ageF) {
+      if (age == null) return false
+      if (ageF === 'today' && age !== 0) return false
+      if (ageF === '7' && (age < 7 || age > 29)) return false
+      if (ageF === '30' && age < 30) return false
+    }
     return true
   })
 
+  const mailboxRows = rows.filter(l => {
+    if (mailTab === 'unread') return l.status === 'New' && !l.readAt
+    if (mailTab === 'qualified') return l.status === 'Qualified'
+    return true
+  })
+  const toggleSelected = id => setSelectedIds(prev => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    return next
+  })
+  const selectVisible = () => setSelectedIds(prev => {
+    const next = new Set(prev)
+    const allSelected = mailboxRows.length > 0 && mailboxRows.every(l => next.has(l.id))
+    mailboxRows.forEach(l => allSelected ? next.delete(l.id) : next.add(l.id))
+    return next
+  })
+  const setReadForSelected = read => {
+    selectedIds.forEach(id => store.updateLead(id, { readAt: read ? new Date().toISOString() : null }))
+    setSelectedIds(new Set())
+  }
+  const tabCount = tab => rows.filter(l => tab === 'unread'
+    ? l.status === 'New' && !l.readAt
+    : tab === 'qualified' ? l.status === 'Qualified' : true).length
+  const sourceOptions = [...new Set(store.leads.map(l => l.source || l.channel).filter(Boolean))].sort()
+  const ownerOptions = [...new Set(store.leads.map(l => l.suggestedOwner || 'Unassigned'))].sort()
+  const filterSelect = (value, onChange, label, options) => (
+    <select className={`mail-head-filter ${value ? 'active' : ''}`} value={value} onChange={e => onChange(e.target.value)} aria-label={`Filter by ${label}`}>
+      <option value="">{label}</option>{options.map(o => Array.isArray(o) ? <option key={o[0]} value={o[0]}>{o[1]}</option> : <option key={o}>{o}</option>)}
+    </select>
+  )
+
   return (
-    <div className="page">
-      <h2><Icon name="inbox" size={18} /> Lead Inbox</h2>
-      <p className="hint">
-        Common sales mailbox is the intake source of truth — AI structures, humans decide.
-      </p>
-      <div className="toolbar">
-        <input placeholder="Search subject, sender, ref…" value={q} onChange={e => setQ(e.target.value)}
-          style={{ minWidth: 220 }} />
-        <select value={statusF} onChange={e => setStatusF(e.target.value)}>
-          <option value="">All statuses</option>
-          {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
+    <div className="page mailbox-page">
+      <div className="mailbox-head">
+        <div>
+          <h2><Icon name="inbox" size={18} /> Lead Inbox</h2>
+          <p className="hint">Common sales mailbox · AI structures, humans decide</p>
+        </div>
+        <div className="mailbox-head-actions">
+          <button onClick={() => store.addLead(simulatedLead())}><Icon name="mail" size={13} /> Simulate incoming inquiry</button>
+          <button className="primary" onClick={() => setPasteOpen(true)}><Icon name="bot" size={13} /> New enquiry</button>
+        </div>
+      </div>
+      <div className="mail-search-row">
+        <div className="mail-search"><Icon name="search" size={16} /><input placeholder="Search mail" value={q} onChange={e => setQ(e.target.value)} /></div>
+        <select value={statusF} onChange={e => setStatusF(e.target.value)} aria-label="Filter by status">
+          <option value="">All statuses</option>{STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
         </select>
-        <select value={routeF} onChange={e => setRouteF(e.target.value)}>
-          <option value="">All routes</option>
-          {ROUTE_OPTIONS.map(r => <option key={r}>{r}</option>)}
+        <select value={routeF} onChange={e => setRouteF(e.target.value)} aria-label="Filter by route">
+          <option value="">All routes</option>{ROUTE_OPTIONS.map(r => <option key={r}>{r}</option>)}
         </select>
-        {!seesAll && (
-          <label className="cb-inline" title="Show every team member's leads, not just yours">
-            <input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)} /> Show all
-          </label>
-        )}
-        <span className="spacer" />
-        <button onClick={() => store.addLead(simulatedLead())}>
-          <Icon name="mail" size={13} /> Simulate incoming inquiry
-        </button>
-        <button className="primary" onClick={() => setPasteOpen(true)}>
-          <Icon name="bot" size={13} /> New enquiry — extract with AI
-        </button>
+        {!seesAll && <label className="mail-show-all"><input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)} /> Show all</label>}
       </div>
       {pasteOpen && <PasteLeadModal onClose={() => setPasteOpen(false)} />}
 
-      <div className="sheet-wrap">
-        <table className="sheet">
-          <thead>
-            <tr>
-              <th>Received</th><th>Source</th><th>Sender</th><th>Subject / ref</th>
-              <th>AI route</th><th>Urgency</th><th>Dup. risk</th><th>Completeness</th>
-              <th>Sugg. owner</th><th>Status</th><th>Age</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(l => {
-              const completeness = l.completeness ?? (l.parse?.confidence != null ? Math.round(l.parse.confidence * 100) : null)
-              const route = l.route || l.parse?.oppType || '—'
-              return (
-                <tr key={l.id} style={{ cursor: 'pointer' }} onClick={() => nav('/inbox/' + l.id)}>
-                  <td>{ddMmmYY((l.ts || '').slice(0, 10))}</td>
-                  <td>{l.source || l.channel}</td>
-                  <td>
-                    <b>{l.sender || l.from}</b>
-                    {l.sender && <><br /><span className="hint">{l.from}</span></>}
-                  </td>
-                  <td>
-                    <b>{l.subject}</b>
-                    {l.ref && <><br /><span className="hint">{l.ref}</span></>}
-                  </td>
-                  <td><Chip tone="grey">{route}</Chip></td>
-                  <td>{l.urgency === 'Urgent'
-                    ? <Chip tone="state-Rejected">Urgent</Chip>
-                    : <Chip tone="grey">Normal</Chip>}</td>
-                  <td>{l.duplicateRisk === 'Medium'
-                    ? <Chip tone="conf-med">Medium</Chip>
-                    : <Chip tone="grey">Low</Chip>}</td>
-                  <td>{completeness != null
-                    ? <ConfChip conf={completeness} thresholds={store.config.aiThresholds} />
-                    : '—'}</td>
-                  <td>{l.suggestedOwner || '—'}</td>
-                  <td><span className={`pill ${PILL[l.status] || 'Blue'}`}>{l.status}</span></td>
-                  <td>{ageDays((l.ts || '').slice(0, 10))} d</td>
-                </tr>
-              )
-            })}
-            {!rows.length && (
-              <tr><td colSpan={11}>No leads match these filters.</td></tr>
-            )}
-          </tbody>
-        </table>
+      <div className="mail-tabs" role="tablist" aria-label="Mailbox views">
+        {[['primary', 'Primary'], ['unread', 'Unread'], ['qualified', 'Qualified']].map(([key, label]) => (
+          <button key={key} role="tab" aria-selected={mailTab === key} className={mailTab === key ? 'active' : ''} onClick={() => setMailTab(key)}>
+            <span>{label}</span><b>{tabCount(key)}</b>
+          </button>
+        ))}
+      </div>
+
+      <div className="mailbox-list">
+        <div className="mail-list-toolbar">
+          <label className="mail-check"><input type="checkbox" checked={mailboxRows.length > 0 && mailboxRows.every(l => selectedIds.has(l.id))} onChange={selectVisible} aria-label="Select visible messages" /></label>
+          <button className="mail-icon-btn" title="Refresh" onClick={() => window.location.reload()}><Icon name="refresh" size={15} /></button>
+          <button className="mail-icon-btn" title="More actions"><Icon name="list" size={15} /></button>
+          {selectedIds.size > 0 && <span className="mail-selection-count">{selectedIds.size} selected</span>}
+          {selectedIds.size > 0 && <>
+            <button className="mail-icon-btn" title="Mark as read" onClick={() => setReadForSelected(true)}><Icon name="mail" size={15} /></button>
+            <button className="mail-icon-btn" title="Mark as unread" onClick={() => setReadForSelected(false)}><Icon name="eye" size={15} /></button>
+          </>}
+          <span className="mail-list-count">{mailboxRows.length ? `1–${mailboxRows.length} of ${mailboxRows.length}` : '0 messages'}</span>
+        </div>
+        <div className="mail-column-head">
+          <span></span><span></span><span><select className={`mail-head-filter ${receivedF ? 'active' : ''}`} value={receivedF} onChange={e => setReceivedF(e.target.value)} aria-label="Filter by received date"><option value="">Received</option><option value="today">Today</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select></span>
+          <span>{filterSelect(sourceF, setSourceF, 'Source / sender', sourceOptions)}</span><span>Subject / preview</span>
+          <span>{filterSelect(routeF, setRouteF, 'AI route', ROUTE_OPTIONS)}</span>
+          <span>{filterSelect(urgencyF, setUrgencyF, 'Urgency', ['Normal', 'Urgent'])}</span>
+          <span>{filterSelect(duplicateF, setDuplicateF, 'Dup. risk', ['Low', 'Medium', 'High'])}</span>
+          <span>{filterSelect(completenessF, setCompletenessF, 'Completeness', [['high', 'High ≥90%'], ['medium', 'Medium 60–89%'], ['low', 'Low <60%']])}</span>
+          <span>{filterSelect(ownerF, setOwnerF, 'Sugg. owner', ownerOptions)}</span>
+          <span>{filterSelect(statusF, setStatusF, 'Status', STATUS_OPTIONS)}</span>
+          <span>{filterSelect(ageF, setAgeF, 'Age', [['today', 'Today'], ['7', '7–29 days'], ['30', '30+ days']])}</span>
+        </div>
+        {mailboxRows.map(l => {
+          const completeness = l.completeness ?? (l.parse?.confidence != null ? Math.round(l.parse.confidence * 100) : null)
+          const route = l.route || l.parse?.oppType || '—'
+          const unread = l.status === 'New' && !l.readAt
+          return (
+            <div key={l.id} className={`mail-row ${unread ? 'unread' : ''} ${selectedIds.has(l.id) ? 'selected' : ''}`} onClick={() => nav('/inbox/' + l.id)}>
+              <label className="mail-check" onClick={e => e.stopPropagation()}><input type="checkbox" checked={selectedIds.has(l.id)} onChange={() => toggleSelected(l.id)} aria-label={`Select ${l.subject}`} /></label>
+              <button className={`mail-star ${l.starred ? 'starred' : ''}`} title={l.starred ? 'Remove star' : 'Star'} onClick={e => { e.stopPropagation(); store.updateLead(l.id, { starred: !l.starred }) }}><Icon name="star" size={15} /></button>
+              <div className="mail-date"><b>{ddMmmYY((l.ts || '').slice(0, 10))}</b><small>{receivedTime(l.ts)}</small></div>
+              <div className="mail-sender"><b>{l.source || l.channel || 'Common mailbox'}</b><small>{l.sender || l.from}</small></div>
+              <div className="mail-content"><b>{l.subject}</b>{l.ref && <span className="mail-ref"> · {l.ref}</span>}<small>{l.ai?.summary || l.body?.replace(/\s+/g, ' ').slice(0, 130) || 'No preview available'}</small></div>
+              <div><Chip tone="grey">{route}</Chip></div>
+              <div><Chip tone={l.urgency === 'Urgent' ? 'state-Rejected' : 'grey'}>{l.urgency || 'Normal'}</Chip></div>
+              <div><Chip tone={l.duplicateRisk === 'Medium' || l.duplicateRisk === 'High' ? 'conf-med' : 'grey'}>{l.duplicateRisk || 'Low'}</Chip></div>
+              <div>{completeness != null ? <ConfChip conf={completeness} thresholds={store.config.aiThresholds} /> : '—'}</div>
+              <div className="mail-owner">{l.suggestedOwner || '—'}</div>
+              <div><span className={`pill ${PILL[l.status] || 'Blue'}`}>{l.status}</span></div>
+              <div className="mail-age">{ageDays((l.ts || '').slice(0, 10))} d</div>
+            </div>
+          )
+        })}
+        {!mailboxRows.length && <div className="mail-empty"><Icon name="mail" size={28} /><b>No messages here</b><span>Try another mailbox tab or change your filters.</span></div>}
       </div>
       <p className="hint" style={{ marginTop: 8 }}>
         Dropped leads are kept as a minimal record — reason and source only — for future demand analytics.

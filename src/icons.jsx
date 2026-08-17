@@ -16,6 +16,7 @@ const PATHS = {
   fileSheet: <><path d="M14 2.5H6.5A1.5 1.5 0 0 0 5 4v16a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 20V7.5Z" /><path d="M14 2.5V7.5h5" /><path d="M8.5 12h7M8.5 16h7M12 12v7.5" /></>,
   upload: <><path d="M12 16V4.5" /><path d="m6.5 9.5 5.5-5 5.5 5" /><path d="M4 20h16" /></>,
   mail: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7.5 9 6 9-6" /></>,
+  star: <path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9Z" />,
   printer: <><path d="M7 8V3.5h10V8" /><rect x="3" y="8" width="18" height="8" rx="1.5" /><path d="M7 16h10v4.5H7z" /></>,
   search: <><circle cx="11" cy="11" r="6.5" /><path d="m20 20-3.8-3.8" /></>,
   x: <path d="M6 6l12 12M18 6 6 18" />,

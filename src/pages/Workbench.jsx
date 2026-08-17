@@ -1,9 +1,9 @@
 import React, { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { ROLES, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS } from '../seed.js'
+import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES } from '../seed.js'
 import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY } from '../utils.js'
-import { readiness, isBlocked, computeProposalTotals } from '../gates.js'
+import { readiness, isBlocked, computeProposalTotals, nextActionWith, transitionBlockers } from '../gates.js'
 import { COMMERCIAL_RX } from './Approvals.jsx'
 import { Chip, ClassChip, AiBadge, Stepper, WarnBox, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
@@ -45,6 +45,7 @@ export default function Workbench() {
   const { oppId, tab = 'overview' } = useParams()
   const store = useStore()
   const nav = useNavigate()
+  const [transition, setTransition] = useState(null)
   const opp = store.opportunities.find(o => o.id === oppId)
 
   if (!opp) {
@@ -58,23 +59,126 @@ export default function Workbench() {
   }
 
   const goTab = k => nav(`/opp/${opp.id}/${k}`)
+  const proposal = store.getProposal(opp.id)
+  const blockers = readiness(opp, proposal, store)
+  const nextAction = nextActionWith(opp, proposal, store)
+  const canSeeValue = canPriceProposal(store.role)
+  const due = opp.orderDate || opp.proposalDate || opp.lastUpdated
+  const milestoneIndex = MILESTONES.indexOf(opp.milestone)
+  const moveMilestone = milestone => {
+    if (milestone === opp.milestone) return
+    if (MILESTONES.indexOf(milestone) < milestoneIndex) {
+      setTransition({ kind: 'backward', target: milestone, reason: '' })
+      return
+    }
+    const blockersForMove = transitionBlockers(opp, milestone, proposal, store)
+    if (blockersForMove.length) {
+      setTransition({ kind: 'blocked', target: milestone, blockers: blockersForMove })
+      return
+    }
+    store.setMilestone(opp.id, milestone)
+  }
+  const moveRelative = delta => {
+    const next = MILESTONES[milestoneIndex + delta]
+    if (next) moveMilestone(next)
+  }
+  const exceptionApprovalFor = blocker => (store.approvals || []).find(a =>
+    a.type === 'Milestone exception' && a.oppId === opp.id
+    && a.targetMilestone === transition?.target && a.blockerKey === blocker.key)
+  const canRequestException = blocker => ['kyc', 'amber-fee', 'red-clearance', 'dev'].includes(blocker.key) || !!blocker.approvalType
+  const requestException = blocker => {
+    const needed = blocker.needed || [blocker.approver || 'AH']
+    store.requestApproval({
+      oppId: opp.id,
+      type: 'Milestone exception',
+      targetMilestone: transition.target,
+      blockerKey: blocker.key,
+      detail: `${blocker.text} — exception requested to move to ${transition.target}.`,
+      approver: needed[0],
+      needed,
+    })
+  }
+  const openTransitionTab = tabName => {
+    setTransition(null)
+    goTab(tabName)
+  }
+  const clarificationRows = (store.clarifications || []).filter(c => c.oppId === opp.id && ['Draft', 'Open', 'Sent'].includes(c.status))
+  const deviationRows = (proposal?.terms || []).filter(t => t.status === 'Deviation')
+  const blockerOwner = blocker => blocker.needed?.join(' + ') || blocker.approver || (blocker.key === 'clarifications' ? opp.owner : 'Opportunity owner')
+  const blockerExplanation = blocker => {
+    if (blocker.key === 'clarifications') return 'Customer answers are still missing. The proposal must not be built on unconfirmed technical, delivery, or site assumptions.'
+    if (blocker.key === 'dev') return 'The customer has requested terms outside the standard commercial position. AH must review and approve the exception before proposal work can continue.'
+    if (blocker.key === 'amber-fee') return 'This Amber customer requires the pre-quote processing fee to be received before the opportunity can progress.'
+    if (blocker.key === 'kyc') return 'This Blue customer is new or unverified. AH must complete the required KYC review before registration or quoting.'
+    if (blocker.key === 'red-clearance') return 'This Red customer requires joint commercial clearance because of the risk or payment history.'
+    return 'Complete the requirement shown below before continuing.'
+  }
 
   return (
     <div className="page">
-      <div className="opp-head">
-        <h2>{opp.id} — {opp.oppName}</h2>
-        <ClassChip cls={opp.customerStatus} />
-        <Chip tone="grey">{opp.route}</Chip>
-        <Chip tone="grey">{opp.stage}</Chip>
-        <span className="hint">Owner {opp.owner} — {ROLES[opp.owner]?.name || opp.owner}</span>
+      <div className="opp-summary">
+        <div className="opp-summary-title">
+          <span className="opp-id">{opp.id}</span>
+          <h2>{opp.oppName}</h2>
+          <ClassChip cls={opp.customerStatus} />
+          <Chip tone="grey">{opp.route}</Chip>
+          <Chip tone={blockers.length ? 'state-Review' : 'state-Accepted'}>{blockers.length ? 'At risk' : 'On track'}</Chip>
+        </div>
+        <div className="opp-summary-grid">
+          <div><span>Owner</span><b>{opp.owner} — {ROLES[opp.owner]?.name || opp.owner}</b></div>
+          <div><span>Milestone</span><b>{opp.milestone || opp.stage}</b></div>
+          <div><span>Customer value</span><b>{canSeeValue ? `₹${fmt(opp.valueK || 0)},000` : 'Restricted'}</b></div>
+          <div className="opp-summary-action"><span>Next action</span><b>{nextAction.text || NEXT_ACTION[opp.milestone] || 'Progress the opportunity'}</b></div>
+          <div><span>Due</span><b>{ddMmmYY(due) || '—'}</b></div>
+        </div>
       </div>
-      <Stepper current={opp.milestone} />
-
       <div className="wb-tabs" style={{ marginTop: 10 }}>
         {TABS.map(([k, label]) => (
           <button key={k} className={`wtab ${tab === k ? 'active' : ''}`} onClick={() => goTab(k)}>{label}</button>
         ))}
       </div>
+      <div className="opp-lifecycle">
+        <div className="lifecycle-heading">
+          <div><div className="workbench-section-title">Lifecycle</div><span className="hint">Select any stop to move the opportunity, including backward corrections.</span></div>
+          <div className="lifecycle-controls">
+            <button disabled={milestoneIndex <= 0} onClick={() => moveRelative(-1)}>← Previous</button>
+            <b>{opp.milestone}</b>
+            <button disabled={milestoneIndex < 0 || milestoneIndex >= MILESTONES.length - 1} onClick={() => moveRelative(1)}>Next →</button>
+          </div>
+        </div>
+        <Stepper current={opp.milestone} onStep={moveMilestone} />
+      </div>
+      {transition && (
+        <Modal title={transition.kind === 'blocked' ? `Cannot move from ${opp.milestone} to ${transition.target}` : `Move back to ${transition.target}`} onClose={() => setTransition(null)} wide>
+          {transition.kind === 'blocked' ? (
+            <>
+              <p className="transition-intro">Complete the following requirements or obtain an approved exception before continuing to <b>{transition.target}</b>.</p>
+              <div className="transition-blockers">{transition.blockers.map((item, i) => {
+                const exception = exceptionApprovalFor(item)
+                const requestable = canRequestException(item)
+                return <div key={`${item.key}-${i}`} className={`workbench-blocker ${item.severity}`}>
+                  <div className="transition-blocker-head"><b>{item.text}</b><span className="transition-owner">Owner: <strong>{blockerOwner(item)}</strong></span></div>
+                  <span className="transition-explanation">{blockerExplanation(item)}</span>
+                  {item.key === 'clarifications' && clarificationRows.length > 0 && <div className="transition-detail-list">{clarificationRows.map(row => <div key={row.id}><b>{row.id}</b> · {row.category} · {row.q} <em>{row.status}</em></div>)}</div>}
+                  {item.key === 'dev' && deviationRows.length > 0 && <div className="transition-detail-list">{deviationRows.map((row, index) => <div key={`${row.term}-${index}`}><b>{row.term}</b> · Customer ask: {row.customerAsk || 'Not recorded'} · Response: {row.ourResponse || 'Pending review'}</div>)}</div>}
+                  {item.severity === 'wait' && <span>Waiting for the responsible approver.</span>}
+                  {item.key === 'clarifications' && <button className="exception-action" onClick={() => openTransitionTab('clarifications')}>Open clarifications</button>}
+                  {requestable && exception?.status === 'Pending' && <span>Exception approval <b>{exception.id}</b> is pending — <button className="inline-action" onClick={() => openTransitionTab('approvals')}>Open approval</button></span>}
+                  {requestable && !exception && <button className="exception-action" onClick={() => requestException(item)}>Request {blockerOwner(item)} approval to continue</button>}
+                  {requestable && exception?.status === 'Rejected' && <span>Exception <b>{exception.id}</b> was rejected; resolve the requirement or request a new review.</span>}
+                </div>
+              })}</div>
+              <div className="forms-actions"><button className="primary" onClick={() => setTransition(null)}>Close</button><button onClick={() => openTransitionTab('approvals')}>Open approvals</button></div>
+            </>
+          ) : (
+            <>
+              <p className="hint">Backward movement is allowed for corrections, but a reason is required and will be recorded in the audit trail.</p>
+              <label>Reason<textarea rows={3} value={transition.reason} onChange={e => setTransition({ ...transition, reason: e.target.value })} placeholder="Explain what changed or why this stage needs correction." /></label>
+              <div className="forms-actions"><button className="primary" disabled={!transition.reason?.trim()} onClick={() => { store.setMilestone(opp.id, transition.target, transition.reason.trim()); setTransition(null) }}>Move backward</button><button onClick={() => setTransition(null)}>Cancel</button></div>
+            </>
+          )}
+        </Modal>
+      )}
       <div className="wb-body">
         {tab === 'overview' && <OverviewTab opp={opp} goTab={goTab} />}
         {tab === 'requirement' && <RequirementTab opp={opp} />}
@@ -96,10 +200,19 @@ export default function Workbench() {
 function OverviewTab({ opp, goTab }) {
   const store = useStore()
   const nav = useNavigate()
+  const [action, setAction] = useState(null)
+  const [actionText, setActionText] = useState('')
+  const [owner, setOwner] = useState(opp.owner)
   const p = store.getProposal(opp.id)
   const blockers = readiness(opp, p, store)
   const blocked = isBlocked(blockers)
   const firstBlock = blockers.find(b => b.severity === 'block')
+  const approvals = (store.approvals || []).filter(a => a.oppId === opp.id)
+  const pendingApprovals = approvals.filter(a => a.status === 'Pending')
+  const customer = store.customers.find(c => c.name === opp.sellTo)
+  const kycItems = customer ? ((store.kyc || {})[customer.name] || []) : []
+  const verifiedKyc = kycItems.filter(k => k.state === 'Verified').length
+  const audit = (store.audit || []).filter(e => (e.objectId || '').includes(opp.id)).slice(0, 3)
 
   const nextAction = firstBlock
     ? `Resolve blocker: ${firstBlock.text}`
@@ -109,7 +222,7 @@ function OverviewTab({ opp, goTab }) {
   const summary = [
     `${opp.oppName} for ${opp.sellTo} (${opp.customerStatus} customer, ${opp.category}) runs on the ${opp.route} route and sits at ${opp.milestone}.`,
     comm && opp.valueK > 0
-      ? `Estimated value ₹ ${fmt(opp.valueK)}K with ${opp.prob?.toLowerCase() || 'unrated'} probability at the ${opp.stage} stage.`
+      ? `Estimated value (₹) ${fmt(opp.valueK)}K with ${opp.prob?.toLowerCase() || 'unrated'} probability at the ${opp.stage} stage.`
       : `${comm ? 'Not yet priced — probability' : 'Probability'} ${opp.prob?.toLowerCase() || 'unrated'} at the ${opp.stage} stage.`,
     blocked ? `${blockers.filter(b => b.severity !== 'info').length} readiness item(s) currently gate the proposal.` : 'No readiness blockers — clear to progress.',
   ].join(' ')
@@ -120,46 +233,92 @@ function OverviewTab({ opp, goTab }) {
     ['Age', `${ageDays(opp.createDate) ?? '—'} days`],
   ]
 
+  const saveAction = () => {
+    if (action === 'note' && actionText.trim()) {
+      store.addNote(`${opp.id} — ${actionText.trim()}`)
+    } else if (action === 'call') {
+      store.addCommunication(opp.id, {
+        to: opp.contactPerson || opp.sellTo,
+        subject: `Call recorded — ${opp.oppName}`,
+        kind: 'call', note: actionText.trim(),
+      })
+    } else if (action === 'owner' && owner) {
+      store.updateOpportunity(opp.id, { owner })
+    }
+    setAction(null)
+    setActionText('')
+  }
+
+  const openAction = name => { setAction(name); setActionText(''); setOwner(opp.owner) }
+
   return (
-    <div>
-      <p style={{ fontSize: 13 }}><b>Next best action:</b> {nextAction}</p>
-
-      <div className={`gate-strip ${blocked ? 'blocked' : 'ready'}`}>
-        {!blockers.length && (
-          <div className="gate-row"><Icon name="checkCircle" size={15} /><span>No blockers — the proposal is clear to go to the customer.</span></div>
-        )}
-        {blockers.map(bl => (
-          <div key={bl.key} className={`gate-row ${bl.severity}`}>
-            <Icon name={bl.severity === 'info' ? 'alert' : bl.severity === 'wait' ? 'clock' : 'lock'} size={15} />
-            <span>{bl.text}</span>
-          </div>
-        ))}
-      </div>
-
-      <div className="ana-grid">
-        <div className="ana-card c-6">
-          <div className="ana-title">AI summary <AiBadge /></div>
-          <p style={{ fontSize: 12.5 }}>{summary}</p>
-          {opp.remarks && <p className="hint">Remarks: {opp.remarks}</p>}
-        </div>
-        <div className="ana-card c-6">
-          <div className="ana-title">Key dates</div>
-          <table className="cost-table" style={{ width: '100%' }}>
-            <tbody>
-              {dates.map(([k, v]) => <tr key={k}><td>{k}</td><td className="num">{v}</td></tr>)}
-            </tbody>
-          </table>
-        </div>
-        <div className="ana-card c-12">
-          <div className="ana-title">Quick actions</div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button onClick={() => nav('/notes')}><Icon name="note" size={13} /> Add note</button>
-            <button onClick={() => goTab('clarifications')}><Icon name="mail" size={13} /> Draft clarification</button>
-            <button onClick={() => nav(`/proposal/${opp.id}`)}><Icon name="fileSheet" size={13} /> Open proposal workbook</button>
+    <div className="workbench-overview">
+      <div className="workbench-overview-grid">
+        <section className="workbench-panel next-action-panel">
+          <div className="workbench-section-title">Next best action</div>
+          <strong>{nextAction.text || NEXT_ACTION[opp.milestone] || 'Progress the opportunity'}</strong>
+          <p className="hint">Due {ddMmmYY(opp.orderDate || opp.lastUpdated) || '—'}</p>
+          <div className="workbench-actions">
+            <button onClick={() => openAction('note')}><Icon name="note" size={13} /> Add note</button>
+            <button onClick={() => goTab('clarifications')}><Icon name="mail" size={13} /> Create clarification</button>
+            <button className="primary" onClick={() => nav(`/proposal/${opp.id}`)}><Icon name="fileSheet" size={13} /> Open workbench</button>
             <button onClick={() => goTab('approvals')}><Icon name="checkCircle" size={13} /> Request approval</button>
+            <button onClick={() => openAction('call')}><Icon name="phone" size={13} /> Record call</button>
+            <button onClick={() => openAction('owner')}><Icon name="users" size={13} /> Change owner</button>
           </div>
-        </div>
+        </section>
+
+        <section className="workbench-panel blocker-panel">
+          <div className="workbench-section-title">Risks &amp; blockers</div>
+          {blockers.length ? blockers.map(bl => (
+            <div key={bl.key} className={`workbench-blocker ${bl.severity}`}>
+              <b>{bl.text}</b>
+              <span>{bl.approvalType ? `Fix: request ${bl.approver} approval` : 'Fix: resolve in the relevant workbench tab'}</span>
+            </div>
+          )) : <div className="workbench-empty"><Icon name="checkCircle" size={15} /> No active blockers.</div>}
+        </section>
+
+        <section className="workbench-panel">
+          <div className="workbench-section-title">AI summary <AiBadge /></div>
+          <p className="workbench-summary">{summary}</p>
+          <div className="workbench-readiness"><span>Proposal readiness</span><Chip tone={blocked ? 'state-Blocks' : 'state-Accepted'}>{blocked ? `${blockers.length} blocker(s)` : 'Ready to progress'}</Chip></div>
+        </section>
+
+        <section className="workbench-panel">
+          <div className="workbench-section-title">KYC snapshot</div>
+          <div className="workbench-kpi"><b>{kycItems.length ? `${verifiedKyc}/${kycItems.length}` : customer ? '0/0' : '—'}</b><span>{customer ? 'verified' : 'Customer not in master'}</span></div>
+          <Chip tone={customer && kycItems.length > 0 && verifiedKyc === kycItems.length ? 'state-Accepted' : 'state-Review'}>{customer && kycItems.length > 0 && verifiedKyc === kycItems.length ? 'Complete' : 'Review required'}</Chip>
+          <button onClick={() => goTab('customer')}>Open Customer/KYC</button>
+        </section>
+
+        <section className="workbench-panel">
+          <div className="workbench-section-title">Pending approvals</div>
+          {pendingApprovals.length ? pendingApprovals.slice(0, 3).map(a => <div className="workbench-list-row" key={a.id}><b>{a.type}</b><Chip tone="state-Review">{a.status}</Chip></div>) : <p className="hint">None pending.</p>}
+          <button onClick={() => goTab('approvals')}>Open approvals</button>
+        </section>
+
+        <section className="workbench-panel">
+          <div className="workbench-section-title">Key dates</div>
+          <table className="cost-table" style={{ width: '100%' }}><tbody>{dates.map(([k, v]) => <tr key={k}><td>{k}</td><td className="num">{v}</td></tr>)}</tbody></table>
+        </section>
+
+        <section className="workbench-panel workbench-timeline-panel">
+          <div className="workbench-section-title">Timeline &amp; audit summary</div>
+          {audit.length ? audit.map((e, i) => <div className="workbench-timeline-row" key={`${e.ts}-${i}`}><span className="timeline-dot" /><span><b>{ddMmmYY((e.ts || '').slice(0, 10))} {e.role}</b><br />{e.action}</span></div>) : <p className="hint">No audit events for this opportunity yet.</p>}
+          <button onClick={() => goTab('audit')}>Full audit</button>
+        </section>
       </div>
+
+      {action && (
+        <Modal title={action === 'note' ? 'Add opportunity note' : action === 'call' ? 'Record customer call' : 'Change opportunity owner'} onClose={() => setAction(null)}>
+          {action === 'owner' ? (
+            <label>New owner<select value={owner} onChange={e => setOwner(e.target.value)}>{OWNERS.map(r => <option key={r} value={r}>{r} — {ROLES[r]?.name || r}</option>)}</select></label>
+          ) : (
+            <label>Details<textarea rows={4} value={actionText} onChange={e => setActionText(e.target.value)} placeholder={action === 'note' ? 'What should the team know?' : 'Summarise the call and next commitment.'} /></label>
+          )}
+          <div className="forms-actions"><button className="primary" disabled={action !== 'owner' && !actionText.trim()} onClick={saveAction}>Save</button><button onClick={() => setAction(null)}>Cancel</button></div>
+        </Modal>
+      )}
     </div>
   )
 }
@@ -449,7 +608,13 @@ function SourcingTab({ opp, goTab }) {
   const store = useStore()
   const lines = store.sparesLines.filter(l => l.oppId === opp.id)
   const superseded = lines.some(l => String(l.match).toLowerCase().includes('superseded'))
-  const [rfqOk, setRfqOk] = useState(false)
+  const rfqDraft = (store.communications[opp.id] || []).find(c => c.kind === 'vendor-rfq-draft')
+  const prepareRfq = () => store.addCommunication(opp.id, {
+    to: 'Approved vendor list',
+    subject: `Vendor RFQ draft — ${opp.oppName}`,
+    kind: 'vendor-rfq-draft',
+    note: `${lines.length || 'all'} line(s), delivery ${opp.location || 'site'}. Human review required before any external send.`,
+  })
 
   const sources = lines.length
     ? [...new Map(lines.map(l => [l.priceList, l.priceState])).entries()].map(([name, state]) => ({ name, state }))
@@ -479,14 +644,14 @@ function SourcingTab({ opp, goTab }) {
       <div className="ana-card c-6">
         <div className="ana-title">Vendor actions</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button onClick={() => setRfqOk(true)}><Icon name="mail" size={13} /> Draft vendor RFQ (simulated)</button>
+          <button onClick={prepareRfq} disabled={!!rfqDraft}><Icon name="mail" size={13} /> {rfqDraft ? 'Vendor RFQ draft prepared' : 'Draft vendor RFQ (simulated)'}</button>
           <button className="primary" onClick={() => goTab('proposal')}>
             <Icon name="arrowRight" size={13} /> Route to workbench
           </button>
         </div>
-        {rfqOk && (
+        {rfqDraft && (
           <div className="okbox">
-            Vendor RFQ draft prepared (simulated) — {lines.length || 'all'} line(s), delivery {opp.location || 'site'}.
+            Vendor RFQ draft prepared (simulated) — {rfqDraft.note || `${lines.length || 'all'} line(s), delivery ${opp.location || 'site'}.`}
             Human review required before any external send.
           </div>
         )}

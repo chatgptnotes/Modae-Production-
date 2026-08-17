@@ -7,7 +7,7 @@
 //                  approvalType?, approver?, approvalId?, condIdx?, kyc? }
 
 import { unitCostINR, unitSellINR } from './utils.js'
-import { defaultCosting } from './seed.js'
+import { defaultCosting, MILESTONES } from './seed.js'
 
 // Total quantity of a BoQ line, matching the workbook: Qty/Unit × units +
 // Common + Spares (legacy rows carried a single qty — treated as common).
@@ -186,3 +186,74 @@ export function oppBlockers(opp, proposal, approvals) {
 }
 
 export const isBlocked = blockers => blockers.some(x => x.severity === 'block' || x.severity === 'wait')
+
+// Forward lifecycle movement is deliberately stricter than proposal
+// readiness. This is the single gate used by the opportunity stepper so a
+// user cannot jump over the lead-management requirements in the official
+// workflow. Backward movement is handled by the UI with a mandatory reason.
+export function transitionBlockers(opp, target, proposal, state) {
+  if (!opp || !target) return []
+  const current = MILESTONES.indexOf(opp.milestone)
+  const next = MILESTONES.indexOf(target)
+  if (next <= current) return []
+  const b = []
+  const required = [
+    ['sellTo', 'Customer is required'], ['oppName', 'Opportunity name is required'],
+    ['owner', 'Opportunity owner is required'], ['route', 'Opportunity route is required'],
+    ['contactPerson', 'Customer contact person is required'], ['contactPhone', 'Customer contact phone is required'],
+  ]
+  required.forEach(([field, text]) => { if (!opp[field]) b.push({ key: `required-${field}`, severity: 'block', text }) })
+
+  const approvals = state.approvals || []
+  const mine = approvals.filter(a => a.oppId === opp.id)
+  const approved = type => mine.some(a => a.type === type && ['Approved', 'Approved with conditions'].includes(a.status))
+  const pending = type => mine.some(a => a.type === type && a.status === 'Pending')
+  const kyc = (state.kyc || {})[opp.sellTo] || []
+  const kycComplete = !!kyc.length && kyc.every(item => item.state === 'Verified')
+
+  if (next >= MILESTONES.indexOf('Customer/KYC') && opp.customerStatus === 'Blue' && !kycComplete && !opp.kycOverride) {
+    b.push({ key: 'kyc', severity: 'block', text: 'Blue customer KYC must be fully verified by AH', approver: 'AH' })
+  }
+  if (next >= MILESTONES.indexOf('Registration') && opp.customerStatus === 'Amber' && !opp.amberFeePaid) {
+    b.push({ key: 'amber-fee', severity: 'block', text: 'Amber customer pre-quote fee must be received', approver: 'AH' })
+  }
+  if (next >= MILESTONES.indexOf('Registration') && opp.customerStatus === 'Red' && !approved('Red customer clearance')) {
+    b.push({ key: 'red-clearance', severity: pending('Red customer clearance') ? 'wait' : 'block', text: pending('Red customer clearance') ? 'Red customer clearance is awaiting LJS/AH approval' : 'Red customer clearance from LJS/AH is required', approver: 'LJS', needed: ['LJS', 'AH'] })
+  }
+
+  const clarifications = (state.clarifications || []).filter(c => c.oppId === opp.id)
+  if (next >= MILESTONES.indexOf('Sourcing') && clarifications.some(c => ['Draft', 'Open', 'Sent'].includes(c.status))) {
+    b.push({ key: 'clarifications', severity: 'block', text: `All customer clarifications must be resolved before moving to ${target}` })
+  }
+
+  if (next >= MILESTONES.indexOf('Proposal')) {
+    b.push(...readiness(opp, proposal, state).filter(x => x.severity === 'block' || x.severity === 'wait'))
+  }
+
+  if (next >= MILESTONES.indexOf('Approval')) {
+    if (!(proposal?.terms || []).length) b.push({ key: 'terms', severity: 'block', text: 'Proposal commercial terms must be completed' })
+    if (!(proposal?.bom || []).length && ['Project', 'Spares'].includes(opp.route)) b.push({ key: 'bom', severity: 'block', text: 'Proposal must contain priced BoQ lines' })
+  }
+
+  if (next >= MILESTONES.indexOf('Submitted')) {
+    const release = mine.find(a => a.type === 'Final quote release' && ['Approved', 'Approved with conditions'].includes(a.status))
+    if (!release) b.push({ key: 'release', severity: pending('Final quote release') ? 'wait' : 'block', text: pending('Final quote release') ? 'Final quote release is awaiting approval' : 'Final quote release approval is required' })
+    const conditions = mine.flatMap(a => a.status === 'Approved with conditions' ? (a.conditions || []) : []).filter(c => !c.incorporated)
+    if (conditions.length) b.push({ key: 'conditions', severity: 'block', text: 'All approval conditions must be incorporated and confirmed' })
+  }
+
+  if (next >= MILESTONES.indexOf('PO Validation') && !(state.poCompare || {})[opp.id]?.received) {
+    b.push({ key: 'po', severity: 'block', text: 'A customer PO must be received before PO validation' })
+  }
+  if (next >= MILESTONES.indexOf('Handover')) {
+    const po = (state.poCompare || {})[opp.id]
+    if (!po?.acceptance?.sales || !po?.acceptance?.customer) b.push({ key: 'po-acceptance', severity: 'block', text: 'PO must be jointly accepted by sales and customer' })
+  }
+  // An approved exception is scoped to this exact target and blocker. It
+  // never clears a different stage or a different requirement.
+  const exceptions = (state.approvals || []).filter(a =>
+    a.type === 'Milestone exception' && a.oppId === opp.id
+    && a.targetMilestone === target
+    && ['Approved', 'Approved with conditions'].includes(a.status))
+  return b.filter(item => !exceptions.some(a => a.blockerKey === item.key))
+}

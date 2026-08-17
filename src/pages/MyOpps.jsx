@@ -54,7 +54,7 @@ export default function MyOpps() {
             <tr>
               <th>Opp ID</th><th>Customer</th><th>Opportunity</th>
               <th>Stage</th><th>Prob</th>
-              <th>{comm ? 'Value (K₹)' : ''}</th>
+              <th>{comm ? 'Value (₹)' : ''}</th>
               <th>Expected Order Date</th><th>Next Action Pending</th>
             </tr>
           </thead>

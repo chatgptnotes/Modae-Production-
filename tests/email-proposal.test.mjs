@@ -46,8 +46,11 @@ test('preview renders the real document, not a text stub', () => {
     'the preview must render PrintDoc')
   assert.doesNotMatch(proposal, /<p>Attached: \{oppId\}_Proposal_Rev_/,
     'the old text stub must be gone')
-  // Sending stays blocked until the document has actually been previewed.
-  assert.match(proposal, /disabled=\{!emailTo\.trim\(\) \|\| !emailPreview\}/)
+  // Sending uses a native mailto link and only needs a recipient; the inline
+  // preview remains optional.
+  assert.match(proposal, /const gmailComposeHref = /)
+  assert.match(proposal, /href=\{gmailComposeHref \|\| undefined\}/)
+  assert.match(proposal, /https:\/\/mail\.google\.com\/mail\/\?view=cm/)
 })
 
 // A mailto: link cannot carry a file. The UI used to say "Attachment ready…
@@ -55,11 +58,12 @@ test('preview renders the real document, not a text stub', () => {
 // the PDF was attached. It never was.
 test('the attachment claim matches what actually happens', () => {
   assert.doesNotMatch(proposal, /Attachment ready:/)
-  assert.match(proposal, /a mail link cannot carry the file itself/)
+  assert.match(proposal, /cannot send or carry the generated PDF/)
   assert.match(proposal, /Save proposal PDF/, 'the user must be able to produce the PDF here')
   assert.match(proposal, /const attachmentName = /, 'one attachment name, used everywhere')
+  assert.doesNotMatch(proposal, /The detailed proposal is attached as/)
 })
 
 test('the sent email is logged against the opportunity', () => {
-  assert.match(proposal, /kind: 'proposal-email', attachment: attachmentName,/)
+  assert.match(proposal, /kind: 'proposal-email-compose', pdfName: attachmentName,/)
 })

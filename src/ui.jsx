@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { MILESTONES } from './seed.js'
 import { Icon } from './icons.jsx'
 
@@ -28,15 +28,15 @@ export const AiBadge = ({ label = 'AI' }) => (
 )
 
 // 13-milestone lifecycle stepper.
-export function Stepper({ current }) {
+export function Stepper({ current, onStep }) {
   const at = MILESTONES.indexOf(current)
   return (
     <div className="stepper">
       {MILESTONES.map((m, i) => (
-        <div key={m} className={`step ${i < at ? 'done' : i === at ? 'now' : ''}`} title={m}>
+        <button key={m} type="button" className={`step ${i < at ? 'done' : i === at ? 'now' : ''} ${onStep ? 'clickable' : ''}`} title={onStep ? `Move opportunity to ${m}` : m} onClick={() => onStep?.(m)}>
           <span className="step-dot">{i < at ? <Icon name="check" size={9} /> : null}</span>
           <span className="step-label">{m}</span>
-        </div>
+        </button>
       ))}
     </div>
   )
@@ -52,11 +52,19 @@ export const KpiCard = ({ label, value, hint, onClick }) => (
 export const WarnBox = ({ children }) => <div className="warnbox">{children}</div>
 export const ErrBox = ({ children }) => <div className="errbox">{children}</div>
 
-export function Modal({ title, onClose, children, wide }) {
+export function Modal({ title, onClose, children, wide, className = '' }) {
+  useEffect(() => {
+    const onKeyDown = event => {
+      if (event.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
   return (
     <>
       <div className="filter-overlay" onClick={onClose} />
-      <div className={`modal form-card ${wide ? 'wide' : ''}`}>
+      <div className={`modal form-card ${wide ? 'wide' : ''} ${className}`.trim()} role="dialog" aria-modal="true" aria-label={title}>
         {title && <div className="section-title">{title}</div>}
         {children}
       </div>

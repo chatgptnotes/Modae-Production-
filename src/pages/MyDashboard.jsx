@@ -163,7 +163,7 @@ function SalesOpportunitySection({ store, open, nav, money }) {
   const action = o => nextActionWith(o, store.getProposal(o.id), store)
   return (
     <Card title="My opportunities" icon="sheet" tone="tone-sky" span={12} action={<ViewSwitch value={view} onChange={setView} />}>
-      {view === 'table' && <div className="dashboard-table-scroll"><table className="dashboard-table"><thead><tr><th>ID</th><th>Opportunity</th><th>Customer</th><th>Stage</th><th>Value</th><th>Win %</th><th>Next action</th><th>Due</th></tr></thead><tbody>{rows.map(o => { const na = action(o); return <tr key={o.id} onClick={() => nav(`/opp/${o.id}`)}><td><b>{o.id}</b></td><td>{o.oppName}</td><td>{o.sellTo}</td><td><span className="pill open">{o.stage}</span></td><td>{money ? fmtLakh(o.valueK) : '—'}</td><td>{o.prob || '—'}</td><td title={na.text}>{na.text || o.remarks || 'Review next step'}</td><td>{o.orderDate ? ddMmmYY(o.orderDate) : '—'}</td></tr>})}</tbody></table></div>}
+      {view === 'table' && <div className="dashboard-table-scroll"><table className="dashboard-table"><thead><tr><th>ID</th><th>Opportunity</th><th>Customer</th><th>Stage</th><th>Value (₹)</th><th>Win %</th><th>Next action</th><th>Due</th></tr></thead><tbody>{rows.map(o => { const na = action(o); return <tr key={o.id} onClick={() => nav(`/opp/${o.id}`)}><td><b>{o.id}</b></td><td>{o.oppName}</td><td>{o.sellTo}</td><td><span className="pill open">{o.stage}</span></td><td>{money ? fmtLakh(o.valueK) : '—'}</td><td>{o.prob || '—'}</td><td title={na.text}>{na.text || o.remarks || 'Review next step'}</td><td>{o.orderDate ? ddMmmYY(o.orderDate) : '—'}</td></tr>})}</tbody></table></div>}
       {view === 'cards' && <div className="sales-opportunity-cards">{rows.map(o => { const na = action(o); return <button key={o.id} onClick={() => nav(`/opp/${o.id}`)}><b>{o.id}</b><strong>{o.oppName}</strong><span>{o.sellTo} · {o.stage}</span><span>{money ? fmtLakh(o.valueK) : '—'} · {o.prob || 'No probability'}</span><small>{na.text || o.remarks || 'Review next step'}</small></button> })}</div>}
       {view === 'compact' && <div className="sales-compact-list">{rows.map(o => <button key={o.id} onClick={() => nav(`/opp/${o.id}`)}><b>{o.id}</b><span>{o.oppName}</span><span>{o.stage}</span><span>{money ? fmtLakh(o.valueK) : '—'}</span></button>)}</div>}
       {!rows.length && <div className="dashboard-empty">No open opportunities are assigned to you.</div>}
@@ -181,7 +181,7 @@ function SalesCustomerSection({ store, open, orders, nav, money }) {
     return { name, status: customer?.status || '—', region, open: opps.length, value: opps.reduce((s, o) => s + (+o.valueK || 0), 0), orders: booked.length }
   }).sort((a, b) => b.value - a.value)
   return <Card title="My customers" icon="users" tone="tone-green" span={12} action={<button onClick={() => nav('/customers')}>Open customer master</button>}>
-    <div className="dashboard-table-scroll"><table className="dashboard-table customer-table"><thead><tr><th>Customer</th><th>Class</th><th>Region</th><th>Open opportunities</th><th>Open value</th><th>Orders</th></tr></thead><tbody>{rows.map(row => <tr key={row.name} onClick={() => nav('/customers')}><td><b>{row.name}</b></td><td><span className={`pill ${row.status}`}>{row.status}</span></td><td>{row.region}</td><td>{row.open}</td><td>{money ? fmtLakh(row.value) : '—'}</td><td>{row.orders}</td></tr>)}</tbody></table></div>
+    <div className="dashboard-table-scroll"><table className="dashboard-table customer-table"><thead><tr><th>Customer</th><th>Class</th><th>Region</th><th>Open opportunities</th><th>Open value (₹)</th><th>Orders</th></tr></thead><tbody>{rows.map(row => <tr key={row.name} onClick={() => nav('/customers')}><td><b>{row.name}</b></td><td><span className={`pill ${row.status}`}>{row.status}</span></td><td>{row.region}</td><td>{row.open}</td><td>{money ? fmtLakh(row.value) : '—'}</td><td>{row.orders}</td></tr>)}</tbody></table></div>
     {!rows.length && <div className="dashboard-empty">Customers will appear here when you have an opportunity or booked order.</div>}
   </Card>
 }
@@ -287,7 +287,7 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
       </div>
 
       <div className="sales-kpi-strip">
-        <Metric label="Open value" value={money ? fmtLakh(openValue) : '—'} tone="sky" onClick={() => nav('/my')} />
+        <Metric label="Open value (₹)" value={money ? fmtLakh(openValue) : '—'} tone="sky" onClick={() => nav('/my')} />
         <Metric label="Weighted forecast" value={money ? fmtLakh(open.reduce((s, o) => s + (+o.valueK || 0) * ({ Low: .25, Medium: .5, High: .75 }[o.prob] || .25), 0)) : '—'} tone="teal" onClick={() => nav('/analytics')} />
         <Metric label="Booked orders" value={money ? fmtLakh(perf.achieved) : '—'} tone="green" onClick={() => nav('/po')} />
         <Metric label="Active customers" value={new Set([...open.map(o => o.sellTo), ...perf.orders.map(o => o.customer)]).size} tone="slate" onClick={() => nav('/customers')} />
@@ -332,7 +332,7 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
           <table className="cost-table" style={{ width: '100%' }}>
             <tbody>
               <tr><td>Open opportunities</td><td className="num">{open.length}</td></tr>
-              {money && <tr><td>Open value</td><td className="num">{fmtLakh(openValue)}</td></tr>}
+              {money && <tr><td>Open value (₹)</td><td className="num">{fmtLakh(openValue)}</td></tr>}
               <tr><td>Without a proposal</td><td className="num">{unproposed.length}</td></tr>
               <tr><td>New leads in your queue</td><td className="num">{leads.length}</td></tr>
               <tr className="total"><td>Blocked</td><td className="num">{blocked.length}</td></tr>
@@ -351,7 +351,7 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
 
         <Card title="My orders" icon="clipboardCheck" tone="tone-green" span={6}>
           <table className="ana-table">
-            <thead><tr><th>Order</th><th>Customer</th><th className="num">Value</th><th>Status</th></tr></thead>
+            <thead><tr><th>Order</th><th>Customer</th><th className="num">Value (₹)</th><th>Status</th></tr></thead>
             <tbody>
               {perf.orders.slice(0, 6).map(o => (
                 <tr key={o.id}>

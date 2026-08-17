@@ -461,7 +461,7 @@ export default function Analytics() {
                 <div><b>{fmtLakh(weightedK)}</b><span>Weighted forecast</span></div>
               </div>
               <div className="hint" style={{ marginTop: 10 }}>
-                Weights: Low 25% · Medium 50% · High 75% of Value (K₹); unset probability counts as Low.
+                Weights: Low 25% · Medium 50% · High 75% of Value (₹); unset probability counts as Low.
               </div>
             </>
           ) : <Restricted />}

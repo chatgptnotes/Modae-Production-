@@ -42,7 +42,7 @@ export default function PurchaseOrders() {
 
       <div className="kpi-row">
         <KpiCard label={`Orders booked ${store.sales?.fy || ''}`} value={orders.length} hint="Booked orders visible to you" />
-        <KpiCard label="Total booked value" value={comm ? fmtLakh(totalK) : <Icon name="lock" size={14} />}
+        <KpiCard label="Total booked value (₹)" value={comm ? fmtLakh(totalK) : <Icon name="lock" size={14} />}
           hint={comm ? 'Sum of booked order values' : 'Restricted — commercial data'} />
         <KpiCard label="POs in validation" value={validating.length} hint="Proposal-vs-PO comparisons in progress" />
       </div>
@@ -102,7 +102,7 @@ export default function PurchaseOrders() {
             <thead>
               <tr>
                 <th>Order</th>{approver && <th>Owner</th>}<th>Customer</th><th>Description</th>
-                <th>Value</th><th>Customer PO</th><th>Status</th><th>Booked</th>
+                <th>Value (₹)</th><th>Customer PO</th><th>Status</th><th>Booked</th>
               </tr>
             </thead>
             <tbody>

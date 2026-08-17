@@ -4,7 +4,7 @@ import { useStore } from '../store.jsx'
 import { fmt, fmtLakh, monthKey, monthLabel, exportCSV, canViewCommercial } from '../utils.js'
 
 // The "Pivot" sheet, shaped like the real one: rows = customers, columns =
-// Expected Order Date months, values = Sum of Value (K₹), with an Expected Order Date quarter
+// Expected Order Date months, values = Sum of Value (₹), with an Expected Order Date quarter
 // range slicer on top.
 const quarterOf = k => `${k.slice(0, 4)}-Q${Math.ceil(parseInt(k.slice(5, 7), 10) / 3)}`
 const QUARTERS = []
@@ -22,7 +22,7 @@ export default function Dashboard() {
   if (!canViewCommercial(store.role)) {
     return (
       <div className="page">
-        <h2>Pivot — Sum of Value (K₹) by Customer × Order Month</h2>
+        <h2>Pivot — Sum of Value (₹) by Customer × Order Month</h2>
         <div className="restricted" style={{ maxWidth: 640 }}>
           Restricted — the forecast pivot rolls up commercial values and is visible to approvers/admin only.
           Switch the acting-as persona in the header to view it.
@@ -65,14 +65,14 @@ export default function Dashboard() {
 
   const doExport = () => exportCSV(
     'forecast_pivot.csv',
-    ['Sum of Value (K₹)', ...months.map(monthLabel), 'Grand Total'],
+    ['Sum of Value (₹)', ...months.map(monthLabel), 'Grand Total'],
     [...customers.map(c => [c, ...months.map(k => matrix[c][k] || ''), rowTotal(c)]),
      ['Grand Total', ...months.map(colTotal), grandTotal]]
   )
 
   return (
     <div className="page">
-      <h2>Pivot — Sum of Value (K₹) by Customer × Order Month</h2>
+      <h2>Pivot — Sum of Value (₹) by Customer × Order Month</h2>
       <div className="toolbar">
         <label>Owner:{' '}
           <select value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)}>
@@ -107,7 +107,7 @@ export default function Dashboard() {
         <table className="sheet">
           <thead>
             <tr>
-              <th>Sum of Value (K₹)</th>
+              <th>Sum of Value (₹)</th>
               {months.map(k => <th key={k} className="num">{monthLabel(k)}</th>)}
               <th className="num">Grand Total</th>
             </tr>
@@ -141,7 +141,7 @@ export default function Dashboard() {
       <div className="section-title">Rows in this roll-up</div>
       <div className="sheet-wrap">
         <table className="sheet">
-          <thead><tr><th>Opp ID</th><th>Customer</th><th>Opportunity</th><th>Owner</th><th>Stage</th><th>Prob</th><th>Order Month</th><th>Value (K₹)</th></tr></thead>
+          <thead><tr><th>Opp ID</th><th>Customer</th><th>Opportunity</th><th>Owner</th><th>Stage</th><th>Prob</th><th>Order Month</th><th>Value (₹)</th></tr></thead>
           <tbody>
             {inScope.map(o => (
               <tr key={o.id}>

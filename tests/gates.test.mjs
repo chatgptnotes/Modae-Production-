@@ -10,7 +10,7 @@ import { canViewCommercial, canPriceProposal, isSalesOwner } from '../src/utils.
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
 
-const SALES_ROLES = ['RS', 'PP', 'SS', 'PJS', 'RJS', 'SR']
+const SALES_ROLES = Object.entries(ROLES).filter(([, role]) => role.sales).map(([id]) => id)
 const APPROVER_ROLES = ['LJS', 'AH']
 
 // 13 Aug client review: "the salesperson himself is making their proposal, so he

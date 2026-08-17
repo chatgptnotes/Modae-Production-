@@ -3,7 +3,9 @@
 // as shown in the Aug 10 meeting screenshots).
 
 export const CATEGORIES = ['EUC', 'OEM', 'EPC', 'MAC', 'SI', 'ACP', 'RE/TR']
-export const OWNERS = ['LJS', 'PP', 'RS', 'SS', 'PJS', 'RJS', 'SR']
+// Active sales owners available for new assignment. Historical records may
+// still contain retired owner codes (SS/PJS/RJS/SR) and remain readable.
+export const OWNERS = ['PP', 'RS']
 export const OPP_TYPES = ['Project', 'Spares', 'Service', 'Upgrade', 'AMC', 'Training']
 export const BUS = ['Aero', 'Energy', 'Service']
 export const SEGMENTS = ['Thermal', 'Nuclear', 'Hydro', 'Industrial', 'O&G-US', 'O&G-MS', 'O&G-DS', 'Petrochem', 'Test Bed', 'Others']
@@ -489,10 +491,6 @@ export const ROLES = {
   AH: { name: 'A. Hameed', label: 'AH — Commercial & Ops Approver', commercial: true },
   RS: { name: 'R. Sundaram', label: 'RS — Sales Owner', commercial: false, sales: true },
   PP: { name: 'P. Prakash', label: 'PP — Sales Owner', commercial: false, sales: true },
-  SS: { name: 'S. Subramanian', label: 'SS — Sales Owner', commercial: false, sales: true },
-  PJS: { name: 'P. J. Sharma', label: 'PJS — Sales Owner', commercial: false, sales: true },
-  RJS: { name: 'R. J. Singh', label: 'RJS — Sales Owner', commercial: false, sales: true },
-  SR: { name: 'S. Rao', label: 'SR — Sales Owner', commercial: false, sales: true },
   TECH: { name: 'T. Rao', label: 'TECH — Technical Reviewer', commercial: false },
   CUST: { name: 'Customer contact', label: 'Customer — External portal', commercial: false, external: true },
 }
@@ -500,18 +498,18 @@ export const ROLES = {
 // Page-permission matrix (from the BT prototype's PERMS). Sales owners all get
 // the same set; CUST sees the external portal only.
 const SALES_PAGES = ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders',
-  'analytics', 'customers', 'po', 'aimap', 'launcher', 'notes', 'voice']
+  'proposal', 'analytics', 'customers', 'po', 'aimap', 'launcher', 'notes', 'voice']
 export const PERMS = {
-  SUPER: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'pricelists',
+  SUPER: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'pricelists',
     'dashboard', 'analytics', 'customers', 'audit', 'users', 'aimap', 'admin', 'po', 'launcher', 'notes', 'voice', 'portal'],
-  ADMIN: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'pricelists',
+  ADMIN: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'pricelists',
     'dashboard', 'analytics', 'customers', 'audit', 'users', 'aimap', 'admin', 'po', 'launcher', 'notes', 'voice'],
-  LJS: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'pricelists',
+  LJS: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'pricelists',
     'dashboard', 'analytics', 'customers', 'audit', 'aimap', 'admin', 'po', 'launcher', 'notes', 'voice', 'portal'],
-  AH: ['home', 'mydashboard', 'tracker', 'my', 'approvals', 'folders', 'pricelists', 'dashboard', 'analytics',
+  AH: ['home', 'mydashboard', 'tracker', 'my', 'approvals', 'folders', 'proposal', 'pricelists', 'dashboard', 'analytics',
     'customers', 'audit', 'aimap', 'po', 'launcher', 'notes'],
-  RS: SALES_PAGES, PP: SALES_PAGES, SS: SALES_PAGES, PJS: SALES_PAGES, RJS: SALES_PAGES, SR: SALES_PAGES,
-  TECH: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'approvals', 'aimap', 'launcher', 'notes'],
+  RS: SALES_PAGES, PP: SALES_PAGES,
+  TECH: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'proposal', 'approvals', 'aimap', 'launcher', 'notes'],
   CUST: ['portal'],
 }
 
@@ -558,7 +556,6 @@ export const seedUsers = [
   { id: 'U-003', name: 'A. Hameed', email: 'ah@modae.demo', role: 'AH', status: 'Active', created: '2026-04-01', pw: DEMO_PASSWORD },
   { id: 'U-004', name: 'R. Sundaram', email: 'rs@modae.demo', role: 'RS', status: 'Active', created: '2026-04-15', pw: DEMO_PASSWORD },
   { id: 'U-005', name: 'P. Prakash', email: 'pp@modae.demo', role: 'PP', status: 'Active', created: '2026-04-15', pw: DEMO_PASSWORD },
-  { id: 'U-006', name: 'S. Rao', email: 'sr@modae.demo', role: 'SR', status: 'Pending', created: '2026-08-08', pw: DEMO_PASSWORD },
   { id: 'U-007', name: 'T. Rao', email: 'tech@modae.demo', role: 'TECH', status: 'Active', created: '2026-08-01', pw: DEMO_PASSWORD },
   { id: 'U-008', name: 'Customer contact', email: 'customer@portal.demo', role: 'CUST', status: 'Active', created: '2026-08-01', pw: DEMO_PASSWORD },
 ]

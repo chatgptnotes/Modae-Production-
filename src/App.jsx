@@ -36,6 +36,12 @@ import PurchaseOrders from './pages/PurchaseOrders.jsx'
 import Launcher from './pages/Launcher.jsx'
 import Portal from './pages/Portal.jsx'
 
+function PageGate({ page, children }) {
+  const store = useStore()
+  if (!canSeePage(store.role, page)) return <Navigate to="/home" replace />
+  return children
+}
+
 // Left-sidebar navigation. `page` is the PERMS matrix key — visibility follows
 // the acting role's permission set (seed.js PERMS).
 const NAV = [
@@ -125,35 +131,35 @@ export default function App() {
     </Routes>
   ) : (
     <Routes>
-      <Route path="/" element={<Tracker />} />
-      <Route path="/home" element={tablet ? <TabletHome /> : <Home />} />
-      <Route path="/my" element={<MyOpps />} />
-      <Route path="/inbox" element={<Inbox />} />
-      <Route path="/inbox/:leadId" element={<Inbox />} />
-      <Route path="/register/:leadId" element={<Register />} />
-      <Route path="/opp/:oppId" element={<Workbench />} />
-      <Route path="/opp/:oppId/:tab" element={<Workbench />} />
-      <Route path="/approvals" element={<Approvals />} />
-      <Route path="/po" element={<PurchaseOrders />} />
-      <Route path="/audit" element={<Audit />} />
-      <Route path="/new" element={<IntakeForm />} />
-      <Route path="/tender" element={<TenderIntake />} />
-      <Route path="/folders" element={<Folders />} />
-      <Route path="/folders/:oppId" element={<Folders />} />
-      <Route path="/folders/:oppId/:sub" element={<Folders />} />
-      <Route path="/proposal/:oppId" element={<Proposal />} />
-      <Route path="/pricelists" element={<PriceLists />} />
-      <Route path="/dashboard" element={<Dashboard />} />
-      <Route path="/my-dashboard" element={<MyDashboard />} />
-      <Route path="/analytics" element={<Analytics />} />
-      <Route path="/customers" element={<Customers />} />
-      <Route path="/users" element={<Users />} />
-      <Route path="/aimap" element={<AiMap />} />
-      <Route path="/admin" element={<Admin />} />
-      <Route path="/launcher" element={<Launcher />} />
-      <Route path="/portal" element={<Portal />} />
-      <Route path="/notes" element={<Notes />} />
-      <Route path="/voice" element={<VoiceUpdate />} />
+      <Route path="/" element={<PageGate page="tracker"><Tracker /></PageGate>} />
+      <Route path="/home" element={<PageGate page="home">{tablet ? <TabletHome /> : <Home />}</PageGate>} />
+      <Route path="/my" element={<PageGate page="my"><MyOpps /></PageGate>} />
+      <Route path="/inbox" element={<PageGate page="inbox"><Inbox /></PageGate>} />
+      <Route path="/inbox/:leadId" element={<PageGate page="inbox"><Inbox /></PageGate>} />
+      <Route path="/register/:leadId" element={<PageGate page="inbox"><Register /></PageGate>} />
+      <Route path="/opp/:oppId" element={<PageGate page="tracker"><Workbench /></PageGate>} />
+      <Route path="/opp/:oppId/:tab" element={<PageGate page="tracker"><Workbench /></PageGate>} />
+      <Route path="/approvals" element={<PageGate page="approvals"><Approvals /></PageGate>} />
+      <Route path="/po" element={<PageGate page="po"><PurchaseOrders /></PageGate>} />
+      <Route path="/audit" element={<PageGate page="audit"><Audit /></PageGate>} />
+      <Route path="/new" element={<PageGate page="new"><IntakeForm /></PageGate>} />
+      <Route path="/tender" element={<PageGate page="tender"><TenderIntake /></PageGate>} />
+      <Route path="/folders" element={<PageGate page="folders"><Folders /></PageGate>} />
+      <Route path="/folders/:oppId" element={<PageGate page="folders"><Folders /></PageGate>} />
+      <Route path="/folders/:oppId/:sub" element={<PageGate page="folders"><Folders /></PageGate>} />
+      <Route path="/proposal/:oppId" element={<PageGate page="proposal"><Proposal /></PageGate>} />
+      <Route path="/pricelists" element={<PageGate page="pricelists"><PriceLists /></PageGate>} />
+      <Route path="/dashboard" element={<PageGate page="dashboard"><Dashboard /></PageGate>} />
+      <Route path="/my-dashboard" element={<PageGate page="mydashboard"><MyDashboard /></PageGate>} />
+      <Route path="/analytics" element={<PageGate page="analytics"><Analytics /></PageGate>} />
+      <Route path="/customers" element={<PageGate page="customers"><Customers /></PageGate>} />
+      <Route path="/users" element={<PageGate page="users"><Users /></PageGate>} />
+      <Route path="/aimap" element={<PageGate page="aimap"><AiMap /></PageGate>} />
+      <Route path="/admin" element={<PageGate page="admin"><Admin /></PageGate>} />
+      <Route path="/launcher" element={<PageGate page="launcher"><Launcher /></PageGate>} />
+      <Route path="/portal" element={<PageGate page="portal"><Portal /></PageGate>} />
+      <Route path="/notes" element={<PageGate page="notes"><Notes /></PageGate>} />
+      <Route path="/voice" element={<PageGate page="voice"><VoiceUpdate /></PageGate>} />
     </Routes>
   )
 

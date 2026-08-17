@@ -153,7 +153,7 @@ export default function OppPanel({ oppId }) {
             <div className="dgrid2">
               <div><label>Revision</label><div className="ro">{proposal.revision} · {proposal.bidStage} · {proposal.bidType}</div></div>
               <div><label>BoQ lines</label><div className="ro">{(proposal.bom || []).length}</div></div>
-              {showValue && <div><label>Value (K₹)</label><div className="ro">₹ {fmt(opp.valueK)}</div></div>}
+              {showValue && <div><label>Value (₹)</label><div className="ro">₹ {fmt(opp.valueK)}</div></div>}
               {comm ? (
                 <>
                   <div><label>COGS (K₹)</label><div className="ro">₹ {fmt(opp.cogsK)}</div></div>
@@ -250,7 +250,7 @@ export default function OppPanel({ oppId }) {
         <div className="fgroup">Commercial</div>
         {showValue ? (
           <div className="dgrid2">
-            <Field label="Value (K₹)"><input type="number" value={opp.valueK || ''} onChange={upd('valueK')} placeholder="-" /></Field>
+            <Field label="Value (₹)"><input type="number" value={opp.valueK || ''} onChange={upd('valueK')} placeholder="-" /></Field>
             {comm && <Field label="COGS (K₹)"><input type="number" value={opp.cogsK || ''} onChange={upd('cogsK')} placeholder="-" /></Field>}
             {comm && <Field label="GM (K₹)"><div className="ro">{opp.valueK ? fmt(gmK) : '-'}</div></Field>}
             {comm && <Field label="GM%"><div className="ro">{gmPct}</div></Field>}
