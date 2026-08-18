@@ -68,22 +68,22 @@ body {
   top: 50%;
   width: min(92vw, 1080px);
   height: auto;
-  opacity: .08;
+  opacity: .14;
   transform-origin: center;
-  filter: saturate(1.06) contrast(1.02);
+  filter: saturate(1.06) contrast(1.08);
   animation: modae-watermark-drift 24s ease-in-out infinite alternate;
 }
 .brand-watermark--tablet .brand-watermark__mark {
   left: 54%;
   top: 54%;
   width: min(94vw, 980px);
-  opacity: .065;
+  opacity: .11;
 }
 .brand-watermark--login .brand-watermark__mark {
   left: 50%;
   top: 50%;
   width: min(108vw, 760px);
-  opacity: .1;
+  opacity: .15;
 }
 .login-bg {
   position: relative;
