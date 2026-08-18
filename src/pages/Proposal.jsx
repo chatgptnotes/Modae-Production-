@@ -12,7 +12,83 @@ import DocEditor from '../proposal/DocEditor.jsx'
 import PrintDoc from '../proposal/PrintDoc.jsx'
 import { signalsFromBom, countSignals, signalsAreEmpty, rackLayout, UMM_CHANNELS, RACK_SLOTS } from '../rack.js'
 
-const TABS = ['Cover Letter', 'Document', 'Signal List', 'Rack Layout', 'Priced BoQ']
+const ROUTE_TABS = {
+  Project: ['Cover Letter', 'Document', 'Signal List', 'Rack Layout', 'Priced BoQ'],
+  Services: ['Cover Letter', 'Document', 'Scope of Work', 'Issues List', 'Proposal', 'Service Rate Schedule'],
+  Spares: ['Cover Letter', 'Document', 'Firm Offer', 'Clarifications', 'Sensor Comparison', 'Priced BoQ'],
+}
+
+function RouteTemplateTab({ route, tab, p, doc, priced, lineQuoted }) {
+  const rows = (p.bom || []).map((line, i) => ({
+    ...line,
+    index: i + 1,
+    qty: (line.qtyPerUnit || 0) * (p.units || 1) + (line.common || 0) + (line.spares || 0),
+  }))
+  const title = tab === 'Service Rate Schedule' ? 'Service Rate Schedule'
+    : tab === 'Firm Offer' ? 'Firm Offer'
+      : tab
+
+  if (tab === 'Scope of Work') {
+    return <div className="form-card route-template-panel">
+      <div className="section-title">Scope of Work</div>
+      <p className="hint">Service template: execution scope and deliverables from the service proposal and SOW.</p>
+      {(doc.scope || []).map((item, i) => <div className="route-template-row" key={i}><b>{i + 1}. {item.category || item.desc}</b><span>{item.desc || item.pn || 'Scope item'}</span></div>)}
+      {(doc.scopeIncludes || []).map((item, i) => <div className="route-template-row" key={`include-${i}`}><b>Deliverable</b><span>{item}</span></div>)}
+      {!doc.scope?.length && !doc.scopeIncludes?.length && <div className="hint">Add the service scope in the Document tab.</div>}
+    </div>
+  }
+
+  if (tab === 'Issues List') {
+    return <div className="form-card route-template-panel">
+      <div className="section-title">Issues List</div>
+      <p className="hint">Service template: open issues, assumptions, and resolution notes stay tied to the proposal.</p>
+      {(p.terms || []).map((term, i) => <div className="route-template-row" key={i}><b>{term.term || `Issue ${i + 1}`}</b><span>{term.customerAsk || term.ourResponse || 'Review required'} · {term.status}</span></div>)}
+      {!p.terms?.length && <div className="hint">No service issues captured yet.</div>}
+    </div>
+  }
+
+  if (tab === 'Proposal') {
+    return <div className="form-card route-template-panel">
+      <div className="section-title">Service Proposal</div>
+      <p className="route-template-lead">{doc.execSummary}</p>
+      <div className="section-title">Commercial note</div>
+      <p>{doc.commercialNote || 'Commercial terms are maintained in the Document tab.'}</p>
+    </div>
+  }
+
+  if (tab === 'Clarifications') {
+    return <div className="form-card route-template-panel">
+      <div className="section-title">Clarifications</div>
+      <p className="hint">Spares template: customer references and unresolved commercial or technical questions.</p>
+      {(p.terms || []).map((term, i) => <div className="route-template-row" key={i}><b>{term.term || `Clarification ${i + 1}`}</b><span>{term.customerAsk || 'No customer requirement recorded'} → {term.ourResponse || 'Response pending'}</span></div>)}
+      {!p.terms?.length && <div className="hint">No clarifications captured yet.</div>}
+    </div>
+  }
+
+  if (tab === 'Sensor Comparison') {
+    return <div className="form-card route-template-panel">
+      <div className="section-title">Sensor Comparison</div>
+      <p className="hint">Spares template: compare the customer item reference with the proposed ModAE/OEM item.</p>
+      <table className="sheet"><thead><tr><th>#</th><th>Customer item</th><th>Proposed item</th><th>Description</th></tr></thead><tbody>
+        {rows.map(row => <tr key={row.index}><td>{row.index}</td><td>{row.custRef || '—'}</td><td>{row.pn || '—'}</td><td>{row.desc || '—'}</td></tr>)}
+        {!rows.length && <tr><td colSpan={4} className="hint">No comparison rows captured yet.</td></tr>}
+      </tbody></table>
+    </div>
+  }
+
+  if (tab === 'Service Rate Schedule' || tab === 'Firm Offer') {
+    return <div className="form-card route-template-panel">
+      <div className="section-title">{title}</div>
+      <p className="hint">{route === 'Services' ? 'Service template: priced activities, man-days, mobilisation, and payment milestones.' : 'Spares template: offered parts, quantities, unit prices, and total prices.'}</p>
+      <table className="sheet"><thead><tr><th>#</th><th>Item / scope description</th><th>Proposed model / part no.</th><th>Qty</th>{priced && <th>Unit price (₹)</th>}</tr></thead><tbody>
+        {rows.map(row => <tr key={row.index}><td>{row.index}</td><td>{row.desc || row.itemCategory || '—'}</td><td>{row.pn || '—'}</td><td className="num">{row.qty}</td>{priced && <td className="num">₹ {fmt(lineQuoted(row))}</td>}</tr>)}
+        {!rows.length && <tr><td colSpan={priced ? 5 : 4} className="hint">No line items captured yet.</td></tr>}
+      </tbody></table>
+    </div>
+  }
+
+  return null
+}
 
 // Qty/Unit × units + Common + Spares — the BoQ quantity rule, in one place so
 // the signal-list derivation reads the same totals the sheet shows.
@@ -300,7 +376,7 @@ export default function Proposal() {
   // spare parts case, there will not be any signal list, there will not be
   // rack layout." Hide the tabs rather than show them with an apology.
   const route = docRoute(p, opp)
-  const visibleTabs = route === 'Project' ? TABS : TABS.filter(t => t !== 'Signal List' && t !== 'Rack Layout')
+  const visibleTabs = ROUTE_TABS[route] || ROUTE_TABS.Project
   // Switching route while sitting on a now-hidden tab must not blank the page.
   if (!visibleTabs.includes(tab)) { setTab('Cover Letter'); return null }
 
@@ -450,6 +526,10 @@ export default function Proposal() {
       {tab === 'Document' && (
         <DocEditor p={p} opp={opp} save={save} files={specFiles.map(f => f.name).filter(Boolean)}
           totals={totals} priced={priced} />
+      )}
+
+      {['Scope of Work', 'Issues List', 'Proposal', 'Service Rate Schedule', 'Firm Offer', 'Clarifications', 'Sensor Comparison'].includes(tab) && (
+        <RouteTemplateTab route={route} tab={tab} p={p} doc={doc} priced={priced} lineQuoted={lineQuoted} />
       )}
 
       {tab === 'Signal List' && (

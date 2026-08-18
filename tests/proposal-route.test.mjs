@@ -103,6 +103,9 @@ test('the printed document is driven by the route, not by a banner', () => {
 test('signal list and rack layout tabs are hidden off the project route', () => {
   const proposal = read('src/pages/Proposal.jsx')
   assert.match(proposal, /const route = docRoute\(p, opp\)/)
-  assert.match(proposal, /visibleTabs = route === 'Project' \? TABS : TABS\.filter/)
+  assert.match(proposal, /Project: \['Cover Letter', 'Document', 'Signal List', 'Rack Layout', 'Priced BoQ'\]/)
+  assert.match(proposal, /Services: \['Cover Letter', 'Document', 'Scope of Work', 'Issues List', 'Proposal', 'Service Rate Schedule'\]/)
+  assert.match(proposal, /Spares: \['Cover Letter', 'Document', 'Firm Offer', 'Clarifications', 'Sensor Comparison', 'Priced BoQ'\]/)
+  assert.match(proposal, /const visibleTabs = ROUTE_TABS\[route\]/)
   assert.match(proposal, /visibleTabs\.map/, 'the tab bar must render the filtered list')
 })
