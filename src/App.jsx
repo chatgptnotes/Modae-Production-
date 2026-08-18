@@ -2,12 +2,11 @@ import React, { useEffect, useState } from 'react'
 import { Routes, Route, NavLink, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from './store.jsx'
 import { ROLES } from './seed.js'
-import { isAdminRole, isApprover, isSalesOwner, canSeePage } from './utils.js'
+import { isAdminRole, isSalesOwner, canSeePage } from './utils.js'
 import { DrawerHost } from './drawer.jsx'
 import { Icon, ModaeLogo } from './icons.jsx'
 import { InstallButton } from './install.jsx'
 import { counts } from './kpi.js'
-import { activeBackend } from './filestore.js'
 import Tracker from './pages/Tracker.jsx'
 import IntakeForm from './pages/IntakeForm.jsx'
 import Folders from './pages/Folders.jsx'
@@ -33,6 +32,7 @@ import PurchaseOrders from './pages/PurchaseOrders.jsx'
 import Launcher from './pages/Launcher.jsx'
 import Portal from './pages/Portal.jsx'
 import Opportunities from './pages/Opportunities.jsx'
+import TabletApp from './tablet/TabletApp.jsx'
 
 function PageGate({ page, children }) {
   const store = useStore()
@@ -60,19 +60,6 @@ const NAV = [
   { to: '/launcher', label: 'Demo Launcher', icon: 'play', page: 'launcher', show: role => isAdminRole(role) },
 ]
 
-// App-like bottom tab bar shown in tablet mode — four tabs around a raised
-// centre action (voice update), like a native app.
-// My Dashboard stays near the top of the sidebar — on a phone the
-// tablet shell renders no sidebar, so without a tab here the page was reachable
-// only by typing the URL.
-// The approvals badge counts the gates *this* persona has to decide (`forMe`),
-// not every pending approval in the company.
-const BOTTOM = [
-  { to: '/my-dashboard', label: 'Dashboard', icon: 'chartBar', page: 'mydashboard' },
-  { to: '/inbox', label: 'Inbox', icon: 'inbox', page: 'inbox', badge: s => counts(s).newLeads },
-  { to: '/approvals', label: 'Approvals', icon: 'checkCircle', page: 'approvals', badge: s => counts(s).forMe },
-]
-
 export default function App() {
   const store = useStore()
   const nav = useNavigate()
@@ -82,12 +69,13 @@ export default function App() {
     try { return window.localStorage.getItem('modae_sidebar_compact') === '1' } catch { return false }
   })
   const tablet = store.viewMode === 'tablet'
+  const custAccount = store.auth?.user?.role === 'CUST'
   const role = store.role
   const items = NAV
     .filter(t => canSeePage(role, t.page) && (typeof t.show !== 'function' || t.show(role)))
     .map(t => t.to === '/po' && isSalesOwner(role) ? { ...t, label: 'My Purchase Orders' } : t)
 
-  // Off-canvas nav closes on navigation (tablet).
+  // Off-canvas nav closes on navigation in the responsive desktop shell.
   useEffect(() => { setNavOpen(false) }, [loc.pathname])
 
   // Follow the viewport until the user picks a mode themselves — a tablet turned
@@ -103,15 +91,10 @@ export default function App() {
     }
   }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Tablet mode lands on the opportunities workspace once per mount.
-  useEffect(() => {
-    const hash = window.location.hash
-    if (tablet && (hash === '' || hash === '#/')) nav('/opportunities', { replace: true })
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  if (tablet) return <RequireAuth><TabletApp /></RequireAuth>
 
   // Customer accounts/persona only ever see the portal. Route-level, not a
   // post-render effect — internal pages must never mount for a customer.
-  const custAccount = store.auth?.user?.role === 'CUST'
   const toggleSidebar = () => setSidebarCompact(value => {
     const next = !value
     try { window.localStorage.setItem('modae_sidebar_compact', next ? '1' : '0') } catch { /* storage is optional */ }
@@ -127,7 +110,6 @@ export default function App() {
     <Routes>
       <Route path="/" element={<PageGate page="tracker"><Tracker /></PageGate>} />
       <Route path="/opportunities" element={<PageGate page="tracker"><Opportunities /></PageGate>} />
-      {/* Keep the old URL as a compatibility redirect while Home is hidden. */}
       <Route path="/home" element={<Navigate to="/opportunities" replace />} />
       <Route path="/my" element={<PageGate page="my"><MyOpps /></PageGate>} />
       <Route path="/inbox" element={<PageGate page="inbox"><Inbox /></PageGate>} />
@@ -168,67 +150,7 @@ export default function App() {
   )
 
   const c = counts(store, role)
-  const theme = store.tabletTheme === 'light' ? 'light' : 'dark'
-  const backend = activeBackend()
-  const online = backend === 'sharepoint'
-    ? { label: 'SharePoint', tone: 'ok' }
-    : backend === 'supabase' ? { label: 'Cloud', tone: 'ok' } : { label: 'Local demo', tone: 'idle' }
-
-  const shell = tablet ? (
-    <div className={`shell tablet-mode theme-${theme}`} style={{ display: 'block' }}>
-      <header className="tablet-bar">
-        <ModaeLogo className="tb-brand" size={24} sub="WinTrack" onClick={() => nav('/opportunities')} />
-        <span className="spacer" />
-        <button className="tb-bell" onClick={() => nav('/inbox')} title={`${c.newLeads} new leads`}>
-          <Icon name="bell" size={15} />
-          {c.newLeads > 0 && <span className="tb-dot amber">{c.newLeads}</span>}
-        </button>
-        <button className="tb-bell" onClick={() => nav('/approvals')} title={`${c.forMe} approvals waiting on you`}>
-          <Icon name="checkCircle" size={15} />
-          {c.forMe > 0 && <span className="tb-dot red">{c.forMe}</span>}
-        </button>
-        <span className={`tb-online ${online.tone}`} title={`File storage: ${online.label}`}>
-          <Icon name="wifi" size={13} /> <span className="tb-label">{online.label}</span>
-        </span>
-        <InstallButton />
-        <button className="tb-icon" title={theme === 'dark' ? 'Switch to light dashboard' : 'Switch to dark dashboard'}
-          onClick={() => store.setTabletTheme(theme === 'dark' ? 'light' : 'dark')}>
-          <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={15} />
-        </button>
-        <RoleSwitcher />
-        <button onClick={() => { store.setViewMode('full') }} title="Switch to the full desktop site">
-          <Icon name="monitor" size={14} /> <span className="tb-label">Full site</span>
-        </button>
-        {store.auth?.user && (
-          <button onClick={store.logout} title={`Sign out ${store.auth.user.email}`}>
-            <Icon name="logout" size={14} /> <span className="tb-label">Exit</span>
-          </button>
-        )}
-      </header>
-      {routes}
-      <nav className="tab-bottom">
-        {BOTTOM.filter(t => canSeePage(role, t.page)).map((t, i) => {
-          const badge = t.badge ? t.badge(store) : 0
-          return (
-            <React.Fragment key={t.to}>
-              {i === 2 && <span className="tab-fab-slot" />}
-              <NavLink to={t.to} className={({ isActive }) => (isActive ? 'active' : '')}>
-                {badge > 0 && <span className="tb-badge">{badge}</span>}
-                <Icon name={t.icon} size={20} />{t.label}
-              </NavLink>
-            </React.Fragment>
-          )
-        })}
-        {canSeePage(role, 'voice') && (
-          <button className="tab-fab" title="Voice update — speak a lead or status change"
-            onClick={() => nav('/voice')}>
-            <Icon name="mic" size={22} />
-          </button>
-        )}
-      </nav>
-      <DrawerHost />
-    </div>
-  ) : (
+  const shell = (
     <div className={`shell ${sidebarCompact ? 'sidebar-compact' : ''}`}>
       <div className={`nav-backdrop ${navOpen ? 'open' : ''}`} onClick={() => setNavOpen(false)} />
       <aside className={`sidenav ${navOpen ? 'open' : ''}`}>
@@ -276,7 +198,7 @@ export default function App() {
           <button className="nav-burger" onClick={() => setNavOpen(true)} title="Menu">
             <Icon name="menu" size={20} />
           </button>
-          <span className="topbar-title">Modae — sales opportunity &amp; proposal workspace</span>
+          <span className="topbar-title">ModAE — sales opportunity &amp; proposal workspace</span>
           <span className="spacer" style={{ flex: 1 }} />
           {!custAccount && (
             <label className="topbar-user" title="Logged-in persona — commercial data is visible to approvers/admins only">
@@ -285,7 +207,7 @@ export default function App() {
             </label>
           )}
           <InstallButton />
-          <button className="mode-switch" onClick={() => { store.setViewMode('tablet'); nav('/opportunities') }}>
+          <button className="mode-switch" onClick={() => { store.setViewMode('tablet'); nav('/home') }}>
             <Icon name="tablet" size={15} /> Switch to tablet view
           </button>
         </header>

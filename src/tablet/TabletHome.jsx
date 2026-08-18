@@ -3,22 +3,20 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES } from '../seed.js'
 import { canViewCommercial, fmtLakh, ddMmmYY } from '../utils.js'
-import { buildTiles, TABLET_SECTIONS, roleGroup } from '../tiles.js'
+import { buildTabletTiles, TABLET_SECTIONS, tabletRoleGroup } from './tabletTiles.js'
 import { counts, pipelineSeries, winRate, turnaround } from '../kpi.js'
 import { Sparkline, DonutGauge, ArcGauge, TrendPill } from '../dashviz.jsx'
 import { Icon } from '../icons.jsx'
 
-// Tablet command deck: grouped task sections with live KPI widgets at the head
-// of each. Every tile is a door into a screen the app already has.
 export default function TabletHome() {
   const store = useStore()
   const nav = useNavigate()
   const role = store.role
   const comm = canViewCommercial(role)
 
-  const tiles = buildTiles(store)
+  const tiles = buildTabletTiles(store)
   const byKey = Object.fromEntries(tiles.map(t => [t.key, t]))
-  const sections = TABLET_SECTIONS[roleGroup(role)] || TABLET_SECTIONS.sales
+  const sections = TABLET_SECTIONS[tabletRoleGroup(role)] || TABLET_SECTIONS.sales
 
   const placed = new Set(sections.flatMap(s => s.keys))
   const leftovers = tiles.filter(t => !placed.has(t.key))
@@ -37,7 +35,6 @@ export default function TabletHome() {
     </button>
   )
 
-  // ---- KPI feature tiles --------------------------------------------------
   const QUICK = [
     { icon: 'plus', to: '/new', title: 'Create opportunity' },
     { icon: 'inbox', to: '/inbox', title: 'Lead inbox' },

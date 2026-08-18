@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS, DEMO_PASSWORD } from '../seed.js'
 import { WarnBox } from '../ui.jsx'
-import { Icon, ModaeLogo } from '../icons.jsx'
+import { Icon, ModaeImageLogo } from '../icons.jsx'
 import { InstallBanner } from '../install.jsx'
 
 // Roles a new registrant may request: the sales owners plus the technical
@@ -59,7 +59,7 @@ export default function Login() {
   return (
     <div className="login-bg">
       <div className="login-card">
-        <ModaeLogo className="login-logo" size={38} sub="WinTrack" />
+        <ModaeImageLogo className="login-logo" height={38} />
 
         <InstallBanner />
 

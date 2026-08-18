@@ -68,8 +68,8 @@ const PATHS = {
   edit: <><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3Z" /><path d="m14.5 6.5 3 3" /></>,
 }
 
-// The Modae mark — rounded tile, "M" stroke, teal accent dot. Single source for
-// every logo in the app (sidebar, tablet bar, login, letterhead, home header).
+const MODAE_LOGO_SRC = '/modae-red-logo.png'
+
 export function ModaeMark({ size = 30, tile = true, className = '' }) {
   return (
     <svg className={`modae-mark ${className}`} width={size} height={size} viewBox="0 0 32 32"
@@ -85,7 +85,7 @@ export function ModaeMark({ size = 30, tile = true, className = '' }) {
 // Mark + wordmark lockup. `sub` prints a small caption under the word.
 export function ModaeLogo({ size = 30, sub = '', tile = true, className = '', onClick }) {
   return (
-    <span className={`modae-logo ${className}`} aria-label="Modae" onClick={onClick}>
+    <span className={`modae-logo ${className}`} aria-label="ModAE" onClick={onClick}>
       <ModaeMark size={size} tile={tile} />
       <span className="ml-text">
         <b>Modae</b>
@@ -95,18 +95,18 @@ export function ModaeLogo({ size = 30, sub = '', tile = true, className = '', on
   )
 }
 
-// Home-header wordmark — deliberately kept as-is; the Home page uses this
-// geometric mark rather than the ModaeLogo lockup.
+export function ModaeImageLogo({ height = 30, className = '', alt = 'ModAE' }) {
+  return (
+    <img className={`modae-image-logo ${className}`} src={MODAE_LOGO_SRC} alt={alt}
+      style={{ '--logo-h': `${height}px` }} />
+  )
+}
+
+// Home-header wordmark.
 export function BrandMark({ height = 30, className = '' }) {
   return (
-    <span className={`brandmark ${className}`} aria-label="ModAE">
-      <svg viewBox="0 0 48 34" height={height} fill="none" aria-hidden="true">
-        <path d="M3 31 15 6l9 16 9-16 12 25" stroke="currentColor" strokeWidth="4.5"
-          strokeLinejoin="round" strokeLinecap="round" opacity=".55" />
-        <path d="M15 31 24 14l9 17Z" fill="currentColor" opacity=".9" />
-      </svg>
-      <b>MODAE</b>
-    </span>
+    <img className={`brandmark ${className}`} src={MODAE_LOGO_SRC} alt="ModAE"
+      style={{ '--logo-h': `${height}px` }} />
   )
 }
 

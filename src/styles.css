@@ -67,6 +67,14 @@ body {
 /* Modae logo lockup — mark + wordmark, shared by every brand slot */
 .modae-logo { display: inline-flex; align-items: center; gap: 10px; line-height: 1.1; }
 .modae-logo .modae-mark { flex: 0 0 auto; }
+.modae-image-logo,
+.modae-mark-img {
+  display: block;
+  width: auto;
+  height: var(--logo-h, 30px);
+  max-width: min(148px, 100%);
+  object-fit: contain;
+}
 .modae-logo .ml-text { display: flex; flex-direction: column; }
 .modae-logo b { font-size: 18px; font-weight: 800; letter-spacing: -.3px; color: inherit; }
 .modae-logo i {
@@ -555,7 +563,7 @@ button.secondary:hover, .btn.secondary:hover {
 /* Proposal cover letter */
 .cover-sheet { background: #fff; border: 1px solid var(--grid-line); max-width: 820px; padding: 34px 46px; }
 .cover-head { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #1e293b; padding-bottom: 10px; margin-bottom: 18px; }
-.cover-logo b { font-size: 26px; }
+.cover-logo { height: 34px; max-width: 150px; }
 .cover-head .tagline { color: var(--bg-sidebar); font-style: italic; font-weight: 600; }
 .cover-meta { margin-bottom: 14px; }
 .cover-meta div { padding: 1px 0; }
@@ -1359,7 +1367,7 @@ input.needs-input, select.needs-input { background: #fffbeb; border-color: var(-
   padding: 4vh 20px 32px; overflow-y: auto; }
 .login-card { background: #fff; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,.35); padding: 30px 34px; width: 400px; max-width: 94vw; }
 .login-logo { margin-bottom: 18px; }
-.login-logo b { font-size: 24px; color: var(--bg-sidebar); }
+.login-logo { height: 38px; max-width: 172px; }
 .login-card label { display: block; font-size: 11.5px; color: var(--text-muted); margin: 10px 0 3px; }
 .login-card input, .login-card select { width: 100%; padding: 8px 10px; font-size: 14px; }
 .login-card .login-actions { margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
@@ -1913,8 +1921,13 @@ button.install:hover { background: var(--primary-hover); }
    ========================================================================= */
 .home-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .home-head h2 { margin: 4px 0 10px; }
-.brandmark { display: inline-flex; align-items: center; gap: 9px; color: var(--text-subtle); opacity: .8; }
-.brandmark b { font-size: 21px; font-weight: 800; letter-spacing: .12em; color: var(--text-muted); }
+.brandmark {
+  display: block;
+  width: auto;
+  height: var(--logo-h, 30px);
+  max-width: 150px;
+  object-fit: contain;
+}
 
 /* Analytics-first landing overview. The two-column split keeps the funnel
    legible while leaving the forecast signal visually distinct. */
@@ -2083,7 +2096,7 @@ button.install:hover { background: var(--primary-hover); }
   font-size: 9.5px; color: var(--text-muted);
 }
 .doc-pagehead .ph-brand { display: inline-flex; align-items: center; gap: 6px; }
-.doc-pagehead .ph-brand b { font-size: 13px; font-weight: 800; color: var(--bg-sidebar); letter-spacing: -.2px; }
+.doc-pagehead .ph-brand .modae-image-logo { height: 20px; max-width: 86px; }
 .doc-pagefoot {
   display: flex; justify-content: space-between; gap: 12px;
   border-top: 1px solid var(--border-soft); padding-top: 5px; margin-top: 18px;
@@ -2093,7 +2106,6 @@ button.install:hover { background: var(--primary-hover); }
 /* ---- letterhead (covering letter only) ---- */
 .doc-letterhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; }
 .doc-lh-brand { display: inline-flex; align-items: center; gap: 10px; line-height: 1.15; }
-.doc-lh-brand b { display: block; font-size: 24px; font-weight: 800; letter-spacing: -.3px; color: var(--bg-sidebar); }
 .doc-lh-brand i { font-style: italic; font-size: 11px; font-weight: 600; color: var(--primary-deep); }
 .doc-lh-right { text-align: right; font-size: 9.5px; color: var(--text-muted); line-height: 1.5; }
 .doc-lh-right b { display: block; font-size: 11.5px; color: var(--text-main); margin-bottom: 1px; }

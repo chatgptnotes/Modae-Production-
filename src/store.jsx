@@ -83,6 +83,11 @@ function migrate(s) {
   }
   if (!s.handover) s.handover = seedHandover && Object.keys(seedHandover).length ? seedHandover : {}
   if (s.viewMode !== 'tablet' && s.viewMode !== 'full') s.viewMode = defaultViewMode()
+  if (s.viewModeRestoreRev === 1) {
+    s.viewMode = defaultViewMode()
+    s.viewModePinned = false
+    delete s.viewModeRestoreRev
+  }
   if (s.tabletTheme !== 'dark' && s.tabletTheme !== 'light') s.tabletTheme = 'dark'
   if (!s.spSync) s.spSync = {}
   if (!s.auth) s.auth = { user: null }

@@ -30,13 +30,16 @@ test('My Dashboard branches per role', () => {
 // and the store defaults to tablet mode at <=1024px.
 test('My Dashboard is reachable on phone and tablet', () => {
   const app = read('src/App.jsx')
-  const tiles = read('src/tiles.js')
-  assert.match(app, /const BOTTOM = \[[\s\S]*?to: '\/my-dashboard'/,
-    'the bottom tab bar must carry My Dashboard')
-  assert.match(tiles, /key: 'mydashboard'/, 'the shared tile registry must carry My Dashboard')
+  const tabletApp = read('src/tablet/TabletApp.jsx')
+  const tiles = read('src/tablet/tabletTiles.js')
+  assert.match(app, /import TabletApp from '\.\/tablet\/TabletApp\.jsx'/,
+    'App must delegate tablet mode to the tablet shell')
+  assert.match(tabletApp, /const BOTTOM = \[[\s\S]*?to: '\/my-dashboard'/,
+    'the tablet bottom tab bar must carry My Dashboard')
+  assert.match(tiles, /key: 'mydashboard'/, 'the tablet tile registry must carry My Dashboard')
   // And it must appear in every role group's tablet layout.
   for (const group of ['sales', 'approver', 'admin']) {
-    const section = tiles.match(new RegExp(`${group}: \\[[^\\]]*\\]`))
+    const section = tiles.match(new RegExp(`${group}: \\[[\\s\\S]*?\\n  \\]`))
     assert.ok(section && section[0].includes('mydashboard'),
       `${group} tablet tasks must include mydashboard`)
   }

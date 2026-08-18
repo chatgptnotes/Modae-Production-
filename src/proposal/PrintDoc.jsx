@@ -1,6 +1,6 @@
 import React from 'react'
 import { fmt, ddMmmYY } from '../utils.js'
-import { Icon, ModaeMark } from '../icons.jsx'
+import { Icon, ModaeImageLogo } from '../icons.jsx'
 import {
   MODAE_COMPANY, docLayout, addDays, amountInWords, lineQty, standardFor, customerResponse,
 } from '../proposalDoc.js'
@@ -50,7 +50,7 @@ const StatusChip = ({ status }) => (
 // Compact identity strip on every page after the covering letter.
 const PageHead = ({ p }) => (
   <div className="doc-pagehead">
-    <span className="ph-brand"><ModaeMark size={20} /> <b>Modae</b></span>
+    <span className="ph-brand"><ModaeImageLogo height={20} /></span>
     <span>{p.ourRef} · Rev {p.revision}</span>
   </div>
 )
@@ -138,11 +138,8 @@ export default function PrintDoc({ p, opp, doc, priced, totals, lineQuoted }) {
       <section className="doc-page doc-letter">
         <header className="doc-letterhead">
           <span className="doc-lh-brand">
-            <ModaeMark size={34} />
-            <span>
-              <b>Modae</b>
-              <i>{MODAE_COMPANY.tagline}</i>
-            </span>
+            <ModaeImageLogo height={34} />
+            <span><i>{MODAE_COMPANY.tagline}</i></span>
           </span>
           <span className="doc-lh-right">
             <b>{MODAE_COMPANY.name}</b>

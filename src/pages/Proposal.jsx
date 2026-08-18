@@ -4,7 +4,7 @@ import { useStore } from '../store.jsx'
 import { defaultCosting, newProposal, proposalTypeForOpp } from '../seed.js'
 import { effectiveRate, unitCostINR, unitSellINR, fmt, exportCSV, canPriceProposal, clampCosting, clampQty, MAX_GM_PCT } from '../utils.js'
 import { useFormulaBar } from '../formulabar.jsx'
-import { Icon, ModaeLogo } from '../icons.jsx'
+import { Icon, ModaeImageLogo } from '../icons.jsx'
 import { Modal } from '../ui.jsx'
 import { oppBlockers, isBlocked } from '../gates.js'
 import { docModel, docRoute } from '../proposalDoc.js'
@@ -378,7 +378,7 @@ export default function Proposal() {
       {tab === 'Cover Letter' && (
         <div className="cover-sheet">
           <div className="cover-head">
-            <ModaeLogo className="cover-logo" size={34} />
+            <ModaeImageLogo className="cover-logo" height={34} />
             <span className="tagline">Your Partners In Achieving Excellence</span>
           </div>
           <div className="cover-meta">

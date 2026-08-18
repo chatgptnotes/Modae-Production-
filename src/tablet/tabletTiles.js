@@ -1,21 +1,14 @@
-import { canViewCommercial, isAdminRole, isSalesOwner, canSeePage } from './utils.js'
-import { counts } from './kpi.js'
+import { canViewCommercial, isAdminRole, isSalesOwner, canSeePage } from '../utils.js'
+import { counts } from '../kpi.js'
 
-// Full-site tile registry. Tablet mode has its own registry under src/tablet so
-// mobile navigation does not drift when the desktop home changes. Shape:
-//   { key, icon, label, hint, to, color, page, badge?, badgeHint? }
-// `color` picks a tone class on desktop tiles; `page` is the PERMS key.
-
-export const roleGroup = role =>
+export const tabletRoleGroup = role =>
   isAdminRole(role) ? 'admin' : role === 'LJS' || role === 'AH' ? 'approver' : 'sales'
 
-export function buildTiles(store) {
+export function buildTabletTiles(store) {
   const role = store.role
   const comm = canViewCommercial(role)
   const admin = isAdminRole(role)
   const approver = role === 'LJS' || role === 'AH' || admin
-
-  // One source of truth for every badge in the app (src/kpi.js).
   const c = counts(store, role)
 
   return [
@@ -39,9 +32,20 @@ export function buildTiles(store) {
   ].filter(t => t.show !== false && (!('show' in t) || t.show === true) && canSeePage(role, t.page))
 }
 
-// Desktop Home groups the tool wall into labelled columns.
-export const HOME_GROUPS = [
-  { title: 'Sales & opportunities', keys: ['mydashboard', 'opportunities', 'status', 'voice', 'approvals'] },
-  { title: 'Document flow', keys: ['inbox', 'folders', 'po'] },
-  { title: 'Insights & AI', keys: ['aimap', 'analytics', 'dashboard', 'customers', 'pricelists', 'users', 'admin', 'audit', 'launcher'] },
-]
+export const TABLET_SECTIONS = {
+  sales: [
+    { title: 'Sales operations', kpis: ['command', 'turnaround'], keys: ['mydashboard', 'opportunities', 'inbox', 'status', 'voice'] },
+    { title: 'Pipeline & proposals', kpis: ['pipeline', 'winrate'], keys: ['opportunities', 'approvals', 'po', 'folders'] },
+    { title: 'Intelligence', kpis: [], keys: ['aimap', 'analytics', 'customers', 'launcher'] },
+  ],
+  approver: [
+    { title: 'Decisions & gates', kpis: ['command'], keys: ['mydashboard', 'opportunities', 'approvals', 'po', 'inbox'] },
+    { title: 'Pipeline health', kpis: ['pipeline', 'winrate', 'turnaround'], keys: ['opportunities', 'status', 'dashboard', 'folders'] },
+    { title: 'Intelligence & audit', kpis: [], keys: ['analytics', 'aimap', 'customers', 'audit', 'launcher'] },
+  ],
+  admin: [
+    { title: 'Platform', kpis: ['command'], keys: ['mydashboard', 'opportunities', 'users', 'admin', 'audit'] },
+    { title: 'Operations', kpis: ['pipeline', 'winrate', 'turnaround'], keys: ['opportunities', 'inbox', 'approvals', 'po', 'folders'] },
+    { title: 'Intelligence', kpis: [], keys: ['aimap', 'analytics', 'dashboard', 'pricelists', 'launcher'] },
+  ],
+}

@@ -1,0 +1,73 @@
+/* Tablet-only overrides are imported by TabletApp after the global stylesheet. */
+.tablet-mode {
+  overscroll-behavior-y: contain;
+}
+
+.tablet-mode .page {
+  padding-bottom: 86px;
+}
+
+.tablet-mode button,
+.tablet-mode .btn {
+  min-height: 42px;
+  padding: 9px 14px;
+  font-size: 14px;
+}
+
+.tablet-mode select,
+.tablet-mode input[type=text],
+.tablet-mode input[type=number],
+.tablet-mode input[type=date],
+.tablet-mode input[type=tel],
+.tablet-mode input[type=email],
+.tablet-mode input[type=password],
+.tablet-mode textarea {
+  min-height: 42px;
+  font-size: 16px;
+}
+
+.tablet-mode .tablet-bar select {
+  min-height: 0;
+  font-size: 12px;
+}
+
+.tablet-mode .tablet-bar button {
+  min-height: 0;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.tablet-mode table.sheet td input,
+.tablet-mode table.sheet td select {
+  min-height: 30px;
+  font-size: 13px;
+}
+
+.tablet-mode table.sheet th,
+.tablet-mode table.sheet td {
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+.tablet-mode .drawer {
+  width: min(680px, 100vw);
+}
+
+.tablet-mode .drawer-backdrop {
+  display: block;
+}
+
+.tablet-mode .drawer-backdrop.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.tablet-mode .sheet-tabs {
+  left: 0;
+  bottom: calc(52px + env(safe-area-inset-bottom));
+}
+
+.tablet-mode .ai-field .af-actions button {
+  min-height: 0;
+  padding: 3px 10px;
+}

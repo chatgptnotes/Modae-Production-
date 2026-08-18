@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
 import { Chip } from '../ui.jsx'
 import { fmt, ddMmmYY } from '../utils.js'
-import { Icon, ModaeLogo } from '../icons.jsx'
+import { Icon, ModaeImageLogo } from '../icons.jsx'
 
 // Customer-facing portal shell (role CUST sees only this). Internal IDs,
 // pricing and assessments are deliberately absent — statuses are translated
@@ -54,7 +54,7 @@ export default function Portal() {
     <div className="page">
       <div className="home-head">
         <h2>Customer portal</h2>
-        <ModaeLogo size={30} sub="WinTrack" />
+        <ModaeImageLogo height={30} />
       </div>
       <div className="hint" style={{ marginBottom: 14, maxWidth: 680 }}>
         Simulated customer-facing view. In production this is a separate authenticated site on its own

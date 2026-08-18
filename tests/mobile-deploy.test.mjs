@@ -25,8 +25,21 @@ test('the tablet bar wraps and sheds labels on a phone', () => {
   assert.match(css, /@media \(max-width: 720px\)[\s\S]{0,400}\.tablet-bar \.tb-label \{ display: none; \}/)
   // Every label the media query hides must actually carry the class.
   const app = read('src/App.jsx')
-  const labels = app.match(/className="tb-label"/g) || []
+  const tabletApp = read('src/tablet/TabletApp.jsx')
+  const labels = tabletApp.match(/className="tb-label"/g) || []
   assert.ok(labels.length >= 3, `expected the bar's labels to be tb-label, found ${labels.length}`)
+})
+
+test('tablet shell is isolated from the full-site app shell', () => {
+  const app = read('src/App.jsx')
+  const tabletApp = read('src/tablet/TabletApp.jsx')
+  const tabletHome = read('src/tablet/TabletHome.jsx')
+  assert.match(app, /import TabletApp from '\.\/tablet\/TabletApp\.jsx'/)
+  assert.doesNotMatch(app, /TabletHome/)
+  assert.match(app, /if \(tablet\) return <RequireAuth><TabletApp \/><\/RequireAuth>/)
+  assert.match(tabletHome, /from '\.\/tabletTiles\.js'/)
+  assert.doesNotMatch(tabletHome, /from '\.\.\/tiles\.js'/)
+  assert.match(tabletApp, /<Route path="\/home" element=\{<TabletGate page="tracker"><TabletHome \/><\/TabletGate>\}/)
 })
 
 // View mode was read from the viewport once on first visit and never again, so
