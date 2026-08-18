@@ -67,3 +67,17 @@ browser prompt, no localhost URL.
 - No horizontal page scroll anywhere. Tables scroll inside their own container.
 - Rotate the device: the layout follows, unless "Full site" was chosen.
 - Modal actions stay visible above the bottom navigation.
+
+## Approval gate and PO handover
+
+- **Handover opens on the joint signature.** On an opportunity with a PO received,
+  accept the PO as LJS, switch the role to AH and accept again — the Handover
+  milestone opens instead of holding on "PO must be jointly accepted".
+- **A revision re-opens approval.** Build a proposal → Submit for approval → approve
+  the Final quote release on `/approvals` → confirm the Submission panel unlocks.
+  Then click **Revise quote** on the builder, give a reason, and confirm:
+  - Submit for approval is enabled again (subject to the readiness blockers),
+  - the Submission panel returns to "Release approval pending",
+  - the revisions list shows the new R-entry with the reason,
+  - the opportunity is back on the Proposal milestone,
+  - the audit trail records "Quote revision opened".

@@ -1,6 +1,8 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
 import * as filestore from './filestore.js'
 import * as datastore from './datastore.js'
+import * as leadBlobs from './leadBlobs.js'
+import { mintId, nextSeq, seqOf } from './ids.js'
 import { statusFolderFor } from './sharepoint.js'
 import {
   seedOpportunities, seedFiles, seedPriceLists, seedAdhocParts,
@@ -9,6 +11,7 @@ import {
   seedRateSheets, seedSvcEstimates, seedClarifications, seedHandover,
   seedAiLeads, seedJointApprovals, seedCatalogRev,
   seedPoCompare, buildPoCompare, buildHandover, milestoneForStage, routeForType,
+  contextForType, B_STEPS, REVISION_TYPES,
   ROLES, SUBFOLDERS, newProposal,
 } from './seed.js'
 
@@ -89,6 +92,11 @@ function migrate(s) {
     delete s.viewModeRestoreRev
   }
   if (s.tabletTheme !== 'dark' && s.tabletTheme !== 'light') s.tabletTheme = 'dark'
+  // Diagram 02 workflow objects: the Brownfield B-01..B-05 sign-off ledger,
+  // the §4 service site surveys, and §8 competitor tracking.
+  if (!s.bSteps) s.bSteps = {}
+  if (!Array.isArray(s.surveys)) s.surveys = []
+  if (!Array.isArray(s.competitors)) s.competitors = []
   if (!s.spSync) s.spSync = {}
   if (!s.auth) s.auth = { user: null }
   // Price lists added to the seed after a state was saved (e.g. Meggitt) land
@@ -139,6 +147,9 @@ function migrate(s) {
     route: routeForType(o.oppType),
     revisions: [], validityDays: 30, followUps: [],
     ...o,
+    // Greenfield/Brownfield is derived, never stored by hand — a saved row from
+    // before the split gets it here, and a type change re-derives it.
+    context: o.context || contextForType(o.oppType),
     nextActionOwner: o.nextActionOwner || '',
   }))
   s.approvals = s.approvals.map(a => ({
@@ -365,6 +376,7 @@ export function StoreProvider({ children }) {
       opp = {
         milestone: milestoneForStage(opp.stage, opp.status),
         route: routeForType(opp.oppType),
+        context: contextForType(opp.oppType),
         ...opp,
       }
       setState(s => withAudit({
@@ -380,6 +392,11 @@ export function StoreProvider({ children }) {
       // Status-folder diff BEFORE the patch lands — a stage change (Won/Lost/
       // reopen) moves the SharePoint folder between the four status folders.
       const before = stateRef.current.opportunities.find(o => o.id === id)
+      // A type change re-derives both branching axes — leaving a Retrofit on
+      // the Greenfield lane would silently skip the B-01..B-05 chain.
+      if (patch.oppType) {
+        patch = { route: routeForType(patch.oppType), context: contextForType(patch.oppType), ...patch }
+      }
       setState(s => withAudit({
         ...s,
         opportunities: s.opportunities.map(o =>
@@ -474,6 +491,122 @@ export function StoreProvider({ children }) {
         'Proposal saved', oppId, `Rev ${proposal.revision}`))
     },
 
+    // Opening a revision on a released quote (diagram 02 §7). The bumped
+    // revision no longer matches the approvals that released the previous one,
+    // so §5 and the submission panel both re-lock — re-approval is mandatory.
+    // The revision type routes the rework back to the B-step that owns it,
+    // which is un-signed here so the salesperson has to walk it again.
+    reviseProposal(oppId, note, type = 'Other') {
+      setState(s => {
+        const p = s.proposals[oppId]
+        if (!p) return s
+        const revisions = p.revisions || []
+        const spec = REVISION_TYPES.find(r => r.id === type) || REVISION_TYPES[REVISION_TYPES.length - 1]
+        const next = {
+          ...p,
+          revision: String((+p.revision || 0) + 1).padStart(2, '0'),
+          releaseStatus: 'Superseded',
+          revisions: [...revisions, {
+            // The original dispatch is V1, so the first revision is V2.
+            rev: `V${revisions.length + 2}`, when: new Date().toISOString().slice(0, 10),
+            by: s.role, note: note || 'Revision opened', status: 'Revised', type: spec.id, step: spec.step,
+          }],
+        }
+        const steps = { ...(s.bSteps[oppId] || {}) }
+        delete steps[spec.step]
+        return withAudit({
+          ...s,
+          proposals: { ...s.proposals, [oppId]: next },
+          bSteps: { ...s.bSteps, [oppId]: steps },
+          opportunities: s.opportunities.map(o => (o.id === oppId ? { ...o, milestone: 'Proposal' } : o)),
+        }, 'Quote revision opened', oppId,
+        `Rev ${next.revision} — ${spec.id} change, back to ${spec.step}, re-approval required · ${note || 'no reason given'}`)
+      })
+    },
+
+    // Diagram 02 §3: the assigned salesperson signs off each Brownfield step.
+    signBStep(oppId, stepId, note = '') {
+      const step = B_STEPS.find(b => b.id === stepId)
+      if (!step) return
+      setState(s => withAudit({
+        ...s,
+        bSteps: {
+          ...s.bSteps,
+          [oppId]: {
+            ...(s.bSteps[oppId] || {}),
+            [stepId]: { state: 'Signed', by: s.role, at: new Date().toISOString(), note },
+          },
+        },
+      }, 'Workflow step signed off', oppId, `${stepId} ${step.label}${note ? ` — ${note}` : ''}`))
+    },
+
+    unsignBStep(oppId, stepId, reason = '') {
+      setState(s => {
+        const steps = { ...(s.bSteps[oppId] || {}) }
+        delete steps[stepId]
+        return withAudit({ ...s, bSteps: { ...s.bSteps, [oppId]: steps } },
+          'Workflow step reopened', oppId, `${stepId}${reason ? ` — ${reason}` : ''}`)
+      })
+    },
+
+    // Diagram 02 §4 — the site-survey branch of the service flow. One survey
+    // record per opportunity, advanced through request → visit → report → SoW.
+    requestSurvey(oppId, detail = '') {
+      setState(s => {
+        if (s.surveys.some(v => v.oppId === oppId)) return s
+        const survey = {
+          id: mintId('SV', s.surveys), oppId, state: 'Requested',
+          requestedBy: s.role, requestedOn: new Date().toISOString().slice(0, 10),
+          detail, visitOn: '', report: '', sow: '',
+        }
+        return withAudit({ ...s, surveys: [...s.surveys, survey] },
+          'Site survey requested', oppId, detail || survey.id)
+      })
+    },
+
+    updateSurvey(oppId, patch, action = 'Site survey updated') {
+      setState(s => withAudit({
+        ...s,
+        surveys: s.surveys.map(v => (v.oppId === oppId ? { ...v, ...patch } : v)),
+      }, action, oppId, Object.keys(patch).join(', ')))
+    },
+
+    // Diagram 02 §8 — competitor tracking, and the loss reason §7 demands.
+    addCompetitor(oppId, entry) {
+      setState(s => withAudit({
+        ...s,
+        competitors: [...s.competitors, { id: mintId('CP', s.competitors), oppId, ...entry }],
+      }, 'Competitor recorded', oppId, `${entry.name || 'unnamed'}${entry.outcome ? ` — ${entry.outcome}` : ''}`))
+    },
+
+    removeCompetitor(id) {
+      setState(s => ({ ...s, competitors: s.competitors.filter(c => c.id !== id) }))
+    },
+
+    // Closing a lost opportunity always carries a reason — the diagram's
+    // "Capture Loss Reason & Close Opportunity" box. Callers must pass one.
+    closeLost(oppId, reason, competitor = null) {
+      if (!reason) return
+      setState(s => {
+        const next = withAudit({
+          ...s,
+          opportunities: s.opportunities.map(o => (o.id === oppId
+            ? { ...o, stage: 'Lost', status: 'Closed', closedReason: reason, lastUpdated: new Date().toISOString().slice(0, 10) }
+            : o)),
+        }, 'Opportunity lost', oppId, reason)
+        return competitor?.name
+          ? { ...next, competitors: [...next.competitors, { id: `CP-${next.competitors.length + 1}`, oppId, outcome: 'Won against us', ...competitor }] }
+          : next
+      })
+      const before = stateRef.current.opportunities.find(o => o.id === oppId)
+      if (before) {
+        const after = { ...before, stage: 'Lost', status: 'Closed' }
+        const from = statusFolderFor(before)
+        const to = statusFolderFor(after)
+        if (from !== to) spTrack(oppId, to, () => filestore.moveOppFolder(after, from, to))
+      }
+    },
+
     addAdhocPart(part) {
       setState(s => ({ ...s, adhocParts: [part, ...s.adhocParts] }))
     },
@@ -531,9 +664,9 @@ export function StoreProvider({ children }) {
     // ---- Approvals --------------------------------------------------------
     requestApproval(req) {
       setState(s => {
-        const seq = Math.max(100, ...s.approvals.map(a => parseInt(String(a.id).replace(/\D/g, ''), 10) || 100)) + 1
+        const id = mintId('AP', s.approvals, 100)
         const appr = {
-          id: `AP-${seq}`, status: 'Pending', conditions: [], decisionTs: '', decisionNote: '',
+          id, status: 'Pending', conditions: [], decisionTs: '', decisionNote: '',
           ts: new Date().toISOString(), requestedBy: s.role, ...req,
         }
         return withAudit(
@@ -671,15 +804,20 @@ export function StoreProvider({ children }) {
     },
 
     // ---- Customer KYC ------------------------------------------------------
-    setKycState(customerName, itemName, state) {
+    // `file` is optional: undefined leaves any attached document alone (the
+    // simulate path), an object attaches one, null drops it (Reject). The bytes
+    // themselves live in IndexedDB — this record is metadata only.
+    setKycState(customerName, itemName, state, file) {
       setState(s => withAudit({
         ...s,
         kyc: {
           ...s.kyc,
           [customerName]: (s.kyc[customerName] || (s.config?.kycItems || []).map(n => ({ name: n, state: 'Missing', when: '' })))
-            .map(k => (k.name === itemName ? { ...k, state, when: new Date().toISOString().slice(0, 10) } : k)),
+            .map(k => (k.name === itemName
+              ? { ...k, state, when: new Date().toISOString().slice(0, 10), ...(file === undefined ? {} : { file: file || undefined }) }
+              : k)),
         },
-      }, `KYC ${state.toLowerCase()}`, customerName, itemName))
+      }, `KYC ${state.toLowerCase()}`, customerName, file ? `${itemName} — ${file.name}` : itemName))
     },
     kycOverride(oppId, reason) {
       setState(s => withAudit({
@@ -691,11 +829,11 @@ export function StoreProvider({ children }) {
     // ---- Clarifications ----------------------------------------------------
     addClarification(row) {
       setState(s => {
-        const seq = Math.max(0, ...s.clarifications.map(c => parseInt(String(c.id).replace(/\D/g, ''), 10) || 0)) + 1
+        const id = mintId('CL', s.clarifications)
         return withAudit({
           ...s,
-          clarifications: [...s.clarifications, { id: `CL-${seq}`, status: 'Draft', response: '', ...row }],
-        }, 'Clarification drafted', `CL-${seq}`, row.q?.slice(0, 60))
+          clarifications: [...s.clarifications, { id, status: 'Draft', response: '', ...row }],
+        }, 'Clarification drafted', id, row.q?.slice(0, 60))
       })
     },
     updateClarification(id, patch) {
@@ -711,11 +849,11 @@ export function StoreProvider({ children }) {
     },
     addSparesLine(oppId, line) {
       setState(s => {
-        const seq = Math.max(0, ...s.sparesLines.map(l => parseInt(String(l.id).replace(/\D/g, ''), 10) || 0)) + 1
+        const id = mintId('SL', s.sparesLines)
         return withAudit({
           ...s,
           sparesLines: [...s.sparesLines, {
-            id: `SL-${seq}`, oppId, match: 'Manual', conf: 100, confirmed: true,
+            id, oppId, match: 'Manual', conf: 100, confirmed: true,
             priceList: 'Ad-hoc', priceState: 'Current', currency: 'INR', qty: 1, ...line,
           }],
         }, 'Manual part added', oppId, line.pn || line.desc)
@@ -931,6 +1069,9 @@ export function StoreProvider({ children }) {
         try { await datastore.resetAll(syncedOf(seedState())) }
         catch (e) { console.warn('Supabase reset failed — server data left as-is:', e?.message) }
       }
+      // Lead file blobs live in IndexedDB, outside the localStorage snapshot.
+      try { await leadBlobs.clearAll() }
+      catch (e) { console.warn('Lead file store reset failed:', e?.message) }
       localStorage.removeItem(KEY)
       window.location.reload()
     },

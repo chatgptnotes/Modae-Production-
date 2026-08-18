@@ -7,7 +7,7 @@
 //                  approvalType?, approver?, approvalId?, condIdx?, kyc? }
 
 import { unitCostINR, unitSellINR } from './utils.js'
-import { defaultCosting, MILESTONES } from './seed.js'
+import { defaultCosting, MILESTONES, B_STEPS } from './seed.js'
 
 // Total quantity of a BoQ line, matching the workbook: Qty/Unit × units +
 // Common + Spares (legacy rows carried a single qty — treated as common).
@@ -38,20 +38,30 @@ export function computeProposalTotals(proposal) {
   return { value, cogs, gmPct }
 }
 
-// Commercial approval routing from the Admin thresholds: healthy margin and
-// discount → LJS releases directly; a notch below → LJS approval; anything
-// worse → joint LJS + AH.
+// Diagram 02 §5C — the margin approval matrix. Routing is on *order value*
+// against ₹10 Lakh and *margin* against 50%, not on discount:
+//
+//   < 10 L & > 50%  → the assigned salesperson approves their own quote
+//   < 10 L & ≤ 50%  → AH or LJS (either one clears it)
+//   ≥ 10 L & > 50%  → AH + LJS jointly
+//   ≥ 10 L & ≤ 50%  → AH + LJS jointly
+//
+// `needed` is the list of roles that must decide; `anyOf` marks the row where
+// one of two approvers is enough, and `selfApprove` the row the owner clears.
 export function commercialGate(opp, proposal, config) {
   const { value, cogs, gmPct } = computeProposalTotals(proposal)
   const disc = proposal?.discountPct || 0
-  const t = config?.approvalThresholds || { gmAuto: 25, discAuto: 5, gmLjs: 20, discLjs: 10 }
-  if (gmPct >= t.gmAuto && disc <= t.discAuto) {
-    return { gmPct, disc, value, cogs, needed: ['LJS'], label: 'LJS final release' }
+  const t = config?.approvalThresholds || {}
+  const valueBreak = t.valueBreak ?? 1000000
+  const marginBreak = t.marginBreak ?? 50
+  const big = value >= valueBreak
+  const healthy = gmPct > marginBreak
+  const base = { gmPct, disc, value, cogs, valueBreak, marginBreak }
+  if (!big && healthy) {
+    return { ...base, needed: [opp?.owner].filter(Boolean), selfApprove: true, label: 'Assigned salesperson' }
   }
-  if (gmPct >= t.gmLjs && disc <= t.discLjs) {
-    return { gmPct, disc, value, cogs, needed: ['LJS'], label: 'LJS approval' }
-  }
-  return { gmPct, disc, value, cogs, needed: ['LJS', 'AH'], label: 'LJS + AH approval' }
+  if (!big) return { ...base, needed: ['AH', 'LJS'], anyOf: true, label: 'AH or LJS' }
+  return { ...base, needed: ['AH', 'LJS'], label: 'AH + LJS (both)' }
 }
 
 // Full workbench readiness: everything oppBlockers raises, plus KYC, the
@@ -91,6 +101,31 @@ export function readiness(opp, proposal, state) {
     const est = (state.svcEstimates || []).find(e => e.oppId === opp.id)
     if (est && !est.travelConfirmed) {
       b.push({ key: 'svc-travel', severity: 'block', text: 'Manual travel estimate not confirmed' })
+    }
+    // Diagram 02 §4: when a site survey is required the proposal is priced off
+    // the survey report and SoW, not straight off the rate sheet.
+    if (est?.surveyRequired) {
+      const survey = (state.surveys || []).find(v => v.oppId === opp.id)
+      if (!survey) {
+        b.push({ key: 'survey', severity: 'block', text: 'Site survey required — raise the survey request' })
+      } else if (!survey.report) {
+        b.push({ key: 'survey', severity: 'block', text: `Site survey report outstanding (${survey.state})` })
+      } else if (!survey.sow) {
+        b.push({ key: 'survey-sow', severity: 'block', text: 'Statement of Work must be written up from the survey report' })
+      }
+    }
+  }
+
+  // Diagram 02 §3 — a Brownfield proposal is only ready once the assigned
+  // salesperson has signed off B-01 through B-05.
+  if (opp.context === 'Brownfield') {
+    const signed = (state.bSteps || {})[opp.id] || {}
+    const open = B_STEPS.filter(step => signed[step.id]?.state !== 'Signed')
+    if (open.length) {
+      b.push({
+        key: 'b-steps', severity: 'block',
+        text: `${open.length} of ${B_STEPS.length} workflow steps unsigned — next ${open[0].id} ${open[0].label}`,
+      })
     }
   }
 
@@ -187,6 +222,40 @@ export function oppBlockers(opp, proposal, approvals) {
 
 export const isBlocked = blockers => blockers.some(x => x.severity === 'block' || x.severity === 'wait')
 
+// The three §5 approvals — technical, commercial and margin — each cover the
+// exact proposal revision they were raised against. The official workflow makes
+// re-approval mandatory on every revision, so a revised quote falls back to
+// unapproved here rather than carrying the old decision forward. Approvals
+// written before `rev` existed are treated as covering the current revision.
+export const APPROVAL_5A = 'Technical approval'
+export const APPROVAL_5B = 'Commercial approval'
+export const APPROVAL_5C = 'Final quote release'
+
+export function approvalForRev(type, proposal, approvals, oppId) {
+  const rev = String(proposal?.revision ?? '')
+  const mine = (approvals || []).filter(a =>
+    a.oppId === oppId && a.type === type
+    && (a.rev == null || String(a.rev) === rev))
+  return {
+    pending: mine.find(a => a.status === 'Pending') || null,
+    approved: mine.find(a => ['Approved', 'Approved with conditions'].includes(a.status)) || null,
+  }
+}
+
+// The §5C release, kept under its original name — it is the gate the
+// submission panel and the proposal builder read.
+export function releaseState(proposal, approvals, oppId) {
+  const { pending, approved } = approvalForRev(APPROVAL_5C, proposal, approvals, oppId)
+  return { pending, release: approved }
+}
+
+// All three §5 gates in one call, for the "All Approvals Completed" box.
+export function approvalSet(proposal, approvals, oppId) {
+  return [APPROVAL_5A, APPROVAL_5B, APPROVAL_5C].map(type => ({
+    type, ...approvalForRev(type, proposal, approvals, oppId),
+  }))
+}
+
 // Forward lifecycle movement is deliberately stricter than proposal
 // readiness. This is the single gate used by the opportunity stepper so a
 // user cannot jump over the lead-management requirements in the official
@@ -226,6 +295,20 @@ export function transitionBlockers(opp, target, proposal, state) {
     b.push({ key: 'clarifications', severity: 'block', text: `All customer clarifications must be resolved before moving to ${target}` })
   }
 
+  // Diagram 02 §2: Greenfield Phase 1 is registration, follow-up and monitoring
+  // only — "No Quote / RFQ / Engineering / Pricing at this stage". Pricing work
+  // may not precede Sourcing.
+  if (opp.context === 'Greenfield' && next < MILESTONES.indexOf('Sourcing')) {
+    const priced = (proposal?.bom || []).some(l =>
+      +(l.listPrice || 0) > 0 || (l.quoted !== '' && l.quoted != null && +l.quoted > 0))
+    if (priced) {
+      b.push({
+        key: 'greenfield-pricing', severity: 'block',
+        text: 'Greenfield Phase 1 carries no pricing — clear the priced lines or move the opportunity to Sourcing first',
+      })
+    }
+  }
+
   if (next >= MILESTONES.indexOf('Proposal')) {
     b.push(...readiness(opp, proposal, state).filter(x => x.severity === 'block' || x.severity === 'wait'))
   }
@@ -235,9 +318,23 @@ export function transitionBlockers(opp, target, proposal, state) {
     if (!(proposal?.bom || []).length && ['Project', 'Spares'].includes(opp.route)) b.push({ key: 'bom', severity: 'block', text: 'Proposal must contain priced BoQ lines' })
   }
 
+  // Diagram 02 §5 — the layered approval, mandatory before the first dispatch
+  // and repeated for every revision. All three must clear before a quote is
+  // "Ready for Dispatch".
   if (next >= MILESTONES.indexOf('Submitted')) {
-    const release = mine.find(a => a.type === 'Final quote release' && ['Approved', 'Approved with conditions'].includes(a.status))
-    if (!release) b.push({ key: 'release', severity: pending('Final quote release') ? 'wait' : 'block', text: pending('Final quote release') ? 'Final quote release is awaiting approval' : 'Final quote release approval is required' })
+    const gates = [
+      { type: APPROVAL_5A, key: 'tech-approval', label: 'Technical approval (LJS or AN)', approver: 'LJS' },
+      { type: APPROVAL_5B, key: 'comm-approval', label: 'Commercial approval (AH)', approver: 'AH' },
+      { type: APPROVAL_5C, key: 'release', label: 'Final quote release', approver: 'LJS' },
+    ]
+    for (const g of gates) {
+      const { approved, pending: waiting } = approvalForRev(g.type, proposal, approvals, opp.id)
+      if (approved) continue
+      b.push({
+        key: g.key, severity: waiting ? 'wait' : 'block', approver: g.approver,
+        text: waiting ? `${g.label} is awaiting approval` : `${g.label} is required`,
+      })
+    }
     const conditions = mine.flatMap(a => a.status === 'Approved with conditions' ? (a.conditions || []) : []).filter(c => !c.incorporated)
     if (conditions.length) b.push({ key: 'conditions', severity: 'block', text: 'All approval conditions must be incorporated and confirmed' })
   }
@@ -247,7 +344,9 @@ export function transitionBlockers(opp, target, proposal, state) {
   }
   if (next >= MILESTONES.indexOf('Handover')) {
     const po = (state.poCompare || {})[opp.id]
-    if (!po?.acceptance?.sales || !po?.acceptance?.customer) b.push({ key: 'po-acceptance', severity: 'block', text: 'PO must be jointly accepted by sales and customer' })
+    // store.acceptPO records each signature under the approving role, so the
+    // joint acceptance the workflow asks for is LJS *and* AH.
+    if (!po?.acceptance?.LJS || !po?.acceptance?.AH) b.push({ key: 'po-acceptance', severity: 'block', text: 'PO must be jointly accepted by LJS and AH' })
   }
   // An approved exception is scoped to this exact target and blocker. It
   // never clears a different stage or a different requirement.

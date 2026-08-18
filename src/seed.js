@@ -495,6 +495,7 @@ export const ROLES = {
   PJS: { name: 'P. J. Sales', label: 'PJS — Parts Sales Owner', commercial: false, sales: true },
   RJS: { name: 'R. J. Sales', label: 'RJS — Flow Sales Owner', commercial: false, sales: true },
   SR: { name: 'S. R. Sales', label: 'SR — Service Sales Owner', commercial: false, sales: true },
+  AN: { name: 'A. Natarajan', label: 'AN — Technical Approver', commercial: false },
   TECH: { name: 'T. Rao', label: 'TECH — Technical Reviewer', commercial: false },
   CUST: { name: 'Customer contact', label: 'Customer — External portal', commercial: false, external: true },
 }
@@ -513,6 +514,7 @@ export const PERMS = {
   AH: ['home', 'mydashboard', 'tracker', 'my', 'approvals', 'folders', 'proposal', 'pricelists', 'dashboard', 'analytics',
     'customers', 'audit', 'aimap', 'po', 'launcher'],
   RS: SALES_PAGES, PP: SALES_PAGES, SS: SALES_PAGES, PJS: SALES_PAGES, RJS: SALES_PAGES, SR: SALES_PAGES,
+  AN: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'proposal', 'approvals', 'folders', 'aimap', 'launcher'],
   TECH: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'proposal', 'approvals', 'aimap', 'launcher'],
   CUST: ['portal'],
 }
@@ -542,6 +544,47 @@ export function routeForType(oppType) {
   if (oppType === 'Service' || oppType === 'AMC' || oppType === 'Training') return 'Service'
   return 'Project'
 }
+
+// Diagram 02 §1 forks the lifecycle into two worlds at "Opportunity Type
+// Identified". This is a separate axis from routeForType: `context` decides
+// which lane the opportunity runs in (Greenfield nurture vs the Brownfield
+// B-01..B-05 activity chain), `route` only decides which workbench renders.
+export const CONTEXTS = ['Greenfield', 'Brownfield']
+
+export function contextForType(oppType) {
+  return oppType === 'Project' || oppType === 'Upgrade' || oppType === 'Flow'
+    ? 'Greenfield' : 'Brownfield'
+}
+
+// Diagram 02 §3 — the Brownfield activity chain. Each step is signed off by
+// the assigned salesperson only ("All above activities are approved only by
+// Assigned Salesperson"); the sub-points are the diagram's own bullets.
+export const B_STEPS = [
+  { id: 'B-01', label: 'Requirement Validation',
+    points: ['Scope understanding', 'Document review', 'Clarifications'] },
+  { id: 'B-02', label: 'Technical Evaluation',
+    points: ['Part number review', 'Compatibility check', 'Replacement identified', 'Technical feasibility'] },
+  { id: 'B-03', label: 'Commercial Applicability',
+    points: ['Standard T&Cs', 'Offer validity', 'Delivery & shipping terms', 'FOR / Ex Works / taxes', 'Customer specific terms'] },
+  { id: 'B-04', label: 'Pricing Validation',
+    points: ['Price sheet lookup', 'Historical pricing', 'Margin calculation', 'Discount check'] },
+  { id: 'B-05', label: 'Proposal Generation',
+    points: ['Cover letter', 'BoQ / price summary', 'Commercial terms', 'Compliance / SoW (if any)'] },
+]
+
+// Diagram 02 §7 — "Identify Type of Revision" routes the rework back to the
+// B-step that owns it, and the proposal is regenerated from there.
+export const REVISION_TYPES = [
+  { id: 'Technical', label: 'Technical change (part / spec / scope)', step: 'B-02' },
+  { id: 'Commercial', label: 'Commercial change (terms / validity / delivery)', step: 'B-03' },
+  { id: 'Pricing', label: 'Pricing change (discount / price / margin)', step: 'B-04' },
+  { id: 'Other', label: 'Other changes (documents / SoW / compliance)', step: 'B-05' },
+]
+
+// Diagram 02 §6/§7 — the channels a quote is dispatched on and then monitored.
+// Only Email has a real send path today; the rest are labelled simulated in
+// the UI until the Microsoft tenancy decision lands.
+export const DISPATCH_CHANNELS = ['Email', 'Teams', 'WhatsApp', 'Customer Portal', 'Tender Portal']
 
 // Ownership is driven by the opportunity type, while routeForType controls
 // which document workbench is shown. These are intentionally separate rules.
@@ -577,7 +620,7 @@ export const seedUsers = [
   { id: 'U-008', name: 'Customer contact', email: 'customer@portal.demo', role: 'CUST', status: 'Active', created: '2026-08-01', pw: DEMO_PASSWORD },
 ]
 
-export const SUBFOLDERS = ['Customer Specs', 'Partner Docs', 'Proposal']
+export const SUBFOLDERS = ['Customer Specs', 'Partner Docs', 'Proposal', 'KYC']
 
 export const seedFiles = {
   '2608222RS': {
@@ -996,7 +1039,8 @@ export const seedConfig = {
     { region: 'Large / miscellaneous / international / aerospace / DCS / automation', owner: 'LJS' },
   ],
   aiThresholds: { high: 90, med: 75 },
-  approvalThresholds: { gmAuto: 25, discAuto: 5, gmLjs: 20, discLjs: 10 },
+  // Diagram 02 §5C margin matrix: order value against ₹10 Lakh, margin against 50%.
+  approvalThresholds: { valueBreak: 1000000, marginBreak: 50 },
   amberFee: { amount: 25000, cur: 'INR', days: 7 },
   kycItems: ['GST certificate', 'PAN certificate', 'Cancelled cheque', 'EFT / bank mandate', 'CIN reference', 'Registered & business address'],
   templates: ['Spares quotation', 'Reactive service offer', 'Project techno-commercial proposal'],

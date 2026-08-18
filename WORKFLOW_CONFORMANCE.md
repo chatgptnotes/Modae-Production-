@@ -76,7 +76,7 @@ PO received → handover (`src/workbench/PoHandover.jsx`).
 | Ref | Diagram element | Reality | Severity |
 |---|---|---|---|
 | **O1** | Greenfield (Project/Upgrade) vs Brownfield (Retrofit/Service/Spares) | **No such field.** The legacy prototype carried `CONTEXTS = ["Brownfield","Greenfield"]`; it was dropped in the v2 rewrite. Branching is `route` = Project \| Spares \| Service (`routeForType`, `src/seed.js:540`), so **Retrofit and Upgrade both land on the Project route** | Critical |
-| **O8** | "Re-Approval Required — repeat Section 5" on every revision | **The opposite is enforced.** `submitForApproval` is disabled once released (`src/workbench/PropBuilder.jsx:246`). A post-release revision **cannot re-trigger the approval gate at all** — a revised price can reach a customer unapproved | Critical |
+| **O8** | "Re-Approval Required — repeat Section 5" on every revision | **Fixed 18 Aug.** A release approval is now stamped with the proposal revision it approved and matched on it (`releaseState`, `src/gates.js`). A released quote is revised through `store.reviseProposal`, which bumps the revision, marks the old release `Superseded` and returns the opportunity to the Proposal milestone — so the approval gate re-opens and submission re-locks. The back-routing of *typed* revisions to B-02…B-05 remains open (see O7) | ~~Critical~~ Partly resolved |
 | **O5** | 5C Margin matrix: order value (≷ ₹10 L) × margin (≷ 50%) → approver set | Routing is GM% × discount% (`src/gates.js:44`, `{gmAuto:25, discAuto:5, gmLjs:20, discLjs:10}`). **Order value is computed but never routes an approval.** The ₹10 Lakh and 50% breakpoints appear nowhere, and there is **no salesperson self-approval tier** | Critical |
 | **O2** | Greenfield Phase-1: "No Quote / RFQ / Engineering / Pricing at this stage" | A Project-route opportunity can build a full priced proposal today. No rule prevents it | High |
 | **O3** | B-01…B-05 tracked steps, each approved by the Assigned Salesperson | No step identifiers, no step state, no per-step sign-off. Fragments exist across workbench tabs, but nothing records that B-02 completed, by whom, or when | High |
@@ -90,9 +90,10 @@ PO received → handover (`src/workbench/PoHandover.jsx`).
 
 ### Defect found during review (independent of the diagrams)
 
-`src/gates.js:257` gates the Handover milestone on `po.acceptance.sales && po.acceptance.customer`,
+`src/gates.js:257` gated the Handover milestone on `po.acceptance.sales && po.acceptance.customer`,
 but `store.acceptPO` (`src/store.jsx:791`) and `buildPoCompare` write the keys **`LJS`** and **`AH`**.
-**The Handover step is unreachable through the UI.**
+The Handover step was unreachable through the UI. **Fixed 18 Aug** — the gate now reads the
+`LJS` / `AH` keys, covered by `tests/gates.test.mjs`.
 
 ---
 
@@ -109,8 +110,7 @@ Small, cheap changes that unblock everything downstream.
    with the diagram's 2×2 on (order value ≷ ₹10 L) × (margin ≷ 50%), including the
    salesperson self-approval tier. Keep the existing GM/discount thresholds as a
    configurable secondary check. Add the `AN` role to `ROLES` and `PERMS` in `src/seed.js`.
-3. **Fix the handover key mismatch** — align `src/gates.js:257` with the `LJS`/`AH` keys
-   written by `store.acceptPO`.
+3. ~~**Fix the handover key mismatch**~~ — done 18 Aug.
 4. **Region-based ownership** (L3) — add `region` to the lead record; make
    `config.ownershipRules` an executed lookup rather than a prompt hint; restrict the owner
    override to LJS/AH and record a mandatory reason.
@@ -123,8 +123,9 @@ Small, cheap changes that unblock everything downstream.
    assigned-salesperson sign-off, reusing the existing approval record shape.
 7. **Service site-survey sub-flow** (O4) — `surveyRequired` decision → survey request →
    site visit → survey report → SoW artefact, feeding the existing `WbService` calculator.
-8. **Mandatory re-approval on revision** (O7, O8) — allow a released proposal to be
-   superseded, with typed revisions routing back to the matching B-step.
+8. **Typed revisions** (O7) — the supersede-and-re-approve half is done (18 Aug); what
+   remains is classifying the revision (Technical / Commercial / Pricing / Other) and
+   routing it back to the matching B-step.
 9. **Enforce the Greenfield pricing boundary** (O2), **enforce `closedReason` on close** and
    **add competitor fields** (O11, O12).
 

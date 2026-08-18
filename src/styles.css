@@ -1436,6 +1436,11 @@ input.needs-input, select.needs-input { background: #fffbeb; border-color: var(-
 .wb-sub button.active { background: var(--xl-green); color: #fff; border-color: var(--xl-green-dark); }
 .check-row { display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-bottom: 1px solid var(--border-soft); font-size: 12.5px; }
 .check-row input[type=checkbox] { width: 17px; height: 17px; }
+.kyc-file { display: flex; align-items: center; gap: 8px; padding: 0 4px 6px; border-bottom: 1px solid var(--border-soft); }
+.kyc-file-open {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 8px;
+  font-family: inherit; font-size: 11.5px; border-radius: 8px; min-height: 0;
+}
 .cost-table td { padding: 3px 10px; font-size: 12.5px; border-bottom: 1px solid var(--border-soft); }
 .cost-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .cost-table tr.total td { font-weight: 800; border-top: 2px solid #1e293b; }
@@ -2887,3 +2892,33 @@ html, body { overflow-x: hidden; max-width: 100%; }
   .tablet-bar .tb-brand i { display: none; }
   .tablet-bar select { max-width: 34vw; }
 }
+
+/* ---- lead attachments: view & add ---- */
+.lead-workspace .attach-row.attach-row-open {
+  width: 100%; text-align: left; font-family: inherit; border-radius: 9px;
+  background: var(--ws-surface); color: inherit;
+}
+.lead-workspace .attach-row.attach-row-open:focus-visible {
+  outline: 2px solid var(--ws-blue); outline-offset: 1px;
+}
+.attach-open { color: var(--ws-text-3); display: inline-flex; align-items: center; flex: 0 0 auto; }
+.lead-workspace .attach-row.attach-row-open:hover .attach-open { color: var(--ws-blue); }
+.lead-workspace .attach-add { margin-top: 8px; border-radius: 10px; }
+
+.attachment-viewer-modal { width: 780px; top: 60px; }
+.att-view-sub { margin: -2px 0 10px; }
+.att-view-body {
+  border: 1px solid var(--border-soft); border-radius: 4px; background: #f8fafc;
+  padding: 10px; max-height: 62vh; overflow: auto;
+}
+.att-view-note { margin: 4px 2px; display: flex; align-items: center; gap: 6px; }
+.att-view-canvas { display: flex; justify-content: center; }
+.att-view-canvas canvas, .att-view-canvas img {
+  max-width: 100%; height: auto; background: #fff; border: 1px solid var(--border-soft);
+}
+.att-view-text {
+  white-space: pre-wrap; font-family: inherit; font-size: 12px; color: #334155; margin: 0;
+}
+.att-view-pager { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 8px; }
+.att-view-foot { display: flex; gap: 8px; justify-content: flex-end; align-items: center; margin-top: 10px; }
+.att-view-foot .btn { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }

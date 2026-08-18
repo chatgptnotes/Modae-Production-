@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
 import { ROLES } from '../seed.js'
 import { ErrBox } from '../ui.jsx'
+import { releaseState } from '../gates.js'
 import { Icon } from '../icons.jsx'
 
 // Simulated customer send — only unlocked by an approved 'Final quote release'
@@ -12,9 +13,9 @@ export default function SubmissionPanel({ opp }) {
   const [checks, setChecks] = useState({ c1: false, c2: false, c3: false })
   const [sentNow, setSentNow] = useState(false)
 
-  const release = store.approvals.find(a =>
-    a.oppId === opp.id && a.type === 'Final quote release'
-    && (a.status === 'Approved' || a.status === 'Approved with conditions'))
+  // Scoped to the proposal's current revision — a quote revised after release
+  // locks submission again until the revision is approved.
+  const { release } = releaseState(p, store.approvals, opp.id)
   const pendingConds = store.approvals
     .filter(a => a.oppId === opp.id && a.status === 'Approved with conditions')
     .flatMap(a => (a.conditions || []).filter(c => !c.incorporated)

@@ -8,9 +8,10 @@ import { Chip, ConfChip, WarnBox, ErrBox, Modal } from '../ui.jsx'
 import { ROLES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, CUSTOMER_STATUSES, ownerForOppType, routeForType } from '../seed.js'
 import { isAdminRole, isApprover } from '../utils.js'
 import { aiEnabled, runJson } from '../ai.js'
-import { extractPdfText } from '../tenderParse.js'
+import { extractDocText } from '../docText.js'
 import { fmtSize } from '../filestore.js'
-import { hold } from '../leadFiles.js'
+import { hold, add as holdMore } from '../leadFiles.js'
+import AttachmentViewer from '../AttachmentViewer.jsx'
 import { findDuplicates } from '../insights.js'
 import { leadWorkflow } from '../leadWorkflow.js'
 
@@ -146,18 +147,15 @@ export async function extractLead({ from, subject, body, attachments = [] }, sto
 const TEXT_PER_FILE = 8000
 const TEXT_TOTAL = 40000
 
-// One picked file → the attachment record. PDFs are read client-side with the
-// same pdfjs path Tender → Proposal uses; anything else attaches by name only.
+// One picked file → the attachment record. PDF, Word and plain-text contents
+// are read client-side (see docText.js); anything else attaches by name only.
 async function readAttachment(file) {
   const rec = { file, name: file.name, size: fmtSize(file.size) }
-  if (!/\.pdf$/i.test(file.name) && file.type !== 'application/pdf') return rec
-  try {
-    const { struct, fullText, charCount } = await extractPdfText(file)
-    if (!charCount) return { ...rec, pages: struct.length, err: 'Scanned — no text layer; the name is attached, not the contents.' }
-    return { ...rec, pages: struct.length, text: fullText.slice(0, TEXT_PER_FILE) }
-  } catch (e) {
-    return { ...rec, err: 'Could not read this PDF (' + (e?.message || e?.code || 'unknown') + ') — the name is attached, not the contents.' }
-  }
+  const { text, pages, err } = await extractDocText(file)
+  if (pages) rec.pages = pages
+  if (err) rec.err = err
+  if (text) rec.text = text.slice(0, TEXT_PER_FILE)
+  return rec
 }
 
 // Trim to the shape the lead stores (no File blob) and respect the total cap.
@@ -323,6 +321,20 @@ const updateLeadField = (fields, key, value, group = 'RFQ') => {
   return fields.map((field, i) => i === index ? { ...field, ...next } : field)
 }
 
+// Re-extraction after a document is added must not silently undo human work:
+// a field somebody accepted, edited or rejected is kept as decided, and only
+// the still-pending ones take the fresh AI value. Fields the new run discovers
+// are appended — that is the whole point of adding the document.
+const mergeDecidedFields = (previous, fresh) => {
+  const keyOf = f => (f.group || '') + '|' + (f.k || '').toLowerCase()
+  const decided = new Map((previous || []).filter(f => f.state && f.state !== 'pending').map(f => [keyOf(f), f]))
+  const merged = (fresh || []).map(f => decided.get(keyOf(f)) || f)
+  const seen = new Set(merged.map(keyOf))
+  // A decision on a field the new run no longer returns still stands.
+  for (const [key, field] of decided) if (!seen.has(key)) merged.push(field)
+  return merged
+}
+
 const fieldChip = (f, med) => {
   if (f.state === 'accepted') return <Chip tone="state-Accepted">Accepted</Chip>
   if (f.state === 'rejected') return <Chip tone="state-Rejected">Rejected</Chip>
@@ -387,6 +399,12 @@ function AiLeadDetail({ lead }) {
   const [rejFor, setRejFor] = useState(null)      // { idx, note }
   const [reExtracting, setReExtracting] = useState(false)
   const [reErr, setReErr] = useState('')
+  const [reNote, setReNote] = useState('')
+  const [viewing, setViewing] = useState(null)   // attachment record open in the viewer
+  const [addingDocs, setAddingDocs] = useState(false)
+  const [docDrag, setDocDrag] = useState(false)
+  const [docErr, setDocErr] = useState('')
+  const docInput = useRef(null)
   const [dropping, setDropping] = useState(false)
   const [reverting, setReverting] = useState(false)
   const [reassignTo, setReassignTo] = useState(lead.suggestedOwner || OWNERS[0])
@@ -402,16 +420,64 @@ function AiLeadDetail({ lead }) {
   const [decisionDraft, setDecisionDraft] = useState(initialDecisions)
   const [decisionSaved, setDecisionSaved] = useState(false)
 
-  // Re-read the original mail. Human decisions are discarded with it, so this
-  // is confirmed first — the point of the field states is that they're earned.
-  const reExtract = async () => {
+  // Re-read the mail (plus whatever documents are now on the lead).
+  // `keepDecisions` is the automatic path taken after a document is added: the
+  // human did not ask to throw their decisions away, they asked the AI to read
+  // one more file. The manual button still replaces everything, confirmed first.
+  const runExtraction = async ({ source, keepDecisions, detail }) => {
+    setReExtracting(true); setReErr(''); setReNote('')
+    const extracted = await extractLead(source, store)
+    setReExtracting(false)
+    if (!extracted) {
+      setReErr('Extraction unavailable — the previous result is unchanged.')
+      return false
+    }
+    const next = keepDecisions && extracted.ai
+      ? { ...extracted, ai: { ...extracted.ai, fields: mergeDecidedFields(source.ai?.fields, extracted.ai.fields) } }
+      : extracted
+    store.updateLead(lead.id, next, detail || '')
+    setReNote('Extraction updated.')
+    return true
+  }
+
+  const reExtract = () => {
     if (decided > 0 && !window.confirm(
       `Re-run extraction? ${decided} field decision(s) on this lead will be replaced.`)) return
-    setReExtracting(true); setReErr('')
-    const extracted = await extractLead(lead, store)
-    setReExtracting(false)
-    if (!extracted) { setReErr('Extraction unavailable — the previous result is unchanged.'); return }
-    store.updateLead(lead.id, extracted)
+    runExtraction({ source: lead, keepDecisions: false })
+  }
+
+  // Documents added here join the enquiry's own attachments: their text goes to
+  // the AI on the spot, and the blobs ride along to Customer Specs at
+  // registration. This is the answer to "the AI did not get the full picture".
+  const addDocuments = async picked => {
+    const list = Array.from(picked || [])
+    if (!list.length) return
+    setAddingDocs(true); setDocErr(''); setReNote('')
+    const recs = []
+    try {
+      for (const file of list) recs.push(await readAttachment(file))
+    } catch (e) {
+      setAddingDocs(false)
+      setDocErr('Could not read ' + (e?.message || 'the file') + '.')
+      return
+    }
+    const nextAttachments = [...attachments, ...attachmentMeta(recs)]
+    const names = recs.map(r => r.name).join(', ')
+    store.updateLead(lead.id, { attachments: nextAttachments }, `Document(s) added to lead: ${names}`)
+    holdMore(lead.id, recs.map(r => r.file))
+    setAddingDocs(false)
+    // Nothing readable came out, so there is nothing new for the AI to read.
+    if (recs.every(r => !r.text)) {
+      setDocErr(recs[0].err || 'No text could be read from this file — it is attached by name only.')
+      return
+    }
+    // Re-read with the new material. `lead` in this closure predates the patch,
+    // so the fresh attachment list is passed explicitly.
+    await runExtraction({
+      source: { ...lead, attachments: nextAttachments },
+      keepDecisions: true,
+      detail: `AI re-read the lead with ${names}`,
+    })
   }
 
   const customer = matchCustomer(store.customers, lead)
@@ -497,16 +563,35 @@ function AiLeadDetail({ lead }) {
           <div className="ws-subject">{lead.subject}</div>
           {lead.ref && <div className="ws-tag">Ref {lead.ref}</div>}
           <div className="email-body">{lead.body}</div>
-          {attachments.length > 0 && (
+          <div className="ws-group">Attachments</div>
+          {attachments.map((a, i) => (
+            <button key={i} type="button" className="attach-row attach-row-open"
+              onClick={() => setViewing(a)} title={`View ${a.name}`}>
+              <span className="attach-icon"><Icon name="fileText" size={13} /></span>
+              <span className="attach-name">{a.name}</span>
+              <span className="attach-meta">{a.pages ? a.pages + ' p.' : a.size || ''}</span>
+              <span className="attach-open"><Icon name="eye" size={13} /></span>
+            </button>
+          ))}
+          {attachments.length === 0 && <p className="hint">No attachments came with this enquiry.</p>}
+          {canAct && (
             <>
-              <div className="ws-group">Attachments</div>
-              {attachments.map((a, i) => (
-                <div key={i} className="attach-row">
-                  <span className="attach-icon"><Icon name="fileText" size={13} /></span>
-                  <span className="attach-name">{a.name}</span>
-                  <span className="attach-meta">{a.pages ? a.pages + ' p.' : a.size || ''}</span>
+              <div className={`tender-drop compact attach-add ${docDrag ? 'drag' : ''}`}
+                onDragOver={e => { e.preventDefault(); setDocDrag(true) }}
+                onDragLeave={() => setDocDrag(false)}
+                onDrop={e => { e.preventDefault(); setDocDrag(false); addDocuments(e.dataTransfer.files) }}
+                onClick={() => docInput.current.click()}>
+                <input ref={docInput} type="file" multiple style={{ display: 'none' }}
+                  onChange={e => { addDocuments(e.target.files); e.target.value = '' }} />
+                <div className="tender-drop-icon"><Icon name="upload" size={20} /></div>
+                <b>{addingDocs ? 'Reading…' : 'Add a document'}</b>
+                <div className="hint">
+                  {reExtracting
+                    ? 'Re-reading the lead with the new document…'
+                    : 'Drop the RFQ, BOM or spec here — PDF and Word contents are read and sent to the AI'}
                 </div>
-              ))}
+              </div>
+              {docErr && <p className="hint"><Icon name="alert" size={12} /> {docErr}</p>}
             </>
           )}
         </div>
@@ -600,6 +685,7 @@ function AiLeadDetail({ lead }) {
         <div className="ws-body">
           <p className="ws-summary">{ai.summary}</p>
           {reErr && <ErrBox>{reErr}</ErrBox>}
+          {reNote && !reErr && <p className="hint"><Icon name="checkCircle" size={12} /> {reNote}</p>}
 
           {ai.missing?.length > 0 && (
             <WarnBox>
@@ -820,6 +906,10 @@ function AiLeadDetail({ lead }) {
           )}
         </footer>
       </section>
+
+      {viewing && (
+        <AttachmentViewer leadId={lead.id} attachment={viewing} onClose={() => setViewing(null)} />
+      )}
     </div>
   )
 }

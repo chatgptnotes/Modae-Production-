@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
 import { canPriceProposal, fmt, ddMmmYY } from '../utils.js'
-import { readiness, isBlocked, commercialGate } from '../gates.js'
+import { readiness, isBlocked, commercialGate, releaseState } from '../gates.js'
 import { Chip, AiBadge, Phase2Badge, ErrBox, WarnBox, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 // Shared with the printed document, so the checklist and the real document
@@ -21,17 +21,18 @@ export default function PropBuilder({ opp }) {
   const [manualDone, setManualDone] = useState({})
   const [overrideOpen, setOverrideOpen] = useState(false)
   const [overrideReason, setOverrideReason] = useState('')
+  const [reviseOpen, setReviseOpen] = useState(false)
+  const [reviseReason, setReviseReason] = useState('')
   const [condNotes, setCondNotes] = useState({})
   const [compareOpen, setCompareOpen] = useState(false)
   const [inserted, setInserted] = useState(false)
   const [tcSim, setTcSim] = useState(false)
 
   const revisions = p.revisions || []
-  const pendingRelease = store.approvals.find(a =>
-    a.oppId === opp.id && a.type === 'Final quote release' && a.status === 'Pending')
-  const released = p.releaseStatus === 'Released' || store.approvals.some(a =>
-    a.oppId === opp.id && a.type === 'Final quote release'
-    && (a.status === 'Approved' || a.status === 'Approved with conditions'))
+  // Scoped to the current revision: a revised quote is no longer released,
+  // so 'Submit for approval' re-opens rather than staying permanently locked.
+  const { pending: pendingRelease, release } = releaseState(p, store.approvals, opp.id)
+  const released = !!release
 
   // Content sections come from the workbook; the rest are auto-drafted by
   // proposalDoc and the checkbox records that a human has read them.
@@ -51,6 +52,13 @@ export default function PropBuilder({ opp }) {
     setOverrideReason('')
   }
 
+  const applyRevision = () => {
+    if (!reviseReason.trim()) return
+    store.reviseProposal(opp.id, reviseReason.trim())
+    setReviseOpen(false)
+    setReviseReason('')
+  }
+
   const condApprovals = store.approvals.filter(a =>
     a.oppId === opp.id && a.status === 'Approved with conditions')
 
@@ -68,15 +76,18 @@ export default function PropBuilder({ opp }) {
 
   const submitForApproval = () => {
     const today = new Date().toISOString().slice(0, 10)
+    // The approval is stamped with the revision it approves, so a later
+    // revision cannot inherit it.
+    const rev = String((+p.revision || 0) + 1).padStart(2, '0')
     store.requestApproval({
-      oppId: opp.id, type: 'Final quote release',
+      oppId: opp.id, type: 'Final quote release', rev,
       detail: `GM ${gate.gmPct.toFixed(1)}% — ${gate.label}`,
       approver: gate.needed[0], needed: gate.needed,
     })
     store.updateOpportunity(opp.id, { milestone: 'Approval' })
     store.saveProposal(opp.id, {
       ...p,
-      revision: String((+p.revision || 0) + 1).padStart(2, '0'),
+      revision: rev,
       revisions: [...revisions, {
         rev: `R${revisions.length + 1}`, when: today, by: store.role,
         note: 'Submitted', status: 'Submitted',
@@ -223,7 +234,24 @@ export default function PropBuilder({ opp }) {
           </button>
         </div>
         {pendingRelease && <div className="warnbox">Final quote release pending with {(pendingRelease.needed || [pendingRelease.approver]).join(' + ')} — decide it on the Approvals page.</div>}
-        {released && !pendingRelease && <div className="okbox">Quote released — simulate the send from the Communications tab.</div>}
+        {released && !pendingRelease && (
+          <div className="okbox">
+            Quote released — simulate the send from the Communications tab.
+            <div style={{ marginTop: 6 }}>
+              {!reviseOpen && (
+                <button onClick={() => setReviseOpen(true)}>Revise quote</button>
+              )}
+              {reviseOpen && (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input placeholder="Reason for revision (logged)" value={reviseReason} style={{ flex: 1 }}
+                    onChange={e => setReviseReason(e.target.value)} />
+                  <button className="primary" disabled={!reviseReason.trim()} onClick={applyRevision}>Open revision</button>
+                </div>
+              )}
+            </div>
+            <span className="hint">A revision re-opens the approval gate — the revised quote must be approved again before it can be sent.</span>
+          </div>
+        )}
       </div>
 
       {compareOpen && (

@@ -17,6 +17,10 @@ import PropBuilder from '../workbench/PropBuilder.jsx'
 import SubmissionPanel from '../workbench/SubmissionPanel.jsx'
 import PoHandover from '../workbench/PoHandover.jsx'
 import OpportunityDetailsEditor from '../OpportunityDetailsEditor.jsx'
+import AttachmentViewer from '../AttachmentViewer.jsx'
+import { extractDocText } from '../docText.js'
+import { putFiles } from '../leadBlobs.js'
+import { uploadOppFile, fmtSize } from '../filestore.js'
 
 const TABS = [
   ['overview', 'Overview'], ['requirement', 'Requirement'], ['customer', 'Customer/KYC'],
@@ -411,6 +415,11 @@ function RequirementTab({ opp }) {
 // ---------------------------------------------------------------------------
 const kycTone = s => (s === 'Verified' ? 'state-Accepted' : s === 'Uploaded' ? 'state-Review' : 'state-Blocks')
 
+// KYC blobs share the lead blob store; the customer name namespaces them so a
+// document survives a reload and can be previewed with the same viewer.
+const kycBlobKey = customerName => 'kyc:' + customerName
+const KYC_TEXT_CAP = 8000
+
 function CustomerKycTab({ opp }) {
   const store = useStore()
   const customer = store.customers.find(c => c.name === opp.sellTo)
@@ -418,7 +427,44 @@ function CustomerKycTab({ opp }) {
   const items = (customer && store.kyc[customer.name])
     || (store.config?.kycItems || []).map(n => ({ name: n, state: 'Missing', when: '' }))
   const fee = store.config?.amberFee || { amount: 25000, cur: 'INR', days: 7 }
-  const setState = (item, state) => customer && store.setKycState(customer.name, item, state)
+  const setState = (item, state, file) => customer && store.setKycState(customer.name, item, state, file)
+
+  const fileInput = useRef(null)
+  const pending = useRef('')
+  const [busy, setBusy] = useState('')
+  const [viewing, setViewing] = useState(null)
+
+  const pick = itemName => { pending.current = itemName; fileInput.current?.click() }
+
+  // A real upload: bytes to IndexedDB (so the preview works after a reload) and
+  // a copy pushed to the opportunity folder. A failed cloud push keeps the local
+  // copy rather than losing the document.
+  async function onPick(e) {
+    const file = e.target.files && e.target.files[0]
+    e.target.value = ''
+    const itemName = pending.current
+    if (!file || !itemName || !customer) return
+    setBusy(itemName)
+    try {
+      const doc = await extractDocText(file)
+      await putFiles(kycBlobKey(customer.name), [file])
+      const meta = { name: file.name, size: fmtSize(file.size), type: file.type || '', cloud: true }
+      if (doc.text) meta.text = doc.text.slice(0, KYC_TEXT_CAP)
+      if (doc.pages) meta.pages = doc.pages
+      if (doc.err) meta.err = doc.err
+      try {
+        const rec = await uploadOppFile(opp, 'KYC', file)
+        store.addFile(opp.id, 'KYC', rec)
+        if (rec.webUrl || rec.url) meta.webUrl = rec.webUrl || rec.url
+      } catch (err) {
+        meta.cloud = false
+        meta.cloudErr = (err && err.message) || String(err)
+      }
+      setState(itemName, 'Uploaded', meta)
+    } finally {
+      setBusy('')
+    }
+  }
 
   return (
     <div className="ana-grid">
@@ -463,27 +509,59 @@ function CustomerKycTab({ opp }) {
       </div>
       <div className="ana-card c-6">
         <div className="ana-title">KYC checklist</div>
+        <input ref={fileInput} type="file" style={{ display: 'none' }} onChange={onPick} />
         {items.map(k => (
-          <div key={k.name} className="check-row">
-            <span style={{ minWidth: 170 }}>{k.name}</span>
-            <Chip tone={kycTone(k.state)}>{k.state}</Chip>
-            {k.when && <span className="hint">{k.when}</span>}
-            <span style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
-              {(k.state === 'Missing' || k.state === 'Expired') && (
-                <button disabled={!customer} onClick={() => setState(k.name, 'Uploaded')}>Simulate upload</button>
-              )}
-              {k.state === 'Uploaded' && (
-                <>
-                  <button className="primary" disabled={!canVerify} title={canVerify ? '' : 'Only AH verifies KYC'}
-                    onClick={() => setState(k.name, 'Verified')}>Verify</button>
-                  <button disabled={!canVerify} title={canVerify ? '' : 'Only AH'}
-                    onClick={() => setState(k.name, 'Missing')}>Reject</button>
-                </>
-              )}
-            </span>
-          </div>
+          <React.Fragment key={k.name}>
+            <div className="check-row">
+              <span style={{ minWidth: 170 }}>{k.name}</span>
+              <Chip tone={kycTone(k.state)}>{k.state}</Chip>
+              {k.when && <span className="hint">{k.when}</span>}
+              <span style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+                {/* Both paths stay on every row, Verified included — otherwise a
+                    fully verified checklist offers no way to replace a document
+                    or re-run the demo. */}
+                <button disabled={!customer || !!busy} onClick={() => pick(k.name)}
+                  title="Attach the actual document">
+                  {busy === k.name ? 'Uploading…' : k.file ? 'Replace…' : 'Upload…'}
+                </button>
+                <button disabled={!customer || !!busy} onClick={() => setState(k.name, 'Uploaded')}
+                  title="Demo only — flips the state without a document">Simulate upload</button>
+                {k.state === 'Uploaded' && (
+                  <>
+                    <button className="primary" disabled={!canVerify} title={canVerify ? '' : 'Only AH verifies KYC'}
+                      onClick={() => setState(k.name, 'Verified')}>Verify</button>
+                    <button disabled={!canVerify} title={canVerify ? '' : 'Only AH'}
+                      onClick={() => setState(k.name, 'Missing', null)}>Reject</button>
+                  </>
+                )}
+              </span>
+            </div>
+            {k.file && (
+              <div className="kyc-file">
+                <button type="button" className="kyc-file-open" onClick={() => setViewing(k.file)}
+                  title={`View ${k.file.name}`}>
+                  <Icon name="fileText" size={12} />
+                  <span className="attach-name">{k.file.name}</span>
+                  <span className="attach-meta">{k.file.pages ? k.file.pages + ' p.' : k.file.size || ''}</span>
+                  <Icon name="eye" size={12} />
+                </button>
+                {k.file.cloud === false && (
+                  <span className="hint"><Icon name="alert" size={11} /> cloud copy failed — kept locally</span>
+                )}
+              </div>
+            )}
+          </React.Fragment>
         ))}
+        {!items.some(k => k.file) && (
+          <p className="hint" style={{ marginTop: 8 }}>
+            Upload attaches the real document (previewable, also filed under the opportunity's KYC folder);
+            Simulate upload only flips the state for a demo run.
+          </p>
+        )}
       </div>
+      {viewing && customer && (
+        <AttachmentViewer leadId={kycBlobKey(customer.name)} attachment={viewing} onClose={() => setViewing(null)} />
+      )}
     </div>
   )
 }

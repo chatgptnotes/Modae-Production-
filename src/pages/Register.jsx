@@ -121,10 +121,10 @@ export default function Register() {
     store.updateLead(lead.id, { status: 'Converted', oppId: opp.id })
 
     // The enquiry's own attachments land in Customer Specs, like a tender does.
-    // Blobs are held in memory only (see leadFiles.js), so a reloaded tab simply
-    // has nothing to upload — the lead keeps its attachment rows either way.
+    // Blobs persist in IndexedDB (see leadFiles.js), so this survives a reload;
+    // if storage was unavailable the lead still keeps its attachment rows.
     const failed = []
-    for (const file of take(lead.id)) {
+    for (const file of await take(lead.id)) {
       try {
         store.addFile(opp.id, 'Customer Specs', await uploadOppFile(opp, 'Customer Specs', file))
       } catch (e) {
