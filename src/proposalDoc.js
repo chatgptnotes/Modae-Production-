@@ -10,14 +10,17 @@ import { MODAE_STANDARD_TERMS } from './tenderParse.js'
 import { MODAE_BRAND } from './branding/modae.js'
 
 export const MODAE_COMPANY = {
-  name: MODAE_BRAND.contact.company,
-  tagline: MODAE_BRAND.tagline,
-  addr: [MODAE_BRAND.contact.location],
-  gstin: '',
-  cin: '',
+  name: MODAE_BRAND.letterhead.legalName,
+  tagline: MODAE_BRAND.letterhead.tagline,
+  salesOffice: MODAE_BRAND.letterhead.salesOffice,
+  registeredOffice: MODAE_BRAND.letterhead.registeredOffice,
+  addr: [MODAE_BRAND.letterhead.salesOffice, MODAE_BRAND.letterhead.registeredOffice],
+  gstin: MODAE_BRAND.letterhead.gstin,
+  cin: MODAE_BRAND.letterhead.cin,
   email: MODAE_BRAND.contact.email,
   phone: MODAE_BRAND.contact.phone_display,
   web: 'mod-ae.com',
+  footer: `${MODAE_BRAND.letterhead.legalName} | ${MODAE_BRAND.letterhead.salesOffice} | ${MODAE_BRAND.letterhead.registeredOffice} | www.mod-ae.com | GSTIN: ${MODAE_BRAND.letterhead.gstin} | CIN: ${MODAE_BRAND.letterhead.cin}`,
 }
 
 export const PROP_SECTIONS = [

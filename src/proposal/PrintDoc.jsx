@@ -59,6 +59,15 @@ const PageFoot = ({ text }) => (
   <div className="doc-pagefoot"><span>{text}</span><span>Confidential</span></div>
 )
 
+const OfficialLetterheadFooter = () => (
+  <div className="doc-official-footer">
+    <b>{MODAE_COMPANY.name}</b>
+    <span>{MODAE_COMPANY.salesOffice}</span>
+    <span>{MODAE_COMPANY.registeredOffice}</span>
+    <span>{MODAE_COMPANY.web} | GSTIN: {MODAE_COMPANY.gstin} | CIN: {MODAE_COMPANY.cin}</span>
+  </div>
+)
+
 // Sections a route renames rather than drops — a services proposal quotes a
 // scope of work and a schedule of charges, not a scope of supply and a BoQ.
 const TITLE_KEY = { 'Scope of supply': 'scopeTitle', 'Bill of quantities': 'boqTitle' }
@@ -203,6 +212,7 @@ export default function PrintDoc({ p, opp, doc, priced, totals, lineQuoted }) {
           )}
         </div>
 
+        <OfficialLetterheadFooter />
         <PageFoot text={foot} />
       </section>
 

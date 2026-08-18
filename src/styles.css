@@ -2185,6 +2185,12 @@ button.install:hover { background: var(--primary-hover); }
 .doc-lh-brand i { font-style: italic; font-size: 11px; font-weight: 600; color: var(--primary-deep); }
 .doc-lh-right { text-align: right; font-size: 9.5px; color: var(--text-muted); line-height: 1.5; }
 .doc-lh-right b { display: block; font-size: 11.5px; color: var(--text-main); margin-bottom: 1px; }
+.doc-official-footer {
+  display: flex; flex-direction: column; gap: 1px; margin-top: 18px; padding-top: 7px;
+  border-top: 1px solid var(--border-soft); color: var(--text-muted); font-size: 8px; line-height: 1.35;
+  text-align: center;
+}
+.doc-official-footer b { color: var(--text-main); font-size: 8.5px; }
 .doc-rule {
   height: 3px; margin: 12px 0 20px; border-radius: 2px;
   background: linear-gradient(90deg, var(--primary-deep) 0%, var(--primary-accent) 55%, var(--teal) 100%);
