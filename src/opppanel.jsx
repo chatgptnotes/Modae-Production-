@@ -4,7 +4,7 @@ import { useStore } from './store.jsx'
 import {
   SUBFOLDERS, OWNERS, STAGES, CLOSE_REASONS,
 } from './seed.js'
-import { fmt, mmmYY, ddMmmYY, canViewCommercial, canPriceProposal, stageClass } from './utils.js'
+import { fmt, mmmYY, ddMmmYY, canViewCommercial, canPriceProposal, stageClass, productList } from './utils.js'
 import { nextActionWith } from './gates.js'
 import * as filestore from './filestore.js'
 import { Icon } from './icons.jsx'
@@ -243,12 +243,6 @@ export default function OppPanel({ oppId }) {
               {CLOSE_REASONS.map(r => <option key={r}>{r}</option>)}
             </select>
           </div>
-        </div>
-
-        <div className="fgroup">Contact</div>
-        <div className="dgrid2">
-          <Field label="Contact Person"><input type="text" value={opp.contactPerson} onChange={upd('contactPerson')} /></Field>
-          <Field label="Contact Phone #"><input type="text" value={opp.contactPhone} onChange={upd('contactPhone')} /></Field>
         </div>
 
         <div className="fgroup">Remarks</div>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { CATEGORIES, CUSTOMER_STATUSES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, PROB_LEVELS } from './seed.js'
 import { productList } from './utils.js'
 
@@ -9,6 +9,7 @@ const Field = ({ label, children }) => (
 const fields = [
   'owner', 'oppName', 'sellTo', 'category', 'location', 'customerStatus',
   'eucName', 'eucLocation', 'oppType', 'bu', 'segment', 'product', 'prob',
+  'contactPerson', 'contactPhone',
 ]
 
 const makeDraft = opp => ({
@@ -18,11 +19,22 @@ const makeDraft = opp => ({
   eucLocation: opp.eucLocation || '', oppType: opp.oppType || '',
   bu: opp.bu || '', segment: opp.segment || '', product: productList(opp.product),
   prob: opp.prob || '',
+  contactPerson: opp.contactPerson || '', contactPhone: opp.contactPhone || '',
 })
 
-export default function OpportunityDetailsEditor({ opp, store, className = '' }) {
+const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ opp, store, className = '' }, ref) {
   const [draft, setDraft] = useState(() => makeDraft(opp))
   const [dirty, setDirty] = useState(false)
+  const contactPersonRef = useRef(null)
+  const contactPhoneRef = useRef(null)
+
+  useImperativeHandle(ref, () => ({
+    focusField(field) {
+      const target = field === 'contactPhone' ? contactPhoneRef.current : contactPersonRef.current
+      target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      target?.focus()
+    },
+  }), [])
 
   useEffect(() => {
     setDraft(makeDraft(opp))
@@ -100,10 +112,18 @@ export default function OpportunityDetailsEditor({ opp, store, className = '' })
         </Field>
       </div>
 
+      <div className="opportunity-details-group">Contact</div>
+      <div className="dgrid2 opportunity-details-grid">
+        <Field label="Contact Person *"><input ref={contactPersonRef} type="text" value={draft.contactPerson} onChange={e => set('contactPerson', e.target.value)} placeholder="Enter contact name" /></Field>
+        <Field label="Contact Phone *"><input ref={contactPhoneRef} type="tel" value={draft.contactPhone} onChange={e => set('contactPhone', e.target.value)} placeholder="Enter contact phone" /></Field>
+      </div>
+
       <div className="opportunity-details-actions">
         <button className="primary" disabled={!dirty} onClick={save}>Save changes</button>
         <button disabled={!dirty} onClick={cancel}>Cancel</button>
       </div>
     </section>
   )
-}
+})
+
+export default OpportunityDetailsEditor

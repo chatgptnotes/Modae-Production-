@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES } from '../seed.js'
@@ -49,6 +49,7 @@ export default function Workbench() {
   const store = useStore()
   const nav = useNavigate()
   const [transition, setTransition] = useState(null)
+  const detailsRef = useRef(null)
   const opp = store.opportunities.find(o => o.id === oppId)
 
   if (!opp) {
@@ -104,6 +105,11 @@ export default function Workbench() {
   const openTransitionTab = tabName => {
     setTransition(null)
     goTab(tabName)
+  }
+  const openMissingContact = field => {
+    setTransition(null)
+    if (tab !== 'overview') nav(`/opp/${opp.id}/overview`)
+    window.setTimeout(() => detailsRef.current?.focusField(field), tab === 'overview' ? 0 : 120)
   }
   const clarificationRows = (store.clarifications || []).filter(c => c.oppId === opp.id && ['Draft', 'Open', 'Sent'].includes(c.status))
   const deviationRows = (proposal?.terms || []).filter(t => t.status === 'Deviation')
@@ -166,6 +172,8 @@ export default function Workbench() {
                   {item.key === 'dev' && deviationRows.length > 0 && <div className="transition-detail-list">{deviationRows.map((row, index) => <div key={`${row.term}-${index}`}><b>{row.term}</b> · Customer ask: {row.customerAsk || 'Not recorded'} · Response: {row.ourResponse || 'Pending review'}</div>)}</div>}
                   {item.severity === 'wait' && <span>Waiting for the responsible approver.</span>}
                   {item.key === 'clarifications' && <button className="exception-action" onClick={() => openTransitionTab('clarifications')}>Open clarifications</button>}
+                  {item.key === 'required-contactPerson' && <button className="exception-action" onClick={() => openMissingContact('contactPerson')}>Edit contact person</button>}
+                  {item.key === 'required-contactPhone' && <button className="exception-action" onClick={() => openMissingContact('contactPhone')}>Edit contact phone</button>}
                   {requestable && exception?.status === 'Pending' && <span>Exception approval <b>{exception.id}</b> is pending — <button className="inline-action" onClick={() => openTransitionTab('approvals')}>Open approval</button></span>}
                   {requestable && !exception && <button className="exception-action" onClick={() => requestException(item)}>Request {blockerOwner(item)} approval to continue</button>}
                   {requestable && exception?.status === 'Rejected' && <span>Exception <b>{exception.id}</b> was rejected; resolve the requirement or request a new review.</span>}
@@ -183,7 +191,7 @@ export default function Workbench() {
         </Modal>
       )}
       <div className="wb-body">
-        {tab === 'overview' && <OverviewTab opp={opp} goTab={goTab} />}
+        {tab === 'overview' && <OverviewTab opp={opp} goTab={goTab} detailsRef={detailsRef} />}
         {tab === 'requirement' && <RequirementTab opp={opp} />}
         {tab === 'customer' && <CustomerKycTab opp={opp} />}
         {tab === 'clarifications' && <ClarificationsTab opp={opp} />}
@@ -200,7 +208,7 @@ export default function Workbench() {
 }
 
 // ---------------------------------------------------------------------------
-function OverviewTab({ opp, goTab }) {
+function OverviewTab({ opp, goTab, detailsRef }) {
   const store = useStore()
   const nav = useNavigate()
   const [action, setAction] = useState(null)
@@ -255,7 +263,7 @@ function OverviewTab({ opp, goTab }) {
 
   return (
     <div className="workbench-overview">
-      <OpportunityDetailsEditor opp={opp} store={store} className="workbench-details-editor" />
+      <OpportunityDetailsEditor ref={detailsRef} opp={opp} store={store} className="workbench-details-editor" />
       <div className="workbench-overview-grid">
         <section className="workbench-panel next-action-panel">
           <div className="workbench-section-title">Next best action</div>
