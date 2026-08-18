@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { canViewCommercial, isApprover, fmtLakh, ddMmmYY } from '../utils.js'
 import { Chip, KpiCard, WarnBox } from '../ui.jsx'
-import { Icon } from '../icons.jsx'
 
 // Customer purchase orders: proposal-vs-PO validation queue plus the booked
 // order book. Sales owners see their own opportunities; approvers/admins see
@@ -42,7 +41,7 @@ export default function PurchaseOrders() {
 
       <div className="kpi-row">
         <KpiCard label={`Orders booked ${store.sales?.fy || ''}`} value={orders.length} hint="Booked orders visible to you" />
-        <KpiCard label="Total booked value (₹)" value={comm ? fmtLakh(totalK) : <Icon name="lock" size={14} />}
+        <KpiCard label="Total booked value (₹)" value={comm ? fmtLakh(totalK) : '—'}
           hint={comm ? 'Sum of booked order values' : 'Restricted — commercial data'} />
         <KpiCard label="POs in validation" value={validating.length} hint="Proposal-vs-PO comparisons in progress" />
       </div>
@@ -112,7 +111,7 @@ export default function PurchaseOrders() {
                   {approver && <td>{o.owner}</td>}
                   <td>{o.customer}</td>
                   <td>{o.title}</td>
-                  <td className="num">{comm ? fmtLakh(o.valueK) : <Icon name="lock" size={11} />}</td>
+                  <td className="num">{comm ? fmtLakh(o.valueK) : '—'}</td>
                   <td>{o.po}</td>
                   <td><Chip tone={ORDER_TONE[o.status] || 'grey'}>{o.status}</Chip></td>
                   <td>{ddMmmYY(o.booked)}</td>
