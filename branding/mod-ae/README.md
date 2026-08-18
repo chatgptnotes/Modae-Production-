@@ -36,9 +36,57 @@ Official source material scraped from mod-ae.com for product copy, brand positio
 - data/contact.json: normalized contact information.
 - data/brand-profile.json: normalized brand summary.
 - data/site-map.json: Firecrawl-discovered official URLs.
-- data/asset-manifest.json: downloaded asset source mapping.
+- data/asset-manifest.json: downloaded asset source mapping (see Asset manifest below).
 - raw/: raw HTML/API captures and per-product markdown.
-- assets/: logo, about image, and official product images.
+- raw/wp-media.json: archived media-library API response, the input to the asset capture.
+- assets/: full-resolution originals — logos, brand imagery, product, service and industry photography.
+- assets/web/: the same images at <=1024px on the long edge, under identical base filenames, so `assets/X.jpg` and `assets/web/X.jpg` always pair.
+
+Nine assets are resolved by literal path from `src/branding/modae.js` and asserted in
+`tests/mobile-deploy.test.mjs`. **Do not rename or move anything in `assets/`** — the manifest
+marks those entries `consumed_by_app: true`.
+
+`assets/modae-official-logo.png` is not a separate upload: it is a re-encode of
+`assets/red-logo.png` (identical 1770x485 RGBA canvas, every pixel with alpha>0 byte-identical,
+differing only in the RGB beneath fully transparent pixels). It is the file the app consumes
+as `logoUrl` / `letterheadUrl` / `officialLogoUrl`.
+
+## Capture
+
+    node scripts/fetch-modae-assets.mjs [--force]
+
+Re-downloads the image archive from the WordPress media library and regenerates
+`data/asset-manifest.json`. Notes on its behaviour:
+
+- **Only `2024/06/` and `2024/10/` uploads are ModAE's.** The ~113 items under `2024/05/` are
+  leftover demo content from the purchased Qfactum theme (stock digital-marketing and contracts
+  imagery, `QFACTUM-PRESENTATION.pdf`) and are deliberately excluded. Filenames alone do not
+  separate them; upload month does.
+- **Throttled.** mod-ae.com sits behind Cloudflare and starts serving `Just a moment...`
+  interstitials under a burst, so requests run one at a time with a ~2-3.5s gap. A full run takes
+  several minutes.
+- **Validated.** A challenge page returns HTTP 200 and would otherwise be saved as a corrupt
+  `.jpg`. Nothing is written unless it passes a content-type, magic-byte, size and marker check.
+  After two consecutive challenges the run aborts rather than writing junk.
+- **Resumable.** Files already on disk and valid are skipped, so re-running after an abort is
+  cheap. Use `--force` to refetch everything.
+- Web variants come from each item's `media_details.sizes`, picking the largest whose *long edge*
+  is <=1024 — never a guessed `-1024x576` filename, which finds only about half of them, and never
+  a width-based rule, which picks the wrong tier for portrait images. If no such variant exists the
+  original is downscaled locally with `sips` (macOS only). If the original is already <=1024 no
+  duplicate is written and the manifest records `same_as_full`.
+
+## Asset manifest
+
+Each entry keeps `title`, `type`, `source_url` and `local_path`, plus:
+
+- `wp_media_id`, `fetched_at`, `alt_text` where the library provides it.
+- `full` and `web` blocks, each with `path`, `width`, `height`, `bytes`, `sha1`.
+- `web.origin`: `wordpress_size` | `same_as_full` | `local_downscale_sips`.
+- `provenance`: `wordpress_media`, or `verified_identical_artwork` for the official logo.
+- `consumed_by_app: true` on the nine files the app resolves directly.
+
+`type` is one of `logo`, `brand`, `product`, `service`, `industry`, `site`.
 
 ## Source URLs
 
