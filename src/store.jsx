@@ -499,13 +499,13 @@ export function StoreProvider({ children }) {
         'Lead received', lead.id, lead.subject))
     },
 
-    updateLead(id, patch) {
+    updateLead(id, patch, detail = '') {
       setState(s => {
         const next = { ...s, leads: s.leads.map(l => (l.id === id ? { ...l, ...patch } : l)) }
-        return patch.status
-          ? withAudit(next, `Lead ${patch.status.toLowerCase()}`, id,
-              patch.droppedReason || patch.oppId || '')
-          : next
+        const auditKeys = Object.keys(patch).filter(k => !['readAt', 'starred'].includes(k))
+        if (!auditKeys.length) return next
+        return withAudit(next, patch.status ? `Lead ${patch.status.toLowerCase()}` : 'Lead updated', id,
+          detail || patch.droppedReason || patch.oppId || auditKeys.join(', '))
       })
     },
 

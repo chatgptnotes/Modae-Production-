@@ -61,3 +61,9 @@ test('qualify, disqualify and reassign are all offered on the lead itself', () =
   assert.match(inbox, /Disqualify/)
   assert.match(inbox, /onClick=\{reassign\}/)
 })
+
+test('lead field edits are persisted and audited with the current role', () => {
+  assert.match(store, /updateLead\(id, patch, detail = ''\)/)
+  assert.match(store, /withAudit\(next, patch\.status \? `Lead \$\{patch\.status\.toLowerCase\(\)\}` : 'Lead updated'/)
+  assert.match(inbox, /AI field "\$\{field\?\.k \|\| 'unknown'\}" updated/)
+})

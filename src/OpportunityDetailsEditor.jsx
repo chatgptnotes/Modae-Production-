@@ -1,0 +1,109 @@
+import React, { useEffect, useState } from 'react'
+import { CATEGORIES, CUSTOMER_STATUSES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, PROB_LEVELS } from './seed.js'
+import { productList } from './utils.js'
+
+const Field = ({ label, children }) => (
+  <div><label>{label}</label>{children}</div>
+)
+
+const fields = [
+  'owner', 'oppName', 'sellTo', 'category', 'location', 'customerStatus',
+  'eucName', 'eucLocation', 'oppType', 'bu', 'segment', 'product', 'prob',
+]
+
+const makeDraft = opp => ({
+  owner: opp.owner || '', oppName: opp.oppName || '', sellTo: opp.sellTo || '',
+  category: opp.category || '', location: opp.location || '',
+  customerStatus: opp.customerStatus || '', eucName: opp.eucName || '',
+  eucLocation: opp.eucLocation || '', oppType: opp.oppType || '',
+  bu: opp.bu || '', segment: opp.segment || '', product: productList(opp.product),
+  prob: opp.prob || '',
+})
+
+export default function OpportunityDetailsEditor({ opp, store, className = '' }) {
+  const [draft, setDraft] = useState(() => makeDraft(opp))
+  const [dirty, setDirty] = useState(false)
+
+  useEffect(() => {
+    setDraft(makeDraft(opp))
+    setDirty(false)
+  }, [opp.id, opp.lastUpdated])
+
+  const set = (key, value) => {
+    setDraft(current => ({ ...current, [key]: value }))
+    setDirty(true)
+  }
+
+  const save = () => {
+    const patch = Object.fromEntries(fields.map(key => [key, draft[key]]))
+    store.updateOpportunity(opp.id, patch)
+    setDirty(false)
+  }
+
+  const cancel = () => {
+    setDraft(makeDraft(opp))
+    setDirty(false)
+  }
+
+  const toggleProduct = product => {
+    const next = draft.product.includes(product)
+      ? draft.product.filter(value => value !== product)
+      : [...draft.product, product]
+    set('product', next)
+  }
+
+  return (
+    <section className={`opportunity-details-editor ${className}`}>
+      <div className="opportunity-details-heading">
+        <div>
+          <div className="workbench-section-title">Opportunity details</div>
+          <span className="hint">Edit the opportunity record. Changes are saved to this opportunity only.</span>
+        </div>
+        {dirty && <span className="opportunity-details-dirty">Unsaved changes</span>}
+      </div>
+
+      <div className="opportunity-details-group">Identity</div>
+      <div className="dgrid2 opportunity-details-grid">
+        <Field label="Opp ID"><div className="ro">{opp.id} (Sl {opp.sl})</div></Field>
+        <Field label="Owner"><select value={draft.owner} onChange={e => set('owner', e.target.value)}>{OWNERS.map(x => <option key={x}>{x}</option>)}</select></Field>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <label>Opportunity Name/Description</label>
+          <input type="text" value={draft.oppName} onChange={e => set('oppName', e.target.value)} />
+        </div>
+      </div>
+
+      <div className="opportunity-details-group">Customer</div>
+      <div className="dgrid2 opportunity-details-grid">
+        <Field label="Sell To Customer"><input type="text" value={draft.sellTo} onChange={e => set('sellTo', e.target.value)} /></Field>
+        <Field label="Category"><select value={draft.category} onChange={e => set('category', e.target.value)}>{CATEGORIES.map(x => <option key={x}>{x}</option>)}</select></Field>
+        <Field label="Location"><input type="text" value={draft.location} onChange={e => set('location', e.target.value)} /></Field>
+        <Field label="Customer Status"><select value={draft.customerStatus} onChange={e => set('customerStatus', e.target.value)}>{CUSTOMER_STATUSES.map(x => <option key={x}>{x}</option>)}</select></Field>
+        <Field label="EUC Name"><input type="text" value={draft.eucName} onChange={e => set('eucName', e.target.value)} /></Field>
+        <Field label="EUC Location"><input type="text" value={draft.eucLocation} onChange={e => set('eucLocation', e.target.value)} /></Field>
+      </div>
+
+      <div className="opportunity-details-group">Classification</div>
+      <div className="dgrid2 opportunity-details-grid">
+        <Field label="Opp Type"><select value={draft.oppType} onChange={e => set('oppType', e.target.value)}>{OPP_TYPES.map(x => <option key={x}>{x}</option>)}</select></Field>
+        <Field label="BU"><select value={draft.bu} onChange={e => set('bu', e.target.value)}>{BUS.map(x => <option key={x}>{x}</option>)}</select></Field>
+        <Field label="Segment"><select value={draft.segment} onChange={e => set('segment', e.target.value)}>{SEGMENTS.map(x => <option key={x}>{x}</option>)}</select></Field>
+        <Field label="Probability"><select value={draft.prob} onChange={e => set('prob', e.target.value)}><option value="">—</option>{PROB_LEVELS.map(x => <option key={x}>{x}</option>)}</select></Field>
+        <Field label="Product">
+          <div className="pill-group">
+            {PRODUCTS.map(product => (
+              <label key={product} className={`pill-opt ${draft.product.includes(product) ? 'on' : ''}`}>
+                <input type="checkbox" checked={draft.product.includes(product)} onChange={() => toggleProduct(product)} />
+                {product}
+              </label>
+            ))}
+          </div>
+        </Field>
+      </div>
+
+      <div className="opportunity-details-actions">
+        <button className="primary" disabled={!dirty} onClick={save}>Save changes</button>
+        <button disabled={!dirty} onClick={cancel}>Cancel</button>
+      </div>
+    </section>
+  )
+}

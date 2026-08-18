@@ -2,13 +2,13 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from './store.jsx'
 import {
-  SUBFOLDERS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS,
-  PROB_LEVELS, STAGES, CLOSE_REASONS,
+  SUBFOLDERS, OWNERS, STAGES, CLOSE_REASONS,
 } from './seed.js'
-import { fmt, mmmYY, ddMmmYY, canViewCommercial, canPriceProposal, stageClass, productList } from './utils.js'
+import { fmt, mmmYY, ddMmmYY, canViewCommercial, canPriceProposal, stageClass } from './utils.js'
 import { nextActionWith } from './gates.js'
 import * as filestore from './filestore.js'
 import { Icon } from './icons.jsx'
+import OpportunityDetailsEditor from './OpportunityDetailsEditor.jsx'
 
 const OPEN_STAGES = STAGES.filter(s => s !== 'Won' && s !== 'Lost')
 
@@ -187,69 +187,7 @@ export default function OppPanel({ oppId }) {
       </div>
 
       <div className="drawer-form">
-        <div className="fgroup">Identity</div>
-        <div className="dgrid2">
-          <Field label="Opp ID"><div className="ro">{opp.id} (Sl {opp.sl})</div></Field>
-          <Field label="Owner">
-            <select value={opp.owner} onChange={upd('owner')}>{OWNERS.map(x => <option key={x}>{x}</option>)}</select>
-          </Field>
-          <div style={{ gridColumn: '1 / -1' }}>
-            <label>Opportunity Name/Description</label>
-            <input type="text" value={opp.oppName} onChange={upd('oppName')} />
-          </div>
-        </div>
-
-        <div className="fgroup">Customer</div>
-        <div className="dgrid2">
-          <Field label="Sell To Customer"><input type="text" value={opp.sellTo} onChange={upd('sellTo')} /></Field>
-          <Field label="Category">
-            <select value={opp.category} onChange={upd('category')}>{CATEGORIES.map(x => <option key={x}>{x}</option>)}</select>
-          </Field>
-          <Field label="Location"><input type="text" value={opp.location} onChange={upd('location')} /></Field>
-          <Field label="Customer Status">
-            <div><span className={`pill ${opp.customerStatus}`}>{opp.customerStatus}</span>{' '}
-              <span className="hint">accounting-fed</span></div>
-          </Field>
-          <Field label="EUC Name"><input type="text" value={opp.eucName} onChange={upd('eucName')} /></Field>
-          <Field label="EUC Location"><input type="text" value={opp.eucLocation} onChange={upd('eucLocation')} /></Field>
-        </div>
-
-        <div className="fgroup">Classification</div>
-        <div className="dgrid2">
-          <Field label="Opp Type">
-            <select value={opp.oppType} onChange={upd('oppType')}>{OPP_TYPES.map(x => <option key={x}>{x}</option>)}</select>
-          </Field>
-          <Field label="BU">
-            <select value={opp.bu} onChange={upd('bu')}>{BUS.map(x => <option key={x}>{x}</option>)}</select>
-          </Field>
-          <Field label="Segment">
-            <select value={opp.segment} onChange={upd('segment')}>{SEGMENTS.map(x => <option key={x}>{x}</option>)}</select>
-          </Field>
-          {/* Multi-select: one opportunity can carry several products. */}
-          <Field label="Product">
-            <div className="pill-group">
-              {PRODUCTS.map(x => {
-                const chosen = productList(opp.product)
-                const on = chosen.includes(x)
-                return (
-                  <label key={x} className={`pill-opt ${on ? 'on' : ''}`}>
-                    <input type="checkbox" checked={on} onChange={() =>
-                      store.updateOpportunity(oppId, {
-                        product: on ? chosen.filter(p => p !== x) : [...chosen, x],
-                      })} />
-                    {x}
-                  </label>
-                )
-              })}
-            </div>
-          </Field>
-          <Field label="Prob (%)">
-            <select value={opp.prob || ''} onChange={upd('prob')}>
-              <option value=""></option>
-              {PROB_LEVELS.map(x => <option key={x}>{x}</option>)}
-            </select>
-          </Field>
-        </div>
+        <OpportunityDetailsEditor opp={opp} store={store} />
 
         <div className="fgroup">Commercial</div>
         {showValue ? (

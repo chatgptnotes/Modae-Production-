@@ -16,6 +16,7 @@ import WbProject from '../workbench/WbProject.jsx'
 import PropBuilder from '../workbench/PropBuilder.jsx'
 import SubmissionPanel from '../workbench/SubmissionPanel.jsx'
 import PoHandover from '../workbench/PoHandover.jsx'
+import OpportunityDetailsEditor from '../OpportunityDetailsEditor.jsx'
 
 const TABS = [
   ['overview', 'Overview'], ['requirement', 'Requirement'], ['customer', 'Customer/KYC'],
@@ -254,6 +255,7 @@ function OverviewTab({ opp, goTab }) {
 
   return (
     <div className="workbench-overview">
+      <OpportunityDetailsEditor opp={opp} store={store} className="workbench-details-editor" />
       <div className="workbench-overview-grid">
         <section className="workbench-panel next-action-panel">
           <div className="workbench-section-title">Next best action</div>

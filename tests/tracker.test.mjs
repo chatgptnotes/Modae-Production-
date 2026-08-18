@@ -45,6 +45,11 @@ test('My Opportunities shows the same working columns', () => {
   assert.doesNotMatch(myOpps, /<th>Updated<\/th>/)
 })
 
+test('opportunity IDs open the full opportunity workspace', () => {
+  assert.match(tracker, /<Link to=\{`\/opp\/\$\{o\.id\}`\} title="Open opportunity workspace">\{o\.id\}<\/Link>/)
+  assert.doesNotMatch(tracker, /<Link to=\{`\/folders\/\$\{o\.id\}`\}>\{o\.id\}<\/Link>/)
+})
+
 // --------------------------------------------------- next action pending owner
 test('the next action owner is derived, not left blank', () => {
   const open = opps.filter(o => o.status === 'Open')

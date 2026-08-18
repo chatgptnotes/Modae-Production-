@@ -5,13 +5,14 @@ import { ddMmmYY, ageDays } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { Chip, ConfChip, WarnBox, ErrBox, Modal } from '../ui.jsx'
-import { ROLES, OWNERS, ownerForOppType } from '../seed.js'
+import { ROLES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, CUSTOMER_STATUSES, ownerForOppType, routeForType } from '../seed.js'
 import { isAdminRole, isApprover } from '../utils.js'
 import { aiEnabled, runJson } from '../ai.js'
 import { extractPdfText } from '../tenderParse.js'
 import { fmtSize } from '../filestore.js'
 import { hold } from '../leadFiles.js'
 import { findDuplicates } from '../insights.js'
+import { leadWorkflow } from '../leadWorkflow.js'
 
 // Common-mailbox lead inbox: AI parses each inquiry, a human decides whether it
 // becomes an opportunity (Qualify → registration / intake form) or is dropped.
@@ -307,12 +308,69 @@ export function matchCustomer(customers, lead) {
   }) || null
 }
 
+const customerStatusForLead = (lead, customers) =>
+  lead.customerStatus || matchCustomer(customers, lead)?.status || (lead.redFlag ? 'Red' : 'Blue')
+
+const leadFieldValue = (fields, pattern) => {
+  const field = (fields || []).find(f => pattern.test(f.k) && f.state !== 'rejected')
+  return field?.v || ''
+}
+
+const updateLeadField = (fields, key, value, group = 'RFQ') => {
+  const index = fields.findIndex(f => f.k.toLowerCase() === key.toLowerCase())
+  const next = { group, k: key, v: value, conf: 100, state: 'accepted', ev: 'Edited on lead detail', note: 'Confirmed by user' }
+  if (index < 0) return [...fields, next]
+  return fields.map((field, i) => i === index ? { ...field, ...next } : field)
+}
+
 const fieldChip = (f, med) => {
   if (f.state === 'accepted') return <Chip tone="state-Accepted">Accepted</Chip>
   if (f.state === 'rejected') return <Chip tone="state-Rejected">Rejected</Chip>
   return f.conf >= med
     ? <Chip tone="state-Review">Review required</Chip>
     : <Chip tone="state-Blocks">Blocks stage</Chip>
+}
+
+function LeadWorkflowBar({ lead }) {
+  const store = useStore()
+  const customer = matchCustomer(store.customers, lead)
+  const progress = leadWorkflow(lead, {
+    customerStatus: lead.customerStatus || customer?.status || '',
+    med: store.config.aiThresholds?.med ?? 75,
+  })
+  const active = progress.steps[progress.activeIndex]
+  const percent = progress.steps.filter(step => step.state === 'complete').length / progress.steps.length * 100
+
+  return (
+    <section className="lead-flow-card" aria-label="Lead workflow progress">
+      <div className="lead-flow-head">
+        <div>
+          <div className="lead-flow-kicker">Lead workflow</div>
+          <b>{progress.complete ? 'Lead workflow complete' : `Current step: ${active.label}`}</b>
+        </div>
+        <span className={`lead-flow-status ${progress.complete ? 'complete' : progress.blocked ? 'blocked' : 'current'}`}>
+          {progress.complete ? 'Ready for opportunity workflow' : progress.blocked || 'In progress'}
+        </span>
+      </div>
+      <div className="lead-flow-track" aria-hidden="true"><span style={{ width: `${percent}%` }} /></div>
+      <div className="lead-flow-steps">
+        {progress.steps.map((step, index) => (
+          <div key={step.id} className={`lead-flow-step ${step.state}`}>
+            <span className="lead-flow-dot">{step.state === 'complete' ? '✓' : index + 1}</span>
+            <span className="lead-flow-step-text"><b>{step.id}</b><span>{step.short}</span></span>
+          </div>
+        ))}
+      </div>
+      {!progress.complete && (
+        <p className="lead-flow-note">
+          Update the editable fields below and save each decision to advance the lead.
+        </p>
+      )}
+      {progress.complete && lead.oppId && (
+        <p className="lead-flow-note">Opportunity {lead.oppId} is linked. Continue in the Opportunity Workflow.</p>
+      )}
+    </section>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -332,6 +390,17 @@ function AiLeadDetail({ lead }) {
   const [dropping, setDropping] = useState(false)
   const [reverting, setReverting] = useState(false)
   const [reassignTo, setReassignTo] = useState(lead.suggestedOwner || OWNERS[0])
+  const initialDecisions = () => ({
+    region: lead.region || lead.location || leadFieldValue(ai.fields, /location|region/i),
+    owner: lead.assignedOwner || lead.suggestedOwner || OWNERS[0],
+    oppType: leadFieldValue(ai.fields, /opp type/i) || (lead.route === 'Service' ? 'Service' : lead.route === 'Project' ? 'Project' : 'Spares'),
+    customerStatus: lead.customerStatus || customerStatusForLead(lead, store.customers),
+    bu: leadFieldValue(ai.fields, /^bu$/i) || 'Energy',
+    segment: leadFieldValue(ai.fields, /segment/i) || 'Others',
+    product: leadFieldValue(ai.fields, /^product$/i) || 'Various',
+  })
+  const [decisionDraft, setDecisionDraft] = useState(initialDecisions)
+  const [decisionSaved, setDecisionSaved] = useState(false)
 
   // Re-read the original mail. Human decisions are discarded with it, so this
   // is confirmed first — the point of the field states is that they're earned.
@@ -346,7 +415,7 @@ function AiLeadDetail({ lead }) {
   }
 
   const customer = matchCustomer(store.customers, lead)
-  const isRed = lead.redFlag || customer?.status === 'Red'
+  const isRed = lead.redFlag || lead.customerStatus === 'Red' || customer?.status === 'Red'
   const redApproval = store.approvals.find(a => a.leadId === lead.id && a.type === 'Red customer clearance')
   const redCleared = redApproval && ['Approved', 'Approved with conditions'].includes(redApproval.status)
 
@@ -354,9 +423,10 @@ function AiLeadDetail({ lead }) {
   const pendingLow = ai.fields.filter(f => f.state === 'pending' && f.conf < med)
 
   const patchField = (idx, patch) => {
+    const field = ai.fields[idx]
     store.updateLead(lead.id, {
       ai: { ...ai, fields: ai.fields.map((f, i) => (i === idx ? { ...f, ...patch } : f)) },
-    })
+    }, `AI field "${field?.k || 'unknown'}" updated`)
   }
 
   const saveEdit = () => {
@@ -384,7 +454,30 @@ function AiLeadDetail({ lead }) {
     .filter(d => !(lead.dismissedDuplicates || []).includes(d.leadId))
 
   const reassign = () => {
-    store.updateLead(lead.id, { suggestedOwner: reassignTo, assignedOwner: reassignTo, reassignedFrom: lead.suggestedOwner || '', reassignedAt: new Date().toISOString() })
+    store.updateLead(lead.id, { suggestedOwner: reassignTo, assignedOwner: reassignTo, reassignedFrom: lead.suggestedOwner || '', reassignedAt: new Date().toISOString() }, `Owner reassigned to ${reassignTo}`)
+  }
+
+  const saveDecisions = () => {
+    const previous = initialDecisions()
+    const nextFields = updateLeadField(updateLeadField(updateLeadField(updateLeadField(ai.fields,
+      'Location', decisionDraft.region, 'Customer'), 'Opp Type', decisionDraft.oppType),
+      'BU / Segment', `${decisionDraft.bu} / ${decisionDraft.segment}`), 'Product', decisionDraft.product)
+    const changed = Object.keys(decisionDraft)
+      .filter(key => previous[key] !== decisionDraft[key])
+      .map(key => `${key}: ${previous[key] || '—'} → ${decisionDraft[key] || '—'}`)
+    if (!changed.length) { setDecisionSaved(true); return }
+    store.updateLead(lead.id, {
+      region: decisionDraft.region,
+      location: decisionDraft.region,
+      suggestedOwner: decisionDraft.owner,
+      assignedOwner: decisionDraft.owner,
+      route: routeForType(decisionDraft.oppType),
+      customerStatus: decisionDraft.customerStatus,
+      redFlag: decisionDraft.customerStatus === 'Red',
+      ai: { ...ai, route: routeForType(decisionDraft.oppType), fields: nextFields },
+    }, `Lead decisions saved — ${changed.join('; ')}`)
+    setReassignTo(decisionDraft.owner)
+    setDecisionSaved(true)
   }
 
   return (
@@ -556,6 +649,65 @@ function AiLeadDetail({ lead }) {
               {lead.suggestedOwner}
               <span className="ws-kv-note">{rule ? `${rule.region} rule` : 'regional rule'} · override needs LJS/AH + reason</span>
             </span>
+          </div>
+
+          <div className="lead-decision-card">
+            <div className="lead-decision-head">
+              <div>
+                <b>Lead decisions</b>
+                <span>Correct routing values before registration</span>
+              </div>
+              {decisionSaved && <span className="lead-decision-saved">Saved</span>}
+            </div>
+            <div className="lead-decision-grid">
+              <label>Region / location
+                <input value={decisionDraft.region} disabled={lead.status === 'Dropped'}
+                  onChange={e => setDecisionDraft({ ...decisionDraft, region: e.target.value })} placeholder="Enter region or location" />
+              </label>
+              <label>Assigned owner
+                <select value={decisionDraft.owner} disabled={lead.status === 'Dropped'}
+                  onChange={e => setDecisionDraft({ ...decisionDraft, owner: e.target.value })}>
+                  {OWNERS.map(owner => <option key={owner}>{owner}</option>)}
+                </select>
+              </label>
+              <label>Opportunity type
+                <select value={decisionDraft.oppType} disabled={lead.status === 'Dropped'}
+                  onChange={e => setDecisionDraft({ ...decisionDraft, oppType: e.target.value })}>
+                  {OPP_TYPES.map(type => <option key={type}>{type}</option>)}
+                </select>
+              </label>
+              <label>Customer class
+                <select value={decisionDraft.customerStatus} disabled={lead.status === 'Dropped'}
+                  onChange={e => setDecisionDraft({ ...decisionDraft, customerStatus: e.target.value })}>
+                  {CUSTOMER_STATUSES.map(status => <option key={status}>{status}</option>)}
+                </select>
+              </label>
+              <label>Business unit
+                <select value={decisionDraft.bu} disabled={lead.status === 'Dropped'}
+                  onChange={e => setDecisionDraft({ ...decisionDraft, bu: e.target.value })}>
+                  {BUS.map(bu => <option key={bu}>{bu}</option>)}
+                </select>
+              </label>
+              <label>Segment
+                <select value={decisionDraft.segment} disabled={lead.status === 'Dropped'}
+                  onChange={e => setDecisionDraft({ ...decisionDraft, segment: e.target.value })}>
+                  {SEGMENTS.map(segment => <option key={segment}>{segment}</option>)}
+                </select>
+              </label>
+              <label>Product
+                <select value={decisionDraft.product} disabled={lead.status === 'Dropped'}
+                  onChange={e => setDecisionDraft({ ...decisionDraft, product: e.target.value })}>
+                  {PRODUCTS.map(product => <option key={product}>{product}</option>)}
+                </select>
+              </label>
+            </div>
+            <div className="lead-decision-actions">
+              <button className="primary" disabled={lead.status === 'Dropped'} onClick={saveDecisions}>
+                <Icon name="check" size={12} /> Save changes
+              </button>
+              <button disabled={lead.status === 'Dropped'} onClick={() => { setDecisionDraft(initialDecisions()); setDecisionSaved(false) }}>Cancel</button>
+            </div>
+            {lead.status === 'Converted' && <p className="lead-decision-note">This edits the lead record only. The linked opportunity is unchanged.</p>}
           </div>
 
           {ai.next?.length > 0 && (
@@ -863,7 +1015,8 @@ export default function Inbox() {
             </div>
           </div>
           <span className={`pill ${PILL[sel.status] || 'Blue'}`}>{sel.status}</span>
-        </div>
+      </div>
+        <LeadWorkflowBar lead={sel} />
         {sel.ai
           ? <AiLeadDetail lead={sel} />
           : <div className="ws-grid single"><section className="ws-col"><div className="ws-body">

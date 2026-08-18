@@ -68,7 +68,8 @@ export default function Register() {
   }
 
   const customer = matchCustomer(store.customers, lead)
-  const isRed = lead.redFlag || customer?.status === 'Red'
+  const leadCustomerStatus = lead.customerStatus || customer?.status || 'Blue'
+  const isRed = lead.redFlag || leadCustomerStatus === 'Red'
   const redApproval = store.approvals.find(a => a.leadId === lead.id && a.type === 'Red customer clearance')
   const redCleared = redApproval && ['Approved', 'Approved with conditions'].includes(redApproval.status)
   const pendingLow = fields.filter(f => f.state === 'pending' && f.conf < med)
@@ -91,12 +92,13 @@ export default function Register() {
     const contactPhone = (contactV.match(/\+?\d[\d\s-]{7,}/) || [''])[0].trim()
     const catV = fieldVal(fields, /category/i)
     const category = guessFromList(catV, ['EUC', 'EPC', 'OEM', 'ACP', 'SI', 'RE/TR']) || '—'
+    const location = fieldVal(fields, /location|region/i) || lead.location || lead.region || ''
     const opp = {
       id: previewId,
       sl: Math.max(0, ...store.opportunities.map(o => o.sl || 0)) + 1,
-      sellTo, category, location: '',
-      customerStatus: customer?.status || 'Blue',
-      eucName: category === 'EUC' ? sellTo : '', eucLocation: '',
+      sellTo, category, location,
+      customerStatus: leadCustomerStatus,
+      eucName: category === 'EUC' ? sellTo : '', eucLocation: location,
       oppName: lead.subject, owner, oppType, bu, segment, product,
       prob: 'Low', valueK: 0, cogsK: 0,
       createDate: today, proposalDate: '', orderDate: '', invoiceDate: '',
@@ -114,7 +116,7 @@ export default function Register() {
     // clearance and its conditions follow the opportunity into the workbench.
     store.linkLeadApprovals(lead.id, opp.id)
     if (!customer) {
-      store.addCustomer({ name: sellTo, category, status: 'Blue', kyc: 'Pending', payment: '—' })
+      store.addCustomer({ name: sellTo, category, status: leadCustomerStatus, kyc: 'Pending', payment: '—' })
     }
     store.updateLead(lead.id, { status: 'Converted', oppId: opp.id })
 

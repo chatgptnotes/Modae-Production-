@@ -329,7 +329,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                 }}>
                 <td className="rowhead">{index + 1}</td>
                 <td onClick={selectCell(o, COLS[0])} className={`oppid ${customerStatusFor(o)} ${stageClass(o) === 'open' ? '' : stageClass(o)} ${isSel(o, COLS[0]) ? 'cell-sel' : ''}`}>
-                  <Link to={`/folders/${o.id}`}>{o.id}</Link>
+                  <Link to={`/opp/${o.id}`} title="Open opportunity workspace">{o.id}</Link>
                 </td>
                 <td onClick={selectCell(o, COLS[1])} className={isSel(o, COLS[1]) ? 'cell-sel' : ''}><input type="text" value={o.sellTo} onChange={upd(o.id, 'sellTo')} style={{ minWidth: 150 }} /></td>
                 <td onClick={selectCell(o, COLS[2])} className={isSel(o, COLS[2]) ? 'cell-sel' : ''}>
