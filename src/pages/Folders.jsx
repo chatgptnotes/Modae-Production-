@@ -138,7 +138,7 @@ export default function Folders() {
             </>
           ) : (
             <>
-              <Link to="/folders">OneDrive - ModAE India Pvt Ltd</Link> ›{' '}
+              <Link to="/folders">OneDrive - Modae Private Limited</Link> ›{' '}
               <b>Sales - Opportunities</b>
             </>
           )}

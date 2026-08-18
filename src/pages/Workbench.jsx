@@ -7,6 +7,8 @@ import { readiness, isBlocked, computeProposalTotals, nextActionWith, transition
 import { COMMERCIAL_RX } from './Approvals.jsx'
 import { Chip, ClassChip, AiBadge, Stepper, WarnBox, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
+import { productBrandProfiles } from '../branding/modae.js'
+import { MODAE_COMPANY } from '../proposalDoc.js'
 import { runJson, runText } from '../ai.js'
 import WbSpares from '../workbench/WbSpares.jsx'
 import WbService from '../workbench/WbService.jsx'
@@ -213,6 +215,7 @@ function OverviewTab({ opp, goTab }) {
   const kycItems = customer ? ((store.kyc || {})[customer.name] || []) : []
   const verifiedKyc = kycItems.filter(k => k.state === 'Verified').length
   const audit = (store.audit || []).filter(e => (e.objectId || '').includes(opp.id)).slice(0, 3)
+  const brandedProducts = productBrandProfiles(opp.product)
 
   const nextAction = firstBlock
     ? `Resolve blocker: ${firstBlock.text}`
@@ -280,6 +283,24 @@ function OverviewTab({ opp, goTab }) {
           <p className="workbench-summary">{summary}</p>
           <div className="workbench-readiness"><span>Proposal readiness</span><Chip tone={blocked ? 'state-Blocks' : 'state-Accepted'}>{blocked ? `${blockers.length} blocker(s)` : 'Ready to progress'}</Chip></div>
         </section>
+
+        {brandedProducts.length > 0 && (
+          <section className="workbench-panel workbench-brand-panel">
+            <div className="workbench-section-title">ModAE solution context</div>
+            <div className="workbench-brand-products">
+              {brandedProducts.map(product => (
+                <article className="workbench-brand-product" key={product.slug}>
+                  <img src={product.imageUrl} alt="" />
+                  <div>
+                    <b>{product.title}</b>
+                    <p>{product.summary}</p>
+                    <span className="hint">{product.sections.applications}</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className="workbench-panel">
           <div className="workbench-section-title">KYC snapshot</div>
@@ -519,7 +540,7 @@ function ClarificationsTab({ opp }) {
       '',
       'Best regards,',
       `${ROLES[opp.owner]?.name || opp.owner}`,
-      'ModAE India Pvt Ltd',
+      MODAE_COMPANY.name,
     ].join('\n')
   }
 

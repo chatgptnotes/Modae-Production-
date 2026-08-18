@@ -344,9 +344,6 @@ export default function DocEditor({ p, opp, save, files, totals, priced }) {
         <label style={{ marginTop: 10, display: 'block' }}>Closing paragraph</label>
         <textarea rows={3} value={doc.about.closing} style={{ width: '100%' }}
           onChange={e => set('about', { ...doc.about, closing: e.target.value })} />
-        <div className="costing-note">
-          Placeholder company profile — replace with ModAE's own copy in <code>src/proposalDoc.js</code>.
-        </div>
       </Section>
 
       <Section title="Signature block" p={p} field="preparedBy" onReset={reset('preparedBy')}>
@@ -359,8 +356,7 @@ export default function DocEditor({ p, opp, save, files, totals, priced }) {
           ))}
         </div>
         <div className="costing-note">
-          Signed for {MODAE_COMPANY.name}. Company address, GSTIN and CIN on the letterhead are placeholders —
-          edit them in <code>src/proposalDoc.js</code>.
+          Signed for {MODAE_COMPANY.name}. Verified legal registration details are intentionally omitted until confirmed.
         </div>
       </Section>
     </div>

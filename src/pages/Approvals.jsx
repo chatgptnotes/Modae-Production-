@@ -7,14 +7,40 @@ import { useDrawer } from '../drawer.jsx'
 import { Icon } from '../icons.jsx'
 import { Chip } from '../ui.jsx'
 
+const NEW_APPROVAL_MS = 48 * 60 * 60 * 1000
 // Approval ts/decisionTs are full ISO stamps; ddMmmYY wants YYYY-MM-DD.
 const day = ts => ddMmmYY((ts || '').slice(0, 10))
+const time = ts => {
+  const d = new Date(ts || '')
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  })
+}
+const stamp = ts => {
+  const d = day(ts)
+  const t = time(ts)
+  return t ? `${d} at ${t}` : d
+}
 const pillFor = s =>
   s === 'Approved' ? 'Green'
     : s === 'Rejected' ? 'Red'
     : s === 'Approved with conditions' || s === 'Returned' ? 'Amber'
     : 'Blue'
 const byTsDesc = (a, b) => (b.ts || '').localeCompare(a.ts || '')
+const isNewApproval = a => {
+  const ts = Date.parse(a?.ts || '')
+  const age = Date.now() - ts
+  return a?.status === 'Pending' && Number.isFinite(ts) && age >= 0 && age <= NEW_APPROVAL_MS
+}
+const cardClass = (a, extra = '') => [
+  'approval-card',
+  isNewApproval(a) && 'approval-card-new',
+  extra,
+].filter(Boolean).join(' ')
+const NewMarker = ({ a }) => isNewApproval(a) ? <span className="approval-new-pill">New</span> : null
 // Joint approvals carry needed:[roles]; legacy single-approver rows only `approver`.
 const neededOf = a => (a.needed && a.needed.length ? a.needed : [a.approver].filter(Boolean))
 const chipTone = d =>
@@ -177,7 +203,7 @@ export default function Approvals() {
         <div className="approval-notice approval-notice-info">
           <Icon name="info" size={14} /> Approvals are decided by LJS / AH. Your requests remain visible here until resolved.
         </div>
-        <div className="approval-list">{mine.map(a => <div key={a.id} className="approval-card"><div className="approval-card-top"><b>{a.id}</b><span className={`pill ${pillFor(a.status)}`}>{a.status}</span><span className="approval-type">{a.type}</span><span className="hint">requested {day(a.ts)}</span></div><div className="approval-ref"><RefLink a={a} /></div><Detail a={a} /><div className="approval-meta"><div><span>Approvers</span><RoleChips a={a} /></div><div><span>Decision note</span><p>{COMMERCIAL_RX.test(a.decisionNote || '') && !comm ? 'Restricted' : (a.decisionNote || 'No decision yet')}</p></div></div><QuickLinks a={a} /></div>)}</div>
+        <div className="approval-list">{mine.map(a => <div key={a.id} className={cardClass(a)}><div className="approval-card-top"><b>{a.id}</b><span className={`pill ${pillFor(a.status)}`}>{a.status}</span><NewMarker a={a} /><span className="approval-type">{a.type}</span><span className="hint">requested {stamp(a.ts)}</span></div><div className="approval-ref"><RefLink a={a} /></div><Detail a={a} /><div className="approval-meta"><div><span>Approvers</span><RoleChips a={a} /></div><div><span>Decision note</span><p>{COMMERCIAL_RX.test(a.decisionNote || '') && !comm ? 'Restricted' : (a.decisionNote || 'No decision yet')}</p></div></div><QuickLinks a={a} /></div>)}</div>
         {!mine.length && <p className="hint">No approval requests yet — raise one from the proposal workbench when a deviation needs clearance.</p>}
       </div>
     )
@@ -199,12 +225,13 @@ export default function Approvals() {
     const remaining = neededOf(a).filter(r => !(a.decisions || {})[r])
     const myDecision = (a.decisions || {})[role]
     return (
-      <div className="form-card approval-card approval-pending-card">
+      <div className={cardClass(a, 'form-card approval-pending-card')}>
         <div className="approval-card-top">
           <b>{a.id}</b>
           <span className="pill Blue">Pending</span>
+          <NewMarker a={a} />
           <span className="approval-type">{a.type}</span>
-          <span className="hint">requested by {a.requestedBy} · {day(a.ts)}</span>
+          <span className="hint">requested by {a.requestedBy} · {stamp(a.ts)}</span>
         </div>
         <div className="approval-ref"><RefLink a={a} /></div>
         <Detail a={a} />
@@ -255,7 +282,7 @@ export default function Approvals() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <b>{a.id}</b>
             <span className="pill Amber">Approved with conditions</span>
-            <span className="hint" style={{ marginLeft: 'auto' }}>decided {day(a.decisionTs)}</span>
+            <span className="hint" style={{ marginLeft: 'auto' }}>decided {stamp(a.decisionTs)}</span>
           </div>
           <div style={{ margin: '6px 0' }}><RefLink a={a} /></div>
           {(a.conditions || []).map((c, i) => (
@@ -283,13 +310,13 @@ export default function Approvals() {
             <b>{a.id}</b>
             <span className={`pill ${pillFor(a.status)}`}>{a.status}</span>
             <span style={{ fontSize: 12.5 }}>{a.type}</span>
-            <span className="hint" style={{ marginLeft: 'auto' }}>decided {day(a.decisionTs)}</span>
+            <span className="hint" style={{ marginLeft: 'auto' }}>decided {stamp(a.decisionTs)}</span>
           </div>
           <div style={{ margin: '6px 0' }}><RefLink a={a} /></div>
           <RoleChips a={a} />
           {Object.entries(a.decisions || {}).map(([r, dd]) => (
             <div key={r} style={{ fontSize: 12.5, margin: '4px 0' }}>
-              <b>{r}</b>: {dd.d}{dd.c && <span> — "{dd.c}"</span>} <span className="hint">· {day(dd.when)}</span>
+              <b>{r}</b>: {dd.d}{dd.c && <span> — "{dd.c}"</span>} <span className="hint">· {stamp(dd.when)}</span>
             </div>
           ))}
           {!Object.keys(a.decisions || {}).length && a.decisionNote && (

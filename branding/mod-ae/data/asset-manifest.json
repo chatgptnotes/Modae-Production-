@@ -1,0 +1,56 @@
+[
+  {
+    "title": "ModAE red logo",
+    "type": "logo",
+    "source_url": "https://mod-ae.com/wp-content/uploads/2024/10/red-logo.png",
+    "local_path": "assets/red-logo.png"
+  },
+  {
+    "title": "About page image",
+    "type": "brand",
+    "source_url": "https://mod-ae.com/wp-content/uploads/2024/10/about-us-pic-2.jpg",
+    "local_path": "assets/about-us-pic-2.jpg"
+  },
+  {
+    "title": "Antisurge Control System",
+    "type": "product",
+    "source_url": "https://mod-ae.com/wp-content/uploads/2024/10/Antisurge-Control-System.jpg",
+    "local_path": "assets/Antisurge-Control-System.jpg"
+  },
+  {
+    "title": "Asset Health Management",
+    "type": "product",
+    "source_url": "https://mod-ae.com/wp-content/uploads/2024/10/products-centrifugal-compressor.jpg",
+    "local_path": "assets/products-centrifugal-compressor.jpg"
+  },
+  {
+    "title": "Machinery Diagnostics",
+    "type": "product",
+    "source_url": "https://mod-ae.com/wp-content/uploads/2024/10/machinery-diagnostics-1.jpg",
+    "local_path": "assets/machinery-diagnostics-1.jpg"
+  },
+  {
+    "title": "Monitoring Systems",
+    "type": "product",
+    "source_url": "https://mod-ae.com/wp-content/uploads/2024/10/Monitoring-Systems-1.jpg",
+    "local_path": "assets/Monitoring-Systems-1.jpg"
+  },
+  {
+    "title": "OverSpeed Detection System",
+    "type": "product",
+    "source_url": "https://mod-ae.com/wp-content/uploads/2024/10/OverSpeed-Detection-System.jpg",
+    "local_path": "assets/OverSpeed-Detection-System.jpg"
+  },
+  {
+    "title": "Sensors",
+    "type": "product",
+    "source_url": "https://mod-ae.com/wp-content/uploads/2024/10/Our-Producs-banner-2.jpg",
+    "local_path": "assets/Our-Producs-banner-2.jpg"
+  },
+  {
+    "title": "Turbine Control System",
+    "type": "product",
+    "source_url": "https://mod-ae.com/wp-content/uploads/2024/10/Turbine-Control-System-1.jpg",
+    "local_path": "assets/Turbine-Control-System-1.jpg"
+  }
+]

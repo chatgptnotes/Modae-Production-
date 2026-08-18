@@ -7,7 +7,7 @@ import { useFormulaBar } from '../formulabar.jsx'
 import { Icon, ModaeImageLogo } from '../icons.jsx'
 import { Modal } from '../ui.jsx'
 import { oppBlockers, isBlocked } from '../gates.js'
-import { docModel, docRoute } from '../proposalDoc.js'
+import { docModel, docRoute, MODAE_COMPANY } from '../proposalDoc.js'
 import DocEditor from '../proposal/DocEditor.jsx'
 import PrintDoc from '../proposal/PrintDoc.jsx'
 import { signalsFromBom, countSignals, signalsAreEmpty, rackLayout, UMM_CHANNELS, RACK_SLOTS } from '../rack.js'
@@ -252,7 +252,7 @@ export default function Proposal() {
       'The proposal PDF can be saved from the workbook using Print / PDF proposal.',
       '',
       'Best regards,',
-      'ModAE India Pvt Ltd',
+      MODAE_COMPANY.name,
   ].join('\n')
   // Gmail compose URLs are reliable in the browser and do not depend on the
   // Mac's default mail application. Keep the body compact and never cut through
@@ -379,7 +379,7 @@ export default function Proposal() {
         <div className="cover-sheet">
           <div className="cover-head">
             <ModaeImageLogo className="cover-logo" height={34} />
-            <span className="tagline">Your Partners In Achieving Excellence</span>
+            <span className="tagline">{MODAE_COMPANY.tagline}</span>
           </div>
           <div className="cover-meta">
             <div><b>Date:</b> <span className="cover-field"><input type="date" value={p.revisionDate} onChange={set('revisionDate')} /></span></div>

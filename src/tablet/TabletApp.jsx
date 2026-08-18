@@ -7,6 +7,7 @@ import { DrawerHost } from '../drawer.jsx'
 import { Icon, ModaeLogo } from '../icons.jsx'
 import { InstallButton } from '../install.jsx'
 import { counts } from '../kpi.js'
+import BrandWatermark from '../branding/BrandWatermark.jsx'
 import { activeBackend } from '../filestore.js'
 import IntakeForm from '../pages/IntakeForm.jsx'
 import Folders from '../pages/Folders.jsx'
@@ -110,8 +111,9 @@ export default function TabletApp() {
 
   return (
     <div className={`shell tablet-mode theme-${theme}`} style={{ display: 'block' }}>
+      <BrandWatermark variant="tablet" />
       <header className="tablet-bar">
-        <ModaeLogo className="tb-brand" size={24} sub="WinTrack" onClick={() => nav('/home')} />
+        <ModaeLogo className="tb-brand" size={24} sub="Sales Workspace" onClick={() => nav('/home')} />
         <span className="spacer" />
         <button className="tb-bell" onClick={() => nav('/inbox')} title={`${c.newLeads} new leads`}>
           <Icon name="bell" size={15} />

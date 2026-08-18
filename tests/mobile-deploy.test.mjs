@@ -61,6 +61,72 @@ test('the pin stays on the device rather than syncing to other users', () => {
   assert.ok(LOCAL_ONLY.includes('viewModePinned'))
 })
 
+test('approval cards show request time and highlight new pending requests', () => {
+  const approvals = read('src/pages/Approvals.jsx')
+  assert.match(approvals, /const stamp = ts =>/)
+  assert.match(approvals, /toLocaleTimeString\('en-IN'/)
+  assert.match(approvals, /requested \{stamp\(a\.ts\)\}/)
+  assert.match(approvals, /requested by \{a\.requestedBy\} · \{stamp\(a\.ts\)\}/)
+  assert.match(approvals, /const NEW_APPROVAL_MS = 48 \* 60 \* 60 \* 1000/)
+  assert.match(approvals, /approval-card-new/)
+  assert.match(approvals, /approval-new-pill/)
+  assert.match(css, /\.approval-card-new/)
+  assert.match(css, /@keyframes approval-new-pulse/)
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)/)
+})
+
+test('ModAE branding is centralized without changing tablet tile ownership', () => {
+  const brand = read('src/branding/modae.js')
+  const icons = read('src/icons.jsx')
+  const proposal = read('src/proposalDoc.js')
+  const tabletTiles = read('src/tablet/tabletTiles.js')
+  assert.match(brand, /brand-profile\.json/)
+  assert.match(brand, /products\.json/)
+  assert.match(brand, /red-logo\.png/)
+  assert.match(icons, /MODAE_BRAND\.logoUrl/)
+  assert.match(proposal, /MODAE_BRAND\.contact\.company/)
+  assert.doesNotMatch(proposal, /29AAAAA0000A1Z5|U29309KA2019PTC000000/)
+  assert.doesNotMatch(tabletTiles, /modae\.js|products\.json|red-logo/)
+})
+
+test('the transparent ModAE watermark is attached to the app shells and login', () => {
+  const app = read('src/App.jsx')
+  const tabletApp = read('src/tablet/TabletApp.jsx')
+  const login = read('src/pages/Login.jsx')
+  const watermark = read('src/branding/BrandWatermark.jsx')
+  assert.match(app, /import BrandWatermark from '\.\/branding\/BrandWatermark\.jsx'/)
+  assert.match(app, /<BrandWatermark variant="shell" \/>/)
+  assert.match(tabletApp, /import BrandWatermark from '\.\.\/branding\/BrandWatermark\.jsx'/)
+  assert.match(tabletApp, /<BrandWatermark variant="tablet" \/>/)
+  assert.match(login, /import BrandWatermark from '\.\.\/branding\/BrandWatermark\.jsx'/)
+  assert.match(login, /<BrandWatermark variant="login" \/>/)
+  assert.match(watermark, /MODAE_BRAND\.logoUrl/)
+  assert.match(css, /\.brand-watermark \{[\s\S]*position: fixed;/)
+  assert.match(css, /mix-blend-mode: soft-light/)
+  assert.match(css, /@keyframes modae-watermark-drift/)
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*\.brand-watermark__mark \{ animation: none; \}/)
+  assert.match(css, /@media print \{[\s\S]*\.brand-watermark \{ display: none !important; \}/)
+})
+
+test('all visible product branding is ModAE', () => {
+  const visibleFiles = [
+    'index.html', 'public/manifest.webmanifest', 'src/App.jsx', 'src/tablet/TabletApp.jsx',
+    'src/install.jsx', 'src/pages/Portal.jsx', 'src/pages/Register.jsx', 'src/pages/Folders.jsx',
+    'src/pages/Proposal.jsx', 'src/pages/Workbench.jsx', 'src/proposal/DocEditor.jsx',
+  ]
+  for (const file of visibleFiles) assert.doesNotMatch(read(file), /WinTrack|wintrack-pipeline/)
+  assert.match(read('src/store.jsx'), /wintrack-modae-v4/, 'compatibility storage key must remain stable')
+  assert.match(read('src/sharepoint.js'), /wintrack-sharepoint-v1/, 'backend config key must remain stable')
+})
+
+test('compact sidebar keeps the official logo and expand control visible', () => {
+  const css = read('src/styles.css')
+  assert.match(css, /\.sidebar-compact \.brand {[^}]*min-height: 64px/)
+  assert.match(css, /\.sidebar-compact \.brand \.modae-logo {[^}]*width: 36px/)
+  assert.match(css, /\.sidebar-compact \.sidebar-toggle {[^}]*position: absolute/)
+  assert.match(css, /\.sidebar-compact \.sidebar-toggle {[^}]*right: 4px/)
+})
+
 // Scenario 6 opened on "no PO received" and needed a Simulate click first.
 test('the PO validation scenario opens on a PO already in review', () => {
   const po = seedPoCompare['2601122LJS']

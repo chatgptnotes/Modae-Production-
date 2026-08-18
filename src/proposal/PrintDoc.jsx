@@ -117,7 +117,7 @@ export default function PrintDoc({ p, opp, doc, priced, totals, lineQuoted }) {
               {doc.preparedBy.name ? <><b>{doc.preparedBy.name}</b>, </> : null}
               {doc.preparedBy.title} · {MODAE_COMPANY.name}<br />
               {[doc.preparedBy.email, doc.preparedBy.phone].filter(Boolean).join(' · ')}<br />
-              {MODAE_COMPANY.web} · CIN {MODAE_COMPANY.cin}
+              {MODAE_COMPANY.web}{MODAE_COMPANY.cin ? ` · CIN ${MODAE_COMPANY.cin}` : ''}
             </p>
             <p className="doc-muted">— End of proposal {p.ourRef} Rev {p.revision} —</p>
           </div>
@@ -145,7 +145,7 @@ export default function PrintDoc({ p, opp, doc, priced, totals, lineQuoted }) {
             <b>{MODAE_COMPANY.name}</b>
             {MODAE_COMPANY.addr.map(l => <span key={l}>{l}<br /></span>)}
             {MODAE_COMPANY.phone} · {MODAE_COMPANY.email}<br />
-            GSTIN {MODAE_COMPANY.gstin}
+            {MODAE_COMPANY.gstin ? <>GSTIN {MODAE_COMPANY.gstin}</> : null}
           </span>
         </header>
         <div className="doc-rule" />

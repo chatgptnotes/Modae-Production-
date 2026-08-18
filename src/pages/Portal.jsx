@@ -58,7 +58,7 @@ export default function Portal() {
       </div>
       <div className="hint" style={{ marginBottom: 14, maxWidth: 680 }}>
         Simulated customer-facing view. In production this is a separate authenticated site on its own
-        domain — customers never see the internal WinTrack screens, and only their own requests appear here.
+        domain — customers never see the internal ModAE workspace, and only their own requests appear here.
       </div>
 
       <div className="ana-grid">

@@ -7,6 +7,7 @@ import { DrawerHost } from './drawer.jsx'
 import { Icon, ModaeLogo } from './icons.jsx'
 import { InstallButton } from './install.jsx'
 import { counts } from './kpi.js'
+import BrandWatermark from './branding/BrandWatermark.jsx'
 import Tracker from './pages/Tracker.jsx'
 import IntakeForm from './pages/IntakeForm.jsx'
 import Folders from './pages/Folders.jsx'
@@ -152,10 +153,11 @@ export default function App() {
   const c = counts(store, role)
   const shell = (
     <div className={`shell ${sidebarCompact ? 'sidebar-compact' : ''}`}>
+      <BrandWatermark variant="shell" />
       <div className={`nav-backdrop ${navOpen ? 'open' : ''}`} onClick={() => setNavOpen(false)} />
       <aside className={`sidenav ${navOpen ? 'open' : ''}`}>
         <div className="brand" onClick={() => nav('/opportunities')}>
-          <ModaeLogo size={28} sub="WinTrack" />
+          <ModaeLogo size={28} sub="Sales Workspace" />
           <button className="sidebar-toggle" onClick={e => { e.stopPropagation(); toggleSidebar() }}
             title={sidebarCompact ? 'Expand sidebar' : 'Collapse sidebar'} aria-label={sidebarCompact ? 'Expand sidebar' : 'Collapse sidebar'}>
             <Icon name={sidebarCompact ? 'chevronRight' : 'chevronLeft'} size={15} />

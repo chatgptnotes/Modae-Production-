@@ -1,0 +1,72 @@
+{
+  "brand_name": "ModAE",
+  "legal_name": "Modae Private Limited",
+  "tagline": "Empowering Safety in Aerospace and Energy",
+  "positioning": "Building safer, reliable, and efficient solutions for safety-critical operations across energy, aerospace, and defence.",
+  "product_page_message": "Cutting-Edge Solutions for Energy and Aerospace",
+  "product_page_subtitle": "Ensuring operational excellence in high-risk environments.",
+  "overview": "ModAE provides innovative, high-reliability solutions for safety-critical operations across Energy, Aerospace, and Defence sectors.",
+  "culture": "A dedicated, self-motivated, customer-focused team emphasizing ethical conduct, transparency, hard work, teamwork, continuous learning, and inclusive growth.",
+  "vision": "To be a pioneer in providing solutions and services that enable customers to achieve safer operations and high availability of assets at competitive costs.",
+  "mission": "To deliver innovative, reliable, and high-quality solutions by fostering continuous learning and growth, while acting as a trusted partner for operational excellence through technology, innovation, and strategic solutions.",
+  "sectors": [
+    "Energy",
+    "Aerospace",
+    "Defence"
+  ],
+  "energy_segments": [
+    "Power",
+    "Oil & Gas",
+    "Petrochemicals"
+  ],
+  "product_categories": [
+    {
+      "title": "Antisurge Control System",
+      "url": "https://mod-ae.com/products/antisurge-control-system/"
+    },
+    {
+      "title": "Asset Health Management",
+      "url": "https://mod-ae.com/products/asset-health-management/"
+    },
+    {
+      "title": "Machinery Diagnostics",
+      "url": "https://mod-ae.com/products/machinery-diagnostics/"
+    },
+    {
+      "title": "Monitoring Systems",
+      "url": "https://mod-ae.com/products/monitoring-systems/"
+    },
+    {
+      "title": "OverSpeed Detection System",
+      "url": "https://mod-ae.com/products/overspeed-detection-system/"
+    },
+    {
+      "title": "Sensors",
+      "url": "https://mod-ae.com/products/sensors/"
+    },
+    {
+      "title": "Turbine Control System",
+      "url": "https://mod-ae.com/products/turbine-control-system/"
+    }
+  ],
+  "contact": {
+    "company": "Modae Private Limited",
+    "brand_name": "ModAE",
+    "email": "ceo@mod-ae.com",
+    "phone_display": "+91 97315 77119",
+    "phone_tel": "+919731577119",
+    "location": "Bengaluru, Karnataka, India",
+    "opening_hours": "10 AM - 6 PM, Monday to Friday",
+    "directions_url": "https://maps.app.goo.gl/tNP83Vh7aYmB4xjJ6",
+    "linkedin_url": "https://www.linkedin.com/company/modae/",
+    "source_urls": [
+      "https://mod-ae.com/contact-us/",
+      "https://mod-ae.com/products/"
+    ]
+  },
+  "note": "Website colors and font colors were intentionally not copied into app theming. Any colors inside raw HTML/CSS are reference-only source material.",
+  "source_urls": [
+    "https://mod-ae.com/about-us/",
+    "https://mod-ae.com/products/"
+  ]
+}

@@ -1,7 +1,7 @@
 {
-  "name": "Modae WinTrack",
-  "short_name": "WinTrack",
-  "description": "Modae sales opportunity, approval and proposal workspace.",
+  "name": "ModAE Sales Workspace",
+  "short_name": "ModAE",
+  "description": "ModAE sales opportunity, approval and proposal workspace.",
   "id": "/",
   "start_url": "./#/home",
   "display": "standalone",

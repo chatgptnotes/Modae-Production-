@@ -30,8 +30,8 @@ export function InstallButton() {
         <button className="install" onClick={() => setShowIos(v => !v)}><Icon name="install" size={14} /> Install</button>
         {showIos && (
           <div className="modal form-card" style={{ top: 70 }}>
-            <div className="section-title">Add WinTrack to your Home Screen</div>
-            <p style={{ fontSize: 13 }}>In Safari: tap the <b>Share</b> button, then <b>"Add to Home Screen"</b>. WinTrack opens full-screen like an app.</p>
+            <div className="section-title">Add ModAE to your Home Screen</div>
+            <p style={{ fontSize: 13 }}>In Safari: tap the <b>Share</b> button, then <b>"Add to Home Screen"</b>. ModAE opens full-screen like an app.</p>
             <div className="forms-actions"><button onClick={() => setShowIos(false)}>Close</button></div>
           </div>
         )}
@@ -64,7 +64,7 @@ export function InstallBanner() {
       <div className="ib-row">
         <span className="ib-icon"><Icon name="install" size={17} /></span>
         <div className="ib-text">
-          <b>Install WinTrack</b>
+          <b>Install ModAE</b>
           <div className="ib-sub">Add it to your home screen — opens full-screen, like an app.</div>
         </div>
       </div>

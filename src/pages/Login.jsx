@@ -5,6 +5,7 @@ import { ROLES, OWNERS, DEMO_PASSWORD } from '../seed.js'
 import { WarnBox } from '../ui.jsx'
 import { Icon, ModaeImageLogo } from '../icons.jsx'
 import { InstallBanner } from '../install.jsx'
+import BrandWatermark from '../branding/BrandWatermark.jsx'
 
 // Roles a new registrant may request: the sales owners plus the technical
 // reviewer. Approvers/admin accounts are provisioned by a super admin.
@@ -58,6 +59,7 @@ export default function Login() {
 
   return (
     <div className="login-bg">
+      <BrandWatermark variant="login" />
       <div className="login-card">
         <ModaeImageLogo className="login-logo" height={38} />
 

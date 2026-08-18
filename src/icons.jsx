@@ -1,4 +1,5 @@
 import React from 'react'
+import { MODAE_BRAND } from './branding/modae.js'
 
 // Inline stroke icon set (lucide-style): currentColor, no emoji anywhere.
 const PATHS = {
@@ -68,7 +69,7 @@ const PATHS = {
   edit: <><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3Z" /><path d="m14.5 6.5 3 3" /></>,
 }
 
-const MODAE_LOGO_SRC = '/modae-red-logo.png'
+const MODAE_LOGO_SRC = MODAE_BRAND.logoUrl
 
 export function ModaeMark({ size = 30, tile = true, className = '' }) {
   return (
@@ -82,13 +83,12 @@ export function ModaeMark({ size = 30, tile = true, className = '' }) {
   )
 }
 
-// Mark + wordmark lockup. `sub` prints a small caption under the word.
+// Official ModAE lockup with an optional workspace descriptor underneath.
 export function ModaeLogo({ size = 30, sub = '', tile = true, className = '', onClick }) {
   return (
     <span className={`modae-logo ${className}`} aria-label="ModAE" onClick={onClick}>
-      <ModaeMark size={size} tile={tile} />
+      <img className="modae-official-logo" src={MODAE_LOGO_SRC} alt="ModAE" style={{ '--logo-h': `${size}px` }} />
       <span className="ml-text">
-        <b>Modae</b>
         {sub && <i>{sub}</i>}
       </span>
     </span>

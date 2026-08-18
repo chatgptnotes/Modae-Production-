@@ -239,7 +239,7 @@ export default function Register() {
           <div className="check-row">
             <Icon name="send" size={14} />
             <span>
-              Teams notification to <b>#wintrack-pipeline</b> — new opportunity registered, owner {owner}
+              Teams notification to <b>#modae-pipeline</b> — new opportunity registered, owner {owner}
               <br /><span className="hint">Simulated</span>
             </span>
           </div>

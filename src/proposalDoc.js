@@ -7,19 +7,17 @@
 import { productLabel } from './utils.js'
 import { routeForType } from './seed.js'
 import { MODAE_STANDARD_TERMS } from './tenderParse.js'
+import { MODAE_BRAND } from './branding/modae.js'
 
-// ⚠ PLACEHOLDER LETTERHEAD. Swap these for ModAE India's registered details
-// before anything printed from this app goes to a customer — it is the only
-// place they appear.
 export const MODAE_COMPANY = {
-  name: 'ModAE India Pvt Ltd',
-  tagline: 'Your Partners In Achieving Excellence',
-  addr: ['#12, 2nd Floor, Industrial Suburb', 'Yeshwanthpur, Bengaluru 560 022', 'Karnataka, India'],
-  gstin: '29AAAAA0000A1Z5',
-  cin: 'U29309KA2019PTC000000',
-  email: 'sales@modae.in',
-  phone: '+91 80 4123 4567',
-  web: 'www.modae.in',
+  name: MODAE_BRAND.contact.company,
+  tagline: MODAE_BRAND.tagline,
+  addr: [MODAE_BRAND.contact.location],
+  gstin: '',
+  cin: '',
+  email: MODAE_BRAND.contact.email,
+  phone: MODAE_BRAND.contact.phone_display,
+  web: 'mod-ae.com',
 }
 
 export const PROP_SECTIONS = [
@@ -380,22 +378,15 @@ export const GENERIC_RATIONALE = {
   proposal: 'We would welcome the opportunity to discuss a mutually workable alternative before award.',
 }
 
-// ⚠ PLACEHOLDER COMPANY PROFILE — replace with ModAE India's own copy.
 export const MODAE_ABOUT = {
-  intro: `${MODAE_COMPANY.name} supplies, engineers and services machinery condition-monitoring systems for the `
-    + 'power, process and heavy-engineering industries in India. Our work covers vibration and air-gap monitoring on '
-    + 'thermal and hydro generating plant, rotating machinery protection to API 670, and the condition-monitoring '
-    + 'software and historian interfaces that sit above them.',
+  intro: MODAE_BRAND.overview,
   capabilities: [
-    'Authorised channel for the sensing and monitoring product lines quoted in this offer, with direct manufacturer support on selection, interchangeability and obsolescence.',
-    'In-house engineering for signal lists, rack configuration, loop schedules and as-built documentation.',
-    'Retrofit and upgrade of installed monitoring systems, including like-for-like replacement of sensing elements without change to the existing monitor or cabling.',
-    'Commissioning, calibration and periodic health-check services by our own engineers, supported from our regional offices.',
-    'Spares support against the installed base, with traceable manufacturer test certification on every item supplied.',
+    `Solutions for ${MODAE_BRAND.sectors.join(', ')} and ${MODAE_BRAND.energy_segments.join(', ')} applications.`,
+    'Turbine control, antisurge, overspeed protection and machinery monitoring systems for safety-critical operations.',
+    'Asset health management, machinery diagnostics and industrial sensing for rotating equipment.',
+    'Project engineering, installation, commissioning, lifecycle support and remote monitoring.',
   ],
-  closing: 'Our approach on a replacement-spares enquiry such as this one is deliberately conservative: we offer what '
-    + 'drops into the existing signal chain unchanged, we say plainly where we differ from the tendered terms, and we '
-    + 'put the reasoning in front of you rather than leaving it to be discovered after award.',
+  closing: MODAE_BRAND.vision,
 }
 
 // --------------------------------------------------------------- doc model
