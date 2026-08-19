@@ -5,7 +5,7 @@ import { OWNERS, AI_PROVIDERS } from '../seed.js'
 import { isAdminRole, canSeePage } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { Chip, WarnBox } from '../ui.jsx'
-import { aiEnabled, testConnection } from '../ai.js'
+import { saveAiKey, testConnection } from '../ai.js'
 import * as sp from '../sharepoint.js'
 
 // Admin — every runtime rule the app obeys, in one card grid. Data lives in
@@ -33,6 +33,7 @@ const isCustomModel = m => {
   const s = (m || '').toLowerCase()
   return s.includes('enter below') || s.includes('deployment')
 }
+const FALLBACK_PROVIDER = 'Built-in fallback'
 
 function NumField({ label, value, disabled, onChange }) {
   return (
@@ -159,12 +160,15 @@ export default function Admin() {
   const ai = config.aiModel || {}
 
   // AI model card — local draft, committed via saveAiModel.
-  const [provider, setProvider] = useState(ai.provider || '')
-  const [model, setModel] = useState(ai.model || '')
+  const [provider, setProvider] = useState(ai.provider || 'Google')
+  const [model, setModel] = useState(ai.model || 'gemini-3.6-flash')
   const [customModel, setCustomModel] = useState(ai.customModel || '')
   const [endpoint, setEndpoint] = useState(ai.endpoint || '')
+  const [apiKey, setApiKey] = useState('')
   const [testing, setTesting] = useState(false)
   const [testResult, setTestResult] = useState(null) // null | { ok, model, ms }
+  const [savingAi, setSavingAi] = useState(false)
+  const [saveResult, setSaveResult] = useState(null)
 
   // Uploads card drafts.
   const [supplier, setSupplier] = useState('')
@@ -185,9 +189,21 @@ export default function Admin() {
     )
   }
 
-  const saveAi = () => {
-    store.saveAiModel({ provider, model, customModel, endpoint })
+  const saveAi = async () => {
+    setSaveResult(null)
     setTestResult(null)
+    setSavingAi(true)
+    try {
+      if (provider !== FALLBACK_PROVIDER && apiKey) await saveAiKey(apiKey, role)
+      store.saveAiModel({ provider, model: provider === FALLBACK_PROVIDER ? '' : model, customModel, endpoint,
+        configured: provider === FALLBACK_PROVIDER || ai.configured || Boolean(apiKey) })
+      setApiKey('')
+      setSaveResult({ ok: true, message: 'AI configuration saved securely.' })
+    } catch (e) {
+      setSaveResult({ ok: false, message: String((e && e.message) || e) })
+    } finally {
+      setSavingAi(false)
+    }
   }
   // Real round-trip through the Supabase Edge Function to the model.
   const testAi = async () => {
@@ -195,7 +211,7 @@ export default function Admin() {
     const res = await testConnection(isCustomModel(model) ? customModel : model)
     setTesting(false)
     setTestResult(res)
-    if (res.ok) store.saveAiModel({ ...ai, provider, model, customModel, endpoint })
+    if (res.ok) store.saveAiModel({ ...ai, provider, model, customModel, endpoint, configured: true })
   }
 
   const patchList = (listKey, i, itemPatch) =>
@@ -242,7 +258,8 @@ export default function Admin() {
           <h3><Icon name="target" size={14} /> Ownership rules</h3>
           {(config.ownershipRules || []).map((r, i) => (
             <div key={i} className="arow">
-              <span>{r.region}</span>
+              <input type="text" value={r.region || ''} disabled={!canEdit} style={{ flex: 1, minWidth: 160 }}
+                onChange={e => patchList('ownershipRules', i, { region: e.target.value })} />
               <select value={r.owner} disabled={!canEdit} style={{ width: 'auto' }}
                 onChange={e => patchList('ownershipRules', i, { owner: e.target.value })}>
                 {OWNERS.map(o => <option key={o}>{o}</option>)}
@@ -257,7 +274,13 @@ export default function Admin() {
           <h3>
             <Icon name="sparkles" size={14} /> AI model configuration
             <span style={{ marginLeft: 'auto' }}>
-              {aiEnabled() ? <Chip tone="state-Accepted">Proxy reachable</Chip> : <Chip tone="grey">Proxy not configured</Chip>}
+              {provider === FALLBACK_PROVIDER
+                ? <Chip tone="state-Review">Built-in fallback</Chip>
+                : testResult?.ok
+                ? <Chip tone="state-Accepted">Proxy reachable</Chip>
+                : ai.configured
+                  ? <Chip tone="state-Accepted">Proxy configured</Chip>
+                  : <Chip tone="grey">Proxy not configured</Chip>}
             </span>
           </h3>
           <p className="hint">
@@ -276,33 +299,30 @@ export default function Admin() {
             </label>
             <label className="afield">Model
               <select value={model} disabled={!canEdit || !provider} onChange={e => setModel(e.target.value)}>
-                <option value="">{provider ? 'Select a model…' : 'Choose a provider first'}</option>
+                <option value="">{provider === FALLBACK_PROVIDER ? 'Not used with fallback' : provider ? 'Select a model…' : 'Choose a provider first'}</option>
                 {(AI_PROVIDERS[provider] || []).map(m => <option key={m}>{m}</option>)}
               </select>
             </label>
-            {isCustomModel(model) && (
-              <label className="afield">Exact model ID / deployment name
-                <input type="text" value={customModel} disabled={!canEdit}
-                  placeholder="e.g. claude-opus-5, gpt-5, gemini-pro"
-                  onChange={e => setCustomModel(e.target.value)} />
-              </label>
-            )}
-            <label className="afield">API base URL (optional — Azure / self-hosted)
-              <input type="text" value={endpoint} disabled={!canEdit} placeholder="https://…"
-                onChange={e => setEndpoint(e.target.value)} />
+            <label className="afield">Gemini API key
+              <input type="password" value={apiKey} disabled={!canEdit || savingAi || provider === FALLBACK_PROVIDER}
+                autoComplete="new-password" placeholder={ai.configured ? 'Saved securely' : 'Paste Gemini API key'}
+                onChange={e => setApiKey(e.target.value)} />
             </label>
-            <label className="afield">API key
-              <span className="ro" style={{ display: 'block', padding: '5px 0' }}>
-                <Icon name="lock" size={11} /> Managed server-side
-              </span>
+            <label className="afield">One-time setup token
+              <input type="password" value={setupToken} disabled={!canEdit || savingAi}
+                autoComplete="off" placeholder="Required for secure setup"
+                onChange={e => setSetupToken(e.target.value)} />
             </label>
           </div>
           <div className="admin-actions">
-            <button className="primary" disabled={!canEdit} onClick={saveAi}>Save configuration</button>
-            <button disabled={!canEdit || testing} onClick={testAi}>
+            <button className="primary" disabled={!canEdit || savingAi} onClick={saveAi}>Save configuration</button>
+            <button disabled={!canEdit || testing || savingAi || provider === FALLBACK_PROVIDER} onClick={testAi}>
               <Icon name="play" size={11} /> Test connection
             </button>
           </div>
+          {savingAi && <p className="hint">Saving AI configuration securely…</p>}
+          {saveResult?.ok && <div className="okbox">{saveResult.message}</div>}
+          {saveResult && !saveResult.ok && <div className="errbox">{saveResult.message}</div>}
           {testing && <p className="hint">Calling the model through the proxy…</p>}
           {testResult?.ok && (
             <div className="okbox">
@@ -316,8 +336,7 @@ export default function Admin() {
             </div>
           )}
           <WarnBox>
-            The key is set with <code>supabase secrets set GEMINI_API_KEY=…</code>, not here.
-            Nothing on this page ever holds it.
+            For Built-in fallback, no key is required. AI credentials are stored server-side and are never returned to this page.
           </WarnBox>
         </div>
 
@@ -355,6 +374,27 @@ export default function Admin() {
           <NumField label="Amber timer (days)" value={amber.days} disabled={!canEdit}
             onChange={v => store.updateConfig({ amberFee: { ...amber, days: v } })} />
           <p className="hint">Fee is adjustable against the order value once the PO lands.</p>
+        </div>
+
+        {/* Lead workflow controls */}
+        <div className="admin-card">
+          <h3><Icon name="clock" size={14} /> Lead workflow controls</h3>
+          <p className="hint">These rules control expiry and fast-track behavior for active leads.</p>
+          <NumField label="KYC deadline (days)" value={config.leadDeadlines?.kycDays ?? 7} disabled={!canEdit}
+            onChange={v => store.updateConfig({ leadDeadlines: { ...(config.leadDeadlines || {}), kycDays: v } })} />
+          <NumField label="Clarification deadline (days)" value={config.leadDeadlines?.clarificationDays ?? 7} disabled={!canEdit}
+            onChange={v => store.updateConfig({ leadDeadlines: { ...(config.leadDeadlines || {}), clarificationDays: v } })} />
+          <label className="check-row">
+            <input type="checkbox" checked={config.fastTrack?.enabled !== false} disabled={!canEdit}
+              onChange={e => store.updateConfig({ fastTrack: { ...(config.fastTrack || {}), enabled: e.target.checked } })} />
+            Enable existing Green-customer fast track
+          </label>
+          <label className="afield">Fast-track customer class
+            <select value={config.fastTrack?.customerStatus || 'Green'} disabled={!canEdit}
+              onChange={e => store.updateConfig({ fastTrack: { ...(config.fastTrack || {}), customerStatus: e.target.value } })}>
+              {['Green', 'Blue', 'Amber', 'Red'].map(v => <option key={v}>{v}</option>)}
+            </select>
+          </label>
         </div>
 
         {/* 7 — KYC checklist */}

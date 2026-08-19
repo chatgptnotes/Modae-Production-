@@ -42,6 +42,7 @@ export function leadWorkflow(lead, { customerStatus = '', med = 75 } = {}) {
   const displayedDone = registered ? done.map(() => true) : done
   const currentIndex = displayedDone.findIndex(value => !value)
   const activeIndex = currentIndex === -1 ? displayedDone.length - 1 : currentIndex
+  const terminal = lead?.status === 'Dropped' ? 'dropped' : registered ? 'converted' : ''
   const blocked = lead?.status === 'Dropped'
     ? 'Lead discarded'
     : pendingLow > 0
@@ -57,6 +58,7 @@ export function leadWorkflow(lead, { customerStatus = '', med = 75 } = {}) {
     })),
     activeIndex,
     complete: registered,
+    terminal,
     blocked,
     decided,
     totalFields: fields.length,

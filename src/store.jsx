@@ -14,6 +14,7 @@ import {
   contextForType, B_STEPS, REVISION_TYPES,
   ROLES, SUBFOLDERS, newProposal,
 } from './seed.js'
+import { leadConfig, routeOwner, expiredLeadDeadline, aiAuditDetail } from './leadRules.js'
 
 // v3: schema updated after the Aug 10 meeting review (prob column, Partner Docs
 // key, corrected products, costing.usdBase/financeCostK) — bump forces a reseed.
@@ -58,6 +59,8 @@ function migrate(s) {
   if (!Array.isArray(s.audit)) s.audit = []
   // ---- phase 2 slices ----
   if (!s.config) s.config = seedConfig
+  s.config.leadDeadlines = { ...seedConfig.leadDeadlines, ...(s.config.leadDeadlines || {}) }
+  s.config.fastTrack = { ...seedConfig.fastTrack, ...(s.config.fastTrack || {}) }
   if (!s.config.uploads) s.config.uploads = seedConfig.uploads
   if (!s.config.aiModel) s.config.aiModel = seedConfig.aiModel
   // Gemini is wired for real now: drop the key fields saved state used to carry
@@ -71,6 +74,8 @@ function migrate(s) {
     s.config.aiModel = { ...seedConfig.aiModel, ...s.config.aiModel, ...{ provider: 'Google', model: seedConfig.aiModel.model } }
   }
   if (!s.kyc) s.kyc = seedKyc
+  if (!Array.isArray(s.leadArchive)) s.leadArchive = []
+  if (!Array.isArray(s.leadDeadlines)) s.leadDeadlines = []
   if (!s.sales) s.sales = seedSales
   if (!Array.isArray(s.sparesLines)) s.sparesLines = seedSparesLines
   if (!Array.isArray(s.sparesAlternatives)) s.sparesAlternatives = seedSparesAlternatives
@@ -176,6 +181,8 @@ function seedState() {
     leads: seedLeads,
     approvals: seedApprovals,
     audit: [],
+    leadArchive: [],
+    leadDeadlines: [],
     users: seedUsers,
     role: 'SUPER',
   })
@@ -637,9 +644,41 @@ export function StoreProvider({ children }) {
         const next = { ...s, leads: s.leads.map(l => (l.id === id ? { ...l, ...patch } : l)) }
         const auditKeys = Object.keys(patch).filter(k => !['readAt', 'starred'].includes(k))
         if (!auditKeys.length) return next
-        return withAudit(next, patch.status ? `Lead ${patch.status.toLowerCase()}` : 'Lead updated', id,
+        const updated = next.leads.find(l => l.id === id)
+        const archived = patch.status === 'Dropped' && updated
+          ? (next.leadArchive || []).some(x => x.id === id)
+            ? next.leadArchive
+            : [{ ...updated, archivedAt: new Date().toISOString(), archiveReason: updated.droppedReason || detail }, ...(next.leadArchive || [])]
+          : next.leadArchive || []
+        const audited = withAudit(next, patch.status ? `Lead ${patch.status.toLowerCase()}` : 'Lead updated', id,
           detail || patch.droppedReason || patch.oppId || auditKeys.join(', '))
+        return { ...audited, leadArchive: archived }
       })
+    },
+
+    processLeadDeadlines(now = new Date()) {
+      setState(s => {
+        const cfg = leadConfig(s.config)
+        const rows = []
+        let next = { ...s, leadDeadlines: s.leadDeadlines || [], leadArchive: s.leadArchive || [] }
+        for (const lead of s.leads || []) {
+          if (['Converted', 'Dropped'].includes(lead.status)) continue
+          const expired = expiredLeadDeadline(lead, cfg, now)
+          if (!expired) continue
+          const deadlineKey = `${lead.id}:${expired.type}`
+          if (next.leadDeadlines.some(d => d.key === deadlineKey && d.status === 'Expired')) continue
+          const updated = { ...lead, status: 'Dropped', droppedReason: `${expired.reason} after ${cfg.leadDeadlines[`${expired.type}Days`] || 7} days`, expiredDeadline: expired.type }
+          next.leads = next.leads.map(item => item.id === lead.id ? updated : item)
+          next.leadArchive = [{ ...updated, archivedAt: new Date(now).toISOString(), archiveReason: updated.droppedReason }, ...next.leadArchive]
+          next.leadDeadlines = [...next.leadDeadlines, { key: deadlineKey, leadId: lead.id, type: expired.type, dueAt: expired.dueAt, status: 'Expired', expiredAt: new Date(now).toISOString() }]
+          rows.push(lead.id)
+        }
+        return rows.length ? withAudit(next, 'Lead deadlines processed', rows.join(','), `${rows.length} lead(s) discarded`) : s
+      })
+    },
+
+    recordAiAction(leadId, payload) {
+      setState(s => withAudit(s, 'AI action', leadId, aiAuditDetail(payload)))
     },
 
     // Take a lead back to the inbox so it can be qualified, disqualified or
@@ -808,16 +847,21 @@ export function StoreProvider({ children }) {
     // simulate path), an object attaches one, null drops it (Reject). The bytes
     // themselves live in IndexedDB — this record is metadata only.
     setKycState(customerName, itemName, state, file) {
-      setState(s => withAudit({
-        ...s,
-        kyc: {
-          ...s.kyc,
-          [customerName]: (s.kyc[customerName] || (s.config?.kycItems || []).map(n => ({ name: n, state: 'Missing', when: '' })))
-            .map(k => (k.name === itemName
-              ? { ...k, state, when: new Date().toISOString().slice(0, 10), ...(file === undefined ? {} : { file: file || undefined }) }
-              : k)),
-        },
-      }, `KYC ${state.toLowerCase()}`, customerName, file ? `${itemName} — ${file.name}` : itemName))
+      setState(s => {
+        const items = (s.kyc[customerName] || (s.config?.kycItems || []).map(n => ({ name: n, state: 'Missing', when: '' })))
+          .map(k => (k.name === itemName
+            ? { ...k, state, when: new Date().toISOString().slice(0, 10), ...(file === undefined ? {} : { file: file || undefined }) }
+            : k))
+        const complete = items.length > 0 && items.every(k => k.state === 'Verified')
+        const next = {
+          ...s,
+          kyc: { ...s.kyc, [customerName]: items },
+          leads: s.leads.map(l => (l.sellTo === customerName || l.customerName === customerName
+            ? { ...l, ...(complete ? { kycCompletedAt: new Date().toISOString() } : { kycCompletedAt: null }) }
+            : l)),
+        }
+        return withAudit(next, `KYC ${state.toLowerCase()}`, customerName, file ? `${itemName} — ${file.name}` : itemName)
+      })
     },
     kycOverride(oppId, reason) {
       setState(s => withAudit({
@@ -1076,6 +1120,16 @@ export function StoreProvider({ children }) {
       window.location.reload()
     },
   }
+
+  // Deadline processing is idempotent and runs on boot/focus so the browser
+  // remains responsive while Supabase-backed state is synchronised. A hosted
+  // scheduler can call the same store-level policy when the app is unattended.
+  useEffect(() => {
+    api.processLeadDeadlines(new Date())
+    const onFocus = () => api.processLeadDeadlines(new Date())
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [])
 
   return <StoreCtx.Provider value={api}>{children}</StoreCtx.Provider>
 }

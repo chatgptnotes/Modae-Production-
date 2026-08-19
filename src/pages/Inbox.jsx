@@ -14,6 +14,7 @@ import { hold, add as holdMore } from '../leadFiles.js'
 import AttachmentViewer from '../AttachmentViewer.jsx'
 import { findDuplicates } from '../insights.js'
 import { leadWorkflow } from '../leadWorkflow.js'
+import { isFastTrackLead, routeOwner } from '../leadRules.js'
 
 // Common-mailbox lead inbox: AI parses each inquiry, a human decides whether it
 // becomes an opportunity (Qualify → registration / intake form) or is dropped.
@@ -93,7 +94,7 @@ export async function extractLead({ from, subject, body, attachments = [] }, sto
     from, subject, body, attachments,
     customers: (store.customers || []).map(c => c.name),
     ownershipRules: store.config?.ownershipRules || [],
-  })
+  }, { fallback: store.config?.aiModel?.provider === 'Built-in fallback' })
   // The proxy is optional in demo/staging builds. Keep the intake usable when
   // it is absent or temporarily unavailable: preserve only facts present in
   // the pasted mail and leave the lead visibly pending human structure.
@@ -221,6 +222,7 @@ function PasteLeadModal({ onClose }) {
     }
     const id = 'LD-' + Date.now()
     store.addLead({ ...newLead(id), duplicateRisk: 'Low', ...extracted })
+    store.recordAiAction(id, { provider: store.config?.aiModel?.provider, model: store.config?.aiModel?.model, action: 'lead.extract', result: { completeness: extracted.completeness, missing: extracted.ai?.missing || [], route: extracted.route } })
     hold(id, files.map(f => f.file))
     onClose()
     nav('/inbox/' + id)
@@ -273,9 +275,9 @@ function PasteLeadModal({ onClose }) {
             {f.err && <div className="hint" style={{ flexBasis: '100%' }}><Icon name="alert" size={11} /> {f.err}</div>}
           </div>
         ))}
-        {!aiEnabled() && (
-          <WarnBox>AI proxy is not configured — extraction will use the built-in email fallback and remain pending human review.</WarnBox>
-        )}
+        {store.config?.aiModel?.provider === 'Built-in fallback'
+          ? <WarnBox>Built-in fallback is selected — the email will be parsed locally and remain pending human review.</WarnBox>
+          : !aiEnabled() && <WarnBox>AI proxy is not configured — extraction will use the built-in email fallback and remain pending human review.</WarnBox>}
         {err && <ErrBox>{err}</ErrBox>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 10 }}>
           <button onClick={onClose}>Cancel</button>
@@ -358,10 +360,10 @@ function LeadWorkflowBar({ lead }) {
       <div className="lead-flow-head">
         <div>
           <div className="lead-flow-kicker">Lead workflow</div>
-          <b>{progress.complete ? 'Lead workflow complete' : `Current step: ${active.label}`}</b>
+          <b>{progress.terminal === 'dropped' ? 'Lead workflow stopped — discarded' : progress.complete ? 'Lead workflow complete' : `Current step: ${active.label}`}</b>
         </div>
-        <span className={`lead-flow-status ${progress.complete ? 'complete' : progress.blocked ? 'blocked' : 'current'}`}>
-          {progress.complete ? 'Ready for opportunity workflow' : progress.blocked || 'In progress'}
+        <span className={`lead-flow-status ${progress.terminal === 'dropped' ? 'blocked' : progress.complete ? 'complete' : progress.blocked ? 'blocked' : 'current'}`}>
+          {progress.terminal === 'dropped' ? `Discarded${lead.droppedReason ? ` — ${lead.droppedReason}` : ''}` : progress.complete ? 'Ready for opportunity workflow' : progress.blocked || 'In progress'}
         </span>
       </div>
       <div className="lead-flow-track" aria-hidden="true"><span style={{ width: `${percent}%` }} /></div>
@@ -373,7 +375,9 @@ function LeadWorkflowBar({ lead }) {
           </div>
         ))}
       </div>
-      {!progress.complete && (
+      {progress.terminal === 'dropped' ? (
+        <p className="lead-flow-note">No further lead steps are required. Reopen the lead only if the discard decision was incorrect.</p>
+      ) : !progress.complete && (
         <p className="lead-flow-note">
           Update the editable fields below and save each decision to advance the lead.
         </p>
@@ -407,10 +411,11 @@ function AiLeadDetail({ lead }) {
   const docInput = useRef(null)
   const [dropping, setDropping] = useState(false)
   const [reverting, setReverting] = useState(false)
+  const [decisionErr, setDecisionErr] = useState('')
   const [reassignTo, setReassignTo] = useState(lead.suggestedOwner || OWNERS[0])
   const initialDecisions = () => ({
     region: lead.region || lead.location || leadFieldValue(ai.fields, /location|region/i),
-    owner: lead.assignedOwner || lead.suggestedOwner || OWNERS[0],
+    owner: lead.assignedOwner || lead.suggestedOwner || routeOwner(lead.region || lead.location || leadFieldValue(ai.fields, /location|region/i), store.config, OWNERS[0]),
     oppType: leadFieldValue(ai.fields, /opp type/i) || (lead.route === 'Service' ? 'Service' : lead.route === 'Project' ? 'Project' : 'Spares'),
     customerStatus: lead.customerStatus || customerStatusForLead(lead, store.customers),
     bu: leadFieldValue(ai.fields, /^bu$/i) || 'Energy',
@@ -436,6 +441,7 @@ function AiLeadDetail({ lead }) {
       ? { ...extracted, ai: { ...extracted.ai, fields: mergeDecidedFields(source.ai?.fields, extracted.ai.fields) } }
       : extracted
     store.updateLead(lead.id, next, detail || '')
+    store.recordAiAction(lead.id, { provider: store.config?.aiModel?.provider, model: store.config?.aiModel?.model, action: 'lead.re-extract', result: { completeness: next.completeness, missing: next.ai?.missing || [], route: next.route } })
     setReNote('Extraction updated.')
     return true
   }
@@ -520,10 +526,30 @@ function AiLeadDetail({ lead }) {
     .filter(d => !(lead.dismissedDuplicates || []).includes(d.leadId))
 
   const reassign = () => {
+    const routedOwner = routeOwner(lead.region || lead.location, store.config, reassignTo)
+    if (routedOwner && reassignTo !== routedOwner && !['LJS', 'AH'].includes(store.role)) {
+      setDecisionErr(`Region routing assigns this lead to ${routedOwner}. Only LJS or AH can override the owner.`)
+      return
+    }
+    if (routedOwner && reassignTo !== routedOwner && !(lead.ownerOverrideReason || '').trim()) {
+      setDecisionErr('An owner override reason is required.')
+      return
+    }
     store.updateLead(lead.id, { suggestedOwner: reassignTo, assignedOwner: reassignTo, reassignedFrom: lead.suggestedOwner || '', reassignedAt: new Date().toISOString() }, `Owner reassigned to ${reassignTo}`)
   }
 
   const saveDecisions = () => {
+    setDecisionErr('')
+    const routedOwner = routeOwner(decisionDraft.region, store.config, decisionDraft.owner)
+    const isOverride = routedOwner && decisionDraft.owner !== routedOwner
+    if (isOverride && !['LJS', 'AH'].includes(store.role)) {
+      setDecisionErr(`Region routing assigns this lead to ${routedOwner}. Only LJS or AH can override the owner.`)
+      return
+    }
+    if (isOverride && !(lead.ownerOverrideReason || '').trim()) {
+      setDecisionErr('An owner override reason is required.')
+      return
+    }
     const previous = initialDecisions()
     const nextFields = updateLeadField(updateLeadField(updateLeadField(updateLeadField(ai.fields,
       'Location', decisionDraft.region, 'Customer'), 'Opp Type', decisionDraft.oppType),
@@ -537,6 +563,9 @@ function AiLeadDetail({ lead }) {
       location: decisionDraft.region,
       suggestedOwner: decisionDraft.owner,
       assignedOwner: decisionDraft.owner,
+      ownerOverrideReason: isOverride ? lead.ownerOverrideReason.trim() : '',
+      fastTrack: isFastTrackLead({ ...lead, customerStatus: decisionDraft.customerStatus }, store.config, customer),
+      fastTrackStartedAt: isFastTrackLead({ ...lead, customerStatus: decisionDraft.customerStatus }, store.config, customer) ? (lead.fastTrackStartedAt || new Date().toISOString()) : lead.fastTrackStartedAt,
       route: routeForType(decisionDraft.oppType),
       customerStatus: decisionDraft.customerStatus,
       redFlag: decisionDraft.customerStatus === 'Red',
@@ -787,6 +816,15 @@ function AiLeadDetail({ lead }) {
                 </select>
               </label>
             </div>
+            {decisionErr && <div className="errbox" style={{ marginTop: 8 }}>{decisionErr}</div>}
+            {decisionDraft.owner !== routeOwner(decisionDraft.region, store.config, decisionDraft.owner) && (
+              <label className="afield" style={{ display: 'block', marginTop: 8 }}>Owner override reason
+                <textarea rows={2} value={lead.ownerOverrideReason || ''} disabled={!['LJS', 'AH'].includes(store.role)}
+                  onChange={e => store.updateLead(lead.id, { ownerOverrideReason: e.target.value }, 'Owner override reason updated')}
+                  placeholder="Required for an LJS/AH owner override" />
+              </label>
+            )}
+            {isFastTrackLead(lead, store.config, customer) && <div className="okbox" style={{ marginTop: 8 }}>Fast-track enabled for this Green customer.</div>}
             <div className="lead-decision-actions">
               <button className="primary" disabled={lead.status === 'Dropped'} onClick={saveDecisions}>
                 <Icon name="check" size={12} /> Save changes
@@ -849,6 +887,16 @@ function AiLeadDetail({ lead }) {
         <footer className="ws-foot">
           {canAct && lead.status !== 'Qualified' && (
             <>
+              {isFastTrackLead(lead, store.config, customer) && (
+                <button className="primary ws-action" disabled={qualifyBlocked}
+                  title={qualifyBlocked ? 'Blocked: Red continuation approval required first' : undefined}
+                  onClick={() => {
+                    store.updateLead(lead.id, { status: 'Qualified', fastTrack: true, fastTrackStartedAt: lead.fastTrackStartedAt || new Date().toISOString() }, 'Green customer fast-track started')
+                    nav('/register/' + lead.id)
+                  }}>
+                  <Icon name="arrowRight" size={14} /> Fast-track to registration
+                </button>
+              )}
               <button className="primary ws-action" disabled={qualifyBlocked}
                 title={qualifyBlocked ? 'Blocked: Red continuation approval required first' : undefined}
                 onClick={() => store.updateLead(lead.id, { status: 'Qualified' })}>
@@ -1074,6 +1122,7 @@ export default function Inbox() {
   // Sales owners see only their assigned leads by default; a "Show all" toggle
   // reveals the team's. Managers (LJS/AH) and admins always see everything.
   const [showAll, setShowAll] = useState(false)
+  const [showArchive, setShowArchive] = useState(false)
   const seesAll = isAdminRole(store.role) || isApprover(store.role)
 
   const sel = leadId ? store.leads.find(l => l.id === leadId) : null
@@ -1116,7 +1165,8 @@ export default function Inbox() {
     )
   }
 
-  const rows = store.leads.filter(l => {
+  const listSource = showArchive ? (store.leadArchive || []) : store.leads
+  const rows = listSource.filter(l => {
     // Sales owners: only their assigned leads unless "Show all" is ticked.
     if (!seesAll && !showAll && l.suggestedOwner !== store.role) return false
     if (q) {
@@ -1175,8 +1225,8 @@ export default function Inbox() {
   const tabCount = tab => rows.filter(l => tab === 'unread'
     ? l.status === 'New' && !l.readAt
     : tab === 'qualified' ? l.status === 'Qualified' : true).length
-  const sourceOptions = [...new Set(store.leads.map(l => l.source || l.channel).filter(Boolean))].sort()
-  const ownerOptions = [...new Set(store.leads.map(l => l.suggestedOwner || 'Unassigned'))].sort()
+  const sourceOptions = [...new Set(listSource.map(l => l.source || l.channel).filter(Boolean))].sort()
+  const ownerOptions = [...new Set(listSource.map(l => l.suggestedOwner || 'Unassigned'))].sort()
   const filterSelect = (value, onChange, label, options) => (
     <select className={`mail-head-filter ${value ? 'active' : ''}`} value={value} onChange={e => onChange(e.target.value)} aria-label={`Filter by ${label}`}>
       <option value="">{label}</option>{options.map(o => Array.isArray(o) ? <option key={o[0]} value={o[0]}>{o[1]}</option> : <option key={o}>{o}</option>)}
@@ -1188,11 +1238,14 @@ export default function Inbox() {
       <div className="mailbox-head">
         <div>
           <h2><Icon name="inbox" size={18} /> Lead Inbox</h2>
-          <p className="hint">Common sales mailbox · AI structures, humans decide</p>
+          <p className="hint">{showArchive ? 'Discarded lead archive' : 'Common sales mailbox · AI structures, humans decide'}</p>
         </div>
         <div className="mailbox-head-actions">
           <button onClick={() => store.addLead(simulatedLead())}><Icon name="mail" size={13} /> Simulate incoming inquiry</button>
           <button className="primary" onClick={() => setPasteOpen(true)}><Icon name="bot" size={13} /> New enquiry</button>
+          <button onClick={() => { setShowArchive(v => !v); setMailTab('primary'); setSelectedIds(new Set()) }}>
+            <Icon name="folder" size={13} /> {showArchive ? 'Back to inbox' : `Archive (${(store.leadArchive || []).length})`}
+          </button>
         </div>
       </div>
       <div className="mail-search-row">

@@ -603,7 +603,7 @@ function ClarificationsTab({ opp }) {
       eucName: opp.eucName, location: opp.location, remarks: opp.remarks,
       lines: (proposal.lines || []).map(l => ({ pn: l.pn, desc: l.desc, qty: l.qty })),
       existing: rows.map(c => c.q),
-    })
+    }, { fallback: store.config?.aiModel?.provider === 'Built-in fallback' })
     setBusy('')
     const due = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
     const suggestions = ai?.rows?.length ? ai.rows : (CLAR_SUGGESTIONS[opp.route] || CLAR_SUGGESTIONS.Project)

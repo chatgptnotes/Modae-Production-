@@ -125,7 +125,7 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
       const ai = await runJson('tender.extract', {
         filename: f.name, pages: ex.struct?.length ?? '', text: ex.fullText,
         parsed: p.header, products: PRODUCTS,
-      }, { timeoutMs: 90000 })
+      }, { timeoutMs: 90000, fallback: store.config?.aiModel?.provider === 'Built-in fallback' })
       mergeAi(p, ai)
       await minDelay
       clearInterval(timer)

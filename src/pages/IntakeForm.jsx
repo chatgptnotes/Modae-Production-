@@ -225,7 +225,7 @@ export default function IntakeForm({ destinationPicker = null }) {
         text: extracted.fullText,
         parsed,
         products: PRODUCTS // Context for product categorization
-      })
+      }, { fallback: store.config?.aiModel?.provider === 'Built-in fallback' })
 
       if (aiResult) {
         const enriched = { ...aiResult, extractedHeader: parsed.header, missing: [...new Set([...(aiResult.missing || []), ...parsed.missing])] }

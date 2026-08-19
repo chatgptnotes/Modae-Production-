@@ -38,3 +38,15 @@ test('converted lead shows a completed handoff', () => {
   assert.equal(flow.complete, true)
   assert.ok(flow.steps.every(step => step.state === 'complete'))
 })
+
+test('dropped lead is terminal rather than appearing stuck on AI validation', () => {
+  const flow = leadWorkflow({
+    status: 'Dropped', droppedReason: 'No response from customer',
+    source: 'Common mailbox', suggestedOwner: 'RS',
+    ai: { fields: [{ k: 'Scope', v: '', conf: 40, state: 'pending' }], route: 'Spares', missing: ['Delivery'] },
+  })
+
+  assert.equal(flow.terminal, 'dropped')
+  assert.equal(flow.blocked, 'Lead discarded')
+  assert.equal(flow.complete, false)
+})

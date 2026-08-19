@@ -14,15 +14,20 @@ const API = 'https://generativelanguage.googleapis.com/v1beta/models'
 const FLASH = 'gemini-3.6-flash'   // fast path: drafting, suggestions
 const PRO = 'gemini-pro-latest'    // hard extraction: leads, tender specs
 
-const KEY = Deno.env.get('GEMINI_API_KEY') ?? ''
+const ENV_KEY = Deno.env.get('GEMINI_API_KEY') ?? ''
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
+const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+const admin = SUPABASE_URL && SERVICE_ROLE_KEY
+  ? (await import('https://esm.sh/@supabase/supabase-js@2')).createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
+  : null
 
-// Google accepts the API key as a header; a real OAuth access token (ya29.…)
-// has to go as a bearer instead. Everything else — including the current
-// AQ.… key format — is an API key.
-const authHeader = (): Record<string, string> =>
-  KEY.startsWith('ya29.')
-    ? { Authorization: `Bearer ${KEY}` }
-    : { 'x-goog-api-key': KEY }
+const getKey = async () => {
+  if (admin) {
+    const { data, error } = await admin.rpc('get_wintrack_ai_secret')
+    if (!error && typeof data === 'string' && data) return data
+  }
+  return ENV_KEY
+}
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -303,7 +308,8 @@ Produce:
 Deno.serve(async req => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (req.method !== 'POST') return json({ ok: false, error: 'POST only' }, 405)
-  if (!KEY) return json({ ok: false, error: 'AI is not configured on the server' }, 503)
+  const key = await getKey()
+  if (!key) return json({ ok: false, error: 'AI is not configured on the server' }, 503)
 
   let body: { task?: string; payload?: Record<string, any>; model?: string }
   try {
@@ -331,7 +337,10 @@ Deno.serve(async req => {
   try {
     res = await fetch(`${API}/${model}:generateContent`, {
       method: 'POST',
-      headers: { ...authHeader(), 'Content-Type': 'application/json' },
+      headers: {
+        ...(key.startsWith('ya29.') ? { Authorization: `Bearer ${key}` } : { 'x-goog-api-key': key }),
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify(req_),
     })
   } catch (e) {

@@ -62,3 +62,44 @@ create policy anon_delete_app_state on public.app_state
 
 grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on public.app_state to anon, authenticated;
+
+-- ---- Secure AI credential storage ----------------------------------------
+-- Supabase Vault keeps the provider key encrypted at rest. The Edge Functions
+-- call these restricted RPCs with the service role; browser roles cannot call
+-- them directly.
+create extension if not exists vault with schema vault;
+
+create or replace function public.set_wintrack_ai_secret(p_secret text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, vault
+as $$
+declare
+  existing_id uuid;
+begin
+  select id into existing_id from vault.decrypted_secrets
+    where name = 'wintrack_gemini_api_key' limit 1;
+  if existing_id is null then
+    perform vault.create_secret(p_secret, 'wintrack_gemini_api_key', 'WinTrack Gemini provider key');
+  else
+    perform vault.update_secret(existing_id, p_secret, 'wintrack_gemini_api_key', 'WinTrack Gemini provider key');
+  end if;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+create or replace function public.get_wintrack_ai_secret()
+returns text
+language sql
+security definer
+set search_path = public, vault
+as $$
+  select decrypted_secret from vault.decrypted_secrets
+  where name = 'wintrack_gemini_api_key' limit 1;
+$$;
+
+revoke all on function public.set_wintrack_ai_secret(text) from public, anon, authenticated;
+revoke all on function public.get_wintrack_ai_secret() from public, anon, authenticated;
+grant execute on function public.set_wintrack_ai_secret(text) to service_role;
+grant execute on function public.get_wintrack_ai_secret() to service_role;

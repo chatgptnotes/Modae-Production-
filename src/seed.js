@@ -1018,6 +1018,7 @@ export function newProposal(oppId, opp) {
 // ---------------------------------------------------------------------------
 
 export const AI_PROVIDERS = {
+  'Built-in fallback': [],
   Anthropic: ['claude-fable-5', 'claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5', 'Other (enter below)'],
   OpenAI: ['gpt-5-flagship', 'gpt-5-mini', 'gpt-4o', 'Other (enter below)'],
   // Google IDs verified against the credential's own /v1beta/models listing.
@@ -1038,6 +1039,8 @@ export const seedConfig = {
     { region: 'South, East & Central India', owner: 'PP' },
     { region: 'Large / miscellaneous / international / aerospace / DCS / automation', owner: 'LJS' },
   ],
+  leadDeadlines: { kycDays: 7, amberFeeDays: 7, clarificationDays: 7 },
+  fastTrack: { enabled: true, customerStatus: 'Green' },
   aiThresholds: { high: 90, med: 75 },
   // Diagram 02 §5C margin matrix: order value against ₹10 Lakh, margin against 50%.
   approvalThresholds: { valueBreak: 1000000, marginBreak: 50 },
