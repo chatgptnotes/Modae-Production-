@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { STAGES, CLOSE_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES } from '../seed.js'
@@ -12,13 +12,12 @@ import { Icon } from '../icons.jsx'
 const OPEN_STAGES = STAGES.filter(s => s !== 'Won' && s !== 'Lost')
 
 // Columns with their real-sheet letters (row number = Sl + 2, as in the sheet).
-// `w` is the column's share of the sheet width. Nothing scrolls sideways any
-// more, so every visible column has to be given a slice of a fixed budget —
-// free text gets the generous shares, single-token chips the thin ones. The
-// numbers are relative weights, normalised to 100% over whichever set of
-// columns is on screen (see columnWidthCss). `wAll` overrides `w` when all 31
-// are on screen at once — with that little room per column the identity and
-// date columns need a bigger slice than they do in the roomy key view.
+// `w` is the column's share of the sheet width — free text gets the generous
+// shares, single-token chips the thin ones. The two views read the weights
+// differently (see columnWidthCss): the key view divides the viewport between
+// its 9 columns and wraps what does not fit, while the all-31 view turns the
+// weights into px widths and scrolls sideways. `wAll` overrides `w` in the
+// all-31 view, where the identity and date columns earn a bigger slice.
 export const COLS = [
   { key: 'id', letter: 'C', label: 'Opp ID', w: 8, wAll: 13 },
   { key: 'sellTo', letter: 'D', label: 'Sell To Customer*', w: 16, wAll: 13 },
@@ -73,30 +72,86 @@ function hiddenColumnCss(hidden) {
   return `${sel} { display: none; } .sheet.cols-key tfoot { display: none; }`
 }
 
-// The sheet is table-layout: fixed and never scrolls sideways, so the visible
-// columns have to divide a fixed budget between them. Percentages are taken
-// from COLS[].w, renormalised over whichever set is on screen — that way the
-// key-column view is not left with a 9-column table filling 40% of the width.
+// Both views size their columns from COLS[].w, but they spend it differently.
+//
+// Key view: table-layout: fixed, nothing scrolls sideways, so the 9 columns
+// divide the viewport between them as percentages renormalised over that set —
+// that way the key view is not left with a 9-column table filling 40% of the
+// width. Anything too long for its share wraps onto a second line.
+//
+// All-31 view: 31 columns cannot share one viewport and stay readable (it came
+// to ~37px each at 1366px), so the weights become px widths and the sheet
+// scrolls sideways inside .sheet-wrap instead.
+//
 // Same nth-child indexing as hiddenColumnCss: the Sl rowhead is child 1, so
-// COLS[i] is child i + 2.
-// Two columns live outside COLS and still need a slice of the budget: the Sl
-// rowhead at child 1 and the trailing Proposal link at the last child.
-// Plain percentages only — Chrome resolves a calc() containing a percentage as
-// `auto` for fixed-layout column widths, which silently collapses every column
-// to an equal share and undoes the whole point of the weights.
+// COLS[i] is child i + 2. Two columns live outside COLS and still need sizing:
+// the Sl rowhead at child 1 and the trailing Proposal link at the last child.
+// Percentages must stay plain — Chrome resolves a calc() containing a
+// percentage as `auto` for fixed-layout column widths, which silently
+// collapses every column to an equal share and undoes the whole point.
 const ROWHEAD_PCT = 2.6
 const PROPOSAL_PCT = 6.5
+// px per weight unit in the scrolling view, and the floor below which a column
+// is too narrow to read its own header. Sums to a sheet about 3000px wide.
+const PX_PER_UNIT = 13
+const MIN_COL_PX = 78
+const ROWHEAD_PX = 34
+const PROPOSAL_PX = 84
 
 function columnWidthCss(cols, scope, all = false) {
   const share = c => (all && c.wAll) || c.w
+  const rule = (sel, value) => `${scope} thead tr > ${sel}, ${scope} tbody tr > ${sel} { ${value} }`
+  if (all) {
+    const px = c => Math.max(MIN_COL_PX, Math.round(share(c) * PX_PER_UNIT))
+    return [
+      rule(':nth-child(1)', `width: ${ROWHEAD_PX}px; min-width: ${ROWHEAD_PX}px;`),
+      ...cols.map(c => rule(`:nth-child(${COLS.indexOf(c) + 2})`, `min-width: ${px(c)}px;`)),
+      rule(':last-child', `min-width: ${PROPOSAL_PX}px;`),
+    ].join('\n')
+  }
   const total = cols.reduce((sum, c) => sum + share(c), 0)
   const budget = 100 - ROWHEAD_PCT - PROPOSAL_PCT
-  const rule = (sel, pct) => `${scope} thead tr > ${sel}, ${scope} tbody tr > ${sel} { width: ${pct.toFixed(3)}%; }`
+  const pct = value => `width: ${value.toFixed(3)}%;`
   return [
-    rule(':nth-child(1)', ROWHEAD_PCT),
-    ...cols.map(c => rule(`:nth-child(${COLS.indexOf(c) + 2})`, (share(c) / total) * budget)),
-    rule(':last-child', PROPOSAL_PCT),
+    rule(':nth-child(1)', pct(ROWHEAD_PCT)),
+    ...cols.map(c => rule(`:nth-child(${COLS.indexOf(c) + 2})`, pct((share(c) / total) * budget))),
+    rule(':last-child', pct(PROPOSAL_PCT)),
   ].join('\n')
+}
+
+// A cell whose text has to wrap. <input> is single-line by construction, so the
+// wide free-text columns of the key view use a textarea grown to fit its own
+// content instead. Enter is swallowed: these are one-value fields that happen
+// to need two lines, not multiline notes. The observer watches the cell, not
+// the textarea — resizing ourselves would feed our own notifications back.
+function WrapInput({ value, onChange, title }) {
+  const ref = useRef(null)
+  useLayoutEffect(() => {
+    const el = ref.current
+    const cell = el?.parentElement
+    if (!cell) return
+    const fit = () => { el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px` }
+    fit()
+    let width = cell.getBoundingClientRect().width
+    const ro = new ResizeObserver(entries => {
+      const next = entries[0].contentRect.width
+      if (next === width) return   // height-only change: that was us
+      width = next
+      fit()
+    })
+    ro.observe(cell)
+    return () => ro.disconnect()
+  }, [value])
+  return (
+    <textarea ref={ref} className="wrapcell" rows={1} value={value} title={title}
+      onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }}
+      onChange={e => {
+        // Enter is blocked above, but a paste can still carry newlines into a
+        // field the rest of the app renders as one line.
+        e.target.value = e.target.value.replace(/\s*\n+\s*/g, ' ')
+        onChange(e)
+      }} />
+  )
 }
 
 export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
@@ -362,14 +417,14 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                 onClick={e => {
                   // Row click opens the detail drawer — but never when the click
                   // landed on an inline editor, link, or the filter popover.
-                  if (e.target.closest('input,select,a,button,label,.filter-pop')) return
+                  if (e.target.closest('input,textarea,select,a,button,label,.filter-pop')) return
                   drawer.open({ type: 'opp', id: o.id })
                 }}>
                 <td className="rowhead">{index + 1}</td>
                 <td onClick={selectCell(o, COLS[0])} className={`oppid ${customerStatusFor(o)} ${stageClass(o) === 'open' ? '' : stageClass(o)} ${isSel(o, COLS[0]) ? 'cell-sel' : ''}`}>
                   <Link to={`/opp/${o.id}`} title="Open opportunity workspace">{o.id}</Link>
                 </td>
-                <td onClick={selectCell(o, COLS[1])} className={isSel(o, COLS[1]) ? 'cell-sel' : ''} title={o.sellTo}><input type="text" value={o.sellTo} onChange={upd(o.id, 'sellTo')} /></td>
+                <td onClick={selectCell(o, COLS[1])} className={isSel(o, COLS[1]) ? 'cell-sel' : ''} title={o.sellTo}><WrapInput value={o.sellTo} onChange={upd(o.id, 'sellTo')} title={o.sellTo} /></td>
                 <td onClick={selectCell(o, COLS[2])} className={isSel(o, COLS[2]) ? 'cell-sel' : ''}>
                   <select value={o.category} onChange={upd(o.id, 'category')}>{CATEGORIES.map(c => <option key={c}>{c}</option>)}</select>
                 </td>
@@ -380,7 +435,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                 </td>
                 <td onClick={selectCell(o, COLS[5])} className={isSel(o, COLS[5]) ? 'cell-sel' : ''} title={o.eucName}><input type="text" value={o.eucName} onChange={upd(o.id, 'eucName')} /></td>
                 <td onClick={selectCell(o, COLS[6])} className={isSel(o, COLS[6]) ? 'cell-sel' : ''} title={o.eucLocation}><input type="text" value={o.eucLocation} onChange={upd(o.id, 'eucLocation')} /></td>
-                <td onClick={selectCell(o, COLS[7])} className={isSel(o, COLS[7]) ? 'cell-sel' : ''} title={o.oppName}><input type="text" value={o.oppName} onChange={upd(o.id, 'oppName')} /></td>
+                <td onClick={selectCell(o, COLS[7])} className={isSel(o, COLS[7]) ? 'cell-sel' : ''} title={o.oppName}><WrapInput value={o.oppName} onChange={upd(o.id, 'oppName')} title={o.oppName} /></td>
                 <td onClick={selectCell(o, COLS[8])} className={isSel(o, COLS[8]) ? 'cell-sel' : ''}>
                   <select value={o.owner} onChange={upd(o.id, 'owner')}>{OWNERS.map(c => <option key={c}>{c}</option>)}</select>
                 </td>

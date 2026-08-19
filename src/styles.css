@@ -2992,8 +2992,9 @@ html, body { overflow-x: hidden; max-width: 100%; }
 
 /* -------------------------------------------------------------- pipeline sheet
    The grid fills the frame: title + toolbar on top, sheet-tab strip on the
-   bottom, and only the rows scroll — under a navy header that finally sticks.
-   Nothing scrolls sideways, in either column view. */
+   bottom, and the rows scroll under a navy header that finally sticks. The two
+   column views handle width differently — the key view keeps all 9 columns on
+   screen and wraps, the all-31 view scrolls sideways. See the blocks below. */
 .opportunities-page, .tracker-page {
   height: 100%; min-height: 0;
   display: flex; flex-direction: column;
@@ -3005,38 +3006,51 @@ html, body { overflow-x: hidden; max-width: 100%; }
    render .sheet-tabs as a fixed footer. */
 .tracker-page > .sheet-tabs { position: static; left: auto; right: auto; bottom: auto; }
 
-/* Fixed layout is what makes a width budget enforceable — the per-column
-   percentages are generated from COLS[].w in pages/Tracker.jsx. */
-.tracker-page table.sheet { table-layout: fixed; }
-/* Headers clip too — a nowrap <th> label in a fixed-width column still
-   grows the wrapper's scrollable overflow, which is what kept the horizontal
-   scrollbar alive after the columns themselves already fitted. The sort/filter
-   caret floats right so truncating the label never swallows the control. */
-.tracker-page table.sheet th, .tracker-page table.sheet td { overflow: hidden; text-overflow: ellipsis; }
 .tracker-page table.sheet th .filter-caret { float: right; margin-left: 2px; }
 .tracker-page table.sheet td input, .tracker-page table.sheet td select { min-width: 0; text-overflow: ellipsis; }
 .tracker-page table.sheet td.num input { text-align: right; }
 
-/* All 31 columns on screen at once is roughly 55px per column at 1700px and
-   ~37px at 1366px. Buy back every pixel that is not content: tighter padding,
-   smaller type, and no native select arrow or date-picker glyph. Values clip
-   to an ellipsis — each cell carries a title so hovering recovers the text. */
-.tracker-page .sheet:not(.cols-key) th, .tracker-page .sheet:not(.cols-key) td { padding: 2px 4px; font-size: 11px; }
-.tracker-page .sheet:not(.cols-key) td input, .tracker-page .sheet:not(.cols-key) td select { font-size: 11px; }
-.tracker-page .sheet:not(.cols-key) td select { appearance: none; -webkit-appearance: none; padding-right: 2px; }
-.tracker-page .sheet:not(.cols-key) td input[type=date] { font-size: 10px; }
-.tracker-page .sheet:not(.cols-key) td input[type=date]::-webkit-calendar-picker-indicator { display: none; }
-/* At ~33px a column cannot afford 14px of permanent sort caret as well as its
-   label, so in the compressed view the caret is overlaid and only appears when
-   the header is hovered. Every header keeps its title, so the full name is one
-   hover away either way. */
-.tracker-page .sheet:not(.cols-key) th { position: relative; }
-.tracker-page .sheet:not(.cols-key) th .filter-caret {
-  float: none; position: absolute; top: 2px; right: 1px; margin: 0;
-  opacity: 0; transition: opacity .12s ease;
+/* Key view — 9 columns divide the viewport between them, so nothing scrolls
+   sideways and a value too long for its share wraps onto a second line instead
+   of being cut off. Fixed layout is what makes that width budget enforceable:
+   the per-column percentages are generated from COLS[].w in pages/Tracker.jsx.
+   Headers wrap on the same terms; the caret floats right (above) so a wrapped
+   label never swallows the sort/filter control. */
+.tracker-page table.sheet.cols-key { table-layout: fixed; }
+.tracker-page .sheet.cols-key th, .tracker-page .sheet.cols-key td {
+  white-space: normal; overflow-wrap: anywhere; vertical-align: middle;
 }
-.tracker-page .sheet:not(.cols-key) th:hover .filter-caret,
-.tracker-page .sheet:not(.cols-key) th.filtered .filter-caret { opacity: 1; }
+
+/* The wrapping free-text cells (WrapInput in pages/Tracker.jsx). Height is set
+   from content by JS, so nothing here may constrain it. */
+table.sheet td .wrapcell {
+  display: block; width: 100%; border: none; background: transparent;
+  font: inherit; font-size: 12px; line-height: 1.3; padding: 1px 2px;
+  resize: none; overflow: hidden;
+}
+table.sheet td .wrapcell:focus { outline: 2px solid var(--xl-green); background: #fff; }
+
+/* All-31 view — 31 columns sharing one viewport came to ~37px each at 1366px,
+   which is narrower than most of the headers. Instead the sheet takes its
+   natural px width (also from COLS[].w) and scrolls inside .sheet-wrap. Rows
+   stay single-line and clip to an ellipsis; every cell carries a title, so a
+   value wider than its column is one hover away. */
+.tracker-page .sheet:not(.cols-key) { table-layout: auto; width: max-content; min-width: 100%; }
+.tracker-page .sheet:not(.cols-key) th, .tracker-page .sheet:not(.cols-key) td { overflow: hidden; text-overflow: ellipsis; }
+.tracker-page .sheet:not(.cols-key) .wrapcell { height: auto !important; white-space: pre; }
+
+/* Scrolling sideways past a dozen columns loses you the row you were reading,
+   so the Sl number and the Opp ID pin to the left edge. A sticky cell needs an
+   opaque background of its own or the scrolled columns show through it — hence
+   the striping and hover fills repeated here at matching specificity. */
+.tracker-page .sheet:not(.cols-key) th.rowhead { left: 0; z-index: 3; }
+.tracker-page .sheet:not(.cols-key) td.rowhead { position: sticky; left: 0; z-index: 2; }
+.tracker-page .sheet:not(.cols-key) thead tr > :nth-child(2) { left: 34px; z-index: 3; }
+.tracker-page .sheet:not(.cols-key) tbody tr > :nth-child(2) {
+  position: sticky; left: 34px; z-index: 2; background: #fff;
+}
+.tracker-page .sheet:not(.cols-key) tbody tr:nth-child(even) > :nth-child(2) { background: #f6f9fc; }
+.tracker-page .sheet:not(.cols-key) tbody tr:hover > :nth-child(2) { background: var(--select-fill); }
 
 /* ------------------------------------------------------------------- mailbox
    Same shape: header, search and tabs pinned, the message list is the only
