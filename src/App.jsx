@@ -155,7 +155,7 @@ export default function App() {
       <div className={`nav-backdrop ${navOpen ? 'open' : ''}`} onClick={() => setNavOpen(false)} />
       <aside className={`sidenav ${navOpen ? 'open' : ''}`}>
         <div className="brand" onClick={() => nav('/opportunities')}>
-          <ModaeLogo size={28} sub="Sales Workspace" />
+          <ModaeLogo size={28} />
           <button className="sidebar-toggle" onClick={e => { e.stopPropagation(); toggleSidebar() }}
             title={sidebarCompact ? 'Expand sidebar' : 'Collapse sidebar'} aria-label={sidebarCompact ? 'Expand sidebar' : 'Collapse sidebar'}>
             <Icon name={sidebarCompact ? 'chevronRight' : 'chevronLeft'} size={15} />

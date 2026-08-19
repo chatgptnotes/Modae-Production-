@@ -113,7 +113,7 @@ export default function TabletApp() {
     <div className={`shell tablet-mode theme-${theme}`} style={{ display: 'block' }}>
       <BrandWatermark variant="tablet" />
       <header className="tablet-bar">
-        <ModaeLogo className="tb-brand" size={24} sub="Sales Workspace" onClick={() => nav('/home')} />
+        <ModaeLogo className="tb-brand" size={24} onClick={() => nav('/home')} />
         <span className="spacer" />
         <button className="tb-bell" onClick={() => nav('/inbox')} title={`${c.newLeads} new leads`}>
           <Icon name="bell" size={15} />
