@@ -308,11 +308,6 @@ export default function Admin() {
                 autoComplete="new-password" placeholder={ai.configured ? 'Saved securely' : 'Paste Gemini API key'}
                 onChange={e => setApiKey(e.target.value)} />
             </label>
-            <label className="afield">One-time setup token
-              <input type="password" value={setupToken} disabled={!canEdit || savingAi}
-                autoComplete="off" placeholder="Required for secure setup"
-                onChange={e => setSetupToken(e.target.value)} />
-            </label>
           </div>
           <div className="admin-actions">
             <button className="primary" disabled={!canEdit || savingAi} onClick={saveAi}>Save configuration</button>
