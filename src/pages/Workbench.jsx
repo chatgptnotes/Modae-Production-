@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES } from '../seed.js'
+import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, REVISION_TYPES } from '../seed.js'
 import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY } from '../utils.js'
 import { readiness, isBlocked, computeProposalTotals, nextActionWith, transitionBlockers } from '../gates.js'
 import { COMMERCIAL_RX } from './Approvals.jsx'
@@ -14,6 +14,7 @@ import WbSpares from '../workbench/WbSpares.jsx'
 import WbService from '../workbench/WbService.jsx'
 import WbProject from '../workbench/WbProject.jsx'
 import PropBuilder from '../workbench/PropBuilder.jsx'
+import BSteps from '../workbench/BSteps.jsx'
 import SubmissionPanel from '../workbench/SubmissionPanel.jsx'
 import PoHandover from '../workbench/PoHandover.jsx'
 import OpportunityDetailsEditor from '../OpportunityDetailsEditor.jsx'
@@ -93,7 +94,27 @@ export default function Workbench() {
   const exceptionApprovalFor = blocker => (store.approvals || []).find(a =>
     a.type === 'Milestone exception' && a.oppId === opp.id
     && a.targetMilestone === transition?.target && a.blockerKey === blocker.key)
-  const canRequestException = blocker => ['kyc', 'amber-fee', 'red-clearance', 'dev'].includes(blocker.key) || !!blocker.approvalType
+  // Diagram 02 §5 draws the layered approval as mandatory — its only "No" branch
+  // is Return for Revision, never a bypass. So a blocker that names its own
+  // approval type is *requested*, not excepted; the exception route is kept for
+  // the lead-management requirements that have no approval object of their own.
+  const canRequestApproval = blocker => !!blocker.approvalType
+  const canRequestException = blocker => !blocker.approvalType
+    && ['kyc', 'amber-fee', 'red-clearance'].includes(blocker.key)
+  const approvalRequestFor = blocker => (store.approvals || []).find(a =>
+    a.oppId === opp.id && a.type === blocker.approvalType && a.status === 'Pending')
+  // §5A names two acceptable approvers ("LJS or AN") and carries `anyOf`, so a
+  // single decision clears it. The approval is stamped with the revision it
+  // covers, or a later revision would inherit it.
+  const requestBlockerApproval = blocker => store.requestApproval({
+    oppId: opp.id,
+    type: blocker.approvalType,
+    rev: String(proposal?.revision ?? ''),
+    approver: blocker.approver,
+    needed: blocker.needed || [blocker.approver],
+    anyOf: !!blocker.anyOf,
+    detail: blocker.text,
+  })
   const requestException = blocker => {
     const needed = blocker.needed || [blocker.approver || 'AH']
     store.requestApproval({
@@ -104,6 +125,7 @@ export default function Workbench() {
       detail: `${blocker.text} — exception requested to move to ${transition.target}.`,
       approver: needed[0],
       needed,
+      anyOf: !!blocker.anyOf,
     })
   }
   const openTransitionTab = tabName => {
@@ -117,13 +139,21 @@ export default function Workbench() {
   }
   const clarificationRows = (store.clarifications || []).filter(c => c.oppId === opp.id && ['Draft', 'Open', 'Sent'].includes(c.status))
   const deviationRows = (proposal?.terms || []).filter(t => t.status === 'Deviation')
-  const blockerOwner = blocker => blocker.needed?.join(' + ') || blocker.approver || (blocker.key === 'clarifications' ? opp.owner : 'Opportunity owner')
+  // `anyOf` blockers (§5A "LJS OR AN") name two approvers but need only one, so
+  // the owner line must not read as a joint requirement.
+  const blockerOwner = blocker => blocker.needed?.join(blocker.anyOf ? ' or ' : ' + ')
+    || blocker.approver || (blocker.key === 'clarifications' ? opp.owner : 'Opportunity owner')
   const blockerExplanation = blocker => {
     if (blocker.key === 'clarifications') return 'Customer answers are still missing. The proposal must not be built on unconfirmed technical, delivery, or site assumptions.'
     if (blocker.key === 'dev') return 'The customer has requested terms outside the standard commercial position. AH must review and approve the exception before proposal work can continue.'
     if (blocker.key === 'amber-fee') return 'This Amber customer requires the pre-quote processing fee to be received before the opportunity can progress.'
     if (blocker.key === 'kyc') return 'This Blue customer is new or unverified. AH must complete the required KYC review before registration or quoting.'
     if (blocker.key === 'red-clearance') return 'This Red customer requires joint commercial clearance because of the risk or payment history.'
+    // Diagram 02 §5 — the layered approval before the first quote dispatch and
+    // before every revision. All three must clear; there is no exception route.
+    if (blocker.key === 'tech-approval') return 'Section 5A: the technical scope must be signed off by LJS or AN before the quote can be dispatched. Either approver alone clears it.'
+    if (blocker.key === 'comm-approval') return 'Section 5B: the commercial position must be signed off by AH before the quote can be dispatched.'
+    if (blocker.key === 'release') return 'Section 5C: the final quote release, routed by order value and margin. It covers this revision only — a revised quote must be released again.'
     return 'Complete the requirement shown below before continuing.'
   }
 
@@ -135,6 +165,9 @@ export default function Workbench() {
           <h2>{opp.oppName}</h2>
           <ClassChip cls={opp.customerStatus} />
           <Chip tone="grey">{opp.route}</Chip>
+          {/* Which of the diagram's three worlds this runs in — it decides the
+              B-step chain, the pricing embargo and the survey path. */}
+          {opp.context && <Chip tone="grey" title={`${opp.context} lane`}>{opp.context}</Chip>}
           <Chip tone={blockers.length ? 'state-Review' : 'state-Accepted'}>{blockers.length ? 'At risk' : 'On track'}</Chip>
         </div>
         <div className="opp-summary-grid">
@@ -169,6 +202,8 @@ export default function Workbench() {
               <div className="transition-blockers">{transition.blockers.map((item, i) => {
                 const exception = exceptionApprovalFor(item)
                 const requestable = canRequestException(item)
+                const approvable = canRequestApproval(item)
+                const openRequest = approvable ? approvalRequestFor(item) : null
                 return <div key={`${item.key}-${i}`} className={`workbench-blocker ${item.severity}`}>
                   <div className="transition-blocker-head"><b>{item.text}</b><span className="transition-owner">Owner: <strong>{blockerOwner(item)}</strong></span></div>
                   <span className="transition-explanation">{blockerExplanation(item)}</span>
@@ -178,6 +213,8 @@ export default function Workbench() {
                   {item.key === 'clarifications' && <button className="exception-action" onClick={() => openTransitionTab('clarifications')}>Open clarifications</button>}
                   {item.key === 'required-contactPerson' && <button className="exception-action" onClick={() => openMissingContact('contactPerson')}>Edit contact person</button>}
                   {item.key === 'required-contactPhone' && <button className="exception-action" onClick={() => openMissingContact('contactPhone')}>Edit contact phone</button>}
+                  {approvable && openRequest && <span>{item.approvalType} <b>{openRequest.id}</b> is pending with {openRequest.needed?.join(openRequest.anyOf ? ' or ' : ' + ') || openRequest.approver} — <button className="inline-action" onClick={() => openTransitionTab('approvals')}>Open approval</button></span>}
+                  {approvable && !openRequest && <button className="exception-action" onClick={() => requestBlockerApproval(item)}>Request {item.approvalType.toLowerCase()} from {blockerOwner(item)}</button>}
                   {requestable && exception?.status === 'Pending' && <span>Exception approval <b>{exception.id}</b> is pending — <button className="inline-action" onClick={() => openTransitionTab('approvals')}>Open approval</button></span>}
                   {requestable && !exception && <button className="exception-action" onClick={() => requestException(item)}>Request {blockerOwner(item)} approval to continue</button>}
                   {requestable && exception?.status === 'Rejected' && <span>Exception <b>{exception.id}</b> was rejected; resolve the requirement or request a new review.</span>}
@@ -368,7 +405,8 @@ function RequirementTab({ opp }) {
   const readonly = [
     ['Opportunity ID', opp.id], ['Sell-to', opp.sellTo], ['Category', opp.category],
     ['End user', `${opp.eucName || '—'} · ${opp.eucLocation || '—'}`],
-    ['Route', opp.route], ['Owner', `${opp.owner} — ${ROLES[opp.owner]?.name || ''}`],
+    ['Route', opp.route], ['Lane', `${opp.context || '—'} world`],
+    ['Owner', `${opp.owner} — ${ROLES[opp.owner]?.name || ''}`],
     ['Contact', `${opp.contactPerson || '—'} ${opp.contactPhone || ''}`],
   ]
 
@@ -789,7 +827,13 @@ function SourcingTab({ opp, goTab }) {
 function ProposalTab({ opp }) {
   const [sub, setSub] = useState('workbench')
   const openBuilder = () => setSub('builder')
-  const SUBS = [['workbench', 'Workbench'], ['builder', 'Builder'], ['preview', 'Preview'], ['followup', 'Follow-up']]
+  // Diagram 02 §3 is the Brownfield lane only — Greenfield runs Phase-1
+  // activities and Service runs the §4 survey path instead.
+  const SUBS = [
+    ['workbench', 'Workbench'],
+    ...(opp.context === 'Brownfield' ? [['steps', 'B-01…B-05']] : []),
+    ['builder', 'Builder'], ['preview', 'Preview'], ['followup', 'Follow-up'],
+  ]
   return (
     <div>
       <div className="wb-sub">
@@ -802,7 +846,8 @@ function ProposalTab({ opp }) {
         : opp.route === 'Service' ? <WbService opp={opp} openBuilder={openBuilder} />
         : <WbProject opp={opp} openBuilder={openBuilder} />
       )}
-      {sub === 'builder' && <PropBuilder opp={opp} />}
+      {sub === 'steps' && <BSteps opp={opp} />}
+      {sub === 'builder' && <PropBuilder opp={opp} openSteps={() => setSub('steps')} />}
       {sub === 'preview' && <PreviewPane opp={opp} />}
       {sub === 'followup' && <FollowUpPane opp={opp} />}
     </div>
@@ -844,28 +889,35 @@ function FollowUpPane({ opp }) {
   const p = store.getProposal(opp.id)
   const revisions = p.revisions || []
   const [note, setNote] = useState('')
+  const [revType, setRevType] = useState(REVISION_TYPES[0].id)
   const [fuOpen, setFuOpen] = useState(false)
   const [fuDraft, setFuDraft] = useState('')
   const [fuBusy, setFuBusy] = useState(false)
   const [fuSent, setFuSent] = useState(false)
   const [escOpen, setEscOpen] = useState(false)
+  // Diagram 02 §7 "Opportunity Lost — Capture Loss Reason" and §8 competitor
+  // tracking. Both close-out branches live beside the follow-up loop they end.
+  const [lossReason, setLossReason] = useState('')
+  const [lossCompetitor, setLossCompetitor] = useState('')
+  const [compName, setCompName] = useState('')
+  const [compNote, setCompNote] = useState('')
 
+  const competitors = (store.competitors || []).filter(c => c.oppId === opp.id)
   const validityDays = opp.validityDays || 30
   const age = opp.proposalDate ? ageDays(opp.proposalDate) : null
   const left = age == null ? null : validityDays - age
 
+  // Diagram 02 §7 has one revision path, not two: every revision is typed, is
+  // routed back to the B-step that owns it, and re-opens the §5 approval. This
+  // used to write an untyped R-numbered entry that did none of that, so the
+  // same act had two different consequences depending on which panel raised it.
   const addRevision = () => {
-    const today = new Date().toISOString().slice(0, 10)
-    store.saveProposal(opp.id, {
-      ...p,
-      revision: String((+p.revision || 0) + 1).padStart(2, '0'),
-      revisions: [...revisions, {
-        rev: `R${revisions.length + 1}`, when: today, by: store.role,
-        note: note.trim() || 'Revision created', status: 'Draft',
-      }],
-    })
+    if (!note.trim()) return
+    store.reviseProposal(opp.id, note.trim(), revType)
     setNote('')
+    setRevType(REVISION_TYPES[0].id)
   }
+  const revSpec = REVISION_TYPES.find(r => r.id === revType) || REVISION_TYPES[0]
 
   const templateFu = () => [
     'Dear Sir,',
@@ -910,15 +962,23 @@ function FollowUpPane({ opp }) {
           <div key={i} className="check-row">
             <b>{r.rev}</b><span>{r.note}</span>
             <Chip tone="grey">{r.status}</Chip>
+            {r.type && <Chip tone="state-Review">{r.type} → {r.step}</Chip>}
             <span className="hint" style={{ marginLeft: 'auto' }}>{ddMmmYY(r.when)} · {r.by}</span>
           </div>
         ))}
         {!revisions.length && <p className="hint">No revisions recorded yet.</p>}
-        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-          <input placeholder="Revision note" value={note} style={{ flex: 1 }}
+        <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+          <select value={revType} onChange={e => setRevType(e.target.value)}>
+            {REVISION_TYPES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+          </select>
+          <input placeholder="Reason for revision (logged)" value={note} style={{ flex: 1, minWidth: 160 }}
             onChange={e => setNote(e.target.value)} />
-          <button onClick={addRevision}><Icon name="plus" size={13} /> Add revision</button>
+          <button disabled={!note.trim()} onClick={addRevision}><Icon name="plus" size={13} /> Add revision</button>
         </div>
+        <p className="hint" style={{ marginTop: 4 }}>
+          Returns the opportunity to <b>{revSpec.step}</b>, reopens that step for sign-off, and
+          requires the whole §5 approval again before the quote can be sent.
+        </p>
       </div>
       <div className="ana-card c-6">
         <div className="ana-title">Follow-up & reminders</div>
@@ -946,6 +1006,65 @@ function FollowUpPane({ opp }) {
             Suggest a courtesy call by {opp.owner} this week, and escalate to LJS if silent past day 14 of the follow-up schedule.
           </div>
         )}
+      </div>
+
+      <div className="ana-card c-6">
+        <div className="ana-title">Close-out</div>
+        {opp.status === 'Closed' ? (
+          <div className={opp.stage === 'Won' ? 'okbox' : 'warnbox'}>
+            Closed as <b>{opp.stage}</b>{opp.closedReason ? ` — ${opp.closedReason}` : ''}
+          </div>
+        ) : (
+          <>
+            <p className="hint">
+              A lost opportunity always carries a reason — it is what the win/loss analytics read.
+            </p>
+            <div style={{ display: 'grid', gap: 6 }}>
+              <select value={lossReason} onChange={e => setLossReason(e.target.value)}>
+                <option value="">— loss reason (required) —</option>
+                {CLOSE_REASONS.map(r => <option key={r}>{r}</option>)}
+              </select>
+              <input placeholder="Competitor who won it (optional)" value={lossCompetitor}
+                onChange={e => setLossCompetitor(e.target.value)} />
+              <div>
+                <button disabled={!lossReason}
+                  title={lossReason ? '' : 'Select a loss reason first'}
+                  onClick={() => {
+                    store.closeLost(opp.id, lossReason, lossCompetitor.trim() ? { name: lossCompetitor.trim() } : null)
+                    setLossReason(''); setLossCompetitor('')
+                  }}>
+                  <Icon name="flag" size={13} /> Close as lost
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="ana-card c-6">
+        <div className="ana-title">Competitors</div>
+        {competitors.map(c => (
+          <div key={c.id} className="check-row">
+            <Icon name="building" size={13} />
+            <span><b>{c.name}</b>{c.note ? <div className="hint">{c.note}</div> : null}</span>
+            {c.outcome && <Chip tone="state-Rejected">{c.outcome}</Chip>}
+            <button style={{ marginLeft: 'auto' }} onClick={() => store.removeCompetitor(c.id)}>Remove</button>
+          </div>
+        ))}
+        {!competitors.length && <p className="hint">No competitor recorded on this opportunity.</p>}
+        <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+          <input placeholder="Competitor" value={compName} style={{ flex: '1 1 120px' }}
+            onChange={e => setCompName(e.target.value)} />
+          <input placeholder="What we know (price, position)" value={compNote} style={{ flex: '2 1 180px' }}
+            onChange={e => setCompNote(e.target.value)} />
+          <button disabled={!compName.trim()}
+            onClick={() => {
+              store.addCompetitor(opp.id, { name: compName.trim(), note: compNote.trim() })
+              setCompName(''); setCompNote('')
+            }}>
+            <Icon name="plus" size={13} /> Record
+          </button>
+        </div>
       </div>
 
       {fuOpen && (

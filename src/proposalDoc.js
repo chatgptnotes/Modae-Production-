@@ -502,8 +502,8 @@ export const DOC_ROUTES = {
 // One canonical route for the document. The opportunity's own route is the
 // source of truth (it is what the workbench already branches on at
 // Workbench.jsx), and the proposal's Proposal type selector is the explicit
-// override. Opportunity types the seed maps to the service route — AMC,
-// Training — must not fall through to the project template.
+// override. Opportunity types the seed maps off the project route — Service,
+// and Retrofit alongside Spares — must not fall through to it.
 export function docRoute(p, opp) {
   const raw = p?.proposalType || routeForType(opp?.oppType) || opp?.route
   if (raw === 'Spares') return 'Spares'

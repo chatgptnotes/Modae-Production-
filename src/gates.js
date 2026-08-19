@@ -83,8 +83,12 @@ export function readiness(opp, proposal, state) {
     }
   }
 
+  // Diagram 01's Amber lane makes the pre-quote fee a condition of proceeding,
+  // and transitionBlockers blocks Registration on it. Readiness said `info`,
+  // so the same unpaid fee read as advisory on one panel and blocking on the
+  // other. It blocks in both.
   if (opp.customerStatus === 'Amber' && opp.amberFeePaid !== true) {
-    b.push({ key: 'amber-fee', severity: 'info', text: 'Amber ₹25K pre-quote fee pending' })
+    b.push({ key: 'amber-fee', severity: 'block', text: 'Amber pre-quote processing fee not received' })
   }
 
   if (opp.route === 'Spares') {
@@ -231,6 +235,9 @@ export const APPROVAL_5A = 'Technical approval'
 export const APPROVAL_5B = 'Commercial approval'
 export const APPROVAL_5C = 'Final quote release'
 
+// The §5 blocker keys, which a milestone exception must never clear.
+export const NO_EXCEPTION = ['tech-approval', 'comm-approval', 'release']
+
 export function approvalForRev(type, proposal, approvals, oppId) {
   const rev = String(proposal?.revision ?? '')
   const mine = (approvals || []).filter(a =>
@@ -310,7 +317,12 @@ export function transitionBlockers(opp, target, proposal, state) {
   }
 
   if (next >= MILESTONES.indexOf('Proposal')) {
-    b.push(...readiness(opp, proposal, state).filter(x => x.severity === 'block' || x.severity === 'wait'))
+    // Readiness raises some of the same requirements this gate already listed
+    // (the Amber fee, for one), so fold by key rather than showing the operator
+    // the same blocker twice.
+    const seen = new Set(b.map(x => x.key))
+    b.push(...readiness(opp, proposal, state).filter(x =>
+      (x.severity === 'block' || x.severity === 'wait') && !seen.has(x.key)))
   }
 
   if (next >= MILESTONES.indexOf('Approval')) {
@@ -322,16 +334,19 @@ export function transitionBlockers(opp, target, proposal, state) {
   // and repeated for every revision. All three must clear before a quote is
   // "Ready for Dispatch".
   if (next >= MILESTONES.indexOf('Submitted')) {
+    // §5A is drawn as "LJS OR AN" and §5B as "AH ONLY", so 5A names both roles
+    // and marks itself `anyOf` — either technical approver alone clears it.
     const gates = [
-      { type: APPROVAL_5A, key: 'tech-approval', label: 'Technical approval (LJS or AN)', approver: 'LJS' },
-      { type: APPROVAL_5B, key: 'comm-approval', label: 'Commercial approval (AH)', approver: 'AH' },
-      { type: APPROVAL_5C, key: 'release', label: 'Final quote release', approver: 'LJS' },
+      { type: APPROVAL_5A, key: 'tech-approval', label: 'Technical approval (LJS or AN)', approver: 'LJS', needed: ['LJS', 'AN'], anyOf: true },
+      { type: APPROVAL_5B, key: 'comm-approval', label: 'Commercial approval (AH)', approver: 'AH', needed: ['AH'] },
+      { type: APPROVAL_5C, key: 'release', label: 'Final quote release', approver: 'LJS', needed: ['LJS'] },
     ]
     for (const g of gates) {
       const { approved, pending: waiting } = approvalForRev(g.type, proposal, approvals, opp.id)
       if (approved) continue
       b.push({
         key: g.key, severity: waiting ? 'wait' : 'block', approver: g.approver,
+        approvalType: g.type, needed: g.needed, anyOf: !!g.anyOf,
         text: waiting ? `${g.label} is awaiting approval` : `${g.label} is required`,
       })
     }
@@ -349,10 +364,14 @@ export function transitionBlockers(opp, target, proposal, state) {
     if (!po?.acceptance?.LJS || !po?.acceptance?.AH) b.push({ key: 'po-acceptance', severity: 'block', text: 'PO must be jointly accepted by LJS and AH' })
   }
   // An approved exception is scoped to this exact target and blocker. It
-  // never clears a different stage or a different requirement.
+  // never clears a different stage or a different requirement — and it never
+  // clears §5 at all: the diagram's layered approval has one "No" branch,
+  // Return for Revision, so technical, commercial and release must be given,
+  // not waived.
   const exceptions = (state.approvals || []).filter(a =>
     a.type === 'Milestone exception' && a.oppId === opp.id
     && a.targetMilestone === target
     && ['Approved', 'Approved with conditions'].includes(a.status))
-  return b.filter(item => !exceptions.some(a => a.blockerKey === item.key))
+  return b.filter(item => NO_EXCEPTION.includes(item.key)
+    || !exceptions.some(a => a.blockerKey === item.key))
 }

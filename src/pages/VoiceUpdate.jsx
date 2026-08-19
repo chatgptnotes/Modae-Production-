@@ -12,8 +12,8 @@ const SR = typeof window !== 'undefined'
 // first so "firm bid" is not shadowed by the bare "bid"/"lead" words.
 const STAGE_WORDS = [
   ['firm bid', 'Firm Bid'],
-  ['negotiation', 'Negotiation'],
-  ['negotiate', 'Negotiation'],
+  ['negotiation', 'Negotiate'],
+  ['negotiate', 'Negotiate'],
   ['budgetary', 'Budgetary'],
   ['won', 'Won'],
   ['lost', 'Lost'],

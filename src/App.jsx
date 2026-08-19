@@ -187,7 +187,12 @@ export default function App() {
               <Icon name="logout" size={14} /> <span className="side-label">Sign out ({store.auth.user.name})</span>
             </button>
           )}
-          <button className="reset" onClick={store.resetDemo} title="Clear local changes and reload seed data">
+          {/* Confirmed, like the Admin and Launcher copies of this button: with
+              Supabase configured resetDemo overwrites every server slice with
+              seeds, so a stray click here discards the shared dataset for every
+              device, not just this browser. */}
+          <button className="reset" title="Clear local changes and reload seed data"
+            onClick={() => { if (window.confirm('Reset all demo data? Every change is discarded and the app reloads with seed data.')) store.resetDemo() }}>
             <Icon name="refresh" size={14} /> <span className="side-label">Reset demo data</span>
           </button>
         </div>
@@ -211,7 +216,10 @@ export default function App() {
             <Icon name="tablet" size={15} /> Switch to tablet view
           </button>
         </header>
-        {routes}
+        {/* The shell is viewport-locked, so this is the app's single scroll
+            region — pages that want their own internal scroller (the pipeline
+            sheet, the mailbox list) size themselves to 100% of it. */}
+        <main className="main-scroll">{routes}</main>
       </div>
       <DrawerHost />
     </div>

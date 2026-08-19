@@ -1,5 +1,5 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
-import { CATEGORIES, CUSTOMER_STATUSES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, PROB_LEVELS } from './seed.js'
+import { CATEGORIES, CUSTOMER_STATUSES, OWNERS, OPP_TYPES, BUS, SEGMENTS, SOLUTIONS, PRODUCTS, PROB_LEVELS } from './seed.js'
 import { productList } from './utils.js'
 
 const Field = ({ label, children }) => (
@@ -8,7 +8,7 @@ const Field = ({ label, children }) => (
 
 const fields = [
   'owner', 'oppName', 'sellTo', 'category', 'location', 'customerStatus',
-  'eucName', 'eucLocation', 'oppType', 'bu', 'segment', 'product', 'prob',
+  'eucName', 'eucLocation', 'oppType', 'bu', 'segment', 'solution', 'product', 'prob',
   'contactPerson', 'contactPhone',
 ]
 
@@ -17,8 +17,8 @@ const makeDraft = opp => ({
   category: opp.category || '', location: opp.location || '',
   customerStatus: opp.customerStatus || '', eucName: opp.eucName || '',
   eucLocation: opp.eucLocation || '', oppType: opp.oppType || '',
-  bu: opp.bu || '', segment: opp.segment || '', product: productList(opp.product),
-  prob: opp.prob || '',
+  bu: opp.bu || '', segment: opp.segment || '', solution: opp.solution || '',
+  product: productList(opp.product), prob: opp.prob || '',
   contactPerson: opp.contactPerson || '', contactPhone: opp.contactPhone || '',
 })
 
@@ -99,6 +99,9 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
         <Field label="Opp Type"><select value={draft.oppType} onChange={e => set('oppType', e.target.value)}>{OPP_TYPES.map(x => <option key={x}>{x}</option>)}</select></Field>
         <Field label="BU"><select value={draft.bu} onChange={e => set('bu', e.target.value)}>{BUS.map(x => <option key={x}>{x}</option>)}</select></Field>
         <Field label="Segment"><select value={draft.segment} onChange={e => set('segment', e.target.value)}>{SEGMENTS.map(x => <option key={x}>{x}</option>)}</select></Field>
+        {/* On the client's Field List but not a Sales Pipeline column, so it is
+            captured here rather than on the tracker sheet. */}
+        <Field label="Solution"><select value={draft.solution} onChange={e => set('solution', e.target.value)}><option value="">—</option>{SOLUTIONS.map(x => <option key={x}>{x}</option>)}</select></Field>
         <Field label="Probability"><select value={draft.prob} onChange={e => set('prob', e.target.value)}><option value="">—</option>{PROB_LEVELS.map(x => <option key={x}>{x}</option>)}</select></Field>
         <Field label="Product">
           <div className="pill-group">

@@ -7,7 +7,7 @@ WinTrack / ModAE sales platform, measured against the two official process diagr
 | **Reference 01** | `branding/Official Lead Management Workflow (2).pdf` — *Expected Lead Management Workflow Post Implementation* |
 | **Reference 02** | `branding/Opportunity Workflow 7 Jun 2026.jpeg` — *02 – Opportunity Management Workflow (FINAL)* |
 | **Presentation copy** | `branding/Workflow Conformance Review.pdf` (8 pages, ModAE letterhead) |
-| **Date** | 18 August 2026 |
+| **Date** | 18 August 2026 · Diagram 02 re-reviewed 19 August 2026 |
 | **Scope** | Full source review — pages, state store, gating rules, approval logic, AI tasks, integrations |
 
 ## Headline finding
@@ -17,10 +17,16 @@ Inbox → AI parse → classify → gate → Opportunity ID → SharePoint folde
 drawn. The gaps are missing *edges*: lead sources, region routing, the Teams chatbot,
 the one-week timer, the fast-track path.
 
-**Diagram 02 — Opportunity Management: ~35% conformant.** The divergence is
-**structural, not cosmetic**. The diagram's primary axis — Greenfield versus Brownfield —
-does not exist in the data model, the B-01…B-05 steps are not tracked, the service
-site-survey flow is absent, and the margin approval matrix uses entirely different logic.
+**Diagram 02 — Opportunity Management: the structural gaps are closed (19 Aug).**
+The three lanes, B-01…B-05, the site-survey sub-flow, the ₹10 Lakh × 50% margin matrix,
+typed revisions with back-routing, competitor tracking and loss capture all exist and are
+reachable from the UI. What remains is **infrastructure, not process**: multi-channel
+dispatch and the "AI monitors and notifies" loop both need a server-side send path and a
+scheduler (Tier 3 below), plus two small UI gaps (O13, O14).
+
+> The original 18 Aug assessment read "~35% conformant… the diagram's primary axis does not
+> exist in the data model". That is no longer true and the Diagram 02 section below has been
+> rewritten. Diagram 01 has **not** been re-reviewed since 18 August.
 
 ---
 
@@ -63,30 +69,39 @@ constraint exists.
 
 ## Diagram 02 — Opportunity Management
 
+**Re-reviewed 19 August 2026.** The structural gaps this section reported on 18 August
+have been closed: the Greenfield / Brownfield / Service lanes, B-01…B-05, the site-survey
+sub-flow, the §5 layered approval with the real ₹10 Lakh × 50% matrix, typed revisions,
+competitor tracking and loss capture all exist and are reachable from the UI.
+
 ### Conformant
 
-Opportunity intake · service rate-sheet build-up covering travel, lodging, manpower days
-and consumables (`src/workbench/WbService.jsx`) · quote dispatch gated on approved release
-with a three-point human review (`src/workbench/SubmissionPanel.jsx:76`) · tracking
-(status / stage / probability) · communication history · analytics and pipeline dashboards ·
-PO received → handover (`src/workbench/PoHandover.jsx`).
+| § | Diagram element | Where |
+|---|---|---|
+| 1 | Intake → SharePoint folder → CRM registration → type identified | `store.addOpportunity`, `sharepoint.js`, `nextOppId` |
+| 1 | Greenfield / Brownfield / **Service** lanes | `contextForType`, `CONTEXTS` (`src/seed.js`); shown as a chip on the workbench header and the Requirement tab |
+| 2 | Greenfield Phase 1 — "No Quote / RFQ / Engineering / Pricing at this stage" | `transitionBlockers`, `src/gates.js` |
+| 3 | B-01…B-05, each signed off by the **assigned salesperson only** | `B_STEPS` (`src/seed.js`), `signBStep` / `unsignBStep` (`src/store.jsx`), panel at `src/workbench/BSteps.jsx` — a Proposal sub-tab on the Brownfield lane. Steps sign in order; `readiness()` blocks the proposal until all five are signed |
+| 4 | "Site Survey Required?" → request → visit → report → SoW → service pricing | `requestSurvey` / `updateSurvey`, panel at `src/workbench/SurveyPanel.jsx` inside `WbService`. Standard service still prices off the rate sheet (travel, lodging, manpower days, consumables) |
+| 5A | Technical approval — **LJS or AN** (`anyOf`) | `transitionBlockers`; the `AN` role exists in `ROLES` and `PERMS` |
+| 5B | Commercial approval — AH only | `transitionBlockers` |
+| 5C | Margin matrix — order value ≷ ₹10 L × margin ≷ 50%, including the salesperson self-approval tier | `commercialGate`, `src/gates.js`. Verified live: a ₹2.3 L / 35% GM quote routed to "AH or LJS — either one decides" |
+| 5 | Re-approval mandatory on every revision | approvals are stamped with the revision they cover (`approvalForRev`) |
+| 6 | Quote submitted → customer acknowledgement | `SubmissionPanel`, customer ack on `src/pages/Portal.jsx` |
+| 7 | Follow-up loop, AI-drafted follow-ups, validity countdown | `FollowUpPane`, `src/pages/Workbench.jsx` |
+| 7 | "Identify Type of Revision" → back-route to B-02…B-05, V2/V3/V4 | `REVISION_TYPES` + `reviseProposal`; type picker in `PropBuilder`, which states the consequence before you confirm. Verified live: a Pricing revision reopened B-04, returned the opportunity to Proposal and re-locked the release gate |
+| 7 | Opportunity lost — capture loss reason & close | `closeLost` (refuses without a reason); close-out card in `FollowUpPane`, and the drawer now routes a Lost stage through it instead of saving a blank reason |
+| 8 | Tracking, comms history, document & revision audit trail, analytics, PO → handover | tracker, `communications`, `audit`, `Analytics`, `PoHandover` |
+| 8 | Competitor tracking | `addCompetitor` / `removeCompetitor`; card in `FollowUpPane` |
 
 ### Gaps
 
 | Ref | Diagram element | Reality | Severity |
 |---|---|---|---|
-| **O1** | Greenfield (Project/Upgrade) vs Brownfield (Retrofit/Service/Spares) | **No such field.** The legacy prototype carried `CONTEXTS = ["Brownfield","Greenfield"]`; it was dropped in the v2 rewrite. Branching is `route` = Project \| Spares \| Service (`routeForType`, `src/seed.js:540`), so **Retrofit and Upgrade both land on the Project route** | Critical |
-| **O8** | "Re-Approval Required — repeat Section 5" on every revision | **Fixed 18 Aug.** A release approval is now stamped with the proposal revision it approved and matched on it (`releaseState`, `src/gates.js`). A released quote is revised through `store.reviseProposal`, which bumps the revision, marks the old release `Superseded` and returns the opportunity to the Proposal milestone — so the approval gate re-opens and submission re-locks. The back-routing of *typed* revisions to B-02…B-05 remains open (see O7) | ~~Critical~~ Partly resolved |
-| **O5** | 5C Margin matrix: order value (≷ ₹10 L) × margin (≷ 50%) → approver set | Routing is GM% × discount% (`src/gates.js:44`, `{gmAuto:25, discAuto:5, gmLjs:20, discLjs:10}`). **Order value is computed but never routes an approval.** The ₹10 Lakh and 50% breakpoints appear nowhere, and there is **no salesperson self-approval tier** | Critical |
-| **O2** | Greenfield Phase-1: "No Quote / RFQ / Engineering / Pricing at this stage" | A Project-route opportunity can build a full priced proposal today. No rule prevents it | High |
-| **O3** | B-01…B-05 tracked steps, each approved by the Assigned Salesperson | No step identifiers, no step state, no per-step sign-off. Fragments exist across workbench tabs, but nothing records that B-02 completed, by whom, or when | High |
-| **O4** | Service: Site Survey Required? → survey request → site visit → survey report → SoW | **`grep -i survey src/` returns zero hits.** SoW is a proposal *heading* only — no record, no approval, no customer sign-off | High |
-| **O6** | 5A Technical Approval → LJS **or AN** | Decided by LJS only. **Role "AN" does not exist** in the role list, permissions matrix or seed data (`ROLES`, `src/seed.js:487`). The technical persona is read-only | High |
-| **O9** | Dispatch via Email / Teams / WhatsApp / Customer Portal / Tender Portals | Gmail compose URL only; **the PDF is not attached programmatically** — the user prints and attaches by hand | High |
-| **O10** | "AI Monitors & Notifies Sales (Real Time Alerts)" | Nothing monitors anything. No scheduler, no polling, no alerting. Sidebar badge counts are the only mechanism | High |
-| **O7** | Revision types (Technical/Commercial/Pricing/Other) routing back to B-02…B-05; V2/V3/V4 | Free-text note only, no revision type, no back-routing. Labels are `R1/R2`. Compare-revisions states in its own text that it is a placeholder | Medium |
-| **O11** | Competitor Tracking (Section 8) | Zero hits. Competitors appear only as prose in free-text remarks | Medium |
-| **O12** | Loss reason captured on close | `closedReason` is *marked* required (`src/opppanel.jsx:302`) but **nothing blocks saving a closed opportunity with it empty**. No dedicated close action | Medium |
+| **O9** | Dispatch via Email / Teams / WhatsApp / Customer Portal / Tender Portals | `DISPATCH_CHANNELS` is declared but unused — `SubmissionPanel` simulates a single email lane and the PDF is not attached programmatically | High |
+| **O10** | "AI Monitors & Notifies Sales (Real Time Alerts)" | Nothing monitors anything. No scheduler, no polling, no alerting; sidebar badge counts are the only mechanism | High |
+| **O13** | §5A and §5B raised directly | Both gates are *enforced* by `transitionBlockers`, but the only affordance on a blocked transition raises a **Milestone exception**, not the technical or commercial approval itself. There is no "request technical approval" action | Medium |
+| **O14** | §5C "All Approvals Completed → Quote Ready for Dispatch" box | `approvalSet()` exists to answer exactly this and has no caller — the three §5 gates are never shown together as one status | Low |
 
 ### Defect found during review (independent of the diagrams)
 
@@ -95,21 +110,28 @@ but `store.acceptPO` (`src/store.jsx:791`) and `buildPoCompare` write the keys *
 The Handover step was unreachable through the UI. **Fixed 18 Aug** — the gate now reads the
 `LJS` / `AH` keys, covered by `tests/gates.test.mjs`.
 
----
+**Fixed 19 Aug.** Two defects found while walking the flow in the running app:
+
+- Every Brownfield opportunity was **hard-locked**. `readiness()` blocked on unsigned
+  B-01…B-05, `migrate()` recomputes `context` on load, no screen could sign a step, and the
+  `b-steps` blocker was not exception-eligible — so all 15 seeded Spares/Retrofit rows could
+  not reach Proposal. Closed by the sign-off panel above.
+- The first revision of a dispatched quote was labelled **V3** instead of V2 — the counter
+  in `reviseProposal` included the builder's "Submitted" timeline entries. It now counts
+  only entries marked `Revised`.
+
 
 ## Remediation plan
 
 ### Tier 1 — Data-model corrections
 Small, cheap changes that unblock everything downstream.
 
-1. **Restore Greenfield / Brownfield** (O1) — add `context: 'Greenfield' | 'Brownfield'` to
-   the opportunity, derived from `oppType` per the diagram (Project, Upgrade → Greenfield;
-   Retrofit, Service, Spares → Brownfield), overridable. Split `routeForType` in
-   `src/seed.js:540` so Retrofit no longer inherits the Project workbench.
-2. **Rewrite the approval matrix** (O5, O6) — replace `commercialGate()` in `src/gates.js:44`
-   with the diagram's 2×2 on (order value ≷ ₹10 L) × (margin ≷ 50%), including the
-   salesperson self-approval tier. Keep the existing GM/discount thresholds as a
-   configurable secondary check. Add the `AN` role to `ROLES` and `PERMS` in `src/seed.js`.
+1. ~~**Restore Greenfield / Brownfield**~~ — done. Three lanes, not two: Service is its own
+   world (§4) and carries neither the Greenfield pricing embargo nor the B-step chain.
+   `routeForType` was split so Retrofit shares the Brownfield workbench.
+2. ~~**Rewrite the approval matrix**~~ — done. `commercialGate()` routes on
+   (order value ≷ ₹10 L) × (margin ≷ 50%) with the salesperson self-approval tier, and `AN`
+   is a real role in `ROLES` / `PERMS`.
 3. ~~**Fix the handover key mismatch**~~ — done 18 Aug.
 4. **Region-based ownership** (L3) — add `region` to the lead record; make
    `config.ownershipRules` an executed lookup rather than a prompt hint; restrict the owner
@@ -119,15 +141,15 @@ Small, cheap changes that unblock everything downstream.
 
 ### Tier 2 — Missing workflow objects
 
-6. **B-01…B-05 as tracked steps** (O3) on the Brownfield route, each with an
-   assigned-salesperson sign-off, reusing the existing approval record shape.
-7. **Service site-survey sub-flow** (O4) — `surveyRequired` decision → survey request →
-   site visit → survey report → SoW artefact, feeding the existing `WbService` calculator.
-8. **Typed revisions** (O7) — the supersede-and-re-approve half is done (18 Aug); what
-   remains is classifying the revision (Technical / Commercial / Pricing / Other) and
-   routing it back to the matching B-step.
-9. **Enforce the Greenfield pricing boundary** (O2), **enforce `closedReason` on close** and
-   **add competitor fields** (O11, O12).
+6. ~~**B-01…B-05 as tracked steps**~~ — done 19 Aug (`src/workbench/BSteps.jsx`).
+7. ~~**Service site-survey sub-flow**~~ — done 19 Aug (`src/workbench/SurveyPanel.jsx`).
+8. ~~**Typed revisions**~~ — done 19 Aug; the type picker routes the rework back to the
+   matching B-step and reopens it.
+9. ~~**Greenfield pricing boundary, `closedReason` on close, competitor fields**~~ — done.
+
+Still open at this tier: **raise §5A / §5B directly** (O13) rather than only as a milestone
+exception, and **show the three §5 gates as one "All Approvals Completed" box** (O14, the
+unused `approvalSet()`).
 
 ### Tier 3 — Infrastructure (the honest blockers)
 
@@ -145,11 +167,24 @@ Small, cheap changes that unblock everything downstream.
 
 ## Verification
 
-- Extend `tests/MANUAL_SMOKE_CHECKLIST.md` with one journey per diagram lane: Greenfield,
-  Brownfield B-01…B-05, Service survey, margin-matrix approval.
-- Add `node --test` cases over `commercialGate()` at the four matrix corners:
-  (₹5 L, 60%), (₹5 L, 40%), (₹15 L, 60%), (₹15 L, 40%).
-- Assert `context` resolves for every value in `OPP_TYPES`.
-- Manually: create a Retrofit opportunity and confirm it renders the Brownfield workbench,
-  not the Project one.
-- Manually: release a quote, revise it, and confirm the approval gate re-opens.
+`npm test` — 163 tests, all passing. `tests/gates.test.mjs` covers the lanes, the B-step
+gate and the §5 matrix; `tests/workflow-ui.test.mjs` pins each screen to the store action it
+drives, so the model layer cannot drift back out of reach of the UI.
+
+Walked end to end in the running app (19 Aug), as RS and AH:
+
+- Brownfield (`2608223RS`, Spares) — signed B-01…B-05 in order, watched the counter move
+  0→5 and the `b-steps` readiness block clear.
+- Service (`2607214RS`) — ticked "site survey required", raised the request, booked the
+  visit, filed the report and wrote the SoW; the panel advanced Requested → Visit booked →
+  Report in → SoW ready and refused to skip a step.
+- §5C matrix — a ₹2.3 L quote at 35% GM routed to "AH or LJS — either one decides", the
+  diagram's `< 10 Lakh & ≤ 50%` row.
+- §7 revision — released the quote, opened a **Pricing** revision; B-04 reopened, the
+  opportunity dropped back to Proposal and the release gate re-locked.
+- Close-out — "Close as lost" stays disabled until a reason is picked; competitors record
+  and remove.
+
+Still worth adding: a journey per lane in `tests/MANUAL_SMOKE_CHECKLIST.md`, and
+`commercialGate()` cases at all four matrix corners — (₹5 L, 60%), (₹5 L, 40%),
+(₹15 L, 60%), (₹15 L, 40%) — rather than the two corners currently asserted.

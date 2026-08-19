@@ -5,7 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { docRoute, docLayout, DOC_ROUTES, DOC_BODY_SECTIONS, defaultExecSummary } from '../src/proposalDoc.js'
-import { newProposal, proposalTypeForOpp } from '../src/seed.js'
+import { newProposal, proposalTypeForOpp, OPP_TYPES } from '../src/seed.js'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
@@ -16,25 +16,39 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8')
 test('each opportunity type resolves to one document route', () => {
   const expected = {
     Spares: 'Spares',
+    Retrofit: 'Spares',
     Service: 'Services',
-    AMC: 'Services',
-    Training: 'Services',
     Project: 'Project',
     Upgrade: 'Project',
+    Flow: 'Project',
   }
   for (const [oppType, route] of Object.entries(expected)) {
     assert.equal(docRoute({}, { oppType }), route, `${oppType} must use the ${route} document`)
   }
+  // Every type the client's Field List allows must be covered above, so a new
+  // one cannot be added without deciding which document it prints.
+  assert.deepEqual([...OPP_TYPES].sort(), Object.keys(expected).sort())
 })
 
-// The old mapping tested oppType directly and only knew 'Spares' and 'Service',
-// so an AMC or Training opportunity printed the 14-page project document.
-test('AMC and Training do not fall through to the project template', () => {
+// Diagram 02 §3 is headed "Retrofit / Spares - Main Flow" and the handover
+// report's Stage 7 makes a Brownfield proposal cover letter + BoQ only, so a
+// Retrofit must not print the 14-page project document.
+test('Retrofit prints the Brownfield document, not the project one', () => {
+  assert.notEqual(docRoute({}, { oppType: 'Retrofit' }), 'Project')
+  assert.equal(newProposal('OPP-1', { oppType: 'Retrofit' }).proposalType, 'Spares')
+  assert.equal(proposalTypeForOpp({ oppType: 'Retrofit' }), 'Spares')
+})
+
+// AMC and Training were ours, not the client's. They left OPP_TYPES when the
+// Field List became the source of truth. Saved rows carrying them are remapped
+// to Service by store.migrate, so nothing downstream needs to know them.
+test('AMC and Training are off the opportunity type list', () => {
   for (const oppType of ['AMC', 'Training']) {
-    assert.notEqual(docRoute({}, { oppType }), 'Project')
-    assert.equal(newProposal('OPP-1', { oppType }).proposalType, 'Services')
-    assert.equal(proposalTypeForOpp({ oppType }), 'Services')
+    assert.ok(!OPP_TYPES.includes(oppType), `${oppType} must be off the dropdown`)
   }
+  const migrated = read('src/store.jsx')
+  assert.match(migrated, /o\.oppType === 'AMC' \|\| o\.oppType === 'Training' \? 'Service'/,
+    'store.migrate must remap saved AMC/Training rows onto Service')
 })
 
 test('the proposal type selector overrides the opportunity route', () => {

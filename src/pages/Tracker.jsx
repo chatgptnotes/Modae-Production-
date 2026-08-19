@@ -12,38 +12,45 @@ import { Icon } from '../icons.jsx'
 const OPEN_STAGES = STAGES.filter(s => s !== 'Won' && s !== 'Lost')
 
 // Columns with their real-sheet letters (row number = Sl + 2, as in the sheet).
+// `w` is the column's share of the sheet width. Nothing scrolls sideways any
+// more, so every visible column has to be given a slice of a fixed budget —
+// free text gets the generous shares, single-token chips the thin ones. The
+// numbers are relative weights, normalised to 100% over whichever set of
+// columns is on screen (see columnWidthCss). `wAll` overrides `w` when all 31
+// are on screen at once — with that little room per column the identity and
+// date columns need a bigger slice than they do in the roomy key view.
 export const COLS = [
-  { key: 'id', letter: 'C', label: 'Opp ID' },
-  { key: 'sellTo', letter: 'D', label: 'Sell To Customer*' },
-  { key: 'category', letter: 'E', label: 'Category' },
-  { key: 'location', letter: 'F', label: 'Location' },
-  { key: 'customerStatus', letter: 'G', label: 'Customer Status' },
-  { key: 'eucName', letter: 'H', label: 'EUC Name*' },
-  { key: 'eucLocation', letter: 'I', label: 'EUC Location' },
-  { key: 'oppName', letter: 'J', label: 'Opportunity Name/Description*' },
-  { key: 'owner', letter: 'K', label: 'Owner' },
-  { key: 'oppType', letter: 'L', label: 'Opp Type' },
-  { key: 'bu', letter: 'M', label: 'BU' },
-  { key: 'segment', letter: 'N', label: 'Segment' },
-  { key: 'product', letter: 'O', label: 'Product' },
-  { key: 'prob', letter: 'P', label: 'Prob (%)' },
-  { key: 'valueK', letter: 'Q', label: 'Value (₹)*', num: true },
-  { key: 'cogsK', letter: 'R', label: 'COGS (K₹)*', num: true },
-  { key: 'gmK', letter: 'S', label: 'GM (K₹)', num: true },
-  { key: 'gmPct', letter: 'T', label: 'GM%', num: true },
-  { key: 'createDate', letter: 'U', label: 'Create Date' },
-  { key: 'proposalDate', letter: 'V', label: 'Proposal Date' },
-  { key: 'orderDate', letter: 'W', label: 'Expected Order Date' },
-  { key: 'invoiceDate', letter: 'X', label: 'Expected Ship Date' },
-  { key: 'status', letter: 'Y', label: 'Status*' },
-  { key: 'stage', letter: 'Z', label: 'Stage*' },
-  { key: 'closedReason', letter: 'AA', label: 'Closed Reason*' },
-  { key: 'contactPerson', letter: 'AB', label: 'Contact Person*' },
-  { key: 'contactPhone', letter: 'AC', label: 'Contact Phone #*' },
-  { key: 'lastUpdated', letter: 'AD', label: 'Last Updated' },
-  { key: 'forecast', letter: 'AE', label: 'Forecast' },
-  { key: 'remarks', letter: 'AF', label: 'Update/Remarks' },
-  { key: 'nextActionOwner', letter: 'AG', label: 'Next Action' },
+  { key: 'id', letter: 'C', label: 'Opp ID', w: 8, wAll: 13 },
+  { key: 'sellTo', letter: 'D', label: 'Sell To Customer*', w: 16, wAll: 13 },
+  { key: 'category', letter: 'E', label: 'Category', w: 6 },
+  { key: 'location', letter: 'F', label: 'Location', w: 6 },
+  { key: 'customerStatus', letter: 'G', label: 'Customer Status', w: 5 },
+  { key: 'eucName', letter: 'H', label: 'EUC Name*', w: 8 },
+  { key: 'eucLocation', letter: 'I', label: 'EUC Location', w: 6 },
+  { key: 'oppName', letter: 'J', label: 'Opportunity Name/Description*', w: 20, wAll: 18 },
+  { key: 'owner', letter: 'K', label: 'Owner', w: 4 },
+  { key: 'oppType', letter: 'L', label: 'Opp Type', w: 11, wAll: 8 },
+  { key: 'bu', letter: 'M', label: 'BU', w: 4 },
+  { key: 'segment', letter: 'N', label: 'Segment', w: 5 },
+  { key: 'product', letter: 'O', label: 'Product', w: 6 },
+  { key: 'prob', letter: 'P', label: 'Prob (%)', w: 9, wAll: 7 },
+  { key: 'valueK', letter: 'Q', label: 'Value (₹)*', num: true, w: 8 },
+  { key: 'cogsK', letter: 'R', label: 'COGS (K₹)*', num: true, w: 5 },
+  { key: 'gmK', letter: 'S', label: 'GM (K₹)', num: true, w: 4 },
+  { key: 'gmPct', letter: 'T', label: 'GM%', num: true, w: 3 },
+  { key: 'createDate', letter: 'U', label: 'Create Date', w: 5, wAll: 7 },
+  { key: 'proposalDate', letter: 'V', label: 'Proposal Date', w: 5, wAll: 7 },
+  { key: 'orderDate', letter: 'W', label: 'Expected Order Date', w: 11, wAll: 9 },
+  { key: 'invoiceDate', letter: 'X', label: 'Expected Ship Date', w: 7, wAll: 9 },
+  { key: 'status', letter: 'Y', label: 'Status*', w: 5 },
+  { key: 'stage', letter: 'Z', label: 'Stage*', w: 11, wAll: 8 },
+  { key: 'closedReason', letter: 'AA', label: 'Closed Reason*', w: 6 },
+  { key: 'contactPerson', letter: 'AB', label: 'Contact Person*', w: 7 },
+  { key: 'contactPhone', letter: 'AC', label: 'Contact Phone #*', w: 6 },
+  { key: 'lastUpdated', letter: 'AD', label: 'Last Updated', w: 5, wAll: 7 },
+  { key: 'forecast', letter: 'AE', label: 'Forecast', w: 3 },
+  { key: 'remarks', letter: 'AF', label: 'Update/Remarks', w: 10 },
+  { key: 'nextActionOwner', letter: 'AG', label: 'Next Action', w: 9 },
 ]
 
 // The columns a sales owner actually works from, in Biji's words on 13 Aug:
@@ -64,6 +71,32 @@ function hiddenColumnCss(hidden) {
     .map(i => `.sheet.cols-key thead tr > :nth-child(${i + 2}), .sheet.cols-key tbody tr > :nth-child(${i + 2})`)
     .join(',')
   return `${sel} { display: none; } .sheet.cols-key tfoot { display: none; }`
+}
+
+// The sheet is table-layout: fixed and never scrolls sideways, so the visible
+// columns have to divide a fixed budget between them. Percentages are taken
+// from COLS[].w, renormalised over whichever set is on screen — that way the
+// key-column view is not left with a 9-column table filling 40% of the width.
+// Same nth-child indexing as hiddenColumnCss: the Sl rowhead is child 1, so
+// COLS[i] is child i + 2.
+// Two columns live outside COLS and still need a slice of the budget: the Sl
+// rowhead at child 1 and the trailing Proposal link at the last child.
+// Plain percentages only — Chrome resolves a calc() containing a percentage as
+// `auto` for fixed-layout column widths, which silently collapses every column
+// to an equal share and undoes the whole point of the weights.
+const ROWHEAD_PCT = 2.6
+const PROPOSAL_PCT = 6.5
+
+function columnWidthCss(cols, scope, all = false) {
+  const share = c => (all && c.wAll) || c.w
+  const total = cols.reduce((sum, c) => sum + share(c), 0)
+  const budget = 100 - ROWHEAD_PCT - PROPOSAL_PCT
+  const rule = (sel, pct) => `${scope} thead tr > ${sel}, ${scope} tbody tr > ${sel} { width: ${pct.toFixed(3)}%; }`
+  return [
+    rule(':nth-child(1)', ROWHEAD_PCT),
+    ...cols.map(c => rule(`:nth-child(${COLS.indexOf(c) + 2})`, (share(c) / total) * budget)),
+    rule(':last-child', PROPOSAL_PCT),
+  ].join('\n')
 }
 
 export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
@@ -262,7 +295,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   }
 
   return (
-    <div className="page">
+    <div className="page tracker-page">
       <h2>Opportunities {sheet === 'Old Closed Opps' && '— Old Closed Opps'}</h2>
       <div className="toolbar">
         {isSalesRep && ownerFilter === store.role ? (
@@ -294,14 +327,19 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
           : <Link className="btn primary" to="/new">Create Opportunity</Link>}
       </div>
 
-      <div className="sheet-wrap">
-        {colView === 'key' && <style>{hiddenColumnCss(COLS.map((c, i) => (KEY_COLS.includes(c.key) ? -1 : i)).filter(i => i >= 0))}</style>}
+      <div className="sheet-wrap fill">
+        {colView === 'key'
+          ? <style>{[
+            hiddenColumnCss(COLS.map((c, i) => (KEY_COLS.includes(c.key) ? -1 : i)).filter(i => i >= 0)),
+            columnWidthCss(COLS.filter(c => KEY_COLS.includes(c.key)), '.tracker-page .sheet.cols-key'),
+          ].join('\n')}</style>
+          : <style>{columnWidthCss(COLS, '.tracker-page .sheet:not(.cols-key)', true)}</style>}
         <table className={`sheet${colView === 'key' ? ' cols-key' : ''}`}>
           <thead>
             <tr>
               <th className="rowhead">Sl</th>
               {COLS.map(col => (
-                <th key={col.key} className={`th-filter ${filters[col.key] ? 'filtered' : ''}`}>
+                <th key={col.key} className={`th-filter ${filters[col.key] ? 'filtered' : ''}`} title={col.label}>
                   {col.label}
                   <span className="filter-caret" title="Sort & filter"
                     onClick={e => {
@@ -331,18 +369,18 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                 <td onClick={selectCell(o, COLS[0])} className={`oppid ${customerStatusFor(o)} ${stageClass(o) === 'open' ? '' : stageClass(o)} ${isSel(o, COLS[0]) ? 'cell-sel' : ''}`}>
                   <Link to={`/opp/${o.id}`} title="Open opportunity workspace">{o.id}</Link>
                 </td>
-                <td onClick={selectCell(o, COLS[1])} className={isSel(o, COLS[1]) ? 'cell-sel' : ''}><input type="text" value={o.sellTo} onChange={upd(o.id, 'sellTo')} style={{ minWidth: 150 }} /></td>
+                <td onClick={selectCell(o, COLS[1])} className={isSel(o, COLS[1]) ? 'cell-sel' : ''} title={o.sellTo}><input type="text" value={o.sellTo} onChange={upd(o.id, 'sellTo')} /></td>
                 <td onClick={selectCell(o, COLS[2])} className={isSel(o, COLS[2]) ? 'cell-sel' : ''}>
                   <select value={o.category} onChange={upd(o.id, 'category')}>{CATEGORIES.map(c => <option key={c}>{c}</option>)}</select>
                 </td>
-                <td onClick={selectCell(o, COLS[3])} className={isSel(o, COLS[3]) ? 'cell-sel' : ''}><input type="text" value={o.location} onChange={upd(o.id, 'location')} style={{ minWidth: 80 }} /></td>
+                <td onClick={selectCell(o, COLS[3])} className={isSel(o, COLS[3]) ? 'cell-sel' : ''} title={o.location}><input type="text" value={o.location} onChange={upd(o.id, 'location')} /></td>
                 <td onClick={selectCell(o, COLS[4])} className={`cstat ${customerStatusFor(o)} ${isSel(o, COLS[4]) ? 'cell-sel' : ''}`}
                   title="Customer status is managed from the Customer master">
                   {customerStatusFor(o)}
                 </td>
-                <td onClick={selectCell(o, COLS[5])} className={isSel(o, COLS[5]) ? 'cell-sel' : ''}><input type="text" value={o.eucName} onChange={upd(o.id, 'eucName')} style={{ minWidth: 120 }} /></td>
-                <td onClick={selectCell(o, COLS[6])} className={isSel(o, COLS[6]) ? 'cell-sel' : ''}><input type="text" value={o.eucLocation} onChange={upd(o.id, 'eucLocation')} style={{ minWidth: 90 }} /></td>
-                <td onClick={selectCell(o, COLS[7])} className={isSel(o, COLS[7]) ? 'cell-sel' : ''} title={o.oppName} style={{ maxWidth: 280 }}><input type="text" value={o.oppName} onChange={upd(o.id, 'oppName')} style={{ minWidth: 220 }} /></td>
+                <td onClick={selectCell(o, COLS[5])} className={isSel(o, COLS[5]) ? 'cell-sel' : ''} title={o.eucName}><input type="text" value={o.eucName} onChange={upd(o.id, 'eucName')} /></td>
+                <td onClick={selectCell(o, COLS[6])} className={isSel(o, COLS[6]) ? 'cell-sel' : ''} title={o.eucLocation}><input type="text" value={o.eucLocation} onChange={upd(o.id, 'eucLocation')} /></td>
+                <td onClick={selectCell(o, COLS[7])} className={isSel(o, COLS[7]) ? 'cell-sel' : ''} title={o.oppName}><input type="text" value={o.oppName} onChange={upd(o.id, 'oppName')} /></td>
                 <td onClick={selectCell(o, COLS[8])} className={isSel(o, COLS[8]) ? 'cell-sel' : ''}>
                   <select value={o.owner} onChange={upd(o.id, 'owner')}>{OWNERS.map(c => <option key={c}>{c}</option>)}</select>
                 </td>
@@ -389,7 +427,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                 {/* Value is the salesperson's own forecast — they type it at intake, so
                     they keep it here. COGS/GM stay commercial. */}
                 {showValue ? (
-                  <td onClick={selectCell(o, COLS[14])} className={`num ${isSel(o, COLS[14]) ? 'cell-sel' : ''}`}><input type="number" value={o.valueK || ''} onChange={upd(o.id, 'valueK')} style={{ textAlign: 'right', width: 70 }} placeholder="-" /></td>
+                  <td onClick={selectCell(o, COLS[14])} className={`num ${isSel(o, COLS[14]) ? 'cell-sel' : ''}`}><input type="number" value={o.valueK || ''} onChange={upd(o.id, 'valueK')} placeholder="-" /></td>
                 ) : (
                   <td className="num locked" title="Commercial data — approvers/admin only"><Icon name="lock" size={12} /></td>
                 )}
@@ -401,7 +439,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                   </>
                 ) : (
                   <>
-                    <td onClick={selectCell(o, COLS[15])} className={`num ${isSel(o, COLS[15]) ? 'cell-sel' : ''}`}><input type="number" value={o.cogsK || ''} onChange={upd(o.id, 'cogsK')} style={{ textAlign: 'right', width: 70 }} placeholder="-" /></td>
+                    <td onClick={selectCell(o, COLS[15])} className={`num ${isSel(o, COLS[15]) ? 'cell-sel' : ''}`}><input type="number" value={o.cogsK || ''} onChange={upd(o.id, 'cogsK')} placeholder="-" /></td>
                     <td onClick={selectCell(o, COLS[16])} className={`num ${isSel(o, COLS[16]) ? 'cell-sel' : ''}`}>{o.valueK ? fmt(gmK(o)) : '-'}</td>
                     {gmPct(o)
                       ? <td onClick={selectCell(o, COLS[17])} className={`num ${isSel(o, COLS[17]) ? 'cell-sel' : ''}`}>{gmPct(o)}</td>
@@ -419,11 +457,11 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                     "he has to put some date. It can be wrong, but he has to put some date." */}
                 <td onClick={selectCell(o, COLS[20])}
                   className={`${isSel(o, COLS[20]) ? 'cell-sel ' : ''}${o.status === 'Open' && !o.orderDate ? 'need' : ''}`.trim()}>
-                  <input type="date" value={o.orderDate} max={o.invoiceDate ? new Date(new Date(`${o.invoiceDate}T00:00:00`).getTime() - 86400000).toISOString().slice(0, 10) : undefined} onChange={upd(o.id, 'orderDate')} style={{ width: 108 }}
+                  <input type="date" value={o.orderDate} max={o.invoiceDate ? new Date(new Date(`${o.invoiceDate}T00:00:00`).getTime() - 86400000).toISOString().slice(0, 10) : undefined} onChange={upd(o.id, 'orderDate')}
                     title={o.orderDate ? '' : 'Expected order date is required on an open opportunity'} /></td>
                 <td onClick={selectCell(o, COLS[21])}
                   className={`${isSel(o, COLS[21]) ? 'cell-sel ' : ''}${o.status === 'Open' && !o.invoiceDate ? 'need' : ''}`.trim()}>
-                  <input type="date" value={o.invoiceDate} min={o.orderDate ? new Date(new Date(`${o.orderDate}T00:00:00`).getTime() + 86400000).toISOString().slice(0, 10) : undefined} onChange={upd(o.id, 'invoiceDate')} style={{ width: 108 }}
+                  <input type="date" value={o.invoiceDate} min={o.orderDate ? new Date(new Date(`${o.orderDate}T00:00:00`).getTime() + 86400000).toISOString().slice(0, 10) : undefined} onChange={upd(o.id, 'invoiceDate')}
                     title={o.invoiceDate ? '' : 'Expected ship date is required on an open opportunity'} /></td>
                 <td onClick={selectCell(o, COLS[22])} className={isSel(o, COLS[22]) ? 'cell-sel' : ''}>
                   <select value={o.status} onChange={upd(o.id, 'status')}>
@@ -445,15 +483,15 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                     </select>
                   ) : ''}
                 </td>
-                <td onClick={selectCell(o, COLS[25])} className={isSel(o, COLS[25]) ? 'cell-sel' : ''}><input type="text" value={o.contactPerson} onChange={upd(o.id, 'contactPerson')} style={{ minWidth: 120 }} /></td>
-                <td onClick={selectCell(o, COLS[26])} className={isSel(o, COLS[26]) ? 'cell-sel' : ''}><input type="text" value={o.contactPhone} onChange={upd(o.id, 'contactPhone')} style={{ minWidth: 110 }} /></td>
+                <td onClick={selectCell(o, COLS[25])} className={isSel(o, COLS[25]) ? 'cell-sel' : ''} title={o.contactPerson}><input type="text" value={o.contactPerson} onChange={upd(o.id, 'contactPerson')} /></td>
+                <td onClick={selectCell(o, COLS[26])} className={isSel(o, COLS[26]) ? 'cell-sel' : ''} title={o.contactPhone}><input type="text" value={o.contactPhone} onChange={upd(o.id, 'contactPhone')} /></td>
                 <td onClick={selectCell(o, COLS[27])} className={isSel(o, COLS[27]) ? 'cell-sel' : ''}>
                   <div className="ro" title="Auto-stamped — read only">{ddMmmYY(o.lastUpdated)}</div>
                 </td>
                 <td onClick={selectCell(o, COLS[28])} className={isSel(o, COLS[28]) ? 'cell-sel' : ''} style={{ textAlign: 'center' }}>
                   <input type="checkbox" checked={!!o.forecast} onChange={upd(o.id, 'forecast')} title="Include for roll-up" />
                 </td>
-                <td onClick={selectCell(o, COLS[29])} className={isSel(o, COLS[29]) ? 'cell-sel' : ''}><input type="text" value={o.remarks} onChange={upd(o.id, 'remarks')} style={{ minWidth: 220 }} /></td>
+                <td onClick={selectCell(o, COLS[29])} className={isSel(o, COLS[29]) ? 'cell-sel' : ''} title={o.remarks}><input type="text" value={o.remarks} onChange={upd(o.id, 'remarks')} /></td>
                 {/* Derived from the live blockers, so the column is never the
                     "— none —" it read on every row before. Typing a value
                     overrides the derivation. */}
@@ -482,7 +520,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
               <td className="num">{comm ? `₹ ${fmt(totals.c)}` : <Icon name="lock" size={12} />}</td>
               <td className="num">{comm ? `₹ ${fmt(totals.v - totals.c)}` : <Icon name="lock" size={12} />}</td>
               <td className="num" style={{ color: 'var(--amber-text)' }}>{comm && totals.v ? Math.round(((totals.v - totals.c) / totals.v) * 100) + '%' : comm ? '' : <Icon name="lock" size={12} />}</td>
-              <td colSpan={13}></td>
+              <td colSpan={14}></td>
             </tr>
           </tfoot>
         </table>

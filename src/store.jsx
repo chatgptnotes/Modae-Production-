@@ -147,16 +147,25 @@ function migrate(s) {
     if (!s.approvals.some(x => x.id === a.id)) s.approvals = [...s.approvals, a]
   }
   // Per-row backfills.
-  s.opportunities = s.opportunities.map(o => ({
-    milestone: milestoneForStage(o.stage, o.status),
-    route: routeForType(o.oppType),
-    revisions: [], validityDays: 30, followUps: [],
-    ...o,
-    // Greenfield/Brownfield is derived, never stored by hand — a saved row from
-    // before the split gets it here, and a type change re-derives it.
-    context: o.context || contextForType(o.oppType),
-    nextActionOwner: o.nextActionOwner || '',
-  }))
+  s.opportunities = s.opportunities.map(o => {
+    // AMC and Training left OPP_TYPES when the client's Field List became the
+    // source of truth. Both were always Service work, so saved rows are
+    // retyped rather than dropped off the dropdown.
+    const oppType = o.oppType === 'AMC' || o.oppType === 'Training' ? 'Service' : o.oppType
+    return {
+      milestone: milestoneForStage(o.stage, o.status),
+      revisions: [], validityDays: 30, followUps: [],
+      ...o,
+      oppType,
+      // `route` and `context` are both derived from the type and are never
+      // stored by hand, so they are recomputed on every load rather than
+      // trusted. That is what moves a saved Retrofit onto the Brownfield
+      // workbench, and a saved Service into its own lane.
+      route: routeForType(oppType),
+      context: contextForType(oppType),
+      nextActionOwner: o.nextActionOwner || '',
+    }
+  })
   s.approvals = s.approvals.map(a => ({
     needed: a.needed || [a.approver].filter(Boolean),
     decisions: a.decisions
@@ -277,6 +286,12 @@ export function StoreProvider({ children }) {
   const hydratedRef = useRef(!datastore.dbEnabled())
   const lastSavedRef = useRef({}) // per-slice snapshot of what the server has
   const saveTimerRef = useRef(null)
+  // What this device booted from. The boot fetch resolves *after* the app is
+  // interactive, so a lead created in that window exists locally but has not
+  // been saved yet (flushSaves is gated on hydratedRef). Comparing against this
+  // is how hydrate() tells "untouched since boot, safe to replace" apart from
+  // "the user already changed this, keep it" — the same rule applyServer uses.
+  const bootRef = useRef(syncedOf(stateRef.current))
 
   const dirtySlices = () => {
     const s = stateRef.current
@@ -300,6 +315,14 @@ export function StoreProvider({ children }) {
 
   // Boot fetch: server slices replace local synced ones (through migrate, so
   // schema backfills apply); an empty table is first-run — seed it from local.
+  //
+  // "Replace" is deliberately limited to slices this device has not touched
+  // since boot. The fetch resolves after the app is already interactive, and
+  // saves are gated on hydratedRef, so anything created in that window lives
+  // only in localStorage — spreading the server's copy over it would delete a
+  // record the user just made and watched appear (simulate a lead, reload
+  // straight away, and it is gone). Same rule as applyServer, measured against
+  // bootRef instead of lastSavedRef because we have not saved anything yet.
   const hydrate = async () => {
     const res = await datastore.loadAll()
     if (!res || hydratedRef.current) return
@@ -313,10 +336,24 @@ export function StoreProvider({ children }) {
         console.warn('Supabase seed failed — retrying on next focus:', e?.message)
       }
     } else {
-      const merged = migrate({ ...stateRef.current, ...syncedOf(res.slices) })
-      lastSavedRef.current = syncedOf(merged)
+      const s = stateRef.current
+      const accepted = {}
+      for (const [k, v] of Object.entries(syncedOf(res.slices))) {
+        if (k in s && s[k] !== bootRef.current[k]) continue // edited this session — keep local
+        accepted[k] = v
+      }
+      const merged = migrate({ ...s, ...accepted })
+      // Only the slices we took from the server are known to match it. A slice
+      // we kept is still unsaved, so it must stay dirty for the flush below.
+      lastSavedRef.current = Object.fromEntries(
+        Object.keys(accepted).map(k => [k, merged[k]]))
       hydratedRef.current = true
       setState(merged)
+      // Push whatever the user did during the boot window now, rather than
+      // leaving it to depend on them making another change. Deferred by a tick
+      // because flushSaves reads stateRef, which only catches up on the render
+      // setState above has just scheduled.
+      setTimeout(flushSaves, 0)
     }
   }
 
@@ -348,16 +385,26 @@ export function StoreProvider({ children }) {
       datastore.loadAll().then(res => { if (res && !res.empty) applyServer(res.slices) })
     }
     const onVisibility = () => { if (document.visibilityState === 'hidden') flushSaves() }
+    // visibilitychange is not reliably delivered when the page is being torn
+    // down, which is exactly the reload-right-after-editing case. pagehide is.
+    const onPageHide = () => flushSaves()
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('pagehide', onPageHide)
     return () => {
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('pagehide', onPageHide)
     }
   }, [])
 
   useEffect(() => {
-    localStorage.setItem(KEY, JSON.stringify(state))
+    // An uncaught throw here (quota, storage disabled) would kill persistence
+    // silently while the app carried on looking normal — seed data is rebuilt
+    // by migrate() on every boot, so only the records the user created would
+    // go missing. Fail loudly in the console instead.
+    try { localStorage.setItem(KEY, JSON.stringify(state)) }
+    catch (e) { console.warn('Local save failed — changes may not survive a reload:', e?.message) }
     if (!datastore.dbEnabled() || !hydratedRef.current) return
     if (!Object.keys(dirtySlices()).length) return
     clearTimeout(saveTimerRef.current)
@@ -514,8 +561,11 @@ export function StoreProvider({ children }) {
           revision: String((+p.revision || 0) + 1).padStart(2, '0'),
           releaseStatus: 'Superseded',
           revisions: [...revisions, {
-            // The original dispatch is V1, so the first revision is V2.
-            rev: `V${revisions.length + 2}`, when: new Date().toISOString().slice(0, 10),
+            // The original dispatch is V1, so the first revision is V2. Count
+            // revisions only — `revisions` also carries the 'Submitted' entries
+            // the builder writes, which are not versions of the quote.
+            rev: `V${revisions.filter(r => r.status === 'Revised').length + 2}`,
+            when: new Date().toISOString().slice(0, 10),
             by: s.role, note: note || 'Revision opened', status: 'Revised', type: spec.id, step: spec.step,
           }],
         }
@@ -820,7 +870,13 @@ export function StoreProvider({ children }) {
         if (!appr) return s
         const decisions = { ...(appr.decisions || {}), [s.role]: { d, c: comment, when: new Date().toISOString() } }
         const needed = appr.needed || [appr.approver].filter(Boolean)
-        const allIn = needed.every(r => decisions[r])
+        // Diagram 02 §5 names two approvers on some gates but only needs one of
+        // them: 5A technical is "LJS *or* AN", and the "< ₹10 L & <= 50%" row of
+        // the 5C margin matrix is "AH *or* LJS". `anyOf` marks those; every
+        // other gate still needs a decision from each named role. A rejection
+        // stays authoritative either way — one approver declining ends it
+        // rather than sending the request round to the other.
+        const allIn = appr.anyOf ? needed.some(r => decisions[r]) : needed.every(r => decisions[r])
         const anyRejected = Object.values(decisions).some(x => x.d === 'Rejected')
         const anyReturned = Object.values(decisions).some(x => x.d === 'Returned')
         const newConds = conditions.filter(Boolean).map(text => ({ text, incorporated: false, note: '' }))

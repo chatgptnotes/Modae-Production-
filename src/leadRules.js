@@ -20,13 +20,20 @@ export function leadConfig(config = {}) {
 
 export function routeOwner(region, config = {}, fallback = '') {
   const value = String(region || '').toLowerCase()
-  if (!value) return fallback
   const rules = leadConfig(config).ownershipRules
+  // L-05-AI ends with "Unclassified Leads - LJS (approval needed)". A region
+  // that was entered but matches no rule *is* unclassified, so it resolves to
+  // that row rather than to whatever the caller passed in. A region that has
+  // not been entered yet is a different thing — the AI's own suggestion still
+  // stands, so a blank keeps the caller's fallback.
+  const catchAll = rules.find(item => item.unclassified)
+  if (!value) return fallback
   const rule = rules.find(item => {
+    if (item.unclassified) return false
     const label = String(item.region || '').toLowerCase()
     return label && (value.includes(label) || label.split(/[,/&]/).some(part => part.trim() && value.includes(part.trim())))
   })
-  return rule?.owner || fallback
+  return rule?.owner || catchAll?.owner || fallback
 }
 
 export function isFastTrackLead(lead, config = {}, customer = null) {

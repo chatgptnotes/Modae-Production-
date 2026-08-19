@@ -287,7 +287,7 @@ table.sheet td.internal { background: var(--border-soft) !important; color: var(
 
 /* Excel bottom sheet-tab strip (offset by the sidebar) */
 .sheet-tabs {
-  position: fixed; bottom: 0; left: 216px; right: 0;
+  position: fixed; bottom: 0; left: var(--shell-nav-w, 216px); right: 0;
   background: var(--header-fill); border-top: 1px solid var(--grid-line);
   display: flex; padding: 0 8px; z-index: 5;
 }
@@ -1064,7 +1064,20 @@ input.needs-input, select.needs-input { background: #fffbeb; border-color: var(-
 .mail-icon-btn:hover, .mail-star:hover { color: var(--primary-deep); background: var(--primary-soft); filter: none; }
 .mail-selection-count { margin-left: 8px; font-size: 12px; color: var(--primary-deep); font-weight: 600; }
 .mail-list-count { margin-left: auto; padding-right: 6px; font-size: 11.5px; }
-.mail-column-head, .mail-row { display: grid; grid-template-columns: 30px 28px 82px 180px minmax(330px, 1fr) 82px 82px 88px 92px 82px 100px 52px; align-items: center; min-width: 1230px; }
+/* Twelve tracks that can actually shrink. minmax(0, Nfr) is the point: a bare
+   1fr floors at min-content, which is what forced the 1230px min-width and the
+   horizontal scrollbar. */
+.mail-column-head, .mail-row {
+  display: grid; align-items: center;
+  grid-template-columns:
+    30px 28px 86px
+    minmax(0, 1.5fr)
+    minmax(0, 3.2fr)
+    minmax(0, .85fr) minmax(0, .85fr)
+    minmax(0, .9fr) minmax(0, .95fr)
+    minmax(0, .8fr) minmax(0, 1fr)
+    46px;
+}
 .mail-column-head { min-height: 34px; padding: 0 10px 0 8px; background: #f8fafc; border-bottom: 1px solid var(--border-color); color: var(--text-muted); font-size: 10px; font-weight: 700; letter-spacing: .25px; text-transform: uppercase; }
 .mail-column-head span { overflow: hidden; padding-right: 8px; text-overflow: ellipsis; white-space: nowrap; }
 .mail-head-filter { width: 100%; min-width: 0; padding: 2px 3px; border: 0; border-radius: 3px; background: transparent; color: var(--text-muted); font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
@@ -1172,7 +1185,7 @@ input.needs-input, select.needs-input { background: #fffbeb; border-color: var(-
 .mail-empty svg { color: var(--text-subtle); }
 
 @media (max-width: 900px) {
-  .mail-column-head, .mail-row { min-width: 1120px; grid-template-columns: 30px 28px 78px 160px minmax(290px, 1fr) 78px 78px 82px 88px 76px 94px 48px; }
+  .mail-column-head, .mail-row { grid-template-columns: 26px 24px 78px minmax(0, 1.4fr) minmax(0, 3fr) minmax(0, .85fr) minmax(0, .85fr) minmax(0, .9fr) minmax(0, .95fr) minmax(0, .8fr) minmax(0, 1fr) 42px; }
 }
 @media (max-width: 640px) {
   .mailbox-head { display: block; }
@@ -1180,7 +1193,6 @@ input.needs-input, select.needs-input { background: #fffbeb; border-color: var(-
   .mail-search-row { flex-wrap: wrap; }
   .mail-search { width: 100%; }
   .mail-tabs button { min-width: 0; flex: 1; justify-content: center; padding-left: 8px; padding-right: 8px; }
-  .mail-column-head, .mail-row { min-width: 1060px; }
 }
 
 /* Print: only the customer-facing proposal document leaves the building */
@@ -2946,4 +2958,134 @@ html, body { overflow-x: hidden; max-width: 100%; }
 @media (max-width: 720px) {
   .dashboard-report-actions { display: grid; grid-template-columns: 1fr; }
   .dashboard-report-actions button { width: 100%; }
+}
+
+/* =========================================================================
+   Viewport-locked shell — nothing scrolls but the content pane
+   -------------------------------------------------------------------------
+   The desktop shell used to be min-height: 100vh, so the document itself
+   grew and the browser painted a page scrollbar down the right. That also
+   meant the sticky bits had nothing to stick to: .topbar drifted, the
+   .sheet-tabs strip was position:fixed to compensate, and table.sheet th's
+   `position: sticky; top: 0` never fired because its scroll container
+   (.sheet-wrap) had no bounded height.
+
+   Now .shell is exactly one viewport tall and .main-scroll is the single
+   scroll region. Pages that want their own internal scroller size themselves
+   to 100% of it (see .tracker-page and .mailbox-page below).
+
+   Scoped off .tablet-mode: the tablet shell (tablet/TabletApp.jsx) is a
+   block-flow document with a fixed bottom tab bar and wants native scrolling.
+   ========================================================================= */
+.shell { --shell-nav-w: 216px; }
+.shell.sidebar-compact { --shell-nav-w: 68px; }
+@media (max-width: 1024px) { .shell { --shell-nav-w: 0px; } }
+
+.shell:not(.tablet-mode) { height: 100dvh; overflow: hidden; }
+.shell:not(.tablet-mode) > .main-col { min-height: 0; overflow: hidden; }
+.shell:not(.tablet-mode) > .main-col > .topbar { flex: 0 0 auto; position: static; }
+.main-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: clip; }
+
+/* Route roots are flex items of .main-scroll, so their height is definite and
+   a page can legitimately ask for 100% of it. */
+.shell:not(.tablet-mode) .main-scroll > .lead-workspace { height: 100%; }
+
+/* -------------------------------------------------------------- pipeline sheet
+   The grid fills the frame: title + toolbar on top, sheet-tab strip on the
+   bottom, and only the rows scroll — under a navy header that finally sticks.
+   Nothing scrolls sideways, in either column view. */
+.opportunities-page, .tracker-page {
+  height: 100%; min-height: 0;
+  display: flex; flex-direction: column;
+}
+.opportunities-page, .tracker-page { padding-bottom: 0; }   /* .page's 64px was clearance for the fixed strip */
+.tracker-page > h2, .tracker-page > .toolbar, .tracker-page > .sheet-tabs { flex: 0 0 auto; }
+.sheet-wrap.fill { flex: 1 1 auto; min-height: 0; overflow: auto; }
+/* Only the pipeline sheet's strip comes in-flow; Dashboard and Proposal still
+   render .sheet-tabs as a fixed footer. */
+.tracker-page > .sheet-tabs { position: static; left: auto; right: auto; bottom: auto; }
+
+/* Fixed layout is what makes a width budget enforceable — the per-column
+   percentages are generated from COLS[].w in pages/Tracker.jsx. */
+.tracker-page table.sheet { table-layout: fixed; }
+/* Headers clip too — a nowrap <th> label in a fixed-width column still
+   grows the wrapper's scrollable overflow, which is what kept the horizontal
+   scrollbar alive after the columns themselves already fitted. The sort/filter
+   caret floats right so truncating the label never swallows the control. */
+.tracker-page table.sheet th, .tracker-page table.sheet td { overflow: hidden; text-overflow: ellipsis; }
+.tracker-page table.sheet th .filter-caret { float: right; margin-left: 2px; }
+.tracker-page table.sheet td input, .tracker-page table.sheet td select { min-width: 0; text-overflow: ellipsis; }
+.tracker-page table.sheet td.num input { text-align: right; }
+
+/* All 31 columns on screen at once is roughly 55px per column at 1700px and
+   ~37px at 1366px. Buy back every pixel that is not content: tighter padding,
+   smaller type, and no native select arrow or date-picker glyph. Values clip
+   to an ellipsis — each cell carries a title so hovering recovers the text. */
+.tracker-page .sheet:not(.cols-key) th, .tracker-page .sheet:not(.cols-key) td { padding: 2px 4px; font-size: 11px; }
+.tracker-page .sheet:not(.cols-key) td input, .tracker-page .sheet:not(.cols-key) td select { font-size: 11px; }
+.tracker-page .sheet:not(.cols-key) td select { appearance: none; -webkit-appearance: none; padding-right: 2px; }
+.tracker-page .sheet:not(.cols-key) td input[type=date] { font-size: 10px; }
+.tracker-page .sheet:not(.cols-key) td input[type=date]::-webkit-calendar-picker-indicator { display: none; }
+/* At ~33px a column cannot afford 14px of permanent sort caret as well as its
+   label, so in the compressed view the caret is overlaid and only appears when
+   the header is hovered. Every header keeps its title, so the full name is one
+   hover away either way. */
+.tracker-page .sheet:not(.cols-key) th { position: relative; }
+.tracker-page .sheet:not(.cols-key) th .filter-caret {
+  float: none; position: absolute; top: 2px; right: 1px; margin: 0;
+  opacity: 0; transition: opacity .12s ease;
+}
+.tracker-page .sheet:not(.cols-key) th:hover .filter-caret,
+.tracker-page .sheet:not(.cols-key) th.filtered .filter-caret { opacity: 1; }
+
+/* ------------------------------------------------------------------- mailbox
+   Same shape: header, search and tabs pinned, the message list is the only
+   scroller, the analytics note stays on screen at the bottom. */
+.mailbox-page {
+  height: 100%; min-height: 0;
+  display: flex; flex-direction: column;
+  padding-bottom: 12px;
+}
+.mailbox-page > .mailbox-head,
+.mailbox-page > .mail-search-row,
+.mailbox-page > .mail-tabs,
+.mailbox-page > .hint { flex: 0 0 auto; }
+.mailbox-list {
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto; overflow-x: hidden;
+}
+/* 44px is .mail-list-toolbar's min-height — the two stack as one sticky head. */
+.mail-list-toolbar { position: sticky; top: 0; z-index: 3; background: #fff; }
+.mail-column-head { position: sticky; top: 44px; z-index: 2; }
+.mail-row > div, .mail-row > .pill { min-width: 0; }
+.mail-row .chip, .mail-row .pill { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Below these widths the thin columns stop being readable. Drop them rather
+   than reintroducing a horizontal scrollbar — least-informative first: age,
+   then duplicate risk, then the suggested owner. Both the header spans and the
+   row cells are addressed by position, since the chip cells carry no class. */
+@media (max-width: 1400px) {
+  .mail-column-head > :nth-child(8), .mail-row > :nth-child(8),
+  .mail-column-head > :nth-child(12), .mail-row > :nth-child(12) { display: none; }
+  .mail-column-head, .mail-row {
+    grid-template-columns:
+      30px 28px 86px
+      minmax(0, 1.5fr)
+      minmax(0, 3.2fr)
+      minmax(0, .85fr) minmax(0, .85fr)
+      minmax(0, .95fr)
+      minmax(0, .8fr) minmax(0, 1fr);
+  }
+}
+@media (max-width: 1180px) {
+  .mail-column-head > :nth-child(10), .mail-row > :nth-child(10) { display: none; }
+  .mail-column-head, .mail-row {
+    grid-template-columns:
+      30px 28px 86px
+      minmax(0, 1.5fr)
+      minmax(0, 3.2fr)
+      minmax(0, .85fr) minmax(0, .85fr)
+      minmax(0, .95fr)
+      minmax(0, 1fr);
+  }
 }

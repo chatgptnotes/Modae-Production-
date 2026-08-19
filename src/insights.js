@@ -100,7 +100,7 @@ export function findDuplicates(lead, leads = []) {
 // Keys are seed.js STAGES.
 const STAGE_BASE = {
   Lead: 'Low', RFI: 'Low', Budgetary: 'Low', RFQ: 'Medium',
-  'Firm Bid': 'Medium', Negotiation: 'High', Won: 'High', Lost: 'Low',
+  'Firm Bid': 'Medium', Negotiate: 'High', Won: 'High', Lost: 'Low',
 }
 
 export function suggestProbability(opp, proposal) {

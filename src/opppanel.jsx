@@ -39,6 +39,8 @@ export default function OppPanel({ oppId }) {
   const fileInput = useRef(null)
   const [busy, setBusy] = useState(false)
   const [cloudErr, setCloudErr] = useState('')
+  const [lossPending, setLossPending] = useState(false)
+  const [lossReason, setLossReason] = useState('')
 
   if (!opp) return <div className="drawer-body"><p className="hint">This opportunity no longer exists.</p></div>
 
@@ -61,6 +63,11 @@ export default function OppPanel({ oppId }) {
     const patch = { [field]: value }
     if (field === 'status' && value === 'Open') Object.assign(patch, { closedReason: '', stage: 'Firm Bid' })
     if (field === 'stage' && (value === 'Won' || value === 'Lost')) patch.status = 'Closed'
+    // Diagram 02 §7 — "Capture Loss Reason & Close Opportunity". Losing is a
+    // decision, not a field edit: closeLost refuses without a reason, so the
+    // stage change is held open here until one is picked.
+    if (patch.stage === 'Lost' && !opp.closedReason) { setLossPending(true); return }
+    if (patch.stage === 'Lost') { store.closeLost(oppId, opp.closedReason); return }
     store.updateOpportunity(oppId, patch)
   }
 
@@ -238,6 +245,22 @@ export default function OppPanel({ oppId }) {
               opp shows the field disabled rather than dropping it entirely. */}
           <div style={{ gridColumn: '1 / -1' }}>
             <label>Closed Reason {opp.status === 'Closed' && !opp.closedReason && <span className="err-text">— required</span>}</label>
+            {lossPending && (
+              <div className="errbox">
+                A loss reason is required before this opportunity can be closed as Lost.
+                <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                  <select value={lossReason} style={{ flex: 1 }} onChange={e => setLossReason(e.target.value)}>
+                    <option value="">— select a reason —</option>
+                    {CLOSE_REASONS.map(r => <option key={r}>{r}</option>)}
+                  </select>
+                  <button className="primary" disabled={!lossReason}
+                    onClick={() => { store.closeLost(oppId, lossReason); setLossPending(false); setLossReason('') }}>
+                    Close as lost
+                  </button>
+                  <button onClick={() => { setLossPending(false); setLossReason('') }}>Cancel</button>
+                </div>
+              </div>
+            )}
             <select value={opp.closedReason} onChange={upd('closedReason')} disabled={opp.status !== 'Closed'}>
               <option value="">{opp.status === 'Closed' ? '— required —' : '—'}</option>
               {CLOSE_REASONS.map(r => <option key={r}>{r}</option>)}

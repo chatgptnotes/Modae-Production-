@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useStore, nextOppId } from '../store.jsx'
-import { OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, routeForType, ownerForOppType } from '../seed.js'
+import { OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, SUBFOLDERS, routeForType, ownerForOppType } from '../seed.js'
 import { Icon } from '../icons.jsx'
 import { ErrBox } from '../ui.jsx'
 import { matchCustomer } from './Inbox.jsx'
@@ -236,8 +236,8 @@ export default function Register() {
           <div className="check-row">
             <Icon name="folder" size={14} />
             <span>
-              SharePoint folder <b>/Opportunities/Open/{blocked ? '…' : previewId}/</b> with 3 subfolders
-              (Customer Specs · Partner Docs · Proposal)
+              SharePoint folder <b>/Opportunities/Open/{blocked ? '…' : previewId}/</b> with{' '}
+              {SUBFOLDERS.length} subfolders ({SUBFOLDERS.join(' · ')})
               <br /><span className="hint">Backend: {backend}{backend === 'sharepoint' ? ' — live' : ' — SharePoint not configured, stored locally'}</span>
             </span>
           </div>

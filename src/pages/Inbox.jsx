@@ -5,7 +5,7 @@ import { ddMmmYY, ageDays } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { Chip, ConfChip, WarnBox, ErrBox, Modal } from '../ui.jsx'
-import { ROLES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, CUSTOMER_STATUSES, ownerForOppType, routeForType } from '../seed.js'
+import { ROLES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, CUSTOMER_STATUSES, LEAD_SOURCES, ownerForOppType, routeForType } from '../seed.js'
 import { isAdminRole, isApprover } from '../utils.js'
 import { aiEnabled, runJson } from '../ai.js'
 import { extractDocText } from '../docText.js'
@@ -285,6 +285,7 @@ function PasteLeadModal({ onClose }) {
   const fileInput = useRef(null)
   const [from, setFrom] = useState('')
   const [subject, setSubject] = useState('')
+  const [source, setSource] = useState('')
   const [body, setBody] = useState('')
   const [files, setFiles] = useState([])
   const [drag, setDrag] = useState(false)
@@ -310,7 +311,11 @@ function PasteLeadModal({ onClose }) {
   // Both add paths record the same attachments; only the blobs held for the
   // registration upload are keyed by the new lead id.
   const newLead = id => ({
-    id, ts: new Date().toISOString(), channel: 'Email', source: 'Common mailbox',
+    id, ts: new Date().toISOString(), channel: 'Email', source,
+    // Every lead reaches the AI through the common mailbox — the drawing calls
+    // it the single source of truth — so L-04 is satisfied by construction here
+    // rather than by pattern-matching the source string.
+    mailbox: true,
     from: from || 'unknown@sender', sender: from || 'Unknown sender',
     subject: subject || '(no subject)', body, attachments: attachmentMeta(files),
     status: 'New',
@@ -347,7 +352,15 @@ function PasteLeadModal({ onClose }) {
   return (
     <Modal title="New enquiry — paste the email" onClose={onClose} wide>
       <div className="drawer-form">
-        <label>From</label>
+        {/* Section 1 of the lead workflow. Where the enquiry came from is a
+            separate fact from the mailbox it arrived in, and it is the one that
+            answers "which channels actually produce work". */}
+        <label>Lead source</label>
+        <select value={source} onChange={e => setSource(e.target.value)} style={{ width: '100%' }}>
+          <option value="">— select the source —</option>
+          {LEAD_SOURCES.map(s => <option key={s}>{s}</option>)}
+        </select>
+        <label style={{ marginTop: 6 }}>From</label>
         <input value={from} onChange={e => setFrom(e.target.value)}
           placeholder="name@customer.com" style={{ width: '100%' }} />
         <label style={{ marginTop: 6 }}>Subject</label>
@@ -691,7 +704,7 @@ function AiLeadDetail({ lead }) {
         <header className="ws-head">
           <span className="ws-head-icon blue"><Icon name="mail" size={13} /></span>
           <span className="ws-head-title">Original email</span>
-          <span className="ws-head-meta">{lead.source || lead.channel || 'Common mailbox'}</span>
+          <span className="ws-head-meta">{lead.source || lead.channel || 'Unclassified source'} · via common mailbox</span>
         </header>
         <div className="ws-body">
           <div className="ws-sender">
@@ -1345,9 +1358,10 @@ export default function Inbox() {
     : tab === 'qualified' ? l.status === 'Qualified' : true).length
   const sourceOptions = [...new Set(listSource.map(l => l.source || l.channel).filter(Boolean))].sort()
   const ownerOptions = [...new Set(listSource.map(l => l.suggestedOwner || 'Unassigned'))].sort()
-  const filterSelect = (value, onChange, label, options) => (
-    <select className={`mail-head-filter ${value ? 'active' : ''}`} value={value} onChange={e => onChange(e.target.value)} aria-label={`Filter by ${label}`}>
-      <option value="">{label}</option>{options.map(o => Array.isArray(o) ? <option key={o[0]} value={o[0]}>{o[1]}</option> : <option key={o}>{o}</option>)}
+  const filterSelect = (value, onChange, label, options, short) => (
+    <select className={`mail-head-filter ${value ? 'active' : ''}`} value={value} onChange={e => onChange(e.target.value)}
+      aria-label={`Filter by ${label}`} title={`Filter by ${label}`}>
+      <option value="">{short || label}</option>{options.map(o => Array.isArray(o) ? <option key={o[0]} value={o[0]}>{o[1]}</option> : <option key={o}>{o}</option>)}
     </select>
   )
 
@@ -1414,12 +1428,12 @@ export default function Inbox() {
         </div>
         <div className="mail-column-head">
           <span></span><span></span><span><select className={`mail-head-filter ${receivedF ? 'active' : ''}`} value={receivedF} onChange={e => setReceivedF(e.target.value)} aria-label="Filter by received date"><option value="">Received</option><option value="today">Today</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select></span>
-          <span>{filterSelect(sourceF, setSourceF, 'Source / sender', sourceOptions)}</span><span>Subject / preview</span>
+          <span>{filterSelect(sourceF, setSourceF, 'Source / sender', sourceOptions)}</span><span title="Subject / preview">Subject / preview</span>
           <span>{filterSelect(routeF, setRouteF, 'AI route', ROUTE_OPTIONS)}</span>
           <span>{filterSelect(urgencyF, setUrgencyF, 'Urgency', ['Normal', 'Urgent'])}</span>
           <span>{filterSelect(duplicateF, setDuplicateF, 'Dup. risk', ['Low', 'Medium', 'High'])}</span>
-          <span>{filterSelect(completenessF, setCompletenessF, 'Completeness', [['high', 'High ≥90%'], ['medium', 'Medium 60–89%'], ['low', 'Low <60%']])}</span>
-          <span>{filterSelect(ownerF, setOwnerF, 'Sugg. owner', ownerOptions)}</span>
+          <span>{filterSelect(completenessF, setCompletenessF, 'Completeness', [['high', 'High ≥90%'], ['medium', 'Medium 60–89%'], ['low', 'Low <60%']], 'Complete')}</span>
+          <span>{filterSelect(ownerF, setOwnerF, 'Sugg. owner', ownerOptions, 'Owner')}</span>
           <span>{filterSelect(statusF, setStatusF, 'Status', STATUS_OPTIONS)}</span>
           <span>{filterSelect(ageF, setAgeF, 'Age', [['today', 'Today'], ['7', '7–29 days'], ['30', '30+ days']])}</span>
         </div>
@@ -1432,8 +1446,8 @@ export default function Inbox() {
               <label className="mail-check" onClick={e => e.stopPropagation()}><input type="checkbox" checked={selectedIds.has(l.id)} onChange={() => toggleSelected(l.id)} aria-label={`Select ${l.subject}`} /></label>
               <button className={`mail-star ${l.starred ? 'starred' : ''}`} title={l.starred ? 'Remove star' : 'Star'} onClick={e => { e.stopPropagation(); store.updateLead(l.id, { starred: !l.starred }) }}><Icon name="star" size={15} /></button>
               <div className="mail-date"><b>{ddMmmYY((l.ts || '').slice(0, 10))}</b><small>{receivedTime(l.ts)}</small></div>
-              <div className="mail-sender"><b>{l.source || l.channel || 'Common mailbox'}</b><small>{l.sender || l.from}</small></div>
-              <div className="mail-content"><b>{l.subject}</b>{l.ref && <span className="mail-ref"> · {l.ref}</span>}<small>{l.ai?.summary || l.body?.replace(/\s+/g, ' ').slice(0, 130) || 'No preview available'}</small></div>
+              <div className="mail-sender" title={[l.source || l.channel || 'Common mailbox', l.sender || l.from].filter(Boolean).join(' — ')}><b>{l.source || l.channel || 'Common mailbox'}</b><small>{l.sender || l.from}</small></div>
+              <div className="mail-content" title={l.subject}><b>{l.subject}</b>{l.ref && <span className="mail-ref"> · {l.ref}</span>}<small>{l.ai?.summary || l.body?.replace(/\s+/g, ' ').slice(0, 130) || 'No preview available'}</small></div>
               <div><Chip tone="grey">{route}</Chip></div>
               <div><Chip tone={l.urgency === 'Urgent' ? 'state-Rejected' : 'grey'}>{l.urgency || 'Normal'}</Chip></div>
               <div><Chip tone={l.duplicateRisk === 'Medium' || l.duplicateRisk === 'High' ? 'conf-med' : 'grey'}>{l.duplicateRisk || 'Low'}</Chip></div>

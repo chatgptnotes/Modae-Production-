@@ -108,7 +108,7 @@ test('win probability is suggested from stage, account and age', () => {
     assert.ok(s.why.includes(stage))
   }
   // A Red account is never a high-probability win.
-  const red = suggestProbability({ stage: 'Negotiation', customerStatus: 'Red' }, null)
+  const red = suggestProbability({ stage: 'Negotiate', customerStatus: 'Red' }, null)
   assert.equal(red.level, 'Low')
 })
 

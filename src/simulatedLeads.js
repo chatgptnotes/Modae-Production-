@@ -22,7 +22,10 @@ export function simulatedLead(customerStatus = 'Green', now = new Date()) {
     ? { requestedAt: ts, requestedFor: customerStatus }
     : {}
   return {
-    id, ts, channel: 'Email', source: 'Common mailbox',
+    // A Green customer is the one class that reaches us directly; the rest of
+    // the simulated classes arrive as ordinary enquiries.
+    id, ts, channel: 'Email', mailbox: true,
+    source: customerStatus === 'Green' ? 'Existing Green customer' : 'Website enquiry',
     from: `${customerStatus.toLowerCase()}.demo@customer.example.in`,
     sender: 'Demo Customer', subject,
     body: `Demo incoming inquiry for the ${scenario.label} workflow. Please quote vibration sensor spares for TG-3.`,

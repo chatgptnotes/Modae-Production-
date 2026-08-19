@@ -153,12 +153,16 @@ export default function Approvals() {
     )
     : <div style={{ fontSize: 12.5 }}>{a.detail}</div>
 
+  // On an `anyOf` gate the named roles are alternatives, not a quorum. Saying so
+  // here stops both approvers sitting on it waiting for the other to go first.
   const RoleChips = ({ a }) => (
-    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6, alignItems: 'center' }}>
       {neededOf(a).map(r => {
         const d = (a.decisions || {})[r]?.d
         return <Chip key={r} tone={chipTone(d)}>{r} {d || 'pending'}</Chip>
       })}
+      {a.anyOf && neededOf(a).length > 1
+        && <span className="hint" style={{ fontSize: 11.5 }}>either one decides</span>}
     </div>
   )
 
@@ -201,7 +205,7 @@ export default function Approvals() {
         <div className="approval-summary approval-summary-three"><div className="approval-summary-card summary-pending"><b>{store.approvals.filter(a => a.requestedBy === role && a.status === 'Pending').length}</b><span>Pending</span></div><div className="approval-summary-card summary-approved"><b>{store.approvals.filter(a => a.requestedBy === role && a.status === 'Approved').length}</b><span>Approved</span></div><div className="approval-summary-card summary-rejected"><b>{store.approvals.filter(a => a.requestedBy === role && a.status === 'Rejected').length}</b><span>Rejected</span></div></div>
         <FilterBar />
         <div className="approval-notice approval-notice-info">
-          <Icon name="info" size={14} /> Approvals are decided by LJS / AH. Your requests remain visible here until resolved.
+          <Icon name="info" size={14} /> Approvals are decided by LJS / AH, and technical approvals by LJS or AN. Your requests remain visible here until resolved.
         </div>
         <div className="approval-list">{mine.map(a => <div key={a.id} className={cardClass(a)}><div className="approval-card-top"><b>{a.id}</b><span className={`pill ${pillFor(a.status)}`}>{a.status}</span><NewMarker a={a} /><span className="approval-type">{a.type}</span><span className="hint">requested {stamp(a.ts)}</span></div><div className="approval-ref"><RefLink a={a} /></div><Detail a={a} /><div className="approval-meta"><div><span>Approvers</span><RoleChips a={a} /></div><div><span>Decision note</span><p>{COMMERCIAL_RX.test(a.decisionNote || '') && !comm ? 'Restricted' : (a.decisionNote || 'No decision yet')}</p></div></div><QuickLinks a={a} /></div>)}</div>
         {!mine.length && <p className="hint">No approval requests yet — raise one from the proposal workbench when a deviation needs clearance.</p>}

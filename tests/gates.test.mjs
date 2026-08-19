@@ -6,7 +6,8 @@ import { fileURLToPath } from 'node:url'
 
 import { ROLES } from '../src/seed.js'
 import { canViewCommercial, canPriceProposal, isSalesOwner } from '../src/utils.js'
-import { transitionBlockers, releaseState } from '../src/gates.js'
+import { transitionBlockers, releaseState, readiness, commercialGate } from '../src/gates.js'
+import { contextForType, routeForType, CONTEXTS, OPP_TYPES } from '../src/seed.js'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
@@ -137,4 +138,92 @@ test('revising a released quote re-blocks the Submitted milestone', () => {
   assert.equal(submitted(releasedProposal), undefined, 'the approved revision may be submitted')
   const revised = { ...releasedProposal, revision: '02' }
   assert.equal(submitted(revised)?.severity, 'block', 'a revision must require a fresh approval')
+})
+
+// ---------------------------------------------------------------------------
+// Diagram 02 §3/§4 — which lane an opportunity runs in.
+// ---------------------------------------------------------------------------
+
+// §3 is headed "Retrofit / Spares - Main Flow" and §4 gives Service its own
+// world (site survey -> SoW -> service pricing). Service used to fall through
+// to Brownfield, which forced it through B-01..B-05 sign-off it never owed.
+test('Service runs its own lane, not the Brownfield B-step chain', () => {
+  assert.equal(contextForType('Service'), 'Service')
+  assert.equal(contextForType('Retrofit'), 'Brownfield')
+  assert.equal(contextForType('Spares'), 'Brownfield')
+  assert.equal(contextForType('Project'), 'Greenfield')
+  assert.equal(contextForType('Upgrade'), 'Greenfield')
+  for (const c of new Set(OPP_TYPES.map(contextForType))) {
+    assert.ok(CONTEXTS.includes(c), `${c} must be a declared context`)
+  }
+})
+
+const bStepBlocker = oppType => readiness(
+  { ...baseOpp, oppType, route: routeForType(oppType), context: contextForType(oppType) },
+  { bom: [{ listPrice: 100, quoted: '' }], terms: [] },
+  { approvals: [], bSteps: {} },
+).find(b => b.key === 'b-steps')
+
+test('a Service proposal is ready without B-step signatures', () => {
+  assert.equal(bStepBlocker('Service'), undefined,
+    'Service is gated by the §4 survey path, never by B-01..B-05')
+  assert.equal(bStepBlocker('Spares')?.severity, 'block', 'Spares still owes the B-steps')
+  assert.equal(bStepBlocker('Retrofit')?.severity, 'block', 'Retrofit still owes the B-steps')
+})
+
+test('Retrofit shares the Brownfield workbench with Spares', () => {
+  assert.equal(routeForType('Retrofit'), 'Spares')
+  assert.equal(routeForType('Spares'), 'Spares')
+  assert.equal(routeForType('Service'), 'Service')
+  assert.equal(routeForType('Project'), 'Project')
+})
+
+// ---------------------------------------------------------------------------
+// Diagram 02 §5 — the layered approval.
+// ---------------------------------------------------------------------------
+
+const quote = (value, gmPct) => {
+  // One BoQ line priced to hit the requested value and margin exactly.
+  const cogs = value * (1 - gmPct / 100)
+  return { bom: [{ qtyPerUnit: 1, listPrice: 0, quoted: value, currency: 'INR' }], units: 1, cogs }
+}
+
+test('the §5C margin matrix routes on order value and margin', () => {
+  const gate = (value, gmPct) => commercialGate(
+    { owner: 'RS' },
+    { bom: [{ qtyPerUnit: 1, quoted: value, currency: 'INR' }], units: 1,
+      costing: { baseRate: 1, usdBase: 1, cdErvContPct: 0, bnkDiscPct: 0, inputGMPct: gmPct } },
+    {},
+  )
+  // < 10 Lakh & > 50% — the assigned salesperson clears their own quote.
+  const small = gate(500000, 60)
+  assert.equal(small.value < small.valueBreak, true)
+  // >= 10 Lakh — both approvers, never one.
+  const big = gate(2000000, 60)
+  assert.deepEqual(big.needed, ['AH', 'LJS'])
+  assert.ok(!big.anyOf, 'above ₹10 Lakh both AH and LJS must decide')
+})
+
+// §5C's "< 10 Lakh & <= 50%" row is drawn as "AH OR LJS", and §5A technical as
+// "LJS OR AN". recordDecision used to resolve with needed.every(), so both of
+// those sat waiting for a second signature that the diagram never asked for.
+test('an either-or approval clears on one decision', () => {
+  const store = read('src/store.jsx')
+  assert.match(store, /appr\.anyOf \? needed\.some\(r => decisions\[r\]\) : needed\.every\(r => decisions\[r\]\)/,
+    'recordDecision must honour anyOf')
+  const builder = read('src/workbench/PropBuilder.jsx')
+  assert.match(builder, /anyOf: !!gate\.anyOf/, 'the §5C release must carry the gate\'s anyOf flag')
+  assert.match(builder, /anyOf: !!bl\.anyOf/, 'a blocker-raised approval must carry its anyOf flag')
+})
+
+// The diagram and its legend both read "Technical Approval — LJS OR AN". AN
+// existed as a role but was never named on the gate, so only LJS could clear it.
+test('AN can give the §5A technical approval', () => {
+  const blocker = transitionBlockers(
+    { ...baseOpp, milestone: 'Approval' }, 'Submitted', releasedProposal, poState({}),
+  ).find(b => b.key === 'tech-approval')
+  assert.ok(blocker, 'technical approval must gate the Submitted milestone')
+  assert.deepEqual(blocker.needed, ['LJS', 'AN'])
+  assert.equal(blocker.anyOf, true, 'either technical approver alone clears §5A')
+  assert.ok(ROLES.AN, 'the AN role must exist for the gate to be satisfiable')
 })

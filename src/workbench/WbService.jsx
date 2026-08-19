@@ -3,6 +3,7 @@ import { useStore } from '../store.jsx'
 import { canPriceProposal, fmt } from '../utils.js'
 import { Chip } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
+import SurveyPanel from './SurveyPanel.jsx'
 
 const DEFAULT_EST = {
   sheet: 'India', workDays: 1, travelDays: 1, dailyHours: 8, otHours: 0,
@@ -73,6 +74,9 @@ export default function WbService({ opp, openBuilder }) {
 
   return (
     <div className="ana-grid">
+      {/* Diagram 02 §4 decides the lane before anything is priced: a standard
+          service comes off the rate sheet, a survey-led one off the SoW. */}
+      <SurveyPanel opp={opp} est={est} />
       <div className="ana-card c-6">
         <div className="ana-title">Service estimate — inputs</div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 10 }}>

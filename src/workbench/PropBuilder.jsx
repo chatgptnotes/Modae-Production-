@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
 import { canPriceProposal, fmt, ddMmmYY } from '../utils.js'
-import { readiness, isBlocked, commercialGate, releaseState } from '../gates.js'
+import { readiness, isBlocked, commercialGate, releaseState, approvalSet } from '../gates.js'
+import { REVISION_TYPES } from '../seed.js'
 import { Chip, AiBadge, Phase2Badge, ErrBox, WarnBox, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 // Shared with the printed document, so the checklist and the real document
@@ -10,7 +11,7 @@ import { PROP_SECTIONS, recommendTerms } from '../proposalDoc.js'
 
 // Proposal builder: section checklist, customer-facing excerpt, and the
 // readiness / approval column that gates 'Submit for approval'.
-export default function PropBuilder({ opp }) {
+export default function PropBuilder({ opp, openSteps }) {
   const store = useStore()
   const comm = canPriceProposal(store.role)
   const p = store.getProposal(opp.id)
@@ -23,6 +24,9 @@ export default function PropBuilder({ opp }) {
   const [overrideReason, setOverrideReason] = useState('')
   const [reviseOpen, setReviseOpen] = useState(false)
   const [reviseReason, setReviseReason] = useState('')
+  // Diagram 02 §7 — "Identify Type of Revision". The type is what routes the
+  // rework back to B-02..B-05, so it is picked here rather than inferred.
+  const [reviseType, setReviseType] = useState(REVISION_TYPES[0].id)
   const [condNotes, setCondNotes] = useState({})
   const [compareOpen, setCompareOpen] = useState(false)
   const [inserted, setInserted] = useState(false)
@@ -33,6 +37,12 @@ export default function PropBuilder({ opp }) {
   // so 'Submit for approval' re-opens rather than staying permanently locked.
   const { pending: pendingRelease, release } = releaseState(p, store.approvals, opp.id)
   const released = !!release
+  // Diagram 02 §5 — technical, commercial and margin are drawn as one
+  // checkpoint feeding "All Approvals Completed → Quote Ready for Dispatch",
+  // so they are shown together rather than discovered one blocker at a time.
+  // Each covers the current revision only.
+  const gates5 = approvalSet(p, store.approvals, opp.id)
+  const allApproved = gates5.every(g => !!g.approved)
 
   // Content sections come from the workbook; the rest are auto-drafted by
   // proposalDoc and the checkbox records that a human has read them.
@@ -40,9 +50,12 @@ export default function PropBuilder({ opp }) {
   const sectionDone = s => (CONTENT[s] ? CONTENT[s]() : !!manualDone[s])
   const derived = s => !!CONTENT[s]
 
+  // A blocker may name more than one acceptable approver (5A is "LJS or AN"),
+  // in which case it carries its own `needed` list and the `anyOf` flag that
+  // lets a single decision clear it.
   const requestForBlocker = bl => store.requestApproval({
     oppId: opp.id, type: bl.approvalType, approver: bl.approver,
-    needed: [bl.approver], detail: bl.text,
+    needed: bl.needed || [bl.approver], anyOf: !!bl.anyOf, detail: bl.text,
   })
 
   const applyOverride = () => {
@@ -54,10 +67,12 @@ export default function PropBuilder({ opp }) {
 
   const applyRevision = () => {
     if (!reviseReason.trim()) return
-    store.reviseProposal(opp.id, reviseReason.trim())
+    store.reviseProposal(opp.id, reviseReason.trim(), reviseType)
     setReviseOpen(false)
     setReviseReason('')
+    setReviseType(REVISION_TYPES[0].id)
   }
+  const reviseSpec = REVISION_TYPES.find(r => r.id === reviseType) || REVISION_TYPES[0]
 
   const condApprovals = store.approvals.filter(a =>
     a.oppId === opp.id && a.status === 'Approved with conditions')
@@ -82,15 +97,20 @@ export default function PropBuilder({ opp }) {
     store.requestApproval({
       oppId: opp.id, type: 'Final quote release', rev,
       detail: `GM ${gate.gmPct.toFixed(1)}% — ${gate.label}`,
-      approver: gate.needed[0], needed: gate.needed,
+      // §5C's "< ₹10 L & <= 50%" row reads "AH OR LJS" — commercialGate marks
+      // it `anyOf`, so one of the two named approvers is enough.
+      approver: gate.needed[0], needed: gate.needed, anyOf: !!gate.anyOf,
     })
     store.updateOpportunity(opp.id, { milestone: 'Approval' })
     store.saveProposal(opp.id, {
       ...p,
       revision: rev,
+      // A submission is not a revision — it gets its own S-series so the
+      // customer-facing V-numbers stay the diagram's V1, V2, V3.
       revisions: [...revisions, {
-        rev: `R${revisions.length + 1}`, when: today, by: store.role,
-        note: 'Submitted', status: 'Submitted',
+        rev: `S${revisions.filter(r => r.status === 'Submitted').length + 1}`,
+        when: today, by: store.role,
+        note: 'Submitted for approval', status: 'Submitted',
       }],
     })
   }
@@ -146,6 +166,9 @@ export default function PropBuilder({ opp }) {
               )}
               {bl.kyc && !overrideOpen && (
                 <button onClick={() => setOverrideOpen(true)}>Override with reason</button>
+              )}
+              {bl.key === 'b-steps' && openSteps && (
+                <button onClick={openSteps}>Open the B-01…B-05 workflow</button>
               )}
             </div>
             {bl.kyc && overrideOpen && (
@@ -217,10 +240,31 @@ export default function PropBuilder({ opp }) {
           </p>
         )}
 
+        <div className="section-title" style={{ marginTop: 10 }}>Section 5 approvals</div>
+        {gates5.map(g => {
+          const state = g.approved ? g.approved.status : g.pending ? 'Pending' : 'Not raised'
+          const tone = g.approved ? 'state-Accepted' : g.pending ? 'state-Review' : 'grey'
+          return (
+            <div key={g.type} style={{ fontSize: 12.5, padding: '2px 0', display: 'flex', gap: 6, alignItems: 'center' }}>
+              <Icon name={g.approved ? 'checkCircle' : 'clock'} size={13} />
+              <span style={{ flex: 1 }}>{g.type}</span>
+              <Chip tone={tone}>{state}</Chip>
+            </div>
+          )
+        })}
+        {allApproved ? (
+          <div className="okbox">All approvals completed — quote ready for dispatch (revision {p.revision || '00'}).</div>
+        ) : (
+          <p className="hint">All three must clear before the quote can be dispatched, and again after every
+            revision. Raise a missing one from the lifecycle stepper when the move to Submitted is blocked.</p>
+        )}
+
         <div className="section-title" style={{ marginTop: 10 }}>Revisions</div>
         {revisions.map((r, i) => (
           <div key={i} style={{ fontSize: 12.5, padding: '2px 0' }}>
-            <b>{r.rev}</b> — {r.note} <Chip tone="grey">{r.status}</Chip> <span className="hint">{ddMmmYY(r.when)} · {r.by}</span>
+            <b>{r.rev}</b> — {r.note} <Chip tone="grey">{r.status}</Chip>
+            {r.type && <Chip tone="state-Review">{r.type} → {r.step}</Chip>}
+            {' '}<span className="hint">{ddMmmYY(r.when)} · {r.by}</span>
           </div>
         ))}
         {!revisions.length && <p className="hint">No revisions yet.</p>}
@@ -242,11 +286,20 @@ export default function PropBuilder({ opp }) {
                 <button onClick={() => setReviseOpen(true)}>Revise quote</button>
               )}
               {reviseOpen && (
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <input placeholder="Reason for revision (logged)" value={reviseReason} style={{ flex: 1 }}
-                    onChange={e => setReviseReason(e.target.value)} />
-                  <button className="primary" disabled={!reviseReason.trim()} onClick={applyRevision}>Open revision</button>
-                </div>
+                <>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <select value={reviseType} onChange={e => setReviseType(e.target.value)}>
+                      {REVISION_TYPES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
+                    </select>
+                    <input placeholder="Reason for revision (logged)" value={reviseReason} style={{ flex: 1, minWidth: 160 }}
+                      onChange={e => setReviseReason(e.target.value)} />
+                    <button className="primary" disabled={!reviseReason.trim()} onClick={applyRevision}>Open revision</button>
+                  </div>
+                  <div className="hint" style={{ marginTop: 4 }}>
+                    Returns the opportunity to <b>{reviseSpec.step}</b>, reopens that step for sign-off,
+                    and requires the whole §5 approval again before the quote can be sent.
+                  </div>
+                </>
               )}
             </div>
             <span className="hint">A revision re-opens the approval gate — the revised quote must be approved again before it can be sent.</span>
@@ -260,6 +313,7 @@ export default function PropBuilder({ opp }) {
             <div key={i} className="check-row">
               <b>{r.rev}</b><span>{r.note}</span>
               <Chip tone="grey">{r.status}</Chip>
+              {r.type && <Chip tone="state-Review">{r.type} → {r.step}</Chip>}
               <span className="hint" style={{ marginLeft: 'auto' }}>{ddMmmYY(r.when)} · {r.by}</span>
             </div>
           ))}

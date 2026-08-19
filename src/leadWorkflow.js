@@ -18,7 +18,13 @@ export function leadWorkflow(lead, { customerStatus = '', med = 75 } = {}) {
   const pendingLow = fields.filter(f => f.state === 'pending' && Number(f.conf || 0) < med).length
   const hasReview = !!lead?.readAt || decided > 0 || lead?.status !== 'New'
   const hasRelevanceDecision = ['Qualified', 'Converted', 'Dropped'].includes(lead?.status)
-  const hasMailbox = /common mailbox/i.test(`${lead?.source || ''} ${lead?.channel || ''}`) || !!lead?.ai
+  // L-04. `mailbox` is set when the lead is taken in, so this no longer depends
+  // on the source string spelling out "common mailbox" — `source` now records
+  // where the enquiry originated, not how it reached us. The older shapes are
+  // still honoured so saved leads keep their progress.
+  const hasMailbox = lead?.mailbox === true
+    || /common mailbox/i.test(`${lead?.source || ''} ${lead?.channel || ''}`)
+    || !!lead?.ai
   const hasOwner = !!(lead?.assignedOwner || lead?.suggestedOwner)
   const hasType = !!(lead?.route || lead?.parse?.oppType || lead?.ai?.route)
   const aiComplete = fields.length > 0 && pendingLow === 0 && (lead?.ai?.missing || []).length === 0

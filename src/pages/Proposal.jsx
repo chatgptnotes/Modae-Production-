@@ -538,7 +538,7 @@ export default function Proposal() {
             <span>Signal List</span>
             {derivedTotal > 0
               ? <span className="hint">(counted from the priced BoQ — edit any cell to override)</span>
-              : ['Spares', 'Service', 'Training', 'AMC'].includes(opp.oppType) &&
+              : ['Spares', 'Retrofit', 'Service'].includes(opp.oppType) &&
                 <span className="hint">(not applicable for spares/service proposals — shown for reference)</span>}
             {signalsStale && (
               <button style={{ marginLeft: 'auto', fontSize: 12, padding: '3px 10px' }}

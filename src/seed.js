@@ -2,22 +2,35 @@
 // (Sales Pipeline Report FY26 Excel + New Sales Opportunity Intake form,
 // as shown in the Aug 10 meeting screenshots).
 
-export const CATEGORIES = ['EUC', 'OEM', 'EPC', 'MAC', 'SI', 'ACP', 'RE/TR']
+// Fx-1..Fx-5 are the client's own reserved slots — they appear on Category,
+// Segment, Product and Solution in the Field List sheet, so a pipeline export
+// can legitimately contain them and our lists have to accept them.
+export const FLEX_SLOTS = ['Fx-1', 'Fx-2', 'Fx-3', 'Fx-4', 'Fx-5']
+
+export const CATEGORIES = ['EUC', 'OEM', 'EPC', 'MAC', 'SI', 'ACP', 'RE/TR', ...FLEX_SLOTS]
 // Active sales owners from the client field list. Historical rows and new
 // enquiries use the same catalogue so ownership remains assignable.
 export const OWNERS = ['LJS', 'PP', 'RS', 'SS', 'PJS', 'RJS', 'SR']
-export const OPP_TYPES = ['Project', 'Spares', 'Service', 'Upgrade', 'Retrofit', 'Flow', 'AMC', 'Training']
-export const BUS = ['Aero', 'Energy', 'Service']
-export const SEGMENTS = ['Thermal', 'Nuclear', 'Hydro', 'Industrial', 'O&G-US', 'O&G-MS', 'O&G-DS', 'Petrochem', 'Test Bed', 'Others']
+// Exactly the client's Field List (Pipeline Explanation workbook, Apr 2026).
+// AMC and Training were ours, not theirs — both are Service opportunities and
+// were collapsed into it; `store.migrate` remaps any saved rows.
+export const OPP_TYPES = ['Project', 'Spares', 'Service', 'Upgrade', 'Retrofit', 'Flow']
+export const BUS = ['Aero', 'Energy', 'Services']
+export const SEGMENTS = ['Thermal', 'Nuclear', 'Hydro', 'Industrial', 'O&G-US', 'O&G-MS',
+  'O&G-DS', 'Petrochem', 'Test Bed', 'Others', ...FLEX_SLOTS]
+// On the Field List but not (yet) a Sales Pipeline column, so it is captured on
+// the opportunity rather than shown on the sheet.
+export const SOLUTIONS = ['Automation', 'SSS', 'VMS/CMS', ...FLEX_SLOTS]
 // Product options exactly as on the intake form (Wilcoxon/ABB fell in a scroll
 // gap on the recording — kept, to be confirmed).
 export const PRODUCTS = [
   'ModAE', 'B&K', 'Metrix', 'Beran', 'Bently', 'CTC', 'Meggitt', 'MC Monitoring',
-  'Monitran', 'Shinkawa', 'Sensonics', 'Senstec', 'Wilcoxon', 'ABB', 'BHEL',
-  'Emerson', 'Honeywell', 'Hima', 'Rockwell', 'Siemens', 'Yokogawa', 'Valmet', 'Various',
+  'Monitran', 'Shinkawa', 'Sensonics', 'Senstec', 'Wilcoxon', 'Others', 'ABB', 'BHEL',
+  'Emerson', 'Honeywell', 'Hima', 'Rockwell', 'Siemens', 'Yokogawa', 'Valmat', 'Various',
+  ...FLEX_SLOTS,
 ]
 export const PROB_LEVELS = ['Low', 'Medium', 'High']
-export const STAGES = ['Lead', 'RFI', 'Budgetary', 'RFQ', 'Firm Bid', 'Negotiation', 'Won', 'Lost']
+export const STAGES = ['Lead', 'RFI', 'Budgetary', 'RFQ', 'Firm Bid', 'Negotiate', 'Won', 'Lost']
 export const CLOSE_REASONS = [
   'Relationship', 'Unique Product', 'Pedigree', 'Best Price', 'Trade Compliance',
   'Technical Compliance', 'Commercial Compliance', 'Capability', 'Lead Time',
@@ -26,6 +39,22 @@ export const CLOSE_REASONS = [
 // Blue = new customer pending admin verification (per the meeting's
 // green/amber/red/blue qualification rules).
 export const CUSTOMER_STATUSES = ['Green', 'Amber', 'Red', 'Blue']
+
+// Section 1 of the Official Lead Management Workflow (22 Jul 2026). This is
+// where the enquiry *originated*, which is a different question from how it
+// reached us: every lead still enters the AI through the common mailbox, and
+// the drawing calls that mailbox "the single source of truth for all leads
+// entering the AI ecosystem". `channel` records the arrival, `source` the
+// origin, and only the latter answers "where does our work come from".
+export const LEAD_SOURCES = [
+  'Website enquiry',
+  'OEM referral',
+  'WhatsApp',
+  'Phone call',
+  'GeM / tender portal',
+  'Networking & relationship',
+  'Existing Green customer',
+]
 
 // Columns: value/cogs/gm in ₹ thousands (K₹), like the sheet.
 export const seedOpportunities = [
@@ -143,7 +172,7 @@ export const seedOpportunities = [
   {
     sl: 75, id: '2607214RS', sellTo: 'Andritz Hydro', category: 'OEM', location: 'Mandideep',
     customerStatus: 'Green', eucName: 'Pinnapuram Unit 4', eucLocation: 'TN',
-    oppName: 'VMS Troubleshooting & AMC', owner: 'RS', oppType: 'Service', bu: 'Service',
+    oppName: 'VMS Troubleshooting & AMC', owner: 'RS', oppType: 'Service', bu: 'Services',
     segment: 'Hydro', product: 'B&K', prob: 'Low',
     valueK: 9873, cogsK: 3826, createDate: '2026-07-08', proposalDate: '2026-07-12',
     orderDate: '', invoiceDate: '', status: 'Closed', stage: 'Lost',
@@ -163,7 +192,7 @@ export const seedOpportunities = [
   {
     sl: 70, id: '2607180SR', sellTo: 'BMMS', category: 'EUC', location: 'Bangalore',
     customerStatus: 'Amber', eucName: 'BMMS', eucLocation: 'Bangalore',
-    oppName: 'Operator Training — 3 weeks', owner: 'SR', oppType: 'Training', bu: 'Service',
+    oppName: 'Operator Training — 3 weeks', owner: 'SR', oppType: 'Service', bu: 'Services',
     segment: 'Industrial', product: 'B&K', prob: 'High',
     valueK: 950, cogsK: 300, createDate: '2026-07-18', proposalDate: '2026-07-22',
     orderDate: '2026-08-25', invoiceDate: '2026-09-10', status: 'Open', stage: 'Firm Bid',
@@ -217,7 +246,7 @@ export const seedOpportunities = [
   {
     sl: 44, id: '2601118PP', sellTo: 'Torrent Power', category: 'EUC', location: 'Ahmedabad',
     customerStatus: 'Amber', eucName: 'Torrent', eucLocation: 'Sabarmati',
-    oppName: 'AMC — vibration monitoring, 2 CCGT blocks', owner: 'PP', oppType: 'AMC', bu: 'Service',
+    oppName: 'AMC — vibration monitoring, 2 CCGT blocks', owner: 'PP', oppType: 'Service', bu: 'Services',
     segment: 'Thermal', product: 'ModAE', prob: 'Medium',
     valueK: 2150, cogsK: 1290, createDate: '2026-01-14', proposalDate: '2026-01-29',
     orderDate: '', invoiceDate: '', status: 'Closed', stage: 'Lost',
@@ -227,7 +256,7 @@ export const seedOpportunities = [
   {
     sl: 45, id: '2601124SR', sellTo: 'Navitus Controls', category: 'SI', location: 'Chennai',
     customerStatus: 'Amber', eucName: 'CPCL', eucLocation: 'Manali',
-    oppName: 'CPCL Manali — retrofit study', owner: 'SR', oppType: 'Service', bu: 'Service',
+    oppName: 'CPCL Manali — retrofit study', owner: 'SR', oppType: 'Service', bu: 'Services',
     segment: 'Petrochem', product: 'ModAE', prob: 'Low',
     valueK: 640, cogsK: 520, createDate: '2026-01-19', proposalDate: '2026-02-04',
     orderDate: '', invoiceDate: '', status: 'Closed', stage: 'Lost',
@@ -259,7 +288,7 @@ export const seedOpportunities = [
   {
     sl: 48, id: '2604146SR', sellTo: "Jost's Engineering", category: 'SI', location: 'Mumbai',
     customerStatus: 'Green', eucName: 'Tata Steel', eucLocation: 'Jamshedpur',
-    oppName: 'Blast furnace blower — training & commissioning', owner: 'SR', oppType: 'Training', bu: 'Service',
+    oppName: 'Blast furnace blower — training & commissioning', owner: 'SR', oppType: 'Service', bu: 'Services',
     segment: 'Industrial', product: 'ModAE', prob: 'Medium',
     valueK: 780, cogsK: 470, createDate: '2026-04-02', proposalDate: '2026-04-18',
     orderDate: '', invoiceDate: '', status: 'Open', stage: 'Budgetary',
@@ -319,7 +348,7 @@ export const seedOpportunities = [
   {
     sl: 54, id: '2604158PP', sellTo: 'Thermax Ltd', category: 'OEM', location: 'Pune',
     customerStatus: 'Green', eucName: 'Thermax', eucLocation: 'Pune',
-    oppName: 'AMC renewal — captive boilers, 2 sites', owner: 'PP', oppType: 'AMC', bu: 'Service',
+    oppName: 'AMC renewal — captive boilers, 2 sites', owner: 'PP', oppType: 'Service', bu: 'Services',
     segment: 'Industrial', product: 'ModAE', prob: 'High',
     valueK: 1980, cogsK: 1090, createDate: '2026-04-28', proposalDate: '2026-05-08',
     orderDate: '2026-06-24', invoiceDate: '2026-07-30', status: 'Closed', stage: 'Won',
@@ -391,7 +420,7 @@ export const seedOpportunities = [
   {
     sl: 61, id: '2605169PP', sellTo: 'Adani Power (Mundra)', category: 'EUC', location: 'Mundra',
     customerStatus: 'Amber', eucName: 'Adani', eucLocation: 'Mundra',
-    oppName: 'Annual calibration & health check — 5 units', owner: 'PP', oppType: 'Service', bu: 'Service',
+    oppName: 'Annual calibration & health check — 5 units', owner: 'PP', oppType: 'Service', bu: 'Services',
     segment: 'Thermal', product: 'Various', prob: 'High',
     valueK: 2760, cogsK: 1710, createDate: '2026-05-27', proposalDate: '2026-06-11',
     orderDate: '2026-07-14', invoiceDate: '', status: 'Closed', stage: 'Won',
@@ -413,7 +442,7 @@ export const seedOpportunities = [
   {
     sl: 63, id: '2606173SR', sellTo: 'BMMS', category: 'EUC', location: 'Bangalore',
     customerStatus: 'Amber', eucName: 'BMMS', eucLocation: 'Bangalore',
-    oppName: 'On-site diagnostics retainer — 12 months', owner: 'SR', oppType: 'Service', bu: 'Service',
+    oppName: 'On-site diagnostics retainer — 12 months', owner: 'SR', oppType: 'Service', bu: 'Services',
     segment: 'Industrial', product: 'ModAE', prob: 'Medium',
     valueK: 1340, cogsK: 830, createDate: '2026-06-05', proposalDate: '2026-06-24',
     orderDate: '', invoiceDate: '', status: 'Open', stage: 'Budgetary',
@@ -473,7 +502,7 @@ export const seedOpportunities = [
   {
     sl: 69, id: '2606179RS', sellTo: 'APGENCO', category: 'EUC', location: 'Vijayawada',
     customerStatus: 'Amber', eucName: 'APGENCO', eucLocation: 'VTPS',
-    oppName: 'VTPS Stage-V — CM system AMC', owner: 'RS', oppType: 'AMC', bu: 'Service',
+    oppName: 'VTPS Stage-V — CM system AMC', owner: 'RS', oppType: 'Service', bu: 'Services',
     segment: 'Thermal', product: 'ModAE', prob: 'Medium',
     valueK: 2480, cogsK: 1580, createDate: '2026-06-25', proposalDate: '2026-07-15',
     orderDate: '', invoiceDate: '', status: 'Open', stage: 'RFQ',
@@ -538,20 +567,28 @@ export function milestoneForStage(stage, status) {
   }
 }
 
-// Route (workbench flavour) from the opp type.
+// Route (workbench flavour) from the opp type. Diagram 02 §3 is headed
+// "Retrofit / Spares - Main Flow", so Retrofit shares the Brownfield
+// BoQ-shaped workbench rather than inheriting the heavy project one; the
+// handover report's Stage 7 agrees (a Brownfield proposal is cover letter +
+// BoQ pricing only).
 export function routeForType(oppType) {
-  if (oppType === 'Spares') return 'Spares'
-  if (oppType === 'Service' || oppType === 'AMC' || oppType === 'Training') return 'Service'
+  if (oppType === 'Spares' || oppType === 'Retrofit') return 'Spares'
+  if (oppType === 'Service') return 'Service'
   return 'Project'
 }
 
-// Diagram 02 §1 forks the lifecycle into two worlds at "Opportunity Type
-// Identified". This is a separate axis from routeForType: `context` decides
-// which lane the opportunity runs in (Greenfield nurture vs the Brownfield
-// B-01..B-05 activity chain), `route` only decides which workbench renders.
-export const CONTEXTS = ['Greenfield', 'Brownfield']
+// Diagram 02 §1 forks the lifecycle at "Opportunity Type Identified". This is
+// a separate axis from routeForType: `context` decides which lane the
+// opportunity runs in, `route` only decides which workbench renders.
+//
+// Three lanes, not two. Service is its own world (§4): it carries neither the
+// Greenfield Phase-1 pricing embargo nor the Brownfield B-01..B-05 chain — it
+// runs the site-survey sub-flow instead, so it must not resolve to Brownfield.
+export const CONTEXTS = ['Greenfield', 'Brownfield', 'Service']
 
 export function contextForType(oppType) {
+  if (oppType === 'Service') return 'Service'
   return oppType === 'Project' || oppType === 'Upgrade' || oppType === 'Flow'
     ? 'Greenfield' : 'Brownfield'
 }
@@ -591,13 +628,13 @@ export const DISPATCH_CHANNELS = ['Email', 'Teams', 'WhatsApp', 'Customer Portal
 export function ownerForOppType(oppType) {
   return {
     Project: 'LJS', Upgrade: 'PP', Retrofit: 'RS', Service: 'SS',
-    Spares: 'PJS', Flow: 'RJS', AMC: 'SS', Training: 'SS',
+    Spares: 'PJS', Flow: 'RJS',
   }[oppType] || 'LJS'
 }
 
 // Proposal template flavour, derived from the same route the workbench uses.
-// Deriving it here rather than re-testing oppType keeps AMC, Training and
-// Upgrade off the heavy project template — they used to fall through to it.
+// Deriving it here rather than re-testing oppType keeps Service, Spares and
+// Retrofit off the heavy project template — they used to fall through to it.
 export function proposalTypeForOpp(opp) {
   const route = routeForType(opp?.oppType)
   return route === 'Spares' ? 'Spares' : route === 'Service' ? 'Services' : 'Project'
@@ -919,7 +956,7 @@ export const seedLeads = [
       sellTo: 'BMMS', category: 'EUC', location: 'Bangalore',
       eucName: 'BMMS', eucLocation: 'Bangalore',
       oppName: 'Field balancing — BFP-2A, 2-3 days on site',
-      oppType: 'Service', bu: 'Service', segment: 'Industrial', product: 'ModAE',
+      oppType: 'Service', bu: 'Services', segment: 'Industrial', product: 'ModAE',
       contactPerson: 'R. Iyer', contactPhone: '+91 98450 22222',
       items: [{ desc: 'Service Engineer — field balancing, on site', pn: '', qty: 3 }],
       confidence: 0.85,
@@ -1033,11 +1070,18 @@ export const AI_PROVIDERS = {
 
 // Runtime configuration — every value editable on the Admin page.
 export const seedConfig = {
-  // Suggested-ownership routing, from the client's roles Excel.
+  // L-05-AI, Official Lead Management Workflow (22 Jul 2026) — six rules, kept
+  // one-per-row so the Admin page reads like the drawing. The AI only suggests
+  // from these; LJS or AH may override, and only with a reason.
+  // `unclassified` is the drawing's last row ("Unclassified Leads - LJS,
+  // approval needed"): it is the catch-all, so it never pattern-matches.
   ownershipRules: [
     { region: 'North & West India', owner: 'RS' },
-    { region: 'South, East & Central India', owner: 'PP' },
-    { region: 'Large / miscellaneous / international / aerospace / DCS / automation', owner: 'LJS' },
+    { region: 'South & East India', owner: 'PP' },
+    { region: 'Big & miscellaneous opportunities', owner: 'LJS' },
+    { region: 'International opportunities', owner: 'LJS' },
+    { region: 'Aerospace / DCS / automation opportunities', owner: 'LJS' },
+    { region: 'Unclassified leads', owner: 'LJS', unclassified: true, approvalNeeded: true },
   ],
   leadDeadlines: { kycDays: 7, amberFeeDays: 7, clarificationDays: 7 },
   fastTrack: { enabled: true, customerStatus: 'Green' },
@@ -1244,7 +1288,7 @@ export const seedHandover = {}
 // ---------------------------------------------------------------------------
 export const seedAiLeads = [
   {
-    id: 'LD-201', ts: '2026-08-10T10:15:00Z', channel: 'Email', source: 'Common mailbox',
+    id: 'LD-201', ts: '2026-08-10T10:15:00Z', channel: 'Email', source: 'Networking & relationship',
     from: 'akhil.umesh@tatapower.example.in', sender: 'Akhil Umesh — Tata Power',
     subject: 'Request for quotation — Meggitt VMS spares (retrofit)',
     ref: 'RFQ/TP/2026/0814', route: 'Spares', urgency: 'Normal', duplicateRisk: 'Medium',
@@ -1268,7 +1312,7 @@ export const seedAiLeads = [
     },
   },
   {
-    id: 'LD-202', ts: '2026-08-09T16:40:00Z', channel: 'Email', source: 'Common mailbox',
+    id: 'LD-202', ts: '2026-08-09T16:40:00Z', channel: 'Email', source: 'OEM referral',
     from: 'scm@epc-major.example.com', sender: 'Supply Chain — (large EPC)',
     subject: 'Provide offer price for VAMS system for Tarali PSP project',
     ref: 'EPC/TARALI/VAMS/26-118', route: 'Project', urgency: 'Urgent', duplicateRisk: 'Low',
@@ -1291,7 +1335,7 @@ export const seedAiLeads = [
     },
   },
   {
-    id: 'LD-203', ts: '2026-08-08T13:05:00Z', channel: 'Email', source: 'Common mailbox',
+    id: 'LD-203', ts: '2026-08-08T13:05:00Z', channel: 'Email', source: 'Existing Green customer',
     from: 'agm.koyna@mahagenco.example.in', sender: 'AGM (E&M) — MAHAGENCO Koyna',
     subject: 'Koyna Hydroelectric Project — offer for Stage 3 upgrade as discussed during visit',
     ref: 'KOYNA/ST3/2026', route: 'Project', urgency: 'Normal', duplicateRisk: 'Low',
@@ -1313,7 +1357,7 @@ export const seedAiLeads = [
     },
   },
   {
-    id: 'LD-204', ts: '2026-08-07T10:58:00Z', channel: 'Email', source: 'Common mailbox',
+    id: 'LD-204', ts: '2026-08-07T10:58:00Z', channel: 'Email', source: 'Website enquiry',
     from: 'npd.sourcing@oem-customer.example.com', sender: 'NPD Sourcing',
     subject: 'Inquiry for Vibration Sensor Specifications & Pricing — VIBROTEST 60 or VST-100',
     ref: '', route: 'Spares', urgency: 'Normal', duplicateRisk: 'Low',
@@ -1333,7 +1377,7 @@ export const seedAiLeads = [
     },
   },
   {
-    id: 'LD-205', ts: '2026-08-06T09:20:00Z', channel: 'Email', source: 'Common mailbox',
+    id: 'LD-205', ts: '2026-08-06T09:20:00Z', channel: 'Email', source: 'GeM / tender portal',
     from: 'gembuyer@example.gov.in', sender: 'GeM Buyer — Cooling Tower Cell',
     subject: 'Technical Clarifications For GeM Bid — cooling tower fan gearbox vibration monitoring & control panel',
     ref: 'GEM/2026/B/7411347', route: 'Project', urgency: 'Urgent', duplicateRisk: 'Low',
@@ -1353,7 +1397,7 @@ export const seedAiLeads = [
     },
   },
   {
-    id: 'LD-206', ts: '2026-08-11T05:30:00Z', channel: 'Email', source: 'Common mailbox',
+    id: 'LD-206', ts: '2026-08-11T05:30:00Z', channel: 'Email', source: 'Phone call',
     from: 'procurement@capsa-realix.example.ae', sender: 'CAPSA Dubai / Realix',
     subject: 'Provide offer for VMS system and accessories',
     ref: 'CAPSA/VMS/2026-31', route: 'Spares', urgency: 'Normal', duplicateRisk: 'Low',
@@ -1378,7 +1422,7 @@ export const seedAiLeads = [
   // reference, same sender domain — exactly what duplicate detection is for, and
   // the reason the detector has something real to find in the demo.
   {
-    id: 'LD-207', ts: '2026-08-12T04:40:00Z', channel: 'Email', source: 'Common mailbox — forwarded',
+    id: 'LD-207', ts: '2026-08-12T04:40:00Z', channel: 'Email', source: 'Networking & relationship',
     from: 'akhil.umesh@tatapower.example.in', sender: 'Akhil Umesh — Tata Power',
     subject: 'Reminder: Request for quotation — Meggitt VMS spares (retrofit)',
     ref: 'RFQ/TP/2026/0814', route: 'Spares', urgency: 'Normal', duplicateRisk: 'High',
