@@ -7,7 +7,7 @@ WinTrack / ModAE sales platform, measured against the two official process diagr
 | **Reference 01** | `branding/Official Lead Management Workflow (2).pdf` — *Expected Lead Management Workflow Post Implementation* |
 | **Reference 02** | `branding/Opportunity Workflow 7 Jun 2026.jpeg` — *02 – Opportunity Management Workflow (FINAL)* |
 | **Presentation copy** | `branding/Workflow Conformance Review.pdf` (8 pages, ModAE letterhead) |
-| **Date** | 18 August 2026 · Diagram 02 re-reviewed 19 August 2026 |
+| **Date** | 18 August 2026 · Diagram 02 re-reviewed 19 August 2026 · §5 closed 19 August 2026 |
 | **Scope** | Full source review — pages, state store, gating rules, approval logic, AI tasks, integrations |
 
 ## Headline finding
@@ -20,9 +20,12 @@ the one-week timer, the fast-track path.
 **Diagram 02 — Opportunity Management: the structural gaps are closed (19 Aug).**
 The three lanes, B-01…B-05, the site-survey sub-flow, the ₹10 Lakh × 50% margin matrix,
 typed revisions with back-routing, competitor tracking and loss capture all exist and are
-reachable from the UI. What remains is **infrastructure, not process**: multi-channel
+reachable from the UI. The §5 approval layer was closed out later the same day: both
+technical and commercial approval can now be raised directly, the three gates are shown
+together as the diagram's "All Approvals Completed" box, and a milestone exception can no
+longer waive any of them. What remains is **infrastructure, not process**: multi-channel
 dispatch and the "AI monitors and notifies" loop both need a server-side send path and a
-scheduler (Tier 3 below), plus two small UI gaps (O13, O14).
+scheduler (Tier 3 below).
 
 > The original 18 Aug assessment read "~35% conformant… the diagram's primary axis does not
 > exist in the data model". That is no longer true and the Diagram 02 section below has been
@@ -83,10 +86,12 @@ competitor tracking and loss capture all exist and are reachable from the UI.
 | 2 | Greenfield Phase 1 — "No Quote / RFQ / Engineering / Pricing at this stage" | `transitionBlockers`, `src/gates.js` |
 | 3 | B-01…B-05, each signed off by the **assigned salesperson only** | `B_STEPS` (`src/seed.js`), `signBStep` / `unsignBStep` (`src/store.jsx`), panel at `src/workbench/BSteps.jsx` — a Proposal sub-tab on the Brownfield lane. Steps sign in order; `readiness()` blocks the proposal until all five are signed |
 | 4 | "Site Survey Required?" → request → visit → report → SoW → service pricing | `requestSurvey` / `updateSurvey`, panel at `src/workbench/SurveyPanel.jsx` inside `WbService`. Standard service still prices off the rate sheet (travel, lodging, manpower days, consumables) |
-| 5A | Technical approval — **LJS or AN** (`anyOf`) | `transitionBlockers`; the `AN` role exists in `ROLES` and `PERMS` |
-| 5B | Commercial approval — AH only | `transitionBlockers` |
+| 5A | Technical approval — **LJS or AN** (`anyOf`) | `transitionBlockers`; the `AN` role exists in `ROLES` and `PERMS`. Raised directly from the transition dialog (`requestBlockerApproval`, `src/pages/Workbench.jsx`), stamped with the revision it covers |
+| 5B | Commercial approval — AH only | `transitionBlockers`; raised the same way |
 | 5C | Margin matrix — order value ≷ ₹10 L × margin ≷ 50%, including the salesperson self-approval tier | `commercialGate`, `src/gates.js`. Verified live: a ₹2.3 L / 35% GM quote routed to "AH or LJS — either one decides" |
 | 5 | Re-approval mandatory on every revision | approvals are stamped with the revision they cover (`approvalForRev`) |
+| 5 | "All Approvals Completed → Quote Ready for Dispatch" | `approvalSet()` rendered as one status block in `PropBuilder`, with a single all-clear state |
+| 5 | The only "No" branch is *Return for Revision* — never a bypass | `NO_EXCEPTION` (`src/gates.js`) refuses to let a Milestone exception clear `tech-approval`, `comm-approval` or `release`; the UI offers the real approval instead |
 | 6 | Quote submitted → customer acknowledgement | `SubmissionPanel`, customer ack on `src/pages/Portal.jsx` |
 | 7 | Follow-up loop, AI-drafted follow-ups, validity countdown | `FollowUpPane`, `src/pages/Workbench.jsx` |
 | 7 | "Identify Type of Revision" → back-route to B-02…B-05, V2/V3/V4 | `REVISION_TYPES` + `reviseProposal`; type picker in `PropBuilder`, which states the consequence before you confirm. Verified live: a Pricing revision reopened B-04, returned the opportunity to Proposal and re-locked the release gate |
@@ -100,8 +105,8 @@ competitor tracking and loss capture all exist and are reachable from the UI.
 |---|---|---|---|
 | **O9** | Dispatch via Email / Teams / WhatsApp / Customer Portal / Tender Portals | `DISPATCH_CHANNELS` is declared but unused — `SubmissionPanel` simulates a single email lane and the PDF is not attached programmatically | High |
 | **O10** | "AI Monitors & Notifies Sales (Real Time Alerts)" | Nothing monitors anything. No scheduler, no polling, no alerting; sidebar badge counts are the only mechanism | High |
-| **O13** | §5A and §5B raised directly | Both gates are *enforced* by `transitionBlockers`, but the only affordance on a blocked transition raises a **Milestone exception**, not the technical or commercial approval itself. There is no "request technical approval" action | Medium |
-| **O14** | §5C "All Approvals Completed → Quote Ready for Dispatch" box | `approvalSet()` exists to answer exactly this and has no caller — the three §5 gates are never shown together as one status | Low |
+
+*(O13 and O14 closed 19 Aug — see the §5 rows in the conformant table above.)*
 
 ### Defect found during review (independent of the diagrams)
 
@@ -119,6 +124,25 @@ The Handover step was unreachable through the UI. **Fixed 18 Aug** — the gate 
 - The first revision of a dispatched quote was labelled **V3** instead of V2 — the counter
   in `reviseProposal` included the builder's "Submitted" timeline entries. It now counts
   only entries marked `Revised`.
+
+**Found and fixed 19 Aug, closing out §5.** Three more, none of them in the gap tables:
+
+- **A milestone exception could waive the entire §5 approval.** `canRequestException`
+  (`src/pages/Workbench.jsx`) returned true for *any* blocker carrying an `approvalType`,
+  which included `tech-approval`, `comm-approval` and `release`. One LJS decision on a
+  Milestone exception released a quote nobody had technically approved. The diagram gives §5
+  one "No" branch — *Return for Revision* — so the exception route is now refused at the
+  model layer (`NO_EXCEPTION`, `src/gates.js`) as well as withdrawn from the UI, and the
+  three gates are requested directly instead.
+- **The Amber pre-quote fee was `info` on one gate and `block` on the other** —
+  `readiness()` treated it as advisory while `transitionBlockers()` blocked Registration on
+  it, so an Amber opportunity read as clear to quote and then refused to move. It blocks in
+  both, and `transitionBlockers` now folds readiness by key so the same requirement is never
+  listed twice.
+- **Two revision writers, two prefixes.** `FollowUpPane` wrote an untyped `R`-numbered entry
+  that skipped the type, the B-step reopen and the milestone return that §7 requires. It now
+  goes through `reviseProposal` like the builder's picker; submissions write an `S`-series
+  so they no longer consume a customer-facing V-number.
 
 
 ## Remediation plan
@@ -147,18 +171,22 @@ Small, cheap changes that unblock everything downstream.
    matching B-step and reopens it.
 9. ~~**Greenfield pricing boundary, `closedReason` on close, competitor fields**~~ — done.
 
-Still open at this tier: **raise §5A / §5B directly** (O13) rather than only as a milestone
-exception, and **show the three §5 gates as one "All Approvals Completed" box** (O14, the
-unused `approvalSet()`).
+10. ~~**Raise §5A / §5B directly** (O13)~~ — done 19 Aug. A blocker that names its own
+    approval type is now requested, not excepted; the exception route is kept only for the
+    lead-management requirements that have no approval object of their own.
+11. ~~**Show the three §5 gates as one "All Approvals Completed" box**~~ (O14) — done 19 Aug;
+    `approvalSet()` has a caller.
+
+Nothing is open at this tier.
 
 ### Tier 3 — Infrastructure (the honest blockers)
 
-10. **A scheduler** (L5, O10) — Supabase cron / pg_cron, so reminders, the one-week KYC and
+12. **A scheduler** (L5, O10) — Supabase cron / pg_cron, so reminders, the one-week KYC and
     fee expiry, validity warnings and approval SLA nudges actually fire.
-11. **A server-side send path** that attaches the PDF, plus a **Teams webhook** — together
+13. **A server-side send path** that attaches the PDF, plus a **Teams webhook** — together
     these unlock the Teams chatbot validation, the AI-08 notification and the multi-channel
     dispatch lane (L4, L9, O9).
-12. **Discarded-lead archive** and **AI-action audit logging** (L6, L10).
+14. **Discarded-lead archive** and **AI-action audit logging** (L6, L10).
 
 > Tier 3 depends on client decisions about hosting and the Microsoft tenancy. Raise these
 > rather than building on assumption.
@@ -167,9 +195,10 @@ unused `approvalSet()`).
 
 ## Verification
 
-`npm test` — 163 tests, all passing. `tests/gates.test.mjs` covers the lanes, the B-step
-gate and the §5 matrix; `tests/workflow-ui.test.mjs` pins each screen to the store action it
-drives, so the model layer cannot drift back out of reach of the UI.
+`npm test` — 171 tests, all passing. `tests/gates.test.mjs` covers the lanes, the B-step
+gate, all four corners of the §5C matrix, and the rule that a milestone exception cannot
+waive §5; `tests/workflow-ui.test.mjs` pins each screen to the store action it drives, so
+the model layer cannot drift back out of reach of the UI.
 
 Walked end to end in the running app (19 Aug), as RS and AH:
 
@@ -185,6 +214,9 @@ Walked end to end in the running app (19 Aug), as RS and AH:
 - Close-out — "Close as lost" stays disabled until a reason is picked; competitors record
   and remove.
 
-Still worth adding: a journey per lane in `tests/MANUAL_SMOKE_CHECKLIST.md`, and
-`commercialGate()` cases at all four matrix corners — (₹5 L, 60%), (₹5 L, 40%),
-(₹15 L, 60%), (₹15 L, 40%) — rather than the two corners currently asserted.
+The four matrix corners — (₹5 L, 60%), (₹5 L, 40%), (₹15 L, 60%), (₹15 L, 40%) — are now
+asserted. Note the older matrix test above them passes its margin through
+`costing.inputGMPct`, which a hand-quoted line ignores; the new test prices the line so the
+fixture produces the margin it names, and asserts that before routing on it.
+
+Still worth adding: a journey per lane in `tests/MANUAL_SMOKE_CHECKLIST.md`.
