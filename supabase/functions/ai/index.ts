@@ -17,14 +17,17 @@ const PRO = 'gemini-pro-latest'    // hard extraction: leads, tender specs
 const ENV_KEY = Deno.env.get('GEMINI_API_KEY') ?? ''
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+import { decryptAiSecret } from '../_shared/aiSecret.ts'
 const admin = SUPABASE_URL && SERVICE_ROLE_KEY
   ? (await import('https://esm.sh/@supabase/supabase-js@2')).createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
   : null
 
 const getKey = async () => {
   if (admin) {
-    const { data, error } = await admin.rpc('get_wintrack_ai_secret')
-    if (!error && typeof data === 'string' && data) return data
+    const { data, error } = await admin.from('ai_secrets').select('ciphertext,iv').eq('name', 'gemini_api_key').maybeSingle()
+    if (!error && data?.ciphertext && data?.iv) {
+      try { return await decryptAiSecret(data.ciphertext, data.iv, SERVICE_ROLE_KEY) } catch (e) { console.error('AI secret decrypt failed', e) }
+    }
   }
   return ENV_KEY
 }

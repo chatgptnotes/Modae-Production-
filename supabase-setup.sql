@@ -64,42 +64,16 @@ grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on public.app_state to anon, authenticated;
 
 -- ---- Secure AI credential storage ----------------------------------------
--- Supabase Vault keeps the provider key encrypted at rest. The Edge Functions
--- call these restricted RPCs with the service role; browser roles cannot call
--- them directly.
-create extension if not exists vault with schema vault;
-
-create or replace function public.set_wintrack_ai_secret(p_secret text)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public, vault
-as $$
-declare
-  existing_id uuid;
-begin
-  select id into existing_id from vault.decrypted_secrets
-    where name = 'wintrack_gemini_api_key' limit 1;
-  if existing_id is null then
-    perform vault.create_secret(p_secret, 'wintrack_gemini_api_key', 'WinTrack Gemini provider key');
-  else
-    perform vault.update_secret(existing_id, p_secret, 'wintrack_gemini_api_key', 'WinTrack Gemini provider key');
-  end if;
-  return jsonb_build_object('ok', true);
-end;
-$$;
-
-create or replace function public.get_wintrack_ai_secret()
-returns text
-language sql
-security definer
-set search_path = public, vault
-as $$
-  select decrypted_secret from vault.decrypted_secrets
-  where name = 'wintrack_gemini_api_key' limit 1;
-$$;
-
-revoke all on function public.set_wintrack_ai_secret(text) from public, anon, authenticated;
-revoke all on function public.get_wintrack_ai_secret() from public, anon, authenticated;
-grant execute on function public.set_wintrack_ai_secret(text) to service_role;
-grant execute on function public.get_wintrack_ai_secret() to service_role;
+-- Some Supabase projects do not expose the Vault extension. The Edge Functions
+-- encrypt this value before writing it here, using their service-role secret as
+-- the decryption key. The browser roles have no table privileges.
+create table if not exists public.ai_secrets (
+  name text primary key,
+  ciphertext text not null,
+  iv text not null,
+  updated_at timestamptz not null default now(),
+  updated_by text not null default 'SYSTEM'
+);
+alter table public.ai_secrets enable row level security;
+revoke all on public.ai_secrets from public, anon, authenticated;
+grant select, insert, update, delete on public.ai_secrets to service_role;

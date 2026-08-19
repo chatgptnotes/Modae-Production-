@@ -2,6 +2,7 @@
 // replace the role header; the provider key is written to Vault and is never
 // returned to the browser.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { encryptAiSecret } from '../_shared/aiSecret.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -28,12 +29,13 @@ Deno.serve(async req => {
   const key = String(body.apiKey ?? '').trim()
   if (key.length < 20 || key.length > 500) return json({ ok: false, error: 'Invalid API key' }, 400)
 
-  const { data, error } = await db.rpc('set_wintrack_ai_secret', { p_secret: key })
+  const encrypted = await encryptAiSecret(key, serviceKey)
+  const { error } = await db.from('ai_secrets').upsert({
+    name: 'gemini_api_key', ...encrypted, updated_at: new Date().toISOString(), updated_by: role,
+  })
   if (error) {
-    console.error('Vault setup failed', error.message)
+    console.error('Encrypted AI setup failed', error.message)
     return json({ ok: false, error: 'Could not save the AI key securely' }, 500)
   }
-  if (!data?.ok) return json({ ok: false, error: 'Could not save the AI key securely' }, 500)
-
   return json({ ok: true, configured: true, message: 'AI key saved securely' })
 })
