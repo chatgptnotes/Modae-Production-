@@ -1,4 +1,4 @@
-import { isAdminRole, isSalesOwner, canSeePage } from '../utils.js'
+import { isAdminRole, isSalesOwner, canSeePage, canViewCommercial } from '../utils.js'
 import { counts } from '../kpi.js'
 
 export const tabletRoleGroup = role =>
@@ -8,6 +8,7 @@ export function buildTabletTiles(store) {
   const role = store.role
   const admin = isAdminRole(role)
   const approver = role === 'LJS' || role === 'AH' || admin
+  const comm = canViewCommercial(role)
   const c = counts(store, role)
 
   return [
@@ -37,7 +38,7 @@ export const TABLET_SECTIONS = {
   ],
   approver: [
     { title: 'Decisions & gates', kpis: ['command'], keys: ['mydashboard', 'opportunities', 'approvals', 'po', 'inbox'] },
-    { title: 'Pipeline health', kpis: ['pipeline', 'winrate', 'turnaround'], keys: ['opportunities', 'status', 'dashboard', 'folders'] },
+    { title: 'Pipeline health', kpis: ['pipeline', 'winrate', 'turnaround'], keys: ['opportunities', 'status', 'folders'] },
     { title: 'Intelligence & audit', kpis: [], keys: ['aimap', 'customers', 'audit', 'launcher'] },
   ],
   admin: [
