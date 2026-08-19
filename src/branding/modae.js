@@ -20,8 +20,9 @@ export const MODAE_BRAND = Object.freeze({
   letterhead: Object.freeze({
     legalName: 'MODAE INDIA PRIVATE LIMITED',
     tagline: 'Your Partners in Achieving Excellence',
-    salesOffice: 'Sales & Services Office: Awfis 7th floor, Commerce Mantri, Bannerghatta Road, BTM 2nd stage Bengaluru-560076',
-    registeredOffice: 'Registered Office: 503C, Hiranandani Hill Crest, Begur Hulimavu Road, Hulimavu, Bangalore 560076, India',
+    officialAddress: '7th Floor, Commerce Mantri, 12, 1 & 2, Bannerghatta Road, BTM Layout, 2nd Stage, BTM Layout, Bangalore, Karnataka – 560076',
+    salesOffice: '7th Floor, Commerce Mantri, 12, 1 & 2, Bannerghatta Road, BTM Layout, 2nd Stage, BTM Layout, Bangalore, Karnataka – 560076',
+    registeredOffice: '',
     gstin: '29AARCM8622J1ZQ',
     cin: 'U62099KA2024PTC185715',
   }),

@@ -51,21 +51,26 @@ const StatusChip = ({ status }) => (
 const PageHead = ({ p }) => (
   <div className="doc-pagehead">
     <span className="ph-brand"><ModaeImageLogo height={20} /></span>
-    <span>{p.ourRef} · Rev {p.revision}</span>
+    <span className="ph-meta">
+      <span className="ph-tagline">{MODAE_COMPANY.tagline}</span>
+      <span>{p.ourRef} · Rev {p.revision}</span>
+    </span>
   </div>
-)
-
-const PageFoot = ({ text }) => (
-  <div className="doc-pagefoot"><span>{text}</span><span>Confidential</span></div>
 )
 
 const OfficialLetterheadFooter = () => (
   <div className="doc-official-footer">
     <b>{MODAE_COMPANY.name}</b>
     <span>{MODAE_COMPANY.salesOffice}</span>
-    <span>{MODAE_COMPANY.registeredOffice}</span>
-    <span>{MODAE_COMPANY.web} | GSTIN: {MODAE_COMPANY.gstin} | CIN: {MODAE_COMPANY.cin}</span>
+    <span>CIN: {MODAE_COMPANY.cin} | GST: {MODAE_COMPANY.gstin}</span>
   </div>
+)
+
+const PageFoot = ({ text }) => (
+  <>
+    <OfficialLetterheadFooter />
+    <div className="doc-pagefoot"><span>{text}</span><span>Confidential</span></div>
+  </>
 )
 
 // Sections a route renames rather than drops — a services proposal quotes a
@@ -73,9 +78,9 @@ const OfficialLetterheadFooter = () => (
 const TITLE_KEY = { 'Scope of supply': 'scopeTitle', 'Bill of quantities': 'boqTitle' }
 
 // `n` prints the section number badge; omit it for front matter.
-function Page({ p, foot, head = true, title, n, last, children }) {
+function Page({ p, foot, head = true, title, n, last, landscape = false, children }) {
   return (
-    <section className={`doc-page${last ? ' last' : ''}`}>
+    <section className={`doc-page${last ? ' last' : ''}${landscape ? ' doc-page--landscape' : ''}`}>
       {head && <PageHead p={p} />}
       <div className="doc-page-body">
         {title && (
@@ -115,9 +120,10 @@ export default function PrintDoc({ p, opp, doc, priced, totals, lineQuoted }) {
   const page = (title, children) => {
     if (!S[title]) return null
     const isLast = S[title] === sections.length
+    const isLandscape = title === 'Bill of quantities' || title === 'Schedule of charges'
     return (
       <Page key={title} p={p} foot={foot} title={layout[TITLE_KEY[title]] || title}
-        n={S[title]} last={isLast}>
+        n={S[title]} last={isLast} landscape={isLandscape}>
         {children}
         {isLast && (
           <div className="doc-endnote">
@@ -146,15 +152,13 @@ export default function PrintDoc({ p, opp, doc, priced, totals, lineQuoted }) {
       {/* ============================================ page 1 — covering letter */}
       <section className="doc-page doc-letter">
         <header className="doc-letterhead">
-          <span className="doc-lh-brand">
-            <ModaeImageLogo height={34} />
-            <span><i>{MODAE_COMPANY.tagline}</i></span>
-          </span>
+          <span className="doc-lh-brand"><ModaeImageLogo height={34} /></span>
           <span className="doc-lh-right">
+            <i>{MODAE_COMPANY.tagline}</i><br />
             <b>{MODAE_COMPANY.name}</b>
-            {MODAE_COMPANY.addr.map(l => <span key={l}>{l}<br /></span>)}
+            {MODAE_COMPANY.officialAddress}<br />
             {MODAE_COMPANY.phone} · {MODAE_COMPANY.email}<br />
-            {MODAE_COMPANY.gstin ? <>GSTIN {MODAE_COMPANY.gstin}</> : null}
+            {MODAE_COMPANY.gstin ? <>GST {MODAE_COMPANY.gstin}</> : null}
           </span>
         </header>
         <div className="doc-rule" />
@@ -212,7 +216,6 @@ export default function PrintDoc({ p, opp, doc, priced, totals, lineQuoted }) {
           )}
         </div>
 
-        <OfficialLetterheadFooter />
         <PageFoot text={foot} />
       </section>
 

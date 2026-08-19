@@ -533,7 +533,7 @@ export default function Proposal() {
       )}
 
       {tab === 'Signal List' && (
-        <div className="form-card">
+        <div className="form-card print-landscape">
           <div className="section-title" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span>Signal List</span>
             {derivedTotal > 0
@@ -573,7 +573,7 @@ export default function Proposal() {
       )}
 
       {tab === 'Rack Layout' && (
-        <div className="form-card">
+        <div className="form-card print-landscape">
           <div className="section-title">Rack Layout <span className="hint">(sized from the signal list)</span></div>
           {totalSignals === 0 ? (
             <div className="hint" style={{ padding: '18px 2px' }}>

@@ -485,20 +485,24 @@ function CustomerKycTab({ opp }) {
           <p className="hint">{opp.sellTo} is not in the customer master yet — treated as a new (Blue) customer.</p>
         )}
         {opp.customerStatus === 'Blue' && (
-          <WarnBox>Blue class: AH clearance required before proposal release.</WarnBox>
+          opp.leadVerification?.status === 'Verified'
+            ? <div className="okbox">KYC verified at Lead stage — no second verification is required in the Opportunity.</div>
+            : <WarnBox>Blue class: AH clearance required before proposal release.</WarnBox>
         )}
         {opp.customerStatus === 'Red' && (
           <WarnBox>Red class: KYC not required — continuation gated by joint LJS+AH (AP-1).</WarnBox>
         )}
         {opp.customerStatus === 'Amber' && (
-          <div className={opp.amberFeePaid ? 'okbox' : 'warnbox'}>
-            <b>Amber pre-quote fee:</b> ₹ {fmt(fee.amount)} — {opp.amberFeePaid ? 'received' : `pending (${fee.days}-day window)`}
-            {!opp.amberFeePaid && (
-              <div style={{ marginTop: 6 }}>
-                <button onClick={() => store.updateOpportunity(opp.id, { amberFeePaid: true })}>Simulate fee received</button>
-              </div>
-            )}
-          </div>
+          opp.leadVerification?.status === 'Confirmed'
+            ? <div className="okbox"><b>Amber processing fee:</b> confirmed at Lead stage — no second confirmation is required in the Opportunity.</div>
+            : <div className={opp.amberFeePaid ? 'okbox' : 'warnbox'}>
+              <b>Amber pre-quote fee:</b> ₹ {fmt(fee.amount)} — {opp.amberFeePaid ? 'received' : `pending (${fee.days}-day window)`}
+              {!opp.amberFeePaid && (
+                <div style={{ marginTop: 6 }}>
+                  <button onClick={() => store.updateOpportunity(opp.id, { amberFeePaid: true })}>Simulate fee received</button>
+                </div>
+              )}
+            </div>
         )}
         {opp.kycOverride && (
           <div className="okbox">
@@ -508,7 +512,21 @@ function CustomerKycTab({ opp }) {
         )}
       </div>
       <div className="ana-card c-6">
-        <div className="ana-title">KYC checklist</div>
+        <div className="ana-title">{opp.leadVerification ? 'Lead-stage verification' : 'KYC checklist'}</div>
+        {opp.leadVerification ? (
+          <>
+            <div className="okbox">
+              {opp.leadVerification.type === 'KYC' ? 'KYC verified at Lead stage.' : opp.leadVerification.type === 'Payment' ? 'Payment confirmed at Lead stage.' : 'Verification was not required.'}
+              {' '}This Opportunity uses the Lead-stage confirmation.
+            </div>
+            {opp.leadVerification.type === 'KYC' && Object.entries(opp.leadVerification.items || {}).map(([name, item]) => (
+              <div className="check-row" key={name}>
+                <Icon name="check" size={14} /> <span style={{ flex: 1 }}>{name}</span>
+                <Chip tone="state-Accepted">{item.mode === 'simulated' ? 'Verified (simulated)' : 'Verified (uploaded)'}</Chip>
+              </div>
+            ))}
+          </>
+        ) : <>
         <input ref={fileInput} type="file" style={{ display: 'none' }} onChange={onPick} />
         {items.map(k => (
           <React.Fragment key={k.name}>
@@ -558,6 +576,7 @@ function CustomerKycTab({ opp }) {
             Simulate upload only flips the state for a demo run.
           </p>
         )}
+        </>}
       </div>
       {viewing && customer && (
         <AttachmentViewer leadId={kycBlobKey(customer.name)} attachment={viewing} onClose={() => setViewing(null)} />

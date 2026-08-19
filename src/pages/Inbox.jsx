@@ -15,6 +15,8 @@ import AttachmentViewer from '../AttachmentViewer.jsx'
 import { findDuplicates } from '../insights.js'
 import { leadWorkflow } from '../leadWorkflow.js'
 import { isFastTrackLead, routeOwner } from '../leadRules.js'
+import { BLUE_KYC_ITEMS, leadVerificationComplete, verificationDeadline, verificationItem } from '../leadVerification.js'
+import { SIMULATED_CUSTOMER_SCENARIOS, simulatedLead } from '../simulatedLeads.js'
 
 // Common-mailbox lead inbox: AI parses each inquiry, a human decides whether it
 // becomes an opportunity (Qualify → registration / intake form) or is dropped.
@@ -62,27 +64,6 @@ const confLabel = c => (c >= 0.9 ? 'High' : c >= 0.6 ? 'Medium' : 'Low')
 const ConfBadge = ({ c }) => (
   <span className={`conf-badge ${confClass(c || 0)}`}>AI · {confLabel(c || 0)}</span>
 )
-
-const simulatedLead = () => ({
-  id: 'LD-' + Date.now(), ts: new Date().toISOString(), channel: 'Email',
-  from: 'stores.korba@balco.example.in',
-  subject: 'Quotation required — vibration sensor spares for TG-3',
-  body: 'Dear ModAE team,\n\nFor our TG-3 condition monitoring system we require:\n1) 4 nos velocity sensors P/N 9200-01-05-10-00\n2) 2 nos signal cables, 9 m\n\nPlease send your best quotation with delivery to Korba, Chhattisgarh. Material required within 6 weeks.\n\nThanks & regards,\nStores Dept, BALCO Korba',
-  status: 'New',
-  parse: {
-    sellTo: 'BALCO Korba', category: 'EUC', location: 'Korba',
-    eucName: 'BALCO Korba', eucLocation: 'Korba',
-    oppName: 'Vibration sensor spares — TG-3',
-    oppType: 'Spares', bu: 'Energy', segment: 'Industrial', product: 'ModAE',
-    contactPerson: 'Stores Dept', contactPhone: '',
-    items: [
-      { desc: 'Velocity sensor', pn: '9200-01-05-10-00', qty: 4 },
-      { desc: 'Signal cable, 9 m', pn: '', qty: 2 },
-    ],
-    confidence: 0.8,
-    note: 'Part numbers matched sensor family; verify cable length variant before quoting.',
-  },
-})
 
 // ---------------------------------------------------------------------------
 // Gemini extraction (task 'lead.extract', see supabase/functions/ai/index.ts).
@@ -147,6 +128,130 @@ export async function extractLead({ from, subject, body, attachments = [] }, sto
 // whole document is not carried; this is enough for the AI and for evidence.
 const TEXT_PER_FILE = 8000
 const TEXT_TOTAL = 40000
+
+function LeadVerification({ lead, customerStatus, store }) {
+  const [busy, setBusy] = useState('')
+  const [pendingUpload, setPendingUpload] = useState(null)
+  const verification = lead.verification || {}
+  const editable = !['Converted', 'Dropped'].includes(lead.status)
+  const deadline = verificationDeadline(lead, customerStatus, store.config)
+  const dateLabel = value => value
+    ? new Date(value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    : '—'
+  const deadlineLabel = deadline
+    ? deadline.expired ? 'Overdue' : `${deadline.remaining} day${deadline.remaining === 1 ? '' : 's'} remaining`
+    : ''
+
+  const saveKyc = async (item, file, mode) => {
+    setBusy(item)
+    let fileMeta = {}
+    if (file) {
+      const rec = await readAttachment(file)
+      fileMeta = { file: rec.name, size: rec.size, pages: rec.pages || 0 }
+      holdMore(lead.id, [file])
+      store.updateLead(lead.id, {
+        attachments: [...(lead.attachments || []), fileMeta],
+      }, `KYC document attached: ${item}`)
+    }
+    const itemRecord = {
+      state: 'Verified', mode, verifiedAt: new Date().toISOString(), ...fileMeta,
+    }
+    const nextKyc = { ...(verification.kyc || {}), [item]: itemRecord }
+    const complete = BLUE_KYC_ITEMS.every(name => nextKyc[name]?.state === 'Verified')
+    store.updateLead(lead.id, {
+      verification: {
+        ...verification,
+        kyc: nextKyc,
+        kycVerifiedAt: complete ? (verification.kycVerifiedAt || new Date().toISOString()) : '',
+      },
+      ...(complete ? { kycCompletedAt: verification.kycVerifiedAt || new Date().toISOString() } : {}),
+    }, `${item} ${mode === 'simulated' ? 'marked verified (simulated)' : 'verified'}`)
+    setBusy('')
+  }
+
+  const confirmPayment = mode => {
+    const now = new Date().toISOString()
+    store.updateLead(lead.id, {
+      verification: { ...verification, payment: { state: 'Confirmed', mode, confirmedAt: now } },
+      amberFeePaid: true,
+    }, `Amber processing fee ${mode === 'simulated' ? 'marked paid (simulated)' : 'confirmed'}`)
+  }
+
+  if (customerStatus === 'Green') return (
+    <div className="okbox" style={{ marginTop: 10 }}>
+      Green customer — KYC and payment verification are not required.
+    </div>
+  )
+
+  if (customerStatus === 'Amber') {
+    const confirmed = verification.payment?.state === 'Confirmed'
+    return (
+      <div className="lead-decision-card" style={{ marginTop: 12 }}>
+        <div className="lead-decision-head"><div><b>Amber customer — fee request</b><span>Customer pays the processing fee within 1 week</span></div>
+          <span className={confirmed ? 'lead-decision-saved' : 'lead-decision-note'}>{confirmed ? 'Confirmed' : 'Pending'}</span></div>
+        <div className="verification-deadline">
+          <span><b>Request sent:</b> {dateLabel(deadline?.requestedAt)}</span>
+          <span><b>Due:</b> {dateLabel(deadline?.dueAt)}</span>
+          <span className={deadline?.expired ? 'deadline-overdue' : ''}><b>{deadlineLabel}</b></span>
+        </div>
+        {confirmed
+          ? <div className="okbox">Customer paid the fee — confirmed at Lead stage ({verification.payment.mode === 'simulated' ? 'simulated' : 'recorded'}).</div>
+          : editable && <div className="lead-decision-actions">
+            <button className="primary" onClick={() => confirmPayment('simulated')}>Already paid — simulate confirmation</button>
+            <button onClick={() => confirmPayment('recorded')}>Record payment received</button>
+          </div>}
+        {!confirmed && <p className="lead-decision-note">Registration is blocked until payment is confirmed.</p>}
+      </div>
+    )
+  }
+
+  if (customerStatus === 'Blue') return (
+    <div className="lead-decision-card" style={{ marginTop: 12 }}>
+      <div className="lead-decision-head"><div><b>Blue customer — KYC request</b><span>Customer shares KYC documents within 1 week</span></div>
+        <span className={leadVerificationComplete(lead, customerStatus) ? 'lead-decision-saved' : 'lead-decision-note'}>
+          {leadVerificationComplete(lead, customerStatus) ? 'Verified' : 'Pending'}
+        </span></div>
+      <div className="verification-deadline">
+        <span><b>Request sent:</b> {dateLabel(deadline?.requestedAt)}</span>
+        <span><b>Due:</b> {dateLabel(deadline?.dueAt)}</span>
+        <span className={deadline?.expired ? 'deadline-overdue' : ''}><b>{deadlineLabel}</b></span>
+      </div>
+      <div style={{ display: 'grid', gap: 7 }}>
+        {BLUE_KYC_ITEMS.map(item => {
+          const row = verificationItem(verification, item)
+          const pending = pendingUpload?.item === item
+          return <div key={item} className="check-row">
+            <Icon name={row.state === 'Verified' ? 'check' : 'fileText'} size={14} />
+            <span style={{ flex: 1 }}>{item} — <b>{row.state === 'Verified' ? `Verified (${row.mode === 'simulated' ? 'simulated' : 'uploaded'})` : 'Missing'}</b></span>
+            {editable && row.state !== 'Verified' && <>
+              {pending
+                ? <>
+                  <span className="hint" title={pendingUpload.file.name}>{pendingUpload.file.name}</span>
+                  <button className="primary" disabled={busy === item} onClick={async () => {
+                    const file = pendingUpload.file
+                    setPendingUpload(null)
+                    await saveKyc(item, file, 'uploaded')
+                  }}>Confirm upload</button>
+                  <button disabled={busy === item} onClick={() => setPendingUpload(null)}>Cancel upload</button>
+                </>
+                : <>
+                  <label className="button" style={{ cursor: busy === item ? 'wait' : 'pointer' }}>
+                    Upload
+                    <input type="file" disabled={busy === item} style={{ display: 'none' }}
+                      onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) setPendingUpload({ item, file }) }} />
+                  </label>
+                  <button disabled={busy === item} onClick={() => saveKyc(item, null, 'simulated')}>Already uploaded — simulate verification</button>
+                </>}
+            </>}
+          </div>
+        })}
+      </div>
+      {!leadVerificationComplete(lead, customerStatus) && <p className="lead-decision-note">Customer KYC is not complete — Opportunity creation is blocked.</p>}
+    </div>
+  )
+
+  return null
+}
 
 // One picked file → the attachment record. PDF, Word and plain-text contents
 // are read client-side (see docText.js); anything else attaches by name only.
@@ -568,6 +673,10 @@ function AiLeadDetail({ lead }) {
       fastTrackStartedAt: isFastTrackLead({ ...lead, customerStatus: decisionDraft.customerStatus }, store.config, customer) ? (lead.fastTrackStartedAt || new Date().toISOString()) : lead.fastTrackStartedAt,
       route: routeForType(decisionDraft.oppType),
       customerStatus: decisionDraft.customerStatus,
+      customerClassifiedAt: lead.customerClassifiedAt || new Date().toISOString(),
+      verification: ['Blue', 'Amber'].includes(decisionDraft.customerStatus)
+        ? { ...(lead.verification || {}), requestedAt: lead.verification?.requestedAt || new Date().toISOString(), requestedFor: decisionDraft.customerStatus }
+        : (lead.verification || {}),
       redFlag: decisionDraft.customerStatus === 'Red',
       ai: { ...ai, route: routeForType(decisionDraft.oppType), fields: nextFields },
     }, `Lead decisions saved — ${changed.join('; ')}`)
@@ -862,6 +971,8 @@ function AiLeadDetail({ lead }) {
             </div>
           )}
 
+          <LeadVerification lead={lead} customerStatus={lead.customerStatus || customer?.status || 'Blue'} store={store} />
+
           {lead.status === 'Converted' && (
             <div className="okbox">
               Qualified and converted{lead.oppId && <> — <span className="oppid-link" style={{ cursor: 'pointer' }}
@@ -1119,6 +1230,7 @@ export default function Inbox() {
   const [mailTab, setMailTab] = useState('primary')
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [pasteOpen, setPasteOpen] = useState(false)
+  const [simulationOpen, setSimulationOpen] = useState(false)
   // Sales owners see only their assigned leads by default; a "Show all" toggle
   // reveals the team's. Managers (LJS/AH) and admins always see everything.
   const [showAll, setShowAll] = useState(false)
@@ -1222,6 +1334,12 @@ export default function Inbox() {
     selectedIds.forEach(id => store.updateLead(id, { readAt: read ? new Date().toISOString() : null }))
     setSelectedIds(new Set())
   }
+  const createSimulatedLead = status => {
+    const lead = simulatedLead(status)
+    store.addLead(lead)
+    setSimulationOpen(false)
+    nav('/inbox/' + lead.id)
+  }
   const tabCount = tab => rows.filter(l => tab === 'unread'
     ? l.status === 'New' && !l.readAt
     : tab === 'qualified' ? l.status === 'Qualified' : true).length
@@ -1241,7 +1359,7 @@ export default function Inbox() {
           <p className="hint">{showArchive ? 'Discarded lead archive' : 'Common sales mailbox · AI structures, humans decide'}</p>
         </div>
         <div className="mailbox-head-actions">
-          <button onClick={() => store.addLead(simulatedLead())}><Icon name="mail" size={13} /> Simulate incoming inquiry</button>
+          <button onClick={() => setSimulationOpen(true)}><Icon name="mail" size={13} /> Simulate incoming inquiry</button>
           <button className="primary" onClick={() => setPasteOpen(true)}><Icon name="bot" size={13} /> New enquiry</button>
           <button onClick={() => { setShowArchive(v => !v); setMailTab('primary'); setSelectedIds(new Set()) }}>
             <Icon name="folder" size={13} /> {showArchive ? 'Back to inbox' : `Archive (${(store.leadArchive || []).length})`}
@@ -1259,6 +1377,20 @@ export default function Inbox() {
         {!seesAll && <label className="mail-show-all"><input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)} /> Show all</label>}
       </div>
       {pasteOpen && <PasteLeadModal onClose={() => setPasteOpen(false)} />}
+      {simulationOpen && (
+        <Modal title="Simulate incoming inquiry" onClose={() => setSimulationOpen(false)}>
+          <p className="hint">Choose a customer class to test its complete Lead workflow.</p>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {SIMULATED_CUSTOMER_SCENARIOS.map(scenario => (
+              <button key={scenario.status} className="form-card" style={{ textAlign: 'left', cursor: 'pointer' }}
+                onClick={() => createSimulatedLead(scenario.status)}>
+                <b>{scenario.label}</b>
+                <span className="hint" style={{ display: 'block', marginTop: 3 }}>{scenario.hint}</span>
+              </button>
+            ))}
+          </div>
+        </Modal>
+      )}
 
       <div className="mail-tabs" role="tablist" aria-label="Mailbox views">
         {[['primary', 'Primary'], ['unread', 'Unread'], ['qualified', 'Qualified']].map(([key, label]) => (

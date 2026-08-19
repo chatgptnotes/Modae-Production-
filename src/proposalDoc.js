@@ -12,15 +12,16 @@ import { MODAE_BRAND } from './branding/modae.js'
 export const MODAE_COMPANY = {
   name: MODAE_BRAND.letterhead.legalName,
   tagline: MODAE_BRAND.letterhead.tagline,
+  officialAddress: MODAE_BRAND.letterhead.officialAddress,
   salesOffice: MODAE_BRAND.letterhead.salesOffice,
   registeredOffice: MODAE_BRAND.letterhead.registeredOffice,
-  addr: [MODAE_BRAND.letterhead.salesOffice, MODAE_BRAND.letterhead.registeredOffice],
+  addr: [MODAE_BRAND.letterhead.officialAddress],
   gstin: MODAE_BRAND.letterhead.gstin,
   cin: MODAE_BRAND.letterhead.cin,
   email: MODAE_BRAND.contact.email,
   phone: MODAE_BRAND.contact.phone_display,
   web: 'mod-ae.com',
-  footer: `${MODAE_BRAND.letterhead.legalName} | ${MODAE_BRAND.letterhead.salesOffice} | ${MODAE_BRAND.letterhead.registeredOffice} | www.mod-ae.com | GSTIN: ${MODAE_BRAND.letterhead.gstin} | CIN: ${MODAE_BRAND.letterhead.cin}`,
+  footer: `${MODAE_BRAND.letterhead.legalName} | ${MODAE_BRAND.letterhead.officialAddress} | CIN: ${MODAE_BRAND.letterhead.cin} | GST: ${MODAE_BRAND.letterhead.gstin}`,
 }
 
 export const PROP_SECTIONS = [

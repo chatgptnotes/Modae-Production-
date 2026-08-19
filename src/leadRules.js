@@ -37,7 +37,7 @@ export function isFastTrackLead(lead, config = {}, customer = null) {
 
 export function deadlineForLead(lead, config = {}, now = new Date()) {
   const cfg = leadConfig(config)
-  const base = new Date(lead?.deadlineStartedAt || lead?.ts || now).getTime()
+  const base = new Date(lead?.verification?.requestedAt || lead?.customerClassifiedAt || lead?.deadlineStartedAt || lead?.ts || now).getTime()
   const add = (days, type, reason) => ({
     type, reason,
     dueAt: new Date(base + Number(days || 0) * 86400000).toISOString(),
