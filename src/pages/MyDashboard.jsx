@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, STAGES } from '../seed.js'
 import { readiness, isBlocked, nextActionWith } from '../gates.js'
@@ -7,6 +7,8 @@ import { isApprover, isAdminRole, isSalesOwner, canViewCommercial, canPricePropo
 import { analyticsSnapshot, counts, salesPerformance, FY_QUARTERS, FY_MONTHS } from '../kpi.js'
 import { ArcGauge, Sparkline } from '../dashviz.jsx'
 import { Icon } from '../icons.jsx'
+import Analytics, { Funnel as AnalyticsFunnel } from './Analytics.jsx'
+import ForecastDashboard from './Dashboard.jsx'
 
 // My Dashboard — "there has to be something called My Dashboard… it will be
 // different for all the roles" (13 Aug review). The salesperson's version is
@@ -133,24 +135,6 @@ function RunRateChart({ perf }) {
   )
 }
 
-function SalesFunnel({ open, nav }) {
-  const stages = STAGES.filter(s => s !== 'Won' && s !== 'Lost')
-  const rows = stages.map(stage => ({ stage, count: open.filter(o => o.stage === stage).length }))
-  return (
-    <div className="sales-funnel">
-      <div className="funnel-legend"><span>Ideal funnel shape</span><span>Actual stage volume</span></div>
-      {rows.map((row, i) => (
-        <button key={row.stage} className="sales-funnel-row" onClick={() => nav(`/?stage=${encodeURIComponent(row.stage)}`)}>
-          <span className="funnel-stage-label">{row.stage}</span>
-          <span className="ideal-funnel" style={{ width: `${100 - i * 9}%` }} />
-          <span className="actual-funnel" style={{ width: `${Math.max(row.count ? 7 : 0, Math.min(100, row.count * 18))}%` }}>{row.count || ''}</span>
-        </button>
-      ))}
-      {!rows.some(row => row.count) && <div className="hint">No open opportunities in your funnel.</div>}
-    </div>
-  )
-}
-
 function ViewSwitch({ value, onChange }) {
   return <div className="dashboard-view-switch" role="group" aria-label="View mode">
     {['table', 'cards', 'compact'].map(mode => <button key={mode} className={value === mode ? 'active' : ''} onClick={() => onChange(mode)}>{mode === 'table' ? '▤ Table' : mode === 'cards' ? '▦ Cards' : '☰ Compact'}</button>)}
@@ -266,6 +250,13 @@ export default function MyDashboard() {
 
 // ------------------------------------------------------------------- sales
 function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head }) {
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [forecastOpen, setForecastOpen] = useState(false)
+  const location = useLocation()
+  React.useEffect(() => {
+    if (location.hash === '#detailed-analytics') setDetailsOpen(true)
+    if (location.hash === '#forecast-details') setForecastOpen(true)
+  }, [location.hash])
   const perf = salesPerformance(store, role)
   const money = canPriceProposal(role)
   const openValue = open.reduce((s, o) => s + (+o.valueK || 0), 0)
@@ -273,6 +264,12 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
   const unproposed = open.filter(o => !o.proposalDate)
   const monthPoints = FY_MONTHS.map((m, i) => ({ key: m, label: m, value: perf.monthly[i] }))
   const variance = perf.achieved - perf.expected
+  const funnelStages = STAGES
+    .filter(stage => stage !== 'Won' && stage !== 'Lost')
+    .map(label => {
+      const rows = open.filter(o => o.stage === label)
+      return { label, count: rows.length, valueK: rows.reduce((sum, o) => sum + (+o.valueK || 0), 0) }
+    })
 
   return (
     <div className="page">
@@ -320,8 +317,26 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
         </Card>
 
         <Card title="My funnel" icon="layers" tone="tone-teal" span={4}>
-          <SalesFunnel open={open} nav={nav} />
+          <AnalyticsFunnel stages={funnelStages} showValue={money} />
+          <div className="hint" style={{ marginTop: 8 }}>Enquiries currently in each stage (Won/Lost excluded).</div>
         </Card>
+
+        <Card title="Detailed reporting" icon="chartLine" tone="tone-sky" span={12}>
+          <div className="dashboard-report-actions">
+            <button onClick={() => setDetailsOpen(value => !value)} aria-expanded={detailsOpen}>
+              {detailsOpen ? 'Hide detailed analytics' : 'Open detailed analytics'}
+              <span aria-hidden="true">{detailsOpen ? ' ↑' : ' ↓'}</span>
+            </button>
+            <button onClick={() => setForecastOpen(value => !value)} aria-expanded={forecastOpen}>
+              {forecastOpen ? 'Hide forecast pivot' : 'Open forecast by customer/month'}
+              <span aria-hidden="true">{forecastOpen ? ' ↑' : ' ↓'}</span>
+            </button>
+          </div>
+          {!detailsOpen && !forecastOpen && <p className="hint">Use these views for filtered funnel analysis, win/loss detail, margins, or forecast by customer and month.</p>}
+        </Card>
+
+        {detailsOpen && <div id="detailed-analytics" className="dashboard-embedded-report"><Analytics embedded /></div>}
+        {forecastOpen && <div id="forecast-details" className="dashboard-embedded-report"><ForecastDashboard embedded /></div>}
 
         <Card title="Monthly bookings" icon="chartLine" tone="tone-violet" span={6}>
           <div style={{ color: 'var(--primary-accent)' }}><Sparkline points={monthPoints} height={64} /></div>

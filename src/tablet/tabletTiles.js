@@ -1,4 +1,4 @@
-import { canViewCommercial, isAdminRole, isSalesOwner, canSeePage } from '../utils.js'
+import { isAdminRole, isSalesOwner, canSeePage } from '../utils.js'
 import { counts } from '../kpi.js'
 
 export const tabletRoleGroup = role =>
@@ -6,7 +6,6 @@ export const tabletRoleGroup = role =>
 
 export function buildTabletTiles(store) {
   const role = store.role
-  const comm = canViewCommercial(role)
   const admin = isAdminRole(role)
   const approver = role === 'LJS' || role === 'AH' || admin
   const c = counts(store, role)
@@ -21,8 +20,6 @@ export function buildTabletTiles(store) {
     { key: 'folders', page: 'folders', icon: 'folder', label: 'SharePoint Folders', hint: 'SharePoint-backed opportunity folders', to: '/folders', color: 'teal' },
     { key: 'po', page: 'po', icon: 'clipboardCheck', label: isSalesOwner(role) ? 'My Purchase Orders' : 'Purchase Orders', hint: 'PO validation & booked orders', to: '/po', color: 'navy', badge: approver ? c.poReview : 0, badgeHint: 'POs in validation' },
     { key: 'aimap', page: 'aimap', icon: 'sparkles', label: 'AI & Automation', hint: '28 AI interventions, live demos', to: '/aimap', color: 'purple', show: admin || role === 'AH' || role === 'LJS' },
-    { key: 'dashboard', page: 'dashboard', icon: 'chartBar', label: 'Pivot / Forecast', hint: 'Order intake by month', to: '/dashboard', color: 'green', show: comm },
-    { key: 'analytics', page: 'analytics', icon: 'chartLine', label: 'Analytics', hint: 'Funnel, targets, win/loss', to: '/analytics', color: 'sky' },
     { key: 'pricelists', page: 'pricelists', icon: 'tag', label: 'Price Lists', hint: 'B&K · Metrix · ad-hoc quotes', to: '/pricelists', color: 'amber', show: comm },
     { key: 'customers', page: 'customers', icon: 'users', label: 'Customers', hint: 'Master + Green/Blue/Amber/Red', to: '/customers', color: 'rust' },
     { key: 'launcher', page: 'launcher', icon: 'play', label: 'Demo Launcher', hint: 'Guided demo scenarios', to: '/launcher', color: 'slate', show: admin },
@@ -36,16 +33,16 @@ export const TABLET_SECTIONS = {
   sales: [
     { title: 'Sales operations', kpis: ['command', 'turnaround'], keys: ['mydashboard', 'opportunities', 'inbox', 'status', 'voice'] },
     { title: 'Pipeline & proposals', kpis: ['pipeline', 'winrate'], keys: ['opportunities', 'approvals', 'po', 'folders'] },
-    { title: 'Intelligence', kpis: [], keys: ['aimap', 'analytics', 'customers', 'launcher'] },
+    { title: 'Intelligence', kpis: [], keys: ['aimap', 'customers', 'launcher'] },
   ],
   approver: [
     { title: 'Decisions & gates', kpis: ['command'], keys: ['mydashboard', 'opportunities', 'approvals', 'po', 'inbox'] },
     { title: 'Pipeline health', kpis: ['pipeline', 'winrate', 'turnaround'], keys: ['opportunities', 'status', 'dashboard', 'folders'] },
-    { title: 'Intelligence & audit', kpis: [], keys: ['analytics', 'aimap', 'customers', 'audit', 'launcher'] },
+    { title: 'Intelligence & audit', kpis: [], keys: ['aimap', 'customers', 'audit', 'launcher'] },
   ],
   admin: [
     { title: 'Platform', kpis: ['command'], keys: ['mydashboard', 'opportunities', 'users', 'admin', 'audit'] },
     { title: 'Operations', kpis: ['pipeline', 'winrate', 'turnaround'], keys: ['opportunities', 'inbox', 'approvals', 'po', 'folders'] },
-    { title: 'Intelligence', kpis: [], keys: ['aimap', 'analytics', 'dashboard', 'pricelists', 'launcher'] },
+    { title: 'Intelligence', kpis: [], keys: ['aimap', 'pricelists', 'launcher'] },
   ],
 }

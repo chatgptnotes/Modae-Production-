@@ -1,4 +1,4 @@
-import { canViewCommercial, isAdminRole, isSalesOwner, canSeePage } from './utils.js'
+import { isAdminRole, isSalesOwner, canSeePage } from './utils.js'
 import { counts } from './kpi.js'
 
 // Full-site tile registry. Tablet mode has its own registry under src/tablet so
@@ -11,7 +11,6 @@ export const roleGroup = role =>
 
 export function buildTiles(store) {
   const role = store.role
-  const comm = canViewCommercial(role)
   const admin = isAdminRole(role)
   const approver = role === 'LJS' || role === 'AH' || admin
 
@@ -28,8 +27,6 @@ export function buildTiles(store) {
     { key: 'folders', page: 'folders', icon: 'folder', label: 'SharePoint Folders', hint: 'SharePoint-backed opportunity folders', to: '/folders', color: 'teal' },
     { key: 'po', page: 'po', icon: 'clipboardCheck', label: isSalesOwner(role) ? 'My Purchase Orders' : 'Purchase Orders', hint: 'PO validation & booked orders', to: '/po', color: 'navy', badge: approver ? c.poReview : 0, badgeHint: 'POs in validation' },
     { key: 'aimap', page: 'aimap', icon: 'sparkles', label: 'AI & Automation', hint: '28 AI interventions, live demos', to: '/aimap', color: 'purple', show: admin || role === 'AH' || role === 'LJS' },
-    { key: 'dashboard', page: 'dashboard', icon: 'chartBar', label: 'Pivot / Forecast', hint: 'Order intake by month', to: '/dashboard', color: 'green', show: comm },
-    { key: 'analytics', page: 'analytics', icon: 'chartLine', label: 'Analytics', hint: 'Funnel, targets, win/loss', to: '/analytics', color: 'sky' },
     { key: 'pricelists', page: 'pricelists', icon: 'tag', label: 'Price Lists', hint: 'B&K · Metrix · ad-hoc quotes', to: '/pricelists', color: 'amber', show: comm },
     { key: 'customers', page: 'customers', icon: 'users', label: 'Customers', hint: 'Master + Green/Blue/Amber/Red', to: '/customers', color: 'rust' },
     { key: 'launcher', page: 'launcher', icon: 'play', label: 'Demo Launcher', hint: 'Guided demo scenarios', to: '/launcher', color: 'slate', show: admin },
@@ -43,5 +40,5 @@ export function buildTiles(store) {
 export const HOME_GROUPS = [
   { title: 'Sales & opportunities', keys: ['mydashboard', 'opportunities', 'status', 'voice', 'approvals'] },
   { title: 'Document flow', keys: ['inbox', 'folders', 'po'] },
-  { title: 'Insights & AI', keys: ['aimap', 'analytics', 'dashboard', 'customers', 'pricelists', 'users', 'admin', 'audit', 'launcher'] },
+  { title: 'Insights & AI', keys: ['aimap', 'customers', 'pricelists', 'users', 'admin', 'audit', 'launcher'] },
 ]

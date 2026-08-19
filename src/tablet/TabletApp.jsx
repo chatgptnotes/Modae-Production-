@@ -96,9 +96,9 @@ export default function TabletApp() {
       <Route path="/folders/:oppId/:sub" element={<TabletGate page="folders"><Folders /></TabletGate>} />
       <Route path="/proposal/:oppId" element={<TabletGate page="proposal"><Proposal /></TabletGate>} />
       <Route path="/pricelists" element={<TabletGate page="pricelists"><PriceLists /></TabletGate>} />
-      <Route path="/dashboard" element={<TabletGate page="dashboard"><Dashboard /></TabletGate>} />
+      <Route path="/dashboard" element={<Navigate to="/my-dashboard#forecast-details" replace />} />
       <Route path="/my-dashboard" element={<TabletGate page="mydashboard"><MyDashboard /></TabletGate>} />
-      <Route path="/analytics" element={<TabletGate page="analytics"><Analytics /></TabletGate>} />
+      <Route path="/analytics" element={<Navigate to="/my-dashboard#detailed-analytics" replace />} />
       <Route path="/customers" element={<TabletGate page="customers"><Customers /></TabletGate>} />
       <Route path="/users" element={<TabletGate page="users"><Users /></TabletGate>} />
       <Route path="/aimap" element={<TabletGate page="aimap"><AiMap /></TabletGate>} />

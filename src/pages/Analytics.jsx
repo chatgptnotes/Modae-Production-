@@ -15,14 +15,6 @@ const OPEN_STAGES = STAGES.filter(s => s !== 'Won' && s !== 'Lost')
 // Weighting lives in src/kpi.js so the dashboard and this page agree.
 
 // ---- Filter model -------------------------------------------------------
-// Which date column the range applies to — an opp has four, and "last 30 days"
-// means something different on each.
-const DATE_FIELDS = [
-  { key: 'createDate', label: 'Create date' },
-  { key: 'proposalDate', label: 'Proposal date' },
-  { key: 'orderDate', label: 'Expected order date' },
-  { key: 'invoiceDate', label: 'Expected ship date' },
-]
 const RANGES = [
   { key: 'all', label: 'All time' },
   { key: 'd30', label: 'Last 30 days' },
@@ -32,7 +24,7 @@ const RANGES = [
   { key: 'custom', label: 'Custom range' },
 ]
 const DEFAULTS = {
-  basis: 'createDate', range: 'all', from: '', to: '',
+  range: 'all', from: '', to: '',
   owner: 'All', customer: 'All', bu: 'All', oppType: 'All',
   segment: 'All', product: 'All', stage: 'All', prob: 'All', status: 'All',
 }
@@ -61,8 +53,8 @@ function rangeFor(key, from, to) {
   return [isoLocal(start), isoLocal(now)]
 }
 
-// ISO dates compare correctly as strings. A row with no date on the chosen
-// column is out of scope whenever a range is set — it hasn't reached that step.
+// ISO dates compare correctly as strings. A row with no create date is out of
+// scope whenever a range is set.
 const inRange = (v, r) => {
   if (!r) return true
   if (!v) return false
@@ -163,7 +155,7 @@ function BarCard({ title, icon, tone, span = 4, entries, color, onPick, hint, sh
 // data. A numbered rail sits on the left and the per-stage detail on the right.
 // The metric is the summed opportunity value when the role may see commercials,
 // else the plain row count.
-function Funnel({ stages, showValue }) {
+export function Funnel({ stages, showValue }) {
   const W = 620, ROW = 46, GAP = 7, NUM = 46, DETAIL = 190
   const H = stages.length * ROW + (stages.length - 1) * GAP
   const plotW = W - NUM - DETAIL
@@ -222,7 +214,7 @@ function Funnel({ stages, showValue }) {
   )
 }
 
-export default function Analytics() {
+export default function Analytics({ embedded = false }) {
   const store = useStore()
   const nav = useNavigate()
   // Sales owners may see commercial analytics for their locked own-owner scope;
@@ -259,7 +251,7 @@ export default function Analytics() {
     (f.stage === 'All' || o.stage === f.stage) &&
     (f.prob === 'All' || (o.prob || 'Low') === f.prob) &&
     (f.status === 'All' || o.status === f.status) &&
-    inRange(o[f.basis], dateRange))
+    inRange(o.createDate, dateRange))
 
   const open = opps.filter(o => o.status === 'Open')
   const closed = opps.filter(o => o.stage === 'Won' || o.stage === 'Lost')
@@ -279,7 +271,7 @@ export default function Analytics() {
   if (dateRange) {
     chips.unshift({
       k: 'range',
-      text: `${DATE_FIELDS.find(d => d.key === f.basis).label}: ${dateRange[0] || '…'} → ${dateRange[1] || '…'}`,
+      text: `Date range: ${dateRange[0] || '…'} → ${dateRange[1] || '…'}`,
     })
   }
   const clearChip = k => (k === 'range'
@@ -375,15 +367,12 @@ export default function Analytics() {
     .sort((a, b) => b.pct - a.pct)
 
   return (
-    <div className="page ana-page">
-      <h2>Analytics</h2>
+    <div className={`page ana-page${embedded ? ' embedded-analytics' : ''}`}>
+      <h2>{embedded ? 'Detailed analytics' : 'Analytics'}</h2>
       <div className="hint" style={{ marginBottom: 10 }}>Click any bar to open the supporting records.</div>
 
       <div className="ana-filters">
         <div className="af-row">
-          <Field label="Date basis" value={f.basis} onChange={v => set('basis', v)}
-            title="Which date column the range below applies to"
-            options={DATE_FIELDS.map(d => ({ value: d.key, label: d.label }))} />
           <Field label="Period" value={f.range} onChange={v => set('range', v)}
             options={RANGES.map(r => ({ value: r.key, label: r.label }))} />
           <label className="ana-field">

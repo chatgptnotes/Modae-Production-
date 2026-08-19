@@ -51,8 +51,6 @@ const NAV = [
   { to: '/po', label: 'Purchase Orders', icon: 'clipboardCheck', page: 'po' },
   { to: '/folders', label: 'SharePoint Folders', icon: 'folder', page: 'folders' },
   { to: '/pricelists', label: 'Price Lists', icon: 'tag', page: 'pricelists' },
-  { to: '/dashboard', label: 'Dashboard', icon: 'chartBar', page: 'dashboard' },
-  { to: '/analytics', label: 'Analytics', icon: 'chartLine', page: 'analytics' },
   { to: '/customers', label: 'Customers', icon: 'users', page: 'customers' },
   { to: '/aimap', label: 'AI & Automation', icon: 'sparkles', page: 'aimap', show: role => isAdminRole(role) || role === 'AH' || role === 'LJS' },
   { to: '/admin', label: 'Admin', icon: 'gear', page: 'admin' },
@@ -128,9 +126,9 @@ export default function App() {
       <Route path="/folders/:oppId/:sub" element={<PageGate page="folders"><Folders /></PageGate>} />
       <Route path="/proposal/:oppId" element={<PageGate page="proposal"><Proposal /></PageGate>} />
       <Route path="/pricelists" element={<PageGate page="pricelists"><PriceLists /></PageGate>} />
-      <Route path="/dashboard" element={<PageGate page="dashboard"><Dashboard /></PageGate>} />
+      <Route path="/dashboard" element={<Navigate to="/my-dashboard#forecast-details" replace />} />
       <Route path="/my-dashboard" element={<PageGate page="mydashboard"><MyDashboard /></PageGate>} />
-      <Route path="/analytics" element={<PageGate page="analytics"><Analytics /></PageGate>} />
+      <Route path="/analytics" element={<Navigate to="/my-dashboard#detailed-analytics" replace />} />
       <Route path="/customers" element={<PageGate page="customers"><Customers /></PageGate>} />
       <Route path="/users" element={<PageGate page="users"><Users /></PageGate>} />
       <Route path="/aimap" element={<PageGate page="aimap"><AiMap /></PageGate>} />

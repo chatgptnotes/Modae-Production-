@@ -10,7 +10,7 @@ const quarterOf = k => `${k.slice(0, 4)}-Q${Math.ceil(parseInt(k.slice(5, 7), 10
 const QUARTERS = []
 for (let y = 2024; y <= 2027; y++) for (let q = 1; q <= 4; q++) QUARTERS.push(`${y}-Q${q}`)
 
-export default function Dashboard() {
+export default function Dashboard({ embedded = false }) {
   const store = useStore()
   const nav = useNavigate()
   const [ownerFilter, setOwnerFilter] = useState('All')
@@ -21,7 +21,7 @@ export default function Dashboard() {
   // The whole pivot is Sum of Value — commercial data, restricted per role.
   if (!canViewCommercial(store.role)) {
     return (
-      <div className="page">
+      <div className={`page${embedded ? ' embedded-forecast' : ''}`}>
         <h2>Pivot — Sum of Value (₹) by Customer × Order Month</h2>
         <div className="restricted" style={{ maxWidth: 640 }}>
           Restricted — the forecast pivot rolls up commercial values and is visible to approvers/admin only.
@@ -71,7 +71,7 @@ export default function Dashboard() {
   )
 
   return (
-    <div className="page">
+    <div className={`page${embedded ? ' embedded-forecast' : ''}`}>
       <h2>Pivot — Sum of Value (₹) by Customer × Order Month</h2>
       <div className="toolbar">
         <label>Owner:{' '}
