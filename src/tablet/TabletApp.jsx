@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react'
 import { Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { ROLES } from '../seed.js'
+import { PORTAL_ENABLED, selectableRoles } from '../seed.js'
 import { canSeePage } from '../utils.js'
 import { DrawerHost } from '../drawer.jsx'
 import { Icon, ModaeLogo } from '../icons.jsx'
@@ -66,7 +66,7 @@ export default function TabletApp() {
 
   const RoleSwitcher = () => custAccount ? null : (
     <select value={store.role} onChange={e => store.setRole(e.target.value)} title="Acting-as persona">
-      {Object.entries(ROLES).map(([id, r]) => <option key={id} value={id}>{r.label}</option>)}
+      {selectableRoles().map(([id, r]) => <option key={id} value={id}>{r.label}</option>)}
     </select>
   )
 
@@ -104,7 +104,7 @@ export default function TabletApp() {
       <Route path="/aimap" element={<TabletGate page="aimap"><AiMap /></TabletGate>} />
       <Route path="/admin" element={<TabletGate page="admin"><Admin /></TabletGate>} />
       <Route path="/launcher" element={<TabletGate page="launcher"><Launcher /></TabletGate>} />
-      <Route path="/portal" element={<TabletGate page="portal"><Portal /></TabletGate>} />
+      {PORTAL_ENABLED && <Route path="/portal" element={<TabletGate page="portal"><Portal /></TabletGate>} />}
       <Route path="/voice" element={<TabletGate page="voice"><VoiceUpdate /></TabletGate>} />
     </Routes>
   )

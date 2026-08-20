@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { ROLES } from '../src/seed.js'
+import { ROLES, PERMS, PORTAL_ENABLED, selectableRoles } from '../src/seed.js'
 import { canViewCommercial, canPriceProposal, isSalesOwner } from '../src/utils.js'
 import { transitionBlockers, releaseState, readiness, commercialGate } from '../src/gates.js'
 import { contextForType, routeForType, CONTEXTS, OPP_TYPES } from '../src/seed.js'
@@ -353,4 +353,41 @@ test('every revision goes through the typed reviseProposal path', () => {
   const builder = read('src/workbench/PropBuilder.jsx')
   assert.match(builder, /rev: `S\$\{revisions\.filter\(r => r\.status === 'Submitted'\)\.length \+ 1\}`/,
     'a submission is not a revision and must not consume a V-number')
+})
+
+// ---------------------------------------------------------------------------
+// Customer portal, parked behind seed.js PORTAL_ENABLED. These lock the *wiring*
+// rather than the current value of the flag, so flipping it back on is a
+// one-line change that stays honest either way.
+// ---------------------------------------------------------------------------
+test('the portal flag drives every surface that can reach the portal', () => {
+  const seed = read('src/seed.js')
+  assert.match(seed, /export const PORTAL_ENABLED = (true|false)/, 'the flag must be a single named export')
+  assert.match(seed, /const pages = list => \(PORTAL_ENABLED \? list : list\.filter\(p => p !== 'portal'\)\)/,
+    'the page-permission matrix must run through the flag')
+  assert.match(seed, /export const selectableRoles = \(\)[\s\S]*?PORTAL_ENABLED \|\| id !== 'CUST'/,
+    'the persona list must drop CUST with the portal')
+
+  for (const [file, why] of [
+    ['src/App.jsx', 'the desktop shell'],
+    ['src/tablet/TabletApp.jsx', 'the tablet shell'],
+  ]) {
+    const src = read(file)
+    assert.match(src, /PORTAL_ENABLED && <Route path="\/portal"/, `${why} must gate the /portal route`)
+    assert.match(src, /selectableRoles\(\)\.map/, `${why} must build its persona switcher from selectableRoles`)
+  }
+  // A customer account has nowhere to land while the portal is off.
+  assert.match(read('src/store.jsx'), /u\.role === 'CUST' && !PORTAL_ENABLED/,
+    'login must refuse a customer account while the portal is parked')
+  assert.match(read('src/App.jsx'), /!PORTAL_ENABLED && \(role === 'CUST' \|\| custAccount\)/,
+    'a saved customer session must land on the parked notice, not a denied app')
+})
+
+test('the portal is currently parked, and nothing offers a way in', () => {
+  assert.equal(PORTAL_ENABLED, false, 'flip this expectation when the portal comes back')
+  assert.equal(selectableRoles().some(([id]) => id === 'CUST'), false,
+    'the customer persona must not be offered in the switcher')
+  for (const role of Object.keys(ROLES)) {
+    assert.equal((PERMS[role] || []).includes('portal'), false, `${role} must not hold the portal page permission`)
+  }
 })

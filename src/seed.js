@@ -529,23 +529,36 @@ export const ROLES = {
   CUST: { name: 'Customer contact', label: 'Customer — External portal', commercial: false, external: true },
 }
 
+// The customer-facing portal is parked for now. The page, its routes and the
+// CUST persona all stay in the code — this single flag is what takes them out
+// of the app and what puts them back. Flipping it to true restores the persona
+// in the switcher, the /portal route, the 'portal' page permission and the
+// customer account's sign-in, with nothing else to remember.
+export const PORTAL_ENABLED = false
+
+// Personas offered in the "acting as" switcher and on the Users page. CUST
+// exists only to demo the portal, so it is hidden alongside it.
+export const selectableRoles = () =>
+  Object.entries(ROLES).filter(([id]) => PORTAL_ENABLED || id !== 'CUST')
+
 // Page-permission matrix (from the BT prototype's PERMS). Sales owners all get
 // the same set; CUST sees the external portal only.
+const pages = list => (PORTAL_ENABLED ? list : list.filter(p => p !== 'portal'))
 const SALES_PAGES = ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders',
   'proposal', 'analytics', 'customers', 'po', 'aimap', 'launcher', 'voice']
 export const PERMS = {
-  SUPER: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'pricelists',
-    'dashboard', 'analytics', 'customers', 'audit', 'users', 'aimap', 'admin', 'po', 'launcher', 'voice', 'portal'],
+  SUPER: pages(['home', 'mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'pricelists',
+    'dashboard', 'analytics', 'customers', 'audit', 'users', 'aimap', 'admin', 'po', 'launcher', 'voice', 'portal']),
   ADMIN: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'pricelists',
     'dashboard', 'analytics', 'customers', 'audit', 'users', 'aimap', 'admin', 'po', 'launcher', 'voice'],
-  LJS: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'pricelists',
-    'dashboard', 'analytics', 'customers', 'audit', 'aimap', 'admin', 'po', 'launcher', 'voice', 'portal'],
+  LJS: pages(['home', 'mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'pricelists',
+    'dashboard', 'analytics', 'customers', 'audit', 'aimap', 'admin', 'po', 'launcher', 'voice', 'portal']),
   AH: ['home', 'mydashboard', 'tracker', 'my', 'approvals', 'folders', 'proposal', 'pricelists', 'dashboard', 'analytics',
     'customers', 'audit', 'aimap', 'po', 'launcher'],
   RS: SALES_PAGES, PP: SALES_PAGES, SS: SALES_PAGES, PJS: SALES_PAGES, RJS: SALES_PAGES, SR: SALES_PAGES,
   AN: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'proposal', 'approvals', 'folders', 'aimap', 'launcher'],
   TECH: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'proposal', 'approvals', 'aimap', 'launcher'],
-  CUST: ['portal'],
+  CUST: pages(['portal']),
 }
 
 // Opportunity lifecycle milestones (BT prototype stepper).

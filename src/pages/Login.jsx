@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { ROLES, OWNERS, DEMO_PASSWORD } from '../seed.js'
+import { ROLES, OWNERS, DEMO_PASSWORD, PORTAL_ENABLED } from '../seed.js'
 import { WarnBox } from '../ui.jsx'
 import { Icon, ModaeImageLogo } from '../icons.jsx'
 import { InstallBanner } from '../install.jsx'
@@ -25,7 +25,8 @@ export default function Login() {
   const switchMode = m => { setMode(m); setErr(''); setOk('') }
 
   // One-click demo sign-in — every ACTIVE account, same audited login path.
-  const quickAccounts = (store.users || []).filter(u => u.status === 'Active')
+  // The customer account is only offered while its portal is on (seed.js).
+  const quickAccounts = (store.users || []).filter(u => u.status === 'Active' && (PORTAL_ENABLED || u.role !== 'CUST'))
   const quickLogin = u => {
     setErr('')
     const res = store.login(u.email, u.pw || DEMO_PASSWORD)
@@ -125,7 +126,7 @@ export default function Login() {
           Demo accounts — password Demo@1234 for all. Manual sign-in above works too:
           admin@modae.demo (Super Admin), ljs@modae.demo (Strategic Approver),
           ah@modae.demo (Commercial &amp; Ops), rs@modae.demo / pp@modae.demo (Sales),
-          tech@modae.demo (Technical), customer@portal.demo (Customer portal).
+          tech@modae.demo (Technical){PORTAL_ENABLED ? ', customer@portal.demo (Customer portal)' : ''}.
         </div>
         <WarnBox>Demo authentication — passwords are stored in plain text in this browser only. Not for production.</WarnBox>
       </div>

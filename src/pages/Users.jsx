@@ -1,17 +1,18 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { ROLES, PERMS, DEMO_PASSWORD } from '../seed.js'
+import { ROLES, PERMS, DEMO_PASSWORD, PORTAL_ENABLED, selectableRoles } from '../seed.js'
 import { ddMmmYY, isAdminRole } from '../utils.js'
 import { Icon } from '../icons.jsx'
 
-// Roles assignable through the UI (incl. TECH and CUST) — SUPER is deliberately not offered.
-const ASSIGNABLE = Object.keys(ROLES).filter(r => r !== 'SUPER')
+// Roles assignable through the UI (incl. TECH) — SUPER is deliberately not
+// offered, and CUST only while the portal is enabled (seed.js PORTAL_ENABLED).
+const ASSIGNABLE = selectableRoles().map(([id]) => id).filter(r => r !== 'SUPER')
 
 // Page keys shown in the permissions matrix, in navigation order.
 const PAGE_KEYS = ['home', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders',
   'pricelists', 'dashboard', 'analytics', 'customers', 'po', 'aimap', 'admin', 'audit', 'users',
-  'launcher', 'voice', 'portal']
+  'launcher', 'voice', ...(PORTAL_ENABLED ? ['portal'] : [])]
 
 export default function Users() {
   const store = useStore()
@@ -139,7 +140,7 @@ export default function Users() {
             <tr><th>Role</th>{PAGE_KEYS.map(p => <th key={p}>{p}</th>)}</tr>
           </thead>
           <tbody>
-            {Object.keys(ROLES).map(r => (
+            {selectableRoles().map(([r]) => (
               <tr key={r}>
                 <td style={{ whiteSpace: 'nowrap' }}><b>{ROLES[r].label}</b></td>
                 {PAGE_KEYS.map(p => (

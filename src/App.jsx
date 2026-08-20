@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react'
 import { Routes, Route, NavLink, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from './store.jsx'
-import { ROLES } from './seed.js'
+import { PORTAL_ENABLED, selectableRoles } from './seed.js'
 import { isAdminRole, isSalesOwner, canSeePage } from './utils.js'
 import { DrawerHost } from './drawer.jsx'
 import { Icon, ModaeLogo } from './icons.jsx'
+import { DemoDataControls } from './ui.jsx'
 import { InstallButton } from './install.jsx'
 import { counts } from './kpi.js'
 import BrandWatermark from './branding/BrandWatermark.jsx'
@@ -39,6 +40,31 @@ function PageGate({ page, children }) {
   const store = useStore()
   if (!canSeePage(store.role, page)) return <Navigate to="/opportunities" replace />
   return children
+}
+
+// Landing for a session that is still on the customer persona/account after the
+// portal was parked (seed.js PORTAL_ENABLED). Internal staff can step back to a
+// workspace persona; a real customer account can only sign out.
+function PortalParked() {
+  const store = useStore()
+  const custAccount = store.auth?.user?.role === 'CUST'
+  return (
+    <div className="shell">
+      <div className="main-col">
+        <div className="page" style={{ maxWidth: 520, margin: '80px auto' }}>
+          <h2><Icon name="lock" size={18} /> Customer portal unavailable</h2>
+          <p className="hint">
+            The customer-facing portal is switched off for now. The internal workspace is unaffected.
+          </p>
+          <div className="lead-decision-actions" style={{ marginTop: 14 }}>
+            {custAccount
+              ? <button className="primary" onClick={store.logout}><Icon name="logout" size={13} /> Sign out</button>
+              : <button className="primary" onClick={() => store.setRole('SUPER')}>Back to the workspace</button>}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // Left-sidebar navigation. `page` is the PERMS matrix key — visibility follows
@@ -90,6 +116,12 @@ export default function App() {
     }
   }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The portal is parked (seed.js PORTAL_ENABLED). A customer session saved
+  // before it was switched off still has role CUST, so it gets a plain notice
+  // and a way out rather than an app with every page denied. Ahead of the
+  // tablet branch, so both shells are covered by the one guard.
+  if (!PORTAL_ENABLED && (role === 'CUST' || custAccount)) return <PortalParked />
+
   if (tablet) return <RequireAuth><TabletApp /></RequireAuth>
 
   // Customer accounts/persona only ever see the portal. Route-level, not a
@@ -134,7 +166,7 @@ export default function App() {
       <Route path="/aimap" element={<PageGate page="aimap"><AiMap /></PageGate>} />
       <Route path="/admin" element={<PageGate page="admin"><Admin /></PageGate>} />
       <Route path="/launcher" element={<PageGate page="launcher"><Launcher /></PageGate>} />
-      <Route path="/portal" element={<PageGate page="portal"><Portal /></PageGate>} />
+      {PORTAL_ENABLED && <Route path="/portal" element={<PageGate page="portal"><Portal /></PageGate>} />}
       <Route path="/voice" element={<PageGate page="voice"><VoiceUpdate /></PageGate>} />
     </Routes>
   )
@@ -144,7 +176,7 @@ export default function App() {
   // the tablet bar and the sidebar footer.
   const RoleSwitcher = () => custAccount ? null : (
     <select value={store.role} onChange={e => store.setRole(e.target.value)} title="Acting-as persona">
-      {Object.entries(ROLES).map(([id, r]) => <option key={id} value={id}>{r.label}</option>)}
+      {selectableRoles().map(([id, r]) => <option key={id} value={id}>{r.label}</option>)}
     </select>
   )
 
@@ -187,14 +219,10 @@ export default function App() {
               <Icon name="logout" size={14} /> <span className="side-label">Sign out ({store.auth.user.name})</span>
             </button>
           )}
-          {/* Confirmed, like the Admin and Launcher copies of this button: with
-              Supabase configured resetDemo overwrites every server slice with
-              seeds, so a stray click here discards the shared dataset for every
-              device, not just this browser. */}
-          <button className="reset" title="Clear local changes and reload seed data"
-            onClick={() => { if (window.confirm('Reset all demo data? Every change is discarded and the app reloads with seed data.')) store.resetDemo() }}>
-            <Icon name="refresh" size={14} /> <span className="side-label">Reset demo data</span>
-          </button>
+          {/* Shared with the Admin and Launcher copies — see DemoDataControls
+              in ui.jsx for why every one of these actions is confirm-guarded. */}
+          <DemoDataControls className="reset" size={14}
+            label={t => <span className="side-label">{t}</span>} />
         </div>
       </aside>
 
