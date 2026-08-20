@@ -4,7 +4,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { docRoute, docLayout, DOC_ROUTES, DOC_BODY_SECTIONS, defaultExecSummary } from '../src/proposalDoc.js'
+import {
+  docRoute, docLayout, docSheets, DOC_ROUTES, DOC_SHEET_KINDS, defaultExecSummary,
+} from '../src/proposalDoc.js'
 import { newProposal, proposalTypeForOpp, OPP_TYPES } from '../src/seed.js'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
@@ -46,9 +48,9 @@ test('AMC and Training are off the opportunity type list', () => {
   for (const oppType of ['AMC', 'Training']) {
     assert.ok(!OPP_TYPES.includes(oppType), `${oppType} must be off the dropdown`)
   }
-  const migrated = read('src/store.jsx')
+  const migrated = read('src/appState.js')
   assert.match(migrated, /o\.oppType === 'AMC' \|\| o\.oppType === 'Training' \? 'Service'/,
-    'store.migrate must remap saved AMC/Training rows onto Service')
+    'migrate must remap saved AMC/Training rows onto Service')
 })
 
 test('the proposal type selector overrides the opportunity route', () => {
@@ -56,37 +58,68 @@ test('the proposal type selector overrides the opportunity route', () => {
   assert.equal(docRoute({ proposalType: 'Project' }, { oppType: 'Spares' }), 'Project')
 })
 
-test('spares and services print fewer sections than a project', () => {
-  const project = docLayout({}, { oppType: 'Project' })
-  const spares = docLayout({}, { oppType: 'Spares' })
-  const services = docLayout({}, { oppType: 'Service' })
-
-  assert.equal(project.sections.length, DOC_BODY_SECTIONS.length)
-  assert.ok(spares.sections.length < project.sections.length,
-    'the spares document must be shorter than the project document')
-  assert.ok(services.sections.length < project.sections.length,
-    'the services document must be shorter than the project document')
-
-  // Every route's sections must be real sections, in the canonical order.
-  for (const layout of Object.values(DOC_ROUTES)) {
-    for (const s of layout.sections) assert.ok(DOC_BODY_SECTIONS.includes(s), `unknown section ${s}`)
-    const order = layout.sections.map(s => DOC_BODY_SECTIONS.indexOf(s))
-    assert.deepEqual(order, [...order].sort((a, b) => a - b), 'sections must stay in document order')
+// The client's own sample proposals (doc/Further Inputs) settled what the
+// documents actually are: a covering letter plus ONE commercial sheet, with
+// technical annexes beside it. Not a long-or-short run of numbered sections —
+// which is what the arrays this test used to assert against were.
+test('every route is a covering letter plus one commercial sheet', () => {
+  for (const [route, layout] of Object.entries(DOC_ROUTES)) {
+    assert.equal(layout.sheets[0], 'cover', `${route} must open with the covering letter`)
+    assert.equal(layout.sheets.filter(s => s === 'boq').length, 1,
+      `${route} must carry exactly one pricing sheet`)
+    for (const s of [...layout.sheets, ...layout.annexes]) {
+      assert.ok(DOC_SHEET_KINDS.includes(s), `unknown sheet ${s} on ${route}`)
+    }
   }
 })
 
-// A two-page spares quote does not need a table of contents or a company profile.
-test('spares drops the project front matter', () => {
-  const spares = docLayout({}, { oppType: 'Spares' })
-  assert.equal(spares.contents, false)
-  assert.equal(spares.about, false)
-  assert.equal(docLayout({}, { oppType: 'Project' }).contents, true)
-  assert.equal(docLayout({}, { oppType: 'Project' }).about, true)
+test('each route carries the sheets its sample carries', () => {
+  assert.deepEqual(DOC_ROUTES.Project.sheets, ['cover', 'signalList', 'rackLayout', 'boq'])
+  assert.deepEqual(DOC_ROUTES.Spares.sheets, ['cover', 'boq'])
+  assert.deepEqual(DOC_ROUTES.Services.sheets, ['cover', 'boq'])
 })
 
-test('a services proposal quotes a scope of work, not a scope of supply', () => {
-  assert.equal(docLayout({}, { oppType: 'Service' }).scopeTitle, 'Scope of work')
-  assert.equal(docLayout({}, { oppType: 'Project' }).scopeTitle, 'Scope of supply')
+// No sample proposal has a contents page, a company page or an executive
+// summary — not even the big project one, which is what the 13 Aug review was
+// worried about. The front matter is gone from every route, not just spares.
+test('no route prints project front matter', () => {
+  const print = read('src/proposal/PrintDoc.jsx')
+  for (const layout of Object.values(DOC_ROUTES)) {
+    assert.equal(layout.contents, undefined)
+    assert.equal(layout.about, undefined)
+  }
+  assert.doesNotMatch(print, /title="Contents"/)
+  assert.doesNotMatch(print, /doc-toc/, 'the table of contents is gone')
+})
+
+// The annexes ship hidden in the workbooks — prepared, not issued. A PDF has no
+// hidden sheets, so they stay out until the proposal opts in.
+test('hidden annexes print only when opted in', () => {
+  const opp = { oppType: 'Spares' }
+  assert.deepEqual(docSheets({}, opp), ['cover', 'boq'])
+  assert.deepEqual(docSheets({ printAnnexes: ['sensorComparison'] }, opp),
+    ['cover', 'boq', 'sensorComparison'])
+  // An annexe that does not belong to the route cannot be forced on.
+  assert.deepEqual(docSheets({ printAnnexes: ['compliance'] }, opp), ['cover', 'boq'])
+})
+
+// The samples title the pricing sheet by revision — 'Rev-00', 'BoQ & Price-00'.
+test('the pricing sheet is titled the way the samples title it', () => {
+  const rev = { revision: '00' }
+  assert.equal(docLayout(rev, { oppType: 'Project' }).boqTitle(rev), 'Priced BoQ')
+  assert.equal(docLayout(rev, { oppType: 'Spares' }).boqTitle(rev), 'Rev-00')
+  assert.equal(docLayout(rev, { oppType: 'Service' }).boqTitle(rev), 'BoQ & Price-00')
+})
+
+// Spares-2 quotes two makes side by side; Spares-1 quotes one. Same route, and
+// the number of priced groups is what tells them apart.
+test('a two-option spares offer picks the option column set', () => {
+  const spares = docLayout({}, { oppType: 'Spares' })
+  assert.equal(spares.boqVariant({ itemGroups: [{ id: 'g1' }] }), 'firm')
+  assert.equal(spares.boqVariant({ itemGroups: [{ id: 'g1' }, { id: 'g2' }] }), 'options')
+  const services = docLayout({}, { oppType: 'Service' })
+  assert.equal(services.boqVariant({}), 'rate')
+  assert.equal(services.boqVariant({ serviceKind: 'scope' }), 'scope')
 })
 
 // The auto-drafted "our understanding" paragraph described spare sensing
@@ -106,10 +139,11 @@ test('the executive summary describes the actual route', () => {
 test('the printed document is driven by the route, not by a banner', () => {
   const print = read('src/proposal/PrintDoc.jsx')
   assert.match(print, /const layout = docLayout\(p, opp\)/)
-  assert.match(print, /const S = Object\.fromEntries\(sections\.map/)
-  // Every section page must go through page(), which drops unlisted sections.
-  assert.doesNotMatch(print, /<Page[^>]*n=\{S\['Attachments/,
-    'the attachments page must render through page() so spares can drop it')
+  assert.match(print, /const sheets = docSheets\(p, opp\)/)
+  // Every sheet must go through sheet(), which drops the ones this route or
+  // this proposal does not carry. A bare <Page> would print unconditionally.
+  assert.doesNotMatch(print, /<Page[^>]*title="(Signal List|Rack Layout|Clarifications)"/,
+    'every sheet must render through sheet()')
 })
 
 // "In the spare parts case, there will not be any signal list, there will not

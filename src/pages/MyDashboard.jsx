@@ -1,11 +1,11 @@
-import React, { useState } from 'react'
+import React, { useId, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, STAGES } from '../seed.js'
 import { readiness, isBlocked, nextActionWith } from '../gates.js'
 import { isApprover, isAdminRole, isSalesOwner, canViewCommercial, canPriceProposal, fmtLakh, ddMmmYY } from '../utils.js'
 import { analyticsSnapshot, counts, salesPerformance, FY_QUARTERS, FY_MONTHS } from '../kpi.js'
-import { ArcGauge, Sparkline } from '../dashviz.jsx'
+import { ArcGauge } from '../dashviz.jsx'
 import { Icon } from '../icons.jsx'
 import Analytics, { Funnel as AnalyticsFunnel } from './Analytics.jsx'
 import ForecastDashboard from './Dashboard.jsx'
@@ -115,22 +115,143 @@ function QuarterBars({ perf }) {
   )
 }
 
+// Monthly bookings against the target run rate, matching the reference
+// prototype's `chartTrend` (Bt_html clickable prototype.html:3733).
+//
+// Two things the 20 Aug review asked for and the old version got wrong:
+//  - the target is the quarter's number over three months (perf.monthlyTarget),
+//    not a flat annual twelfth, and it is drawn across all twelve months;
+//  - the actual stops at today. It used to run the full year, so Sep–Mar drew
+//    a flat line along zero and read as "we booked nothing" rather than
+//    "we have not got there yet".
 function RunRateChart({ perf }) {
-  const points = perf.monthly.map((actual, i) => ({ label: FY_MONTHS[i], actual, target: perf.annual / 12 }))
-  const max = Math.max(1, ...points.flatMap(p => [p.actual, p.target]))
-  const x = i => 26 + (i * 668 / Math.max(1, points.length - 1))
-  const y = value => 132 - ((value / max) * 104)
-  const line = key => points.map((p, i) => `${x(i)},${y(p[key])}`).join(' ')
+  // Unique per instance: a hardcoded gradient id collides when two charts share
+  // a page, and the second one silently picks up the first one's fill.
+  const gradientId = `runrate-fade-${useId().replace(/:/g, '')}`
+  // Which month the pointer (or the keyboard) is asking about. null = no readout.
+  const [hover, setHover] = useState(null)
+  const svgRef = useRef(null)
+
+  const target = perf.monthlyTarget || FY_MONTHS.map(() => perf.annual / 12)
+  const elapsed = Math.max(1, Math.min(FY_MONTHS.length, perf.monthsElapsed || FY_MONTHS.length))
+  const actual = perf.monthly.slice(0, elapsed)
+
+  // The reference prototype used a 360-wide viewBox in a ~360px card. This card
+  // is twice that, and the svg scales to fill it — which multiplied every
+  // fontSize and stroke by ~2.2 and made the month labels compete with the card
+  // heading. Doubling the viewBox brings the scale back to ~1.1, so 10px reads
+  // as 10px. Nothing else here needs to change: every coordinate is derived.
+  const W = 720, H = 160, padL = 16, padR = 16, base = H - 22, topY = 14
+  const max = Math.max(1, ...perf.monthly, ...target)
+  const step = (W - padL - padR) / Math.max(1, FY_MONTHS.length - 1)
+  const px = i => padL + i * step
+  const py = v => base - (v / max) * (base - topY)
+  const pts = series => series.map((v, i) => `${px(i).toFixed(1)},${py(v).toFixed(1)}`).join(' ')
+
+  // The area closes on the last *booked* month, not the right-hand edge.
+  const area = `${padL},${base} ${pts(actual)} ${px(actual.length - 1).toFixed(1)},${base}`
+  // Six labels plus a guaranteed last one, so twelve months do not collide.
+  const every = Math.ceil(FY_MONTHS.length / 6)
+
+  // The crosshair finds the X: the reader aims at a month, never at a 2px line.
+  // The SVG scales to the card width, so map client pixels back through the
+  // viewBox before snapping to the nearest month.
+  const monthAt = event => {
+    const box = svgRef.current?.getBoundingClientRect()
+    if (!box?.width) return null
+    const x = ((event.clientX - box.left) / box.width) * W
+    const i = Math.round((x - padL) / step)
+    return Math.max(0, Math.min(FY_MONTHS.length - 1, i))
+  }
+
+  // Keyboard reaches the same readout as the pointer.
+  const onKeyDown = event => {
+    if (event.key === 'Escape') return setHover(null)
+    const delta = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
+    if (!delta) return
+    event.preventDefault()
+    setHover(prev => Math.max(0, Math.min(FY_MONTHS.length - 1,
+      (prev == null ? (delta > 0 ? -1 : FY_MONTHS.length) : prev) + delta)))
+  }
+
+  const booked = hover != null && hover < actual.length
+  // Keep the readout inside the card at both ends.
+  const side = hover != null && px(hover) > W / 2 ? 'left' : 'right'
+
   return (
     <div className="runrate-chart">
-      <svg viewBox="0 0 720 166" role="img" aria-label="Monthly performance against run rate">
-        <line x1="26" y1="132" x2="694" y2="132" stroke="var(--border-color)" />
-        <line x1="26" y1="80" x2="694" y2="80" stroke="var(--border-soft)" strokeDasharray="3 4" />
-        <polyline points={line('target')} fill="none" stroke="#94a3b8" strokeWidth="2" strokeDasharray="5 4" />
-        <polyline points={line('actual')} fill="none" stroke="var(--primary-accent)" strokeWidth="2.5" />
-        {points.map((p, i) => <g key={p.label}><circle cx={x(i)} cy={y(p.actual)} r="3.5" fill="var(--primary-accent)" /><text x={x(i)} y="153" textAnchor="middle" fontSize="10" fill="var(--text-subtle)">{p.label}</text></g>)}
-      </svg>
-      <div className="chart-legend"><span><i className="legend-line target" />Target run rate</span><span><i className="legend-line actual" />Actual</span></div>
+      <div className="runrate-plot">
+        <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} tabIndex={0} role="img"
+          aria-label={`Monthly bookings against target run rate, ${FY_MONTHS[0]} to ${FY_MONTHS[FY_MONTHS.length - 1]}. Use the arrow keys to read each month.`}
+          onPointerMove={event => setHover(monthAt(event))}
+          onPointerLeave={() => setHover(null)}
+          onBlur={() => setHover(null)}
+          onKeyDown={onKeyDown}>
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--primary-accent)" stopOpacity=".28" />
+              <stop offset="100%" stopColor="var(--primary-accent)" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <polygon points={area} fill={`url(#${gradientId})`} />
+          {hover != null && (
+            <line className="runrate-crosshair" x1={px(hover)} y1={topY - 6} x2={px(hover)} y2={base} />
+          )}
+          <polyline points={pts(target)} fill="none" stroke="var(--text-main)" strokeWidth="1.6"
+            strokeDasharray="5 4" opacity=".6" />
+          <polyline points={pts(actual)} fill="none" stroke="var(--primary-accent)" strokeWidth="2.6"
+            strokeLinejoin="round" strokeLinecap="round" />
+          {actual.map((v, i) => (
+            <circle key={FY_MONTHS[i]} cx={px(i).toFixed(1)} cy={py(v).toFixed(1)}
+              r={hover === i ? '5.5' : '4'}
+              fill="var(--card-bg)" stroke="var(--primary-accent)" strokeWidth="2" />
+          ))}
+          {hover != null && (
+            <circle cx={px(hover).toFixed(1)} cy={py(target[hover]).toFixed(1)} r="3.6"
+              fill="var(--card-bg)" stroke="var(--text-main)" strokeWidth="1.6" opacity=".7" />
+          )}
+          {FY_MONTHS.map((label, i) => (i % every === 0 || i === FY_MONTHS.length - 1) && (
+            <text key={label} x={px(i).toFixed(1)} y={H - 5} fontSize="10" textAnchor="middle"
+              fill="var(--text-subtle)">{label}</text>
+          ))}
+        </svg>
+        {hover != null && (
+          // One tooltip, every series — the pointer never has to land on a line
+          // to get a value, and the value leads while the label follows.
+          <div className={`runrate-tip runrate-tip-${side}`}
+            style={{ left: `${(px(hover) / W) * 100}%` }} role="status">
+            <b>{FY_MONTHS[hover]}</b>
+            <span>
+              <i className="legend-line actual" />
+              <strong>{booked ? fmtLakh(perf.monthly[hover]) : '—'}</strong> actual
+            </span>
+            <span>
+              <i className="legend-line target" />
+              <strong>{fmtLakh(target[hover])}</strong> target
+            </span>
+            {!booked && <em>Not booked yet</em>}
+          </div>
+        )}
+      </div>
+      <div className="chart-legend">
+        <span><i className="legend-line target" />Target run rate</span>
+        <span><i className="legend-line actual" />Actual run rate</span>
+      </div>
+      {/* The tooltip enhances, it never gates: every figure it shows is also
+          here, for a screen reader and for anyone not using a pointer. */}
+      <table className="visually-hidden">
+        <caption>Monthly bookings against target run rate</caption>
+        <thead><tr><th>Month</th><th>Actual</th><th>Target</th></tr></thead>
+        <tbody>
+          {FY_MONTHS.map((label, i) => (
+            <tr key={label}>
+              <th scope="row">{label}</th>
+              <td>{i < actual.length ? fmtLakh(perf.monthly[i]) : 'Not booked yet'}</td>
+              <td>{fmtLakh(target[i])}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
@@ -262,7 +383,6 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
   const openValue = open.reduce((s, o) => s + (+o.valueK || 0), 0)
   const leads = store.leads.filter(l => (l.assignedOwner || l.suggestedOwner) === role && l.status === 'New')
   const unproposed = open.filter(o => !o.proposalDate)
-  const monthPoints = FY_MONTHS.map((m, i) => ({ key: m, label: m, value: perf.monthly[i] }))
   const variance = perf.achieved - perf.expected
   const funnelStages = STAGES
     .filter(stage => stage !== 'Won' && stage !== 'Lost')
@@ -312,8 +432,13 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
           <div className="hint" style={{ marginTop: 8 }}>Booked orders against your quarterly number.</div>
         </Card>
 
-        <Card title="Monthly performance against run rate" icon="chartLine" tone="tone-sky" span={8}>
+        <Card title="Monthly bookings" icon="chartLine" tone="tone-sky" span={8}>
           <RunRateChart perf={perf} />
+          <div className="hint" style={{ marginTop: 8 }}>
+            {perf.fy} · {FY_MONTHS[0]}–{FY_MONTHS[FY_MONTHS.length - 1]} · actual against target run rate,
+            booked to {FY_MONTHS[Math.max(0, (perf.monthsElapsed || 1) - 1)]} ·{' '}
+            {perf.orders.length} order{perf.orders.length === 1 ? '' : 's'}
+          </div>
         </Card>
 
         <Card title="My funnel" icon="layers" tone="tone-teal" span={4}>
@@ -338,12 +463,11 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
         {detailsOpen && <div id="detailed-analytics" className="dashboard-embedded-report"><Analytics embedded /></div>}
         {forecastOpen && <div id="forecast-details" className="dashboard-embedded-report"><ForecastDashboard embedded /></div>}
 
-        <Card title="Monthly bookings" icon="chartLine" tone="tone-violet" span={6}>
-          <div style={{ color: 'var(--primary-accent)' }}><Sparkline points={monthPoints} height={64} /></div>
-          <div className="hint">{FY_MONTHS[0]} – {FY_MONTHS[FY_MONTHS.length - 1]} · {perf.orders.length} order{perf.orders.length === 1 ? '' : 's'} booked</div>
-        </Card>
+        {/* The "Monthly bookings" sparkline that used to sit here plotted the
+            same perf.monthly array as the chart above, with no target line, no
+            month labels and a distorted stroke. One chart, above. */}
 
-        <Card title="Pipeline snapshot" icon="chartBar" tone="tone-teal" span={6}>
+        <Card title="Pipeline snapshot" icon="chartBar" tone="tone-teal" span={12}>
           <table className="cost-table" style={{ width: '100%' }}>
             <tbody>
               <tr><td>Open opportunities</td><td className="num">{open.length}</td></tr>

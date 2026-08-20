@@ -4,10 +4,10 @@ import { useStore, nextOppId } from '../store.jsx'
 import { OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, SUBFOLDERS, routeForType, ownerForOppType } from '../seed.js'
 import { Icon } from '../icons.jsx'
 import { ErrBox } from '../ui.jsx'
-import { matchCustomer } from './Inbox.jsx'
+import { matchCustomer, customerStatusForLead } from './Inbox.jsx'
 import { activeBackend, uploadOppFile, fmtSize } from '../filestore.js'
 import { take } from '../leadFiles.js'
-import { leadVerificationBlockers, verificationSnapshot } from '../leadVerification.js'
+import { leadVerificationBlockers, verificationSnapshot, redClearanceFor, isRedCleared } from '../leadVerification.js'
 
 // Registration — the moment a qualified lead becomes an opportunity and the
 // permanent opportunity ID is minted (YYMM + sequence + owner initials).
@@ -69,17 +69,22 @@ export default function Register() {
   }
 
   const customer = matchCustomer(store.customers, lead)
-  const leadCustomerStatus = lead.customerStatus || customer?.status || 'Blue'
-  const isRed = lead.redFlag || leadCustomerStatus === 'Red'
-  const redApproval = store.approvals.find(a => a.leadId === lead.id && a.type === 'Red customer clearance')
-  const redCleared = redApproval && ['Approved', 'Approved with conditions'].includes(redApproval.status)
+  // One resolution chain, shared with the inbox — the inline copy here used to
+  // drop the `redFlag ? 'Red' : 'Blue'` fallback, so a red-flagged lead with no
+  // master match silently registered as Blue.
+  const leadCustomerStatus = customerStatusForLead(lead, store.customers)
+  const redApproval = redClearanceFor(store.approvals, lead.id)
+  const redCleared = isRedCleared(redApproval)
   const pendingLow = fields.filter(f => f.state === 'pending' && f.conf < med)
-  const verificationBlockers = leadVerificationBlockers(lead, leadCustomerStatus)
+  // Red clears on the joint approval now. The same blocker used to be raised
+  // here *and* unconditionally inside leadVerificationBlockers; that second
+  // copy read no approvals, so it could never clear and an approved Red lead
+  // could never be registered.
+  const verificationBlockers = leadVerificationBlockers(lead, leadCustomerStatus, { redCleared })
 
   const blockers = []
   if (lead.status !== 'Qualified') blockers.push('Lead is not Qualified yet — qualify it in the inbox first')
   pendingLow.forEach(f => blockers.push(`Low-confidence field unresolved: ${f.k} (${f.conf}%)`))
-  if (isRed && !redCleared) blockers.push('Red continuation approval (joint LJS + AH) not granted')
   verificationBlockers.forEach(item => blockers.push(item))
   const blocked = blockers.length > 0
 
@@ -101,7 +106,7 @@ export default function Register() {
       sl: Math.max(0, ...store.opportunities.map(o => o.sl || 0)) + 1,
       sellTo, category, location,
       customerStatus: leadCustomerStatus,
-      leadVerification: verificationSnapshot(lead, leadCustomerStatus),
+      leadVerification: verificationSnapshot(lead, leadCustomerStatus, { approval: redApproval }),
       eucName: category === 'EUC' ? sellTo : '', eucLocation: location,
       oppName: lead.subject, owner, oppType, bu, segment, product,
       prob: 'Low', valueK: 0, cogsK: 0,

@@ -22,11 +22,69 @@ export const MODAE_BRAND = Object.freeze({
     tagline: 'Your Partners in Achieving Excellence',
     officialAddress: '7th Floor, Commerce Mantri, 12, 1 & 2, Bannerghatta Road, BTM Layout, 2nd Stage, BTM Layout, Bangalore, Karnataka – 560076',
     salesOffice: '7th Floor, Commerce Mantri, 12, 1 & 2, Bannerghatta Road, BTM Layout, 2nd Stage, BTM Layout, Bangalore, Karnataka – 560076',
-    registeredOffice: '',
+    // The samples and the May 2026 letterhead both print the registered office
+    // alongside the sales office; it was blank, so the proposal footer carried
+    // only half the statutory identity.
+    registeredOffice: '503C, Hiranandani Hill Crest, Begur Hulimavu Road, Hulimavu, Bangalore 560076, India',
     gstin: '29AARCM8622J1ZQ',
     cin: 'U62099KA2024PTC185715',
   }),
   aboutImageUrl,
+})
+
+// ---------------------------------------------------------- visual identity
+// Read off mod-ae.com's own theme stylesheet
+// (wp-content/themes/Qfactum/assets/css/style.css) after the 20 Aug review
+// asked for the full brand identity — colours and buttons — rather than the
+// logo and font alone. The BT prototype's :root carries the same palette, so
+// the two references agree.
+//
+// This is the source of truth; styles.css mirrors it into CSS custom
+// properties. Keep them in step — tests/mobile-deploy.test.mjs asserts it.
+//
+// One deliberate departure. The brand colour is a red, and this app also uses
+// red to mean *lost*, *overdue* and *Red-class customer*. Those stay a separate
+// hue (`status.bad`) so a destructive state never reads as a primary button.
+export const MODAE_COLORS = Object.freeze({
+  primary: '#ED3F2F',        // .btn__primary, links, accents
+  primaryDark: '#C7291B',    // hover / pressed
+  primaryLight: '#FDEDEB',   // tinted fills
+  primaryBorder: '#F6C3BD',
+  ink: '#282828',            // headings, sidebar, dark chrome
+  inkSoft: '#3F3F3F',        // body copy
+  muted: '#616161',
+  border: '#E3E3E5',
+  canvas: '#F7F7F8',
+  surface: '#FFFFFF',
+  // Semantic, deliberately not the brand red.
+  status: Object.freeze({
+    good: '#37A64A',
+    info: '#2F80ED',
+    warn: '#D99200',
+    bad: '#C93838',   // one step darker than the website tone: white text needs 4.5:1
+  }),
+  // Sequential ramp for magnitude (the pipeline funnel). One hue, light→dark,
+  // with the brand red as step 3 — placing it mid-ramp leaves the lightness
+  // room the six steps need.
+  //
+  // Validated as a *sequential* ramp (lightness monotonicity, adjacent ΔL,
+  // single hue, light-end contrast), not as a categorical one: monotone,
+  // 1° hue spread, every gap ≥ 0.06, light end 2.05:1 on white. The website's
+  // own `chShade` ramp fails all four — it runs light→lighter and then drops to
+  // a chroma-free charcoal — so it is deliberately not reused here.
+  ramp: Object.freeze(['#F39C8E', '#EF7765', '#ED3F2F', '#BB2718', '#8A1710', '#5E0F09']),
+})
+
+export const MODAE_TYPE = Object.freeze({
+  heading: "'Rubik', 'Segoe UI', system-ui, sans-serif",
+  body: "'Roboto', 'Segoe UI', system-ui, sans-serif",
+  // Website buttons are 60px tall hero controls. The colour, radius, weight and
+  // letter-spacing carry across; the metrics do not — this is a dense
+  // enterprise UI, not a marketing page.
+  buttonRadius: '7px',
+  buttonWeight: 700,
+  buttonTracking: '.3px',
+  cardRadius: '12px',
 })
 
 const imageBySlug = {

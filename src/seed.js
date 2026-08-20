@@ -742,6 +742,49 @@ export const seedPriceLists = {
       { pn: 'CMS-RPT', desc: 'Automated reporting module', price: 4200, adders: [] },
       { pn: 'SVC-COMM-DAY', desc: 'Commissioning engineer (per day, ex-works)', price: 780, adders: [] },
       { pn: 'SVC-AMC-YR', desc: 'Annual maintenance contract — per rack, per year', price: 3600, adders: [] },
+
+      // ---- DS821 displacement-sensor family -------------------------------
+      // The five line items of the Ref 14716 GeM enquiry and the firm offer
+      // that answered it (2511096RS). Part numbers and descriptions are taken
+      // verbatim from those two documents:
+      //   doc/Further Inputs/.../Spares Opp-1 (Won almost)/
+      //     02_7425309-Buyers Speces.pdf          — the enquiry, "Ref:14716"
+      //     Spares Firm Offer Rev00 2May2026.xlsx — the proposal
+      // Keywords carry the buyer's own wording so matchParts resolves a GeM
+      // item description that never quotes the ModAE catalogue name.
+      //
+      // ⚠ PLACEHOLDER PRICES. The sample workbook prices through external
+      // links, so its cached figures are zero and the real B&K net list was not
+      // in the handover. These are plausible figures that make the benchmark
+      // price coherently; replace every `price` below from the B&K Vibro
+      // distributor price file before any of this reaches a customer.
+      { pn: 'DS821.DS1001/10/075/012/005/000/0', price: 520, adders: [],
+        desc: 'Non-contact Displacement Sensor with full length thread, Measuring Range 2mm, With 0.5m Integral Cable',
+        keywords: ['non-contact sensor', 'non contact sensor', 'displacement sensor',
+          'full length thread', 'non-contact vibration sensor'] },
+      // The buyer writes this one as "Reverse mount sensor FOR sensor holder
+      // with adjustment spindle" — which contains the holder's keywords too.
+      // Scored on the short set it lost to AC-3101/1 and would have priced a
+      // €245 holder where a €560 sensor belongs, so the phrases below are the
+      // buyer's own, long enough to outscore the accessory it names.
+      { pn: 'DS821.DS1003/62/039/013/005/000/0', price: 560, adders: [],
+        desc: 'Non-contact Displacement Sensor, Reverse Mount Sensor for Sensor Holder with Adjustment Spindle, With 0.5m integral cable',
+        keywords: ['reverse mount sensor for sensor holder', 'reverse mount sensor', 'reverse mount',
+          'non contact reverse mount', 'displacement sensor'] },
+      { pn: 'DS821.EC100/45/0', price: 135, adders: [
+        // The sample quotes five extra cables beyond the sensor count.
+        { code: 'ADDL', desc: 'Additional extension cable, 4.5m', price: 135 },
+      ],
+        desc: 'Sensor Extension Cable Extension Cable without protection, 4.5m length',
+        keywords: ['sensor extension cable', 'extension cable'] },
+      { pn: 'DS821.OD110/0', price: 610, adders: [],
+        desc: 'Sensor Driver Electronics for 2mm Measuring Range (oscillator/de-modulator), supports all nominal system lengths (5 m and 10 m)',
+        keywords: ['sensor driver', 'driver electronics', 'oscillator', 'de-modulator', 'demodulator'] },
+      // A bare 'holder' matched anything that merely mentioned one, including
+      // the sensor above; these are specific to the accessory itself.
+      { pn: 'AC-3101/1', price: 245, adders: [],
+        desc: 'Sensor Holder, With Adjustment Spindle Uncut, Without Sensor Thread, FKM O-ring',
+        keywords: ['sensor holder', 'adjustment spindle', 'spindle uncut', 'without sensor thread'] },
     ],
   },
   // Metrix Instrument Co. machinery-protection range (USD list, ex-Houston).
@@ -1097,6 +1140,9 @@ export const seedConfig = {
     { region: 'Unclassified leads', owner: 'LJS', unclassified: true, approvalNeeded: true },
   ],
   leadDeadlines: { kycDays: 7, amberFeeDays: 7, clarificationDays: 7 },
+  // The mailbox every enquiry lands in. Clarification mail goes out from here
+  // until a lead is assigned, and from the assigned salesperson after that.
+  commonMailbox: 'sales@modae.demo',
   fastTrack: { enabled: true, customerStatus: 'Green' },
   aiThresholds: { high: 90, med: 75 },
   // Diagram 02 §5C margin matrix: order value against ₹10 Lakh, margin against 50%.
@@ -1452,6 +1498,49 @@ export const seedAiLeads = [
       missing: [],
       duplicates: [],
       next: ['Confirm against LD-201 and drop this one', 'Reply on the existing opportunity, not a new one'],
+    },
+  },
+  // ---- The 20 Aug benchmark ------------------------------------------------
+  // The client named one enquiry and one proposal as the yardstick for the
+  // spares lead-to-proposal flow. Both are in the repo:
+  //   doc/Further Inputs/.../Spares Opp-1 (Won almost)/
+  //     02_7425309-Buyers Speces.pdf          — this enquiry, "Ref:14716"
+  //     Spares Firm Offer Rev00 2May2026.xlsx — the answer, Our Ref 2511096RS
+  // Five B&K Vibro line items whose part codes match one-for-one across the two
+  // documents; the price list carries all five (see seedPriceLists.BNK).
+  // Green so the flow exercises the existing fast track end to end.
+  {
+    id: 'LD-208', ts: '2026-08-19T06:15:00Z', channel: 'Email', source: 'GeM / tender portal',
+    from: 'purchase@ntpc-vindhyachal.example.gov.in', sender: 'Purchase — NTPC Vindhyachal',
+    subject: 'Enquiry Ref 14716 — B&K Vibro spare sensors & accessories (GeM two-part bid)',
+    ref: '14716', route: 'Spares', urgency: 'Normal', duplicateRisk: 'Low',
+    completeness: 88, suggestedOwner: 'RS', status: 'New', customerStatus: 'Green',
+    body: 'Dear Sir,\n\nPlease refer our enquiry Ref:14716 for supply of B&K Vibro make spare sensors and accessories '
+      + 'against the attached buyer specification (five items, part codes as listed).\n\n'
+      + 'Bidder must be the original manufacturer or an authorized dealer/distributor — a bid-specific valid '
+      + 'authorization certificate is to be enclosed with the offer. Material must be delivered in OEM packing only.\n\n'
+      + 'Kindly submit your priced offer along with the technical compliance sheet.\n\n'
+      + 'Regards,\nPurchase Department',
+    attachments: [{ name: '02_7425309-Buyers Speces.pdf', pages: 11 }],
+    ai: {
+      summary: 'GeM two-part spares enquiry, Ref 14716, for five B&K Vibro items with explicit part codes. '
+        + 'All five resolve against the B&K price list. Buyer requires an authorization certificate and OEM '
+        + 'packing; delivery location and the bid submission date are not stated in the specification.',
+      fields: [
+        { group: 'Customer', k: 'Sell-to customer', v: 'NTPC Vindhyachal', conf: 94, ev: 'Sender domain + buyer specification header', state: 'pending' },
+        { group: 'Customer', k: 'Category', v: 'EUC', conf: 88, ev: 'Government generating station', state: 'pending' },
+        { group: 'RFQ', k: 'Buyer reference', v: '14716', conf: 99, ev: 'Ref:14716, page 1 of the specification', state: 'pending' },
+        { group: 'RFQ', k: 'Opp type', v: 'Spares', conf: 96, ev: 'Five spare sensor / accessory line items', state: 'pending' },
+        { group: 'RFQ', k: 'Line items', v: '5 items — DS1001 ×10, DS1003 ×10, EC100 ×15, OD110 ×10, AC-3101/1 ×10', conf: 93, ev: 'Buyer specification, Items 1-5', state: 'pending' },
+        { group: 'RFQ', k: 'Suggested owner', v: 'RS', conf: 90, ev: 'Ownership routing table — North & West India', state: 'pending' },
+      ],
+      missing: ['Delivery location / consignee address', 'Bid submission date'],
+      duplicates: [],
+      next: [
+        'Draft the clarification for the delivery address and bid date',
+        'Register and price against the B&K list — all five part codes are on it',
+        'Enclose the authorization certificate the buyer specification asks for',
+      ],
     },
   },
 ]

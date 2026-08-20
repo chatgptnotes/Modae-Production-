@@ -4,9 +4,10 @@ import { useStore } from '../store.jsx'
 import { OWNERS, AI_PROVIDERS } from '../seed.js'
 import { isAdminRole, canSeePage } from '../utils.js'
 import { Icon } from '../icons.jsx'
-import { Chip, WarnBox } from '../ui.jsx'
+import { Chip, WarnBox, DemoDataControls } from '../ui.jsx'
 import { saveAiKey, testConnection } from '../ai.js'
 import * as sp from '../sharepoint.js'
+import { DEFAULT_COMMON_MAILBOX } from '../leadClarification.js'
 
 // Admin — every runtime rule the app obeys, in one card grid. Data lives in
 // store.config; all changes are audited by the store mutators.
@@ -230,9 +231,7 @@ export default function Admin() {
       <div className="toolbar">
         <span className="hint">Configuration is separated from demo data. Changes update behaviour immediately and are audited.</span>
         <span className="spacer" />
-        <button onClick={() => { if (window.confirm('Reset all demo data? Every change is discarded and the app reloads with seed data.')) store.resetDemo() }}>
-          <Icon name="refresh" size={12} /> Reset all demo data
-        </button>
+        <DemoDataControls size={12} />
       </div>
 
       {!canEdit && (
@@ -379,6 +378,17 @@ export default function Admin() {
             onChange={v => store.updateConfig({ leadDeadlines: { ...(config.leadDeadlines || {}), kycDays: v } })} />
           <NumField label="Clarification deadline (days)" value={config.leadDeadlines?.clarificationDays ?? 7} disabled={!canEdit}
             onChange={v => store.updateConfig({ leadDeadlines: { ...(config.leadDeadlines || {}), clarificationDays: v } })} />
+          {/* Clarification mail goes out from here until a lead is assigned,
+              and from the assigned salesperson once it is. */}
+          <label className="afield">Common mailbox
+            <input type="email" value={config.commonMailbox || ''} disabled={!canEdit}
+              placeholder={DEFAULT_COMMON_MAILBOX}
+              onChange={e => store.updateConfig({ commonMailbox: e.target.value })} />
+          </label>
+          <p className="hint">
+            Unassigned leads send clarification mail from this address; once a lead is assigned it
+            sends from the salesperson, copying this mailbox.
+          </p>
           <label className="check-row">
             <input type="checkbox" checked={config.fastTrack?.enabled !== false} disabled={!canEdit}
               onChange={e => store.updateConfig({ fastTrack: { ...(config.fastTrack || {}), enabled: e.target.checked } })} />

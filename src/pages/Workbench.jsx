@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, REVISION_TYPES } from '../seed.js'
 import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY } from '../utils.js'
-import { readiness, isBlocked, computeProposalTotals, nextActionWith, transitionBlockers } from '../gates.js'
+import { readiness, isBlocked, nextActionWith, transitionBlockers } from '../gates.js'
 import { COMMERCIAL_RX } from './Approvals.jsx'
 import { Chip, ClassChip, AiBadge, Stepper, WarnBox, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
@@ -14,6 +14,11 @@ import WbSpares from '../workbench/WbSpares.jsx'
 import WbService from '../workbench/WbService.jsx'
 import WbProject from '../workbench/WbProject.jsx'
 import PropBuilder from '../workbench/PropBuilder.jsx'
+// The same component the standalone /proposal/:oppId route renders — both write
+// through store.saveProposal, so the two views are never out of step.
+import Proposal from './Proposal.jsx'
+import PrintDoc from '../proposal/PrintDoc.jsx'
+import { buildDocProps } from '../proposal/docProps.js'
 import BSteps from '../workbench/BSteps.jsx'
 import SubmissionPanel from '../workbench/SubmissionPanel.jsx'
 import PoHandover from '../workbench/PoHandover.jsx'
@@ -847,39 +852,41 @@ function ProposalTab({ opp }) {
         : <WbProject opp={opp} openBuilder={openBuilder} />
       )}
       {sub === 'steps' && <BSteps opp={opp} />}
-      {sub === 'builder' && <PropBuilder opp={opp} openSteps={() => setSub('steps')} />}
-      {sub === 'preview' && <PreviewPane opp={opp} />}
+      {sub === 'builder' && (
+        <>
+          <PropBuilder opp={opp} openSteps={() => setSub('steps')} />
+          <div className="builder-divider" />
+          <Proposal oppId={opp.id} embedded />
+        </>
+      )}
+      {sub === 'preview' && <PreviewPane opp={opp} openBuilder={openBuilder} />}
       {sub === 'followup' && <FollowUpPane opp={opp} />}
     </div>
   )
 }
 
-function PreviewPane({ opp }) {
+// The real customer document, not a summary of it. Same component, same props
+// and same data the Builder's "Preview proposal" modal and the printer use — a
+// preview that showed anything else would be worth less than no preview at all.
+function PreviewPane({ opp, openBuilder }) {
   const store = useStore()
-  const comm = canPriceProposal(store.role)
-  const p = store.getProposal(opp.id)
-  const t = computeProposalTotals(p)
+  const props = buildDocProps(store, opp.id)
+  if (!props) return <div className="form-card">Unknown opportunity.</div>
+  const { p, doc, priced, totals, lineQuoted } = props
   return (
-    <div className="form-card" style={{ maxWidth: 560 }}>
-      <div className="section-title">Workbook preview</div>
-      <table className="cost-table" style={{ width: '100%' }}>
-        <tbody>
-          <tr><td>BoQ lines</td><td className="num">{(p.bom || []).length}</td></tr>
-          <tr><td>Revision</td><td className="num">{p.revision}</td></tr>
-          {comm ? (
-            <>
-              <tr><td>Customer-facing value</td><td className="num">₹ {fmt(t.value)}</td></tr>
-              <tr><td>COGS</td><td className="num">₹ {fmt(t.cogs)}</td></tr>
-              <tr className="total"><td>GM</td><td className="num">{t.gmPct.toFixed(1)}%</td></tr>
-            </>
-          ) : (
-            <tr><td colSpan={2}><span className="restricted"><Icon name="lock" size={11} /> Value / COGS / GM restricted — LJS / AH only</span></td></tr>
-          )}
-        </tbody>
-      </table>
-      <p style={{ marginTop: 10 }}>
-        <Link to={`/proposal/${opp.id}`}><Icon name="fileSheet" size={13} /> Open the full proposal workbook</Link>
-      </p>
+    <div className="proposal-preview-pane">
+      <div className="proposal-preview-toolbar">
+        <span className="hint">
+          Customer-facing document · Rev {p.revision} · Read-only preview
+          {!priced && ' · prices hidden'}
+        </span>
+        <button className="linklike" onClick={openBuilder}>
+          <Icon name="fileSheet" size={13} /> Edit in the Builder
+        </button>
+      </div>
+      <div className="proposal-preview-scroll">
+        <PrintDoc p={p} opp={opp} doc={doc} priced={priced} totals={totals} lineQuoted={lineQuoted} />
+      </div>
     </div>
   )
 }

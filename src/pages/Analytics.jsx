@@ -6,10 +6,12 @@ import { fmtLakh, ageDays, canViewCommercial, isAdminRole, isApprover, isSalesOw
 import { PROB_WEIGHT } from '../kpi.js'
 import { Icon } from '../icons.jsx'
 import { ArcGauge } from '../dashviz.jsx'
+import { MODAE_COLORS } from '../branding/modae.js'
 
 // Funnel ramp validated with the dataviz palette checker (ordinal, light
 // surface): monotone lightness, ≥0.06 step gaps, light end ≥2:1 on white.
-const FUNNEL_RAMP = ['#7dd3fc', '#38bdf8', '#0ea5e9', '#0284c7', '#0369a1', '#075985']
+// Now brand-anchored — see MODAE_COLORS.ramp for the validation note.
+const FUNNEL_RAMP = MODAE_COLORS.ramp
 // The funnel only holds live enquiries — Won and Lost have left it.
 const OPEN_STAGES = STAGES.filter(s => s !== 'Won' && s !== 'Lost')
 // Weighting lives in src/kpi.js so the dashboard and this page agree.
@@ -197,14 +199,14 @@ export function Funnel({ stages, showValue }) {
             <polygon fill="url(#fnlRamp)"
               points={`${cx - wTop / 2},${top} ${cx + wTop / 2},${top} ${cx + wBot / 2},${bot} ${cx - wBot / 2},${bot}`} />
             <text x={cx} y={y(i) + ROW / 2 + 5} textAnchor="middle" fontSize={showValue ? 12.5 : 14} fontWeight="800"
-              fill={i < 2 ? '#0f172a' : '#fff'}>{label(s)}</text>
+              fill={i < 2 ? 'var(--text-main)' : '#fff'}>{label(s)}</text>
 
             <line x1={cx + wTop / 2 + 6} y1={y(i) + ROW / 2} x2={W - DETAIL + 4} y2={y(i) + ROW / 2}
-              stroke="#e2e8f0" strokeWidth="1" strokeDasharray="3 3" />
-            <text x={W - DETAIL + 12} y={y(i) + ROW / 2 - 3} fontSize="12" fontWeight="700" fill="#0f172a">
+              stroke="var(--border-soft)" strokeWidth="1" strokeDasharray="3 3" />
+            <text x={W - DETAIL + 12} y={y(i) + ROW / 2 - 3} fontSize="12" fontWeight="700" fill="var(--text-main)">
               {s.label}{showValue ? ` (${s.count})` : ''}
             </text>
-            <text x={W - DETAIL + 12} y={y(i) + ROW / 2 + 12} fontSize="10.5" fill="#64748b">
+            <text x={W - DETAIL + 12} y={y(i) + ROW / 2 + 12} fontSize="10.5" fill="var(--text-muted)">
               {share(s)}% of open pipeline
             </text>
           </g>
@@ -456,12 +458,12 @@ export default function Analytics({ embedded = false }) {
           ) : <Restricted />}
         </div>
 
-        <BarCard title="Owner" icon="users" entries={groupBy(open, 'owner')} color="#0369a1" showValue={comm}
+        <BarCard title="Owner" icon="users" entries={groupBy(open, 'owner')} color="var(--primary-accent)" showValue={comm}
           onPick={v => toTracker('owner', v)}
           hint={comm ? 'Open opportunity value per owner · opportunity count.' : 'Open opportunities per owner.'} />
-        <BarCard title="Opp type" icon="tag" tone="tone-teal" entries={groupBy(open, 'oppType')} color="#0d9488"
+        <BarCard title="Opp type" icon="tag" tone="tone-teal" entries={groupBy(open, 'oppType')} color="var(--primary-accent)"
           showValue={comm} onPick={v => toTracker('oppType', v)} />
-        <BarCard title="BU / business area" icon="building" tone="tone-slate" entries={groupBy(open, 'bu')} color="#475569"
+        <BarCard title="BU / business area" icon="building" tone="tone-slate" entries={groupBy(open, 'bu')} color="var(--text-muted)"
           showValue={comm} onPick={v => toTracker('bu', v)} />
 
         <div className="ana-card c-4">
@@ -544,7 +546,7 @@ export default function Analytics({ embedded = false }) {
                   onClick={() => nav(`/proposal/${o.id}`)} onKeyDown={e => { if (e.key === 'Enter') nav(`/proposal/${o.id}`) }}>
                   <span className="mb-lbl wide"><span className="oppid-link">{o.id}</span> <span className="hint">{fmtLakh(o.valueK)}</span></span>
                   <span className="mb-track">
-                    <span className="mb-fill" style={{ width: `${Math.min(100, Math.max(4, o.gm))}%`, background: o.gm >= 25 ? '#15803d' : o.gm >= 20 ? '#b45309' : '#b91c1c' }} />
+                    <span className="mb-fill" style={{ width: `${Math.min(100, Math.max(4, o.gm))}%`, background: o.gm >= 25 ? 'var(--status-good)' : o.gm >= 20 ? 'var(--status-warn)' : 'var(--status-bad)' }} />
                   </span>
                   <span className="mb-val">{o.gm}%</span>
                 </div>
@@ -563,7 +565,7 @@ export default function Analytics({ embedded = false }) {
                 <div key={q.label} className="mbar">
                   <span className="mb-lbl wide">{q.label}</span>
                   <span className="mb-track">
-                    <span className="mb-fill" style={{ width: `${Math.min(100, Math.max(2, q.target ? (q.actual / q.target) * 100 : 0))}%`, background: '#0284c7' }} />
+                    <span className="mb-fill" style={{ width: `${Math.min(100, Math.max(2, q.target ? (q.actual / q.target) * 100 : 0))}%`, background: 'var(--primary-accent)' }} />
                   </span>
                   <span className="mb-val" style={{ flexBasis: 140 }}>{fmtLakh(q.actual)} / {fmtLakh(q.target)}</span>
                 </div>
@@ -583,7 +585,7 @@ export default function Analytics({ embedded = false }) {
                 <div key={a.owner} className="mbar">
                   <span className="mb-lbl">{a.owner}</span>
                   <span className="mb-track">
-                    <span className="mb-fill" style={{ width: `${Math.min(100, Math.max(2, a.pct))}%`, background: a.pct >= 50 ? '#15803d' : a.pct >= 25 ? '#b45309' : '#b91c1c' }} />
+                    <span className="mb-fill" style={{ width: `${Math.min(100, Math.max(2, a.pct))}%`, background: a.pct >= 50 ? 'var(--status-good)' : a.pct >= 25 ? 'var(--status-warn)' : 'var(--status-bad)' }} />
                   </span>
                   <span className="mb-val" style={{ flexBasis: 140 }}>{a.pct}% · {fmtLakh(a.booked)}</span>
                 </div>

@@ -46,11 +46,14 @@ test('preview renders the real document, not a text stub', () => {
     'the preview must render PrintDoc')
   assert.doesNotMatch(proposal, /<p>Attached: \{oppId\}_Proposal_Rev_/,
     'the old text stub must be gone')
-  // Sending uses a native mailto link and only needs a recipient; the inline
-  // preview remains optional.
-  assert.match(proposal, /const gmailComposeHref = /)
-  assert.match(proposal, /href=\{gmailComposeHref \|\| undefined\}/)
-  assert.match(proposal, /https:\/\/mail\.google\.com\/mail\/\?view=cm/)
+  // Sending opens a compose window and only needs a recipient; the inline
+  // preview remains optional. The URL builder moved to utils.js so the lead
+  // clarification draft and this dialog share one implementation.
+  assert.match(proposal, /const composeHref = gmailComposeHref\(\{ to: emailTo, cc: emailCc, subject: emailSubject, body: emailBody \}\)/)
+  assert.match(proposal, /href=\{composeHref \|\| undefined\}/)
+  assert.doesNotMatch(proposal, /const gmailComposeHref = \(\(\) => \{/,
+    'the inline copy must be gone, not duplicated')
+  assert.match(read('src/utils.js'), /https:\/\/mail\.google\.com\/mail\/\?view=cm/)
 })
 
 // A mailto: link cannot carry a file. The UI used to say "Attachment ready…

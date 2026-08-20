@@ -1,6 +1,20 @@
 # ModAE Branding Reference
 
-Official source material scraped from mod-ae.com for product copy, brand positioning, contact details, and visual assets. Existing WinTrack app colors and font colors should remain unchanged; website colors are reference-only.
+Official source material scraped from mod-ae.com for product copy, brand positioning, contact details, and visual assets.
+
+**Changed 20 August 2026.** This file used to say the app's colours and fonts should
+stay as they were and the website palette was reference-only. The client reversed that
+in the 20 Aug review: the UI adopts ModAE's *full* brand identity — colours and buttons
+— from the website, not just the logo and font.
+
+The palette now lives in `src/branding/modae.js` as `MODAE_COLORS` and `MODAE_TYPE`,
+read off the site's own theme stylesheet (`wp-content/themes/Qfactum/assets/css/style.css`),
+and is mirrored into the `:root` block of `src/styles.css`. `raw/*.html` remains the
+capture those values came from.
+
+One deliberate departure: the brand colour is a red, and the app also uses red to mean
+*lost*, *overdue* and *Red-class customer*. Those keep a separate hue so a destructive
+state never reads as a primary button.
 
 ## Contact
 

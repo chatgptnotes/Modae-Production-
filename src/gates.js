@@ -169,12 +169,16 @@ export function oppBlockers(opp, proposal, approvals) {
 
   if (opp.customerStatus === 'Red' && !hasApproved('Red customer clearance')) {
     if (hasOpen('Red customer clearance')) {
-      b.push({ key: 'red-wait', severity: 'wait', text: 'Red customer clearance awaiting LJS decision.' })
+      b.push({ key: 'red-wait', severity: 'wait', text: 'Red customer clearance awaiting joint LJS + AH decision.' })
     } else {
+      // `needed` matters: without it, requestBlockerApproval builds the gate
+      // from `approver` alone, and a Red clearance raised off this blocker
+      // would clear on LJS by himself — bypassing the AH half of the joint
+      // decision that transitionBlockers and the inbox both demand.
       b.push({
         key: 'red', severity: 'block',
-        text: 'Red customer — high risk / unpaid record. LJS clearance required before any proposal goes out.',
-        approvalType: 'Red customer clearance', approver: 'LJS',
+        text: 'Red customer — high risk / unpaid record. Joint LJS + AH clearance required before any proposal goes out.',
+        approvalType: 'Red customer clearance', approver: 'LJS', needed: ['LJS', 'AH'],
       })
     }
   }
@@ -236,7 +240,11 @@ export const APPROVAL_5B = 'Commercial approval'
 export const APPROVAL_5C = 'Final quote release'
 
 // The §5 blocker keys, which a milestone exception must never clear.
-export const NO_EXCEPTION = ['tech-approval', 'comm-approval', 'release']
+// A milestone exception may never waive these. The §5 approvals were always
+// here; `red-clearance` joins them because the Red gate is a joint LJS + AH
+// decision about whether to trade with the customer at all — not a schedule
+// concession one approver can sign away.
+export const NO_EXCEPTION = ['tech-approval', 'comm-approval', 'release', 'red-clearance']
 
 export function approvalForRev(type, proposal, approvals, oppId) {
   const rev = String(proposal?.revision ?? '')
@@ -294,7 +302,12 @@ export function transitionBlockers(opp, target, proposal, state) {
     b.push({ key: 'amber-fee', severity: 'block', text: 'Amber customer pre-quote fee must be received', approver: 'AH' })
   }
   if (next >= MILESTONES.indexOf('Registration') && opp.customerStatus === 'Red' && !approved('Red customer clearance')) {
-    b.push({ key: 'red-clearance', severity: pending('Red customer clearance') ? 'wait' : 'block', text: pending('Red customer clearance') ? 'Red customer clearance is awaiting LJS/AH approval' : 'Red customer clearance from LJS/AH is required', approver: 'LJS', needed: ['LJS', 'AH'] })
+    // `approvalType` matters as much as `needed`: without it Workbench treats
+    // this as exception-eligible and offers a Milestone exception instead, which
+    // waived the Red gate outright — the opportunity moved past Registration
+    // with no clearance record in existence. With it, the real approval is
+    // requested, and NO_EXCEPTION refuses the waiver at the model layer too.
+    b.push({ key: 'red-clearance', severity: pending('Red customer clearance') ? 'wait' : 'block', text: pending('Red customer clearance') ? 'Red customer clearance is awaiting LJS/AH approval' : 'Red customer clearance from LJS/AH is required', approvalType: 'Red customer clearance', approver: 'LJS', needed: ['LJS', 'AH'] })
   }
 
   const clarifications = (state.clarifications || []).filter(c => c.oppId === opp.id)

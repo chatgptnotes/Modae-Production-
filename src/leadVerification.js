@@ -8,6 +8,24 @@ export const BLUE_KYC_ITEMS = [
   'EFT / bank mandate',
 ]
 
+// Red is the one class whose evidence is *not* on the lead. Its clearance is a
+// joint LJS + AH approval record, so the caller resolves it and passes the
+// answer in. This module must stay importable by `node --test`, which means no
+// reaching into the store from here.
+export const RED_CLEARANCE = 'Red customer clearance'
+export const RED_BLOCKER = 'Red continuation approval (joint LJS + AH) not granted'
+const APPROVED = ['Approved', 'Approved with conditions']
+
+// A Returned clearance can be re-requested, so a lead may carry more than one.
+// A granted decision always wins; otherwise take the most recent request.
+export function redClearanceFor(approvals, leadId) {
+  const mine = (approvals || []).filter(a => a.leadId === leadId && a.type === RED_CLEARANCE)
+  if (!mine.length) return null
+  return mine.find(a => APPROVED.includes(a.status))
+    || [...mine].sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')))[0]
+}
+export const isRedCleared = approval => !!approval && APPROVED.includes(approval.status)
+
 export function verificationDeadline(lead, customerStatus, config = {}, now = new Date()) {
   if (!['Blue', 'Amber'].includes(customerStatus)) return null
   const requestedAt = lead?.verification?.requestedAt || lead?.customerClassifiedAt || lead?.ts || now.toISOString()
@@ -30,14 +48,17 @@ export function amberPaymentComplete(verification) {
   return verification?.payment?.state === 'Confirmed'
 }
 
-export function leadVerificationComplete(lead, customerStatus = lead?.customerStatus || '') {
+export function leadVerificationComplete(lead, customerStatus = lead?.customerStatus || '', { redCleared = false } = {}) {
   if (customerStatus === 'Green') return true
   if (customerStatus === 'Blue') return blueKycComplete(lead?.verification)
   if (customerStatus === 'Amber') return amberPaymentComplete(lead?.verification)
+  // Red used to return false here unconditionally, with no way to pass the
+  // clearance in — so an approved Red lead could never be registered.
+  if (customerStatus === 'Red') return !!redCleared
   return false
 }
 
-export function leadVerificationBlockers(lead, customerStatus = lead?.customerStatus || '') {
+export function leadVerificationBlockers(lead, customerStatus = lead?.customerStatus || '', { redCleared = false } = {}) {
   if (customerStatus === 'Green') return []
   if (customerStatus === 'Blue') {
     return BLUE_KYC_ITEMS
@@ -47,11 +68,12 @@ export function leadVerificationBlockers(lead, customerStatus = lead?.customerSt
   if (customerStatus === 'Amber' && !amberPaymentComplete(lead?.verification)) {
     return ['Amber processing-fee payment confirmation is required']
   }
-  if (customerStatus === 'Red') return ['Red customer continuation approval is required']
+  if (customerStatus === 'Red') return redCleared ? [] : [RED_BLOCKER]
+  if (customerStatus === 'Amber') return []
   return ['Customer classification is required']
 }
 
-export function verificationSnapshot(lead, customerStatus = lead?.customerStatus || '') {
+export function verificationSnapshot(lead, customerStatus = lead?.customerStatus || '', { approval = null } = {}) {
   if (customerStatus === 'Blue') {
     return {
       status: 'Verified', type: 'KYC', customerStatus,
@@ -64,6 +86,18 @@ export function verificationSnapshot(lead, customerStatus = lead?.customerStatus
       status: 'Confirmed', type: 'Payment', customerStatus,
       payment: lead?.verification?.payment || {},
       confirmedAt: lead?.verification?.payment?.confirmedAt || '',
+    }
+  }
+  // A Red opportunity used to record "Not required", losing the only trace of
+  // the joint clearance that authorised it. Keep the decision on the record.
+  if (customerStatus === 'Red') {
+    return {
+      status: isRedCleared(approval) ? 'Cleared' : 'Not cleared',
+      type: 'Red continuation', customerStatus,
+      approvalId: approval?.id || '',
+      decidedBy: Object.keys(approval?.decisions || {}),
+      conditions: (approval?.conditions || []).map(c => c.text),
+      verifiedAt: approval?.decisionTs || '',
     }
   }
   return { status: 'Not required', type: 'None', customerStatus, verifiedAt: '' }

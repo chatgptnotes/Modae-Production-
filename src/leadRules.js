@@ -62,6 +62,42 @@ export function deadlineForLead(lead, config = {}, now = new Date()) {
   return rows
 }
 
+// Supply a piece of information the AI could not find, by hand. Returns the
+// lead patch, or null when there is nothing usable to record.
+//
+// `ai.missing` is not cosmetic: it holds the L-07 AI validation step open
+// (leadWorkflow.aiComplete) and keeps a clarification deadline running
+// (deadlineForLead above). Answering an item is therefore what actually moves
+// the lead on — waiting for the customer to reply was previously the only way.
+//
+// The answer lands as an accepted field at full confidence because a human
+// typed it, and completeness rises by the share the answered item represented,
+// so clearing the last outstanding item closes the lead at 100 rather than at
+// some arbitrary remainder.
+export function supplyMissing(lead, label, value, key = null) {
+  const k = String(label ?? '').trim()
+  const v = String(value ?? '').trim()
+  if (!k || !v) return null
+  const ai = lead?.ai || {}
+  const outstanding = ai.missing || []
+  const remaining = key == null ? outstanding : outstanding.filter(m => m !== key)
+  const answered = outstanding.length - remaining.length
+  const current = lead?.completeness ?? 0
+  return {
+    completeness: answered && outstanding.length
+      ? Math.min(100, current + Math.round((100 - current) / outstanding.length))
+      : current,
+    ai: {
+      ...ai,
+      missing: remaining,
+      fields: [...(ai.fields || []), {
+        k, v, conf: 100, state: 'accepted', group: 'Added manually',
+        note: 'Supplied by user', manual: true,
+      }],
+    },
+  }
+}
+
 export function expiredLeadDeadline(lead, config = {}, now = new Date()) {
   const nowMs = new Date(now).getTime()
   return deadlineForLead(lead, config, now).find(row => new Date(row.dueAt).getTime() <= nowMs) || null

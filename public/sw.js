@@ -1,5 +1,20 @@
-const CACHE = 'wintrack-v3'
-const PRECACHE = ['/', '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png']
+// Bumped to v4 for the ModAE brand fonts: a returning tablet holding a v3 cache
+// would otherwise keep serving the old shell and render the app in the system
+// font until the cache happened to turn over.
+const CACHE = 'wintrack-v4'
+const FONTS = [
+  '/fonts/rubik-latin.woff2',
+  '/fonts/rubik-latin-ext.woff2',
+  '/fonts/roboto-latin.woff2',
+  '/fonts/roboto-latin-ext.woff2',
+]
+// Precached, not merely cacheable: this app is meant to work on a tablet with
+// no signal, and a font fetched lazily is a font that is missing offline.
+const PRECACHE = [
+  '/', '/index.html', '/manifest.webmanifest',
+  '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png',
+  ...FONTS,
+]
 
 self.addEventListener('install', (event) => {
   self.skipWaiting()
@@ -48,6 +63,7 @@ self.addEventListener('fetch', (event) => {
 
   // Static assets + icons: cache-first with background revalidate
   const cacheable = url.pathname.startsWith('/assets/') ||
+    url.pathname.startsWith('/fonts/') ||
     /\/(icon-192|icon-512|apple-touch-icon)\.png$/.test(url.pathname) ||
     url.pathname === '/manifest.webmanifest'
   if (!cacheable) return

@@ -71,17 +71,10 @@ const PATHS = {
 
 const MODAE_LOGO_SRC = MODAE_BRAND.logoUrl
 
-export function ModaeMark({ size = 30, tile = true, className = '' }) {
-  return (
-    <svg className={`modae-mark ${className}`} width={size} height={size} viewBox="0 0 32 32"
-      fill="none" aria-hidden="true">
-      {tile && <rect x="1" y="1" width="30" height="30" rx="8" fill="var(--bg-sidebar)" />}
-      <path d="M8 22V11l4.4 6.2L16.8 11v11" stroke="var(--primary-accent)" strokeWidth="2.4"
-        strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="22.5" cy="20.2" r="2.6" stroke="var(--teal)" strokeWidth="2.4" />
-    </svg>
-  )
-}
+// `ModaeMark` used to live here: an inline SVG drawing a generic "M + dot"
+// glyph that was not the ModAE mark, imported by nothing. Removed with the
+// 20 Aug brand pass rather than left to be picked up as if it were the logo.
+// The real mark is the PNG below, and every render site uses it.
 
 // Official ModAE lockup with an optional workspace descriptor underneath.
 export function ModaeLogo({ size = 30, sub = '', tile = true, className = '', onClick }) {

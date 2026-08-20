@@ -102,3 +102,142 @@ test('an owner with no target does not divide by zero', () => {
   assert.equal(none.runRate, 0)
   assert.ok(Number.isFinite(none.gap))
 })
+
+// 20 Aug review, on the Monthly Bookings chart: show all months (April–March),
+// a dotted Target Run Rate against a solid Actual Run Rate, and actuals only up
+// to the current date. The reference is `chartTrend` in the BT prototype.
+
+test('the target run rate comes from the quarter, not a flat annual twelfth', () => {
+  // A flat annual/12 line understates a front-loaded quarter and overstates a
+  // back-loaded one. The prototype spreads each quarter's number over its own
+  // three months: t.q[Math.floor(i / 3)] / 3.
+  const uneven = {
+    sales: {
+      monthsElapsed: 5, currentQ: 2, orders: [],
+      targets: { RS: { annual: 120, q: [60, 30, 20, 10] } },
+    },
+  }
+  const perf = salesPerformance(uneven, 'RS')
+  assert.equal(perf.monthlyTarget.length, 12)
+  assert.deepEqual(perf.monthlyTarget.slice(0, 3), [20, 20, 20], 'Q1 60 over three months')
+  assert.deepEqual(perf.monthlyTarget.slice(9), [10 / 3, 10 / 3, 10 / 3], 'Q4 10 over three months')
+  // And it must still add up to the year.
+  assert.equal(Math.round(perf.monthlyTarget.reduce((a, b) => a + b, 0)), perf.annual)
+})
+
+test('the run-rate series covers the whole financial year', () => {
+  const rs = salesPerformance(store, 'RS')
+  assert.equal(rs.monthly.length, 12)
+  assert.equal(rs.monthlyTarget.length, 12)
+  assert.equal(FY_MONTHS.length, 12)
+  assert.equal(rs.monthsElapsed, seedSales.monthsElapsed, 'the chart needs to know where "today" is')
+})
+
+test('the chart stops the actual line at the current month', () => {
+  const source = read('src/pages/MyDashboard.jsx')
+  // Truncation, not a full-year series padded with zeros.
+  assert.match(source, /const actual = perf\.monthly\.slice\(0, elapsed\)/)
+  assert.match(source, /perf\.monthsElapsed/)
+  // Target is drawn across all twelve; only the actual is cut short.
+  assert.match(source, /points=\{pts\(target\)\}/)
+  assert.match(source, /points=\{pts\(actual\)\}/)
+
+  // With the seeded data the year is five months old, so seven months of the
+  // actual series must not be drawn as zeros.
+  const rs = salesPerformance(store, 'RS')
+  assert.ok(rs.monthsElapsed < 12)
+  assert.ok(rs.monthly.slice(rs.monthsElapsed).every(v => v === 0),
+    'the months being dropped are unbooked, which is exactly why they must not be plotted')
+})
+
+test('target is dotted, actual is solid, and neither colour is hardcoded', () => {
+  const source = read('src/pages/MyDashboard.jsx')
+  assert.match(source, /strokeDasharray="5 4"/, 'the target run rate is the dashed line')
+  assert.match(source, /stroke="var\(--primary-accent\)" strokeWidth="2\.6"/, 'the actual is the solid brand line')
+  assert.doesNotMatch(source, /#94a3b8/, 'the target colour was a hardcoded slate literal')
+  const css = read('src/styles.css')
+  assert.doesNotMatch(css, /\.legend-line\.target \{ border-top-color: #94a3b8/)
+  // The legend has to name both series the way the client does.
+  assert.match(source, /Target run rate/)
+  assert.match(source, /Actual run rate/)
+})
+
+test('the gradient id is unique per chart instance', () => {
+  // dashviz's `sparkFade` and Analytics' `fnlRamp` are global literals: two on
+  // one page and the second silently inherits the first one's fill.
+  const source = read('src/pages/MyDashboard.jsx')
+  assert.match(source, /const gradientId = `runrate-fade-\$\{useId\(\)/)
+  assert.match(source, /id=\{gradientId\}/)
+  assert.match(source, /fill=\{`url\(#\$\{gradientId\}\)`\}/)
+})
+
+test('there is one monthly bookings card, not two', () => {
+  const source = read('src/pages/MyDashboard.jsx')
+  assert.equal((source.match(/title="Monthly bookings"/g) || []).length, 1)
+  // The old sparkline card plotted the same array with no target and no labels.
+  assert.doesNotMatch(source, /<Sparkline points=\{monthPoints\}/)
+  assert.doesNotMatch(source, /title="Monthly performance against run rate"/)
+  assert.doesNotMatch(source, /import \{ ArcGauge, Sparkline \}/, 'the unused import must go too')
+})
+
+// dataviz, interaction reference: "An HTML chart is interactive by default — the
+// hover layer is part of the deliverable, not an upgrade." Twelve months against
+// a target line with no way to read a value is not a finished chart.
+
+test('the bookings chart has a crosshair and a tooltip', () => {
+  const source = read('src/pages/MyDashboard.jsx')
+  // The crosshair finds the X — the reader aims at a month, not at a 2px line.
+  assert.match(source, /onPointerMove=\{event => setHover\(monthAt\(event\)\)\}/)
+  assert.match(source, /onPointerLeave=\{\(\) => setHover\(null\)\}/)
+  assert.match(source, /className="runrate-crosshair"/)
+  // Snapping happens through the viewBox, because the svg scales to the card.
+  assert.match(source, /const monthAt = event =>/)
+  assert.match(source, /getBoundingClientRect\(\)/)
+  assert.match(source, /Math\.round\(\(x - padL\) \/ step\)/)
+
+  const css = read('src/styles.css')
+  assert.match(css, /\.runrate-crosshair \{/)
+  assert.match(css, /\.runrate-tip \{/)
+  assert.match(css, /\.runrate-plot \{ position: relative; \}/)
+})
+
+test('one tooltip carries every series at that month', () => {
+  // "The readout lists every series at that X — the pointer never has to land
+  // on a line or a fill to get a value."
+  const source = read('src/pages/MyDashboard.jsx')
+  const tip = source.slice(source.indexOf('className={`runrate-tip'), source.indexOf('</div>\n        )}\n      </div>'))
+  assert.match(tip, /\{FY_MONTHS\[hover\]\}/, 'the month')
+  assert.match(tip, /fmtLakh\(perf\.monthly\[hover\]\)/, 'the actual')
+  assert.match(tip, /fmtLakh\(target\[hover\]\)/, 'the target')
+  // Values lead, labels follow.
+  assert.match(tip, /<strong>\{booked \? fmtLakh\(perf\.monthly\[hover\]\) : '—'\}<\/strong> actual/)
+  // Line keys, not boxes.
+  assert.match(tip, /<i className="legend-line actual" \/>/)
+  assert.match(tip, /<i className="legend-line target" \/>/)
+  // A month past the booked window must not read as a booking of zero.
+  assert.match(source, /const booked = hover != null && hover < actual\.length/)
+  assert.match(tip, /Not booked yet/)
+})
+
+test('the keyboard reaches the same readout as the pointer', () => {
+  // "Same details on keyboard focus as on hover."
+  const source = read('src/pages/MyDashboard.jsx')
+  assert.match(source, /tabIndex=\{0\}/)
+  assert.match(source, /onKeyDown=\{onKeyDown\}/)
+  assert.match(source, /event\.key === 'ArrowRight'/)
+  assert.match(source, /event\.key === 'ArrowLeft'/)
+  assert.match(source, /event\.key === 'Escape'/)
+  assert.match(read('src/styles.css'), /\.runrate-plot svg:focus-visible/)
+})
+
+test('the tooltip enhances but does not gate the values', () => {
+  // "Every value a tooltip shows is also reachable without it, through direct
+  // labels or the table view."
+  const source = read('src/pages/MyDashboard.jsx')
+  assert.match(source, /<table className="visually-hidden">/)
+  assert.match(source, /<caption>Monthly bookings against target run rate<\/caption>/)
+  assert.match(source, /<th scope="row">\{label\}<\/th>/)
+  // Twelve rows, both series, and the unbooked months named rather than zeroed.
+  assert.match(source, /\{i < actual\.length \? fmtLakh\(perf\.monthly\[i\]\) : 'Not booked yet'\}/)
+  assert.match(read('src/styles.css'), /\.visually-hidden \{/)
+})

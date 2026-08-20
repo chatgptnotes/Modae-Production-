@@ -2,8 +2,17 @@ import React from 'react'
 import { fmt } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import {
-  docModel, addDays, lineQty, standardFor, MODAE_COMPANY,
+  docModel, docLayout, addDays, lineQty, standardFor, MODAE_COMPANY,
 } from '../proposalDoc.js'
+
+// Sheet keys are internal; these are what the salesperson sees.
+const ANNEXE_LABELS = {
+  compliance: 'Technical Compliance & Clarification Table',
+  clarifications: 'Clarifications',
+  sensorComparison: 'Sensor Comparison',
+  sow: 'Scope of Work',
+  issues: 'Issues List',
+}
 
 // A stored value exists only once the user has edited it — everything else is
 // live auto-draft. That distinction is what "Reset to auto-draft" acts on.
@@ -91,15 +100,39 @@ export default function DocEditor({ p, opp, save, files, totals, priced }) {
   )
 
   const gst = Math.round(totals.target * (doc.gstPct / 100))
+  const annexes = (docLayout(p, opp).annexes || [])
+    .map(key => ({ key, label: ANNEXE_LABELS[key] || key }))
 
   return (
     <div className="doc-editor">
       <div className="costing-note" style={{ marginBottom: 10 }}>
-        The printed proposal is a covering letter, a contents page, a company page, then eleven numbered
-        sections — one per page. Free text is auto-drafted from the opportunity and the BoQ and stays live
-        until you edit it; derived sections update themselves. Use <b>Print / PDF proposal</b> above to see
-        the finished document, and switch <b>Headers and footers</b> off in the print dialog.
+        The printed proposal follows the ModAE sample proposals: a covering letter, one priced sheet, and
+        the technical annexes for this route. Free text is auto-drafted from the opportunity and the BoQ
+        and stays live until you edit it; derived content updates itself. Use <b>Print / PDF proposal</b>
+        above to see the finished document, and switch <b>Headers and footers</b> off in the print dialog.
       </div>
+
+      <Section title="Annexes to issue">
+        <div className="costing-note" style={{ marginBottom: 8 }}>
+          The sample workbooks keep these sheets hidden — prepared, but not sent. Tick one to include it
+          in the printed document.
+        </div>
+        {annexes.length === 0
+          ? <p className="hint">This route carries no optional annexes.</p>
+          : annexes.map(a => (
+            <label key={a.key} className="q" style={{ display: 'block' }}>
+              <input type="checkbox" checked={(p.printAnnexes || []).includes(a.key)}
+                onChange={e => {
+                  const on = e.target.checked
+                  const next = on
+                    ? [...(p.printAnnexes || []), a.key]
+                    : (p.printAnnexes || []).filter(k => k !== a.key)
+                  save({ ...p, printAnnexes: next })
+                }} />
+              {' '}{a.label}
+            </label>
+          ))}
+      </Section>
 
       <Section title="Covering letter">
         <div className="dgrid2" style={{ maxWidth: 620, marginBottom: 8 }}>

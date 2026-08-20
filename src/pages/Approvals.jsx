@@ -292,7 +292,7 @@ export default function Approvals() {
           {(a.conditions || []).map((c, i) => (
             <div key={i} style={{ fontSize: 12.5, margin: '4px 0' }}>
               {c.incorporated
-                ? <span style={{ color: '#15803d' }}><Icon name="check" size={12} /> {c.text}{c.note && <span className="hint"> — {c.note}</span>}</span>
+                ? <span style={{ color: 'var(--status-good)' }}><Icon name="check" size={12} /> {c.text}{c.note && <span className="hint"> — {c.note}</span>}</span>
                 : <span><Icon name="alert" size={12} /> {c.text}</span>}
             </div>
           ))}

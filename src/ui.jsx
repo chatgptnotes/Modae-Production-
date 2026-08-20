@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react'
 import { MILESTONES } from './seed.js'
 import { Icon } from './icons.jsx'
+import { useStore } from './store.jsx'
 
 // Shared chips/badges/steppers for the BT-prototype port. All styling lives in
 // styles.css — these are the only markup shapes the pages should use.
@@ -68,6 +69,52 @@ export function Modal({ title, onClose, children, wide, className = '' }) {
         {title && <div className="section-title">{title}</div>}
         {children}
       </div>
+    </>
+  )
+}
+
+// ---- Demo data ------------------------------------------------------------
+// The app ships full of seeded demo records (src/seed.js). These two actions
+// are the way in and out of that: "Remove" empties every business record while
+// keeping the logins, admin configuration and parts catalogues you need to
+// carry on working; "Restore" brings the whole seeded dataset back.
+//
+// One component, rendered in all three places that carry a demo-data action
+// (sidebar footer, Admin toolbar, Demo Launcher), so the wording and the
+// confirm guards cannot drift apart between them. The guards are not optional:
+// with Supabase configured either action rewrites the shared dataset for every
+// device, not just this browser.
+const RESET_MSG = 'Reset all demo data? Every change is discarded and the app reloads with seed data.'
+const REMOVE_MSG = 'Remove all demo data?\n\n'
+  + 'The app is emptied — every opportunity, lead, customer, approval and order goes, '
+  + 'including anything you added since.\n\n'
+  + 'Your logins and Admin configuration stay, and you can restore the demo dataset later.'
+const RESTORE_MSG = 'Restore the demo dataset?\n\n'
+  + 'Anything you entered since removing it is discarded.'
+
+export function DemoDataControls({ className = '', size = 13, label = x => x }) {
+  const store = useStore()
+  const demo = store.demoData !== false
+  const ask = (msg, run) => () => { if (window.confirm(msg)) run() }
+  return (
+    <>
+      {demo && (
+        <button className={className} title="Discard local changes and reload the seed dataset"
+          onClick={ask(RESET_MSG, store.restoreDemo)}>
+          <Icon name="refresh" size={size} /> {label('Reset all demo data')}
+        </button>
+      )}
+      {demo ? (
+        <button className={className} title="Empty the app — logins and configuration stay"
+          onClick={ask(REMOVE_MSG, store.clearDemo)}>
+          <Icon name="x" size={size} /> {label('Remove demo data')}
+        </button>
+      ) : (
+        <button className={className} title="Bring the seeded demo dataset back"
+          onClick={ask(RESTORE_MSG, store.restoreDemo)}>
+          <Icon name="refresh" size={size} /> {label('Restore demo data')}
+        </button>
+      )}
     </>
   )
 }

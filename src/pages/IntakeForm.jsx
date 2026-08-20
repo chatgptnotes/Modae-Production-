@@ -467,7 +467,15 @@ export default function IntakeForm({ destinationPicker = null }) {
                 1. Sell To Customer<span className="star">*</span>
                 {aiFilledFields.has('sellTo') && <span className="ai-badge">AI</span>}
               </div>
-              <Select field="sellTo" options={store.customers.map(c => c.name)} placeholder="Select customer" />
+              {/* Free text with the master as suggestions, not a closed
+                  dropdown: on a fresh install with no demo data the customer
+                  list is empty, and a plain <select> would make the first real
+                  enquiry impossible to file. Submit already creates the
+                  customer (flagged Blue) when the name is a new one. */}
+              <Input field="sellTo" list="intake-customers" placeholder="Select or type customer name" />
+              <datalist id="intake-customers">
+                {store.customers.map(c => <option key={c.name} value={c.name} />)}
+              </datalist>
               {f.sellTo && (
                 <div className="hint" style={{ marginTop: 2 }}>
                   {knownCustomer

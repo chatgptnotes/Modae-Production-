@@ -17,7 +17,7 @@ export const AI_MAP = [
     group: 'Lead & opportunity intelligence (CRM)',
     items: [
       { t: 'Email intake & NLP parsing', phase: 1, kind: 'ai', d: 'Reads the common sales mailbox, extracts customer, contact and RFQ details, tags the enquiry as Spares / Services / Mixed.', to: '/inbox' },
-      { t: 'Missing-information detection', phase: 1, kind: 'ai', d: 'Flags incomplete enquiries and drafts the clarification request automatically.', to: '/inbox/LD-205' },
+      { t: 'Missing-information detection', phase: 1, kind: 'ai', d: 'Flags incomplete enquiries and drafts the clarification request. The draft is never sent automatically — a salesperson reviews it and clicks Send.', to: '/inbox/LD-205' },
       { t: 'Customer classification (Green / Blue / Amber / Red)', phase: 1, kind: 'rule', d: 'Suggests the customer class that drives KYC, fees and approval routing.', to: '/customers' },
       { t: 'Duplicate lead detection', phase: 1, kind: 'rule', d: 'Flags likely-duplicate leads before they become separate opportunities — same buyer reference, or same sender with an overlapping subject.', to: '/inbox/LD-207' },
       { t: 'Opportunity ID & owner suggestion', phase: 1, kind: 'rule', d: 'Suggests the opportunity owner from region/type rules and generates the ID on registration.', to: '/register/LD-203' },

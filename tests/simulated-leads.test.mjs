@@ -123,3 +123,31 @@ test('purging removes generated rows and keeps everything else', () => {
   assert.equal(simulatedCount(rows, [sim]), 2)
   assert.deepEqual(withoutSimulated(), [])
 })
+
+// This test used to fail about one run in eight. The cause was not the test:
+// `chaseable` included leads with no buyer reference (seed's LD-204 carries
+// `ref: ''`), and `ref = chased.ref || … || ref` then fell through to a freshly
+// minted reference — producing a lead flagged duplicateRisk:'High' that
+// findDuplicates could never match to anything.
+test('a chaser always reuses a reference that exists', () => {
+  for (let i = 0; i < 200; i += 1) {
+    const lead = simulatedLead('Green', WHEN, {
+      quality: 'duplicate', existingLeads: seedAiLeads, config: seedConfig,
+    })
+    const chased = seedAiLeads.find(l => l.ref === lead.ref)
+    assert.ok(chased, `run ${i}: chaser ref ${lead.ref} matches no seeded lead`)
+    assert.equal(lead.duplicateRisk, 'High')
+    assert.ok(findDuplicates(lead, seedAiLeads).length >= 1)
+  }
+})
+
+test('a lead with no buyer reference is never chased', () => {
+  const refless = seedAiLeads.filter(l => !l.ref && !l.rfqNumber)
+  assert.ok(refless.length > 0, 'LD-204 is the fixture this guards')
+  // Offered only refless leads to chase, the generator must fall back rather
+  // than mint a reference nobody can match.
+  const lead = simulatedLead('Green', WHEN, {
+    quality: 'duplicate', existingLeads: refless, config: seedConfig,
+  })
+  assert.notEqual(lead.duplicateRisk, 'High', 'it is not a duplicate of anything')
+})

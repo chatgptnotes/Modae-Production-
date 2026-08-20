@@ -77,6 +77,11 @@ export function salesPerformance(store, owner = null) {
 
   const achieved = quarterActual.reduce((a, b) => a + b, 0)
   const elapsed = sales.monthsElapsed || 0
+  // The target run rate is the quarter's number spread over its three months,
+  // not a flat annual twelfth: the quarterly targets are not equal, so a flat
+  // line understates Q1 and overstates Q4. This is the reference prototype's
+  // `mTarget = FY_MONTHS.map((m, i) => t.q[Math.floor(i / 3)] / 3)`.
+  const monthlyTarget = FY_MONTHS.map((_, i) => (target.q[Math.floor(i / 3)] || 0) / 3)
   return {
     fy: sales.fy || '',
     currentQ: Math.max(0, (sales.currentQ || 1) - 1),
@@ -85,6 +90,10 @@ export function salesPerformance(store, owner = null) {
     quarterTarget: target.q,
     quarterActual,
     monthly,
+    monthlyTarget,
+    // How many months of the year are actually behind us. The actual series
+    // stops here — the remaining months are unbooked, not zero-booked.
+    monthsElapsed: elapsed,
     achieved,
     gap: Math.max(0, target.annual - achieved),
     attainPct: target.annual ? (achieved / target.annual) * 100 : 0,

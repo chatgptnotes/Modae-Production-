@@ -1,7 +1,7 @@
 # Manual browser and device smoke checklist
 
 `npm test` covers the logic; this covers what only a person at a screen can see.
-Start each scenario from a clean **Reset demo data** (Demo Launcher or Admin).
+Start each scenario from a clean **Reset all demo data** (Demo Launcher or Admin).
 Record browser, viewport, role, result and console errors.
 
 ## The two journeys the client walked on 13 Aug
@@ -53,6 +53,28 @@ browser prompt, no localhost URL.
 - Scenario 6 opens on a PO already in review — no "Simulate" click needed first.
 - Scenario 4 is the deferred project deep-dive.
 
+## Removing the demo data (do this last — it empties the app)
+
+The three call sites carry the same pair of buttons: sidebar footer, Admin
+toolbar, Demo Launcher housekeeping.
+
+- **Remove demo data** → confirm. Tracker, Inbox, Approvals, Customers, PO and
+  My Dashboard all come back empty, with no console errors and no blank screen.
+- Admin still lists the users and every configuration card; Price Lists still
+  shows the B&K catalogue; the "DUMMY — replace with actual" upload is gone.
+- **Reload the page.** Still empty. This is the check that matters — the demo
+  leads (LD-203…LD-207) and AP-1 used to reappear on every boot.
+- Sign out and back in with a seeded account (`Demo@1234`) — the logins survived.
+- New → file an enquiry. "Sell To Customer" accepts a name that is not in the
+  master yet. Save, reload: the enquiry is still there.
+- Inbox → "Simulate incoming inquiry" still works on the empty app.
+- Demo Launcher → the scenario tiles are dimmed and disabled, with the restore
+  notice above them.
+- **Restore demo data** → confirm. The full seeded dataset is back (anything
+  entered in between is discarded — that is intended).
+- With Supabase configured, repeat on a second browser: it must come up empty
+  after a Remove rather than pushing its own seeds back to the server.
+
 ## AI & Automation
 
 - Every row badges Live AI / Rule-based / Preview, and "Open in demo" lands where
@@ -81,3 +103,71 @@ browser prompt, no localhost URL.
   - the revisions list shows the new R-entry with the reason,
   - the opportunity is back on the Proposal milestone,
   - the audit trail records "Quote revision opened".
+
+## The two journeys from the 20 August review
+
+`npm test` pins the logic for both; these are the parts only a person at a screen
+can confirm. Both start from a clean **Reset all demo data**.
+
+### Journey 1 — the Red-class approval that could never clear
+
+This is the bug the client reproduced on the call: both approvers said yes and the
+opportunity ID still read `— withheld —`.
+
+1. As **RS**, open `/inbox/LD-206` (CAPSA Dubai / Realix). The red box names AP-1
+   and offers **Request joint approval**. Raise it.
+2. Switch to **LJS** → `/approvals` → approve AP-1. Go back to LD-206: the gate is
+   still open. One approver is not enough, and the box must still say so.
+3. Switch to **AH** → approve AP-1. LD-206 now shows the green "Red gate cleared"
+   box naming the approval and its status.
+4. As RS, qualify the lead and continue to registration. **The opportunity ID must
+   be a real `YYMM…RS` value, not `— withheld —`**, and Create opportunity must be
+   enabled.
+5. Open the new opportunity → Customer/KYC. Its lead-stage verification must record
+   the clearance — approval id and both deciding roles — not "Verification was not
+   required".
+6. Return AP-1 instead of approving it on a second lead: the inbox must offer
+   **Re-request joint approval**, not a dead end.
+
+### Journey 2 — the spares benchmark, enquiry 14716
+
+The client's yardstick. The enquiry (`02_7425309-Buyers Speces.pdf`, "Ref:14716")
+and the proposal that answered it (`Spares Firm Offer Rev00 2May2026.xlsx`,
+Our Ref 2511096RS) are both in `doc/Further Inputs/`.
+
+1. Demo Launcher → **Spares benchmark — enquiry 14716** (scenario 1, persona RS).
+2. The lead shows five B&K line items and two open questions (delivery address,
+   bid submission date).
+3. Click **Draft clarification email**. Confirm the From line reads the **common
+   mailbox** and says the lead is not assigned yet. The body must ask for both
+   missing items.
+4. Assign the lead to RS and click **Re-draft email**. The From must now be
+   `rs@modae.demo` with the common mailbox on CC.
+5. Press **Send**. A compose window opens — *nothing has been sent yet*. Close it
+   without sending and confirm the lead still records the mail as Sent from the
+   click (that stamp is the human's action, not a dispatch).
+6. Register the lead. Price the BoQ: all five part codes must resolve to real B&K
+   list prices, not zero.
+7. Open the proposal preview. Check the eight numbered terms against the sample:
+   Ex Works Bangalore (not FCA), freight to the customer's account, **16 weeks
+   after PO and advance payment**, and **50/50 payment** (not 100% advance).
+
+### Brand identity — check on any screen
+
+- Nothing sky-blue or navy survives: chrome is ModAE red `#ED3F2F` on charcoal
+  `#282828`.
+- Headings render in **Rubik**, body in **Roboto**. With DevTools offline-throttled
+  and a hard reload, they must still render — the fonts are precached, not linked.
+- Buttons are 7px-radius, primary is red with white text, **Danger is a distinct
+  red** so a destructive action never reads as a primary button.
+- Prices show a real `₹` glyph, not a fallback-font one. (That is the latin-ext
+  subset doing its job.)
+- Tablet dark mode: the accent lifts to `#EF7765`; nothing stays slate/sky.
+
+### Monthly bookings chart — My Dashboard
+
+- **One** card titled "Monthly bookings", not two.
+- All twelve months Apr–Mar are labelled along the axis (sparsely — Apr, Jun, Aug,
+  Oct, Dec, Feb, Mar).
+- The **dotted** target line runs the full year; the **solid** actual line stops at
+  the current month and does not flatline along zero to March.

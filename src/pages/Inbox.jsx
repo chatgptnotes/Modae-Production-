@@ -1,13 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { ddMmmYY, ageDays } from '../utils.js'
+import { ddMmmYY, ageDays, gmailComposeHref } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { Chip, ConfChip, WarnBox, ErrBox, Modal } from '../ui.jsx'
 import { ROLES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, CUSTOMER_STATUSES, LEAD_SOURCES, ownerForOppType, routeForType } from '../seed.js'
 import { isAdminRole, isApprover } from '../utils.js'
-import { aiEnabled, runJson } from '../ai.js'
+import { aiEnabled, runJson, runText } from '../ai.js'
 import { extractDocText } from '../docText.js'
 import { fmtSize } from '../filestore.js'
 import { hold, add as holdMore } from '../leadFiles.js'
@@ -15,7 +15,11 @@ import AttachmentViewer from '../AttachmentViewer.jsx'
 import { findDuplicates } from '../insights.js'
 import { leadWorkflow } from '../leadWorkflow.js'
 import { isFastTrackLead, routeOwner, supplyMissing } from '../leadRules.js'
-import { BLUE_KYC_ITEMS, leadVerificationComplete, verificationDeadline, verificationItem } from '../leadVerification.js'
+import {
+  QUOTE_FEE_DOCUMENTS, answeredPatch, clarificationItems, clarificationKindFor,
+  clarificationSender, draftClarification, draftPatch, senderLabel, sentPatch,
+} from '../leadClarification.js'
+import { BLUE_KYC_ITEMS, leadVerificationComplete, verificationDeadline, verificationItem, redClearanceFor, isRedCleared } from '../leadVerification.js'
 import { SIMULATED_CUSTOMER_SCENARIOS, simulatedLead, simulatedCount } from '../simulatedLeads.js'
 
 // Common-mailbox lead inbox: AI parses each inquiry, a human decides whether it
@@ -426,7 +430,7 @@ export function matchCustomer(customers, lead) {
   }) || null
 }
 
-const customerStatusForLead = (lead, customers) =>
+export const customerStatusForLead = (lead, customers) =>
   lead.customerStatus || matchCustomer(customers, lead)?.status || (lead.redFlag ? 'Red' : 'Blue')
 
 const leadFieldValue = (fields, pattern) => {
@@ -524,6 +528,11 @@ function AiLeadDetail({ lead }) {
   const [reExtracting, setReExtracting] = useState(false)
   const [reErr, setReErr] = useState('')
   const [reNote, setReNote] = useState('')
+  // The clarification mail the AI drafts and a human sends. `null` while there
+  // is no draft on screen; an editable copy of the stored record otherwise.
+  const [clarDraft, setClarDraft] = useState(null)
+  const [clarBusy, setClarBusy] = useState(false)
+  const [clarErr, setClarErr] = useState('')
   const [viewing, setViewing] = useState(null)   // attachment record open in the viewer
   const [addingDocs, setAddingDocs] = useState(false)
   const [docDrag, setDocDrag] = useState(false)
@@ -607,9 +616,21 @@ function AiLeadDetail({ lead }) {
   }
 
   const customer = matchCustomer(store.customers, lead)
-  const isRed = lead.redFlag || lead.customerStatus === 'Red' || customer?.status === 'Red'
-  const redApproval = store.approvals.find(a => a.leadId === lead.id && a.type === 'Red customer clearance')
-  const redCleared = redApproval && ['Approved', 'Approved with conditions'].includes(redApproval.status)
+  const leadCustomerStatus = customerStatusForLead(lead, store.customers)
+  const isRed = leadCustomerStatus === 'Red'
+  const redApproval = redClearanceFor(store.approvals, lead.id)
+  const redCleared = isRedCleared(redApproval)
+  // A Returned clearance is not a decision, it is a request for rework — so the
+  // salesperson must be able to raise it again. Without this the ErrBox showed
+  // "Returned" with nowhere to go, and the Approvals page had no route back
+  // either because every needed role had already decided.
+  const redRequestable = !redApproval || redApproval.status === 'Returned'
+  const requestRedClearance = () => store.requestApproval({
+    leadId: lead.id, oppId: '', type: 'Red customer clearance',
+    detail: `${customer?.name || lead.sender || lead.from} (Red) — ${lead.subject}. Continuation needs joint LJS + AH clearance before any opportunity ID is generated.`
+      + (redApproval ? ` Re-raised after ${redApproval.id} was returned.` : ''),
+    approver: 'LJS', needed: ['LJS', 'AH'],
+  })
 
   const groups = [...new Set(ai.fields.map(f => f.group))]
   const pendingLow = ai.fields.filter(f => f.state === 'pending' && f.conf < med)
@@ -644,6 +665,62 @@ function AiLeadDetail({ lead }) {
 
   const qualifyBlocked = isRed && !redCleared
   const canAct = !['Converted', 'Dropped'].includes(lead.status)
+
+  // ---- Clarification mail: AI drafts, a human sends -----------------------
+  // 20 Aug review: the original flow auto-sent these, which risks putting wrong
+  // information in front of a customer. So `draftClarificationMail` only ever
+  // writes a Draft, and the only thing that marks it Sent is `sendClarification`
+  // below — called from a button, after the compose window has been opened.
+  // There is deliberately no code path from drafting to sending.
+  const clarRecord = lead.clarification || null
+  const clarKind = clarificationKindFor(lead, leadCustomerStatus)
+  const clarSender = clarificationSender(lead, store.users, store.config)
+  const canDraftClar = canAct && !!clarKind
+
+  const draftClarificationMail = async () => {
+    setClarErr('')
+    setClarBusy(true)
+    try {
+      const items = clarKind === 'quote-fee' ? QUOTE_FEE_DOCUMENTS : clarificationItems(lead)
+      // The model writes the prose; the template writes it when the model is
+      // unavailable, refused or times out. runText already returns null rather
+      // than throwing, so the fallback is the normal case, not the error case.
+      const aiBody = await runText('lead.clarify', {
+        kind: clarKind,
+        items,
+        subject: lead.subject,
+        body: lead.body,
+        sellTo: customer?.name || leadFieldValue(ai.fields, /sell-to/i),
+        contactPerson: customer?.contactPerson || leadFieldValue(ai.fields, /contact/i),
+        salutation: customer?.contactPerson ? `Dear ${customer.contactPerson},` : 'Dear Sir,',
+        feeText: `₹${Number(store.config?.amberFee?.amount ?? 25000).toLocaleString('en-IN')}`,
+        senderBlock: [clarSender.rule === 'assigned-owner' ? clarSender.name : '', 'ModAE India Pvt Ltd']
+          .filter(Boolean).join('\n'),
+      })
+      const draft = draftClarification(lead, {
+        kind: clarKind, customer, users: store.users, config: store.config, aiBody: aiBody || '',
+      })
+      store.updateLead(lead.id, draftPatch(draft),
+        `${draft.kind === 'quote-fee' ? 'Pre-quote fee' : 'Clarification'} mail drafted by ${draft.draftedBy} — not sent`)
+      setClarDraft(draft)
+    } catch (e) {
+      setClarErr(e?.message || 'Could not draft the mail')
+    } finally {
+      setClarBusy(false)
+    }
+  }
+
+  // The one place a clarification becomes Sent. It opens a compose window; the
+  // person still has to review it there and press send in their mail client.
+  const sendClarification = () => {
+    if (!clarDraft?.to?.trim()) { setClarErr('Add a recipient address before sending'); return }
+    const href = gmailComposeHref(clarDraft)
+    if (!href) { setClarErr('Add a recipient address before sending'); return }
+    window.open(href, '_blank', 'noopener')
+    store.updateLead(lead.id, sentPatch({ ...(clarRecord || {}), ...clarDraft }, { sentBy: store.role }),
+      `${clarDraft.kind === 'quote-fee' ? 'Pre-quote fee' : 'Clarification'} mail sent to ${clarDraft.to} from ${clarDraft.from}`)
+    setClarDraft(null)
+  }
   // Read-only progress readout for the fields column footer.
   const decided = ai.fields.filter(f => f.state !== 'pending').length
   const attachments = lead.attachments || []
@@ -911,6 +988,70 @@ function AiLeadDetail({ lead }) {
             </div>
           )}
 
+          {/* AI drafts, a human sends. Nothing here dispatches on its own —
+              "Send" opens a compose window that still has to be submitted by
+              hand, and only that click marks the record Sent. */}
+          {(canDraftClar || clarRecord) && (
+            <div className="clar-mail">
+              <div className="clar-mail-head">
+                <b>{clarKind === 'quote-fee' ? 'Pre-quote fee request' : 'Clarification request'}</b>
+                {clarRecord?.status === 'Sent' && <span className="lead-decision-saved">Sent {ddMmmYY(clarRecord.sentAt)}</span>}
+                {clarRecord?.status === 'Draft' && !clarDraft && <span className="lead-decision-note">Drafted, not sent</span>}
+              </div>
+              <p className="hint">
+                From <b>{clarSender.address}</b> — {senderLabel(clarSender)}.
+              </p>
+              {clarErr && <ErrBox>{clarErr}</ErrBox>}
+
+              {!clarDraft && canDraftClar && (
+                <div className="clar-mail-actions">
+                  <button className="primary" disabled={clarBusy} onClick={draftClarificationMail}>
+                    <Icon name="sparkles" size={12} /> {clarBusy ? 'Drafting…' : clarRecord ? 'Re-draft email' : 'Draft clarification email'}
+                  </button>
+                  {clarRecord && (
+                    <button onClick={() => setClarDraft({ ...clarRecord })}>Review last draft</button>
+                  )}
+                  {clarRecord?.status === 'Sent' && (
+                    <button onClick={() => store.updateLead(lead.id, answeredPatch(clarRecord),
+                      'Customer answered the clarification')}>Customer answered</button>
+                  )}
+                </div>
+              )}
+
+              {clarDraft && (
+                <div className="clar-mail-form">
+                  <label className="afield">To
+                    <input value={clarDraft.to} onChange={e => setClarDraft({ ...clarDraft, to: e.target.value })} />
+                  </label>
+                  <label className="afield">CC
+                    <input value={clarDraft.cc} onChange={e => setClarDraft({ ...clarDraft, cc: e.target.value })} />
+                  </label>
+                  <label className="afield">Subject
+                    <input value={clarDraft.subject} onChange={e => setClarDraft({ ...clarDraft, subject: e.target.value })} />
+                  </label>
+                  <label className="afield">Body
+                    <textarea rows={14} value={clarDraft.body}
+                      onChange={e => setClarDraft({ ...clarDraft, body: e.target.value })} />
+                  </label>
+                  <p className="hint">
+                    Drafted by {clarDraft.draftedBy === 'AI' ? 'the model' : 'the standard ModAE template'}.
+                    Review every line before sending — nothing leaves the app until you press Send.
+                  </p>
+                  <div className="clar-mail-actions">
+                    <button className="primary" onClick={sendClarification}>
+                      <Icon name="mail" size={12} /> Send
+                    </button>
+                    <button onClick={() => {
+                      store.updateLead(lead.id, draftPatch({ ...clarDraft }), 'Clarification draft saved')
+                      setClarDraft(null)
+                    }}>Save draft</button>
+                    <button onClick={() => { setClarDraft(null); setClarErr('') }}>Cancel</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Computed against the live inbox, not read from a seeded list —
               a lead added today is checked the same way a seeded one is. Any
               candidate the user has dismissed stays dismissed. */}
@@ -1033,14 +1174,11 @@ function AiLeadDetail({ lead }) {
             <ErrBox>
               <b>Red-class customer</b> — continuation needs joint LJS + AH approval (AP-1).
               No opportunity ID until approved.{' '}
-              {redApproval
-                ? <>Approval <b>{redApproval.id}</b> is <b>{redApproval.status}</b>.{' '}
-                    <button onClick={() => nav('/approvals')}>Open approvals</button></>
-                : <button onClick={() => store.requestApproval({
-                    leadId: lead.id, oppId: '', type: 'Red customer clearance',
-                    detail: `${customer?.name || lead.sender || lead.from} (Red) — ${lead.subject}. Continuation needs joint LJS + AH clearance before any opportunity ID is generated.`,
-                    approver: 'LJS', needed: ['LJS', 'AH'],
-                  })}>Request joint approval</button>}
+              {redApproval && <>Approval <b>{redApproval.id}</b> is <b>{redApproval.status}</b>.{' '}
+                <button onClick={() => nav('/approvals')}>Open approvals</button>{' '}</>}
+              {redRequestable && <button onClick={requestRedClearance}>
+                {redApproval ? 'Re-request joint approval' : 'Request joint approval'}
+              </button>}
             </ErrBox>
           )}
           {isRed && redCleared && (
@@ -1050,7 +1188,7 @@ function AiLeadDetail({ lead }) {
             </div>
           )}
 
-          <LeadVerification lead={lead} customerStatus={lead.customerStatus || customer?.status || 'Blue'} store={store} />
+          <LeadVerification lead={lead} customerStatus={leadCustomerStatus} store={store} />
 
           {lead.status === 'Converted' && (
             <div className="okbox">
@@ -1197,7 +1335,7 @@ function LegacyLeadDetail({ lead }) {
       <p className="hint" style={{ margin: '4px 0 10px' }}>
         From {lead.from} · {lead.channel} · {ddMmmYY((lead.ts || '').slice(0, 10))}
       </p>
-      <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', background: '#f8fafc', border: '1px solid var(--grid-line)', padding: '10px 12px', fontSize: 12.5 }}>
+      <pre style={{ whiteSpace: 'pre-wrap', fontFamily: 'inherit', background: 'var(--bg-app)', border: '1px solid var(--grid-line)', padding: '10px 12px', fontSize: 12.5 }}>
         {lead.body}
       </pre>
       {(lead.attachments || []).map((a, i) => (
@@ -1312,7 +1450,11 @@ export default function Inbox() {
   const [simulationOpen, setSimulationOpen] = useState(false)
   // Sales owners see only their assigned leads by default; a "Show all" toggle
   // reveals the team's. Managers (LJS/AH) and admins always see everything.
-  const [showAll, setShowAll] = useState(false)
+  // The toggle lives in the store, not in component state: as component state a
+  // reload reset it, and a lead the simulator routed to another owner then read
+  // as "never saved".
+  const showAll = !!store.inboxShowAll
+  const setShowAll = on => store.setInboxShowAll(on)
   const [showArchive, setShowArchive] = useState(false)
   const seesAll = isAdminRole(store.role) || isApprover(store.role)
 
@@ -1357,9 +1499,11 @@ export default function Inbox() {
   }
 
   const listSource = showArchive ? (store.leadArchive || []) : store.leads
-  const rows = listSource.filter(l => {
-    // Sales owners: only their assigned leads unless "Show all" is ticked.
-    if (!seesAll && !showAll && l.suggestedOwner !== store.role) return false
+  // Sales owners: only their assigned leads unless "Show all" is ticked. Kept
+  // apart from the column filters so the list can say how many rows the rule is
+  // holding back — silently omitting them is what made a saved lead look lost.
+  const ownerVisible = l => seesAll || showAll || l.suggestedOwner === store.role
+  const matchesFilters = l => {
     if (q) {
       const hay = `${l.subject} ${l.sender || ''} ${l.from} ${l.ref || ''}`.toLowerCase()
       if (!hay.includes(q.toLowerCase())) return false
@@ -1391,13 +1535,17 @@ export default function Inbox() {
       if (ageF === '30' && age < 30) return false
     }
     return true
-  })
-
-  const mailboxRows = rows.filter(l => {
+  }
+  const matchesTab = l => {
     if (mailTab === 'unread') return l.status === 'New' && !l.readAt
     if (mailTab === 'qualified') return l.status === 'Qualified'
     return true
-  })
+  }
+
+  const rows = listSource.filter(l => ownerVisible(l) && matchesFilters(l))
+  const mailboxRows = rows.filter(matchesTab)
+  // Rows this tab would show if they were yours. Surfaced rather than dropped.
+  const hiddenByOwner = listSource.filter(l => !ownerVisible(l) && matchesFilters(l) && matchesTab(l)).length
   const toggleSelected = id => setSelectedIds(prev => {
     const next = new Set(prev)
     if (next.has(id)) next.delete(id); else next.add(id)
@@ -1522,6 +1670,12 @@ export default function Inbox() {
             <button className="mail-icon-btn" title="Mark as read" onClick={() => setReadForSelected(true)}><Icon name="mail" size={15} /></button>
             <button className="mail-icon-btn" title="Mark as unread" onClick={() => setReadForSelected(false)}><Icon name="eye" size={15} /></button>
           </>}
+          {hiddenByOwner > 0 && (
+            <button className="mail-hidden-note" onClick={() => setShowAll(true)}
+              title="These leads exist — they are assigned to another owner">
+              <Icon name="eye" size={12} /> {hiddenByOwner} more assigned to others — show
+            </button>
+          )}
           <span className="mail-list-count">{mailboxRows.length ? `1–${mailboxRows.length} of ${mailboxRows.length}` : '0 messages'}</span>
         </div>
         <div className="mail-column-head">
@@ -1556,7 +1710,19 @@ export default function Inbox() {
             </div>
           )
         })}
-        {!mailboxRows.length && <div className="mail-empty"><Icon name="mail" size={28} /><b>No messages here</b><span>Try another mailbox tab or change your filters.</span></div>}
+        {!mailboxRows.length && (
+          <div className="mail-empty">
+            <Icon name="mail" size={28} />
+            {hiddenByOwner > 0 ? <>
+              <b>{hiddenByOwner} lead{hiddenByOwner === 1 ? '' : 's'} here, none assigned to you</b>
+              <span>Leads are routed to an owner by the AI region rules, so a lead you created can belong to someone else.</span>
+              <button className="primary" onClick={() => setShowAll(true)}>Show all leads</button>
+            </> : <>
+              <b>No messages here</b>
+              <span>Try another mailbox tab or change your filters.</span>
+            </>}
+          </div>
+        )}
       </div>
       <p className="hint" style={{ marginTop: 8 }}>
         Dropped leads are kept as a minimal record — reason and source only — for future demand analytics.

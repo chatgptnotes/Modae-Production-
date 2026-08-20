@@ -148,6 +148,55 @@ Produce:
 - next: 2-4 concrete next actions for the salesperson.`,
   },
 
+  // ---- Inbox: the lead-stage clarification / pre-quote-fee mail body.
+  //
+  // Drafting only. The model never sends: the browser puts this text in an
+  // editable field and a human opens the compose window and submits it. That
+  // is the 20 Aug decision — an automated send risks putting wrong information
+  // in front of a customer. Keep it that way; do not add a dispatch task here.
+  //
+  // Distinct from 'email.clarification', which writes against a registered
+  // opportunity with a priced BoQ behind it. This one has only the raw enquiry.
+  'lead.clarify': {
+    model: FLASH,
+    build: p => `${HOUSE}
+
+Write the body of an email to a prospective customer at the lead stage.
+Plain text, no subject line, no markdown, no placeholders in square brackets.
+Open with "${cap(p.salutation, 80) || 'Dear Sir,'}" and close with the sender
+block given below, exactly as given.
+
+${p.kind === 'quote-fee'
+  ? `PURPOSE: this is an Amber-class customer. Thank them for the enquiry, note
+that ModAE India is the authorized distributor for B&K Vibro, ask for the
+compliance documents listed below, and state that a pre-quote processing and
+administrative fee of ${cap(p.feeText, 40)} applies before the quotation is
+prepared and is fully adjustable against the final order value if a Purchase
+Order is placed within the quotation's validity. Ask them to confirm so a
+Proforma Invoice can be issued.
+
+Documents to ask for:`
+  : `PURPOSE: the enquiry is missing information we need before we can quote.
+Thank them for the RFQ, say the offer and the signed technical compliance sheet
+are being prepared, and ask for the details listed below so the proposed
+solution suits their application. Close by saying we will submit the offer as
+soon as the details arrive.
+
+Details to ask for:`}
+${cap((p.items || []).map((q: string, i: number) => `${i + 1}. ${q}`).join('\n'), 6000)}
+
+Enquiry subject: ${cap(p.subject, 300)}
+Customer: ${cap(p.sellTo, 200)} · contact: ${cap(p.contactPerson, 200)}
+Enquiry body (for context only — do not quote it back):
+${cap(p.body, 6000)}
+
+Ask for every listed item and nothing else. Do not invent a part number, a
+price, a delivery date or a specification. Keep it under 220 words.
+
+Sender block:
+${cap(p.senderBlock, 600)}`,
+  },
+
   // ---- Workbench: gap-specific clarification questions
   'clarification.suggest': {
     model: FLASH,

@@ -132,7 +132,7 @@ test('all visible product branding is ModAE', () => {
     'src/pages/Proposal.jsx', 'src/pages/Workbench.jsx', 'src/proposal/DocEditor.jsx',
   ]
   for (const file of visibleFiles) assert.doesNotMatch(read(file), /WinTrack|wintrack-pipeline/)
-  assert.match(read('src/store.jsx'), /wintrack-modae-v4/, 'compatibility storage key must remain stable')
+  assert.match(read('src/appState.js'), /wintrack-modae-v4/, 'compatibility storage key must remain stable')
   assert.match(read('src/sharepoint.js'), /wintrack-sharepoint-v1/, 'backend config key must remain stable')
 })
 
@@ -156,9 +156,11 @@ test('the PO validation scenario opens on a PO already in review', () => {
 })
 
 test('the seeded PO is backfilled into saved state without clobbering work', () => {
-  const store = read('src/store.jsx')
-  assert.match(store, /for \(const \[oppId, po\] of Object\.entries\(seedPoCompare\)\)/)
-  assert.match(store, /if \(!s\.poCompare\[oppId\]\)/,
+  // migrate() moved to appState.js so the demo-data gating could be run by the
+  // tests rather than regex-matched — see tests/demo-data.test.mjs.
+  const state = read('src/appState.js')
+  assert.match(state, /for \(const \[oppId, po\] of Object\.entries\(seedPoCompare\)\)/)
+  assert.match(state, /if \(!s\.poCompare\[oppId\]\)/,
     'an existing PO must never be overwritten')
 })
 

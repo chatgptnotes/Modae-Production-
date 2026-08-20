@@ -287,7 +287,13 @@ export function simulatedLead(customerStatus = 'Green', now = new Date(), option
     : at(pool, variant)
 
   // A chaser only makes sense against something already in the mailbox.
-  const chaseable = (existingLeads || []).filter(l => l && l.id && l.subject && l.status !== 'Dropped')
+  // A chaser is only a duplicate if it can reuse the buyer's reference, which
+  // is what findDuplicates keys on. Leads carrying no reference (seed's LD-204
+  // has `ref: ''`) used to be chaseable: `ref = chased.ref || … || ref` then
+  // fell through to a freshly minted reference, and the result was a lead
+  // labelled duplicateRisk:'High' that nothing could match to anything.
+  const chaseable = (existingLeads || [])
+    .filter(l => l && l.id && l.subject && l.status !== 'Dropped' && (l.ref || l.rfqNumber))
   let quality = forcedQuality || pickQuality(rng)
   if (quality === 'duplicate' && !chaseable.length) quality = 'partial'
 

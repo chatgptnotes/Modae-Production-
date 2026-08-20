@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test"
+    "test": "node --test",
+    "render:proposal": "esbuild scripts/render-proposal.jsx --bundle --platform=node --format=cjs --outfile=node_modules/.cache/render-proposal.cjs --loader:.js=jsx --loader:.png=text --loader:.jpg=text --define:import.meta.url='\"file:///stub/\"' --log-level=error && node node_modules/.cache/render-proposal.cjs"
   },
   "dependencies": {
     "@azure/msal-browser": "^3.26.1",

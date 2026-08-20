@@ -9,8 +9,8 @@ import { getConfig } from '../sharepoint.js'
 import { Icon } from '../icons.jsx'
 
 // The client's four real SharePoint status folders and their Excel-ish colors.
-const OPEN_FOLDER = { fill: '#ffeb9c', stroke: '#9c6500' }
-const BLUE_FOLDER = { fill: '#e0f2fe', stroke: '#0369a1' }
+const OPEN_FOLDER = { fill: 'var(--amber-fill)', stroke: 'var(--amber-text)' }
+const BLUE_FOLDER = { fill: 'var(--primary-soft)', stroke: 'var(--primary-deep)' }
 
 function FolderIcon({ cls = 'open', size = 44, pathStyle }) {
   return (

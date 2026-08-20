@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { defaultCosting, newProposal, proposalTypeForOpp } from '../seed.js'
-import { effectiveRate, unitCostINR, unitSellINR, fmt, exportCSV, canPriceProposal, clampCosting, clampQty, MAX_GM_PCT } from '../utils.js'
+import { effectiveRate, fmt, exportCSV, canPriceProposal, clampCosting, clampQty, MAX_GM_PCT, gmailComposeHref } from '../utils.js'
 import { useFormulaBar } from '../formulabar.jsx'
 import { Icon, ModaeImageLogo } from '../icons.jsx'
 import { Modal } from '../ui.jsx'
@@ -10,7 +9,8 @@ import { oppBlockers, isBlocked } from '../gates.js'
 import { docModel, docRoute, MODAE_COMPANY } from '../proposalDoc.js'
 import DocEditor from '../proposal/DocEditor.jsx'
 import PrintDoc from '../proposal/PrintDoc.jsx'
-import { signalsFromBom, countSignals, signalsAreEmpty, rackLayout, UMM_CHANNELS, RACK_SLOTS } from '../rack.js'
+import { signalsFromBom, countSignals, rackLayout, UMM_CHANNELS, RACK_SLOTS } from '../rack.js'
+import { normalizeProposal, buildPricing } from '../proposal/docProps.js'
 
 const ROUTE_TABS = {
   Project: ['Cover Letter', 'Document', 'Signal List', 'Rack Layout', 'Priced BoQ'],
@@ -92,43 +92,17 @@ function RouteTemplateTab({ route, tab, p, doc, priced, lineQuoted }) {
 
 // Qty/Unit × units + Common + Spares — the BoQ quantity rule, in one place so
 // the signal-list derivation reads the same totals the sheet shows.
-const lineQty = (l, u) => (l.qtyPerUnit || 0) * u + (l.common || 0) + (l.spares || 0)
+// normalize() and the line-pricing chain moved to proposal/docProps.js so the
+// opportunity workspace's Preview tab can build the same document this page
+// prints. `normalize` keeps its old name here to leave the call sites alone.
+const normalize = normalizeProposal
 
-// Older saved proposals (and newProposal before this change) used a single
-// `qty`; the real BoQ splits quantities into Qty/Unit × units + Common + Spares.
-function normalize(pr, opp) {
-  const units = pr.units || 7
-  const bom = (pr.bom || []).map(l => ({
-    itemCategory: '', qtyPerUnit: 0, common: 0, spares: 0, quoted: '',
-    list: 'BNK', currency: 'EUR', uom: 'EA', custRef: '',
-    ...l,
-    ...(l.qtyPerUnit === undefined && l.qty != null ? { common: l.qty } : {}),
-  }))
-  // Tender intake saves the signal rows zeroed (spares quantities are absolute,
-  // not per-unit), which left the tab blank. Counts are implied by the BoQ, so
-  // adopt them as the default until someone types a figure of their own.
-  const stored = pr.signals || newProposal(pr.oppId).signals
-  const derived = signalsFromBom(bom, units, l => lineQty(l, units))
-  const signals = signalsAreEmpty(stored) && !signalsAreEmpty(derived) ? derived : stored
-  return {
-    ...pr,
-    proposalType: pr.proposalType || proposalTypeForOpp(opp),
-    route: pr.route || docRoute(pr, opp),
-    artifactSheets: pr.artifactSheets || (docRoute(pr, opp) === 'Project'
-      ? ['Cover Letter', 'Signal List', 'Rack Layout', 'Priced BoQ', 'Compliance Table']
-      : docRoute(pr, opp) === 'Service'
-        ? ['Cover Letter', 'Scope of Work', 'Issues List', 'Proposal', 'Service Rate Schedule']
-        : ['Cover Letter', 'Firm Offer', 'Clarifications', 'Sensor Comparison', 'Priced BoQ']),
-    signals,
-    bom,
-    units,
-    costing: { ...defaultCosting, ...pr.costing },
-    terms: (pr.terms || []).map(t => ({ key: '', clauseRef: '', ...t })),
-  }
-}
-
-export default function Proposal() {
-  const { oppId } = useParams()
+// Rendered two ways: as the standalone /proposal/:oppId page, and embedded in the
+// opportunity workspace (Proposal tab → Builder). Embedded mode drops the page
+// chrome — title, back link, duplicated blocker list — and unpins the sheet tabs.
+export default function Proposal({ oppId: oppIdProp, embedded = false }) {
+  const { oppId: routeOppId } = useParams()
+  const oppId = oppIdProp || routeOppId
   const store = useStore()
   const fb = useFormulaBar()
   const opp = store.opportunities.find(o => o.id === oppId)
@@ -154,13 +128,21 @@ export default function Proposal() {
 
   // Print-all: render the full customer document (cover + terms + BoQ) first,
   // then open the dialog; afterprint restores the tabbed view.
+  // Embedded, the surrounding opportunity page (summary, tab strips, lifecycle,
+  // readiness panel) is not part of the customer document — the print stylesheet
+  // hides it off this body class, which only exists while the dialog is open.
   useEffect(() => {
     if (!printing) return
     const done = () => setPrinting(false)
+    if (embedded) document.body.classList.add('proposal-printing')
     window.addEventListener('afterprint', done, { once: true })
     const t = setTimeout(() => window.print(), 60)
-    return () => { clearTimeout(t); window.removeEventListener('afterprint', done) }
-  }, [printing])
+    return () => {
+      clearTimeout(t)
+      window.removeEventListener('afterprint', done)
+      document.body.classList.remove('proposal-printing')
+    }
+  }, [printing, embedded])
 
   if (!opp) return <div className="page"><h2>Unknown opportunity</h2><Link to="/">Back to tracker</Link></div>
 
@@ -170,32 +152,10 @@ export default function Proposal() {
 
   const units = p.units || 7
 
-  const allParts = [
-    ...Object.entries(store.priceLists).flatMap(([list, pl]) =>
-      pl.parts.map(part => ({ ...part, list, currency: pl.currency }))),
-    // Trader quotes captured on Price Lists → Ad-hoc parts (latest first = reference price)
-    ...store.adhocParts.map(a => ({
-      pn: a.pn, desc: a.note ? `${a.note} (${a.supplier})` : a.supplier,
-      price: a.price, adders: [], list: 'Ad-hoc', currency: a.currency,
-    })),
-  ]
-
-  const totalQty = (l, u = units) => lineQty(l, u)
-  const linePrice = l => {
-    const part = allParts.find(x => x.pn === l.pn && (x.list === l.list || !l.list))
-    const adderSum = (part?.adders || []).filter(a => l.adders.includes(a.code)).reduce((s, a) => s + a.price, 0)
-    return l.listPrice + adderSum
-  }
-  const isBnk = l => (l.list || 'BNK') === 'BNK'
-  const lineCost = (l, c = p.costing) => unitCostINR(linePrice(l), c, l.currency || 'EUR', isBnk(l))
-  const lineComputed = (l, c = p.costing) => unitSellINR(linePrice(l), c, l.currency || 'EUR', isBnk(l))
-  // Customer-facing (target) price — editable; defaults to the computed GM price.
-  const lineQuoted = (l, c = p.costing) => (l.quoted !== '' && l.quoted != null ? +l.quoted : Math.round(lineComputed(l, c)))
-
-  const computeTotals = pr => pr.bom.reduce((t, l) => {
-    const q = totalQty(l, pr.units || 7)
-    return { cost: t.cost + lineCost(l, pr.costing) * q, target: t.target + lineQuoted(l, pr.costing) * q }
-  }, { cost: 0, target: 0 })
+  // Shared with the Preview tab in the opportunity workspace — see docProps.js.
+  const {
+    allParts, totalQty, linePrice, lineCost, lineComputed, lineQuoted, computeTotals,
+  } = buildPricing(store, p)
 
   const totals = computeTotals(p)
   const financeCost = (p.costing.financeCostK || 0) * 1000
@@ -291,8 +251,14 @@ export default function Proposal() {
   const blocked = isBlocked(blockers)
   const submitted = comms.some(c => c.kind === 'submission')
 
+  // Forward `needed` and `anyOf`. Dropping them let recordDecision fall back to
+  // [approver], so a joint LJS+AH gate raised from this page — the Red customer
+  // clearance among them — cleared on LJS alone. Workbench.jsx and PropBuilder
+  // already forward both; this call site was the odd one out.
   const requestApproval = bl => () => store.requestApproval({
     oppId, type: bl.approvalType, approver: bl.approver, detail: bl.text,
+    ...(bl.needed ? { needed: bl.needed } : {}),
+    ...(bl.anyOf ? { anyOf: bl.anyOf } : {}),
   })
   const confirmCond = bl => () => {
     setConditionTarget(bl)
@@ -330,15 +296,9 @@ export default function Proposal() {
       'Best regards,',
       MODAE_COMPANY.name,
   ].join('\n')
-  // Gmail compose URLs are reliable in the browser and do not depend on the
-  // Mac's default mail application. Keep the body compact and never cut through
-  // a %XX escape.
-  const gmailComposeHref = (() => {
-    if (!emailTo.trim()) return ''
-    const encBody = encodeURIComponent(emailBody).slice(0, 1600).replace(/%[0-9A-F]?$/i, '')
-    const cc = emailCc.trim() ? `&cc=${encodeURIComponent(emailCc.trim())}` : ''
-    return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(emailTo.trim())}&su=${encodeURIComponent(emailSubject)}${cc}&body=${encBody}`
-  })()
+  // Shared with the lead-stage clarification draft (src/leadClarification.js),
+  // so the two dispatch paths cannot drift apart.
+  const composeHref = gmailComposeHref({ to: emailTo, cc: emailCc, subject: emailSubject, body: emailBody })
 
   const sendEmail = () => {
     if (!emailTo.trim()) return
@@ -380,19 +340,25 @@ export default function Proposal() {
   // Switching route while sitting on a now-hidden tab must not blank the page.
   if (!visibleTabs.includes(tab)) { setTab('Cover Letter'); return null }
 
+  // Embedded, the opportunity page owns the padding and the sheet strip sits in
+  // normal flow, so the 64px clearance `.page` reserves for the fixed bar is wrong.
+  const shellClass = embedded ? 'proposal-embedded' : 'page'
+
   if (printing) {
     return (
-      <div className="page">
+      <div className={shellClass}>
         <PrintDoc p={p} opp={opp} doc={doc} priced={priced} totals={totals} lineQuoted={lineQuoted} />
       </div>
     )
   }
 
   return (
-    <div className="page">
-      <h2>{oppId} — {opp.sellTo} — Proposal Workbook</h2>
+    <div className={shellClass}>
+      {/* The opportunity summary header already names the opportunity, and there
+          is no folder to go back to from inside it. */}
+      {!embedded && <h2>{oppId} — {opp.sellTo} — Proposal Workbook</h2>}
       <div className="toolbar">
-        <Link className="btn" to={`/folders/${oppId}`}>◂ Back to folder</Link>
+        {!embedded && <Link className="btn" to={`/folders/${oppId}`}>◂ Back to folder</Link>}
         <span className="spacer" />
         <label className="hint">Proposal type:{' '}
           <select value={p.proposalType || 'Project'} onChange={set('proposalType')}>
@@ -418,7 +384,19 @@ export default function Proposal() {
                 : <button className="primary" onClick={markSubmitted}>Mark submitted to customer</button>}
             </div>
           )}
-          {blockers.map(bl => (
+          {/* Embedded, the readiness panel directly above already lists every
+              blocker with the same Request-approval buttons — repeating them
+              here would show the same list twice on one screen. */}
+          {embedded && blockers.length > 0 && (
+            <div className={`gate-row ${blocked ? 'block' : 'info'}`}>
+              <Icon name={blocked ? 'lock' : 'alert'} size={15} />
+              <span>
+                {blockers.length} open item{blockers.length > 1 ? 's' : ''} — see
+                {' '}<b>Readiness &amp; approval</b> above.
+              </span>
+            </div>
+          )}
+          {!embedded && blockers.map(bl => (
             <div key={bl.key} className={`gate-row ${bl.severity}`}>
               <Icon name={bl.severity === 'info' ? 'alert' : bl.severity === 'wait' ? 'clock' : 'lock'} size={15} />
               <span>{bl.text}</span>
@@ -445,9 +423,11 @@ export default function Proposal() {
 
       {route !== 'Project' && (
         <div className="ai-notice" style={{ marginBottom: 10 }}>
-          <b>{route} proposal route.</b> The printed document uses the short {route.toLowerCase()} section
-          set — no signal list or rack layout, and no project front matter. Section wording will be
-          based on the supplied {p.templateSource || `${route.toLowerCase()} sample`} structure: {p.artifactSheets.filter(x => !['Cover Letter', 'Priced BoQ'].includes(x)).join(' · ')}.
+          <b>{route} proposal route.</b> The printed document follows the supplied{' '}
+          {p.templateSource || `${route.toLowerCase()} sample`}: a covering letter and one priced sheet,
+          with no signal list, no rack layout and no project front matter. Optional annexes
+          ({p.artifactSheets.filter(x => !['Cover Letter', 'Priced BoQ'].includes(x)).join(' · ')}) are
+          issued only when ticked on the Document tab.
         </div>
       )}
 
@@ -793,9 +773,9 @@ export default function Proposal() {
             </div>
           )}
           <div className="forms-actions">
-            <a className={`primary email-launch-link${!gmailComposeHref ? ' disabled' : ''}`} href={gmailComposeHref || undefined}
-              onClick={event => { if (!gmailComposeHref) event.preventDefault(); else sendEmail() }}
-              aria-disabled={!gmailComposeHref} target="_blank" rel="noreferrer">
+            <a className={`primary email-launch-link${!composeHref ? ' disabled' : ''}`} href={composeHref || undefined}
+              onClick={event => { if (!composeHref) event.preventDefault(); else sendEmail() }}
+              aria-disabled={!composeHref} target="_blank" rel="noreferrer">
               Open Gmail compose ▸
             </a>
             <button onClick={() => setEmailOpen(false)}>Cancel</button>
@@ -831,7 +811,7 @@ export default function Proposal() {
         </Modal>
       )}
 
-      <div className="sheet-tabs">
+      <div className={embedded ? 'sheet-tabs inline' : 'sheet-tabs'}>
         {visibleTabs.map(t => (
           <div key={t} className={`tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>{t}</div>
         ))}

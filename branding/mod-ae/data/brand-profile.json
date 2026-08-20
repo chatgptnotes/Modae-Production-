@@ -64,7 +64,7 @@
       "https://mod-ae.com/products/"
     ]
   },
-  "note": "Website colors and font colors were intentionally not copied into app theming. Any colors inside raw HTML/CSS are reference-only source material.",
+  "note": "Superseded 20 Aug 2026: the client asked the app to adopt the full website brand identity, colours and buttons included, not just the logo and font. The palette is now mirrored in src/branding/modae.js (MODAE_COLORS / MODAE_TYPE) and from there into the :root block of src/styles.css. Colours in raw/ HTML and CSS are the source for that palette.",
   "source_urls": [
     "https://mod-ae.com/about-us/",
     "https://mod-ae.com/products/"

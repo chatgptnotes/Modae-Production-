@@ -11,7 +11,7 @@ import {
 } from './seed.js'
 import { leadConfig, routeOwner, expiredLeadDeadline, aiAuditDetail } from './leadRules.js'
 import { withoutSimulated, simulatedCount } from './simulatedLeads.js'
-import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf } from './appState.js'
+import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, defaultViewMode } from './appState.js'
 
 const StoreCtx = createContext(null)
 
@@ -42,10 +42,13 @@ function applyApprovalEffects(s, appr) {
   if (appr.type === 'Red customer clearance' && appr.leadId) {
     // 'Returned' does NOT clear the gate — leave the lead untouched so the
     // salesperson can address the comments and re-request.
+    const lead = next.leads.find(l => l.id === appr.leadId)
     const leadPatch = appr.status === 'Rejected'
       ? { status: 'Dropped', droppedReason: 'Red-class continuation rejected' }
       : appr.status === 'Approved' || appr.status === 'Approved with conditions'
-        ? { status: 'Qualified' }
+        // A late decision must not walk an already-registered lead backwards:
+        // 'Converted' owns a live opportunity, and Qualified would orphan it.
+        ? (lead?.status === 'Converted' ? null : { status: 'Qualified' })
         : null
     if (leadPatch) next = { ...next, leads: next.leads.map(l => (l.id === appr.leadId ? { ...l, ...leadPatch } : l)) }
   }
@@ -651,6 +654,13 @@ export function StoreProvider({ children }) {
       setState(s => ((theme === 'dark' || theme === 'light') ? { ...s, tabletTheme: theme } : s))
     },
 
+    // ---- Lead inbox: "Show all" ------------------------------------------
+    // Survives a reload so a lead routed to another owner cannot silently
+    // disappear from the list that just created it.
+    setInboxShowAll(on) {
+      setState(s => ({ ...s, inboxShowAll: !!on }))
+    },
+
     // ---- View mode (tablet / full site) -----------------------------------
     // An explicit switch is remembered (`viewModePinned`) and never overridden.
     setViewMode(mode) {
@@ -677,8 +687,13 @@ export function StoreProvider({ children }) {
       setState(s => {
         const appr = s.approvals.find(a => a.id === id)
         if (!appr) return s
-        const decisions = { ...(appr.decisions || {}), [s.role]: { d, c: comment, when: new Date().toISOString() } }
         const needed = appr.needed || [appr.approver].filter(Boolean)
+        // Guard at the model layer, not only in Approvals.canDecide. Keying by
+        // persona alone let an ADMIN/SUPER decision land outside `needed`, and
+        // `needed.every(...)` then never came true — stranding a joint gate at
+        // Pending with no way back.
+        if (needed.length && !needed.includes(s.role)) return s
+        const decisions = { ...(appr.decisions || {}), [s.role]: { d, c: comment, when: new Date().toISOString() } }
         // Diagram 02 §5 names two approvers on some gates but only needs one of
         // them: 5A technical is "LJS *or* AN", and the "< ₹10 L & <= 50%" row of
         // the 5C margin matrix is "AH *or* LJS". `anyOf` marks those; every

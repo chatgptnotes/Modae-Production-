@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { leadWorkflow } from '../src/leadWorkflow.js'
+import { supplyMissing } from '../src/leadRules.js'
 
 const fields = [
   { k: 'Sell-to', v: 'Customer', conf: 95, state: 'accepted' },
@@ -49,4 +50,30 @@ test('dropped lead is terminal rather than appearing stuck on AI validation', ()
   assert.equal(flow.terminal, 'dropped')
   assert.equal(flow.blocked, 'Lead discarded')
   assert.equal(flow.complete, false)
+})
+
+// Answering the outstanding clarifications by hand has to move the workflow on,
+// not just tidy the panel — L-07 stays open while ai.missing has anything in it,
+// and the header reads "N clarifications required".
+test('supplying the missing information clears the L-07 AI validation block', () => {
+  let lead = {
+    id: 'LD-902', status: 'Qualified', mailbox: true, suggestedOwner: 'RS', route: 'Service',
+    customerStatus: 'Green', completeness: 78,
+    ai: {
+      fields: [{ k: 'Sell-to', v: 'Tata Steel', conf: 97, state: 'accepted' }],
+      missing: ['Number of preventive visits per year expected', 'Required response time'],
+    },
+  }
+  const before = leadWorkflow(lead, { customerStatus: 'Green' })
+  assert.equal(before.blocked, '2 clarifications required')
+
+  for (const item of [...lead.ai.missing]) {
+    lead = { ...lead, ...supplyMissing(lead, item, 'answered', item) }
+  }
+  const after = leadWorkflow(lead, { customerStatus: 'Green' })
+  assert.equal(after.blocked, '', 'nothing should still be blocking')
+  assert.ok(after.activeIndex > before.activeIndex, 'the lead must advance past L-07')
+  // The answers are accepted fields, so they cannot re-block the step.
+  assert.equal(lead.ai.fields.filter(f => f.manual).length, 2)
+  assert.equal(lead.completeness, 100)
 })
