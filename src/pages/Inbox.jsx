@@ -14,9 +14,9 @@ import { hold, add as holdMore } from '../leadFiles.js'
 import AttachmentViewer from '../AttachmentViewer.jsx'
 import { findDuplicates } from '../insights.js'
 import { leadWorkflow } from '../leadWorkflow.js'
-import { isFastTrackLead, routeOwner } from '../leadRules.js'
+import { isFastTrackLead, routeOwner, supplyMissing } from '../leadRules.js'
 import { BLUE_KYC_ITEMS, leadVerificationComplete, verificationDeadline, verificationItem } from '../leadVerification.js'
-import { SIMULATED_CUSTOMER_SCENARIOS, simulatedLead } from '../simulatedLeads.js'
+import { SIMULATED_CUSTOMER_SCENARIOS, simulatedLead, simulatedCount } from '../simulatedLeads.js'
 
 // Common-mailbox lead inbox: AI parses each inquiry, a human decides whether it
 // becomes an opportunity (Qualify → registration / intake form) or is dropped.
@@ -519,6 +519,8 @@ function AiLeadDetail({ lead }) {
   const [evOpen, setEvOpen] = useState(null)      // field index with evidence expanded
   const [editFor, setEditFor] = useState(null)    // { idx, val, note }
   const [rejFor, setRejFor] = useState(null)      // { idx, note }
+  const [fillFor, setFillFor] = useState(null)    // { item, val } — answering a missing item
+  const [addOther, setAddOther] = useState(null)  // { k, v } — information nobody asked for yet
   const [reExtracting, setReExtracting] = useState(false)
   const [reErr, setReErr] = useState('')
   const [reNote, setReNote] = useState('')
@@ -617,6 +619,13 @@ function AiLeadDetail({ lead }) {
     store.updateLead(lead.id, {
       ai: { ...ai, fields: ai.fields.map((f, i) => (i === idx ? { ...f, ...patch } : f)) },
     }, `AI field "${field?.k || 'unknown'}" updated`)
+  }
+
+  // Supply a piece of information the AI could not find. The policy — what it
+  // does to completeness and to the clarification deadline — is in leadRules.
+  const addMissing = (label, value, key = null) => {
+    const patch = supplyMissing({ ...lead, ai }, label, value, key)
+    if (patch) store.updateLead(lead.id, patch, `Missing information supplied: ${String(label).trim()}`)
   }
 
   const saveEdit = () => {
@@ -838,11 +847,68 @@ function AiLeadDetail({ lead }) {
           {reErr && <ErrBox>{reErr}</ErrBox>}
           {reNote && !reErr && <p className="hint"><Icon name="checkCircle" size={12} /> {reNote}</p>}
 
+          {/* Each outstanding item is answerable on the spot. Waiting on the
+              customer is one way to close a clarification; typing in what you
+              already know is the other, and it was the one with no button. */}
           {ai.missing?.length > 0 && (
             <WarnBox>
               <b>Missing information</b>
-              <ul>{ai.missing.map((m, i) => <li key={i}>{m}</li>)}</ul>
+              <ul className="ws-missing">
+                {(ai.missing || []).map((m, i) => (
+                  <li key={i}>
+                    <div className="ws-missing-row">
+                      <span>{m}</span>
+                      {canAct && fillFor?.item !== m && (
+                        <button onClick={() => { setAddOther(null); setFillFor({ item: m, val: '' }) }}>
+                          <Icon name="plus" size={11} /> Add
+                        </button>
+                      )}
+                    </div>
+                    {fillFor?.item === m && (
+                      <div className="ws-missing-fill">
+                        <input autoFocus value={fillFor.val} placeholder="Type what you know"
+                          onChange={e => setFillFor({ ...fillFor, val: e.target.value })}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' && fillFor.val.trim()) { addMissing(m, fillFor.val, m); setFillFor(null) }
+                            if (e.key === 'Escape') setFillFor(null)
+                          }} />
+                        <button className="act-accept" disabled={!fillFor.val.trim()}
+                          onClick={() => { addMissing(m, fillFor.val, m); setFillFor(null) }}>
+                          <Icon name="check" size={11} /> Save
+                        </button>
+                        <button onClick={() => setFillFor(null)}>Cancel</button>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
             </WarnBox>
+          )}
+
+          {/* Outside the warning box, so it stays reachable on a lead the AI
+              read cleanly — the enquiry can still be short something nobody
+              thought to flag. */}
+          {canAct && !addOther && (
+            <button className="ws-missing-other" onClick={() => { setFillFor(null); setAddOther({ k: '', v: '' }) }}>
+              <Icon name="plus" size={11} /> Add other information
+            </button>
+          )}
+          {addOther && (
+            <div className="ws-missing-fill ws-missing-other-fill">
+              <input autoFocus value={addOther.k} placeholder="What is it (e.g. Delivery address)"
+                onChange={e => setAddOther({ ...addOther, k: e.target.value })} />
+              <input value={addOther.v} placeholder="Value"
+                onChange={e => setAddOther({ ...addOther, v: e.target.value })}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && addOther.k.trim() && addOther.v.trim()) { addMissing(addOther.k, addOther.v); setAddOther(null) }
+                  if (e.key === 'Escape') setAddOther(null)
+                }} />
+              <button className="act-accept" disabled={!addOther.k.trim() || !addOther.v.trim()}
+                onClick={() => { addMissing(addOther.k, addOther.v); setAddOther(null) }}>
+                <Icon name="check" size={11} /> Save
+              </button>
+              <button onClick={() => setAddOther(null)}>Cancel</button>
+            </div>
           )}
 
           {/* Computed against the live inbox, not read from a seeded list —
@@ -1348,10 +1414,24 @@ export default function Inbox() {
     setSelectedIds(new Set())
   }
   const createSimulatedLead = status => {
-    const lead = simulatedLead(status)
+    const lead = simulatedLead(status, new Date(), { existingLeads: store.leads, config: store.config })
     store.addLead(lead)
+    // Owner now comes from the L-05-AI region rules, so a generated lead can
+    // land with someone else. Without this the sales owner's filtered list
+    // would silently drop the row they just created.
+    if (!seesAll && lead.suggestedOwner !== store.role) setShowAll(true)
     setSimulationOpen(false)
     nav('/inbox/' + lead.id)
+  }
+  const createRandomSimulatedLead = () =>
+    createSimulatedLead(SIMULATED_CUSTOMER_SCENARIOS[Math.floor(Math.random() * SIMULATED_CUSTOMER_SCENARIOS.length)].status)
+  const simulatedLeadCount = simulatedCount(store.leads, store.leadArchive)
+  const clearSimulated = () => {
+    if (!window.confirm(`Clear ${simulatedLeadCount} simulated lead${simulatedLeadCount === 1 ? '' : 's'}?\n\n`
+      + 'Only rows generated by this simulator go. Seeded and hand-entered leads stay, '
+      + 'and a simulated lead already converted to an opportunity is kept.')) return
+    store.clearSimulatedLeads()
+    setSimulationOpen(false)
   }
   const tabCount = tab => rows.filter(l => tab === 'unread'
     ? l.status === 'New' && !l.readAt
@@ -1393,7 +1473,11 @@ export default function Inbox() {
       {pasteOpen && <PasteLeadModal onClose={() => setPasteOpen(false)} />}
       {simulationOpen && (
         <Modal title="Simulate incoming inquiry" onClose={() => setSimulationOpen(false)}>
-          <p className="hint">Choose a customer class to test its complete Lead workflow.</p>
+          <p className="hint">
+            Choose a customer class to test its complete Lead workflow. The class is fixed by
+            your choice; the enquiry itself — customer, plant, scope, route and how complete
+            the extraction is — is a different permutation every time.
+          </p>
           <div style={{ display: 'grid', gap: 8 }}>
             {SIMULATED_CUSTOMER_SCENARIOS.map(scenario => (
               <button key={scenario.status} className="form-card" style={{ textAlign: 'left', cursor: 'pointer' }}
@@ -1402,7 +1486,21 @@ export default function Inbox() {
                 <span className="hint" style={{ display: 'block', marginTop: 3 }}>{scenario.hint}</span>
               </button>
             ))}
+            <button className="form-card" style={{ textAlign: 'left', cursor: 'pointer' }}
+              onClick={createRandomSimulatedLead}>
+              <b>Random inquiry</b>
+              <span className="hint" style={{ display: 'block', marginTop: 3 }}>
+                Any customer class, any scope — fill the inbox with a varied mix
+              </span>
+            </button>
           </div>
+          {simulatedLeadCount > 0 && (
+            <div className="lead-decision-actions" style={{ marginTop: 12 }}>
+              <button onClick={clearSimulated}>
+                <Icon name="x" size={13} /> Clear {simulatedLeadCount} simulated lead{simulatedLeadCount === 1 ? '' : 's'}
+              </button>
+            </div>
+          )}
         </Modal>
       )}
 
