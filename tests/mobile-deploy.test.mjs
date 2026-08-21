@@ -96,13 +96,16 @@ test('customer documents use the original ModAE letterhead template identity', (
   const proposal = read('src/proposalDoc.js')
   const printDoc = read('src/proposal/PrintDoc.jsx')
   const css = read('src/styles.css')
-  assert.match(brand, /Your Partners in Achieving Excellence/)
+  // Capital "In" per the 18 Aug branding-guideline email.
+  assert.match(brand, /Your Partners In Achieving Excellence/)
   assert.match(brand, /MODAE INDIA PRIVATE LIMITED/)
   assert.match(brand, /29AARCM8622J1ZQ/)
   assert.match(brand, /U62099KA2024PTC185715/)
   assert.match(proposal, /MODAE_BRAND\.letterhead/)
   assert.match(printDoc, /OfficialLetterheadFooter/)
-  assert.match(printDoc, /MODAE_COMPANY\.salesOffice/)
+  // The guideline footer: legal name, the Commerce Mantri address, CIN | GST.
+  assert.match(printDoc, /MODAE_COMPANY\.officialAddress/)
+  assert.match(printDoc, /CIN: \{MODAE_COMPANY\.cin\} \| GST: \{MODAE_COMPANY\.gstin\}/)
   assert.match(css, /\.doc-official-footer/)
 })
 

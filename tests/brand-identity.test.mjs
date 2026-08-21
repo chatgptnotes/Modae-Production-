@@ -33,6 +33,23 @@ test('styles.css mirrors the brand tokens', () => {
   assert.match(root_, /--font-body: 'Roboto'/)
 })
 
+// The 18 Aug guideline standardises DOCUMENT templates on Candara 11pt/12pt.
+// The app UI deliberately stays on Rubik/Roboto (the tokens above); only the
+// printed proposal (.propdoc) switches, on screen and in print alike.
+test('printed documents use the Candara document face, the UI does not', () => {
+  assert.equal(MODAE_TYPE.document.includes('Candara'), true)
+  const root_ = css.slice(css.indexOf(':root {'), css.indexOf('}', css.indexOf(':root {')))
+  assert.match(root_, /--font-document: 'Candara'/)
+  const propdocRules = [...css.matchAll(/^\s*\.propdoc \{[^}]*\}/gm)].map(m => m[0])
+  assert.ok(propdocRules.length >= 2, 'screen and print .propdoc rules')
+  for (const rule of propdocRules) {
+    assert.match(rule, /font-family: var\(--font-document\)/)
+    assert.match(rule, /font-size: 11pt/)
+  }
+  assert.match(css, /\.doc-h \{[^}]*font-size: 12pt/, 'guideline heading size')
+  assert.doesNotMatch(css, /body \{[^}]*--font-document/, 'the UI must not pick it up')
+})
+
 test('the sky-and-navy theme is gone, not merely overridden', () => {
   // Overriding :root while leaving the old literals scattered through the file
   // is how a half-rebranded app happens.

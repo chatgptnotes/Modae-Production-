@@ -12,7 +12,7 @@ import PrintDoc from '../proposal/PrintDoc.jsx'
 import { signalsFromBom, countSignals, rackLayout, UMM_CHANNELS, RACK_SLOTS } from '../rack.js'
 import { normalizeProposal, buildPricing } from '../proposal/docProps.js'
 import ProposalSheetEditor from '../proposal/ProposalSheetEditor.jsx'
-import { proposalWorkbookAttachment, standardTermsAttachment } from '../proposal/emailAttachments.js'
+import { proposalWorkbookAttachment, standardTermsAttachment, serviceRateScheduleAttachment } from '../proposal/emailAttachments.js'
 import { downloadProposalXlsx } from '../proposal/excelExport.js'
 
 const ROUTE_TABS = {
@@ -307,7 +307,9 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
       ...p.bom.slice(0, 6).map((l, i) => `${i + 1}. ${l.desc} — ${totalQty(l)} nos`),
       ...(p.bom.length > 6 ? [`…and ${p.bom.length - 6} more items`] : []),
       '',
-      'The proposal workbook and ModAE Standard Terms are attached.',
+      docRoute(p, opp) === 'Services'
+        ? 'The proposal workbook, ModAE Standard Terms and the Services Rate Schedule are attached.'
+        : 'The proposal workbook and ModAE Standard Terms are attached.',
       '',
       'Best regards,',
       MODAE_COMPANY.name,
@@ -323,6 +325,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
     setEmailError('')
     try {
       const termsFile = await standardTermsAttachment()
+      const rateSchedule = route === 'Services' ? [await serviceRateScheduleAttachment()] : []
       const response = await fetch('/api/send-proposal-email', {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
@@ -330,6 +333,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           attachments: [
             proposalWorkbookAttachment({ p, opp, doc, priced, totalQty, lineQuoted, route }),
             termsFile,
+            ...rateSchedule,
           ],
         }),
       })
@@ -338,7 +342,8 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
       store.addCommunication(oppId, {
         to: emailTo.trim(), cc: emailCc.trim(), subject: emailSubject, kind: 'proposal-email',
         messageId: result.messageId, status: 'sent',
-        attachmentNames: [`${oppId}_Proposal_Rev_${p.revision}.xlsx`, 'ModAE Standard Terms-Sales.pdf'],
+        attachmentNames: [`${oppId}_Proposal_Rev_${p.revision}.xlsx`, 'ModAE Standard Terms-Sales.pdf',
+          ...rateSchedule.map(a => a.filename)],
       })
       setEmailOpen(false)
     } catch (error) {
@@ -804,7 +809,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
             <input type="text" value={emailNote} onChange={e => setEmailNote(e.target.value)} placeholder="e.g. Submitted within due date — happy to discuss." />
           </div>
           <div className="costing-note">
-            This automatically sends the current Excel proposal and the agreed ModAE Standard Terms PDF.
+            This automatically sends the current Excel proposal and the agreed ModAE Standard Terms PDF{route === 'Services' ? ', plus the Services Rate Schedule' : ''}.
           </div>
           {emailError && <div className="errbox" style={{ marginTop: 8 }}>{emailError}</div>}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -827,7 +832,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           )}
           <div className="forms-actions">
             <button className="primary" disabled={emailBusy || !emailTo.trim()} onClick={sendEmail}>
-              <Icon name="send" size={13} /> {emailBusy ? 'Sending…' : 'Send with 2 attachments'}
+              <Icon name="send" size={13} /> {emailBusy ? 'Sending…' : `Send with ${route === 'Services' ? 3 : 2} attachments`}
             </button>
             <button onClick={() => setEmailOpen(false)}>Cancel</button>
           </div>

@@ -19,7 +19,9 @@ export const MODAE_BRAND = Object.freeze({
   letterheadUrl: officialLogoUrl,
   letterhead: Object.freeze({
     legalName: 'MODAE INDIA PRIVATE LIMITED',
-    tagline: 'Your Partners in Achieving Excellence',
+    // Capital "In" — the 18 Aug branding-guideline email spells the tagline
+    // "Your Partners In Achieving Excellence" in the document header spec.
+    tagline: 'Your Partners In Achieving Excellence',
     officialAddress: '7th Floor, Commerce Mantri, 12, 1 & 2, Bannerghatta Road, BTM Layout, 2nd Stage, BTM Layout, Bangalore, Karnataka – 560076',
     salesOffice: '7th Floor, Commerce Mantri, 12, 1 & 2, Bannerghatta Road, BTM Layout, 2nd Stage, BTM Layout, Bangalore, Karnataka – 560076',
     // The samples and the May 2026 letterhead both print the registered office
@@ -78,6 +80,11 @@ export const MODAE_COLORS = Object.freeze({
 export const MODAE_TYPE = Object.freeze({
   heading: "'Rubik', 'Segoe UI', system-ui, sans-serif",
   body: "'Roboto', 'Segoe UI', system-ui, sans-serif",
+  // Document templates only (18 Aug guideline: Candara, 11pt body / 12pt
+  // headings). Candara is a Windows system font that cannot be self-hosted,
+  // so the printed documents carry a fallback stack; the client's machines
+  // are Windows and render the real face.
+  document: "'Candara', 'Optima', 'Segoe UI', system-ui, sans-serif",
   // Website buttons are 60px tall hero controls. The colour, radius, weight and
   // letter-spacing carry across; the metrics do not — this is a dense
   // enterprise UI, not a marketing page.

@@ -55,11 +55,28 @@ test('preview renders the real document, not a text stub', () => {
 })
 
 test('the attachment claim matches what actually happens', () => {
-  assert.match(proposal, /Send with 2 attachments/)
+  // Services carry a third attachment (the Rate Schedule); everything else two.
+  assert.match(proposal, /Send with \$\{route === 'Services' \? 3 : 2\} attachments/)
   assert.doesNotMatch(proposal, /Proposal PDF attachment \*/)
   assert.match(proposal, /Save proposal PDF/, 'the user must be able to produce the PDF here')
   assert.match(proposal, /ModAE Standard Terms-Sales\.pdf/)
   assert.doesNotMatch(proposal, /!proposalPdf/, 'sending must not depend on a manually selected PDF')
+})
+
+// Biji, 20 Aug review: the Services Rate Schedule goes with every services
+// proposal — domestic or international — and never with spares or projects.
+// The Standard Terms go with everything.
+test('service proposals carry the rate schedule, others do not', () => {
+  for (const file of [proposal, submission]) {
+    assert.match(file, /serviceRateScheduleAttachment/)
+    assert.match(file, /route === 'Services' \? \[await serviceRateScheduleAttachment\(\)\] : \[\]/)
+    assert.match(file, /\.\.\.rateSchedule/)
+  }
+  const attachments = read('src/proposal/emailAttachments.js')
+  assert.match(attachments, /ModAE Services Rate Schedule FY2025-26\.pdf/)
+  assert.match(attachments, /SERVICE_RATE_SCHEDULE_URL/)
+  assert.ok(fs.existsSync(new URL('../branding/Further Inputs/Further Inputs/Proposals and T&Cs/ModAE Services Rate Schedule FY2025-26.pdf', import.meta.url)),
+    'the Rate Schedule PDF must ship with the app')
 })
 
 test('the sent email is logged against the opportunity', () => {

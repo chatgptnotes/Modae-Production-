@@ -30,6 +30,17 @@ test('restricted Excel rows omit customer prices', () => {
   assert.equal(pricing[3].length, 5)
 })
 
+// 18 Aug branding guideline: document templates in Candara, 11pt body,
+// 12pt headings — the workbook is the document the customer opens.
+test('workbook cells carry the Candara document face', () => {
+  const workbook = buildProposalWorkbook(input)
+  const pricing = workbook.Sheets['Firm Offer Rev-00']
+  assert.deepEqual(pricing.A3.s.font, { name: 'Candara', sz: 12, bold: true }, 'header row: 12pt bold')
+  assert.deepEqual(pricing.B4.s.font, { name: 'Candara', sz: 11 }, 'body row: 11pt')
+  const cover = workbook.Sheets['Cover Letter']
+  assert.deepEqual(cover.B1.s.font, { name: 'Candara', sz: 11 })
+})
+
 test('Excel text cells wrap and long rows grow', () => {
   const workbook = buildProposalWorkbook({ ...input, doc: { ...input.doc, letterBody: 'long '.repeat(100) } })
   const cover = workbook.Sheets['Cover Letter']

@@ -15,6 +15,17 @@ export async function standardTermsAttachment() {
   return blobAttachment(await response.blob(), 'ModAE Standard Terms-Sales.pdf', 'application/pdf')
 }
 
+export const SERVICE_RATE_SCHEDULE_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/ModAE Services Rate Schedule FY2025-26.pdf', import.meta.url).href
+
+// Services proposals only — Biji, 20 Aug review: the rate schedule goes with
+// every services job, domestic or international; spares and project proposals
+// carry the Standard Terms alone.
+export async function serviceRateScheduleAttachment() {
+  const response = await fetch(SERVICE_RATE_SCHEDULE_URL)
+  if (!response.ok) throw new Error('Services Rate Schedule PDF could not be loaded')
+  return blobAttachment(await response.blob(), 'ModAE Services Rate Schedule FY2025-26.pdf', 'application/pdf')
+}
+
 export function proposalWorkbookAttachment(args) {
   return {
     filename: `${args.opp.id}_Proposal_Rev_${args.p.revision}.xlsx`,

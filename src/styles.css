@@ -60,6 +60,10 @@
 :root {
   --font-heading: 'Rubik', 'Segoe UI', system-ui, sans-serif;
   --font-body: 'Roboto', 'Segoe UI', system-ui, sans-serif;
+  /* Printed document templates only (18 Aug guideline): Candara cannot be
+     self-hosted, so the client's Windows machines render the real face and
+     everything else falls back. The app UI stays on the two tokens above. */
+  --font-document: 'Candara', 'Optima', 'Segoe UI', system-ui, sans-serif;
 
   --bg-sidebar: #282828;        /* charcoal — sidebar, table headers, dark bars */
   --bg-sidebar-2: #3a3a3a;      /* raised surface inside dark chrome */
@@ -2502,7 +2506,7 @@ button.install:hover { background: var(--primary-hover); }
    =========================================================================== */
 .propdoc {
   color: var(--text-main);
-  font-family: var(--font-body);
+  font-family: var(--font-document);
   font-size: 11pt; line-height: 1.45; font-variant-numeric: tabular-nums;
 }
 
@@ -2749,7 +2753,7 @@ button.linklike:hover { text-decoration: underline; }
   @page { size: A4; margin: 13mm 13mm; }
   @page landscape { size: A4 landscape; margin: 13mm; }
 
-  .propdoc { font-family: var(--font-body); font-size: 11pt; line-height: 1.45; }
+  .propdoc { font-family: var(--font-document); font-size: 11pt; line-height: 1.45; }
   .propdoc, .propdoc * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 
   /* One section per sheet. min-height:auto lets short sections end early; the

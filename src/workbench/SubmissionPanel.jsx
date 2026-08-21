@@ -7,7 +7,7 @@ import { Icon } from '../icons.jsx'
 import { canPriceProposal } from '../utils.js'
 import { docModel, docRoute } from '../proposalDoc.js'
 import { buildPricing } from '../proposal/docProps.js'
-import { proposalWorkbookAttachment, standardTermsAttachment } from '../proposal/emailAttachments.js'
+import { proposalWorkbookAttachment, standardTermsAttachment, serviceRateScheduleAttachment } from '../proposal/emailAttachments.js'
 
 // Customer send — only unlocked by an approved 'Final quote release'
 // and a three-point human-in-the-loop checklist.
@@ -56,6 +56,7 @@ export default function SubmissionPanel({ opp }) {
     setSendError('')
     try {
       const terms = await standardTermsAttachment()
+      const rateSchedule = route === 'Services' ? [await serviceRateScheduleAttachment()] : []
       const response = await fetch('/api/send-proposal-email', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -67,6 +68,7 @@ export default function SubmissionPanel({ opp }) {
           attachments: [
             proposalWorkbookAttachment({ p, opp, doc, priced, totalQty, lineQuoted, route }),
             terms,
+            ...rateSchedule,
           ],
           cc: emailCc,
         }),
@@ -75,6 +77,7 @@ export default function SubmissionPanel({ opp }) {
       if (!response.ok || !result.ok) throw new Error(result.error || 'Email could not be sent')
       store.addCommunication(opp.id, { to, cc: emailCc, subject, kind: 'submission', messageId: result.messageId, status: 'sent', attachmentNames: [
         `${opp.id}_Proposal_Rev_${p.revision}.xlsx`, 'ModAE Standard Terms-Sales.pdf',
+        ...rateSchedule.map(a => a.filename),
       ] })
       store.updateOpportunity(opp.id, {
         milestone: 'Submitted',
@@ -93,7 +96,7 @@ export default function SubmissionPanel({ opp }) {
     ['To', to || 'Customer email required'],
     ['CC', emailCc],
     ['Subject', subject],
-    ['Attachments', `${opp.id}_Proposal_Rev_${p.revision}.xlsx · ModAE Standard Terms-Sales.pdf`],
+    ['Attachments', `${opp.id}_Proposal_Rev_${p.revision}.xlsx · ModAE Standard Terms-Sales.pdf${route === 'Services' ? ' · ModAE Services Rate Schedule FY2025-26.pdf' : ''}`],
   ]
 
   return (

@@ -11,7 +11,7 @@ const clean = value => value == null ? '' : value
 
 export function proposalWorkbookRows({ p, opp, doc, priced, totalQty, lineQuoted, route }) {
   const cover = [
-    ['', 'Your Partners In Achieving Excellence'],
+    ['', MODAE_COMPANY.tagline],
     ['', MODAE_COMPANY.name],
     ['', MODAE_COMPANY.officialAddress],
     ['', `${MODAE_COMPANY.phone} · ${MODAE_COMPANY.email}`],
@@ -74,9 +74,12 @@ const styleSheet = (sheet, rows, widths, headerRows = []) => {
   for (const ref of Object.keys(sheet).filter(key => !key.startsWith('!'))) {
     const cell = sheet[ref]
     const row = Number(ref.match(/\d+/)?.[0]) - 1
+    // 18 Aug branding guideline: Candara, body 11pt, headings 12pt.
     cell.s = {
       alignment: { vertical: 'top', wrapText: typeof cell.v === 'string' },
-      ...(headerRows.includes(row) ? { font: { bold: true }, fill: { fgColor: { rgb: 'E8EEF6' } } } : {}),
+      ...(headerRows.includes(row)
+        ? { font: { name: 'Candara', sz: 12, bold: true }, fill: { fgColor: { rgb: 'E8EEF6' } } }
+        : { font: { name: 'Candara', sz: 11 } }),
     }
   }
 }

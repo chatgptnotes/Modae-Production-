@@ -37,15 +37,13 @@ const PageHead = ({ p }) => (
   </div>
 )
 
-// Both offices, as on the May 2026 letterhead and every sample proposal — the
-// registered office is the statutory one and was missing entirely.
+// The footer the 18 Aug branding-guideline email prescribes: legal name, the
+// Commerce Mantri address, then CIN | GST. The web address stays on the last
+// line — ModAE's own Standard Terms document carries it there too.
 const OfficialLetterheadFooter = () => (
   <div className="doc-official-footer">
     <b>{MODAE_COMPANY.name}</b>
-    <span>Sales &amp; Services Office: {MODAE_COMPANY.salesOffice}</span>
-    {MODAE_COMPANY.registeredOffice && (
-      <span>Regd. Office: {MODAE_COMPANY.registeredOffice}</span>
-    )}
+    <span>{MODAE_COMPANY.officialAddress}</span>
     <span>{MODAE_COMPANY.web} | CIN: {MODAE_COMPANY.cin} | GST: {MODAE_COMPANY.gstin}</span>
   </div>
 )
