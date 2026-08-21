@@ -224,6 +224,21 @@ export const INQUIRY_TEMPLATES = [
 // at least one enquiry shape, in the client's canonical Field List order.
 export const SIMULATED_OPP_TYPES = OPP_TYPES.filter(t => INQUIRY_TEMPLATES.some(tpl => tpl.oppType === t))
 
+// The template pool a Project/Opportunity type selection draws from. Exported
+// so the dialog's "Enquiry shape" list cannot drift from what the generator
+// would actually pick. Prefer templates tagged with the exact requested type —
+// an Upgrade request draws a genuine upgrade enquiry, not a relabelled
+// project. Types with no tagged shape of their own (Retrofit, Flow) fall back
+// to the same-route pool, and an unconstrained selection offers everything.
+export function templatesForSelection(projectType, oppType) {
+  const requestedProjectType = PROJECT_TYPES.includes(projectType) ? projectType : ''
+  const requestedOppType = OPP_TYPES.includes(oppType) ? oppType : ''
+  const constrained = requestedProjectType || (requestedOppType ? routeForType(requestedOppType) : '')
+  const tagged = requestedOppType ? INQUIRY_TEMPLATES.filter(t => t.oppType === requestedOppType) : []
+  const routed = constrained ? INQUIRY_TEMPLATES.filter(t => t.route === constrained) : []
+  return tagged.length ? tagged : routed.length ? routed : INQUIRY_TEMPLATES
+}
+
 // ---------------------------------------------------------------- generation
 const QUALITY_WEIGHTS = [['clean', 0.5], ['partial', 0.35], ['duplicate', 0.15]]
 
@@ -289,6 +304,7 @@ export function simulatedLead(customerStatus = 'Green', now = new Date(), option
     seq = null,
     projectType = null,
     oppType = null,
+    template: shapeKey = null,
   } = options
 
   const scenario = SIMULATED_CUSTOMER_SCENARIOS.find(item => item.status === customerStatus)
@@ -298,16 +314,17 @@ export function simulatedLead(customerStatus = 'Green', now = new Date(), option
   const requestedProjectType = PROJECT_TYPES.includes(projectType) ? projectType : ''
   const requestedOppType = OPP_TYPES.includes(oppType) ? oppType : ''
   const constrainedProjectType = requestedProjectType || (requestedOppType ? routeForType(requestedOppType) : '')
-  // Prefer templates tagged with the exact requested type — an Upgrade request
-  // draws a genuine upgrade enquiry, not a relabelled project. Types with no
-  // tagged shape of their own (Retrofit, Flow) fall back to the same-route
-  // pool, and an unconstrained draw uses everything. The anti-repeat memory is
-  // kept per pool: freshPick caps its memory at pool-size − 1, so a small
-  // filtered pool sharing the unfiltered pool's memory would truncate it.
-  const taggedPool = requestedOppType ? INQUIRY_TEMPLATES.filter(t => t.oppType === requestedOppType) : []
-  const routePool = constrainedProjectType ? INQUIRY_TEMPLATES.filter(t => t.route === constrainedProjectType) : []
-  const pickedTemplatePool = taggedPool.length ? taggedPool : routePool.length ? routePool : INQUIRY_TEMPLATES
-  const poolKey = taggedPool.length ? requestedOppType : routePool.length ? `route:${constrainedProjectType}` : 'any'
+  // `template` pins one enquiry shape from the selection's pool — unlike the
+  // `variant` test hook it leaves the customer, quality and everything else
+  // random. A key outside the pool is ignored rather than leaking a shape the
+  // selection could not produce. The anti-repeat memory is kept per pool:
+  // freshPick caps its memory at pool-size − 1, so a small filtered pool
+  // sharing the unfiltered pool's memory would truncate it.
+  const selectionPool = templatesForSelection(projectType, oppType)
+  const pinned = shapeKey ? selectionPool.filter(t => t.key === shapeKey) : []
+  const pickedTemplatePool = pinned.length ? pinned : selectionPool
+  const poolKey = pinned.length ? `key:${shapeKey}`
+    : requestedOppType || (constrainedProjectType ? `route:${constrainedProjectType}` : 'any')
   const template = variant == null
     ? freshPick(pickedTemplatePool, rng, t => t.key, recentTemplates[poolKey] || (recentTemplates[poolKey] = []))
     : at(pickedTemplatePool, variant)

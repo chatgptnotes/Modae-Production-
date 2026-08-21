@@ -19,5 +19,8 @@ test('simulated inquiries return to the shared inbox after saving', () => {
   assert.match(inbox, /store\.updateLead\(lead\.id, \{ status: 'Converted', oppId \}\)/)
   assert.match(inbox, /nextOppId\(store\.opportunities, owner\)/)
   assert.match(inbox, /setSimulationOpen\(false\)\r?\n\s+nav\('\/inbox'\)/)
-  assert.doesNotMatch(inbox, /setSimulationOpen\(false\)\r?\n\s+nav\('\/inbox\/'.*lead\.id\)/)
+  // The stop-at-inbox option instead opens the New lead, returning before any
+  // opportunity is created — the class gates are then walked manually.
+  assert.match(inbox, /if \(!simRegister\) \{/)
+  assert.match(inbox, /nav\('\/inbox\/' \+ lead\.id\)\r?\n\s+return/)
 })

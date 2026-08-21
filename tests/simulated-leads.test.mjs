@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   PROJECT_TYPES, SIMULATED_CUSTOMER_SCENARIOS, SIMULATED_OPP_TYPES, INQUIRY_TEMPLATES, SIMULATED_CUSTOMERS,
-  oppTypesForProjectType, simulatedLead, withoutSimulated, simulatedCount,
+  oppTypesForProjectType, templatesForSelection, simulatedLead, withoutSimulated, simulatedCount,
 } from '../src/simulatedLeads.js'
 import { deadlineForLead } from '../src/leadRules.js'
 import { findDuplicates } from '../src/insights.js'
@@ -232,6 +232,33 @@ test('a filtered pool still avoids back-to-back repeats', () => {
     assert.notEqual(seen[i], seen[i - 1], `template repeated back-to-back at ${i}`)
   }
   assert.deepEqual([...new Set(seen)].sort(), ['cms-upgrade', 'obsoletion'])
+})
+
+// The dialog's "Enquiry shape" list and the generator must agree on what a
+// selection can produce — both read templatesForSelection.
+test('the shape list follows the type selection', () => {
+  assert.deepEqual(templatesForSelection(null, 'Spares').map(t => t.key).sort(),
+    INQUIRY_TEMPLATES.filter(t => t.oppType === 'Spares').map(t => t.key).sort())
+  // Retrofit has no tagged shape of its own — it offers the Spares-route pool.
+  assert.deepEqual(templatesForSelection('Spares', 'Retrofit').map(t => t.key).sort(),
+    INQUIRY_TEMPLATES.filter(t => t.route === 'Spares').map(t => t.key).sort())
+  assert.equal(templatesForSelection(null, null).length, INQUIRY_TEMPLATES.length)
+})
+
+test('a pinned enquiry shape repeats while the customer still rotates', () => {
+  const leads = Array.from({ length: 8 }, () =>
+    simulatedLead('Green', WHEN, { oppType: 'Spares', template: 'air-gap-sensors', quality: 'clean' }))
+  assert.ok(leads.every(l => l.simulatedTemplate === 'air-gap-sensors'))
+  assert.ok(leads.every(l => l.route === 'Spares'))
+  const sellTo = new Set(leads.map(l => l.ai.fields.find(f => /sell-to/i.test(f.k)).v))
+  assert.ok(sellTo.size > 1, 'pinning the shape must not pin the customer too')
+})
+
+test('a shape outside the selection pool is ignored, not leaked', () => {
+  // amc-renewal is a Service shape — a Spares selection cannot produce it.
+  const lead = simulatedLead('Green', WHEN, { oppType: 'Spares', template: 'amc-renewal', quality: 'clean' })
+  assert.notEqual(lead.simulatedTemplate, 'amc-renewal')
+  assert.equal(lead.route, 'Spares')
 })
 
 // A chaser inherits the chased lead's route, so a typed request must only

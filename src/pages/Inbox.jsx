@@ -15,7 +15,7 @@ import AttachmentViewer from '../AttachmentViewer.jsx'
 import { findDuplicates } from '../insights.js'
 import { leadWorkflow } from '../leadWorkflow.js'
 import { isFastTrackLead, routeOwner, supplyMissing } from '../leadRules.js'
-import { PROJECT_TYPES, oppTypesForProjectType, simulatedLead, simulatedCount, SIMULATED_CUSTOMER_SCENARIOS } from '../simulatedLeads.js'
+import { PROJECT_TYPES, oppTypesForProjectType, templatesForSelection, simulatedLead, simulatedCount, SIMULATED_CUSTOMER_SCENARIOS } from '../simulatedLeads.js'
 import {
   QUOTE_FEE_DOCUMENTS, answeredPatch, clarificationItems, clarificationKindFor,
   clarificationSender, draftClarification, draftPatch, senderLabel, sentPatch,
@@ -1469,6 +1469,9 @@ export default function Inbox() {
   const [simulationOpen, setSimulationOpen] = useState(false)
   const [simProjectType, setSimProjectType] = useState(PROJECT_TYPES[0])
   const [simOppType, setSimOppType] = useState(() => oppTypesForProjectType(PROJECT_TYPES[0])[0] || PROJECT_TYPES[0])
+  const [simShape, setSimShape] = useState('')      // template key, '' = any shape
+  const [simQuality, setSimQuality] = useState('')  // '' = varied | clean | partial | duplicate
+  const [simRegister, setSimRegister] = useState(true)
   // Sales owners see only their assigned leads by default; a "Show all" toggle
   // reveals the team's. Managers (LJS/AH) and admins always see everything.
   // The toggle lives in the store, not in component state: as component state a
@@ -1584,6 +1587,10 @@ export default function Inbox() {
   }
   const simOppOptions = oppTypesForProjectType(simProjectType)
   const activeSimOppType = simOppOptions.includes(simOppType) ? simOppType : (simOppOptions[0] || simProjectType)
+  // The shape list follows the type selection; a shape left over from another
+  // selection silently reads as "Any shape" rather than pinning a wrong type.
+  const simShapeOptions = templatesForSelection(simProjectType, activeSimOppType)
+  const activeSimShape = simShapeOptions.some(t => t.key === simShape) ? simShape : ''
 
   const createSimulatedLead = (status, options = {}) => {
     const projectType = options.projectType || simProjectType
@@ -1593,9 +1600,23 @@ export default function Inbox() {
       config: store.config,
       projectType,
       oppType,
-      quality: options.quality || null,
+      // A randomised call (Random inquiry) picks its own type, so the pinned
+      // shape from the dialog would not fit it.
+      template: options.projectType ? null : (activeSimShape || null),
+      quality: options.quality !== undefined ? options.quality : (simQuality || null),
     })
     store.addLead(lead)
+    // Owner comes from the L-05-AI region rules, so a generated lead can land
+    // with someone else. Without this the sales owner's filtered list would
+    // silently drop the row they just created.
+    if (!seesAll && lead.suggestedOwner !== store.role) setShowAll(true)
+    if (!simRegister) {
+      // Stop at the inbox: the class gates (KYC / fee / joint approval) are
+      // walked manually from the New lead itself.
+      setSimulationOpen(false)
+      nav('/inbox/' + lead.id)
+      return
+    }
     const value = pattern => leadFieldValue(lead.ai?.fields, pattern)
     const owner = lead.assignedOwner || lead.suggestedOwner || store.role
     const sellTo = value(/sell-to customer|customer/i) || lead.sellTo || lead.sender || 'Simulated customer'
@@ -1619,10 +1640,6 @@ export default function Inbox() {
       lastUpdated: today, forecast: false, remarks: lead.body || '', nextActionOwner: '', simulated: true,
     })
     store.updateLead(lead.id, { status: 'Converted', oppId })
-    // Owner now comes from the L-05-AI region rules, so a generated lead can
-    // land with someone else. Without this the sales owner's filtered list
-    // would silently drop the row they just created.
-    if (!seesAll && lead.suggestedOwner !== store.role) setShowAll(true)
     setSimulationOpen(false)
     nav('/inbox')
   }
@@ -1694,6 +1711,26 @@ export default function Inbox() {
             <label className="afield">Opportunity type
               <select value={activeSimOppType} onChange={e => setSimOppType(e.target.value)} style={{ display: 'block', marginTop: 2, width: '100%' }}>
                 {simOppOptions.map(type => <option key={type}>{type}</option>)}
+              </select>
+            </label>
+            <label className="afield">Enquiry shape
+              <select value={activeSimShape} onChange={e => setSimShape(e.target.value)} style={{ display: 'block', marginTop: 2, width: '100%' }}>
+                <option value="">Any shape (varied)</option>
+                {simShapeOptions.map(t => <option key={t.key} value={t.key}>{t.subject}</option>)}
+              </select>
+            </label>
+            <label className="afield">Extraction quality
+              <select value={simQuality} onChange={e => setSimQuality(e.target.value)} style={{ display: 'block', marginTop: 2, width: '100%' }}>
+                <option value="">Varied (weighted)</option>
+                <option value="clean">Complete extraction</option>
+                <option value="partial">Missing info — needs clarification</option>
+                <option value="duplicate">Duplicate — chaser on an existing enquiry</option>
+              </select>
+            </label>
+            <label className="afield">After generating
+              <select value={simRegister ? 'register' : 'inbox'} onChange={e => setSimRegister(e.target.value === 'register')} style={{ display: 'block', marginTop: 2, width: '100%' }}>
+                <option value="register">Register the opportunity immediately</option>
+                <option value="inbox">Stop at the inbox as a New lead</option>
               </select>
             </label>
           </div>
