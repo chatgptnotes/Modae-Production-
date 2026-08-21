@@ -1702,25 +1702,25 @@ export default function Inbox() {
             Choose the project type first, then the opportunity type. The customer class
             buttons below decide the simulated lead that gets generated.
           </p>
-          <div style={{ display: 'grid', gap: 10, marginBottom: 10 }}>
+          <div className="sim-controls">
             <label className="afield">Project type
-              <select value={simProjectType} onChange={e => setSimProjectType(e.target.value)} style={{ display: 'block', marginTop: 2, width: '100%' }}>
+              <select value={simProjectType} onChange={e => setSimProjectType(e.target.value)}>
                 {PROJECT_TYPES.map(type => <option key={type}>{type}</option>)}
               </select>
             </label>
             <label className="afield">Opportunity type
-              <select value={activeSimOppType} onChange={e => setSimOppType(e.target.value)} style={{ display: 'block', marginTop: 2, width: '100%' }}>
+              <select value={activeSimOppType} onChange={e => setSimOppType(e.target.value)}>
                 {simOppOptions.map(type => <option key={type}>{type}</option>)}
               </select>
             </label>
-            <label className="afield">Enquiry shape
-              <select value={activeSimShape} onChange={e => setSimShape(e.target.value)} style={{ display: 'block', marginTop: 2, width: '100%' }}>
+            <label className="afield wide">Enquiry shape
+              <select value={activeSimShape} onChange={e => setSimShape(e.target.value)}>
                 <option value="">Any shape (varied)</option>
                 {simShapeOptions.map(t => <option key={t.key} value={t.key}>{t.subject}</option>)}
               </select>
             </label>
             <label className="afield">Extraction quality
-              <select value={simQuality} onChange={e => setSimQuality(e.target.value)} style={{ display: 'block', marginTop: 2, width: '100%' }}>
+              <select value={simQuality} onChange={e => setSimQuality(e.target.value)}>
                 <option value="">Varied (weighted)</option>
                 <option value="clean">Complete extraction</option>
                 <option value="partial">Missing info — needs clarification</option>
@@ -1728,24 +1728,22 @@ export default function Inbox() {
               </select>
             </label>
             <label className="afield">After generating
-              <select value={simRegister ? 'register' : 'inbox'} onChange={e => setSimRegister(e.target.value === 'register')} style={{ display: 'block', marginTop: 2, width: '100%' }}>
+              <select value={simRegister ? 'register' : 'inbox'} onChange={e => setSimRegister(e.target.value === 'register')}>
                 <option value="register">Register the opportunity immediately</option>
                 <option value="inbox">Stop at the inbox as a New lead</option>
               </select>
             </label>
           </div>
-          <div style={{ display: 'grid', gap: 8 }}>
+          <div className="sim-cards">
             {SIMULATED_CUSTOMER_SCENARIOS.map(scenario => (
-              <button key={scenario.status} className="form-card" style={{ textAlign: 'left', cursor: 'pointer' }}
-                onClick={() => createSimulatedLead(scenario.status)}>
+              <button key={scenario.status} className="form-card" onClick={() => createSimulatedLead(scenario.status)}>
                 <b>{scenario.label}</b>
-                <span className="hint" style={{ display: 'block', marginTop: 3 }}>{scenario.hint}</span>
+                <span className="hint">{scenario.hint}</span>
               </button>
             ))}
-            <button className="form-card" style={{ textAlign: 'left', cursor: 'pointer' }}
-              onClick={createRandomSimulatedLead}>
+            <button className="form-card wide" onClick={createRandomSimulatedLead}>
               <b>Random inquiry</b>
-              <span className="hint" style={{ display: 'block', marginTop: 3 }}>
+              <span className="hint">
                 Any customer class, any scope — fill the inbox with a varied mix
               </span>
             </button>

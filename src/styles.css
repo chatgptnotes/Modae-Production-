@@ -948,8 +948,21 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .pill.status-Pending { background: var(--amber-fill); color: var(--amber-text); }
 .pill.status-Suspended { background: var(--lost-fill); color: var(--lost-text); }
 .modal { position: fixed; z-index: 56; top: 90px; left: 50%; transform: translateX(-50%); width: 420px; max-width: 92vw; box-shadow: 0 6px 24px rgba(0,0,0,.25); }
-/* Type selectors, five choice cards and a footer row outgrow a short viewport. */
-.simulate-modal { max-height: calc(100vh - 120px); overflow-y: auto; }
+/* Five selectors, five choice cards and a footer row outgrow a single 420px
+   column — widen the dialog and wrap the controls and cards into two columns
+   so the whole thing fits on screen without scrolling. */
+.simulate-modal { width: min(620px, 92vw); max-height: calc(100vh - 120px); overflow-y: auto; }
+.sim-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin-bottom: 12px; }
+.sim-controls .afield { display: block; font-size: 11px; color: var(--text-muted); }
+.sim-controls .afield.wide { grid-column: 1 / -1; }
+.sim-controls select { display: block; margin-top: 2px; width: 100%; }
+.sim-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.sim-cards .form-card { text-align: left; cursor: pointer; }
+.sim-cards .form-card.wide { grid-column: 1 / -1; }
+.sim-cards .form-card .hint { display: block; margin-top: 3px; }
+@media (max-width: 560px) {
+  .sim-controls, .sim-cards { grid-template-columns: 1fr; }
+}
 .clarification-compose-modal {
   top: 5vh;
   width: min(760px, 92vw);
