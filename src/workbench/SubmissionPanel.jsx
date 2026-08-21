@@ -4,6 +4,10 @@ import { ROLES } from '../seed.js'
 import { ErrBox } from '../ui.jsx'
 import { releaseState } from '../gates.js'
 import { Icon } from '../icons.jsx'
+import { canPriceProposal } from '../utils.js'
+import { docModel, docRoute } from '../proposalDoc.js'
+import { buildPricing } from '../proposal/docProps.js'
+import { proposalWorkbookAttachment, standardTermsAttachment } from '../proposal/emailAttachments.js'
 
 // Customer send — only unlocked by an approved 'Final quote release'
 // and a three-point human-in-the-loop checklist.
@@ -14,7 +18,7 @@ export default function SubmissionPanel({ opp }) {
   const [sentNow, setSentNow] = useState(false)
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState('')
-  const [attachment, setAttachment] = useState(null)
+  const [emailCc, setEmailCc] = useState('sales@mod-ae.com')
 
   // Scoped to the proposal's current revision — a quote revised after release
   // locks submission again until the revision is approved.
@@ -40,16 +44,18 @@ export default function SubmissionPanel({ opp }) {
   const customer = (store.customers || []).find(c => c.id === opp.sellTo || c.name === opp.sellTo)
   const to = opp.contactEmail || customer?.email || ''
   const subject = `Proposal — ${opp.oppName} (${opp.id} Rev ${p.revision})`
+  const doc = docModel(p, opp, { files: [] })
+  const route = docRoute(p, opp)
+  const { totalQty, lineQuoted } = buildPricing(store, p)
+  const priced = p.bidType !== 'Unpriced (Technical)' && canPriceProposal(store.role)
   const allChecked = checks.c1 && checks.c2 && checks.c3
-  const canSend = allChecked && !pendingConds.length && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to) && attachment
+  const canSend = allChecked && !pendingConds.length && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)
 
   const send = async () => {
     setSending(true)
     setSendError('')
     try {
-      const bytes = new Uint8Array(await attachment.arrayBuffer())
-      let binary = ''
-      for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+      const terms = await standardTermsAttachment()
       const response = await fetch('/api/send-proposal-email', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -58,12 +64,18 @@ export default function SubmissionPanel({ opp }) {
           to,
           subject,
           body: `Dear Sir/Madam,\n\nPlease find our approved Techno-Commercial Proposal ${opp.id}, revision ${p.revision}.\n\nBest regards,\nModAE India Pvt Ltd`,
-          attachment: { filename: attachment.name, mimeType: attachment.type, contentBase64: btoa(binary) },
+          attachments: [
+            proposalWorkbookAttachment({ p, opp, doc, priced, totalQty, lineQuoted, route }),
+            terms,
+          ],
+          cc: emailCc,
         }),
       })
       const result = await response.json().catch(() => ({}))
       if (!response.ok || !result.ok) throw new Error(result.error || 'Email could not be sent')
-      store.addCommunication(opp.id, { to, subject, kind: 'submission', messageId: result.messageId, status: 'sent' })
+      store.addCommunication(opp.id, { to, cc: emailCc, subject, kind: 'submission', messageId: result.messageId, status: 'sent', attachmentNames: [
+        `${opp.id}_Proposal_Rev_${p.revision}.xlsx`, 'ModAE Standard Terms-Sales.pdf',
+      ] })
       store.updateOpportunity(opp.id, {
         milestone: 'Submitted',
         proposalDate: new Date().toISOString().slice(0, 10),
@@ -79,9 +91,9 @@ export default function SubmissionPanel({ opp }) {
   const rows = [
     ['From', 'Configured Gmail account'],
     ['To', to || 'Customer email required'],
-    ['CC', 'sales@mod-ae.com'],
+    ['CC', emailCc],
     ['Subject', subject],
-    ['Attachment', attachment?.name || `${opp.id}_Proposal_Rev_${p.revision}.pdf required`],
+    ['Attachments', `${opp.id}_Proposal_Rev_${p.revision}.xlsx · ModAE Standard Terms-Sales.pdf`],
   ]
 
   return (
@@ -89,15 +101,9 @@ export default function SubmissionPanel({ opp }) {
       <div className="section-title">Submission (customer email)</div>
       <table className="cost-table" style={{ width: '100%' }}>
         <tbody>
-          {rows.map(([k, v]) => <tr key={k}><td style={{ width: 90 }}><b>{k}</b></td><td>{v}</td></tr>)}
+          {rows.map(([k, v]) => <tr key={k}><td style={{ width: 90 }}><b>{k}</b></td><td>{k === 'CC' ? <input type="email" value={emailCc} onChange={e => setEmailCc(e.target.value)} placeholder="name@company.com" /> : v}</td></tr>)}
         </tbody>
       </table>
-      <label style={{ display: 'block', marginTop: 10 }}>
-        Proposal PDF attachment *
-        <input type="file" accept="application/pdf" style={{ display: 'block', marginTop: 4 }}
-          onChange={e => { setAttachment(e.target.files?.[0] || null); setSendError('') }} />
-      </label>
-
       {pendingConds.length > 0 && (
         <ErrBox>
           {pendingConds.length} approval condition{pendingConds.length === 1 ? '' : 's'} not yet confirmed incorporated —
@@ -122,7 +128,7 @@ export default function SubmissionPanel({ opp }) {
       <div style={{ marginTop: 10 }}>
         {sendError && <ErrBox>{sendError}</ErrBox>}
         <button className="primary" disabled={!canSend || sending}
-          title={pendingConds.length ? 'Confirm all approval conditions first' : !allChecked ? 'Complete the human-review checklist' : !to ? 'Customer email is missing' : !attachment ? 'Attach the proposal PDF' : ''}
+          title={pendingConds.length ? 'Confirm all approval conditions first' : !allChecked ? 'Complete the human-review checklist' : !to ? 'Customer email is missing' : ''}
           onClick={send}>
           <Icon name="send" size={13} /> {sending ? 'Sending…' : 'Send quote email'}
         </button>

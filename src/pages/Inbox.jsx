@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useStore } from '../store.jsx'
+import { useStore, nextOppId } from '../store.jsx'
 import { ddMmmYY, ageDays, gmailComposeHref } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { useDrawer } from '../drawer.jsx'
@@ -1596,12 +1596,35 @@ export default function Inbox() {
       quality: options.quality || null,
     })
     store.addLead(lead)
+    const value = pattern => leadFieldValue(lead.ai?.fields, pattern)
+    const owner = lead.assignedOwner || lead.suggestedOwner || store.role
+    const sellTo = value(/sell-to customer|customer/i) || lead.sellTo || lead.sender || 'Simulated customer'
+    const category = value(/category/i) || 'EUC'
+    const location = value(/^location$/i) || lead.location || ''
+    const resolvedOppType = OPP_TYPES.includes(lead.oppType) ? lead.oppType : (oppType || lead.route || 'Project')
+    const product = value(/^product$/i) || 'Various'
+    const knownCustomer = store.customers.some(c => c.name.toLowerCase() === sellTo.toLowerCase())
+    const oppId = nextOppId(store.opportunities, owner)
+    const today = new Date().toISOString().slice(0, 10)
+    const maxSl = Math.max(0, ...store.opportunities.map(o => o.sl || 0))
+    if (!knownCustomer) store.addCustomer({ name: sellTo, category, status, kyc: status === 'Green' ? 'Verified' : 'Pending', payment: '—' })
+    store.addOpportunity({
+      sl: maxSl + 1, id: oppId, sellTo, category, location,
+      customerStatus: status, eucName: value(/contact person/i) || sellTo, eucLocation: location,
+      oppName: lead.subject, owner, oppType: resolvedOppType, bu: value(/^bu/i) || 'Energy',
+      segment: value(/segment/i) || 'Others', product: [product], prob: '', valueK: 0, cogsK: 0,
+      rfqNumber: lead.ref || '', rfqDate: lead.ts?.slice(0, 10) || '', createDate: today,
+      proposalDate: '', orderDate: '', invoiceDate: '', status: 'Open', stage: 'Lead', closedReason: '',
+      contactPerson: value(/contact person/i) || lead.sender || '', contactPhone: '', contactEmail: lead.from || '',
+      lastUpdated: today, forecast: false, remarks: lead.body || '', nextActionOwner: '', simulated: true,
+    })
+    store.updateLead(lead.id, { status: 'Converted', oppId })
     // Owner now comes from the L-05-AI region rules, so a generated lead can
     // land with someone else. Without this the sales owner's filtered list
     // would silently drop the row they just created.
     if (!seesAll && lead.suggestedOwner !== store.role) setShowAll(true)
     setSimulationOpen(false)
-    nav('/inbox/' + lead.id)
+    nav('/inbox')
   }
   const createRandomSimulatedLead = () => {
     const projectType = PROJECT_TYPES[Math.floor(Math.random() * PROJECT_TYPES.length)]

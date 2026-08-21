@@ -68,9 +68,9 @@ test('proposal records the supplied route-specific artifact set', () => {
 
 test('proposal workbook exposes three distinct route templates', () => {
   const proposal = read('src/pages/Proposal.jsx')
-  assert.match(proposal, /Project: \['Cover Letter', 'Document', 'Signal List', 'Rack Layout', 'Priced BoQ'\]/)
-  assert.match(proposal, /Services: \['Cover Letter', 'Document', 'Scope of Work', 'Issues List', 'Proposal', 'Service Rate Schedule'\]/)
-  assert.match(proposal, /Spares: \['Cover Letter', 'Document', 'Firm Offer', 'Clarifications', 'Sensor Comparison', 'Priced BoQ'\]/)
+  assert.match(proposal, /Project: \['Cover Letter', 'Edit Sheet', 'Document', 'Signal List', 'Rack Layout', 'Priced BoQ'\]/)
+  assert.match(proposal, /Services: \['Cover Letter', 'Edit Sheet', 'Document', 'Scope of Work', 'Issues List', 'Proposal', 'Service Rate Schedule'\]/)
+  assert.match(proposal, /Spares: \['Cover Letter', 'Edit Sheet', 'Document', 'Firm Offer', 'Clarifications', 'Sensor Comparison', 'Priced BoQ'\]/)
   assert.match(proposal, /function RouteTemplateTab/)
 })
 

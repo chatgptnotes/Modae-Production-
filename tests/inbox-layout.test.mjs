@@ -1,0 +1,23 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+
+const css = fs.readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
+const inbox = fs.readFileSync(new URL('../src/pages/Inbox.jsx', import.meta.url), 'utf8')
+
+test('inbox keeps received date and time visible in the narrow grid', () => {
+  assert.match(css, /\.mail-date b, \.mail-date small \{ display: block; white-space: nowrap; \}/)
+  const narrowStart = css.indexOf('@media (max-width: 900px)', css.indexOf('.mail-date'))
+  const narrow = css.slice(narrowStart, css.indexOf('\n@media', narrowStart + 1))
+  assert.match(narrow, /26px 24px 78px[\s\S]*?minmax\(0, \.9fr\);/)
+  assert.doesNotMatch(narrow, /42px;/)
+})
+
+test('simulated inquiries return to the shared inbox after saving', () => {
+  assert.match(inbox, /store\.addLead\(lead\)/)
+  assert.match(inbox, /store\.addOpportunity\(/)
+  assert.match(inbox, /store\.updateLead\(lead\.id, \{ status: 'Converted', oppId \}\)/)
+  assert.match(inbox, /nextOppId\(store\.opportunities, owner\)/)
+  assert.match(inbox, /setSimulationOpen\(false\)\n\s+nav\('\/inbox'\)/)
+  assert.doesNotMatch(inbox, /setSimulationOpen\(false\)\n\s+nav\('\/inbox\/'.*lead\.id\)/)
+})

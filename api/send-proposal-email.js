@@ -8,8 +8,8 @@ function encodeBase64Url(value) {
     .replace(/=+$/, '')
 }
 
-function mimeMessage({ from, to, cc, subject, body, attachment }) {
-  if (!attachment) {
+function mimeMessage({ from, to, cc, subject, body, attachments = [] }) {
+  if (!attachments.length) {
     const lines = [
       `From: ${headerValue(from)}`, `To: ${headerValue(to)}`, ...(cc ? [`Cc: ${headerValue(cc)}`] : []), `Subject: ${headerValue(subject)}`,
       'MIME-Version: 1.0', 'Content-Type: text/plain; charset="UTF-8"',
@@ -18,7 +18,6 @@ function mimeMessage({ from, to, cc, subject, body, attachment }) {
     return encodeBase64Url(lines.join('\r\n'))
   }
   const boundary = `=_wintrack_${Date.now()}`
-  const encoded = String(attachment.contentBase64 || '').replace(/\s/g, '').match(/.{1,76}/g)?.join('\r\n') || ''
   const lines = [
     `From: ${headerValue(from)}`,
     `To: ${headerValue(to)}`,
@@ -31,13 +30,19 @@ function mimeMessage({ from, to, cc, subject, body, attachment }) {
     'Content-Type: text/plain; charset="UTF-8"',
     'Content-Transfer-Encoding: 8bit', '',
     body,
-    '', `--${boundary}`,
-    `Content-Type: ${attachment.mimeType || 'application/pdf'}; name="${headerValue(attachment.filename)}"`,
-    'Content-Transfer-Encoding: base64',
-    `Content-Disposition: attachment; filename="${headerValue(attachment.filename)}"`, '',
-    encoded,
-    `--${boundary}--`, '',
+    '',
   ]
+  for (const attachment of attachments) {
+    const encoded = String(attachment.contentBase64 || '').replace(/\s/g, '').match(/.{1,76}/g)?.join('\r\n') || ''
+    lines.push(
+      `--${boundary}`,
+      `Content-Type: ${attachment.mimeType}; name="${headerValue(attachment.filename)}"`,
+      'Content-Transfer-Encoding: base64',
+      `Content-Disposition: attachment; filename="${headerValue(attachment.filename)}"`, '',
+      encoded,
+    )
+  }
+  lines.push(`--${boundary}--`, '')
   return encodeBase64Url(lines.join('\r\n'))
 }
 
@@ -58,18 +63,25 @@ export default async function handler(req, res) {
   const to = clean(input.to)
   const subject = clean(input.subject)
   const body = clean(input.body)
+  const cc = clean(input.cc)
   if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
     return res.status(400).json({ ok: false, error: 'A valid recipient email is required' })
   }
   if (!subject || !body || body.length > 50000) {
     return res.status(400).json({ ok: false, error: 'Subject and a valid message body are required' })
   }
-  const attachment = input.attachment
-  if (!attachment?.filename || !attachment?.contentBase64 || attachment.mimeType !== 'application/pdf') {
-    return res.status(400).json({ ok: false, error: 'A proposal PDF attachment is required' })
+  const attachments = Array.isArray(input.attachments)
+    ? input.attachments
+    : input.attachment ? [input.attachment] : []
+  if (!attachments.length || attachments.length > 5) {
+    return res.status(400).json({ ok: false, error: 'One to five attachments are required' })
   }
-  if (String(attachment.contentBase64).length > 30_000_000) {
-    return res.status(400).json({ ok: false, error: 'Proposal PDF is too large' })
+  const allowed = new Set(['application/pdf', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])
+  if (attachments.some(a => !a?.filename || !a.contentBase64 || !allowed.has(a.mimeType))) {
+    return res.status(400).json({ ok: false, error: 'Attachments must be PDF or XLSX files' })
+  }
+  if (attachments.reduce((sum, a) => sum + String(a.contentBase64).length, 0) > 30_000_000) {
+    return res.status(400).json({ ok: false, error: 'Attachments are too large' })
   }
 
   try {
@@ -96,7 +108,7 @@ export default async function handler(req, res) {
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        raw: mimeMessage({ from: account, to, cc: clean(input.cc), subject, body, attachment }),
+        raw: mimeMessage({ from: account, to, cc, subject, body, attachments }),
       }),
     })
     const result = await gmailResponse.json()

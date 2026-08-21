@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { effectiveRate, fmt, exportCSV, canPriceProposal, clampCosting, clampQty, MAX_GM_PCT, gmailComposeHref } from '../utils.js'
+import { effectiveRate, fmt, exportCSV, canPriceProposal, clampCosting, clampQty, MAX_GM_PCT } from '../utils.js'
 import { useFormulaBar } from '../formulabar.jsx'
 import { Icon, ModaeImageLogo } from '../icons.jsx'
 import { Modal } from '../ui.jsx'
@@ -11,11 +11,14 @@ import DocEditor from '../proposal/DocEditor.jsx'
 import PrintDoc from '../proposal/PrintDoc.jsx'
 import { signalsFromBom, countSignals, rackLayout, UMM_CHANNELS, RACK_SLOTS } from '../rack.js'
 import { normalizeProposal, buildPricing } from '../proposal/docProps.js'
+import ProposalSheetEditor from '../proposal/ProposalSheetEditor.jsx'
+import { proposalWorkbookAttachment, standardTermsAttachment } from '../proposal/emailAttachments.js'
+import { downloadProposalXlsx } from '../proposal/excelExport.js'
 
 const ROUTE_TABS = {
-  Project: ['Cover Letter', 'Document', 'Signal List', 'Rack Layout', 'Priced BoQ'],
-  Services: ['Cover Letter', 'Document', 'Scope of Work', 'Issues List', 'Proposal', 'Service Rate Schedule'],
-  Spares: ['Cover Letter', 'Document', 'Firm Offer', 'Clarifications', 'Sensor Comparison', 'Priced BoQ'],
+  Project: ['Cover Letter', 'Edit Sheet', 'Document', 'Signal List', 'Rack Layout', 'Priced BoQ'],
+  Services: ['Cover Letter', 'Edit Sheet', 'Document', 'Scope of Work', 'Issues List', 'Proposal', 'Service Rate Schedule'],
+  Spares: ['Cover Letter', 'Edit Sheet', 'Document', 'Firm Offer', 'Clarifications', 'Sensor Comparison', 'Priced BoQ'],
 }
 
 function RouteTemplateTab({ route, tab, p, doc, priced, lineQuoted }) {
@@ -100,13 +103,13 @@ const normalize = normalizeProposal
 // Rendered two ways: as the standalone /proposal/:oppId page, and embedded in the
 // opportunity workspace (Proposal tab → Builder). Embedded mode drops the page
 // chrome — title, back link, duplicated blocker list — and unpins the sheet tabs.
-export default function Proposal({ oppId: oppIdProp, embedded = false }) {
+export default function Proposal({ oppId: oppIdProp, embedded = false, initialTab = 'Edit Sheet' }) {
   const { oppId: routeOppId } = useParams()
   const oppId = oppIdProp || routeOppId
   const store = useStore()
   const fb = useFormulaBar()
   const opp = store.opportunities.find(o => o.id === oppId)
-  const [tab, setTab] = useState('Cover Letter')
+  const [tab, setTab] = useState(initialTab)
   const [printing, setPrinting] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [emailOpen, setEmailOpen] = useState(false)
@@ -115,6 +118,8 @@ export default function Proposal({ oppId: oppIdProp, embedded = false }) {
   const [emailSubject, setEmailSubject] = useState('')
   const [emailNote, setEmailNote] = useState('')
   const [emailPreview, setEmailPreview] = useState(false)
+  const [emailBusy, setEmailBusy] = useState(false)
+  const [emailError, setEmailError] = useState('')
   const [conditionTarget, setConditionTarget] = useState(null)
   const [conditionNote, setConditionNote] = useState('')
   const [p, setP] = useState(() => normalize(store.getProposal(oppId), opp))
@@ -124,7 +129,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false }) {
   pRef.current = p
 
   // /proposal/:oppId reuses this component instance — reload state per opportunity.
-  useEffect(() => { setP(normalize(store.getProposal(oppId), opp)); setTab('Cover Letter') }, [oppId]) // eslint-disable-line
+  useEffect(() => { setP(normalize(store.getProposal(oppId), opp)); setTab(initialTab) }, [oppId, initialTab]) // eslint-disable-line
 
   // Print-all: render the full customer document (cover + terms + BoQ) first,
   // then open the dialog; afterprint restores the tabbed view.
@@ -229,6 +234,19 @@ export default function Proposal({ oppId: oppIdProp, embedded = false }) {
       : numeric ? clampQty(e.target.value) : e.target.value
     save({ ...p, bom: p.bom.map((l, j) => (j === i ? { ...l, [k]: v } : l)) })
   }
+  const pasteBoq = (startRow, startCol, values) => {
+    const keys = ['itemCategory', 'desc', 'qtyPerUnit', 'common', 'spares', 'quoted']
+    const current = pRef.current
+    const bom = current.bom.map(l => ({ ...l }))
+    values.forEach((row, r) => row.forEach((value, c) => {
+      const i = startRow + r
+      const key = keys[startCol + c]
+      if (!bom[i] || !key) return
+      bom[i][key] = key === 'quoted' ? clampQuoted(value)
+        : ['itemCategory', 'desc'].includes(key) ? value : clampQty(value)
+    }))
+    save({ ...current, bom })
+  }
   const toggleAdder = (i, adder) => () => {
     const bom = p.bom.map((l, j) => {
       if (j !== i) return l
@@ -279,8 +297,6 @@ export default function Proposal({ oppId: oppIdProp, embedded = false }) {
     if (!opp.proposalDate) store.updateOpportunity(oppId, { proposalDate: new Date().toISOString().slice(0, 10) })
   }
 
-  const attachmentName = `${oppId}_Proposal_Rev_${p.revision}.pdf`
-
   const emailBody = [
       'Dear Sir/Madam,',
       '',
@@ -291,22 +307,45 @@ export default function Proposal({ oppId: oppIdProp, embedded = false }) {
       ...p.bom.slice(0, 6).map((l, i) => `${i + 1}. ${l.desc} — ${totalQty(l)} nos`),
       ...(p.bom.length > 6 ? [`…and ${p.bom.length - 6} more items`] : []),
       '',
-      'The proposal PDF can be saved from the workbook using Print / PDF proposal.',
+      'The proposal workbook and ModAE Standard Terms are attached.',
       '',
       'Best regards,',
       MODAE_COMPANY.name,
   ].join('\n')
   // Shared with the lead-stage clarification draft (src/leadClarification.js),
   // so the two dispatch paths cannot drift apart.
-  const composeHref = gmailComposeHref({ to: emailTo, cc: emailCc, subject: emailSubject, body: emailBody })
-
-  const sendEmail = () => {
-    if (!emailTo.trim()) return
-    store.addCommunication(oppId, {
-      to: emailTo.trim(), cc: emailCc.trim(), subject: emailSubject,
-      kind: 'proposal-email-compose', pdfName: attachmentName,
-    })
-    setEmailOpen(false)
+  const sendEmail = async () => {
+    if (!emailTo.trim()) {
+      setEmailError('A recipient email is required')
+      return
+    }
+    setEmailBusy(true)
+    setEmailError('')
+    try {
+      const termsFile = await standardTermsAttachment()
+      const response = await fetch('/api/send-proposal-email', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          oppId, to: emailTo.trim(), cc: emailCc.trim(), subject: emailSubject, body: emailBody,
+          attachments: [
+            proposalWorkbookAttachment({ p, opp, doc, priced, totalQty, lineQuoted, route }),
+            termsFile,
+          ],
+        }),
+      })
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok || !result.ok) throw new Error(result.error || 'Email could not be sent')
+      store.addCommunication(oppId, {
+        to: emailTo.trim(), cc: emailCc.trim(), subject: emailSubject, kind: 'proposal-email',
+        messageId: result.messageId, status: 'sent',
+        attachmentNames: [`${oppId}_Proposal_Rev_${p.revision}.xlsx`, 'ModAE Standard Terms-Sales.pdf'],
+      })
+      setEmailOpen(false)
+    } catch (error) {
+      setEmailError(error?.message || 'Email could not be sent')
+    } finally {
+      setEmailBusy(false)
+    }
   }
 
   const openEmail = () => {
@@ -314,6 +353,8 @@ export default function Proposal({ oppId: oppIdProp, embedded = false }) {
     setEmailTo(opp.contactEmail || customer?.email || '')
     setEmailCc('')
     setEmailPreview(false)
+    setProposalPdf(null)
+    setEmailError('')
     setEmailOpen(true)
   }
 
@@ -322,6 +363,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false }) {
     ['Sl.', 'Item Category', 'Item/Scope Description', 'Proposed Model & Part Number', 'Customer Item Code', 'Adders', 'Qty/Unit', 'Common', 'Spares', 'Total Qty', 'UOM', 'Unit Price ₹', 'Total Price ₹', 'Unit Cost ₹', 'Total Cost ₹', `List Price`, 'Currency'],
     p.bom.map((l, i) => [i + 1, l.itemCategory, l.desc, l.pn, l.custRef, l.adders.join('+'), l.qtyPerUnit, l.common, l.spares, totalQty(l), l.uom, lineQuoted(l), lineQuoted(l) * totalQty(l), Math.round(lineCost(l)), Math.round(lineCost(l) * totalQty(l)), linePrice(l), l.currency])
   )
+  const exportExcel = () => downloadProposalXlsx({ p, opp, doc, priced, totalQty, lineQuoted, route })
 
   // The customer document: sections auto-drafted from the opportunity and BoQ,
   // each overridable on the Document tab. Attachments pick up whatever the
@@ -367,6 +409,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false }) {
         </label>
         {pendingForOpp.length > 0 && <span className="pill Amber">{pendingForOpp.length} approval{pendingForOpp.length > 1 ? 's' : ''} pending</span>}
         {tab === 'Priced BoQ' && comm && <button onClick={exportBoQ}>Extract to Excel</button>}
+        <button onClick={exportExcel}>Download Excel proposal</button>
         <button onClick={() => setPreviewOpen(true)}><Icon name="eye" size={13} /> Preview proposal</button>
         <button onClick={openEmail}><Icon name="mail" size={13} /> Email proposal</button>
         <button className="primary" onClick={() => setPrinting(true)}><Icon name="printer" size={13} /> Print / PDF proposal</button>
@@ -506,6 +549,13 @@ export default function Proposal({ oppId: oppIdProp, embedded = false }) {
       {tab === 'Document' && (
         <DocEditor p={p} opp={opp} save={save} files={specFiles.map(f => f.name).filter(Boolean)}
           totals={totals} priced={priced} />
+      )}
+
+      {tab === 'Edit Sheet' && (
+        <ProposalSheetEditor p={p} opp={opp} doc={doc} save={save} allParts={allParts} totals={totals} units={units} priced={comm}
+          totalQty={totalQty} lineComputed={lineComputed} lineQuoted={lineQuoted} lineCost={lineCost}
+          linePrice={linePrice} addBomLine={addBomLine} updLine={updLine} removeLine={removeLine}
+          updTerm={updTerm} addTerm={addTerm} removeTerm={removeTerm} pasteBoq={pasteBoq} store={store} />
       )}
 
       {['Scope of Work', 'Issues List', 'Proposal', 'Service Rate Schedule', 'Firm Offer', 'Clarifications', 'Sensor Comparison'].includes(tab) && (
@@ -734,6 +784,10 @@ export default function Proposal({ oppId: oppIdProp, embedded = false }) {
         <div className="modal form-card no-print">
           <div className="section-title"><Icon name="mail" size={15} /> Email proposal — {oppId}</div>
           <div className="q">
+            <div className="q-label">From</div>
+            <input type="text" value="Configured Gmail account" readOnly />
+          </div>
+          <div className="q">
             <div className="q-label">To</div>
             <input type="text" value={emailTo} onChange={e => setEmailTo(e.target.value)} placeholder="customer@company.com" autoFocus />
           </div>
@@ -749,11 +803,10 @@ export default function Proposal({ oppId: oppIdProp, embedded = false }) {
             <div className="q-label">Note (optional, one line)</div>
             <input type="text" value={emailNote} onChange={e => setEmailNote(e.target.value)} placeholder="e.g. Submitted within due date — happy to discuss." />
           </div>
-          {/* Honest about the mechanism: a mailto: link opens Gmail compose but
-              cannot send or carry the generated PDF. */}
           <div className="costing-note">
-            Save <b>{attachmentName}</b> with <b>Save proposal PDF</b> below, then add it in Gmail if needed.
+            This automatically sends the current Excel proposal and the agreed ModAE Standard Terms PDF.
           </div>
+          {emailError && <div className="errbox" style={{ marginTop: 8 }}>{emailError}</div>}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button type="button" onClick={() => setEmailPreview(!emailPreview)}>
               {emailPreview ? 'Hide proposal preview' : 'Preview proposal'}
@@ -773,11 +826,9 @@ export default function Proposal({ oppId: oppIdProp, embedded = false }) {
             </div>
           )}
           <div className="forms-actions">
-            <a className={`primary email-launch-link${!composeHref ? ' disabled' : ''}`} href={composeHref || undefined}
-              onClick={event => { if (!composeHref) event.preventDefault(); else sendEmail() }}
-              aria-disabled={!composeHref} target="_blank" rel="noreferrer">
-              Open Gmail compose ▸
-            </a>
+            <button className="primary" disabled={emailBusy || !emailTo.trim()} onClick={sendEmail}>
+              <Icon name="send" size={13} /> {emailBusy ? 'Sending…' : 'Send with 2 attachments'}
+            </button>
             <button onClick={() => setEmailOpen(false)}>Cancel</button>
           </div>
         </div>

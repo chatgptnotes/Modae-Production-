@@ -10,6 +10,8 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
 
 const proposal = read('src/pages/Proposal.jsx')
+const workbench = read('src/pages/Workbench.jsx')
+const submission = read('src/workbench/SubmissionPanel.jsx')
 
 // Biji, 13 Aug: "this has to automatically come, I should not be selecting…
 // that is from the RFQ, either that has to keep the sender address." The To
@@ -46,27 +48,37 @@ test('preview renders the real document, not a text stub', () => {
     'the preview must render PrintDoc')
   assert.doesNotMatch(proposal, /<p>Attached: \{oppId\}_Proposal_Rev_/,
     'the old text stub must be gone')
-  // Sending opens a compose window and only needs a recipient; the inline
-  // preview remains optional. The URL builder moved to utils.js so the lead
-  // clarification draft and this dialog share one implementation.
-  assert.match(proposal, /const composeHref = gmailComposeHref\(\{ to: emailTo, cc: emailCc, subject: emailSubject, body: emailBody \}\)/)
-  assert.match(proposal, /href=\{composeHref \|\| undefined\}/)
-  assert.doesNotMatch(proposal, /const gmailComposeHref = \(\(\) => \{/,
-    'the inline copy must be gone, not duplicated')
-  assert.match(read('src/utils.js'), /https:\/\/mail\.google\.com\/mail\/\?view=cm/)
+  assert.match(proposal, /fetch\('\/api\/send-proposal-email'/)
+  assert.match(proposal, /attachments: \[/)
+  assert.match(proposal, /proposalWorkbookAttachment/)
+  assert.match(proposal, /standardTermsAttachment/)
 })
 
-// A mailto: link cannot carry a file. The UI used to say "Attachment ready…
-// the mail app may require final attachment confirmation", which read as though
-// the PDF was attached. It never was.
 test('the attachment claim matches what actually happens', () => {
-  assert.doesNotMatch(proposal, /Attachment ready:/)
-  assert.match(proposal, /cannot send or carry the generated PDF/)
+  assert.match(proposal, /Send with 2 attachments/)
+  assert.doesNotMatch(proposal, /Proposal PDF attachment \*/)
   assert.match(proposal, /Save proposal PDF/, 'the user must be able to produce the PDF here')
-  assert.match(proposal, /const attachmentName = /, 'one attachment name, used everywhere')
-  assert.doesNotMatch(proposal, /The detailed proposal is attached as/)
+  assert.match(proposal, /ModAE Standard Terms-Sales\.pdf/)
+  assert.doesNotMatch(proposal, /!proposalPdf/, 'sending must not depend on a manually selected PDF')
 })
 
 test('the sent email is logged against the opportunity', () => {
-  assert.match(proposal, /kind: 'proposal-email-compose', pdfName: attachmentName,/)
+  assert.match(proposal, /kind: 'proposal-email'/)
+  assert.match(proposal, /attachmentNames:/)
+})
+
+test('every outbound email surface exposes sender and copy recipients', () => {
+  assert.match(proposal, /q-label">From<\/div>/)
+  assert.match(workbench, /clarificationSender\(/)
+  assert.match(workbench, /<label className="afield">From/)
+  assert.match(workbench, /<label className="afield">To/)
+  assert.match(workbench, /<label className="afield">CC/)
+  assert.match(workbench, /gmailComposeHref\(draft\)/)
+  assert.match(workbench, /className="clarification-compose-modal"/)
+  assert.match(workbench, /<div className="clar-mail-form">/)
+  assert.match(submission, /const \[emailCc, setEmailCc\]/)
+  assert.match(submission, /cc: emailCc/)
+  assert.match(read('api/send-proposal-email.js'), /mimeMessage\(\{ from: account, to, cc, subject, body, attachments \}\)/)
+  assert.match(submission, /proposalWorkbookAttachment/)
+  assert.match(submission, /standardTermsAttachment/)
 })
