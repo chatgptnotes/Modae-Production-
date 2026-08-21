@@ -206,10 +206,10 @@ test('the AI map no longer claims the mail goes out by itself', () => {
   assert.match(map, /never sent automatically/)
 })
 
-test('one compose helper, shared by both dispatch paths', () => {
+test('proposal email uses the attachment-capable send path', () => {
   const proposal = read('src/pages/Proposal.jsx')
-  assert.match(proposal, /gmailComposeHref\(\{ to: emailTo, cc: emailCc, subject: emailSubject, body: emailBody \}\)/)
-  // The old inline copy is gone.
-  assert.equal(/const gmailComposeHref = \(\(\) => \{/.test(proposal), false)
+  assert.match(proposal, /fetch\('\/api\/send-proposal-email'/)
+  assert.match(proposal, /attachments: \[/)
+  assert.equal(/Open Gmail compose/.test(proposal), false)
   assert.match(read('src/utils.js'), /export function gmailComposeHref/)
 })

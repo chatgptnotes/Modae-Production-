@@ -75,3 +75,11 @@ test('the owner rule reports what it is holding back', () => {
   assert.match(inbox, /none assigned to you/)
   assert.match(read('src/styles.css'), /^\.mail-hidden-note \{/m)
 })
+
+test('the simulator modal asks for project type before opportunity type', () => {
+  assert.match(inbox, /Choose the project type first, then the opportunity type\./)
+  assert.match(inbox, /Project type/)
+  assert.match(inbox, /Opportunity type/)
+  assert.match(inbox, /oppTypesForProjectType\(simProjectType\)/)
+  assert.doesNotMatch(inbox, /Generate missing-info lead/)
+})

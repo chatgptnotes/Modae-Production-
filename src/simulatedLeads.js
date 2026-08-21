@@ -22,6 +22,11 @@ export const SIMULATED_CUSTOMER_SCENARIOS = [
   { status: 'Red', label: 'Red customer', hint: 'Joint LJS / AH approval required' },
 ]
 
+export const PROJECT_TYPES = ['Project', 'Spares', 'Service']
+
+export const oppTypesForProjectType = projectType =>
+  OPP_TYPES.filter(type => routeForType(type) === projectType)
+
 // Demo accounts, three per class. The "Demo" suffix is deliberate — nobody
 // should mistake a simulated row for a live account. `region` is worded to
 // match the L-05-AI ownership rules in seedConfig, so routeOwner() resolves a
@@ -269,38 +274,55 @@ const fieldValue = (fields, re) => (fields || []).find(f => re.test(String(f.k |
 // One simulated inbound enquiry.
 //
 // `customerStatus` is the gate under test and is never randomised; the same
-// goes for `options.oppType` when the operator picked one (null/unknown means
-// any). `options` also carries existingLeads (so the duplicate variant can
-// chase something real), config (for routeOwner), and variant/quality/rng/seq
-// so a test can pin one exact permutation.
+// goes for `options.projectType` and `options.oppType` when the operator
+// picked them (null/unknown means any). `options` also carries existingLeads
+// (so the duplicate variant can chase something real), config (for
+// routeOwner), and variant/quality/rng/seq so a test can pin one exact
+// permutation.
 export function simulatedLead(customerStatus = 'Green', now = new Date(), options = {}) {
   const {
     existingLeads = [],
     config = {},
-    oppType = null,
     variant = null,
     quality: forcedQuality = null,
     rng = Math.random,
     seq = null,
+    projectType = null,
+    oppType = null,
   } = options
 
   const scenario = SIMULATED_CUSTOMER_SCENARIOS.find(item => item.status === customerStatus)
     || SIMULATED_CUSTOMER_SCENARIOS[0]
   const status = scenario.status
   const ts = new Date(now).toISOString()
-  // An opp type with no template (or an unknown value) falls back to the full
-  // pool — "any" — rather than crashing on an empty list.
-  const typedPool = oppType ? INQUIRY_TEMPLATES.filter(t => t.oppType === oppType) : []
-  const templatePool = typedPool.length ? typedPool : INQUIRY_TEMPLATES
-  const poolKey = typedPool.length ? oppType : 'any'
+  const requestedProjectType = PROJECT_TYPES.includes(projectType) ? projectType : ''
+  const requestedOppType = OPP_TYPES.includes(oppType) ? oppType : ''
+  const constrainedProjectType = requestedProjectType || (requestedOppType ? routeForType(requestedOppType) : '')
+  // Prefer templates tagged with the exact requested type — an Upgrade request
+  // draws a genuine upgrade enquiry, not a relabelled project. Types with no
+  // tagged shape of their own (Retrofit, Flow) fall back to the same-route
+  // pool, and an unconstrained draw uses everything. The anti-repeat memory is
+  // kept per pool: freshPick caps its memory at pool-size − 1, so a small
+  // filtered pool sharing the unfiltered pool's memory would truncate it.
+  const taggedPool = requestedOppType ? INQUIRY_TEMPLATES.filter(t => t.oppType === requestedOppType) : []
+  const routePool = constrainedProjectType ? INQUIRY_TEMPLATES.filter(t => t.route === constrainedProjectType) : []
+  const pickedTemplatePool = taggedPool.length ? taggedPool : routePool.length ? routePool : INQUIRY_TEMPLATES
+  const poolKey = taggedPool.length ? requestedOppType : routePool.length ? `route:${constrainedProjectType}` : 'any'
   const template = variant == null
-    ? freshPick(templatePool, rng, t => t.key, recentTemplates[poolKey] || (recentTemplates[poolKey] = []))
-    : at(INQUIRY_TEMPLATES, variant)
+    ? freshPick(pickedTemplatePool, rng, t => t.key, recentTemplates[poolKey] || (recentTemplates[poolKey] = []))
+    : at(pickedTemplatePool, variant)
   const pool = SIMULATED_CUSTOMERS[status]
   const recentForClass = lastCustomer[status] || (lastCustomer[status] = [])
   const customer = variant == null
     ? freshPick(pool, rng, c => c.name, recentForClass)
     : at(pool, variant)
+  const projectTypeValue = constrainedProjectType || template.route
+  const oppPool = oppTypesForProjectType(projectTypeValue)
+  const resolvedOppType = requestedOppType
+    || (constrainedProjectType ? pick(oppPool.length ? oppPool : OPP_TYPES, rng) : '')
+    || fieldValue(template.fields, /opp type/i)
+    || template.route
+  const route = requestedOppType ? routeForType(resolvedOppType) || projectTypeValue : projectTypeValue
 
   // A chaser only makes sense against something already in the mailbox.
   // A chaser is only a duplicate if it can reuse the buyer's reference, which
@@ -308,10 +330,10 @@ export function simulatedLead(customerStatus = 'Green', now = new Date(), option
   // has `ref: ''`) used to be chaseable: `ref = chased.ref || … || ref` then
   // fell through to a freshly minted reference, and the result was a lead
   // labelled duplicateRisk:'High' that nothing could match to anything.
-  // When an opp type was picked, only chase leads on the same route — a chaser
+  // When a type was picked, only chase leads on the same route — a chaser
   // inherits the chased lead's route and facts (below), and a "Spares" click
   // that produced a Project chaser would be the dialog lying to the operator.
-  const wantedRoute = typedPool.length ? routeForType(oppType) : null
+  const wantedRoute = constrainedProjectType || null
   const chaseable = (existingLeads || [])
     .filter(l => l && l.id && l.subject && l.status !== 'Dropped' && (l.ref || l.rfqNumber))
     .filter(l => !wantedRoute || l.route === wantedRoute)
@@ -346,7 +368,8 @@ export function simulatedLead(customerStatus = 'Green', now = new Date(), option
   // A chaser carries no new scope (seed's LD-207 is the model), so the route
   // and the extracted RFQ facts come from the lead being chased — quoting a
   // spares chaser as a Project would be the generator contradicting itself.
-  const route = chased ? (chased.route || template.route) : template.route
+  const templateRoute = chased ? (chased.route || template.route) : template.route
+  const routeValue = chased ? templateRoute : route
   const urgency = chased ? (chased.urgency || template.urgency) : template.urgency
 
   const baseFields = [
@@ -366,11 +389,15 @@ export function simulatedLead(customerStatus = 'Green', now = new Date(), option
 
   // A thin mail leaves the tail of the extraction below the accept threshold.
   const pendingCount = quality === 'partial' ? between(2, 3, rng) : 0
+  const finalOppType = chased
+    ? fieldValue(chased.ai?.fields, /opp type/i) || chased.oppType || templateRoute
+    : (requestedOppType || constrainedProjectType ? resolvedOppType : fieldValue(template.fields, /opp type/i) || template.route)
   const fields = baseFields.map((f, i) => {
     const pending = i >= baseFields.length - pendingCount
-    if (!pending) return { ...f, state: 'accepted' }
+    if (!pending) return /opp type/i.test(String(f.k || '')) ? { ...f, state: 'accepted', v: finalOppType } : { ...f, state: 'accepted' }
     return {
       ...f,
+      v: /opp type/i.test(String(f.k || '')) ? finalOppType : f.v,
       state: 'pending',
       conf: Math.min(f.conf, between(62, 85, rng)),
       note: 'Below the accept threshold — confirm before registration.',
@@ -409,8 +436,9 @@ export function simulatedLead(customerStatus = 'Green', now = new Date(), option
     status: 'New', customerStatus: status, customerClassifiedAt: ts,
     verification: ['Blue', 'Amber'].includes(status) ? { requestedAt: ts, requestedFor: status } : {},
     redFlag: status === 'Red',
-    route,
-    oppType: chased ? (chased.oppType || null) : template.oppType,
+    projectType: projectTypeValue,
+    oppType: finalOppType,
+    route: routeValue,
     urgency,
     duplicateRisk: chased ? 'High' : 'Low',
     region: customer.region,
@@ -432,7 +460,7 @@ export function simulatedLead(customerStatus = 'Green', now = new Date(), option
         ...(chased ? ['Reply on the existing opportunity, not a new one'] : template.next),
         ...(status === 'Green' ? [] : ['Complete the customer-classification gate']),
       ],
-      route,
+      route: routeValue,
     },
   }
 }

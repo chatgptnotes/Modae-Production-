@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, REVISION_TYPES } from '../seed.js'
-import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY } from '../utils.js'
+import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY, gmailComposeHref } from '../utils.js'
 import { readiness, isBlocked, nextActionWith, transitionBlockers } from '../gates.js'
 import { COMMERCIAL_RX } from './Approvals.jsx'
 import { Chip, ClassChip, AiBadge, Stepper, WarnBox, Modal } from '../ui.jsx'
@@ -10,6 +10,7 @@ import { Icon } from '../icons.jsx'
 import { productBrandProfiles } from '../branding/modae.js'
 import { MODAE_COMPANY } from '../proposalDoc.js'
 import { runJson, runText } from '../ai.js'
+import { clarificationSender } from '../leadClarification.js'
 import WbSpares from '../workbench/WbSpares.jsx'
 import WbService from '../workbench/WbService.jsx'
 import WbProject from '../workbench/WbProject.jsx'
@@ -54,6 +55,22 @@ const NEXT_ACTION = {
   Handover: 'Complete the handover checklist with the execution team',
 }
 
+const LIFECYCLE_TABS = {
+  Intake: 'overview',
+  Qualification: 'requirement',
+  'Customer/KYC': 'customer',
+  Registration: 'customer',
+  Screening: 'requirement',
+  Clarification: 'clarifications',
+  Sourcing: 'sourcing',
+  Proposal: 'proposal',
+  Approval: 'approvals',
+  'PO Validation': 'po',
+  Handover: 'po',
+  Submitted: 'overview',
+  'Follow-up': 'overview',
+}
+
 export default function Workbench() {
   const { oppId, tab = 'overview' } = useParams()
   const store = useStore()
@@ -73,6 +90,10 @@ export default function Workbench() {
   }
 
   const goTab = k => nav(`/opp/${opp.id}/${k}`)
+  const moveToMilestone = (milestone, reason = '') => {
+    store.setMilestone(opp.id, milestone, reason)
+    goTab(LIFECYCLE_TABS[milestone] || 'overview')
+  }
   const proposal = store.getProposal(opp.id)
   const blockers = readiness(opp, proposal, store)
   const nextAction = nextActionWith(opp, proposal, store)
@@ -90,7 +111,7 @@ export default function Workbench() {
       setTransition({ kind: 'blocked', target: milestone, blockers: blockersForMove })
       return
     }
-    store.setMilestone(opp.id, milestone)
+    moveToMilestone(milestone)
   }
   const moveRelative = delta => {
     const next = MILESTONES[milestoneIndex + delta]
@@ -231,7 +252,7 @@ export default function Workbench() {
             <>
               <p className="hint">Backward movement is allowed for corrections, but a reason is required and will be recorded in the audit trail.</p>
               <label>Reason<textarea rows={3} value={transition.reason} onChange={e => setTransition({ ...transition, reason: e.target.value })} placeholder="Explain what changed or why this stage needs correction." /></label>
-              <div className="forms-actions"><button className="primary" disabled={!transition.reason?.trim()} onClick={() => { store.setMilestone(opp.id, transition.target, transition.reason.trim()); setTransition(null) }}>Move backward</button><button onClick={() => setTransition(null)}>Cancel</button></div>
+              <div className="forms-actions"><button className="primary" disabled={!transition.reason?.trim()} onClick={() => { moveToMilestone(transition.target, transition.reason.trim()); setTransition(null) }}>Move backward</button><button onClick={() => setTransition(null)}>Cancel</button></div>
             </>
           )}
         </Modal>
@@ -651,8 +672,9 @@ function ClarificationsTab({ opp }) {
   const rows = store.clarifications.filter(c => c.oppId === opp.id)
   const open = rows.filter(c => c.status === 'Draft' || c.status === 'Open')
   const [draftOpen, setDraftOpen] = useState(false)
-  const [draft, setDraft] = useState('')
+  const [draft, setDraft] = useState(null)
   const [sentOk, setSentOk] = useState(false)
+  const [sendErr, setSendErr] = useState('')
   const [busy, setBusy] = useState('') // '' | 'suggest' | 'draft'
 
   // Gemini proposes gap-specific questions; the canned per-route list is the
@@ -702,15 +724,29 @@ function ClarificationsTab({ opp }) {
       senderName: ROLES[opp.owner]?.name || opp.owner,
     })
     setBusy('')
-    setDraft(text?.trim() || templateDraft())
+    const customer = (store.customers || []).find(c => c.id === opp.sellTo || c.name === opp.sellTo)
+    const sender = clarificationSender({ assignedOwner: opp.owner }, store.users, store.config)
+    setDraft({
+      from: sender.address,
+      to: opp.contactEmail || customer?.email || '',
+      cc: sender.cc,
+      subject: `Clarifications — ${opp.oppName}`,
+      body: text?.trim() || templateDraft(),
+    })
+    setSendErr('')
     setDraftOpen(true)
   }
 
   const approveSend = () => {
+    if (!draft?.to?.trim()) { setSendErr('Add a recipient email address before sending'); return }
+    const href = gmailComposeHref(draft)
+    if (!href) { setSendErr('Add a recipient email address before sending'); return }
+    window.open(href, '_blank', 'noopener')
     for (const c of open) store.updateClarification(c.id, { status: 'Sent' })
     store.addCommunication(opp.id, {
-      to: opp.contactPerson || opp.sellTo,
-      subject: `Clarifications — ${opp.oppName}`,
+      to: draft.to,
+      cc: draft.cc,
+      subject: draft.subject,
       kind: 'clarification',
     })
     setDraftOpen(false)
@@ -757,13 +793,29 @@ function ClarificationsTab({ opp }) {
       </div>
 
       {draftOpen && (
-        <Modal title="AI-drafted clarification email" onClose={() => setDraftOpen(false)} wide>
-          <p className="hint">To: {opp.contactPerson || opp.sellTo} · Subject: Clarifications — {opp.oppName}</p>
-          <textarea rows={14} style={{ width: '100%' }} value={draft} onChange={e => setDraft(e.target.value)} />
+        <Modal title="AI-drafted clarification email" onClose={() => setDraftOpen(false)} wide className="clarification-compose-modal">
+          {sendErr && <ErrBox>{sendErr}</ErrBox>}
+          <div className="clar-mail-form">
+            <label className="afield">From
+              <input value={draft?.from || ''} readOnly />
+            </label>
+            <label className="afield">To
+              <input value={draft?.to || ''} onChange={e => setDraft({ ...draft, to: e.target.value })} placeholder="customer@company.com" autoFocus />
+            </label>
+            <label className="afield">CC
+              <input value={draft?.cc || ''} onChange={e => setDraft({ ...draft, cc: e.target.value })} placeholder="name@company.com, another@company.com" />
+            </label>
+            <label className="afield">Subject
+              <input value={draft?.subject || ''} onChange={e => setDraft({ ...draft, subject: e.target.value })} />
+            </label>
+            <label className="afield">Body
+              <textarea rows={14} value={draft?.body || ''} onChange={e => setDraft({ ...draft, body: e.target.value })} />
+            </label>
+          </div>
           <WarnBox>Human review required before sending — verify every question and the addressee.</WarnBox>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
             <button onClick={() => setDraftOpen(false)}>Cancel</button>
-            <button className="primary" onClick={approveSend}><Icon name="send" size={13} /> Approve & send (simulated)</button>
+            <button className="primary" onClick={approveSend}><Icon name="send" size={13} /> Open Gmail compose</button>
           </div>
         </Modal>
       )}
@@ -830,14 +882,15 @@ function SourcingTab({ opp, goTab }) {
 
 // ---------------------------------------------------------------------------
 function ProposalTab({ opp }) {
-  const [sub, setSub] = useState('workbench')
+  const [sub, setSub] = useState('edit-sheet')
   const openBuilder = () => setSub('builder')
+  const openEditSheet = () => setSub('edit-sheet')
   // Diagram 02 §3 is the Brownfield lane only — Greenfield runs Phase-1
   // activities and Service runs the §4 survey path instead.
   const SUBS = [
     ['workbench', 'Workbench'],
     ...(opp.context === 'Brownfield' ? [['steps', 'B-01…B-05']] : []),
-    ['builder', 'Builder'], ['preview', 'Preview'], ['followup', 'Follow-up'],
+    ['builder', 'Builder'], ['edit-sheet', 'Edit Sheet'], ['preview', 'Preview'], ['followup', 'Follow-up'],
   ]
   return (
     <div>
@@ -856,10 +909,11 @@ function ProposalTab({ opp }) {
         <>
           <PropBuilder opp={opp} openSteps={() => setSub('steps')} />
           <div className="builder-divider" />
-          <Proposal oppId={opp.id} embedded />
+          <Proposal oppId={opp.id} embedded initialTab="Cover Letter" />
         </>
       )}
-      {sub === 'preview' && <PreviewPane opp={opp} openBuilder={openBuilder} />}
+      {sub === 'edit-sheet' && <Proposal oppId={opp.id} embedded initialTab="Edit Sheet" />}
+      {sub === 'preview' && <PreviewPane opp={opp} openBuilder={openBuilder} openEditSheet={openEditSheet} />}
       {sub === 'followup' && <FollowUpPane opp={opp} />}
     </div>
   )
@@ -868,7 +922,7 @@ function ProposalTab({ opp }) {
 // The real customer document, not a summary of it. Same component, same props
 // and same data the Builder's "Preview proposal" modal and the printer use — a
 // preview that showed anything else would be worth less than no preview at all.
-function PreviewPane({ opp, openBuilder }) {
+function PreviewPane({ opp, openBuilder, openEditSheet }) {
   const store = useStore()
   const props = buildDocProps(store, opp.id)
   if (!props) return <div className="form-card">Unknown opportunity.</div>
@@ -880,8 +934,8 @@ function PreviewPane({ opp, openBuilder }) {
           Customer-facing document · Rev {p.revision} · Read-only preview
           {!priced && ' · prices hidden'}
         </span>
-        <button className="linklike" onClick={openBuilder}>
-          <Icon name="fileSheet" size={13} /> Edit in the Builder
+        <button className="linklike" onClick={openEditSheet}>
+          <Icon name="fileSheet" size={13} /> Edit in the Sheet
         </button>
       </div>
       <div className="proposal-preview-scroll">

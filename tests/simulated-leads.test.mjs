@@ -1,8 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  SIMULATED_CUSTOMER_SCENARIOS, SIMULATED_OPP_TYPES, INQUIRY_TEMPLATES, SIMULATED_CUSTOMERS,
-  simulatedLead, withoutSimulated, simulatedCount,
+  PROJECT_TYPES, SIMULATED_CUSTOMER_SCENARIOS, SIMULATED_OPP_TYPES, INQUIRY_TEMPLATES, SIMULATED_CUSTOMERS,
+  oppTypesForProjectType, simulatedLead, withoutSimulated, simulatedCount,
 } from '../src/simulatedLeads.js'
 import { deadlineForLead } from '../src/leadRules.js'
 import { findDuplicates } from '../src/insights.js'
@@ -29,6 +29,38 @@ test('Blue and Amber simulations start their customer requests immediately', () 
   assert.equal(simulatedLead('Amber', WHEN).verification.requestedAt, WHEN)
   assert.deepEqual(simulatedLead('Green', WHEN).verification, {})
   assert.equal(simulatedLead('Red', WHEN).redFlag, true)
+})
+
+test('project type narrows the opportunity type choices', () => {
+  assert.deepEqual(PROJECT_TYPES, ['Project', 'Spares', 'Service'])
+  assert.deepEqual(oppTypesForProjectType('Project'), ['Project', 'Upgrade', 'Flow'])
+  assert.deepEqual(oppTypesForProjectType('Spares'), ['Spares', 'Retrofit'])
+  assert.deepEqual(oppTypesForProjectType('Service'), ['Service'])
+
+  const lead = simulatedLead('Blue', WHEN, {
+    projectType: 'Spares',
+    oppType: 'Retrofit',
+    variant: 0,
+    quality: 'clean',
+  })
+  assert.equal(lead.projectType, 'Spares')
+  assert.equal(lead.oppType, 'Retrofit')
+  assert.equal(lead.route, 'Spares')
+  assert.equal(lead.ai.route, 'Spares')
+  assert.equal(lead.ai.fields.find(f => /opp type/i.test(f.k)).v, 'Retrofit')
+})
+
+test('the simulator can force a thin enquiry with missing info', () => {
+  const lead = simulatedLead('Blue', WHEN, {
+    projectType: 'Project',
+    oppType: 'Upgrade',
+    quality: 'partial',
+    variant: 0,
+  })
+  assert.ok(lead.ai.missing.length >= 1)
+  assert.ok(lead.ai.fields.some(f => f.state === 'pending'))
+  assert.equal(lead.projectType, 'Project')
+  assert.equal(lead.oppType, 'Upgrade')
 })
 
 // The whole point of the rewrite: two clicks must not look the same.
@@ -76,9 +108,10 @@ test('a duplicate inquiry chases a lead already in the inbox', () => {
   // No stacked "Fwd: Reminder: …" when the chased lead is itself a chaser.
   assert.equal(/^(re|fwd|fw|reminder):\s*(re|fwd|fw|reminder):/i.test(lead.subject), false)
   // A chaser restates an existing enquiry, so it must not contradict it.
+  const chasedOppType = chased.oppType || chased.ai?.fields.find(f => /opp type/i.test(f.k))?.v || chased.route
   assert.equal(lead.route, chased.route)
   assert.equal(lead.ai.route, chased.route)
-  assert.equal(lead.ai.fields.find(f => /opp type/i.test(f.k)).v, chased.route)
+  assert.equal(lead.ai.fields.find(f => /opp type/i.test(f.k)).v, chasedOppType)
   assert.equal(lead.ai.fields.find(f => /buyer reference/i.test(f.k)).v, chased.ref)
   assert.deepEqual(lead.ai.missing, [], 'a chaser has no new scope to clarify')
   assert.equal(lead.completeness, 94)
@@ -178,11 +211,15 @@ test('a requested opp type is honoured on every draw', () => {
   }
 })
 
-test('an unknown or absent opp type falls back to the full pool', () => {
-  // 'Flow' is a real Field List value with no enquiry shape behind it.
-  const templates = new Set(Array.from({ length: 40 }, () =>
-    simulatedLead('Green', WHEN, { quality: 'clean', oppType: 'Flow' }).simulatedTemplate))
-  assert.ok(templates.size > 3, `Flow fell back to only ${templates.size} shapes`)
+test('a type with no tagged shape falls back to its route pool', () => {
+  // 'Flow' is a real Field List value with no enquiry shape of its own — it
+  // draws any same-route shape and relabels the extraction.
+  const leads = Array.from({ length: 20 }, () =>
+    simulatedLead('Green', WHEN, { quality: 'clean', oppType: 'Flow' }))
+  assert.ok(leads.every(l => l.route === routeForType('Flow')), 'Flow must stay on its own route')
+  assert.ok(leads.every(l => l.oppType === 'Flow'), 'the requested type must survive the fallback')
+  assert.ok(new Set(leads.map(l => l.simulatedTemplate)).size > 1, 'the route pool must still vary')
+  // No request at all still draws from everything.
   assert.ok(simulatedLead('Green', WHEN, { quality: 'clean', oppType: null }).simulatedTemplate)
 })
 

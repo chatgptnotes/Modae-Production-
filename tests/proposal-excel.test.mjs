@@ -1,0 +1,41 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { proposalWorkbookRows, buildProposalWorkbook } from '../src/proposal/excelExport.js'
+
+const input = {
+  p: {
+    revision: '00', revisionDate: '2026-08-21', ourRef: '2608227RS', bidStage: 'Binding', bidType: 'Priced',
+    addressee: 'M/s. Customer', kindAttn: 'Buyer', subject: 'VMS spares', project: 'Retrofit',
+    bom: [{ desc: 'Probe', pn: 'P-1', qtyPerUnit: 2, common: 1, spares: 0, uom: 'EA' }],
+  },
+  opp: { id: '2608227RS', sellTo: 'Customer' },
+  doc: { letterSalutation: 'Dear Sir,', letterBody: 'Offer body', letterClose: 'Best Regards,', preparedBy: {}, docTerms: [{ label: 'Validity', text: '30 days' }] },
+  priced: true,
+  totalQty: line => line.qtyPerUnit + line.common + line.spares,
+  lineQuoted: () => 100,
+  route: 'Spares',
+}
+
+test('proposal Excel rows contain the cover and customer pricing sheets', () => {
+  const { cover, pricing } = proposalWorkbookRows(input)
+  assert.equal(cover[6][1], '2608227RS')
+  assert.deepEqual(pricing[2], ['Sl.', 'Item Description', 'Model / Part Number', 'Total Qty', 'UOM', 'Unit Price ₹', 'Total Price ₹'])
+  assert.deepEqual(pricing[3], [1, 'Probe', 'P-1', 3, 'EA', 100, 300])
+  assert.deepEqual(pricing.at(-1), ['1. Validity', '30 days'])
+})
+
+test('restricted Excel rows omit customer prices', () => {
+  const { pricing } = proposalWorkbookRows({ ...input, priced: false })
+  assert.deepEqual(pricing[2], ['Sl.', 'Item Description', 'Model / Part Number', 'Total Qty', 'UOM'])
+  assert.equal(pricing[3].length, 5)
+})
+
+test('Excel text cells wrap and long rows grow', () => {
+  const workbook = buildProposalWorkbook({ ...input, doc: { ...input.doc, letterBody: 'long '.repeat(100) } })
+  const cover = workbook.Sheets['Cover Letter']
+  const pricing = workbook.Sheets['Firm Offer Rev-00']
+  assert.equal(cover.B20.s.alignment.wrapText, true)
+  assert.ok(cover['!rows'][19].hpt > 20)
+  assert.equal(pricing.B3.s.alignment.wrapText, true)
+  assert.ok(pricing['!rows'][3].hpt >= 20)
+})

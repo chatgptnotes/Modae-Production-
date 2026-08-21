@@ -39,6 +39,29 @@ test('sales owners open on the key columns, everyone else on the full sheet', ()
   assert.match(tracker, /setColView\(colView === 'key' \? 'all' : 'key'\)/)
 })
 
+test('Excel export uses the role-safe filtered column list for headers and rows', () => {
+  assert.match(tracker, /const COMMERCIAL_COLS = new Set\(\['valueK', 'cogsK', 'gmK', 'gmPct'\]\)/)
+  assert.match(tracker, /const exportCols = comm\s*\?\s*COLS\s*:\s*COLS\.filter\(/)
+  assert.match(tracker, /canPriceProposal\(store\.role\)\s*\?\s*!\['cogsK', 'gmK', 'gmPct'\]\.includes\(col\.key\)\s*:\s*!COMMERCIAL_COLS\.has\(col\.key\)/)
+  assert.match(tracker, /\['Sl', \.\.\.exportCols\.map\(col => col\.label\)\]/)
+  assert.match(tracker, /rows\.map\(\(o, index\) => \[index \+ 1, \.\.\.exportCols\.map\(col => \{/)
+  assert.match(tracker, /case 'gmK': return gmK\(o\)/)
+  assert.match(tracker, /case 'gmPct': return gmPct\(o\) \|\| ''/)
+  assert.match(tracker, /nextActionWith\(o, store\.getProposal\(o\.id\), store\)\.owner \|\| ''/)
+  assert.doesNotMatch(tracker, /disabled=\{!comm\}/)
+})
+
+test('Latest created selects all owners, clears filters, and sorts by createDate descending', () => {
+  assert.match(tracker, /const showLatestCreated = \(\) => \{/)
+  assert.match(tracker, /setOwnerFilter\('All'\)/)
+  assert.match(tracker, /setSort\(\{ key: 'createDate', dir: -1 \}\)/)
+  assert.match(tracker, /setFilters\(\{\}\)/)
+  assert.match(tracker, /setFrozenIds\(null\)/)
+  assert.match(tracker, /setOpenFilter\(null\)/)
+  assert.match(tracker, />Latest created<\/button>/)
+  assert.match(tracker, /sortVal = \(o, key\) => \(DATE_KEYS\.includes\(key\) \? \(o\[key\] \|\| ''\)/)
+})
+
 test('My Opportunities shows the same working columns', () => {
   assert.match(myOpps, /<th>Expected Order Date<\/th><th>Next Action<\/th>/)
   assert.doesNotMatch(myOpps, /<th>Owner<\/th>/)

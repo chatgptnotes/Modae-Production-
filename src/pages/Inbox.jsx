@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useStore } from '../store.jsx'
+import { useStore, nextOppId } from '../store.jsx'
 import { ddMmmYY, ageDays, gmailComposeHref } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { useDrawer } from '../drawer.jsx'
@@ -15,13 +15,12 @@ import AttachmentViewer from '../AttachmentViewer.jsx'
 import { findDuplicates } from '../insights.js'
 import { leadWorkflow } from '../leadWorkflow.js'
 import { isFastTrackLead, routeOwner, supplyMissing } from '../leadRules.js'
+import { PROJECT_TYPES, oppTypesForProjectType, simulatedLead, simulatedCount, SIMULATED_CUSTOMER_SCENARIOS } from '../simulatedLeads.js'
 import {
   QUOTE_FEE_DOCUMENTS, answeredPatch, clarificationItems, clarificationKindFor,
   clarificationSender, draftClarification, draftPatch, senderLabel, sentPatch,
 } from '../leadClarification.js'
 import { BLUE_KYC_ITEMS, leadVerificationComplete, verificationDeadline, verificationItem, redClearanceFor, isRedCleared } from '../leadVerification.js'
-import { SIMULATED_CUSTOMER_SCENARIOS, SIMULATED_OPP_TYPES, INQUIRY_TEMPLATES, simulatedLead, simulatedCount } from '../simulatedLeads.js'
-
 // Common-mailbox lead inbox: AI parses each inquiry, a human decides whether it
 // becomes an opportunity (Qualify → registration / intake form) or is dropped.
 const PILL = { New: 'Blue', Qualified: 'Amber', Dropped: 'Red', Converted: 'Green' }
@@ -545,7 +544,9 @@ function AiLeadDetail({ lead }) {
   const initialDecisions = () => ({
     region: lead.region || lead.location || leadFieldValue(ai.fields, /location|region/i),
     owner: lead.assignedOwner || lead.suggestedOwner || routeOwner(lead.region || lead.location || leadFieldValue(ai.fields, /location|region/i), store.config, OWNERS[0]),
-    oppType: leadFieldValue(ai.fields, /opp type/i) || (lead.route === 'Service' ? 'Service' : lead.route === 'Project' ? 'Project' : 'Spares'),
+    oppType: OPP_TYPES.includes(lead.oppType)
+      ? lead.oppType
+      : leadFieldValue(ai.fields, /opp type/i) || (lead.route === 'Service' ? 'Service' : lead.route === 'Project' ? 'Project' : 'Spares'),
     customerStatus: lead.customerStatus || customerStatusForLead(lead, store.customers),
     bu: leadFieldValue(ai.fields, /^bu$/i) || 'Energy',
     segment: leadFieldValue(ai.fields, /segment/i) || 'Others',
@@ -664,6 +665,7 @@ function AiLeadDetail({ lead }) {
   const rule = (store.config.ownershipRules || []).find(r => r.owner === lead.suggestedOwner)
 
   const qualifyBlocked = isRed && !redCleared
+  const registrationBlocked = !!(ai.missing || []).length || pendingLow.length > 0
   const canAct = !['Converted', 'Dropped'].includes(lead.status)
 
   // ---- Clarification mail: AI drafts, a human sends -----------------------
@@ -770,6 +772,7 @@ function AiLeadDetail({ lead }) {
       ownerOverrideReason: isOverride ? lead.ownerOverrideReason.trim() : '',
       fastTrack: isFastTrackLead({ ...lead, customerStatus: decisionDraft.customerStatus }, store.config, customer),
       fastTrackStartedAt: isFastTrackLead({ ...lead, customerStatus: decisionDraft.customerStatus }, store.config, customer) ? (lead.fastTrackStartedAt || new Date().toISOString()) : lead.fastTrackStartedAt,
+      oppType: decisionDraft.oppType,
       route: routeForType(decisionDraft.oppType),
       customerStatus: decisionDraft.customerStatus,
       customerClassifiedAt: lead.customerClassifiedAt || new Date().toISOString(),
@@ -1210,6 +1213,13 @@ function AiLeadDetail({ lead }) {
               Each must be accepted, edited or rejected.
             </WarnBox>
           )}
+          {lead.status === 'Qualified' && (ai.missing || []).length > 0 && (
+            <WarnBox>
+              <b>Registration still blocked</b> until the missing information is filled in:
+              <ul>{ai.missing.map((item, i) => <li key={i}>{item}</li>)}</ul>
+              Use the Add button above to answer each item before continuing.
+            </WarnBox>
+          )}
         </div>
 
         <footer className="ws-foot">
@@ -1263,14 +1273,23 @@ function AiLeadDetail({ lead }) {
           )}
           {lead.status === 'Qualified' && (
             <>
-              <button className="primary ws-action" disabled={pendingLow.length > 0}
-                title={pendingLow.length ? 'Resolve the low-confidence fields first' : undefined}
+              <button className="primary ws-action" disabled={registrationBlocked}
+                title={registrationBlocked
+                  ? (ai.missing || []).length > 0
+                    ? 'Fill the missing information first'
+                    : 'Resolve the low-confidence fields first'
+                  : undefined}
                 onClick={() => nav('/register/' + lead.id)}>
                 Continue to registration <Icon name="arrowRight" size={14} />
               </button>
               {pendingLow.length > 0 && (
                 <p className="ws-foot-note">
                   Blocked — {pendingLow.length} field{pendingLow.length > 1 ? 's' : ''} below the {med}% confidence threshold.
+                </p>
+              )}
+              {lead.status === 'Qualified' && (ai.missing || []).length > 0 && (
+                <p className="ws-foot-note">
+                  Blocked — {ai.missing.length} missing item{ai.missing.length > 1 ? 's' : ''} still need to be filled.
                 </p>
               )}
             </>
@@ -1448,9 +1467,8 @@ export default function Inbox() {
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [pasteOpen, setPasteOpen] = useState(false)
   const [simulationOpen, setSimulationOpen] = useState(false)
-  // undefined = step 1 (pick the opportunity type), a type string = that type
-  // chosen, null = "Any type" chosen — the latter two show step 2.
-  const [simOppType, setSimOppType] = useState(undefined)
+  const [simProjectType, setSimProjectType] = useState(PROJECT_TYPES[0])
+  const [simOppType, setSimOppType] = useState(() => oppTypesForProjectType(PROJECT_TYPES[0])[0] || PROJECT_TYPES[0])
   // Sales owners see only their assigned leads by default; a "Show all" toggle
   // reveals the team's. Managers (LJS/AH) and admins always see everything.
   // The toggle lives in the store, not in component state: as component state a
@@ -1564,18 +1582,57 @@ export default function Inbox() {
     selectedIds.forEach(id => store.updateLead(id, { readAt: read ? new Date().toISOString() : null }))
     setSelectedIds(new Set())
   }
-  const createSimulatedLead = status => {
-    const lead = simulatedLead(status, new Date(), { existingLeads: store.leads, config: store.config, oppType: simOppType || null })
+  const simOppOptions = oppTypesForProjectType(simProjectType)
+  const activeSimOppType = simOppOptions.includes(simOppType) ? simOppType : (simOppOptions[0] || simProjectType)
+
+  const createSimulatedLead = (status, options = {}) => {
+    const projectType = options.projectType || simProjectType
+    const oppType = options.oppType || activeSimOppType
+    const lead = simulatedLead(status, new Date(), {
+      existingLeads: store.leads,
+      config: store.config,
+      projectType,
+      oppType,
+      quality: options.quality || null,
+    })
     store.addLead(lead)
+    const value = pattern => leadFieldValue(lead.ai?.fields, pattern)
+    const owner = lead.assignedOwner || lead.suggestedOwner || store.role
+    const sellTo = value(/sell-to customer|customer/i) || lead.sellTo || lead.sender || 'Simulated customer'
+    const category = value(/category/i) || 'EUC'
+    const location = value(/^location$/i) || lead.location || ''
+    const resolvedOppType = OPP_TYPES.includes(lead.oppType) ? lead.oppType : (oppType || lead.route || 'Project')
+    const product = value(/^product$/i) || 'Various'
+    const knownCustomer = store.customers.some(c => c.name.toLowerCase() === sellTo.toLowerCase())
+    const oppId = nextOppId(store.opportunities, owner)
+    const today = new Date().toISOString().slice(0, 10)
+    const maxSl = Math.max(0, ...store.opportunities.map(o => o.sl || 0))
+    if (!knownCustomer) store.addCustomer({ name: sellTo, category, status, kyc: status === 'Green' ? 'Verified' : 'Pending', payment: '—' })
+    store.addOpportunity({
+      sl: maxSl + 1, id: oppId, sellTo, category, location,
+      customerStatus: status, eucName: value(/contact person/i) || sellTo, eucLocation: location,
+      oppName: lead.subject, owner, oppType: resolvedOppType, bu: value(/^bu/i) || 'Energy',
+      segment: value(/segment/i) || 'Others', product: [product], prob: '', valueK: 0, cogsK: 0,
+      rfqNumber: lead.ref || '', rfqDate: lead.ts?.slice(0, 10) || '', createDate: today,
+      proposalDate: '', orderDate: '', invoiceDate: '', status: 'Open', stage: 'Lead', closedReason: '',
+      contactPerson: value(/contact person/i) || lead.sender || '', contactPhone: '', contactEmail: lead.from || '',
+      lastUpdated: today, forecast: false, remarks: lead.body || '', nextActionOwner: '', simulated: true,
+    })
+    store.updateLead(lead.id, { status: 'Converted', oppId })
     // Owner now comes from the L-05-AI region rules, so a generated lead can
     // land with someone else. Without this the sales owner's filtered list
     // would silently drop the row they just created.
     if (!seesAll && lead.suggestedOwner !== store.role) setShowAll(true)
     setSimulationOpen(false)
-    nav('/inbox/' + lead.id)
+    nav('/inbox')
   }
-  const createRandomSimulatedLead = () =>
-    createSimulatedLead(SIMULATED_CUSTOMER_SCENARIOS[Math.floor(Math.random() * SIMULATED_CUSTOMER_SCENARIOS.length)].status)
+  const createRandomSimulatedLead = () => {
+    const projectType = PROJECT_TYPES[Math.floor(Math.random() * PROJECT_TYPES.length)]
+    const oppTypes = oppTypesForProjectType(projectType)
+    const oppType = oppTypes[Math.floor(Math.random() * oppTypes.length)] || projectType
+    const status = SIMULATED_CUSTOMER_SCENARIOS[Math.floor(Math.random() * SIMULATED_CUSTOMER_SCENARIOS.length)].status
+    createSimulatedLead(status, { projectType, oppType, quality: Math.random() < 0.33 ? 'partial' : null })
+  }
   const simulatedLeadCount = simulatedCount(store.leads, store.leadArchive)
   const clearSimulated = () => {
     if (!window.confirm(`Clear ${simulatedLeadCount} simulated lead${simulatedLeadCount === 1 ? '' : 's'}?\n\n`
@@ -1604,7 +1661,7 @@ export default function Inbox() {
           <p className="hint">{showArchive ? 'Discarded lead archive' : 'Common sales mailbox · AI structures, humans decide'}</p>
         </div>
         <div className="mailbox-head-actions">
-          <button onClick={() => { setSimOppType(undefined); setSimulationOpen(true) }}><Icon name="mail" size={13} /> Simulate incoming inquiry</button>
+          <button onClick={() => setSimulationOpen(true)}><Icon name="mail" size={13} /> Simulate incoming inquiry</button>
           <button className="primary" onClick={() => setPasteOpen(true)}><Icon name="bot" size={13} /> New enquiry</button>
           <button onClick={() => { setShowArchive(v => !v); setMailTab('primary'); setSelectedIds(new Set()) }}>
             <Icon name="folder" size={13} /> {showArchive ? 'Back to inbox' : `Archive (${(store.leadArchive || []).length})`}
@@ -1624,71 +1681,44 @@ export default function Inbox() {
       {pasteOpen && <PasteLeadModal onClose={() => setPasteOpen(false)} />}
       {simulationOpen && (
         <Modal title="Simulate incoming inquiry" className="simulate-modal" onClose={() => setSimulationOpen(false)}>
-          {simOppType === undefined ? (
-            <>
-              <p className="hint">
-                Step 1 of 2 — pick the opportunity type to simulate, or Any type to let the
-                simulator choose.
-              </p>
-              <div style={{ display: 'grid', gap: 8 }}>
-                {SIMULATED_OPP_TYPES.map(type => {
-                  const shapes = INQUIRY_TEMPLATES.filter(t => t.oppType === type).length
-                  return (
-                    <button key={type} className="form-card" style={{ textAlign: 'left', cursor: 'pointer' }}
-                      onClick={() => setSimOppType(type)}>
-                      <b>{type}</b>
-                      <span className="hint" style={{ display: 'block', marginTop: 3 }}>
-                        {shapes} enquiry shape{shapes === 1 ? '' : 's'}
-                      </span>
-                    </button>
-                  )
-                })}
-                <button className="form-card" style={{ textAlign: 'left', cursor: 'pointer' }}
-                  onClick={() => setSimOppType(null)}>
-                  <b>Any type</b>
-                  <span className="hint" style={{ display: 'block', marginTop: 3 }}>
-                    Any scope — fill the inbox with a varied mix
-                  </span>
-                </button>
-              </div>
-              {simulatedLeadCount > 0 && (
-                <div className="lead-decision-actions" style={{ marginTop: 12 }}>
-                  <button onClick={clearSimulated}>
-                    <Icon name="x" size={13} /> Clear {simulatedLeadCount} simulated lead{simulatedLeadCount === 1 ? '' : 's'}
-                  </button>
-                </div>
-              )}
-            </>
-          ) : (
-            <>
-              <p className="hint">
-                Step 2 of 2 — choose the customer class to test its complete Lead workflow.
-                {simOppType ? ` The ${simOppType} type and the class are fixed by your choices` : ' The type is random and the class is fixed by your choice'};
-                the enquiry itself — customer, plant, scope and how complete the extraction
-                is — is a different permutation every time.
-              </p>
-              <div style={{ display: 'grid', gap: 8 }}>
-                {SIMULATED_CUSTOMER_SCENARIOS.map(scenario => (
-                  <button key={scenario.status} className="form-card" style={{ textAlign: 'left', cursor: 'pointer' }}
-                    onClick={() => createSimulatedLead(scenario.status)}>
-                    <b>{scenario.label}</b>
-                    <span className="hint" style={{ display: 'block', marginTop: 3 }}>{scenario.hint}</span>
-                  </button>
-                ))}
-                <button className="form-card" style={{ textAlign: 'left', cursor: 'pointer' }}
-                  onClick={createRandomSimulatedLead}>
-                  <b>Random customer</b>
-                  <span className="hint" style={{ display: 'block', marginTop: 3 }}>
-                    Any customer class — let the simulator pick the gate under test
-                  </span>
-                </button>
-              </div>
-              <div className="lead-decision-actions" style={{ marginTop: 12 }}>
-                <button onClick={() => setSimOppType(undefined)}>
-                  <Icon name="chevronLeft" size={13} /> Back to opportunity type
-                </button>
-              </div>
-            </>
+          <p className="hint">
+            Choose the project type first, then the opportunity type. The customer class
+            buttons below decide the simulated lead that gets generated.
+          </p>
+          <div style={{ display: 'grid', gap: 10, marginBottom: 10 }}>
+            <label className="afield">Project type
+              <select value={simProjectType} onChange={e => setSimProjectType(e.target.value)} style={{ display: 'block', marginTop: 2, width: '100%' }}>
+                {PROJECT_TYPES.map(type => <option key={type}>{type}</option>)}
+              </select>
+            </label>
+            <label className="afield">Opportunity type
+              <select value={activeSimOppType} onChange={e => setSimOppType(e.target.value)} style={{ display: 'block', marginTop: 2, width: '100%' }}>
+                {simOppOptions.map(type => <option key={type}>{type}</option>)}
+              </select>
+            </label>
+          </div>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {SIMULATED_CUSTOMER_SCENARIOS.map(scenario => (
+              <button key={scenario.status} className="form-card" style={{ textAlign: 'left', cursor: 'pointer' }}
+                onClick={() => createSimulatedLead(scenario.status)}>
+                <b>{scenario.label}</b>
+                <span className="hint" style={{ display: 'block', marginTop: 3 }}>{scenario.hint}</span>
+              </button>
+            ))}
+            <button className="form-card" style={{ textAlign: 'left', cursor: 'pointer' }}
+              onClick={createRandomSimulatedLead}>
+              <b>Random inquiry</b>
+              <span className="hint" style={{ display: 'block', marginTop: 3 }}>
+                Any customer class, any scope — fill the inbox with a varied mix
+              </span>
+            </button>
+          </div>
+          {simulatedLeadCount > 0 && (
+            <div className="lead-decision-actions" style={{ marginTop: 12 }}>
+              <button onClick={clearSimulated}>
+                <Icon name="x" size={13} /> Clear {simulatedLeadCount} simulated lead{simulatedLeadCount === 1 ? '' : 's'}
+              </button>
+            </div>
           )}
         </Modal>
       )}

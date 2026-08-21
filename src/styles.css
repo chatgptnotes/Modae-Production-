@@ -948,8 +948,15 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .pill.status-Pending { background: var(--amber-fill); color: var(--amber-text); }
 .pill.status-Suspended { background: var(--lost-fill); color: var(--lost-text); }
 .modal { position: fixed; z-index: 56; top: 90px; left: 50%; transform: translateX(-50%); width: 420px; max-width: 92vw; box-shadow: 0 6px 24px rgba(0,0,0,.25); }
-/* Five choice cards plus a footer row outgrow a short viewport. */
+/* Type selectors, five choice cards and a footer row outgrow a short viewport. */
 .simulate-modal { max-height: calc(100vh - 120px); overflow-y: auto; }
+.clarification-compose-modal {
+  top: 5vh;
+  width: min(760px, 92vw);
+  max-width: none;
+  max-height: 90vh;
+  overflow-y: auto;
+}
 .opportunity-create-modal {
   top: 3vh;
   left: calc(50% + 108px);
@@ -986,6 +993,31 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
    cap would trap the document in a second scrollbar. */
 .proposal-preview-pane .proposal-preview-scroll {
   max-height: none; margin-top: 10px; overflow-x: auto;
+}
+
+.proposal-sheet-editor { max-width: 1100px; }
+.proposal-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.proposal-sheet-head h3 { margin: 0 0 4px; }
+.workbook-switcher { display: flex; gap: 6px; flex-wrap: wrap; }
+.workbook-switcher button.active, .workbook-tabs button.active { background: var(--primary-fill); color: #fff; border-color: var(--primary-fill); }
+.workbook-tabs { display: flex; gap: 4px; flex-wrap: wrap; padding: 8px 0 0; border-top: 1px solid var(--grid-line); }
+.workbook-tabs button { border-radius: 3px 3px 0 0; }
+.workbook-scroll { max-height: calc(100vh - 300px); min-height: 260px; overflow: auto; }
+.workbook-table { min-width: 980px; }
+.workbook-colour.c0 { color: var(--won-text); background: var(--won-fill); }
+.workbook-colour.c1 { color: var(--amber-text); background: var(--amber-fill); }
+.workbook-colour.c2 { color: var(--lost-text); background: var(--lost-fill); }
+.workbook-colour.c3 { color: var(--bg-sidebar); background: var(--primary-soft); }
+.inputs-workbook { max-width: 1100px; }
+.proposal-sheet-fields { display: grid; grid-template-columns: repeat(3, minmax(180px, 1fr)); gap: 10px 14px; }
+.proposal-sheet-field { display: grid; gap: 4px; font-size: 12px; color: var(--text-muted); font-weight: 600; }
+.proposal-sheet-editor .form-card { margin-bottom: 12px; }
+.proposal-sheet-editor textarea { display: block; width: 100%; margin-top: 5px; font: inherit; padding: 6px 8px; border: 1px solid var(--border-color); resize: vertical; }
+.proposal-edit-grid input { min-width: 100px; }
+.proposal-edit-grid td:nth-child(3) input { min-width: 220px; }
+.proposal-edit-grid td:focus-within { background: #fff !important; }
+@media (max-width: 800px) {
+  .proposal-sheet-fields { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
 }
 .email-launch-link { display: inline-flex; align-items: center; text-decoration: none; }
 .email-launch-link.disabled { opacity: .5; pointer-events: none; }
@@ -1341,7 +1373,7 @@ input.needs-input, select.needs-input { background: #fffbeb; border-color: var(-
 .mail-detail-label > span:not(.pill):not(.conf-badge) { font-size: 11px; }
 .mail-labels .conf-badge, .mail-labels .pill, .mail-labels .chip { font-size: 10px; }
 .mail-date { text-align: left; white-space: nowrap; font-size: 11px; }
-.mail-date b, .mail-date small { display: block; }
+.mail-date b, .mail-date small { display: block; white-space: nowrap; }
 .mail-owner { font-weight: 700; color: var(--text-main); }
 .mail-age { white-space: nowrap; font-size: 11px; }
 .mail-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; min-height: 220px; color: var(--text-muted); }
@@ -1349,7 +1381,18 @@ input.needs-input, select.needs-input { background: #fffbeb; border-color: var(-
 .mail-empty svg { color: var(--text-subtle); }
 
 @media (max-width: 900px) {
-  .mail-column-head, .mail-row { grid-template-columns: 26px 24px 78px minmax(0, 1.4fr) minmax(0, 3fr) minmax(0, .85fr) minmax(0, .85fr) minmax(0, .9fr) minmax(0, .95fr) minmax(0, .8fr) minmax(0, 1fr) 42px; }
+  /* Keep the useful nine columns after the 1400/1180 rules hide duplicate
+     risk, age, and owner. The old twelve-track override made rows misalign
+     at tablet widths and squeezed the Received date/time out of view. */
+  .mail-column-head, .mail-row {
+    grid-template-columns:
+      26px 24px 78px
+      minmax(0, 1.25fr)
+      minmax(0, 2.8fr)
+      minmax(0, .75fr) minmax(0, .75fr)
+      minmax(0, .85fr)
+      minmax(0, .9fr);
+  }
 }
 @media (max-width: 640px) {
   .mailbox-head { display: block; }
