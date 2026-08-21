@@ -58,6 +58,7 @@ export const COLS = [
 // action pending." He was explicit that Opportunity Owner and Updated are not
 // required — a rep filtered to their own rows already knows the owner.
 const KEY_COLS = ['id', 'sellTo', 'oppName', 'stage', 'oppType', 'prob', 'valueK', 'orderDate', 'nextActionOwner']
+const COMMERCIAL_COLS = new Set(['valueK', 'cogsK', 'gmK', 'gmPct'])
 
 // Hiding a spreadsheet column means hiding the header and the matching cell in
 // every row. The cells are written out in COLS order, so one generated rule per
@@ -281,11 +282,34 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   }
   const isSel = (o, col) => fb.sel.ref === `${col.letter}${o.sl + 2}`
 
+  const exportCols = comm
+    ? COLS
+    : COLS.filter(col => canPriceProposal(store.role)
+      ? !['cogsK', 'gmK', 'gmPct'].includes(col.key)
+      : !COMMERCIAL_COLS.has(col.key))
   const exportRows = () => exportCSV(
     'Sales_Pipeline_Report.csv',
-    ['Sl','Opp ID','Sell To Customer','Category','Location','Customer Status','EUC Name','EUC Location','Opportunity Name/Description','Owner','Opp Type','BU','Segment','Product','Prob (%)','Value (₹)','COGS (K₹)','GM (K₹)','GM%','Create Date','Proposal Date','Expected Order Date','Expected Ship Date','Status','Stage','Closed Reason','Contact Person','Contact Phone #','Last Updated','Forecast','Update/Remarks','Next Action Pending Owner'],
-    rows.map((o, index) => [index + 1,o.id,o.sellTo,o.category,o.location,customerStatusFor(o),o.eucName,o.eucLocation,o.oppName,o.owner,o.oppType,o.bu,o.segment,productLabel(o.product),o.prob||'',o.valueK,o.cogsK,gmK(o),gmPct(o)||'',o.createDate,o.proposalDate,o.orderDate,o.invoiceDate,o.status,o.stage,o.closedReason,o.contactPerson,o.contactPhone,o.lastUpdated,o.forecast?'Y':'N',o.remarks,o.nextActionOwner||''])
+    ['Sl', ...exportCols.map(col => col.label)],
+    rows.map((o, index) => [index + 1, ...exportCols.map(col => {
+      switch (col.key) {
+        case 'customerStatus': return customerStatusFor(o)
+        case 'product': return productLabel(o.product)
+        case 'gmK': return gmK(o)
+        case 'gmPct': return gmPct(o) || ''
+        case 'nextActionOwner': return o.nextActionOwner || nextActionWith(o, store.getProposal(o.id), store).owner || ''
+        case 'forecast': return o.forecast ? 'Y' : 'N'
+        default: return o[col.key] ?? ''
+      }
+    })])
   )
+
+  const showLatestCreated = () => {
+    setOwnerFilter('All')
+    setSort({ key: 'createDate', dir: -1 })
+    setFilters({})
+    setFrozenIds(null)
+    setOpenFilter(null)
+  }
 
   // Plain render function (not a component type) so the open dropdown's DOM is
   // diffed in place — checkbox focus and scroll position survive toggles.
@@ -364,6 +388,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
             {isSalesRep && <button type="button" onClick={() => setOwnerFilter(store.role)}>My Opportunities</button>}
           </>
         )}
+        <button type="button" onClick={showLatestCreated}>Latest created</button>
         <span className="hint">Rows are never deleted — close them via Stage (Won/Lost) with a mandatory Closed Reason. Click ▼ on a header to sort/filter; click a cell to see its formula.</span>
         <span className="spacer" />
         {colView === 'key' && showValue && (
@@ -375,8 +400,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
             : `Show only the working columns: ${KEY_COLS.length} of ${COLS.length}`}>
           {colView === 'key' ? `All ${COLS.length} columns` : 'Key columns'}
         </button>
-        <button onClick={exportRows} disabled={!comm}
-          title={comm ? '' : 'Export includes commercial columns — restricted to approvers/admin'}>Extract to Excel</button>
+        <button onClick={exportRows} title="Export the rows shown with fields allowed for your role">Extract to Excel</button>
         {onCreateOpportunity
           ? <button className="primary" onClick={onCreateOpportunity}>Create Opportunity</button>
           : <Link className="btn primary" to="/new">Create Opportunity</Link>}
