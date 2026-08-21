@@ -57,6 +57,24 @@ supabase functions deploy ai --project-ref <ref>
 With no key the function returns 503 and the app falls back to its deterministic
 parsers rather than erroring — fine for a preview, not for the client's build.
 
+### Customer quote email
+
+The approval decision stays inside WinTrack. After the final release approval,
+the Submission panel calls the Vercel `/api/send-proposal-email` function. Add
+these as **server-side** Vercel variables (never `VITE_` variables):
+
+```bash
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_REFRESH_TOKEN=...
+GMAIL_ACCOUNT=...
+```
+
+The sender requires a customer email and a PDF selected in the Submission
+panel. A successful Gmail response is then logged in the opportunity's
+Supabase-backed Communications history and advances the opportunity to
+`Submitted`; a failure leaves its stage unchanged.
+
 ## Day to day
 
 ```bash
