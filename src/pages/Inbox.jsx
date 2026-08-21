@@ -20,7 +20,7 @@ import {
   clarificationSender, draftClarification, draftPatch, senderLabel, sentPatch,
 } from '../leadClarification.js'
 import { BLUE_KYC_ITEMS, leadVerificationComplete, verificationDeadline, verificationItem, redClearanceFor, isRedCleared } from '../leadVerification.js'
-import { SIMULATED_CUSTOMER_SCENARIOS, simulatedLead, simulatedCount } from '../simulatedLeads.js'
+import { SIMULATED_CUSTOMER_SCENARIOS, SIMULATED_OPP_TYPES, INQUIRY_TEMPLATES, simulatedLead, simulatedCount } from '../simulatedLeads.js'
 
 // Common-mailbox lead inbox: AI parses each inquiry, a human decides whether it
 // becomes an opportunity (Qualify → registration / intake form) or is dropped.
@@ -1448,6 +1448,9 @@ export default function Inbox() {
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [pasteOpen, setPasteOpen] = useState(false)
   const [simulationOpen, setSimulationOpen] = useState(false)
+  // undefined = step 1 (pick the opportunity type), a type string = that type
+  // chosen, null = "Any type" chosen — the latter two show step 2.
+  const [simOppType, setSimOppType] = useState(undefined)
   // Sales owners see only their assigned leads by default; a "Show all" toggle
   // reveals the team's. Managers (LJS/AH) and admins always see everything.
   // The toggle lives in the store, not in component state: as component state a
@@ -1562,7 +1565,7 @@ export default function Inbox() {
     setSelectedIds(new Set())
   }
   const createSimulatedLead = status => {
-    const lead = simulatedLead(status, new Date(), { existingLeads: store.leads, config: store.config })
+    const lead = simulatedLead(status, new Date(), { existingLeads: store.leads, config: store.config, oppType: simOppType || null })
     store.addLead(lead)
     // Owner now comes from the L-05-AI region rules, so a generated lead can
     // land with someone else. Without this the sales owner's filtered list
@@ -1601,7 +1604,7 @@ export default function Inbox() {
           <p className="hint">{showArchive ? 'Discarded lead archive' : 'Common sales mailbox · AI structures, humans decide'}</p>
         </div>
         <div className="mailbox-head-actions">
-          <button onClick={() => setSimulationOpen(true)}><Icon name="mail" size={13} /> Simulate incoming inquiry</button>
+          <button onClick={() => { setSimOppType(undefined); setSimulationOpen(true) }}><Icon name="mail" size={13} /> Simulate incoming inquiry</button>
           <button className="primary" onClick={() => setPasteOpen(true)}><Icon name="bot" size={13} /> New enquiry</button>
           <button onClick={() => { setShowArchive(v => !v); setMailTab('primary'); setSelectedIds(new Set()) }}>
             <Icon name="folder" size={13} /> {showArchive ? 'Back to inbox' : `Archive (${(store.leadArchive || []).length})`}
@@ -1620,34 +1623,72 @@ export default function Inbox() {
       </div>
       {pasteOpen && <PasteLeadModal onClose={() => setPasteOpen(false)} />}
       {simulationOpen && (
-        <Modal title="Simulate incoming inquiry" onClose={() => setSimulationOpen(false)}>
-          <p className="hint">
-            Choose a customer class to test its complete Lead workflow. The class is fixed by
-            your choice; the enquiry itself — customer, plant, scope, route and how complete
-            the extraction is — is a different permutation every time.
-          </p>
-          <div style={{ display: 'grid', gap: 8 }}>
-            {SIMULATED_CUSTOMER_SCENARIOS.map(scenario => (
-              <button key={scenario.status} className="form-card" style={{ textAlign: 'left', cursor: 'pointer' }}
-                onClick={() => createSimulatedLead(scenario.status)}>
-                <b>{scenario.label}</b>
-                <span className="hint" style={{ display: 'block', marginTop: 3 }}>{scenario.hint}</span>
-              </button>
-            ))}
-            <button className="form-card" style={{ textAlign: 'left', cursor: 'pointer' }}
-              onClick={createRandomSimulatedLead}>
-              <b>Random inquiry</b>
-              <span className="hint" style={{ display: 'block', marginTop: 3 }}>
-                Any customer class, any scope — fill the inbox with a varied mix
-              </span>
-            </button>
-          </div>
-          {simulatedLeadCount > 0 && (
-            <div className="lead-decision-actions" style={{ marginTop: 12 }}>
-              <button onClick={clearSimulated}>
-                <Icon name="x" size={13} /> Clear {simulatedLeadCount} simulated lead{simulatedLeadCount === 1 ? '' : 's'}
-              </button>
-            </div>
+        <Modal title="Simulate incoming inquiry" className="simulate-modal" onClose={() => setSimulationOpen(false)}>
+          {simOppType === undefined ? (
+            <>
+              <p className="hint">
+                Step 1 of 2 — pick the opportunity type to simulate, or Any type to let the
+                simulator choose.
+              </p>
+              <div style={{ display: 'grid', gap: 8 }}>
+                {SIMULATED_OPP_TYPES.map(type => {
+                  const shapes = INQUIRY_TEMPLATES.filter(t => t.oppType === type).length
+                  return (
+                    <button key={type} className="form-card" style={{ textAlign: 'left', cursor: 'pointer' }}
+                      onClick={() => setSimOppType(type)}>
+                      <b>{type}</b>
+                      <span className="hint" style={{ display: 'block', marginTop: 3 }}>
+                        {shapes} enquiry shape{shapes === 1 ? '' : 's'}
+                      </span>
+                    </button>
+                  )
+                })}
+                <button className="form-card" style={{ textAlign: 'left', cursor: 'pointer' }}
+                  onClick={() => setSimOppType(null)}>
+                  <b>Any type</b>
+                  <span className="hint" style={{ display: 'block', marginTop: 3 }}>
+                    Any scope — fill the inbox with a varied mix
+                  </span>
+                </button>
+              </div>
+              {simulatedLeadCount > 0 && (
+                <div className="lead-decision-actions" style={{ marginTop: 12 }}>
+                  <button onClick={clearSimulated}>
+                    <Icon name="x" size={13} /> Clear {simulatedLeadCount} simulated lead{simulatedLeadCount === 1 ? '' : 's'}
+                  </button>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <p className="hint">
+                Step 2 of 2 — choose the customer class to test its complete Lead workflow.
+                {simOppType ? ` The ${simOppType} type and the class are fixed by your choices` : ' The type is random and the class is fixed by your choice'};
+                the enquiry itself — customer, plant, scope and how complete the extraction
+                is — is a different permutation every time.
+              </p>
+              <div style={{ display: 'grid', gap: 8 }}>
+                {SIMULATED_CUSTOMER_SCENARIOS.map(scenario => (
+                  <button key={scenario.status} className="form-card" style={{ textAlign: 'left', cursor: 'pointer' }}
+                    onClick={() => createSimulatedLead(scenario.status)}>
+                    <b>{scenario.label}</b>
+                    <span className="hint" style={{ display: 'block', marginTop: 3 }}>{scenario.hint}</span>
+                  </button>
+                ))}
+                <button className="form-card" style={{ textAlign: 'left', cursor: 'pointer' }}
+                  onClick={createRandomSimulatedLead}>
+                  <b>Random customer</b>
+                  <span className="hint" style={{ display: 'block', marginTop: 3 }}>
+                    Any customer class — let the simulator pick the gate under test
+                  </span>
+                </button>
+              </div>
+              <div className="lead-decision-actions" style={{ marginTop: 12 }}>
+                <button onClick={() => setSimOppType(undefined)}>
+                  <Icon name="chevronLeft" size={13} /> Back to opportunity type
+                </button>
+              </div>
+            </>
           )}
         </Modal>
       )}

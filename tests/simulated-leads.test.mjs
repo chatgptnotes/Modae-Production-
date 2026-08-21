@@ -1,12 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  SIMULATED_CUSTOMER_SCENARIOS, INQUIRY_TEMPLATES, SIMULATED_CUSTOMERS,
+  SIMULATED_CUSTOMER_SCENARIOS, SIMULATED_OPP_TYPES, INQUIRY_TEMPLATES, SIMULATED_CUSTOMERS,
   simulatedLead, withoutSimulated, simulatedCount,
 } from '../src/simulatedLeads.js'
 import { deadlineForLead } from '../src/leadRules.js'
 import { findDuplicates } from '../src/insights.js'
-import { seedConfig, seedAiLeads } from '../src/seed.js'
+import { seedConfig, seedAiLeads, OPP_TYPES, routeForType } from '../src/seed.js'
 
 const WHEN = '2026-08-19T00:00:00.000Z'
 
@@ -150,4 +150,68 @@ test('a lead with no buyer reference is never chased', () => {
     quality: 'duplicate', existingLeads: refless, config: seedConfig,
   })
   assert.notEqual(lead.duplicateRisk, 'High', 'it is not a duplicate of anything')
+})
+
+// The step-1 contract of the two-step dialog. The decision panel seeds
+// decisionDraft.oppType from the 'Opp type' AI field, and registration derives
+// the route from it — so the tag must be a real Field List value, agree with
+// the template's route, and be what the AI field says.
+test('every template carries a Field List opp type that agrees with its route', () => {
+  for (const t of INQUIRY_TEMPLATES) {
+    assert.ok(OPP_TYPES.includes(t.oppType), `${t.key}: '${t.oppType}' is not in OPP_TYPES`)
+    assert.equal(routeForType(t.oppType), t.route, `${t.key}: routeForType('${t.oppType}') contradicts route '${t.route}'`)
+    assert.equal(t.fields.find(f => /opp type/i.test(f.k)).v, t.oppType, `${t.key}: the 'Opp type' AI field disagrees with the tag`)
+  }
+  assert.deepEqual(SIMULATED_OPP_TYPES, OPP_TYPES.filter(t => INQUIRY_TEMPLATES.some(tpl => tpl.oppType === t)))
+  assert.ok(SIMULATED_OPP_TYPES.includes('Spares'), 'the spares option is the one the dialog exists for')
+})
+
+test('a requested opp type is honoured on every draw', () => {
+  for (const type of SIMULATED_OPP_TYPES) {
+    for (let i = 0; i < 10; i += 1) {
+      const lead = simulatedLead('Green', WHEN, { quality: 'clean', oppType: type })
+      const template = INQUIRY_TEMPLATES.find(t => t.key === lead.simulatedTemplate)
+      assert.equal(template.oppType, type, `draw ${i}: asked for ${type}, got template ${template.key}`)
+      assert.equal(lead.oppType, type)
+      assert.equal(lead.route, routeForType(type))
+    }
+  }
+})
+
+test('an unknown or absent opp type falls back to the full pool', () => {
+  // 'Flow' is a real Field List value with no enquiry shape behind it.
+  const templates = new Set(Array.from({ length: 40 }, () =>
+    simulatedLead('Green', WHEN, { quality: 'clean', oppType: 'Flow' }).simulatedTemplate))
+  assert.ok(templates.size > 3, `Flow fell back to only ${templates.size} shapes`)
+  assert.ok(simulatedLead('Green', WHEN, { quality: 'clean', oppType: null }).simulatedTemplate)
+})
+
+// The per-pool memory: a 2-template pool must alternate rather than truncate
+// the shared anti-repeat memory (freshPick caps at pool-size − 1).
+test('a filtered pool still avoids back-to-back repeats', () => {
+  const seen = Array.from({ length: 6 }, () =>
+    simulatedLead('Green', WHEN, { quality: 'clean', oppType: 'Upgrade' }).simulatedTemplate)
+  for (let i = 1; i < seen.length; i += 1) {
+    assert.notEqual(seen[i], seen[i - 1], `template repeated back-to-back at ${i}`)
+  }
+  assert.deepEqual([...new Set(seen)].sort(), ['cms-upgrade', 'obsoletion'])
+})
+
+// A chaser inherits the chased lead's route, so a typed request must only
+// chase leads on that route — and degrade honestly when there are none.
+test('a typed duplicate only chases leads on the requested route', () => {
+  for (let i = 0; i < 50; i += 1) {
+    const lead = simulatedLead('Green', WHEN, {
+      quality: 'duplicate', oppType: 'Spares', existingLeads: seedAiLeads, config: seedConfig,
+    })
+    assert.equal(lead.simulatedQuality, 'duplicate')
+    assert.equal(lead.route, 'Spares', `run ${i}: a Spares request produced a ${lead.route} chaser`)
+  }
+  const nonSpares = seedAiLeads.filter(l => l.route !== 'Spares')
+  assert.ok(nonSpares.some(l => l.ref || l.rfqNumber), 'the degrade case needs chaseable non-Spares leads')
+  const degraded = simulatedLead('Green', WHEN, {
+    quality: 'duplicate', oppType: 'Spares', existingLeads: nonSpares, config: seedConfig,
+  })
+  assert.equal(degraded.simulatedQuality, 'partial')
+  assert.notEqual(degraded.duplicateRisk, 'High')
 })

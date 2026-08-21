@@ -1,5 +1,6 @@
 import { findDuplicates } from './insights.js'
 import { routeOwner } from './leadRules.js'
+import { OPP_TYPES, routeForType } from './seed.js'
 
 // The demo simulator behind "Simulate incoming inquiry".
 //
@@ -9,9 +10,10 @@ import { routeOwner } from './leadRules.js'
 // implements: the clarification deadline (leadRules.deadlineForLead) and
 // duplicate detection (insights.findDuplicates).
 //
-// The one thing that does NOT vary is the customer class. That is the workflow
-// gate the operator deliberately picked, and leadVerification/leadWorkflow read
-// it, so the class is an input and everything else is a permutation over it.
+// What does NOT vary is what the operator deliberately picked: the customer
+// class (the workflow gate that leadVerification/leadWorkflow read) and, when
+// chosen, the opportunity type. Those are inputs; everything else is a
+// permutation over them.
 
 export const SIMULATED_CUSTOMER_SCENARIOS = [
   { status: 'Green', label: 'Green customer', hint: 'Proceed without KYC or fee' },
@@ -54,13 +56,13 @@ export const INQUIRY_TEMPLATES = [
   {
     key: 'retrofit-spares',
     subject: 'Request for quotation — VM600 retrofit spares',
-    route: 'Spares', urgency: 'Normal', refPrefix: 'RFQ', source: 'Networking & relationship',
+    route: 'Spares', oppType: 'Spares', urgency: 'Normal', refPrefix: 'RFQ', source: 'Networking & relationship',
     bu: 'Energy', segment: 'Thermal', product: 'Meggitt', suggestedOwner: 'RS',
     body: 'Dear Sir,\n\nPlease quote for the following retrofit spares against our installed VM600 rack on TG-2:\n\n1. Proximity probe, 8 mm — 12 nos\n2. Extension cable, 5 m — 12 nos\n3. Signal conditioner module — 4 nos\n4. MPC4 monitoring card — 2 nos\n5. Rack CPU spare — 1 no\n\nOur shutdown window is fixed, so an early offer is requested.',
     attachments: [{ name: 'Retrofit_BOM.xlsx', pages: 3 }],
     summary: 'Retrofit spares RFQ against an existing VM600 install base — five line items with part numbers plus a rack CPU spare.',
     fields: [
-      { group: 'RFQ', k: 'Opp type', v: 'Spares (retrofit)', conf: 95, ev: 'Part-number list against the installed VM600 rack' },
+      { group: 'RFQ', k: 'Opp type', v: 'Spares', conf: 95, ev: 'Retrofit part-number list against the installed VM600 rack' },
       { group: 'RFQ', k: 'Line items', v: '5 items — probes, cables, conditioner, MPC4, rack CPU', conf: 93, ev: 'Email body lines 1-5' },
       { group: 'Known Project', k: 'Install base', v: 'VM600 rack, CPU MK2 + 4x MPC4', conf: 90, ev: 'Rack configuration quoted in the email' },
     ],
@@ -74,7 +76,7 @@ export const INQUIRY_TEMPLATES = [
   {
     key: 'vams-project',
     subject: 'Provide offer price for VAMS system — pumped storage project',
-    route: 'Project', urgency: 'Urgent', refPrefix: 'PRJ', source: 'OEM referral',
+    route: 'Project', oppType: 'Project', urgency: 'Urgent', refPrefix: 'PRJ', source: 'OEM referral',
     bu: 'Energy', segment: 'Hydro', product: 'ModAE', suggestedOwner: 'LJS',
     body: 'Dear Sir,\n\nPlease provide offer price as per the attached specification for supply of VAMS (Vibration & Air Gap Monitoring System).\n\n3 VAMS panels for the complete installation; 33 sensors per unit per the signal list. Interface to plant DCS/SCADA over MODBUS TCP/IP.\n\nKind Regards,',
     attachments: [{ name: 'Purchasing_Specification_VAMS.pdf', pages: 42 }, { name: 'Signal_List.xlsx', pages: 4 }],
@@ -94,13 +96,13 @@ export const INQUIRY_TEMPLATES = [
   {
     key: 'obsoletion',
     subject: 'MPC4 obsoletion notice — replacement options required',
-    route: 'Project', urgency: 'Normal', refPrefix: 'OBS', source: 'Existing Green customer',
+    route: 'Project', oppType: 'Upgrade', urgency: 'Normal', refPrefix: 'OBS', source: 'Existing Green customer',
     bu: 'Energy', segment: 'Thermal', product: 'MC Monitoring', suggestedOwner: 'RS',
     body: 'Dear Sir,\n\nWe are informed that the MPC4 card on our monitoring rack is being discontinued. Kindly advise the replacement path and quote for migrating both units before the next overhaul.\n\nPlease also confirm whether the existing field wiring and probes can be retained.',
     attachments: [{ name: 'Existing_Rack_Photos.pdf', pages: 6 }],
     summary: 'Obsoletion-driven migration enquiry — replacement path for a discontinued monitoring card across two units, wiring reuse to be confirmed.',
     fields: [
-      { group: 'RFQ', k: 'Opp type', v: 'Upgrade (obsoletion migration)', conf: 91, ev: 'Discontinuation of the installed card' },
+      { group: 'RFQ', k: 'Opp type', v: 'Upgrade', conf: 91, ev: 'Obsoletion migration — discontinuation of the installed card' },
       { group: 'RFQ', k: 'Scope', v: '2 units — card migration, wiring reuse to be assessed', conf: 84, ev: 'Email body' },
       { group: 'Known Project', k: 'Overhaul window', v: 'Next planned overhaul', conf: 72, ev: 'Email body — no date given' },
     ],
@@ -114,13 +116,13 @@ export const INQUIRY_TEMPLATES = [
   {
     key: 'gem-bid',
     subject: 'GeM bid — pre-bid clarification on vibration monitoring scope',
-    route: 'Project', urgency: 'Urgent', refPrefix: 'GEM', source: 'GeM / tender portal',
+    route: 'Project', oppType: 'Project', urgency: 'Urgent', refPrefix: 'GEM', source: 'GeM / tender portal',
     bu: 'Energy', segment: 'Thermal', product: 'ModAE', suggestedOwner: 'LJS',
     body: 'Sir,\n\nWith reference to the captioned bid, kindly confirm compliance to the technical specification and submit the pre-bid clarification in the prescribed format before the closing date.\n\nBid documents are available on the portal.',
     attachments: [{ name: 'Bid_Document.pdf', pages: 88 }, { name: 'Prebid_Format.docx', pages: 2 }],
     summary: 'Tender-portal bid with a pre-bid clarification window — compliance statement and the prescribed clarification format are due before the closing date.',
     fields: [
-      { group: 'RFQ', k: 'Opp type', v: 'Project (tender)', conf: 94, ev: 'Bid document on the tender portal' },
+      { group: 'RFQ', k: 'Opp type', v: 'Project', conf: 94, ev: 'Tender bid document on the tender portal' },
       { group: 'RFQ', k: 'Submission mode', v: 'Portal upload, prescribed pre-bid format', conf: 90, ev: 'Bid instructions' },
       { group: 'Known Project', k: 'Bid closing', v: 'Per the portal timetable', conf: 68, ev: 'Not restated in the mail' },
     ],
@@ -134,13 +136,13 @@ export const INQUIRY_TEMPLATES = [
   {
     key: 'amc-renewal',
     subject: 'Annual maintenance contract renewal — vibration monitoring system',
-    route: 'Service', urgency: 'Normal', refPrefix: 'AMC', source: 'Existing Green customer',
+    route: 'Service', oppType: 'Service', urgency: 'Normal', refPrefix: 'AMC', source: 'Existing Green customer',
     bu: 'Services', segment: 'Thermal', product: 'ModAE', suggestedOwner: 'RS',
     body: 'Dear Sir,\n\nOur AMC for the vibration monitoring system is due for renewal. Please quote for a two-year comprehensive contract covering preventive visits, calibration and breakdown support.\n\nKindly confirm the response time you can commit for a breakdown call.',
     attachments: [{ name: 'Previous_AMC_Scope.pdf', pages: 5 }],
     summary: 'AMC renewal for an installed vibration monitoring system — two-year comprehensive scope with preventive visits, calibration and breakdown support.',
     fields: [
-      { group: 'RFQ', k: 'Opp type', v: 'Service (AMC renewal)', conf: 95, ev: 'Renewal of the existing contract' },
+      { group: 'RFQ', k: 'Opp type', v: 'Service', conf: 95, ev: 'AMC renewal of the existing contract' },
       { group: 'RFQ', k: 'Scope', v: '2-year comprehensive — preventive, calibration, breakdown', conf: 92, ev: 'Email body' },
       { group: 'Known Project', k: 'Previous contract', v: 'Scope attached', conf: 89, ev: 'Attachment' },
     ],
@@ -154,13 +156,13 @@ export const INQUIRY_TEMPLATES = [
   {
     key: 'cms-upgrade',
     subject: 'Condition monitoring upgrade — enquiry for online CMS',
-    route: 'Project', urgency: 'Normal', refPrefix: 'CMS', source: 'Website enquiry',
+    route: 'Project', oppType: 'Upgrade', urgency: 'Normal', refPrefix: 'CMS', source: 'Website enquiry',
     bu: 'Energy', segment: 'Industrial', product: 'B&K', suggestedOwner: 'RS',
     body: 'Hello,\n\nWe currently do route-based vibration data collection and want to move critical machines to online condition monitoring. Roughly 18 machines — fans, pumps and a compressor train.\n\nPlease share an indicative budgetary offer and a typical architecture.',
     attachments: [],
     summary: 'Move from route-based collection to online condition monitoring on ~18 critical machines — budgetary offer and reference architecture requested.',
     fields: [
-      { group: 'RFQ', k: 'Opp type', v: 'Project (online CMS)', conf: 90, ev: 'Move from route-based to online monitoring' },
+      { group: 'RFQ', k: 'Opp type', v: 'Upgrade', conf: 90, ev: 'Online CMS — move from route-based to online monitoring' },
       { group: 'RFQ', k: 'Machine count', v: '~18 machines — fans, pumps, compressor train', conf: 86, ev: 'Email body' },
       { group: 'RFQ', k: 'Offer type', v: 'Budgetary', conf: 93, ev: 'Indicative offer requested' },
     ],
@@ -174,13 +176,13 @@ export const INQUIRY_TEMPLATES = [
   {
     key: 'commissioning-spares',
     subject: 'Commissioning spares and mandatory spares list',
-    route: 'Spares', urgency: 'Urgent', refPrefix: 'CSP', source: 'OEM referral',
+    route: 'Spares', oppType: 'Spares', urgency: 'Urgent', refPrefix: 'CSP', source: 'OEM referral',
     bu: 'Energy', segment: 'Hydro', product: 'ModAE', suggestedOwner: 'RS',
     body: 'Dear Sir,\n\nPlease quote for the commissioning spares and the two-year mandatory spares list for the monitoring system supplied under the ongoing project.\n\nMaterial is required at site before the commissioning window opens.',
     attachments: [{ name: 'Mandatory_Spares_List.xlsx', pages: 2 }],
     summary: 'Commissioning plus two-year mandatory spares for a monitoring system already supplied — site delivery needed before the commissioning window.',
     fields: [
-      { group: 'RFQ', k: 'Opp type', v: 'Spares (commissioning + mandatory)', conf: 94, ev: 'Spares list attached' },
+      { group: 'RFQ', k: 'Opp type', v: 'Spares', conf: 94, ev: 'Commissioning + mandatory spares list attached' },
       { group: 'RFQ', k: 'Coverage', v: '2-year mandatory spares', conf: 91, ev: 'Attachment header' },
       { group: 'Known Project', k: 'Linked supply', v: 'Monitoring system supplied under the ongoing project', conf: 87, ev: 'Email body' },
     ],
@@ -194,13 +196,13 @@ export const INQUIRY_TEMPLATES = [
   {
     key: 'air-gap-sensors',
     subject: 'Replacement of air gap sensors on generator',
-    route: 'Spares', urgency: 'Normal', refPrefix: 'AGS', source: 'Phone call',
+    route: 'Spares', oppType: 'Spares', urgency: 'Normal', refPrefix: 'AGS', source: 'Phone call',
     bu: 'Energy', segment: 'Hydro', product: 'ModAE', suggestedOwner: 'RS',
     body: 'Dear Sir,\n\nTwo of the air gap sensors on Unit 1 are reading erratically after the last outage. Please quote for replacement sensors with cables, and advise whether recalibration can be done in situ.\n\nUnit 1 is currently on bar.',
     attachments: [{ name: 'Trend_Screenshots.pdf', pages: 4 }],
     summary: 'Two air gap sensors reading erratically after an outage — replacement sensors with cables requested, in-situ recalibration to be advised.',
     fields: [
-      { group: 'RFQ', k: 'Opp type', v: 'Spares (sensor replacement)', conf: 93, ev: 'Replacement requested for two sensors' },
+      { group: 'RFQ', k: 'Opp type', v: 'Spares', conf: 93, ev: 'Sensor replacement requested for two air gap sensors' },
       { group: 'RFQ', k: 'Scope', v: '2 air gap sensors + cables, recalibration advice', conf: 90, ev: 'Email body' },
       { group: 'Known Project', k: 'Symptom', v: 'Erratic readings since the last outage', conf: 82, ev: 'Trend screenshots' },
     ],
@@ -212,6 +214,10 @@ export const INQUIRY_TEMPLATES = [
     next: ['Identify the installed sensor from the trend data', 'Quote the replacement with a recalibration option'],
   },
 ]
+
+// Step-1 choices for the simulate dialog: only the opportunity types that have
+// at least one enquiry shape, in the client's canonical Field List order.
+export const SIMULATED_OPP_TYPES = OPP_TYPES.filter(t => INQUIRY_TEMPLATES.some(tpl => tpl.oppType === t))
 
 // ---------------------------------------------------------------- generation
 const QUALITY_WEIGHTS = [['clean', 0.5], ['partial', 0.35], ['duplicate', 0.15]]
@@ -229,9 +235,12 @@ const between = (lo, hi, rng) => lo + Math.floor(rng() * (hi - lo + 1))
 // third click, which is the exact thing that made the old inbox look broken.
 // Keeping a short memory of what was just used costs nothing and removes the
 // visible repeat. Only the free-running path uses it — an explicit `variant`
-// stays deterministic for the tests.
+// stays deterministic for the tests. The memory is kept per template pool
+// (one per requested opp type, plus 'any'): freshPick caps the memory at
+// pool-size − 1, so letting a filtered 1-template pool share the unfiltered
+// pool's memory would truncate it to nothing.
 const RECENT_CAP = 4
-const recentTemplates = []
+const recentTemplates = {}
 const lastCustomer = {}
 
 function freshPick(list, rng, keyOf, recent) {
@@ -259,14 +268,16 @@ const fieldValue = (fields, re) => (fields || []).find(f => re.test(String(f.k |
 
 // One simulated inbound enquiry.
 //
-// `customerStatus` is the gate under test and is never randomised. `options`
-// carries existingLeads (so the duplicate variant can chase something real),
-// config (for routeOwner), and variant/quality/rng/seq so a test can pin one
-// exact permutation.
+// `customerStatus` is the gate under test and is never randomised; the same
+// goes for `options.oppType` when the operator picked one (null/unknown means
+// any). `options` also carries existingLeads (so the duplicate variant can
+// chase something real), config (for routeOwner), and variant/quality/rng/seq
+// so a test can pin one exact permutation.
 export function simulatedLead(customerStatus = 'Green', now = new Date(), options = {}) {
   const {
     existingLeads = [],
     config = {},
+    oppType = null,
     variant = null,
     quality: forcedQuality = null,
     rng = Math.random,
@@ -277,8 +288,13 @@ export function simulatedLead(customerStatus = 'Green', now = new Date(), option
     || SIMULATED_CUSTOMER_SCENARIOS[0]
   const status = scenario.status
   const ts = new Date(now).toISOString()
+  // An opp type with no template (or an unknown value) falls back to the full
+  // pool — "any" — rather than crashing on an empty list.
+  const typedPool = oppType ? INQUIRY_TEMPLATES.filter(t => t.oppType === oppType) : []
+  const templatePool = typedPool.length ? typedPool : INQUIRY_TEMPLATES
+  const poolKey = typedPool.length ? oppType : 'any'
   const template = variant == null
-    ? freshPick(INQUIRY_TEMPLATES, rng, t => t.key, recentTemplates)
+    ? freshPick(templatePool, rng, t => t.key, recentTemplates[poolKey] || (recentTemplates[poolKey] = []))
     : at(INQUIRY_TEMPLATES, variant)
   const pool = SIMULATED_CUSTOMERS[status]
   const recentForClass = lastCustomer[status] || (lastCustomer[status] = [])
@@ -292,8 +308,13 @@ export function simulatedLead(customerStatus = 'Green', now = new Date(), option
   // has `ref: ''`) used to be chaseable: `ref = chased.ref || … || ref` then
   // fell through to a freshly minted reference, and the result was a lead
   // labelled duplicateRisk:'High' that nothing could match to anything.
+  // When an opp type was picked, only chase leads on the same route — a chaser
+  // inherits the chased lead's route and facts (below), and a "Spares" click
+  // that produced a Project chaser would be the dialog lying to the operator.
+  const wantedRoute = typedPool.length ? routeForType(oppType) : null
   const chaseable = (existingLeads || [])
     .filter(l => l && l.id && l.subject && l.status !== 'Dropped' && (l.ref || l.rfqNumber))
+    .filter(l => !wantedRoute || l.route === wantedRoute)
   let quality = forcedQuality || pickQuality(rng)
   if (quality === 'duplicate' && !chaseable.length) quality = 'partial'
 
@@ -389,6 +410,7 @@ export function simulatedLead(customerStatus = 'Green', now = new Date(), option
     verification: ['Blue', 'Amber'].includes(status) ? { requestedAt: ts, requestedFor: status } : {},
     redFlag: status === 'Red',
     route,
+    oppType: chased ? (chased.oppType || null) : template.oppType,
     urgency,
     duplicateRisk: chased ? 'High' : 'Low',
     region: customer.region,
