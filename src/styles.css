@@ -952,12 +952,21 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
    column — widen the dialog and wrap the controls and cards into two columns
    so the whole thing fits on screen without scrolling. */
 .simulate-modal { width: min(620px, 92vw); max-height: calc(100vh - 120px); overflow-y: auto; }
+/* Same label/select treatment as .lead-decision-grid (its --ws-* tokens are
+   scoped to .lead-workspace, so the raw values are used here): without this
+   the labels and the browser-default select chrome each pick their own size
+   and weight, and the dialog reads as a random mix of dark and light text. */
 .sim-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin-bottom: 12px; }
-.sim-controls .afield { display: block; font-size: 11px; color: var(--text-muted); }
+.sim-controls .afield { display: flex; flex-direction: column; gap: 3px; font-size: 10.5px; font-weight: 700; color: #475569; }
 .sim-controls .afield.wide { grid-column: 1 / -1; }
-.sim-controls select { display: block; margin-top: 2px; width: 100%; }
+.sim-controls select {
+  width: 100%; min-width: 0; border: 1px solid var(--border-color); border-radius: 6px;
+  padding: 7px 8px; background: #fff; color: var(--text-main); font-size: 11.5px; font-weight: 400;
+}
+.sim-controls select:focus { outline: 2px solid var(--primary-border); border-color: var(--primary-accent); }
 .sim-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .sim-cards .form-card { text-align: left; cursor: pointer; }
+.sim-cards .form-card b { font-size: 12.5px; color: var(--text-main); }
 .sim-cards .form-card.wide { grid-column: 1 / -1; }
 .sim-cards .form-card .hint { display: block; margin-top: 3px; }
 @media (max-width: 560px) {
