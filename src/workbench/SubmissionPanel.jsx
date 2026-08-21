@@ -5,9 +5,9 @@ import { ErrBox } from '../ui.jsx'
 import { releaseState } from '../gates.js'
 import { Icon } from '../icons.jsx'
 import { canPriceProposal } from '../utils.js'
-import { docModel, docRoute } from '../proposalDoc.js'
+import { docModel, docRoute, enclosuresFor } from '../proposalDoc.js'
 import { buildPricing } from '../proposal/docProps.js'
-import { proposalWorkbookAttachment, standardTermsAttachment, serviceRateScheduleAttachment } from '../proposal/emailAttachments.js'
+import { proposalWorkbookAttachment, enclosureAttachments } from '../proposal/emailAttachments.js'
 
 // Customer send — only unlocked by an approved 'Final quote release'
 // and a three-point human-in-the-loop checklist.
@@ -55,8 +55,7 @@ export default function SubmissionPanel({ opp }) {
     setSending(true)
     setSendError('')
     try {
-      const terms = await standardTermsAttachment()
-      const rateSchedule = route === 'Services' ? [await serviceRateScheduleAttachment()] : []
+      const enclosures = await enclosureAttachments(route)
       const response = await fetch('/api/send-proposal-email', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -67,8 +66,7 @@ export default function SubmissionPanel({ opp }) {
           body: `Dear Sir/Madam,\n\nPlease find our approved Techno-Commercial Proposal ${opp.id}, revision ${p.revision}.\n\nBest regards,\nModAE India Pvt Ltd`,
           attachments: [
             proposalWorkbookAttachment({ p, opp, doc, priced, totalQty, lineQuoted, route }),
-            terms,
-            ...rateSchedule,
+            ...enclosures,
           ],
           cc: emailCc,
         }),
@@ -76,8 +74,8 @@ export default function SubmissionPanel({ opp }) {
       const result = await response.json().catch(() => ({}))
       if (!response.ok || !result.ok) throw new Error(result.error || 'Email could not be sent')
       store.addCommunication(opp.id, { to, cc: emailCc, subject, kind: 'submission', messageId: result.messageId, status: 'sent', attachmentNames: [
-        `${opp.id}_Proposal_Rev_${p.revision}.xlsx`, 'ModAE Standard Terms-Sales.pdf',
-        ...rateSchedule.map(a => a.filename),
+        `${opp.id}_Proposal_Rev_${p.revision}.xlsx`,
+        ...enclosures.map(a => a.filename),
       ] })
       store.updateOpportunity(opp.id, {
         milestone: 'Submitted',
@@ -96,7 +94,7 @@ export default function SubmissionPanel({ opp }) {
     ['To', to || 'Customer email required'],
     ['CC', emailCc],
     ['Subject', subject],
-    ['Attachments', `${opp.id}_Proposal_Rev_${p.revision}.xlsx · ModAE Standard Terms-Sales.pdf${route === 'Services' ? ' · ModAE Services Rate Schedule FY2025-26.pdf' : ''}`],
+    ['Attachments', [`${opp.id}_Proposal_Rev_${p.revision}.xlsx`, ...enclosuresFor(route).map(e => e.filename)].join(' · ')],
   ]
 
   return (

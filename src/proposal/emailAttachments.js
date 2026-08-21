@@ -1,6 +1,13 @@
 import { proposalWorkbookBase64 } from './excelExport.js'
+import { ENCLOSURES, enclosuresFor } from '../proposalDoc.js'
 
 export const STANDARD_TERMS_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/ModAE Standard Terms-Sales.pdf', import.meta.url).href
+export const SERVICE_RATE_SCHEDULE_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/ModAE Services Rate Schedule FY2025-26.pdf', import.meta.url).href
+
+const ENCLOSURE_URLS = {
+  [ENCLOSURES.gtc.filename]: STANDARD_TERMS_URL,
+  [ENCLOSURES.serviceRates.filename]: SERVICE_RATE_SCHEDULE_URL,
+}
 
 export async function blobAttachment(blob, filename, mimeType) {
   const bytes = new Uint8Array(await blob.arrayBuffer())
@@ -9,21 +16,15 @@ export async function blobAttachment(blob, filename, mimeType) {
   return { filename, mimeType, contentBase64: btoa(binary) }
 }
 
-export async function standardTermsAttachment() {
-  const response = await fetch(STANDARD_TERMS_URL)
-  if (!response.ok) throw new Error('Standard Terms PDF could not be loaded')
-  return blobAttachment(await response.blob(), 'ModAE Standard Terms-Sales.pdf', 'application/pdf')
-}
-
-export const SERVICE_RATE_SCHEDULE_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/ModAE Services Rate Schedule FY2025-26.pdf', import.meta.url).href
-
-// Services proposals only — Biji, 20 Aug review: the rate schedule goes with
-// every services job, domestic or international; spares and project proposals
-// carry the Standard Terms alone.
-export async function serviceRateScheduleAttachment() {
-  const response = await fetch(SERVICE_RATE_SCHEDULE_URL)
-  if (!response.ok) throw new Error('Services Rate Schedule PDF could not be loaded')
-  return blobAttachment(await response.blob(), 'ModAE Services Rate Schedule FY2025-26.pdf', 'application/pdf')
+// The route decides the standard enclosures (proposalDoc.enclosuresFor): the
+// GTC with everything, the rate schedule with services only. Both send paths
+// call this, so what goes out can never drift from the rule.
+export function enclosureAttachments(route) {
+  return Promise.all(enclosuresFor(route).map(async enclosure => {
+    const response = await fetch(ENCLOSURE_URLS[enclosure.filename])
+    if (!response.ok) throw new Error(`${enclosure.label} PDF could not be loaded`)
+    return blobAttachment(await response.blob(), enclosure.filename, 'application/pdf')
+  }))
 }
 
 export function proposalWorkbookAttachment(args) {

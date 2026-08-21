@@ -51,32 +51,39 @@ test('preview renders the real document, not a text stub', () => {
   assert.match(proposal, /fetch\('\/api\/send-proposal-email'/)
   assert.match(proposal, /attachments: \[/)
   assert.match(proposal, /proposalWorkbookAttachment/)
-  assert.match(proposal, /standardTermsAttachment/)
+  assert.match(proposal, /enclosureAttachments/)
 })
 
 test('the attachment claim matches what actually happens', () => {
-  // Services carry a third attachment (the Rate Schedule); everything else two.
-  assert.match(proposal, /Send with \$\{route === 'Services' \? 3 : 2\} attachments/)
+  // The count derives from the enclosure rule, never from a hand-kept number.
+  assert.match(proposal, /Send with \$\{1 \+ enclosuresFor\(route\)\.length\} attachments/)
   assert.doesNotMatch(proposal, /Proposal PDF attachment \*/)
   assert.match(proposal, /Save proposal PDF/, 'the user must be able to produce the PDF here')
-  assert.match(proposal, /ModAE Standard Terms-Sales\.pdf/)
   assert.doesNotMatch(proposal, /!proposalPdf/, 'sending must not depend on a manually selected PDF')
 })
 
 // Biji, 20 Aug review: the Services Rate Schedule goes with every services
 // proposal — domestic or international — and never with spares or projects.
-// The Standard Terms go with everything.
-test('service proposals carry the rate schedule, others do not', () => {
+// The Standard Terms go with everything. One rule, one place.
+test('service proposals carry the rate schedule, others do not', async () => {
+  const { ENCLOSURES, enclosuresFor } = await import('../src/proposalDoc.js')
+  assert.deepEqual(enclosuresFor('Services').map(e => e.filename),
+    ['ModAE Standard Terms-Sales.pdf', 'ModAE Services Rate Schedule FY2025-26.pdf'])
+  assert.deepEqual(enclosuresFor('Spares').map(e => e.filename), ['ModAE Standard Terms-Sales.pdf'])
+  assert.deepEqual(enclosuresFor('Project').map(e => e.filename), ['ModAE Standard Terms-Sales.pdf'])
+  assert.ok(ENCLOSURES.gtc.label.includes('General Terms'))
+  // Both send paths draw from the rule rather than keeping their own ternary.
   for (const file of [proposal, submission]) {
-    assert.match(file, /serviceRateScheduleAttachment/)
-    assert.match(file, /route === 'Services' \? \[await serviceRateScheduleAttachment\(\)\] : \[\]/)
-    assert.match(file, /\.\.\.rateSchedule/)
+    assert.match(file, /enclosureAttachments\(route\)/)
+    assert.match(file, /\.\.\.enclosures/)
+    assert.doesNotMatch(file, /serviceRateScheduleAttachment/)
   }
   const attachments = read('src/proposal/emailAttachments.js')
-  assert.match(attachments, /ModAE Services Rate Schedule FY2025-26\.pdf/)
-  assert.match(attachments, /SERVICE_RATE_SCHEDULE_URL/)
-  assert.ok(fs.existsSync(new URL('../branding/Further Inputs/Further Inputs/Proposals and T&Cs/ModAE Services Rate Schedule FY2025-26.pdf', import.meta.url)),
-    'the Rate Schedule PDF must ship with the app')
+  assert.match(attachments, /enclosuresFor\(route\)/)
+  for (const enclosure of enclosuresFor('Services')) {
+    assert.ok(fs.existsSync(new URL(`../branding/Further Inputs/Further Inputs/Proposals and T&Cs/${enclosure.filename}`, import.meta.url)),
+      `${enclosure.filename} must ship with the app`)
+  }
 })
 
 test('the sent email is logged against the opportunity', () => {
@@ -97,5 +104,5 @@ test('every outbound email surface exposes sender and copy recipients', () => {
   assert.match(submission, /cc: emailCc/)
   assert.match(read('api/send-proposal-email.js'), /mimeMessage\(\{ from: account, to, cc, subject, body, attachments \}\)/)
   assert.match(submission, /proposalWorkbookAttachment/)
-  assert.match(submission, /standardTermsAttachment/)
+  assert.match(submission, /enclosureAttachments/)
 })

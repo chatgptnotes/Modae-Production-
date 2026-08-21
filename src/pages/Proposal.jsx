@@ -6,13 +6,13 @@ import { useFormulaBar } from '../formulabar.jsx'
 import { Icon, ModaeImageLogo } from '../icons.jsx'
 import { Modal } from '../ui.jsx'
 import { oppBlockers, isBlocked } from '../gates.js'
-import { docModel, docRoute, MODAE_COMPANY } from '../proposalDoc.js'
+import { docModel, docRoute, enclosuresFor, MODAE_COMPANY } from '../proposalDoc.js'
 import DocEditor from '../proposal/DocEditor.jsx'
 import PrintDoc from '../proposal/PrintDoc.jsx'
 import { signalsFromBom, countSignals, rackLayout, UMM_CHANNELS, RACK_SLOTS } from '../rack.js'
 import { normalizeProposal, buildPricing } from '../proposal/docProps.js'
 import ProposalSheetEditor from '../proposal/ProposalSheetEditor.jsx'
-import { proposalWorkbookAttachment, standardTermsAttachment, serviceRateScheduleAttachment } from '../proposal/emailAttachments.js'
+import { proposalWorkbookAttachment, enclosureAttachments } from '../proposal/emailAttachments.js'
 import { downloadProposalXlsx } from '../proposal/excelExport.js'
 
 const ROUTE_TABS = {
@@ -324,16 +324,14 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
     setEmailBusy(true)
     setEmailError('')
     try {
-      const termsFile = await standardTermsAttachment()
-      const rateSchedule = route === 'Services' ? [await serviceRateScheduleAttachment()] : []
+      const enclosures = await enclosureAttachments(route)
       const response = await fetch('/api/send-proposal-email', {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           oppId, to: emailTo.trim(), cc: emailCc.trim(), subject: emailSubject, body: emailBody,
           attachments: [
             proposalWorkbookAttachment({ p, opp, doc, priced, totalQty, lineQuoted, route }),
-            termsFile,
-            ...rateSchedule,
+            ...enclosures,
           ],
         }),
       })
@@ -342,8 +340,8 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
       store.addCommunication(oppId, {
         to: emailTo.trim(), cc: emailCc.trim(), subject: emailSubject, kind: 'proposal-email',
         messageId: result.messageId, status: 'sent',
-        attachmentNames: [`${oppId}_Proposal_Rev_${p.revision}.xlsx`, 'ModAE Standard Terms-Sales.pdf',
-          ...rateSchedule.map(a => a.filename)],
+        attachmentNames: [`${oppId}_Proposal_Rev_${p.revision}.xlsx`,
+          ...enclosures.map(a => a.filename)],
       })
       setEmailOpen(false)
     } catch (error) {
@@ -832,7 +830,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           )}
           <div className="forms-actions">
             <button className="primary" disabled={emailBusy || !emailTo.trim()} onClick={sendEmail}>
-              <Icon name="send" size={13} /> {emailBusy ? 'Sending…' : `Send with ${route === 'Services' ? 3 : 2} attachments`}
+              <Icon name="send" size={13} /> {emailBusy ? 'Sending…' : `Send with ${1 + enclosuresFor(route).length} attachments`}
             </button>
             <button onClick={() => setEmailOpen(false)}>Cancel</button>
           </div>

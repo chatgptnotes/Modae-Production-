@@ -706,6 +706,26 @@ export function docRoute(p, opp) {
 
 export const docLayout = (p, opp) => DOC_ROUTES[docRoute(p, opp)] || DOC_ROUTES.Project
 
+// The standard documents that accompany every outgoing proposal — enclosures,
+// never "annexes" (annexes are the opt-in technical sheets inside the
+// document). The GTC goes with everything; the rate schedule with services
+// only, domestic or international (Biji, 20 Aug review). Both email send
+// paths derive their attachment lists from here so the rule cannot drift.
+// The samples show no printed Encl: list, so the letter itself names nothing.
+export const ENCLOSURES = Object.freeze({
+  gtc: Object.freeze({
+    filename: 'ModAE Standard Terms-Sales.pdf',
+    label: 'General Terms & Conditions for Supply of Goods and Services',
+  }),
+  serviceRates: Object.freeze({
+    filename: 'ModAE Services Rate Schedule FY2025-26.pdf',
+    label: 'Engineering Services Rate Schedule FY2025-26',
+  }),
+})
+
+export const enclosuresFor = route =>
+  route === 'Services' ? [ENCLOSURES.gtc, ENCLOSURES.serviceRates] : [ENCLOSURES.gtc]
+
 // The keys docModel can auto-draft — used by the editor's "reset to auto-draft".
 export const DOC_FIELDS = [
   'letterSalutation', 'letterBody', 'letterClose', 'letterCc',
