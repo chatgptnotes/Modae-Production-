@@ -2,7 +2,8 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { STAGES, CLOSE_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES } from '../seed.js'
-import { fmt, mmmYY, ddMmmYY, exportCSV, stageClass, canViewCommercial, canPriceProposal, productList, productLabel, sameCustomer } from '../utils.js'
+import { fmt, mmmYY, ddMmmYY, stageClass, canViewCommercial, canPriceProposal, productList, productLabel, sameCustomer } from '../utils.js'
+import { downloadTableXlsx } from '../proposal/excelExport.js'
 import { useFormulaBar } from '../formulabar.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { nextActionWith } from '../gates.js'
@@ -287,8 +288,11 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     : COLS.filter(col => canPriceProposal(store.role)
       ? !['cogsK', 'gmK', 'gmPct'].includes(col.key)
       : !COMMERCIAL_COLS.has(col.key))
-  const exportRows = () => exportCSV(
-    'Sales_Pipeline_Report.csv',
+  // A real .xlsx rather than CSV: CSV carries no formatting, so long text
+  // (opportunity names, remarks) landed unwrapped in one endless row.
+  const exportRows = () => downloadTableXlsx(
+    'Sales_Pipeline_Report.xlsx',
+    'Pipeline',
     ['Sl', ...exportCols.map(col => col.label)],
     rows.map((o, index) => [index + 1, ...exportCols.map(col => {
       switch (col.key) {

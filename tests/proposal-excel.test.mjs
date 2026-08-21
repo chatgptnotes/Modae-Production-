@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { proposalWorkbookRows, buildProposalWorkbook } from '../src/proposal/excelExport.js'
+import { proposalWorkbookRows, buildProposalWorkbook, buildTableWorkbook } from '../src/proposal/excelExport.js'
 
 const input = {
   p: {
@@ -38,4 +38,21 @@ test('Excel text cells wrap and long rows grow', () => {
   assert.ok(cover['!rows'][19].hpt > 20)
   assert.equal(pricing.B3.s.alignment.wrapText, true)
   assert.ok(pricing['!rows'][3].hpt >= 20)
+})
+
+// The tracker's pipeline export — the report the client opens in Excel.
+test('the table workbook wraps long text inside capped columns', () => {
+  const headers = ['Sl', 'Opportunity Name/Description', 'Value']
+  const rows = [
+    [1, 'Gandikota PSP — Vibration & Air Gap Monitoring, 7 Units (5×300MW) + (2×150MW)', 100],
+    [2, 'Short', 2380],
+  ]
+  const sheet = buildTableWorkbook('Pipeline', headers, rows).Sheets.Pipeline
+  const widths = sheet['!cols'].map(c => c.wch)
+  assert.equal(widths[1], 42, 'a long text column is capped so it wraps instead of sprawling')
+  assert.ok(widths[0] >= 10 && widths[0] < 42, 'short columns stay tight')
+  assert.equal(sheet.B2.s.alignment.wrapText, true, 'text cells wrap')
+  assert.notEqual(sheet.C2.s.alignment.wrapText, true, 'numbers are not wrapped')
+  assert.ok(sheet['!rows'][1].hpt > sheet['!rows'][2].hpt, 'the wrapped row grows taller than the short one')
+  assert.equal(sheet.A1.s.font.bold, true, 'the header row is bold')
 })

@@ -81,6 +81,29 @@ const styleSheet = (sheet, rows, widths, headerRows = []) => {
   }
 }
 
+// A generic one-sheet report — the tracker's "Extract to Excel". Column widths
+// follow the content so short columns stay tight while long text (opportunity
+// names, remarks) wraps inside a capped column instead of sprawling across the
+// sheet in one endless row.
+const contentWidths = (headers, rows) => headers.map((h, i) => {
+  const longest = [headers, ...rows].reduce((max, row) =>
+    Math.max(max, ...String(clean(row[i])).split('\n').map(line => line.length)), 0)
+  return Math.max(10, Math.min(42, longest + 2))
+})
+
+export function buildTableWorkbook(sheetName, headers, rows) {
+  const all = [headers, ...rows]
+  const workbook = XLSX.utils.book_new()
+  const sheet = XLSX.utils.aoa_to_sheet(all)
+  styleSheet(sheet, all, contentWidths(headers, rows), [0])
+  XLSX.utils.book_append_sheet(workbook, sheet, sheetName)
+  return workbook
+}
+
+export function downloadTableXlsx(filename, sheetName, headers, rows) {
+  XLSX.writeFile(buildTableWorkbook(sheetName, headers, rows), filename)
+}
+
 export function buildProposalWorkbook(args) {
   const { cover, pricing } = proposalWorkbookRows(args)
   const workbook = XLSX.utils.book_new()
