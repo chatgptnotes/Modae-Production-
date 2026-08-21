@@ -625,6 +625,23 @@ export function StoreProvider({ children }) {
         : { ...s, customers: [...s.customers, cust] })
     },
 
+    // Bulk import of the client's existing customer list (the Customer
+    // Master's Excel/CSV upload). Rows whose name already exists are skipped —
+    // a file never overwrites the master. Admin-only, one audit entry.
+    importCustomers(rows, reason = '') {
+      setState(s => {
+        if (!ROLES[s.role]?.admin) return s
+        const have = new Set(s.customers.map(c => c.name.toLowerCase()))
+        const fresh = (rows || []).filter(r => r?.name && !have.has(String(r.name).toLowerCase()))
+        if (!fresh.length) return s
+        const names = fresh.map(c => c.name).slice(0, 8).join(', ') + (fresh.length > 8 ? '…' : '')
+        return withAudit(
+          { ...s, customers: [...s.customers, ...fresh] },
+          'Customers imported', `${fresh.length} added`,
+          [names, reason].filter(Boolean).join(' · '))
+      })
+    },
+
     setRole(role) {
       // Audit against the pre-switch state so the entry records who switched.
       // External (customer) accounts can never escalate to an internal persona.

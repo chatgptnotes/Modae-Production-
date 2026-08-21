@@ -1,8 +1,9 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { useStore } from '../store.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { isAdminRole } from '../utils.js'
 import { customerHealth } from '../insights.js'
+import { parseCustomerFile } from '../customerImport.js'
 import { Icon } from '../icons.jsx'
 import { Modal, ErrBox } from '../ui.jsx'
 
@@ -107,12 +108,127 @@ function EditCustomer({ customer, canEditDirect, onClose }) {
   )
 }
 
+// Manual entry of one existing customer — same audited, duplicate-safe path
+// as the file upload (store.importCustomers), just for a single row.
+function AddCustomer({ onClose }) {
+  const store = useStore()
+  const [form, setForm] = useState({ name: '', category: 'EUC', status: 'Green', kyc: 'Valid', payment: '—' })
+  const [err, setErr] = useState('')
+  const exists = form.name.trim()
+    && store.customers.some(c => c.name.toLowerCase() === form.name.trim().toLowerCase())
+
+  const submit = e => {
+    e.preventDefault()
+    if (!form.name.trim()) { setErr('A customer name is required.'); return }
+    if (exists) { setErr('This customer is already in the master.'); return }
+    store.importCustomers([{ ...form, name: form.name.trim() }], 'added manually')
+    onClose()
+  }
+
+  return (
+    <Modal title="Add existing customer" onClose={onClose}>
+      <form onSubmit={submit} className="drawer-form">
+        <label>Customer name</label>
+        <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
+          placeholder="e.g. Adani Power Ltd" autoFocus style={{ width: '100%' }} />
+        <div className="dgrid2" style={{ marginTop: 8 }}>
+          {FIELDS.map(([k, label, opts]) => (
+            <div key={k}>
+              <label>{label}</label>
+              {opts
+                ? (
+                  <select value={form[k]} onChange={e => setForm({ ...form, [k]: e.target.value })}>
+                    {opts.map(o => <option key={o} value={o}>{o}</option>)}
+                  </select>
+                )
+                : (
+                  <input value={form[k]} onChange={e => setForm({ ...form, [k]: e.target.value })}
+                    placeholder="e.g. Avg 60 days" />
+                )}
+            </div>
+          ))}
+        </div>
+        {err && <ErrBox>{err}</ErrBox>}
+        <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
+          <button type="button" onClick={onClose}>Cancel</button>
+          <button className="primary" type="submit"><Icon name="check" size={13} /> Add to master</button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+// Preview of a parsed upload — nothing lands in the master until the human
+// confirms. Rows already in the master are shown but never overwritten.
+function ImportPreview({ rows, fileName, onClose }) {
+  const store = useStore()
+  const have = new Set(store.customers.map(c => c.name.toLowerCase()))
+  const fresh = rows.filter(r => !have.has(r.name.toLowerCase()))
+
+  const confirm = () => {
+    store.importCustomers(fresh, `uploaded from ${fileName}`)
+    onClose()
+  }
+
+  return (
+    <Modal title={`Import customers — ${fileName}`} onClose={onClose} wide>
+      <p className="hint">
+        {rows.length} row{rows.length === 1 ? '' : 's'} read · {fresh.length} new ·{' '}
+        {rows.length - fresh.length} already in the master (kept as they are, never overwritten).
+      </p>
+      <div className="sheet-wrap" style={{ maxHeight: '46vh', overflowY: 'auto' }}>
+        <table className="sheet">
+          <thead><tr><th>Customer</th><th>Category</th><th>Status</th><th>KYC</th><th>Payment</th><th></th></tr></thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.name}>
+                <td>{r.name}</td>
+                <td>{r.category}</td>
+                <td><span className={`pill ${r.status}`}>{r.status}</span></td>
+                <td>{r.kyc}</td>
+                <td>{r.payment}</td>
+                <td>{have.has(r.name.toLowerCase())
+                  ? <span className="pill Blue">Exists — skipped</span>
+                  : <span className="pill Green">New</span>}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
+        <button onClick={onClose}>Cancel</button>
+        <button className="primary" disabled={!fresh.length} onClick={confirm}>
+          <Icon name="check" size={13} /> Import {fresh.length} customer{fresh.length === 1 ? '' : 's'}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
 export default function Customers() {
   const store = useStore()
   const drawer = useDrawer()
   const [editing, setEditing] = useState(null) // customer name
+  const [adding, setAdding] = useState(false)
+  const [preview, setPreview] = useState(null) // { rows, fileName }
+  const [uploadErr, setUploadErr] = useState('')
+  const fileRef = useRef(null)
   const canEditDirect = isAdminRole(store.role)
   const customer = store.customers.find(c => c.name === editing)
+
+  const onFile = async e => {
+    const file = e.target.files?.[0]
+    e.target.value = '' // same file can be picked again
+    if (!file) return
+    setUploadErr('')
+    try {
+      const rows = parseCustomerFile(await file.arrayBuffer())
+      if (!rows.length) { setUploadErr('No customer rows found — the sheet needs a name/customer column.'); return }
+      setPreview({ rows, fileName: file.name })
+    } catch {
+      setUploadErr('The file could not be read — an .xlsx, .xls or .csv export is expected.')
+    }
+  }
   // A change already in flight — don't let the same row be requested twice.
   const pendingFor = name => store.approvals.some(
     a => a.status === 'Pending' && a.type === 'Customer master change' && a.customerName === name)
@@ -129,8 +245,17 @@ export default function Customers() {
           {' '}New customers are flagged Blue until verified.
         </span>
         <span className="spacer" />
-        <button onClick={() => alert('Admin upload (mock): periodically upload the customer extract from the accounting system; statuses refresh from that file.')}>Upload accounting extract</button>
+        {canEditDirect && (
+          <>
+            <button onClick={() => setAdding(true)}><Icon name="plus" size={13} /> Add customer</button>
+            <button onClick={() => fileRef.current?.click()}>
+              <Icon name="folder" size={13} /> Upload customer list
+            </button>
+            <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={onFile} />
+          </>
+        )}
       </div>
+      {uploadErr && <ErrBox>{uploadErr}</ErrBox>}
       <div className="sheet-wrap" style={{ maxWidth: 980 }}>
         <table className="sheet">
           <thead><tr><th>Customer</th><th>Category</th><th>Status</th><th>KYC</th><th>Payment Pattern</th><th>Health</th><th></th></tr></thead>
@@ -184,6 +309,8 @@ export default function Customers() {
       {customer && (
         <EditCustomer customer={customer} canEditDirect={canEditDirect} onClose={() => setEditing(null)} />
       )}
+      {adding && <AddCustomer onClose={() => setAdding(false)} />}
+      {preview && <ImportPreview rows={preview.rows} fileName={preview.fileName} onClose={() => setPreview(null)} />}
     </div>
   )
 }
