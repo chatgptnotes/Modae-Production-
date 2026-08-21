@@ -1699,8 +1699,10 @@ export default function Inbox() {
       {simulationOpen && (
         <Modal title="Simulate incoming inquiry" className="simulate-modal" onClose={() => setSimulationOpen(false)}>
           <p className="hint">
-            Choose the project type first, then the opportunity type. The customer class
-            buttons below decide the simulated lead that gets generated.
+            Choose the project type first, then the opportunity type. Optionally pin an
+            enquiry shape and an extraction quality, and decide whether the inquiry
+            registers an opportunity immediately or stops in the inbox as a New lead.
+            Clicking a customer class below generates it.
           </p>
           <div className="sim-controls">
             <label className="afield">Project type
