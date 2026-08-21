@@ -33,13 +33,16 @@ export default function Register() {
 
   // Prefills derived from the AI extraction.
   const ownerFieldV = fields.find(f => /owner/i.test(f.k) && f.state === 'accepted')?.v || ''
-  const suggested = guessFromList(ownerFieldV, OWNERS) || lead?.suggestedOwner || ownerForOppType(lead?.route === 'Spares' ? 'Spares' : lead?.route === 'Service' ? 'Service' : 'Project')
+  const oppTypeSeed = OPP_TYPES.includes(lead?.oppType)
+    ? lead.oppType
+    : (lead?.route === 'Service' ? 'Service' : lead?.route === 'Project' ? 'Project' : 'Spares')
+  const suggested = guessFromList(ownerFieldV, OWNERS) || lead?.suggestedOwner || ownerForOppType(oppTypeSeed)
   const typeV = fieldVal(fields, /opp type/i)
   const buSegV = fieldVal(fields, /bu|segment/i)
   const allText = fields.map(f => f.v).join(' ') + ' ' + (lead?.subject || '')
 
   const [owner, setOwner] = useState(suggested)
-  const [oppType, setOppType] = useState(guessFromList(typeV, OPP_TYPES) || (lead?.route === 'Project' ? 'Project' : lead?.route === 'Service' ? 'Service' : 'Spares'))
+  const [oppType, setOppType] = useState(guessFromList(typeV, OPP_TYPES) || oppTypeSeed)
   const [bu, setBu] = useState(guessFromList(buSegV, BUS) || 'Energy')
   const [segment, setSegment] = useState(guessFromList(buSegV, SEGMENTS) || 'Others')
   const [product, setProduct] = useState(guessFromList(allText, PRODUCTS) || 'Various')
@@ -81,10 +84,12 @@ export default function Register() {
   // copy read no approvals, so it could never clear and an approved Red lead
   // could never be registered.
   const verificationBlockers = leadVerificationBlockers(lead, leadCustomerStatus, { redCleared })
+  const missingInfo = lead?.ai?.missing || []
 
   const blockers = []
   if (lead.status !== 'Qualified') blockers.push('Lead is not Qualified yet — qualify it in the inbox first')
   pendingLow.forEach(f => blockers.push(`Low-confidence field unresolved: ${f.k} (${f.conf}%)`))
+  missingInfo.forEach(item => blockers.push(`Missing information: ${item}`))
   verificationBlockers.forEach(item => blockers.push(item))
   const blocked = blockers.length > 0
 

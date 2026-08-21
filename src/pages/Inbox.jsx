@@ -15,13 +15,12 @@ import AttachmentViewer from '../AttachmentViewer.jsx'
 import { findDuplicates } from '../insights.js'
 import { leadWorkflow } from '../leadWorkflow.js'
 import { isFastTrackLead, routeOwner, supplyMissing } from '../leadRules.js'
+import { PROJECT_TYPES, oppTypesForProjectType, simulatedLead, simulatedCount, SIMULATED_CUSTOMER_SCENARIOS } from '../simulatedLeads.js'
 import {
   QUOTE_FEE_DOCUMENTS, answeredPatch, clarificationItems, clarificationKindFor,
   clarificationSender, draftClarification, draftPatch, senderLabel, sentPatch,
 } from '../leadClarification.js'
 import { BLUE_KYC_ITEMS, leadVerificationComplete, verificationDeadline, verificationItem, redClearanceFor, isRedCleared } from '../leadVerification.js'
-import { SIMULATED_CUSTOMER_SCENARIOS, simulatedLead, simulatedCount } from '../simulatedLeads.js'
-
 // Common-mailbox lead inbox: AI parses each inquiry, a human decides whether it
 // becomes an opportunity (Qualify → registration / intake form) or is dropped.
 const PILL = { New: 'Blue', Qualified: 'Amber', Dropped: 'Red', Converted: 'Green' }
@@ -545,7 +544,9 @@ function AiLeadDetail({ lead }) {
   const initialDecisions = () => ({
     region: lead.region || lead.location || leadFieldValue(ai.fields, /location|region/i),
     owner: lead.assignedOwner || lead.suggestedOwner || routeOwner(lead.region || lead.location || leadFieldValue(ai.fields, /location|region/i), store.config, OWNERS[0]),
-    oppType: leadFieldValue(ai.fields, /opp type/i) || (lead.route === 'Service' ? 'Service' : lead.route === 'Project' ? 'Project' : 'Spares'),
+    oppType: OPP_TYPES.includes(lead.oppType)
+      ? lead.oppType
+      : leadFieldValue(ai.fields, /opp type/i) || (lead.route === 'Service' ? 'Service' : lead.route === 'Project' ? 'Project' : 'Spares'),
     customerStatus: lead.customerStatus || customerStatusForLead(lead, store.customers),
     bu: leadFieldValue(ai.fields, /^bu$/i) || 'Energy',
     segment: leadFieldValue(ai.fields, /segment/i) || 'Others',
@@ -664,6 +665,7 @@ function AiLeadDetail({ lead }) {
   const rule = (store.config.ownershipRules || []).find(r => r.owner === lead.suggestedOwner)
 
   const qualifyBlocked = isRed && !redCleared
+  const registrationBlocked = !!(ai.missing || []).length || pendingLow.length > 0
   const canAct = !['Converted', 'Dropped'].includes(lead.status)
 
   // ---- Clarification mail: AI drafts, a human sends -----------------------
@@ -770,6 +772,7 @@ function AiLeadDetail({ lead }) {
       ownerOverrideReason: isOverride ? lead.ownerOverrideReason.trim() : '',
       fastTrack: isFastTrackLead({ ...lead, customerStatus: decisionDraft.customerStatus }, store.config, customer),
       fastTrackStartedAt: isFastTrackLead({ ...lead, customerStatus: decisionDraft.customerStatus }, store.config, customer) ? (lead.fastTrackStartedAt || new Date().toISOString()) : lead.fastTrackStartedAt,
+      oppType: decisionDraft.oppType,
       route: routeForType(decisionDraft.oppType),
       customerStatus: decisionDraft.customerStatus,
       customerClassifiedAt: lead.customerClassifiedAt || new Date().toISOString(),
@@ -1210,6 +1213,13 @@ function AiLeadDetail({ lead }) {
               Each must be accepted, edited or rejected.
             </WarnBox>
           )}
+          {lead.status === 'Qualified' && (ai.missing || []).length > 0 && (
+            <WarnBox>
+              <b>Registration still blocked</b> until the missing information is filled in:
+              <ul>{ai.missing.map((item, i) => <li key={i}>{item}</li>)}</ul>
+              Use the Add button above to answer each item before continuing.
+            </WarnBox>
+          )}
         </div>
 
         <footer className="ws-foot">
@@ -1263,14 +1273,23 @@ function AiLeadDetail({ lead }) {
           )}
           {lead.status === 'Qualified' && (
             <>
-              <button className="primary ws-action" disabled={pendingLow.length > 0}
-                title={pendingLow.length ? 'Resolve the low-confidence fields first' : undefined}
+              <button className="primary ws-action" disabled={registrationBlocked}
+                title={registrationBlocked
+                  ? (ai.missing || []).length > 0
+                    ? 'Fill the missing information first'
+                    : 'Resolve the low-confidence fields first'
+                  : undefined}
                 onClick={() => nav('/register/' + lead.id)}>
                 Continue to registration <Icon name="arrowRight" size={14} />
               </button>
               {pendingLow.length > 0 && (
                 <p className="ws-foot-note">
                   Blocked — {pendingLow.length} field{pendingLow.length > 1 ? 's' : ''} below the {med}% confidence threshold.
+                </p>
+              )}
+              {lead.status === 'Qualified' && (ai.missing || []).length > 0 && (
+                <p className="ws-foot-note">
+                  Blocked — {ai.missing.length} missing item{ai.missing.length > 1 ? 's' : ''} still need to be filled.
                 </p>
               )}
             </>
@@ -1448,6 +1467,8 @@ export default function Inbox() {
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [pasteOpen, setPasteOpen] = useState(false)
   const [simulationOpen, setSimulationOpen] = useState(false)
+  const [simProjectType, setSimProjectType] = useState(PROJECT_TYPES[0])
+  const [simOppType, setSimOppType] = useState(() => oppTypesForProjectType(PROJECT_TYPES[0])[0] || PROJECT_TYPES[0])
   // Sales owners see only their assigned leads by default; a "Show all" toggle
   // reveals the team's. Managers (LJS/AH) and admins always see everything.
   // The toggle lives in the store, not in component state: as component state a
@@ -1561,8 +1582,19 @@ export default function Inbox() {
     selectedIds.forEach(id => store.updateLead(id, { readAt: read ? new Date().toISOString() : null }))
     setSelectedIds(new Set())
   }
-  const createSimulatedLead = status => {
-    const lead = simulatedLead(status, new Date(), { existingLeads: store.leads, config: store.config })
+  const simOppOptions = oppTypesForProjectType(simProjectType)
+  const activeSimOppType = simOppOptions.includes(simOppType) ? simOppType : (simOppOptions[0] || simProjectType)
+
+  const createSimulatedLead = (status, options = {}) => {
+    const projectType = options.projectType || simProjectType
+    const oppType = options.oppType || activeSimOppType
+    const lead = simulatedLead(status, new Date(), {
+      existingLeads: store.leads,
+      config: store.config,
+      projectType,
+      oppType,
+      quality: options.quality || null,
+    })
     store.addLead(lead)
     // Owner now comes from the L-05-AI region rules, so a generated lead can
     // land with someone else. Without this the sales owner's filtered list
@@ -1571,8 +1603,13 @@ export default function Inbox() {
     setSimulationOpen(false)
     nav('/inbox/' + lead.id)
   }
-  const createRandomSimulatedLead = () =>
-    createSimulatedLead(SIMULATED_CUSTOMER_SCENARIOS[Math.floor(Math.random() * SIMULATED_CUSTOMER_SCENARIOS.length)].status)
+  const createRandomSimulatedLead = () => {
+    const projectType = PROJECT_TYPES[Math.floor(Math.random() * PROJECT_TYPES.length)]
+    const oppTypes = oppTypesForProjectType(projectType)
+    const oppType = oppTypes[Math.floor(Math.random() * oppTypes.length)] || projectType
+    const status = SIMULATED_CUSTOMER_SCENARIOS[Math.floor(Math.random() * SIMULATED_CUSTOMER_SCENARIOS.length)].status
+    createSimulatedLead(status, { projectType, oppType, quality: Math.random() < 0.33 ? 'partial' : null })
+  }
   const simulatedLeadCount = simulatedCount(store.leads, store.leadArchive)
   const clearSimulated = () => {
     if (!window.confirm(`Clear ${simulatedLeadCount} simulated lead${simulatedLeadCount === 1 ? '' : 's'}?\n\n`
@@ -1622,10 +1659,21 @@ export default function Inbox() {
       {simulationOpen && (
         <Modal title="Simulate incoming inquiry" onClose={() => setSimulationOpen(false)}>
           <p className="hint">
-            Choose a customer class to test its complete Lead workflow. The class is fixed by
-            your choice; the enquiry itself — customer, plant, scope, route and how complete
-            the extraction is — is a different permutation every time.
+            Choose the project type first, then the opportunity type. The customer class
+            buttons below decide the simulated lead that gets generated.
           </p>
+          <div style={{ display: 'grid', gap: 10, marginBottom: 10 }}>
+            <label className="afield">Project type
+              <select value={simProjectType} onChange={e => setSimProjectType(e.target.value)} style={{ display: 'block', marginTop: 2, width: '100%' }}>
+                {PROJECT_TYPES.map(type => <option key={type}>{type}</option>)}
+              </select>
+            </label>
+            <label className="afield">Opportunity type
+              <select value={activeSimOppType} onChange={e => setSimOppType(e.target.value)} style={{ display: 'block', marginTop: 2, width: '100%' }}>
+                {simOppOptions.map(type => <option key={type}>{type}</option>)}
+              </select>
+            </label>
+          </div>
           <div style={{ display: 'grid', gap: 8 }}>
             {SIMULATED_CUSTOMER_SCENARIOS.map(scenario => (
               <button key={scenario.status} className="form-card" style={{ textAlign: 'left', cursor: 'pointer' }}

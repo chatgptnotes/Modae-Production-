@@ -1,5 +1,6 @@
 import { findDuplicates } from './insights.js'
 import { routeOwner } from './leadRules.js'
+import { OPP_TYPES, routeForType } from './seed.js'
 
 // The demo simulator behind "Simulate incoming inquiry".
 //
@@ -19,6 +20,11 @@ export const SIMULATED_CUSTOMER_SCENARIOS = [
   { status: 'Amber', label: 'Amber customer', hint: 'Processing fee required within 1 week' },
   { status: 'Red', label: 'Red customer', hint: 'Joint LJS / AH approval required' },
 ]
+
+export const PROJECT_TYPES = ['Project', 'Spares', 'Service']
+
+export const oppTypesForProjectType = projectType =>
+  OPP_TYPES.filter(type => routeForType(type) === projectType)
 
 // Demo accounts, three per class. The "Demo" suffix is deliberate — nobody
 // should mistake a simulated row for a live account. `region` is worded to
@@ -271,20 +277,36 @@ export function simulatedLead(customerStatus = 'Green', now = new Date(), option
     quality: forcedQuality = null,
     rng = Math.random,
     seq = null,
+    projectType = null,
+    oppType = null,
   } = options
 
   const scenario = SIMULATED_CUSTOMER_SCENARIOS.find(item => item.status === customerStatus)
     || SIMULATED_CUSTOMER_SCENARIOS[0]
   const status = scenario.status
   const ts = new Date(now).toISOString()
+  const requestedProjectType = PROJECT_TYPES.includes(projectType) ? projectType : ''
+  const requestedOppType = OPP_TYPES.includes(oppType) ? oppType : ''
+  const constrainedProjectType = requestedProjectType || (requestedOppType ? routeForType(requestedOppType) : '')
+  const templatePool = constrainedProjectType
+    ? INQUIRY_TEMPLATES.filter(t => t.route === constrainedProjectType)
+    : INQUIRY_TEMPLATES
+  const pickedTemplatePool = templatePool.length ? templatePool : INQUIRY_TEMPLATES
   const template = variant == null
-    ? freshPick(INQUIRY_TEMPLATES, rng, t => t.key, recentTemplates)
-    : at(INQUIRY_TEMPLATES, variant)
+    ? freshPick(pickedTemplatePool, rng, t => t.key, recentTemplates)
+    : at(pickedTemplatePool, variant)
   const pool = SIMULATED_CUSTOMERS[status]
   const recentForClass = lastCustomer[status] || (lastCustomer[status] = [])
   const customer = variant == null
     ? freshPick(pool, rng, c => c.name, recentForClass)
     : at(pool, variant)
+  const projectTypeValue = constrainedProjectType || template.route
+  const oppPool = oppTypesForProjectType(projectTypeValue)
+  const resolvedOppType = requestedOppType
+    || (constrainedProjectType ? pick(oppPool.length ? oppPool : OPP_TYPES, rng) : '')
+    || fieldValue(template.fields, /opp type/i)
+    || template.route
+  const route = requestedOppType ? routeForType(resolvedOppType) || projectTypeValue : projectTypeValue
 
   // A chaser only makes sense against something already in the mailbox.
   // A chaser is only a duplicate if it can reuse the buyer's reference, which
@@ -325,7 +347,8 @@ export function simulatedLead(customerStatus = 'Green', now = new Date(), option
   // A chaser carries no new scope (seed's LD-207 is the model), so the route
   // and the extracted RFQ facts come from the lead being chased — quoting a
   // spares chaser as a Project would be the generator contradicting itself.
-  const route = chased ? (chased.route || template.route) : template.route
+  const templateRoute = chased ? (chased.route || template.route) : template.route
+  const routeValue = chased ? templateRoute : route
   const urgency = chased ? (chased.urgency || template.urgency) : template.urgency
 
   const baseFields = [
@@ -345,11 +368,15 @@ export function simulatedLead(customerStatus = 'Green', now = new Date(), option
 
   // A thin mail leaves the tail of the extraction below the accept threshold.
   const pendingCount = quality === 'partial' ? between(2, 3, rng) : 0
+  const finalOppType = chased
+    ? fieldValue(chased.ai?.fields, /opp type/i) || chased.oppType || templateRoute
+    : (requestedOppType || constrainedProjectType ? resolvedOppType : fieldValue(template.fields, /opp type/i) || template.route)
   const fields = baseFields.map((f, i) => {
     const pending = i >= baseFields.length - pendingCount
-    if (!pending) return { ...f, state: 'accepted' }
+    if (!pending) return /opp type/i.test(String(f.k || '')) ? { ...f, state: 'accepted', v: finalOppType } : { ...f, state: 'accepted' }
     return {
       ...f,
+      v: /opp type/i.test(String(f.k || '')) ? finalOppType : f.v,
       state: 'pending',
       conf: Math.min(f.conf, between(62, 85, rng)),
       note: 'Below the accept threshold — confirm before registration.',
@@ -388,7 +415,9 @@ export function simulatedLead(customerStatus = 'Green', now = new Date(), option
     status: 'New', customerStatus: status, customerClassifiedAt: ts,
     verification: ['Blue', 'Amber'].includes(status) ? { requestedAt: ts, requestedFor: status } : {},
     redFlag: status === 'Red',
-    route,
+    projectType: projectTypeValue,
+    oppType: finalOppType,
+    route: routeValue,
     urgency,
     duplicateRisk: chased ? 'High' : 'Low',
     region: customer.region,
@@ -410,7 +439,7 @@ export function simulatedLead(customerStatus = 'Green', now = new Date(), option
         ...(chased ? ['Reply on the existing opportunity, not a new one'] : template.next),
         ...(status === 'Green' ? [] : ['Complete the customer-classification gate']),
       ],
-      route,
+      route: routeValue,
     },
   }
 }
