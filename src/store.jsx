@@ -666,6 +666,15 @@ export function StoreProvider({ children }) {
       setState(s => ({ ...s, users: s.users.filter(u => u.id !== id) }))
     },
 
+    // Approvers (LJS/AH) and admins set the FY numbers each owner is measured
+    // against. Values are K₹, matching store.sales.targets.
+    setSalesTarget(owner, { annual, q }) {
+      setState(s => withAudit({
+        ...s,
+        sales: { ...s.sales, targets: { ...(s.sales?.targets || {}), [owner]: { annual, q } } },
+      }, 'Sales target updated', owner, `annual ${annual}K · quarters ${q.join('/')}K`))
+    },
+
     // Cosmetic only — deliberately not audited, toggling would flood the log.
     setTabletTheme(theme) {
       setState(s => ((theme === 'dark' || theme === 'light') ? { ...s, tabletTheme: theme } : s))

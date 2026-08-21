@@ -1,10 +1,10 @@
 import React, { useId, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { ROLES, STAGES } from '../seed.js'
+import { ROLES, OWNERS } from '../seed.js'
 import { readiness, isBlocked, nextActionWith } from '../gates.js'
 import { isApprover, isAdminRole, isSalesOwner, canViewCommercial, canPriceProposal, fmtLakh, ddMmmYY } from '../utils.js'
-import { analyticsSnapshot, counts, salesPerformance, FY_QUARTERS, FY_MONTHS } from '../kpi.js'
+import { analyticsSnapshot, counts, salesPerformance, FY_QUARTERS, FY_MONTHS, PROB_WEIGHT } from '../kpi.js'
 import { ArcGauge } from '../dashviz.jsx'
 import { Icon } from '../icons.jsx'
 import Analytics, { Funnel as AnalyticsFunnel } from './Analytics.jsx'
@@ -115,15 +115,61 @@ function QuarterBars({ perf }) {
   )
 }
 
+// Grouped columns above the quarter cards: grey target beside the coloured
+// actual per quarter, green once the quarter is at or above target — ported
+// from the prototype's `chartColumns` (Bt_html clickable prototype.html:3712).
+// Same 720-wide viewBox trick as RunRateChart below: the card is ~twice the
+// prototype's 360px, so doubling the viewBox keeps 10px type reading as 10px.
+function QuarterColumns({ perf }) {
+  const W = 720, H = 170, pad = 26, base = H - 24
+  const max = Math.max(1, ...perf.quarterActual, ...perf.quarterTarget)
+  const bw = (W - pad * 2) / FY_QUARTERS.length
+  const y = v => base - (v / max) * (base - 16)
+  return (
+    <>
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" style={{ width: '100%' }}
+        aria-label={`Quarterly actual versus target: ${FY_QUARTERS.map((q, i) =>
+          `${q} ${fmtLakh(perf.quarterActual[i] || 0)} of ${fmtLakh(perf.quarterTarget[i] || 0)}`).join(', ')}`}>
+        <line x1={pad} y1={base} x2={W - pad} y2={base} stroke="var(--border-soft)" strokeWidth="1" />
+        {FY_QUARTERS.map((label, i) => {
+          const x = pad + i * bw, w1 = bw * 0.34
+          const target = perf.quarterTarget[i] || 0
+          const actual = perf.quarterActual[i] || 0
+          const ta = y(target), aa = y(actual)
+          return (
+            <g key={label}>
+              <rect x={(x + bw * 0.16).toFixed(1)} y={ta.toFixed(1)} width={w1.toFixed(1)}
+                height={(base - ta).toFixed(1)} rx="4" fill="var(--border-soft)" />
+              <rect x={(x + bw * 0.52).toFixed(1)} y={aa.toFixed(1)} width={w1.toFixed(1)}
+                height={(base - aa).toFixed(1)} rx="4"
+                fill={target > 0 && actual >= target ? 'var(--won-text)' : 'var(--primary-accent)'} />
+              <text x={(x + bw / 2).toFixed(1)} y={base + 14} textAnchor="middle" fontSize="10.5"
+                fontWeight="700" fill="var(--text-subtle)">{label}</text>
+            </g>
+          )
+        })}
+      </svg>
+      <div className="chart-legend">
+        <span><i className="legend-swatch" style={{ background: 'var(--border-soft)' }} />Target</span>
+        <span><i className="legend-swatch" style={{ background: 'var(--primary-accent)' }} />Actual</span>
+        <span><i className="legend-swatch" style={{ background: 'var(--won-text)' }} />At or above target</span>
+      </div>
+    </>
+  )
+}
+
 // Monthly bookings against the target run rate, matching the reference
 // prototype's `chartTrend` (Bt_html clickable prototype.html:3733).
 //
-// Two things the 20 Aug review asked for and the old version got wrong:
-//  - the target is the quarter's number over three months (perf.monthlyTarget),
-//    not a flat annual twelfth, and it is drawn across all twelve months;
-//  - the actual stops at today. It used to run the full year, so Sep–Mar drew
-//    a flat line along zero and read as "we booked nothing" rather than
-//    "we have not got there yet".
+// The target is the quarter's number over three months (perf.monthlyTarget),
+// not a flat annual twelfth, and it is drawn across all twelve months.
+//
+// The actual is drawn across all twelve months too, dropping to the baseline
+// for unbooked months — the Ver 1.1 look the client asked for on 21 Aug,
+// screenshot in hand. (A 20 Aug review had the line stop at today instead;
+// the comparison overrode it.) The reader learns a month is unbooked from the
+// tooltip and the table, which still say "Not booked yet" past `elapsed`,
+// rather than from the line stopping.
 function RunRateChart({ perf }) {
   // Unique per instance: a hardcoded gradient id collides when two charts share
   // a page, and the second one silently picks up the first one's fill.
@@ -134,7 +180,7 @@ function RunRateChart({ perf }) {
 
   const target = perf.monthlyTarget || FY_MONTHS.map(() => perf.annual / 12)
   const elapsed = Math.max(1, Math.min(FY_MONTHS.length, perf.monthsElapsed || FY_MONTHS.length))
-  const actual = perf.monthly.slice(0, elapsed)
+  const actual = perf.monthly
 
   // The reference prototype used a 360-wide viewBox in a ~360px card. This card
   // is twice that, and the svg scales to fill it — which multiplied every
@@ -148,7 +194,6 @@ function RunRateChart({ perf }) {
   const py = v => base - (v / max) * (base - topY)
   const pts = series => series.map((v, i) => `${px(i).toFixed(1)},${py(v).toFixed(1)}`).join(' ')
 
-  // The area closes on the last *booked* month, not the right-hand edge.
   const area = `${padL},${base} ${pts(actual)} ${px(actual.length - 1).toFixed(1)},${base}`
   // Six labels plus a guaranteed last one, so twelve months do not collide.
   const every = Math.ceil(FY_MONTHS.length / 6)
@@ -174,7 +219,7 @@ function RunRateChart({ perf }) {
       (prev == null ? (delta > 0 ? -1 : FY_MONTHS.length) : prev) + delta)))
   }
 
-  const booked = hover != null && hover < actual.length
+  const booked = hover != null && hover < elapsed
   // Keep the readout inside the card at both ends.
   const side = hover != null && px(hover) > W / 2 ? 'left' : 'right'
 
@@ -246,7 +291,7 @@ function RunRateChart({ perf }) {
           {FY_MONTHS.map((label, i) => (
             <tr key={label}>
               <th scope="row">{label}</th>
-              <td>{i < actual.length ? fmtLakh(perf.monthly[i]) : 'Not booked yet'}</td>
+              <td>{i < elapsed ? fmtLakh(perf.monthly[i]) : 'Not booked yet'}</td>
               <td>{fmtLakh(target[i])}</td>
             </tr>
           ))}
@@ -381,15 +426,24 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
   const perf = salesPerformance(store, role)
   const money = canPriceProposal(role)
   const openValue = open.reduce((s, o) => s + (+o.valueK || 0), 0)
-  const leads = store.leads.filter(l => (l.assignedOwner || l.suggestedOwner) === role && l.status === 'New')
+  const weightedValue = open.reduce((s, o) => s + (+o.valueK || 0) * (PROB_WEIGHT[o.prob] ?? PROB_WEIGHT.Low), 0)
+  const myLeads = store.leads.filter(l => (l.assignedOwner || l.suggestedOwner) === role)
+  const leads = myLeads.filter(l => l.status === 'New')
   const unproposed = open.filter(o => !o.proposalDate)
   const variance = perf.achieved - perf.expected
-  const funnelStages = STAGES
-    .filter(stage => stage !== 'Won' && stage !== 'Lost')
-    .map(label => {
-      const rows = open.filter(o => o.stage === label)
-      return { label, count: rows.length, valueK: rows.reduce((sum, o) => sum + (+o.valueK || 0), 0) }
-    })
+  // The prototype's lead-lifecycle funnel (vSalesDashboard, Bt_html clickable
+  // prototype.html:4127), mapped to this data model: no "Submitted" milestone
+  // here, so proposalDate stands in for "proposal sent". Unlike the prototype,
+  // Qualified is owner-filtered — its team-wide count could exceed the stage
+  // above it, which is how the demo printed "400% of prior".
+  const wonCount = store.opportunities.filter(o => o.owner === role && o.stage === 'Won').length
+  const funnelStages = [
+    { label: 'Leads assigned', count: myLeads.length },
+    { label: 'Qualified', count: myLeads.filter(l => ['Qualified', 'Converted'].includes(l.status)).length },
+    { label: 'Opportunities', count: open.length },
+    { label: 'Proposal sent', count: open.filter(o => o.proposalDate).length },
+    { label: 'Won', count: wonCount + perf.orders.length },
+  ]
 
   return (
     <div className="page">
@@ -405,7 +459,7 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
 
       <div className="sales-kpi-strip">
         <Metric label="Open value (₹)" value={money ? fmtLakh(openValue) : '—'} tone="sky" onClick={() => nav('/my')} />
-        <Metric label="Weighted forecast" value={money ? fmtLakh(open.reduce((s, o) => s + (+o.valueK || 0) * ({ Low: .25, Medium: .5, High: .75 }[o.prob] || .25), 0)) : '—'} tone="teal" onClick={() => nav('/analytics')} />
+        <Metric label="Weighted forecast" value={money ? fmtLakh(weightedValue) : '—'} tone="teal" onClick={() => nav('/analytics')} />
         <Metric label="Booked orders" value={money ? fmtLakh(perf.achieved) : '—'} tone="green" onClick={() => nav('/po')} />
         <Metric label="Active customers" value={new Set([...open.map(o => o.sellTo), ...perf.orders.map(o => o.customer)]).size} tone="slate" onClick={() => nav('/customers')} />
       </div>
@@ -428,11 +482,12 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
         </Card>
 
         <Card title="Quarterly target vs actual" icon="chartBar" tone="tone-sky" span={8}>
+          <QuarterColumns perf={perf} />
           <QuarterBars perf={perf} />
           <div className="hint" style={{ marginTop: 8 }}>Booked orders against your quarterly number.</div>
         </Card>
 
-        <Card title="Monthly bookings" icon="chartLine" tone="tone-sky" span={8}>
+        <Card title="Monthly performance against run rate" icon="chartLine" tone="tone-sky" span={8}>
           <RunRateChart perf={perf} />
           <div className="hint" style={{ marginTop: 8 }}>
             {perf.fy} · {FY_MONTHS[0]}–{FY_MONTHS[FY_MONTHS.length - 1]} · actual against target run rate,
@@ -442,8 +497,8 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
         </Card>
 
         <Card title="My funnel" icon="layers" tone="tone-teal" span={4}>
-          <AnalyticsFunnel stages={funnelStages} showValue={money} />
-          <div className="hint" style={{ marginTop: 8 }}>Enquiries currently in each stage (Won/Lost excluded).</div>
+          <AnalyticsFunnel stages={funnelStages} showValue={false} conversion />
+          <div className="hint" style={{ marginTop: 8 }}>Your leads through to won business, with the conversion from each stage to the next.</div>
         </Card>
 
         <Card title="Detailed reporting" icon="chartLine" tone="tone-sky" span={12}>
@@ -468,15 +523,32 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
             month labels and a distorted stroke. One chart, above. */}
 
         <Card title="Pipeline snapshot" icon="chartBar" tone="tone-teal" span={12}>
-          <table className="cost-table" style={{ width: '100%' }}>
-            <tbody>
-              <tr><td>Open opportunities</td><td className="num">{open.length}</td></tr>
-              {money && <tr><td>Open value (₹)</td><td className="num">{fmtLakh(openValue)}</td></tr>}
-              <tr><td>Without a proposal</td><td className="num">{unproposed.length}</td></tr>
-              <tr><td>New leads in your queue</td><td className="num">{leads.length}</td></tr>
-              <tr className="total"><td>Blocked</td><td className="num">{blocked.length}</td></tr>
-            </tbody>
-          </table>
+          {/* The prototype's chartBars rows (Bt_html clickable prototype.html:4170):
+              open / weighted / booked as proportional bars, counts as a list. */}
+          {money && (
+            <div>
+              {[
+                { label: 'Open value', value: openValue, cls: 'snap-open' },
+                { label: 'Weighted', value: weightedValue, cls: 'snap-weighted' },
+                { label: 'Booked orders', value: perf.achieved, cls: 'snap-booked' },
+              ].map((row, _, rows) => (
+                <div key={row.label} className="mbar" aria-label={`${row.label}: ${fmtLakh(row.value)}`}>
+                  <span className="mb-lbl wide">{row.label}</span>
+                  <span className="mb-track">
+                    <span className={`mb-fill ${row.cls}`}
+                      style={{ width: `${Math.max(2, (row.value / Math.max(1, ...rows.map(r => r.value))) * 100)}%` }} />
+                  </span>
+                  <span className="mb-val wide">{fmtLakh(row.value)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <ul className="stat-list" style={{ marginTop: money ? 10 : 0 }}>
+            <li>Open opportunities<b>{open.length}</b></li>
+            <li>Without a proposal<b>{unproposed.length}</b></li>
+            <li>New leads in your queue<b>{leads.length}</b></li>
+            <li>Blocked<b>{blocked.length}</b></li>
+          </ul>
           <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button onClick={() => nav('/my')}>My opportunities</button>
             <button onClick={() => nav('/inbox')}>Lead inbox</button>
@@ -512,6 +584,96 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
         <SalesCustomerSection store={store} open={open} orders={perf.orders} nav={nav} money={money} />
       </div>
     </div>
+  )
+}
+
+// ------------------------------------------------------------ team targets
+// LJS and AH (and admins) set the FY numbers each owner is measured against —
+// until now store.sales.targets was seed-only, with no way to change it.
+// Targets are stored in K₹; the editor speaks lakhs, the unit every widget
+// prints (1 L = 100 K₹).
+function TeamTargetsCard({ store, span = 12 }) {
+  const [editing, setEditing] = useState(null)
+  const [draft, setDraft] = useState(null)
+  const targets = store.sales?.targets || {}
+  const owners = [...new Set([...OWNERS, ...Object.keys(targets)])]
+  const toL = k => Math.round(k || 0) / 100
+  const toK = l => Math.round((parseFloat(l) || 0) * 100)
+
+  const begin = owner => {
+    const t = targets[owner] || { annual: 0, q: [0, 0, 0, 0] }
+    setEditing(owner)
+    setDraft({ annual: String(toL(t.annual)), q: (t.q || [0, 0, 0, 0]).map(v => String(toL(v))) })
+  }
+  const stop = () => { setEditing(null); setDraft(null) }
+  const save = () => {
+    store.setSalesTarget(editing, { annual: toK(draft.annual), q: draft.q.map(toK) })
+    stop()
+  }
+  const split = () => setDraft(d => {
+    const each = String(Math.round(((parseFloat(d.annual) || 0) / 4) * 100) / 100)
+    return { ...d, q: [each, each, each, each] }
+  })
+  const qSum = draft ? draft.q.reduce((s, v) => s + (parseFloat(v) || 0), 0) : 0
+  const mismatch = draft && Math.abs(qSum - (parseFloat(draft.annual) || 0)) > 0.5
+
+  return (
+    <Card title="Team targets" icon="target" tone="tone-sky" span={span}
+      action={<span className="hint">₹ lakh{store.sales?.fy ? ` · ${store.sales.fy}` : ''}</span>}>
+      <table className="ana-table targets-table">
+        <thead>
+          <tr>
+            <th>Owner</th><th className="num">Annual</th>
+            {FY_QUARTERS.map(q => <th key={q} className="num">{q.slice(0, 2)}</th>)}
+            <th />
+          </tr>
+        </thead>
+        <tbody>
+          {owners.map(owner => {
+            const t = targets[owner] || { annual: 0, q: [0, 0, 0, 0] }
+            if (editing !== owner) return (
+              <tr key={owner}>
+                <td><b>{owner}</b> <span className="hint">{ROLES[owner]?.name || ''}</span></td>
+                <td className="num">{fmtLakh(t.annual)}</td>
+                {(t.q || [0, 0, 0, 0]).map((v, i) => <td key={FY_QUARTERS[i]} className="num">{fmtLakh(v)}</td>)}
+                <td className="num"><button onClick={() => begin(owner)}>Edit</button></td>
+              </tr>
+            )
+            return (
+              <tr key={owner} className="targets-editing">
+                <td><b>{owner}</b> <span className="hint">{ROLES[owner]?.name || ''}</span></td>
+                <td className="num">
+                  <input type="number" min="0" value={draft.annual} aria-label={`${owner} annual target in lakh`}
+                    onChange={e => setDraft(d => ({ ...d, annual: e.target.value }))} />
+                </td>
+                {draft.q.map((v, i) => (
+                  <td key={FY_QUARTERS[i]} className="num">
+                    <input type="number" min="0" value={v} aria-label={`${owner} Q${i + 1} target in lakh`}
+                      onChange={e => setDraft(d => ({ ...d, q: d.q.map((x, j) => (j === i ? e.target.value : x)) }))} />
+                  </td>
+                ))}
+                <td className="num">
+                  <div className="targets-actions">
+                    <button onClick={split}>Split evenly</button>
+                    <button onClick={save}>Save</button>
+                    <button onClick={stop}>Cancel</button>
+                  </div>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      {mismatch && (
+        <p className="hint" role="status">
+          Quarters add to ₹{qSum.toFixed(1)} L against an annual of ₹{(parseFloat(draft.annual) || 0).toFixed(1)} L —
+          saved as entered, so check the split before you save.
+        </p>
+      )}
+      <p className="hint" style={{ marginTop: 6 }}>
+        Changes apply immediately to that owner's dashboard and the company roll-up, and are recorded in the audit trail.
+      </p>
+    </Card>
   )
 }
 
@@ -551,6 +713,8 @@ function ApproverDashboard({ store, nav, role, c, open, blocked, nextActions, he
             {fmtLakh(perf.achieved)} booked of {fmtLakh(perf.annual)} · {Math.round(perf.attainPct)}% attained
           </div>
         </Card>
+
+        <TeamTargetsCard store={store} />
 
         <Card title="Blocked opportunities" icon="alert" tone="tone-red" span={6}
           action={<span className="pill Red">{blocked.length}</span>}>
@@ -622,6 +786,8 @@ function AdminDashboard({ store, nav, role, c, open, blocked, head }) {
             {fmtLakh(perf.achieved)} booked of {fmtLakh(perf.annual)} · {Math.round(perf.attainPct)}% attained
           </div>
         </Card>
+
+        <TeamTargetsCard store={store} />
       </div>
     </div>
   )

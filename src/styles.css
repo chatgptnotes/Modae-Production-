@@ -2839,6 +2839,20 @@ button.linklike:hover { text-decoration: underline; }
 /* Matches the chart: the target is the dashed charcoal line, the actual is
    the solid brand one. Both read from tokens so the brand retheme carries. */
 .legend-line.target { border-top-color: var(--text-main); border-top-style: dashed; opacity: .6; }
+/* Block swatch for the quarter-columns legend (Target / Actual / At or above). */
+.legend-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; }
+/* Pipeline-snapshot bars: open in brand red, weighted a lighter tint of the
+   same, booked in the won green — the prototype's chartBars palette on tokens. */
+.mb-fill.snap-open { background: var(--primary-accent); }
+.mb-fill.snap-weighted { background: var(--primary-accent); opacity: .55; }
+.mb-fill.snap-booked { background: var(--won-text); }
+/* fmtLakh values ("₹1.63 Cr") need more room than the default 40px count. */
+.mb-val.wide { flex-basis: 76px; white-space: nowrap; }
+/* Team-targets editor: compact numeric inputs, actions on one line. */
+.targets-table input { width: 72px; padding: 3px 5px; font-size: 12px; text-align: right; }
+.targets-table td { vertical-align: middle; }
+.targets-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+.targets-editing td { background: var(--select-fill); }
 .sales-funnel { display: grid; gap: 5px; }
 .funnel-legend { display: flex; justify-content: space-between; color: var(--text-subtle); font-size: 10px; margin-bottom: 2px; }
 .sales-funnel-row { position: relative; display: grid; grid-template-columns: 116px 1fr; align-items: center; min-height: 24px; padding: 0; border: 0; background: transparent; text-align: left; cursor: pointer; }

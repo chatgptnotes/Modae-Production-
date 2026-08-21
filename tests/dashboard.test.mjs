@@ -133,21 +133,20 @@ test('the run-rate series covers the whole financial year', () => {
   assert.equal(rs.monthsElapsed, seedSales.monthsElapsed, 'the chart needs to know where "today" is')
 })
 
-test('the chart stops the actual line at the current month', () => {
+test('the actual line runs the full year, like the Ver 1.1 chart', () => {
+  // 21 Aug, screenshot comparison: the client wants the prototype look — the
+  // red line spans Apr–Mar, dropping to the baseline for unbooked months.
+  // (This reverses the 20 Aug stop-at-today behaviour on purpose.)
   const source = read('src/pages/MyDashboard.jsx')
-  // Truncation, not a full-year series padded with zeros.
-  assert.match(source, /const actual = perf\.monthly\.slice\(0, elapsed\)/)
-  assert.match(source, /perf\.monthsElapsed/)
-  // Target is drawn across all twelve; only the actual is cut short.
+  assert.match(source, /const actual = perf\.monthly\r?\n/, 'the plotted series is the whole year')
+  assert.doesNotMatch(source, /const actual = perf\.monthly\.slice\(0, elapsed\)/)
+  // Both series are drawn across all twelve months.
   assert.match(source, /points=\{pts\(target\)\}/)
   assert.match(source, /points=\{pts\(actual\)\}/)
-
-  // With the seeded data the year is five months old, so seven months of the
-  // actual series must not be drawn as zeros.
-  const rs = salesPerformance(store, 'RS')
-  assert.ok(rs.monthsElapsed < 12)
-  assert.ok(rs.monthly.slice(rs.monthsElapsed).every(v => v === 0),
-    'the months being dropped are unbooked, which is exactly why they must not be plotted')
+  // But an unbooked month must still read as "not booked yet", never as a
+  // ₹0 booking — elapsed gates the tooltip and the table, not the line.
+  assert.match(source, /const booked = hover != null && hover < elapsed/)
+  assert.match(source, /\{i < elapsed \? fmtLakh\(perf\.monthly\[i\]\) : 'Not booked yet'\}/)
 })
 
 test('target is dotted, actual is solid, and neither colour is hardcoded', () => {
@@ -171,12 +170,13 @@ test('the gradient id is unique per chart instance', () => {
   assert.match(source, /fill=\{`url\(#\$\{gradientId\}\)`\}/)
 })
 
-test('there is one monthly bookings card, not two', () => {
+test('there is one run-rate card, not two, under the prototype title', () => {
   const source = read('src/pages/MyDashboard.jsx')
-  assert.equal((source.match(/title="Monthly bookings"/g) || []).length, 1)
+  // 21 Aug: the card carries the Ver 1.1 prototype's title.
+  assert.equal((source.match(/title="Monthly performance against run rate"/g) || []).length, 1)
+  assert.doesNotMatch(source, /title="Monthly bookings"/)
   // The old sparkline card plotted the same array with no target and no labels.
   assert.doesNotMatch(source, /<Sparkline points=\{monthPoints\}/)
-  assert.doesNotMatch(source, /title="Monthly performance against run rate"/)
   assert.doesNotMatch(source, /import \{ ArcGauge, Sparkline \}/, 'the unused import must go too')
 })
 
@@ -215,7 +215,7 @@ test('one tooltip carries every series at that month', () => {
   assert.match(tip, /<i className="legend-line actual" \/>/)
   assert.match(tip, /<i className="legend-line target" \/>/)
   // A month past the booked window must not read as a booking of zero.
-  assert.match(source, /const booked = hover != null && hover < actual\.length/)
+  assert.match(source, /const booked = hover != null && hover < elapsed/)
   assert.match(tip, /Not booked yet/)
 })
 
@@ -238,6 +238,85 @@ test('the tooltip enhances but does not gate the values', () => {
   assert.match(source, /<caption>Monthly bookings against target run rate<\/caption>/)
   assert.match(source, /<th scope="row">\{label\}<\/th>/)
   // Twelve rows, both series, and the unbooked months named rather than zeroed.
-  assert.match(source, /\{i < actual\.length \? fmtLakh\(perf\.monthly\[i\]\) : 'Not booked yet'\}/)
+  assert.match(source, /\{i < elapsed \? fmtLakh\(perf\.monthly\[i\]\) : 'Not booked yet'\}/)
   assert.match(read('src/styles.css'), /\.visually-hidden \{/)
+})
+
+// ------------------------------------------------- 21 Aug: Ver 1.1 parity
+// The client showed the Ver 1.1 prototype dashboard and asked for the same
+// look: grouped quarter columns with the three-way legend, the lead-lifecycle
+// funnel with conversion captions, and pipeline-snapshot bars — plus a way
+// for LJS/AH to set each owner's targets.
+
+test('the quarterly card pairs the column chart with the quarter cards', () => {
+  const source = read('src/pages/MyDashboard.jsx')
+  assert.match(source, /function QuarterColumns\(\{ perf \}\)/)
+  const card = source.slice(source.indexOf('title="Quarterly target vs actual"'))
+  assert.ok(card.indexOf('<QuarterColumns perf={perf} />') > 0
+    && card.indexOf('<QuarterColumns perf={perf} />') < card.indexOf('<QuarterBars perf={perf} />'),
+    'columns render above the quarter cards, as in the prototype')
+  // The prototype's three-way legend, on tokens rather than its hex literals.
+  for (const label of ['Target', 'Actual', 'At or above target']) {
+    assert.ok(source.includes(`className="legend-swatch"`) && source.includes(`/>${label}</span>`),
+      `legend names ${label}`)
+  }
+  assert.match(source, /fill=\{target > 0 && actual >= target \? 'var\(--won-text\)' : 'var\(--primary-accent\)'\}/,
+    'a quarter at or above target turns green')
+})
+
+test('my funnel walks the lead lifecycle with conversion captions', () => {
+  const source = read('src/pages/MyDashboard.jsx')
+  for (const stage of ['Leads assigned', 'Qualified', 'Opportunities', 'Proposal sent', 'Won']) {
+    assert.ok(source.includes(`label: '${stage}'`), `funnel carries "${stage}"`)
+  }
+  assert.match(source, /<AnalyticsFunnel stages=\{funnelStages\} showValue=\{false\} conversion \/>/)
+  // Unlike the prototype, Qualified is owner-filtered — the team-wide count
+  // could exceed the stage above it (the demo's "400% of prior").
+  assert.match(source, /myLeads\.filter\(l => \['Qualified', 'Converted'\]\.includes\(l\.status\)\)/)
+
+  const analytics = read('src/pages/Analytics.jsx')
+  assert.match(analytics, /conversion = false/)
+  assert.match(analytics, /% of prior/)
+  assert.match(analytics, /% of open pipeline/, 'the stage-share caption must survive for the analytics funnel')
+})
+
+test('the pipeline snapshot is bars plus a stat list, not a table', () => {
+  const source = read('src/pages/MyDashboard.jsx')
+  const start = source.indexOf('title="Pipeline snapshot"')
+  // The fallback dashboard has its own "Next best actions" card earlier in the
+  // file, so the end anchor must search from the snapshot card onward.
+  const card = source.slice(start, source.indexOf('title="Next best actions"', start))
+  for (const row of ['Open value', 'Weighted', 'Booked orders']) assert.ok(card.includes(`'${row}'`), row)
+  assert.match(card, /className=\{`mb-fill \$\{row\.cls\}`\}/)
+  assert.match(card, /className="stat-list"/)
+  assert.doesNotMatch(card, /cost-table/, 'the flat table gave way to the prototype bars')
+  const css = read('src/styles.css')
+  for (const cls of ['snap-open', 'snap-weighted', 'snap-booked']) assert.match(css, new RegExp(`\.mb-fill\.${cls}`))
+  // Both weighted consumers share kpi.js's PROB_WEIGHT, not a re-typed map.
+  assert.match(source, /PROB_WEIGHT\[o\.prob\] \?\? PROB_WEIGHT\.Low/)
+  assert.doesNotMatch(source, /\{ Low: \.25, Medium: \.5, High: \.75 \}/)
+})
+
+test('LJS and AH can set targets for the owners, and it is audited', () => {
+  const store = read('src/store.jsx')
+  assert.match(store, /setSalesTarget\(owner, \{ annual, q \}\)/)
+  assert.match(store, /withAudit\(\{[\s\S]{0,200}targets: \{ \.\.\.\(s\.sales\?\.targets \|\| \{\}\), \[owner\]: \{ annual, q \} \}/,
+    'the write must land in store.sales.targets under audit')
+  assert.match(store, /'Sales target updated'/)
+
+  const source = read('src/pages/MyDashboard.jsx')
+  assert.match(source, /function TeamTargetsCard\(\{ store/)
+  // The approver dashboard is exactly LJS/AH (isApprover minus admins); the
+  // admin dashboard keeps parity. Sales owners never see the editor.
+  const approver = source.slice(source.indexOf('function ApproverDashboard'), source.indexOf('function AdminDashboard'))
+  const admin = source.slice(source.indexOf('function AdminDashboard'), source.indexOf('function TechDashboard'))
+  const sales = source.slice(source.indexOf('function SalesDashboard'), source.indexOf('function TeamTargetsCard'))
+  assert.match(approver, /<TeamTargetsCard store=\{store\} \/>/)
+  assert.match(admin, /<TeamTargetsCard store=\{store\} \/>/)
+  assert.doesNotMatch(sales, /TeamTargetsCard/)
+  // The editor speaks lakhs while the store keeps K₹.
+  assert.match(source, /const toK = l => Math\.round\(\(parseFloat\(l\) \|\| 0\) \* 100\)/)
+  assert.match(source, /store\.setSalesTarget\(editing, \{ annual: toK\(draft\.annual\), q: draft\.q\.map\(toK\) \}\)/)
+  // Every owner gets a row, including ones not yet in the seed targets.
+  assert.match(source, /\[\.\.\.new Set\(\[\.\.\.OWNERS, \.\.\.Object\.keys\(targets\)\]\)\]/)
 })

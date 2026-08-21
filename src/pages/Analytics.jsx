@@ -157,7 +157,10 @@ function BarCard({ title, icon, tone, span = 4, entries, color, onPick, hint, sh
 // data. A numbered rail sits on the left and the per-stage detail on the right.
 // The metric is the summed opportunity value when the role may see commercials,
 // else the plain row count.
-export function Funnel({ stages, showValue }) {
+// `conversion` swaps the share-of-pipeline caption for the prototype's
+// "N% of prior" conversion between lifecycle stages (`pctTxt`, Bt_html
+// clickable prototype.html:3643) — geometry and shading stay the same.
+export function Funnel({ stages, showValue, conversion = false }) {
   const W = 620, ROW = 46, GAP = 7, NUM = 46, DETAIL = 190
   const H = stages.length * ROW + (stages.length - 1) * GAP
   const plotW = W - NUM - DETAIL
@@ -174,6 +177,11 @@ export function Funnel({ stages, showValue }) {
   // distribution supports, and it changes the caption, never the geometry.
   const total = stages.reduce((t, s) => t + metric(s), 0)
   const share = s => (total ? Math.round((metric(s) / total) * 100) : 0)
+  const caption = (s, i) => {
+    if (!conversion) return `${share(s)}% of open pipeline`
+    const prior = i > 0 ? metric(stages[i - 1]) : 0
+    return i === 0 ? 'start of funnel' : prior ? `${Math.round((metric(s) / prior) * 100)}% of prior` : '—'
+  }
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} role="img" className="funnel-svg" style={{ width: '100%' }}
@@ -207,7 +215,7 @@ export function Funnel({ stages, showValue }) {
               {s.label}{showValue ? ` (${s.count})` : ''}
             </text>
             <text x={W - DETAIL + 12} y={y(i) + ROW / 2 + 12} fontSize="10.5" fill="var(--text-muted)">
-              {share(s)}% of open pipeline
+              {caption(s, i)}
             </text>
           </g>
         )
