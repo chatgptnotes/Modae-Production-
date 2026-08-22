@@ -67,13 +67,13 @@ test('proposal pricing surfaces use the proposal gate, not the reporting gate', 
   }
 })
 
-// Biji, on the salesperson's tracker columns: "I need value, value and expected
-// order date". Value follows the proposal gate; COGS/GM stay commercial.
-test('tracker shows value to sales owners while opportunity surfaces expose proposal cost and margin', () => {
+// The tracker is the shared operational sheet: every role that can open it can
+// see and maintain Value/COGS, while GM and GM% are derived in the sheet.
+test('tracker commercial columns are independent of reporting and proposal gates', () => {
   const tracker = read('src/pages/Tracker.jsx')
-  assert.match(tracker, /const showValue = canPriceProposal\(store\.role\)/)
-  assert.match(tracker, /const comm = canViewCommercial\(store\.role\)/)
-  assert.match(tracker, /\{showValue \? \(/, 'the value cell must be gated on showValue')
+  assert.doesNotMatch(tracker, /canViewCommercial/)
+  assert.doesNotMatch(tracker, /canPriceProposal/)
+  assert.doesNotMatch(tracker, /className="num locked"/)
 })
 
 // --- Workflow conformance defects (18 Aug review) -------------------------

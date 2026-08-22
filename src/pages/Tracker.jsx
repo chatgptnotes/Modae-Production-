@@ -2,13 +2,12 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { STAGES, CLOSE_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES } from '../seed.js'
-import { fmt, mmmYY, ddMmmYY, stageClass, canViewCommercial, canPriceProposal, productList, productLabel, sameCustomer } from '../utils.js'
+import { fmt, mmmYY, ddMmmYY, stageClass, productList, productLabel, sameCustomer } from '../utils.js'
 import { downloadTableXlsx } from '../proposal/excelExport.js'
 import { useFormulaBar } from '../formulabar.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { nextActionWith } from '../gates.js'
 import { suggestProbability } from '../insights.js'
-import { Icon } from '../icons.jsx'
 
 const OPEN_STAGES = STAGES.filter(s => s !== 'Won' && s !== 'Lost')
 
@@ -59,8 +58,6 @@ export const COLS = [
 // action pending." He was explicit that Opportunity Owner and Updated are not
 // required — a rep filtered to their own rows already knows the owner.
 const KEY_COLS = ['id', 'sellTo', 'oppName', 'stage', 'oppType', 'prob', 'valueK', 'orderDate', 'nextActionOwner']
-const COMMERCIAL_COLS = new Set(['valueK', 'cogsK', 'gmK', 'gmPct'])
-
 // Hiding a spreadsheet column means hiding the header and the matching cell in
 // every row. The cells are written out in COLS order, so one generated rule per
 // hidden column does it — the same thing Excel's "hide column" does, and it
@@ -176,8 +173,6 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const [colView, setColView] = useState(() => ((OWNERS.includes(store.role)
     && !(ROLES[store.role]?.admin || ROLES[store.role]?.commercial)) ? 'key' : 'all'))
 
-  const comm = canViewCommercial(store.role)
-  const showValue = canPriceProposal(store.role)
   const gmK = o => (o.valueK || 0) - (o.cogsK || 0)
   const gmPct = o => (o.valueK ? Math.round((gmK(o) / o.valueK) * 100) + '%' : null)
   const customerStatusFor = o => store.customers.find(c => sameCustomer(c.name, o.sellTo))?.status || o.customerStatus || 'Blue'
@@ -283,11 +278,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   }
   const isSel = (o, col) => fb.sel.ref === `${col.letter}${o.sl + 2}`
 
-  const exportCols = comm
-    ? COLS
-    : COLS.filter(col => canPriceProposal(store.role)
-      ? !['cogsK', 'gmK', 'gmPct'].includes(col.key)
-      : !COMMERCIAL_COLS.has(col.key))
+  const exportCols = COLS
   // A real .xlsx rather than CSV: CSV carries no formatting, so long text
   // (opportunity names, remarks) landed unwrapped in one endless row.
   const exportRows = () => downloadTableXlsx(
@@ -395,7 +386,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
         <button type="button" onClick={showLatestCreated}>Latest created</button>
         <span className="hint">Rows are never deleted — close them via Stage (Won/Lost) with a mandatory Closed Reason. Click ▼ on a header to sort/filter; click a cell to see its formula.</span>
         <span className="spacer" />
-        {colView === 'key' && showValue && (
+        {colView === 'key' && (
           <span className="pill Blue" title="Total value of the rows shown">₹ {fmt(totals.v)}K</span>
         )}
         <button onClick={() => setColView(colView === 'key' ? 'all' : 'key')}
@@ -404,7 +395,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
             : `Show only the working columns: ${KEY_COLS.length} of ${COLS.length}`}>
           {colView === 'key' ? `All ${COLS.length} columns` : 'Key columns'}
         </button>
-        <button onClick={exportRows} title="Export the rows shown with fields allowed for your role">Extract to Excel</button>
+        <button onClick={exportRows} title="Export all columns for the rows shown">Extract to Excel</button>
         {onCreateOpportunity
           ? <button className="primary" onClick={onCreateOpportunity}>Create Opportunity</button>
           : <Link className="btn primary" to="/new">Create Opportunity</Link>}
@@ -507,28 +498,14 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                     )
                   })()}
                 </td>
-                {/* Value is the salesperson's own forecast — they type it at intake, so
-                    they keep it here. COGS/GM stay commercial. */}
-                {showValue ? (
-                  <td onClick={selectCell(o, COLS[14])} className={`num ${isSel(o, COLS[14]) ? 'cell-sel' : ''}`}><input type="number" value={o.valueK || ''} onChange={upd(o.id, 'valueK')} placeholder="-" /></td>
-                ) : (
-                  <td className="num locked" title="Commercial data — approvers/admin only"><Icon name="lock" size={12} /></td>
-                )}
-                {!comm ? (
-                  <>
-                    <td className="num locked" title="Cost and margin — approvers/admin only"><Icon name="lock" size={12} /></td>
-                    <td className="num locked"><Icon name="lock" size={12} /></td>
-                    <td className="num locked"><Icon name="lock" size={12} /></td>
-                  </>
-                ) : (
-                  <>
-                    <td onClick={selectCell(o, COLS[15])} className={`num ${isSel(o, COLS[15]) ? 'cell-sel' : ''}`}><input type="number" value={o.cogsK || ''} onChange={upd(o.id, 'cogsK')} placeholder="-" /></td>
-                    <td onClick={selectCell(o, COLS[16])} className={`num ${isSel(o, COLS[16]) ? 'cell-sel' : ''}`}>{o.valueK ? fmt(gmK(o)) : '-'}</td>
-                    {gmPct(o)
-                      ? <td onClick={selectCell(o, COLS[17])} className={`num ${isSel(o, COLS[17]) ? 'cell-sel' : ''}`}>{gmPct(o)}</td>
-                      : <td onClick={selectCell(o, COLS[17])} className={`err ${isSel(o, COLS[17]) ? 'cell-sel' : ''}`}>#DIV/0!</td>}
-                  </>
-                )}
+                {/* Value and COGS are open tracker inputs for every role. GM and
+                    GM% remain derived from them and are therefore read only. */}
+                <td onClick={selectCell(o, COLS[14])} className={`num ${isSel(o, COLS[14]) ? 'cell-sel' : ''}`}><input type="number" value={o.valueK || ''} onChange={upd(o.id, 'valueK')} placeholder="-" /></td>
+                <td onClick={selectCell(o, COLS[15])} className={`num ${isSel(o, COLS[15]) ? 'cell-sel' : ''}`}><input type="number" value={o.cogsK || ''} onChange={upd(o.id, 'cogsK')} placeholder="-" /></td>
+                <td onClick={selectCell(o, COLS[16])} className={`num ${isSel(o, COLS[16]) ? 'cell-sel' : ''}`}>{o.valueK ? fmt(gmK(o)) : '-'}</td>
+                {gmPct(o)
+                  ? <td onClick={selectCell(o, COLS[17])} className={`num ${isSel(o, COLS[17]) ? 'cell-sel' : ''}`}>{gmPct(o)}</td>
+                  : <td onClick={selectCell(o, COLS[17])} className={`err ${isSel(o, COLS[17]) ? 'cell-sel' : ''}`}>#DIV/0!</td>}
                 {/* Created and Proposal are system-stamped — read only, like Last Updated. */}
                 <td onClick={selectCell(o, COLS[18])} className={isSel(o, COLS[18]) ? 'cell-sel' : ''}>
                   <div className="ro" title="Stamped when the opportunity was created — read only">{mmmYY(o.createDate) || '—'}</div>
@@ -599,10 +576,10 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
             <tr>
               <td className="rowhead"></td>
               <td colSpan={14}>Totals {rows.length < base.length && <span className="hint">({rows.length} of {base.length} rows shown — filters active)</span>}</td>
-              <td className="num">{showValue ? `₹ ${fmt(totals.v)}` : <Icon name="lock" size={12} />}</td>
-              <td className="num">{comm ? `₹ ${fmt(totals.c)}` : <Icon name="lock" size={12} />}</td>
-              <td className="num">{comm ? `₹ ${fmt(totals.v - totals.c)}` : <Icon name="lock" size={12} />}</td>
-              <td className="num" style={{ color: 'var(--amber-text)' }}>{comm && totals.v ? Math.round(((totals.v - totals.c) / totals.v) * 100) + '%' : comm ? '' : <Icon name="lock" size={12} />}</td>
+              <td className="num">₹ {fmt(totals.v)}</td>
+              <td className="num">₹ {fmt(totals.c)}</td>
+              <td className="num">₹ {fmt(totals.v - totals.c)}</td>
+              <td className="num" style={{ color: 'var(--amber-text)' }}>{totals.v ? Math.round(((totals.v - totals.c) / totals.v) * 100) + '%' : ''}</td>
               <td colSpan={14}></td>
             </tr>
           </tfoot>

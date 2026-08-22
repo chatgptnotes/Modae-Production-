@@ -39,16 +39,22 @@ test('sales owners open on the key columns, everyone else on the full sheet', ()
   assert.match(tracker, /setColView\(colView === 'key' \? 'all' : 'key'\)/)
 })
 
-test('Excel export uses the role-safe filtered column list for headers and rows', () => {
-  assert.match(tracker, /const COMMERCIAL_COLS = new Set\(\['valueK', 'cogsK', 'gmK', 'gmPct'\]\)/)
-  assert.match(tracker, /const exportCols = comm\s*\?\s*COLS\s*:\s*COLS\.filter\(/)
-  assert.match(tracker, /canPriceProposal\(store\.role\)\s*\?\s*!\['cogsK', 'gmK', 'gmPct'\]\.includes\(col\.key\)\s*:\s*!COMMERCIAL_COLS\.has\(col\.key\)/)
+test('Excel export includes every tracker column for every role', () => {
+  assert.match(tracker, /const exportCols = COLS/)
+  assert.doesNotMatch(tracker, /COMMERCIAL_COLS/)
   assert.match(tracker, /\['Sl', \.\.\.exportCols\.map\(col => col\.label\)\]/)
   assert.match(tracker, /rows\.map\(\(o, index\) => \[index \+ 1, \.\.\.exportCols\.map\(col => \{/)
   assert.match(tracker, /case 'gmK': return gmK\(o\)/)
   assert.match(tracker, /case 'gmPct': return gmPct\(o\) \|\| ''/)
   assert.match(tracker, /nextActionWith\(o, store\.getProposal\(o\.id\), store\)\.owner \|\| ''/)
-  assert.doesNotMatch(tracker, /disabled=\{!comm\}/)
+})
+
+test('Value and COGS are editable for every tracker user while GM stays derived', () => {
+  assert.match(tracker, /value=\{o\.valueK \|\| ''\} onChange=\{upd\(o\.id, 'valueK'\)\}/)
+  assert.match(tracker, /value=\{o\.cogsK \|\| ''\} onChange=\{upd\(o\.id, 'cogsK'\)\}/)
+  assert.match(tracker, />\{o\.valueK \? fmt\(gmK\(o\)\) : '-'\}<\/td>/)
+  assert.doesNotMatch(tracker, /className="num locked"/)
+  assert.doesNotMatch(tracker, /name="lock"/)
 })
 
 test('Latest created selects all owners, clears filters, and sorts by createDate descending', () => {
