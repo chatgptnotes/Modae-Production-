@@ -14,30 +14,37 @@ import { supabase } from './supabase.js'
 // Local development: point at a function served outside Supabase, e.g.
 //   deno run --allow-net --allow-env supabase/functions/ai/index.ts
 //   VITE_AI_FUNCTION_URL=http://localhost:8000 npm run dev
-// Unset in every deployed build — then calls go through Supabase as normal.
-// Guarded the same way as supabase.js — `import.meta.env` is Vite-only.
-const DEV_URL = ((import.meta.env || {}).VITE_AI_FUNCTION_URL || '').trim()
+// Production builds default to the same-origin Vercel route; local builds can
+// point at a separately served function. Guarded like supabase.js because
+// `import.meta.env` is Vite-only.
+const AI_URL = ((import.meta.env || {}).VITE_AI_FUNCTION_URL || '').trim()
+  || ((import.meta.env || {}).PROD ? '/api/ai' : '')
 const DEV_ADMIN_URL = ((import.meta.env || {}).VITE_AI_ADMIN_FUNCTION_URL || '').trim()
 
-export const aiEnabled = () => !!supabase || !!DEV_URL
+export const aiEnabled = () => !!supabase || !!AI_URL
 
 const DEFAULT_TIMEOUT = 45000
 
 // → { data } | { text } from the function, or null. Never throws.
 export async function runTask(task, payload = {}, { timeoutMs = DEFAULT_TIMEOUT, model, fallback = false } = {}) {
   if (fallback) return null
-  if (!supabase && !DEV_URL) return null
+  if (!supabase && !AI_URL) return null
   const ctl = new AbortController()
   const timer = setTimeout(() => ctl.abort(), timeoutMs)
   try {
     const body = { task, payload, model }
-    const { data, error } = DEV_URL
-      ? await fetch(DEV_URL, {
+    const { data, error } = AI_URL
+      ? await fetch(AI_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(body),
           signal: ctl.signal,
-        }).then(async r => ({ data: await r.json(), error: null }))
+        }).then(async response => {
+          const data = await response.json().catch(() => ({}))
+          return response.ok
+            ? { data, error: null }
+            : { data, error: new Error(data?.error || `AI proxy returned HTTP ${response.status}`) }
+        })
       : await supabase.functions.invoke('ai', { body, signal: ctl.signal })
     if (error) throw error
     if (!data?.ok) throw new Error(data?.error || 'AI task failed')
@@ -67,7 +74,7 @@ export async function testConnection(model) {
 export async function saveAiKey(apiKey, role = '') {
   if (!apiKey) throw new Error('API key is required')
   const body = { apiKey }
-  const adminUrl = DEV_ADMIN_URL || (DEV_URL ? DEV_URL.replace(/\/ai\/?$/, '/ai-admin') : '')
+  const adminUrl = DEV_ADMIN_URL || (AI_URL && !AI_URL.endsWith('/api/ai') ? AI_URL.replace(/\/ai\/?$/, '/ai-admin') : '')
   if (adminUrl) {
     const res = await fetch(adminUrl, {
       method: 'POST',

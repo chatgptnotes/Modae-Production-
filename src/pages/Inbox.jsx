@@ -15,6 +15,7 @@ import AttachmentViewer from '../AttachmentViewer.jsx'
 import { findDuplicates } from '../insights.js'
 import { leadWorkflow } from '../leadWorkflow.js'
 import { isFastTrackLead, routeOwner, supplyMissing } from '../leadRules.js'
+import { INDIA_LOCATIONS, INDIA_LOCATION_GROUPS, indiaRegionForLocation } from '../indiaLocations.js'
 import { PROJECT_TYPES, oppTypesForProjectType, templatesForSelection, simulatedLead, simulatedCount, SIMULATED_CUSTOMER_SCENARIOS } from '../simulatedLeads.js'
 import {
   QUOTE_FEE_DOCUMENTS, answeredPatch, clarificationItems, clarificationKindFor,
@@ -578,9 +579,12 @@ function AiLeadDetail({ lead }) {
   const [reverting, setReverting] = useState(false)
   const [decisionErr, setDecisionErr] = useState('')
   const [reassignTo, setReassignTo] = useState(lead.suggestedOwner || OWNERS[0])
+  const initialLocation = lead.location || (lead.region && !indiaRegionForLocation(lead.region) ? lead.region : '') || leadFieldValue(ai.fields, /location|region/i)
+  const initialRegion = lead.region || indiaRegionForLocation(initialLocation) || initialLocation
   const initialDecisions = () => ({
-    region: lead.region || lead.location || leadFieldValue(ai.fields, /location|region/i),
-    owner: lead.assignedOwner || lead.suggestedOwner || routeOwner(lead.region || lead.location || leadFieldValue(ai.fields, /location|region/i), store.config, OWNERS[0]),
+    location: initialLocation,
+    region: initialRegion,
+    owner: lead.assignedOwner || lead.suggestedOwner || routeOwner(initialRegion, store.config, OWNERS[0]),
     oppType: OPP_TYPES.includes(lead.oppType)
       ? lead.oppType
       : leadFieldValue(ai.fields, /opp type/i) || (lead.route === 'Service' ? 'Service' : lead.route === 'Project' ? 'Project' : 'Spares'),
@@ -796,7 +800,7 @@ function AiLeadDetail({ lead }) {
     }
     const previous = initialDecisions()
     const nextFields = updateLeadField(updateLeadField(updateLeadField(updateLeadField(ai.fields,
-      'Location', decisionDraft.region, 'Customer'), 'Opp Type', decisionDraft.oppType),
+      'Location', decisionDraft.location, 'Customer'), 'Opp Type', decisionDraft.oppType),
       'BU / Segment', `${decisionDraft.bu} / ${decisionDraft.segment}`), 'Product', decisionDraft.product)
     const changed = Object.keys(decisionDraft)
       .filter(key => previous[key] !== decisionDraft[key])
@@ -804,7 +808,7 @@ function AiLeadDetail({ lead }) {
     if (!changed.length) { setDecisionSaved(true); return }
     store.updateLead(lead.id, {
       region: decisionDraft.region,
-      location: decisionDraft.region,
+      location: decisionDraft.location,
       suggestedOwner: decisionDraft.owner,
       assignedOwner: decisionDraft.owner,
       ownerOverrideReason: isOverride ? lead.ownerOverrideReason.trim() : '',
@@ -824,15 +828,17 @@ function AiLeadDetail({ lead }) {
     setDecisionSaved(true)
   }
 
-  const updateDecisionRegion = (region) => {
+  const updateDecisionRegion = (location) => {
+    const mappedRegion = indiaRegionForLocation(location) || (location.trim() ? 'Unclassified leads' : '')
     setDecisionDraft(previous => ({
       ...previous,
-      region,
+      location,
+      region: mappedRegion,
       // A non-empty region is authoritative for routing. Keep the current
       // owner only while the region is blank; once a region is entered, the
       // owner selector follows the configured regional rule immediately.
-      owner: region.trim()
-        ? routeOwner(region, store.config, previous.owner)
+      owner: mappedRegion
+        ? routeOwner(mappedRegion, store.config, previous.owner)
         : previous.owner,
     }))
     setDecisionErr('')
@@ -1160,9 +1166,17 @@ function AiLeadDetail({ lead }) {
               {decisionSaved && <span className="lead-decision-saved">Saved</span>}
             </div>
             <div className="lead-decision-grid">
-              <label>Region / location
-                <input value={decisionDraft.region} disabled={lead.status === 'Dropped'}
-                  onChange={e => updateDecisionRegion(e.target.value)} placeholder="Enter region or location" />
+              <label>City / location
+                <select value={decisionDraft.location === 'Other / Unclassified' || INDIA_LOCATIONS.some(item => item.value === decisionDraft.location) ? decisionDraft.location : ''}
+                  disabled={lead.status === 'Dropped'} onChange={e => updateDecisionRegion(e.target.value)}>
+                  <option value="">Select a city or town</option>
+                  {INDIA_LOCATION_GROUPS.map(group => (
+                    <optgroup key={group.state} label={group.state}>
+                      {group.locations.map(item => <option key={item.value} value={item.value}>{item.city}</option>)}
+                    </optgroup>
+                  ))}
+                  <option value="Other / Unclassified">Other / Unclassified</option>
+                </select>
               </label>
               <label>Assigned owner
                 <select value={decisionDraft.owner} disabled={lead.status === 'Dropped'}
