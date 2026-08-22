@@ -15,7 +15,7 @@ import AttachmentViewer from '../AttachmentViewer.jsx'
 import { findDuplicates } from '../insights.js'
 import { leadWorkflow } from '../leadWorkflow.js'
 import { isFastTrackLead, routeOwner, supplyMissing } from '../leadRules.js'
-import { INDIA_LOCATIONS, INDIA_LOCATION_GROUPS, indiaRegionForLocation } from '../indiaLocations.js'
+import { INDIA_LOCATION_GROUPS, indiaLocation, indiaRegionForLocation } from '../indiaLocations.js'
 import { PROJECT_TYPES, oppTypesForProjectType, templatesForSelection, simulatedLead, simulatedCount, SIMULATED_CUSTOMER_SCENARIOS } from '../simulatedLeads.js'
 import {
   QUOTE_FEE_DOCUMENTS, answeredPatch, clarificationItems, clarificationKindFor,
@@ -603,6 +603,9 @@ function AiLeadDetail({ lead }) {
       locations: group.locations.filter(item => `${item.city} ${item.state}`.toLowerCase().includes(locationQuery)),
     })).filter(group => group.locations.length)
     : INDIA_LOCATION_GROUPS
+  const filteredLocations = filteredLocationGroups.flatMap(group => group.locations)
+  const visibleLocations = filteredLocations.slice(0, 50)
+  const selectedLocation = indiaLocation(decisionDraft.location)
 
   // Re-read the mail (plus whatever documents are now on the lead).
   // `keepDecisions` is the automatic path taken after a document is added: the
@@ -1178,17 +1181,28 @@ function AiLeadDetail({ lead }) {
               <label>City / location
                 <input type="search" value={locationSearch} disabled={lead.status === 'Dropped'}
                   onChange={e => setLocationSearch(e.target.value)} placeholder="Search city or state" aria-label="Search city or state" />
-                <select value={decisionDraft.location === 'Other / Unclassified' || INDIA_LOCATIONS.some(item => item.value === decisionDraft.location) ? decisionDraft.location : ''}
-                  disabled={lead.status === 'Dropped'} onChange={e => updateDecisionRegion(e.target.value)}>
-                  <option value="">Select a city or town</option>
-                  {filteredLocationGroups.map(group => (
-                    <optgroup key={group.state} label={group.state}>
-                      {group.locations.map(item => <option key={item.value} value={item.value}>{item.city}</option>)}
-                    </optgroup>
+                <div className="location-suggestions" role="listbox" aria-label="City suggestions">
+                  {locationQuery && visibleLocations.map(item => (
+                    <button type="button" key={item.value} className="location-suggestion"
+                      disabled={lead.status === 'Dropped'} onClick={() => updateDecisionRegion(item.value)}>
+                      <strong>{item.city}</strong><span>{item.state} · {item.region}</span>
+                    </button>
                   ))}
-                  {locationQuery && !filteredLocationGroups.length && <option disabled>No cities found</option>}
-                  <option value="Other / Unclassified">Other / Unclassified</option>
-                </select>
+                  {locationQuery && filteredLocations.length > 50 && (
+                    <span className="location-suggestion-note">Showing 50 of {filteredLocations.length} matches. Refine your search.</span>
+                  )}
+                  {locationQuery && !filteredLocations.length && (
+                    <span className="location-suggestion-note">No cities found</span>
+                  )}
+                  {!locationQuery && selectedLocation && (
+                    <span className="location-selected"><strong>{selectedLocation.city}</strong> · {selectedLocation.state}</span>
+                  )}
+                  {!locationQuery && !selectedLocation && (
+                    <span className="location-suggestion-note">Type above to search for a city or town</span>
+                  )}
+                  <button type="button" className="location-other" disabled={lead.status === 'Dropped'}
+                    onClick={() => updateDecisionRegion('Other / Unclassified')}>Other / Unclassified</button>
+                </div>
               </label>
               <label>Assigned owner
                 <select value={decisionDraft.owner} disabled={lead.status === 'Dropped'}

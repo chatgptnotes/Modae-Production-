@@ -1920,6 +1920,14 @@ button.install:hover { background: var(--primary-hover); }
 .lead-decision-grid input, .lead-decision-grid select { width: 100%; min-width: 0; border: 1px solid var(--ws-border-strong); border-radius: 6px; padding: 7px 8px; background: var(--ws-surface); color: var(--ws-text); font-size: 11.5px; }
 .lead-decision-grid input:focus, .lead-decision-grid select:focus { outline: 2px solid var(--ws-blue-line); border-color: var(--ws-primary); }
 .lead-decision-grid input:disabled, .lead-decision-grid select:disabled { background: var(--ws-surface-2); color: var(--ws-text-3); cursor: not-allowed; }
+.location-suggestions { display: flex; flex-direction: column; gap: 3px; max-height: 190px; overflow-y: auto; padding: 3px; border: 1px solid var(--ws-border-strong); border-radius: 6px; background: var(--ws-surface-2); }
+.location-suggestion { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 6px 7px; border: 0; border-radius: 4px; background: transparent; color: var(--ws-text); text-align: left; cursor: pointer; }
+.location-suggestion:hover, .location-suggestion:focus-visible { background: var(--ws-blue-soft); outline: 0; }
+.location-suggestion strong, .location-selected strong { font-size: 11.5px; }
+.location-suggestion span, .location-selected, .location-suggestion-note { color: var(--ws-text-3); font-size: 10px; font-weight: 500; }
+.location-selected { padding: 6px 7px; border-radius: 4px; background: var(--ws-blue-soft); }
+.location-other { align-self: flex-start; margin: 2px 4px 1px; padding: 3px 6px; border: 1px solid var(--ws-border-strong); border-radius: 4px; background: var(--ws-surface); color: var(--ws-text-2); font-size: 10px; cursor: pointer; }
+.location-other:hover, .location-other:focus-visible { border-color: var(--ws-primary); color: var(--ws-primary); outline: 0; }
 .lead-decision-actions { display: flex; gap: 7px; margin-top: 10px; }
 .lead-decision-actions button { min-height: 0; padding: 6px 9px; font-size: 11px; }
 .lead-decision-note { margin: 8px 0 0; color: var(--ws-amber); font-size: 10.5px; line-height: 1.4; }
