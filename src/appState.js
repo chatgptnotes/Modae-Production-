@@ -91,6 +91,7 @@ export function migrate(s) {
   if (!s.rateSheets) s.rateSheets = seedRateSheets
   if (!Array.isArray(s.svcEstimates)) s.svcEstimates = demo ? seedSvcEstimates : []
   if (!Array.isArray(s.clarifications)) s.clarifications = demo ? seedClarifications : []
+  if (!Array.isArray(s.vendorQuotes)) s.vendorQuotes = []
   // Demo Launcher scenario 6 needs a PO already in review to open onto. Backfill
   // by key so a saved state that predates the seed picks it up, without ever
   // overwriting a PO the user has been working on.
@@ -215,7 +216,7 @@ export function emptyState(prev) {
     demoData: false,
     opportunities: [], leads: [], leadArchive: [], leadDeadlines: [],
     approvals: [], audit: [], customers: [],
-    sparesLines: [], sparesAlternatives: [], svcEstimates: [], clarifications: [],
+    sparesLines: [], sparesAlternatives: [], svcEstimates: [], clarifications: [], vendorQuotes: [],
     surveys: [], competitors: [],
     files: {}, proposals: {}, communications: {}, kyc: {},
     poCompare: {}, handover: {}, bSteps: {},

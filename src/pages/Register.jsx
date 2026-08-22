@@ -1,13 +1,14 @@
 import React, { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useStore, nextOppId } from '../store.jsx'
-import { OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, SUBFOLDERS, routeForType, ownerForOppType } from '../seed.js'
+import { OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, SUBFOLDERS, routeForType, ownerForOppType, newProposal } from '../seed.js'
 import { Icon } from '../icons.jsx'
 import { ErrBox } from '../ui.jsx'
 import { matchCustomer, customerStatusForLead } from './Inbox.jsx'
 import { activeBackend, uploadOppFile, fmtSize } from '../filestore.js'
 import { take } from '../leadFiles.js'
 import { leadVerificationBlockers, verificationSnapshot, redClearanceFor, isRedCleared } from '../leadVerification.js'
+import { buildLeadProposalData } from '../leadBoq.js'
 
 // Registration — the moment a qualified lead becomes an opportunity and the
 // permanent opportunity ID is minted (YYMM + sequence + owner initials).
@@ -108,6 +109,7 @@ export default function Register() {
     const location = fieldVal(fields, /location|region/i) || lead.location || lead.region || ''
     const opp = {
       id: previewId,
+      sourceLeadId: lead.id,
       sl: Math.max(0, ...store.opportunities.map(o => o.sl || 0)) + 1,
       sellTo, category, location,
       customerStatus: leadCustomerStatus,
@@ -126,6 +128,24 @@ export default function Register() {
       route: routeForType(oppType),
     }
     store.addOpportunity(opp)
+    if (routeForType(oppType) === 'Spares') {
+      const { workbenchRows, bom } = buildLeadProposalData(lead, store.priceLists)
+      store.addSparesLinesFromLead(opp.id, workbenchRows)
+      const proposal = newProposal(opp.id, opp)
+      store.saveProposal(opp.id, {
+        ...proposal,
+        rfqNumber: lead.ref || '',
+        subject: lead.subject || proposal.subject,
+        project: lead.subject || proposal.project,
+        kindAttn: contactPerson || proposal.kindAttn,
+        units: 1,
+        ...(bom.length ? { leadImportId: lead.id } : {}),
+        // Carry every extracted request into the visible BoQ immediately.
+        // Unmatched rows remain unpriced and therefore continue to block
+        // readiness until the workbench resolves them.
+        bom,
+      })
+    }
     // Stamp the new opp id onto lead-linked approvals (AP-1) so the Red-class
     // clearance and its conditions follow the opportunity into the workbench.
     store.linkLeadApprovals(lead.id, opp.id)

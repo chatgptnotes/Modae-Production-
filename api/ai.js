@@ -41,6 +41,10 @@ const leadSchema = {
     urgency: { type: 'STRING', enum: ['Low', 'Normal', 'Urgent'] },
     completeness: { type: 'INTEGER' },
     suggestedOwner: { type: 'STRING' },
+    lineItems: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+      description: { type: 'STRING' }, partNumber: { type: 'STRING' }, customerRef: { type: 'STRING' },
+      qty: { type: 'NUMBER' }, uom: { type: 'STRING' }, confidence: { type: 'INTEGER' }, evidence: { type: 'STRING' },
+    }, required: ['description', 'qty', 'confidence', 'evidence'] } },
     fields: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
       group: { type: 'STRING', enum: ['Customer', 'RFQ', 'Known Project'] },
       k: { type: 'STRING' }, v: { type: 'STRING' }, conf: { type: 'INTEGER' },
@@ -49,7 +53,7 @@ const leadSchema = {
     missing: { type: 'ARRAY', items: { type: 'STRING' } },
     next: { type: 'ARRAY', items: { type: 'STRING' } },
   },
-  required: ['summary', 'route', 'urgency', 'completeness', 'fields', 'missing', 'next'],
+  required: ['summary', 'route', 'urgency', 'completeness', 'fields', 'lineItems', 'missing', 'next'],
 }
 
 function leadPrompt(p) {
@@ -74,7 +78,8 @@ Ownership rules:
 ${cap((p.ownershipRules || []).map(r => `${r.region} -> ${r.owner}`).join('\n'), 1000)}
 
 Always attempt Sell-to customer, Category, Contact, Opp type, Opportunity
-scope, line items, quantities, BU and Segment. Cite the email or attachment
+scope, line items, quantities, BU and Segment. Return every requested material
+as lineItems with one row per item. Cite the email or attachment
 name in evidence. Ask only for information absent from both sources.`
 }
 

@@ -493,6 +493,10 @@ function CustomerKycTab({ opp }) {
     || (store.config?.kycItems || []).map(n => ({ name: n, state: 'Missing', when: '' }))
   const fee = store.config?.amberFee || { amount: 25000, cur: 'INR', days: 7 }
   const setState = (item, state, file) => customer && store.setKycState(customer.name, item, state, file)
+  const simulateAllKycDone = () => {
+    if (!customer || !canVerify || busy) return
+    items.forEach(item => store.setKycState(customer.name, item.name, 'Verified'))
+  }
 
   const fileInput = useRef(null)
   const pending = useRef('')
@@ -593,6 +597,15 @@ function CustomerKycTab({ opp }) {
           </>
         ) : <>
         <input ref={fileInput} type="file" style={{ display: 'none' }} onChange={onPick} />
+        {customer && (
+          <div className="toolbar" style={{ margin: '0 0 8px' }}>
+            <button className="primary" disabled={!canVerify || !!busy || items.every(k => k.state === 'Verified')}
+              title={canVerify ? 'Demo only - marks every checklist item verified' : 'Only AH verifies KYC'}
+              onClick={simulateAllKycDone}>
+              Simulate all KYC done
+            </button>
+          </div>
+        )}
         {items.map(k => (
           <React.Fragment key={k.name}>
             <div className="check-row">
@@ -677,6 +690,10 @@ function ClarificationsTab({ opp }) {
   const [sentOk, setSentOk] = useState(false)
   const [sendErr, setSendErr] = useState('')
   const [busy, setBusy] = useState('') // '' | 'suggest' | 'draft'
+  const [answerFor, setAnswerFor] = useState(null)
+  const [answerForm, setAnswerForm] = useState({ response: '', answerSource: 'Customer', receivedAt: '' })
+  const [answerFiles, setAnswerFiles] = useState([])
+  const [answerErr, setAnswerErr] = useState('')
 
   // Gemini proposes gap-specific questions; the canned per-route list is the
   // fallback whenever the AI is unavailable (see src/ai.js).
@@ -754,6 +771,41 @@ function ClarificationsTab({ opp }) {
     setSentOk(true)
   }
 
+  const openAnswer = c => {
+    setAnswerFor(c)
+    setAnswerForm({
+      response: c.response || '',
+      answerSource: c.answerSource || c.audience || 'Customer',
+      receivedAt: c.answeredAt || new Date().toISOString().slice(0, 10),
+    })
+    setAnswerFiles([])
+    setAnswerErr('')
+  }
+
+  const saveAnswer = async () => {
+    if (!answerFor) return
+    if (!answerForm.response.trim()) { setAnswerErr('Add the answer received before marking this resolved.'); return }
+    setBusy('answer')
+    const attachments = []
+    for (const file of answerFiles) {
+      try {
+        const rec = await uploadOppFile(opp, 'Customer Specs', file)
+        store.addFile(opp.id, 'Customer Specs', rec)
+        attachments.push({ ...rec, folder: 'Customer Specs' })
+      } catch (err) {
+        attachments.push({ name: file.name, date: new Date().toISOString().slice(0, 10), size: fmtSize(file.size), folder: 'Customer Specs', cloud: false, error: err?.message || String(err) })
+      }
+    }
+    store.answerClarification(answerFor.id, {
+      response: answerForm.response.trim(),
+      answerSource: answerForm.answerSource,
+      answeredAt: answerForm.receivedAt,
+      attachments,
+    })
+    setBusy('')
+    setAnswerFor(null)
+  }
+
   return (
     <div>
       <div className="toolbar">
@@ -776,15 +828,13 @@ function ClarificationsTab({ opp }) {
                 <td>{c.id}</td>
                 <td>{c.category}</td>
                 <td>{c.gap}<div className="hint">{c.evidence}</div></td>
-                <td>{c.q}{c.response && <div className="okbox">Response: {c.response}</div>}</td>
+                <td>{c.q}{c.response && <div className="okbox">Response: {c.response}<div className="hint">From {c.answerSource || c.audience || 'source'}{c.answeredAt ? ` � ${ddMmmYY(c.answeredAt)}` : ''}</div>{(c.attachments || []).map(f => <div key={f.name} className="hint"><Icon name="fileText" size={11} /> {f.name}</div>)}</div>}</td>
                 <td>{c.owner}</td>
                 <td>{c.audience}</td>
                 <td>{ddMmmYY(c.due)}</td>
                 <td><Chip tone={clarTone(c.status)}>{c.status}</Chip></td>
                 <td>
-                  {c.status !== 'Answered' && (
-                    <button onClick={() => store.updateClarification(c.id, { status: 'Answered' })}>Mark resolved</button>
-                  )}
+                  <button onClick={() => openAnswer(c)}>{c.status === 'Answered' ? 'Edit answer' : 'Add answer'}</button>
                 </td>
               </tr>
             ))}
@@ -793,6 +843,34 @@ function ClarificationsTab({ opp }) {
         </table>
       </div>
 
+      {answerFor && (
+        <Modal title={`Answer clarification - ${answerFor.id}`} onClose={() => setAnswerFor(null)} wide>
+          {answerErr && <ErrBox>{answerErr}</ErrBox>}
+          <div className="clar-mail-form">
+            <label className="afield">Source
+              <select value={answerForm.answerSource} onChange={e => setAnswerForm({ ...answerForm, answerSource: e.target.value })}>
+                <option>Customer</option>
+                <option>Manufacturer / Vendor</option>
+                <option>Internal</option>
+              </select>
+            </label>
+            <label className="afield">Received date
+              <input type="date" value={answerForm.receivedAt} onChange={e => setAnswerForm({ ...answerForm, receivedAt: e.target.value })} />
+            </label>
+            <label className="afield">Answer received
+              <textarea rows={8} value={answerForm.response} onChange={e => setAnswerForm({ ...answerForm, response: e.target.value })} placeholder="Paste or summarise the answer received for this question." autoFocus />
+            </label>
+            <label className="afield">Files / mail evidence
+              <input type="file" multiple onChange={e => setAnswerFiles(Array.from(e.target.files || []))} />
+            </label>
+            {!!answerFiles.length && <div className="hint">{answerFiles.length} file(s) selected for Customer Specs.</div>}
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
+            <button onClick={() => setAnswerFor(null)}>Cancel</button>
+            <button className="primary" disabled={busy === 'answer'} onClick={saveAnswer}><Icon name="check" size={13} /> {busy === 'answer' ? 'Saving...' : 'Save answer'}</button>
+          </div>
+        </Modal>
+      )}
       {draftOpen && (
         <Modal title="AI-drafted clarification email" onClose={() => setDraftOpen(false)} wide className="clarification-compose-modal">
           {sendErr && <ErrBox>{sendErr}</ErrBox>}
@@ -828,14 +906,100 @@ function ClarificationsTab({ opp }) {
 function SourcingTab({ opp, goTab }) {
   const store = useStore()
   const lines = store.sparesLines.filter(l => l.oppId === opp.id)
+  const quotes = (store.vendorQuotes || []).filter(q => q.oppId === opp.id)
   const superseded = lines.some(l => String(l.match).toLowerCase().includes('superseded'))
-  const rfqDraft = (store.communications[opp.id] || []).find(c => c.kind === 'vendor-rfq-draft')
-  const prepareRfq = () => store.addCommunication(opp.id, {
-    to: 'Approved vendor list',
-    subject: `Vendor RFQ draft — ${opp.oppName}`,
-    kind: 'vendor-rfq-draft',
-    note: `${lines.length || 'all'} line(s), delivery ${opp.location || 'site'}. Human review required before any external send.`,
-  })
+  const [rfqOpen, setRfqOpen] = useState(false)
+  const [rfqForm, setRfqForm] = useState({ manufacturer: '', to: '', cc: '', subject: '', body: '' })
+  const [rfqErr, setRfqErr] = useState('')
+  const [quoteFor, setQuoteFor] = useState(null)
+  const [quoteForm, setQuoteForm] = useState({ lineId: '', unitPrice: '', currency: 'INR', leadTime: '', quoteRef: '', notes: '' })
+  const [quoteFiles, setQuoteFiles] = useState([])
+  const [quoteErr, setQuoteErr] = useState('')
+  const [quoteBusy, setQuoteBusy] = useState(false)
+
+  const rfqBody = () => [
+    'Dear Sir,',
+    '',
+    `Please share your best price and delivery for ${opp.oppName} (${opp.id}).`,
+    '',
+    'Items:',
+    ...(lines.length ? lines.map((l, i) => `${i + 1}. ${l.pn || l.custRef} - ${l.desc || 'Item'} - Qty ${l.qty || 1}`) : ['1. As per attached buyer specification.']),
+    '',
+    'Kindly include validity, lead time, warranty, freight basis and applicable taxes.',
+    '',
+    'Best regards,',
+    `${ROLES[opp.owner]?.name || opp.owner}`,
+    MODAE_COMPANY.name,
+  ].join('\n')
+
+  const openRfq = () => {
+    setRfqForm({
+      manufacturer: '', to: '', cc: '',
+      subject: `Manufacturer RFQ - ${opp.oppName} - ${opp.id}`,
+      body: rfqBody(),
+    })
+    setRfqErr('')
+    setRfqOpen(true)
+  }
+
+  const sendRfq = () => {
+    if (!rfqForm.to.trim()) { setRfqErr('Add the manufacturer email address before opening compose.'); return }
+    const href = gmailComposeHref({ to: rfqForm.to, cc: rfqForm.cc, subject: rfqForm.subject, body: rfqForm.body })
+    if (!href) { setRfqErr('Add the manufacturer email address before opening compose.'); return }
+    window.open(href, '_blank', 'noopener')
+    store.addVendorQuote(opp.id, {
+      manufacturer: rfqForm.manufacturer.trim() || rfqForm.to.trim(),
+      email: rfqForm.to.trim(), cc: rfqForm.cc.trim(), subject: rfqForm.subject,
+      body: rfqForm.body, lineIds: lines.map(l => l.id), status: 'Sent',
+    })
+    store.addCommunication(opp.id, {
+      to: rfqForm.to.trim(), cc: rfqForm.cc.trim(), subject: rfqForm.subject,
+      kind: 'vendor-rfq',
+    })
+    setRfqOpen(false)
+  }
+
+  const openVendorResponse = q => {
+    setQuoteFor(q)
+    setQuoteForm({
+      lineId: q.lineIds?.[0] || lines[0]?.id || '',
+      unitPrice: '', currency: 'INR', leadTime: '', quoteRef: '', notes: '',
+    })
+    setQuoteFiles([])
+    setQuoteErr('')
+  }
+
+  const saveVendorResponse = async () => {
+    if (!quoteFor) return
+    if (!quoteFiles.length && !quoteForm.unitPrice) { setQuoteErr('Upload the manufacturer reply or enter the quoted unit price.'); return }
+    setQuoteBusy(true)
+    try {
+      for (const file of quoteFiles) {
+        try {
+          const rec = await uploadOppFile(opp, 'Partner Docs', file)
+          store.addFile(opp.id, 'Partner Docs', rec)
+          store.attachVendorQuoteFile(quoteFor.id, { ...rec, folder: 'Partner Docs' })
+        } catch (err) {
+          store.attachVendorQuoteFile(quoteFor.id, { name: file.name, date: new Date().toISOString().slice(0, 10), size: fmtSize(file.size), folder: 'Partner Docs', cloud: false, error: err?.message || String(err) })
+        }
+      }
+      if (quoteForm.unitPrice && quoteForm.lineId) {
+        store.applyVendorQuoteToLine(quoteFor.id, quoteForm.lineId, {
+          manufacturer: quoteFor.manufacturer,
+          unitPrice: quoteForm.unitPrice,
+          currency: quoteForm.currency,
+          leadTime: quoteForm.leadTime,
+          quoteRef: quoteForm.quoteRef,
+          notes: quoteForm.notes,
+        })
+      } else {
+        store.updateVendorQuote(quoteFor.id, { status: 'Received', receivedAt: new Date().toISOString().slice(0, 10), notes: quoteForm.notes })
+      }
+      setQuoteFor(null)
+    } finally {
+      setQuoteBusy(false)
+    }
+  }
 
   const sources = lines.length
     ? [...new Map(lines.map(l => [l.priceList, l.priceState])).entries()].map(([name, state]) => ({ name, state }))
@@ -846,7 +1010,7 @@ function SourcingTab({ opp, goTab }) {
       {superseded && (
         <div className="ana-card c-12">
           <WarnBox>
-            <b>Obsolescence alert:</b> a quoted part is superseded (demo bulletin SB-112 — BKD-3300 replaced by BKD-3310).
+            <b>Obsolescence alert:</b> a quoted part is superseded (demo bulletin SB-112 - BKD-3300 replaced by BKD-3310).
             Resolve the supersession in the Spares workbench before quoting.
           </WarnBox>
         </div>
@@ -865,22 +1029,100 @@ function SourcingTab({ opp, goTab }) {
       <div className="ana-card c-6">
         <div className="ana-title">Vendor actions</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button onClick={prepareRfq} disabled={!!rfqDraft}><Icon name="mail" size={13} /> {rfqDraft ? 'Vendor RFQ draft prepared' : 'Draft vendor RFQ (simulated)'}</button>
+          <button onClick={openRfq}><Icon name="mail" size={13} /> Draft manufacturer RFQ</button>
           <button className="primary" onClick={() => goTab('proposal')}>
             <Icon name="arrowRight" size={13} /> Route to workbench
           </button>
         </div>
-        {rfqDraft && (
-          <div className="okbox">
-            Vendor RFQ draft prepared (simulated) — {rfqDraft.note || `${lines.length || 'all'} line(s), delivery ${opp.location || 'site'}.`}
-            Human review required before any external send.
-          </div>
-        )}
+        <p className="hint">Send RFQs to multiple manufacturers, attach their replies, then apply the chosen price to the opportunity line.</p>
       </div>
+
+      <div className="ana-card c-12">
+        <div className="ana-title">Manufacturer quotes</div>
+        {quotes.map(q => (
+          <div key={q.id} className="check-row" style={{ alignItems: 'flex-start' }}>
+            <Icon name="mail" size={13} />
+            <span style={{ flex: 1 }}>
+              <b>{q.manufacturer}</b> <Chip tone={q.status === 'Applied' ? 'state-Accepted' : q.status === 'Received' ? 'state-Review' : 'grey'}>{q.status}</Chip>
+              <div className="hint">{q.email}{q.sentAt ? ` - sent ${ddMmmYY((q.sentAt || '').slice(0, 10))}` : ''}{q.receivedAt ? ` - received ${ddMmmYY(q.receivedAt)}` : ''}</div>
+              {(q.attachments || []).map(f => <div key={f.name} className="hint"><Icon name="fileText" size={11} /> {f.name}</div>)}
+              {(q.prices || []).map((p, i) => <div key={i} className="okbox">Applied {p.unitPrice} {p.currency} to {p.lineId}{p.leadTime ? ` - ${p.leadTime}` : ''}</div>)}
+            </span>
+            <button onClick={() => openVendorResponse(q)}><Icon name="upload" size={12} /> Upload / apply response</button>
+          </div>
+        ))}
+        {!quotes.length && <p className="hint">No manufacturer RFQs sent yet.</p>}
+      </div>
+
+      {rfqOpen && (
+        <Modal title="Draft manufacturer RFQ" onClose={() => setRfqOpen(false)} wide>
+          {rfqErr && <ErrBox>{rfqErr}</ErrBox>}
+          <div className="clar-mail-form">
+            <label className="afield">Manufacturer
+              <input value={rfqForm.manufacturer} onChange={e => setRfqForm({ ...rfqForm, manufacturer: e.target.value })} placeholder="Manufacturer / vendor name" />
+            </label>
+            <label className="afield">To
+              <input value={rfqForm.to} onChange={e => setRfqForm({ ...rfqForm, to: e.target.value })} placeholder="sales@manufacturer.com" autoFocus />
+            </label>
+            <label className="afield">CC
+              <input value={rfqForm.cc} onChange={e => setRfqForm({ ...rfqForm, cc: e.target.value })} />
+            </label>
+            <label className="afield">Subject
+              <input value={rfqForm.subject} onChange={e => setRfqForm({ ...rfqForm, subject: e.target.value })} />
+            </label>
+            <label className="afield">Body
+              <textarea rows={14} value={rfqForm.body} onChange={e => setRfqForm({ ...rfqForm, body: e.target.value })} />
+            </label>
+          </div>
+          <WarnBox>Human review required before sending. The app opens Gmail compose and logs the RFQ against this opportunity.</WarnBox>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
+            <button onClick={() => setRfqOpen(false)}>Cancel</button>
+            <button className="primary" onClick={sendRfq}><Icon name="send" size={13} /> Open Gmail compose</button>
+          </div>
+        </Modal>
+      )}
+
+      {quoteFor && (
+        <Modal title={`Manufacturer response - ${quoteFor.manufacturer}`} onClose={() => setQuoteFor(null)} wide>
+          {quoteErr && <ErrBox>{quoteErr}</ErrBox>}
+          <div className="clar-mail-form">
+            <label className="afield">Apply to opportunity line
+              <select value={quoteForm.lineId} onChange={e => setQuoteForm({ ...quoteForm, lineId: e.target.value })}>
+                <option value="">Do not apply price yet</option>
+                {lines.map(l => <option key={l.id} value={l.id}>{l.pn || l.custRef} - {l.desc || 'Item'} - Qty {l.qty || 1}</option>)}
+              </select>
+            </label>
+            <label className="afield">Quoted unit price
+              <input type="number" min="0" value={quoteForm.unitPrice} onChange={e => setQuoteForm({ ...quoteForm, unitPrice: e.target.value })} />
+            </label>
+            <label className="afield">Currency
+              <select value={quoteForm.currency} onChange={e => setQuoteForm({ ...quoteForm, currency: e.target.value })}>
+                {['INR', 'EUR', 'USD'].map(c => <option key={c}>{c}</option>)}
+              </select>
+            </label>
+            <label className="afield">Lead time
+              <input value={quoteForm.leadTime} onChange={e => setQuoteForm({ ...quoteForm, leadTime: e.target.value })} placeholder="4-6 weeks" />
+            </label>
+            <label className="afield">Quote reference
+              <input value={quoteForm.quoteRef} onChange={e => setQuoteForm({ ...quoteForm, quoteRef: e.target.value })} placeholder="Manufacturer quote no. / email date" />
+            </label>
+            <label className="afield">Notes
+              <textarea rows={4} value={quoteForm.notes} onChange={e => setQuoteForm({ ...quoteForm, notes: e.target.value })} />
+            </label>
+            <label className="afield">Reply files / price sheet
+              <input type="file" multiple onChange={e => setQuoteFiles(Array.from(e.target.files || []))} />
+            </label>
+            {!!quoteFiles.length && <div className="hint">{quoteFiles.length} file(s) selected for Partner Docs.</div>}
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
+            <button onClick={() => setQuoteFor(null)}>Cancel</button>
+            <button className="primary" disabled={quoteBusy} onClick={saveVendorResponse}><Icon name="check" size={13} /> {quoteBusy ? 'Saving...' : 'Save response'}</button>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }
-
 // ---------------------------------------------------------------------------
 function ProposalTab({ opp }) {
   const [sub, setSub] = useState('edit-sheet')

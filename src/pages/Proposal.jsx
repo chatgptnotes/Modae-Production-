@@ -14,6 +14,8 @@ import { normalizeProposal, buildPricing } from '../proposal/docProps.js'
 import ProposalSheetEditor from '../proposal/ProposalSheetEditor.jsx'
 import { proposalWorkbookAttachment, enclosureAttachments } from '../proposal/emailAttachments.js'
 import { downloadProposalXlsx } from '../proposal/excelExport.js'
+import { routeForType } from '../seed.js'
+import { buildLeadProposalData } from '../leadBoq.js'
 
 const ROUTE_TABS = {
   Project: ['Cover Letter', 'Edit Sheet', 'Document', 'Signal List', 'Rack Layout', 'Priced BoQ'],
@@ -127,9 +129,27 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   // never a click-time snapshot — a stale snapshot would silently revert edits.
   const pRef = React.useRef(p)
   pRef.current = p
+  const linkedLead = opp && store.leads.find(l => l.id === opp.sourceLeadId
+    || l.oppId === oppId
+    || String(opp.remarks || '').includes(`lead ${l.id}`))
 
   // /proposal/:oppId reuses this component instance — reload state per opportunity.
   useEffect(() => { setP(normalize(store.getProposal(oppId), opp)); setTab(initialTab) }, [oppId, initialTab]) // eslint-disable-line
+
+  // Older converted opportunities predate structured lead imports. Backfill
+  // their BoQ once from the linked lead so existing work does not stay on the
+  // generic starter rows. New registrations carry leadImportId themselves.
+  useEffect(() => {
+    if (!opp || routeForType(opp.oppType) !== 'Spares') return
+    const current = store.getProposal(oppId)
+    if (!linkedLead || (current.leadImportId === linkedLead.id && current.bom?.length) || !linkedLead.ai) return
+    const { workbenchRows, bom } = buildLeadProposalData(linkedLead, store.priceLists)
+    if (!bom.length) return
+    const next = { ...current, bom, units: 1, rfqNumber: linkedLead.ref || current.rfqNumber, subject: linkedLead.subject || current.subject, project: linkedLead.subject || current.project, leadImportId: linkedLead.id }
+    store.addSparesLinesFromLead(oppId, workbenchRows)
+    store.saveProposal(oppId, next)
+    setP(normalize(next, opp))
+  }, [oppId, opp?.sourceLeadId, opp?.remarks, linkedLead?.id, linkedLead?.oppId, store.proposals?.[oppId]?.leadImportId, store.proposals?.[oppId]?.bom?.length]) // eslint-disable-line
 
   // Print-all: render the full customer document (cover + terms + BoQ) first,
   // then open the dialog; afterprint restores the tabbed view.
@@ -475,6 +495,10 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           ({p.artifactSheets.filter(x => !['Cover Letter', 'Priced BoQ'].includes(x)).join(' · ')}) are
           issued only when ticked on the Document tab.
         </div>
+      )}
+
+      {route === 'Spares' && !linkedLead && (
+        <div className="warnbox">No source lead is linked to this opportunity. The BoQ was not populated from another lead.</div>
       )}
 
       {tab === 'Cover Letter' && (

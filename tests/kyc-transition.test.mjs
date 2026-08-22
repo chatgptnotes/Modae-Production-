@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
-import { transitionBlockers } from '../src/gates.js'
+import { nextActionWith, readiness, transitionBlockers } from '../src/gates.js'
 
 const workbenchSource = fs.readFileSync('src/pages/Workbench.jsx', 'utf8')
 const proposal = { terms: [], bom: [{ quoted: 100, listPrice: 100 }], revision: '01' }
@@ -39,6 +39,32 @@ test('Blue KYC blocks Proposal until every KYC item is verified', () => {
     },
   })
   assert.equal(verified.some(b => b.key === 'kyc'), false, 'verified KYC should clear the KYC blocker')
+})
+
+test('Blue lead-stage KYC verification clears the opportunity KYC gate', () => {
+  const state = { approvals: [], kyc: {}, clarifications: [] }
+  const leadVerifiedOpp = {
+    ...baseOpp,
+    milestone: 'Customer/KYC',
+    leadVerification: { type: 'KYC', status: 'Verified' },
+  }
+
+  const blockers = transitionBlockers(leadVerifiedOpp, 'Registration', proposal, state)
+  assert.equal(blockers.some(b => b.key === 'kyc'), false, 'lead-stage verified KYC should clear Registration')
+  assert.equal(readiness(leadVerifiedOpp, proposal, state).some(b => b.key === 'kyc-block'), false,
+    'lead-stage verified KYC should clear readiness')
+  assert.equal(nextActionWith(leadVerifiedOpp, proposal, state).owner, '',
+    'lead-stage verified KYC should not assign the next action to AH')
+})
+
+test('unverified lead-stage KYC snapshot does not clear the opportunity gate', () => {
+  const state = { approvals: [], kyc: {}, clarifications: [] }
+  const blockers = transitionBlockers({
+    ...baseOpp,
+    milestone: 'Customer/KYC',
+    leadVerification: { type: 'KYC', status: 'Pending' },
+  }, 'Registration', proposal, state)
+  assert.ok(blockers.some(b => b.key === 'kyc'), 'only a verified lead-stage snapshot should clear KYC')
 })
 
 test('commercial deviation still uses AH approval', () => {

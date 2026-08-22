@@ -426,7 +426,7 @@ export function matchParts(items, allParts) {
         if (!match && n.length >= 5) {
           const part = allParts.find(p => {
             const pp = norm(p.pn)
-            return pp.length >= 5 && (pp.startsWith(n) || n.startsWith(pp))
+            return pp.length >= 5 && (pp.startsWith(n) || n.startsWith(pp) || pp.includes(n))
           })
           if (part) match = { ...part, tier: 3 }
         }
@@ -448,6 +448,35 @@ export function matchParts(items, allParts) {
     }
     return { item, match }
   })
+}
+
+// Conservative parser for common email/pasted-list line shapes.
+export function parseLeadLineItems(text) {
+  const source = String(text || '').replace(/\r/g, '')
+  const qtyPattern = /(?:qty|quantity|qnty)\s*[:=]?\s*\d+(?:\.\d+)?|(?:x|×)\s*\d+(?:\.\d+)?|\d+(?:\.\d+)?\s*(?:nos?|pcs?|pieces?|sets?|ea)\b/i
+  const partPattern = /\b(?=[A-Z0-9./_-]*\d)[A-Z][A-Z0-9]*(?:[./_-][A-Z0-9]+)*\b/i
+  const chunks = []
+  for (const line of source.split(/\n|;|(?=\b\d+[.)]\s)/).map(s => s.trim()).filter(Boolean)) {
+    const commaParts = line.split(',').map(s => s.trim()).filter(Boolean)
+    const compact = commaParts.length > 1
+      && commaParts.filter(s => qtyPattern.test(s) && partPattern.test(s)).length === commaParts.length
+    chunks.push(...(compact ? commaParts : [line]))
+  }
+  const rows = []
+  for (const chunk of chunks) {
+    const qtyM = chunk.match(/(?:qty|quantity|qnty)\s*[:=]?\s*(\d+(?:\.\d+)?)|(?:x|×)\s*(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*(?:nos?|pcs?|pieces?|sets?|ea)\b/i)
+    const pnM = chunk.match(partPattern)
+    if (!qtyM && !pnM) continue
+    const qty = Number(qtyM?.[1] || qtyM?.[2] || qtyM?.[3] || 1)
+    const pn = pnM?.[0] || ''
+    const desc = chunk.replace(/^\d+[.)]\s*/, '')
+      .replace(/(?:qty|quantity|qnty)\s*[:=]?\s*\d+(?:\.\d+)?/i, '')
+      .replace(/(?:x|×)\s*\d+(?:\.\d+)?/i, '')
+      .replace(/\d+(?:\.\d+)?\s*(?:nos?|pcs?|pieces?|sets?|ea)\b/i, '')
+      .replace(pn, '').replace(/[,:\-–]+\s*$/, '').trim()
+    rows.push({ description: desc || pn, partNumber: pn, customerRef: pn, qty, uom: 'EA', confidence: pn ? 80 : 55, evidence: chunk })
+  }
+  return rows
 }
 
 // ----------------------------------------------------------------- builders

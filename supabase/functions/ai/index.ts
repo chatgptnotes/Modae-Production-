@@ -101,6 +101,11 @@ const TASKS: Record<string, Task> = {
         urgency: { type: 'STRING', enum: ['Low', 'Normal', 'Urgent'] },
         completeness: INT,
         suggestedOwner: STR,
+        lineItems: arrOf({
+          type: 'OBJECT',
+          properties: { description: STR, partNumber: STR, customerRef: STR, qty: { type: 'NUMBER' }, uom: STR, confidence: INT, evidence: STR },
+          required: ['description', 'qty', 'confidence', 'evidence'],
+        }),
         fields: arrOf({
           type: 'OBJECT',
           properties: {
@@ -112,7 +117,7 @@ const TASKS: Record<string, Task> = {
         missing: arrOf(STR),
         next: arrOf(STR),
       },
-      required: ['summary', 'route', 'urgency', 'completeness', 'fields', 'missing', 'next'],
+      required: ['summary', 'route', 'urgency', 'completeness', 'fields', 'lineItems', 'missing', 'next'],
     },
     build: p => `${HOUSE}
 
@@ -144,6 +149,8 @@ Produce:
   entry for any installed base named in the mail. If the source contradicts
   itself, add a field naming the conflict with a confidence below 75 and a note.
 - completeness: 0-100, how much of what we need to quote is actually present.
+- lineItems: one row for every requested material or spare, with description,
+  partNumber/customerRef when present, quantity, UOM, confidence and evidence.
 - missing: the specific information we must ask the customer for.
 - next: 2-4 concrete next actions for the salesperson.`,
   },

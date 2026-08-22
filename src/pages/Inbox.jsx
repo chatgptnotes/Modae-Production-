@@ -5,7 +5,7 @@ import { ddMmmYY, ageDays, gmailComposeHref } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { Chip, ConfChip, WarnBox, ErrBox, Modal } from '../ui.jsx'
-import { ROLES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, CUSTOMER_STATUSES, LEAD_SOURCES, ownerForOppType, routeForType } from '../seed.js'
+import { ROLES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, CUSTOMER_STATUSES, LEAD_SOURCES, ownerForOppType, routeForType, newProposal } from '../seed.js'
 import { isAdminRole, isApprover } from '../utils.js'
 import { aiEnabled, runJson, runText } from '../ai.js'
 import { extractDocText } from '../docText.js'
@@ -14,6 +14,8 @@ import { hold, add as holdMore } from '../leadFiles.js'
 import AttachmentViewer from '../AttachmentViewer.jsx'
 import { findDuplicates } from '../insights.js'
 import { leadWorkflow } from '../leadWorkflow.js'
+import { parseLeadLineItems } from '../tenderParse.js'
+import { buildLeadProposalData } from '../leadBoq.js'
 import { isFastTrackLead, routeOwner, supplyMissing } from '../leadRules.js'
 import { INDIA_LOCATION_GROUPS, indiaLocation, indiaRegionForLocation } from '../indiaLocations.js'
 import { PROJECT_TYPES, oppTypesForProjectType, templatesForSelection, simulatedLead, simulatedCount, SIMULATED_CUSTOMER_SCENARIOS } from '../simulatedLeads.js'
@@ -104,6 +106,7 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
     if (body?.trim()) fields.push({ group: 'RFQ', k: 'Email body', v: body.trim().slice(0, 500), conf: 35, ev: 'Email body', note: 'Structure the requested scope and quantities.' })
     if (attachmentText) fields.push({ group: 'RFQ', k: 'Attachment content', v: attachmentText.slice(0, 1000), conf: 45, ev: 'Attached document content', note: 'Confirm the scope, quantities and specifications.' })
     const missing = ['Customer name', 'Opportunity scope', 'Required quantities and specifications']
+    const lineItems = parseLeadLineItems(`${body || ''}\n${attachmentText}`)
     if (attachmentText) missing.splice(missing.indexOf('Opportunity scope'), 1)
     if (attachmentHasSpecs) {
       const i = missing.indexOf('Required quantities and specifications')
@@ -118,6 +121,7 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
       ai: {
         summary: 'AI extraction was unavailable. The original enquiry was saved for manual structuring.',
         fields: fields.map(f => ({ ...f, state: 'pending' })),
+        lineItems,
         missing,
         duplicates: [],
         next: ['Confirm the customer and opportunity route', 'Structure the requested scope', 'Add missing quantities and specifications'],
@@ -136,6 +140,16 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
     ai: {
       summary: ai.summary || '',
       fields: ai.fields.map(f => ({ ...f, conf: Math.max(0, Math.min(100, Math.round(f.conf ?? 0))), state: 'pending' })),
+      lineItems: (Array.isArray(ai.lineItems) && ai.lineItems.length
+        ? ai.lineItems
+        : parseLeadLineItems(`${body || ''}\n${attachmentText}`)).map(x => ({
+          description: x.description || x.desc || x.partNumber || '',
+          partNumber: x.partNumber || x.pn || '',
+          customerRef: x.customerRef || x.partNumber || x.pn || '',
+          qty: Number(x.qty) || 1, uom: x.uom || 'EA',
+          confidence: Math.max(0, Math.min(100, Math.round(x.confidence ?? x.conf ?? 0))),
+          evidence: x.evidence || 'Inbound email or attachment',
+        })),
       missing: ai.missing || [],
       duplicates: [],
       next: ai.next || [],
@@ -620,7 +634,7 @@ function AiLeadDetail({ lead }) {
       return false
     }
     const next = keepDecisions && extracted.ai
-      ? { ...extracted, ai: { ...extracted.ai, fields: mergeDecidedFields(source.ai?.fields, extracted.ai.fields) } }
+      ? { ...extracted, ai: { ...extracted.ai, fields: mergeDecidedFields(source.ai?.fields, extracted.ai.fields), lineItems: extracted.ai.lineItems || source.ai?.lineItems || [] } }
       : extracted
     store.updateLead(lead.id, next, detail || '')
     store.recordAiAction(lead.id, { provider: store.config?.aiModel?.provider, model: store.config?.aiModel?.model, action: 'lead.re-extract', result: { completeness: next.completeness, missing: next.ai?.missing || [], route: next.route } })
@@ -1758,8 +1772,8 @@ export default function Inbox() {
     const today = new Date().toISOString().slice(0, 10)
     const maxSl = Math.max(0, ...store.opportunities.map(o => o.sl || 0))
     if (!knownCustomer) store.addCustomer({ name: sellTo, category, status, kyc: status === 'Green' ? 'Verified' : 'Pending', payment: '—' })
-    store.addOpportunity({
-      sl: maxSl + 1, id: oppId, sellTo, category, location,
+    const opp = {
+      sl: maxSl + 1, id: oppId, sourceLeadId: lead.id, sellTo, category, location,
       customerStatus: status, eucName: value(/contact person/i) || sellTo, eucLocation: location,
       oppName: lead.subject, owner, oppType: resolvedOppType, bu: value(/^bu/i) || 'Energy',
       segment: value(/segment/i) || 'Others', product: [product], prob: '', valueK: 0, cogsK: 0,
@@ -1767,7 +1781,19 @@ export default function Inbox() {
       proposalDate: '', orderDate: '', invoiceDate: '', status: 'Open', stage: 'Lead', closedReason: '',
       contactPerson: value(/contact person/i) || lead.sender || '', contactPhone: '', contactEmail: lead.from || '',
       lastUpdated: today, forecast: false, remarks: lead.body || '', nextActionOwner: '', simulated: true,
-    })
+    }
+    store.addOpportunity(opp)
+    if (routeForType(resolvedOppType) === 'Spares') {
+      const { workbenchRows, bom } = buildLeadProposalData(lead, store.priceLists)
+      store.addSparesLinesFromLead(oppId, workbenchRows)
+      const proposal = newProposal(oppId, opp)
+      store.saveProposal(oppId, {
+        ...proposal,
+        rfqNumber: lead.ref || '', subject: lead.subject || proposal.subject,
+        project: lead.subject || proposal.project, units: 1, bom,
+        ...(bom.length ? { leadImportId: lead.id } : {}),
+      })
+    }
     store.updateLead(lead.id, { status: 'Converted', oppId })
     setSimulationOpen(false)
     nav('/inbox')

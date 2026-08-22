@@ -128,7 +128,7 @@ export default function WbSpares({ opp, openBuilder }) {
               </tr>
             ))}
             {!lines.length && (
-              <tr><td colSpan={9} className="hint">No spares lines yet — add a manual part below.</td></tr>
+              <tr><td colSpan={9} className="hint">No imported or manual spares lines yet — add a part below or re-run lead extraction.</td></tr>
             )}
           </tbody>
         </table>

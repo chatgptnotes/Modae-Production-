@@ -9,6 +9,15 @@
 import { unitCostINR, unitSellINR } from './utils.js'
 import { defaultCosting, MILESTONES, B_STEPS } from './seed.js'
 
+const isLeadKycVerified = opp =>
+  opp?.leadVerification?.type === 'KYC' && opp.leadVerification.status === 'Verified'
+
+function blueKycComplete(opp, state) {
+  if (isLeadKycVerified(opp)) return true
+  const items = (state.kyc || {})[opp.sellTo]
+  return !!items?.length && items.every(item => item.state === 'Verified')
+}
+
 // Total quantity of a BoQ line, matching the workbook: Qty/Unit × units +
 // Common + Spares (legacy rows carried a single qty — treated as common).
 function lineQty(l, units) {
@@ -71,16 +80,11 @@ export function readiness(opp, proposal, state) {
   if (!opp) return []
   const b = [...oppBlockers(opp, proposal, state.approvals || [])]
 
-  if (opp.customerStatus === 'Blue' && !opp.kycOverride) {
-    const items = (state.kyc || {})[opp.sellTo]
-    const unverified = !items || !items.length
-      || items.some(k => k.state === 'Missing' || k.state === 'Expired')
-    if (unverified) {
-      b.push({
-        key: 'kyc-block', severity: 'block', kyc: true,
-        text: 'KYC verification pending (AH) — or override with reason',
-      })
-    }
+  if (opp.customerStatus === 'Blue' && !opp.kycOverride && !blueKycComplete(opp, state)) {
+    b.push({
+      key: 'kyc-block', severity: 'block', kyc: true,
+      text: 'KYC verification pending (AH) — or override with reason',
+    })
   }
 
   // Diagram 01's Amber lane makes the pre-quote fee a condition of proceeding,
@@ -292,8 +296,7 @@ export function transitionBlockers(opp, target, proposal, state) {
   const mine = approvals.filter(a => a.oppId === opp.id)
   const approved = type => mine.some(a => a.type === type && ['Approved', 'Approved with conditions'].includes(a.status))
   const pending = type => mine.some(a => a.type === type && a.status === 'Pending')
-  const kyc = (state.kyc || {})[opp.sellTo] || []
-  const kycComplete = !!kyc.length && kyc.every(item => item.state === 'Verified')
+  const kycComplete = blueKycComplete(opp, state)
 
   if (next >= MILESTONES.indexOf('Customer/KYC') && opp.customerStatus === 'Blue' && !kycComplete && !opp.kycOverride) {
     b.push({ key: 'kyc', severity: 'block', text: 'Blue customer KYC must be fully verified by AH', approver: 'AH' })

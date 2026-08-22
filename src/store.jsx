@@ -479,7 +479,9 @@ export function StoreProvider({ children }) {
         },
       }, entry.kind === 'submission'
         ? 'Proposal submitted'
-        : entry.kind === 'proposal-email-compose' ? 'Proposal email compose opened' : 'Proposal emailed',
+        : entry.kind === 'proposal-email-compose' ? 'Proposal email compose opened'
+        : entry.kind === 'vendor-rfq' ? 'Manufacturer RFQ sent'
+        : entry.kind === 'clarification' ? 'Clarification emailed' : 'Proposal emailed',
       oppId, entry.subject))
     },
 
@@ -779,6 +781,9 @@ export function StoreProvider({ children }) {
         const next = {
           ...s,
           kyc: { ...s.kyc, [customerName]: items },
+          customers: s.customers.map(c => (c.name === customerName
+            ? { ...c, kyc: complete ? 'Valid' : 'Pending' }
+            : c)),
           leads: s.leads.map(l => (l.sellTo === customerName || l.customerName === customerName
             ? { ...l, ...(complete ? { kycCompletedAt: new Date().toISOString() } : { kycCompletedAt: null }) }
             : l)),
@@ -810,6 +815,80 @@ export function StoreProvider({ children }) {
       }, patch.status ? `Clarification ${patch.status.toLowerCase()}` : 'Clarification updated', id))
     },
 
+    answerClarification(id, { response, answerSource = '', answeredAt = '', attachments = [] }) {
+      setState(s => withAudit({
+        ...s,
+        clarifications: s.clarifications.map(c => (c.id === id ? {
+          ...c,
+          response,
+          answerSource,
+          answeredAt: answeredAt || new Date().toISOString().slice(0, 10),
+          answeredBy: s.role,
+          attachments: [...(c.attachments || []), ...attachments],
+          status: 'Answered',
+        } : c)),
+      }, 'Clarification answered', id, response))
+    },
+
+    // ---- Manufacturer / vendor quotes --------------------------------------
+    addVendorQuote(oppId, quote) {
+      setState(s => {
+        const id = mintId('VQ', s.vendorQuotes || [])
+        return withAudit({
+          ...s,
+          vendorQuotes: [{
+            id, oppId, status: 'Sent', sentAt: new Date().toISOString(), attachments: [], prices: [], ...quote,
+          }, ...(s.vendorQuotes || [])],
+        }, 'Vendor RFQ sent', id, quote.subject || quote.manufacturer || oppId)
+      })
+    },
+
+    updateVendorQuote(id, patch) {
+      setState(s => withAudit({
+        ...s,
+        vendorQuotes: (s.vendorQuotes || []).map(q => (q.id === id ? { ...q, ...patch } : q)),
+      }, patch.status ? `Vendor quote ${String(patch.status).toLowerCase()}` : 'Vendor quote updated', id))
+    },
+
+    attachVendorQuoteFile(id, file) {
+      setState(s => withAudit({
+        ...s,
+        vendorQuotes: (s.vendorQuotes || []).map(q => (q.id === id ? {
+          ...q,
+          attachments: [file, ...(q.attachments || [])],
+          status: q.status === 'Sent' ? 'Received' : q.status,
+          receivedAt: q.receivedAt || new Date().toISOString().slice(0, 10),
+        } : q)),
+      }, 'Vendor quote file attached', id, file?.name || 'file'))
+    },
+
+    applyVendorQuoteToLine(id, lineId, price) {
+      setState(s => {
+        const quote = (s.vendorQuotes || []).find(q => q.id === id)
+        const label = `Manufacturer quote - ${price.manufacturer || quote?.manufacturer || 'Vendor'}`
+        return withAudit({
+          ...s,
+          vendorQuotes: (s.vendorQuotes || []).map(q => (q.id === id ? {
+            ...q,
+            status: 'Applied',
+            receivedAt: q.receivedAt || new Date().toISOString().slice(0, 10),
+            prices: [{ lineId, ...price, appliedAt: new Date().toISOString() }, ...(q.prices || [])],
+          } : q)),
+          sparesLines: s.sparesLines.map(l => (l.id === lineId ? {
+            ...l,
+            listPrice: price.unitPrice === '' || price.unitPrice == null ? (l.listPrice || 0) : Number(price.unitPrice),
+            currency: price.currency || l.currency || 'INR',
+            leadTime: price.leadTime || l.leadTime || 'TBC',
+            priceList: label,
+            priceState: 'Current',
+            oem: price.manufacturer || quote?.manufacturer || l.oem,
+            quoteRef: price.quoteRef || quote?.subject || quote?.id,
+            confirmed: true,
+          } : l)),
+        }, 'Vendor quote applied', id, `${lineId} ${price.unitPrice || ''} ${price.currency || ''}`)
+      })
+    },
+
     // ---- Spares workbench --------------------------------------------------
     updateSparesLine(id, patch) {
       setState(s => ({ ...s, sparesLines: s.sparesLines.map(l => (l.id === id ? { ...l, ...patch } : l)) }))
@@ -824,6 +903,27 @@ export function StoreProvider({ children }) {
             priceList: 'Ad-hoc', priceState: 'Current', currency: 'INR', qty: 1, ...line,
           }],
         }, 'Manual part added', oppId, line.pn || line.desc)
+      })
+    },
+    addSparesLinesFromLead(oppId, rows) {
+      setState(s => {
+        const existing = s.sparesLines.filter(l => l.oppId === oppId)
+        const key = l => `${String(l.pn || l.custRef || '').toUpperCase()}|${String(l.desc || '').toLowerCase()}`
+        const seen = new Set(existing.map(key))
+        const additions = rows.filter(Boolean).filter(row => {
+          const k = key(row)
+          if (seen.has(k)) return false
+          seen.add(k)
+          return true
+        }).map((row, i) => ({
+          id: mintId('SL', [...s.sparesLines, ...rows.slice(0, i)]), oppId,
+          match: row.match || 'AI suggested', conf: Number(row.conf) || 0,
+          confirmed: !!row.confirmed, priceList: row.priceList || 'Ad-hoc',
+          priceState: row.priceState || 'Current', currency: row.currency || 'INR',
+          qty: Number(row.qty) || 1, uom: row.uom || 'EA', ...row,
+        }))
+        if (!additions.length) return s
+        return withAudit({ ...s, sparesLines: [...s.sparesLines, ...additions] }, 'Lead lines imported', oppId, `${additions.length} line(s)`)
       })
     },
     removeSparesLine(id) {
@@ -846,9 +946,9 @@ export function StoreProvider({ children }) {
         if (!lines.length) return s
         const opp = s.opportunities.find(o => o.id === oppId)
         const base = s.proposals[oppId] || newProposal(oppId, opp)
-        const existing = new Set((base.bom || []).map(b => b.pn))
-        const added = lines.filter(l => !existing.has(l.pn)).map(l => ({
-          itemCategory: 'Hardware', pn: l.pn, desc: l.desc, listPrice: l.listPrice, adders: [],
+        const existing = new Set((base.bom || []).map(b => b.pn || b.custRef || b.desc))
+        const added = lines.filter(l => !existing.has(l.pn || l.custRef || l.desc)).map(l => ({
+          itemCategory: 'Hardware', pn: l.pn, custRef: l.custRef, desc: l.desc, listPrice: l.listPrice, adders: [],
           qtyPerUnit: 0, common: l.qty, spares: 0, quoted: '',
           list: l.priceList?.startsWith('BNK') ? 'BNK' : 'Ad-hoc', currency: l.currency,
         }))
