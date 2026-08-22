@@ -126,7 +126,7 @@ export default function Workbench() {
   // the lead-management requirements that have no approval object of their own.
   const canRequestApproval = blocker => !!blocker.approvalType
   const canRequestException = blocker => !blocker.approvalType
-    && ['kyc', 'amber-fee', 'red-clearance'].includes(blocker.key)
+    && ['amber-fee', 'red-clearance'].includes(blocker.key)
   const approvalRequestFor = blocker => (store.approvals || []).find(a =>
     a.oppId === opp.id && a.type === blocker.approvalType && a.status === 'Pending')
   // §5A names two acceptable approvers ("LJS or AN") and carries `anyOf`, so a
@@ -237,6 +237,7 @@ export default function Workbench() {
                   {item.key === 'dev' && deviationRows.length > 0 && <div className="transition-detail-list">{deviationRows.map((row, index) => <div key={`${row.term}-${index}`}><b>{row.term}</b> · Customer ask: {row.customerAsk || 'Not recorded'} · Response: {row.ourResponse || 'Pending review'}</div>)}</div>}
                   {item.severity === 'wait' && <span>Waiting for the responsible approver.</span>}
                   {item.key === 'clarifications' && <button className="exception-action" onClick={() => openTransitionTab('clarifications')}>Open clarifications</button>}
+                  {item.key === 'kyc' && <button className="exception-action" onClick={() => openTransitionTab('customer')}>Open Customer/KYC</button>}
                   {item.key === 'required-contactPerson' && <button className="exception-action" onClick={() => openMissingContact('contactPerson')}>Edit contact person</button>}
                   {item.key === 'required-contactPhone' && <button className="exception-action" onClick={() => openMissingContact('contactPhone')}>Edit contact phone</button>}
                   {approvable && openRequest && <span>{item.approvalType} <b>{openRequest.id}</b> is pending with {openRequest.needed?.join(openRequest.anyOf ? ' or ' : ' + ') || openRequest.approver} — <button className="inline-action" onClick={() => openTransitionTab('approvals')}>Open approval</button></span>}
