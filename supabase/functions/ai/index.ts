@@ -378,8 +378,14 @@ Deno.serve(async req => {
   const model = /^gemini-[\w.-]+$/.test(String(body.model ?? '')) ? String(body.model) : task.model
 
   const payload = body.payload ?? {}
+  const inlineParts = Array.isArray(payload.aiAttachments)
+    ? payload.aiAttachments
+      .filter((a: any) => a && typeof a.dataBase64 === 'string' && typeof a.mimeType === 'string')
+      .slice(0, 8)
+      .map((a: any) => ({ inlineData: { mimeType: String(a.mimeType).slice(0, 100), data: a.dataBase64 } }))
+    : []
   const req_ = {
-    contents: [{ parts: [{ text: task.build(payload) }] }],
+    contents: [{ parts: [{ text: task.build(payload) }, ...inlineParts] }],
     generationConfig: task.schema
       ? { responseMimeType: 'application/json', responseSchema: task.schema }
       : {},

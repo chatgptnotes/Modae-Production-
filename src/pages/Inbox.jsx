@@ -73,9 +73,9 @@ const ConfBadge = ({ c }) => (
 // The model returns the lead.ai shape the three-panel view already renders; we
 // only stamp state:'pending' on each field, because "AI proposes, humans decide"
 // is enforced by that state — nothing is accepted until someone accepts it.
-export async function extractLead({ from, subject, body, attachments = [] }, store) {
+export async function extractLead({ from, subject, body, attachments = [], aiAttachments = [] }, store) {
   const ai = await runJson('lead.extract', {
-    from, subject, body, attachments,
+    from, subject, body, attachments, aiAttachments,
     customers: (store.customers || []).map(c => c.name),
     ownershipRules: store.config?.ownershipRules || [],
   }, { fallback: store.config?.aiModel?.provider === 'Built-in fallback' })
@@ -83,7 +83,11 @@ export async function extractLead({ from, subject, body, attachments = [] }, sto
   // it is absent or temporarily unavailable: preserve only facts present in
   // the pasted mail and leave the lead visibly pending human structure.
   if (!ai?.fields?.length) {
-    const text = `${subject || ''}\n${body || ''}`
+    const attachmentText = (attachments || [])
+      .filter(a => a.text?.trim())
+      .map(a => `Attachment: ${a.name}\n${a.text}`)
+      .join('\n\n')
+    const text = `${subject || ''}\n${body || ''}\n${attachmentText}`
     const lower = text.toLowerCase()
     const route = /spare|sensor|probe|cable|replacement|part number/.test(lower)
       ? 'Spares'
@@ -94,6 +98,9 @@ export async function extractLead({ from, subject, body, attachments = [] }, sto
     if (from?.trim()) fields.push({ group: 'Customer', k: 'Sender', v: from.trim(), conf: 45, ev: 'From address', note: 'Confirm the customer and contact person.' })
     if (subject?.trim()) fields.push({ group: 'RFQ', k: 'Subject', v: subject.trim(), conf: 55, ev: 'Email subject', note: 'Confirm the opportunity name and route.' })
     if (body?.trim()) fields.push({ group: 'RFQ', k: 'Email body', v: body.trim().slice(0, 500), conf: 35, ev: 'Email body', note: 'Structure the requested scope and quantities.' })
+    if (attachmentText) fields.push({ group: 'RFQ', k: 'Attachment content', v: attachmentText.slice(0, 1000), conf: 45, ev: 'Attached document content', note: 'Confirm the scope, quantities and specifications.' })
+    const missing = ['Customer name', 'Opportunity scope', 'Required quantities and specifications']
+    if (attachmentText) missing.splice(missing.indexOf('Opportunity scope'), 1)
     return {
       route,
       urgency: 'Normal',
@@ -102,7 +109,7 @@ export async function extractLead({ from, subject, body, attachments = [] }, sto
       ai: {
         summary: 'AI extraction was unavailable. The original enquiry was saved for manual structuring.',
         fields: fields.map(f => ({ ...f, state: 'pending' })),
-        missing: ['Customer name', 'Opportunity scope', 'Required quantities and specifications'],
+        missing,
         duplicates: [],
         next: ['Confirm the customer and opportunity route', 'Structure the requested scope', 'Add missing quantities and specifications'],
       },
@@ -131,6 +138,8 @@ export async function extractLead({ from, subject, body, attachments = [] }, sto
 // whole document is not carried; this is enough for the AI and for evidence.
 const TEXT_PER_FILE = 8000
 const TEXT_TOTAL = 40000
+const AI_FILE_BYTES = 4 * 1024 * 1024
+const AI_TOTAL_BYTES = 8 * 1024 * 1024
 
 function LeadVerification({ lead, customerStatus, store }) {
   const [busy, setBusy] = useState('')
@@ -281,6 +290,26 @@ function attachmentMeta(files) {
   })
 }
 
+// Scanned PDFs and images have no text layer. Send their bytes only for the
+// transient AI request; the lead stores metadata/text, never this payload.
+async function attachmentAiPayload(files) {
+  let total = 0
+  const out = []
+  for (const f of files) {
+    const file = f.file || f
+    const type = file.type || (/\.pdf$/i.test(file.name) ? 'application/pdf' : '')
+    if (!/^application\/(pdf|image\/)/i.test(type) && !/^image\//i.test(type)) continue
+    if (file.size > AI_FILE_BYTES || total + file.size > AI_TOTAL_BYTES) continue
+    const bytes = new Uint8Array(await file.arrayBuffer())
+    let binary = ''
+    const chunk = 0x8000
+    for (let i = 0; i < bytes.length; i += chunk) binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
+    out.push({ name: file.name, mimeType: type, dataBase64: btoa(binary) })
+    total += file.size
+  }
+  return out
+}
+
 // Paste a real inbound enquiry and let Gemini structure it.
 function PasteLeadModal({ onClose }) {
   const store = useStore()
@@ -327,7 +356,7 @@ function PasteLeadModal({ onClose }) {
   const add = async () => {
     if (!body.trim() && !files.length) { setErr('Paste the email body, or attach the enquiry document.'); return }
     setBusy(true); setErr('')
-    const extracted = await extractLead({ from, subject, body, attachments: attachmentMeta(files) }, store)
+    const extracted = await extractLead({ from, subject, body, attachments: attachmentMeta(files), aiAttachments: await attachmentAiPayload(files) }, store)
     setBusy(false)
     if (!extracted) {
       setErr('Extraction is unavailable — check the AI configuration on the Admin page, or add the mail unextracted and structure it by hand.')
@@ -559,12 +588,12 @@ function AiLeadDetail({ lead }) {
   // `keepDecisions` is the automatic path taken after a document is added: the
   // human did not ask to throw their decisions away, they asked the AI to read
   // one more file. The manual button still replaces everything, confirmed first.
-  const runExtraction = async ({ source, keepDecisions, detail }) => {
+  const runExtraction = async ({ source, keepDecisions, detail, failureNote = '' }) => {
     setReExtracting(true); setReErr(''); setReNote('')
     const extracted = await extractLead(source, store)
     setReExtracting(false)
     if (!extracted) {
-      setReErr('Extraction unavailable — the previous result is unchanged.')
+      setReErr(failureNote || 'AI extraction was unavailable. The attachment was saved, but the previous extracted fields are unchanged. Retry when the AI proxy is available.')
       return false
     }
     const next = keepDecisions && extracted.ai
@@ -610,9 +639,10 @@ function AiLeadDetail({ lead }) {
     // Re-read with the new material. `lead` in this closure predates the patch,
     // so the fresh attachment list is passed explicitly.
     await runExtraction({
-      source: { ...lead, attachments: nextAttachments },
+      source: { ...lead, attachments: nextAttachments, aiAttachments: await attachmentAiPayload(recs) },
       keepDecisions: true,
       detail: `AI re-read the lead with ${names}`,
+      failureNote: `${names} was attached successfully, but AI could not re-read the lead. The previous extracted fields are unchanged. Retry when the AI proxy is available.`,
     })
   }
 

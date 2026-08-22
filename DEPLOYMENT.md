@@ -45,13 +45,12 @@ Supabase project.
 ### The AI key
 
 `GEMINI_API_KEY` is never a `VITE_` variable — anything so prefixed is compiled
-into the browser bundle. It lives on the edge function, once per Supabase
-project:
+into the browser bundle. The Vercel deployment reads it from the server-side
+Vercel environment and exposes only the `/api/ai` proxy to the SPA:
 
-```bash
-supabase secrets set GEMINI_API_KEY=... --project-ref <staging-ref>
-supabase secrets set GEMINI_API_KEY=... --project-ref <production-ref>
-supabase functions deploy ai --project-ref <ref>
+```text
+GEMINI_API_KEY=...           # Vercel server-side variable
+VITE_AI_FUNCTION_URL=/api/ai # public build-time route, no secret
 ```
 
 With no key the function returns 503 and the app falls back to its deterministic

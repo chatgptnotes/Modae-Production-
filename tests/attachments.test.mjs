@@ -137,6 +137,22 @@ test('lead attachments are read through docText, not the PDF-only path', () => {
   const inbox = read('src/pages/Inbox.jsx')
   assert.match(inbox, /extractDocText/, 'readAttachment must use the shared extractor')
   assert.doesNotMatch(inbox, /import \{ extractPdfText \}/, 'the PDF-only import is superseded')
+  assert.match(inbox, /attachmentText/, 'fallback extraction must include readable attachment text')
+  assert.match(inbox, /aiAttachments/, 'AI extraction must receive temporary file inputs')
+})
+
+test('the edge function sends uploaded files as Gemini inline data', () => {
+  const ai = read('supabase/functions/ai/index.ts')
+  assert.match(ai, /inlineData/, 'multimodal attachments must be sent to Gemini')
+  assert.match(ai, /payload\.aiAttachments/, 'the edge function must read the attachment payload')
+})
+
+test('the Vercel AI route uses only the server-side Gemini key', () => {
+  const ai = read('api/ai.js')
+  assert.match(ai, /process\.env\.GEMINI_API_KEY/)
+  assert.match(ai, /lead\.extract/)
+  assert.match(ai, /inlineData/)
+  assert.doesNotMatch(ai, /VITE_GEMINI|VITE_GEMINI_API_KEY/)
 })
 
 test('attachments are viewable and lead documents can be added after creation', () => {
@@ -144,6 +160,8 @@ test('attachments are viewable and lead documents can be added after creation', 
   assert.match(inbox, /attach-row-open/, 'attachment rows must be a click target')
   assert.match(inbox, /AttachmentViewer/, 'the viewer must be mounted')
   assert.match(inbox, /attachments: nextAttachments/, 'adding a document must patch lead.attachments')
+  assert.match(inbox, /failureNote: `\$\{names\} was attached successfully/, 'failed AI re-reads must name the saved document')
+  assert.match(inbox, /previous extracted fields are unchanged/, 'failed AI re-reads must preserve prior fields visibly')
 })
 
 test('blobs are persisted so a reload can still preview and upload them', () => {
