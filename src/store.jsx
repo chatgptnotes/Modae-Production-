@@ -518,6 +518,23 @@ export function StoreProvider({ children }) {
       })
     },
 
+    // Permanent cleanup for an inbox lead. Registration/opportunity records
+    // are protected here so deleting a mailbox row cannot orphan commercial
+    // history; the caller confirms before invoking this action.
+    deleteLead(id) {
+      const lead = stateRef.current.leads.find(l => l.id === id)
+        || (stateRef.current.leadArchive || []).find(l => l.id === id)
+      if (!lead || lead.oppId) return false
+      leadBlobs.deleteLead(id)
+      setState(s => withAudit({
+        ...s,
+        leads: (s.leads || []).filter(l => l.id !== id),
+        leadArchive: (s.leadArchive || []).filter(l => l.id !== id),
+        leadDeadlines: (s.leadDeadlines || []).filter(d => d.leadId !== id),
+      }, 'Lead deleted', id, lead.subject || lead.sender || 'Inbox lead'))
+      return true
+    },
+
     processLeadDeadlines(now = new Date()) {
       setState(s => {
         const cfg = leadConfig(s.config)

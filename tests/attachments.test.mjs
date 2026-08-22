@@ -164,6 +164,16 @@ test('attachments are viewable and lead documents can be added after creation', 
   assert.match(inbox, /attachments: nextAttachments/, 'adding a document must patch lead.attachments')
   assert.match(inbox, /failureNote: `\$\{names\} was attached successfully/, 'failed AI re-reads must name the saved document')
   assert.match(inbox, /previous extracted fields are unchanged/, 'failed AI re-reads must preserve prior fields visibly')
+  assert.match(inbox, /deleteSelected/, 'the inbox must expose selected-lead deletion')
+  assert.match(inbox, /Delete .*selected lead/, 'deletion must require a confirmation message')
+})
+
+test('lead deletion removes the lead and its persisted attachment bytes', () => {
+  const store = read('src/store.jsx')
+  assert.match(store, /deleteLead\(id\)/)
+  assert.match(store, /leadBlobs\.deleteLead\(id\)/)
+  assert.match(store, /leads: \(s\.leads \|\| \[\]\)\.filter\(l => l\.id !== id\)/)
+  assert.match(store, /if \(!lead \|\| lead\.oppId\) return false/)
 })
 
 test('blobs are persisted so a reload can still preview and upload them', () => {

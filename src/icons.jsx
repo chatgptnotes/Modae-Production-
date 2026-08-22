@@ -67,6 +67,7 @@ const PATHS = {
   chevronLeft: <path d="m14.5 5.5-6.5 6.5 6.5 6.5" />,
   chevronRight: <path d="m9.5 5.5 6.5 6.5-6.5 6.5" />,
   edit: <><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3Z" /><path d="m14.5 6.5 3 3" /></>,
+  trash: <><path d="M4.5 7.5h15" /><path d="M9 7.5V5h6v2.5M7 7.5l.8 13h8.4l.8-13" /><path d="M10 11v6M14 11v6" /></>,
 }
 
 const MODAE_LOGO_SRC = MODAE_BRAND.logoUrl

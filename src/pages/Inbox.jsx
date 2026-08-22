@@ -1623,6 +1623,20 @@ export default function Inbox() {
     selectedIds.forEach(id => store.updateLead(id, { readAt: read ? new Date().toISOString() : null }))
     setSelectedIds(new Set())
   }
+  const deleteSelected = () => {
+    const selected = listSource.filter(l => selectedIds.has(l.id))
+    if (!selected.length) return
+    const deletable = selected.filter(l => !l.oppId)
+    const protectedCount = selected.length - deletable.length
+    if (!deletable.length) {
+      window.alert('These leads are linked to opportunities and cannot be deleted. Use the opportunity workflow instead.')
+      return
+    }
+    const suffix = protectedCount ? ` ${protectedCount} linked lead${protectedCount === 1 ? '' : 's'} will be kept.` : ''
+    if (!window.confirm(`Delete ${deletable.length} selected lead${deletable.length === 1 ? '' : 's'} permanently? Attachments and inbox history will also be removed.${suffix}`)) return
+    deletable.forEach(l => store.deleteLead(l.id))
+    setSelectedIds(new Set())
+  }
   const simOppOptions = oppTypesForProjectType(simProjectType)
   const activeSimOppType = simOppOptions.includes(simOppType) ? simOppType : (simOppOptions[0] || simProjectType)
   // The shape list follows the type selection; a shape left over from another
@@ -1815,6 +1829,7 @@ export default function Inbox() {
           {selectedIds.size > 0 && <>
             <button className="mail-icon-btn" title="Mark as read" onClick={() => setReadForSelected(true)}><Icon name="mail" size={15} /></button>
             <button className="mail-icon-btn" title="Mark as unread" onClick={() => setReadForSelected(false)}><Icon name="eye" size={15} /></button>
+            <button className="mail-icon-btn mail-delete-btn" title="Delete selected leads" onClick={deleteSelected}><Icon name="trash" size={15} /></button>
           </>}
           {hiddenByOwner > 0 && (
             <button className="mail-hidden-note" onClick={() => setShowAll(true)}
