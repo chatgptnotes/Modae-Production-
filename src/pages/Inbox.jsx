@@ -824,6 +824,21 @@ function AiLeadDetail({ lead }) {
     setDecisionSaved(true)
   }
 
+  const updateDecisionRegion = (region) => {
+    setDecisionDraft(previous => ({
+      ...previous,
+      region,
+      // A non-empty region is authoritative for routing. Keep the current
+      // owner only while the region is blank; once a region is entered, the
+      // owner selector follows the configured regional rule immediately.
+      owner: region.trim()
+        ? routeOwner(region, store.config, previous.owner)
+        : previous.owner,
+    }))
+    setDecisionErr('')
+    setDecisionSaved(false)
+  }
+
   return (
     <div className="ws-grid">
       {/* ---- Column 1 — original email ---- */}
@@ -1147,7 +1162,7 @@ function AiLeadDetail({ lead }) {
             <div className="lead-decision-grid">
               <label>Region / location
                 <input value={decisionDraft.region} disabled={lead.status === 'Dropped'}
-                  onChange={e => setDecisionDraft({ ...decisionDraft, region: e.target.value })} placeholder="Enter region or location" />
+                  onChange={e => updateDecisionRegion(e.target.value)} placeholder="Enter region or location" />
               </label>
               <label>Assigned owner
                 <select value={decisionDraft.owner} disabled={lead.status === 'Dropped'}
