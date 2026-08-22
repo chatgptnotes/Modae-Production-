@@ -504,11 +504,11 @@ const fieldChip = (f, med) => {
     : <Chip tone="state-Blocks">Blocks stage</Chip>
 }
 
-function LeadWorkflowBar({ lead }) {
+function LeadWorkflowBar({ lead, customerStatus }) {
   const store = useStore()
   const customer = matchCustomer(store.customers, lead)
   const progress = leadWorkflow(lead, {
-    customerStatus: lead.customerStatus || customer?.status || '',
+    customerStatus: customerStatus || lead.customerStatus || customer?.status || '',
     med: store.config.aiThresholds?.med ?? 75,
   })
   const active = progress.steps[progress.activeIndex]
@@ -671,7 +671,9 @@ function AiLeadDetail({ lead }) {
 
   const customer = matchCustomer(store.customers, lead)
   const leadCustomerStatus = customerStatusForLead(lead, store.customers)
-  const isRed = leadCustomerStatus === 'Red'
+  const previewCustomerStatus = decisionDraft.customerStatus || leadCustomerStatus
+  const previewLead = { ...lead, customerStatus: previewCustomerStatus, redFlag: previewCustomerStatus === 'Red' }
+  const isRed = previewCustomerStatus === 'Red'
   const redApproval = redClearanceFor(store.approvals, lead.id)
   const redCleared = isRedCleared(redApproval)
   // A Returned clearance is not a decision, it is a request for rework — so the
@@ -718,7 +720,8 @@ function AiLeadDetail({ lead }) {
   const rule = (store.config.ownershipRules || []).find(r => r.owner === lead.suggestedOwner)
 
   const qualifyBlocked = isRed && !redCleared
-  const registrationBlocked = !!(ai.missing || []).length || pendingLow.length > 0
+  const verificationBlocked = !leadVerificationComplete(lead, previewCustomerStatus, { redCleared })
+  const registrationBlocked = !!(ai.missing || []).length || pendingLow.length > 0 || verificationBlocked
   const canAct = !['Converted', 'Dropped'].includes(lead.status)
 
   // ---- Clarification mail: AI drafts, a human sends -----------------------
@@ -728,7 +731,7 @@ function AiLeadDetail({ lead }) {
   // below — called from a button, after the compose window has been opened.
   // There is deliberately no code path from drafting to sending.
   const clarRecord = lead.clarification || null
-  const clarKind = clarificationKindFor(lead, leadCustomerStatus)
+  const clarKind = clarificationKindFor(lead, previewCustomerStatus)
   const clarSender = clarificationSender(lead, store.users, store.config)
   const canDraftClar = canAct && !!clarKind
 
@@ -858,6 +861,8 @@ function AiLeadDetail({ lead }) {
   }
 
   return (
+    <>
+    <LeadWorkflowBar lead={lead} customerStatus={previewCustomerStatus} />
     <div className="ws-grid">
       {/* ---- Column 1 — original email ---- */}
       <section className="ws-col">
@@ -1218,7 +1223,11 @@ function AiLeadDetail({ lead }) {
               </label>
               <label>Customer class
                 <select value={decisionDraft.customerStatus} disabled={lead.status === 'Dropped'}
-                  onChange={e => setDecisionDraft({ ...decisionDraft, customerStatus: e.target.value })}>
+                  onChange={e => {
+                    setDecisionDraft({ ...decisionDraft, customerStatus: e.target.value })
+                    setDecisionErr('')
+                    setDecisionSaved(false)
+                  }}>
                   {CUSTOMER_STATUSES.map(status => <option key={status}>{status}</option>)}
                 </select>
               </label>
@@ -1249,7 +1258,7 @@ function AiLeadDetail({ lead }) {
                   placeholder="Required for an LJS/AH owner override" />
               </label>
             )}
-            {isFastTrackLead(lead, store.config, customer) && <div className="okbox" style={{ marginTop: 8 }}>Fast-track enabled for this Green customer.</div>}
+            {isFastTrackLead(previewLead, store.config, customer) && <div className="okbox" style={{ marginTop: 8 }}>Fast-track enabled for this Green customer.</div>}
             <div className="lead-decision-actions">
               <button className="primary" disabled={lead.status === 'Dropped'} onClick={saveDecisions}>
                 <Icon name="check" size={12} /> Save changes
@@ -1284,7 +1293,7 @@ function AiLeadDetail({ lead }) {
             </div>
           )}
 
-          <LeadVerification lead={lead} customerStatus={leadCustomerStatus} store={store} />
+          <LeadVerification lead={lead} customerStatus={previewCustomerStatus} store={store} />
 
           {lead.status === 'Converted' && (
             <div className="okbox">
@@ -1318,11 +1327,17 @@ function AiLeadDetail({ lead }) {
         <footer className="ws-foot">
           {canAct && lead.status !== 'Qualified' && (
             <>
-              {isFastTrackLead(lead, store.config, customer) && (
+              {isFastTrackLead(previewLead, store.config, customer) && (
                 <button className="primary ws-action" disabled={qualifyBlocked}
                   title={qualifyBlocked ? 'Blocked: Red continuation approval required first' : undefined}
                   onClick={() => {
-                    store.updateLead(lead.id, { status: 'Qualified', fastTrack: true, fastTrackStartedAt: lead.fastTrackStartedAt || new Date().toISOString() }, 'Green customer fast-track started')
+                    store.updateLead(lead.id, {
+                      status: 'Qualified',
+                      customerStatus: previewCustomerStatus,
+                      redFlag: previewCustomerStatus === 'Red',
+                      fastTrack: true,
+                      fastTrackStartedAt: lead.fastTrackStartedAt || new Date().toISOString(),
+                    }, 'Green customer fast-track started')
                     nav('/register/' + lead.id)
                   }}>
                   <Icon name="arrowRight" size={14} /> Fast-track to registration
@@ -1368,7 +1383,9 @@ function AiLeadDetail({ lead }) {
             <>
               <button className="primary ws-action" disabled={registrationBlocked}
                 title={registrationBlocked
-                  ? (ai.missing || []).length > 0
+                  ? verificationBlocked
+                    ? `Complete ${previewCustomerStatus} customer verification first`
+                    : (ai.missing || []).length > 0
                     ? 'Fill the missing information first'
                     : 'Resolve the low-confidence fields first'
                   : undefined}
@@ -1385,6 +1402,11 @@ function AiLeadDetail({ lead }) {
                   Blocked — {ai.missing.length} missing item{ai.missing.length > 1 ? 's' : ''} still need to be filled.
                 </p>
               )}
+              {verificationBlocked && (
+                <p className="ws-foot-note">
+                  Blocked — {previewCustomerStatus} customer verification is not complete.
+                </p>
+              )}
             </>
           )}
           {!canAct && (
@@ -1399,6 +1421,7 @@ function AiLeadDetail({ lead }) {
         <AttachmentViewer leadId={lead.id} attachment={viewing} onClose={() => setViewing(null)} />
       )}
     </div>
+    </>
   )
 }
 
@@ -1605,12 +1628,11 @@ export default function Inbox() {
           </div>
           <span className={`pill ${PILL[sel.status] || 'Blue'}`}>{sel.status}</span>
       </div>
-        <LeadWorkflowBar lead={sel} />
         {sel.ai
           ? <AiLeadDetail lead={sel} />
-          : <div className="ws-grid single"><section className="ws-col"><div className="ws-body">
+          : <><LeadWorkflowBar lead={sel} /><div className="ws-grid single"><section className="ws-col"><div className="ws-body">
               <LegacyLeadDetail lead={sel} />
-            </div></section></div>}
+            </div></section></div></>}
       </div>
     )
   }
