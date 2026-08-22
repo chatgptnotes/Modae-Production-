@@ -74,6 +74,13 @@ const ConfBadge = ({ c }) => (
 // only stamp state:'pending' on each field, because "AI proposes, humans decide"
 // is enforced by that state — nothing is accepted until someone accepts it.
 export async function extractLead({ from, subject, body, attachments = [], aiAttachments = [] }, store) {
+  const attachmentText = (attachments || [])
+    .filter(a => a.text?.trim())
+    .map(a => `Attachment: ${a.name}\n${a.text}`)
+    .join('\n\n')
+  const attachmentHasSpecs = /specification|part\s*code|short\s*description|parameters|make\s*:/i.test(attachmentText)
+  const attachmentHasQuantity = /\b(?:quantity|qty|quantities)\b|\b\d+\s*(?:nos?|pcs?|pieces?|sets?|ea)\b/i.test(attachmentText)
+
   const ai = await runJson('lead.extract', {
     from, subject, body, attachments, aiAttachments,
     customers: (store.customers || []).map(c => c.name),
@@ -83,10 +90,6 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
   // it is absent or temporarily unavailable: preserve only facts present in
   // the pasted mail and leave the lead visibly pending human structure.
   if (!ai?.fields?.length) {
-    const attachmentText = (attachments || [])
-      .filter(a => a.text?.trim())
-      .map(a => `Attachment: ${a.name}\n${a.text}`)
-      .join('\n\n')
     const text = `${subject || ''}\n${body || ''}\n${attachmentText}`
     const lower = text.toLowerCase()
     const route = /spare|sensor|probe|cable|replacement|part number/.test(lower)
@@ -101,6 +104,11 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
     if (attachmentText) fields.push({ group: 'RFQ', k: 'Attachment content', v: attachmentText.slice(0, 1000), conf: 45, ev: 'Attached document content', note: 'Confirm the scope, quantities and specifications.' })
     const missing = ['Customer name', 'Opportunity scope', 'Required quantities and specifications']
     if (attachmentText) missing.splice(missing.indexOf('Opportunity scope'), 1)
+    if (attachmentHasSpecs) {
+      const i = missing.indexOf('Required quantities and specifications')
+      if (i >= 0) missing.splice(i, 1)
+      if (!attachmentHasQuantity) missing.push('Required quantities')
+    }
     return {
       route,
       urgency: 'Normal',

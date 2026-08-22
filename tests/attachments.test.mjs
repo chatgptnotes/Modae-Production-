@@ -138,6 +138,8 @@ test('lead attachments are read through docText, not the PDF-only path', () => {
   assert.match(inbox, /extractDocText/, 'readAttachment must use the shared extractor')
   assert.doesNotMatch(inbox, /import \{ extractPdfText \}/, 'the PDF-only import is superseded')
   assert.match(inbox, /attachmentText/, 'fallback extraction must include readable attachment text')
+  assert.match(inbox, /attachmentHasSpecs/, 'fallback extraction must recognise document specifications')
+  assert.match(inbox, /Required quantities/, 'specification-present documents must isolate missing quantities')
   assert.match(inbox, /aiAttachments/, 'AI extraction must receive temporary file inputs')
 })
 
