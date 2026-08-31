@@ -83,3 +83,9 @@ test('the simulator modal asks for project type before opportunity type', () => 
   assert.match(inbox, /oppTypesForProjectType\(simProjectType\)/)
   assert.doesNotMatch(inbox, /Generate missing-info lead/)
 })
+
+test('every missing-information row offers manual and simulation actions', () => {
+  assert.match(inbox, /fillFor\?\.item !== m[\s\S]{0,500}Simulate/)
+  assert.doesNotMatch(inbox, /isSimulationLead\s*&&[\s\S]{0,100}Simulate/)
+  assert.doesNotMatch(inbox, /Simulated Customer Pvt Ltd|Demo information confirmed for testing/)
+})

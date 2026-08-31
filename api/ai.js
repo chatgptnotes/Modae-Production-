@@ -59,6 +59,12 @@ const leadSchema = {
   required: ['summary', 'route', 'urgency', 'completeness', 'fields', 'lineItems', 'missing', 'next'],
 }
 
+const fillSchema = {
+  type: 'OBJECT',
+  properties: { value: { type: 'STRING' }, rationale: { type: 'STRING' } },
+  required: ['value', 'rationale'],
+}
+
 function leadPrompt(p) {
   return `${HOUSE}
 
@@ -90,6 +96,29 @@ only when the requested work is labour such as maintenance, repair, calibration,
 commissioning or field engineering. Ask only for information absent from both sources.`
 }
 
+function fillPrompt(p) {
+  return `${HOUSE}
+
+This is a controlled QA simulation. Generate one realistic business value for
+the missing information below, using the enquiry context. Do not invent a part
+number, price, contractual commitment or precise date. If the source cannot
+support precision, use a clear planning value such as "As per attached buyer specification"
+or "Before the commissioning window". Do not include the words "simulated",
+"demo" or "placeholder" in the value.
+
+MISSING INFORMATION: ${cap(p.missing, 300)}
+FROM: ${cap(p.from, 200)}
+SUBJECT: ${cap(p.subject, 300)}
+BODY:
+${cap(p.body, 12000)}
+
+EXTRACTED FIELDS:
+${cap((p.fields || []).map(f => `${f.k}: ${f.v}`).join('\n'), 10000)}
+
+ATTACHMENTS:
+${cap((p.attachments || []).map(a => `${a.name}: ${a.text || ''}`).join('\n\n'), 20000) || 'none'}`
+}
+
 function inlineParts(payload) {
   return Array.isArray(payload?.aiAttachments)
     ? payload.aiAttachments
@@ -117,15 +146,15 @@ export default async function handler(req, res) {
   const task = String(input.task || '')
   const payload = input.payload || {}
   const model = /^gemini-[\w.-]+$/.test(String(input.model || '')) ? String(input.model) : DEFAULT_MODEL
-  if (!['health', 'lead.extract'].includes(task)) {
+  if (!['health', 'lead.extract', 'lead.fill'].includes(task)) {
     return fail(res, 400, 'AI_BAD_REQUEST', `Unsupported task: ${task}`)
   }
 
-  const prompt = task === 'health' ? 'Reply with the single word: ok' : leadPrompt(payload)
+  const prompt = task === 'health' ? 'Reply with the single word: ok' : task === 'lead.fill' ? fillPrompt(payload) : leadPrompt(payload)
   const requestBody = {
     contents: [{ parts: [{ text: prompt }, ...(task === 'lead.extract' ? inlineParts(payload) : [])] }],
-    generationConfig: task === 'lead.extract'
-      ? { responseMimeType: 'application/json', responseSchema: leadSchema }
+    generationConfig: ['lead.extract', 'lead.fill'].includes(task)
+      ? { responseMimeType: 'application/json', responseSchema: task === 'lead.fill' ? fillSchema : leadSchema }
       : {},
   }
 

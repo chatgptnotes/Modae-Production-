@@ -75,6 +75,11 @@ const cap = (s: unknown, n: number) => String(s ?? '').slice(0, n)
 const STR = { type: 'STRING' }
 const INT = { type: 'INTEGER' }
 const arrOf = (items: unknown) => ({ type: 'ARRAY', items })
+const fillSchema = {
+  type: 'OBJECT',
+  properties: { value: STR, rationale: STR },
+  required: ['value', 'rationale'],
+}
 
 // ---------------------------------------------------------------------------
 type Task = {
@@ -91,6 +96,31 @@ const TASKS: Record<string, Task> = {
   },
 
   // ---- Inbox: raw inbound mail → the lead.ai structure the UI already renders
+  'lead.fill': {
+    model: FLASH,
+    schema: fillSchema,
+    build: p => `${HOUSE}
+
+This is a controlled QA simulation. Generate one realistic business value for
+the missing information below, using the enquiry context. Do not invent a part
+number, price, contractual commitment or precise date. If the source cannot
+support precision, use a clear planning value such as "As per attached buyer
+specification" or "Before the commissioning window". Do not include the words
+"simulated", "demo" or "placeholder" in the value.
+
+MISSING INFORMATION: ${cap(p.missing, 300)}
+FROM: ${cap(p.from, 200)}
+SUBJECT: ${cap(p.subject, 300)}
+BODY:
+${cap(p.body, 12000)}
+
+EXTRACTED FIELDS:
+${cap((p.fields || []).map((f: any) => `${f.k}: ${f.v}`).join('\n'), 10000)}
+
+ATTACHMENTS:
+${cap((p.attachments || []).map((a: any) => `${a.name}: ${a.text || ''}`).join('\n\n'), 20000) || 'none'}`,
+  },
+
   'lead.extract': {
     model: PRO,
     schema: {

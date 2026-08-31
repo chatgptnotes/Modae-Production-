@@ -620,11 +620,6 @@ function AiLeadDetail({ lead }) {
   const nav = useNavigate()
   const drawer = useDrawer()
   const ai = lead.ai
-  // Older demo records were saved before the `simulated` marker was added.
-  // Keep the simulator controls available for those records as well.
-  const isSimulationLead = lead.simulated === true
-    || /^LD-SIM-/i.test(String(lead.id || ''))
-    || /\bdemo\b/i.test([lead.sender, lead.from, lead.subject, lead.sellTo].filter(Boolean).join(' '))
   const med = store.config.aiThresholds?.med ?? 75
   const [evOpen, setEvOpen] = useState(null)      // field index with evidence expanded
   const [editFor, setEditFor] = useState(null)    // { idx, val, note }
@@ -632,6 +627,7 @@ function AiLeadDetail({ lead }) {
   const [fillFor, setFillFor] = useState(null)    // { item, val } — answering a missing item
   const [addOther, setAddOther] = useState(null)  // { k, v } — information nobody asked for yet
   const [reExtracting, setReExtracting] = useState(false)
+  const [simulating, setSimulating] = useState('')
   const [reErr, setReErr] = useState('')
   const [reNote, setReNote] = useState('')
   // The clarification mail the AI drafts and a human sends. `null` while there
@@ -787,16 +783,34 @@ function AiLeadDetail({ lead }) {
     if (patch) store.updateLead(lead.id, patch, `Missing information supplied: ${String(label).trim()}`)
   }
 
-  // Temporary QA path: only simulated leads may fill a missing item with a
-  // deterministic demo value. Real leads retain the normal Add/manual path.
-  const simulatedMissingValue = label => {
-    if (/customer company|customer name/i.test(label)) return 'Simulated Customer Pvt Ltd'
-    if (/customer category|category/i.test(label)) return 'EUC'
-    if (/quantity|quantit/i.test(label)) return '10'
-    if (/delivery|date|timeline/i.test(label)) return '30 days'
-    if (/location/i.test(label)) return 'Bangalore'
-    if (/machine|system|application/i.test(label)) return 'VM600 vibration monitoring system'
-    return 'Demo information confirmed for testing'
+  // Temporary QA path: any missing item can be filled with a deterministic
+  // demo value. The action is deliberately labelled so it can be removed or
+  // permission-gated after testing without changing the manual path.
+  const simulateMissing = async label => {
+    setSimulating(label)
+    setReErr(''); setReNote('')
+    const result = await runTaskResult('lead.fill', {
+      missing: label,
+      from: lead.from || lead.sender || '',
+      subject: lead.subject || '',
+      body: lead.body || '',
+      fields: ai.fields || [],
+      attachments: lead.attachments || [],
+    }, { model: store.config?.aiModel?.model })
+    const value = String(result.data?.data?.value || '').trim()
+    if (value) {
+      addMissing(label, value, label)
+      store.recordAiAction(lead.id, {
+        provider: store.config?.aiModel?.provider,
+        model: result.data?.model || store.config?.aiModel?.model,
+        action: 'lead.fill',
+        result: { missing: label, value, rationale: result.data?.data?.rationale || '' },
+      })
+      setReNote('AI generated and saved the missing information.')
+    } else {
+      setReErr(result.error || 'AI could not generate this value. Please try again or use Add to enter it manually.')
+    }
+    setSimulating('')
   }
 
   const saveEdit = () => {
@@ -1197,9 +1211,10 @@ function AiLeadDetail({ lead }) {
                           <Icon name="plus" size={11} /> Add
                         </button>
                       )}
-                      {isSimulationLead && fillFor?.item !== m && (
-                        <button title="Fill with a demo value for testing" onClick={() => addMissing(m, simulatedMissingValue(m), m)}>
-                          <Icon name="sparkles" size={11} /> Simulate
+                      {fillFor?.item !== m && (
+                        <button title="Ask AI to generate a realistic test value" disabled={simulating === m}
+                          onClick={() => simulateMissing(m)}>
+                          <Icon name="sparkles" size={11} /> {simulating === m ? 'Generating…' : 'Simulate'}
                         </button>
                       )}
                     </div>
