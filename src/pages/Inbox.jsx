@@ -590,6 +590,14 @@ function AiLeadDetail({ lead }) {
   const [docDrag, setDocDrag] = useState(false)
   const [docErr, setDocErr] = useState('')
   const docInput = useRef(null)
+  const [responseOpen, setResponseOpen] = useState(false)
+  const [responseFrom, setResponseFrom] = useState(lead.from || '')
+  const [responseSubject, setResponseSubject] = useState('')
+  const [responseBody, setResponseBody] = useState('')
+  const [responseFiles, setResponseFiles] = useState([])
+  const [responseBusy, setResponseBusy] = useState(false)
+  const [responseErr, setResponseErr] = useState('')
+  const responseInput = useRef(null)
   const [dropping, setDropping] = useState(false)
   const [reverting, setReverting] = useState(false)
   const [decisionErr, setDecisionErr] = useState('')
@@ -857,6 +865,56 @@ function AiLeadDetail({ lead }) {
     setDecisionSaved(true)
   }
 
+  const addResponseFiles = async picked => {
+    const list = Array.from(picked || [])
+    if (!list.length) return
+    try {
+      const recs = []
+      for (const file of list) recs.push(await readAttachment(file))
+      setResponseFiles(previous => [...previous, ...recs])
+    } catch (e) { setResponseErr('Could not read ' + (e?.message || 'the file') + '.') }
+  }
+
+  const saveCustomerResponse = async () => {
+    if (!responseBody.trim() && !responseFiles.length) {
+      setResponseErr('Paste the customer reply or attach a clarification document.')
+      return
+    }
+    setResponseBusy(true); setResponseErr(''); setReNote('')
+    try {
+      const responseAttachments = attachmentMeta(responseFiles)
+      const nextAttachments = [...attachments, ...responseAttachments]
+      const names = responseAttachments.map(file => file.name).join(', ')
+      const response = {
+        id: `CR-${Date.now()}`, receivedAt: new Date().toISOString(),
+        from: responseFrom.trim(), subject: responseSubject.trim(), body: responseBody.trim(),
+        attachments: responseAttachments,
+      }
+      store.updateLead(lead.id, {
+        attachments: nextAttachments,
+        clarificationResponses: [...(lead.clarificationResponses || []), response],
+        ...(lead.clarification ? { clarification: { ...lead.clarification, status: 'Answered', answeredAt: response.receivedAt } } : {}),
+        clarificationCompletedAt: response.receivedAt,
+      }, `Customer clarification received${names ? `: ${names}` : ''}`)
+      store.addCommunication(lead.id, {
+        dir: 'In', kind: 'clarification-response', from: response.from,
+        subject: response.subject || 'Customer clarification received', body: response.body,
+        attachmentNames: responseAttachments.map(file => file.name),
+      })
+      holdMore(lead.id, responseFiles.map(file => file.file))
+      const responseText = response.body ? `\n\nCUSTOMER CLARIFICATION RESPONSE:\n${response.body}` : ''
+      await runExtraction({
+        source: { ...lead, body: `${lead.body || ''}${responseText}`, attachments: nextAttachments, aiAttachments: await attachmentAiPayload(responseFiles) },
+        keepDecisions: true,
+        detail: 'AI re-read the lead with the customer clarification response',
+        failureNote: 'The customer clarification was saved, but AI could not re-read the lead. Retry when the AI proxy is available.',
+      })
+      setResponseOpen(false); setResponseFrom(lead.from || ''); setResponseSubject(''); setResponseBody(''); setResponseFiles([])
+    } catch (e) {
+      setResponseErr(e?.message || 'Could not save the customer clarification')
+    } finally { setResponseBusy(false) }
+  }
+
   const updateDecisionRegion = (location) => {
     const mappedRegion = indiaRegionForLocation(location) || (location.trim() ? 'Unclassified leads' : '')
     setLocationSearch('')
@@ -923,6 +981,32 @@ function AiLeadDetail({ lead }) {
                 </div>
               </div>
               {docErr && <p className="hint"><Icon name="alert" size={12} /> {docErr}</p>}
+              <div className="clar-response-upload">
+                {!responseOpen ? (
+                  <button type="button" onClick={() => { setResponseOpen(true); setResponseErr('') }}>
+                    <Icon name="mail" size={12} /> Add customer clarification response
+                  </button>
+                ) : (
+                  <div className="drawer-form">
+                    <b>Customer clarification received</b>
+                    <label style={{ marginTop: 6 }}>From</label>
+                    <input value={responseFrom} onChange={e => setResponseFrom(e.target.value)} placeholder="customer@company.com" />
+                    <label style={{ marginTop: 6 }}>Subject</label>
+                    <input value={responseSubject} onChange={e => setResponseSubject(e.target.value)} placeholder="Re: Clarification request" />
+                    <label style={{ marginTop: 6 }}>Reply body</label>
+                    <textarea rows={6} value={responseBody} onChange={e => setResponseBody(e.target.value)} placeholder="Paste the customer's clarification reply" />
+                    <label style={{ marginTop: 6 }}>Reply attachments</label>
+                    <input ref={responseInput} type="file" multiple style={{ display: 'none' }} onChange={e => { addResponseFiles(e.target.files); e.target.value = '' }} />
+                    <button type="button" onClick={() => responseInput.current.click()}><Icon name="upload" size={12} /> Add files</button>
+                    {responseFiles.map((file, i) => <div className="attach-row" key={`${file.name}-${i}`}><Icon name="fileText" size={13} /><span className="attach-name" style={{ flex: 1 }}>{file.name}</span><button type="button" onClick={() => setResponseFiles(responseFiles.filter((_, j) => j !== i))}>×</button></div>)}
+                    {responseErr && <ErrBox>{responseErr}</ErrBox>}
+                    <div className="toolbar" style={{ margin: 0 }}>
+                      <button className="primary" type="button" disabled={responseBusy} onClick={saveCustomerResponse}>{responseBusy ? 'Saving and re-reading…' : 'Save response & re-read'}</button>
+                      <button type="button" disabled={responseBusy} onClick={() => { setResponseOpen(false); setResponseErr('') }}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </>
           )}
         </div>
