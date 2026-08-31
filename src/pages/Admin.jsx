@@ -5,7 +5,7 @@ import { OWNERS, AI_PROVIDERS } from '../seed.js'
 import { isAdminRole, canSeePage } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { Chip, WarnBox, DemoDataControls } from '../ui.jsx'
-import { saveAiKey, testConnection } from '../ai.js'
+import { saveAiKey, testConnection, usesVercelAi } from '../ai.js'
 import * as sp from '../sharepoint.js'
 import { DEFAULT_COMMON_MAILBOX } from '../leadClarification.js'
 
@@ -195,7 +195,7 @@ export default function Admin() {
     setTestResult(null)
     setSavingAi(true)
     try {
-      if (provider !== FALLBACK_PROVIDER && apiKey) await saveAiKey(apiKey, role)
+      if (provider !== FALLBACK_PROVIDER && apiKey && !usesVercelAi()) await saveAiKey(apiKey, role)
       store.saveAiModel({ provider, model: provider === FALLBACK_PROVIDER ? '' : model, customModel, endpoint,
         configured: provider === FALLBACK_PROVIDER || ai.configured || Boolean(apiKey) })
       setApiKey('')
@@ -302,11 +302,11 @@ export default function Admin() {
                 {(AI_PROVIDERS[provider] || []).map(m => <option key={m}>{m}</option>)}
               </select>
             </label>
-            <label className="afield">Gemini API key
+            {!usesVercelAi() && <label className="afield">Gemini API key
               <input type="password" value={apiKey} disabled={!canEdit || savingAi || provider === FALLBACK_PROVIDER}
                 autoComplete="new-password" placeholder={ai.configured ? 'Saved securely' : 'Paste Gemini API key'}
                 onChange={e => setApiKey(e.target.value)} />
-            </label>
+            </label>}
           </div>
           <div className="admin-actions">
             <button className="primary" disabled={!canEdit || savingAi} onClick={saveAi}>Save configuration</button>
@@ -325,7 +325,7 @@ export default function Admin() {
           )}
           {testResult && !testResult.ok && (
             <div className="errbox">
-              No response. Check that the <code>ai</code> function is deployed and
+              {testResult.error || 'No response.'} {usesVercelAi() ? <>Check the Vercel Production <code>GEMINI_API_KEY</code> and redeploy.</> : <>Check that the configured AI function is deployed.</>}
               <code> GEMINI_API_KEY</code> is set in its secrets — details are in the browser console.
             </div>
           )}

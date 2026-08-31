@@ -17,6 +17,9 @@ const send = (res, status, body) => {
   return res.status(status).json(body)
 }
 
+const fail = (res, status, errorCode, error) =>
+  send(res, status, { ok: false, errorCode, error })
+
 const cap = (value, max) => String(value ?? '').slice(0, max)
 
 const HOUSE = `
@@ -102,16 +105,16 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'POST only' })
 
   const key = String(process.env.GEMINI_API_KEY || '').trim()
-  if (!key) return send(res, 503, { ok: false, error: 'GEMINI_API_KEY is not configured on Vercel' })
+  if (!key) return fail(res, 503, 'AI_KEY_MISSING', 'Gemini is not configured for this Vercel environment')
 
   let input
   try { input = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {}) }
-  catch { return send(res, 400, { ok: false, error: 'Malformed request body' }) }
+  catch { return fail(res, 400, 'AI_BAD_REQUEST', 'Malformed request body') }
   const task = String(input.task || '')
   const payload = input.payload || {}
   const model = /^gemini-[\w.-]+$/.test(String(input.model || '')) ? String(input.model) : DEFAULT_MODEL
   if (!['health', 'lead.extract'].includes(task)) {
-    return send(res, 400, { ok: false, error: `Unsupported task: ${task}` })
+    return fail(res, 400, 'AI_BAD_REQUEST', `Unsupported task: ${task}`)
   }
 
   const prompt = task === 'health' ? 'Reply with the single word: ok' : leadPrompt(payload)
@@ -128,14 +131,26 @@ export default async function handler(req, res) {
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
       body: JSON.stringify(requestBody),
     })
-    if (!upstream.ok) return send(res, 502, { ok: false, error: `Model returned ${upstream.status}` })
+    if (!upstream.ok) {
+      const errorCode = [401, 403].includes(upstream.status)
+        ? 'AI_KEY_REJECTED'
+        : upstream.status === 429
+          ? 'AI_RATE_LIMITED'
+          : 'AI_UPSTREAM_FAILED'
+      const error = errorCode === 'AI_KEY_REJECTED'
+        ? 'Gemini rejected the configured server credential'
+        : errorCode === 'AI_RATE_LIMITED'
+          ? 'Gemini is temporarily rate limited; try again shortly'
+          : `Gemini service returned HTTP ${upstream.status}`
+      return fail(res, 502, errorCode, error)
+    }
     const out = await upstream.json()
     const text = out?.candidates?.[0]?.content?.parts?.map(p => p?.text || '').join('') || ''
-    if (!text) return send(res, 502, { ok: false, error: 'The model returned no output' })
+    if (!text) return fail(res, 502, 'AI_EMPTY_RESPONSE', 'Gemini returned no usable output')
     if (task === 'health') return send(res, 200, { ok: true, model, text })
     return send(res, 200, { ok: true, model, data: JSON.parse(text) })
   } catch (error) {
     console.error('Vercel Gemini proxy failed', error?.message || error)
-    return send(res, 502, { ok: false, error: 'Gemini request failed' })
+    return fail(res, 502, 'AI_NETWORK_ERROR', 'Gemini could not be reached; try again shortly')
   }
 }

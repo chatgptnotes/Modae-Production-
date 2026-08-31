@@ -56,6 +56,12 @@ VITE_AI_FUNCTION_URL=/api/ai # public build-time route, no secret
 With no key the function returns 503 and the app falls back to its deterministic
 parsers rather than erroring — fine for a preview, not for the client's build.
 
+After adding or replacing either variable, redeploy that environment; Vercel
+applies environment-variable changes only to new deployments. On the deployed
+app, use **Admin → AI model configuration → Test connection**. It must report
+a model and response time before lead extraction is expected to scan email
+bodies or attachments.
+
 ### Customer quote email
 
 The approval decision stays inside WinTrack. After the final release approval,

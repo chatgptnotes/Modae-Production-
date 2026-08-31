@@ -7,7 +7,7 @@ import { useDrawer } from '../drawer.jsx'
 import { Chip, ConfChip, WarnBox, ErrBox, Modal } from '../ui.jsx'
 import { ROLES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, CUSTOMER_STATUSES, LEAD_SOURCES, ownerForOppType, routeForType, newProposal } from '../seed.js'
 import { isAdminRole, isApprover } from '../utils.js'
-import { aiEnabled, runJson, runText } from '../ai.js'
+import { aiEnabled, runTaskResult, runText } from '../ai.js'
 import { extractDocText } from '../docText.js'
 import { fmtSize } from '../filestore.js'
 import { hold, add as holdMore } from '../leadFiles.js'
@@ -84,11 +84,12 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
   const attachmentHasSpecs = /specification|part\s*code|short\s*description|parameters|make\s*:/i.test(attachmentText)
   const attachmentHasQuantity = /\b(?:quantity|qty|quantities)\b|\b\d+\s*(?:nos?|pcs?|pieces?|sets?|ea)\b/i.test(attachmentText)
 
-  const ai = await runJson('lead.extract', {
+  const aiResult = await runTaskResult('lead.extract', {
     from, subject, body, attachments, aiAttachments,
     customers: (store.customers || []).map(c => c.name),
     ownershipRules: store.config?.ownershipRules || [],
   }, { fallback: store.config?.aiModel?.provider === 'Built-in fallback' })
+  const ai = aiResult.data?.data
   // The proxy is optional in demo/staging builds. Keep the intake usable when
   // it is absent or temporarily unavailable: preserve only facts present in
   // the pasted mail and leave the lead visibly pending human structure.
@@ -119,7 +120,7 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
       completeness: fields.length ? 20 : 0,
       suggestedOwner: ownerForOppType(route === 'Spares' ? 'Spares' : route === 'Service' ? 'Service' : 'Project'),
       ai: {
-        summary: 'AI extraction was unavailable. The original enquiry was saved for manual structuring.',
+        summary: `AI extraction was unavailable${aiResult.error ? `: ${aiResult.error}` : ''}. The original enquiry was saved for manual structuring.`,
         fields: fields.map(f => ({ ...f, state: 'pending' })),
         lineItems,
         missing,

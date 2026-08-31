@@ -20,20 +20,21 @@ import { supabase } from './supabase.js'
 const AI_URL = ((import.meta.env || {}).VITE_AI_FUNCTION_URL || '').trim()
   || ((import.meta.env || {}).PROD ? '/api/ai' : '')
 const DEV_ADMIN_URL = ((import.meta.env || {}).VITE_AI_ADMIN_FUNCTION_URL || '').trim()
+export const usesVercelAi = () => AI_URL === '/api/ai'
 
 export const aiEnabled = () => !!supabase || !!AI_URL
 
 const DEFAULT_TIMEOUT = 45000
 
 // → { data } | { text } from the function, or null. Never throws.
-export async function runTask(task, payload = {}, { timeoutMs = DEFAULT_TIMEOUT, model, fallback = false } = {}) {
-  if (fallback) return null
-  if (!supabase && !AI_URL) return null
+export async function runTaskResult(task, payload = {}, { timeoutMs = DEFAULT_TIMEOUT, model, fallback = false } = {}) {
+  if (fallback) return { data: null, errorCode: 'AI_FALLBACK_ENABLED', error: 'Built-in fallback is selected' }
+  if (!supabase && !AI_URL) return { data: null, errorCode: 'AI_ENDPOINT_MISSING', error: 'No AI endpoint is configured' }
   const ctl = new AbortController()
   const timer = setTimeout(() => ctl.abort(), timeoutMs)
   try {
     const body = { task, payload, model }
-    const { data, error } = AI_URL
+    const { data, error, errorCode } = AI_URL
       ? await fetch(AI_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -43,19 +44,23 @@ export async function runTask(task, payload = {}, { timeoutMs = DEFAULT_TIMEOUT,
           const data = await response.json().catch(() => ({}))
           return response.ok
             ? { data, error: null }
-            : { data, error: new Error(data?.error || `AI proxy returned HTTP ${response.status}`) }
+            : { data, error: new Error(data?.error || `AI proxy returned HTTP ${response.status}`), errorCode: data?.errorCode || 'AI_PROXY_ERROR' }
         })
       : await supabase.functions.invoke('ai', { body, signal: ctl.signal })
-    if (error) throw error
-    if (!data?.ok) throw new Error(data?.error || 'AI task failed')
-    return data
+    if (error) return { data: null, errorCode: errorCode || 'AI_PROXY_ERROR', error: error.message }
+    if (!data?.ok) return { data: null, errorCode: data?.errorCode || 'AI_TASK_FAILED', error: data?.error || 'AI task failed' }
+    return { data, errorCode: '', error: '' }
   } catch (e) {
     // Same posture as datastore.js: warn, and let the caller carry on without.
     console.warn(`AI task "${task}" unavailable — using the built-in fallback:`, e?.message || e)
-    return null
+    return { data: null, errorCode: e?.name === 'AbortError' ? 'AI_TIMEOUT' : 'AI_NETWORK_ERROR', error: e?.name === 'AbortError' ? 'AI request timed out' : 'AI endpoint could not be reached' }
   } finally {
     clearTimeout(timer)
   }
+}
+
+export async function runTask(task, payload = {}, options = {}) {
+  return (await runTaskResult(task, payload, options)).data
 }
 
 // Convenience wrappers so call sites read as intent, not transport.
@@ -65,8 +70,8 @@ export const runText = async (task, payload, opts) => (await runTask(task, paylo
 // Admin "Test connection" — resolves to { ok, model, ms } either way.
 export async function testConnection(model) {
   const t0 = Date.now()
-  const res = await runTask('health', {}, { timeoutMs: 20000, model })
-  return { ok: !!res, model: res?.model || model || '', ms: Date.now() - t0 }
+  const res = await runTaskResult('health', {}, { timeoutMs: 20000, model })
+  return { ok: !!res.data, model: res.data?.model || model || '', ms: Date.now() - t0, errorCode: res.errorCode, error: res.error }
 }
 
 // Sends a new provider credential only to the server-side setup function. It
