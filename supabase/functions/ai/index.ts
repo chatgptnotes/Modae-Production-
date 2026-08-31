@@ -11,7 +11,7 @@
 // in supabase-setup.sql — there is no per-user Supabase auth in this app.
 
 const API = 'https://generativelanguage.googleapis.com/v1beta/models'
-const FLASH = 'gemini-3.6-flash'   // fast path: drafting, suggestions
+const FLASH = 'gemini-2.5-flash'   // fast path: drafting, suggestions
 const PRO = 'gemini-pro-latest'    // hard extraction: leads, tender specs
 
 const ENV_KEY = Deno.env.get('GEMINI_API_KEY') ?? ''
