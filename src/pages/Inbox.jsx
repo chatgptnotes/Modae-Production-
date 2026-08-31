@@ -694,6 +694,10 @@ function AiLeadDetail({ lead }) {
     const next = keepDecisions && extracted.ai
       ? { ...extracted, ai: { ...extracted.ai, fields: mergeDecidedFields(source.ai?.fields, extracted.ai.fields), lineItems: extracted.ai.lineItems || source.ai?.lineItems || [] } }
       : extracted
+    // Re-reading a document must not silently move the lead out of the
+    // salesperson's inbox. Human assignment wins over a fresh AI suggestion;
+    // an unassigned lead keeps its prior suggested owner until a user changes it.
+    next.suggestedOwner = source.assignedOwner || source.suggestedOwner || next.suggestedOwner
     store.updateLead(lead.id, next, detail || '')
     store.recordAiAction(lead.id, { provider: store.config?.aiModel?.provider, model: store.config?.aiModel?.model, action: 'lead.re-extract', result: { completeness: next.completeness, missing: next.ai?.missing || [], route: next.route } })
     setReNote('Extraction updated.')
