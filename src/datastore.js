@@ -7,7 +7,7 @@ import { supabase } from './supabase.js'
 
 // Per-device/session state that must never be shared across browsers.
 export const LOCAL_ONLY = ['viewMode', 'viewModePinned', 'tabletTheme', 'spSync', 'auth', 'role',
-  'inboxShowAll']
+  'inboxShowAll', 'leadSyncBaseline']
 
 export const dbEnabled = () => !!supabase
 

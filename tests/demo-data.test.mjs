@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
-import { migrate, seedState, emptyState, stateFromSaved, syncedOf, KEY } from '../src/appState.js'
+import { migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLeadSlice, KEY } from '../src/appState.js'
 import { seedAiLeads, seedJointApprovals } from '../src/seed.js'
 
 // The app ships full of seeded demo records, and until now there was no way out
@@ -16,6 +16,27 @@ import { seedAiLeads, seedJointApprovals } from '../src/seed.js'
 // on the next reload.
 
 const empty = () => emptyState(seedState())
+
+test('lead hydration keeps a local mail created before the server save completes', () => {
+  const local = [{ id: 'LD-local', subject: 'New mail', status: 'New' }]
+  const server = [{ id: 'LD-old', subject: 'Old mail', status: 'New' }]
+  const merged = mergeLeadSlice(local, server, [])
+  assert.deepEqual(merged.rows.map(l => l.id), ['LD-local', 'LD-old'])
+})
+
+test('lead hydration preserves local edits and deletes against a stale server snapshot', () => {
+  const baseline = [
+    { id: 'LD-edit', subject: 'Before', status: 'New' },
+    { id: 'LD-delete', subject: 'Remove me', status: 'New' },
+  ]
+  const local = [{ id: 'LD-edit', subject: 'After', status: 'Qualified' }]
+  const server = [
+    { id: 'LD-edit', subject: 'Before', status: 'New' },
+    { id: 'LD-delete', subject: 'Remove me', status: 'New' },
+  ]
+  const merged = mergeLeadSlice(local, server, baseline)
+  assert.deepEqual(merged.rows, [{ id: 'LD-edit', subject: 'After', status: 'Qualified' }])
+})
 
 test('the seeded state is flagged as demo data', () => {
   assert.equal(seedState().demoData, true)

@@ -31,6 +31,7 @@ import { BLUE_KYC_ITEMS, leadVerificationComplete, verificationDeadline, verific
 const PILL = { New: 'Blue', Qualified: 'Amber', Dropped: 'Red', Converted: 'Green' }
 const STATUS_OPTIONS = ['New', 'Qualified', 'Converted', 'Dropped']
 const ROUTE_OPTIONS = ['Project', 'Spares', 'Service']
+const CUSTOMER_CATEGORY_OPTIONS = ['OEM', 'EUC', 'EUC/OEM', 'ACP', 'SI', 'RE/TR', 'EPC', 'Trader']
 const DROP_REASONS = ['Outside business scope', 'Window shopping / budgetary only',
   'Duplicate inquiry', 'No response from customer', 'Other']
 
@@ -619,6 +620,11 @@ function AiLeadDetail({ lead }) {
   const nav = useNavigate()
   const drawer = useDrawer()
   const ai = lead.ai
+  // Older demo records were saved before the `simulated` marker was added.
+  // Keep the simulator controls available for those records as well.
+  const isSimulationLead = lead.simulated === true
+    || /^LD-SIM-/i.test(String(lead.id || ''))
+    || /\bdemo\b/i.test([lead.sender, lead.from, lead.subject, lead.sellTo].filter(Boolean).join(' '))
   const med = store.config.aiThresholds?.med ?? 75
   const [evOpen, setEvOpen] = useState(null)      // field index with evidence expanded
   const [editFor, setEditFor] = useState(null)    // { idx, val, note }
@@ -779,6 +785,18 @@ function AiLeadDetail({ lead }) {
   const addMissing = (label, value, key = null) => {
     const patch = supplyMissing({ ...lead, ai }, label, value, key)
     if (patch) store.updateLead(lead.id, patch, `Missing information supplied: ${String(label).trim()}`)
+  }
+
+  // Temporary QA path: only simulated leads may fill a missing item with a
+  // deterministic demo value. Real leads retain the normal Add/manual path.
+  const simulatedMissingValue = label => {
+    if (/customer company|customer name/i.test(label)) return 'Simulated Customer Pvt Ltd'
+    if (/customer category|category/i.test(label)) return 'EUC'
+    if (/quantity|quantit/i.test(label)) return '10'
+    if (/delivery|date|timeline/i.test(label)) return '30 days'
+    if (/location/i.test(label)) return 'Bangalore'
+    if (/machine|system|application/i.test(label)) return 'VM600 vibration monitoring system'
+    return 'Demo information confirmed for testing'
   }
 
   const saveEdit = () => {
@@ -1177,6 +1195,11 @@ function AiLeadDetail({ lead }) {
                       {canAct && fillFor?.item !== m && (
                         <button onClick={() => { setAddOther(null); setFillFor({ item: m, val: '' }) }}>
                           <Icon name="plus" size={11} /> Add
+                        </button>
+                      )}
+                      {isSimulationLead && fillFor?.item !== m && (
+                        <button title="Fill with a demo value for testing" onClick={() => addMissing(m, simulatedMissingValue(m), m)}>
+                          <Icon name="sparkles" size={11} /> Simulate
                         </button>
                       )}
                     </div>
@@ -1745,6 +1768,7 @@ export default function Inbox() {
   const [simulationOpen, setSimulationOpen] = useState(false)
   const [simProjectType, setSimProjectType] = useState(PROJECT_TYPES[0])
   const [simOppType, setSimOppType] = useState(() => oppTypesForProjectType(PROJECT_TYPES[0])[0] || PROJECT_TYPES[0])
+  const [simCategory, setSimCategory] = useState('') // temporary test override
   const [simShape, setSimShape] = useState('')      // template key, '' = any shape
   const [simQuality, setSimQuality] = useState('')  // '' = varied | clean | partial | duplicate
   const [simRegister, setSimRegister] = useState(true)
@@ -1889,6 +1913,7 @@ export default function Inbox() {
       config: store.config,
       projectType,
       oppType,
+      customerCategory: options.customerCategory || simCategory || null,
       // A randomised call (Random inquiry) picks its own type, so the pinned
       // shape from the dialog would not fit it.
       template: options.projectType ? null : (activeSimShape || null),
@@ -2014,6 +2039,12 @@ export default function Inbox() {
             <label className="afield">Opportunity type
               <select value={activeSimOppType} onChange={e => setSimOppType(e.target.value)}>
                 {simOppOptions.map(type => <option key={type}>{type}</option>)}
+              </select>
+            </label>
+            <label className="afield">Customer category (test)
+              <select value={simCategory} onChange={e => setSimCategory(e.target.value)}>
+                <option value="">Use scenario category</option>
+                {CUSTOMER_CATEGORY_OPTIONS.map(category => <option key={category}>{category}</option>)}
               </select>
             </label>
             <label className="afield wide">Enquiry shape

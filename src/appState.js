@@ -113,6 +113,8 @@ export function migrate(s) {
   // owner back on their own leads — and a lead the simulator had just routed to
   // someone else looked like it had never saved. Per-device, never synced.
   if (typeof s.inboxShowAll !== 'boolean') s.inboxShowAll = false
+  // Per-device baseline used to distinguish unsaved lead changes after reload.
+  if (!s.leadSyncBaseline || typeof s.leadSyncBaseline !== 'object') s.leadSyncBaseline = {}
   // Diagram 02 workflow objects: the Brownfield B-01..B-05 sign-off ledger,
   // the §4 service site surveys, and §8 competitor tracking.
   if (!s.bSteps) s.bSteps = {}
@@ -276,4 +278,52 @@ export function syncedOf(s) {
     if (!datastore.LOCAL_ONLY.includes(k)) out[k] = s[k]
   }
   return out
+}
+
+const sameValue = (a, b) => JSON.stringify(a) === JSON.stringify(b)
+
+// Preserve local lead creates/edits/deletes while accepting server-only rows and
+// remote edits. The baseline is the last server snapshot known to this device.
+export function mergeLeadSlice(local = [], server = [], baseline = []) {
+  const localRows = Array.isArray(local) ? local : []
+  const serverRows = Array.isArray(server) ? server : []
+  const baseRows = Array.isArray(baseline) ? baseline : []
+  const byId = rows => new Map(rows.filter(row => row?.id).map(row => [row.id, row]))
+  const localById = byId(localRows)
+  const serverById = byId(serverRows)
+  const baseById = byId(baseRows)
+  const ids = [...new Set([...localRows, ...serverRows].map(row => row?.id).filter(Boolean))]
+
+  const nextBaseline = []
+  const rows = ids.flatMap(id => {
+    const localRow = localById.get(id)
+    const serverRow = serverById.get(id)
+    const baseRow = baseById.get(id)
+    if (baseRow) {
+      if (!localRow) {
+        nextBaseline.push(baseRow)
+        return [] // local delete since the baseline
+      }
+      if (!sameValue(localRow, baseRow)) {
+        nextBaseline.push(baseRow)
+        return [localRow]
+      }
+      if (serverRow) {
+        nextBaseline.push(serverRow)
+        return [serverRow]
+      }
+      nextBaseline.push(baseRow)
+      return []
+    }
+    // No baseline means the local row may have been created before the first
+    // successful sync. Keep it instead of allowing stale hydration to erase it.
+    if (localRow) return [localRow]
+    if (serverRow) {
+      nextBaseline.push(serverRow)
+      return [serverRow]
+    }
+    return []
+  })
+
+  return { rows, baseline: nextBaseline }
 }

@@ -279,3 +279,11 @@ test('a typed duplicate only chases leads on the requested route', () => {
   assert.equal(degraded.simulatedQuality, 'partial')
   assert.notEqual(degraded.duplicateRisk, 'High')
 })
+
+test('the simulator can override customer category for test coverage', () => {
+  const lead = simulatedLead('Green', WHEN, {
+    projectType: 'Spares', oppType: 'Spares', customerCategory: 'EPC', quality: 'clean', config: seedConfig,
+  })
+  const category = lead.ai.fields.find(field => field.k === 'Category')
+  assert.equal(category?.v, 'EPC')
+})

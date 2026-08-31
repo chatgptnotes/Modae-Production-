@@ -304,6 +304,7 @@ export function simulatedLead(customerStatus = 'Green', now = new Date(), option
     seq = null,
     projectType = null,
     oppType = null,
+    customerCategory = null,
     template: shapeKey = null,
   } = options
 
@@ -330,9 +331,10 @@ export function simulatedLead(customerStatus = 'Green', now = new Date(), option
     : at(pickedTemplatePool, variant)
   const pool = SIMULATED_CUSTOMERS[status]
   const recentForClass = lastCustomer[status] || (lastCustomer[status] = [])
-  const customer = variant == null
+  const pickedCustomer = variant == null
     ? freshPick(pool, rng, c => c.name, recentForClass)
     : at(pool, variant)
+  const customer = customerCategory ? { ...pickedCustomer, category: customerCategory } : pickedCustomer
   const projectTypeValue = constrainedProjectType || template.route
   const oppPool = oppTypesForProjectType(projectTypeValue)
   const resolvedOppType = requestedOppType

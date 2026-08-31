@@ -11,7 +11,7 @@ import {
 } from './seed.js'
 import { leadConfig, routeOwner, expiredLeadDeadline, aiAuditDetail } from './leadRules.js'
 import { withoutSimulated, simulatedCount } from './simulatedLeads.js'
-import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, defaultViewMode } from './appState.js'
+import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLeadSlice, defaultViewMode } from './appState.js'
 
 const StoreCtx = createContext(null)
 
@@ -110,7 +110,20 @@ export function StoreProvider({ children }) {
     const dirty = dirtySlices()
     if (!Object.keys(dirty).length) return
     datastore.saveSlices(dirty)
-      .then(() => { lastSavedRef.current = { ...lastSavedRef.current, ...dirty } })
+      .then(() => {
+        const current = stateRef.current
+        const saved = { ...lastSavedRef.current }
+        const confirmed = {}
+        for (const [key, value] of Object.entries(dirty)) {
+          if (JSON.stringify(current[key]) !== JSON.stringify(value)) continue
+          saved[key] = value
+          if (key === 'leads' || key === 'leadArchive') confirmed[key] = value
+        }
+        lastSavedRef.current = saved
+        if (Object.keys(confirmed).length) {
+          setState(s => ({ ...s, leadSyncBaseline: { ...(s.leadSyncBaseline || {}), ...confirmed } }))
+        }
+      })
       .catch(e => console.warn('Supabase save failed — will retry on next change/focus:', e?.message))
   }
 
@@ -133,21 +146,32 @@ export function StoreProvider({ children }) {
         await datastore.saveSlices(snap)
         lastSavedRef.current = snap
         hydratedRef.current = true
+        setState(s => ({ ...s, leadSyncBaseline: {
+          ...(s.leadSyncBaseline || {}), leads: s.leads, leadArchive: s.leadArchive || [],
+        } }))
       } catch (e) {
         console.warn('Supabase seed failed — retrying on next focus:', e?.message)
       }
     } else {
       const s = stateRef.current
       const accepted = {}
-      for (const [k, v] of Object.entries(syncedOf(res.slices))) {
+      const serverSlices = syncedOf(res.slices)
+      const nextBaseline = { ...(s.leadSyncBaseline || {}) }
+      for (const [k, v] of Object.entries(serverSlices)) {
+        if (k === 'leads' || k === 'leadArchive') {
+          const mergedLead = mergeLeadSlice(s[k], v, nextBaseline[k])
+          accepted[k] = mergedLead.rows
+          nextBaseline[k] = mergedLead.baseline
+          continue
+        }
         if (k in s && s[k] !== bootRef.current[k]) continue // edited this session — keep local
         accepted[k] = v
       }
-      const merged = migrate({ ...s, ...accepted })
+      const merged = migrate({ ...s, ...accepted, leadSyncBaseline: nextBaseline })
       // Only the slices we took from the server are known to match it. A slice
       // we kept is still unsaved, so it must stay dirty for the flush below.
       lastSavedRef.current = Object.fromEntries(
-        Object.keys(accepted).map(k => [k, merged[k]]))
+        Object.keys(accepted).map(k => [k, serverSlices[k] ?? merged[k]]))
       hydratedRef.current = true
       setState(merged)
       // Push whatever the user did during the boot window now, rather than
@@ -163,14 +187,16 @@ export function StoreProvider({ children }) {
   const applyServer = slices => {
     const s = stateRef.current
     const updates = {}
+    const nextBaseline = { ...(s.leadSyncBaseline || {}) }
     for (const [k, v] of Object.entries(syncedOf(slices))) {
       const dirty = k in s && s[k] !== lastSavedRef.current[k]
       if (dirty) continue
       if (JSON.stringify(s[k]) === JSON.stringify(v)) continue
       updates[k] = v
+      if (k === 'leads' || k === 'leadArchive') nextBaseline[k] = v
     }
     if (!Object.keys(updates).length) return
-    const merged = migrate({ ...s, ...updates })
+    const merged = migrate({ ...s, ...updates, leadSyncBaseline: nextBaseline })
     lastSavedRef.current = syncedOf(merged)
     setState(merged)
   }
