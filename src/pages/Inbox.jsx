@@ -11,10 +11,12 @@ import { aiEnabled, runTaskResult, runText } from '../ai.js'
 import { extractDocText } from '../docText.js'
 import { fmtSize } from '../filestore.js'
 import { hold, add as holdMore } from '../leadFiles.js'
+import { listFiles } from '../leadBlobs.js'
 import AttachmentViewer from '../AttachmentViewer.jsx'
 import { findDuplicates } from '../insights.js'
 import { leadWorkflow } from '../leadWorkflow.js'
 import { parseLeadLineItems } from '../tenderParse.js'
+import { deterministicLeadRoute, leadTextChunks, mergeLeadResults } from '../leadExtraction.js'
 import { buildLeadProposalData } from '../leadBoq.js'
 import { isFastTrackLead, routeOwner, supplyMissing } from '../leadRules.js'
 import { INDIA_LOCATION_GROUPS, indiaLocation, indiaRegionForLocation } from '../indiaLocations.js'
@@ -84,12 +86,31 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
   const attachmentHasSpecs = /specification|part\s*code|short\s*description|parameters|make\s*:/i.test(attachmentText)
   const attachmentHasQuantity = /\b(?:quantity|qty|quantities)\b|\b\d+\s*(?:nos?|pcs?|pieces?|sets?|ea)\b/i.test(attachmentText)
 
-  const aiResult = await runTaskResult('lead.extract', {
-    from, subject, body, attachments, aiAttachments,
+  const chunks = leadTextChunks(body, attachments)
+  const common = {
+    from, subject,
     customers: (store.customers || []).map(c => c.name),
     ownershipRules: store.config?.ownershipRules || [],
-  }, { fallback: store.config?.aiModel?.provider === 'Built-in fallback' })
-  const ai = aiResult.data?.data
+  }
+  const fallback = store.config?.aiModel?.provider === 'Built-in fallback'
+  const results = []
+  let aiResult = { error: '' }
+  if (chunks.length) {
+    for (const chunk of chunks) {
+      aiResult = await runTaskResult('lead.extract', {
+        ...common,
+        body: chunk.source === 'Email body' ? chunk.text : '',
+        attachments: chunk.source === 'Email body' ? [] : [{ name: chunk.source.replace(/^Attachment: /, ''), text: chunk.text }],
+        aiAttachments: chunk.index === 0 ? aiAttachments : [],
+        chunk: { source: chunk.source, index: chunk.index, total: chunk.total },
+      }, { fallback })
+      if (aiResult.data?.data) results.push(aiResult.data.data)
+    }
+  } else {
+    aiResult = await runTaskResult('lead.extract', { ...common, body, attachments, aiAttachments }, { fallback })
+    if (aiResult.data?.data) results.push(aiResult.data.data)
+  }
+  const ai = mergeLeadResults(results)
   // The proxy is optional in demo/staging builds. Keep the intake usable when
   // it is absent or temporarily unavailable: preserve only facts present in
   // the pasted mail and leave the lead visibly pending human structure.
@@ -104,8 +125,8 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
     const fields = []
     if (from?.trim()) fields.push({ group: 'Customer', k: 'Sender', v: from.trim(), conf: 45, ev: 'From address', note: 'Confirm the customer and contact person.' })
     if (subject?.trim()) fields.push({ group: 'RFQ', k: 'Subject', v: subject.trim(), conf: 55, ev: 'Email subject', note: 'Confirm the opportunity name and route.' })
-    if (body?.trim()) fields.push({ group: 'RFQ', k: 'Email body', v: body.trim().slice(0, 500), conf: 35, ev: 'Email body', note: 'Structure the requested scope and quantities.' })
-    if (attachmentText) fields.push({ group: 'RFQ', k: 'Attachment content', v: attachmentText.slice(0, 1000), conf: 45, ev: 'Attached document content', note: 'Confirm the scope, quantities and specifications.' })
+    if (body?.trim()) fields.push({ group: 'RFQ', k: 'Email body', v: body.trim().slice(0, 2000), conf: 35, ev: 'Email body', note: 'Fallback preview; the complete source is retained separately. Structure the requested scope and quantities.' })
+    if (attachmentText) fields.push({ group: 'RFQ', k: 'Attachment content', v: attachmentText.slice(0, 4000), conf: 45, ev: 'Attached document content', note: 'Fallback preview; the complete source is retained separately. Confirm the scope, quantities and specifications.' })
     const missing = ['Customer name', 'Opportunity scope', 'Required quantities and specifications']
     const lineItems = parseLeadLineItems(`${body || ''}\n${attachmentText}`)
     if (attachmentText) missing.splice(missing.indexOf('Opportunity scope'), 1)
@@ -126,21 +147,31 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
         missing,
         duplicates: [],
         next: ['Confirm the customer and opportunity route', 'Structure the requested scope', 'Add missing quantities and specifications'],
+        scan: { chunks: chunks.length || 1, completed: 0, complete: false },
       },
     }
   }
-  const inferredOwner = ownerForOppType(ai.route === 'Spares' ? 'Spares' : ai.route === 'Service' ? 'Service' : 'Project')
+  const sourceRoute = deterministicLeadRoute(body, attachments)
+  const resolvedRoute = sourceRoute || ai.route || 'Spares'
   const owner = ROLES[ai.suggestedOwner]?.sales
     ? ai.suggestedOwner
-    : inferredOwner
+    : ownerForOppType(resolvedRoute === 'Spares' ? 'Spares' : resolvedRoute === 'Service' ? 'Service' : 'Project')
+  const resolvedFields = ai.fields.map(f => {
+    if (!/^(opp type|opportunity type)$/i.test(f.k) || !sourceRoute) return f
+    return {
+      ...f, v: sourceRoute, conf: Math.max(Number(f.conf) || 0, 98),
+      ev: `${f.ev || 'Email or attachment'}; deterministic physical-scope check`,
+      note: [f.note, `Resolved as ${sourceRoute} from the source scope.`].filter(Boolean).join(' '),
+    }
+  })
   return {
-    route: ai.route || 'Spares',
+    route: resolvedRoute,
     urgency: ai.urgency || 'Normal',
     completeness: Math.max(0, Math.min(100, Math.round(ai.completeness ?? 0))),
     suggestedOwner: owner,
     ai: {
       summary: ai.summary || '',
-      fields: ai.fields.map(f => ({ ...f, conf: Math.max(0, Math.min(100, Math.round(f.conf ?? 0))), state: 'pending' })),
+      fields: resolvedFields.map(f => ({ ...f, conf: Math.max(0, Math.min(100, Math.round(f.conf ?? 0))), state: 'pending' })),
       lineItems: (Array.isArray(ai.lineItems) && ai.lineItems.length
         ? ai.lineItems
         : parseLeadLineItems(`${body || ''}\n${attachmentText}`)).map(x => ({
@@ -154,14 +185,15 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
       missing: ai.missing || [],
       duplicates: [],
       next: ai.next || [],
+      scan: { chunks: chunks.length || 1, completed: results.length, complete: results.length === (chunks.length || 1) },
     },
   }
 }
 
 // Attachment text kept on the lead — the store persists to localStorage, so the
 // whole document is not carried; this is enough for the AI and for evidence.
-const TEXT_PER_FILE = 8000
-const TEXT_TOTAL = 40000
+const TEXT_PER_FILE = 12000
+const TEXT_TOTAL = 60000
 const AI_FILE_BYTES = 4 * 1024 * 1024
 const AI_TOTAL_BYTES = 8 * 1024 * 1024
 
@@ -296,7 +328,7 @@ async function readAttachment(file) {
   const { text, pages, err } = await extractDocText(file)
   if (pages) rec.pages = pages
   if (err) rec.err = err
-  if (text) rec.text = text.slice(0, TEXT_PER_FILE)
+  if (text) rec.text = text
   return rec
 }
 
@@ -312,6 +344,22 @@ function attachmentMeta(files) {
     }
     return rec
   })
+}
+
+// Metadata in the lead is intentionally compact. Rehydrate the original blobs
+// before a re-run so a reload never turns a complete document into an excerpt.
+async function fullLeadAttachments(lead, attachments) {
+  const stored = await listFiles(lead.id)
+  if (!stored.length) return attachments || []
+  const byName = new Map(stored.map(file => [file.name, file]))
+  const out = []
+  for (const attachment of attachments || []) {
+    const file = byName.get(attachment.name)
+    if (!file) { out.push(attachment); continue }
+    const fresh = await readAttachment(file)
+    out.push({ ...attachment, ...fresh })
+  }
+  return out
 }
 
 // Scanned PDFs and images have no text layer. Send their bytes only for the
@@ -380,7 +428,7 @@ function PasteLeadModal({ onClose }) {
   const add = async () => {
     if (!body.trim() && !files.length) { setErr('Paste the email body, or attach the enquiry document.'); return }
     setBusy(true); setErr('')
-    const extracted = await extractLead({ from, subject, body, attachments: attachmentMeta(files), aiAttachments: await attachmentAiPayload(files) }, store)
+    const extracted = await extractLead({ from, subject, body, attachments: files, aiAttachments: await attachmentAiPayload(files) }, store)
     setBusy(false)
     if (!extracted) {
       setErr('Extraction is unavailable — check the AI configuration on the Admin page, or add the mail unextracted and structure it by hand.')
@@ -636,7 +684,8 @@ function AiLeadDetail({ lead }) {
   // one more file. The manual button still replaces everything, confirmed first.
   const runExtraction = async ({ source, keepDecisions, detail, failureNote = '' }) => {
     setReExtracting(true); setReErr(''); setReNote('')
-    const extracted = await extractLead(source, store)
+    const hydrated = { ...source, attachments: await fullLeadAttachments(source, source.attachments) }
+    const extracted = await extractLead(hydrated, store)
     setReExtracting(false)
     if (!extracted) {
       setReErr(failureNote || 'AI extraction was unavailable. The attachment was saved, but the previous extracted fields are unchanged. Retry when the AI proxy is available.')
@@ -1099,6 +1148,14 @@ function AiLeadDetail({ lead }) {
         </header>
         <div className="ws-body">
           <p className="ws-summary">{ai.summary}</p>
+          {ai.scan && (
+            <p className="hint" role="status">
+              <Icon name={ai.scan.complete ? 'checkCircle' : 'alert'} size={12} />{' '}
+              {ai.scan.complete
+                ? `Complete document scan: ${ai.scan.completed} section${ai.scan.completed === 1 ? '' : 's'} processed.`
+                : `Partial document scan: ${ai.scan.completed || 0} of ${ai.scan.chunks || 1} sections processed.`}
+            </p>
+          )}
           {reErr && <ErrBox>{reErr}</ErrBox>}
           {reNote && !reErr && <p className="hint"><Icon name="checkCircle" size={12} /> {reNote}</p>}
 

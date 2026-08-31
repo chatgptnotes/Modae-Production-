@@ -83,7 +83,11 @@ ${cap((p.ownershipRules || []).map(r => `${r.region} -> ${r.owner}`).join('\n'),
 Always attempt Sell-to customer, Category, Contact, Opp type, Opportunity
 scope, line items, quantities, BU and Segment. Return every requested material
 as lineItems with one row per item. Cite the email or attachment
-name in evidence. Ask only for information absent from both sources.`
+name in evidence. For Opp type, classify procurement of physical items with part
+numbers, quantities, sensors, probes, cables or spare materials as Spares, even
+if the document mentions service/support in a commercial clause. Use Service
+only when the requested work is labour such as maintenance, repair, calibration,
+commissioning or field engineering. Ask only for information absent from both sources.`
 }
 
 function inlineParts(payload) {

@@ -152,7 +152,11 @@ Produce:
 - lineItems: one row for every requested material or spare, with description,
   partNumber/customerRef when present, quantity, UOM, confidence and evidence.
 - missing: the specific information we must ask the customer for.
-- next: 2-4 concrete next actions for the salesperson.`,
+- next: 2-4 concrete next actions for the salesperson.
+- For Opp type, physical procurement with part numbers, quantities, sensors,
+  probes, cables or spare materials is Spares, even when service/support is
+  mentioned in a commercial clause. Service means labour such as maintenance,
+  repair, calibration, commissioning or field engineering.`,
   },
 
   // ---- Inbox: the lead-stage clarification / pre-quote-fee mail body.
