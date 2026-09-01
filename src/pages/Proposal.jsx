@@ -751,7 +751,10 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
     ['Sl.', 'Item Category', 'Item/Scope Description', 'Proposed Model & Part Number', 'Customer Item Code', 'Adders', 'Qty/Unit', 'Common', 'Spares', 'Total Qty', 'UOM', 'Unit Price ₹', 'Total Price ₹', 'Unit Cost ₹', 'Total Cost ₹', `List Price`, 'Currency'],
     p.bom.map((l, i) => [i + 1, l.itemCategory, l.desc, l.pn, l.custRef, l.adders.join('+'), l.qtyPerUnit, l.common, l.spares, totalQty(l), l.uom, lineQuoted(l), lineQuoted(l) * totalQty(l), Math.round(lineCost(l)), Math.round(lineCost(l) * totalQty(l)), linePrice(l), l.currency])
   )
-  const exportExcel = () => downloadProposalXlsx({ p, opp, doc, priced, totalQty, lineQuoted, route })
+  const exportExcel = () => downloadProposalXlsx({ p, opp, doc, priced, totalQty, lineQuoted, route }).catch(error => {
+    console.error('Proposal Excel export failed', error)
+    window.alert(`The proposal workbook could not be downloaded: ${error?.message || 'unknown export error'}`)
+  })
 
   // The customer document: sections auto-drafted from the opportunity and BoQ,
   // each overridable on the Document tab. Attachments pick up whatever the

@@ -1,4 +1,5 @@
 import React from 'react'
+import { useEffect, useState } from 'react'
 import { fmt } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import {
@@ -24,16 +25,36 @@ const Auto = ({ p, field, onReset }) => (
       </button>
 )
 
+const sectionId = title => String(title).replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase()
+
 function Section({ title, p, field, onReset, children }) {
+  const id = sectionId(title)
+  const initiallyOpen = /covering letter|executive summary/i.test(title)
+  const compact = /annexes|bill of quantities|assumptions|exclusions|terms offered|validity|attachments/i.test(title)
+  const [open, setOpen] = useState(initiallyOpen)
+
+  useEffect(() => {
+    const openFromNavigator = event => {
+      if (event.detail !== id) return
+      setOpen(true)
+      requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    }
+    window.addEventListener('proposal-doc-open', openFromNavigator)
+    return () => window.removeEventListener('proposal-doc-open', openFromNavigator)
+  }, [id])
+
   return (
-    <div className="form-card doc-edit">
-      <div className="section-title">
-        {title}
+    <section id={id} className={`form-card doc-edit ${compact ? 'doc-edit-compact' : ''} ${open ? 'is-open' : 'is-collapsed'}`}>
+      <div className="doc-section-toggle" role="button" tabIndex={0} aria-expanded={open}
+        onClick={() => setOpen(value => !value)}
+        onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setOpen(value => !value) } }}>
+        <span className="doc-section-chevron" aria-hidden="true">{open ? '−' : '+'}</span>
+        <span>{title}</span>
         <span className="spacer" />
-        {field && <Auto p={p} field={field} onReset={onReset} />}
+        {field && <span onClick={event => event.stopPropagation()}><Auto p={p} field={field} onReset={onReset} /></span>}
       </div>
-      {children}
-    </div>
+      {open && <div className="doc-section-content">{children}</div>}
+    </section>
   )
 }
 
@@ -95,9 +116,22 @@ export default function DocEditor({ p, opp, save, files, totals, priced }) {
   const set = (k, v) => save({ ...p, [k]: v })
   const reset = k => () => { const next = { ...p }; delete next[k]; save(next) }
 
+  const autoGrow = event => {
+    const element = event.currentTarget
+    element.style.height = 'auto'
+    element.style.height = `${Math.max(element.scrollHeight, 72)}px`
+  }
   const area = (field, rows = 4) => (
-    <textarea rows={rows} value={doc[field]} onChange={e => set(field, e.target.value)} style={{ width: '100%' }} />
+    <textarea className="doc-auto-textarea" rows={rows} value={doc[field]} onChange={e => set(field, e.target.value)} onInput={autoGrow} />
   )
+
+  const navigation = [
+    ['annexes-to-issue', 'Annexes'], ['covering-letter', 'Cover letter'], ['1-executive-summary', 'Summary'],
+    ['2-scope-of-supply', 'Scope'], ['3-bill-of-quantities', 'BoQ'], ['4-commercial-summary', 'Commercial'],
+    ['5-delivery-schedule', 'Delivery'], ['6-assumptions', 'Assumptions'], ['7-exclusions', 'Exclusions'],
+    ['8-deviations', 'Deviations'], ['9-terms-offered', 'Terms'], ['10-validity-of-offer', 'Validity'],
+    ['11-attachments-enclosures', 'Attachments'], ['about-modae-front-matter-page', 'About ModAE'],
+  ]
 
   const gst = Math.round(totals.target * (doc.gstPct / 100))
   const annexes = (docLayout(p, opp).annexes || [])
@@ -105,6 +139,10 @@ export default function DocEditor({ p, opp, save, files, totals, priced }) {
 
   return (
     <div className="doc-editor">
+      <nav className="doc-section-nav" aria-label="Document sections">
+        <span className="doc-section-nav-label">Jump to:</span>
+        {navigation.map(([id, label]) => <button type="button" key={id} onClick={() => window.dispatchEvent(new CustomEvent('proposal-doc-open', { detail: id }))}>{label}</button>)}
+      </nav>
       <div className="costing-note" style={{ marginBottom: 10 }}>
         The printed proposal follows the ModAE sample proposals: a covering letter, one priced sheet, and
         the technical annexes for this route. Free text is auto-drafted from the opportunity and the BoQ

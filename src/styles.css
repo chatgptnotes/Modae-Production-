@@ -1782,6 +1782,7 @@ input.needs-input, select.needs-input { background: #fffbeb; border-color: var(-
 .opp-summary-title h2 { margin: 0; font-size: 22px; color: var(--text-main); }
 .opp-id { background: var(--bg-app); border-radius: 6px; padding: 5px 9px; font-weight: 800; font-size: 16px; font-variant-numeric: tabular-nums; }
 .opp-summary-grid { display: grid; grid-template-columns: 1fr 1fr 1fr 2.4fr 1fr; gap: 14px; margin-top: 12px; }
+.mojibake-summary { display: none; }
 .opp-summary-grid div { min-width: 0; }
 .opp-summary-grid span { display: block; color: var(--text-muted); font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 3px; }
 .opp-summary-grid b { display: block; font-size: 12.5px; line-height: 1.35; }
@@ -2890,16 +2891,52 @@ button.install:hover { background: var(--primary-hover); }
 .doc-endnote .doc-muted { text-align: center; margin-top: 16px; letter-spacing: .5px; }
 
 /* ---- Document tab editor ---- */
-.doc-editor { max-width: 900px; }
-.doc-editor .form-card { margin-bottom: 12px; }
+.doc-editor {
+  width: 100%; max-width: none; display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px 12px; scroll-margin-top: 60px;
+}
+.doc-editor > .doc-section-nav,
+.doc-editor > .costing-note,
+.doc-editor > .doc-edit:not(.doc-edit-compact) { grid-column: 1 / -1; }
+.doc-editor .form-card { max-width: none; margin-bottom: 0; scroll-margin-top: 58px; }
+.doc-section-nav {
+  position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 5px;
+  flex-wrap: wrap; padding: 8px 10px; margin-bottom: 10px; background: var(--card-bg, #fff);
+  border: 1px solid var(--border-soft); box-shadow: 0 2px 5px rgba(15, 23, 42, .08);
+}
+.doc-section-nav-label { color: var(--text-muted); font-size: 11px; font-weight: 700; margin-right: 3px; }
+.doc-section-nav button { min-height: 26px; padding: 3px 8px; font-size: 11px; border: 1px solid var(--border-color); background: #fff; }
+.doc-section-nav button:hover, .doc-section-nav button:focus-visible { border-color: var(--primary-accent); color: var(--primary-hover); }
+.doc-section-toggle {
+  display: flex; align-items: center; gap: 7px; width: 100%; min-height: 32px; padding: 0;
+  border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer;
+}
+.doc-section-toggle:focus-visible { outline: 2px solid var(--primary-accent); outline-offset: 2px; border-radius: 4px; }
+.doc-section-toggle:hover { color: var(--primary-hover); }
+.doc-section-chevron { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: 1px solid var(--border-color); border-radius: 4px; font-size: 16px; line-height: 1; }
+.doc-edit.is-collapsed { padding-bottom: 10px; }
+.doc-section-content { margin-top: 10px; }
+.doc-edit-compact .doc-section-content { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 16px; align-items: start; }
+.doc-edit-compact .doc-section-content > .costing-note,
+.doc-edit-compact .doc-section-content > table,
+.doc-edit-compact .doc-section-content > .sheet,
+.doc-edit-compact .doc-section-content > .doc-list-row,
+.doc-edit-compact .doc-section-content > button:last-of-type { grid-column: 1 / -1; }
 .doc-edit .section-title { display: flex; align-items: baseline; gap: 8px; }
 .doc-edit .section-title .spacer { flex: 1; }
-.doc-editor textarea { width: 100%; font: inherit; padding: 6px 8px; border: 1px solid var(--border-color); resize: vertical; }
+.doc-editor textarea { width: 100%; font: inherit; padding: 6px 8px; border: 1px solid var(--border-color); resize: none; overflow: hidden; box-sizing: border-box; }
+.doc-editor .doc-auto-textarea { min-height: 88px; line-height: 1.4; }
 .doc-list-row { display: flex; align-items: flex-start; gap: 6px; margin-bottom: 6px; }
 .doc-list-row .doc-list-n { flex: 0 0 18px; padding-top: 7px; font-size: 11px; color: var(--text-muted); text-align: right; }
 .doc-list-row textarea { flex: 1; }
 .doc-list-row input { flex: 1; }
 .doc-list-row button { flex: 0 0 auto; }
+@media (max-width: 760px) {
+  .doc-editor { display: block; }
+  .doc-editor .form-card { margin-bottom: 10px; }
+  .doc-section-nav { position: static; }
+}
 button.linklike {
   background: none; border: none; padding: 0; min-height: 0;
   color: var(--primary-hover); font-size: 11.5px; font-weight: 600; cursor: pointer;

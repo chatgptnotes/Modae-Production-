@@ -1,30 +1,25 @@
 import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
-import { B_STEPS as ALL_B_STEPS } from '../seed.js'
+import { B_STEPS as ALL_B_STEPS, ROLES, defaultBStepOwners } from '../seed.js'
 import { isAdminRole } from '../utils.js'
 import { Chip } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 
-// Diagram 02 §3 — the Brownfield activity chain, B-01 Requirement Validation
-// through B-05 Proposal Generation. The diagram's own footnote is the access
-// rule: "All above activities are approved only by Assigned Salesperson", so
-// the sign-off buttons belong to the opportunity owner alone; everyone else
-// reads the ledger. `readiness()` blocks the proposal until all five are
-// signed, which is why this panel is the way out of that block.
+// Brownfield B-01..B-05 are sequential approvals with configurable ownership.
+// LJS/AH/admin assign the responsible internal user; only that user (or an
+// admin acting for them) can sign or reopen the step.
 export default function BSteps({ opp, steps = ALL_B_STEPS, title = 'Brownfield workflow - B-01 to B-05' }) {
   const store = useStore()
-  const B_STEPS = steps
   const signed = (store.bSteps || {})[opp.id] || {}
-  // An admin acts for the owner (the same latitude every other owner-scoped
-  // action on the workbench gives them), nobody else.
-  const maySign = store.role === opp.owner || isAdminRole(store.role)
+  const assignments = { ...defaultBStepOwners(opp), ...((store.bStepOwners || {})[opp.id] || {}) }
+  const canAssign = store.role === 'LJS' || store.role === 'AH' || isAdminRole(store.role)
+  const assignableRoles = Object.entries(ROLES).filter(([, role]) => !role.external)
   const [notes, setNotes] = useState({})
   const [reopening, setReopening] = useState({})
 
   const isSigned = id => signed[id]?.state === 'Signed'
-  const open = steps.filter(s => !isSigned(s.id))
+  const open = steps.filter(step => !isSigned(step.id))
   const done = steps.length - open.length
-  // Sequential: each step feeds the next, so B-0n waits on B-0(n-1).
   const nextUp = open[0]?.id
 
   const sign = id => {
@@ -42,15 +37,15 @@ export default function BSteps({ opp, steps = ALL_B_STEPS, title = 'Brownfield w
     <div className="ana-grid">
       <div className="ana-card c-12">
         <div className="ana-title">
-          Brownfield workflow — B-01 to B-05 <Chip tone={done === B_STEPS.length ? 'state-Accepted' : 'grey'}>{done} of {B_STEPS.length} signed</Chip>
+          {title} <Chip tone={done === steps.length ? 'state-Accepted' : 'grey'}>{done} of {steps.length} signed</Chip>
         </div>
         <p className="hint">
-          Every activity is signed off by the assigned salesperson ({opp.owner}) before the proposal
-          can go for approval. A revision routes the rework back to the step that owns it and reopens it.
+          Each activity is assigned to a responsible person and must be signed in order before the proposal
+          can go for approval. Revisions reopen the step that owns the change.
         </p>
-        {!maySign && (
+        {!canAssign && (
           <div className="warnbox">
-            Read-only — these activities are signed off by the assigned salesperson ({opp.owner}) only.
+            Read-only assignments - LJS, AH, or an administrator must assign the responsible person.
           </div>
         )}
       </div>
@@ -60,52 +55,64 @@ export default function BSteps({ opp, steps = ALL_B_STEPS, title = 'Brownfield w
         const ok = rec?.state === 'Signed'
         const isNext = step.id === nextUp
         const waiting = !ok && !isNext
+        const assignedTo = assignments[step.id]
+        const mayAct = store.role === assignedTo || isAdminRole(store.role)
         return (
           <div key={step.id} className="ana-card c-6">
             <div className="ana-title">
-              {step.id} · {step.label}
+              {step.id} - {step.label}
+              <span className="hint">Owner: {assignedTo}</span>
               {ok
                 ? <Chip tone="state-Accepted">Signed</Chip>
                 : isNext ? <Chip tone="state-Review">Next</Chip> : <Chip tone="grey">Waiting</Chip>}
             </div>
-            {step.points.map(pt => (
-              <div key={pt} className="check-row">
+            {step.points.map(point => (
+              <div key={point} className="check-row">
                 <Icon name={ok ? 'checkCircle' : 'list'} size={13} />
-                <span>{pt}</span>
+                <span>{point}</span>
               </div>
             ))}
 
             {ok ? (
               <>
                 <div className="okbox">
-                  Signed by {rec.by} · {(rec.at || '').slice(0, 10)}
+                  Signed by {rec.by} - {(rec.at || '').slice(0, 10)}
                   {rec.note ? <div className="hint">{rec.note}</div> : null}
                 </div>
-                {maySign && (reopening[step.id] === undefined ? (
+                {mayAct && (reopening[step.id] === undefined ? (
                   <button onClick={() => setReopening({ ...reopening, [step.id]: '' })}>Reopen step</button>
                 ) : (
                   <div style={{ display: 'flex', gap: 6 }}>
                     <input placeholder="Reason for reopening (logged)" style={{ flex: 1 }}
                       value={reopening[step.id]}
-                      onChange={e => setReopening({ ...reopening, [step.id]: e.target.value })} />
+                      onChange={event => setReopening({ ...reopening, [step.id]: event.target.value })} />
                     <button className="primary" disabled={!reopening[step.id].trim()}
                       onClick={() => reopen(step.id)}>Reopen</button>
                   </div>
                 ))}
               </>
             ) : waiting ? (
-              <p className="hint">Waiting on {nextUp} — the activities are signed in order.</p>
-            ) : maySign ? (
+              <p className="hint">Waiting on {nextUp} - the activities are signed in order.</p>
+            ) : mayAct ? (
               <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                 <input placeholder="Sign-off note (optional)" style={{ flex: 1 }}
                   value={notes[step.id] || ''}
-                  onChange={e => setNotes({ ...notes, [step.id]: e.target.value })} />
+                  onChange={event => setNotes({ ...notes, [step.id]: event.target.value })} />
                 <button className="primary" onClick={() => sign(step.id)}>
                   <Icon name="check" size={13} /> Sign off {step.id}
                 </button>
               </div>
             ) : (
-              <p className="hint">Awaiting sign-off from {opp.owner}.</p>
+              <p className="hint">Awaiting sign-off from {assignedTo}.</p>
+            )}
+
+            {canAssign && (
+              <label className="hint" style={{ display: 'block', marginTop: 8 }}>
+                Responsible person{' '}
+                <select value={assignedTo} onChange={event => store.assignBStep(opp.id, step.id, event.target.value)}>
+                  {assignableRoles.map(([id, role]) => <option key={id} value={id}>{id} - {role.name}</option>)}
+                </select>
+              </label>
             )}
           </div>
         )

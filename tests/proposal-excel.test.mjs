@@ -114,5 +114,8 @@ test('exact proposal export preserves template artwork, merges and print layout'
   assert.equal(firm.getCell('D10').alignment.wrapText, true)
   assert.ok(firm.getRow(10).height >= 30)
   assert.equal(firm.getCell('B13').alignment.wrapText, true)
+  assert.ok(firm.model.merges.includes('B13:H13'), 'terms heading spans the customer-facing page width')
+  assert.equal(firm.getCell('B14').value, '1. Validity: 30 days')
+  assert.equal(firm.getCell('B26').value, null, 'template duplicate terms are cleared')
   assert.equal(cover.getCell('C6').value, '2608227RS')
 })

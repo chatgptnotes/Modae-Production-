@@ -104,7 +104,8 @@ test('Email proposal is the first proposal action', () => {
 
 test('proposal workspace labels distinct navigation and preview controls', () => {
   assert.match(workbench, /\['edit-sheet', 'Edit proposal'\]/)
-  assert.match(workbench, /\['preview', 'Document preview'\]/)
+  assert.doesNotMatch(workbench, /\['preview', 'Document preview'\]/)
+  assert.match(workbench, /B-05 Proposal sign-off/)
   assert.match(proposal, /className="toolbar proposal-action-toolbar"/)
   assert.match(workbench, /className="proposal-tab-shell"/)
 })

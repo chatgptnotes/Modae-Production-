@@ -7,11 +7,12 @@ import { statusFolderFor } from './sharepoint.js'
 import {
   buildPoCompare, buildHandover, milestoneForStage, routeForType,
   contextForType, B_STEPS, REVISION_TYPES,
-  ROLES, SUBFOLDERS, newProposal, PORTAL_ENABLED,
+  ROLES, SUBFOLDERS, newProposal, PORTAL_ENABLED, defaultBStepOwners,
 } from './seed.js'
 import { leadConfig, routeOwner, expiredLeadDeadline, aiAuditDetail } from './leadRules.js'
 import { withoutSimulated, simulatedCount } from './simulatedLeads.js'
 import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLeadSlice, defaultViewMode } from './appState.js'
+import { unitCostINR, unitSellINR } from './utils.js'
 
 const StoreCtx = createContext(null)
 
@@ -409,16 +410,43 @@ export function StoreProvider({ children }) {
     },
 
     // Diagram 02 §3: the assigned salesperson signs off each Brownfield step.
+    assignBStep(oppId, stepId, assignee) {
+      if (!B_STEPS.some(step => step.id === stepId) || !ROLES[assignee] || ROLES[assignee].external) return
+      setState(s => {
+        if (!['LJS', 'AH'].includes(s.role) && !ROLES[s.role]?.admin) return s
+        const opp = s.opportunities.find(item => item.id === oppId)
+        if (!opp || opp.context !== 'Brownfield') return s
+        const owners = { ...defaultBStepOwners(opp), ...(s.bStepOwners[oppId] || {}) }
+        if (owners[stepId] === assignee) return s
+        const index = B_STEPS.findIndex(step => step.id === stepId)
+        const signed = { ...(s.bSteps[oppId] || {}) }
+        for (const step of B_STEPS.slice(index)) delete signed[step.id]
+        return withAudit({
+          ...s,
+          bStepOwners: { ...s.bStepOwners, [oppId]: { ...owners, [stepId]: assignee } },
+          bSteps: { ...s.bSteps, [oppId]: signed },
+        }, 'B-step owner assigned', oppId, `${stepId} -> ${assignee}`)
+      })
+    },
+
     signBStep(oppId, stepId, note = '') {
       const step = B_STEPS.find(b => b.id === stepId)
       if (!step) return
+      const current = stateRef.current
+      const opp = current.opportunities.find(item => item.id === oppId)
+      if (!opp || opp.context !== 'Brownfield') return
+      const owners = { ...defaultBStepOwners(opp), ...(current.bStepOwners[oppId] || {}) }
+      if (current.role !== owners[stepId] && !ROLES[current.role]?.admin) return
+      const index = B_STEPS.findIndex(item => item.id === stepId)
+      const signed = current.bSteps[oppId] || {}
+      if (index > 0 && signed[B_STEPS[index - 1].id]?.state !== 'Signed') return
       setState(s => withAudit({
         ...s,
         bSteps: {
           ...s.bSteps,
           [oppId]: {
             ...(s.bSteps[oppId] || {}),
-            [stepId]: { state: 'Signed', by: s.role, at: new Date().toISOString(), note },
+            [stepId]: { state: 'Signed', by: s.role, assignedTo: owners[stepId], at: new Date().toISOString(), note },
           },
         },
       }, 'Workflow step signed off', oppId, `${stepId} ${step.label}${note ? ` — ${note}` : ''}`))
@@ -426,6 +454,9 @@ export function StoreProvider({ children }) {
 
     unsignBStep(oppId, stepId, reason = '') {
       setState(s => {
+        const opp = s.opportunities.find(item => item.id === oppId)
+        const owners = opp ? { ...defaultBStepOwners(opp), ...(s.bStepOwners[oppId] || {}) } : {}
+        if (!opp || (s.role !== owners[stepId] && !ROLES[s.role]?.admin)) return s
         const steps = { ...(s.bSteps[oppId] || {}) }
         delete steps[stepId]
         return withAudit({ ...s, bSteps: { ...s.bSteps, [oppId]: steps } },
@@ -983,15 +1014,49 @@ export function StoreProvider({ children }) {
         if (!lines.length) return s
         const opp = s.opportunities.find(o => o.id === oppId)
         const base = s.proposals[oppId] || newProposal(oppId, opp)
-        const existing = new Set((base.bom || []).map(b => b.pn || b.custRef || b.desc))
-        const added = lines.filter(l => !existing.has(l.pn || l.custRef || l.desc)).map(l => ({
+        const keys = item => [item?.pn, item?.custRef, item?.desc]
+          .map(value => String(value || '').trim().toLowerCase())
+          .filter(Boolean)
+        const sourceByKey = new Map(lines.flatMap(line => keys(line).map(itemKey => [itemKey, line])))
+        const bom = (base.bom || []).map(item => {
+          const source = keys(item).map(itemKey => sourceByKey.get(itemKey)).find(Boolean)
+          if (!source) return item
+          return {
+            ...item,
+            pn: source.pn || item.pn,
+            custRef: source.custRef || item.custRef,
+            desc: source.desc || item.desc,
+            listPrice: Number(source.listPrice) || 0,
+            currency: source.currency || item.currency || 'INR',
+            common: Number(source.qty) || item.common || 0,
+            list: source.priceList?.startsWith('BNK') ? 'BNK' : 'Ad-hoc',
+          }
+        })
+        const existing = new Set((base.bom || []).flatMap(keys))
+        const added = lines.filter(l => !keys(l).some(itemKey => existing.has(itemKey))).map(l => ({
           itemCategory: 'Hardware', pn: l.pn, custRef: l.custRef, desc: l.desc, listPrice: l.listPrice, adders: [],
           qtyPerUnit: 0, common: l.qty, spares: 0, quoted: '',
           list: l.priceList?.startsWith('BNK') ? 'BNK' : 'Ad-hoc', currency: l.currency,
         }))
+        const mergedBom = [...bom, ...added]
+        const costing = base.costing || {}
+        const pricedLines = lines.reduce((totals, line) => {
+          const bnk = String(line.priceList || '').startsWith('BNK')
+          const price = Number(line.listPrice) || 0
+          const qty = Number(line.qty) || 0
+          return {
+            value: totals.value + unitSellINR(price, costing, line.currency || 'EUR', bnk) * qty,
+            cogs: totals.cogs + unitCostINR(price, costing, line.currency || 'EUR', bnk) * qty,
+          }
+        }, { value: 0, cogs: 0 })
         return withAudit({
           ...s,
-          proposals: { ...s.proposals, [oppId]: { ...base, bom: [...(base.bom || []), ...added] } },
+          opportunities: s.opportunities.map(item => item.id === oppId ? {
+            ...item,
+            valueK: Math.round(pricedLines.value / 1000),
+            cogsK: Math.round(pricedLines.cogs / 1000),
+          } : item),
+          proposals: { ...s.proposals, [oppId]: { ...base, bom: mergedBom } },
         }, 'Lines sent to proposal', oppId, `${added.length} line(s)`)
       })
     },

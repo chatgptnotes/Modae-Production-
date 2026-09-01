@@ -222,12 +222,36 @@ function setCommercialSheet(workbook, worksheet, args) {
     if (['G', 'K', 'M', 'O'].includes(column)) cell.value = { formula: `SUM(${column}${firstRow}:${column}${footer - 1})` }
   }
   const termsStart = footer + 2
-  setValue(worksheet.getCell(`B${termsStart}`), doc.docTermsHeading || 'Terms & Conditions:', { font: { bold: true }, alignment: { wrapText: true } })
-  setWrappedHeight(worksheet, termsStart, [{ value: worksheet.getCell(`B${termsStart}`).value, width: columnWidth(worksheet, 2) }])
+  // The source templates contain leftover customer-facing rows below the BOQ
+  // (including an older, duplicate Terms & Conditions block). Clear those
+  // rows before writing the generated terms so they cannot leak into page 2.
+  // Keep the internal costing columns J:O untouched.
+  for (const mergeRef of Object.keys(worksheet._merges || {})) {
+    const match = mergeRef.match(/([A-Z]+)(\d+):([A-Z]+)(\d+)/)
+    if (match && Number(match[2]) >= termsStart) worksheet.unMergeCells(mergeRef)
+  }
+  for (let row = footer + 1; row <= worksheet.rowCount; row++) {
+    for (let column = 2; column <= 8; column++) worksheet.getCell(row, column).value = null
+  }
+
+  const termWidth = rangeWidth(worksheet, 2, 8)
+  const writeTermRow = (row, value, heading = false) => {
+    worksheet.mergeCells(`B${row}:H${row}`)
+    setValue(worksheet.getCell(`B${row}`), value, {
+      font: { bold: heading },
+      alignment: { horizontal: 'left', vertical: 'top', wrapText: true },
+    })
+    setWrappedHeight(worksheet, row, [{ value, width: termWidth }], {
+      min: heading ? 24 : 24,
+      max: 120,
+      lineHeight: 15,
+    })
+  }
+
+  writeTermRow(termsStart, doc.docTermsHeading || 'Terms & Conditions:', true)
   ;(doc.docTerms || []).forEach((term, index) => {
     const row = termsStart + index + 1
-    setValue(worksheet.getCell(`B${row}`), `${index + 1}. ${term.label || ''} ${term.text || ''}`.trim(), { alignment: { wrapText: true, vertical: 'top' } })
-    setWrappedHeight(worksheet, row, [{ value: worksheet.getCell(`B${row}`).value, width: columnWidth(worksheet, 2) }], { min: 24, max: 120, lineHeight: 15 })
+    writeTermRow(row, `${index + 1}. ${term.label || ''}: ${term.text || ''}`.trim())
   })
   // Keep the template's two customer-facing columns visible and the costing block intact.
   worksheet.getColumn('B').width = 8

@@ -10,7 +10,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { readiness, transitionBlockers } from '../src/gates.js'
-import { B_STEPS, REVISION_TYPES, routeForType, contextForType } from '../src/seed.js'
+import { B_STEPS, REVISION_TYPES, routeForType, contextForType, defaultBStepOwners } from '../src/seed.js'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
@@ -67,8 +67,9 @@ test('the B-step panel is reachable and wired to the store', () => {
   const panel = read('src/workbench/BSteps.jsx')
   assert.match(panel, /store\.signBStep\(/, 'the panel must sign steps')
   assert.match(panel, /store\.unsignBStep\(/, 'and be able to reopen one')
-  // "All above activities are approved only by Assigned Salesperson".
-  assert.match(panel, /store\.role === opp\.owner/, 'sign-off belongs to the assigned salesperson')
+  assert.match(panel, /defaultBStepOwners/, 'the panel uses per-opportunity defaults')
+  assert.match(panel, /store\.assignBStep\(/, 'authorized users can assign each step')
+  assert.match(panel, /store\.role === assignedTo/, 'sign-off belongs to the configured step owner')
 
   const workbench = read('src/pages/Workbench.jsx')
   assert.match(workbench, /import BSteps from '\.\.\/workbench\/BSteps\.jsx'/)
@@ -79,6 +80,17 @@ test('the B-step panel is reachable and wired to the store', () => {
   const builder = read('src/workbench/PropBuilder.jsx')
   assert.match(builder, /bl\.key === 'b-steps' && openSteps/,
     'the readiness blocker must offer a route to the panel that clears it')
+})
+
+test('Brownfield steps have distinct functional defaults', () => {
+  assert.deepEqual(defaultBStepOwners({ owner: 'RS' }), {
+    'B-01': 'RS', 'B-02': 'TECH', 'B-03': 'AH', 'B-04': 'LJS', 'B-05': 'RS',
+  })
+  const state = read('src/appState.js')
+  assert.match(state, /bStepOwners/, 'step assignments must be migrated and persisted')
+  const store = read('src/store.jsx')
+  assert.match(store, /B-step owner assigned/, 'assignment changes must be audited')
+  assert.match(store, /B_STEPS\[index - 1\]\.id/, 'signing must remain sequential')
 })
 
 test('spares confirmation workbench is reachable before Sourcing advances', () => {

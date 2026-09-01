@@ -6,7 +6,7 @@ import {
   seedRateSheets, seedSvcEstimates, seedClarifications, seedHandover,
   seedAiLeads, seedJointApprovals, seedCatalogRev,
   seedPoCompare, milestoneForStage, routeForType, contextForType,
-  ROLES,
+  ROLES, B_STEPS, defaultBStepOwners,
 } from './seed.js'
 
 // The store's pure state layer, lifted out of store.jsx so it can be imported
@@ -137,6 +137,7 @@ export function migrate(s) {
   // Diagram 02 workflow objects: the Brownfield B-01..B-05 sign-off ledger,
   // the §4 service site surveys, and §8 competitor tracking.
   if (!s.bSteps) s.bSteps = {}
+  if (!s.bStepOwners) s.bStepOwners = {}
   if (!Array.isArray(s.surveys)) s.surveys = []
   if (!Array.isArray(s.competitors)) s.competitors = []
   if (!s.spSync) s.spSync = {}
@@ -205,6 +206,14 @@ export function migrate(s) {
       nextActionOwner: o.nextActionOwner || '',
     }
   })
+  for (const opp of s.opportunities) {
+    if (opp.context !== 'Brownfield') continue
+    const defaults = defaultBStepOwners(opp)
+    const existing = s.bStepOwners[opp.id] || {}
+    s.bStepOwners[opp.id] = Object.fromEntries(B_STEPS.map(step => [
+      step.id, existing[step.id] || defaults[step.id],
+    ]))
+  }
   s.approvals = s.approvals.map(a => {
     // Type-aware, deliberately. These gates are joint even when an older
     // persisted row was created with only `approver` or `anyOf`.
@@ -254,7 +263,7 @@ export function emptyState(prev) {
     sparesLines: [], sparesAlternatives: [], svcEstimates: [], clarifications: [], vendorQuotes: [],
     surveys: [], competitors: [],
     files: {}, proposals: {}, communications: {}, kyc: {},
-    poCompare: {}, handover: {}, bSteps: {},
+    poCompare: {}, handover: {}, bSteps: {}, bStepOwners: {},
     sales: emptySales(prev.sales),
     // The one piece of demo data hiding inside config — the placeholder price
     // list Admin renders with a "DUMMY — replace with actual" chip.

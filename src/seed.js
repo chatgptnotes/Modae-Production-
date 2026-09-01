@@ -622,6 +622,18 @@ export const B_STEPS = [
     points: ['Cover letter', 'BoQ / price summary', 'Commercial terms', 'Compliance / SoW (if any)'] },
 ]
 
+// Default responsibility for the Brownfield chain. These are only starting
+// assignments: LJS/AH/admin can change them per opportunity before sign-off.
+export function defaultBStepOwners(opp = {}) {
+  return {
+    'B-01': opp.owner || 'RS',
+    'B-02': 'TECH',
+    'B-03': 'AH',
+    'B-04': 'LJS',
+    'B-05': opp.owner || 'RS',
+  }
+}
+
 // Diagram 02 §7 — "Identify Type of Revision" routes the rework back to the
 // B-step that owns it, and the proposal is regenerated from there.
 export const REVISION_TYPES = [

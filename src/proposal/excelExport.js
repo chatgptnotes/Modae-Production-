@@ -127,8 +127,11 @@ export async function downloadProposalXlsx(args) {
   const link = document.createElement('a')
   link.href = url
   link.download = `${args.opp.id}_Proposal_Rev_${args.p.revision}.xlsx`
+  link.style.display = 'none'
+  document.body.appendChild(link)
   link.click()
-  setTimeout(() => URL.revokeObjectURL(url), 0)
+  link.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 export function proposalWorkbookBase64(args) {

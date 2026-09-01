@@ -18,8 +18,6 @@ import PropBuilder from '../workbench/PropBuilder.jsx'
 // The same component the standalone /proposal/:oppId route renders â€” both write
 // through store.saveProposal, so the two views are never out of step.
 import Proposal from './Proposal.jsx'
-import PrintDoc from '../proposal/PrintDoc.jsx'
-import { buildDocProps } from '../proposal/docProps.js'
 import BSteps from '../workbench/BSteps.jsx'
 import SubmissionPanel from '../workbench/SubmissionPanel.jsx'
 import PoHandover from '../workbench/PoHandover.jsx'
@@ -196,13 +194,20 @@ export default function Workbench() {
           {opp.context && <Chip tone="grey" title={`${opp.context} lane`}>{opp.context}</Chip>}
           <Chip tone={blockers.length ? 'state-Review' : 'state-Accepted'}>{blockers.length ? 'At risk' : 'On track'}</Chip>
         </div>
-        <div className="opp-summary-grid">
+        <div className="opp-summary-grid mojibake-summary">
           <div><span>Owner</span><b>{opp.owner} â€” {ROLES[opp.owner]?.name || opp.owner}</b></div>
           <div><span>Milestone</span><b>{opp.milestone || opp.stage}</b></div>
-          <div><span>Customer value</span><b>{canSeeValue ? `â‚¹${fmt(opp.valueK || 0)},000` : 'Restricted'}</b></div>
+        <div><span>Customer value</span><b>{canSeeValue ? `\u20B9${fmt(opp.valueK || 0)},000` : 'Restricted'}</b></div>
           <div className="opp-summary-action"><span>Next action</span><b>{nextAction.text || NEXT_ACTION[opp.milestone] || 'Progress the opportunity'}</b></div>
           <div><span>Due</span><b>{ddMmmYY(due) || 'â€”'}</b></div>
         </div>
+      </div>
+      <div className="opp-summary-grid clean-summary-grid">
+        <div><span>Owner</span><b>{opp.owner} - {ROLES[opp.owner]?.name || opp.owner}</b></div>
+        <div><span>Milestone</span><b>{opp.milestone || opp.stage}</b></div>
+        <div><span>Customer value</span><b>{canSeeValue ? `₹${fmt(opp.valueK || 0)},000` : 'Restricted'}</b></div>
+        <div className="opp-summary-action"><span>Next action</span><b>{nextAction.text || NEXT_ACTION[opp.milestone] || 'Progress the opportunity'}</b></div>
+        <div><span>Due</span><b>{ddMmmYY(due) || '-'}</b></div>
       </div>
       <div className="wb-tabs" style={{ marginTop: 10 }}>
         {TABS.map(([k, label]) => (
@@ -1188,13 +1193,12 @@ function SourcingTab({ opp, goTab }) {
 function ProposalTab({ opp }) {
   const [sub, setSub] = useState('edit-sheet')
   const openBuilder = () => setSub('builder')
-  const openEditSheet = () => setSub('edit-sheet')
   // Diagram 02 Â§3 is the Brownfield lane only â€” Greenfield runs Phase-1
   // activities and Service runs the Â§4 survey path instead.
   const SUBS = [
     ['workbench', 'Workbench'],
-    ...(opp.context === 'Brownfield' ? [['steps', 'B-01â€¦B-05']] : []),
-    ['builder', 'Builder'], ['edit-sheet', 'Edit proposal'], ['preview', 'Document preview'], ['followup', 'Follow-up'],
+    ...(opp.context === 'Brownfield' ? [['steps', 'B-05 Proposal sign-off']] : []),
+    ['builder', 'Builder'], ['edit-sheet', 'Edit proposal'], ['followup', 'Follow-up'],
   ]
   return (
     <div className="proposal-tab-shell">
@@ -1217,7 +1221,6 @@ function ProposalTab({ opp }) {
         </>
       )}
       {sub === 'edit-sheet' && <Proposal oppId={opp.id} embedded initialTab="Edit Sheet" />}
-      {sub === 'preview' && <PreviewPane opp={opp} openBuilder={openBuilder} openEditSheet={openEditSheet} />}
       {sub === 'followup' && <FollowUpPane opp={opp} />}
     </div>
   )
