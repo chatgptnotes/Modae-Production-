@@ -8,7 +8,7 @@
 // Plain JS, no JSX — `node --test` cannot parse JSX, and the migration in
 // normalizeProposal is exactly the kind of thing that has to be testable.
 import { defaultCosting, newProposal, proposalTypeForOpp } from '../seed.js'
-import { unitCostINR, unitSellINR, canPriceProposal } from '../utils.js'
+import { unitCostINR, unitSellINR } from '../utils.js'
 import { docModel, docRoute } from '../proposalDoc.js'
 import { signalsFromBom, signalsAreEmpty } from '../rack.js'
 
@@ -126,9 +126,9 @@ export function buildDocProps(store, oppId) {
     p,
     opp,
     doc: docModel(p, opp, { files: specFiles.map(f => f.name).filter(Boolean) }),
-    // An unpriced technical bid prints no prices, and neither does a document
-    // opened by someone who is not allowed to see them.
-    priced: p.bidType !== 'Unpriced (Technical)' && canPriceProposal(store.role),
+    // Selling rates are visible on every priced proposal. Internal cost and
+    // margin values are not part of this public document model.
+    priced: p.bidType !== 'Unpriced (Technical)',
     totals: computeTotals(p),
     lineQuoted,
   }

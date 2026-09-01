@@ -61,6 +61,12 @@ test('the B-step panel is reachable and wired to the store', () => {
     'the readiness blocker must offer a route to the panel that clears it')
 })
 
+test('spares confirmation workbench is reachable before Sourcing advances', () => {
+  const workbench = read('src/pages/Workbench.jsx')
+  assert.match(workbench, /opp\.route === 'Spares' && \(\s*<div className="ana-card c-12 sourcing-spares-workbench">\s*<WbSpares opp=\{opp\}/s,
+    'Spares opportunities must expose line confirmations on the Sourcing tab')
+})
+
 // ---------------------------------------------------------------------------
 // §4 — the service site-survey branch.
 // ---------------------------------------------------------------------------

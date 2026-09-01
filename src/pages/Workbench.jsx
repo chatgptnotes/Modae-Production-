@@ -975,6 +975,11 @@ function SourcingTab({ opp, goTab }) {
       status: 'Received', receivedAt: today, quoteRef: result.quoteRef,
       leadTime: result.leadTime, notes: result.notes, prices, simulated: true,
     })
+    store.addCommunication(opp.id, {
+      dir: 'In', from: 'simulated-manufacturer@example.com', fromName: result.manufacturer,
+      to: ROLES[opp.owner]?.name || opp.owner, subject: `Indicative quote ${result.quoteRef} - ${opp.oppName}`,
+      body: result.notes, kind: 'vendor-response', simulated: true,
+    })
     store.recordAiAction(opp.id, {
       provider: store.config?.aiModel?.provider,
       model: store.config?.aiModel?.model,
@@ -1048,6 +1053,11 @@ function SourcingTab({ opp, goTab }) {
 
   return (
     <div className="ana-grid">
+      {opp.route === 'Spares' && (
+        <div className="ana-card c-12 sourcing-spares-workbench">
+          <WbSpares opp={opp} openBuilder={() => goTab('proposal')} />
+        </div>
+      )}
       {superseded && (
         <div className="ana-card c-12">
           <WarnBox>
@@ -1178,10 +1188,10 @@ function ProposalTab({ opp }) {
   const SUBS = [
     ['workbench', 'Workbench'],
     ...(opp.context === 'Brownfield' ? [['steps', 'B-01â€¦B-05']] : []),
-    ['builder', 'Builder'], ['edit-sheet', 'Edit Sheet'], ['preview', 'Preview'], ['followup', 'Follow-up'],
+    ['builder', 'Builder'], ['edit-sheet', 'Edit proposal'], ['preview', 'Document preview'], ['followup', 'Follow-up'],
   ]
   return (
-    <div>
+    <div className="proposal-tab-shell">
       <div className="wb-sub">
         {SUBS.map(([k, label]) => (
           <button key={k} className={sub === k ? 'active' : ''} onClick={() => setSub(k)}>{label}</button>
@@ -1503,7 +1513,7 @@ function communicationRecipient(entry, opp, customer, vendorQuotes, mailbox) {
 
 function communicationSender(entry, opp, lead) {
   const raw = cleanAddress(entry.from)
-  if (entry.dir === 'In') return { name: lead?.sender || raw || 'Customer', email: raw && raw !== lead?.sender ? raw : '' }
+  if (entry.dir === 'In') return { name: entry.fromName || lead?.sender || raw || 'Customer', email: raw && raw !== (entry.fromName || lead?.sender) ? raw : '' }
   return { name: entry.fromName || ROLES[opp.owner]?.name || opp.owner || 'ModAE Sales Desk', email: raw }
 }
 
@@ -1520,7 +1530,16 @@ function LegacyCommsTab({ opp }) {
     from: lead.from, fromName: lead.sender, to: mailbox,
     subject: lead.subject || 'Original enquiry', body: lead.body,
   }] : []
-  const rows = [...inbound, ...leadRows, ...opportunityRows]
+  const recordedVendorResponses = new Set(opportunityRows.filter(c => c.kind === 'vendor-response').map(c => c.subject))
+  const simulatedVendorRows = vendorQuotes
+    .filter(q => q.simulated && !recordedVendorResponses.has(q.subject))
+    .map(q => ({
+      id: `vendor-response-${q.id}`, ts: q.receivedAt || q.sentAt, dir: 'In',
+      from: q.email, fromName: q.manufacturer, to: ROLES[opp.owner]?.name || opp.owner,
+      subject: q.subject || `Vendor response - ${q.manufacturer}`, body: q.body || q.notes,
+      kind: 'vendor-response', simulated: true, attachmentNames: q.attachmentNames || [],
+    }))
+  const rows = [...inbound, ...leadRows, ...opportunityRows, ...simulatedVendorRows]
     .sort((a, b) => new Date(b.ts || 0) - new Date(a.ts || 0))
   const formatKind = kind => ({
     enquiry: 'Incoming enquiry', 'clarification-response': 'Customer reply',

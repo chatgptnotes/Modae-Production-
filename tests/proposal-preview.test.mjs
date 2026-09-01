@@ -35,6 +35,12 @@ test('preview and print derive their props the same way', () => {
   assert.doesNotMatch(workbench, /computeProposalTotals/)
 })
 
+test('proposal keeps one artifact tab row and no top-level print action', () => {
+  assert.match(proposal, /proposal-artifact-tabs/, 'the canonical artifact tabs remain available')
+  assert.doesNotMatch(proposal, /<div className=\{embedded \? 'sheet-tabs inline' : 'sheet-tabs'\}>/, 'the duplicate bottom tab row is removed')
+  assert.doesNotMatch(proposal, /<button className="primary" onClick=\{\(\) => setPrinting\(true\)\}><Icon name="printer"/, 'the toolbar Print/PDF action is removed')
+})
+
 // normalize() used to live in Proposal.jsx, which node:test cannot parse
 // because it is JSX. Moving it out is what makes the migration testable.
 test('the proposal migration is reachable from a test', () => {
@@ -78,9 +84,9 @@ test('an empty proposal still builds a document', () => {
   assert.deepEqual(props.totals, { cost: 0, target: 0 })
 })
 
-// An unpriced technical bid prints no prices, and neither does a document
-// opened by someone who is not allowed to see them.
-test('prices stay gated in the preview', () => {
+// An unpriced technical bid prints no prices; selling rates on a priced bid are
+// customer-facing and therefore visible regardless of the logged-in role.
+test('priced proposals show rates to every role', () => {
   const opp = { id: 'X', oppType: 'Spares', sellTo: 'KSB' }
   const mk = (role, bidType) => buildDocProps({
     opportunities: [opp],
@@ -88,6 +94,8 @@ test('prices stay gated in the preview', () => {
     priceLists: {}, adhocParts: [], files: {}, role,
   }, 'X').priced
 
-  assert.equal(mk('RS', 'Priced'), true)
+  for (const role of ['RS', 'AH', 'LJS', 'TECH', 'CUST']) {
+    assert.equal(mk(role, 'Priced'), true, `${role} must see selling rates on priced proposals`)
+  }
   assert.equal(mk('RS', 'Unpriced (Technical)'), false, 'an unpriced bid never shows prices')
 })

@@ -4,7 +4,6 @@ import { ROLES } from '../seed.js'
 import { ErrBox } from '../ui.jsx'
 import { releaseState } from '../gates.js'
 import { Icon } from '../icons.jsx'
-import { canPriceProposal } from '../utils.js'
 import { docModel, docRoute, enclosuresFor } from '../proposalDoc.js'
 import { buildPricing } from '../proposal/docProps.js'
 import { proposalWorkbookAttachment, enclosureAttachments } from '../proposal/emailAttachments.js'
@@ -47,7 +46,7 @@ export default function SubmissionPanel({ opp }) {
   const doc = docModel(p, opp, { files: [] })
   const route = docRoute(p, opp)
   const { totalQty, lineQuoted } = buildPricing(store, p)
-  const priced = p.bidType !== 'Unpriced (Technical)' && canPriceProposal(store.role)
+  const priced = p.bidType !== 'Unpriced (Technical)'
   const allChecked = checks.c1 && checks.c2 && checks.c3
   const canSend = allChecked && !pendingConds.length && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)
 

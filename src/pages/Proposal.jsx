@@ -757,9 +757,9 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   // intake wizard filed under Customer Specs.
   const specFiles = ((store.files || {})[oppId] || {})['Customer Specs'] || []
   const doc = docModel(p, opp, { files: specFiles.map(f => f.name).filter(Boolean) })
-  // An unpriced technical bid, or a role that may not see money, prints the
-  // full document with quantities only — never a document with the BoQ missing.
-  const priced = p.bidType !== 'Unpriced (Technical)' && comm
+  // Selling rates are part of every priced proposal; internal costs and margins
+  // remain separately protected by the commercial-role checks.
+  const priced = p.bidType !== 'Unpriced (Technical)'
 
   // Signal List and Rack Layout are project artefacts. Biji, 13 Aug: "in the
   // spare parts case, there will not be any signal list, there will not be
@@ -785,7 +785,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
       {/* The opportunity summary header already names the opportunity, and there
           is no folder to go back to from inside it. */}
       {!embedded && <h2>{oppId} — {opp.sellTo} — Proposal Workbook</h2>}
-      <div className="toolbar">
+      <div className="toolbar proposal-action-toolbar">
         {!embedded && <Link className="btn" to={`/folders/${oppId}`}>◂ Back to folder</Link>}
         <span className="spacer" />
         <label className="hint">Proposal type:{' '}
@@ -794,12 +794,11 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           </select>
         </label>
         {pendingForOpp.length > 0 && <span className="pill Amber">{pendingForOpp.length} approval{pendingForOpp.length > 1 ? 's' : ''} pending</span>}
+        <button onClick={openEmail}><Icon name="mail" size={13} /> Email proposal</button>
         {tab === 'Priced BoQ' && comm && <button onClick={exportBoQ}>Extract to Excel</button>}
         <button onClick={exportExcel}>Download Excel proposal</button>
         <button onClick={() => setPreviewOpen(true)}><Icon name="eye" size={13} /> Preview proposal</button>
         {(route === 'Spares' || route === 'Services') && <button onClick={openTemplatePreview}><Icon name="fileSheet" size={13} /> Preview {route === 'Spares' ? 'Spares firm offer' : 'service proposal'}</button>}
-        <button onClick={openEmail}><Icon name="mail" size={13} /> Email proposal</button>
-        <button className="primary" onClick={() => setPrinting(true)}><Icon name="printer" size={13} /> Print / PDF proposal</button>
       </div>
 
       <div className="workbook-tabs proposal-artifact-tabs" role="tablist" aria-label="Proposal documents">
@@ -949,7 +948,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
       )}
 
       {tab === 'Edit Sheet' && (
-        <ProposalSheetEditor p={p} opp={opp} doc={doc} save={save} allParts={allParts} totals={totals} units={units} priced={comm}
+        <ProposalSheetEditor p={p} opp={opp} doc={doc} save={save} allParts={allParts} totals={totals} units={units} priced={priced}
           totalQty={totalQty} lineComputed={lineComputed} lineQuoted={lineQuoted} lineCost={lineCost}
           linePrice={linePrice} addBomLine={addBomLine} updLine={updLine} removeLine={removeLine}
           updTerm={updTerm} addTerm={addTerm} removeTerm={removeTerm} pasteBoq={pasteBoq} store={store}
@@ -1363,12 +1362,6 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
         </Modal>
       )}
 
-      <div className={embedded ? 'sheet-tabs inline' : 'sheet-tabs'}>
-        {visibleTabs.map(t => (
-          <div key={t} className={`tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>{t}</div>
-        ))}
-        <div className="tab">＋</div>
-      </div>
     </div>
   )
 }

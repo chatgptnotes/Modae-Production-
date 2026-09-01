@@ -95,6 +95,20 @@ test('the sent email is logged against the opportunity', () => {
   assert.match(proposal, /attachmentNames:/)
 })
 
+test('Email proposal is the first proposal action', () => {
+  const toolbarStart = proposal.indexOf('<div className="toolbar proposal-action-toolbar">')
+  const toolbar = proposal.slice(toolbarStart, proposal.indexOf('</div>', toolbarStart))
+  assert.ok(toolbar.indexOf('Email proposal') < toolbar.indexOf('Download Excel proposal'))
+  assert.ok(toolbar.indexOf('Email proposal') < toolbar.indexOf('Preview proposal'))
+})
+
+test('proposal workspace labels distinct navigation and preview controls', () => {
+  assert.match(workbench, /\['edit-sheet', 'Edit proposal'\]/)
+  assert.match(workbench, /\['preview', 'Document preview'\]/)
+  assert.match(proposal, /className="toolbar proposal-action-toolbar"/)
+  assert.match(workbench, /className="proposal-tab-shell"/)
+})
+
 test('communications combines the inbound enquiry with all logged messages', () => {
   assert.match(workbench, /store\.communications\?\.\[lead\?\.id\]/)
   assert.match(workbench, /store\.communications\?\.\[opp\.id\]/)
