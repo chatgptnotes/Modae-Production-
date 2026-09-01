@@ -1,4 +1,4 @@
-import { proposalWorkbookBase64 } from './excelExport.js'
+import { proposalWorkbookBase64, pricedBoqWorkbookBase64 } from './excelExport.js'
 import { ENCLOSURES, enclosuresFor } from '../proposalDoc.js'
 
 export const STANDARD_TERMS_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/ModAE Standard Terms-Sales.pdf', import.meta.url).href
@@ -32,5 +32,13 @@ export function proposalWorkbookAttachment(args) {
     filename: `${args.opp.id}_Proposal_Rev_${args.p.revision}.xlsx`,
     mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     contentBase64: proposalWorkbookBase64(args),
+  }
+}
+
+export function pricedBoqAttachment(args) {
+  return {
+    filename: `${args.opp.id}_Priced_BoQ_Rev_${args.p.revision}.xlsx`,
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    contentBase64: pricedBoqWorkbookBase64(args),
   }
 }

@@ -1969,14 +1969,14 @@ export default function Inbox() {
       lastUpdated: today, forecast: false, remarks: lead.body || '', nextActionOwner: '', simulated: true,
     }
     store.addOpportunity(opp)
-    if (routeForType(resolvedOppType) === 'Spares') {
-      const { workbenchRows, bom } = buildLeadProposalData(lead, store.priceLists)
+    if (routeForType(resolvedOppType) !== 'Service') {
+      const { extracted, workbenchRows, bom } = buildLeadProposalData(lead, store.priceLists)
       store.addSparesLinesFromLead(oppId, workbenchRows)
       const proposal = newProposal(oppId, opp)
       store.saveProposal(oppId, {
         ...proposal,
         rfqNumber: lead.ref || '', subject: lead.subject || proposal.subject,
-        project: lead.subject || proposal.project, units: 1, bom,
+        project: lead.subject || proposal.project, units: 1, bom, extractedItems: extracted,
         ...(bom.length ? { leadImportId: lead.id } : {}),
       })
     }

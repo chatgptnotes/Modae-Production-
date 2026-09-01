@@ -32,17 +32,29 @@ export function normalizeProposal(pr, opp) {
   const stored = pr.signals || newProposal(pr.oppId).signals
   const derived = signalsFromBom(bom, units, l => lineQty(l, units))
   const signals = signalsAreEmpty(stored) && !signalsAreEmpty(derived) ? derived : stored
+  const defaultArtifacts = docRoute(pr, opp) === 'Project'
+    ? ['Cover Letter', 'Signal List', 'Rack Layout', 'Priced BoQ', 'Compliance Table']
+    : docRoute(pr, opp) === 'Service'
+      ? ['Cover Letter', 'Scope of Work', 'Issues List', 'Proposal', 'Service Rate Schedule']
+      : ['Cover Letter', 'Firm Offer', 'Clarifications', 'Sensor Comparison', 'Priced BoQ']
   return {
     ...pr,
     proposalType: pr.proposalType || proposalTypeForOpp(opp),
     route: pr.route || docRoute(pr, opp),
-    artifactSheets: pr.artifactSheets || (docRoute(pr, opp) === 'Project'
-      ? ['Cover Letter', 'Signal List', 'Rack Layout', 'Priced BoQ', 'Compliance Table']
-      : docRoute(pr, opp) === 'Service'
-        ? ['Cover Letter', 'Scope of Work', 'Issues List', 'Proposal', 'Service Rate Schedule']
-        : ['Cover Letter', 'Firm Offer', 'Clarifications', 'Sensor Comparison', 'Priced BoQ']),
+    // Edit Sheet is an application navigation action, not a customer-facing
+    // artifact. Remove it from older saved proposals so it cannot duplicate the
+    // opportunity-level Edit Sheet control.
+    artifactSheets: (pr.artifactSheets || defaultArtifacts).filter(x => x !== 'Edit Sheet'),
     signals: signals.map(s => ({ parameter: s.signal, sensorType: '', location: '', ...s })),
     bom: bom.map(l => ({ groupId: 'g1', custDesc: '', rfqItem: '', ...l })),
+    extractedItems: pr.extractedItems || bom.map(l => ({
+      description: l.desc || '',
+      partNumber: l.custRef || l.pn || '',
+      customerRef: l.custRef || l.pn || '',
+      qty: lineQty(l, units),
+      uom: l.uom || 'EA',
+      evidence: 'Saved proposal BoQ',
+    })),
     units,
     costing: { ...defaultCosting, ...pr.costing },
     // `section`, `compliance` and `workflowStatus` are the sample compliance

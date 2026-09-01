@@ -50,13 +50,16 @@ test('preview renders the real document, not a text stub', () => {
     'the old text stub must be gone')
   assert.match(proposal, /fetch\('\/api\/send-proposal-email'/)
   assert.match(proposal, /attachments: \[/)
-  assert.match(proposal, /proposalWorkbookAttachment/)
-  assert.match(proposal, /enclosureAttachments/)
+  assert.match(proposal, /pricedBoqAttachment/)
+  assert.match(proposal, /emailAttachments/)
 })
 
-test('the attachment claim matches what actually happens', () => {
-  // The count derives from the enclosure rule, never from a hand-kept number.
-  assert.match(proposal, /Send with \$\{1 \+ enclosuresFor\(route\)\.length\} attachments/)
+test('the email sends the BoQ by default and permits selected extra files', () => {
+  assert.match(proposal, /Send with \$\{1 \+ emailAttachments\.length\} attachment/)
+  assert.match(proposal, /Additional attachments \(optional\)/)
+  assert.match(proposal, /Up to four extra PDF or XLSX files/)
+  assert.match(proposal, /pricedBoqAttachment/)
+  assert.doesNotMatch(proposal, /enclosureAttachments\(route\)/)
   assert.doesNotMatch(proposal, /Proposal PDF attachment \*/)
   assert.match(proposal, /Save proposal PDF/, 'the user must be able to produce the PDF here')
   assert.doesNotMatch(proposal, /!proposalPdf/, 'sending must not depend on a manually selected PDF')
@@ -72,8 +75,9 @@ test('service proposals carry the rate schedule, others do not', async () => {
   assert.deepEqual(enclosuresFor('Spares').map(e => e.filename), ['ModAE Standard Terms-Sales.pdf'])
   assert.deepEqual(enclosuresFor('Project').map(e => e.filename), ['ModAE Standard Terms-Sales.pdf'])
   assert.ok(ENCLOSURES.gtc.label.includes('General Terms'))
-  // Both send paths draw from the rule rather than keeping their own ternary.
-  for (const file of [proposal, submission]) {
+  // The submission path sends the governed supporting documents. The proposal
+  // email starts with the BoQ alone and lets the salesperson select extras.
+  for (const file of [submission]) {
     assert.match(file, /enclosureAttachments\(route\)/)
     assert.match(file, /\.\.\.enclosures/)
     assert.doesNotMatch(file, /serviceRateScheduleAttachment/)

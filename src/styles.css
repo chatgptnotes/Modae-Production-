@@ -1028,6 +1028,13 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .workbook-switcher button.active, .workbook-tabs button.active { background: var(--primary-fill); color: #fff; border-color: var(--primary-fill); }
 .workbook-tabs { display: flex; gap: 4px; flex-wrap: wrap; padding: 8px 0 0; border-top: 1px solid var(--grid-line); }
 .workbook-tabs button { border-radius: 3px 3px 0 0; }
+.template-workbook-preview { display: flex; flex-direction: column; gap: 18px; }
+.template-workbook-page { background: var(--surface, #fff); border: 1px solid var(--border-soft); box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 14px; }
+.template-workbook-page-title { font-weight: 700; color: var(--text-strong); padding-bottom: 10px; border-bottom: 2px solid var(--primary-fill); margin-bottom: 10px; }
+.template-workbook-page-scroll { overflow-x: auto; }
+.template-workbook-page .sheet { margin: 0; }
+.template-workbook-page .sheet textarea { min-height: 24px; border: 0; background: transparent; padding: 4px; font: inherit; color: inherit; }
+.template-workbook-page .sheet td { padding: 0; vertical-align: top; }
 .workbook-scroll { max-height: calc(100vh - 300px); min-height: 260px; overflow: auto; }
 .workbook-table { min-width: 980px; }
 .workbook-colour.c0 { color: var(--won-text); background: var(--won-fill); }

@@ -14,9 +14,12 @@ const inputProps = (row, col, onKeyDown) => ({
 export default function ProposalSheetEditor({
   p, opp, doc, save, allParts, totals, units, totalQty, lineComputed, lineQuoted, priced,
   lineCost, linePrice, addBomLine, updLine, removeLine, updTerm, addTerm, removeTerm, pasteBoq, store,
+  boqFileRef, extractBoqFromPdf, boqExtractBusy, boqExtractError,
 }) {
   const [workbook, setWorkbook] = useState('proposal')
-  const [sheet, setSheet] = useState('Cover')
+  // Edit Sheet is the single entry point from the proposal navigation. Start on
+  // BOQ so extracted buyer parts are immediately visible without another tab row.
+  const [sheet, setSheet] = useState('BOQ')
   const sheetRef = useRef(null)
   const focusCell = (row, col) => sheetRef.current?.querySelector(`[data-sheet-cell="${row}:${col}"]`)?.focus()
   const keyNav = (e, row, col, rows, cols) => {
@@ -43,10 +46,7 @@ export default function ProposalSheetEditor({
   return (
     <div className="proposal-sheet-editor" ref={sheetRef}>
       <div className="proposal-sheet-head">
-        <div>
-          <h3>Proposal Workbook</h3>
-          <p className="hint">Edit white cells. Calculated totals stay locked and update the Preview automatically.</p>
-        </div>
+        <div><p className="hint">Edit white cells. Calculated totals stay locked and update the Preview automatically.</p></div>
         <div className="workbook-switcher"><button className="active">Proposal Workbook</button><button onClick={() => setWorkbook('inputs')}>Inputs Workbook</button></div>
       </div>
 
@@ -88,12 +88,29 @@ export default function ProposalSheetEditor({
       {show('BOQ') && <section className="form-card wide">
         <div className="section-title">Bill of quantities</div>
         <div className="toolbar">
-          <label>Add part: <select value="" onChange={e => e.target.value !== '' && addBomLine(e.target.value)}>
+          <input ref={boqFileRef} type="file" accept="application/pdf" onChange={extractBoqFromPdf} style={{ display: 'none' }} />
+          <button onClick={() => boqFileRef.current?.click()} disabled={boqExtractBusy}>
+            {boqExtractBusy ? 'Extracting PDF…' : 'Extract BOQ from buyer PDF'}
+          </button>
+          <label>Add part from buyer PDF or price list: <select value="" onChange={e => e.target.value !== '' && addBomLine(e.target.value)}>
             <option value="">— select part number —</option>
-            {allParts.map((x, i) => <option key={i} value={i}>{x.list} · {x.pn} — {x.desc}</option>)}
+            {(p.extractedItems || []).length > 0 && <optgroup label="Buyer PDF items">
+              {(p.extractedItems || []).map((x, i) => {
+                const key = x.partNumber || x.customerRef || x.description || ''
+                const exists = p.bom.some(line => (line.custRef || line.pn || '').toLowerCase() === key.toLowerCase())
+                return <option key={`source-${i}`} value={`source:${i}`} disabled={exists}>
+                  {key || x.description}{exists ? ' (already added)' : ''}
+                </option>
+              })}
+            </optgroup>}
+            <optgroup label="Price-list items">
+              {allParts.map((x, i) => <option key={i} value={i}>{x.list} · {x.pn} — {x.desc}</option>)}
+            </optgroup>
           </select></label>
           <span className="hint">Paste tab-separated cells into the editable columns. Use arrows, Enter, or Tab to move.</span>
         </div>
+        {boqExtractError && <div className="errbox" role="alert">{boqExtractError}</div>}
+        {p.boqSource && <div className="hint">Source: {p.boqSource}. Review extracted rows before pricing.</div>}
         <div className="sheet-wrap">
           <table className="sheet proposal-edit-grid">
             <thead><tr>
@@ -127,9 +144,6 @@ export default function ProposalSheetEditor({
         <label>Executive summary<textarea rows={5} value={p.execSummary ?? doc.execSummary ?? ''} onChange={e => save({ ...p, execSummary: e.target.value })} /></label>
         <label>Commercial note<textarea rows={3} value={p.commercialNote ?? doc.commercialNote ?? ''} onChange={e => save({ ...p, commercialNote: e.target.value })} /></label>
       </section>}
-      <div className="workbook-tabs proposal-workbook-tabs">
-        {['Cover', 'Commercial Terms', 'BOQ', 'Document'].map(name => <button key={name} className={sheet === name ? 'active' : ''} onClick={() => setSheet(name)}>{name}</button>)}
-      </div>
     </div>
   )
 }

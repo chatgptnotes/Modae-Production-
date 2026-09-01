@@ -128,8 +128,8 @@ export default function Register() {
       route: routeForType(oppType),
     }
     store.addOpportunity(opp)
-    if (routeForType(oppType) === 'Spares') {
-      const { workbenchRows, bom } = buildLeadProposalData(lead, store.priceLists)
+    if (routeForType(oppType) !== 'Service') {
+      const { extracted, workbenchRows, bom } = buildLeadProposalData(lead, store.priceLists)
       store.addSparesLinesFromLead(opp.id, workbenchRows)
       const proposal = newProposal(opp.id, opp)
       store.saveProposal(opp.id, {
@@ -144,6 +144,7 @@ export default function Register() {
         // Unmatched rows remain unpriced and therefore continue to block
         // readiness until the workbench resolves them.
         bom,
+        extractedItems: extracted,
       })
     }
     // Stamp the new opp id onto lead-linked approvals (AP-1) so the Red-class

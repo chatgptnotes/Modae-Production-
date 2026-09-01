@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
+import XLSX from 'xlsx-js-style'
 import { useParams, Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { effectiveRate, fmt, exportCSV, canPriceProposal, clampCosting, clampQty, MAX_GM_PCT } from '../utils.js'
@@ -12,15 +13,72 @@ import PrintDoc from '../proposal/PrintDoc.jsx'
 import { signalsFromBom, countSignals, rackLayout, UMM_CHANNELS, RACK_SLOTS } from '../rack.js'
 import { normalizeProposal, buildPricing } from '../proposal/docProps.js'
 import ProposalSheetEditor from '../proposal/ProposalSheetEditor.jsx'
-import { proposalWorkbookAttachment, enclosureAttachments } from '../proposal/emailAttachments.js'
+import { blobAttachment, pricedBoqAttachment } from '../proposal/emailAttachments.js'
 import { downloadProposalXlsx } from '../proposal/excelExport.js'
 import { routeForType } from '../seed.js'
 import { buildLeadProposalData } from '../leadBoq.js'
+import { extractPdfText, parseTender, matchParts, buildProposal } from '../tenderParse.js'
+import { runTaskResult } from '../ai.js'
 
 const ROUTE_TABS = {
   Project: ['Cover Letter', 'Edit Sheet', 'Document', 'Signal List', 'Rack Layout', 'Priced BoQ'],
   Services: ['Cover Letter', 'Edit Sheet', 'Document', 'Scope of Work', 'Issues List', 'Proposal', 'Service Rate Schedule'],
   Spares: ['Cover Letter', 'Edit Sheet', 'Document', 'Firm Offer', 'Clarifications', 'Sensor Comparison', 'Priced BoQ'],
+}
+
+const MEGGITT_ITEM_LIST_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-2 With Different Make (Not yet won)/Meggitt Item List.xlsx', import.meta.url).href
+const SPARES_PROPOSAL_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx', import.meta.url).href
+const SERVICE_PROPOSAL_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Big Service Opp-1 (Won) With SoW/Service Proposal 14Apr26 Rev-01.xlsx', import.meta.url).href
+
+const parseQuantityCell = value => {
+  const match = String(value ?? '').match(/\d+(?:\.\d+)?/)
+  return Number(match?.[0] || 0)
+}
+
+const parseReferenceWorkbook = (buffer, filename) => {
+  const workbook = XLSX.read(buffer, { type: 'array' })
+  const sheetName = workbook.SheetNames[0]
+  const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' })
+  return {
+    filename, sheetName,
+    rows: rows.slice(1).filter(row => row.some(Boolean)).map((row, i) => ({
+      srNo: Number(row[0]) || i + 1,
+      description: String(row[1] || ''),
+      quantity: parseQuantityCell(row[2]),
+      quantityText: String(row[2] || ''),
+      uom: /nos?/i.test(String(row[2])) ? 'EA' : 'EA',
+      unitPrice: Number(row[3]) || 0,
+      totalPrice: Number(row[4]) || 0,
+    })),
+  }
+}
+
+const parseProposalWorkbook = (buffer, filename) => {
+  const workbook = XLSX.read(buffer, { type: 'array', cellStyles: true })
+  return {
+    filename,
+    sheets: workbook.SheetNames.map(name => {
+      const sheet = workbook.Sheets[name]
+      const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1:A1')
+      const rows = []
+      for (let r = range.s.r; r <= range.e.r; r++) {
+        const row = []
+        for (let c = range.s.c; c <= range.e.c; c++) {
+          const cell = sheet[XLSX.utils.encode_cell({ r, c })]
+          row.push(cell?.w ?? (cell?.v == null ? '' : String(cell.v)))
+        }
+        rows.push(row)
+      }
+      const rawWidths = sheet['!cols'] || []
+      return {
+        name,
+        rows,
+        // Some Excel writers emit all 16,384 column definitions. Only retain
+        // the columns the sheet actually uses so the preview stays usable.
+        widths: Array.from({ length: range.e.c - range.s.c + 1 }, (_, i) => rawWidths[range.s.c + i]?.wpx || 110),
+      }
+    }),
+  }
 }
 
 function RouteTemplateTab({ route, tab, p, doc, priced, lineQuoted }) {
@@ -114,14 +172,24 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   const [tab, setTab] = useState(initialTab)
   const [printing, setPrinting] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [referencePreviewOpen, setReferencePreviewOpen] = useState(false)
+  const [referenceLoading, setReferenceLoading] = useState(false)
+  const [referenceError, setReferenceError] = useState('')
+  const [templatePreviewOpen, setTemplatePreviewOpen] = useState(false)
+  const [templateLoading, setTemplateLoading] = useState(false)
+  const [templateError, setTemplateError] = useState('')
   const [emailOpen, setEmailOpen] = useState(false)
   const [emailTo, setEmailTo] = useState('')
   const [emailCc, setEmailCc] = useState('')
   const [emailSubject, setEmailSubject] = useState('')
-  const [emailNote, setEmailNote] = useState('')
+  const [emailBody, setEmailBody] = useState('')
+  const [emailAttachments, setEmailAttachments] = useState([])
   const [emailPreview, setEmailPreview] = useState(false)
   const [emailBusy, setEmailBusy] = useState(false)
   const [emailError, setEmailError] = useState('')
+  const boqFileRef = useRef(null)
+  const [boqExtractBusy, setBoqExtractBusy] = useState(false)
+  const [boqExtractError, setBoqExtractError] = useState('')
   const [conditionTarget, setConditionTarget] = useState(null)
   const [conditionNote, setConditionNote] = useState('')
   const [p, setP] = useState(() => normalize(store.getProposal(oppId), opp))
@@ -129,9 +197,11 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   // never a click-time snapshot — a stale snapshot would silently revert edits.
   const pRef = React.useRef(p)
   pRef.current = p
-  const linkedLead = opp && store.leads.find(l => l.id === opp.sourceLeadId
+  const linkedLead = opp && [...(store.leads || []), ...(store.leadArchive || [])].find(l => l.id === opp.sourceLeadId
     || l.oppId === oppId
-    || String(opp.remarks || '').includes(`lead ${l.id}`))
+    || String(opp.remarks || '').includes(`lead ${l.id}`)
+    || (opp.rfqNumber && l.ref && String(opp.rfqNumber).trim() === String(l.ref).trim())
+    || (opp.oppName && l.subject && String(opp.oppName).trim() === String(l.subject).trim()))
 
   // /proposal/:oppId reuses this component instance — reload state per opportunity.
   useEffect(() => { setP(normalize(store.getProposal(oppId), opp)); setTab(initialTab) }, [oppId, initialTab]) // eslint-disable-line
@@ -140,12 +210,12 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   // their BoQ once from the linked lead so existing work does not stay on the
   // generic starter rows. New registrations carry leadImportId themselves.
   useEffect(() => {
-    if (!opp || routeForType(opp.oppType) !== 'Spares') return
+    if (!opp || routeForType(opp.oppType) === 'Service') return
     const current = store.getProposal(oppId)
     if (!linkedLead || (current.leadImportId === linkedLead.id && current.bom?.length) || !linkedLead.ai) return
-    const { workbenchRows, bom } = buildLeadProposalData(linkedLead, store.priceLists)
+    const { extracted, workbenchRows, bom } = buildLeadProposalData(linkedLead, store.priceLists)
     if (!bom.length) return
-    const next = { ...current, bom, units: 1, rfqNumber: linkedLead.ref || current.rfqNumber, subject: linkedLead.subject || current.subject, project: linkedLead.subject || current.project, leadImportId: linkedLead.id }
+    const next = { ...current, bom, extractedItems: extracted, units: 1, rfqNumber: linkedLead.ref || current.rfqNumber, subject: linkedLead.subject || current.subject, project: linkedLead.subject || current.project, leadImportId: linkedLead.id }
     store.addSparesLinesFromLead(oppId, workbenchRows)
     store.saveProposal(oppId, next)
     setP(normalize(next, opp))
@@ -181,6 +251,95 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   const {
     allParts, totalQty, linePrice, lineCost, lineComputed, lineQuoted, computeTotals,
   } = buildPricing(store, p)
+
+  const route = docRoute(p, opp)
+  const referenceRows = p.referenceWorkbook?.rows || []
+  const proposalTemplate = route === 'Spares' ? p.sparesProposalWorkbook : route === 'Services' ? p.serviceProposalWorkbook : null
+  const proposalTemplateSheets = proposalTemplate?.sheets || []
+  const referencePartNumber = description => String(description || '').match(/[A-Z]{1,8}[A-Z0-9]*(?:[./-][A-Z0-9]+){2,}/i)?.[0] || ''
+  const referenceBom = rows => rows.map(row => {
+    const pn = referencePartNumber(row.description)
+    const match = allParts.find(part => (pn && part.pn?.toLowerCase() === pn.toLowerCase()) || part.desc?.toLowerCase() === row.description.toLowerCase())
+    return {
+      itemCategory: 'Hardware', pn: match?.pn || pn, custRef: pn,
+      desc: row.description, uom: row.uom || 'EA', listPrice: row.unitPrice || match?.price || 0,
+      adders: [], qtyPerUnit: 0, common: row.quantity || 1, spares: 0, quoted: row.unitPrice || '',
+      list: match?.list || 'Ad-hoc', currency: match?.currency || 'INR',
+    }
+  })
+
+  useEffect(() => {
+    if (!opp || docRoute(p, opp) !== 'Spares' || p.referenceWorkbook) return
+    let cancelled = false
+    setReferenceLoading(true)
+    setReferenceError('')
+    fetch(MEGGITT_ITEM_LIST_URL)
+      .then(response => { if (!response.ok) throw new Error('Meggitt item list could not be loaded'); return response.arrayBuffer() })
+      .then(buffer => {
+        if (cancelled) return
+        const workbook = parseReferenceWorkbook(buffer, 'Meggitt Item List.xlsx')
+        const current = pRef.current
+        const next = { ...current, referenceWorkbook: workbook, bom: referenceBom(workbook.rows) }
+        store.saveProposal(oppId, next)
+        setP(normalize(next, opp))
+      })
+      .catch(error => { if (!cancelled) setReferenceError(error?.message || 'Reference workbook could not be loaded') })
+      .finally(() => { if (!cancelled) setReferenceLoading(false) })
+    return () => { cancelled = true }
+  }, [oppId, opp?.oppType, p.proposalType, p.referenceWorkbook]) // eslint-disable-line
+
+  // The supplied proposal templates are editable reference workbooks. They are
+  // deliberately stored separately from the BoQ: the Spares item list remains
+  // the source of quoted lines, while these sheets preserve the customer-facing
+  // layout (cover, firm offer, SOW, issues, and so on).
+  useEffect(() => {
+    if (!opp || (route !== 'Spares' && route !== 'Services') || proposalTemplate) return
+    let cancelled = false
+    const isSpares = route === 'Spares'
+    const url = isSpares ? SPARES_PROPOSAL_URL : SERVICE_PROPOSAL_URL
+    const key = isSpares ? 'sparesProposalWorkbook' : 'serviceProposalWorkbook'
+    const filename = isSpares ? 'Spares Firm Offer Rev00 2May2026.xlsx' : 'Service Proposal 14Apr26 Rev-01.xlsx'
+    setTemplateLoading(true)
+    setTemplateError('')
+    fetch(url)
+      .then(response => { if (!response.ok) throw new Error('Proposal template could not be loaded'); return response.arrayBuffer() })
+      .then(buffer => {
+        if (cancelled) return
+        const workbook = parseProposalWorkbook(buffer, filename)
+        const current = pRef.current
+        const next = { ...current, [key]: workbook }
+        store.saveProposal(oppId, next)
+        setP(normalize(next, opp))
+      })
+      .catch(error => { if (!cancelled) setTemplateError(error?.message || 'Proposal template could not be loaded') })
+      .finally(() => { if (!cancelled) setTemplateLoading(false) })
+    return () => { cancelled = true }
+  }, [oppId, opp?.oppType, p.proposalType, route, proposalTemplate]) // eslint-disable-line
+
+  const updateReferenceRow = (index, key, value) => {
+    const rows = referenceRows.map((row, i) => {
+      if (i !== index) return row
+      if (key === 'quantityText') return { ...row, quantityText: value, quantity: parseQuantityCell(value) }
+      return { ...row, [key]: key === 'unitPrice' ? Math.max(0, Number(value) || 0) : value }
+    })
+    const next = { ...p, referenceWorkbook: { ...p.referenceWorkbook, rows }, bom: referenceBom(rows) }
+    save(next)
+  }
+
+  const openTemplatePreview = () => {
+    setTemplatePreviewOpen(true)
+  }
+
+  const updateTemplateCell = (sheetName, rowIndex, columnIndex, value) => {
+    const targetSheet = proposalTemplateSheets.find(sheet => sheet.name === sheetName)
+    if (!targetSheet) return
+    const key = route === 'Spares' ? 'sparesProposalWorkbook' : 'serviceProposalWorkbook'
+    const sheets = proposalTemplateSheets.map(sheet => sheet.name !== sheetName ? sheet : {
+      ...sheet,
+      rows: sheet.rows.map((row, r) => r !== rowIndex ? row : row.map((cell, c) => c !== columnIndex ? cell : value)),
+    })
+    save({ ...p, [key]: { ...proposalTemplate, sheets } })
+  }
 
   const totals = computeTotals(p)
   const financeCost = (p.costing.financeCostK || 0) * 1000
@@ -229,16 +388,81 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
 
   // Add by index into allParts — part numbers are NOT unique across lists
   // (ad-hoc quotes can duplicate a BNK/Metrics PN, and repeat over time).
-  const addBomLine = idx => {
-    const part = allParts[+idx]
-    if (!part) return
+  const addBomLine = value => {
+    const isSource = String(value).startsWith('source:')
+    const sourceItem = isSource ? (p.extractedItems || [])[+String(value).slice(7)] : null
+    const part = isSource
+      ? allParts.find(x => x.pn && sourceItem?.partNumber && x.pn.toLowerCase() === sourceItem.partNumber.toLowerCase())
+      : allParts[+value]
+    if (isSource && !sourceItem) return
+    if (!isSource && !part) return
+    const requestedPn = sourceItem?.partNumber || sourceItem?.customerRef || ''
+    const pn = part?.pn || requestedPn
+    if (p.bom.some(line => (line.custRef || line.pn || '').toLowerCase() === pn.toLowerCase())) return
     save({
       ...p,
       bom: [...p.bom, {
-        itemCategory: '', pn: part.pn, desc: part.desc, listPrice: part.price, adders: [],
-        qtyPerUnit: 0, common: 1, spares: 0, quoted: '', list: part.list, currency: part.currency,
+        itemCategory: '', pn: part?.pn || '', custRef: requestedPn,
+        desc: sourceItem?.description || part?.desc || '', listPrice: part?.price || 0, adders: [],
+        qtyPerUnit: 0, common: sourceItem?.qty || 1, spares: 0, quoted: '',
+        list: part?.list || 'Ad-hoc', currency: part?.currency || 'INR',
       }],
     })
+  }
+  const extractBoqFromPdf = async e => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setBoqExtractBusy(true)
+    setBoqExtractError('')
+    try {
+      const extracted = await extractPdfText(file)
+      const localLead = {
+        body: extracted.fullText,
+        attachments: [{ name: file.name, text: extracted.fullText }],
+      }
+      let aiData = null
+      if (file.size <= 12 * 1024 * 1024) {
+        const bytes = new Uint8Array(await file.arrayBuffer())
+        let binary = ''
+        for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+        const aiResult = await runTaskResult('lead.extract', {
+          from: opp.contactEmail || opp.contactPerson || '',
+          subject: opp.oppName || p.subject || '',
+          body: extracted.fullText,
+          attachments: [{ name: file.name, text: extracted.fullText }],
+          aiAttachments: [{ name: file.name, mimeType: 'application/pdf', dataBase64: btoa(binary) }],
+        }, { fallback: store.config?.aiModel?.provider === 'Built-in fallback' })
+        aiData = aiResult.data?.data || null
+      }
+      const aiLead = aiData?.lineItems?.length ? { ...localLead, ai: { lineItems: aiData.lineItems } } : null
+      const leadData = buildLeadProposalData(aiLead || localLead, store.priceLists)
+      const parsed = parseTender(extracted.fullText, extracted.struct)
+      const items = parsed.items?.length
+        ? parsed.items.map(item => ({
+          description: item.description, partNumber: item.pn, customerRef: item.sapCode || item.pn,
+          qty: item.qty, uom: item.uom || 'EA', evidence: item.evidence || 'Buyer PDF',
+        }))
+        : leadData.extracted
+      if (!items.length) throw new Error('No BOQ line items were found in this PDF.')
+      const matched = matchParts(items.map(item => ({
+        description: item.description, pn: item.partNumber || item.pn, qty: item.qty,
+      })), allParts)
+      const next = parsed.items?.length ? buildProposal(oppId, opp, parsed, matched) : { ...p, bom: leadData.bom }
+      save({
+        ...p,
+        // Keep the existing proposal header and commercial edits intact.
+        bom: next.bom,
+        terms: p.terms?.length ? p.terms : next.terms,
+        extractedItems: items,
+        attachments: [...new Set([...(p.attachments || []), file.name])],
+        boqSource: `PDF: ${file.name}`,
+      })
+    } catch (error) {
+      setBoqExtractError(error?.message || 'Could not extract BOQ lines from this PDF.')
+    } finally {
+      setBoqExtractBusy(false)
+    }
   }
   // Unit Price ₹ stays a string field — blank means "use the computed price" —
   // so it can't go through clampQty; it only rejects negatives.
@@ -317,23 +541,47 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
     if (!opp.proposalDate) store.updateOpportunity(oppId, { proposalDate: new Date().toISOString().slice(0, 10) })
   }
 
-  const emailBody = [
+  const generatedEmailBody = [
       'Dear Sir/Madam,',
       '',
-      ...(emailNote.trim() ? [emailNote.trim(), ''] : []),
       `Please find our Techno-Commercial Proposal ${oppId}${p.project ? ' for ' + p.project : ''}.`,
       ...(p.rfqNumber ? [`Ref: ${p.rfqNumber}`] : []),
       '',
       ...p.bom.slice(0, 6).map((l, i) => `${i + 1}. ${l.desc} — ${totalQty(l)} nos`),
       ...(p.bom.length > 6 ? [`…and ${p.bom.length - 6} more items`] : []),
       '',
-      docRoute(p, opp) === 'Services'
-        ? 'The proposal workbook, ModAE Standard Terms and the Services Rate Schedule are attached.'
-        : 'The proposal workbook and ModAE Standard Terms are attached.',
+      'Please find the priced Bill of Quantities attached.',
       '',
       'Best regards,',
       MODAE_COMPANY.name,
   ].join('\n')
+  const emailAttachmentMimeType = file => file.type || (file.name.toLowerCase().endsWith('.pdf')
+    ? 'application/pdf'
+    : file.name.toLowerCase().endsWith('.xlsx')
+      ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      : '')
+  const addEmailFiles = event => {
+    const selected = Array.from(event.target.files || [])
+    event.target.value = ''
+    const allowed = new Set([
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    ])
+    const invalid = selected.find(file => !allowed.has(emailAttachmentMimeType(file)))
+    if (invalid) {
+      setEmailError('Only PDF and XLSX files can be attached')
+      return
+    }
+    setEmailAttachments(current => {
+      const next = [...current, ...selected.filter(file => !current.some(existing => existing.name === file.name && existing.size === file.size))]
+      if (next.length > 4) {
+        setEmailError('You can add up to four extra files (five attachments in total)')
+        return next.slice(0, 4)
+      }
+      setEmailError('')
+      return next
+    })
+  }
   // Shared with the lead-stage clarification draft (src/leadClarification.js),
   // so the two dispatch paths cannot drift apart.
   const sendEmail = async () => {
@@ -344,14 +592,14 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
     setEmailBusy(true)
     setEmailError('')
     try {
-      const enclosures = await enclosureAttachments(route)
+      const optionalAttachments = await Promise.all(emailAttachments.map(file => blobAttachment(file, file.name, emailAttachmentMimeType(file))))
       const response = await fetch('/api/send-proposal-email', {
         method: 'POST', headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           oppId, to: emailTo.trim(), cc: emailCc.trim(), subject: emailSubject, body: emailBody,
           attachments: [
-            proposalWorkbookAttachment({ p, opp, doc, priced, totalQty, lineQuoted, route }),
-            ...enclosures,
+            pricedBoqAttachment({ p, opp, priced, totalQty, lineQuoted, route }),
+            ...optionalAttachments,
           ],
         }),
       })
@@ -360,8 +608,8 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
       store.addCommunication(oppId, {
         to: emailTo.trim(), cc: emailCc.trim(), subject: emailSubject, kind: 'proposal-email',
         messageId: result.messageId, status: 'sent',
-        attachmentNames: [`${oppId}_Proposal_Rev_${p.revision}.xlsx`,
-          ...enclosures.map(a => a.filename)],
+        attachmentNames: [`${oppId}_Priced_BoQ_Rev_${p.revision}.xlsx`,
+          ...optionalAttachments.map(a => a.filename)],
       })
       setEmailOpen(false)
     } catch (error) {
@@ -375,8 +623,9 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
     setEmailSubject(`${oppId} — Techno-Commercial Proposal${p.project ? ' — ' + p.project.slice(0, 60) : ''}`)
     setEmailTo(opp.contactEmail || customer?.email || '')
     setEmailCc('')
+    setEmailBody(generatedEmailBody)
+    setEmailAttachments([])
     setEmailPreview(false)
-    setProposalPdf(null)
     setEmailError('')
     setEmailOpen(true)
   }
@@ -400,7 +649,6 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   // Signal List and Rack Layout are project artefacts. Biji, 13 Aug: "in the
   // spare parts case, there will not be any signal list, there will not be
   // rack layout." Hide the tabs rather than show them with an apology.
-  const route = docRoute(p, opp)
   const visibleTabs = ROUTE_TABS[route] || ROUTE_TABS.Project
   // Switching route while sitting on a now-hidden tab must not blank the page.
   if (!visibleTabs.includes(tab)) { setTab('Cover Letter'); return null }
@@ -434,8 +682,15 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
         {tab === 'Priced BoQ' && comm && <button onClick={exportBoQ}>Extract to Excel</button>}
         <button onClick={exportExcel}>Download Excel proposal</button>
         <button onClick={() => setPreviewOpen(true)}><Icon name="eye" size={13} /> Preview proposal</button>
+        {(route === 'Spares' || route === 'Services') && <button onClick={openTemplatePreview}><Icon name="fileSheet" size={13} /> Preview {route === 'Spares' ? 'Spares firm offer' : 'service proposal'}</button>}
         <button onClick={openEmail}><Icon name="mail" size={13} /> Email proposal</button>
         <button className="primary" onClick={() => setPrinting(true)}><Icon name="printer" size={13} /> Print / PDF proposal</button>
+      </div>
+
+      <div className="workbook-tabs proposal-artifact-tabs" role="tablist" aria-label="Proposal documents">
+        {visibleTabs.map(name => (
+          <button key={name} role="tab" aria-selected={tab === name} className={tab === name ? 'active' : ''} onClick={() => setTab(name)}>{name}</button>
+        ))}
       </div>
 
       {opp.status === 'Open' && (
@@ -489,8 +744,8 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
 
       {route !== 'Project' && (
         <div className="ai-notice" style={{ marginBottom: 10 }}>
-          <b>{route} proposal route.</b> The printed document follows the supplied{' '}
-          {p.templateSource || `${route.toLowerCase()} sample`}: a covering letter and one priced sheet,
+          <b>{route} proposal route.</b> The printed document follows the{' '}
+          {route.toLowerCase()} proposal template: a covering letter and one priced sheet,
           with no signal list, no rack layout and no project front matter. Optional annexes
           ({p.artifactSheets.filter(x => !['Cover Letter', 'Priced BoQ'].includes(x)).join(' · ')}) are
           issued only when ticked on the Document tab.
@@ -582,7 +837,8 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
         <ProposalSheetEditor p={p} opp={opp} doc={doc} save={save} allParts={allParts} totals={totals} units={units} priced={comm}
           totalQty={totalQty} lineComputed={lineComputed} lineQuoted={lineQuoted} lineCost={lineCost}
           linePrice={linePrice} addBomLine={addBomLine} updLine={updLine} removeLine={removeLine}
-          updTerm={updTerm} addTerm={addTerm} removeTerm={removeTerm} pasteBoq={pasteBoq} store={store} />
+          updTerm={updTerm} addTerm={addTerm} removeTerm={removeTerm} pasteBoq={pasteBoq} store={store}
+          boqFileRef={boqFileRef} extractBoqFromPdf={extractBoqFromPdf} boqExtractBusy={boqExtractBusy} boqExtractError={boqExtractError} />
       )}
 
       {['Scope of Work', 'Issues List', 'Proposal', 'Service Rate Schedule', 'Firm Offer', 'Clarifications', 'Sensor Comparison'].includes(tab) && (
@@ -729,10 +985,21 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           </div>
 
           <div className="toolbar">
-            <label>Add part from price list:{' '}
+            <label>Add part from buyer PDF or price list:{' '}
               <select value="" onChange={e => e.target.value !== '' && addBomLine(e.target.value)}>
                 <option value="">— select part number —</option>
-                {allParts.map((x, i) => <option key={i} value={i}>{x.list} · {x.pn} — {x.desc} ({x.currency} {fmt(x.price)})</option>)}
+                {(p.extractedItems || []).length > 0 && <optgroup label={`Buyer PDF items${p.boqSource ? ` (${p.boqSource})` : ''}`}>
+                  {(p.extractedItems || []).map((x, i) => {
+                    const key = x.partNumber || x.customerRef || x.description || ''
+                    const exists = p.bom.some(line => (line.custRef || line.pn || '').toLowerCase() === key.toLowerCase())
+                    return <option key={`source-${i}`} value={`source:${i}`} disabled={exists}>
+                      {key || x.description} — {x.description || 'Buyer requested item'}{exists ? ' (already added)' : ''}
+                    </option>
+                  })}
+                </optgroup>}
+                <optgroup label="Price-list items">
+                  {allParts.map((x, i) => <option key={i} value={i}>{x.list} · {x.pn} — {x.desc} ({x.currency} {fmt(x.price)})</option>)}
+                </optgroup>
               </select>
             </label>
             <span className="hint">Ad-hoc trader quotes captured in Price Lists appear here too (latest entry = reference price).</span>
@@ -827,11 +1094,22 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
             <input type="text" value={emailSubject} onChange={e => setEmailSubject(e.target.value)} />
           </div>
           <div className="q">
-            <div className="q-label">Note (optional, one line)</div>
-            <input type="text" value={emailNote} onChange={e => setEmailNote(e.target.value)} placeholder="e.g. Submitted within due date — happy to discuss." />
+            <div className="q-label">Message body</div>
+            <textarea rows={11} value={emailBody} onChange={e => setEmailBody(e.target.value)} />
           </div>
           <div className="costing-note">
-            This automatically sends the current Excel proposal and the agreed ModAE Standard Terms PDF{route === 'Services' ? ', plus the Services Rate Schedule' : ''}.
+            The priced BoQ Excel is attached automatically. Add only the extra customer-facing files you want to send.
+          </div>
+          <div className="q">
+            <div className="q-label">Additional attachments (optional)</div>
+            <input type="file" accept=".pdf,.xlsx,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple onChange={addEmailFiles} />
+            <div className="hint">Up to four extra PDF or XLSX files. The priced BoQ is always included.</div>
+            {!!emailAttachments.length && <div className="email-attachment-list">
+              {emailAttachments.map((file, index) => <div key={`${file.name}-${file.size}`} className="email-attachment-row">
+                <span>{file.name}</span>
+                <button type="button" onClick={() => setEmailAttachments(current => current.filter((_, i) => i !== index))}>Remove</button>
+              </div>)}
+            </div>}
           </div>
           {emailError && <div className="errbox" style={{ marginTop: 8 }}>{emailError}</div>}
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -854,7 +1132,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           )}
           <div className="forms-actions">
             <button className="primary" disabled={emailBusy || !emailTo.trim()} onClick={sendEmail}>
-              <Icon name="send" size={13} /> {emailBusy ? 'Sending…' : `Send with ${1 + enclosuresFor(route).length} attachments`}
+              <Icon name="send" size={13} /> {emailBusy ? 'Sending…' : `Send with ${1 + emailAttachments.length} attachment${emailAttachments.length ? 's' : ''}`}
             </button>
             <button onClick={() => setEmailOpen(false)}>Cancel</button>
           </div>
@@ -875,6 +1153,56 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           <div className="proposal-preview-scroll">
             <PrintDoc p={p} opp={opp} doc={doc} priced={priced} totals={totals} lineQuoted={lineQuoted} />
           </div>
+        </Modal>
+      )}
+
+      {referencePreviewOpen && (
+        <Modal title={`Meggitt Item List — ${oppId}`} onClose={() => setReferencePreviewOpen(false)} wide className="proposal-preview-modal">
+          <div className="proposal-preview-toolbar">
+            <span className="hint">Editable source workbook · changes update the proposal BOQ immediately</span>
+            <button onClick={() => setReferencePreviewOpen(false)}>Close</button>
+          </div>
+          {referenceLoading && <div className="hint">Loading Meggitt Item List.xlsx…</div>}
+          {referenceError && <div className="errbox" role="alert">{referenceError}</div>}
+          {!!referenceRows.length && <div className="proposal-preview-scroll reference-workbook-preview">
+            <table className="sheet" style={{ minWidth: 940, tableLayout: 'fixed' }}>
+              <colgroup><col style={{ width: 88 }} /><col style={{ width: 560 }} /><col style={{ width: 110 }} /><col style={{ width: 120 }} /><col style={{ width: 140 }} /></colgroup>
+              <thead><tr><th>Sr. No</th><th>Item Description</th><th>Quantity</th><th>Unit Price</th><th>Total Price</th></tr></thead>
+              <tbody>{referenceRows.map((row, i) => <tr key={i}>
+                <td>{row.srNo}</td>
+                <td><textarea rows={2} value={row.description} onChange={e => updateReferenceRow(i, 'description', e.target.value)} style={{ width: '100%', resize: 'vertical' }} /></td>
+                <td><input value={row.quantityText ?? row.quantity} onChange={e => updateReferenceRow(i, 'quantityText', e.target.value)} style={{ width: '100%' }} /></td>
+                <td><input type="number" min="0" value={row.unitPrice} onChange={e => updateReferenceRow(i, 'unitPrice', e.target.value)} style={{ width: '100%' }} /></td>
+                <td className="num">{fmt((Number(row.quantity) || 0) * (Number(row.unitPrice) || 0))}</td>
+              </tr>)}</tbody>
+            </table>
+          </div>}
+        </Modal>
+      )}
+
+      {templatePreviewOpen && (
+        <Modal title={`${route === 'Spares' ? 'Spares Firm Offer' : 'Service Proposal'} â€” ${oppId}`} onClose={() => setTemplatePreviewOpen(false)} wide className="proposal-preview-modal">
+          <div className="proposal-preview-toolbar">
+            <span className="hint">Editable Excel template Â· each tab is a worksheet Â· changes are saved to this proposal</span>
+            <button onClick={() => setTemplatePreviewOpen(false)}>Close</button>
+          </div>
+          {templateLoading && <div className="hint">Loading proposal workbookâ€¦</div>}
+          {templateError && <div className="errbox" role="alert">{templateError}</div>}
+          {!!proposalTemplateSheets.length && <div className="proposal-preview-scroll template-workbook-preview">
+            {proposalTemplateSheets.map((sheet, sheetIndex) => <section className="template-workbook-page" key={sheet.name}>
+              <div className="template-workbook-page-title">Page {sheetIndex + 1} · {sheet.name.trim() || 'Sheet'}</div>
+              <div className="template-workbook-page-scroll">
+                <table className="sheet" style={{ minWidth: Math.min(2800, Math.max(900, sheet.widths.reduce((sum, width) => sum + width, 0))), tableLayout: 'fixed' }}>
+                  <colgroup>{sheet.widths.map((width, i) => <col key={i} style={{ width: Math.max(70, Math.min(420, width)) }} />)}</colgroup>
+                  <tbody>{sheet.rows.map((row, rowIndex) => <tr key={rowIndex}>
+                    {row.map((cell, columnIndex) => <td key={columnIndex} className={cell ? '' : 'template-workbook-empty'}>
+                      <textarea aria-label={`${sheet.name} row ${rowIndex + 1} column ${columnIndex + 1}`} rows={String(cell).length > 70 ? 3 : 1} value={cell} onChange={event => updateTemplateCell(sheet.name, rowIndex, columnIndex, event.target.value)} style={{ width: '100%', resize: 'vertical' }} />
+                    </td>)}
+                  </tr>)}</tbody>
+                </table>
+              </div>
+            </section>)}
+          </div>}
         </Modal>
       )}
 

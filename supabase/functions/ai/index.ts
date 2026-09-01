@@ -80,6 +80,18 @@ const fillSchema = {
   properties: { value: STR, rationale: STR },
   required: ['value', 'rationale'],
 }
+const vendorQuoteSchema = {
+  type: 'OBJECT',
+  properties: {
+    manufacturer: STR, quoteRef: STR, leadTime: STR, notes: STR,
+    prices: arrOf({
+      type: 'OBJECT',
+      properties: { lineId: STR, unitPrice: { type: 'NUMBER' }, currency: STR, leadTime: STR, notes: STR },
+      required: ['lineId', 'unitPrice', 'currency', 'leadTime', 'notes'],
+    }),
+  },
+  required: ['manufacturer', 'quoteRef', 'leadTime', 'notes', 'prices'],
+}
 
 // ---------------------------------------------------------------------------
 type Task = {
@@ -119,6 +131,24 @@ ${cap((p.fields || []).map((f: any) => `${f.k}: ${f.v}`).join('\n'), 10000)}
 
 ATTACHMENTS:
 ${cap((p.attachments || []).map((a: any) => `${a.name}: ${a.text || ''}`).join('\n\n'), 20000) || 'none'}`,
+  },
+
+  'vendor.quote': {
+    model: FLASH,
+    schema: vendorQuoteSchema,
+    build: p => `${HOUSE}
+
+This is a controlled QA simulation of a manufacturer response to a sourcing
+request. Generate a plausible, clearly non-binding vendor quote. Do not claim
+that it was actually sent or received. Use INR unless another currency is
+clearly required. Use realistic indicative prices and lead times, never zero
+prices. Return one price row for each supplied line and preserve each lineId.
+
+OPPORTUNITY: ${cap(p.oppName, 300)} (${cap(p.oppId, 100)})
+CUSTOMER: ${cap(p.customer, 300)}
+PRODUCT / ROUTE: ${cap(p.product, 200)} / ${cap(p.route, 100)}
+REQUESTED LINES:
+${cap((p.lines || []).map((l: any) => `${l.id}: ${l.pn || l.custRef || 'No part number'} - ${l.desc || 'Item'} - Qty ${l.qty || 1}`).join('\n'), 12000) || 'No priced lines are available yet; return an overall indicative response with an empty prices list.'}`,
   },
 
   'lead.extract': {

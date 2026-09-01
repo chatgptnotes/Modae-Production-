@@ -5,7 +5,7 @@ import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS
 import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY, gmailComposeHref } from '../utils.js'
 import { readiness, isBlocked, nextActionWith, transitionBlockers } from '../gates.js'
 import { COMMERCIAL_RX } from './Approvals.jsx'
-import { Chip, ClassChip, AiBadge, Stepper, WarnBox, Modal } from '../ui.jsx'
+import { Chip, ClassChip, AiBadge, Stepper, WarnBox, ErrBox, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 import { productBrandProfiles } from '../branding/modae.js'
 import { MODAE_COMPANY } from '../proposalDoc.js'
@@ -15,7 +15,7 @@ import WbSpares from '../workbench/WbSpares.jsx'
 import WbService from '../workbench/WbService.jsx'
 import WbProject from '../workbench/WbProject.jsx'
 import PropBuilder from '../workbench/PropBuilder.jsx'
-// The same component the standalone /proposal/:oppId route renders — both write
+// The same component the standalone /proposal/:oppId route renders â€” both write
 // through store.saveProposal, so the two views are never out of step.
 import Proposal from './Proposal.jsx'
 import PrintDoc from '../proposal/PrintDoc.jsx'
@@ -48,7 +48,7 @@ const NEXT_ACTION = {
   Clarification: 'Chase open clarifications with the customer',
   Sourcing: 'Confirm part matches and price sources in the workbench',
   Proposal: 'Complete the proposal workbook and submit for approval',
-  Approval: 'Awaiting release approval — follow up with LJS / AH',
+  Approval: 'Awaiting release approval â€” follow up with LJS / AH',
   Submitted: 'Follow up with the customer inside the validity window',
   'Follow-up': 'Record follow-ups and push for a decision',
   'PO Validation': 'Resolve PO deviations and complete joint acceptance',
@@ -83,7 +83,7 @@ export default function Workbench() {
     return (
       <div className="page">
         <h2>Opportunity not found</h2>
-        <p className="hint">No opportunity with ID <b>{oppId}</b> — it may have been deleted or the link is stale.</p>
+        <p className="hint">No opportunity with ID <b>{oppId}</b> â€” it may have been deleted or the link is stale.</p>
         <Link to="/">Back to the tracker</Link>
       </div>
     )
@@ -120,7 +120,7 @@ export default function Workbench() {
   const exceptionApprovalFor = blocker => (store.approvals || []).find(a =>
     a.type === 'Milestone exception' && a.oppId === opp.id
     && a.targetMilestone === transition?.target && a.blockerKey === blocker.key)
-  // Diagram 02 §5 draws the layered approval as mandatory — its only "No" branch
+  // Diagram 02 Â§5 draws the layered approval as mandatory â€” its only "No" branch
   // is Return for Revision, never a bypass. So a blocker that names its own
   // approval type is *requested*, not excepted; the exception route is kept for
   // the lead-management requirements that have no approval object of their own.
@@ -129,7 +129,7 @@ export default function Workbench() {
     && ['amber-fee', 'red-clearance'].includes(blocker.key)
   const approvalRequestFor = blocker => (store.approvals || []).find(a =>
     a.oppId === opp.id && a.type === blocker.approvalType && a.status === 'Pending')
-  // §5A names two acceptable approvers ("LJS or AN") and carries `anyOf`, so a
+  // Â§5A names two acceptable approvers ("LJS or AN") and carries `anyOf`, so a
   // single decision clears it. The approval is stamped with the revision it
   // covers, or a later revision would inherit it.
   const requestBlockerApproval = blocker => store.requestApproval({
@@ -148,7 +148,7 @@ export default function Workbench() {
       type: 'Milestone exception',
       targetMilestone: transition.target,
       blockerKey: blocker.key,
-      detail: `${blocker.text} — exception requested to move to ${transition.target}.`,
+      detail: `${blocker.text} â€” exception requested to move to ${transition.target}.`,
       approver: needed[0],
       needed,
       anyOf: !!blocker.anyOf,
@@ -165,7 +165,7 @@ export default function Workbench() {
   }
   const clarificationRows = (store.clarifications || []).filter(c => c.oppId === opp.id && ['Draft', 'Open', 'Sent'].includes(c.status))
   const deviationRows = (proposal?.terms || []).filter(t => t.status === 'Deviation')
-  // `anyOf` blockers (§5A "LJS OR AN") name two approvers but need only one, so
+  // `anyOf` blockers (Â§5A "LJS OR AN") name two approvers but need only one, so
   // the owner line must not read as a joint requirement.
   const blockerOwner = blocker => blocker.needed?.join(blocker.anyOf ? ' or ' : ' + ')
     || blocker.approver || (blocker.key === 'clarifications' ? opp.owner : 'Opportunity owner')
@@ -175,11 +175,11 @@ export default function Workbench() {
     if (blocker.key === 'amber-fee') return 'This Amber customer requires the pre-quote processing fee to be received before the opportunity can progress.'
     if (blocker.key === 'kyc') return 'This Blue customer is new or unverified. AH must complete the required KYC review before registration or quoting.'
     if (blocker.key === 'red-clearance') return 'This Red customer requires joint commercial clearance because of the risk or payment history.'
-    // Diagram 02 §5 — the layered approval before the first quote dispatch and
+    // Diagram 02 Â§5 â€” the layered approval before the first quote dispatch and
     // before every revision. All three must clear; there is no exception route.
     if (blocker.key === 'tech-approval') return 'Section 5A: the technical scope must be signed off by LJS or AN before the quote can be dispatched. Either approver alone clears it.'
     if (blocker.key === 'comm-approval') return 'Section 5B: the commercial position must be signed off by AH before the quote can be dispatched.'
-    if (blocker.key === 'release') return 'Section 5C: the final quote release, routed by order value and margin. It covers this revision only — a revised quote must be released again.'
+    if (blocker.key === 'release') return 'Section 5C: the final quote release, routed by order value and margin. It covers this revision only â€” a revised quote must be released again.'
     return 'Complete the requirement shown below before continuing.'
   }
 
@@ -191,17 +191,17 @@ export default function Workbench() {
           <h2>{opp.oppName}</h2>
           <ClassChip cls={opp.customerStatus} />
           <Chip tone="grey">{opp.route}</Chip>
-          {/* Which of the diagram's three worlds this runs in — it decides the
+          {/* Which of the diagram's three worlds this runs in â€” it decides the
               B-step chain, the pricing embargo and the survey path. */}
           {opp.context && <Chip tone="grey" title={`${opp.context} lane`}>{opp.context}</Chip>}
           <Chip tone={blockers.length ? 'state-Review' : 'state-Accepted'}>{blockers.length ? 'At risk' : 'On track'}</Chip>
         </div>
         <div className="opp-summary-grid">
-          <div><span>Owner</span><b>{opp.owner} — {ROLES[opp.owner]?.name || opp.owner}</b></div>
+          <div><span>Owner</span><b>{opp.owner} â€” {ROLES[opp.owner]?.name || opp.owner}</b></div>
           <div><span>Milestone</span><b>{opp.milestone || opp.stage}</b></div>
-          <div><span>Customer value</span><b>{canSeeValue ? `₹${fmt(opp.valueK || 0)},000` : 'Restricted'}</b></div>
+          <div><span>Customer value</span><b>{canSeeValue ? `â‚¹${fmt(opp.valueK || 0)},000` : 'Restricted'}</b></div>
           <div className="opp-summary-action"><span>Next action</span><b>{nextAction.text || NEXT_ACTION[opp.milestone] || 'Progress the opportunity'}</b></div>
-          <div><span>Due</span><b>{ddMmmYY(due) || '—'}</b></div>
+          <div><span>Due</span><b>{ddMmmYY(due) || 'â€”'}</b></div>
         </div>
       </div>
       <div className="wb-tabs" style={{ marginTop: 10 }}>
@@ -213,9 +213,9 @@ export default function Workbench() {
         <div className="lifecycle-heading">
           <div><div className="workbench-section-title">Lifecycle</div><span className="hint">Select any stop to move the opportunity, including backward corrections.</span></div>
           <div className="lifecycle-controls">
-            <button disabled={milestoneIndex <= 0} onClick={() => moveRelative(-1)}>← Previous</button>
+            <button disabled={milestoneIndex <= 0} onClick={() => moveRelative(-1)}>â† Previous</button>
             <b>{opp.milestone}</b>
-            <button disabled={milestoneIndex < 0 || milestoneIndex >= MILESTONES.length - 1} onClick={() => moveRelative(1)}>Next →</button>
+            <button disabled={milestoneIndex < 0 || milestoneIndex >= MILESTONES.length - 1} onClick={() => moveRelative(1)}>Next â†’</button>
           </div>
         </div>
         <Stepper current={opp.milestone} onStep={moveMilestone} />
@@ -233,16 +233,16 @@ export default function Workbench() {
                 return <div key={`${item.key}-${i}`} className={`workbench-blocker ${item.severity}`}>
                   <div className="transition-blocker-head"><b>{item.text}</b><span className="transition-owner">Owner: <strong>{blockerOwner(item)}</strong></span></div>
                   <span className="transition-explanation">{blockerExplanation(item)}</span>
-                  {item.key === 'clarifications' && clarificationRows.length > 0 && <div className="transition-detail-list">{clarificationRows.map(row => <div key={row.id}><b>{row.id}</b> · {row.category} · {row.q} <em>{row.status}</em></div>)}</div>}
-                  {item.key === 'dev' && deviationRows.length > 0 && <div className="transition-detail-list">{deviationRows.map((row, index) => <div key={`${row.term}-${index}`}><b>{row.term}</b> · Customer ask: {row.customerAsk || 'Not recorded'} · Response: {row.ourResponse || 'Pending review'}</div>)}</div>}
+                  {item.key === 'clarifications' && clarificationRows.length > 0 && <div className="transition-detail-list">{clarificationRows.map(row => <div key={row.id}><b>{row.id}</b> Â· {row.category} Â· {row.q} <em>{row.status}</em></div>)}</div>}
+                  {item.key === 'dev' && deviationRows.length > 0 && <div className="transition-detail-list">{deviationRows.map((row, index) => <div key={`${row.term}-${index}`}><b>{row.term}</b> Â· Customer ask: {row.customerAsk || 'Not recorded'} Â· Response: {row.ourResponse || 'Pending review'}</div>)}</div>}
                   {item.severity === 'wait' && <span>Waiting for the responsible approver.</span>}
                   {item.key === 'clarifications' && <button className="exception-action" onClick={() => openTransitionTab('clarifications')}>Open clarifications</button>}
                   {item.key === 'kyc' && <button className="exception-action" onClick={() => openTransitionTab('customer')}>Open Customer/KYC</button>}
                   {item.key === 'required-contactPerson' && <button className="exception-action" onClick={() => openMissingContact('contactPerson')}>Edit contact person</button>}
                   {item.key === 'required-contactPhone' && <button className="exception-action" onClick={() => openMissingContact('contactPhone')}>Edit contact phone</button>}
-                  {approvable && openRequest && <span>{item.approvalType} <b>{openRequest.id}</b> is pending with {openRequest.needed?.join(openRequest.anyOf ? ' or ' : ' + ') || openRequest.approver} — <button className="inline-action" onClick={() => openTransitionTab('approvals')}>Open approval</button></span>}
+                  {approvable && openRequest && <span>{item.approvalType} <b>{openRequest.id}</b> is pending with {openRequest.needed?.join(openRequest.anyOf ? ' or ' : ' + ') || openRequest.approver} â€” <button className="inline-action" onClick={() => openTransitionTab('approvals')}>Open approval</button></span>}
                   {approvable && !openRequest && <button className="exception-action" onClick={() => requestBlockerApproval(item)}>Request {item.approvalType.toLowerCase()} from {blockerOwner(item)}</button>}
-                  {requestable && exception?.status === 'Pending' && <span>Exception approval <b>{exception.id}</b> is pending — <button className="inline-action" onClick={() => openTransitionTab('approvals')}>Open approval</button></span>}
+                  {requestable && exception?.status === 'Pending' && <span>Exception approval <b>{exception.id}</b> is pending â€” <button className="inline-action" onClick={() => openTransitionTab('approvals')}>Open approval</button></span>}
                   {requestable && !exception && <button className="exception-action" onClick={() => requestException(item)}>Request {blockerOwner(item)} approval to continue</button>}
                   {requestable && exception?.status === 'Rejected' && <span>Exception <b>{exception.id}</b> was rejected; resolve the requirement or request a new review.</span>}
                 </div>
@@ -302,22 +302,22 @@ function OverviewTab({ opp, goTab, detailsRef }) {
   const summary = [
     `${opp.oppName} for ${opp.sellTo} (${opp.customerStatus} customer, ${opp.category}) runs on the ${opp.route} route and sits at ${opp.milestone}.`,
     comm && opp.valueK > 0
-      ? `Estimated value (₹) ${fmt(opp.valueK)}K with ${opp.prob?.toLowerCase() || 'unrated'} probability at the ${opp.stage} stage.`
-      : `${comm ? 'Not yet priced — probability' : 'Probability'} ${opp.prob?.toLowerCase() || 'unrated'} at the ${opp.stage} stage.`,
-    blocked ? `${blockers.filter(b => b.severity !== 'info').length} readiness item(s) currently gate the proposal.` : 'No readiness blockers — clear to progress.',
+      ? `Estimated value (â‚¹) ${fmt(opp.valueK)}K with ${opp.prob?.toLowerCase() || 'unrated'} probability at the ${opp.stage} stage.`
+      : `${comm ? 'Not yet priced â€” probability' : 'Probability'} ${opp.prob?.toLowerCase() || 'unrated'} at the ${opp.stage} stage.`,
+    blocked ? `${blockers.filter(b => b.severity !== 'info').length} readiness item(s) currently gate the proposal.` : 'No readiness blockers â€” clear to progress.',
   ].join(' ')
 
   const dates = [
-    ['Created', ddMmmYY(opp.createDate)], ['Proposal', ddMmmYY(opp.proposalDate) || '—'],
-    ['Expected order', ddMmmYY(opp.orderDate) || '—'], ['Last updated', ddMmmYY(opp.lastUpdated)],
-    ['Age', `${ageDays(opp.createDate) ?? '—'} days`],
+    ['Created', ddMmmYY(opp.createDate)], ['Proposal', ddMmmYY(opp.proposalDate) || 'â€”'],
+    ['Expected order', ddMmmYY(opp.orderDate) || 'â€”'], ['Last updated', ddMmmYY(opp.lastUpdated)],
+    ['Age', `${ageDays(opp.createDate) ?? 'â€”'} days`],
   ]
 
   const saveAction = () => {
     if (action === 'call') {
       store.addCommunication(opp.id, {
         to: opp.contactPerson || opp.sellTo,
-        subject: `Call recorded — ${opp.oppName}`,
+        subject: `Call recorded â€” ${opp.oppName}`,
         kind: 'call', note: actionText.trim(),
       })
     } else if (action === 'owner' && owner) {
@@ -336,7 +336,7 @@ function OverviewTab({ opp, goTab, detailsRef }) {
         <section className="workbench-panel next-action-panel">
           <div className="workbench-section-title">Next best action</div>
           <strong>{nextAction.text || NEXT_ACTION[opp.milestone] || 'Progress the opportunity'}</strong>
-          <p className="hint">Due {ddMmmYY(opp.orderDate || opp.lastUpdated) || '—'}</p>
+          <p className="hint">Due {ddMmmYY(opp.orderDate || opp.lastUpdated) || 'â€”'}</p>
           <div className="workbench-actions">
             <button onClick={() => goTab('clarifications')}><Icon name="mail" size={13} /> Create clarification</button>
             <button className="primary" onClick={() => nav(`/proposal/${opp.id}`)}><Icon name="fileSheet" size={13} /> Open workbench</button>
@@ -382,7 +382,7 @@ function OverviewTab({ opp, goTab, detailsRef }) {
 
         <section className="workbench-panel">
           <div className="workbench-section-title">KYC snapshot</div>
-          <div className="workbench-kpi"><b>{kycItems.length ? `${verifiedKyc}/${kycItems.length}` : customer ? '0/0' : '—'}</b><span>{customer ? 'verified' : 'Customer not in master'}</span></div>
+          <div className="workbench-kpi"><b>{kycItems.length ? `${verifiedKyc}/${kycItems.length}` : customer ? '0/0' : 'â€”'}</b><span>{customer ? 'verified' : 'Customer not in master'}</span></div>
           <Chip tone={customer && kycItems.length > 0 && verifiedKyc === kycItems.length ? 'state-Accepted' : 'state-Review'}>{customer && kycItems.length > 0 && verifiedKyc === kycItems.length ? 'Complete' : 'Review required'}</Chip>
           <button onClick={() => goTab('customer')}>Open Customer/KYC</button>
         </section>
@@ -408,7 +408,7 @@ function OverviewTab({ opp, goTab, detailsRef }) {
       {action && (
         <Modal title={action === 'call' ? 'Record customer call' : 'Change opportunity owner'} onClose={() => setAction(null)}>
           {action === 'owner' ? (
-            <label>New owner<select value={owner} onChange={e => setOwner(e.target.value)}>{OWNERS.map(r => <option key={r} value={r}>{r} — {ROLES[r]?.name || r}</option>)}</select></label>
+            <label>New owner<select value={owner} onChange={e => setOwner(e.target.value)}>{OWNERS.map(r => <option key={r} value={r}>{r} â€” {ROLES[r]?.name || r}</option>)}</select></label>
           ) : (
             <label>Details<textarea rows={4} value={actionText} onChange={e => setActionText(e.target.value)} placeholder="Summarise the call and next commitment." /></label>
           )}
@@ -431,10 +431,10 @@ function RequirementTab({ opp }) {
   ]
   const readonly = [
     ['Opportunity ID', opp.id], ['Sell-to', opp.sellTo], ['Category', opp.category],
-    ['End user', `${opp.eucName || '—'} · ${opp.eucLocation || '—'}`],
-    ['Route', opp.route], ['Lane', `${opp.context || '—'} world`],
-    ['Owner', `${opp.owner} — ${ROLES[opp.owner]?.name || ''}`],
-    ['Contact', `${opp.contactPerson || '—'} ${opp.contactPhone || ''}`],
+    ['End user', `${opp.eucName || 'â€”'} Â· ${opp.eucLocation || 'â€”'}`],
+    ['Route', opp.route], ['Lane', `${opp.context || 'â€”'} world`],
+    ['Owner', `${opp.owner} â€” ${ROLES[opp.owner]?.name || ''}`],
+    ['Contact', `${opp.contactPerson || 'â€”'} ${opp.contactPhone || ''}`],
   ]
 
   return (
@@ -452,7 +452,7 @@ function RequirementTab({ opp }) {
             ))}
           </>
         ) : (
-          <p style={{ fontSize: 12.5 }}>{opp.remarks || 'No linked lead email — requirement captured at intake.'}</p>
+          <p style={{ fontSize: 12.5 }}>{opp.remarks || 'No linked lead email â€” requirement captured at intake.'}</p>
         )}
       </div>
       <div className="ana-card c-6">
@@ -551,21 +551,21 @@ function CustomerKycTab({ opp }) {
             </table>
           </>
         ) : (
-          <p className="hint">{opp.sellTo} is not in the customer master yet — treated as a new (Blue) customer.</p>
+          <p className="hint">{opp.sellTo} is not in the customer master yet â€” treated as a new (Blue) customer.</p>
         )}
         {opp.customerStatus === 'Blue' && (
           opp.leadVerification?.status === 'Verified'
-            ? <div className="okbox">KYC verified at Lead stage — no second verification is required in the Opportunity.</div>
+            ? <div className="okbox">KYC verified at Lead stage â€” no second verification is required in the Opportunity.</div>
             : <WarnBox>Blue class: AH clearance required before proposal release.</WarnBox>
         )}
         {opp.customerStatus === 'Red' && (
-          <WarnBox>Red class: KYC not required — continuation gated by joint LJS+AH (AP-1).</WarnBox>
+          <WarnBox>Red class: KYC not required â€” continuation gated by joint LJS+AH (AP-1).</WarnBox>
         )}
         {opp.customerStatus === 'Amber' && (
           opp.leadVerification?.status === 'Confirmed'
-            ? <div className="okbox"><b>Amber processing fee:</b> confirmed at Lead stage — no second confirmation is required in the Opportunity.</div>
+            ? <div className="okbox"><b>Amber processing fee:</b> confirmed at Lead stage â€” no second confirmation is required in the Opportunity.</div>
             : <div className={opp.amberFeePaid ? 'okbox' : 'warnbox'}>
-              <b>Amber pre-quote fee:</b> ₹ {fmt(fee.amount)} — {opp.amberFeePaid ? 'received' : `pending (${fee.days}-day window)`}
+              <b>Amber pre-quote fee:</b> â‚¹ {fmt(fee.amount)} â€” {opp.amberFeePaid ? 'received' : `pending (${fee.days}-day window)`}
               {!opp.amberFeePaid && (
                 <div style={{ marginTop: 6 }}>
                   <button onClick={() => store.updateOpportunity(opp.id, { amberFeePaid: true })}>Simulate fee received</button>
@@ -613,15 +613,15 @@ function CustomerKycTab({ opp }) {
               <Chip tone={kycTone(k.state)}>{k.state}</Chip>
               {k.when && <span className="hint">{k.when}</span>}
               <span style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
-                {/* Both paths stay on every row, Verified included — otherwise a
+                {/* Both paths stay on every row, Verified included â€” otherwise a
                     fully verified checklist offers no way to replace a document
                     or re-run the demo. */}
                 <button disabled={!customer || !!busy} onClick={() => pick(k.name)}
                   title="Attach the actual document">
-                  {busy === k.name ? 'Uploading…' : k.file ? 'Replace…' : 'Upload…'}
+                  {busy === k.name ? 'Uploadingâ€¦' : k.file ? 'Replaceâ€¦' : 'Uploadâ€¦'}
                 </button>
                 <button disabled={!customer || !!busy} onClick={() => setState(k.name, 'Uploaded')}
-                  title="Demo only — flips the state without a document">Simulate upload</button>
+                  title="Demo only â€” flips the state without a document">Simulate upload</button>
                 {k.state === 'Uploaded' && (
                   <>
                     <button className="primary" disabled={!canVerify} title={canVerify ? '' : 'Only AH verifies KYC'}
@@ -642,7 +642,7 @@ function CustomerKycTab({ opp }) {
                   <Icon name="eye" size={12} />
                 </button>
                 {k.file.cloud === false && (
-                  <span className="hint"><Icon name="alert" size={11} /> cloud copy failed — kept locally</span>
+                  <span className="hint"><Icon name="alert" size={11} /> cloud copy failed â€” kept locally</span>
                 )}
               </div>
             )}
@@ -714,7 +714,7 @@ function ClarificationsTab({ opp }) {
     }
   }
 
-  // Deterministic template — also the fallback when Gemini can't be reached.
+  // Deterministic template â€” also the fallback when Gemini can't be reached.
   const templateDraft = () => {
     const qs = open.map((c, i) => `${i + 5}. ${c.q}`).join('\n')
     return [
@@ -748,7 +748,7 @@ function ClarificationsTab({ opp }) {
       from: sender.address,
       to: opp.contactEmail || customer?.email || '',
       cc: sender.cc,
-      subject: `Clarifications — ${opp.oppName}`,
+      subject: `Clarifications â€” ${opp.oppName}`,
       body: text?.trim() || templateDraft(),
     })
     setSendErr('')
@@ -810,15 +810,15 @@ function ClarificationsTab({ opp }) {
     <div>
       <div className="toolbar">
         <button onClick={suggest} disabled={!!busy}>
-          <Icon name="sparkles" size={13} /> {busy === 'suggest' ? 'Thinking…' : 'AI: suggest questions'}
+          <Icon name="sparkles" size={13} /> {busy === 'suggest' ? 'Thinkingâ€¦' : 'AI: suggest questions'}
         </button>
         <button onClick={openDraft} disabled={!open.length || !!busy}
           title={open.length ? '' : 'No open questions to draft from'}>
-          <Icon name="mail" size={13} /> {busy === 'draft' ? 'Drafting…' : 'AI: draft email'}
+          <Icon name="mail" size={13} /> {busy === 'draft' ? 'Draftingâ€¦' : 'AI: draft email'}
         </button>
         <span className="spacer" />
       </div>
-      {sentOk && <div className="okbox">Clarification email sent (simulated) — logged in Communications.</div>}
+      {sentOk && <div className="okbox">Clarification email sent (simulated) â€” logged in Communications.</div>}
       <div className="sheet-wrap">
         <table className="sheet">
           <thead><tr><th>ID</th><th>Category</th><th>Gap / evidence</th><th>Question</th><th>Owner</th><th>Audience</th><th>Due</th><th>Status</th><th></th></tr></thead>
@@ -828,7 +828,7 @@ function ClarificationsTab({ opp }) {
                 <td>{c.id}</td>
                 <td>{c.category}</td>
                 <td>{c.gap}<div className="hint">{c.evidence}</div></td>
-                <td>{c.q}{c.response && <div className="okbox">Response: {c.response}<div className="hint">From {c.answerSource || c.audience || 'source'}{c.answeredAt ? ` � ${ddMmmYY(c.answeredAt)}` : ''}</div>{(c.attachments || []).map(f => <div key={f.name} className="hint"><Icon name="fileText" size={11} /> {f.name}</div>)}</div>}</td>
+                <td>{c.q}{c.response && <div className="okbox">Response: {c.response}<div className="hint">From {c.answerSource || c.audience || 'source'}{c.answeredAt ? ` · ${ddMmmYY(c.answeredAt)}` : ''}</div>{(c.attachments || []).map(f => <div key={f.name} className="hint"><Icon name="fileText" size={11} /> {f.name}</div>)}</div>}</td>
                 <td>{c.owner}</td>
                 <td>{c.audience}</td>
                 <td>{ddMmmYY(c.due)}</td>
@@ -838,7 +838,7 @@ function ClarificationsTab({ opp }) {
                 </td>
               </tr>
             ))}
-            {!rows.length && <tr><td colSpan={9} className="hint">No clarifications yet — let the AI suggest questions from detected gaps.</td></tr>}
+            {!rows.length && <tr><td colSpan={9} className="hint">No clarifications yet â€” let the AI suggest questions from detected gaps.</td></tr>}
           </tbody>
         </table>
       </div>
@@ -891,7 +891,7 @@ function ClarificationsTab({ opp }) {
               <textarea rows={14} value={draft?.body || ''} onChange={e => setDraft({ ...draft, body: e.target.value })} />
             </label>
           </div>
-          <WarnBox>Human review required before sending — verify every question and the addressee.</WarnBox>
+          <WarnBox>Human review required before sending â€” verify every question and the addressee.</WarnBox>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
             <button onClick={() => setDraftOpen(false)}>Cancel</button>
             <button className="primary" onClick={approveSend}><Icon name="send" size={13} /> Open Gmail compose</button>
@@ -916,6 +916,8 @@ function SourcingTab({ opp, goTab }) {
   const [quoteFiles, setQuoteFiles] = useState([])
   const [quoteErr, setQuoteErr] = useState('')
   const [quoteBusy, setQuoteBusy] = useState(false)
+  const [vendorSimBusy, setVendorSimBusy] = useState(false)
+  const [vendorSimErr, setVendorSimErr] = useState('')
 
   const rfqBody = () => [
     'Dear Sir,',
@@ -940,6 +942,45 @@ function SourcingTab({ opp, goTab }) {
     })
     setRfqErr('')
     setRfqOpen(true)
+  }
+
+  const simulateVendorResponse = async () => {
+    setVendorSimBusy(true); setVendorSimErr('')
+    const result = await runJson('vendor.quote', {
+      oppId: opp.id,
+      oppName: opp.oppName,
+      customer: opp.sellTo,
+      product: (opp.product || []).join(', '),
+      route: opp.oppType || opp.route || '',
+      lines,
+    }, { model: store.config?.aiModel?.model })
+    if (!result?.manufacturer) {
+      setVendorSimErr('AI could not generate a vendor response. Please try again.')
+      setVendorSimBusy(false)
+      return
+    }
+    const today = new Date().toISOString().slice(0, 10)
+    const prices = Array.isArray(result.prices)
+      ? result.prices.filter(p => lines.some(l => l.id === p.lineId)).map(p => ({
+        lineId: p.lineId, unitPrice: Number(p.unitPrice) || 0, currency: p.currency || 'INR',
+        leadTime: p.leadTime || result.leadTime, notes: p.notes || '', appliedAt: new Date().toISOString(),
+      }))
+      : []
+    store.addVendorQuote(opp.id, {
+      manufacturer: result.manufacturer,
+      email: 'simulated-manufacturer@example.com',
+      subject: `Indicative quote ${result.quoteRef} - ${opp.oppName}`,
+      body: result.notes,
+      lineIds: lines.map(l => l.id),
+      status: 'Received', receivedAt: today, quoteRef: result.quoteRef,
+      leadTime: result.leadTime, notes: result.notes, prices, simulated: true,
+    })
+    store.recordAiAction(opp.id, {
+      provider: store.config?.aiModel?.provider,
+      model: store.config?.aiModel?.model,
+      action: 'vendor.quote', result,
+    })
+    setVendorSimBusy(false)
   }
 
   const sendRfq = () => {
@@ -1030,10 +1071,14 @@ function SourcingTab({ opp, goTab }) {
         <div className="ana-title">Vendor actions</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button onClick={openRfq}><Icon name="mail" size={13} /> Draft manufacturer RFQ</button>
+          <button onClick={simulateVendorResponse} disabled={vendorSimBusy} title="Ask AI to create a test vendor response">
+            <Icon name="sparkles" size={13} /> {vendorSimBusy ? 'Generating…' : 'Simulate vendor response'}
+          </button>
           <button className="primary" onClick={() => goTab('proposal')}>
             <Icon name="arrowRight" size={13} /> Route to workbench
           </button>
         </div>
+        {vendorSimErr && <ErrBox>{vendorSimErr}</ErrBox>}
         <p className="hint">Send RFQs to multiple manufacturers, attach their replies, then apply the chosen price to the opportunity line.</p>
       </div>
 
@@ -1128,11 +1173,11 @@ function ProposalTab({ opp }) {
   const [sub, setSub] = useState('edit-sheet')
   const openBuilder = () => setSub('builder')
   const openEditSheet = () => setSub('edit-sheet')
-  // Diagram 02 §3 is the Brownfield lane only — Greenfield runs Phase-1
-  // activities and Service runs the §4 survey path instead.
+  // Diagram 02 Â§3 is the Brownfield lane only â€” Greenfield runs Phase-1
+  // activities and Service runs the Â§4 survey path instead.
   const SUBS = [
     ['workbench', 'Workbench'],
-    ...(opp.context === 'Brownfield' ? [['steps', 'B-01…B-05']] : []),
+    ...(opp.context === 'Brownfield' ? [['steps', 'B-01â€¦B-05']] : []),
     ['builder', 'Builder'], ['edit-sheet', 'Edit Sheet'], ['preview', 'Preview'], ['followup', 'Follow-up'],
   ]
   return (
@@ -1163,7 +1208,7 @@ function ProposalTab({ opp }) {
 }
 
 // The real customer document, not a summary of it. Same component, same props
-// and same data the Builder's "Preview proposal" modal and the printer use — a
+// and same data the Builder's "Preview proposal" modal and the printer use â€” a
 // preview that showed anything else would be worth less than no preview at all.
 function PreviewPane({ opp, openBuilder, openEditSheet }) {
   const store = useStore()
@@ -1174,8 +1219,8 @@ function PreviewPane({ opp, openBuilder, openEditSheet }) {
     <div className="proposal-preview-pane">
       <div className="proposal-preview-toolbar">
         <span className="hint">
-          Customer-facing document · Rev {p.revision} · Read-only preview
-          {!priced && ' · prices hidden'}
+          Customer-facing document Â· Rev {p.revision} Â· Read-only preview
+          {!priced && ' Â· prices hidden'}
         </span>
         <button className="linklike" onClick={openEditSheet}>
           <Icon name="fileSheet" size={13} /> Edit in the Sheet
@@ -1199,7 +1244,7 @@ function FollowUpPane({ opp }) {
   const [fuBusy, setFuBusy] = useState(false)
   const [fuSent, setFuSent] = useState(false)
   const [escOpen, setEscOpen] = useState(false)
-  // Diagram 02 §7 "Opportunity Lost — Capture Loss Reason" and §8 competitor
+  // Diagram 02 Â§7 "Opportunity Lost â€” Capture Loss Reason" and Â§8 competitor
   // tracking. Both close-out branches live beside the follow-up loop they end.
   const [lossReason, setLossReason] = useState('')
   const [lossCompetitor, setLossCompetitor] = useState('')
@@ -1211,8 +1256,8 @@ function FollowUpPane({ opp }) {
   const age = opp.proposalDate ? ageDays(opp.proposalDate) : null
   const left = age == null ? null : validityDays - age
 
-  // Diagram 02 §7 has one revision path, not two: every revision is typed, is
-  // routed back to the B-step that owns it, and re-opens the §5 approval. This
+  // Diagram 02 Â§7 has one revision path, not two: every revision is typed, is
+  // routed back to the B-step that owns it, and re-opens the Â§5 approval. This
   // used to write an untyped R-numbered entry that did none of that, so the
   // same act had two different consequences depending on which panel raised it.
   const addRevision = () => {
@@ -1240,7 +1285,7 @@ function FollowUpPane({ opp }) {
       oppName: opp.oppName, sellTo: opp.sellTo, contactPerson: opp.contactPerson,
       quoteRef: opp.id, sentOn: opp.proposalDate, ageDays: age,
       validity: left != null && left > 0 ? `${left} of ${validityDays} days remaining` : `${validityDays} days from submission`,
-      history: (store.communications?.[opp.id] || []).map(c => `${c.ts?.slice(0, 10)} ${c.kind} → ${c.to}: ${c.subject}`),
+      history: (store.communications?.[opp.id] || []).map(c => `${c.ts?.slice(0, 10)} ${c.kind} â†’ ${c.to}: ${c.subject}`),
       senderName: ROLES[opp.owner]?.name || opp.owner,
     })
     setFuBusy(false)
@@ -1251,7 +1296,7 @@ function FollowUpPane({ opp }) {
   const sendFu = () => {
     store.addCommunication(opp.id, {
       to: opp.contactPerson || opp.sellTo,
-      subject: `Follow-up — ${opp.oppName}`,
+      subject: `Follow-up â€” ${opp.oppName}`,
       kind: 'follow-up',
     })
     setFuOpen(false)
@@ -1266,8 +1311,8 @@ function FollowUpPane({ opp }) {
           <div key={i} className="check-row">
             <b>{r.rev}</b><span>{r.note}</span>
             <Chip tone="grey">{r.status}</Chip>
-            {r.type && <Chip tone="state-Review">{r.type} → {r.step}</Chip>}
-            <span className="hint" style={{ marginLeft: 'auto' }}>{ddMmmYY(r.when)} · {r.by}</span>
+            {r.type && <Chip tone="state-Review">{r.type} â†’ {r.step}</Chip>}
+            <span className="hint" style={{ marginLeft: 'auto' }}>{ddMmmYY(r.when)} Â· {r.by}</span>
           </div>
         ))}
         {!revisions.length && <p className="hint">No revisions recorded yet.</p>}
@@ -1281,16 +1326,16 @@ function FollowUpPane({ opp }) {
         </div>
         <p className="hint" style={{ marginTop: 4 }}>
           Returns the opportunity to <b>{revSpec.step}</b>, reopens that step for sign-off, and
-          requires the whole §5 approval again before the quote can be sent.
+          requires the whole Â§5 approval again before the quote can be sent.
         </p>
       </div>
       <div className="ana-card c-6">
         <div className="ana-title">Follow-up & reminders</div>
         {age == null
-          ? <p className="hint">Not yet submitted — the validity countdown starts at the proposal date.</p>
+          ? <p className="hint">Not yet submitted â€” the validity countdown starts at the proposal date.</p>
           : left > 0
             ? <p style={{ fontSize: 12.5 }}>Validity: <b>{left} day(s) left</b> of {validityDays} (submitted {ddMmmYY(opp.proposalDate)}).</p>
-            : <WarnBox>Proposal validity expired {-left} day(s) ago — revalidate or issue a revision.</WarnBox>}
+            : <WarnBox>Proposal validity expired {-left} day(s) ago â€” revalidate or issue a revision.</WarnBox>}
         {(store.config?.reminders || []).map(r => (
           <div key={r.id} className="check-row">
             <span>{r.label}</span>
@@ -1299,11 +1344,11 @@ function FollowUpPane({ opp }) {
         ))}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
           <button onClick={openFu} disabled={fuBusy}>
-            <Icon name="sparkles" size={13} /> {fuBusy ? 'Drafting…' : 'AI: draft follow-up'}
+            <Icon name="sparkles" size={13} /> {fuBusy ? 'Draftingâ€¦' : 'AI: draft follow-up'}
           </button>
           <button onClick={() => setEscOpen(true)}><Icon name="sparkles" size={13} /> AI: escalation suggestion</button>
         </div>
-        {fuSent && <div className="okbox">Follow-up sent (simulated) — logged in Communications.</div>}
+        {fuSent && <div className="okbox">Follow-up sent (simulated) â€” logged in Communications.</div>}
         {escOpen && (
           <div className="okbox">
             Post-quotation intelligence: {age != null ? `submitted ${age} day(s) ago with no recorded customer response` : 'proposal not yet submitted'}.
@@ -1316,16 +1361,16 @@ function FollowUpPane({ opp }) {
         <div className="ana-title">Close-out</div>
         {opp.status === 'Closed' ? (
           <div className={opp.stage === 'Won' ? 'okbox' : 'warnbox'}>
-            Closed as <b>{opp.stage}</b>{opp.closedReason ? ` — ${opp.closedReason}` : ''}
+            Closed as <b>{opp.stage}</b>{opp.closedReason ? ` â€” ${opp.closedReason}` : ''}
           </div>
         ) : (
           <>
             <p className="hint">
-              A lost opportunity always carries a reason — it is what the win/loss analytics read.
+              A lost opportunity always carries a reason â€” it is what the win/loss analytics read.
             </p>
             <div style={{ display: 'grid', gap: 6 }}>
               <select value={lossReason} onChange={e => setLossReason(e.target.value)}>
-                <option value="">— loss reason (required) —</option>
+                <option value="">â€” loss reason (required) â€”</option>
                 {CLOSE_REASONS.map(r => <option key={r}>{r}</option>)}
               </select>
               <input placeholder="Competitor who won it (optional)" value={lossCompetitor}
@@ -1397,11 +1442,11 @@ function ApprovalsTab({ opp }) {
             <b>{a.id}</b>
             <span style={{ fontSize: 12.5 }}>{a.type}</span>
             <span className={`pill ${statusPill(a.status)}`}>{a.status}</span>
-            <span className="hint" style={{ marginLeft: 'auto' }}>requested by {a.requestedBy} · {ddMmmYY((a.ts || '').slice(0, 10))}</span>
+            <span className="hint" style={{ marginLeft: 'auto' }}>requested by {a.requestedBy} Â· {ddMmmYY((a.ts || '').slice(0, 10))}</span>
           </div>
           {COMMERCIAL_RX.test(a.detail || '') && !canPriceProposal(store.role) ? (
             <div className="restricted" style={{ fontSize: 12.5, margin: '6px 0' }}>
-              <Icon name="lock" size={11} /> Commercial exception — trigger values (GM% / discount / value) visible to approvers and the opportunity owner only.
+              <Icon name="lock" size={11} /> Commercial exception â€” trigger values (GM% / discount / value) visible to approvers and the opportunity owner only.
             </div>
           ) : (
             <div style={{ fontSize: 12.5, margin: '6px 0' }}>{a.detail}</div>
@@ -1427,7 +1472,7 @@ function ApprovalsTab({ opp }) {
           )}
         </div>
       ))}
-      {!rows.length && <p className="hint">No approvals raised for this opportunity yet — the builder routes them when needed.</p>}
+      {!rows.length && <p className="hint">No approvals raised for this opportunity yet â€” the builder routes them when needed.</p>}
       <Link to="/approvals"><Icon name="checkCircle" size={13} /> Open the Approvals page</Link>
     </div>
   )
@@ -1444,7 +1489,7 @@ function CommsTab({ opp }) {
         {rows.map((c, i) => (
           <div key={i} className="check-row">
             <Icon name="mail" size={13} />
-            <span><b>{c.subject}</b><div className="hint">to {c.to} · {new Date(c.ts).toLocaleString()}</div></span>
+            <span><b>{c.subject}</b><div className="hint">to {c.to} Â· {new Date(c.ts).toLocaleString()}</div></span>
             <Chip tone="grey">{c.kind}</Chip>
           </div>
         ))}
@@ -1488,7 +1533,7 @@ function FilesTab({ opp }) {
             {files.map(f => (
               <div key={f.name} className="attach-row">
                 <Icon name="fileText" size={13} /> {f.name}
-                <span className="hint" style={{ marginLeft: 'auto' }}>{f.size} · {ddMmmYY(f.date)}</span>
+                <span className="hint" style={{ marginLeft: 'auto' }}>{f.size} Â· {ddMmmYY(f.date)}</span>
               </div>
             ))}
             {!files.length && <p className="hint">Empty.</p>}

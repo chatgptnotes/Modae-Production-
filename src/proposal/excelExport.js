@@ -126,3 +126,23 @@ export function downloadProposalXlsx(args) {
 export function proposalWorkbookBase64(args) {
   return XLSX.write(buildProposalWorkbook(args), { bookType: 'xlsx', type: 'base64' })
 }
+
+// The email action sends only the customer-facing priced BoQ by default. The
+// covering letter and optional documents can still be shared explicitly, but
+// no standard terms or internal workbook sheets are sent without a choice.
+export function buildPricedBoqWorkbook({ p, opp, priced, totalQty, lineQuoted, route }) {
+  const headers = ['Sl.', 'Item Description', 'Model / Part Number', 'Total Qty', 'UOM']
+  if (priced) headers.push('Unit Price ₹', 'Total Price ₹')
+  const rows = (p.bom || []).map((line, i) => {
+    const qty = totalQty(line)
+    const row = [i + 1, line.desc || line.itemCategory || '', line.pn || '', qty, line.uom || '']
+    if (priced) row.push(lineQuoted(line), lineQuoted(line) * qty)
+    return row
+  })
+  if (priced) rows.push(['', '', '', '', 'Total', '', rows.reduce((sum, row) => sum + (Number(row.at(-1)) || 0), 0)])
+  return buildTableWorkbook(routeSheetName(route, p.revision), headers, rows)
+}
+
+export function pricedBoqWorkbookBase64(args) {
+  return XLSX.write(buildPricedBoqWorkbook(args), { bookType: 'xlsx', type: 'base64' })
+}

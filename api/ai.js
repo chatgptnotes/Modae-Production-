@@ -65,6 +65,21 @@ const fillSchema = {
   required: ['value', 'rationale'],
 }
 
+const vendorQuoteSchema = {
+  type: 'OBJECT',
+  properties: {
+    manufacturer: { type: 'STRING' },
+    quoteRef: { type: 'STRING' },
+    leadTime: { type: 'STRING' },
+    notes: { type: 'STRING' },
+    prices: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+      lineId: { type: 'STRING' }, unitPrice: { type: 'NUMBER' }, currency: { type: 'STRING' },
+      leadTime: { type: 'STRING' }, notes: { type: 'STRING' },
+    }, required: ['lineId', 'unitPrice', 'currency', 'leadTime', 'notes'] } },
+  },
+  required: ['manufacturer', 'quoteRef', 'leadTime', 'notes', 'prices'],
+}
+
 function leadPrompt(p) {
   return `${HOUSE}
 
@@ -119,6 +134,23 @@ ATTACHMENTS:
 ${cap((p.attachments || []).map(a => `${a.name}: ${a.text || ''}`).join('\n\n'), 20000) || 'none'}`
 }
 
+function vendorQuotePrompt(p) {
+  return `${HOUSE}
+
+This is a controlled QA simulation of a manufacturer response to a sourcing
+request. Generate a plausible, clearly non-binding vendor quote using the
+opportunity and requested lines. Do not claim that the quote was actually sent
+or received. Use INR unless the opportunity clearly requires another currency.
+Use realistic indicative prices and lead times; do not use zero prices. Return
+one price row for each supplied line and preserve each lineId exactly.
+
+OPPORTUNITY: ${cap(p.oppName, 300)} (${cap(p.oppId, 100)})
+CUSTOMER: ${cap(p.customer, 300)}
+PRODUCT / ROUTE: ${cap(p.product, 200)} / ${cap(p.route, 100)}
+REQUESTED LINES:
+${cap((p.lines || []).map(l => `${l.id}: ${l.pn || l.custRef || 'No part number'} - ${l.desc || 'Item'} - Qty ${l.qty || 1}`).join('\n'), 12000) || 'No priced lines are available yet; return an overall indicative response with an empty prices list.'}`
+}
+
 function inlineParts(payload) {
   return Array.isArray(payload?.aiAttachments)
     ? payload.aiAttachments
@@ -146,15 +178,15 @@ export default async function handler(req, res) {
   const task = String(input.task || '')
   const payload = input.payload || {}
   const model = /^gemini-[\w.-]+$/.test(String(input.model || '')) ? String(input.model) : DEFAULT_MODEL
-  if (!['health', 'lead.extract', 'lead.fill'].includes(task)) {
+  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote'].includes(task)) {
     return fail(res, 400, 'AI_BAD_REQUEST', `Unsupported task: ${task}`)
   }
 
-  const prompt = task === 'health' ? 'Reply with the single word: ok' : task === 'lead.fill' ? fillPrompt(payload) : leadPrompt(payload)
+  const prompt = task === 'health' ? 'Reply with the single word: ok' : task === 'lead.fill' ? fillPrompt(payload) : task === 'vendor.quote' ? vendorQuotePrompt(payload) : leadPrompt(payload)
   const requestBody = {
     contents: [{ parts: [{ text: prompt }, ...(task === 'lead.extract' ? inlineParts(payload) : [])] }],
-    generationConfig: ['lead.extract', 'lead.fill'].includes(task)
-      ? { responseMimeType: 'application/json', responseSchema: task === 'lead.fill' ? fillSchema : leadSchema }
+    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote'].includes(task)
+      ? { responseMimeType: 'application/json', responseSchema: task === 'lead.fill' ? fillSchema : task === 'vendor.quote' ? vendorQuoteSchema : leadSchema }
       : {},
   }
 
