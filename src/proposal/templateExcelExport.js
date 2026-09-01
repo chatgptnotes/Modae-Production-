@@ -18,6 +18,24 @@ const allBorders = { top: border, left: border, bottom: border, right: border }
 const rupeeFormat = '₹#,##0.00'
 const euroFormat = '€#,##0.00'
 
+const columnWidth = (worksheet, column) => worksheet.getColumn(column).width || 10
+
+function rangeWidth(worksheet, start, end = start) {
+  let width = 0
+  for (let column = start; column <= end; column++) width += columnWidth(worksheet, column)
+  return width
+}
+
+function wrappedLines(value, width) {
+  const chars = Math.max(8, Math.floor(width))
+  return clean(value).split(/\r?\n/).reduce((total, line) => total + Math.max(1, Math.ceil(line.length / chars)), 0)
+}
+
+function setWrappedHeight(worksheet, rowNumber, cells, { min = 18, max = 120, lineHeight = 15 } = {}) {
+  const lines = cells.reduce((total, cell) => Math.max(total, wrappedLines(cell.value, cell.width)), 1)
+  worksheet.getRow(rowNumber).height = Math.max(min, Math.min(max, lines * lineHeight + 3))
+}
+
 function setValue(cell, value, options = {}) {
   cell.value = value
   if (options.font) cell.font = { ...(cell.font || {}), ...options.font }
@@ -111,7 +129,17 @@ function setCoverSheet(workbook, worksheet, { p, opp, doc }) {
     MODAE_PHONE_EMAIL,
   ].filter(Boolean).join('\n'))
 
-  for (const ref of ['B22', 'B24', 'B26', 'C18', 'C20']) styleNarrative(worksheet.getCell(ref))
+  for (const ref of ['B11', 'B12', 'B13', 'B14', 'C16', 'B22', 'B24', 'B26', 'C18', 'C20']) styleNarrative(worksheet.getCell(ref))
+  setWrappedHeight(worksheet, 11, [{ value: worksheet.getCell('B11').value, width: rangeWidth(worksheet, 2, 3) }])
+  setWrappedHeight(worksheet, 12, [{ value: worksheet.getCell('B12').value, width: rangeWidth(worksheet, 2, 3) }])
+  setWrappedHeight(worksheet, 13, [{ value: worksheet.getCell('B13').value, width: rangeWidth(worksheet, 2, 3) }])
+  setWrappedHeight(worksheet, 14, [{ value: worksheet.getCell('B14').value, width: rangeWidth(worksheet, 2, 3) }])
+  setWrappedHeight(worksheet, 16, [{ value: worksheet.getCell('C16').value, width: rangeWidth(worksheet, 3, 4) }])
+  setWrappedHeight(worksheet, 18, [{ value: worksheet.getCell('C18').value, width: rangeWidth(worksheet, 3, 17) }])
+  setWrappedHeight(worksheet, 20, [{ value: worksheet.getCell('C20').value, width: rangeWidth(worksheet, 3, 17) }])
+  setWrappedHeight(worksheet, 22, [{ value: worksheet.getCell('B22').value, width: rangeWidth(worksheet, 2, 17) }])
+  setWrappedHeight(worksheet, 24, [{ value: worksheet.getCell('B24').value, width: rangeWidth(worksheet, 2, 17) }], { min: 30, max: 300, lineHeight: 15 })
+  setWrappedHeight(worksheet, 26, [{ value: worksheet.getCell('B26').value, width: rangeWidth(worksheet, 2, 17) }], { min: 45, max: 150, lineHeight: 15 })
   for (const ref of ['B6', 'B7', 'B8', 'B9', 'B16', 'B18', 'B20']) {
     worksheet.getCell(ref).font = { ...(worksheet.getCell(ref).font || {}), bold: true }
   }
@@ -175,7 +203,10 @@ function setCommercialSheet(workbook, worksheet, args) {
     setValue(worksheet.getCell(`M${row}`), { formula: `L${row}*E${row}` }, { alignment: { horizontal: 'right', vertical: 'top' } })
     setValue(worksheet.getCell(`N${row}`), unitEuro, { alignment: { horizontal: 'right', vertical: 'top' } })
     setValue(worksheet.getCell(`O${row}`), { formula: `N${row}*E${row}` }, { alignment: { horizontal: 'right', vertical: 'top' } })
-    worksheet.getRow(row).height = Math.max(30, Math.min(100, 18 + Math.ceil(clean(line.desc).length / 48) * 15))
+    setWrappedHeight(worksheet, row, [
+      { value: line.desc || line.itemCategory || '', width: columnWidth(worksheet, 3) },
+      { value: line.pn || line.custRef || '', width: columnWidth(worksheet, 4) },
+    ], { min: 30, max: 120, lineHeight: 15 })
     for (const column of ['F', 'G', 'J', 'K', 'L', 'M']) worksheet.getCell(`${column}${row}`).numFmt = rupeeFormat
     for (const column of ['N', 'O']) worksheet.getCell(`${column}${row}`).numFmt = euroFormat
     worksheet.getCell(`E${row}`).numFmt = '#,##0'
@@ -192,10 +223,11 @@ function setCommercialSheet(workbook, worksheet, args) {
   }
   const termsStart = footer + 2
   setValue(worksheet.getCell(`B${termsStart}`), doc.docTermsHeading || 'Terms & Conditions:', { font: { bold: true }, alignment: { wrapText: true } })
+  setWrappedHeight(worksheet, termsStart, [{ value: worksheet.getCell(`B${termsStart}`).value, width: columnWidth(worksheet, 2) }])
   ;(doc.docTerms || []).forEach((term, index) => {
     const row = termsStart + index + 1
     setValue(worksheet.getCell(`B${row}`), `${index + 1}. ${term.label || ''} ${term.text || ''}`.trim(), { alignment: { wrapText: true, vertical: 'top' } })
-    worksheet.getRow(row).height = Math.max(24, Math.min(75, 18 + Math.ceil(clean(term.text).length / 120) * 15))
+    setWrappedHeight(worksheet, row, [{ value: worksheet.getCell(`B${row}`).value, width: columnWidth(worksheet, 2) }], { min: 24, max: 120, lineHeight: 15 })
   })
   // Keep the template's two customer-facing columns visible and the costing block intact.
   worksheet.getColumn('B').width = 8
