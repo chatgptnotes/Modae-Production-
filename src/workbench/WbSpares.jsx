@@ -15,6 +15,7 @@ export default function WbSpares({ opp, openBuilder }) {
   const [evidence, setEvidence] = useState(null)
   const [sent, setSent] = useState(false)
   const [np, setNp] = useState({ pn: '', desc: '', qty: '1', listPrice: '' })
+  const [priceDrafts, setPriceDrafts] = useState({})
 
   const isBnk = l => String(l.priceList || '').startsWith('BNK')
   const sellINR = l => unitSellINR(l.listPrice || 0, defaultCosting, l.currency || 'EUR', isBnk(l))
@@ -27,6 +28,27 @@ export default function WbSpares({ opp, openBuilder }) {
   const expiredLines = lines.filter(l => l.priceState === 'Expired')
 
   const bumpQty = (l, d) => store.updateSparesLine(l.id, { qty: Math.max(1, (l.qty || 1) + d) })
+
+  const commitPrice = l => {
+    const raw = priceDrafts[l.id]
+    if (raw == null) return
+    const value = Number(raw)
+    if (!Number.isFinite(value) || value < 0) {
+      setPriceDrafts(drafts => ({ ...drafts, [l.id]: String(l.listPrice ?? '') }))
+      return
+    }
+    store.updateSparesLine(l.id, {
+      listPrice: value,
+      currency: 'INR',
+      priceList: 'Manual entry',
+      priceState: 'Current',
+    })
+    setPriceDrafts(drafts => {
+      const next = { ...drafts }
+      delete next[l.id]
+      return next
+    })
+  }
 
   // Selecting an alternative must carry ITS price data — keeping the
   // superseded part's price while flipping to "Current" would silently bypass
@@ -49,7 +71,8 @@ export default function WbSpares({ opp, openBuilder }) {
     if (!np.pn.trim() && !np.desc.trim()) return
     store.addSparesLine(opp.id, {
       custRef: np.pn.trim() || np.desc.trim(), pn: np.pn.trim(), desc: np.desc.trim(),
-      qty: +np.qty || 1, listPrice: +np.listPrice || 0, oem: 'Manual', leadTime: 'TBC',
+      qty: +np.qty || 1, listPrice: +np.listPrice || 0, currency: 'INR',
+      priceList: 'Manual entry', priceState: 'Current', oem: 'Manual', leadTime: 'TBC',
     })
     setNp({ pn: '', desc: '', qty: '1', listPrice: '' })
   }
@@ -114,11 +137,16 @@ export default function WbSpares({ opp, openBuilder }) {
                 </td>
                 <td className="num">
                   {comm
-                    ? <span>{fmt(l.listPrice)} {l.currency}</span>
+                    ? <input aria-label={`List price for ${l.pn || l.custRef || l.id}`} type="number" min="0" step="0.01"
+                        value={priceDrafts[l.id] ?? (l.listPrice ?? '')} style={{ width: 100 }}
+                        onChange={e => setPriceDrafts(drafts => ({ ...drafts, [l.id]: e.target.value }))}
+                        onBlur={() => commitPrice(l)} />
                     : <span className="restricted"><Icon name="lock" size={11} /> Restricted</span>}
                 </td>
                 <td>
-                  <a style={{ cursor: 'pointer' }} onClick={() => setEvidence(l)}>Price-list row</a>
+                  <a style={{ cursor: 'pointer' }} onClick={() => setEvidence(l)}>
+                    {l.priceList === 'Manual entry' ? 'Manual price' : 'Price-list row'}
+                  </a>
                 </td>
                 <td style={{ whiteSpace: 'nowrap' }}>
                   {!l.confirmed && (

@@ -917,7 +917,15 @@ export function StoreProvider({ children }) {
 
     // ---- Spares workbench --------------------------------------------------
     updateSparesLine(id, patch) {
-      setState(s => ({ ...s, sparesLines: s.sparesLines.map(l => (l.id === id ? { ...l, ...patch } : l)) }))
+      setState(s => {
+        const current = s.sparesLines.find(l => l.id === id)
+        if (!current) return s
+        const changed = Object.keys(patch || {}).filter(key => patch[key] !== current[key])
+        if (!changed.length) return s
+        const detail = changed.map(key => `${key}: ${String(current[key] ?? '')} -> ${String(patch[key] ?? '')}`).join('; ')
+        const next = { ...s, sparesLines: s.sparesLines.map(l => (l.id === id ? { ...l, ...patch } : l)) }
+        return withAudit(next, 'Spares line updated', current.oppId, `${id} — ${detail}`)
+      })
     },
     addSparesLine(oppId, line) {
       setState(s => {
