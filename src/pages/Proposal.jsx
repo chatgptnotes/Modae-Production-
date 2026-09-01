@@ -13,6 +13,7 @@ import PrintDoc from '../proposal/PrintDoc.jsx'
 import { signalsFromBom, countSignals, rackLayout, UMM_CHANNELS, RACK_SLOTS } from '../rack.js'
 import { normalizeProposal, buildPricing } from '../proposal/docProps.js'
 import ProposalSheetEditor from '../proposal/ProposalSheetEditor.jsx'
+import PartPicker from '../proposal/PartPicker.jsx'
 import { blobAttachment, pricedBoqAttachment } from '../proposal/emailAttachments.js'
 import { downloadProposalXlsx } from '../proposal/excelExport.js'
 import { routeForType } from '../seed.js'
@@ -1099,23 +1100,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           </div>
 
           <div className="toolbar">
-            <label>Add part from buyer PDF or price list:{' '}
-              <select value="" onChange={e => e.target.value !== '' && addBomLine(e.target.value)}>
-                <option value="">— select part number —</option>
-                {(p.extractedItems || []).length > 0 && <optgroup label={`Buyer PDF items${p.boqSource ? ` (${p.boqSource})` : ''}`}>
-                  {(p.extractedItems || []).map((x, i) => {
-                    const key = x.partNumber || x.customerRef || x.description || ''
-                    const exists = p.bom.some(line => (line.custRef || line.pn || '').toLowerCase() === key.toLowerCase())
-                    return <option key={`source-${i}`} value={`source:${i}`} disabled={exists}>
-                      {key || x.description} — {x.description || 'Buyer requested item'}{exists ? ' (already added)' : ''}
-                    </option>
-                  })}
-                </optgroup>}
-                <optgroup label="Price-list items">
-                  {allParts.map((x, i) => <option key={i} value={i}>{x.list} · {x.pn} — {x.desc} ({x.currency} {fmt(x.price)})</option>)}
-                </optgroup>
-              </select>
-            </label>
+            <PartPicker extractedItems={p.extractedItems} allParts={allParts} bom={p.bom} onSelect={addBomLine} />
             <span className="hint">Ad-hoc trader quotes captured in Price Lists appear here too (latest entry = reference price).</span>
           </div>
 

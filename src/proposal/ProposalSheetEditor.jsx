@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react'
 import { fmt } from '../utils.js'
 import { nextCell } from './sheetNav.js'
 import InputsWorkbook from './InputsWorkbook.jsx'
+import PartPicker from './PartPicker.jsx'
 
 // The sheet is deliberately built from native inputs: browser copy/paste and
 // keyboard focus are enough here, and keep the proposal model as the only data
@@ -92,21 +93,7 @@ export default function ProposalSheetEditor({
           <button onClick={() => boqFileRef.current?.click()} disabled={boqExtractBusy}>
             {boqExtractBusy ? 'Extracting PDF…' : 'Extract BOQ from buyer PDF'}
           </button>
-          <label>Add part from buyer PDF or price list: <select value="" onChange={e => e.target.value !== '' && addBomLine(e.target.value)}>
-            <option value="">— select part number —</option>
-            {(p.extractedItems || []).length > 0 && <optgroup label="Buyer PDF items">
-              {(p.extractedItems || []).map((x, i) => {
-                const key = x.partNumber || x.customerRef || x.description || ''
-                const exists = p.bom.some(line => (line.custRef || line.pn || '').toLowerCase() === key.toLowerCase())
-                return <option key={`source-${i}`} value={`source:${i}`} disabled={exists}>
-                  {key || x.description}{exists ? ' (already added)' : ''}
-                </option>
-              })}
-            </optgroup>}
-            <optgroup label="Price-list items">
-              {allParts.map((x, i) => <option key={i} value={i}>{x.list} · {x.pn} — {x.desc}</option>)}
-            </optgroup>
-          </select></label>
+          <PartPicker extractedItems={p.extractedItems} allParts={allParts} bom={p.bom} onSelect={addBomLine} />
           <span className="hint">Paste tab-separated cells into the editable columns. Use arrows, Enter, or Tab to move.</span>
         </div>
         {boqExtractError && <div className="errbox" role="alert">{boqExtractError}</div>}

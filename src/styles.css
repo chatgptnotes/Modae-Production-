@@ -1151,6 +1151,21 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
   resize: none; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere;
   line-height: 1.35; padding: 2px 4px;
 }
+.proposal-boq-sheet-wrap table.sheet th:nth-child(3),
+.proposal-boq-sheet-wrap table.sheet td:nth-child(3) { width: 30%; min-width: 300px; }
+.proposal-boq-sheet-wrap table.sheet th:nth-child(4),
+.proposal-boq-sheet-wrap table.sheet td:nth-child(4) { width: 24%; min-width: 220px; }
+.proposal-edit-grid .proposal-description-editor { min-height: 58px; height: 58px; }
+.part-picker { position: relative; min-width: min(520px, 100%); }
+.part-picker > label { display: grid; gap: 4px; font-size: 12px; color: var(--text-muted); font-weight: 600; }
+.part-picker > label input { min-width: min(520px, 100%); }
+.part-picker-results { position: absolute; z-index: 20; top: 100%; left: 0; right: 0; max-height: 360px; overflow-y: auto; background: var(--card-bg); border: 1px solid var(--border-color); box-shadow: 0 8px 20px rgba(0,0,0,.16); }
+.part-picker-group-label { padding: 7px 10px 4px; color: var(--text-muted); font-size: 11px; font-weight: 700; background: var(--surface); }
+.part-picker-results button { display: grid; gap: 2px; width: 100%; padding: 7px 10px; text-align: left; border: 0; border-bottom: 1px solid var(--border-color); border-radius: 0; background: transparent; }
+.part-picker-results button span { color: var(--text-muted); font-size: 11px; }
+.part-picker-results button.active, .part-picker-results button:hover:not(:disabled) { background: var(--primary-soft); }
+.part-picker-results button:disabled { opacity: .55; cursor: not-allowed; }
+.part-picker-empty { padding: 12px; color: var(--text-muted); font-size: 12px; }
 .proposal-edit-grid td:focus-within { background: #fff !important; }
 @media (max-width: 800px) {
   .proposal-sheet-fields { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
