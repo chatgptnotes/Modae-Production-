@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, REVISION_TYPES } from '../seed.js'
 import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY, gmailComposeHref } from '../utils.js'
-import { readiness, isBlocked, nextActionWith, transitionBlockers } from '../gates.js'
+import { readiness, isBlocked, nextActionWith, transitionBlockers, B_PRE_PROPOSAL_STEPS, B_PROPOSAL_STEPS } from '../gates.js'
 import { COMMERCIAL_RX } from './Approvals.jsx'
 import { Chip, ClassChip, AiBadge, Stepper, WarnBox, ErrBox, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
@@ -237,6 +237,7 @@ export default function Workbench() {
                   {item.key === 'dev' && deviationRows.length > 0 && <div className="transition-detail-list">{deviationRows.map((row, index) => <div key={`${row.term}-${index}`}><b>{row.term}</b> Â· Customer ask: {row.customerAsk || 'Not recorded'} Â· Response: {row.ourResponse || 'Pending review'}</div>)}</div>}
                   {item.severity === 'wait' && <span>Waiting for the responsible approver.</span>}
                   {item.key === 'clarifications' && <button className="exception-action" onClick={() => openTransitionTab('clarifications')}>Open clarifications</button>}
+                  {item.key === 'b-steps' && <button className="exception-action" onClick={() => openTransitionTab(item.phase === 'pre-proposal' ? 'sourcing' : 'proposal')}>Open {item.phase === 'pre-proposal' ? 'Sourcing workflow' : 'Proposal workflow'}</button>}
                   {item.key === 'kyc' && <button className="exception-action" onClick={() => openTransitionTab('customer')}>Open Customer/KYC</button>}
                   {item.key === 'required-contactPerson' && <button className="exception-action" onClick={() => openMissingContact('contactPerson')}>Edit contact person</button>}
                   {item.key === 'required-contactPhone' && <button className="exception-action" onClick={() => openMissingContact('contactPhone')}>Edit contact phone</button>}
@@ -1053,6 +1054,11 @@ function SourcingTab({ opp, goTab }) {
 
   return (
     <div className="ana-grid">
+      {opp.context === 'Brownfield' && (
+        <div className="ana-card c-12">
+          <BSteps opp={opp} steps={B_PRE_PROPOSAL_STEPS} title="Brownfield sourcing sign-off - B-01 to B-04" />
+        </div>
+      )}
       {opp.route === 'Spares' && (
         <div className="ana-card c-12 sourcing-spares-workbench">
           <WbSpares opp={opp} openBuilder={() => goTab('proposal')} />
@@ -1202,7 +1208,7 @@ function ProposalTab({ opp }) {
         : opp.route === 'Service' ? <WbService opp={opp} openBuilder={openBuilder} />
         : <WbProject opp={opp} openBuilder={openBuilder} />
       )}
-      {sub === 'steps' && <BSteps opp={opp} />}
+      {sub === 'steps' && <BSteps opp={opp} steps={B_PROPOSAL_STEPS} title="Brownfield proposal sign-off - B-05" />}
       {sub === 'builder' && (
         <>
           <PropBuilder opp={opp} openSteps={() => setSub('steps')} />

@@ -9,7 +9,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { readiness } from '../src/gates.js'
+import { readiness, transitionBlockers } from '../src/gates.js'
 import { B_STEPS, REVISION_TYPES, routeForType, contextForType } from '../src/seed.js'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
@@ -38,9 +38,29 @@ test('signing every B-step clears the Brownfield readiness block', () => {
 
 test('a partially signed chain names the next step owed', () => {
   const partial = { 'X-1': { 'B-01': { state: 'Signed', by: 'RS' } } }
-  const b = readiness(brownfieldOpp, pricedProposal, { approvals: [], bSteps: partial })
+  const b = readiness(brownfieldOpp, pricedProposal, { approvals: [], bSteps: partial }, { bStepPhase: 'pre-proposal' })
     .find(x => x.key === 'b-steps')
   assert.match(b.text, /B-02/, 'the blocker must point at the next unsigned step')
+})
+
+test('Brownfield lifecycle splits sourcing sign-off from proposal sign-off', () => {
+  const sourcingOpp = { ...brownfieldOpp, milestone: 'Sourcing' }
+  const state = { approvals: [], bSteps: { 'X-1': Object.fromEntries([
+    ...['B-01', 'B-02', 'B-03', 'B-04'].map(id => [id, { state: 'Signed', by: 'RS' }]),
+  ]) } }
+  const toProposal = transitionBlockers(sourcingOpp, 'Proposal', pricedProposal, state)
+  assert.equal(toProposal.find(b => b.key === 'b-steps'), undefined,
+    'B-01 through B-04 should clear the Sourcing to Proposal gate')
+
+  const proposalState = { ...state, bSteps: { 'X-1': {
+    ...state.bSteps['X-1'],
+    'B-05': { state: 'Signed', by: 'RS' },
+  } } }
+  const atProposal = readiness({ ...sourcingOpp, milestone: 'Proposal' }, pricedProposal, state)
+  assert.match(atProposal.find(b => b.key === 'b-steps').text, /B-05/,
+    'Proposal readiness should ask only for B-05')
+  assert.equal(readiness({ ...sourcingOpp, milestone: 'Proposal' }, pricedProposal, proposalState).find(b => b.key === 'b-steps'), undefined,
+    'B-05 should clear the proposal workflow gate')
 })
 
 test('the B-step panel is reachable and wired to the store', () => {

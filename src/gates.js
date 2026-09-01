@@ -73,10 +73,15 @@ export function commercialGate(opp, proposal, config) {
   return { ...base, needed: ['AH', 'LJS'], label: 'AH + LJS (both)' }
 }
 
+// Brownfield sign-off is split: B-01..B-04 belong to Sourcing and B-05
+// confirms the proposal before Approval.
+export const B_PRE_PROPOSAL_STEPS = B_STEPS.slice(0, 4)
+export const B_PROPOSAL_STEPS = B_STEPS.slice(4)
+
 // Full workbench readiness: everything oppBlockers raises, plus KYC, the
 // Amber pre-quote fee, and route-specific checks (spares part matching /
 // price sources, service travel confirmation, empty BoQ).
-export function readiness(opp, proposal, state) {
+export function readiness(opp, proposal, state, options = {}) {
   if (!opp) return []
   const b = [...oppBlockers(opp, proposal, state.approvals || [])]
 
@@ -128,10 +133,13 @@ export function readiness(opp, proposal, state) {
   // salesperson has signed off B-01 through B-05.
   if (opp.context === 'Brownfield') {
     const signed = (state.bSteps || {})[opp.id] || {}
-    const open = B_STEPS.filter(step => signed[step.id]?.state !== 'Signed')
+    const phase = options.bStepPhase || (MILESTONES.indexOf(opp.milestone) >= MILESTONES.indexOf('Proposal') ? 'proposal' : 'pre-proposal')
+    const stepSet = phase === 'proposal' ? B_PROPOSAL_STEPS : B_PRE_PROPOSAL_STEPS
+    const B_STEPS = stepSet
+    const open = stepSet.filter(step => signed[step.id]?.state !== 'Signed')
     if (open.length) {
       b.push({
-        key: 'b-steps', severity: 'block',
+        key: 'b-steps', severity: 'block', phase,
         text: `${open.length} of ${B_STEPS.length} workflow steps unsigned — next ${open[0].id} ${open[0].label}`,
       })
     }
@@ -337,7 +345,8 @@ export function transitionBlockers(opp, target, proposal, state) {
     // (the Amber fee, for one), so fold by key rather than showing the operator
     // the same blocker twice.
     const seen = new Set(b.map(x => x.key))
-    b.push(...readiness(opp, proposal, state).filter(x =>
+    const bStepPhase = next >= MILESTONES.indexOf('Approval') ? 'proposal' : 'pre-proposal'
+    b.push(...readiness(opp, proposal, state, { bStepPhase }).filter(x =>
       (x.severity === 'block' || x.severity === 'wait') && !seen.has(x.key)))
   }
 

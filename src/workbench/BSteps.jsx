@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
-import { B_STEPS } from '../seed.js'
+import { B_STEPS as ALL_B_STEPS } from '../seed.js'
 import { isAdminRole } from '../utils.js'
 import { Chip } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
@@ -11,8 +11,9 @@ import { Icon } from '../icons.jsx'
 // the sign-off buttons belong to the opportunity owner alone; everyone else
 // reads the ledger. `readiness()` blocks the proposal until all five are
 // signed, which is why this panel is the way out of that block.
-export default function BSteps({ opp }) {
+export default function BSteps({ opp, steps = ALL_B_STEPS, title = 'Brownfield workflow - B-01 to B-05' }) {
   const store = useStore()
+  const B_STEPS = steps
   const signed = (store.bSteps || {})[opp.id] || {}
   // An admin acts for the owner (the same latitude every other owner-scoped
   // action on the workbench gives them), nobody else.
@@ -21,8 +22,8 @@ export default function BSteps({ opp }) {
   const [reopening, setReopening] = useState({})
 
   const isSigned = id => signed[id]?.state === 'Signed'
-  const open = B_STEPS.filter(s => !isSigned(s.id))
-  const done = B_STEPS.length - open.length
+  const open = steps.filter(s => !isSigned(s.id))
+  const done = steps.length - open.length
   // Sequential: each step feeds the next, so B-0n waits on B-0(n-1).
   const nextUp = open[0]?.id
 
@@ -54,7 +55,7 @@ export default function BSteps({ opp }) {
         )}
       </div>
 
-      {B_STEPS.map(step => {
+      {steps.map(step => {
         const rec = signed[step.id]
         const ok = rec?.state === 'Signed'
         const isNext = step.id === nextUp
