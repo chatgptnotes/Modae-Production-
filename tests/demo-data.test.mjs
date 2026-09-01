@@ -123,6 +123,16 @@ test('demo mode is still the default and still self-heals', () => {
   assert.equal(noFlag.approvals.length, seedJointApprovals.length)
 })
 
+test('migrate gives duplicate spares rows separate ids', () => {
+  const s = seedState()
+  s.sparesLines = [
+    { id: 'SL-same', oppId: '2609001PP', pn: 'A' },
+    { id: 'SL-same', oppId: '2609001PP', pn: 'B' },
+  ]
+  const migrated = migrate(JSON.parse(JSON.stringify(s)))
+  assert.deepEqual(migrated.sparesLines.map(line => line.id), ['SL-same', 'SL-repair-1'])
+})
+
 // clearDemo pushes syncedOf(emptyState(...)) to Supabase, and datastore.resetAll
 // deletes every app_state row whose key is not in that map. A slice missing from
 // the synced set would be left behind on the server holding demo records, and

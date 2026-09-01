@@ -944,18 +944,21 @@ export function StoreProvider({ children }) {
         const existing = s.sparesLines.filter(l => l.oppId === oppId)
         const key = l => `${String(l.pn || l.custRef || '').toUpperCase()}|${String(l.desc || '').toLowerCase()}`
         const seen = new Set(existing.map(key))
-        const additions = rows.filter(Boolean).filter(row => {
+        const additions = []
+        rows.filter(Boolean).filter(row => {
           const k = key(row)
           if (seen.has(k)) return false
           seen.add(k)
           return true
-        }).map((row, i) => ({
-          id: mintId('SL', [...s.sparesLines, ...rows.slice(0, i)]), oppId,
+        }).forEach(row => {
+          additions.push({
+          id: mintId('SL', [...s.sparesLines, ...additions]), oppId,
           match: row.match || 'AI suggested', conf: Number(row.conf) || 0,
           confirmed: !!row.confirmed, priceList: row.priceList || 'Ad-hoc',
           priceState: row.priceState || 'Current', currency: row.currency || 'INR',
           qty: Number(row.qty) || 1, uom: row.uom || 'EA', ...row,
-        }))
+          })
+        })
         if (!additions.length) return s
         return withAudit({ ...s, sparesLines: [...s.sparesLines, ...additions] }, 'Lead lines imported', oppId, `${additions.length} line(s)`)
       })

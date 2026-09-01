@@ -87,6 +87,25 @@ export function migrate(s) {
   if (!Array.isArray(s.leadDeadlines)) s.leadDeadlines = []
   if (!s.sales) s.sales = demo ? seedSales : emptySales()
   if (!Array.isArray(s.sparesLines)) s.sparesLines = demo ? seedSparesLines : []
+  // Repair states saved while lead-imported spares lines shared one generated
+  // id. Without this, editing one row can match every duplicate and update all
+  // of them together. Keep the first id (for any existing references) and give
+  // later duplicates stable unique ids.
+  {
+    const seen = new Set()
+    let repair = 1
+    s.sparesLines = s.sparesLines.map(line => {
+      const original = String(line.id || '')
+      if (original && !seen.has(original)) {
+        seen.add(original)
+        return line
+      }
+      let id
+      do { id = `SL-repair-${repair++}` } while (seen.has(id))
+      seen.add(id)
+      return { ...line, id }
+    })
+  }
   if (!Array.isArray(s.sparesAlternatives)) s.sparesAlternatives = demo ? seedSparesAlternatives : []
   if (!s.rateSheets) s.rateSheets = seedRateSheets
   if (!Array.isArray(s.svcEstimates)) s.svcEstimates = demo ? seedSvcEstimates : []

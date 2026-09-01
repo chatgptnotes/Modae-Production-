@@ -82,6 +82,8 @@ test('sourcing prices are editable and sourcing edits are audited', () => {
     'sourcing row edits must be written to the audit trail')
   assert.match(store, /changed\.map\(key => `\$\{key\}:.*->/,
     'audit details must include before and after values')
+  assert.match(store, /mintId\('SL', \[\.\.\.s\.sparesLines, \.\.\.additions\]\)/,
+    'each imported sourcing row must receive a distinct id')
 })
 
 // ---------------------------------------------------------------------------
