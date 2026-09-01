@@ -4,6 +4,8 @@ import fs from 'node:fs'
 import ExcelJS from 'exceljs'
 import { proposalWorkbookRows, buildProposalWorkbook, buildTableWorkbook } from '../src/proposal/excelExport.js'
 import { generateProposalWorkbook } from '../src/proposal/templateExcelExport.js'
+import { buildPricing } from '../src/proposal/docProps.js'
+import { defaultCosting } from '../src/seed.js'
 
 const input = {
   p: {
@@ -69,6 +71,16 @@ test('the table workbook wraps long text inside capped columns', () => {
   assert.notEqual(sheet.C2.s.alignment.wrapText, true, 'numbers are not wrapped')
   assert.ok(sheet['!rows'][1].hpt > sheet['!rows'][2].hpt, 'the wrapped row grows taller than the short one')
   assert.equal(sheet.A1.s.font.bold, true, 'the header row is bold')
+})
+
+test('Spares proposal pricing falls back to the confirmed sourcing line', () => {
+  const p = { route: 'Spares', units: 1, costing: { ...defaultCosting }, bom: [{ pn: 'P-1', desc: 'Probe', listPrice: '', adders: [], currency: 'EUR' }] }
+  const { linePrice, lineQuoted } = buildPricing({
+    priceLists: {}, adhocParts: [],
+    sparesLines: [{ pn: 'P-1', desc: 'Probe', listPrice: 1250, currency: 'EUR' }],
+  }, p)
+  assert.equal(linePrice(p.bom[0]), 1250)
+  assert.ok(lineQuoted(p.bom[0]) > 0)
 })
 
 test('exact proposal export preserves template artwork, merges and print layout', async () => {

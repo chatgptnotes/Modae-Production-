@@ -84,6 +84,7 @@ export function normalizeProposal(pr, opp) {
 // ad-hoc trader quotes, so this needs the store, not just the proposal.
 export function buildPricing(store, p) {
   const units = p.units || 7
+  const sparesLines = p.route === 'Spares' ? (store.sparesLines || []) : []
   const allParts = [
     ...Object.entries(store.priceLists).flatMap(([list, pl]) =>
       pl.parts.map(part => ({ ...part, list, currency: pl.currency }))),
@@ -95,10 +96,22 @@ export function buildPricing(store, p) {
   ]
 
   const totalQty = (l, u = units) => lineQty(l, u)
+  const sourceLine = l => sparesLines.find(x =>
+    (l.pn && x.pn === l.pn) ||
+    (l.custRef && x.custRef === l.custRef) ||
+    (l.desc && x.desc === l.desc))
   const linePrice = l => {
     const part = allParts.find(x => x.pn === l.pn && (x.list === l.list || !l.list))
     const adderSum = (part?.adders || []).filter(a => l.adders.includes(a.code)).reduce((s, a) => s + a.price, 0)
-    return l.listPrice + adderSum
+    const storedPrice = Number(l.listPrice)
+    const sourcePrice = Number(sourceLine(l)?.listPrice)
+    const catalogPrice = Number(part?.price)
+    const basePrice = Number.isFinite(storedPrice) && storedPrice > 0
+      ? storedPrice
+      : Number.isFinite(sourcePrice) && sourcePrice > 0
+        ? sourcePrice
+        : Number.isFinite(catalogPrice) && catalogPrice > 0 ? catalogPrice : 0
+    return basePrice + adderSum
   }
   const isBnk = l => (l.list || 'BNK') === 'BNK'
   const lineCost = (l, c = p.costing) => unitCostINR(linePrice(l), c, l.currency || 'EUR', isBnk(l))
