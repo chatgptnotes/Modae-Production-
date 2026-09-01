@@ -1,5 +1,6 @@
 import XLSX from 'xlsx-js-style'
 import { MODAE_COMPANY } from '../proposalDoc.js'
+import { generateProposalWorkbook } from './templateExcelExport.js'
 
 const routeSheetName = (route, revision) => route === 'Services'
   ? `BoQ & Price-${revision}`
@@ -119,8 +120,15 @@ export function buildProposalWorkbook(args) {
   return workbook
 }
 
-export function downloadProposalXlsx(args) {
-  XLSX.writeFile(buildProposalWorkbook(args), `${args.opp.id}_Proposal_Rev_${args.p.revision}.xlsx`)
+export async function downloadProposalXlsx(args) {
+  const bytes = await generateProposalWorkbook(args)
+  const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${args.opp.id}_Proposal_Rev_${args.p.revision}.xlsx`
+  link.click()
+  setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
 export function proposalWorkbookBase64(args) {

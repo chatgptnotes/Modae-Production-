@@ -65,7 +65,7 @@ export default function SubmissionPanel({ opp }) {
           subject,
           body: `Dear Sir/Madam,\n\nPlease find our approved Techno-Commercial Proposal ${opp.id}, revision ${p.revision}.\n\nBest regards,\nModAE India Pvt Ltd`,
           attachments: [
-            proposalWorkbookAttachment({ p, opp, doc, priced, totalQty, lineQuoted, route }),
+            await proposalWorkbookAttachment({ p, opp, doc, priced, totalQty, lineQuoted, route }),
             ...enclosures,
           ],
           cc: emailCc,

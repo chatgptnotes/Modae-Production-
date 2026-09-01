@@ -1,6 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import ExcelJS from 'exceljs'
 import { proposalWorkbookRows, buildProposalWorkbook, buildTableWorkbook } from '../src/proposal/excelExport.js'
+import { generateProposalWorkbook } from '../src/proposal/templateExcelExport.js'
 
 const input = {
   p: {
@@ -66,4 +69,33 @@ test('the table workbook wraps long text inside capped columns', () => {
   assert.notEqual(sheet.C2.s.alignment.wrapText, true, 'numbers are not wrapped')
   assert.ok(sheet['!rows'][1].hpt > sheet['!rows'][2].hpt, 'the wrapped row grows taller than the short one')
   assert.equal(sheet.A1.s.font.bold, true, 'the header row is bold')
+})
+
+test('exact proposal export preserves template artwork, merges and print layout', async () => {
+  const templateBuffer = fs.readFileSync('branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx')
+  const logoBuffer = fs.readFileSync('branding/mod-ae/assets/modae-official-logo.png')
+  const output = await generateProposalWorkbook({
+    templateBuffer,
+    logoBuffer,
+    route: 'Spares',
+    p: { revision: '00', revisionDate: '2026-08-21', ourRef: '2608227RS', bidStage: 'Binding', bidType: 'Priced', addressee: 'M/s Customer', kindAttn: 'Buyer', subject: 'VMS spares', project: 'Retrofit', bom: [{ desc: 'Probe', pn: 'P-1', qtyPerUnit: 2, common: 1, spares: 0, uom: 'EA' }] },
+    opp: { id: '2608227RS', sellTo: 'Customer' },
+    doc: { letterSalutation: 'Dear Sir', letterBody: 'Offer body', letterClose: 'Best Regards', preparedBy: {}, docTerms: [{ label: 'Validity', text: '30 days' }] },
+    totalQty: line => line.qtyPerUnit + line.common + line.spares,
+    lineQuoted: () => 100,
+  })
+  const workbook = new ExcelJS.Workbook()
+  await workbook.xlsx.load(output)
+  const cover = workbook.getWorksheet('Cover Letter')
+  const firm = workbook.getWorksheet('Firm Rev-00')
+  assert.ok(cover && firm)
+  assert.ok(cover.getImages().length > 0)
+  assert.ok(firm.getImages().length > 0)
+  assert.equal(cover.pageSetup.orientation, 'portrait')
+  assert.equal(firm.pageSetup.orientation, 'landscape')
+  assert.equal(firm.pageSetup.paperSize, 9)
+  assert.equal(firm.pageSetup.fitToWidth, 1)
+  assert.equal(firm.getCell('G10').value.formula, 'F10*E10')
+  assert.equal(firm.getCell('C10').value, 'Probe')
+  assert.equal(cover.getCell('C6').value, '2608227RS')
 })

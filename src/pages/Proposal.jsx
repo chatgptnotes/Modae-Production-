@@ -70,15 +70,111 @@ const parseProposalWorkbook = (buffer, filename) => {
         rows.push(row)
       }
       const rawWidths = sheet['!cols'] || []
-      return {
-        name,
-        rows,
+      const merges = (sheet['!merges'] || []).map(merge => ({
+        s: { r: merge.s.r - range.s.r, c: merge.s.c - range.s.c },
+        e: { r: merge.e.r - range.s.r, c: merge.e.c - range.s.c },
+      }))
+       const rawRows = sheet['!rows'] || []
+       // Some proposal templates include one completely empty layout row at
+       // the top. Hide that unused row while keeping all intentional spacing
+       // below it. Merge coordinates and heights must follow the same shift.
+       const dropFirstRow = rows.length > 1 && rows[0].every(value => String(value ?? '').trim() === '')
+       const visibleRows = dropFirstRow ? rows.slice(1) : rows
+       const visibleMerges = dropFirstRow
+         ? merges.filter(merge => merge.e.r > 0).map(merge => ({
+           s: { ...merge.s, r: Math.max(0, merge.s.r - 1) },
+           e: { ...merge.e, r: merge.e.r - 1 },
+         }))
+         : merges
+       return {
+         name,
+         rows: visibleRows,
+         merges: visibleMerges,
+         heights: Array.from({ length: range.e.r - range.s.r + 1 }, (_, i) => rawRows[range.s.r + i]?.hpx || rawRows[range.s.r + i]?.hpt || 24).slice(dropFirstRow ? 1 : 0),
         // Some Excel writers emit all 16,384 column definitions. Only retain
         // the columns the sheet actually uses so the preview stays usable.
         widths: Array.from({ length: range.e.c - range.s.c + 1 }, (_, i) => rawWidths[range.s.c + i]?.wpx || 110),
       }
     }),
   }
+}
+
+const templateCellsForRow = (sheet, rowIndex) => {
+  const columnCount = sheet.widths.length || Math.max(1, ...sheet.rows.map(row => row.length))
+  const cells = []
+  for (let columnIndex = 0; columnIndex < columnCount; columnIndex++) {
+    const merge = (sheet.merges || []).find(item => item.s.r <= rowIndex && item.e.r >= rowIndex && item.s.c <= columnIndex && item.e.c >= columnIndex)
+    if (merge && (merge.s.r !== rowIndex || merge.s.c !== columnIndex)) continue
+    let colSpan = merge ? merge.e.c - merge.s.c + 1 : 1
+    const value = sheet.rows[rowIndex]?.[columnIndex] ?? ''
+    // Excel lets text flow into trailing empty cells even when no formal
+    // merge exists. Reproduce that behavior for long labels and paragraphs,
+    // but never span across another populated or merged field.
+    if (!merge && String(value).length > 35) {
+      let end = columnIndex
+      while (end + 1 < columnCount
+        && !(sheet.rows[rowIndex]?.[end + 1])
+        && !(sheet.merges || []).some(item => item.s.r <= rowIndex && item.e.r >= rowIndex && item.s.c <= end + 1 && item.e.c >= end + 1)) end++
+      colSpan = end - columnIndex + 1
+    }
+    const rowSpan = merge ? merge.e.r - merge.s.r + 1 : 1
+    const width = (sheet.widths || []).slice(columnIndex, columnIndex + colSpan).reduce((sum, item) => sum + item, 0)
+    const portrait = /cover letter|scope of work|^sow$|issues/i.test(String(sheet.name || ''))
+    const wideSheet = /firm|pricing|proposal/i.test(String(sheet.name || ''))
+    const previewWidth = portrait ? 820 : wideSheet ? 1400 : 1180
+    const totalWidth = (sheet.widths || []).reduce((sum, item) => sum + Math.max(1, Number(item) || 1), 0) || 1
+    const renderedWidth = Math.max(24, (width / totalWidth) * previewWidth)
+    // Use the width the user actually sees, rather than the source Excel
+    // width. This keeps long descriptions and terms from being clipped.
+    const rows = Math.max(1, Math.ceil(String(value).length / Math.max(12, Math.floor(renderedWidth / 7))))
+    cells.push({
+      columnIndex,
+      colSpan,
+      rowSpan,
+      value,
+      rows,
+    })
+    columnIndex += colSpan - 1
+  }
+  return cells
+}
+
+const templateColumnPercentages = (sheet, route) => {
+  const widths = sheet.widths || []
+  const sheetName = String(sheet.name || '').toLowerCase()
+  if (sheetName.includes('cover letter') || sheetName.includes('scope of work') || sheetName === 'sow') {
+    const percentages = widths.map(() => 1)
+    if (percentages.length > 0) percentages[0] = 3
+    if (percentages.length > 1) percentages[1] = 14
+    if (percentages.length > 2) percentages[2] = 18
+    const total = percentages.reduce((sum, item) => sum + item, 0) || 1
+    return percentages.map(width => `${(width / total) * 100}%`)
+  }
+  const total = widths.reduce((sum, width) => sum + Math.max(1, Number(width) || 1), 0) || 1
+  return widths.map(width => `${(Math.max(1, Number(width) || 1) / total) * 100}%`)
+}
+
+const templatePageClass = (sheet, route) => {
+  const name = String(sheet.name || '').toLowerCase()
+  const portrait = name.includes('cover letter') || name.includes('scope of work') || name === 'sow' || name.includes('issues')
+  const wide = !portrait && /firm|pricing|proposal/i.test(name)
+  return `${portrait ? 'template-page-portrait' : 'template-page-landscape'}${wide ? ' template-page-wide' : ''}`
+}
+
+const templateCellClass = (sheet, cell) => {
+  const value = String(cell.value ?? '')
+  const name = String(sheet.name || '').toLowerCase()
+  const numeric = /^\s*[₹$€£]?[-+\d.,%]+\s*$/.test(value)
+  const code = /^[A-Z0-9][A-Z0-9._\-/]{10,}$/i.test(value.replace(/\s+/g, ''))
+  const wideText = value.length >= 42 || /description|terms|conditions|address|subject|project|paragraph|letter/i.test(value)
+  return [
+    'template-workbook-cell',
+    value ? '' : 'template-workbook-empty',
+    wideText ? 'template-cell-description' : '',
+    code ? 'template-cell-code' : '',
+    numeric ? 'template-cell-number' : '',
+    !wideText && !code && !numeric && /firm|pricing|proposal/i.test(name) && value.length <= 14 ? 'template-cell-compact' : '',
+  ].filter(Boolean).join(' ')
 }
 
 function RouteTemplateTab({ route, tab, p, doc, priced, lineQuoted }) {
@@ -176,6 +272,8 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   const [referenceLoading, setReferenceLoading] = useState(false)
   const [referenceError, setReferenceError] = useState('')
   const [templatePreviewOpen, setTemplatePreviewOpen] = useState(false)
+  const [activeTemplateSheet, setActiveTemplateSheet] = useState(0)
+  const [editingTemplateCell, setEditingTemplateCell] = useState(null)
   const [templateLoading, setTemplateLoading] = useState(false)
   const [templateError, setTemplateError] = useState('')
   const [emailOpen, setEmailOpen] = useState(false)
@@ -256,6 +354,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   const referenceRows = p.referenceWorkbook?.rows || []
   const proposalTemplate = route === 'Spares' ? p.sparesProposalWorkbook : route === 'Services' ? p.serviceProposalWorkbook : null
   const proposalTemplateSheets = proposalTemplate?.sheets || []
+  const activeTemplateSheetData = proposalTemplateSheets[activeTemplateSheet] || proposalTemplateSheets[0]
   const referencePartNumber = description => String(description || '').match(/[A-Z]{1,8}[A-Z0-9]*(?:[./-][A-Z0-9]+){2,}/i)?.[0] || ''
   const referenceBom = rows => rows.map(row => {
     const pn = referencePartNumber(row.description)
@@ -327,6 +426,8 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   }
 
   const openTemplatePreview = () => {
+    setActiveTemplateSheet(0)
+    setEditingTemplateCell(null)
     setTemplatePreviewOpen(true)
   }
 
@@ -339,6 +440,19 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
       rows: sheet.rows.map((row, r) => r !== rowIndex ? row : row.map((cell, c) => c !== columnIndex ? cell : value)),
     })
     save({ ...p, [key]: { ...proposalTemplate, sheets } })
+  }
+
+  const beginTemplateCellEdit = (sheetName, rowIndex, columnIndex, value) => {
+    setEditingTemplateCell({ sheetName, rowIndex, columnIndex, value: String(value ?? '') })
+  }
+
+  const finishTemplateCellEdit = (cancel = false) => {
+    if (!editingTemplateCell) return
+    if (!cancel) {
+      const { sheetName, rowIndex, columnIndex, value } = editingTemplateCell
+      updateTemplateCell(sheetName, rowIndex, columnIndex, value)
+    }
+    setEditingTemplateCell(null)
   }
 
   const totals = computeTotals(p)
@@ -474,6 +588,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
     return n < 0 ? '0' : t
   }
   const updLine = (i, k, numeric = true) => e => {
+    if (k === 'quoted') return
     const v = k === 'quoted' ? clampQuoted(e.target.value)
       : numeric ? clampQty(e.target.value) : e.target.value
     save({ ...p, bom: p.bom.map((l, j) => (j === i ? { ...l, [k]: v } : l)) })
@@ -1005,7 +1120,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
             <span className="hint">Ad-hoc trader quotes captured in Price Lists appear here too (latest entry = reference price).</span>
           </div>
 
-          <div className="sheet-wrap">
+          <div className="sheet-wrap proposal-boq-sheet-wrap">
             <table className="sheet">
               <thead>
                 <tr>
@@ -1023,10 +1138,12 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
                     <tr key={i}>
                       <td className="rowhead">{i + 1}</td>
                       <td><input value={l.itemCategory} onChange={updLine(i, 'itemCategory', false)} placeholder="e.g. Proximity Transducer" style={{ minWidth: 140 }} /></td>
-                      <td><input value={l.desc} onChange={updLine(i, 'desc', false)} style={{ minWidth: 180 }} /></td>
+                      <td><textarea rows={2} value={l.desc} onChange={updLine(i, 'desc', false)} /></td>
                       <td>
-                        {l.pn || <span className="hint">—</span>}
-                        {l.custRef && <div className="hint" title="Customer's own item code from the tender">{l.custRef}</div>}
+                        {l.pn || l.custRef || <span className="hint">—</span>}
+                        {l.custRef && l.pn && l.custRef.trim().toLowerCase() !== l.pn.trim().toLowerCase() && (
+                          <div className="hint" title="Customer's own item code from the tender">{l.custRef}</div>
+                        )}
                       </td>
                       <td>
                         {(part?.adders || []).length
@@ -1181,27 +1298,56 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
       )}
 
       {templatePreviewOpen && (
-        <Modal title={`${route === 'Spares' ? 'Spares Firm Offer' : 'Service Proposal'} â€” ${oppId}`} onClose={() => setTemplatePreviewOpen(false)} wide className="proposal-preview-modal">
+        <Modal title={`${route === 'Spares' ? 'Spares Firm Offer' : 'Service Proposal'} - ${oppId}`} onClose={() => setTemplatePreviewOpen(false)} wide className="proposal-preview-modal">
           <div className="proposal-preview-toolbar">
-            <span className="hint">Editable Excel template Â· each tab is a worksheet Â· changes are saved to this proposal</span>
+            <span className="hint">Editable Excel template - each tab is a worksheet - changes are saved to this proposal</span>
             <button onClick={() => setTemplatePreviewOpen(false)}>Close</button>
           </div>
-          {templateLoading && <div className="hint">Loading proposal workbookâ€¦</div>}
+          {!!proposalTemplateSheets.length && <nav className="template-workbook-page-nav template-workbook-page-nav-top" aria-label="Workbook pages">
+            <button type="button" onClick={() => setActiveTemplateSheet(index => Math.max(0, index - 1))} disabled={activeTemplateSheet <= 0}>Previous page</button>
+            <div className="template-workbook-page-tabs">
+              {proposalTemplateSheets.map((sheet, index) => <button type="button" key={sheet.name} className={index === activeTemplateSheet ? 'active' : ''} onClick={() => { setEditingTemplateCell(null); setActiveTemplateSheet(index) }}>Page {index + 1} - {sheet.name.trim() || 'Sheet'}</button>)}
+            </div>
+            <button type="button" onClick={() => setActiveTemplateSheet(index => Math.min(proposalTemplateSheets.length - 1, index + 1))} disabled={activeTemplateSheet >= proposalTemplateSheets.length - 1}>Next page</button>
+          </nav>}
+          {templateLoading && <div className="hint">Loading proposal workbook...</div>}
           {templateError && <div className="errbox" role="alert">{templateError}</div>}
-          {!!proposalTemplateSheets.length && <div className="proposal-preview-scroll template-workbook-preview">
-            {proposalTemplateSheets.map((sheet, sheetIndex) => <section className="template-workbook-page" key={sheet.name}>
-              <div className="template-workbook-page-title">Page {sheetIndex + 1} · {sheet.name.trim() || 'Sheet'}</div>
+          {!!activeTemplateSheetData && <div className="proposal-preview-scroll template-workbook-preview">
+            <section className={`template-workbook-page ${templatePageClass(activeTemplateSheetData, route)}`}>
+              <div className="template-workbook-page-title">Page {activeTemplateSheet + 1} - {activeTemplateSheetData.name.trim() || 'Sheet'}</div>
               <div className="template-workbook-page-scroll">
-                <table className="sheet" style={{ minWidth: Math.min(2800, Math.max(900, sheet.widths.reduce((sum, width) => sum + width, 0))), tableLayout: 'fixed' }}>
-                  <colgroup>{sheet.widths.map((width, i) => <col key={i} style={{ width: Math.max(70, Math.min(420, width)) }} />)}</colgroup>
-                  <tbody>{sheet.rows.map((row, rowIndex) => <tr key={rowIndex}>
-                    {row.map((cell, columnIndex) => <td key={columnIndex} className={cell ? '' : 'template-workbook-empty'}>
-                      <textarea aria-label={`${sheet.name} row ${rowIndex + 1} column ${columnIndex + 1}`} rows={String(cell).length > 70 ? 3 : 1} value={cell} onChange={event => updateTemplateCell(sheet.name, rowIndex, columnIndex, event.target.value)} style={{ width: '100%', resize: 'vertical' }} />
-                    </td>)}
+                <table className="sheet template-workbook-table">
+                  <colgroup>{(activeTemplateSheetData.widths || []).map((width, i) => <col key={i} style={{ width: `${Math.max(90, Number(width) || 110)}px` }} />)}</colgroup>
+                  <tbody>{activeTemplateSheetData.rows.map((row, rowIndex) => <tr key={rowIndex} style={{ minHeight: activeTemplateSheetData.heights?.[rowIndex] || 24 }}>
+                    {templateCellsForRow(activeTemplateSheetData, rowIndex).map(cell => {
+                      const editing = editingTemplateCell
+                        && editingTemplateCell.sheetName === activeTemplateSheetData.name
+                        && editingTemplateCell.rowIndex === rowIndex
+                        && editingTemplateCell.columnIndex === cell.columnIndex
+                      return <td key={cell.columnIndex} rowSpan={cell.rowSpan} colSpan={cell.colSpan}
+                        className={`${templateCellClass(activeTemplateSheetData, cell)}${editing ? ' is-editing' : ''}`}
+                        tabIndex={editing ? -1 : 0}
+                        onClick={() => { if (!editing) beginTemplateCellEdit(activeTemplateSheetData.name, rowIndex, cell.columnIndex, cell.value) }}
+                        onDoubleClick={() => beginTemplateCellEdit(activeTemplateSheetData.name, rowIndex, cell.columnIndex, cell.value)}
+                        onKeyDown={event => {
+                          if (event.key === 'Enter' || event.key === 'F2') {
+                            event.preventDefault()
+                            beginTemplateCellEdit(activeTemplateSheetData.name, rowIndex, cell.columnIndex, cell.value)
+                          }
+                        }}>
+                        {editing ? <textarea autoFocus className="template-cell-editor" aria-label={`${activeTemplateSheetData.name} row ${rowIndex + 1} column ${cell.columnIndex + 1}`} value={editingTemplateCell.value}
+                          onChange={event => setEditingTemplateCell(current => ({ ...current, value: event.target.value }))}
+                          onBlur={() => finishTemplateCellEdit()}
+                          onKeyDown={event => {
+                            if (event.key === 'Escape') { event.preventDefault(); finishTemplateCellEdit(true) }
+                            if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); finishTemplateCellEdit() }
+                          }} /> : <span className="template-cell-value">{cell.value || '\u00a0'}</span>}
+                      </td>
+                    })}
                   </tr>)}</tbody>
                 </table>
               </div>
-            </section>)}
+            </section>
           </div>}
         </Modal>
       )}

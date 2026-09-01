@@ -123,7 +123,7 @@ export default function ProposalSheetEditor({
               return <tr key={i}>
                 <td className="rowhead">{i + 1}</td>
                 <td><input {...inputProps(i, 0, e => { paste(i, 0, e); keyNav(e, i, 0, p.bom.length, 6) })} value={l.itemCategory || ''} onChange={updLine(i, 'itemCategory', false)} /></td>
-                <td><input {...inputProps(i, 1, e => { paste(i, 1, e); keyNav(e, i, 1, p.bom.length, 6) })} value={l.desc || ''} onChange={updLine(i, 'desc', false)} /></td>
+                <td><textarea rows={2} className="proposal-description-editor" {...inputProps(i, 1, e => { paste(i, 1, e); keyNav(e, i, 1, p.bom.length, 6) })} value={l.desc || ''} onChange={updLine(i, 'desc', false)} /></td>
                 <td>{l.pn || '—'}{l.custRef && <div className="hint">{l.custRef}</div>}</td>
                 {editable.slice(2, 5).map((key, j) => <td className="num" key={key}><input type="number" min="0" {...inputProps(i, j + 2, e => { paste(i, j + 2, e); keyNav(e, i, j + 2, p.bom.length, 6) })} value={l[key] || ''} onChange={updLine(i, key)} /></td>)}
                 <td className="num"><b>{totalQty(l)}</b></td>

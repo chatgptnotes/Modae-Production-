@@ -1,4 +1,5 @@
-import { proposalWorkbookBase64, pricedBoqWorkbookBase64 } from './excelExport.js'
+import { pricedBoqWorkbookBase64 } from './excelExport.js'
+import { generateProposalWorkbook, MIME_XLSX } from './templateExcelExport.js'
 import { ENCLOSURES, enclosuresFor } from '../proposalDoc.js'
 
 export const STANDARD_TERMS_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/ModAE Standard Terms-Sales.pdf', import.meta.url).href
@@ -9,16 +10,16 @@ const ENCLOSURE_URLS = {
   [ENCLOSURES.serviceRates.filename]: SERVICE_RATE_SCHEDULE_URL,
 }
 
-export async function blobAttachment(blob, filename, mimeType) {
-  const bytes = new Uint8Array(await blob.arrayBuffer())
+const bytesBase64 = bytes => {
   let binary = ''
   for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
-  return { filename, mimeType, contentBase64: btoa(binary) }
+  return btoa(binary)
 }
 
-// The route decides the standard enclosures (proposalDoc.enclosuresFor): the
-// GTC with everything, the rate schedule with services only. Both send paths
-// call this, so what goes out can never drift from the rule.
+export async function blobAttachment(blob, filename, mimeType) {
+  return { filename, mimeType, contentBase64: bytesBase64(new Uint8Array(await blob.arrayBuffer())) }
+}
+
 export function enclosureAttachments(route) {
   return Promise.all(enclosuresFor(route).map(async enclosure => {
     const response = await fetch(ENCLOSURE_URLS[enclosure.filename])
@@ -27,18 +28,19 @@ export function enclosureAttachments(route) {
   }))
 }
 
-export function proposalWorkbookAttachment(args) {
+export async function proposalWorkbookAttachment(args) {
+  const bytes = await generateProposalWorkbook(args)
   return {
     filename: `${args.opp.id}_Proposal_Rev_${args.p.revision}.xlsx`,
-    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    contentBase64: proposalWorkbookBase64(args),
+    mimeType: MIME_XLSX,
+    contentBase64: bytesBase64(bytes),
   }
 }
 
 export function pricedBoqAttachment(args) {
   return {
     filename: `${args.opp.id}_Priced_BoQ_Rev_${args.p.revision}.xlsx`,
-    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    mimeType: MIME_XLSX,
     contentBase64: pricedBoqWorkbookBase64(args),
   }
 }

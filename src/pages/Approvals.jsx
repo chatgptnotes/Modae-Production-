@@ -153,8 +153,8 @@ export default function Approvals() {
     )
     : <div style={{ fontSize: 12.5 }}>{a.detail}</div>
 
-  // On an `anyOf` gate the named roles are alternatives, not a quorum. Saying so
-  // here stops both approvers sitting on it waiting for the other to go first.
+  // On an `anyOf` gate the named roles are alternatives, not a quorum. Joint
+  // gates deliberately omit this marker and display both outstanding roles.
   const RoleChips = ({ a }) => (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6, alignItems: 'center' }}>
       {neededOf(a).map(r => {

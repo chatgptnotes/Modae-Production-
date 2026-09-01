@@ -207,3 +207,21 @@ test('migrate repairs a persisted single-approver Red clearance', () => {
   // Other approval types keep the original single-approver backfill.
   assert.deepEqual(migrated.approvals.find(a => a.id === 'AP-2').needed, ['AH'])
 })
+
+test('migrate keeps a half-approved final quote release pending', () => {
+  const migrated = migrate({
+    ...seedState(),
+    approvals: [{
+      id: 'AP-117', oppId: 'O-1', type: 'Final quote release', approver: 'AH',
+      needed: ['AH', 'LJS'], anyOf: true, status: 'Approved',
+      decisions: { AH: { d: 'Approved', c: 'done', when: '2026-08-31T08:00:00Z' } },
+      conditions: [], decisionTs: '2026-08-31T08:00:00Z', decisionNote: 'done',
+    }],
+  })
+  const release = migrated.approvals[0]
+  assert.equal(release.status, 'Pending')
+  assert.deepEqual(release.needed, ['LJS', 'AH'])
+  assert.equal(release.anyOf, false)
+  assert.ok(release.decisions.AH)
+  assert.equal(release.decisions.LJS, undefined)
+})

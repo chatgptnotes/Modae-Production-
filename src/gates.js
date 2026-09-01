@@ -355,7 +355,9 @@ export function transitionBlockers(opp, target, proposal, state) {
     const gates = [
       { type: APPROVAL_5A, key: 'tech-approval', label: 'Technical approval (LJS or AN)', approver: 'LJS', needed: ['LJS', 'AN'], anyOf: true },
       { type: APPROVAL_5B, key: 'comm-approval', label: 'Commercial approval (AH)', approver: 'AH', needed: ['AH'] },
-      { type: APPROVAL_5C, key: 'release', label: 'Final quote release', approver: 'LJS', needed: ['LJS'] },
+      // Final quote release is a joint commercial decision. Both named
+      // approvers must sign off before the customer-facing proposal can go out.
+      { type: APPROVAL_5C, key: 'release', label: 'Final quote release', approver: 'LJS', needed: ['LJS', 'AH'] },
     ]
     for (const g of gates) {
       const { approved, pending: waiting } = approvalForRev(g.type, proposal, approvals, opp.id)

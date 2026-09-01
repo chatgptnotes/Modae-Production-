@@ -1479,9 +1479,55 @@ function ApprovalsTab({ opp }) {
 }
 
 // ---------------------------------------------------------------------------
-function CommsTab({ opp }) {
+const cleanAddress = value => typeof value === 'string' ? value.trim() : ''
+
+function CommsName({ value, email }) {
+  return <>{value}{email && <span className="hint"> &lt;{email}&gt;</span>}</>
+}
+
+function communicationRecipient(entry, opp, customer, vendorQuotes, mailbox) {
+  const raw = cleanAddress(entry.to)
+  if (raw && mailbox && raw.toLowerCase() === mailbox.toLowerCase()) {
+    return { name: 'ModAE Sales Desk', email: raw }
+  }
+  const customerEmail = cleanAddress(opp.contactEmail || customer?.email)
+  if (raw && customerEmail && raw.toLowerCase() === customerEmail.toLowerCase()) {
+    return { name: opp.contactPerson || customer?.name || opp.sellTo, email: raw }
+  }
+  if (entry.kind === 'vendor-rfq') {
+    const quote = vendorQuotes.find(q => q.subject === entry.subject)
+    if (quote?.manufacturer) return { name: quote.manufacturer, email: raw || quote.email }
+  }
+  return { name: raw || 'ModAE Sales Desk', email: '' }
+}
+
+function communicationSender(entry, opp, lead) {
+  const raw = cleanAddress(entry.from)
+  if (entry.dir === 'In') return { name: lead?.sender || raw || 'Customer', email: raw && raw !== lead?.sender ? raw : '' }
+  return { name: entry.fromName || ROLES[opp.owner]?.name || opp.owner || 'ModAE Sales Desk', email: raw }
+}
+
+function LegacyCommsTab({ opp }) {
   const store = useStore()
-  const rows = store.communications[opp.id] || []
+  const lead = [...(store.leads || []), ...(store.leadArchive || [])].find(l => l.id === opp.sourceLeadId)
+  const customer = (store.customers || []).find(c => c.name?.toLowerCase() === opp.sellTo?.toLowerCase())
+  const vendorQuotes = store.vendorQuotes?.[opp.id] || []
+  const leadRows = store.communications?.[lead?.id] || []
+  const opportunityRows = store.communications?.[opp.id] || []
+  const mailbox = store.config?.commonMailbox || 'sales@modae.demo'
+  const inbound = lead ? [{
+    id: `lead-${lead.id}`, ts: lead.ts, dir: 'In', kind: 'enquiry',
+    from: lead.from, fromName: lead.sender, to: mailbox,
+    subject: lead.subject || 'Original enquiry', body: lead.body,
+  }] : []
+  const rows = [...inbound, ...leadRows, ...opportunityRows]
+    .sort((a, b) => new Date(b.ts || 0) - new Date(a.ts || 0))
+  const formatKind = kind => ({
+    enquiry: 'Incoming enquiry', 'clarification-response': 'Customer reply',
+    clarification: 'Clarification', 'vendor-rfq': 'Manufacturer RFQ',
+    'proposal-email': 'Proposal email', submission: 'Proposal submission',
+    'follow-up': 'Follow-up', ack: 'Customer acknowledgement',
+  }[kind] || kind || 'Communication')
   return (
     <div className="ana-grid">
       <div className="ana-card c-6">
@@ -1503,6 +1549,77 @@ function CommsTab({ opp }) {
 }
 
 // ---------------------------------------------------------------------------
+function CommsTab({ opp }) {
+  const store = useStore()
+  const [selectedCommunication, setSelectedCommunication] = useState(null)
+  const lead = [...(store.leads || []), ...(store.leadArchive || [])].find(l => l.id === opp.sourceLeadId)
+  const customer = (store.customers || []).find(c => c.name?.toLowerCase() === opp.sellTo?.toLowerCase())
+  const vendorQuotes = store.vendorQuotes?.[opp.id] || []
+  const leadRows = store.communications?.[lead?.id] || []
+  const opportunityRows = store.communications?.[opp.id] || []
+  const mailbox = store.config?.commonMailbox || 'sales@modae.demo'
+  const inbound = lead ? [{
+    id: `lead-${lead.id}`, ts: lead.ts, dir: 'In', kind: 'enquiry',
+    from: lead.from, fromName: lead.sender, to: mailbox,
+    subject: lead.subject || 'Original enquiry', body: lead.body,
+  }] : []
+  const rows = [...inbound, ...leadRows, ...opportunityRows]
+    .sort((a, b) => new Date(b.ts || 0) - new Date(a.ts || 0))
+  const formatKind = kind => ({
+    enquiry: 'Incoming enquiry', 'clarification-response': 'Customer reply',
+    clarification: 'Clarification', 'vendor-rfq': 'Manufacturer RFQ',
+    'proposal-email': 'Proposal email', submission: 'Proposal submission',
+    'follow-up': 'Follow-up', ack: 'Customer acknowledgement',
+  }[kind] || kind || 'Communication')
+  return (
+    <div className="ana-grid">
+      <div className="ana-card c-6">
+        <div className="ana-title">Communication log</div>
+        {rows.map((c, i) => {
+          const sender = communicationSender(c, opp, lead)
+          const recipient = communicationRecipient(c, opp, customer, vendorQuotes, mailbox)
+          return (
+            <div key={c.id || `${c.ts}-${i}`} className="check-row communication-row" role="button" tabIndex={0}
+              onClick={() => setSelectedCommunication(c)}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedCommunication(c) } }}>
+              <Icon name="mail" size={13} />
+              <span>
+                <b>{c.subject}</b>
+                <div className="hint"><CommsName value={sender.name} email={sender.email} /> → <CommsName value={recipient.name} email={recipient.email} /> · {new Date(c.ts).toLocaleString()}</div>
+              </span>
+              <Chip tone={c.dir === 'In' ? 'Blue' : 'grey'}>{formatKind(c.kind)}</Chip>
+            </div>
+          )
+        })}
+        {!rows.length && <p className="hint">No communications logged yet.</p>}
+      </div>
+      <div className="ana-card c-6">
+        <SubmissionPanel opp={opp} />
+      </div>
+      {selectedCommunication && (() => {
+        const c = selectedCommunication
+        const sender = communicationSender(c, opp, lead)
+        const recipient = communicationRecipient(c, opp, customer, vendorQuotes, mailbox)
+        return (
+          <Modal title={c.subject || 'Communication'} onClose={() => setSelectedCommunication(null)} wide>
+            <div className="communication-detail">
+              <div className="communication-detail-meta">
+                <div><b>From</b><span><CommsName value={sender.name} email={sender.email} /></span></div>
+                <div><b>To</b><span><CommsName value={recipient.name} email={recipient.email} /></span></div>
+                {c.cc && <div><b>CC</b><span>{c.cc}</span></div>}
+                <div><b>Date</b><span>{c.ts ? new Date(c.ts).toLocaleString() : '—'}</span></div>
+                <div><b>Type</b><span>{formatKind(c.kind)}</span></div>
+              </div>
+              <div className="communication-detail-body">{c.body || 'No message body was recorded for this communication.'}</div>
+              {(c.attachmentNames || []).length > 0 && <div className="communication-detail-attachments"><b>Attachments</b><span>{c.attachmentNames.join(' · ')}</span></div>}
+            </div>
+          </Modal>
+        )
+      })()}
+    </div>
+  )
+}
+
 function FilesTab({ opp }) {
   const store = useStore()
   const folders = store.files[opp.id] || Object.fromEntries(SUBFOLDERS.map(f => [f, []]))

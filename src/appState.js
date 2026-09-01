@@ -186,20 +186,34 @@ export function migrate(s) {
       nextActionOwner: o.nextActionOwner || '',
     }
   })
-  s.approvals = s.approvals.map(a => ({
-    // Type-aware, deliberately. A blanket `[a.approver]` backfill blessed every
-    // Red clearance saved before the joint-approval fix as a single-LJS gate —
-    // and migrate() runs on every boot and every server hydrate, so it made the
-    // wrong shape permanent instead of repairing it.
-    needed: a.type === 'Red customer clearance'
+  s.approvals = s.approvals.map(a => {
+    // Type-aware, deliberately. These gates are joint even when an older
+    // persisted row was created with only `approver` or `anyOf`.
+    const joint = a.type === 'Red customer clearance' || a.type === 'Final quote release'
+    const needed = joint
       ? ['LJS', 'AH']
-      : a.needed || [a.approver].filter(Boolean),
-    decisions: a.decisions
+      : a.needed || [a.approver].filter(Boolean)
+    const decisions = a.decisions
       || (a.status && a.status !== 'Pending' && a.approver
         ? { [a.approver]: { d: a.status, c: a.decisionNote || '', when: a.decisionTs || '' } }
-        : {}),
-    ...a,
-  }))
+        : {})
+    const decided = (a.anyOf && !joint)
+      ? needed.some(r => decisions[r])
+      : needed.every(r => decisions[r])
+    const rejected = Object.values(decisions).some(d => d.d === 'Rejected')
+    const returned = Object.values(decisions).some(d => d.d === 'Returned')
+    const status = rejected ? 'Rejected'
+      : !decided ? 'Pending'
+      : returned ? 'Returned'
+      : (a.conditions || []).length ? 'Approved with conditions' : 'Approved'
+    return {
+      ...a,
+      needed,
+      ...(joint ? { anyOf: false } : {}),
+      decisions,
+      status,
+    }
+  })
   return s
 }
 

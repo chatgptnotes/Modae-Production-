@@ -130,6 +130,21 @@ test('a release approval covers only the revision it approved', () => {
     'approvals recorded before `rev` existed stay valid')
 })
 
+test('final quote release requires both AH and LJS', () => {
+  const state = poState({})
+  state.approvals = [
+    { id: 'AP-1', oppId: 'OP-1', type: 'Technical approval', rev: '01', status: 'Approved' },
+    { id: 'AP-2', oppId: 'OP-1', type: 'Commercial approval', rev: '01', status: 'Approved' },
+  ]
+  const blockers = transitionBlockers(
+    { ...baseOpp, milestone: 'Approval' }, 'Submitted', releasedProposal, state,
+  )
+  const release = blockers.find(b => b.key === 'release')
+  assert.ok(release, 'the final quote release gate must be present')
+  assert.deepEqual(release.needed, ['LJS', 'AH'])
+  assert.equal(release.anyOf, false)
+})
+
 test('revising a released quote re-blocks the Submitted milestone', () => {
   const state = poState({})
   const submitted = proposal => transitionBlockers(
@@ -204,15 +219,14 @@ test('the §5C margin matrix routes on order value and margin', () => {
   assert.ok(!big.anyOf, 'above ₹10 Lakh both AH and LJS must decide')
 })
 
-// §5C's "< 10 Lakh & <= 50%" row is drawn as "AH OR LJS", and §5A technical as
-// "LJS OR AN". recordDecision used to resolve with needed.every(), so both of
-// those sat waiting for a second signature that the diagram never asked for.
+// §5A technical remains "LJS OR AN". recordDecision must continue honoring
+// that anyOf gate while final quote release uses a joint AH + LJS decision.
 test('an either-or approval clears on one decision', () => {
   const store = read('src/store.jsx')
   assert.match(store, /appr\.anyOf \? needed\.some\(r => decisions\[r\]\) : needed\.every\(r => decisions\[r\]\)/,
     'recordDecision must honour anyOf')
   const builder = read('src/workbench/PropBuilder.jsx')
-  assert.match(builder, /anyOf: !!gate\.anyOf/, 'the §5C release must carry the gate\'s anyOf flag')
+  assert.match(builder, /needed: \['LJS', 'AH'\], anyOf: false/, 'the §5C release must be joint')
   assert.match(builder, /anyOf: !!bl\.anyOf/, 'a blocker-raised approval must carry its anyOf flag')
 })
 

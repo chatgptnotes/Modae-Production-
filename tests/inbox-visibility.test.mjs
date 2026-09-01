@@ -84,6 +84,15 @@ test('the simulator modal asks for project type before opportunity type', () => 
   assert.doesNotMatch(inbox, /Generate missing-info lead/)
 })
 
+test('converted leads have a dedicated tab and linked opportunity marker', () => {
+  assert.match(inbox, /\['converted', 'Opportunity'\]/)
+  assert.match(inbox, /mailTab === 'converted'\) return l\.status === 'Converted'/)
+  assert.match(inbox, /tab === 'converted' \? l\.status === 'Converted'/)
+  assert.match(inbox, /className="mail-opportunity-link"/)
+  assert.match(inbox, /nav\('\/opp\/' \+ l\.oppId\)/)
+  assert.match(inbox, /<span className="pill Green">Opportunity<\/span>/)
+})
+
 test('every missing-information row offers manual and simulation actions', () => {
   assert.match(inbox, /fillFor\?\.item !== m[\s\S]{0,500}Simulate/)
   assert.doesNotMatch(inbox, /isSimulationLead\s*&&[\s\S]{0,100}Simulate/)

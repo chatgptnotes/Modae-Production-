@@ -344,6 +344,59 @@ select, input[type=text], input[type=number], input[type=date], input[type=tel],
 
 /* Pipeline-report grid: navy header band like the real sheet */
 .sheet-wrap { overflow-x: auto; background: #fff; border: 1px solid var(--grid-line); }
+.proposal-boq-sheet-wrap { overflow-x: hidden; }
+.proposal-boq-sheet-wrap table.sheet { width: 100%; table-layout: fixed; }
+.proposal-boq-sheet-wrap table.sheet th,
+.proposal-boq-sheet-wrap table.sheet td { white-space: normal; overflow-wrap: anywhere; vertical-align: top; }
+.proposal-boq-sheet-wrap table.sheet th:nth-child(3),
+.proposal-boq-sheet-wrap table.sheet td:nth-child(3) { width: 24%; min-width: 220px; }
+.proposal-boq-sheet-wrap table.sheet th:nth-child(4),
+.proposal-boq-sheet-wrap table.sheet td:nth-child(4) { width: 20%; min-width: 180px; }
+.proposal-boq-sheet-wrap table.sheet td input,
+.proposal-boq-sheet-wrap table.sheet td select,
+.proposal-boq-sheet-wrap table.sheet td textarea { min-width: 0; max-width: 100%; box-sizing: border-box; white-space: normal; }
+.proposal-boq-sheet-wrap table.sheet td textarea { width: 100%; resize: none; line-height: 1.35; }
+.proposal-boq-sheet-wrap table.sheet td:nth-child(11) input { pointer-events: none; background: var(--border-soft); color: var(--text-muted); }
+.proposal-boq-sheet-wrap table.sheet td:nth-child(11) { background: var(--border-soft) !important; color: var(--text-muted); }
+.proposal-boq-sheet-wrap table.sheet th.internal,
+.proposal-boq-sheet-wrap table.sheet td.internal { display: none; }
+.proposal-boq-sheet-wrap table.sheet th:nth-child(1),
+.proposal-boq-sheet-wrap table.sheet td:nth-child(1) { width: 42px; }
+.proposal-boq-sheet-wrap table.sheet th:nth-child(6),
+.proposal-boq-sheet-wrap table.sheet td:nth-child(6),
+.proposal-boq-sheet-wrap table.sheet th:nth-child(7),
+.proposal-boq-sheet-wrap table.sheet td:nth-child(7),
+.proposal-boq-sheet-wrap table.sheet th:nth-child(8),
+.proposal-boq-sheet-wrap table.sheet td:nth-child(8),
+.proposal-boq-sheet-wrap table.sheet th:nth-child(9),
+.proposal-boq-sheet-wrap table.sheet td:nth-child(9) { width: 76px; }
+@media (max-width: 900px) {
+  .proposal-boq-sheet-wrap table.sheet thead { display: none; }
+  .proposal-boq-sheet-wrap table.sheet,
+  .proposal-boq-sheet-wrap table.sheet tbody,
+  .proposal-boq-sheet-wrap table.sheet tr,
+  .proposal-boq-sheet-wrap table.sheet td { display: block; width: 100%; }
+  .proposal-boq-sheet-wrap table.sheet tbody { display: grid; gap: 12px; }
+  .proposal-boq-sheet-wrap table.sheet tbody tr { border: 1px solid var(--grid-line); padding: 10px; box-sizing: border-box; }
+  .proposal-boq-sheet-wrap table.sheet tbody td { border: 0; padding: 5px 0; }
+  .proposal-boq-sheet-wrap table.sheet tbody td::before { display: block; color: var(--text-muted); font-size: 10px; font-weight: 700; margin-bottom: 3px; }
+  .proposal-boq-sheet-wrap table.sheet tbody td:nth-child(1)::before { content: 'Sl.'; }
+  .proposal-boq-sheet-wrap table.sheet tbody td:nth-child(2)::before { content: 'Item category'; }
+  .proposal-boq-sheet-wrap table.sheet tbody td:nth-child(3)::before { content: 'Description'; }
+  .proposal-boq-sheet-wrap table.sheet tbody td:nth-child(4)::before { content: 'Model / part number'; }
+  .proposal-boq-sheet-wrap table.sheet tbody td:nth-child(5)::before { content: 'Configurable adders'; }
+  .proposal-boq-sheet-wrap table.sheet tbody td:nth-child(6)::before { content: 'Qty / unit'; }
+  .proposal-boq-sheet-wrap table.sheet tbody td:nth-child(7)::before { content: 'Common'; }
+  .proposal-boq-sheet-wrap table.sheet tbody td:nth-child(8)::before { content: 'Spares'; }
+  .proposal-boq-sheet-wrap table.sheet tbody td:nth-child(9)::before { content: 'Total quantity'; }
+  .proposal-boq-sheet-wrap table.sheet tbody td:nth-child(10)::before { content: 'UOM'; }
+  .proposal-boq-sheet-wrap table.sheet tbody td:nth-child(11)::before { content: 'Unit price (locked)'; }
+  .proposal-boq-sheet-wrap table.sheet tbody td:nth-child(12)::before { content: 'Total price'; }
+  .proposal-boq-sheet-wrap table.sheet tfoot { display: block; margin-top: 12px; }
+  .proposal-boq-sheet-wrap table.sheet tfoot tr,
+  .proposal-boq-sheet-wrap table.sheet tfoot td { display: block; width: 100%; box-sizing: border-box; }
+  .proposal-boq-sheet-wrap table.sheet tfoot td:not(:first-child) { display: none; }
+}
 table.sheet { border-collapse: collapse; width: 100%; background: #fff; }
 table.sheet th, table.sheet td {
   border: 1px solid var(--grid-line); padding: 3px 7px; font-size: 12px;
@@ -1000,7 +1053,7 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .opportunity-create-modal .create-opportunity-workspace { margin-top: 0; }
 .opportunity-create-modal .forms-card.wide { margin: 0; width: 100%; max-width: none; }
 .proposal-preview-modal {
-  top: 4vh; width: min(1180px, 94vw); max-width: none; max-height: 92vh;
+  top: 3vh; width: 95vw; max-width: 1400px; max-height: 94vh;
   overflow: hidden; padding: 16px 18px 18px;
 }
 .proposal-preview-modal > .section-title { margin: 0 0 8px; font-size: 15px; }
@@ -1010,8 +1063,8 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 }
 .proposal-preview-toolbar .forms-actions { margin: 0; }
 .proposal-preview-scroll {
-  max-height: calc(92vh - 92px); overflow: auto; margin-top: 12px;
-  padding: 12px; background: var(--surface-sunken, #eceff3); border: 1px solid var(--border-soft);
+  max-height: calc(94vh - 92px); overflow-y: auto; overflow-x: hidden; margin-top: 12px;
+  padding: 16px; background: var(--surface-sunken, #eceff3); border: 1px solid var(--border-soft);
 }
 .proposal-preview-scroll .propdoc { max-width: 820px; margin: 0 auto; }
 /* The same preview inside the opportunity workspace's Proposal → Preview tab.
@@ -1028,13 +1081,57 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .workbook-switcher button.active, .workbook-tabs button.active { background: var(--primary-fill); color: #fff; border-color: var(--primary-fill); }
 .workbook-tabs { display: flex; gap: 4px; flex-wrap: wrap; padding: 8px 0 0; border-top: 1px solid var(--grid-line); }
 .workbook-tabs button { border-radius: 3px 3px 0 0; }
-.template-workbook-preview { display: flex; flex-direction: column; gap: 18px; }
-.template-workbook-page { background: var(--surface, #fff); border: 1px solid var(--border-soft); box-shadow: 0 1px 3px rgba(0,0,0,.08); padding: 14px; }
+.template-workbook-preview { display: flex; flex-direction: column; gap: 28px; align-items: center; }
+.template-workbook-page {
+  width: 100%; box-sizing: border-box; background: var(--surface, #fff);
+  border: 1px solid var(--border-soft); box-shadow: 0 2px 8px rgba(0,0,0,.1);
+  padding: 20px 24px; overflow: visible;
+}
+.template-workbook-page.template-page-portrait { max-width: 900px; }
+.template-workbook-page.template-page-landscape { max-width: none; }
+.template-workbook-page.template-page-wide { max-width: none; }
+.template-workbook-page.template-page-wide .template-workbook-page-scroll { overflow-x: auto; overflow-y: auto; }
 .template-workbook-page-title { font-weight: 700; color: var(--text-strong); padding-bottom: 10px; border-bottom: 2px solid var(--primary-fill); margin-bottom: 10px; }
-.template-workbook-page-scroll { overflow-x: auto; }
+.template-workbook-page-scroll { overflow-x: auto; overflow-y: auto; width: 100%; max-height: calc(94vh - 190px); }
 .template-workbook-page .sheet { margin: 0; }
-.template-workbook-page .sheet textarea { min-height: 24px; border: 0; background: transparent; padding: 4px; font: inherit; color: inherit; }
-.template-workbook-page .sheet td { padding: 0; vertical-align: top; }
+.template-workbook-table { width: max-content; min-width: 100%; table-layout: auto; border-collapse: collapse; }
+.template-workbook-page .sheet td.template-workbook-cell {
+  min-width: 110px; min-height: 24px; padding: 5px 7px; vertical-align: top;
+  border: 1px solid #e2e8f0; background: #fff; white-space: normal;
+  overflow-wrap: break-word; word-break: break-word; box-sizing: border-box;
+}
+.template-workbook-page .sheet td.template-cell-description { min-width: 260px; max-width: 460px; }
+.template-workbook-page .sheet td.template-cell-code { min-width: 160px; white-space: nowrap; word-break: normal; overflow-wrap: normal; }
+.template-workbook-page .sheet td.template-cell-number { min-width: 90px; text-align: right; white-space: nowrap; word-break: normal; overflow-wrap: normal; }
+.template-workbook-page .sheet td.template-cell-compact { min-width: 110px; white-space: nowrap; }
+.template-workbook-page .sheet td.template-workbook-cell:focus,
+.template-workbook-page .sheet td.template-workbook-cell.is-editing { outline: 2px solid #107c41; outline-offset: -2px; background: #fff; }
+.template-cell-value { display: block; min-height: 14px; }
+.template-cell-editor {
+  display: block; width: 100%; min-height: 18px; border: 0; border-radius: 0;
+  background: transparent; padding: 0; margin: 0; font: inherit; line-height: 1.35;
+  color: inherit; box-sizing: border-box; outline: none; resize: none !important;
+  overflow: hidden; white-space: pre-wrap; overflow-wrap: break-word; word-break: break-word;
+}
+.template-cell-code .template-cell-editor,
+.template-cell-number .template-cell-editor { white-space: nowrap; word-break: normal; overflow-wrap: normal; }
+.template-workbook-page .sheet td.template-workbook-empty { background: #fff; }
+.template-workbook-page-nav {
+  width: 100%; display: flex; align-items: center; gap: 10px;
+  justify-content: space-between; padding: 8px 10px; box-sizing: border-box;
+  background: #fff; border: 1px solid var(--border-soft); margin-top: 10px;
+}
+.template-workbook-page-nav-top {
+  position: relative; z-index: 1;
+}
+.template-workbook-page-tabs { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; }
+.template-workbook-page-tabs button { border-radius: 3px; padding: 6px 10px; }
+.template-workbook-page-tabs button.active { background: var(--primary-fill); color: #fff; border-color: var(--primary-fill); }
+.template-workbook-page-nav button:disabled { opacity: .45; cursor: not-allowed; }
+@media (max-width: 800px) {
+  .template-workbook-page-nav { align-items: stretch; flex-wrap: wrap; }
+  .template-workbook-page-tabs { order: 3; width: 100%; }
+}
 .workbook-scroll { max-height: calc(100vh - 300px); min-height: 260px; overflow: auto; }
 .workbook-table { min-width: 980px; }
 .workbook-colour.c0 { color: var(--won-text); background: var(--won-fill); }
@@ -1047,7 +1144,13 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .proposal-sheet-editor .form-card { margin-bottom: 12px; }
 .proposal-sheet-editor textarea { display: block; width: 100%; margin-top: 5px; font: inherit; padding: 6px 8px; border: 1px solid var(--border-color); resize: vertical; }
 .proposal-edit-grid input { min-width: 100px; }
-.proposal-edit-grid td:nth-child(3) input { min-width: 220px; }
+.proposal-edit-grid td:nth-child(3) input,
+.proposal-edit-grid td:nth-child(3) textarea { min-width: 220px; }
+.proposal-edit-grid .proposal-description-editor {
+  display: block; width: 100%; min-height: 42px; height: 42px; box-sizing: border-box;
+  resize: none; overflow-y: auto; white-space: pre-wrap; overflow-wrap: anywhere;
+  line-height: 1.35; padding: 2px 4px;
+}
 .proposal-edit-grid td:focus-within { background: #fff !important; }
 @media (max-width: 800px) {
   .proposal-sheet-fields { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
@@ -1400,6 +1503,18 @@ input.needs-input, select.needs-input { background: #fffbeb; border-color: var(-
 .mail-content b { color: var(--text-main); }
 .mail-content small { display: block; overflow: hidden; margin-top: 3px; color: var(--text-subtle); text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; }
 .mail-ref { color: var(--primary-deep) !important; font-size: 10.5px; font-weight: 600; }
+.mail-opportunity-link { display: block; max-width: 100%; margin-top: 3px; padding: 0; overflow: hidden; border: 0; background: transparent; color: var(--primary-deep); font: inherit; font-size: 10.5px; font-weight: 700; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.mail-opportunity-link:hover { text-decoration: underline; }
+.mail-opportunity-link .pill { margin-right: 4px; font-size: 9px; vertical-align: 1px; }
+.communication-row { cursor: pointer; }
+.communication-row:hover, .communication-row:focus { background: var(--primary-soft); outline: none; }
+.communication-detail-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 18px; padding: 12px; background: #f8fafc; border: 1px solid var(--border-soft); border-radius: 6px; }
+.communication-detail-meta div { min-width: 0; }
+.communication-detail-meta b, .communication-detail-attachments b { display: block; margin-bottom: 3px; color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .35px; }
+.communication-detail-meta span, .communication-detail-attachments span { overflow-wrap: anywhere; font-size: 12px; }
+.communication-detail-body { min-height: 110px; margin-top: 12px; padding: 12px; border: 1px solid var(--border-soft); border-radius: 6px; background: #fff; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12.5px; line-height: 1.5; }
+.communication-detail-attachments { margin-top: 12px; padding: 9px 12px; background: #f8fafc; border-radius: 6px; }
+@media (max-width: 640px) { .communication-detail-meta { grid-template-columns: 1fr; } }
 .mail-labels { display: flex; align-items: center; justify-content: flex-start; gap: 7px; padding-right: 10px; white-space: nowrap; }
 .mail-detail-label { display: inline-flex; align-items: center; gap: 4px; }
 .mail-detail-label em { color: var(--text-subtle); font-size: 9px; font-style: normal; text-transform: uppercase; letter-spacing: .35px; }

@@ -95,6 +95,25 @@ test('the sent email is logged against the opportunity', () => {
   assert.match(proposal, /attachmentNames:/)
 })
 
+test('communications combines the inbound enquiry with all logged messages', () => {
+  assert.match(workbench, /store\.communications\?\.\[lead\?\.id\]/)
+  assert.match(workbench, /store\.communications\?\.\[opp\.id\]/)
+  assert.match(workbench, /id: `lead-\$\{lead\.id\}`.*kind: 'enquiry'/s)
+  assert.match(workbench, /\.sort\(\(a, b\) => new Date\(b\.ts \|\| 0\) - new Date\(a\.ts \|\| 0\)\)/)
+  assert.match(workbench, /ModAE Sales Desk/)
+  assert.match(workbench, /ROLES\[opp\.owner\]\?\.name/)
+  assert.match(workbench, /formatKind = kind =>/)
+})
+
+test('communication log entries open a message detail view', () => {
+  assert.match(workbench, /className="check-row communication-row"/)
+  assert.match(workbench, /setSelectedCommunication\(c\)/)
+  assert.match(workbench, /role="button" tabIndex=\{0\}/)
+  assert.match(workbench, /<Modal title=\{c\.subject \|\| 'Communication'\}/)
+  assert.match(workbench, /communication-detail-body/)
+  assert.match(workbench, /communication-detail-attachments/)
+})
+
 test('every outbound email surface exposes sender and copy recipients', () => {
   assert.match(proposal, /q-label">From<\/div>/)
   assert.match(workbench, /clarificationSender\(/)

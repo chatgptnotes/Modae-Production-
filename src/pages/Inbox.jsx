@@ -1877,6 +1877,7 @@ export default function Inbox() {
   const matchesTab = l => {
     if (mailTab === 'unread') return l.status === 'New' && !l.readAt
     if (mailTab === 'qualified') return l.status === 'Qualified'
+    if (mailTab === 'converted') return l.status === 'Converted'
     return true
   }
 
@@ -2001,7 +2002,8 @@ export default function Inbox() {
   }
   const tabCount = tab => rows.filter(l => tab === 'unread'
     ? l.status === 'New' && !l.readAt
-    : tab === 'qualified' ? l.status === 'Qualified' : true).length
+    : tab === 'qualified' ? l.status === 'Qualified'
+      : tab === 'converted' ? l.status === 'Converted' : true).length
   const sourceOptions = [...new Set(listSource.map(l => l.source || l.channel).filter(Boolean))].sort()
   const ownerOptions = [...new Set(listSource.map(l => l.suggestedOwner || 'Unassigned'))].sort()
   const filterSelect = (value, onChange, label, options, short) => (
@@ -2108,7 +2110,7 @@ export default function Inbox() {
       )}
 
       <div className="mail-tabs" role="tablist" aria-label="Mailbox views">
-        {[['primary', 'Primary'], ['unread', 'Unread'], ['qualified', 'Qualified']].map(([key, label]) => (
+        {[['primary', 'Primary'], ['unread', 'Unread'], ['qualified', 'Qualified'], ['converted', 'Opportunity']].map(([key, label]) => (
           <button key={key} role="tab" aria-selected={mailTab === key} className={mailTab === key ? 'active' : ''} onClick={() => setMailTab(key)}>
             <span>{label}</span><b>{tabCount(key)}</b>
           </button>
@@ -2155,7 +2157,7 @@ export default function Inbox() {
               <button className={`mail-star ${l.starred ? 'starred' : ''}`} title={l.starred ? 'Remove star' : 'Star'} onClick={e => { e.stopPropagation(); store.updateLead(l.id, { starred: !l.starred }) }}><Icon name="star" size={15} /></button>
               <div className="mail-date"><b>{ddMmmYY((l.ts || '').slice(0, 10))}</b><small>{receivedTime(l.ts)}</small></div>
               <div className="mail-sender" title={[l.source || l.channel || 'Common mailbox', l.sender || l.from].filter(Boolean).join(' — ')}><b>{l.source || l.channel || 'Common mailbox'}</b><small>{l.sender || l.from}</small></div>
-              <div className="mail-content" title={l.subject}><b>{l.subject}</b>{l.ref && <span className="mail-ref"> · {l.ref}</span>}<small>{l.ai?.summary || l.body?.replace(/\s+/g, ' ').slice(0, 130) || 'No preview available'}</small></div>
+              <div className="mail-content" title={l.subject}><b>{l.subject}</b>{l.ref && <span className="mail-ref"> · {l.ref}</span>}{l.status === 'Converted' && l.oppId && <button className="mail-opportunity-link" onClick={e => { e.stopPropagation(); nav('/opp/' + l.oppId) }} title="Open linked opportunity"><span className="pill Green">Opportunity</span> {l.oppId}</button>}<small>{l.ai?.summary || l.body?.replace(/\s+/g, ' ').slice(0, 130) || 'No preview available'}</small></div>
               <div><Chip tone="grey">{route}</Chip></div>
               <div><Chip tone={l.urgency === 'Urgent' ? 'state-Rejected' : 'grey'}>{l.urgency || 'Normal'}</Chip></div>
               <div><Chip tone={l.duplicateRisk === 'Medium' || l.duplicateRisk === 'High' ? 'conf-med' : 'grey'}>{l.duplicateRisk || 'Low'}</Chip></div>
@@ -2169,12 +2171,15 @@ export default function Inbox() {
         {!mailboxRows.length && (
           <div className="mail-empty">
             <Icon name="mail" size={28} />
-            {hiddenByOwner > 0 ? <>
-              <b>{hiddenByOwner} lead{hiddenByOwner === 1 ? '' : 's'} here, none assigned to you</b>
-              <span>Leads are routed to an owner by the AI region rules, so a lead you created can belong to someone else.</span>
-              <button className="primary" onClick={() => setShowAll(true)}>Show all leads</button>
-            </> : <>
-              <b>No messages here</b>
+             {hiddenByOwner > 0 ? <>
+               <b>{hiddenByOwner} lead{hiddenByOwner === 1 ? '' : 's'} here, none assigned to you</b>
+               <span>Leads are routed to an owner by the AI region rules, so a lead you created can belong to someone else.</span>
+               <button className="primary" onClick={() => setShowAll(true)}>Show all leads</button>
+             </> : mailTab === 'converted' ? <>
+               <b>No opportunities here</b>
+               <span>Leads converted into opportunities will appear in this tab.</span>
+             </> : <>
+               <b>No messages here</b>
               <span>Try another mailbox tab or change your filters.</span>
             </>}
           </div>

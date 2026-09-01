@@ -97,9 +97,10 @@ export default function PropBuilder({ opp, openSteps }) {
     store.requestApproval({
       oppId: opp.id, type: 'Final quote release', rev,
       detail: `GM ${gate.gmPct.toFixed(1)}% — ${gate.label}`,
-      // §5C's "< ₹10 L & <= 50%" row reads "AH OR LJS" — commercialGate marks
-      // it `anyOf`, so one of the two named approvers is enough.
-      approver: gate.needed[0], needed: gate.needed, anyOf: !!gate.anyOf,
+      // Final quote release is a joint AH + LJS decision. The commercial gate
+      // still determines the routing context, but neither approver can release
+      // the quote alone.
+      approver: 'LJS', needed: ['LJS', 'AH'], anyOf: false,
     })
     store.updateOpportunity(opp.id, { milestone: 'Approval' })
     store.saveProposal(opp.id, {
