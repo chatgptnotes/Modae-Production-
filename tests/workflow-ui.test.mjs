@@ -65,6 +65,10 @@ test('spares confirmation workbench is reachable before Sourcing advances', () =
   const workbench = read('src/pages/Workbench.jsx')
   assert.match(workbench, /opp\.route === 'Spares' && \(\s*<div className="ana-card c-12 sourcing-spares-workbench">\s*<WbSpares opp=\{opp\}/s,
     'Spares opportunities must expose line confirmations on the Sourcing tab')
+  const spares = read('src/workbench/WbSpares.jsx')
+  assert.match(spares, /Request price update/, 'expired price blockers must have a visible recovery action')
+  const styles = read('src/styles.css')
+  assert.match(styles, /\.sourcing-spares-workbench \.sheet th:last-child/, 'the recovery Actions column must stay visible on wide sheets')
 })
 
 // ---------------------------------------------------------------------------

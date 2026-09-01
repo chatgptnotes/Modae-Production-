@@ -3656,3 +3656,27 @@ table.sheet td .wrapcell:focus { outline: 2px solid var(--xl-green); background:
   white-space: nowrap;
   border: 0;
 }
+.sourcing-spares-workbench .sheet th:last-child,
+.sourcing-spares-workbench .sheet td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  min-width: 220px;
+  box-shadow: -6px 0 8px rgba(20, 25, 35, .08);
+}
+
+.sourcing-spares-workbench .sheet th:last-child {
+  background: var(--ink, #20242b);
+}
+
+.sourcing-spares-workbench .sheet td:last-child {
+  background: var(--paper, #fff);
+}
+
+.sourcing-spares-workbench .sheet tbody tr:nth-child(even) td:last-child {
+  background: var(--surface, #f6f7f8);
+}
+
+.spares-price-warning {
+  margin: 0 0 10px;
+}

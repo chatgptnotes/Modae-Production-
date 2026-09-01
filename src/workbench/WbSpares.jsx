@@ -24,6 +24,7 @@ export default function WbSpares({ opp, openBuilder }) {
     cogs: t.cogs + costINR(l) * (l.qty || 0),
   }), { value: 0, cogs: 0 })
   const gmPct = totals.value ? ((totals.value - totals.cogs) / totals.value) * 100 : 0
+  const expiredLines = lines.filter(l => l.priceState === 'Expired')
 
   const bumpQty = (l, d) => store.updateSparesLine(l.id, { qty: Math.max(1, (l.qty || 1) + d) })
 
@@ -61,6 +62,12 @@ export default function WbSpares({ opp, openBuilder }) {
   return (
     <div>
       <div className="section-title">Spares workbench — part matching ({lines.length} line{lines.length === 1 ? '' : 's'})</div>
+      {!!expiredLines.length && (
+        <div className="warnbox spares-price-warning">
+          <b>{expiredLines.length} price source{expiredLines.length === 1 ? '' : 's'} expired.</b>{' '}
+          Use <b>Request price update</b> in the pinned Actions column, or apply a current manufacturer quote, before moving to Proposal.
+        </div>
+      )}
       <div className="sheet-wrap">
         <table className="sheet">
           <thead>
