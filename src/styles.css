@@ -1255,17 +1255,33 @@ tr.rowclick { cursor: pointer; }
 .drawer-panel .check-row { flex-wrap: wrap; }
 .drawer-panel .drawer-panel-chips { margin-top: 8px; }
 .drawer-panel .drawer-panel-actions { margin-top: 10px; }
-.opportunity-details-editor { padding: 0 0 12px; }
-.opportunity-details-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
-.opportunity-details-group { margin: 14px 0 7px; padding-bottom: 4px; border-bottom: 1px solid var(--grid-line); color: var(--text-muted); font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
-.opportunity-details-grid { gap: 10px 12px; }
-.opportunity-details-editor .pill-group { max-height: 190px; overflow: auto; }
+.opportunity-details-editor { padding: 0 0 8px; }
+.opportunity-details-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.opportunity-details-heading .hint { font-size: 11px; line-height: 1.25; }
+.opportunity-details-group { margin: 9px 0 4px; padding-bottom: 2px; border-bottom: 1px solid var(--grid-line); color: var(--text-muted); font-size: 10px; line-height: 1.2; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.opportunity-details-grid { gap: 5px 10px; }
+.opportunity-details-grid > div > label { margin-bottom: 1px; font-size: 10.5px; line-height: 1.15; }
+.opportunity-details-grid input[type=text], .opportunity-details-grid input[type=tel], .opportunity-details-grid select { min-height: 22px; padding: 2px 5px; font-size: 11.5px; }
+.opportunity-details-grid .ro { min-height: 22px; padding: 2px 5px; font-size: 11.5px; }
 .opportunity-details-dirty { flex: none; color: var(--warn-text); font-size: 11px; font-weight: 700; }
-.opportunity-details-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--grid-line); }
-.workbench-details-editor { background: #fff; border: 1px solid var(--border-soft); border-radius: 8px; padding: 14px 16px; margin-bottom: 10px; box-shadow: 0 2px 8px rgba(15,23,42,.04); }
+.opportunity-details-actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--grid-line); }
+.opportunity-details-actions button { padding: 3px 9px; font-size: 11.5px; }
+.workbench-details-editor { background: #fff; border: 1px solid var(--border-soft); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; box-shadow: 0 2px 8px rgba(15,23,42,.04); }
 .workbench-details-editor .opportunity-details-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 @media (max-width: 900px) { .workbench-details-editor .opportunity-details-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 620px) { .workbench-details-editor .opportunity-details-grid { grid-template-columns: 1fr; } }
+.compact-product-picker { position: relative; min-width: 0; }
+.compact-product-trigger { display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%; min-height: 22px; padding: 2px 5px; border: 1px solid var(--border-color); border-radius: 2px; background: #fff; color: var(--text-main); font: inherit; font-size: 11.5px; text-align: left; }
+.compact-product-trigger:hover, .compact-product-trigger:focus-visible { border-color: var(--primary-accent); filter: none; }
+.compact-product-trigger span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.compact-product-trigger:not(.has-selection) { color: var(--text-muted); }
+.compact-product-caret { flex: none; color: var(--text-muted); font-size: 11px; }
+.compact-product-menu { position: absolute; z-index: 30; top: calc(100% + 3px); left: 0; min-width: 100%; width: max-content; max-width: min(300px, 90vw); max-height: 220px; overflow-y: auto; padding: 4px; border: 1px solid var(--text-subtle); background: #fff; box-shadow: 2px 3px 10px rgba(0,0,0,.28); color: var(--text-main); }
+.compact-product-option { display: flex; align-items: center; gap: 5px; padding: 3px 6px; cursor: pointer; font-size: 11.5px; line-height: 1.2; white-space: nowrap; }
+.compact-product-option:hover { background: var(--select-fill); }
+.compact-product-option input { margin: 0; }
+.compact-product-menu-actions { display: flex; justify-content: flex-end; gap: 4px; margin-top: 3px; padding: 4px 2px 0; border-top: 1px solid var(--border-soft); }
+.compact-product-menu-actions button { padding: 2px 7px; font-size: 11px; }
 .drawer-form .fgroup, .drawer-propsum .fgroup, .drawer-body .fgroup {
   font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
   color: var(--text-muted); border-bottom: 1px solid var(--grid-line);
