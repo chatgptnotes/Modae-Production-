@@ -8,10 +8,10 @@
 //
 // Two things worth knowing before you change this:
 //
-//   * Both families are served as VARIABLE fonts. Asking the css2 API for
-//     `wght@500;600;700` returns three @font-face rules pointing at the same
-//     file, so we keep one file per family+subset and declare a weight *range*.
-//     Downloading per weight would triple the payload for nothing.
+//   * Inter is served as a VARIABLE font. Asking the css2 API for multiple
+//     weights returns multiple @font-face rules pointing at the same file, so
+//     we keep one file per subset and declare a weight *range*. Downloading per
+//     weight would multiply the payload for nothing.
 //   * latin-ext is not optional. The rupee sign (U+20B9) lives in that subset,
 //     and this app prints ₹ on nearly every screen. Dropping it renders every
 //     price with a fallback-font rupee.
@@ -27,7 +27,7 @@ const OUT = path.join(root, 'public', 'fonts')
 
 // A browser UA is required: the css2 API serves TTF to unknown clients.
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-const SRC = 'https://fonts.googleapis.com/css2?family=Rubik:wght@500;600;700&family=Roboto:wght@400;500&display=swap'
+const SRC = 'https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap'
 const WANT = new Set(['latin', 'latin-ext'])
 
 const css = await (await fetch(SRC, { headers: { 'User-Agent': UA } })).text()
@@ -44,8 +44,8 @@ for (const [, subset, body] of css.matchAll(/\/\* ([a-z-]+) \*\/\s*@font-face \{
   seen.set(key, url)
 }
 
-if (seen.size !== 4) {
-  console.error(`expected 4 files (2 families x 2 subsets), resolved ${seen.size} — has the API changed?`)
+if (seen.size !== 2) {
+  console.error(`expected 2 files (Inter x 2 subsets), resolved ${seen.size} — has the API changed?`)
   process.exit(1)
 }
 

@@ -78,8 +78,8 @@ export const MODAE_COLORS = Object.freeze({
 })
 
 export const MODAE_TYPE = Object.freeze({
-  heading: "'Candara', 'Optima', 'Segoe UI', system-ui, sans-serif",
-  body: "'Candara', 'Optima', 'Segoe UI', system-ui, sans-serif",
+  heading: "'Inter', 'Segoe UI', system-ui, sans-serif",
+  body: "'Inter', 'Segoe UI', system-ui, sans-serif",
   // Document templates only (18 Aug guideline: Candara, 11pt body / 12pt
   // headings). Candara is a Windows system font that cannot be self-hosted,
   // so the printed documents carry a fallback stack; the client's machines

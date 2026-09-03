@@ -20,8 +20,8 @@ const css = read('src/styles.css')
 test('the brand palette is declared once, in the branding module', () => {
   assert.equal(MODAE_COLORS.primary, '#ED3F2F', "the website's .btn__primary")
   assert.equal(MODAE_COLORS.ink, '#282828')
-  assert.equal(MODAE_TYPE.heading.includes('Candara'), true)
-  assert.equal(MODAE_TYPE.body.includes('Candara'), true)
+  assert.equal(MODAE_TYPE.heading.includes('Inter'), true)
+  assert.equal(MODAE_TYPE.body.includes('Inter'), true)
 })
 
 test('styles.css mirrors the brand tokens', () => {
@@ -29,14 +29,14 @@ test('styles.css mirrors the brand tokens', () => {
   assert.match(root_, /--primary-accent: #ed3f2f/i)
   assert.match(root_, /--bg-sidebar: #282828/i)
   assert.match(root_, /--text-main: #282828/i)
-  assert.match(root_, /--font-heading: 'Candara'/)
-  assert.match(root_, /--font-body: 'Candara'/)
+  assert.match(root_, /--font-heading: 'Inter'/)
+  assert.match(root_, /--font-body: 'Inter'/)
 })
 
 // The 18 Aug guideline standardises DOCUMENT templates on Candara 11pt/12pt.
-// The app UI deliberately stays on Rubik/Roboto (the tokens above); only the
-// printed proposal (.propdoc) switches, on screen and in print alike.
-test('website and printed documents use the Candara document face', () => {
+// The app UI uses Inter; only printed/customer-facing proposal documents keep
+// the Candara face, on screen and in print alike.
+test('printed documents use the Candara document face', () => {
   assert.equal(MODAE_TYPE.document.includes('Candara'), true)
   const root_ = css.slice(css.indexOf(':root {'), css.indexOf('}', css.indexOf(':root {')))
   assert.match(root_, /--font-document: 'Candara'/)
@@ -47,7 +47,7 @@ test('website and printed documents use the Candara document face', () => {
     assert.match(rule, /font-size: 11pt/)
   }
   assert.match(css, /\.doc-h \{[^}]*font-size: 12pt/, 'guideline heading size')
-  assert.match(css, /--font-body: 'Candara'/, 'the website uses Candara too')
+  assert.match(css, /--font-body: 'Inter'/, 'the website UI uses Inter')
 })
 
 test('document standards carry the exact approved furniture', () => {
@@ -93,9 +93,8 @@ test('no orphan font stylesheet ships alongside the real one', () => {
   assert.equal(exists('public/font-face.css'), false)
   const files = fs.readdirSync(path.join(root, 'public/fonts'))
   assert.deepEqual(files.sort(), [
-    'roboto-latin-ext.woff2', 'roboto-latin.woff2',
-    'rubik-latin-ext.woff2', 'rubik-latin.woff2',
-  ], 'four variable faces, one per family per subset')
+    'inter-latin-ext.woff2', 'inter-latin.woff2',
+  ], 'two variable faces, one per subset')
 })
 
 test('status colour is not brand colour', () => {
@@ -129,7 +128,7 @@ test('buttons carry the website treatment at enterprise metrics', () => {
 test('the web fonts are self-hosted and offline-cached', () => {
   // A Google Fonts <link> would leave this PWA unstyled on a tablet with no
   // signal, so the files ship with the app.
-  for (const f of ['rubik-latin.woff2', 'rubik-latin-ext.woff2', 'roboto-latin.woff2', 'roboto-latin-ext.woff2']) {
+  for (const f of ['inter-latin.woff2', 'inter-latin-ext.woff2']) {
     assert.ok(exists(`public/fonts/${f}`), `public/fonts/${f} must be committed`)
   }
   assert.doesNotMatch(read('index.html'), /fonts\.googleapis\.com|fonts\.gstatic\.com/)
@@ -141,11 +140,11 @@ test('the web fonts are self-hosted and offline-cached', () => {
   assert.match(css, /font-display: swap/)
 
   const sw = read('public/sw.js')
-  assert.match(sw, /'\/fonts\/rubik-latin\.woff2'/)
+  assert.match(sw, /'\/fonts\/inter-latin\.woff2'/)
   assert.match(sw, /url\.pathname\.startsWith\('\/fonts\/'\)/)
   // A stale cache would keep serving the old shell in the system font.
-  assert.match(sw, /const CACHE = 'wintrack-v4'/)
-  assert.doesNotMatch(sw, /wintrack-v3/)
+  assert.match(sw, /const CACHE = 'wintrack-v5'/)
+  assert.doesNotMatch(sw, /wintrack-v4/)
 })
 
 test('nothing renders a hardcoded sky hex any more', () => {

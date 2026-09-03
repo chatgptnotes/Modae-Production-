@@ -1,12 +1,10 @@
-// Bumped to v4 for the ModAE brand fonts: a returning tablet holding a v3 cache
+// Bumped to v5 for the Inter UI font: a returning tablet holding a v4 cache
 // would otherwise keep serving the old shell and render the app in the system
 // font until the cache happened to turn over.
-const CACHE = 'wintrack-v4'
+const CACHE = 'wintrack-v5'
 const FONTS = [
-  '/fonts/rubik-latin.woff2',
-  '/fonts/rubik-latin-ext.woff2',
-  '/fonts/roboto-latin.woff2',
-  '/fonts/roboto-latin-ext.woff2',
+  '/fonts/inter-latin.woff2',
+  '/fonts/inter-latin-ext.woff2',
 ]
 // Precached, not merely cacheable: this app is meant to work on a tablet with
 // no signal, and a font fetched lazily is a font that is missing offline.

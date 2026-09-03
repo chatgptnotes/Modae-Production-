@@ -156,7 +156,7 @@ Our Ref 2511096RS) are both in `doc/Further Inputs/`.
 
 - Nothing sky-blue or navy survives: chrome is ModAE red `#ED3F2F` on charcoal
   `#282828`.
-- Headings render in **Rubik**, body in **Roboto**. With DevTools offline-throttled
+- Headings and body render in **Inter**. With DevTools offline-throttled
   and a hard reload, they must still render — the fonts are precached, not linked.
 - Buttons are 7px-radius, primary is red with white text, **Danger is a distinct
   red** so a destructive action never reads as a primary button.

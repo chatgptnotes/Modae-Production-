@@ -16,12 +16,19 @@ test('proposal sheet moves between cells with spreadsheet keys', () => {
   assert.equal(nextCell(1, 1, 'Escape', 4, 6), null)
 })
 
-test('BOQ descriptions use a wrapped two-line editor', () => {
+test('BOQ descriptions use a wrapped editor that cannot overflow neighboring cells', () => {
   const source = read('src/proposal/ProposalSheetEditor.jsx')
   const css = read('src/styles.css')
   assert.match(source, /<textarea rows=\{2\} className="proposal-description-editor"/)
   assert.match(css, /\.proposal-edit-grid \.proposal-description-editor[\s\S]*height: 42px/)
   assert.match(css, /\.proposal-edit-grid \.proposal-description-editor[\s\S]*overflow-wrap: anywhere/)
+  assert.match(css, /\.proposal-edit-grid td textarea[\s\S]*overflow: auto/)
+  assert.match(css, /\.proposal-boq-sheet-wrap table\.sheet\.proposal-edit-grid[\s\S]*min-width: 0/)
+  assert.match(css, /col\.boq-col-description[\s\S]*width: 250px/)
+  assert.match(css, /col\.boq-col-part[\s\S]*width: 190px/)
+  assert.match(css, /\.proposal-edit-grid th[\s\S]*overflow-wrap: normal/)
+  assert.match(css, /\.proposal-edit-grid th[\s\S]*word-break: normal/)
+  assert.match(css, /\.proposal-edit-grid thead[\s\S]*height: 38px/)
 })
 
 test('proposal BOQ editing has no extraction or part-picker controls', () => {

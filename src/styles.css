@@ -2,54 +2,31 @@
 
 /* ---- ModAE web fonts ----------------------------------------------------
    Self-hosted, not linked: this is an offline-capable PWA, and a Google Fonts
-   <link> would leave the app unstyled on a tablet with no signal. Both are
-   variable fonts, so one file per family covers every weight we use — 132 KB
-   for all four subsets. latin-ext is not optional: the rupee sign (U+20B9)
+   <link> would leave the app unstyled on a tablet with no signal. Inter is a
+   variable font, so one file per subset covers every UI weight we use.
+   latin-ext is not optional: the rupee sign (U+20B9)
    lives there and this app prints ₹ on nearly every screen.
    Refresh with scripts/fetch-modae-fonts.mjs. -------------------------------- */
 @font-face {
-  font-family: 'Rubik';
+  font-family: 'Inter';
   font-style: normal;
-  font-weight: 300 900;
+  font-weight: 100 900;
   font-display: swap;
-  src: url('/fonts/rubik-latin.woff2') format('woff2');
+  src: url('/fonts/inter-latin.woff2') format('woff2');
   unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
     U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
     U+FEFF, U+FFFD;
 }
 @font-face {
-  font-family: 'Rubik';
+  font-family: 'Inter';
   font-style: normal;
-  font-weight: 300 900;
+  font-weight: 100 900;
   font-display: swap;
-  src: url('/fonts/rubik-latin-ext.woff2') format('woff2');
+  src: url('/fonts/inter-latin-ext.woff2') format('woff2');
   unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
     U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
     U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
-@font-face {
-  font-family: 'Roboto';
-  font-style: normal;
-  font-weight: 100 900;
-  font-stretch: 100%;
-  font-display: swap;
-  src: url('/fonts/roboto-latin.woff2') format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
-    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
-    U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: 'Roboto';
-  font-style: normal;
-  font-weight: 100 900;
-  font-stretch: 100%;
-  font-display: swap;
-  src: url('/fonts/roboto-latin-ext.woff2') format('woff2');
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
-    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
-    U+2113, U+2C60-2C7F, U+A720-A7FF;
-}
-
 /* ---- ModAE brand identity ------------------------------------------------
    Mirrors MODAE_COLORS / MODAE_TYPE in src/branding/modae.js, which was read
    off mod-ae.com's own theme stylesheet. Keep the two in step — the app used to
@@ -58,8 +35,30 @@
    The token *names* are unchanged on purpose: ~370 var() call sites across this
    file reskin through them without being rewritten. --------------------------- */
 :root {
-  --font-heading: 'Candara', 'Optima', 'Segoe UI', system-ui, sans-serif;
-  --font-body: 'Candara', 'Optima', 'Segoe UI', system-ui, sans-serif;
+  --font-heading: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --font-body: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  /* Enterprise UI typography scale. Keep these tokens separate from the
+     document font so dense workspace screens can evolve independently. */
+  --font-family-sans: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --font-family-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  --fs-xs: .6875rem;
+  --fs-sm: .75rem;
+  --fs-base: .8125rem;
+  --fs-md: .875rem;
+  --fs-lg: 1rem;
+  --fs-xl: 1.25rem;
+  --fs-2xl: 1.5rem;
+  --fs-display: clamp(1.625rem, 1.15rem + 1.35vw, 2.375rem);
+  --lh-tight: 1.15;
+  --lh-normal: 1.4;
+  --lh-relaxed: 1.6;
+  --ls-tight: -.025em;
+  --ls-normal: 0;
+  --ls-wide: .08em;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
   /* Printed document templates only (18 Aug guideline): Candara cannot be
      self-hosted, so the client's Windows machines render the real face and
      everything else falls back. The app UI stays on the two tokens above. */
@@ -344,18 +343,37 @@ select, input[type=text], input[type=number], input[type=date], input[type=tel],
 
 /* Pipeline-report grid: navy header band like the real sheet */
 .sheet-wrap { overflow-x: auto; background: #fff; border: 1px solid var(--grid-line); }
-.proposal-boq-sheet-wrap { overflow-x: hidden; }
-.proposal-boq-sheet-wrap table.sheet { width: 100%; table-layout: fixed; }
+.proposal-boq-sheet-wrap { overflow-x: auto; }
+.proposal-boq-sheet-wrap table.sheet { width: 100%; min-width: 0; table-layout: fixed; }
 .proposal-boq-sheet-wrap table.sheet th,
 .proposal-boq-sheet-wrap table.sheet td { white-space: normal; overflow-wrap: anywhere; vertical-align: top; }
 .proposal-boq-sheet-wrap table.sheet th:nth-child(3),
 .proposal-boq-sheet-wrap table.sheet td:nth-child(3) { width: 24%; min-width: 220px; }
 .proposal-boq-sheet-wrap table.sheet th:nth-child(4),
 .proposal-boq-sheet-wrap table.sheet td:nth-child(4) { width: 20%; min-width: 180px; }
+.proposal-boq-sheet-wrap table.sheet th:nth-child(2),
+.proposal-boq-sheet-wrap table.sheet td:nth-child(2) { width: 11%; min-width: 110px; }
+.proposal-boq-sheet-wrap table.sheet th:nth-child(5),
+.proposal-boq-sheet-wrap table.sheet td:nth-child(5) { width: 14%; min-width: 120px; }
 .proposal-boq-sheet-wrap table.sheet td input,
 .proposal-boq-sheet-wrap table.sheet td select,
 .proposal-boq-sheet-wrap table.sheet td textarea { min-width: 0; max-width: 100%; box-sizing: border-box; white-space: normal; }
 .proposal-boq-sheet-wrap table.sheet td textarea { width: 100%; resize: none; line-height: 1.35; }
+.proposal-boq-sheet-wrap table.sheet td:nth-child(3),
+.proposal-boq-sheet-wrap table.sheet td:nth-child(4) {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.proposal-boq-sheet-wrap table.sheet td:nth-child(3) textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.proposal-boq-sheet-wrap table.sheet td:nth-child(4) {
+  white-space: normal;
+}
 .proposal-boq-sheet-wrap table.sheet td:nth-child(11) input { pointer-events: none; background: var(--border-soft); color: var(--text-muted); }
 .proposal-boq-sheet-wrap table.sheet td:nth-child(11) { background: var(--border-soft) !important; color: var(--text-muted); }
 .proposal-boq-sheet-wrap table.sheet th.internal,
@@ -371,6 +389,7 @@ select, input[type=text], input[type=number], input[type=date], input[type=tel],
 .proposal-boq-sheet-wrap table.sheet th:nth-child(9),
 .proposal-boq-sheet-wrap table.sheet td:nth-child(9) { width: 76px; }
 @media (max-width: 900px) {
+  .proposal-boq-sheet-wrap table.sheet { min-width: 0; }
   .proposal-boq-sheet-wrap table.sheet thead { display: none; }
   .proposal-boq-sheet-wrap table.sheet,
   .proposal-boq-sheet-wrap table.sheet tbody,
@@ -1159,6 +1178,11 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .proposal-boq-sheet-wrap table.sheet td:nth-child(3) { width: 30%; min-width: 300px; }
 .proposal-boq-sheet-wrap table.sheet th:nth-child(4),
 .proposal-boq-sheet-wrap table.sheet td:nth-child(4) { width: 24%; min-width: 220px; }
+.proposal-boq-sheet-wrap table.sheet {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
 .proposal-edit-grid .proposal-description-editor { min-height: 58px; height: 58px; }
 .part-picker { position: relative; min-width: min(520px, 100%); }
 .part-picker > label { display: grid; gap: 4px; font-size: 12px; color: var(--text-muted); font-weight: 600; }
@@ -3927,6 +3951,407 @@ select:focus, input:focus, textarea:focus {
   .page h2 { font-size: 20px; }
 }
 
+/* Proposal action hierarchy: one decisive action, quiet utility controls. */
+button.install.install-secondary, .btn.install.install-secondary {
+  background: transparent;
+  border-color: var(--border-color);
+  color: var(--text-main);
+  font-weight: 600;
+}
+button.install.install-secondary:hover, .btn.install.install-secondary:hover {
+  background: var(--bg-app);
+  border-color: var(--text-muted);
+  color: var(--text-main);
+}
+
+.proposal-action-toolbar {
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.proposal-context-actions,
+.proposal-secondary-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.proposal-secondary-actions {
+  justify-content: flex-end;
+}
+.proposal-secondary-actions button,
+.proposal-secondary-actions .btn,
+.proposal-context-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.proposal-action-toolbar .btn-secondary,
+.proposal-action-toolbar button.btn-secondary {
+  background: #fff;
+  border-color: var(--border-color);
+  color: var(--text-main);
+}
+.proposal-action-toolbar .btn-secondary:hover,
+.proposal-action-toolbar button.btn-secondary:hover {
+  background: var(--bg-app);
+  border-color: var(--text-muted);
+}
+
+.segmented-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: var(--bg-app);
+}
+.proposal-tab-bar .segmented-control button,
+.segmented-control button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  box-shadow: none;
+  font-weight: 600;
+}
+.proposal-tab-bar .segmented-control button.active,
+.segmented-control button.active {
+  background: #fff;
+  color: var(--text-main);
+  box-shadow: 0 1px 3px rgba(40, 40, 40, .12);
+}
+
+.lifecycle-heading {
+  align-items: center;
+  flex-wrap: wrap;
+}
+.lifecycle-heading-copy {
+  min-width: 0;
+  flex: 1 1 320px;
+}
+.lifecycle-controls {
+  flex: 0 0 auto;
+  margin-left: auto;
+  align-items: center;
+}
+.lifecycle-controls button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #fff;
+  border-color: var(--border-color);
+  color: var(--text-main);
+}
+.lifecycle-controls button:hover:not(:disabled) {
+  background: var(--bg-app);
+  border-color: var(--text-muted);
+}
+
+@media (max-width: 900px) {
+  .proposal-action-toolbar,
+  .proposal-context-actions,
+  .proposal-secondary-actions {
+    width: 100%;
+  }
+  .proposal-secondary-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .proposal-secondary-actions button,
+  .proposal-secondary-actions .btn,
+  .proposal-context-actions .btn,
+  .proposal-context-actions .proposal-type-control {
+    flex: 1 1 100%;
+  }
+  .proposal-secondary-actions button,
+  .proposal-context-actions .btn {
+    width: 100%;
+  }
+  .proposal-tab-bar .segmented-control {
+    width: 100%;
+  }
+  .segmented-control button {
+    flex: 1 1 0;
+  }
+  .lifecycle-controls {
+    width: 100%;
+    margin-left: 0;
+    justify-content: space-between;
+  }
+}
+
+/* Final proposal hierarchy overrides. Keep these after legacy proposal rules. */
+.proposal-tab-bar .segmented-control button.active { background: #fff; color: var(--text-main); border-color: transparent; }
+.proposal-action-toolbar .btn-secondary,
+.proposal-action-toolbar button.btn-secondary { background: #fff; border-color: var(--border-color); color: var(--text-main); }
+
+/* ===========================================================================
+   Enterprise workspace typography system
+   ---------------------------------------------------------------------------
+   Inter is self-hosted above for offline/PWA reliability. In a networked app,
+   the equivalent hosted import should request Inter and JetBrains Mono at
+   weights 400, 500, 600, and 700 with display=swap.
+   =========================================================================== */
+
+html {
+  font-family: var(--font-family-sans);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+body,
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-family-sans);
+  font-variant-ligatures: common-ligatures;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'tnum', 'zero';
+}
+
+body {
+  font-size: var(--fs-base);
+  line-height: var(--lh-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+:where(h1, h2, h3, h4, h5, h6) {
+  margin-block: 0;
+  color: var(--text-main);
+  font-family: var(--font-family-sans);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--ls-tight);
+  text-wrap: balance;
+  overflow-wrap: break-word;
+}
+:where(h1) { font-size: var(--fs-display); font-weight: var(--fw-bold); }
+:where(h2) { font-size: var(--fs-2xl); }
+:where(h3) { font-size: var(--fs-xl); }
+:where(h4) { font-size: var(--fs-lg); }
+:where(h5) { font-size: var(--fs-md); }
+:where(h6) { font-size: var(--fs-sm); letter-spacing: var(--ls-normal); }
+
+:where(p, li, dd) {
+  max-width: 75ch;
+  line-height: var(--lh-normal);
+  text-wrap: pretty;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+:where(code, kbd, pre, .code, .opp-id, .oppid, .oppid-link, .ref-no,
+  .currency, .amount, .numeric, .table-num, [data-mono]) {
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums slashed-zero;
+  font-feature-settings: 'tnum', 'zero';
+}
+
+:where(button, .btn, [role='button'], input, select, textarea) {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+:where(button, .btn, [role='button']) {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+:where(.pill, .badge, .chip, .status-badge, .status-pill) {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  line-height: 1.2;
+  letter-spacing: var(--ls-wide);
+  text-transform: uppercase;
+}
+
+:where(label, .field-label, .meta-label, .metagrid-label) {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--ls-wide);
+  text-transform: uppercase;
+}
+
+:where(input, select, textarea) {
+  font-size: var(--fs-base);
+  line-height: var(--lh-normal);
+}
+:where(input, select, textarea)::placeholder {
+  color: var(--text-subtle);
+  opacity: 1;
+}
+:where(input, select, textarea):disabled {
+  cursor: not-allowed;
+}
+
+:where(.tabs, .sheet-tabs, .wb-tabs, .wb-sub, .workbook-tabs,
+  .proposal-artifact-tabs, .opportunities-tabs) {
+  min-width: 0;
+}
+:where(.tabs button, .tab, .sheet-tabs button, .wb-tabs button,
+  .workbook-tabs button, .proposal-artifact-tabs button,
+  .opportunities-tabs button) {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:where(table, .sheet, .dashboard-table, .ana-table) {
+  font-variant-numeric: tabular-nums;
+}
+:where(table th, .metagrid-label) {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--ls-wide);
+  text-transform: uppercase;
+}
+:where(table td.numeric, table td.num, table td.amount, table td.currency,
+  .table-num, .numeric, .amount, .currency) {
+  font-family: var(--font-family-mono);
+  font-variant-numeric: tabular-nums slashed-zero;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.text-truncate {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.line-clamp-2,
+.line-clamp-3 {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+}
+.line-clamp-2 { -webkit-line-clamp: 2; line-clamp: 2; }
+.line-clamp-3 { -webkit-line-clamp: 3; line-clamp: 3; }
+.text-balance { text-wrap: balance; }
+.text-pretty { text-wrap: pretty; }
+.text-wrap-safe { overflow-wrap: break-word; hyphens: auto; }
+.text-nowrap { white-space: nowrap; }
+.text-uppercase { text-transform: uppercase; letter-spacing: var(--ls-wide); }
+
+@media (max-width: 1024px) {
+  :root {
+    --fs-2xl: 1.375rem;
+    --fs-xl: 1.125rem;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --fs-base: .8125rem;
+    --fs-md: .84375rem;
+    --fs-2xl: 1.25rem;
+    --fs-display: clamp(1.5rem, 7vw, 2rem);
+  }
+  :where(h1, h2, h3) { text-wrap: pretty; }
+}
+
+@media (prefers-contrast: more) {
+  :where(p, li, dd) { color: var(--text-main); }
+  :where(label, .field-label, .meta-label, .metagrid-label, table th) {
+    color: var(--text-main);
+  }
+  :where(input, select, textarea, button, .btn) { border-width: 2px; }
+}
+.proposal-secondary-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.proposal-secondary-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.proposal-action-toolbar { align-items: flex-start; justify-content: space-between; gap: 14px; }
+.proposal-context-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lifecycle-heading { align-items: center; flex-wrap: wrap; }
+.lifecycle-heading-copy { min-width: 0; flex: 1 1 320px; }
+.lifecycle-controls { flex: 0 0 auto; margin-left: auto; }
+.lifecycle-controls button { display: inline-flex; align-items: center; justify-content: center; background: #fff; border-color: var(--border-color); color: var(--text-main); }
+
+/* Lifecycle stage names should remain readable at a glance. */
+.opp-lifecycle .step-label { font-weight: 700; }
+
+@media (max-width: 900px) {
+  .proposal-action-toolbar, .proposal-context-actions, .proposal-secondary-actions { width: 100%; }
+  .proposal-secondary-actions { justify-content: flex-start; }
+}
+
+@media (max-width: 640px) {
+  .proposal-secondary-actions button, .proposal-context-actions .btn, .proposal-context-actions .proposal-type-control { width: 100%; flex: 1 1 100%; }
+  .proposal-tab-bar .segmented-control { width: 100%; }
+  .segmented-control button { flex: 1 1 0; }
+  .lifecycle-controls { width: 100%; margin-left: 0; justify-content: space-between; }
+}
+
+/* Text rendering and metadata legibility pass. Keep the existing type tokens;
+   these properties improve rasterisation and small-label contrast. */
+html {
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.page .opp-summary-grid span,
+.page .lifecycle-heading .hint,
+.page .stepper .step-label,
+.page .eyebrow,
+.page .kpi-label,
+.page .workbench-readiness,
+.page .workbench-kpi span {
+  color: #4b5563;
+  font-weight: 600;
+}
+
+.page .opp-summary-grid span {
+  letter-spacing: .08em;
+}
+
+.page .stepper .step-label {
+  color: #374151;
+  font-size: 11px;
+  line-height: 1.2;
+  overflow-wrap: normal;
+  word-break: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.page .stepper .step.now .step-label {
+  color: var(--primary-ink);
+  font-weight: 700;
+}
+
+@media (max-width: 760px) {
+  .page .stepper .step-label {
+    font-size: 10px;
+  }
+}
+
 /* Proposal workspace refresh: compact chrome, explicit hierarchy, and one
    bounded horizontal scroller for the data-heavy BoQ. */
 .proposal-tab-shell {
@@ -3946,7 +4371,14 @@ select:focus, input:focus, textarea:focus {
   box-shadow: 0 8px 24px rgba(40,40,40,.045);
 }
 .proposal-subnav-header { margin-bottom: 12px; }
-.proposal-workspace-header { position: sticky; top: 0; z-index: 6; margin-bottom: 12px; }
+.proposal-workspace-header {
+  /* The app topbar is sticky too. Keeping this at 0 lets the proposal chrome
+     slide underneath it and hide the first rows of the workbook while scrolling. */
+  position: sticky;
+  top: 58px;
+  z-index: 6;
+  margin-bottom: 12px;
+}
 .proposal-workspace-title,
 .proposal-subnav-header > div:first-child { min-width: 0; }
 .eyebrow {
@@ -4068,21 +4500,21 @@ select:focus, input:focus, textarea:focus {
 .proposal-sheet-editor .form-card { width: 100%; max-width: none; }
 .proposal-edit-grid {
   width: 100%;
-  min-width: 980px;
+  min-width: 0;
   table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
 }
 .proposal-edit-grid .boq-col-si { width: 50px; }
-.proposal-edit-grid .boq-col-category { width: 145px; }
-.proposal-edit-grid .boq-col-description { width: auto; }
-.proposal-edit-grid .boq-col-part { width: 150px; }
+.proposal-edit-grid .boq-col-category { width: 120px; }
+.proposal-edit-grid .boq-col-description { width: 250px; }
+.proposal-edit-grid .boq-col-part { width: 190px; }
 .proposal-edit-grid .boq-col-qty,
-.proposal-edit-grid .boq-col-total-qty { width: 80px; }
-.proposal-edit-grid .boq-col-uom { width: 70px; }
-.proposal-edit-grid .boq-col-unit-price { width: 100px; }
-.proposal-edit-grid .boq-col-total-price { width: 110px; }
-.proposal-edit-grid .boq-col-action { width: 50px; }
+.proposal-edit-grid .boq-col-total-qty { width: 64px; }
+.proposal-edit-grid .boq-col-uom { width: 54px; }
+.proposal-edit-grid .boq-col-unit-price { width: 92px; }
+.proposal-edit-grid .boq-col-total-price { width: 105px; }
+.proposal-edit-grid .boq-col-action { width: 48px; }
 .proposal-edit-grid th,
 .proposal-edit-grid td {
   box-sizing: border-box;
@@ -4092,7 +4524,88 @@ select:focus, input:focus, textarea:focus {
 .proposal-edit-grid th { white-space: normal; line-height: 1.2; }
 .proposal-edit-grid td input,
 .proposal-edit-grid td textarea { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; }
-.proposal-edit-grid td textarea { min-height: 58px; }
+.proposal-edit-grid td textarea {
+  min-height: 58px;
+  max-height: 150px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  line-height: 1.35;
+}
+
+/* Final BoQ readability pass. The legacy sheet rule fixes the table at 1480px,
+   which leaves unused space on desktop and makes the editors fight their cells.
+   Let the table fill the available workspace while retaining a safe scrollable
+   width on smaller screens. */
+.proposal-boq-sheet-wrap table.sheet.proposal-edit-grid {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+.proposal-boq-sheet-wrap .proposal-edit-grid col.boq-col-description {
+  width: 250px;
+}
+.proposal-boq-sheet-wrap .proposal-edit-grid col.boq-col-part {
+  width: 190px;
+}
+.proposal-edit-grid th,
+.proposal-edit-grid td {
+  overflow: hidden;
+  text-overflow: clip;
+}
+.proposal-edit-grid th {
+  padding: 4px 6px;
+  font-size: 10px;
+  line-height: 1.15;
+  height: 38px;
+  max-height: 38px;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+.proposal-edit-grid thead,
+.proposal-edit-grid thead tr { height: 38px; }
+.proposal-edit-grid td:nth-child(3) {
+  vertical-align: top;
+}
+.proposal-edit-grid td:nth-child(4) {
+  white-space: normal;
+  line-height: 1.35;
+  word-break: break-word;
+  font-family: var(--font-family-mono);
+  font-size: 11px;
+}
+.proposal-edit-grid td:nth-child(4) .hint {
+  font-family: var(--font-family-mono);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.proposal-edit-grid td:nth-child(3) textarea {
+  display: block;
+  width: 100%;
+  height: 42px;
+  min-height: 42px;
+  max-height: 96px;
+  resize: vertical;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.35;
+}
+.proposal-edit-grid td:nth-child(10),
+.proposal-edit-grid td:nth-child(11) {
+  white-space: nowrap;
+}
+.proposal-edit-grid td:focus-within {
+  overflow: visible;
+  position: relative;
+  z-index: 2;
+}
 
 .stepper {
   display: grid;
@@ -4298,4 +4811,29 @@ button.install, .btn.install,
   .proposal-action-toolbar > button, .proposal-action-toolbar > .btn,
   .proposal-action-toolbar > label { width: 100%; }
   .proposal-action-toolbar > .spacer { display: none; }
+}
+
+/* Proposal hierarchy overrides must follow the legacy proposal rules. */
+.proposal-tab-bar .segmented-control button.active { background: #fff; color: var(--text-main); border-color: transparent; }
+.proposal-action-toolbar .btn-secondary,
+.proposal-action-toolbar button.btn-secondary { background: #fff; border-color: var(--border-color); color: var(--text-main); }
+.proposal-action-toolbar { align-items: flex-start; justify-content: space-between; gap: 14px; }
+.proposal-context-actions, .proposal-secondary-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.proposal-secondary-actions { justify-content: flex-end; }
+.proposal-secondary-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.lifecycle-heading { align-items: center; flex-wrap: wrap; }
+.lifecycle-heading-copy { min-width: 0; flex: 1 1 320px; }
+.lifecycle-controls { flex: 0 0 auto; margin-left: auto; }
+.lifecycle-controls button { display: inline-flex; align-items: center; justify-content: center; background: #fff; border-color: var(--border-color); color: var(--text-main); }
+
+@media (max-width: 900px) {
+  .proposal-action-toolbar, .proposal-context-actions, .proposal-secondary-actions { width: 100%; }
+  .proposal-secondary-actions { justify-content: flex-start; }
+}
+
+@media (max-width: 640px) {
+  .proposal-secondary-actions button, .proposal-context-actions .btn, .proposal-context-actions .proposal-type-control { width: 100%; flex: 1 1 100%; }
+  .proposal-tab-bar .segmented-control { width: 100%; }
+  .segmented-control button { flex: 1 1 0; }
+  .lifecycle-controls { width: 100%; margin-left: 0; justify-content: space-between; }
 }
