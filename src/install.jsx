@@ -22,12 +22,12 @@ export function InstallButton() {
   const [showIos, setShowIos] = useState(false)
   if (isStandalone) return null
   if (canInstall) {
-    return <button className="install" onClick={install}><Icon name="install" size={14} /> Install app</button>
+    return <button className="install install-secondary" onClick={install}><Icon name="install" size={14} /> Install app</button>
   }
   if (isIOS) {
     return (
       <>
-        <button className="install" onClick={() => setShowIos(v => !v)}><Icon name="install" size={14} /> Install</button>
+        <button className="install install-secondary" onClick={() => setShowIos(v => !v)}><Icon name="install" size={14} /> Install</button>
         {showIos && (
           <div className="modal form-card" style={{ top: 70 }}>
             <div className="section-title">Add ModAE to your Home Screen</div>

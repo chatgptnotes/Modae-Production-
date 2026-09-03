@@ -31,7 +31,7 @@ export default function SubmissionPanel({ opp }) {
   if (!release) {
     return (
       <div className="form-card">
-        <div className="section-title">Submission (simulated send)</div>
+          <div className="section-title">Customer submission (simulated)</div>
         <p className="hint">
           Release approval pending — submission opens once a 'Final quote release' is approved.
           Prepare the proposal in the builder and submit it for approval first.
@@ -98,7 +98,7 @@ export default function SubmissionPanel({ opp }) {
 
   return (
     <div className="form-card">
-      <div className="section-title">Submission (customer email)</div>
+        <div className="section-title">Customer email submission</div>
       <table className="cost-table" style={{ width: '100%' }}>
         <tbody>
           {rows.map(([k, v]) => <tr key={k}><td style={{ width: 90 }}><b>{k}</b></td><td>{k === 'CC' ? <input type="email" value={emailCc} onChange={e => setEmailCc(e.target.value)} placeholder="name@company.com" /> : v}</td></tr>)}
@@ -112,7 +112,7 @@ export default function SubmissionPanel({ opp }) {
         </ErrBox>
       )}
 
-      <div className="section-title" style={{ marginTop: 10 }}>Human review required</div>
+      <div className="section-title" style={{ marginTop: 10 }}>Review required before sending</div>
       {[
         ['c1', 'Customer-facing prices and validity verified'],
         ['c2', 'No restricted commercial data in the document'],

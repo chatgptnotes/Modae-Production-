@@ -216,10 +216,10 @@ export default function Workbench() {
       <div className="opp-lifecycle">
         <div className="lifecycle-heading">
           <div><div className="workbench-section-title">Lifecycle</div><span className="hint">Select any stop to move the opportunity, including backward corrections.</span></div>
-          <div className="lifecycle-controls">
-            <button disabled={milestoneIndex <= 0} onClick={() => moveRelative(-1)}>â† Previous</button>
+           <div className="lifecycle-controls" aria-label="Lifecycle navigation">
+            <button disabled={milestoneIndex <= 0} onClick={() => moveRelative(-1)}>&larr; Previous</button>
             <b>{opp.milestone}</b>
-            <button disabled={milestoneIndex < 0 || milestoneIndex >= MILESTONES.length - 1} onClick={() => moveRelative(1)}>Next â†’</button>
+            <button disabled={milestoneIndex < 0 || milestoneIndex >= MILESTONES.length - 1} onClick={() => moveRelative(1)}>Next &rarr;</button>
           </div>
         </div>
         <Stepper current={opp.milestone} onStep={moveMilestone} />
@@ -1089,7 +1089,7 @@ function SourcingTab({ opp, goTab }) {
             <Icon name="sparkles" size={13} /> {vendorSimBusy ? 'Generating…' : 'Simulate vendor response'}
           </button>
           <button className="primary" onClick={() => goTab('proposal')}>
-            <Icon name="arrowRight" size={13} /> Route to workbench
+            <Icon name="arrowRight" size={13} /> Open proposal workbench
           </button>
         </div>
         {vendorSimErr && <ErrBox>{vendorSimErr}</ErrBox>}
@@ -1133,7 +1133,7 @@ function SourcingTab({ opp, goTab }) {
               <textarea rows={14} value={rfqForm.body} onChange={e => setRfqForm({ ...rfqForm, body: e.target.value })} />
             </label>
           </div>
-          <WarnBox>Human review required before sending. The app opens Gmail compose and logs the RFQ against this opportunity.</WarnBox>
+          <WarnBox>Review the message before sending. Gmail will open a compose window and log the RFQ against this opportunity.</WarnBox>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
             <button onClick={() => setRfqOpen(false)}>Cancel</button>
             <button className="primary" onClick={sendRfq}><Icon name="send" size={13} /> Open Gmail compose</button>

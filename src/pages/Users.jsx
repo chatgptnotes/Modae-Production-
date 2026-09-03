@@ -172,7 +172,7 @@ export default function Users() {
             </label>
             {err && <div className="err-text">{err}</div>}
             <div className="forms-actions">
-              <button className="primary" type="submit">Create account</button>
+                <button className="primary" type="submit">Create user account</button>
               <button type="button" onClick={() => setModal(false)}>Cancel</button>
             </div>
           </form>

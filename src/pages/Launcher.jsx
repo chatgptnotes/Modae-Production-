@@ -36,7 +36,7 @@ export default function Launcher() {
 
   return (
     <div className="page">
-      <h2>Demo Launcher</h2>
+        <h2>Demo launcher</h2>
       <div className="hint" style={{ marginBottom: 14, maxWidth: 640 }}>
         Guided demo scenarios — each starts at the right screen with the right persona.
         Every value on screen is fictional demo content.

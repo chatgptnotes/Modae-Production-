@@ -81,7 +81,7 @@ export default function Login() {
               <button className="primary" type="submit">Sign in</button>
             </div>
             <div className="login-switch">
-              No account yet? <a onClick={() => switchMode('register')}>Register</a>
+              Need an account? <a onClick={() => switchMode('register')}>Request access</a>
             </div>
           </form>
         ) : (
@@ -100,10 +100,10 @@ export default function Login() {
               {REG_ROLES.map(r => <option key={r} value={r}>{ROLES[r]?.label || r}</option>)}
             </select>
             <div className="login-actions">
-              <button className="primary" type="submit">Create account</button>
+              <button className="primary" type="submit">Request access</button>
             </div>
             <div className="login-switch">
-              Already registered? <a onClick={() => switchMode('signin')}>Sign in</a>
+              Already have access? <a onClick={() => switchMode('signin')}>Sign in</a>
             </div>
           </form>
         )}

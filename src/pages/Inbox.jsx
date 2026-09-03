@@ -2017,7 +2017,7 @@ export default function Inbox() {
     <div className="page mailbox-page">
       <div className="mailbox-head">
         <div>
-          <h2><Icon name="inbox" size={18} /> Lead Inbox</h2>
+          <h2><Icon name="inbox" size={18} /> Lead inbox</h2>
           <p className="hint">{showArchive ? 'Discarded lead archive' : 'Common sales mailbox · AI structures, humans decide'}</p>
         </div>
         <div className="mailbox-head-actions">

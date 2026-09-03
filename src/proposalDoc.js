@@ -62,26 +62,26 @@ const DOC_TERM_TEXT = {
   fxProject: 'Exchange rate variations beyond 1% shall be to the customer’s account.',
   // Clause 1 of the spares sample runs three sentences: the validity, the
   // escalation warning, and the rate the offer was built on.
-  fxEscalation: 'Any price escalation until delivery of the goods due to exchange rate variations shall be to your account.',
+  fxEscalation: 'Any price escalation before delivery due to exchange-rate variations will be charged to your account.',
   fxSpares: p => p.fxBasis
     ? `Proposal considered @ ₹${p.fxBasis} per Euro as on the date of this offer.`
     : 'Prices are based on the exchange rate prevailing on the date of this offer.',
   warrantyProject: '36 months from the date of supply or 24 months from the date of commissioning, whichever is earlier.',
   warrantySpares: '12 months from the date of supply.',
   warrantyServices: '3 months from the date of completion of the services.',
-  priceBasis: 'Ex Works, Bangalore. All taxes and duties shall be extra as applicable.',
-  freightCustomer: 'Freight and insurance are to the customer’s account.',
+  priceBasis: 'Ex Works, Bangalore. Applicable taxes and duties are extra.',
+  freightCustomer: 'Freight and insurance are at the customer’s cost.',
   deliveryProject: '30-32 weeks from the date of purchase order and after receipt of manufacturing clearance or drawing/document approval, whichever is later.',
-  deliverySpares: '16 weeks after receipt of purchase order and advance payment.',
+  deliverySpares: '16 weeks from receipt of the purchase order and advance payment.',
   deliveryServices: 'Engineer mobilisation within 2 weeks of the purchase order, subject to site readiness.',
-  siteServices: 'Site services, if required, are additional and chargeable as per the ModAE standard rate schedule.',
+  siteServices: 'Site services, if required, are additional and charged at the ModAE standard rate schedule.',
   paymentProject: '50% advance along with the purchase order and the balance 50% on material readiness.',
-  paymentSpares: '50% advance along with the purchase order, and the balance 50% plus applicable taxes on material readiness.',
+  paymentSpares: '50% advance with the purchase order; balance 50% plus applicable taxes on material readiness.',
   paymentServices: '100% within 45 days from the date of completion of the services.',
   pbg: 'A performance bank guarantee equivalent to 10% of the purchase order value, valid for 36 months.',
   ld: 'Liquidated damages at 0.5% per week of delay, up to a maximum of 5% of the undelivered portion.',
   makeModel: 'Make, model and part numbers will be confirmed during detail engineering.',
-  standardTerms: 'Other terms and conditions: as per ModAE India standard terms and conditions of sale.',
+  standardTerms: 'Other terms and conditions are as per ModAE India’s standard terms and conditions of sale.',
   // The services samples carry five clauses the goods proposals do not.
   deputation: 'Advance intimation of one month is required for site deputation.',
   standby: 'The rates quoted cover standby and work hours on site.',
@@ -101,7 +101,7 @@ export function defaultDocTerms(p, opp) {
   const rows = route === 'Project' ? [
     T('Proposal Validity', `${resolve(D.validity, p)} ${D.fxProject}`),
     T('Warranty', D.warrantyProject),
-    T('Price Basis & Inco Terms', D.priceBasis),
+     T('Price Basis & Incoterms', D.priceBasis),
     T('Freight & Insurance', D.freightCustomer),
     T('Delivery Period', D.deliveryProject),
     T('Payment Terms', D.paymentProject),
@@ -122,7 +122,7 @@ export function defaultDocTerms(p, opp) {
   ] : [
     T('Proposal Validity', `${resolve(D.validity, p)} ${D.fxEscalation} ${resolve(D.fxSpares, p)}`),
     T('Warranty', D.warrantySpares),
-    T('Price Basis & Inco Terms', D.priceBasis),
+     T('Price Basis & Incoterms', D.priceBasis),
     T('Freight & Insurance', D.freightCustomer),
     T('Delivery Period', D.deliverySpares),
     T('Site Services', D.siteServices),

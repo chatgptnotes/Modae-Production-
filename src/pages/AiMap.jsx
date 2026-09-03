@@ -21,7 +21,7 @@ export default function AiMap() {
 
   return (
     <div className="page">
-      <h2>AI & Automation Map</h2>
+      <h2>AI and automation map</h2>
       <div className="hint" style={{ marginBottom: 12 }}>
         Every intervention opens where it actually runs. <b>Live AI</b> calls the configured Gemini
         model; <b>Rule-based</b> is real behaviour computed from your own data without a model;

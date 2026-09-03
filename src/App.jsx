@@ -71,18 +71,18 @@ function PortalParked() {
 // the acting role's permission set (seed.js PERMS).
 const NAV = [
   { to: '/my-dashboard', label: 'My Dashboard', icon: 'chartBar', page: 'mydashboard' },
-  { to: '/inbox', label: 'Lead Inbox', icon: 'inbox', page: 'inbox', badge: c => c.newLeads, badgeHint: 'new leads to qualify' },
+  { to: '/inbox', label: 'Lead inbox', icon: 'inbox', page: 'inbox', badge: c => c.newLeads, badgeHint: 'new leads requiring qualification' },
   { to: '/opportunities', label: 'Opportunities', icon: 'cards', page: 'tracker' },
   { to: '/approvals', label: 'Approvals', icon: 'checkCircle', page: 'approvals', badge: c => c.forMe + c.myPending, badgeHint: 'gates waiting on you, plus your own requests' },
   { to: '/po', label: 'Purchase Orders', icon: 'clipboardCheck', page: 'po' },
-  { to: '/folders', label: 'SharePoint Folders', icon: 'folder', page: 'folders' },
+  { to: '/folders', label: 'SharePoint folders', icon: 'folder', page: 'folders' },
   { to: '/pricelists', label: 'Price Lists', icon: 'tag', page: 'pricelists' },
   { to: '/customers', label: 'Customers', icon: 'users', page: 'customers' },
-  { to: '/aimap', label: 'AI & Automation', icon: 'sparkles', page: 'aimap', show: role => isAdminRole(role) || role === 'AH' || role === 'LJS' },
+  { to: '/aimap', label: 'AI and automation', icon: 'sparkles', page: 'aimap', show: role => isAdminRole(role) || role === 'AH' || role === 'LJS' },
   { to: '/admin', label: 'Admin', icon: 'gear', page: 'admin' },
   { to: '/audit', label: 'Audit Trail', icon: 'list', page: 'audit' },
-  { to: '/users', label: 'Users & Roles', icon: 'shield', page: 'users' },
-  { to: '/launcher', label: 'Demo Launcher', icon: 'play', page: 'launcher', show: role => isAdminRole(role) },
+  { to: '/users', label: 'Users and roles', icon: 'shield', page: 'users' },
+  { to: '/launcher', label: 'Demo launcher', icon: 'play', page: 'launcher', show: role => isAdminRole(role) },
 ]
 
 export default function App() {

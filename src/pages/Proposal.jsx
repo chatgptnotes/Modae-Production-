@@ -712,18 +712,21 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           <h3>{route} proposal <span className="proposal-meta-chip">Rev {p.revision || '00'}</span></h3>
         </div>
       <div className="toolbar proposal-action-toolbar">
+        <div className="proposal-context-actions">
         {!embedded && <Link className="btn" to={`/folders/${oppId}`}>◂ Back to folder</Link>}
-        <span className="spacer" />
         <label className="proposal-type-control">Proposal type
           <select value={p.proposalType || 'Project'} onChange={set('proposalType')}>
             <option>Project</option><option>Spares</option><option>Services</option>
           </select>
         </label>
         {pendingForOpp.length > 0 && <span className="pill Amber">{pendingForOpp.length} approval{pendingForOpp.length > 1 ? 's' : ''} pending</span>}
-        <button onClick={openEmail}><Icon name="mail" size={13} /> Email proposal</button>
-        <button onClick={exportExcel}>Download Excel</button>
-        <button onClick={() => setPreviewOpen(true)}><Icon name="eye" size={13} /> Preview proposal</button>
-        {(route === 'Spares' || route === 'Services') && <button onClick={openTemplatePreview}><Icon name="fileSheet" size={13} /> Preview {route === 'Spares' ? 'Spares firm offer' : 'service proposal'}</button>}
+        </div>
+        <div className="proposal-secondary-actions" aria-label="Proposal utilities">
+        <button className="btn-secondary" onClick={openEmail}><Icon name="mail" size={13} /> Email proposal</button>
+        <button className="btn-secondary" onClick={exportExcel}><Icon name="download" size={13} /> Download Excel</button>
+        <button className="btn-secondary" onClick={() => setPreviewOpen(true)}><Icon name="eye" size={13} /> Preview proposal</button>
+        {(route === 'Spares' || route === 'Services') && <button className="btn-secondary" onClick={openTemplatePreview}><Icon name="fileSheet" size={13} /> Preview {route === 'Spares' ? 'Spares firm offer' : 'service proposal'}</button>}
+        </div>
       </div>
       </header>
 
@@ -734,9 +737,9 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           ))}
         </div>
         {tab === 'Edit Sheet' && (
-          <div className="workbook-switcher" aria-label="Workbook mode">
-            <button className={workbook === 'proposal' ? 'active' : ''} onClick={() => setWorkbook('proposal')}>Proposal Workbook</button>
-            <button className={workbook === 'inputs' ? 'active' : ''} onClick={() => setWorkbook('inputs')}>Inputs Workbook</button>
+          <div className="workbook-switcher segmented-control" role="tablist" aria-label="Workbook mode">
+            <button role="tab" aria-selected={workbook === 'proposal'} className={workbook === 'proposal' ? 'active' : ''} onClick={() => setWorkbook('proposal')}>Proposal Workbook</button>
+            <button role="tab" aria-selected={workbook === 'inputs'} className={workbook === 'inputs' ? 'active' : ''} onClick={() => setWorkbook('inputs')}>Inputs Workbook</button>
           </div>
         )}
       </div>
@@ -758,7 +761,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
               <span className="spacer" />
               {submitted
                 ? <span className="pill won">Submitted</span>
-                : <button className="primary" onClick={markSubmitted}>Mark submitted to customer</button>}
+                : <button className="primary" onClick={markSubmitted}>Mark as submitted to customer</button>}
             </div>
           )}
           {/* Embedded, the readiness panel directly above already lists every
@@ -789,7 +792,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           {blockers.length > 0 && !blocked && !submitted && (
             <div className="gate-row">
               <span className="spacer" />
-              <button className="primary" onClick={markSubmitted}>Mark submitted to customer</button>
+              <button className="primary" onClick={markSubmitted}>Mark as submitted to customer</button>
             </div>
           )}
           {blockers.length > 0 && !blocked && submitted && (
@@ -1054,8 +1057,8 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
             <table className="sheet">
               <thead>
                 <tr>
-                  <th>Sl.</th><th>Item Category</th><th>Item/Scope Description</th><th>Proposed Model &amp; Part Number</th><th>Configurable Adders</th>
-                  <th>Qty/Unit</th><th>Common</th><th>Spares</th><th>Total Qty</th><th>UOM</th>
+                  <th>Sl.</th><th>Item category</th><th>Description</th><th>Model / part number</th><th>Add-ons</th>
+                  <th>Qty / unit</th><th>Common</th><th>Spares</th><th>Total quantity</th><th>UOM</th>
                   <th>Unit Price ₹</th><th>Total Price ₹</th>
                   <th className="internal">Unit Cost ₹</th><th className="internal">Total Cost ₹</th><th className="internal">Computed ₹</th><th className="internal">List Price</th><th></th>
                 </tr>
