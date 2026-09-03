@@ -83,6 +83,13 @@ export const productList = v => (Array.isArray(v)
 export const productLabel = v => productList(v).join(', ')
 // LJS (strategic) and AH (commercial & ops) decide gates; admins can see the queue.
 export const isApprover = role => role === 'LJS' || role === 'AH' || isAdminRole(role)
+export const displayRole = role => {
+  if (!role) return ''
+  if (role === 'RS') return 'Ruthvik Satish'
+  return ROLES[role]?.name || role
+}
+export const displayRoles = (roles, separator = ' + ') =>
+  (roles || []).map(displayRole).filter(Boolean).join(separator)
 // Page-level permission from the PERMS matrix (unknown role sees nothing).
 export const canSeePage = (role, page) => (PERMS[role] || []).includes(page)
 

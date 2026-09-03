@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { fmt, fmtLakh, monthKey, monthLabel, exportCSV, canViewCommercial } from '../utils.js'
+import { fmt, fmtLakh, monthKey, monthLabel, exportCSV, canViewCommercial, displayRole } from '../utils.js'
 
 // The "Pivot" sheet, shaped like the real one: rows = customers, columns =
 // Expected Order Date months, values = Sum of Value (₹), with an Expected Order Date quarter
@@ -76,7 +76,7 @@ export default function Dashboard({ embedded = false }) {
       <div className="toolbar">
         <label>Owner:{' '}
           <select value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)}>
-            {owners.map(p => <option key={p}>{p}</option>)}
+            {owners.map(p => <option key={p} value={p}>{p === 'All' ? p : displayRole(p)}</option>)}
           </select>
         </label>
         <label>Expected Order Date:{' '}
@@ -146,7 +146,7 @@ export default function Dashboard({ embedded = false }) {
             {inScope.map(o => (
               <tr key={o.id}>
                 <td className="oppid">{o.id}</td><td>{o.sellTo}</td><td>{o.oppName}</td>
-                <td>{o.owner}</td><td>{o.stage}</td><td>{o.prob || ''}</td>
+                <td>{displayRole(o.owner)}</td><td>{o.stage}</td><td>{o.prob || ''}</td>
                 <td>{monthLabel(monthKey(o.orderDate))}</td>
                 <td className="num">{fmt(o.valueK)}</td>
               </tr>

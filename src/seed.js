@@ -637,10 +637,10 @@ export function defaultBStepOwners(opp = {}) {
 // Diagram 02 §7 — "Identify Type of Revision" routes the rework back to the
 // B-step that owns it, and the proposal is regenerated from there.
 export const REVISION_TYPES = [
-  { id: 'Technical', label: 'Technical change (part / spec / scope)', step: 'B-02' },
-  { id: 'Commercial', label: 'Commercial change (terms / validity / delivery)', step: 'B-03' },
-  { id: 'Pricing', label: 'Pricing change (discount / price / margin)', step: 'B-04' },
-  { id: 'Other', label: 'Other changes (documents / SoW / compliance)', step: 'B-05' },
+  { id: 'Technical', label: 'Technical change (part / spec / scope)' },
+  { id: 'Commercial', label: 'Commercial change (terms / validity / delivery)' },
+  { id: 'Pricing', label: 'Pricing change (discount / price / margin)' },
+  { id: 'Other', label: 'Other changes (documents / SoW / compliance)' },
 ]
 
 // Diagram 02 §6/§7 — the channels a quote is dispatched on and then monitored.

@@ -2,7 +2,6 @@ import React, { useRef, useState } from 'react'
 import { fmt } from '../utils.js'
 import { nextCell } from './sheetNav.js'
 import InputsWorkbook from './InputsWorkbook.jsx'
-import PartPicker from './PartPicker.jsx'
 
 // The sheet is deliberately built from native inputs: browser copy/paste and
 // keyboard focus are enough here, and keep the proposal model as the only data
@@ -13,11 +12,11 @@ const inputProps = (row, col, onKeyDown) => ({
 })
 
 export default function ProposalSheetEditor({
-  p, opp, doc, save, allParts, totals, units, totalQty, lineComputed, lineQuoted, priced,
-  lineCost, linePrice, addBomLine, updLine, removeLine, updTerm, addTerm, removeTerm, pasteBoq, store,
-  boqFileRef, extractBoqFromPdf, boqExtractBusy, boqExtractError,
+  p, opp, doc, save, totals, units, totalQty, lineComputed, lineQuoted, priced,
+   lineCost, linePrice, updLine, removeLine, updTerm, addTerm, removeTerm, pasteBoq, store, workbook = 'proposal', setWorkbook,
 }) {
-  const [workbook, setWorkbook] = useState('proposal')
+  const [localWorkbook, setLocalWorkbook] = useState('proposal')
+  const activeWorkbook = setWorkbook ? workbook : localWorkbook
   // Edit Sheet is the single entry point from the proposal navigation. Start on
   // BOQ so extracted buyer parts are immediately visible without another tab row.
   const [sheet, setSheet] = useState('BOQ')
@@ -41,14 +40,13 @@ export default function ProposalSheetEditor({
     </label>
   )
 
-  if (workbook === 'inputs') return <div className="proposal-sheet-editor"><div className="workbook-switcher"><button onClick={() => setWorkbook('proposal')}>Proposal Workbook</button><button className="active">Inputs Workbook</button></div><InputsWorkbook store={store} /></div>
+  if (activeWorkbook === 'inputs') return <div className="proposal-sheet-editor"><InputsWorkbook store={store} /></div>
 
   const show = name => sheet === name
   return (
     <div className="proposal-sheet-editor" ref={sheetRef}>
       <div className="proposal-sheet-head">
         <div><p className="hint">Edit white cells. Calculated totals stay locked and update the Preview automatically.</p></div>
-        <div className="workbook-switcher"><button className="active">Proposal Workbook</button><button onClick={() => setWorkbook('inputs')}>Inputs Workbook</button></div>
       </div>
 
       {show('Cover') && <section className="form-card wide">
@@ -88,19 +86,15 @@ export default function ProposalSheetEditor({
 
       {show('BOQ') && <section className="form-card wide">
         <div className="section-title">Bill of quantities</div>
-        <div className="toolbar">
-          <input ref={boqFileRef} type="file" accept="application/pdf" onChange={extractBoqFromPdf} style={{ display: 'none' }} />
-          <button onClick={() => boqFileRef.current?.click()} disabled={boqExtractBusy}>
-            {boqExtractBusy ? 'Extracting PDF…' : 'Extract BOQ from buyer PDF'}
-          </button>
-          <PartPicker extractedItems={p.extractedItems} allParts={allParts} bom={p.bom} onSelect={addBomLine} />
-          <span className="hint">Paste tab-separated cells into the editable columns. Use arrows, Enter, or Tab to move.</span>
-        </div>
-        {boqExtractError && <div className="errbox" role="alert">{boqExtractError}</div>}
-        {p.boqSource && <div className="hint">Source: {p.boqSource}. Review extracted rows before pricing.</div>}
+        <p className="hint proposal-boq-edit-note">Edit the existing rows directly. Use copy/paste or the keyboard to update the white cells.</p>
         <div className="sheet-wrap">
-          <table className="sheet proposal-edit-grid">
-            <thead><tr>
+           <table className="sheet proposal-edit-grid">
+             <colgroup>
+               <col className="boq-col-si" /><col className="boq-col-category" /><col className="boq-col-description" /><col className="boq-col-part" />
+               <col className="boq-col-qty" /><col className="boq-col-qty" /><col className="boq-col-qty" /><col className="boq-col-total-qty" /><col className="boq-col-uom" />
+               {priced && <><col className="boq-col-unit-price" /><col className="boq-col-total-price" /></>}<col className="boq-col-action" />
+             </colgroup>
+             <thead><tr>
               <th>Sl.</th><th>Item category</th><th>Description</th><th>Model / part number</th>
               <th>Qty/unit</th><th>Common</th><th>Spares</th><th>Total qty</th><th>UOM</th>
               {priced && <><th>Unit price ₹</th><th>Total price ₹</th></>}<th />

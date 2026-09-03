@@ -103,9 +103,10 @@ test('customer documents use the original ModAE letterhead template identity', (
   assert.match(brand, /U62099KA2024PTC185715/)
   assert.match(proposal, /MODAE_BRAND\.letterhead/)
   assert.match(printDoc, /OfficialLetterheadFooter/)
-  // The guideline footer: legal name, the Commerce Mantri address, CIN | GST.
-  assert.match(printDoc, /MODAE_COMPANY\.officialAddress/)
-  assert.match(printDoc, /CIN: \{MODAE_COMPANY\.cin\} \| GST: \{MODAE_COMPANY\.gstin\}/)
+  // The guideline footer is centralized so HTML/PDF and Excel exports cannot drift.
+  assert.match(printDoc, /MODAE_DOCUMENT_STANDARDS\.footerLines/)
+  assert.match(brand, /ModAE India Private Limited/)
+  assert.match(brand, /CIN: U62099KA2024PTC185715 \| GST: 29AARCM8622J1ZQ/)
   assert.match(css, /\.doc-official-footer/)
 })
 

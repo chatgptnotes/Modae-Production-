@@ -184,6 +184,7 @@ export default function App() {
   const shell = (
     <div className={`shell ${sidebarCompact ? 'sidebar-compact' : ''}`}>
       <BrandWatermark variant="shell" />
+      <a className="skip-link" href="#main-content">Skip to workspace</a>
       <div className={`nav-backdrop ${navOpen ? 'open' : ''}`} onClick={() => setNavOpen(false)} />
       <aside className={`sidenav ${navOpen ? 'open' : ''}`}>
         <div className="brand" onClick={() => nav('/opportunities')}>
@@ -193,7 +194,7 @@ export default function App() {
             <Icon name={sidebarCompact ? 'chevronRight' : 'chevronLeft'} size={15} />
           </button>
         </div>
-        <nav className="side-nav">
+        <nav className="side-nav" aria-label="Workspace navigation">
           {items.map(t => {
             // Same badges the tablet bar carries — the desktop sidebar had none,
             // so an approver saw no sign that a gate was waiting on them.
@@ -208,12 +209,6 @@ export default function App() {
           })}
         </nav>
         <div className="side-foot">
-          {!custAccount && (
-            <label title="Logged-in persona — commercial data is visible to approvers/admins only">
-              Logged in as
-              <RoleSwitcher />
-            </label>
-          )}
           {store.auth?.user && (
             <button className="reset" onClick={store.logout} title={store.auth.user.email}>
               <Icon name="logout" size={14} /> <span className="side-label">Sign out ({store.auth.user.name})</span>
@@ -235,7 +230,7 @@ export default function App() {
           <span className="spacer" style={{ flex: 1 }} />
           {!custAccount && (
             <label className="topbar-user" title="Logged-in persona — commercial data is visible to approvers/admins only">
-              Logged in as
+              Current user
               <RoleSwitcher />
             </label>
           )}
@@ -247,7 +242,7 @@ export default function App() {
         {/* The shell is viewport-locked, so this is the app's single scroll
             region — pages that want their own internal scroller (the pipeline
             sheet, the mailbox list) size themselves to 100% of it. */}
-        <main className="main-scroll">{routes}</main>
+        <main id="main-content" className="main-scroll">{routes}</main>
       </div>
       <DrawerHost />
     </div>

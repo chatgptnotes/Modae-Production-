@@ -48,7 +48,7 @@ function Pills({ field, options }) {
   const { f, set, selectedProducts, setF, aiMissing } = React.useContext(FormCtx)
   const isProduct = field === 'product'
   return (
-    <div className={'pill-group' + (aiMissing?.has(field) ? ' not-extracted' : '')}>
+    <div className={'pill-group' + (isProduct ? ' product-options' : '') + (aiMissing?.has(field) ? ' not-extracted' : '')}>
       {options.map(o => {
         const on = isProduct ? selectedProducts.includes(o) : f[field] === o
         return (

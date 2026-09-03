@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS } from '../seed.js'
 import { readiness, isBlocked, nextActionWith } from '../gates.js'
-import { isApprover, isAdminRole, isSalesOwner, canViewCommercial, canPriceProposal, fmtLakh, ddMmmYY } from '../utils.js'
+import { isApprover, isAdminRole, isSalesOwner, canViewCommercial, canPriceProposal, fmtLakh, ddMmmYY, displayRole } from '../utils.js'
 import { analyticsSnapshot, counts, salesPerformance, FY_QUARTERS, FY_MONTHS, PROB_WEIGHT } from '../kpi.js'
 import { ArcGauge } from '../dashviz.jsx'
 import { Icon } from '../icons.jsx'
@@ -701,7 +701,7 @@ function ApproverDashboard({ store, nav, role, c, open, blocked, nextActions, he
           {mine.map(a => (
             <button key={a.id} className="dashboard-action" onClick={() => nav('/approvals')}>
               <span><b>{a.id}</b> — {a.type}</span>
-              <span className="hint">{a.oppId || '—'} · requested by {a.requestedBy}</span>
+              <span className="hint">{a.oppId || '—'} · requested by {displayRole(a.requestedBy)}</span>
             </button>
           ))}
           {!mine.length && <p className="hint">Nothing is waiting on you right now.</p>}
@@ -721,7 +721,7 @@ function ApproverDashboard({ store, nav, role, c, open, blocked, nextActions, he
           {blocked.slice(0, 6).map(({ opp }) => (
             <button key={opp.id} className="dashboard-action" onClick={() => nav(`/opp/${opp.id}`)}>
               <span><b>{opp.id}</b> — {opp.oppName}</span>
-              <span className="hint">{opp.owner} · {opp.stage}</span>
+              <span className="hint">{displayRole(opp.owner)} · {opp.stage}</span>
             </button>
           ))}
           {!blocked.length && <p className="hint">No opportunity is currently blocked.</p>}

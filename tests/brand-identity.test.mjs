@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { MODAE_COLORS, MODAE_TYPE } from '../src/branding/modae.js'
+import { MODAE_COLORS, MODAE_TYPE, MODAE_DOCUMENT_STANDARDS } from '../src/branding/modae.js'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
@@ -20,8 +20,8 @@ const css = read('src/styles.css')
 test('the brand palette is declared once, in the branding module', () => {
   assert.equal(MODAE_COLORS.primary, '#ED3F2F', "the website's .btn__primary")
   assert.equal(MODAE_COLORS.ink, '#282828')
-  assert.equal(MODAE_TYPE.heading.includes('Rubik'), true)
-  assert.equal(MODAE_TYPE.body.includes('Roboto'), true)
+  assert.equal(MODAE_TYPE.heading.includes('Candara'), true)
+  assert.equal(MODAE_TYPE.body.includes('Candara'), true)
 })
 
 test('styles.css mirrors the brand tokens', () => {
@@ -29,14 +29,14 @@ test('styles.css mirrors the brand tokens', () => {
   assert.match(root_, /--primary-accent: #ed3f2f/i)
   assert.match(root_, /--bg-sidebar: #282828/i)
   assert.match(root_, /--text-main: #282828/i)
-  assert.match(root_, /--font-heading: 'Rubik'/)
-  assert.match(root_, /--font-body: 'Roboto'/)
+  assert.match(root_, /--font-heading: 'Candara'/)
+  assert.match(root_, /--font-body: 'Candara'/)
 })
 
 // The 18 Aug guideline standardises DOCUMENT templates on Candara 11pt/12pt.
 // The app UI deliberately stays on Rubik/Roboto (the tokens above); only the
 // printed proposal (.propdoc) switches, on screen and in print alike.
-test('printed documents use the Candara document face, the UI does not', () => {
+test('website and printed documents use the Candara document face', () => {
   assert.equal(MODAE_TYPE.document.includes('Candara'), true)
   const root_ = css.slice(css.indexOf(':root {'), css.indexOf('}', css.indexOf(':root {')))
   assert.match(root_, /--font-document: 'Candara'/)
@@ -47,7 +47,18 @@ test('printed documents use the Candara document face, the UI does not', () => {
     assert.match(rule, /font-size: 11pt/)
   }
   assert.match(css, /\.doc-h \{[^}]*font-size: 12pt/, 'guideline heading size')
-  assert.doesNotMatch(css, /body \{[^}]*--font-document/, 'the UI must not pick it up')
+  assert.match(css, /--font-body: 'Candara'/, 'the website uses Candara too')
+})
+
+test('document standards carry the exact approved furniture', () => {
+  assert.equal(MODAE_DOCUMENT_STANDARDS.bodySizePt, 11)
+  assert.equal(MODAE_DOCUMENT_STANDARDS.headingSizePt, 12)
+  assert.equal(MODAE_DOCUMENT_STANDARDS.header.tagline, 'Your Partners In Achieving Excellence')
+  assert.deepEqual(MODAE_DOCUMENT_STANDARDS.footerLines, [
+    'ModAE India Private Limited',
+    '7th Floor, Commerce Mantri, 12, 1 & 2, Bannerghatta Road, BTM Layout, 2nd Stage, BTM Layout, Bangalore, Karnataka – 560076',
+    'CIN: U62099KA2024PTC185715 | GST: 29AARCM8622J1ZQ',
+  ])
 })
 
 test('the sky-and-navy theme is gone, not merely overridden', () => {

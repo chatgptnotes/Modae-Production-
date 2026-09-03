@@ -1,7 +1,7 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { canViewCommercial, isApprover, fmtLakh, ddMmmYY } from '../utils.js'
+import { canViewCommercial, isApprover, fmtLakh, ddMmmYY, displayRole } from '../utils.js'
 import { Chip, KpiCard, WarnBox } from '../ui.jsx'
 
 // Customer purchase orders: proposal-vs-PO validation queue plus the booked
@@ -76,7 +76,7 @@ export default function PurchaseOrders() {
                       <td><b>{pc.poNo}</b></td>
                       <td><span className="oppid-link">{pc.oppId}</span> <span className="hint">{o?.oppName?.slice(0, 40)}</span></td>
                       <td>{o?.sellTo || '—'}</td>
-                      <td>{o?.owner || '—'}</td>
+                      <td>{displayRole(o?.owner) || '—'}</td>
                       <td>
                         {blocking > 0 && <span style={{ color: 'var(--lost-text)', fontWeight: 700 }}>{blocking} blocking</span>}
                         {blocking > 0 && review > 0 && ' · '}
@@ -108,7 +108,7 @@ export default function PurchaseOrders() {
               {orders.map(o => (
                 <tr key={o.id}>
                   <td><b>{o.id}</b></td>
-                  {approver && <td>{o.owner}</td>}
+                  {approver && <td>{displayRole(o.owner)}</td>}
                   <td>{o.customer}</td>
                   <td>{o.title}</td>
                   <td className="num">{comm ? fmtLakh(o.valueK) : '—'}</td>

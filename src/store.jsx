@@ -394,18 +394,15 @@ export function StoreProvider({ children }) {
             // the builder writes, which are not versions of the quote.
             rev: `V${revisions.filter(r => r.status === 'Revised').length + 2}`,
             when: new Date().toISOString().slice(0, 10),
-            by: s.role, note: note || 'Revision opened', status: 'Revised', type: spec.id, step: spec.step,
+            by: s.role, note: note || 'Revision opened', status: 'Revised', type: spec.id,
           }],
         }
-        const steps = { ...(s.bSteps[oppId] || {}) }
-        delete steps[spec.step]
         return withAudit({
           ...s,
           proposals: { ...s.proposals, [oppId]: next },
-          bSteps: { ...s.bSteps, [oppId]: steps },
           opportunities: s.opportunities.map(o => (o.id === oppId ? { ...o, milestone: 'Proposal' } : o)),
         }, 'Quote revision opened', oppId,
-        `Rev ${next.revision} — ${spec.id} change, back to ${spec.step}, re-approval required · ${note || 'no reason given'}`)
+        `Rev ${next.revision} - ${spec.id} change, re-approval required - ${note || 'no reason given'}`)
       })
     },
 

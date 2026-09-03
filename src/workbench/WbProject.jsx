@@ -191,7 +191,7 @@ export default function WbProject({ opp, openBuilder }) {
           {comm ? (
             <table className="cost-table">
               <tbody>
-                <tr><td>Customer-facing value</td><td className="num">₹ {fmt(totals.value)}</td></tr>
+                <tr><td>Proposal value</td><td className="num">₹ {fmt(totals.value)}</td></tr>
                 <tr><td>COGS</td><td className="num">₹ {fmt(totals.cogs)}</td></tr>
                 <tr className="total"><td>GM</td><td className="num">₹ {fmt(totals.value - totals.cogs)} ({totals.gmPct.toFixed(1)}%)</td></tr>
               </tbody>

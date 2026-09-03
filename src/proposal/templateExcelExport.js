@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs'
+import { MODAE_DOCUMENT_STANDARDS } from '../branding/modae.js'
 
 const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 const SPARES_TEMPLATE_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx', import.meta.url).href
@@ -70,7 +71,23 @@ function setPrintLayout(worksheet, orientation) {
     fitToHeight: 0,
     horizontalDpi: 300,
     verticalDpi: 300,
-    margins: { left: 0.75, right: 0.75, top: 0.75, bottom: 0.75, header: 0.3, footer: 0.3 },
+    margins: MODAE_DOCUMENT_STANDARDS.marginsInches,
+  }
+  worksheet.headerFooter = {
+    oddHeader: `&R${MODAE_DOCUMENT_STANDARDS.header.tagline}`,
+    oddFooter: `&C${MODAE_DOCUMENT_STANDARDS.footerLines.join('\n')}`,
+  }
+}
+
+function applyDocumentFont(workbook) {
+  for (const worksheet of workbook.worksheets) {
+    worksheet.eachRow(row => row.eachCell(cell => {
+      cell.font = {
+        ...(cell.font || {}),
+        name: 'Candara',
+        size: MODAE_DOCUMENT_STANDARDS.bodySizePt,
+      }
+    }))
   }
 }
 
@@ -102,7 +119,7 @@ function setCoverSheet(workbook, worksheet, { p, opp, doc }) {
   worksheet.getRow(3).height = Math.max(worksheet.getRow(3).height || 15, 24)
 
   setValue(worksheet.getCell('A3'), `${p.project || 'Proposal'} - ${opp.id}`, {
-    font: { name: 'Calibri', size: 14, bold: true, color: { argb: 'FF222222' } },
+    font: { name: 'Candara', size: MODAE_DOCUMENT_STANDARDS.headingSizePt, bold: true, color: { argb: 'FF222222' } },
     alignment: { horizontal: 'left', vertical: 'middle' },
   })
   setValue(worksheet.getCell('B5'), excelDate(p.revisionDate), { alignment: { vertical: 'middle' } })
@@ -178,7 +195,7 @@ function setCommercialSheet(workbook, worksheet, args) {
   const headers = [['B9', 'Sl. No.'], ['C9', 'Item Description'], ['D9', 'Proposed Model / Part No.'], ['E9', 'Qty'], ['F9', 'Unit Price (₹)'], ['G9', 'Total Price (₹)'], ['J9', 'Unit Price (₹)'], ['K9', 'Total Price (₹)'], ['L9', 'Unit Cost (₹)'], ['M9', 'Total Cost (₹)'], ['N9', 'Unit Cost (€)'], ['O9', 'Total Cost (€)']]
   for (const [ref, value] of headers) {
     setValue(worksheet.getCell(ref), value, {
-      font: { name: 'Calibri', size: 11, bold: true, color: { argb: 'FF222222' } },
+      font: { name: 'Candara', size: MODAE_DOCUMENT_STANDARDS.headingSizePt, bold: true, color: { argb: 'FF222222' } },
       fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEAEAEA' } },
       alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
     })
@@ -279,6 +296,7 @@ export async function generateProposalWorkbook(args) {
   const workbook = new ExcelJS.Workbook()
   await workbook.xlsx.load(await readBuffer(templateUrl))
   expandSharedFormulas(workbook)
+  applyDocumentFont(workbook)
   const logo = await fetchOptionalLogo(args.logoBuffer)
   const byName = name => workbook.worksheets.find(sheet => sheet.name.trim() === name)
   const cover = byName('Cover Letter') || workbook.worksheets[0]

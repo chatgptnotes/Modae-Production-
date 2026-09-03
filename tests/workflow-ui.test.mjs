@@ -10,88 +10,60 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { readiness, transitionBlockers } from '../src/gates.js'
-import { B_STEPS, REVISION_TYPES, routeForType, contextForType, defaultBStepOwners } from '../src/seed.js'
+import { REVISION_TYPES, routeForType, contextForType } from '../src/seed.js'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
 
-// ---------------------------------------------------------------------------
-// §3 — the Brownfield B-step chain must be signable, or it is a deadlock.
-// ---------------------------------------------------------------------------
-
 const brownfieldOpp = {
   id: 'X-1', sellTo: 'ACME', oppName: 'Retrofit', owner: 'RS', customerStatus: 'Green',
-  oppType: 'Spares', route: routeForType('Spares'), context: contextForType('Spares'),
-  milestone: 'Proposal',
+  oppType: 'Spares', route: routeForType('Spares'), context: contextForType('Spares'), milestone: 'Proposal',
 }
 const pricedProposal = { bom: [{ qtyPerUnit: 1, listPrice: 100, quoted: '' }], terms: [], revision: '00' }
-const allSigned = Object.fromEntries(B_STEPS.map(s => [s.id, { state: 'Signed', by: 'RS', at: '2026-08-19' }]))
 
-test('signing every B-step clears the Brownfield readiness block', () => {
-  const blocked = readiness(brownfieldOpp, pricedProposal, { approvals: [], bSteps: {} })
-  assert.ok(blocked.find(b => b.key === 'b-steps'), 'an unsigned chain must block')
-
-  const clear = readiness(brownfieldOpp, pricedProposal, { approvals: [], bSteps: { 'X-1': allSigned } })
-  assert.equal(clear.find(b => b.key === 'b-steps'), undefined,
-    'a fully signed chain must clear — otherwise the block has no exit')
+// ---------------------------------------------------------------------------
+// Brownfield opportunities use the standard readiness and approval gates; the
+// legacy B-step ledger is retained only for loading older saved records.
+test('Brownfield readiness ignores legacy sign-off records', () => {
+  const state = { approvals: [], bSteps: {} }
+  assert.equal(readiness(brownfieldOpp, pricedProposal, state).some(b => b.key === 'b-steps'), false)
+  assert.equal(readiness({ ...brownfieldOpp, milestone: 'Sourcing' }, pricedProposal, state).some(b => b.key === 'b-steps'), false)
+  assert.equal(readiness({ ...brownfieldOpp, milestone: 'Proposal' }, pricedProposal, state).some(b => b.key === 'b-steps'), false)
 })
 
-test('a partially signed chain names the next step owed', () => {
-  const partial = { 'X-1': { 'B-01': { state: 'Signed', by: 'RS' } } }
-  const b = readiness(brownfieldOpp, pricedProposal, { approvals: [], bSteps: partial }, { bStepPhase: 'pre-proposal' })
-    .find(x => x.key === 'b-steps')
-  assert.match(b.text, /B-02/, 'the blocker must point at the next unsigned step')
-})
-
-test('Brownfield lifecycle splits sourcing sign-off from proposal sign-off', () => {
+test('Brownfield milestone movement is not blocked by B-step sign-off', () => {
   const sourcingOpp = { ...brownfieldOpp, milestone: 'Sourcing' }
-  const state = { approvals: [], bSteps: { 'X-1': Object.fromEntries([
-    ...['B-01', 'B-02', 'B-03', 'B-04'].map(id => [id, { state: 'Signed', by: 'RS' }]),
-  ]) } }
-  const toProposal = transitionBlockers(sourcingOpp, 'Proposal', pricedProposal, state)
-  assert.equal(toProposal.find(b => b.key === 'b-steps'), undefined,
-    'B-01 through B-04 should clear the Sourcing to Proposal gate')
-
-  const proposalState = { ...state, bSteps: { 'X-1': {
-    ...state.bSteps['X-1'],
-    'B-05': { state: 'Signed', by: 'RS' },
-  } } }
-  const atProposal = readiness({ ...sourcingOpp, milestone: 'Proposal' }, pricedProposal, state)
-  assert.match(atProposal.find(b => b.key === 'b-steps').text, /B-05/,
-    'Proposal readiness should ask only for B-05')
-  assert.equal(readiness({ ...sourcingOpp, milestone: 'Proposal' }, pricedProposal, proposalState).find(b => b.key === 'b-steps'), undefined,
-    'B-05 should clear the proposal workflow gate')
+  const blockers = transitionBlockers(sourcingOpp, 'Proposal', pricedProposal, { approvals: [], bSteps: {} })
+  assert.equal(blockers.some(b => b.key === 'b-steps'), false)
 })
 
-test('the B-step panel is reachable and wired to the store', () => {
-  const panel = read('src/workbench/BSteps.jsx')
-  assert.match(panel, /store\.signBStep\(/, 'the panel must sign steps')
-  assert.match(panel, /store\.unsignBStep\(/, 'and be able to reopen one')
-  assert.match(panel, /defaultBStepOwners/, 'the panel uses per-opportunity defaults')
-  assert.match(panel, /store\.assignBStep\(/, 'authorized users can assign each step')
-  assert.match(panel, /store\.role === assignedTo/, 'sign-off belongs to the configured step owner')
-
+test('Brownfield sign-off UI is no longer reachable', () => {
   const workbench = read('src/pages/Workbench.jsx')
-  assert.match(workbench, /import BSteps from '\.\.\/workbench\/BSteps\.jsx'/)
-  assert.match(workbench, /opp\.context === 'Brownfield' \? \[\['steps'/,
-    'the B-step tab must show on the Brownfield lane only')
-  assert.match(workbench, /sub === 'steps' && <BSteps/)
-
+  assert.doesNotMatch(workbench, /BSteps/)
+  assert.doesNotMatch(workbench, /B-05 Proposal sign-off/)
+  assert.doesNotMatch(workbench, /sourcing sign-off - B-01 to B-04/)
   const builder = read('src/workbench/PropBuilder.jsx')
-  assert.match(builder, /bl\.key === 'b-steps' && openSteps/,
-    'the readiness blocker must offer a route to the panel that clears it')
+  assert.doesNotMatch(builder, /b-steps|openSteps|B-01.*B-05/)
 })
 
-test('Brownfield steps have distinct functional defaults', () => {
-  assert.deepEqual(defaultBStepOwners({ owner: 'RS' }), {
-    'B-01': 'RS', 'B-02': 'TECH', 'B-03': 'AH', 'B-04': 'LJS', 'B-05': 'RS',
-  })
+test('legacy Brownfield records remain loadable without active sign-off behavior', () => {
   const state = read('src/appState.js')
-  assert.match(state, /bStepOwners/, 'step assignments must be migrated and persisted')
+  assert.match(state, /if \(!s\.bSteps\) s\.bSteps = \{\}/)
+  assert.match(state, /if \(!s\.bStepOwners\) s\.bStepOwners = \{\}/)
   const store = read('src/store.jsx')
-  assert.match(store, /B-step owner assigned/, 'assignment changes must be audited')
-  assert.match(store, /B_STEPS\[index - 1\]\.id/, 'signing must remain sequential')
+  assert.match(store, /assignBStep\(/)
+  assert.match(store, /signBStep\(/)
+  assert.doesNotMatch(store, /delete steps\[spec\.step\]/)
 })
+
+test('revision categories no longer route to Brownfield sign-off steps', () => {
+  const seed = read('src/seed.js')
+  assert.doesNotMatch(seed, /REVISION_TYPES[\\s\\S]*step:/)
+  const store = read('src/store.jsx')
+  assert.doesNotMatch(store, /back to \$\{spec\.step\}|delete steps\[spec\.step\]/)
+})
+
+
 
 test('spares confirmation workbench is reachable before Sourcing advances', () => {
   const workbench = read('src/pages/Workbench.jsx')
@@ -145,14 +117,12 @@ test('the survey gates only bite once a survey is actually required', () => {
 // §7 — "Identify Type of Revision" routes the rework back to a B-step.
 // ---------------------------------------------------------------------------
 
-test('the revision dialog picks a type and passes it through', () => {
+test('the revision dialog keeps typed categories without sign-off routing', () => {
   const builder = read('src/workbench/PropBuilder.jsx')
   assert.match(builder, /store\.reviseProposal\(opp\.id, reviseReason\.trim\(\), reviseType\)/,
-    'the revision type must reach the store — without it every revision routes to B-05')
+    'the revision category must reach the store')
   assert.match(builder, /REVISION_TYPES\.map/, 'the type must be chosen, not assumed')
-  for (const t of REVISION_TYPES) {
-    assert.ok(B_STEPS.some(s => s.id === t.step), `${t.id} must route back to a real B-step`)
-  }
+  assert.ok(REVISION_TYPES.every(t => !t.step), 'revision categories must not route to sign-off steps')
 })
 
 // ---------------------------------------------------------------------------

@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { STAGES, CLOSE_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES } from '../seed.js'
-import { fmt, mmmYY, ddMmmYY, stageClass, productList, productLabel, sameCustomer } from '../utils.js'
+import { fmt, mmmYY, ddMmmYY, stageClass, productList, productLabel, sameCustomer, displayRole } from '../utils.js'
 import { downloadTableXlsx } from '../proposal/excelExport.js'
 import { useFormulaBar } from '../formulabar.jsx'
 import { useDrawer } from '../drawer.jsx'
@@ -191,7 +191,8 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
       case 'forecast': return o.forecast ? '✓ Checked' : '☐ Unchecked'
       case 'prob': return o.prob || ''
       case 'product': return productLabel(o.product)
-      case 'nextActionOwner': return o.nextActionOwner || nextActionWith(o, store.getProposal(o.id), store).owner || ''
+      case 'owner': return displayRole(o.owner)
+      case 'nextActionOwner': return displayRole(o.nextActionOwner || nextActionWith(o, store.getProposal(o.id), store).owner || '')
       default: return o[key] ?? ''
     }
   }
@@ -378,7 +379,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
           <>
             <label className="owner-view-label" htmlFor="opportunities-owner-filter">View opportunities for:</label>
             <select id="opportunities-owner-filter" value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)}>
-              {owners.map(p => <option key={p} value={p}>{p === 'All' ? 'All Opportunities' : p}</option>)}
+              {owners.map(p => <option key={p} value={p}>{p === 'All' ? 'All Opportunities' : displayRole(p)}</option>)}
             </select>
             {isSalesRep && <button type="button" onClick={() => setOwnerFilter(store.role)}>My Opportunities</button>}
           </>
@@ -456,7 +457,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                 <td onClick={selectCell(o, COLS[6])} className={isSel(o, COLS[6]) ? 'cell-sel' : ''} title={o.eucLocation}><input type="text" value={o.eucLocation} onChange={upd(o.id, 'eucLocation')} /></td>
                 <td onClick={selectCell(o, COLS[7])} className={isSel(o, COLS[7]) ? 'cell-sel' : ''} title={o.oppName}><WrapInput value={o.oppName} onChange={upd(o.id, 'oppName')} title={o.oppName} /></td>
                 <td onClick={selectCell(o, COLS[8])} className={isSel(o, COLS[8]) ? 'cell-sel' : ''}>
-                  <select value={o.owner} onChange={upd(o.id, 'owner')}>{OWNERS.map(c => <option key={c}>{c}</option>)}</select>
+                  <select value={o.owner} onChange={upd(o.id, 'owner')}>{OWNERS.map(c => <option key={c} value={c}>{displayRole(c)}</option>)}</select>
                 </td>
                 <td onClick={selectCell(o, COLS[9])} className={isSel(o, COLS[9]) ? 'cell-sel' : ''}>
                   <select value={o.oppType} onChange={upd(o.id, 'oppType')}>{OPP_TYPES.map(c => <option key={c}>{c}</option>)}</select>
@@ -562,8 +563,8 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                       <select value={o.nextActionOwner || ''} onChange={upd(o.id, 'nextActionOwner')}
                         className={!o.nextActionOwner && na.owner ? 'derived' : ''}
                         title={na.text || 'No blocker — set an owner if someone else owes you an action'}>
-                        <option value="">{na.owner ? `${na.owner} (auto)` : '— none —'}</option>
-                        {OWNERS.map(owner => <option key={owner}>{owner}</option>)}
+                        <option value="">{na.owner ? `${ROLES[na.owner]?.name || na.owner} (auto)` : '— none —'}</option>
+                        {OWNERS.map(owner => <option key={owner} value={owner}>{ROLES[owner]?.name || owner}</option>)}
                       </select>
                     )
                   })()}

@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
-import { canPriceProposal, fmt, ddMmmYY } from '../utils.js'
+import { canPriceProposal, fmt, ddMmmYY, displayRole, displayRoles } from '../utils.js'
 import { readiness, isBlocked, commercialGate, releaseState, approvalSet } from '../gates.js'
 import { REVISION_TYPES } from '../seed.js'
 import { Chip, AiBadge, Phase2Badge, ErrBox, WarnBox, Modal } from '../ui.jsx'
@@ -11,7 +11,7 @@ import { PROP_SECTIONS, recommendTerms } from '../proposalDoc.js'
 
 // Proposal builder: section checklist, customer-facing excerpt, and the
 // readiness / approval column that gates 'Submit for approval'.
-export default function PropBuilder({ opp, openSteps }) {
+export default function PropBuilder({ opp }) {
   const store = useStore()
   const comm = canPriceProposal(store.role)
   const p = store.getProposal(opp.id)
@@ -72,7 +72,6 @@ export default function PropBuilder({ opp, openSteps }) {
     setReviseReason('')
     setReviseType(REVISION_TYPES[0].id)
   }
-  const reviseSpec = REVISION_TYPES.find(r => r.id === reviseType) || REVISION_TYPES[0]
 
   const condApprovals = store.approvals.filter(a =>
     a.oppId === opp.id && a.status === 'Approved with conditions')
@@ -167,12 +166,11 @@ export default function PropBuilder({ opp, openSteps }) {
               )}
               {bl.kyc && !overrideOpen && (
                 <button onClick={() => setOverrideOpen(true)}>Override with reason</button>
-              )}
-              {bl.key === 'b-steps' && openSteps && (
-                <button onClick={openSteps}>Open the B-01…B-05 workflow</button>
-              )}
+               )}
+
             </div>
-            {bl.kyc && overrideOpen && (
+           {bl.kyc && overrideOpen && (
+
               <div style={{ marginTop: 6, display: 'flex', gap: 6 }}>
                 <input placeholder="Override reason (logged)" value={overrideReason} style={{ flex: 1 }}
                   onChange={e => setOverrideReason(e.target.value)} />
@@ -193,7 +191,7 @@ export default function PropBuilder({ opp, openSteps }) {
             <div className="section-title" style={{ marginTop: 10 }}>Conditions from approvals</div>
             {condApprovals.map(a => (a.conditions || []).map((c, i) => (
               <div key={`${a.id}-${i}`} className={c.incorporated ? 'okbox' : 'warnbox'}>
-                <b>{a.approver}:</b> {c.text}
+                <b>{displayRole(a.approver)}:</b> {c.text}
                 {c.incorporated
                   ? <div className="hint">Incorporated — {c.note}</div>
                   : (
@@ -264,7 +262,7 @@ export default function PropBuilder({ opp, openSteps }) {
         {revisions.map((r, i) => (
           <div key={i} style={{ fontSize: 12.5, padding: '2px 0' }}>
             <b>{r.rev}</b> — {r.note} <Chip tone="grey">{r.status}</Chip>
-            {r.type && <Chip tone="state-Review">{r.type} → {r.step}</Chip>}
+            {r.type && <Chip tone="state-Review">{r.type} revision</Chip>}
             {' '}<span className="hint">{ddMmmYY(r.when)} · {r.by}</span>
           </div>
         ))}
@@ -278,7 +276,7 @@ export default function PropBuilder({ opp, openSteps }) {
             <Icon name="send" size={13} /> Submit for approval
           </button>
         </div>
-        {pendingRelease && <div className="warnbox">Final quote release pending with {(pendingRelease.needed || [pendingRelease.approver]).join(' + ')} — decide it on the Approvals page.</div>}
+        {pendingRelease && <div className="warnbox">Final quote release pending with {displayRoles(pendingRelease.needed || [pendingRelease.approver])} — decide it on the Approvals page.</div>}
         {released && !pendingRelease && (
           <div className="okbox">
             Quote released — simulate the send from the Communications tab.
@@ -297,8 +295,7 @@ export default function PropBuilder({ opp, openSteps }) {
                     <button className="primary" disabled={!reviseReason.trim()} onClick={applyRevision}>Open revision</button>
                   </div>
                   <div className="hint" style={{ marginTop: 4 }}>
-                    Returns the opportunity to <b>{reviseSpec.step}</b>, reopens that step for sign-off,
-                    and requires the whole §5 approval again before the quote can be sent.
+                    The revised quote must pass the approval checks again before it can be sent.
                   </div>
                 </>
               )}
@@ -314,7 +311,7 @@ export default function PropBuilder({ opp, openSteps }) {
             <div key={i} className="check-row">
               <b>{r.rev}</b><span>{r.note}</span>
               <Chip tone="grey">{r.status}</Chip>
-              {r.type && <Chip tone="state-Review">{r.type} → {r.step}</Chip>}
+              {r.type && <Chip tone="state-Review">{r.type} revision</Chip>}
               <span className="hint" style={{ marginLeft: 'auto' }}>{ddMmmYY(r.when)} · {r.by}</span>
             </div>
           ))}

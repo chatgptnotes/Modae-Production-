@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES } from '../seed.js'
-import { isApprover, canViewCommercial, ddMmmYY } from '../utils.js'
+import { isApprover, canViewCommercial, ddMmmYY, displayRole, displayRoles } from '../utils.js'
 import { useDrawer } from '../drawer.jsx'
 import { Icon } from '../icons.jsx'
 import { Chip } from '../ui.jsx'
@@ -53,7 +53,7 @@ const DECISIONS = ['Approved', 'Approved with conditions', 'Returned', 'Rejected
 const DECISION_LABELS = {
   'Approved': 'Approve',
   'Approved with conditions': 'Approve with conditions',
-  'Returned': 'Return',
+  'Returned': 'Send back',
   'Rejected': 'Reject',
 }
 
@@ -79,7 +79,7 @@ function DecisionForm({ a, role, onDecide }) {
   return (
     <form onSubmit={submit} className="approval-decision-form">
       <div className="approval-decision-title">
-        Your decision as {ROLES[role]?.label || role}
+        Your decision as {displayRole(role)}
       </div>
       <div className="approval-decision-options">
         {DECISIONS.map(v => (
@@ -159,7 +159,7 @@ export default function Approvals() {
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6, alignItems: 'center' }}>
       {neededOf(a).map(r => {
         const d = (a.decisions || {})[r]?.d
-        return <Chip key={r} tone={chipTone(d)}>{r} {d || 'pending'}</Chip>
+        return <Chip key={r} tone={chipTone(d)}>{displayRole(r)} {d || 'pending'}</Chip>
       })}
       {a.anyOf && neededOf(a).length > 1
         && <span className="hint" style={{ fontSize: 11.5 }}>either one decides</span>}
@@ -235,7 +235,7 @@ export default function Approvals() {
           <span className="pill Blue">Pending</span>
           <NewMarker a={a} />
           <span className="approval-type">{a.type}</span>
-          <span className="hint">requested by {a.requestedBy} · {stamp(a.ts)}</span>
+          <span className="hint">requested by {displayRole(a.requestedBy)} · {stamp(a.ts)}</span>
         </div>
         <div className="approval-ref"><RefLink a={a} /></div>
         <Detail a={a} />
@@ -246,12 +246,12 @@ export default function Approvals() {
           : myDecision
             ? (
               <div className="approval-awaiting hint">
-                You decided <b>{myDecision.d}</b> — "{myDecision.c}" · waiting on {remaining.join(' + ') || 'no one'}
+                You decided <b>{myDecision.d}</b> — "{myDecision.c}" · waiting on {displayRoles(remaining) || 'no one'}
               </div>
             )
             : (
               <div className="approval-awaiting hint">
-                Awaiting {remaining.map(r => ROLES[r]?.label || r).join(' + ')}
+                Awaiting {displayRoles(remaining)}
               </div>
             )}
       </div>
@@ -260,7 +260,7 @@ export default function Approvals() {
 
   return (
     <div className="page approvals-page">
-      <div className="approval-head"><div><div className="approval-eyebrow">DECISION WORKSPACE</div><h2><Icon name="checkCircle" size={18} /> Approvals — {ROLES[role]?.label || role}</h2><p className="hint">Resolve requests, inspect linked records, and keep the pipeline moving.</p></div></div>
+      <div className="approval-head"><div><div className="approval-eyebrow">DECISION WORKSPACE</div><h2><Icon name="checkCircle" size={18} /> Approvals — {displayRole(role)}</h2><p className="hint">Resolve requests, inspect linked records, and keep the pipeline moving.</p></div></div>
       <div className="approval-summary"><div className="approval-summary-card summary-pending"><b>{forMe.length}</b><span>Needs your decision</span></div><div className="approval-summary-card summary-waiting"><b>{others.length}</b><span>Awaiting others</span></div><div className="approval-summary-card summary-conditions"><b>{condOpen.length}</b><span>Open conditions</span></div><div className="approval-summary-card summary-decided"><b>{decided.length}</b><span>Decided</span></div></div>
       <FilterBar />
       <div className="approval-explainer"><span className="hint">

@@ -1,5 +1,6 @@
 import XLSX from 'xlsx-js-style'
 import { MODAE_COMPANY } from '../proposalDoc.js'
+import { MODAE_DOCUMENT_STANDARDS } from '../branding/modae.js'
 import { generateProposalWorkbook } from './templateExcelExport.js'
 
 const routeSheetName = (route, revision) => route === 'Services'
@@ -39,11 +40,11 @@ export function proposalWorkbookRows({ p, opp, doc, priced, totalQty, lineQuoted
     ['', doc.preparedBy?.division || ''],
   ]
 
-  const priceHeader = ['Sl.', 'Item Description', 'Model / Part Number', 'Total Qty', 'UOM']
+  const priceHeader = route === 'Spares' ? ['Part number', 'Description', 'Total quantity'] : ['Sl.', 'Item Description', 'Model / Part Number', 'Total Qty', 'UOM']
   if (priced) priceHeader.push('Unit Price ₹', 'Total Price ₹')
   const rows = (p.bom || []).map((line, i) => {
     const qty = totalQty(line)
-    const row = [i + 1, line.desc || line.itemCategory || '', line.pn || '', qty, line.uom || '']
+    const row = route === 'Spares' ? [line.pn || '', line.desc || line.itemCategory || '', qty] : [i + 1, line.desc || line.itemCategory || '', line.pn || '', qty, line.uom || '']
     if (priced) row.push(lineQuoted(line), lineQuoted(line) * qty)
     return row
   })
@@ -72,6 +73,12 @@ const rowHeight = (row, widths) => {
 const styleSheet = (sheet, rows, widths, headerRows = []) => {
   sheet['!cols'] = widths.map(wch => ({ wch }))
   sheet['!rows'] = rows.map(row => ({ hpt: rowHeight(row, widths) }))
+  sheet['!margins'] = MODAE_DOCUMENT_STANDARDS.marginsInches
+  sheet['!pageSetup'] = {
+    orientation: widths.length >= 7 ? 'landscape' : 'portrait',
+    fitToWidth: 1,
+    fitToHeight: 0,
+  }
   for (const ref of Object.keys(sheet).filter(key => !key.startsWith('!'))) {
     const cell = sheet[ref]
     const row = Number(ref.match(/\d+/)?.[0]) - 1
@@ -79,8 +86,8 @@ const styleSheet = (sheet, rows, widths, headerRows = []) => {
     cell.s = {
       alignment: { vertical: 'top', wrapText: typeof cell.v === 'string' },
       ...(headerRows.includes(row)
-        ? { font: { name: 'Candara', sz: 12, bold: true }, fill: { fgColor: { rgb: 'E8EEF6' } } }
-        : { font: { name: 'Candara', sz: 11 } }),
+        ? { font: { name: 'Candara', sz: MODAE_DOCUMENT_STANDARDS.headingSizePt, bold: true }, fill: { fgColor: { rgb: 'E8EEF6' } } }
+        : { font: { name: 'Candara', sz: MODAE_DOCUMENT_STANDARDS.bodySizePt } }),
     }
   }
 }
@@ -142,11 +149,11 @@ export function proposalWorkbookBase64(args) {
 // covering letter and optional documents can still be shared explicitly, but
 // no standard terms or internal workbook sheets are sent without a choice.
 export function buildPricedBoqWorkbook({ p, opp, priced, totalQty, lineQuoted, route }) {
-  const headers = ['Sl.', 'Item Description', 'Model / Part Number', 'Total Qty', 'UOM']
+  const headers = route === 'Spares' ? ['Part number', 'Description', 'Total quantity'] : ['Sl.', 'Item Description', 'Model / Part Number', 'Total Qty', 'UOM']
   if (priced) headers.push('Unit Price ₹', 'Total Price ₹')
   const rows = (p.bom || []).map((line, i) => {
     const qty = totalQty(line)
-    const row = [i + 1, line.desc || line.itemCategory || '', line.pn || '', qty, line.uom || '']
+    const row = route === 'Spares' ? [line.pn || '', line.desc || line.itemCategory || '', qty] : [i + 1, line.desc || line.itemCategory || '', line.pn || '', qty, line.uom || '']
     if (priced) row.push(lineQuoted(line), lineQuoted(line) * qty)
     return row
   })

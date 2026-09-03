@@ -1,7 +1,8 @@
 import React from 'react'
 import { ddMmmYY } from '../utils.js'
 import { ModaeImageLogo } from '../icons.jsx'
-import { MODAE_COMPANY, docLayout, docSheets, BOQ_LANDSCAPE } from '../proposalDoc.js'
+import { MODAE_COMPANY, docLayout, docSheets } from '../proposalDoc.js'
+import { MODAE_DOCUMENT_STANDARDS } from '../branding/modae.js'
 import { rackLayout, countSignals } from '../rack.js'
 import BoqSheet from './sheets/BoqSheet.jsx'
 import {
@@ -42,16 +43,16 @@ const PageHead = ({ p }) => (
 // line — ModAE's own Standard Terms document carries it there too.
 const OfficialLetterheadFooter = () => (
   <div className="doc-official-footer">
-    <b>{MODAE_COMPANY.name}</b>
-    <span>{MODAE_COMPANY.officialAddress}</span>
-    <span>{MODAE_COMPANY.web} | CIN: {MODAE_COMPANY.cin} | GST: {MODAE_COMPANY.gstin}</span>
+    <b>{MODAE_DOCUMENT_STANDARDS.footerLines[0]}</b>
+    <span>{MODAE_DOCUMENT_STANDARDS.footerLines[1]}</span>
+    <span>{MODAE_DOCUMENT_STANDARDS.footerLines[2]}</span>
   </div>
 )
 
 const PageFoot = ({ text }) => (
   <>
     <OfficialLetterheadFooter />
-    <div className="doc-pagefoot"><span>{text}</span><span>Confidential</span></div>
+    <div className="doc-pagefoot"><span>{text}</span><span>ModAE</span></div>
   </>
 )
 
@@ -193,13 +194,13 @@ export default function PrintDoc({ p, opp, doc, priced, totals, lineQuoted }) {
         <PageFoot text={foot} />
       </section>
 
-      {sheet('signalList', 'Signal List', <SignalListSheet p={p} />)}
+      {sheet('signalList', 'Signal List', <SignalListSheet p={p} />, true)}
 
       {sheet('rackLayout', 'Rack Layout', <RackLayoutSheet rack={rack} p={p} />, true)}
 
       {sheet('boq', layout.boqTitle(p), (
         <BoqSheet p={p} doc={doc} priced={priced} variant={boqVariant} lineQuoted={lineQuoted} />
-      ), BOQ_LANDSCAPE.includes(boqVariant))}
+      ), true)}
 
       {sheet('compliance', 'Technical Compliance & Clarification Table',
         <ComplianceSheet rows={doc.compliance} />, true)}

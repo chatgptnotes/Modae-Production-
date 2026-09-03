@@ -78,8 +78,8 @@ export const MODAE_COLORS = Object.freeze({
 })
 
 export const MODAE_TYPE = Object.freeze({
-  heading: "'Rubik', 'Segoe UI', system-ui, sans-serif",
-  body: "'Roboto', 'Segoe UI', system-ui, sans-serif",
+  heading: "'Candara', 'Optima', 'Segoe UI', system-ui, sans-serif",
+  body: "'Candara', 'Optima', 'Segoe UI', system-ui, sans-serif",
   // Document templates only (18 Aug guideline: Candara, 11pt body / 12pt
   // headings). Candara is a Windows system font that cannot be self-hosted,
   // so the printed documents carry a fallback stack; the client's machines
@@ -92,6 +92,27 @@ export const MODAE_TYPE = Object.freeze({
   buttonWeight: 700,
   buttonTracking: '.3px',
   cardRadius: '12px',
+})
+
+// Shared source of truth for every customer-facing document and export.
+// Keep the visible footer text exactly as approved by ModAE India.
+export const MODAE_DOCUMENT_STANDARDS = Object.freeze({
+  fontFamily: MODAE_TYPE.document,
+  bodySizePt: 11,
+  headingSizePt: 12,
+  marginsInches: Object.freeze({ left: 0.75, right: 0.75, top: 0.75, bottom: 0.75, header: 0.3, footer: 0.3 }),
+  header: Object.freeze({ tagline: 'Your Partners In Achieving Excellence' }),
+  footerLines: Object.freeze([
+    'ModAE India Private Limited',
+    '7th Floor, Commerce Mantri, 12, 1 & 2, Bannerghatta Road, BTM Layout, 2nd Stage, BTM Layout, Bangalore, Karnataka – 560076',
+    'CIN: U62099KA2024PTC185715 | GST: 29AARCM8622J1ZQ',
+  ]),
+  orientation: Object.freeze({
+    cover: 'portrait', report: 'portrait', proposal: 'portrait', policy: 'portrait',
+    signalList: 'landscape', rackLayout: 'landscape', compliance: 'landscape',
+    boq: 'landscape', pricing: 'landscape', issues: 'landscape',
+    clarifications: 'portrait', sensorComparison: 'landscape', sow: 'portrait',
+  }),
 })
 
 const imageBySlug = {

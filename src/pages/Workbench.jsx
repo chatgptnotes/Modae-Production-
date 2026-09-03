@@ -2,8 +2,8 @@ import React, { useRef, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, REVISION_TYPES } from '../seed.js'
-import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY, gmailComposeHref } from '../utils.js'
-import { readiness, isBlocked, nextActionWith, transitionBlockers, B_PRE_PROPOSAL_STEPS, B_PROPOSAL_STEPS } from '../gates.js'
+import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY, gmailComposeHref, displayRole, displayRoles } from '../utils.js'
+import { readiness, isBlocked, nextActionWith, transitionBlockers } from '../gates.js'
 import { COMMERCIAL_RX } from './Approvals.jsx'
 import { Chip, ClassChip, AiBadge, Stepper, WarnBox, ErrBox, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
@@ -18,7 +18,6 @@ import PropBuilder from '../workbench/PropBuilder.jsx'
 // The same component the standalone /proposal/:oppId route renders â€” both write
 // through store.saveProposal, so the two views are never out of step.
 import Proposal from './Proposal.jsx'
-import BSteps from '../workbench/BSteps.jsx'
 import SubmissionPanel from '../workbench/SubmissionPanel.jsx'
 import PoHandover from '../workbench/PoHandover.jsx'
 import OpportunityDetailsEditor from '../OpportunityDetailsEditor.jsx'
@@ -195,7 +194,7 @@ export default function Workbench() {
           <Chip tone={blockers.length ? 'state-Review' : 'state-Accepted'}>{blockers.length ? 'At risk' : 'On track'}</Chip>
         </div>
         <div className="opp-summary-grid mojibake-summary">
-          <div><span>Owner</span><b>{opp.owner} â€” {ROLES[opp.owner]?.name || opp.owner}</b></div>
+          <div><span>Owner</span><b>{displayRole(opp.owner)}</b></div>
           <div><span>Milestone</span><b>{opp.milestone || opp.stage}</b></div>
         <div><span>Customer value</span><b>{canSeeValue ? `\u20B9${fmt(opp.valueK || 0)},000` : 'Restricted'}</b></div>
           <div className="opp-summary-action"><span>Next action</span><b>{nextAction.text || NEXT_ACTION[opp.milestone] || 'Progress the opportunity'}</b></div>
@@ -203,7 +202,7 @@ export default function Workbench() {
         </div>
       </div>
       <div className="opp-summary-grid clean-summary-grid">
-        <div><span>Owner</span><b>{opp.owner} - {ROLES[opp.owner]?.name || opp.owner}</b></div>
+        <div><span>Owner</span><b>{displayRole(opp.owner)}</b></div>
         <div><span>Milestone</span><b>{opp.milestone || opp.stage}</b></div>
         <div><span>Customer value</span><b>{canSeeValue ? `₹${fmt(opp.valueK || 0)},000` : 'Restricted'}</b></div>
         <div className="opp-summary-action"><span>Next action</span><b>{nextAction.text || NEXT_ACTION[opp.milestone] || 'Progress the opportunity'}</b></div>
@@ -242,7 +241,6 @@ export default function Workbench() {
                   {item.key === 'dev' && deviationRows.length > 0 && <div className="transition-detail-list">{deviationRows.map((row, index) => <div key={`${row.term}-${index}`}><b>{row.term}</b> Â· Customer ask: {row.customerAsk || 'Not recorded'} Â· Response: {row.ourResponse || 'Pending review'}</div>)}</div>}
                   {item.severity === 'wait' && <span>Waiting for the responsible approver.</span>}
                   {item.key === 'clarifications' && <button className="exception-action" onClick={() => openTransitionTab('clarifications')}>Open clarifications</button>}
-                  {item.key === 'b-steps' && <button className="exception-action" onClick={() => openTransitionTab(item.phase === 'pre-proposal' ? 'sourcing' : 'proposal')}>Open {item.phase === 'pre-proposal' ? 'Sourcing workflow' : 'Proposal workflow'}</button>}
                   {item.key === 'kyc' && <button className="exception-action" onClick={() => openTransitionTab('customer')}>Open Customer/KYC</button>}
                   {item.key === 'required-contactPerson' && <button className="exception-action" onClick={() => openMissingContact('contactPerson')}>Edit contact person</button>}
                   {item.key === 'required-contactPhone' && <button className="exception-action" onClick={() => openMissingContact('contactPhone')}>Edit contact phone</button>}
@@ -790,7 +788,7 @@ function ClarificationsTab({ opp }) {
 
   const saveAnswer = async () => {
     if (!answerFor) return
-    if (!answerForm.response.trim()) { setAnswerErr('Add the answer received before marking this resolved.'); return }
+    if (!answerForm.response.trim()) { setAnswerErr('Add the missing information received before marking this resolved.'); return }
     setBusy('answer')
     const attachments = []
     for (const file of answerFiles) {
@@ -840,7 +838,7 @@ function ClarificationsTab({ opp }) {
                 <td>{ddMmmYY(c.due)}</td>
                 <td><Chip tone={clarTone(c.status)}>{c.status}</Chip></td>
                 <td>
-                  <button onClick={() => openAnswer(c)}>{c.status === 'Answered' ? 'Edit answer' : 'Add answer'}</button>
+                  <button onClick={() => openAnswer(c)}>{c.status === 'Answered' ? 'Edit information' : 'Update information'}</button>
                 </td>
               </tr>
             ))}
@@ -850,7 +848,7 @@ function ClarificationsTab({ opp }) {
       </div>
 
       {answerFor && (
-        <Modal title={`Answer clarification - ${answerFor.id}`} onClose={() => setAnswerFor(null)} wide>
+        <Modal title={`Update information - ${answerFor.id}`} onClose={() => setAnswerFor(null)} wide>
           {answerErr && <ErrBox>{answerErr}</ErrBox>}
           <div className="clar-mail-form">
             <label className="afield">Source
@@ -863,8 +861,8 @@ function ClarificationsTab({ opp }) {
             <label className="afield">Received date
               <input type="date" value={answerForm.receivedAt} onChange={e => setAnswerForm({ ...answerForm, receivedAt: e.target.value })} />
             </label>
-            <label className="afield">Answer received
-              <textarea rows={8} value={answerForm.response} onChange={e => setAnswerForm({ ...answerForm, response: e.target.value })} placeholder="Paste or summarise the answer received for this question." autoFocus />
+            <label className="afield">Information received
+              <textarea rows={8} value={answerForm.response} onChange={e => setAnswerForm({ ...answerForm, response: e.target.value })} placeholder="Paste or summarise the missing information received for this request." autoFocus />
             </label>
             <label className="afield">Files / mail evidence
               <input type="file" multiple onChange={e => setAnswerFiles(Array.from(e.target.files || []))} />
@@ -873,7 +871,7 @@ function ClarificationsTab({ opp }) {
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
             <button onClick={() => setAnswerFor(null)}>Cancel</button>
-            <button className="primary" disabled={busy === 'answer'} onClick={saveAnswer}><Icon name="check" size={13} /> {busy === 'answer' ? 'Saving...' : 'Save answer'}</button>
+            <button className="primary" disabled={busy === 'answer'} onClick={saveAnswer}><Icon name="check" size={13} /> {busy === 'answer' ? 'Saving...' : 'Save information'}</button>
           </div>
         </Modal>
       )}
@@ -1059,11 +1057,6 @@ function SourcingTab({ opp, goTab }) {
 
   return (
     <div className="ana-grid">
-      {opp.context === 'Brownfield' && (
-        <div className="ana-card c-12">
-          <BSteps opp={opp} steps={B_PRE_PROPOSAL_STEPS} title="Brownfield sourcing sign-off - B-01 to B-04" />
-        </div>
-      )}
       {opp.route === 'Spares' && (
         <div className="ana-card c-12 sourcing-spares-workbench">
           <WbSpares opp={opp} openBuilder={() => goTab('proposal')} />
@@ -1195,27 +1188,28 @@ function ProposalTab({ opp }) {
   const openBuilder = () => setSub('builder')
   // Diagram 02 Â§3 is the Brownfield lane only â€” Greenfield runs Phase-1
   // activities and Service runs the Â§4 survey path instead.
-  const SUBS = [
-    ['workbench', 'Workbench'],
-    ...(opp.context === 'Brownfield' ? [['steps', 'B-05 Proposal sign-off']] : []),
-    ['builder', 'Builder'], ['edit-sheet', 'Edit proposal'], ['followup', 'Follow-up'],
-  ]
+  const SUBS = [['edit-sheet', 'Edit proposal'], ['followup', 'Follow-up']]
   return (
     <div className="proposal-tab-shell">
+      <header className="proposal-subnav-header">
+        <div>
+          <span className="eyebrow">Proposal workspace</span>
+          <h3>Prepare customer proposal</h3>
+        </div>
       <div className="wb-sub">
         {SUBS.map(([k, label]) => (
           <button key={k} className={sub === k ? 'active' : ''} onClick={() => setSub(k)}>{label}</button>
         ))}
       </div>
+      </header>
       {sub === 'workbench' && (
         opp.route === 'Spares' ? <WbSpares opp={opp} openBuilder={openBuilder} />
         : opp.route === 'Service' ? <WbService opp={opp} openBuilder={openBuilder} />
         : <WbProject opp={opp} openBuilder={openBuilder} />
       )}
-      {sub === 'steps' && <BSteps opp={opp} steps={B_PROPOSAL_STEPS} title="Brownfield proposal sign-off - B-05" />}
       {sub === 'builder' && (
         <>
-          <PropBuilder opp={opp} openSteps={() => setSub('steps')} />
+          <PropBuilder opp={opp} />
           <div className="builder-divider" />
           <Proposal oppId={opp.id} embedded initialTab="Cover Letter" />
         </>
@@ -1285,7 +1279,6 @@ function FollowUpPane({ opp }) {
     setNote('')
     setRevType(REVISION_TYPES[0].id)
   }
-  const revSpec = REVISION_TYPES.find(r => r.id === revType) || REVISION_TYPES[0]
 
   const templateFu = () => [
     'Dear Sir,',
@@ -1330,7 +1323,7 @@ function FollowUpPane({ opp }) {
           <div key={i} className="check-row">
             <b>{r.rev}</b><span>{r.note}</span>
             <Chip tone="grey">{r.status}</Chip>
-            {r.type && <Chip tone="state-Review">{r.type} â†’ {r.step}</Chip>}
+            {r.type && <Chip tone="state-Review">{r.type} revision</Chip>}
             <span className="hint" style={{ marginLeft: 'auto' }}>{ddMmmYY(r.when)} Â· {r.by}</span>
           </div>
         ))}
@@ -1344,8 +1337,7 @@ function FollowUpPane({ opp }) {
           <button disabled={!note.trim()} onClick={addRevision}><Icon name="plus" size={13} /> Add revision</button>
         </div>
         <p className="hint" style={{ marginTop: 4 }}>
-          Returns the opportunity to <b>{revSpec.step}</b>, reopens that step for sign-off, and
-          requires the whole Â§5 approval again before the quote can be sent.
+          The revised quote must pass the approval checks again before it can be sent.
         </p>
       </div>
       <div className="ana-card c-6">
@@ -1371,7 +1363,7 @@ function FollowUpPane({ opp }) {
         {escOpen && (
           <div className="okbox">
             Post-quotation intelligence: {age != null ? `submitted ${age} day(s) ago with no recorded customer response` : 'proposal not yet submitted'}.
-            Suggest a courtesy call by {opp.owner} this week, and escalate to LJS if silent past day 14 of the follow-up schedule.
+            Suggest a courtesy call by {displayRole(opp.owner)} this week, and escalate to LJS if silent past day 14 of the follow-up schedule.
           </div>
         )}
       </div>

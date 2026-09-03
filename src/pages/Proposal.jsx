@@ -13,13 +13,10 @@ import PrintDoc from '../proposal/PrintDoc.jsx'
 import { signalsFromBom, countSignals, rackLayout, UMM_CHANNELS, RACK_SLOTS } from '../rack.js'
 import { normalizeProposal, buildPricing } from '../proposal/docProps.js'
 import ProposalSheetEditor from '../proposal/ProposalSheetEditor.jsx'
-import PartPicker from '../proposal/PartPicker.jsx'
 import { blobAttachment, pricedBoqAttachment } from '../proposal/emailAttachments.js'
 import { downloadProposalXlsx } from '../proposal/excelExport.js'
 import { routeForType } from '../seed.js'
 import { buildLeadProposalData } from '../leadBoq.js'
-import { extractPdfText, parseTender, matchParts, buildProposal } from '../tenderParse.js'
-import { runTaskResult } from '../ai.js'
 
 const ROUTE_TABS = {
   Project: ['Cover Letter', 'Edit Sheet', 'Document', 'Signal List', 'Rack Layout', 'Priced BoQ'],
@@ -267,6 +264,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   const fb = useFormulaBar()
   const opp = store.opportunities.find(o => o.id === oppId)
   const [tab, setTab] = useState(initialTab)
+  const [workbook, setWorkbook] = useState('proposal')
   const [printing, setPrinting] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [referencePreviewOpen, setReferencePreviewOpen] = useState(false)
@@ -286,9 +284,6 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   const [emailPreview, setEmailPreview] = useState(false)
   const [emailBusy, setEmailBusy] = useState(false)
   const [emailError, setEmailError] = useState('')
-  const boqFileRef = useRef(null)
-  const [boqExtractBusy, setBoqExtractBusy] = useState(false)
-  const [boqExtractError, setBoqExtractError] = useState('')
   const [conditionTarget, setConditionTarget] = useState(null)
   const [conditionNote, setConditionNote] = useState('')
   const [p, setP] = useState(() => normalize(store.getProposal(oppId), opp))
@@ -501,84 +496,6 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
     kind,
   })
 
-  // Add by index into allParts — part numbers are NOT unique across lists
-  // (ad-hoc quotes can duplicate a BNK/Metrics PN, and repeat over time).
-  const addBomLine = value => {
-    const isSource = String(value).startsWith('source:')
-    const sourceItem = isSource ? (p.extractedItems || [])[+String(value).slice(7)] : null
-    const part = isSource
-      ? allParts.find(x => x.pn && sourceItem?.partNumber && x.pn.toLowerCase() === sourceItem.partNumber.toLowerCase())
-      : allParts[+value]
-    if (isSource && !sourceItem) return
-    if (!isSource && !part) return
-    const requestedPn = sourceItem?.partNumber || sourceItem?.customerRef || ''
-    const pn = part?.pn || requestedPn
-    if (p.bom.some(line => (line.custRef || line.pn || '').toLowerCase() === pn.toLowerCase())) return
-    save({
-      ...p,
-      bom: [...p.bom, {
-        itemCategory: '', pn: part?.pn || '', custRef: requestedPn,
-        desc: sourceItem?.description || part?.desc || '', listPrice: part?.price || 0, adders: [],
-        qtyPerUnit: 0, common: sourceItem?.qty || 1, spares: 0, quoted: '',
-        list: part?.list || 'Ad-hoc', currency: part?.currency || 'INR',
-      }],
-    })
-  }
-  const extractBoqFromPdf = async e => {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
-    setBoqExtractBusy(true)
-    setBoqExtractError('')
-    try {
-      const extracted = await extractPdfText(file)
-      const localLead = {
-        body: extracted.fullText,
-        attachments: [{ name: file.name, text: extracted.fullText }],
-      }
-      let aiData = null
-      if (file.size <= 12 * 1024 * 1024) {
-        const bytes = new Uint8Array(await file.arrayBuffer())
-        let binary = ''
-        for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
-        const aiResult = await runTaskResult('lead.extract', {
-          from: opp.contactEmail || opp.contactPerson || '',
-          subject: opp.oppName || p.subject || '',
-          body: extracted.fullText,
-          attachments: [{ name: file.name, text: extracted.fullText }],
-          aiAttachments: [{ name: file.name, mimeType: 'application/pdf', dataBase64: btoa(binary) }],
-        }, { fallback: store.config?.aiModel?.provider === 'Built-in fallback' })
-        aiData = aiResult.data?.data || null
-      }
-      const aiLead = aiData?.lineItems?.length ? { ...localLead, ai: { lineItems: aiData.lineItems } } : null
-      const leadData = buildLeadProposalData(aiLead || localLead, store.priceLists)
-      const parsed = parseTender(extracted.fullText, extracted.struct)
-      const items = parsed.items?.length
-        ? parsed.items.map(item => ({
-          description: item.description, partNumber: item.pn, customerRef: item.sapCode || item.pn,
-          qty: item.qty, uom: item.uom || 'EA', evidence: item.evidence || 'Buyer PDF',
-        }))
-        : leadData.extracted
-      if (!items.length) throw new Error('No BOQ line items were found in this PDF.')
-      const matched = matchParts(items.map(item => ({
-        description: item.description, pn: item.partNumber || item.pn, qty: item.qty,
-      })), allParts)
-      const next = parsed.items?.length ? buildProposal(oppId, opp, parsed, matched) : { ...p, bom: leadData.bom }
-      save({
-        ...p,
-        // Keep the existing proposal header and commercial edits intact.
-        bom: next.bom,
-        terms: p.terms?.length ? p.terms : next.terms,
-        extractedItems: items,
-        attachments: [...new Set([...(p.attachments || []), file.name])],
-        boqSource: `PDF: ${file.name}`,
-      })
-    } catch (error) {
-      setBoqExtractError(error?.message || 'Could not extract BOQ lines from this PDF.')
-    } finally {
-      setBoqExtractBusy(false)
-    }
-  }
   // Unit Price ₹ stays a string field — blank means "use the computed price" —
   // so it can't go through clampQty; it only rejects negatives.
   const clampQuoted = s => {
@@ -789,29 +706,50 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
       {/* The opportunity summary header already names the opportunity, and there
           is no folder to go back to from inside it. */}
       {!embedded && <h2>{oppId} — {opp.sellTo} — Proposal Workbook</h2>}
+      <header className="proposal-workspace-header">
+        <div className="proposal-workspace-title">
+          <span className="eyebrow">Customer proposal</span>
+          <h3>{route} proposal <span className="proposal-meta-chip">Rev {p.revision || '00'}</span></h3>
+        </div>
       <div className="toolbar proposal-action-toolbar">
         {!embedded && <Link className="btn" to={`/folders/${oppId}`}>◂ Back to folder</Link>}
         <span className="spacer" />
-        <label className="hint">Proposal type:{' '}
+        <label className="proposal-type-control">Proposal type
           <select value={p.proposalType || 'Project'} onChange={set('proposalType')}>
             <option>Project</option><option>Spares</option><option>Services</option>
           </select>
         </label>
         {pendingForOpp.length > 0 && <span className="pill Amber">{pendingForOpp.length} approval{pendingForOpp.length > 1 ? 's' : ''} pending</span>}
         <button onClick={openEmail}><Icon name="mail" size={13} /> Email proposal</button>
-        {tab === 'Priced BoQ' && comm && <button onClick={exportBoQ}>Extract to Excel</button>}
-        <button onClick={exportExcel}>Download Excel proposal</button>
+        <button onClick={exportExcel}>Download Excel</button>
         <button onClick={() => setPreviewOpen(true)}><Icon name="eye" size={13} /> Preview proposal</button>
         {(route === 'Spares' || route === 'Services') && <button onClick={openTemplatePreview}><Icon name="fileSheet" size={13} /> Preview {route === 'Spares' ? 'Spares firm offer' : 'service proposal'}</button>}
       </div>
+      </header>
 
-      <div className="workbook-tabs proposal-artifact-tabs" role="tablist" aria-label="Proposal documents">
-        {visibleTabs.map(name => (
-          <button key={name} role="tab" aria-selected={tab === name} className={tab === name ? 'active' : ''} onClick={() => setTab(name)}>{name}</button>
-        ))}
+      <div className="proposal-tab-bar">
+        <div className="workbook-tabs proposal-artifact-tabs" role="tablist" aria-label="Proposal documents">
+          {visibleTabs.map(name => (
+            <button key={name} role="tab" aria-selected={tab === name} className={tab === name ? 'active' : ''} onClick={() => setTab(name)}>{name}</button>
+          ))}
+        </div>
+        {tab === 'Edit Sheet' && (
+          <div className="workbook-switcher" aria-label="Workbook mode">
+            <button className={workbook === 'proposal' ? 'active' : ''} onClick={() => setWorkbook('proposal')}>Proposal Workbook</button>
+            <button className={workbook === 'inputs' ? 'active' : ''} onClick={() => setWorkbook('inputs')}>Inputs Workbook</button>
+          </div>
+        )}
       </div>
 
       {opp.status === 'Open' && (
+        <details className="proposal-alert-drawer" open={blocked || pendingForOpp.length > 0}>
+          <summary>
+            <span className={`proposal-alert-indicator ${blocked ? 'blocked' : 'ready'}`} />
+            <span>{blocked ? `${blockers.length} readiness item${blockers.length === 1 ? '' : 's'} need attention` : 'Proposal is ready to progress'}</span>
+            {submitted && <span className="pill won">Submitted</span>}
+            <span className="proposal-alert-toggle">Review status</span>
+          </summary>
+          <div className="proposal-alert-drawer-body">
         <div className={`gate-strip ${blocked ? 'blocked' : 'ready'}`}>
           {blockers.length === 0 && (
             <div className="gate-row">
@@ -856,22 +794,32 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           )}
           {blockers.length > 0 && !blocked && submitted && (
             <div className="gate-row"><span className="spacer" /><span className="pill won">Submitted</span></div>
-          )}
-        </div>
+           )}
+         </div>
+          </div>
+        </details>
       )}
 
       {route !== 'Project' && (
-        <div className="ai-notice" style={{ marginBottom: 10 }}>
+        <details className="proposal-context-drawer">
+          <summary>Proposal notes <span className="hint">Route context</span></summary>
+          <div className="proposal-context-drawer-body">
+        <div className="ai-notice">
           <b>{route} proposal route.</b> The printed document follows the{' '}
           {route.toLowerCase()} proposal template: a covering letter and one priced sheet,
           with no signal list, no rack layout and no project front matter. Optional annexes
           ({p.artifactSheets.filter(x => !['Cover Letter', 'Priced BoQ'].includes(x)).join(' · ')}) are
           issued only when ticked on the Document tab.
         </div>
+          </div>
+        </details>
       )}
 
       {route === 'Spares' && !linkedLead && (
-        <div className="warnbox">No source lead is linked to this opportunity. The BoQ was not populated from another lead.</div>
+        <details className="proposal-context-drawer">
+          <summary>Source lead notice <span className="hint">No linked lead</span></summary>
+          <div className="proposal-context-drawer-body"><div className="warnbox">No source lead is linked to this opportunity. The BoQ was not populated from another lead.</div></div>
+        </details>
       )}
 
       {tab === 'Cover Letter' && (
@@ -952,11 +900,11 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
       )}
 
       {tab === 'Edit Sheet' && (
-        <ProposalSheetEditor p={p} opp={opp} doc={doc} save={save} allParts={allParts} totals={totals} units={units} priced={priced}
+          <ProposalSheetEditor p={p} opp={opp} doc={doc} save={save} totals={totals} units={units} priced={priced} workbook={workbook} setWorkbook={setWorkbook}
           totalQty={totalQty} lineComputed={lineComputed} lineQuoted={lineQuoted} lineCost={lineCost}
-          linePrice={linePrice} addBomLine={addBomLine} updLine={updLine} removeLine={removeLine}
+          linePrice={linePrice} updLine={updLine} removeLine={removeLine}
           updTerm={updTerm} addTerm={addTerm} removeTerm={removeTerm} pasteBoq={pasteBoq} store={store}
-          boqFileRef={boqFileRef} extractBoqFromPdf={extractBoqFromPdf} boqExtractBusy={boqExtractBusy} boqExtractError={boqExtractError} />
+          />
       )}
 
       {['Scope of Work', 'Issues List', 'Proposal', 'Service Rate Schedule', 'Firm Offer', 'Clarifications', 'Sensor Comparison'].includes(tab) && (
@@ -1100,11 +1048,6 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
             Eff. Rate = ROUNDUP(base × (1 + CD+ERV+Cont.) × (1 − B&amp;K Disc)) — e.g. 112 × 1.16 × 0.50 → ₹65 (B&amp;K discount applies to the B&amp;K list only).
             Unit ₹ price = list × Eff. Rate ÷ (1 − GM). Net GM = Target − ModAE Costs − Finance Cost, so quoting below the computed price or adding finance cost pulls Net GM% under the Input GM%.
             Input GM% is capped at {MAX_GM_PCT}%, the discount at 100%, and finance cost cannot be negative — the cells hold at those limits.
-          </div>
-
-          <div className="toolbar">
-            <PartPicker extractedItems={p.extractedItems} allParts={allParts} bom={p.bom} onSelect={addBomLine} />
-            <span className="hint">Ad-hoc trader quotes captured in Price Lists appear here too (latest entry = reference price).</span>
           </div>
 
           <div className="sheet-wrap proposal-boq-sheet-wrap">

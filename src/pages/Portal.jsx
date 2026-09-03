@@ -89,7 +89,7 @@ export default function Portal() {
                 value={answers[c.id] || ''}
                 onChange={e => setAnswers(a => ({ ...a, [c.id]: e.target.value }))} />
               <button style={{ marginTop: 4 }} disabled={!(answers[c.id] || '').trim()} onClick={() => sendAnswer(c)}>
-                <Icon name="send" size={12} /> Submit answer
+                <Icon name="send" size={12} /> Submit information
               </button>
             </div>
           ))}

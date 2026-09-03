@@ -624,9 +624,9 @@ export const BOQ_COLUMNS = {
   ],
   firm: [
     { key: 'sl', label: 'Sl.', cls: 'sl' },
-    { key: 'desc', label: 'Item Description' },
-    { key: 'pn', label: 'Proposed Model/Part No.' },
-    { key: 'qty', label: 'Qty', num: true },
+    { key: 'pn', label: 'Part number' },
+    { key: 'desc', label: 'Description' },
+    { key: 'qty', label: 'Total quantity', num: true },
     { key: 'unit', label: 'Unit Price ₹', num: true, priced: true },
     { key: 'total', label: 'Total Price ₹', num: true, priced: true },
   ],

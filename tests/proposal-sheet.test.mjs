@@ -24,15 +24,10 @@ test('BOQ descriptions use a wrapped two-line editor', () => {
   assert.match(css, /\.proposal-edit-grid \.proposal-description-editor[\s\S]*overflow-wrap: anywhere/)
 })
 
-test('proposal part selection is searchable and the description column is wider', () => {
+test('proposal BOQ editing has no extraction or part-picker controls', () => {
   const proposal = read('src/pages/Proposal.jsx')
   const editor = read('src/proposal/ProposalSheetEditor.jsx')
-  const picker = read('src/proposal/PartPicker.jsx')
-  const css = read('src/styles.css')
-  assert.match(proposal, /<PartPicker extractedItems=\{p\.extractedItems\}/)
-  assert.match(editor, /<PartPicker extractedItems=\{p\.extractedItems\}/)
-  assert.match(picker, /role="combobox"/)
-  assert.match(picker, /Search part number or description/)
-  assert.match(picker, /already added/)
-  assert.match(css, /proposal-boq-sheet-wrap table\.sheet th:nth-child\(3\)[\s\S]*min-width: 300px/)
+  assert.doesNotMatch(proposal, /Extract BOQ from buyer PDF/)
+  assert.doesNotMatch(editor, /Extract BOQ from buyer PDF/)
+  assert.doesNotMatch(editor, /PartPicker|Search part number or description/)
 })

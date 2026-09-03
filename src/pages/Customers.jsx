@@ -128,7 +128,7 @@ function AddCustomer({ onClose }) {
   return (
     <Modal title="Add existing customer" onClose={onClose}>
       <form onSubmit={submit} className="drawer-form">
-        <label>Customer name</label>
+        <label>Company name</label>
         <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
           placeholder="e.g. Adani Power Ltd" autoFocus style={{ width: '100%' }} />
         <div className="dgrid2" style={{ marginTop: 8 }}>

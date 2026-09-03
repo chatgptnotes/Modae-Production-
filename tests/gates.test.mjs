@@ -182,8 +182,8 @@ const bStepBlocker = oppType => readiness(
 test('a Service proposal is ready without B-step signatures', () => {
   assert.equal(bStepBlocker('Service'), undefined,
     'Service is gated by the §4 survey path, never by B-01..B-05')
-  assert.equal(bStepBlocker('Spares')?.severity, 'block', 'Spares still owes the B-steps')
-  assert.equal(bStepBlocker('Retrofit')?.severity, 'block', 'Retrofit still owes the B-steps')
+  assert.equal(bStepBlocker('Spares'), undefined, 'Spares no longer owes Brownfield sign-offs')
+  assert.equal(bStepBlocker('Retrofit'), undefined, 'Retrofit no longer owes Brownfield sign-offs')
 })
 
 test('Retrofit shares the Brownfield workbench with Spares', () => {

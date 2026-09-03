@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
 import { B_STEPS as ALL_B_STEPS, ROLES, defaultBStepOwners } from '../seed.js'
-import { isAdminRole } from '../utils.js'
+import { isAdminRole, displayRole } from '../utils.js'
 import { Chip } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 
@@ -58,10 +58,10 @@ export default function BSteps({ opp, steps = ALL_B_STEPS, title = 'Brownfield w
         const assignedTo = assignments[step.id]
         const mayAct = store.role === assignedTo || isAdminRole(store.role)
         return (
-          <div key={step.id} className="ana-card c-6">
+          <div key={step.id} className={'ana-card c-6' + (isNext ? ' b-step-current' : '')}>
             <div className="ana-title">
               {step.id} - {step.label}
-              <span className="hint">Owner: {assignedTo}</span>
+              <span className="hint">Owner: {displayRole(assignedTo)}</span>
               {ok
                 ? <Chip tone="state-Accepted">Signed</Chip>
                 : isNext ? <Chip tone="state-Review">Next</Chip> : <Chip tone="grey">Waiting</Chip>}
@@ -103,14 +103,14 @@ export default function BSteps({ opp, steps = ALL_B_STEPS, title = 'Brownfield w
                 </button>
               </div>
             ) : (
-              <p className="hint">Awaiting sign-off from {assignedTo}.</p>
+              <p className="hint">Awaiting sign-off from {displayRole(assignedTo)}.</p>
             )}
 
             {canAssign && (
               <label className="hint" style={{ display: 'block', marginTop: 8 }}>
                 Responsible person{' '}
                 <select value={assignedTo} onChange={event => store.assignBStep(opp.id, step.id, event.target.value)}>
-                  {assignableRoles.map(([id, role]) => <option key={id} value={id}>{id} - {role.name}</option>)}
+                  {assignableRoles.map(([id]) => <option key={id} value={id}>{displayRole(id)}</option>)}
                 </select>
               </label>
             )}
