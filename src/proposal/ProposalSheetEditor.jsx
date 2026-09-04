@@ -13,7 +13,7 @@ const inputProps = (row, col, onKeyDown) => ({
 
 export default function ProposalSheetEditor({
   p, opp, doc, save, totals, units, totalQty, lineComputed, lineQuoted, priced,
-   lineCost, linePrice, updLine, removeLine, updTerm, addTerm, removeTerm, pasteBoq, store, workbook = 'proposal', setWorkbook,
+   lineCost, linePrice, updLine, removeLine, adjustLineQty, updTerm, addTerm, removeTerm, pasteBoq, store, workbook = 'proposal', setWorkbook,
 }) {
   const [localWorkbook, setLocalWorkbook] = useState('proposal')
   const activeWorkbook = setWorkbook ? workbook : localWorkbook
@@ -76,7 +76,7 @@ export default function ProposalSheetEditor({
                 <td><input value={t.customerAsk || ''} onChange={updTerm(i, 'customerAsk')} /></td>
                 <td><input value={t.ourResponse || ''} onChange={updTerm(i, 'ourResponse')} /></td>
                 <td><select value={t.status || 'Comply'} onChange={updTerm(i, 'status')}><option>Comply</option><option>Deviation</option></select></td>
-                <td><button onClick={removeTerm(i)} title="Remove term">✕</button></td>
+                <td><button className="proposal-row-minus" onClick={removeTerm(i)} title="Remove term" aria-label="Remove term">−</button></td>
               </tr>
             ))}</tbody>
           </table>
@@ -106,12 +106,20 @@ export default function ProposalSheetEditor({
                 <td><input {...inputProps(i, 0, e => { paste(i, 0, e); keyNav(e, i, 0, p.bom.length, 6) })} value={l.itemCategory || ''} onChange={updLine(i, 'itemCategory', false)} /></td>
                 <td><textarea rows={2} className="proposal-description-editor" {...inputProps(i, 1, e => { paste(i, 1, e); keyNav(e, i, 1, p.bom.length, 6) })} value={l.desc || ''} onChange={updLine(i, 'desc', false)} /></td>
                 <td>{l.pn || '—'}{l.custRef && <div className="hint">{l.custRef}</div>}</td>
-                {editable.slice(2, 5).map((key, j) => <td className="num" key={key}><input type="number" min="0" {...inputProps(i, j + 2, e => { paste(i, j + 2, e); keyNav(e, i, j + 2, p.bom.length, 6) })} value={l[key] || ''} onChange={updLine(i, key)} /></td>)}
+                {editable.slice(2, 5).map((key, j) => <td className="num" key={key}>
+                  {key === 'qtyPerUnit'
+                    ? <div className="quantity-stepper">
+                        <button type="button" onClick={adjustLineQty(i, -1)} title="Decrease quantity" aria-label={`Decrease quantity for line ${i + 1}`}>−</button>
+                        <input type="number" min="0" {...inputProps(i, j + 2, e => { paste(i, j + 2, e); keyNav(e, i, j + 2, p.bom.length, 6) })} value={l[key] || ''} onChange={updLine(i, key)} />
+                        <button type="button" onClick={adjustLineQty(i, 1)} title="Increase quantity" aria-label={`Increase quantity for line ${i + 1}`}>＋</button>
+                      </div>
+                    : <input type="number" min="0" {...inputProps(i, j + 2, e => { paste(i, j + 2, e); keyNav(e, i, j + 2, p.bom.length, 6) })} value={l[key] || ''} onChange={updLine(i, key)} />}
+                </td>)}
                 <td className="num"><b>{totalQty(l)}</b></td>
                 <td>{l.uom || '—'}</td>
                 {priced && <><td className="num"><input type="number" min="0" {...inputProps(i, 5, e => { paste(i, 5, e); keyNav(e, i, 5, p.bom.length, 6) })} value={l.quoted || ''} placeholder={fmt(Math.round(lineComputed(l)))} onChange={updLine(i, 'quoted', false)} /></td>
                 <td className="num">₹ {fmt(lineQuoted(l) * totalQty(l))}</td></>}
-                <td><button onClick={removeLine(i)} title="Remove line">✕</button></td>
+                <td><span className="proposal-row-control" title="Adjust quantity with the stepper">Qty</span></td>
               </tr>
             })}</tbody>
             {priced && <tfoot><tr><td colSpan={10}>Totals</td><td className="num">₹ {fmt(totals.target)}</td><td /></tr></tfoot>}

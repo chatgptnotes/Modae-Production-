@@ -12,3 +12,6 @@ CLAUDE.md
 # Client workflow specs and working artifacts — large binaries (PDF/docx/xlsx/zip)
 # that are reference material, not source. Kept local.
 doc/
+
+# Local skill symlinks — absolute paths are machine-specific, not portable
+.claude/

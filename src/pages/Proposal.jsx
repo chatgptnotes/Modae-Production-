@@ -17,6 +17,7 @@ import { blobAttachment, pricedBoqAttachment } from '../proposal/emailAttachment
 import { downloadProposalXlsx } from '../proposal/excelExport.js'
 import { routeForType } from '../seed.js'
 import { buildLeadProposalData } from '../leadBoq.js'
+import DetailTabs from '../DetailTabs.jsx'
 
 const ROUTE_TABS = {
   Project: ['Cover Letter', 'Edit Sheet', 'Document', 'Signal List', 'Rack Layout', 'Priced BoQ'],
@@ -286,6 +287,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   const [emailError, setEmailError] = useState('')
   const [conditionTarget, setConditionTarget] = useState(null)
   const [conditionNote, setConditionNote] = useState('')
+  const [readinessOpen, setReadinessOpen] = useState(false)
   const [p, setP] = useState(() => normalize(store.getProposal(oppId), opp))
   // Ref mirror: deferred commits (formula bar) must patch the CURRENT proposal,
   // never a click-time snapshot — a stale snapshot would silently revert edits.
@@ -533,6 +535,13 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
     save({ ...p, bom })
   }
   const removeLine = i => () => save({ ...p, bom: p.bom.filter((_, j) => j !== i) })
+  const adjustLineQty = (i, delta) => () => {
+    const current = Number(pRef.current.bom[i]?.qtyPerUnit) || 0
+    const bom = pRef.current.bom.map((line, j) => j === i
+      ? { ...line, qtyPerUnit: Math.max(0, current + delta) }
+      : line)
+    save({ ...pRef.current, bom })
+  }
 
   const updTerm = (i, k) => e => save({ ...p, terms: p.terms.map((t, j) => (j === i ? { ...t, [k]: e.target.value } : t)) })
   const addTerm = () => save({ ...p, terms: [...p.terms, { term: '', customerAsk: '', ourResponse: '', status: 'Comply' }] })
@@ -672,6 +681,16 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
     console.error('Proposal Excel export failed', error)
     window.alert(`The proposal workbook could not be downloaded: ${error?.message || 'unknown export error'}`)
   })
+  const submitForApproval = () => {
+    const pendingTypes = new Set(pendingForOpp.map(item => item.type))
+    const actionable = blockers.filter(bl => bl.approvalType && bl.severity !== 'wait' && !pendingTypes.has(bl.approvalType))
+    actionable.forEach(bl => store.requestApproval({
+      oppId, type: bl.approvalType, approver: bl.approver, detail: bl.text,
+      ...(bl.needed ? { needed: bl.needed } : {}),
+      ...(bl.anyOf ? { anyOf: bl.anyOf } : {}),
+    }))
+    setReadinessOpen(true)
+  }
 
   // The customer document: sections auto-drafted from the opportunity and BoQ,
   // each overridable on the Document tab. Attachments pick up whatever the
@@ -685,7 +704,8 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   // Signal List and Rack Layout are project artefacts. Biji, 13 Aug: "in the
   // spare parts case, there will not be any signal list, there will not be
   // rack layout." Hide the tabs rather than show them with an apology.
-  const visibleTabs = ROUTE_TABS[route] || ROUTE_TABS.Project
+  const visibleTabs = (ROUTE_TABS[route] || ROUTE_TABS.Project)
+    .filter(name => name !== 'Priced BoQ' || comm)
   // Switching route while sitting on a now-hidden tab must not blank the page.
   if (!visibleTabs.includes(tab)) { setTab('Cover Letter'); return null }
 
@@ -711,6 +731,10 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           <span className="eyebrow">Customer proposal</span>
           <h3>{route} proposal <span className="proposal-meta-chip">Rev {p.revision || '00'}</span></h3>
         </div>
+        <div className="proposal-primary-actions" aria-label="Primary proposal actions">
+          <button className="btn-secondary" onClick={exportExcel}><Icon name="download" size={13} /> Download Draft</button>
+          <button className="primary" onClick={submitForApproval}><Icon name="checkCircle" size={13} /> Submit for Approval</button>
+        </div>
       <div className="toolbar proposal-action-toolbar">
         <div className="proposal-context-actions">
         {!embedded && <Link className="btn" to={`/folders/${oppId}`}>◂ Back to folder</Link>}
@@ -730,22 +754,36 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
       </div>
       </header>
 
-      <div className="proposal-tab-bar">
-        <div className="workbook-tabs proposal-artifact-tabs" role="tablist" aria-label="Proposal documents">
-          {visibleTabs.map(name => (
-            <button key={name} role="tab" aria-selected={tab === name} className={tab === name ? 'active' : ''} onClick={() => setTab(name)}>{name}</button>
-          ))}
+      <div className="proposal-control-groups">
+        <div className="proposal-context-actions" aria-label="Proposal setup">
+          {!embedded && <Link className="btn" to={`/folders/${oppId}`}>Back to folder</Link>}
+          <label className="proposal-type-control">Type
+            <select value={p.proposalType || 'Project'} onChange={set('proposalType')}>
+              <option>Project</option><option>Spares</option><option>Services</option>
+            </select>
+          </label>
+          {pendingForOpp.length > 0 && <span className="pill Amber">{pendingForOpp.length} approval{pendingForOpp.length > 1 ? 's' : ''} pending</span>}
         </div>
+        <div className="proposal-secondary-actions" aria-label="Customer-facing actions">
+          <button className="btn-secondary" onClick={openEmail}><Icon name="mail" size={13} /> Email proposal</button>
+          <button className="btn-secondary" onClick={() => setPreviewOpen(true)}><Icon name="eye" size={13} /> Preview proposal</button>
+          {(route === 'Spares' || route === 'Services') && <button className="btn-secondary" onClick={openTemplatePreview}><Icon name="fileSheet" size={13} /> Preview template</button>}
+        </div>
+      </div>
+
+      <div className="proposal-tab-bar">
+        <DetailTabs ariaLabel="Proposal documents" activeId={tab}
+          items={visibleTabs.map(name => ({ id: name, label: name }))}
+          onChange={setTab} />
         {tab === 'Edit Sheet' && (
-          <div className="workbook-switcher segmented-control" role="tablist" aria-label="Workbook mode">
-            <button role="tab" aria-selected={workbook === 'proposal'} className={workbook === 'proposal' ? 'active' : ''} onClick={() => setWorkbook('proposal')}>Proposal Workbook</button>
-            <button role="tab" aria-selected={workbook === 'inputs'} className={workbook === 'inputs' ? 'active' : ''} onClick={() => setWorkbook('inputs')}>Inputs Workbook</button>
-          </div>
+          <DetailTabs ariaLabel="Workbook mode" activeId={workbook}
+            items={[{ id: 'proposal', label: 'Proposal' }, { id: 'inputs', label: 'Inputs' }]}
+            onChange={setWorkbook} />
         )}
       </div>
 
       {opp.status === 'Open' && (
-        <details className="proposal-alert-drawer" open={blocked || pendingForOpp.length > 0}>
+        <details className="proposal-alert-drawer" open={readinessOpen || blocked || pendingForOpp.length > 0} onToggle={e => setReadinessOpen(e.currentTarget.open)}>
           <summary>
             <span className={`proposal-alert-indicator ${blocked ? 'blocked' : 'ready'}`} />
             <span>{blocked ? `${blockers.length} readiness item${blockers.length === 1 ? '' : 's'} need attention` : 'Proposal is ready to progress'}</span>
@@ -870,7 +908,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
                       <option>Comply</option><option>Deviation</option>
                     </select>
                   </td>
-                  <td><button onClick={removeTerm(i)} title="Remove term">✕</button></td>
+                  <td><button className="proposal-row-minus" onClick={removeTerm(i)} title="Remove term" aria-label={`Remove term ${i + 1}`}>−</button></td>
                 </tr>
               ))}
             </tbody>
@@ -905,7 +943,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
       {tab === 'Edit Sheet' && (
           <ProposalSheetEditor p={p} opp={opp} doc={doc} save={save} totals={totals} units={units} priced={priced} workbook={workbook} setWorkbook={setWorkbook}
           totalQty={totalQty} lineComputed={lineComputed} lineQuoted={lineQuoted} lineCost={lineCost}
-          linePrice={linePrice} updLine={updLine} removeLine={removeLine}
+          linePrice={linePrice} updLine={updLine} removeLine={removeLine} adjustLineQty={adjustLineQty}
           updTerm={updTerm} addTerm={addTerm} removeTerm={removeTerm} pasteBoq={pasteBoq} store={store}
           />
       )}
@@ -1088,7 +1126,13 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
                           ))
                           : <span className="hint">—</span>}
                       </td>
-                      <td className="num"><input type="number" min="0" value={l.qtyPerUnit || ''} onChange={updLine(i, 'qtyPerUnit')} style={{ width: 52, textAlign: 'right' }} placeholder="-" /></td>
+                      <td className="num">
+                        <div className="quantity-stepper">
+                          <button type="button" onClick={adjustLineQty(i, -1)} title="Decrease quantity" aria-label={`Decrease quantity for line ${i + 1}`}>−</button>
+                          <input type="number" min="0" value={l.qtyPerUnit || ''} onChange={updLine(i, 'qtyPerUnit')} placeholder="-" />
+                          <button type="button" onClick={adjustLineQty(i, 1)} title="Increase quantity" aria-label={`Increase quantity for line ${i + 1}`}>＋</button>
+                        </div>
+                      </td>
                       <td className="num"><input type="number" min="0" value={l.common || ''} onChange={updLine(i, 'common')} style={{ width: 52, textAlign: 'right' }} placeholder="-" /></td>
                       <td className="num"><input type="number" min="0" value={l.spares || ''} onChange={updLine(i, 'spares')} style={{ width: 52, textAlign: 'right' }} placeholder="-" /></td>
                       <td className="num"><b>{q}</b></td>
@@ -1099,7 +1143,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
                       <td className="num internal">₹ {fmt(lineCost(l) * q)}</td>
                       <td className="num internal">₹ {fmt(Math.round(lineComputed(l)))}</td>
                       <td className="num internal">{l.currency === 'USD' ? '$' : l.currency === 'INR' ? '₹' : '€'} {fmt(linePrice(l))}</td>
-                      <td><button onClick={removeLine(i)} title="Remove line">✕</button></td>
+                      <td><span className="proposal-row-control" title="Adjust quantity with the stepper">Qty</span></td>
                     </tr>
                   )
                 })}

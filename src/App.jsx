@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Routes, Route, NavLink, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from './store.jsx'
-import { PORTAL_ENABLED, selectableRoles } from './seed.js'
+import { PORTAL_ENABLED } from './seed.js'
 import { isAdminRole, isSalesOwner, canSeePage } from './utils.js'
 import { DrawerHost } from './drawer.jsx'
 import { Icon, ModaeLogo } from './icons.jsx'
@@ -171,15 +171,8 @@ export default function App() {
     </Routes>
   )
 
-  // Customer accounts never get the persona switcher (store.setRole also
-  // refuses the escalation — this just removes the dead control). Rendered in
-  // the tablet bar and the sidebar footer.
-  const RoleSwitcher = () => custAccount ? null : (
-    <select value={store.role} onChange={e => store.setRole(e.target.value)} title="Acting-as persona">
-      {selectableRoles().map(([id, r]) => <option key={id} value={id}>{r.label}</option>)}
-    </select>
-  )
-
+  // Workspace navigation stays focused on destinations; role selection belongs
+  // to authentication and the demo launcher.
   const c = counts(store, role)
   const shell = (
     <div className={`shell ${sidebarCompact ? 'sidebar-compact' : ''}`}>
@@ -226,14 +219,7 @@ export default function App() {
           <button className="nav-burger" onClick={() => setNavOpen(true)} title="Menu">
             <Icon name="menu" size={20} />
           </button>
-          <span className="topbar-title">ModAE — sales opportunity &amp; proposal workspace</span>
           <span className="spacer" style={{ flex: 1 }} />
-          {!custAccount && (
-            <label className="topbar-user" title="Logged-in persona — commercial data is visible to approvers/admins only">
-              Current user
-              <RoleSwitcher />
-            </label>
-          )}
           <InstallButton />
           <button className="mode-switch" onClick={() => { store.setViewMode('tablet'); nav('/home') }}>
             <Icon name="tablet" size={15} /> Switch to tablet view

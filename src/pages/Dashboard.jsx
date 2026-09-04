@@ -79,18 +79,18 @@ export default function Dashboard({ embedded = false }) {
             {owners.map(p => <option key={p} value={p}>{p === 'All' ? p : displayRole(p)}</option>)}
           </select>
         </label>
-        <label>Expected Order Date:{' '}
+        <label title="Choose the expected order-date window">Range:{' '}
           <select value={fromQ} onChange={e => setFromQ(e.target.value)}>
             {QUARTERS.map(q => <option key={q}>{q}</option>)}
           </select>
-          {' '}→{' '}
+          {' '}to{' '}
           <select value={toQ} onChange={e => setToQ(e.target.value)}>
             {QUARTERS.map(q => <option key={q}>{q}</option>)}
           </select>
         </label>
         <label>
           <input type="checkbox" checked={forecastOnly} onChange={e => setForecastOnly(e.target.checked)} />
-          {' '}Forecast-ticked only
+          {' '}Forecast only
         </label>
         <span className="spacer" />
         <button onClick={doExport}>Extract to Excel</button>
