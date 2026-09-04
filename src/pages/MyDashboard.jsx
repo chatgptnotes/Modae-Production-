@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS } from '../seed.js'
 import { readiness, isBlocked, nextActionWith } from '../gates.js'
-import { isApprover, isAdminRole, isSalesOwner, canViewCommercial, canPriceProposal, fmtLakh, ddMmmYY, displayRole } from '../utils.js'
+import { isApprover, isAdminRole, isSalesOwner, canViewCommercial, canPriceProposal, fmtLakh, ddMmmYY, displayRole, displayRoleLabel } from '../utils.js'
 import { analyticsSnapshot, counts, salesPerformance, FY_QUARTERS, FY_MONTHS, PROB_WEIGHT } from '../kpi.js'
 import { ArcGauge } from '../dashviz.jsx'
 import { Icon } from '../icons.jsx'
@@ -15,7 +15,7 @@ import ForecastDashboard from './Dashboard.jsx'
 // the one the client walked through in the HTML prototype: target, attainment,
 // quarterly performance, then their own work queue.
 
-const roleLabel = role => ROLES[role]?.label || role
+const roleLabel = role => displayRoleLabel(role) || role
 
 function Metric({ label, value, hint, tone = '', onClick }) {
   const El = onClick ? 'button' : 'div'
@@ -633,7 +633,7 @@ function TeamTargetsCard({ store, span = 12 }) {
             const t = targets[owner] || { annual: 0, q: [0, 0, 0, 0] }
             if (editing !== owner) return (
               <tr key={owner}>
-                <td><b>{owner}</b> <span className="hint">{ROLES[owner]?.name || ''}</span></td>
+                <td><b>{displayRole(owner)}</b> <span className="hint">{roleLabel(owner).replace(`${displayRole(owner)} - `, '')}</span></td>
                 <td className="num">{fmtLakh(t.annual)}</td>
                 {(t.q || [0, 0, 0, 0]).map((v, i) => <td key={FY_QUARTERS[i]} className="num">{fmtLakh(v)}</td>)}
                 <td className="num"><button onClick={() => begin(owner)}>Edit</button></td>
@@ -641,7 +641,7 @@ function TeamTargetsCard({ store, span = 12 }) {
             )
             return (
               <tr key={owner} className="targets-editing">
-                <td><b>{owner}</b> <span className="hint">{ROLES[owner]?.name || ''}</span></td>
+                <td><b>{displayRole(owner)}</b> <span className="hint">{roleLabel(owner).replace(`${displayRole(owner)} - `, '')}</span></td>
                 <td className="num">
                   <input type="number" min="0" value={draft.annual} aria-label={`${owner} annual target`}
                     onChange={e => setDraft(d => ({ ...d, annual: e.target.value }))} />

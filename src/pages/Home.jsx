@@ -7,6 +7,7 @@ import { homeKpis } from '../kpi.js'
 import { Sparkline } from '../dashviz.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { Icon, BrandMark } from '../icons.jsx'
+import { displayRole } from '../utils.js'
 
 // Tiles come from the shared registry (src/tiles.js) so the desktop Home and
 // the tablet launcher never drift; only the "Generate Proposal" action tile is
@@ -78,7 +79,7 @@ export default function Home() {
   return (
     <div className="page home-page">
       <div className="home-head">
-        <h2>Home — {ROLES[role]?.name}</h2>
+        <h2>Home — {displayRole(role) || ROLES[role]?.name}</h2>
         <BrandMark />
       </div>
 

@@ -4,6 +4,7 @@ import { useStore, nextOppId } from '../store.jsx'
 import { CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES } from '../seed.js'
 import { runJson } from '../ai.js'
 import { extractPdfText, parseTender, buildOpportunityDraft } from '../tenderParse.js'
+import { displayRole } from '../utils.js'
 
 const empty = {
   sellTo: '', category: '', location: '', eucName: '', eucLocation: '',
@@ -532,7 +533,7 @@ export default function IntakeForm({ destinationPicker = null }) {
               <Select field="owner" options={OWNERS} placeholder="Select owner" />
               <div className="hint" style={{ marginTop: 2 }}>
                 {OWNERS.includes(store.role) && f.owner === store.role && (
-                  <>Auto-filled as {store.role} (your role)</>
+                  <>Auto-filled as {displayRole(store.role)} (your role)</>
                 )}
               </div>
             </div>

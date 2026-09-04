@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, PERMS, DEMO_PASSWORD, PORTAL_ENABLED, selectableRoles } from '../seed.js'
-import { ddMmmYY, isAdminRole } from '../utils.js'
+import { ddMmmYY, isAdminRole, displayRoleLabel } from '../utils.js'
 import { Icon } from '../icons.jsx'
 
 // Roles assignable through the UI (incl. TECH) — SUPER is deliberately not
@@ -82,7 +82,7 @@ export default function Users() {
                 {pending.map(u => (
                   <tr key={u.id}>
                     <td><b>{u.name}</b></td><td>{u.email}</td>
-                    <td>Requested <b>{ROLES[u.role]?.label || u.role}</b></td>
+                    <td>Requested <b>{displayRoleLabel(u.role)}</b></td>
                     <td>
                       <button className="primary" onClick={() => store.updateUser(u.id, { status: 'Active' })}>Approve</button>{' '}
                       <button onClick={() => { if (window.confirm(`Reject and remove the registration for ${u.email}?`)) store.deleteUser(u.id) }}>Reject</button>
@@ -109,9 +109,9 @@ export default function Users() {
                 <td>
                   {canManage && u.role !== 'SUPER' ? (
                     <select value={u.role} onChange={e => store.updateUser(u.id, { role: e.target.value })}>
-                      {ASSIGNABLE.map(r => <option key={r} value={r}>{ROLES[r].label}</option>)}
+                      {ASSIGNABLE.map(r => <option key={r} value={r}>{displayRoleLabel(r)}</option>)}
                     </select>
-                  ) : (ROLES[u.role]?.label || u.role)}
+                  ) : (displayRoleLabel(u.role) || u.role)}
                 </td>
                 <td><span className={`pill status-${u.status}`}>{u.status}</span></td>
                 <td>{ddMmmYY(u.created)}</td>
@@ -142,7 +142,7 @@ export default function Users() {
           <tbody>
             {selectableRoles().map(([r]) => (
               <tr key={r}>
-                <td style={{ whiteSpace: 'nowrap' }}><b>{ROLES[r].label}</b></td>
+                <td style={{ whiteSpace: 'nowrap' }}><b>{displayRoleLabel(r)}</b></td>
                 {PAGE_KEYS.map(p => (
                   <td key={p} style={{ textAlign: 'center' }}>
                     {(PERMS[r] || []).includes(p) && <Icon name="check" size={12} />}
@@ -164,7 +164,7 @@ export default function Users() {
             <div className="q"><div className="q-label">Work email</div><input name="email" type="text" placeholder="name@modae.demo" /></div>
             <div className="q"><div className="q-label">Role</div>
               <select name="role" defaultValue="RS">
-                {ASSIGNABLE.map(r => <option key={r} value={r}>{ROLES[r].label}</option>)}
+                {ASSIGNABLE.map(r => <option key={r} value={r}>{displayRoleLabel(r)}</option>)}
               </select>
             </div>
             <label className="q" style={{ display: 'block' }}>

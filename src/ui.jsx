@@ -29,11 +29,13 @@ export const AiBadge = ({ label = 'AI' }) => (
 )
 
 // 13-milestone lifecycle stepper.
+const VISIBLE_MILESTONES = MILESTONES.filter(m => !['Follow-up', 'PO Validation', 'Handover'].includes(m))
+
 export function Stepper({ current, onStep }) {
-  const at = MILESTONES.indexOf(current)
+  const at = VISIBLE_MILESTONES.indexOf(current)
   return (
     <div className="stepper">
-      {MILESTONES.map((m, i) => (
+      {VISIBLE_MILESTONES.map((m, i) => (
         <button key={m} type="button" className={`step ${i < at ? 'done' : i === at ? 'now' : ''} ${onStep ? 'clickable' : ''}`} title={onStep ? `Move opportunity to ${m}` : m} onClick={() => onStep?.(m)}>
           <span className="step-dot">{i < at ? <Icon name="check" size={9} /> : null}</span>
           <span className="step-label">{m}</span>

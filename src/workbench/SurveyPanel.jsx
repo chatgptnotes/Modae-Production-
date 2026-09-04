@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
+import { displayRole } from '../utils.js'
 import { Chip } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 
@@ -65,7 +66,7 @@ export default function SurveyPanel({ opp, est }) {
       ) : (
         <>
           <p className="hint" style={{ marginTop: 6 }}>
-            {survey.id} · requested by {survey.requestedBy} on {survey.requestedOn}
+            {survey.id} · requested by {displayRole(survey.requestedBy)} on {survey.requestedOn}
             {survey.detail ? ` — ${survey.detail}` : ''}
           </p>
 

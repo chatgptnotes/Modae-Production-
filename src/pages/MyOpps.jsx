@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { OWNERS, ROLES } from '../seed.js'
-import { canPriceProposal, canViewCommercial, isSalesOwner, fmt, mmmYY, ddMmmYY, stageClass, productLabel } from '../utils.js'
+import { canPriceProposal, canViewCommercial, isSalesOwner, fmt, mmmYY, ddMmmYY, stageClass, productLabel, displayRole } from '../utils.js'
 import { nextActionWith } from '../gates.js'
 import { useDrawer } from '../drawer.jsx'
 import { Icon } from '../icons.jsx'
@@ -47,13 +47,13 @@ export default function MyOpps() {
     if (key === 'createDate' || key === 'proposalDate' || key === 'orderDate' || key === 'invoiceDate') return o[key] ? mmmYY(o[key]) : '—'
     if (key === 'lastUpdated') return ddMmmYY(o[key]) || '—'
     if (key === 'forecast') return o.forecast ? 'Checked' : '—'
-    if (key === 'nextActionOwner') return na(o).owner || '—'
+    if (key === 'nextActionOwner') return displayRole(na(o).owner) || '—'
     return o[key] || '—'
   }
 
   return (
     <div className="page">
-      <h2>{mine ? `My Opportunities — ${role}` : 'Opportunities'}</h2>
+      <h2>{mine ? `My Opportunities — ${displayRole(role)}` : 'Opportunities'}</h2>
       <div className="toolbar">
         {mine && !isAdmin && (
           <label className="show-all-toggle">
@@ -123,7 +123,7 @@ export default function MyOpps() {
                   </td>
                   <td title={na(o).text}>
                     {na(o).owner
-                      ? <span className={na(o).derived ? 'hint' : ''}>{na(o).owner}</span>
+                      ? <span className={na(o).derived ? 'hint' : ''}>{displayRole(na(o).owner)}</span>
                       : <span className="hint">—</span>}
                   </td>
                 </tr>

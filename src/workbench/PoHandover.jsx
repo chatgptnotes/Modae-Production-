@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
-import { isApprover } from '../utils.js'
+import { isApprover, displayRole } from '../utils.js'
 import { Chip, Phase2Badge } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 
@@ -135,7 +135,7 @@ export default function PoHandover({ opp }) {
                   <input type="checkbox" checked={!!it.done} disabled={ho.approved}
                     onChange={e => store.hoToggleItem(opp.id, gi, ii, e.target.checked)} />
                   <span>{it.n}</span>
-                  <Chip tone="grey">{it.owner}</Chip>
+                  <Chip tone="grey">{displayRole(it.owner)}</Chip>
                   {it.done ? <Chip tone="state-Accepted">Complete</Chip> : <Chip tone="state-Review">Pending</Chip>}
                 </div>
               ))}
@@ -152,7 +152,7 @@ export default function PoHandover({ opp }) {
           {ho.approved && (
             <>
               <div className="okbox">
-                Opportunity Won — moved to Handover. Approved by {ho.approvedBy} on {ho.approvedOn};
+                Opportunity Won — moved to Handover. Approved by {displayRole(ho.approvedBy)} on {ho.approvedOn};
                 ownership passes to the execution team.
               </div>
               <div className="phase2-panel">

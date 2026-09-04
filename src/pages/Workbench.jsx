@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, REVISION_TYPES } from '../seed.js'
-import { canPriceProposal, isAdminRole, isApprover, fmt, ageDays, ddMmmYY, gmailComposeHref, displayRole, displayRoles } from '../utils.js'
+import { canPriceProposal, isAdminRole, isApprover, fmt, ageDays, ddMmmYY, gmailComposeHref, displayRole, displayRoles, displayRoleLabel } from '../utils.js'
 import { readiness, isBlocked, nextActionWith, transitionBlockers } from '../gates.js'
 import { COMMERCIAL_RX } from './Approvals.jsx'
 import { Chip, ClassChip, AiBadge, Stepper, WarnBox, ErrBox, Modal } from '../ui.jsx'
@@ -30,7 +30,7 @@ import DetailTabs from '../DetailTabs.jsx'
 const TABS = [
   ['overview', 'Overview'], ['requirement', 'Requirement'], ['customer', 'Customer/KYC'],
   ['clarifications', 'Clarifications'], ['sourcing', 'Sourcing'], ['proposal', 'Proposal'],
-  ['approvals', 'Approvals'], ['comms', 'Communications'], ['po', 'PO & Handover'],
+  ['approvals', 'Approvals'], ['comms', 'Communications'],
   ['files', 'Files'], ['audit', 'Audit'],
 ]
 
@@ -216,6 +216,9 @@ export default function Workbench() {
   return (
     <div className="page">
       <div className="opp-summary">
+        <Link className="back-to-opportunities" to="/opportunities">
+          <Icon name="arrowLeft" size={13} /> Back to opportunities
+        </Link>
         <div className="opp-summary-title">
           <span className="opp-id">{opp.id}</span>
           <h2>{opp.oppName}</h2>
@@ -426,7 +429,7 @@ function OverviewTab({ opp, goTab, detailsRef }) {
 
         <section className="workbench-panel workbench-timeline-panel">
           <div className="workbench-section-title">Timeline &amp; audit summary</div>
-          {audit.length ? audit.map((e, i) => <div className="workbench-timeline-row" key={`${e.ts}-${i}`}><span className="timeline-dot" /><span><b>{ddMmmYY((e.ts || '').slice(0, 10))} {e.role}</b><br />{e.action}</span></div>) : <p className="hint">No audit events for this opportunity yet.</p>}
+          {audit.length ? audit.map((e, i) => <div className="workbench-timeline-row" key={`${e.ts}-${i}`}><span className="timeline-dot" /><span><b>{ddMmmYY((e.ts || '').slice(0, 10))} {displayRole(e.role)}</b><br />{e.action}</span></div>) : <p className="hint">No audit events for this opportunity yet.</p>}
           <button onClick={() => goTab('audit')}>Full audit</button>
         </section>
       </div>
@@ -434,7 +437,7 @@ function OverviewTab({ opp, goTab, detailsRef }) {
       {action && (
         <Modal title={action === 'call' ? 'Record customer call' : 'Change opportunity owner'} onClose={() => setAction(null)}>
           {action === 'owner' ? (
-            <label>New owner<select value={owner} onChange={e => setOwner(e.target.value)}>{OWNERS.map(r => <option key={r} value={r}>{r} — {ROLES[r]?.name || r}</option>)}</select></label>
+            <label>New owner<select value={owner} onChange={e => setOwner(e.target.value)}>{OWNERS.map(r => <option key={r} value={r}>{displayRoleLabel(r)}</option>)}</select></label>
           ) : (
             <label>Details<textarea rows={4} value={actionText} onChange={e => setActionText(e.target.value)} placeholder="Summarise the call and next commitment." /></label>
           )}
@@ -459,7 +462,7 @@ function RequirementTab({ opp }) {
     ['Opportunity ID', opp.id], ['Sell-to', opp.sellTo], ['Category', opp.category],
     ['End user', `${opp.eucName || '—'} · ${opp.eucLocation || '—'}`],
     ['Route', opp.route], ['Lane', `${opp.context || '—'} world`],
-    ['Owner', `${opp.owner} — ${ROLES[opp.owner]?.name || ''}`],
+    ['Owner', displayRoleLabel(opp.owner)],
     ['Contact', `${opp.contactPerson || '—'} ${opp.contactPhone || ''}`],
   ]
 
@@ -855,7 +858,7 @@ function ClarificationsTab({ opp }) {
                 <td>{c.category}</td>
                 <td>{c.gap}<div className="hint">{c.evidence}</div></td>
                 <td>{c.q}{c.response && <div className="okbox">Response: {c.response}<div className="hint">From {c.answerSource || c.audience || 'source'}{c.answeredAt ? ` · ${ddMmmYY(c.answeredAt)}` : ''}</div>{(c.attachments || []).map(f => <div key={f.name} className="hint"><Icon name="fileText" size={11} /> {f.name}</div>)}</div>}</td>
-                <td>{c.owner}</td>
+                <td>{displayRole(c.owner)}</td>
                 <td>{c.audience}</td>
                 <td>{ddMmmYY(c.due)}</td>
                 <td><Chip tone={clarTone(c.status)}>{c.status}</Chip></td>
@@ -1210,7 +1213,7 @@ function ProposalTab({ opp }) {
   const openBuilder = () => setSub('builder')
   // Diagram 02 §3 is the Brownfield lane only — Greenfield runs Phase-1
   // activities and Service runs the §4 survey path instead.
-  const SUBS = [['edit-sheet', 'Edit proposal'], ['followup', 'Follow-up']]
+  const SUBS = [['edit-sheet', 'Edit proposal']]
   return (
     <div className="proposal-tab-shell">
       <header className="proposal-subnav-header">
@@ -1472,7 +1475,7 @@ function ApprovalsTab({ opp }) {
             <b>{a.id}</b>
             <span style={{ fontSize: 12.5 }}>{a.type}</span>
             <span className={`pill ${statusPill(a.status)}`}>{a.status}</span>
-            <span className="hint" style={{ marginLeft: 'auto' }}>requested by {a.requestedBy} · {ddMmmYY((a.ts || '').slice(0, 10))}</span>
+            <span className="hint" style={{ marginLeft: 'auto' }}>requested by {displayRole(a.requestedBy)} · {ddMmmYY((a.ts || '').slice(0, 10))}</span>
           </div>
           {COMMERCIAL_RX.test(a.detail || '') && !canPriceProposal(store.role) ? (
             <div className="restricted" style={{ fontSize: 12.5, margin: '6px 0' }}>
@@ -1715,7 +1718,7 @@ function AuditTab({ opp }) {
           {rows.map((e, i) => (
             <tr key={i}>
               <td style={{ whiteSpace: 'nowrap' }}>{new Date(e.ts).toLocaleString()}</td>
-              <td>{e.role}</td>
+              <td>{displayRole(e.role)}</td>
               <td><b>{e.action}</b></td>
               <td>{e.objectId}</td>
               <td>{e.detail}</td>

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useStore, nextOppId } from '../store.jsx'
-import { ddMmmYY, ageDays, gmailComposeHref } from '../utils.js'
+import { ddMmmYY, ageDays, gmailComposeHref, displayRole } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { Chip, ConfChip, WarnBox, ErrBox, Modal } from '../ui.jsx'
@@ -1411,7 +1411,7 @@ function AiLeadDetail({ lead }) {
               <label>Assigned owner
                 <select value={decisionDraft.owner} disabled={lead.status === 'Dropped'}
                   onChange={e => setDecisionDraft({ ...decisionDraft, owner: e.target.value })}>
-                  {OWNERS.map(owner => <option key={owner}>{owner}</option>)}
+                  {OWNERS.map(owner => <option key={owner}>{displayRole(owner)}</option>)}
                 </select>
               </label>
               <label>Opportunity type
@@ -1554,7 +1554,7 @@ function AiLeadDetail({ lead }) {
             <div className="toolbar" style={{ margin: '8px 0 0' }}>
               <button onClick={() => setDropping(true)}><Icon name="x" size={13} /> Disqualify</button>
               <select value={reassignTo} onChange={e => setReassignTo(e.target.value)} title="Assign lead to another salesperson">
-                {OWNERS.map(owner => <option key={owner}>{owner}</option>)}
+                {OWNERS.map(owner => <option key={owner}>{displayRole(owner)}</option>)}
               </select>
               <button onClick={reassign}>Reassign</button>
             </div>
@@ -1752,7 +1752,7 @@ function LegacyLeadDetail({ lead }) {
       {lead.status !== 'Dropped' && lead.status !== 'Converted' && (
         <div className="toolbar" style={{ marginTop: 8, marginBottom: 0 }}>
           <select value={reassignTo} onChange={e => setReassignTo(e.target.value)}>
-            {OWNERS.map(owner => <option key={owner}>{owner}</option>)}
+            {OWNERS.map(owner => <option key={owner}>{displayRole(owner)}</option>)}
           </select>
           <button onClick={reassign}>Reassign</button>
         </div>

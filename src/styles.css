@@ -240,6 +240,9 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }
 .side-foot button.reset { background: transparent; border: 1px solid rgba(255,255,255,.25); color: #cbd5e1; border-radius: 4px; padding: 5px 8px; font-size: 11px; cursor: pointer; }
 .side-foot button.reset:hover { color: #fff; border-color: rgba(255,255,255,.5); }
 .main-col { flex: 1; min-width: 0; width: calc(100% - 216px); margin-left: 216px; display: flex; flex-direction: column; transition: margin-left .2s ease, width .2s ease; }
+.main-col { position: relative; }
+.shell-nav-burger { display: none; }
+.sidebar-mode-switch { display: flex; align-items: center; gap: 7px; width: 100%; text-align: left; }
 .topbar {
   display: flex; align-items: center; gap: 10px; background: #fff;
   position: sticky; top: 0; z-index: 40; border-bottom: 1px solid var(--grid-line); padding: 8px 14px; min-height: 40px;
@@ -1210,6 +1213,26 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
     max-height: 96vh;
   }
 }
+
+@media (max-width: 1024px) {
+  .shell-nav-burger {
+    position: fixed;
+    top: 12px;
+    left: 14px;
+    z-index: 42;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--text-main);
+    box-shadow: 0 4px 14px rgba(40, 40, 40, .08);
+  }
+}
 @media (max-width: 700px) {
   .proposal-preview-modal { top: 2vh; width: 96vw; max-height: 96vh; padding: 12px; }
   .proposal-preview-toolbar { align-items: flex-start; flex-direction: column; }
@@ -1834,6 +1857,8 @@ input.needs-input, select.needs-input { background: #fffbeb; border-color: var(-
 .opp-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
 .opp-head h2 { margin: 0; }
 .opp-summary { background: #fff; border: 1px solid var(--border-soft); border-radius: 8px; padding: 14px 16px; box-shadow: 0 3px 14px rgba(15,23,42,.06); }
+.back-to-opportunities { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 12px; color: var(--text-muted); font-size: 12px; font-weight: 700; text-decoration: none; }
+.back-to-opportunities:hover { color: var(--primary-ink); text-decoration: underline; }
 .opp-summary-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .opp-summary-title h2 { margin: 0; font-size: 22px; color: var(--text-main); }
 .opp-id { background: var(--bg-app); border-radius: 6px; padding: 5px 9px; font-weight: 800; font-size: 16px; font-variant-numeric: tabular-nums; }
@@ -4457,6 +4482,29 @@ body {
 .proposal-control-groups .proposal-context-actions,
 .proposal-control-groups .proposal-secondary-actions { margin: 0; }
 .proposal-action-toolbar { display: none; }
+.proposal-upload-button { cursor: pointer; }
+.proposal-upload-button input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.proposal-review-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border: 1px solid #f1d2a8;
+  border-left: 3px solid #d97706;
+  border-radius: 8px;
+  background: #fffaf2;
+}
+.proposal-review-strip > div { display: grid; gap: 3px; }
+.proposal-review-strip strong { color: var(--text-main); font-size: 13px; }
+.proposal-review-strip span { color: var(--text-muted); font-size: 12px; }
+.proposal-review-results { display: grid; gap: 8px; margin: -3px 0 12px; }
+.proposal-review-issues { display: grid; gap: 5px; padding: 10px 12px; border: 1px solid var(--border-soft); border-radius: 8px; background: #fff; font-size: 12px; }
+.proposal-review-issue { padding: 6px 8px; border-radius: 5px; background: #f8fafc; color: var(--text-muted); }
+.proposal-review-issue.block { background: #fff1f0; color: #9f2d22; }
+.proposal-review-issue.warning { background: #fffaf2; color: #8a4b08; }
+.proposal-review-issue.info { background: #f1f8f3; color: #276749; }
 .proposal-sheet-editor .form-card { border: 1px solid var(--border-soft); border-radius: 6px; box-shadow: none; padding: 16px; }
 .proposal-sheet-editor .section-title { margin-bottom: 12px; }
 .proposal-edit-grid {
@@ -4939,6 +4987,8 @@ body {
   .proposal-tab-bar { align-items: stretch; flex-direction: column; gap: 8px; }
   .proposal-artifact-tabs { overflow-x: auto; }
   .proposal-tab-bar .workbook-switcher { align-self: flex-start; margin-bottom: 0; }
+  .proposal-review-strip { align-items: stretch; flex-direction: column; }
+  .proposal-review-strip button { width: 100%; }
   .proposal-action-toolbar > button,
   .proposal-action-toolbar > .btn,
   .proposal-type-control { flex: 1 1 calc(50% - 8px); }

@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES } from '../seed.js'
 import { Icon } from '../icons.jsx'
-import { DemoDataControls } from '../ui.jsx'
 
 // Guided demo launcher — each scenario switches to the right persona and jumps
 // straight to the screen where that story starts.
@@ -18,7 +17,6 @@ const SCENARIOS = [
   { n: 4, icon: 'refresh', label: 'Obsolete product → equivalent', hint: 'Vibrotest 60 → VST-100 suggestion', persona: 'PP', to: '/inbox/LD-204' },
   { n: 5, icon: 'layers', label: 'Project workbench deep-dive', hint: 'BOQ, signals, compliance, commercial gate', persona: 'RS', to: '/opp/2608222RS/proposal' },
   { n: 6, icon: 'flag', label: 'Red-class continuation (AP-1)', hint: 'Joint LJS+AH clearance, prepay-only terms', persona: 'RS', to: '/inbox/LD-206' },
-  { n: 7, icon: 'clipboardCheck', label: 'PO validation & handover', hint: 'Proposal-vs-PO compare, joint acceptance, handover pack', persona: 'LJS', to: '/opp/2601122LJS/po' },
 ]
 
 export default function Launcher() {
@@ -63,15 +61,6 @@ export default function Launcher() {
         ))}
       </div>
 
-      <div className="tile-section">Housekeeping</div>
-      <div className="toolbar" style={{ marginBottom: 0 }}>
-        <DemoDataControls />
-        <span className="hint">
-          {demo
-            ? 'Reset restores the seeded pipeline, leads, approvals and orders. Remove empties the app for real use — your logins and Admin configuration stay.'
-            : 'The app is empty and ready for real records. Restore brings the seeded pipeline, leads, approvals and orders back.'}
-        </span>
-      </div>
     </div>
   )
 }

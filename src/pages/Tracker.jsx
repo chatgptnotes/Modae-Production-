@@ -563,8 +563,8 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                       <select value={o.nextActionOwner || ''} onChange={upd(o.id, 'nextActionOwner')}
                         className={!o.nextActionOwner && na.owner ? 'derived' : ''}
                         title={na.text || 'No blocker — set an owner if someone else owes you an action'}>
-                        <option value="">{na.owner ? `${ROLES[na.owner]?.name || na.owner} (auto)` : '— none —'}</option>
-                        {OWNERS.map(owner => <option key={owner} value={owner}>{ROLES[owner]?.name || owner}</option>)}
+                        <option value="">{na.owner ? `${displayRole(na.owner)} (auto)` : '— none —'}</option>
+                        {OWNERS.map(owner => <option key={owner} value={owner}>{displayRole(owner)}</option>)}
                       </select>
                     )
                   })()}

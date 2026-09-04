@@ -88,6 +88,16 @@ export const displayRole = role => {
   if (role === 'RS') return 'Ruthvik Satish'
   return ROLES[role]?.name || role
 }
+export const displayRoleLabel = role => {
+  if (!role) return ''
+  const suffix = String(ROLES[role]?.label || '')
+    .split('—')
+    .slice(1)
+    .join('—')
+    .trim()
+  const name = displayRole(role)
+  return suffix ? `${name} - ${suffix}` : name
+}
 export const displayRoles = (roles, separator = ' + ') =>
   (roles || []).map(displayRole).filter(Boolean).join(separator)
 // Page-level permission from the PERMS matrix (unknown role sees nothing).

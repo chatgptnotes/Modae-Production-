@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { STAGES, CUSTOMER_STATUSES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, PROB_LEVELS, ROLES } from '../seed.js'
-import { fmtLakh, ageDays, canViewCommercial, isAdminRole, isApprover, isSalesOwner, sameCustomer, productList } from '../utils.js'
+import { fmtLakh, ageDays, canViewCommercial, isAdminRole, isApprover, isSalesOwner, sameCustomer, productList, displayRoleLabel, displayRole } from '../utils.js'
 import { PROB_WEIGHT } from '../kpi.js'
 import { Icon } from '../icons.jsx'
 import { ArcGauge } from '../dashviz.jsx'
@@ -248,7 +248,7 @@ export default function Analytics({ embedded = false }) {
   const customers = [...new Set(allOpps.map(o => o.sellTo))].sort((a, b) => a.localeCompare(b))
   const ownerOpts = ['All', ...OWNERS.filter(o => allOpps.some(x => x.owner === o))].map(o => ({
     value: o,
-    label: o === 'All' ? 'All owners' : `${o} — ${ROLES[o]?.name || o}${o === selfOwner ? ' (you)' : ''}`,
+    label: o === 'All' ? 'All owners' : `${displayRoleLabel(o)}${o === selfOwner ? ' (you)' : ''}`,
   }))
 
   const opps = allOpps.filter(o =>
@@ -591,7 +591,7 @@ export default function Analytics({ embedded = false }) {
             <>
               {attainment.map(a => (
                 <div key={a.owner} className="mbar">
-                  <span className="mb-lbl">{a.owner}</span>
+                  <span className="mb-lbl">{displayRole(a.owner)}</span>
                   <span className="mb-track">
                     <span className="mb-fill" style={{ width: `${Math.min(100, Math.max(2, a.pct))}%`, background: a.pct >= 50 ? 'var(--status-good)' : a.pct >= 25 ? 'var(--status-warn)' : 'var(--status-bad)' }} />
                   </span>

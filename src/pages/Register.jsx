@@ -9,6 +9,7 @@ import { activeBackend, uploadOppFile, fmtSize } from '../filestore.js'
 import { take } from '../leadFiles.js'
 import { leadVerificationBlockers, verificationSnapshot, redClearanceFor, isRedCleared } from '../leadVerification.js'
 import { buildLeadProposalData } from '../leadBoq.js'
+import { displayRole } from '../utils.js'
 
 // Registration — the moment a qualified lead becomes an opportunity and the
 // permanent opportunity ID is minted (YYMM + sequence + owner initials).
@@ -282,7 +283,7 @@ export default function Register() {
           <div className="check-row">
             <Icon name="send" size={14} />
             <span>
-              Teams notification to <b>#modae-pipeline</b> — new opportunity registered, owner {owner}
+              Teams notification to <b>#modae-pipeline</b> — new opportunity registered, owner {displayRole(owner)}
               <br /><span className="hint">Simulated</span>
             </span>
           </div>

@@ -1,12 +1,10 @@
 import React, { useEffect, useState } from 'react'
 import { Routes, Route, NavLink, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from './store.jsx'
-import { PORTAL_ENABLED } from './seed.js'
-import { isAdminRole, isSalesOwner, canSeePage } from './utils.js'
+import { PORTAL_ENABLED, ROLES } from './seed.js'
+import { isAdminRole, isSalesOwner, canSeePage, displayRole } from './utils.js'
 import { DrawerHost } from './drawer.jsx'
 import { Icon, ModaeLogo } from './icons.jsx'
-import { DemoDataControls } from './ui.jsx'
-import { InstallButton } from './install.jsx'
 import { counts } from './kpi.js'
 import BrandWatermark from './branding/BrandWatermark.jsx'
 import Tracker from './pages/Tracker.jsx'
@@ -96,6 +94,11 @@ export default function App() {
   const tablet = store.viewMode === 'tablet'
   const custAccount = store.auth?.user?.role === 'CUST'
   const role = store.role
+  const signedInName = store.auth?.user
+    ? store.auth.user.name === (ROLES[store.auth.user.role]?.name || '')
+      ? displayRole(store.auth.user.role)
+      : store.auth.user.name
+    : ''
   const items = NAV
     .filter(t => canSeePage(role, t.page) && (typeof t.show !== 'function' || t.show(role)))
     .map(t => t.to === '/po' && isSalesOwner(role) ? { ...t, label: 'My Purchase Orders' } : t)
@@ -202,29 +205,21 @@ export default function App() {
           })}
         </nav>
         <div className="side-foot">
+          <button className="reset sidebar-mode-switch" onClick={() => { store.setViewMode('tablet'); nav('/home') }}>
+            <Icon name="tablet" size={14} /> <span className="side-label">Switch to tablet view</span>
+          </button>
           {store.auth?.user && (
             <button className="reset" onClick={store.logout} title={store.auth.user.email}>
-              <Icon name="logout" size={14} /> <span className="side-label">Sign out ({store.auth.user.name})</span>
+              <Icon name="logout" size={14} /> <span className="side-label">Sign out ({signedInName})</span>
             </button>
           )}
-          {/* Shared with the Admin and Launcher copies — see DemoDataControls
-              in ui.jsx for why every one of these actions is confirm-guarded. */}
-          <DemoDataControls className="reset" size={14}
-            label={t => <span className="side-label">{t}</span>} />
         </div>
       </aside>
 
       <div className="main-col">
-        <header className="topbar">
-          <button className="nav-burger" onClick={() => setNavOpen(true)} title="Menu">
-            <Icon name="menu" size={20} />
-          </button>
-          <span className="spacer" style={{ flex: 1 }} />
-          <InstallButton />
-          <button className="mode-switch" onClick={() => { store.setViewMode('tablet'); nav('/home') }}>
-            <Icon name="tablet" size={15} /> Switch to tablet view
-          </button>
-        </header>
+        <button className="shell-nav-burger" onClick={() => setNavOpen(true)} title="Menu" aria-label="Open navigation">
+          <Icon name="menu" size={20} />
+        </button>
         {/* The shell is viewport-locked, so this is the app's single scroll
             region — pages that want their own internal scroller (the pipeline
             sheet, the mailbox list) size themselves to 100% of it. */}

@@ -285,6 +285,9 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   const [emailPreview, setEmailPreview] = useState(false)
   const [emailBusy, setEmailBusy] = useState(false)
   const [emailError, setEmailError] = useState('')
+  const [reviewBusy, setReviewBusy] = useState(false)
+  const [reviewMessage, setReviewMessage] = useState('')
+  const [reviewError, setReviewError] = useState('')
   const [conditionTarget, setConditionTarget] = useState(null)
   const [conditionNote, setConditionNote] = useState('')
   const [readinessOpen, setReadinessOpen] = useState(false)
@@ -468,7 +471,13 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
     // Once a BoQ has ever been priced, keep syncing even down to 0 — an emptied
     // BoQ must not leave stale Value/COGS on the tracker. Never-priced proposals
     // don't overwrite the intake estimate.
-    next = { ...next, pricedOnce: pRef.current.pricedOnce || next.bom.length > 0 }
+    next = {
+      ...next,
+      pricedOnce: pRef.current.pricedOnce || next.bom.length > 0,
+      reviewStatus: next.reviewStatus === 'Validated' ? 'Needs review' : (next.reviewStatus || pRef.current.reviewStatus),
+      reviewIssues: next.reviewStatus === 'Validated' ? [] : (next.reviewIssues || pRef.current.reviewIssues || []),
+      reviewNeedsRevision: next.reviewStatus === 'Validated' ? true : (next.reviewNeedsRevision || pRef.current.reviewNeedsRevision || false),
+    }
     setP(next)
     store.saveProposal(oppId, next)
     if (next.pricedOnce) {
@@ -554,6 +563,9 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   const blockers = oppBlockers(opp, p, store.approvals || [])
   const blocked = isBlocked(blockers)
   const submitted = comms.some(c => c.kind === 'submission')
+  const reviewStatus = p.reviewStatus || 'Not reviewed'
+  const reviewReady = reviewStatus === 'Validated'
+  const approvalRequired = blockers.some(bl => bl.approvalType && bl.severity !== 'wait') || pendingForOpp.length > 0
 
   // Forward `needed` and `anyOf`. Dropping them let recordDecision fall back to
   // [approver], so a joint LJS+AH gate raised from this page — the Red customer
@@ -581,6 +593,78 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
       kind: 'submission',
     })
     if (!opp.proposalDate) store.updateOpportunity(oppId, { proposalDate: new Date().toISOString().slice(0, 10) })
+  }
+
+  // Phase-one human-in-the-loop checkpoint. This is intentionally deterministic
+  // in the local demo: production AI can replace the implementation while the
+  // proposal state and UX remain the same.
+  const validateReviewedProposal = async () => {
+    setReviewBusy(true)
+    setReviewMessage('')
+    setReviewError('')
+    try {
+      const issues = []
+      const revisionChanged = !!p.reviewNeedsRevision
+      const nextRevision = revisionChanged ? String((Number(p.revision) || 0) + 1).padStart(2, '0') : p.revision
+      const nextRevisionLog = revisionChanged ? [...(p.revisions || []), {
+        rev: `V${(p.revisions || []).filter(item => item.status === 'Revised').length + 2}`,
+        when: new Date().toISOString().slice(0, 10), by: store.role,
+        note: 'Proposal edited and revalidated', status: 'Revised', type: 'Other',
+      }] : (p.revisions || [])
+      if (!p.bom?.length && route !== 'Services') issues.push({ severity: 'block', text: 'No proposal line items were found.' })
+      if (p.bom?.some(line => !String(line.pn || '').trim())) issues.push({ severity: 'warning', text: 'One or more line items are missing a model or part number.' })
+      if (p.bom?.some(line => Number(totalQty(line)) <= 0)) issues.push({ severity: 'block', text: 'Every proposal line must have a quantity greater than zero.' })
+      if (p.bom?.some(line => line.quoted !== '' && Number(line.quoted) < 0)) issues.push({ severity: 'block', text: 'Negative quoted prices are not allowed.' })
+      if (!p.terms?.length) issues.push({ severity: 'warning', text: 'Commercial terms have not been added yet.' })
+      if (p.reviewedUpload) issues.push({ severity: 'info', text: `Reviewed upload received: ${p.reviewedUpload.filename}` })
+
+      const next = {
+        ...p,
+        revision: nextRevision,
+        revisions: nextRevisionLog,
+        reviewStatus: issues.some(issue => issue.severity === 'block') ? 'Needs attention' : 'Validated',
+        reviewIssues: issues,
+        reviewCompletedAt: new Date().toISOString(),
+        reviewNeedsRevision: false,
+      }
+      setP(next)
+      store.saveProposal(oppId, next)
+      if (next.reviewStatus === 'Validated') {
+        setReviewMessage('Review complete. The proposal can now move to approval or customer send.')
+      } else {
+        setReviewError('Review found blocking issues. Resolve them before continuing.')
+      }
+    } catch (error) {
+      setReviewError(error?.message || 'Proposal validation failed')
+    } finally {
+      setReviewBusy(false)
+    }
+  }
+
+  const uploadReviewedProposal = async event => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (!/\.xlsx?$/i.test(file.name)) {
+      setReviewError('Upload the reviewed proposal as an XLSX file.')
+      return
+    }
+    try {
+      const parsed = parseProposalWorkbook(await file.arrayBuffer(), file.name)
+      const next = {
+        ...p,
+        reviewedUpload: { filename: file.name, size: file.size, uploadedAt: new Date().toISOString(), sheets: parsed.sheets },
+        reviewStatus: 'Ready for validation',
+        reviewIssues: [],
+        reviewNeedsRevision: reviewReady || !!p.reviewNeedsRevision,
+      }
+      setP(next)
+      store.saveProposal(oppId, next)
+      setReviewError('')
+      setReviewMessage(`${file.name} uploaded. Run validation to continue.`)
+    } catch (error) {
+      setReviewError(error?.message || 'The reviewed proposal could not be read')
+    }
   }
 
   const generatedEmailBody = [
@@ -682,6 +766,10 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
     window.alert(`The proposal workbook could not be downloaded: ${error?.message || 'unknown export error'}`)
   })
   const submitForApproval = () => {
+    if (!reviewReady) {
+      setReviewError('Run validation after reviewing the proposal before requesting approval.')
+      return
+    }
     const pendingTypes = new Set(pendingForOpp.map(item => item.type))
     const actionable = blockers.filter(bl => bl.approvalType && bl.severity !== 'wait' && !pendingTypes.has(bl.approvalType))
     actionable.forEach(bl => store.requestApproval({
@@ -733,25 +821,10 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
         </div>
         <div className="proposal-primary-actions" aria-label="Primary proposal actions">
           <button className="btn-secondary" onClick={exportExcel}><Icon name="download" size={13} /> Download Draft</button>
-          <button className="primary" onClick={submitForApproval}><Icon name="checkCircle" size={13} /> Submit for Approval</button>
+          <button className="primary" onClick={validateReviewedProposal} disabled={reviewBusy}>
+            <Icon name="checkCircle" size={13} /> {reviewBusy ? 'Checking…' : 'Validate review'}
+          </button>
         </div>
-      <div className="toolbar proposal-action-toolbar">
-        <div className="proposal-context-actions">
-        {!embedded && <Link className="btn" to={`/folders/${oppId}`}>◂ Back to folder</Link>}
-        <label className="proposal-type-control">Proposal type
-          <select value={p.proposalType || 'Project'} onChange={set('proposalType')}>
-            <option>Project</option><option>Spares</option><option>Services</option>
-          </select>
-        </label>
-        {pendingForOpp.length > 0 && <span className="pill Amber">{pendingForOpp.length} approval{pendingForOpp.length > 1 ? 's' : ''} pending</span>}
-        </div>
-        <div className="proposal-secondary-actions" aria-label="Proposal utilities">
-        <button className="btn-secondary" onClick={openEmail}><Icon name="mail" size={13} /> Email proposal</button>
-        <button className="btn-secondary" onClick={exportExcel}><Icon name="download" size={13} /> Download Excel</button>
-        <button className="btn-secondary" onClick={() => setPreviewOpen(true)}><Icon name="eye" size={13} /> Preview proposal</button>
-        {(route === 'Spares' || route === 'Services') && <button className="btn-secondary" onClick={openTemplatePreview}><Icon name="fileSheet" size={13} /> Preview {route === 'Spares' ? 'Spares firm offer' : 'service proposal'}</button>}
-        </div>
-      </div>
       </header>
 
       <div className="proposal-control-groups">
@@ -762,14 +835,40 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
               <option>Project</option><option>Spares</option><option>Services</option>
             </select>
           </label>
+          <span className={`pill ${reviewReady ? 'won' : reviewStatus === 'Needs attention' ? 'Red' : 'grey'}`}>{reviewStatus}</span>
           {pendingForOpp.length > 0 && <span className="pill Amber">{pendingForOpp.length} approval{pendingForOpp.length > 1 ? 's' : ''} pending</span>}
         </div>
         <div className="proposal-secondary-actions" aria-label="Customer-facing actions">
-          <button className="btn-secondary" onClick={openEmail}><Icon name="mail" size={13} /> Email proposal</button>
+          <label className="btn-secondary proposal-upload-button">
+            <Icon name="upload" size={13} /> Upload reviewed XLSX
+            <input type="file" accept=".xlsx,.xls" onChange={uploadReviewedProposal} />
+          </label>
           <button className="btn-secondary" onClick={() => setPreviewOpen(true)}><Icon name="eye" size={13} /> Preview proposal</button>
+          {reviewReady && !pendingForOpp.length && !blocked && <button className="primary" onClick={openEmail}><Icon name="mail" size={13} /> Send to customer</button>}
+          {reviewReady && approvalRequired && <button className="btn-secondary" onClick={submitForApproval}><Icon name="send" size={13} /> Request approval</button>}
           {(route === 'Spares' || route === 'Services') && <button className="btn-secondary" onClick={openTemplatePreview}><Icon name="fileSheet" size={13} /> Preview template</button>}
         </div>
       </div>
+
+      <section className="proposal-review-strip" aria-label="Human review checkpoint">
+        <div>
+          <strong>Review the AI draft before approval</strong>
+          <span>Edit inline, download and revise externally, or upload the reviewed workbook. Validation runs after that review.</span>
+        </div>
+        <button className="primary" onClick={validateReviewedProposal} disabled={reviewBusy}>
+          <Icon name="checkCircle" size={13} /> {reviewBusy ? 'Checking…' : 'Run validation'}
+        </button>
+      </section>
+      {(reviewError || reviewMessage || p.reviewIssues?.length > 0) && (
+        <section className="proposal-review-results" aria-live="polite">
+          {reviewError && <div className="errbox">{reviewError}</div>}
+          {reviewMessage && <div className="okbox">{reviewMessage}</div>}
+          {!!p.reviewIssues?.length && <div className="proposal-review-issues">
+            <strong>Validation findings</strong>
+            {p.reviewIssues.map((issue, index) => <div key={index} className={`proposal-review-issue ${issue.severity}`}>{issue.text}</div>)}
+          </div>}
+        </section>
+      )}
 
       <div className="proposal-tab-bar">
         <DetailTabs ariaLabel="Proposal documents" activeId={tab}

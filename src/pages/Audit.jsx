@@ -1,12 +1,9 @@
 import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
 import { useDrawer } from '../drawer.jsx'
-import { ROLES } from '../seed.js'
-import { ddMmmYY, exportCSV, canSeePage } from '../utils.js'
+import { ddMmmYY, exportCSV, canSeePage, displayRole } from '../utils.js'
 
 const when = ts => `${ddMmmYY(ts.slice(0, 10))} ${ts.slice(11, 16)}`
-// Labels read "LJS — Strategic Approver"; the table only needs the short part.
-const shortRole = r => (ROLES[r]?.label ?? r).split('—')[0].trim()
 
 export default function Audit() {
   const store = useStore()
@@ -43,7 +40,7 @@ export default function Audit() {
   const doExport = () => exportCSV(
     'Audit_Trail.csv',
     ['When', 'Role', 'Action', 'Object', 'Detail'],
-    rows.map(e => [when(e.ts), shortRole(e.role), e.action, e.objectId ?? '', e.detail ?? '']))
+    rows.map(e => [when(e.ts), displayRole(e.role), e.action, e.objectId ?? '', e.detail ?? '']))
 
   return (
     <div className="page">
@@ -54,7 +51,7 @@ export default function Audit() {
         <label>Role:{' '}
           <select value={role} onChange={e => setRole(e.target.value)}>
             <option>All</option>
-            {roles.map(r => <option key={r} value={r}>{shortRole(r)}</option>)}
+            {roles.map(r => <option key={r} value={r}>{displayRole(r)}</option>)}
           </select>
         </label>
         <label>Action:{' '}
@@ -80,7 +77,7 @@ export default function Audit() {
               return (
                 <tr key={`${e.ts}-${i}`}>
                   <td style={{ whiteSpace: 'nowrap' }}>{when(e.ts)}</td>
-                  <td>{shortRole(e.role)}</td>
+                  <td>{displayRole(e.role)}</td>
                   <td><b>{e.action}</b></td>
                   <td>
                     {oppIds.has(e.objectId)

@@ -35,6 +35,7 @@ const isCustomModel = m => {
   return s.includes('enter below') || s.includes('deployment')
 }
 const FALLBACK_PROVIDER = 'Built-in fallback'
+const DEMO_CONTROLS_PASSWORD = '32605'
 
 function NumField({ label, value, disabled, onChange }) {
   return (
@@ -175,6 +176,9 @@ export default function Admin() {
   const [supplier, setSupplier] = useState('')
   const [plVersion, setPlVersion] = useState('')
   const [newKyc, setNewKyc] = useState('')
+  const [demoPassword, setDemoPassword] = useState('')
+  const [demoUnlocked, setDemoUnlocked] = useState(false)
+  const [demoPasswordError, setDemoPasswordError] = useState('')
 
   // Route-level gate AFTER the hooks (an early return before them would change
   // the hook count when the persona flips while /admin is mounted). Approval
@@ -225,13 +229,46 @@ export default function Admin() {
   const aiTh = config.aiThresholds || {}
   const amber = config.amberFee || {}
 
+  const unlockDemoControls = event => {
+    event.preventDefault()
+    if (demoPassword === DEMO_CONTROLS_PASSWORD) {
+      setDemoUnlocked(true)
+      setDemoPassword('')
+      setDemoPasswordError('')
+      return
+    }
+    setDemoPasswordError('Incorrect password.')
+  }
+
   return (
     <div className="page">
       <h2>Admin — configuration</h2>
       <div className="toolbar">
         <span className="hint">Configuration is separated from demo data. Changes update behaviour immediately and are audited.</span>
         <span className="spacer" />
-        <DemoDataControls size={12} />
+      </div>
+
+      <div className="admin-card demo-controls-card" style={{ marginBottom: 12 }}>
+        <h3><Icon name="shield" size={14} /> Demo data controls</h3>
+        {!demoUnlocked ? (
+          <form className="admin-actions" onSubmit={unlockDemoControls}>
+            <input
+              type="password"
+              value={demoPassword}
+              onChange={e => { setDemoPassword(e.target.value); setDemoPasswordError('') }}
+              placeholder="Admin password"
+              autoComplete="off"
+              aria-label="Demo data controls password"
+            />
+            <button className="primary" type="submit">Unlock controls</button>
+            {demoPasswordError && <span className="err-text" role="alert">{demoPasswordError}</span>}
+          </form>
+        ) : (
+          <div className="admin-actions">
+            <DemoDataControls size={12} />
+            <span className="hint">These actions affect demo records only; configuration and logins are retained.</span>
+          </div>
+        )}
       </div>
 
       {!canEdit && (

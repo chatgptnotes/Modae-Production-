@@ -1,6 +1,6 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { CATEGORIES, CUSTOMER_STATUSES, OWNERS, OPP_TYPES, BUS, SEGMENTS, SOLUTIONS, PRODUCTS, PROB_LEVELS } from './seed.js'
-import { productList } from './utils.js'
+import { displayRole, productList } from './utils.js'
 
 const Field = ({ label, children }) => (
   <div><label>{label}</label>{children}</div>
@@ -86,7 +86,7 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
       <div className="opportunity-details-group">Identity</div>
       <div className="dgrid2 opportunity-details-grid">
         <Field label="Opp ID"><div className="ro">{opp.id} (Sl {opp.sl})</div></Field>
-        <Field label="Owner"><select value={draft.owner} onChange={e => set('owner', e.target.value)}>{OWNERS.map(x => <option key={x}>{x}</option>)}</select></Field>
+        <Field label="Owner"><select value={draft.owner} onChange={e => set('owner', e.target.value)}>{OWNERS.map(x => <option key={x}>{displayRole(x)}</option>)}</select></Field>
         <Field label="RFQ Number"><input type="text" value={draft.rfqNumber} onChange={e => set('rfqNumber', e.target.value)} /></Field>
         <Field label="RFQ Date"><input type="date" value={draft.rfqDate} onChange={e => set('rfqDate', e.target.value)} /></Field>
         <div style={{ gridColumn: '1 / -1' }}>

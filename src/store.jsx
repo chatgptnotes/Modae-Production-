@@ -388,6 +388,9 @@ export function StoreProvider({ children }) {
           ...p,
           revision: String((+p.revision || 0) + 1).padStart(2, '0'),
           releaseStatus: 'Superseded',
+          reviewStatus: 'Needs review',
+          reviewIssues: [],
+          reviewNeedsRevision: false,
           revisions: [...revisions, {
             // The original dispatch is V1, so the first revision is V2. Count
             // revisions only — `revisions` also carries the 'Submitted' entries

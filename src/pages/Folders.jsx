@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { SUBFOLDERS } from '../seed.js'
-import { stageClass } from '../utils.js'
+import { stageClass, displayRole } from '../utils.js'
 import { removePrefix } from '../supabase.js'
 import * as filestore from '../filestore.js'
 import { getConfig } from '../sharepoint.js'
@@ -293,7 +293,7 @@ export default function Folders() {
       </div>
       <h2>{opp.oppName}</h2>
       <div className="hint" style={{ marginBottom: 12 }}>
-        {opp.sellTo} · EUC: {opp.eucName} ({opp.eucLocation}) · Owner {opp.owner}
+        {opp.sellTo} · EUC: {opp.eucName} ({opp.eucLocation}) · Owner {displayRole(opp.owner)}
       </div>
       <div className="folder-grid" style={{ maxWidth: 640 }}>
         {subNames.map(sf => {
