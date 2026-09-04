@@ -65,9 +65,9 @@ scheduler (Tier 3 below).
 | **L9** | AI-07 register in CRM & Sales Pipeline (Stage 1) | Labelled "Simulated". The app *is* the CRM — needs a client decision | Low |
 | **L10** | "All AI actions … logged for a complete audit trail" | Audit logs **human actions only**; no model, prompt or response recorded. Capped at 500 entries, client-writable | Medium |
 
-**Also:** `nextOppId` takes a *global* max over the serial, not per-month, and computes
-from browser state — two concurrent registrations collide. No DB sequence or uniqueness
-constraint exists.
+**Also:** `nextOppId` now resets the serial per month, but still computes from browser
+state — two concurrent registrations can collide. No DB sequence or uniqueness constraint
+exists.
 
 ---
 

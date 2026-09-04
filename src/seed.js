@@ -201,8 +201,8 @@ export const seedOpportunities = [
   },
 
   // ---- FY 2025-26 closed history (the "Old Closed Opps" tab) ----------------
-  // Opp ID = YYMM + global running seq + owner initials, so the seq climbs with
-  // the create date. Closed rows carry a mandatory Closed Reason.
+  // Opp ID = YYMM + monthly sequence + owner initials. Closed rows carry a
+  // mandatory Closed Reason.
   {
     sl: 40, id: '2510095SS', sellTo: 'Reliance Industries (Jamnagar)', category: 'EUC', location: 'Jamnagar',
     customerStatus: 'Green', eucName: 'Reliance', eucLocation: 'Jamnagar',

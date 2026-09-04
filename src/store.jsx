@@ -1289,12 +1289,13 @@ export function StoreProvider({ children }) {
 
 export const useStore = () => useContext(StoreCtx)
 
-// Opp ID = YYMM + 3-digit running sequence + owner initials (e.g. 2608222RS),
-// per the Sales Pipeline Report sheet.
+// Opp ID = YYMM + 3-digit monthly sequence + owner initials
+// (e.g. 2609001RS), per the Sales Pipeline Report sheet.
 export function nextOppId(opportunities, owner) {
   const now = new Date()
   const yymm = String(now.getFullYear()).slice(2) + String(now.getMonth() + 1).padStart(2, '0')
   const seqs = opportunities
+    .filter(o => String(o.id).startsWith(yymm))
     .map(o => parseInt(String(o.id).slice(4, 7), 10))
     .filter(n => !isNaN(n))
   const next = (seqs.length ? Math.max(...seqs) : 0) + 1
