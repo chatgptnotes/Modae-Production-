@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import DetailTabs from '../DetailTabs.jsx'
 
 const FIELD_LIST = [
   'Owner', 'Opp Type', 'BU', 'Solution', 'Product', 'Stage', 'Prob (%)',
@@ -42,6 +43,8 @@ export default function InputsWorkbook({ store }) {
       <span className="pill Blue">Reference data</span>
     </div>
     <div className="sheet-wrap workbook-scroll">{table}</div>
-    <div className="workbook-tabs">{['Pipeline Explanation', 'Rows With Different Colour Code', 'Customers', 'Field List'].map(name => <button key={name} className={tab === name ? 'active' : ''} onClick={() => setTab(name)}>{name}</button>)}</div>
+    <DetailTabs ariaLabel="Input workbook views" activeId={tab}
+      items={['Pipeline Explanation', 'Rows With Different Colour Code', 'Customers', 'Field List'].map(name => ({ id: name, label: name }))}
+      onChange={setTab} />
   </div>
 }

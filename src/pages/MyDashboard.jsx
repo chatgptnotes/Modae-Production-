@@ -30,7 +30,7 @@ function Metric({ label, value, hint, tone = '', onClick }) {
 
 function Card({ title, icon, tone = '', span = 6, children, action }) {
   return (
-    <section className={`ana-card c-${span}`}>
+    <section className={`ana-card dashboard-card c-${span}`}>
       <div className="ana-title">
         {icon && <span className={`ana-ico ${tone}`}><Icon name={icon} size={15} /></span>}
         {title}
@@ -401,7 +401,7 @@ export default function MyDashboard() {
 
   // Any future role still gets the work queue rather than a blank page.
   return (
-    <div className="page">
+    <div className="page dashboard-page">
       {head}
       <div className="stat-cards">
         <Metric label="Open opportunities" value={open.length} tone="sky" />
@@ -446,7 +446,7 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
   ]
 
   return (
-    <div className="page">
+    <div className="page dashboard-page">
       {head}
 
       <div className="stat-cards">
@@ -643,12 +643,12 @@ function TeamTargetsCard({ store, span = 12 }) {
               <tr key={owner} className="targets-editing">
                 <td><b>{owner}</b> <span className="hint">{ROLES[owner]?.name || ''}</span></td>
                 <td className="num">
-                  <input type="number" min="0" value={draft.annual} aria-label={`${owner} annual target in lakh`}
+                  <input type="number" min="0" value={draft.annual} aria-label={`${owner} annual target`}
                     onChange={e => setDraft(d => ({ ...d, annual: e.target.value }))} />
                 </td>
                 {draft.q.map((v, i) => (
                   <td key={FY_QUARTERS[i]} className="num">
-                    <input type="number" min="0" value={v} aria-label={`${owner} Q${i + 1} target in lakh`}
+                    <input type="number" min="0" value={v} aria-label={`${owner} Q${i + 1} target`}
                       onChange={e => setDraft(d => ({ ...d, q: d.q.map((x, j) => (j === i ? e.target.value : x)) }))} />
                   </td>
                 ))}
@@ -685,7 +685,7 @@ function ApproverDashboard({ store, nav, role, c, open, blocked, nextActions, he
   const openValue = open.reduce((s, o) => s + (+o.valueK || 0), 0)
 
   return (
-    <div className="page">
+    <div className="page dashboard-page">
       {head}
       <div className="stat-cards">
         <Metric label="Waiting on you" value={mine.length} tone={mine.length ? 'red' : 'green'} onClick={() => nav('/approvals')} />
@@ -742,7 +742,7 @@ function AdminDashboard({ store, nav, role, c, open, blocked, head }) {
   const perf = salesPerformance(store)
 
   return (
-    <div className="page">
+    <div className="page dashboard-page">
       {head}
       <div className="stat-cards">
         <Metric label="User accounts" value={users.length} tone="slate" onClick={() => nav('/users')} />
@@ -804,7 +804,7 @@ function TechDashboard({ store, nav, open, blocked, nextActions, head }) {
   const deviations = forReview.reduce((s, { p }) => s + (p.terms || []).filter(t => t.status === 'Deviation').length, 0)
 
   return (
-    <div className="page">
+    <div className="page dashboard-page">
       {head}
       <div className="stat-cards">
         <Metric label="Proposals with a BoQ" value={forReview.length} tone="sky" />

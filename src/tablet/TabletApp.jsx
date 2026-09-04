@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react'
 import { Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { PORTAL_ENABLED, selectableRoles } from '../seed.js'
+import { PORTAL_ENABLED } from '../seed.js'
 import { canSeePage } from '../utils.js'
 import { DrawerHost } from '../drawer.jsx'
 import { Icon, ModaeLogo } from '../icons.jsx'
@@ -64,12 +64,6 @@ export default function TabletApp() {
     if (loc.pathname === '/') nav('/home', { replace: true })
   }, [loc.pathname, nav])
 
-  const RoleSwitcher = () => custAccount ? null : (
-    <select value={store.role} onChange={e => store.setRole(e.target.value)} title="Acting-as persona">
-      {selectableRoles().map(([id, r]) => <option key={id} value={id}>{r.label}</option>)}
-    </select>
-  )
-
   const routes = (role === 'CUST' || custAccount) ? (
     <Routes>
       <Route path="/portal" element={<Portal />} />
@@ -131,7 +125,6 @@ export default function TabletApp() {
           onClick={() => store.setTabletTheme(theme === 'dark' ? 'light' : 'dark')}>
           <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={15} />
         </button>
-        <RoleSwitcher />
         <button onClick={() => { store.setViewMode('full'); nav('/opportunities') }} title="Switch to the full desktop site">
           <Icon name="monitor" size={14} /> <span className="tb-label">Full site</span>
         </button>

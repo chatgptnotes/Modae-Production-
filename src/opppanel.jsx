@@ -11,6 +11,7 @@ import * as filestore from './filestore.js'
 import { Icon } from './icons.jsx'
 import { Chip, ClassChip } from './ui.jsx'
 import OpportunityDetailsEditor from './OpportunityDetailsEditor.jsx'
+import DetailTabs from './DetailTabs.jsx'
 
 const OPEN_STAGES = STAGES.filter(s => s !== 'Won' && s !== 'Lost')
 
@@ -39,7 +40,18 @@ export default function OppPanel({ oppId }) {
   const opp = store.opportunities.find(o => o.id === oppId)
   const files = store.files[oppId] || Object.fromEntries(SUBFOLDERS.map(f => [f, []]))
   const subNames = Object.keys(files)
-  const tabNames = [DETAILS_TAB, ...subNames]
+  const tabItems = [
+    { id: DETAILS_TAB, label: DETAILS_TAB },
+    ...subNames.map(name => ({
+      id: name,
+      label: name,
+      // Core folders describe the opportunity even before a file is uploaded;
+      // optional folders stay hidden until they contain active content.
+      show: ['Customer Specs', 'Partner Docs', 'KYC'].includes(name)
+        || name === 'Proposal' && (!!store.proposals?.[oppId] || !!files[name]?.length)
+        || !!files[name]?.length,
+    })),
+  ]
 
   const [tab, setTab] = useState(DETAILS_TAB)
   useEffect(() => { setTab(DETAILS_TAB) }, [oppId])
@@ -53,7 +65,7 @@ export default function OppPanel({ oppId }) {
   if (!opp) return <div className="drawer-body"><p className="hint">This opportunity no longer exists.</p></div>
 
   // A custom subfolder can be deleted (on the Folders page) while its tab is active.
-  const activeTab = tabNames.includes(tab) ? tab : DETAILS_TAB
+  const activeTab = tabItems.some(item => item.show !== false && item.id === tab) ? tab : DETAILS_TAB
   const isDetails = activeTab === DETAILS_TAB
   // Sales owners need cost and margin while building their proposals;
   // org-wide commercial reports remain protected by canViewCommercial.
@@ -111,13 +123,7 @@ export default function OppPanel({ oppId }) {
 
   return (
     <div className="drawer-body">
-      <div className="drawer-tabs">
-        {tabNames.map(sf => (
-          <button key={sf} className={`dtab ${sf === activeTab ? 'active' : ''}`} onClick={() => setTab(sf)}>
-            {sf}
-          </button>
-        ))}
-      </div>
+      <DetailTabs ariaLabel="Opportunity files" activeId={activeTab} items={tabItems} onChange={setTab} />
 
       {!isDetails && (
         <div className="drawer-files">

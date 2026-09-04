@@ -66,7 +66,7 @@ export function Modal({ title, onClose, children, wide, className = '' }) {
     <>
       <div className="filter-overlay modal-overlay" onClick={onClose} />
       <div className={`modal form-card ${wide ? 'wide' : ''} ${className}`.trim()} role="dialog" aria-modal="true" aria-label={title}>
-        {title && <div className="section-title">{String(title).replace(/Ã¢â‚¬â€/g, '—').replace(/Ã‚Â·/g, '·').replace(/Ã¢â‚¬Â¦/g, '…')}</div>}
+        {title && <div className="section-title">{String(title)}</div>}
         {children}
       </div>
     </>

@@ -13,6 +13,7 @@ import { fmtSize } from '../filestore.js'
 import { hold, add as holdMore } from '../leadFiles.js'
 import { listFiles } from '../leadBlobs.js'
 import AttachmentViewer from '../AttachmentViewer.jsx'
+import DetailTabs from '../DetailTabs.jsx'
 import { findDuplicates } from '../insights.js'
 import { leadWorkflow } from '../leadWorkflow.js'
 import { parseLeadLineItems } from '../tenderParse.js'
@@ -2004,6 +2005,12 @@ export default function Inbox() {
     ? l.status === 'New' && !l.readAt
     : tab === 'qualified' ? l.status === 'Qualified'
       : tab === 'converted' ? l.status === 'Converted' : true).length
+  const mailTabItems = [
+    { id: 'primary', label: 'Primary', count: tabCount('primary') },
+    { id: 'unread', label: 'Unread', count: tabCount('unread') },
+    { id: 'qualified', label: 'Qualified', count: tabCount('qualified') },
+    { id: 'converted', label: 'Opportunity', count: tabCount('converted') },
+  ].filter(item => item.id === 'primary' || item.count > 0 || item.id === mailTab)
   const sourceOptions = [...new Set(listSource.map(l => l.source || l.channel).filter(Boolean))].sort()
   const ownerOptions = [...new Set(listSource.map(l => l.suggestedOwner || 'Unassigned'))].sort()
   const filterSelect = (value, onChange, label, options, short) => (
@@ -2109,13 +2116,7 @@ export default function Inbox() {
         </Modal>
       )}
 
-      <div className="mail-tabs" role="tablist" aria-label="Mailbox views">
-        {[['primary', 'Primary'], ['unread', 'Unread'], ['qualified', 'Qualified'], ['converted', 'Opportunity']].map(([key, label]) => (
-          <button key={key} role="tab" aria-selected={mailTab === key} className={mailTab === key ? 'active' : ''} onClick={() => setMailTab(key)}>
-            <span>{label}</span><b>{tabCount(key)}</b>
-          </button>
-        ))}
-      </div>
+      <DetailTabs ariaLabel="Mailbox views" activeId={mailTab} items={mailTabItems} onChange={setMailTab} />
 
       <div className="mailbox-list">
         <div className="mail-list-toolbar">

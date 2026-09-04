@@ -5,7 +5,7 @@ import { ROLES } from '../seed.js'
 import { isApprover, canViewCommercial, ddMmmYY, displayRole, displayRoles } from '../utils.js'
 import { useDrawer } from '../drawer.jsx'
 import { Icon } from '../icons.jsx'
-import { Chip } from '../ui.jsx'
+import { Chip, AiBadge } from '../ui.jsx'
 
 const NEW_APPROVAL_MS = 48 * 60 * 60 * 1000
 // Approval ts/decisionTs are full ISO stamps; ddMmmYY wants YYYY-MM-DD.
@@ -145,13 +145,50 @@ export default function Approvals() {
       : <span className="hint">No linked record</span>
 
   // Detail may embed commercial trigger values (GM%, discount, value) — gate it.
-  const Detail = ({ a }) => (COMMERCIAL_RX.test(a.detail || '') && !comm)
+  const Detail = ({ a }) => <>
+    <OpportunityContext a={a} />
+    {(COMMERCIAL_RX.test(a.detail || '') && !comm)
     ? (
       <div className="restricted" style={{ fontSize: 12.5 }}>
         <Icon name="lock" size={11} /> Commercial exception — trigger values (GM% / discount / value) visible to LJS / AH only.
       </div>
     )
-    : <div style={{ fontSize: 12.5 }}>{a.detail}</div>
+    : <div style={{ fontSize: 12.5 }}>{a.detail}</div>}
+  </>
+
+  const OpportunityContext = ({ a }) => {
+    if (!a.oppId && !a.opportunitySummary && !a.blockingReason) return null
+    const opp = a.oppId ? store.opportunities.find(o => o.id === a.oppId) : null
+    const snapshot = a.opportunitySnapshot || {}
+    const summary = a.opportunitySummary || opp?.remarks || 'No opportunity summary was captured.'
+    const isCommercialRequest = a.type === 'Commercial deviation'
+    const reason = !comm && isCommercialRequest
+      ? 'Commercial deviation approval is required before submission.'
+      : (a.blockingReason || a.detail || 'Approval is required before the workflow can continue.')
+    const deviations = comm ? (a.deviationDetails || []) : []
+    return (
+      <div className="approval-opportunity-context">
+        <div className="approval-context-head">
+          <span className="approval-context-label">Opportunity summary</span>
+          {a.summarySource === 'ai' && <AiBadge label="AI summary" />}
+        </div>
+        <p className="approval-context-summary">{summary}</p>
+        <div className="approval-context-facts">
+          <span><b>Customer</b>{snapshot.customer || opp?.sellTo || 'Not recorded'}</span>
+          <span><b>Route</b>{snapshot.route || opp?.route || 'Not recorded'}</span>
+          <span><b>Milestone</b>{snapshot.milestone || opp?.milestone || opp?.stage || 'Not recorded'}</span>
+          {(snapshot.product || opp?.product) && <span><b>Product</b>{snapshot.product || (Array.isArray(opp.product) ? opp.product.join(', ') : opp.product)}</span>}
+          {comm && snapshot.valueK != null && <span><b>Value</b>₹{snapshot.valueK}K</span>}
+        </div>
+        <div className="approval-context-reason"><b>Why this is blocked</b><span>{reason}</span></div>
+        {deviations.length > 0 && (
+          <div className="approval-context-deviations">
+            {deviations.map((d, i) => <div key={`${d.term}-${i}`}><b>{d.term}</b><span>Customer requested: {d.customerAsk}</span><span>ModAE offered: {d.ourResponse}</span></div>)}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   // On an `anyOf` gate the named roles are alternatives, not a quorum. Joint
   // gates deliberately omit this marker and display both outstanding roles.
@@ -288,7 +325,8 @@ export default function Approvals() {
             <span className="pill Amber">Approved with conditions</span>
             <span className="hint" style={{ marginLeft: 'auto' }}>decided {stamp(a.decisionTs)}</span>
           </div>
-          <div style={{ margin: '6px 0' }}><RefLink a={a} /></div>
+           <div style={{ margin: '6px 0' }}><RefLink a={a} /></div>
+           <OpportunityContext a={a} />
           {(a.conditions || []).map((c, i) => (
             <div key={i} style={{ fontSize: 12.5, margin: '4px 0' }}>
               {c.incorporated
@@ -316,7 +354,8 @@ export default function Approvals() {
             <span style={{ fontSize: 12.5 }}>{a.type}</span>
             <span className="hint" style={{ marginLeft: 'auto' }}>decided {stamp(a.decisionTs)}</span>
           </div>
-          <div style={{ margin: '6px 0' }}><RefLink a={a} /></div>
+           <div style={{ margin: '6px 0' }}><RefLink a={a} /></div>
+           <OpportunityContext a={a} />
           <RoleChips a={a} />
           {Object.entries(a.decisions || {}).map(([r, dd]) => (
             <div key={r} style={{ fontSize: 12.5, margin: '4px 0' }}>
