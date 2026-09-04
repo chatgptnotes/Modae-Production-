@@ -2,6 +2,7 @@ import React from 'react'
 import { useEffect, useState } from 'react'
 import { fmt } from '../utils.js'
 import { Icon } from '../icons.jsx'
+import { useStore } from '../store.jsx'
 import {
   docModel, docLayout, addDays, lineQty, standardFor, MODAE_COMPANY,
 } from '../proposalDoc.js'
@@ -112,7 +113,8 @@ function PairEditor({ items, keys, labels, onChange }) {
 // free text editable, derived sections shown read-only so the operator can see
 // what will actually print.
 export default function DocEditor({ p, opp, save, files, totals, priced }) {
-  const doc = docModel(p, opp, { files })
+  const store = useStore()
+  const doc = docModel(p, opp, { files, config: store.config })
   const set = (k, v) => save({ ...p, [k]: v })
   const reset = k => () => { const next = { ...p }; delete next[k]; save(next) }
 

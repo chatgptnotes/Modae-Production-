@@ -138,7 +138,7 @@ export function buildDocProps(store, oppId) {
   return {
     p,
     opp,
-    doc: docModel(p, opp, { files: specFiles.map(f => f.name).filter(Boolean) }),
+    doc: docModel(p, opp, { files: specFiles.map(f => f.name).filter(Boolean), config: store.config }),
     // Selling rates are visible on every priced proposal. Internal cost and
     // margin values are not part of this public document model.
     priced: p.bidType !== 'Unpriced (Technical)',

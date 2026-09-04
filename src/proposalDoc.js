@@ -32,11 +32,12 @@ export const PROP_SECTIONS = [
 
 // Rule-based commercial-term suggestions (AI-labelled in the UI): payment by
 // customer class, delivery by route, standard validity and warranty.
-export function recommendTerms(opp) {
-  const payment = opp.customerStatus === 'Green' ? '30 days credit from invoice'
+export function recommendTerms(opp, config = {}) {
+  const payment = config.classRules?.[opp.customerStatus]
+    || (opp.customerStatus === 'Green' ? '30 days credit from invoice'
     : opp.customerStatus === 'Blue' ? '50% advance, balance on delivery'
     : opp.customerStatus === 'Amber' ? '100% advance before dispatch'
-    : '100% prepayment only'
+    : '100% prepayment only')
   const delivery = opp.route === 'Spares' ? '6-8 weeks ex-works'
     : opp.route === 'Service' ? 'Engineer mobilisation within 2 weeks of PO'
     : '16-20 weeks per milestone schedule'
@@ -511,7 +512,7 @@ export function docModel(p, opp, ctx = {}) {
     assumptions: p.assumptions ?? DEFAULT_ASSUMPTIONS,
     exclusions: p.exclusions ?? DEFAULT_EXCLUSIONS,
     deviations,
-    offerTerms: p.offerTerms ?? recommendTerms(opp || {}),
+    offerTerms: p.offerTerms ?? recommendTerms(opp || {}, ctx.config),
     // The numbered T&C block the samples print under the pricing sheet.
     docTerms: p.docTerms ?? defaultDocTerms(p, opp),
     docTermsHeading: p.docTermsHeading ?? docTermsHeading(p, opp),

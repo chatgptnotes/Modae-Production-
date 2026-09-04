@@ -702,8 +702,8 @@ function AiLeadDetail({ lead }) {
   const [reverting, setReverting] = useState(false)
   const [decisionErr, setDecisionErr] = useState('')
   const [reassignTo, setReassignTo] = useState(lead.suggestedOwner || OWNERS[0])
-  const initialLocation = lead.location || (lead.region && !indiaRegionForLocation(lead.region) ? lead.region : '') || leadFieldValue(ai.fields, /location|region/i)
-  const initialRegion = lead.region || indiaRegionForLocation(initialLocation) || initialLocation
+  const initialLocation = lead.location || (lead.region && !indiaRegionForLocation(lead.region, store.config) ? lead.region : '') || leadFieldValue(ai.fields, /location|region/i)
+  const initialRegion = lead.region || indiaRegionForLocation(initialLocation, store.config) || initialLocation
   const initialDecisions = () => ({
     location: initialLocation,
     region: initialRegion,
@@ -1051,7 +1051,7 @@ function AiLeadDetail({ lead }) {
   }
 
   const updateDecisionRegion = (location) => {
-    const mappedRegion = indiaRegionForLocation(location) || (location.trim() ? 'Unclassified leads' : '')
+    const mappedRegion = indiaRegionForLocation(location, store.config) || (location.trim() ? 'Unclassified leads' : '')
     setLocationSearch('')
     setDecisionDraft(previous => ({
       ...previous,

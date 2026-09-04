@@ -784,7 +784,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   // each overridable on the Document tab. Attachments pick up whatever the
   // intake wizard filed under Customer Specs.
   const specFiles = ((store.files || {})[oppId] || {})['Customer Specs'] || []
-  const doc = docModel(p, opp, { files: specFiles.map(f => f.name).filter(Boolean) })
+  const doc = docModel(p, opp, { files: specFiles.map(f => f.name).filter(Boolean), config: store.config })
   // Selling rates are part of every priced proposal; internal costs and margins
   // remain separately protected by the commercial-role checks.
   const priced = p.bidType !== 'Unpriced (Technical)'

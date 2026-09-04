@@ -1,6 +1,7 @@
 // Reference data and dummy rows cloned from Modae's actual workflow
 // (Sales Pipeline Report FY26 Excel + New Sales Opportunity Intake form,
 // as shown in the Aug 10 meeting screenshots).
+import { STATES, STATE_REGION } from './indiaLocations.js'
 
 // Fx-1..Fx-5 are the client's own reserved slots — they appear on Category,
 // Segment, Product and Solution in the Field List sheet, so a pipeline export
@@ -1160,6 +1161,17 @@ export const seedConfig = {
   // Diagram 02 §5C margin matrix: order value against ₹10 Lakh, margin against 50%.
   approvalThresholds: { valueBreak: 1000000, marginBreak: 50 },
   amberFee: { amount: 25000, cur: 'INR', days: 7 },
+  classRules: {
+    Green: '30 days credit from invoice',
+    Blue: '50% advance, balance on delivery',
+    Amber: '100% advance before dispatch',
+    Red: '100% prepayment only',
+  },
+  // Which region (and thus which owner, via ownershipRules) each Indian
+  // state/UT routes to. Defaults mirror indiaLocations.js's STATE_REGION.
+  stateRegions: Object.entries(STATES)
+    .map(([code, name]) => ({ code, name, region: STATE_REGION[code] || 'Unclassified leads' }))
+    .sort((a, b) => a.name.localeCompare(b.name)),
   kycItems: ['GST certificate', 'PAN certificate', 'Cancelled cheque', 'EFT / bank mandate', 'CIN reference', 'Registered & business address'],
   templates: ['Spares quotation', 'Reactive service offer', 'Project techno-commercial proposal'],
   reminders: [

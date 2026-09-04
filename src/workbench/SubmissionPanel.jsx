@@ -43,7 +43,7 @@ export default function SubmissionPanel({ opp }) {
   const customer = (store.customers || []).find(c => c.id === opp.sellTo || c.name === opp.sellTo)
   const to = opp.contactEmail || customer?.email || ''
   const subject = `Proposal — ${opp.oppName} (${opp.id} Rev ${p.revision})`
-  const doc = docModel(p, opp, { files: [] })
+  const doc = docModel(p, opp, { files: [], config: store.config })
   const route = docRoute(p, opp)
   const { totalQty, lineQuoted } = buildPricing(store, p)
   const priced = p.bidType !== 'Unpriced (Technical)'

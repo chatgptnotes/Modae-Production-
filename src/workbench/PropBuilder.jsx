@@ -77,7 +77,7 @@ export default function PropBuilder({ opp }) {
     a.oppId === opp.id && a.status === 'Approved with conditions')
 
   const insertTerms = () => {
-    const recs = recommendTerms(opp)
+    const recs = recommendTerms(opp, store.config)
     const terms = [...(p.terms || [])]
     for (const rec of recs) {
       const i = terms.findIndex(t => t.term === rec.term)
@@ -211,7 +211,7 @@ export default function PropBuilder({ opp }) {
         )}
 
         <div className="section-title" style={{ marginTop: 10 }}>Commercial terms <AiBadge label="AI-suggested" /></div>
-        {recommendTerms(opp).map(t => (
+        {recommendTerms(opp, store.config).map(t => (
           <div key={t.term} style={{ fontSize: 12.5, padding: '2px 0' }}>
             <b>{t.term}:</b> {t.ourResponse}
           </div>

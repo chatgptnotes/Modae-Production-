@@ -70,6 +70,8 @@ export function migrate(s) {
   if (!s.config) s.config = seedConfig
   s.config.leadDeadlines = { ...seedConfig.leadDeadlines, ...(s.config.leadDeadlines || {}) }
   s.config.fastTrack = { ...seedConfig.fastTrack, ...(s.config.fastTrack || {}) }
+  s.config.classRules = { ...seedConfig.classRules, ...(s.config.classRules || {}) }
+  if (!Array.isArray(s.config.stateRegions)) s.config.stateRegions = seedConfig.stateRegions
   if (!s.config.uploads) s.config.uploads = seedConfig.uploads
   if (!s.config.aiModel) s.config.aiModel = seedConfig.aiModel
   // Gemini is wired for real now: drop the key fields saved state used to carry

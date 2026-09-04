@@ -12,12 +12,8 @@ import { DEFAULT_COMMON_MAILBOX } from '../leadClarification.js'
 // Admin — every runtime rule the app obeys, in one card grid. Data lives in
 // store.config; all changes are audited by the store mutators.
 
-const CLASS_RULES = [
-  ['Green', 'OK to quote — 30 days credit'],
-  ['Blue', 'New customer — 50% advance, KYC pending'],
-  ['Amber', 'Pre-quote processing fee — 100% advance'],
-  ['Red', 'No Bid without joint LJS+AH clearance — 100% prepayment only'],
-]
+const CLASS_ORDER = ['Green', 'Blue', 'Amber', 'Red']
+const REGION_OPTIONS = ['North & West India', 'South & East India', 'Unclassified leads']
 
 const CONNECTOR_CYCLE = {
   'Healthy': 'Degraded (read-only)',
@@ -305,7 +301,230 @@ export default function Admin() {
           <p className="hint">Suggested owner on intake. Overriding a routed owner requires LJS or AH with a mandatory reason.</p>
         </div>
 
-        {/* 3 — AI model configuration */}
+        {/* 2b — State → region mapping */}
+        <div className="admin-card">
+          <h3><Icon name="target" size={14} /> State → region mapping</h3>
+          <p className="hint">Which Ownership-rules region each Indian state/UT feeds into. Location text typed on lead intake is matched to a state, then routed here.</p>
+          <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+            {(config.stateRegions || []).map((r, i) => (
+              <div key={r.code} className="arow">
+                <span style={{ flex: 1 }}>{r.name}</span>
+                <select value={r.region} disabled={!canEdit} style={{ width: 'auto' }}
+                  onChange={e => patchList('stateRegions', i, { region: e.target.value })}>
+                  {REGION_OPTIONS.map(o => <option key={o}>{o}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 3 — AI confidence thresholds */}
+        <div className="admin-card">
+          <h3><Icon name="bot" size={14} /> AI confidence thresholds</h3>
+          <NumField label="High ≥ %" value={aiTh.high} disabled={!canEdit}
+            onChange={v => store.updateConfig({ aiThresholds: { ...aiTh, high: v } })} />
+          <NumField label="Medium ≥ %" value={aiTh.med} disabled={!canEdit}
+            onChange={v => store.updateConfig({ aiThresholds: { ...aiTh, med: v } })} />
+          <p className="hint">Below medium blocks stage completion; source conflicts always need human resolution.</p>
+        </div>
+
+        {/* 4 — Approval thresholds */}
+        <div className="admin-card">
+          <h3><Icon name="checkCircle" size={14} /> Approval thresholds</h3>
+          <NumField label="Order value break (INR)" value={thresholds.valueBreak} disabled={!canEdit}
+            onChange={v => store.updateConfig({ approvalThresholds: { ...thresholds, valueBreak: v } })} />
+          <NumField label="Margin break (%)" value={thresholds.marginBreak} disabled={!canEdit}
+            onChange={v => store.updateConfig({ approvalThresholds: { ...thresholds, marginBreak: v } })} />
+          <p className="hint">Below value break &amp; margin above break → assigned salesperson self-approves. Below value break &amp; margin at/below break → AH or LJS. At/above value break → AH + LJS jointly.</p>
+        </div>
+
+        {/* 5 — Customer-class rules & Amber fee */}
+        <div className="admin-card">
+          <h3><Icon name="flag" size={14} /> Customer-class rules &amp; Amber fee</h3>
+          {CLASS_ORDER.map(cls => (
+            <div key={cls} className="arow">
+              <span className={`pill ${cls}`}>{cls}</span>
+              <input type="text" style={{ flex: 1, marginLeft: 8 }} disabled={!canEdit}
+                value={config.classRules?.[cls] || ''}
+                onChange={e => store.updateConfig({ classRules: { ...(config.classRules || {}), [cls]: e.target.value } })} />
+            </div>
+          ))}
+          <NumField label="Amber pre-quote processing fee (INR)" value={amber.amount} disabled={!canEdit}
+            onChange={v => store.updateConfig({ amberFee: { ...amber, amount: v } })} />
+          <NumField label="Amber timer (days)" value={amber.days} disabled={!canEdit}
+            onChange={v => store.updateConfig({ amberFee: { ...amber, days: v } })} />
+          <p className="hint">Fee is adjustable against the order value once the PO lands.</p>
+        </div>
+
+        {/* Lead workflow controls */}
+        <div className="admin-card">
+          <h3><Icon name="clock" size={14} /> Lead workflow controls</h3>
+          <p className="hint">These rules control expiry and fast-track behavior for active leads.</p>
+          <NumField label="KYC deadline (days)" value={config.leadDeadlines?.kycDays ?? 7} disabled={!canEdit}
+            onChange={v => store.updateConfig({ leadDeadlines: { ...(config.leadDeadlines || {}), kycDays: v } })} />
+          <NumField label="Clarification deadline (days)" value={config.leadDeadlines?.clarificationDays ?? 7} disabled={!canEdit}
+            onChange={v => store.updateConfig({ leadDeadlines: { ...(config.leadDeadlines || {}), clarificationDays: v } })} />
+          {/* Clarification mail goes out from here until a lead is assigned,
+              and from the assigned salesperson once it is. */}
+          <label className="afield">Common mailbox
+            <input type="email" value={config.commonMailbox || ''} disabled={!canEdit}
+              placeholder={DEFAULT_COMMON_MAILBOX}
+              onChange={e => store.updateConfig({ commonMailbox: e.target.value })} />
+          </label>
+          <p className="hint">
+            Unassigned leads send clarification mail from this address; once a lead is assigned it
+            sends from the salesperson, copying this mailbox.
+          </p>
+          <label className="check-row">
+            <input type="checkbox" checked={config.fastTrack?.enabled !== false} disabled={!canEdit}
+              onChange={e => store.updateConfig({ fastTrack: { ...(config.fastTrack || {}), enabled: e.target.checked } })} />
+            Enable existing Green-customer fast track
+          </label>
+          <label className="afield">Fast-track customer class
+            <select value={config.fastTrack?.customerStatus || 'Green'} disabled={!canEdit}
+              onChange={e => store.updateConfig({ fastTrack: { ...(config.fastTrack || {}), customerStatus: e.target.value } })}>
+              {['Green', 'Blue', 'Amber', 'Red'].map(v => <option key={v}>{v}</option>)}
+            </select>
+          </label>
+        </div>
+
+        {/* 6 — KYC checklist */}
+        <div className="admin-card">
+          <h3><Icon name="clipboardCheck" size={14} /> KYC checklist</h3>
+          {(config.kycItems || []).map((k, i) => (
+            <div key={k + i} className="arow">
+              <span>{k}</span>
+              {canEdit && (
+                <button title="Remove item"
+                  onClick={() => store.updateConfig({ kycItems: config.kycItems.filter((_, j) => j !== i) })}>
+                  <Icon name="x" size={10} />
+                </button>
+              )}
+            </div>
+          ))}
+          {canEdit && (
+            <div className="admin-actions">
+              <input type="text" value={newKyc} placeholder="New checklist item"
+                style={{ flex: 1, minWidth: 140 }} onChange={e => setNewKyc(e.target.value)} />
+              <button onClick={() => {
+                const v = newKyc.trim()
+                if (v && !config.kycItems.includes(v)) store.updateConfig({ kycItems: [...config.kycItems, v] })
+                setNewKyc('')
+              }}><Icon name="plus" size={11} /> Add</button>
+            </div>
+          )}
+        </div>
+
+        {/* 7 — Price-list & rate registries */}
+        <div className="admin-card">
+          <h3><Icon name="tag" size={14} /> Price-list &amp; rate registries</h3>
+          {(uploads.priceLists || []).map((p, i) => (
+            <div key={i} className="arow">
+              <span>{p.supplier} — {p.name}<br /><span className="hint">{p.version} · uploaded {p.uploaded}</span></span>
+              <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                {p.dummy && <Chip tone="state-Review">DUMMY — replace with actual</Chip>}
+                <Chip tone={p.status === 'Expired' ? 'state-Rejected' : 'state-Accepted'}>{p.status || 'Current'}</Chip>
+              </span>
+            </div>
+          ))}
+          <div className="arow"><span>Rate sheet — India (INR, GST 18%)</span><Chip tone="state-Accepted">Current</Chip></div>
+          <div className="arow"><span>Rate sheet — International (USD)</span><Chip tone="state-Accepted">Current</Chip></div>
+          <p className="hint">Rates are editable on the Price Lists page; registries here track which versions are live.</p>
+        </div>
+
+        {/* 8 — Document uploads */}
+        <div className="admin-card" style={{ gridColumn: '1 / -1' }}>
+          <h3><Icon name="upload" size={14} /> Document uploads</h3>
+          <p className="hint">Metadata only in the demo — file contents are not stored.</p>
+
+          <div className="section-title" style={{ marginTop: 6 }}>Supplier price list</div>
+          <div className="admin-actions">
+            <input type="text" value={supplier} placeholder="Supplier (e.g. B&K)" disabled={!canEdit}
+              style={{ flex: 1, minWidth: 120 }} onChange={e => setSupplier(e.target.value)} />
+            <input type="text" value={plVersion} placeholder="Version (e.g. 2026-Q3)" disabled={!canEdit}
+              style={{ flex: 1, minWidth: 120 }} onChange={e => setPlVersion(e.target.value)} />
+            <FileButton primary label="Upload price list" disabled={!canEdit}
+              onFile={f => {
+                store.addUpload('priceLists', {
+                  supplier: supplier.trim() || 'Unspecified supplier',
+                  name: f.name, size: f.size,
+                  version: plVersion.trim() || '—', status: 'Current',
+                })
+                setSupplier(''); setPlVersion('')
+              }} />
+          </div>
+
+          <div className="section-title" style={{ marginTop: 10 }}>Spare-parts interchangeability matrix</div>
+          <p className="hint">Equivalent models across manufacturers.</p>
+          {uploads.interchangeability ? (
+            <div className="arow">
+              <span>{uploads.interchangeability.name}<br /><span className="hint">uploaded {uploads.interchangeability.uploaded}</span></span>
+              <FileButton label="Replace" disabled={!canEdit}
+                onFile={f => store.addUpload('interchangeability', { name: f.name, size: f.size })} />
+            </div>
+          ) : (
+            <div className="admin-actions">
+              <FileButton primary label="Upload matrix" disabled={!canEdit}
+                onFile={f => store.addUpload('interchangeability', { name: f.name, size: f.size })} />
+            </div>
+          )}
+
+          <div className="section-title" style={{ marginTop: 10 }}>Customer classification</div>
+          <p className="hint">Customer classification Excel from the accounting system (offline upload — no direct integration in phase 1).</p>
+          {uploads.customerClassification ? (
+            <div className="arow">
+              <span>{uploads.customerClassification.name}<br /><span className="hint">uploaded {uploads.customerClassification.uploaded}</span></span>
+              <FileButton label="Replace" disabled={!canEdit}
+                onFile={f => store.addUpload('customerClassification', { name: f.name, size: f.size })} />
+            </div>
+          ) : (
+            <div className="admin-actions">
+              <FileButton primary label="Upload classification" disabled={!canEdit}
+                onFile={f => store.addUpload('customerClassification', { name: f.name, size: f.size })} />
+            </div>
+          )}
+        </div>
+
+        {/* 9 — Templates & reminders */}
+        <div className="admin-card">
+          <h3><Icon name="fileText" size={14} /> Proposal templates &amp; reminder rules</h3>
+          {(config.templates || []).map(t => (
+            <div key={t} className="arow"><span>{t}</span><Chip tone="grey">Template</Chip></div>
+          ))}
+          {(config.reminders || []).map((r, i) => (
+            <label key={r.id || i} className="check-row">
+              <input type="checkbox" checked={!!r.on} disabled={!canEdit}
+                onChange={() => patchList('reminders', i, { on: !r.on })} />
+              {r.label || r.name}
+            </label>
+          ))}
+        </div>
+
+        {/* 10 — Connector state */}
+        <div className="admin-card">
+          <h3><Icon name="globe" size={14} /> Connector state</h3>
+          {(config.connectors || []).map(c => (
+            <div key={c.id} className="arow">
+              <span><span className={`conn-dot ${connDotClass(c.state)}`} />{c.label || c.name}</span>
+              {c.id === 'sharepoint' ? (
+                <span className="hint">Configured on the SharePoint card</span>
+              ) : (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span className="hint">{c.state}</span>
+                  <button disabled={!canEdit} title="Cycle health state"
+                    onClick={() => store.setConnectorState(c.id, CONNECTOR_CYCLE[c.state] || 'Healthy')}>
+                    <Icon name="refresh" size={10} />
+                  </button>
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* 11 — SharePoint connector */}
+        <SharePointCard canEdit={canEdit} />
+
+        {/* 12 — AI model configuration */}
         <div className="admin-card" style={{ gridColumn: '1 / -1' }}>
           <h3>
             <Icon name="sparkles" size={14} /> AI model configuration
@@ -370,210 +589,6 @@ export default function Admin() {
             For Built-in fallback, no key is required. AI credentials are stored server-side and are never returned to this page.
           </WarnBox>
         </div>
-
-        {/* 4 — AI confidence thresholds */}
-        <div className="admin-card">
-          <h3><Icon name="bot" size={14} /> AI confidence thresholds</h3>
-          <NumField label="High ≥ %" value={aiTh.high} disabled={!canEdit}
-            onChange={v => store.updateConfig({ aiThresholds: { ...aiTh, high: v } })} />
-          <NumField label="Medium ≥ %" value={aiTh.med} disabled={!canEdit}
-            onChange={v => store.updateConfig({ aiThresholds: { ...aiTh, med: v } })} />
-          <p className="hint">Below medium blocks stage completion; source conflicts always need human resolution.</p>
-        </div>
-
-        {/* 5 — Approval thresholds */}
-        <div className="admin-card">
-          <h3><Icon name="checkCircle" size={14} /> Approval thresholds</h3>
-          <NumField label="GM auto-release ≥ %" value={thresholds.gmAuto} disabled={!canEdit}
-            onChange={v => store.updateConfig({ approvalThresholds: { ...thresholds, gmAuto: v } })} />
-          <NumField label="Discount auto-release ≤ %" value={thresholds.discAuto} disabled={!canEdit}
-            onChange={v => store.updateConfig({ approvalThresholds: { ...thresholds, discAuto: v } })} />
-          <NumField label="GM floor before LJS+AH %" value={thresholds.gmLjs} disabled={!canEdit}
-            onChange={v => store.updateConfig({ approvalThresholds: { ...thresholds, gmLjs: v } })} />
-          <NumField label="Discount ceiling before LJS+AH %" value={thresholds.discLjs} disabled={!canEdit}
-            onChange={v => store.updateConfig({ approvalThresholds: { ...thresholds, discLjs: v } })} />
-        </div>
-
-        {/* 6 — Customer-class rules & Amber fee */}
-        <div className="admin-card">
-          <h3><Icon name="flag" size={14} /> Customer-class rules &amp; Amber fee</h3>
-          {CLASS_RULES.map(([cls, rule]) => (
-            <div key={cls} className="arow"><span className={`pill ${cls}`}>{cls}</span><span className="hint" style={{ textAlign: 'right' }}>{rule}</span></div>
-          ))}
-          <NumField label="Amber pre-quote processing fee (INR)" value={amber.amount} disabled={!canEdit}
-            onChange={v => store.updateConfig({ amberFee: { ...amber, amount: v } })} />
-          <NumField label="Amber timer (days)" value={amber.days} disabled={!canEdit}
-            onChange={v => store.updateConfig({ amberFee: { ...amber, days: v } })} />
-          <p className="hint">Fee is adjustable against the order value once the PO lands.</p>
-        </div>
-
-        {/* Lead workflow controls */}
-        <div className="admin-card">
-          <h3><Icon name="clock" size={14} /> Lead workflow controls</h3>
-          <p className="hint">These rules control expiry and fast-track behavior for active leads.</p>
-          <NumField label="KYC deadline (days)" value={config.leadDeadlines?.kycDays ?? 7} disabled={!canEdit}
-            onChange={v => store.updateConfig({ leadDeadlines: { ...(config.leadDeadlines || {}), kycDays: v } })} />
-          <NumField label="Clarification deadline (days)" value={config.leadDeadlines?.clarificationDays ?? 7} disabled={!canEdit}
-            onChange={v => store.updateConfig({ leadDeadlines: { ...(config.leadDeadlines || {}), clarificationDays: v } })} />
-          {/* Clarification mail goes out from here until a lead is assigned,
-              and from the assigned salesperson once it is. */}
-          <label className="afield">Common mailbox
-            <input type="email" value={config.commonMailbox || ''} disabled={!canEdit}
-              placeholder={DEFAULT_COMMON_MAILBOX}
-              onChange={e => store.updateConfig({ commonMailbox: e.target.value })} />
-          </label>
-          <p className="hint">
-            Unassigned leads send clarification mail from this address; once a lead is assigned it
-            sends from the salesperson, copying this mailbox.
-          </p>
-          <label className="check-row">
-            <input type="checkbox" checked={config.fastTrack?.enabled !== false} disabled={!canEdit}
-              onChange={e => store.updateConfig({ fastTrack: { ...(config.fastTrack || {}), enabled: e.target.checked } })} />
-            Enable existing Green-customer fast track
-          </label>
-          <label className="afield">Fast-track customer class
-            <select value={config.fastTrack?.customerStatus || 'Green'} disabled={!canEdit}
-              onChange={e => store.updateConfig({ fastTrack: { ...(config.fastTrack || {}), customerStatus: e.target.value } })}>
-              {['Green', 'Blue', 'Amber', 'Red'].map(v => <option key={v}>{v}</option>)}
-            </select>
-          </label>
-        </div>
-
-        {/* 7 — KYC checklist */}
-        <div className="admin-card">
-          <h3><Icon name="clipboardCheck" size={14} /> KYC checklist</h3>
-          {(config.kycItems || []).map((k, i) => (
-            <div key={k + i} className="arow">
-              <span>{k}</span>
-              {canEdit && (
-                <button title="Remove item"
-                  onClick={() => store.updateConfig({ kycItems: config.kycItems.filter((_, j) => j !== i) })}>
-                  <Icon name="x" size={10} />
-                </button>
-              )}
-            </div>
-          ))}
-          {canEdit && (
-            <div className="admin-actions">
-              <input type="text" value={newKyc} placeholder="New checklist item"
-                style={{ flex: 1, minWidth: 140 }} onChange={e => setNewKyc(e.target.value)} />
-              <button onClick={() => {
-                const v = newKyc.trim()
-                if (v && !config.kycItems.includes(v)) store.updateConfig({ kycItems: [...config.kycItems, v] })
-                setNewKyc('')
-              }}><Icon name="plus" size={11} /> Add</button>
-            </div>
-          )}
-        </div>
-
-        {/* 8 — Price-list & rate registries */}
-        <div className="admin-card">
-          <h3><Icon name="tag" size={14} /> Price-list &amp; rate registries</h3>
-          {(uploads.priceLists || []).map((p, i) => (
-            <div key={i} className="arow">
-              <span>{p.supplier} — {p.name}<br /><span className="hint">{p.version} · uploaded {p.uploaded}</span></span>
-              <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                {p.dummy && <Chip tone="state-Review">DUMMY — replace with actual</Chip>}
-                <Chip tone={p.status === 'Expired' ? 'state-Rejected' : 'state-Accepted'}>{p.status || 'Current'}</Chip>
-              </span>
-            </div>
-          ))}
-          <div className="arow"><span>Rate sheet — India (INR, GST 18%)</span><Chip tone="state-Accepted">Current</Chip></div>
-          <div className="arow"><span>Rate sheet — International (USD)</span><Chip tone="state-Accepted">Current</Chip></div>
-          <p className="hint">Rates are editable on the Price Lists page; registries here track which versions are live.</p>
-        </div>
-
-        {/* 9 — Document uploads */}
-        <div className="admin-card" style={{ gridColumn: '1 / -1' }}>
-          <h3><Icon name="upload" size={14} /> Document uploads</h3>
-          <p className="hint">Metadata only in the demo — file contents are not stored.</p>
-
-          <div className="section-title" style={{ marginTop: 6 }}>Supplier price list</div>
-          <div className="admin-actions">
-            <input type="text" value={supplier} placeholder="Supplier (e.g. B&K)" disabled={!canEdit}
-              style={{ flex: 1, minWidth: 120 }} onChange={e => setSupplier(e.target.value)} />
-            <input type="text" value={plVersion} placeholder="Version (e.g. 2026-Q3)" disabled={!canEdit}
-              style={{ flex: 1, minWidth: 120 }} onChange={e => setPlVersion(e.target.value)} />
-            <FileButton primary label="Upload price list" disabled={!canEdit}
-              onFile={f => {
-                store.addUpload('priceLists', {
-                  supplier: supplier.trim() || 'Unspecified supplier',
-                  name: f.name, size: f.size,
-                  version: plVersion.trim() || '—', status: 'Current',
-                })
-                setSupplier(''); setPlVersion('')
-              }} />
-          </div>
-
-          <div className="section-title" style={{ marginTop: 10 }}>Spare-parts interchangeability matrix</div>
-          <p className="hint">Equivalent models across manufacturers.</p>
-          {uploads.interchangeability ? (
-            <div className="arow">
-              <span>{uploads.interchangeability.name}<br /><span className="hint">uploaded {uploads.interchangeability.uploaded}</span></span>
-              <FileButton label="Replace" disabled={!canEdit}
-                onFile={f => store.addUpload('interchangeability', { name: f.name, size: f.size })} />
-            </div>
-          ) : (
-            <div className="admin-actions">
-              <FileButton primary label="Upload matrix" disabled={!canEdit}
-                onFile={f => store.addUpload('interchangeability', { name: f.name, size: f.size })} />
-            </div>
-          )}
-
-          <div className="section-title" style={{ marginTop: 10 }}>Customer classification</div>
-          <p className="hint">Customer classification Excel from the accounting system (offline upload — no direct integration in phase 1).</p>
-          {uploads.customerClassification ? (
-            <div className="arow">
-              <span>{uploads.customerClassification.name}<br /><span className="hint">uploaded {uploads.customerClassification.uploaded}</span></span>
-              <FileButton label="Replace" disabled={!canEdit}
-                onFile={f => store.addUpload('customerClassification', { name: f.name, size: f.size })} />
-            </div>
-          ) : (
-            <div className="admin-actions">
-              <FileButton primary label="Upload classification" disabled={!canEdit}
-                onFile={f => store.addUpload('customerClassification', { name: f.name, size: f.size })} />
-            </div>
-          )}
-        </div>
-
-        {/* 10 — Templates & reminders */}
-        <div className="admin-card">
-          <h3><Icon name="fileText" size={14} /> Proposal templates &amp; reminder rules</h3>
-          {(config.templates || []).map(t => (
-            <div key={t} className="arow"><span>{t}</span><Chip tone="grey">Template</Chip></div>
-          ))}
-          {(config.reminders || []).map((r, i) => (
-            <label key={r.id || i} className="check-row">
-              <input type="checkbox" checked={!!r.on} disabled={!canEdit}
-                onChange={() => patchList('reminders', i, { on: !r.on })} />
-              {r.label || r.name}
-            </label>
-          ))}
-        </div>
-
-        {/* 11 — Connector state */}
-        <div className="admin-card">
-          <h3><Icon name="globe" size={14} /> Connector state</h3>
-          {(config.connectors || []).map(c => (
-            <div key={c.id} className="arow">
-              <span><span className={`conn-dot ${connDotClass(c.state)}`} />{c.label || c.name}</span>
-              {c.id === 'sharepoint' ? (
-                <span className="hint">Configured on the SharePoint card</span>
-              ) : (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <span className="hint">{c.state}</span>
-                  <button disabled={!canEdit} title="Cycle health state"
-                    onClick={() => store.setConnectorState(c.id, CONNECTOR_CYCLE[c.state] || 'Healthy')}>
-                    <Icon name="refresh" size={10} />
-                  </button>
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* 12 — SharePoint connector */}
-        <SharePointCard canEdit={canEdit} />
 
       </div>
     </div>
