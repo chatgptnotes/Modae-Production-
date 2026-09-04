@@ -24,15 +24,15 @@ const input = {
 test('proposal Excel rows contain the cover and customer pricing sheets', () => {
   const { cover, pricing } = proposalWorkbookRows(input)
   assert.equal(cover[6][1], '2608227RS')
-  assert.deepEqual(pricing[2], ['Sl.', 'Item Description', 'Model / Part Number', 'Total Qty', 'UOM', 'Unit Price ₹', 'Total Price ₹'])
-  assert.deepEqual(pricing[3], [1, 'Probe', 'P-1', 3, 'EA', 100, 300])
+  assert.deepEqual(pricing[2], ['Part number', 'Description', 'Total quantity', 'Unit Price ₹', 'Total Price ₹'])
+  assert.deepEqual(pricing[3], ['P-1', 'Probe', 3, 100, 300])
   assert.deepEqual(pricing.at(-1), ['1. Validity', '30 days'])
 })
 
 test('restricted Excel rows omit customer prices', () => {
   const { pricing } = proposalWorkbookRows({ ...input, priced: false })
-  assert.deepEqual(pricing[2], ['Sl.', 'Item Description', 'Model / Part Number', 'Total Qty', 'UOM'])
-  assert.equal(pricing[3].length, 5)
+  assert.deepEqual(pricing[2], ['Part number', 'Description', 'Total quantity'])
+  assert.equal(pricing[3].length, 3)
 })
 
 // 18 Aug branding guideline: document templates in Candara, 11pt body,
@@ -110,12 +110,81 @@ test('exact proposal export preserves template artwork, merges and print layout'
   assert.equal(firm.getCell('G10').value.formula, 'F10*E10')
   assert.equal(firm.getCell('C10').value, 'Probe')
   assert.equal(cover.getCell('B24').alignment.wrapText, true)
+  assert.equal(cover.views[0].showGridLines, false)
+  assert.deepEqual(
+    ['B11:Q11', 'B12:Q12', 'B13:Q13', 'B14:Q14', 'C16:Q16', 'C18:Q18', 'C20:Q20', 'B22:Q22', 'B24:Q24', 'B26:Q26']
+      .map(range => cover.model.merges.includes(range)),
+    [true, true, true, true, true, true, true, true, true, true],
+  )
+  assert.equal(cover.getCell('B11').alignment.wrapText, true)
+  assert.equal(cover.getCell('B13').alignment.wrapText, true)
+  assert.ok(cover.getRow(13).height >= 18)
   assert.equal(firm.getCell('C10').alignment.wrapText, true)
   assert.equal(firm.getCell('D10').alignment.wrapText, true)
   assert.ok(firm.getRow(10).height >= 30)
-  assert.equal(firm.getCell('B13').alignment.wrapText, true)
-  assert.ok(firm.model.merges.includes('B13:H13'), 'terms heading spans the customer-facing page width')
-  assert.equal(firm.getCell('B14').value, '1. Validity: 30 days')
+  assert.equal(firm.getCell('B16').alignment.wrapText, true)
+  assert.ok(firm.model.merges.includes('B16:H16'), 'terms heading spans the customer-facing page width')
+  assert.equal(firm.getCell('B17').value, '1. Validity: 30 days')
   assert.equal(firm.getCell('B26').value, null, 'template duplicate terms are cleared')
   assert.equal(cover.getCell('C6').value, '2608227RS')
+})
+
+test('spares export keeps the reference offer rows and file quantities', async () => {
+  const templateBuffer = fs.readFileSync('branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx')
+  const output = await generateProposalWorkbook({
+    templateBuffer,
+    logoBuffer: fs.readFileSync('branding/mod-ae/assets/modae-official-logo.png'),
+    route: 'Spares',
+    p: {
+      revision: '00', bom: [
+        { pn: 'DS821.DS1001/10/075/012/005/000/0', desc: 'Wrong live description', common: 1 },
+        { pn: 'DS821.DS1003/62/039/013/005/000/0', desc: 'Wrong live description', common: 1 },
+        { pn: 'DS821.EC100/45/0', desc: 'Wrong live description', common: 1 },
+        { pn: 'DS821.OD110/0', desc: 'Wrong live description', common: 1 },
+        { pn: 'AC-3101/1', desc: 'Wrong live description', common: 1 },
+      ],
+    },
+    opp: { id: '2609001PJS', sellTo: 'Customer' },
+    doc: { docTerms: [] },
+    totalQty: line => line.common,
+    lineQuoted: () => 0,
+  })
+  const workbook = new ExcelJS.Workbook()
+  await workbook.xlsx.load(output)
+  const firm = workbook.getWorksheet('Firm Rev-00')
+  assert.deepEqual(
+    Array.from({ length: 8 }, (_, index) => firm.getCell(`C${index + 10}`).value),
+    [
+      'Non-contact Displacement Sensor with full length thread, Measuring Range 2mm, With 0.5m Integral Cable',
+      'Non-contact Displacement Sensor, Reverse Mount Sensor for Sensor Holder with Adjustment Spindle, With 0.5m integral cable',
+      'Sensor Extension Cable Extension Cable without protection, 4.5m length',
+      'Sensor Driver Electronics for 2mm Measuring Range (oscillator/de-modulator), supports all nominal system lengths (5 m and 10 m)',
+      'Sensor Holder, With Adjustment Spindle Uncut, Without Sensor Thread, FKM O-ring', 'Warranty Certificate',
+      'Country of Origin Certificate', 'Freight Charges from B&K Germany To ModAE India',
+    ],
+  )
+  assert.deepEqual(Array.from({ length: 5 }, (_, index) => firm.getCell(`E${index + 10}`).value), [10, 10, 15, 10, 10])
+  assert.equal(firm.getCell('B18').value, 'Total For')
+})
+
+test('generated Spares workbooks are editable and have no external Excel names', async () => {
+  const templateBuffer = fs.readFileSync('branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx')
+  const output = await generateProposalWorkbook({
+    templateBuffer,
+    logoBuffer: fs.readFileSync('branding/mod-ae/assets/modae-official-logo.png'),
+    route: 'Spares',
+    p: { revision: '00', bom: [{ pn: 'P-1', desc: 'Probe', common: 1 }] },
+    opp: { id: '2609001PJS', sellTo: 'Customer' },
+    doc: { docTerms: [] },
+    totalQty: line => line.common,
+    lineQuoted: () => 100,
+  })
+  const workbook = new ExcelJS.Workbook()
+  await workbook.xlsx.load(output)
+  assert.ok(workbook.definedNames.model.every(name => name.name === '_xlnm.Print_Area'))
+  assert.ok(workbook.definedNames.model.every(name => name.ranges.every(range => !/[\[\]#REF!]/.test(range))))
+  assert.ok(!workbook.getWorksheet('Cover Letter').sheetProtection)
+  assert.ok(!workbook.getWorksheet('Firm Rev-00').sheetProtection)
+  assert.notEqual(workbook.getWorksheet('Firm Rev-00').getCell('C10').protection?.locked, true)
+  assert.ok(workbook.getWorksheet('Cover Letter').getCell('A3').value == null)
 })

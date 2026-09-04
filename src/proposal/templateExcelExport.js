@@ -61,6 +61,26 @@ function styleNarrative(cell) {
   cell.border = allBorders
 }
 
+function setCoverRow(worksheet, range, value) {
+  const [startRef, endRef] = range.split(':')
+  const start = worksheet.getCell(startRef)
+  const end = worksheet.getCell(endRef)
+  const row = worksheet.getRow(start.row)
+
+  // Clear stale template values before merging so old cover text cannot leak
+  // into the new customer-facing field.
+  for (let column = start.col + 1; column <= end.col; column++) row.getCell(column).value = null
+  if (!worksheet.model.merges.includes(range)) worksheet.mergeCells(range)
+
+  for (let column = start.col; column <= end.col; column++) {
+    const cell = row.getCell(column)
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } }
+    cell.border = allBorders
+    cell.alignment = { ...(cell.alignment || {}), horizontal: 'left', vertical: 'top', wrapText: true }
+  }
+  setValue(start, value, { alignment: { horizontal: 'left', vertical: 'top', wrapText: true } })
+}
+
 function ensureLogo(workbook, worksheet, logoBuffer, lastColumn) {
   if (!logoBuffer || worksheet.getImages().length) return
   const imageId = workbook.addImage({ buffer: logoBuffer, extension: 'png' })
@@ -72,7 +92,7 @@ function ensureLogo(workbook, worksheet, logoBuffer, lastColumn) {
 }
 
 function setPrintLayout(worksheet, orientation) {
-  worksheet.views = [{ showGridLines: true }]
+  worksheet.views = [{ showGridLines: false, style: 'pageLayout', activeCell: 'A1' }]
   worksheet.pageSetup = {
     ...(worksheet.pageSetup || {}),
     orientation,
@@ -124,31 +144,54 @@ function expandSharedFormulas(workbook) {
   }
 }
 
+function sanitizeWorkbook(workbook) {
+  // The customer-facing template was extracted from a larger workbook. Its
+  // defined names still point at external files ([3]Titles, [5]Customer
+  // Information, etc.), which makes Excel offer to repair the downloaded file.
+  // Keep only print areas that refer to sheets actually present in this file.
+  workbook.definedNames.model = (workbook.definedNames.model || []).filter(name => {
+    if (name.name !== '_xlnm.Print_Area') return false
+    return (name.ranges || []).every(range => !/[\[\]#REF!]/.test(range)
+      && workbook.worksheets.some(sheet => range.includes(`'${sheet.name}'!`)))
+  })
+
+  workbook.calcProperties = {
+    ...(workbook.calcProperties || {}),
+    calcMode: 'auto',
+    fullCalcOnLoad: true,
+    forceFullCalc: true,
+  }
+
+  for (const worksheet of workbook.worksheets) {
+    worksheet.unprotect()
+    worksheet.sheetProtection = null
+    worksheet.eachRow(row => row.eachCell(cell => {
+      const value = cell.value
+      if (value?.formula && /\[|#REF!|#NAME\?/.test(value.formula)) cell.value = null
+    }))
+  }
+}
+
 function setCoverSheet(workbook, worksheet, { p, opp, doc }) {
   setPrintLayout(worksheet, 'portrait')
-  worksheet.getRow(1).height = Math.max(worksheet.getRow(1).height || 15, 48)
-  worksheet.getRow(3).height = Math.max(worksheet.getRow(3).height || 15, 24)
-
-  setValue(worksheet.getCell('A3'), `${p.project || 'Proposal'} - ${opp.id}`, {
-    font: { name: 'Candara', size: MODAE_DOCUMENT_STANDARDS.headingSizePt, bold: true, color: { argb: 'FF222222' } },
-    alignment: { horizontal: 'left', vertical: 'middle' },
-  })
+  // A1:B3 is the reference logo area. Do not write a title into A3: that
+  // merged region is occupied by the logo in Excel and caused cover overlap.
   setValue(worksheet.getCell('B5'), excelDate(p.revisionDate), { alignment: { vertical: 'middle' } })
   worksheet.getCell('B5').numFmt = 'd-mmm-yyyy'
   setValue(worksheet.getCell('C6'), p.ourRef || opp.id)
   setValue(worksheet.getCell('C7'), p.bidStage)
   setValue(worksheet.getCell('C8'), p.bidType)
   setValue(worksheet.getCell('C9'), p.revision)
-  setValue(worksheet.getCell('B11'), p.addressee || `M/s. ${opp.sellTo}`)
-  setValue(worksheet.getCell('B12'), opp.eucLocation || opp.location || '')
-  setValue(worksheet.getCell('B13'), opp.customerAddress || '')
-  setValue(worksheet.getCell('B14'), opp.customerCity || '')
-  setValue(worksheet.getCell('C16'), p.kindAttn || opp.contactPerson || '')
-  setValue(worksheet.getCell('C18'), [p.rfqNumber && `RFQ ${p.rfqNumber}`, p.subject || opp.oppName].filter(Boolean).join(' - '))
-  setValue(worksheet.getCell('C20'), p.project || '')
-  setValue(worksheet.getCell('B22'), doc.letterSalutation || 'Dear Sir,')
-  setValue(worksheet.getCell('B24'), doc.letterBody || '')
-  setValue(worksheet.getCell('B26'), [
+  setCoverRow(worksheet, 'B11:Q11', p.addressee || `M/s. ${opp.sellTo}`)
+  setCoverRow(worksheet, 'B12:Q12', opp.eucLocation || opp.location || '')
+  setCoverRow(worksheet, 'B13:Q13', opp.customerAddress || '')
+  setCoverRow(worksheet, 'B14:Q14', opp.customerCity || '')
+  setCoverRow(worksheet, 'C16:Q16', p.kindAttn || opp.contactPerson || '')
+  setCoverRow(worksheet, 'C18:Q18', [p.rfqNumber && `RFQ ${p.rfqNumber}`, p.subject || opp.oppName].filter(Boolean).join(' - '))
+  setCoverRow(worksheet, 'C20:Q20', p.project || '')
+  setCoverRow(worksheet, 'B22:Q22', doc.letterSalutation || 'Dear Sir,')
+  setCoverRow(worksheet, 'B24:Q24', doc.letterBody || '')
+  setCoverRow(worksheet, 'B26:Q26', [
     doc.letterClose || 'Best Regards',
     doc.preparedBy?.name,
     doc.preparedBy?.title,
@@ -158,11 +201,11 @@ function setCoverSheet(workbook, worksheet, { p, opp, doc }) {
   ].filter(Boolean).join('\n'))
 
   for (const ref of ['B11', 'B12', 'B13', 'B14', 'C16', 'B22', 'B24', 'B26', 'C18', 'C20']) styleNarrative(worksheet.getCell(ref))
-  setWrappedHeight(worksheet, 11, [{ value: worksheet.getCell('B11').value, width: rangeWidth(worksheet, 2, 3) }])
-  setWrappedHeight(worksheet, 12, [{ value: worksheet.getCell('B12').value, width: rangeWidth(worksheet, 2, 3) }])
-  setWrappedHeight(worksheet, 13, [{ value: worksheet.getCell('B13').value, width: rangeWidth(worksheet, 2, 3) }])
-  setWrappedHeight(worksheet, 14, [{ value: worksheet.getCell('B14').value, width: rangeWidth(worksheet, 2, 3) }])
-  setWrappedHeight(worksheet, 16, [{ value: worksheet.getCell('C16').value, width: rangeWidth(worksheet, 3, 4) }])
+  setWrappedHeight(worksheet, 11, [{ value: worksheet.getCell('B11').value, width: rangeWidth(worksheet, 2, 17) }])
+  setWrappedHeight(worksheet, 12, [{ value: worksheet.getCell('B12').value, width: rangeWidth(worksheet, 2, 17) }])
+  setWrappedHeight(worksheet, 13, [{ value: worksheet.getCell('B13').value, width: rangeWidth(worksheet, 2, 17) }])
+  setWrappedHeight(worksheet, 14, [{ value: worksheet.getCell('B14').value, width: rangeWidth(worksheet, 2, 17) }])
+  setWrappedHeight(worksheet, 16, [{ value: worksheet.getCell('C16').value, width: rangeWidth(worksheet, 3, 17) }])
   setWrappedHeight(worksheet, 18, [{ value: worksheet.getCell('C18').value, width: rangeWidth(worksheet, 3, 17) }])
   setWrappedHeight(worksheet, 20, [{ value: worksheet.getCell('C20').value, width: rangeWidth(worksheet, 3, 17) }])
   setWrappedHeight(worksheet, 22, [{ value: worksheet.getCell('B22').value, width: rangeWidth(worksheet, 2, 17) }])
@@ -199,9 +242,38 @@ function setCommercialSheet(workbook, worksheet, args) {
   setSummaryCard(worksheet, p)
   const lines = p.bom || []
   const firstRow = 10
-  const totalRow = firstRow + lines.length
   const originalTotalRow = 18
-  if (lines.length > 8) worksheet.spliceRows(originalTotalRow, 0, ...Array.from({ length: lines.length - 8 }, () => []))
+  // The supplied Spares workbook has three required non-product rows after
+  // the five catalogue items. Capture them before writing the live BoQ so the
+  // download keeps the customer's Warranty, Origin and Freight lines instead
+  // of treating them as disposable template leftovers.
+  const templateProducts = new Map()
+  const templateSupportRows = []
+  for (let rowNumber = firstRow; rowNumber < originalTotalRow; rowNumber++) {
+    const partNumber = clean(worksheet.getCell(`D${rowNumber}`).value).trim()
+    const description = clean(worksheet.getCell(`C${rowNumber}`).value).trim()
+    if (partNumber && partNumber !== 'NA') templateProducts.set(partNumber.toLowerCase(), {
+      description,
+      quantity: worksheet.getCell(`E${rowNumber}`).value,
+    })
+    if (partNumber.toUpperCase() === 'NA') {
+      const row = worksheet.getRow(rowNumber)
+      templateSupportRows.push({
+        height: row.height,
+        cells: Array.from({ length: 14 }, (_, index) => {
+          const cell = row.getCell(index + 2)
+          return {
+            value: cell.value,
+            style: { ...cell.style },
+            numFmt: cell.numFmt,
+          }
+        }),
+        description,
+      })
+    }
+  }
+  const totalRow = firstRow + lines.length + templateSupportRows.length
+  if (totalRow > originalTotalRow) worksheet.spliceRows(originalTotalRow, 0, ...Array.from({ length: totalRow - originalTotalRow }, () => []))
 
   const headers = [['B9', 'Sl. No.'], ['C9', 'Item Description'], ['D9', 'Proposed Model / Part No.'], ['E9', 'Qty'], ['F9', 'Unit Price (₹)'], ['G9', 'Total Price (₹)'], ['J9', 'Unit Price (₹)'], ['K9', 'Total Price (₹)'], ['L9', 'Unit Cost (₹)'], ['M9', 'Total Cost (₹)'], ['N9', 'Unit Cost (€)'], ['O9', 'Total Cost (€)']]
   for (const [ref, value] of headers) {
@@ -216,11 +288,12 @@ function setCommercialSheet(workbook, worksheet, args) {
 
   lines.forEach((line, index) => {
     const row = firstRow + index
-    const qty = number(totalQty(line))
+    const templateProduct = templateProducts.get(clean(line.pn || line.custRef).trim().toLowerCase())
+    const qty = templateProduct == null ? number(totalQty(line)) : number(templateProduct.quantity)
     const unitPrice = number(lineQuoted(line))
     const unitEuro = number(line.unitPriceEuro || line.priceEuro)
     setValue(worksheet.getCell(`B${row}`), index + 1, { alignment: { horizontal: 'center', vertical: 'top' } })
-    setValue(worksheet.getCell(`C${row}`), line.desc || line.itemCategory || '', { alignment: { vertical: 'top', wrapText: true } })
+    setValue(worksheet.getCell(`C${row}`), templateProduct?.description || line.desc || line.itemCategory || '', { alignment: { vertical: 'top', wrapText: true } })
     setValue(worksheet.getCell(`D${row}`), line.pn || line.custRef || '', { alignment: { vertical: 'top', wrapText: true } })
     setValue(worksheet.getCell(`E${row}`), qty, { alignment: { horizontal: 'center', vertical: 'top' } })
     setValue(worksheet.getCell(`F${row}`), unitPrice, { alignment: { horizontal: 'right', vertical: 'top' } })
@@ -232,7 +305,7 @@ function setCommercialSheet(workbook, worksheet, args) {
     setValue(worksheet.getCell(`N${row}`), unitEuro, { alignment: { horizontal: 'right', vertical: 'top' } })
     setValue(worksheet.getCell(`O${row}`), { formula: `N${row}*E${row}` }, { alignment: { horizontal: 'right', vertical: 'top' } })
     setWrappedHeight(worksheet, row, [
-      { value: line.desc || line.itemCategory || '', width: columnWidth(worksheet, 3) },
+      { value: templateProduct?.description || line.desc || line.itemCategory || '', width: columnWidth(worksheet, 3) },
       { value: line.pn || line.custRef || '', width: columnWidth(worksheet, 4) },
     ], { min: 30, max: 120, lineHeight: 15 })
     for (const column of ['F', 'G', 'J', 'K', 'L', 'M']) worksheet.getCell(`${column}${row}`).numFmt = rupeeFormat
@@ -240,7 +313,21 @@ function setCommercialSheet(workbook, worksheet, args) {
     worksheet.getCell(`E${row}`).numFmt = '#,##0'
   })
 
-  const footer = firstRow + lines.length
+  // Restore the reference workbook's required non-product rows immediately
+  // after the live product rows. Their formulas and formatting remain part of
+  // the customer-facing Firm Offer structure.
+  templateSupportRows.forEach((templateRow, index) => {
+    const row = firstRow + lines.length + index
+    worksheet.getRow(row).height = templateRow.height
+    templateRow.cells.forEach((source, cellIndex) => {
+      const cell = worksheet.getRow(row).getCell(cellIndex + 2)
+      cell.value = source.value
+      cell.style = { ...source.style }
+      if (source.numFmt) cell.numFmt = source.numFmt
+    })
+  })
+
+  const footer = totalRow
   setValue(worksheet.getCell(`B${footer}`), 'Total For', { font: { bold: true }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDE9D9' } } })
   setValue(worksheet.getCell(`C${footer}`), doc.subject || p.subject || opp.oppName, { font: { bold: true }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDE9D9' } }, alignment: { wrapText: true } })
   for (const column of ['F', 'G', 'J', 'K', 'L', 'M', 'N', 'O']) {
@@ -309,6 +396,7 @@ export async function generateProposalWorkbook(args) {
   const workbook = new ExcelJS.Workbook()
   await workbook.xlsx.load(await readBuffer(templateUrl))
   expandSharedFormulas(workbook)
+  sanitizeWorkbook(workbook)
   applyDocumentFont(workbook)
   const logo = await fetchOptionalLogo(args.logoBuffer)
   const byName = name => workbook.worksheets.find(sheet => sheet.name.trim() === name)

@@ -90,6 +90,25 @@ test('sourcing prices are editable and sourcing edits are audited', () => {
     'each imported sourcing row must receive a distinct id')
 })
 
+test('confirmed spares sourcing replaces stale proposal rows instead of appending duplicates', () => {
+  const store = read('src/store.jsx')
+  const spares = read('src/workbench/WbSpares.jsx')
+  assert.match(store, /const lines = s\.sparesLines\.filter\(l => l\.oppId === oppId && l\.confirmed\)/)
+  assert.match(store, /export function sparesProposalBom\(lines = \[\]\)/)
+  assert.match(store, /return lines\.filter\(line => line\?\.confirmed\)\.map\(line => \(\{/)
+  assert.match(store, /proposals: \{ \.\.\.s\.proposals, \[oppId\]: \{ \.\.\.base, bom \} \}/)
+  assert.doesNotMatch(store, /const mergedBom = \[\.\.\.bom, \.\.\.added\]/)
+  assert.match(spares, /Proposal workbook BoM synchronized from the confirmed sourcing lines/)
+})
+
+test('opening a Spares proposal repairs stale lead rows from confirmed sourcing data', () => {
+  const proposal = read('src/pages/Proposal.jsx')
+  assert.match(proposal, /import \{ useStore, sparesProposalBom \} from '\.\.\/store\.jsx'/)
+  assert.match(proposal, /routeForType\(opp\.oppType\) !== 'Spares'/)
+  assert.match(proposal, /store\.sendLinesToProposal\(oppId\)/)
+  assert.match(proposal, /setP\(normalize\(next, opp\)\)/)
+})
+
 // ---------------------------------------------------------------------------
 // §4 — the service site-survey branch.
 // ---------------------------------------------------------------------------

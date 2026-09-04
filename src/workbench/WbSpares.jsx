@@ -213,11 +213,11 @@ export default function WbSpares({ opp, openBuilder }) {
           <button className="primary" onClick={sendToProposal}>
             <Icon name="arrowRight" size={13} /> Continue to proposal
           </button>
-          <span className="hint">Only confirmed lines from a current price source merge into the draft proposal.</span>
+          <span className="hint">Only confirmed sourcing lines synchronize into the draft proposal.</span>
         </div>
         {sent && (
           <div className="okbox">
-            Lines merged into the proposal workbook BoM.{' '}
+            Proposal workbook BoM synchronized from the confirmed sourcing lines.{' '}
             <a style={{ cursor: 'pointer' }} onClick={openBuilder}>Open the proposal builder</a>
           </div>
         )}

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import XLSX from 'xlsx-js-style'
 import { useParams, Link } from 'react-router-dom'
-import { useStore } from '../store.jsx'
+import { useStore, sparesProposalBom } from '../store.jsx'
 import { effectiveRate, fmt, exportCSV, canPriceProposal, clampCosting, clampQty, MAX_GM_PCT } from '../utils.js'
 import { useFormulaBar } from '../formulabar.jsx'
 import { Icon, ModaeImageLogo } from '../icons.jsx'
@@ -320,6 +320,27 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
     store.saveProposal(oppId, next)
     setP(normalize(next, opp))
   }, [oppId, opp?.sourceLeadId, opp?.remarks, linkedLead?.id, linkedLead?.oppId, store.proposals?.[oppId]?.leadImportId, store.proposals?.[oppId]?.bom?.length]) // eslint-disable-line
+
+  // A saved Spares proposal may predate the sourcing-to-proposal sync and still
+  // contain unrelated lead-extracted rows. Repair that state on load so the
+  // screen immediately reflects the confirmed sourcing dataset.
+  useEffect(() => {
+    if (!opp || routeForType(opp.oppType) !== 'Spares') return
+    const confirmed = (store.sparesLines || []).filter(line => line.oppId === oppId && line.confirmed)
+    if (!confirmed.length) return
+    const current = store.getProposal(oppId)
+    const nextBom = sparesProposalBom(confirmed)
+    const same = current.bom?.length === nextBom.length
+      && current.bom.every((line, index) => {
+        const next = nextBom[index]
+        return line.pn === next.pn && line.custRef === next.custRef && line.desc === next.desc
+          && Number(line.common || 0) === next.common && Number(line.listPrice || 0) === next.listPrice
+      })
+    if (same) return
+    const next = { ...current, bom: nextBom }
+    store.sendLinesToProposal(oppId)
+    setP(normalize(next, opp))
+  }, [oppId, opp?.oppType, store.sparesLines, store.proposals?.[oppId]?.bom]) // eslint-disable-line
 
   // Print-all: render the full customer document (cover + terms + BoQ) first,
   // then open the dialog; afterprint restores the tabbed view.

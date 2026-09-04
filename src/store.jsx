@@ -16,6 +16,27 @@ import { unitCostINR, unitSellINR } from './utils.js'
 
 const StoreCtx = createContext(null)
 
+// Sourcing is the canonical line-item source for Spares proposals. Keep this
+// conversion pure so both explicit synchronization and proposal-load repair
+// produce exactly the same BoQ shape.
+export function sparesProposalBom(lines = []) {
+  return lines.filter(line => line?.confirmed).map(line => ({
+    itemCategory: 'Hardware',
+    pn: line.pn || '',
+    custRef: line.custRef || line.pn || line.desc || '',
+    desc: line.desc || line.custRef || line.pn || '',
+    listPrice: Number(line.listPrice) || 0,
+    adders: [],
+    qtyPerUnit: 0,
+    common: Number(line.qty) || 0,
+    spares: 0,
+    quoted: '',
+    uom: line.uom || 'EA',
+    list: String(line.priceList || '').startsWith('BNK') ? 'BNK' : 'Ad-hoc',
+    currency: line.currency || 'INR',
+  }))
+}
+
 // The localStorage read is all that is left here; the decision itself lives in
 // appState.js so the tests can drive the boot path directly.
 const initialState = () => stateFromSaved(localStorage.getItem(KEY))
@@ -1007,38 +1028,16 @@ export function StoreProvider({ children }) {
           : l)),
       }, 'Price source refreshed', id, 'BNK 2026-Q2 (+4% list)'))
     },
-    // Merge confirmed spares lines into the proposal workbook BoM.
+    // Synchronize confirmed spares lines into the proposal workbook BoM. The
+    // sourcing workbench is authoritative for Spares proposals, so stale lead
+    // extraction rows must not remain alongside the confirmed matches.
     sendLinesToProposal(oppId) {
       setState(s => {
         const lines = s.sparesLines.filter(l => l.oppId === oppId && l.confirmed)
         if (!lines.length) return s
         const opp = s.opportunities.find(o => o.id === oppId)
         const base = s.proposals[oppId] || newProposal(oppId, opp)
-        const keys = item => [item?.pn, item?.custRef, item?.desc]
-          .map(value => String(value || '').trim().toLowerCase())
-          .filter(Boolean)
-        const sourceByKey = new Map(lines.flatMap(line => keys(line).map(itemKey => [itemKey, line])))
-        const bom = (base.bom || []).map(item => {
-          const source = keys(item).map(itemKey => sourceByKey.get(itemKey)).find(Boolean)
-          if (!source) return item
-          return {
-            ...item,
-            pn: source.pn || item.pn,
-            custRef: source.custRef || item.custRef,
-            desc: source.desc || item.desc,
-            listPrice: Number(source.listPrice) || 0,
-            currency: source.currency || item.currency || 'INR',
-            common: Number(source.qty) || item.common || 0,
-            list: source.priceList?.startsWith('BNK') ? 'BNK' : 'Ad-hoc',
-          }
-        })
-        const existing = new Set((base.bom || []).flatMap(keys))
-        const added = lines.filter(l => !keys(l).some(itemKey => existing.has(itemKey))).map(l => ({
-          itemCategory: 'Hardware', pn: l.pn, custRef: l.custRef, desc: l.desc, listPrice: l.listPrice, adders: [],
-          qtyPerUnit: 0, common: l.qty, spares: 0, quoted: '',
-          list: l.priceList?.startsWith('BNK') ? 'BNK' : 'Ad-hoc', currency: l.currency,
-        }))
-        const mergedBom = [...bom, ...added]
+        const bom = sparesProposalBom(lines)
         const costing = base.costing || {}
         const pricedLines = lines.reduce((totals, line) => {
           const bnk = String(line.priceList || '').startsWith('BNK')
@@ -1056,8 +1055,8 @@ export function StoreProvider({ children }) {
             valueK: Math.round(pricedLines.value / 1000),
             cogsK: Math.round(pricedLines.cogs / 1000),
           } : item),
-          proposals: { ...s.proposals, [oppId]: { ...base, bom: mergedBom } },
-        }, 'Lines sent to proposal', oppId, `${added.length} line(s)`)
+          proposals: { ...s.proposals, [oppId]: { ...base, bom } },
+        }, 'Lines sent to proposal', oppId, `${bom.length} line(s) synchronized`)
       })
     },
 
