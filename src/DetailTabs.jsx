@@ -2,11 +2,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 // Shared tab navigation for detail surfaces. Items are data-driven so each
 // view can apply its own role/content rules without duplicating layout.
-export default function DetailTabs({ items, activeId, onChange, ariaLabel = 'Detail views' }) {
+export default function DetailTabs({ items, activeId, onChange, ariaLabel = 'Detail views', primaryCount = 5, showOverflow = true }) {
   const visible = useMemo(() => items.filter(item => item.show !== false), [items])
-  const primary = visible.slice(0, 5)
-  const overflow = visible.slice(5)
-  const activeInOverflow = overflow.some(item => item.id === activeId)
+  const primary = visible.slice(0, primaryCount)
+  const overflowItems = visible.slice(primaryCount)
+  const activeInOverflow = overflowItems.some(item => item.id === activeId)
   const [open, setOpen] = useState(false)
   const menuRef = useRef(null)
 
@@ -37,7 +37,7 @@ export default function DetailTabs({ items, activeId, onChange, ariaLabel = 'Det
             {item.label}{item.count != null && <span className="detail-tab-count">{item.count}</span>}
           </button>
         ))}
-        {!!overflow.length && (
+        {showOverflow && !!overflowItems.length && (
           <div className="detail-tabs-more" ref={menuRef}>
             <button type="button" className={'detail-tabs-more-trigger' + (activeInOverflow ? ' active' : '')}
               aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(value => !value)}>
@@ -45,7 +45,7 @@ export default function DetailTabs({ items, activeId, onChange, ariaLabel = 'Det
             </button>
             {open && (
               <div className="detail-tabs-menu" role="menu">
-                {overflow.map(item => (
+                {overflowItems.map(item => (
                   <button key={item.id} type="button" role="menuitem" disabled={item.disabled}
                     className={activeId === item.id ? 'active' : ''} onClick={() => select(item)}>
                     {item.label}{item.count != null && <span className="detail-tab-count">{item.count}</span>}

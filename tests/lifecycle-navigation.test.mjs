@@ -22,3 +22,11 @@ test('milestone changes open their lifecycle workspace', () => {
   assert.match(workbench, /goTab\(LIFECYCLE_TABS\[milestone\] \|\| 'overview'\)/)
   assert.match(workbench, /moveToMilestone\(transition\.target, transition\.reason\.trim\(\)\)/)
 })
+
+test('the compact lifecycle stepper exposes every displayed stage as selectable', () => {
+  const ui = fs.readFileSync(path.join(root, 'src/ui.jsx'), 'utf8')
+  assert.match(ui, /aria-label="Opportunity lifecycle"/)
+  assert.match(ui, /aria-label=\{onStep \? `Select \$\{m\} milestone` : m\}/)
+  assert.match(ui, /onClick=\{\(\) => onStep\?\.\(m\)\}/)
+  assert.match(ui, /className=\{`step \$\{i < at \? 'done' : i === at \? 'now' : 'future'\}/)
+})

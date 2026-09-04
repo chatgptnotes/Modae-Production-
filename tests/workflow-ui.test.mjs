@@ -148,6 +148,17 @@ test('the lane an opportunity runs in is visible, not just derived', () => {
   assert.match(workbench, /\['Lane', `\$\{opp\.context/)
 })
 
+test('the opportunity navigation keeps Proposal, Approval and Submitted in the primary row', () => {
+  const workbench = read('src/pages/Workbench.jsx')
+  const detailTabs = read('src/DetailTabs.jsx')
+  assert.match(workbench, /\['approval', 'Approval'\], \['submitted', 'Submitted'\]/)
+  assert.match(workbench, /<DetailTabs ariaLabel="Opportunity views" primaryCount=\{8\} showOverflow=\{false\}/)
+  assert.match(detailTabs, /primaryCount = 5, showOverflow = true/)
+  assert.match(detailTabs, /visible\.slice\(0, primaryCount\)/)
+  assert.match(detailTabs, /visible\.slice\(primaryCount\)/)
+  assert.match(detailTabs, /showOverflow && !!overflowItems\.length/)
+})
+
 // The first revision of a dispatched quote is V2 (the dispatch itself is V1).
 // The counter used to include the builder's 'Submitted' timeline entries, so a
 // quote's first revision came out labelled V3.

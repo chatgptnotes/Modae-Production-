@@ -1,6 +1,6 @@
 // Backend-agnostic facade over opportunity file storage.
 // Picks SharePoint (configured + signed in) → Supabase (env configured) → mock.
-import { supabase, uploadFile as sbUpload, removePaths, removePrefix } from './supabase.js'
+import { supabase, uploadFile as sbUpload, uploadAdminTemplate as sbUploadAdminTemplate, removePaths, removePrefix } from './supabase.js'
 import * as sp from './sharepoint.js'
 
 const today = () => new Date().toISOString().slice(0, 10)
@@ -14,6 +14,14 @@ export function fmtSize(bytes) {
 export function activeBackend() {
   if (sp.isConfigured() && sp.getAccount()) return 'sharepoint'
   return supabase ? 'supabase' : 'mock'
+}
+
+export async function uploadAdminTemplate(lane, file) {
+  if (!supabase) throw new Error('Supabase storage is not configured. Connect Supabase before uploading templates.')
+  const safeName = String(file.name || 'template.xlsx').replace(/[^a-z0-9._-]+/gi, '-')
+  const path = `admin/templates/${lane}/${Date.now()}-${safeName}`
+  const url = await sbUploadAdminTemplate(path, file)
+  return { path, url }
 }
 
 export async function uploadOppFile(opp, subfolder, file) {

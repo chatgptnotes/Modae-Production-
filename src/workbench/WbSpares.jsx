@@ -26,6 +26,7 @@ export default function WbSpares({ opp, openBuilder }) {
   }), { value: 0, cogs: 0 })
   const gmPct = totals.value ? ((totals.value - totals.cogs) / totals.value) * 100 : 0
   const expiredLines = lines.filter(l => l.priceState === 'Expired')
+  const clarifications = (store.clarifications || []).filter(c => c.oppId === opp.id && c.status === 'Answered')
 
   const bumpQty = (l, d) => store.updateSparesLine(l.id, { qty: Math.max(1, (l.qty || 1) + d) })
 
@@ -85,10 +86,22 @@ export default function WbSpares({ opp, openBuilder }) {
   return (
     <div>
       <div className="section-title">Spares workbench — part matching ({lines.length} line{lines.length === 1 ? '' : 's'})</div>
+      {clarifications.length > 0 && (
+        <div className="okbox sourcing-clarification-context">
+          <b>Confirmed customer information</b>
+          <span className="hint"> These answers stay attached to the opportunity and should be checked while validating each line.</span>
+          {clarifications.map(c => (
+            <div key={c.id} className="sourcing-clarification-row">
+              <b>{c.category || 'Clarification'}:</b> {c.response}
+              <span className="hint"> · {c.answerSource || 'Customer'}{c.answeredAt ? ` · ${c.answeredAt}` : ''}</span>
+            </div>
+          ))}
+        </div>
+      )}
       {!!expiredLines.length && (
         <div className="warnbox spares-price-warning">
           <b>{expiredLines.length} price source{expiredLines.length === 1 ? '' : 's'} expired.</b>{' '}
-          Use <b>Request price update</b> in the pinned Actions column, or apply a current manufacturer quote, before moving to Proposal.
+          Use <b>Request price update</b> in the Actions column, or apply a current manufacturer quote only when the approved price list cannot be used.
         </div>
       )}
       <div className="sheet-wrap">
@@ -198,9 +211,9 @@ export default function WbSpares({ opp, openBuilder }) {
 
         <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <button className="primary" onClick={sendToProposal}>
-            <Icon name="arrowRight" size={13} /> Send lines to proposal
+            <Icon name="arrowRight" size={13} /> Continue to proposal
           </button>
-          <span className="hint">Only confirmed lines merge into the workbook BoM.</span>
+          <span className="hint">Only confirmed lines from a current price source merge into the draft proposal.</span>
         </div>
         {sent && (
           <div className="okbox">

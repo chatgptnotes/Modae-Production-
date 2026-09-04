@@ -1175,6 +1175,21 @@ export function StoreProvider({ children }) {
         },
       }, 'Admin document uploaded', kind, meta.name))
     },
+    saveProposalTemplate(template) {
+      setState(s => {
+        const existing = s.config?.uploads?.proposalTemplates || []
+        const archived = existing.map(item => item.lane === template.lane && item.status === 'Current'
+          ? { ...item, status: 'Archived' }
+          : item)
+        return withAudit({
+          ...s,
+          config: {
+            ...s.config,
+            uploads: { ...s.config.uploads, proposalTemplates: [{ ...template, status: 'Current' }, ...archived] },
+          },
+        }, 'Proposal template updated', template.lane, template.name)
+      })
+    },
     setConnectorState(id, stateVal) {
       setState(s => ({
         ...s,

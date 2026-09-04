@@ -21,6 +21,17 @@ const euroFormat = '€#,##0.00'
 
 const columnWidth = (worksheet, column) => worksheet.getColumn(column).width || 10
 
+const columnName = columnNumber => {
+  let number = columnNumber
+  let name = ''
+  while (number > 0) {
+    const remainder = (number - 1) % 26
+    name = String.fromCharCode(65 + remainder) + name
+    number = Math.floor((number - 1) / 26)
+  }
+  return name
+}
+
 function rangeWidth(worksheet, start, end = start) {
   let width = 0
   for (let column = start; column <= end; column++) width += columnWidth(worksheet, column)
@@ -243,9 +254,11 @@ function setCommercialSheet(workbook, worksheet, args) {
   // (including an older, duplicate Terms & Conditions block). Clear those
   // rows before writing the generated terms so they cannot leak into page 2.
   // Keep the internal costing columns J:O untouched.
-  for (const mergeRef of Object.keys(worksheet._merges || {})) {
-    const match = mergeRef.match(/([A-Z]+)(\d+):([A-Z]+)(\d+)/)
-    if (match && Number(match[2]) >= termsStart) worksheet.unMergeCells(mergeRef)
+  for (const range of Object.values(worksheet._merges || {})) {
+    const model = range?.model
+    if (!model || model.top < termsStart) continue
+    const mergeRef = `${columnName(model.left)}${model.top}:${columnName(model.right)}${model.bottom}`
+    worksheet.unMergeCells(mergeRef)
   }
   for (let row = footer + 1; row <= worksheet.rowCount; row++) {
     for (let column = 2; column <= 8; column++) worksheet.getCell(row, column).value = null

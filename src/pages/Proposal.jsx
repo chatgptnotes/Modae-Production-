@@ -26,6 +26,7 @@ const ROUTE_TABS = {
 }
 
 const MEGGITT_ITEM_LIST_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-2 With Different Make (Not yet won)/Meggitt Item List.xlsx', import.meta.url).href
+const PROJECT_PROPOSAL_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Big Project Opp/2608222RS  Project Rev-00.xlsx', import.meta.url).href
 const SPARES_PROPOSAL_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx', import.meta.url).href
 const SERVICE_PROPOSAL_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Big Service Opp-1 (Won) With SoW/Service Proposal 14Apr26 Rev-01.xlsx', import.meta.url).href
 
@@ -353,7 +354,9 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
 
   const route = docRoute(p, opp)
   const referenceRows = p.referenceWorkbook?.rows || []
-  const proposalTemplate = route === 'Spares' ? p.sparesProposalWorkbook : route === 'Services' ? p.serviceProposalWorkbook : null
+  const proposalTemplate = route === 'Project' ? p.projectProposalWorkbook
+    : route === 'Spares' ? p.sparesProposalWorkbook
+      : route === 'Services' ? p.serviceProposalWorkbook : null
   const proposalTemplateSheets = proposalTemplate?.sheets || []
   const activeTemplateSheetData = proposalTemplateSheets[activeTemplateSheet] || proposalTemplateSheets[0]
   const referencePartNumber = description => String(description || '').match(/[A-Z]{1,8}[A-Z0-9]*(?:[./-][A-Z0-9]+){2,}/i)?.[0] || ''
@@ -393,12 +396,14 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   // the source of quoted lines, while these sheets preserve the customer-facing
   // layout (cover, firm offer, SOW, issues, and so on).
   useEffect(() => {
-    if (!opp || (route !== 'Spares' && route !== 'Services') || proposalTemplate) return
+    if (!opp || !['Project', 'Spares', 'Services'].includes(route) || proposalTemplate) return
     let cancelled = false
     const isSpares = route === 'Spares'
-    const url = isSpares ? SPARES_PROPOSAL_URL : SERVICE_PROPOSAL_URL
-    const key = isSpares ? 'sparesProposalWorkbook' : 'serviceProposalWorkbook'
-    const filename = isSpares ? 'Spares Firm Offer Rev00 2May2026.xlsx' : 'Service Proposal 14Apr26 Rev-01.xlsx'
+    const lane = route === 'Services' ? 'Service' : route
+    const configured = (store.config?.uploads?.proposalTemplates || []).find(item => item.lane === lane && item.status === 'Current')
+    const url = configured?.url || (route === 'Project' ? PROJECT_PROPOSAL_URL : isSpares ? SPARES_PROPOSAL_URL : SERVICE_PROPOSAL_URL)
+    const key = route === 'Project' ? 'projectProposalWorkbook' : isSpares ? 'sparesProposalWorkbook' : 'serviceProposalWorkbook'
+    const filename = configured?.name || (route === 'Project' ? '2608222RS Project Rev-00.xlsx' : isSpares ? 'Spares Firm Offer Rev00 2May2026.xlsx' : 'Service Proposal 14Apr26 Rev-01.xlsx')
     setTemplateLoading(true)
     setTemplateError('')
     fetch(url)
@@ -414,7 +419,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
       .catch(error => { if (!cancelled) setTemplateError(error?.message || 'Proposal template could not be loaded') })
       .finally(() => { if (!cancelled) setTemplateLoading(false) })
     return () => { cancelled = true }
-  }, [oppId, opp?.oppType, p.proposalType, route, proposalTemplate]) // eslint-disable-line
+  }, [oppId, opp?.oppType, p.proposalType, route, proposalTemplate, store.config?.uploads?.proposalTemplates]) // eslint-disable-line
 
   const updateReferenceRow = (index, key, value) => {
     const rows = referenceRows.map((row, i) => {
@@ -435,7 +440,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   const updateTemplateCell = (sheetName, rowIndex, columnIndex, value) => {
     const targetSheet = proposalTemplateSheets.find(sheet => sheet.name === sheetName)
     if (!targetSheet) return
-    const key = route === 'Spares' ? 'sparesProposalWorkbook' : 'serviceProposalWorkbook'
+    const key = route === 'Project' ? 'projectProposalWorkbook' : route === 'Spares' ? 'sparesProposalWorkbook' : 'serviceProposalWorkbook'
     const sheets = proposalTemplateSheets.map(sheet => sheet.name !== sheetName ? sheet : {
       ...sheet,
       rows: sheet.rows.map((row, r) => r !== rowIndex ? row : row.map((cell, c) => c !== columnIndex ? cell : value)),
@@ -562,7 +567,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   // approved-with-conditions confirmations, per the Aug 10 review.
   const blockers = oppBlockers(opp, p, store.approvals || [])
   const blocked = isBlocked(blockers)
-  const submitted = comms.some(c => c.kind === 'submission')
+  const submitted = comms.some(c => c.kind === 'submission' || c.kind === 'proposal-email')
   const reviewStatus = p.reviewStatus || 'Not reviewed'
   const reviewReady = reviewStatus === 'Validated'
   const approvalRequired = blockers.some(bl => bl.approvalType && bl.severity !== 'wait') || pendingForOpp.length > 0
@@ -732,10 +737,14 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
       const result = await response.json().catch(() => ({}))
       if (!response.ok || !result.ok) throw new Error(result.error || 'Email could not be sent')
       store.addCommunication(oppId, {
-        to: emailTo.trim(), cc: emailCc.trim(), subject: emailSubject, kind: 'proposal-email',
+        to: emailTo.trim(), cc: emailCc.trim(), subject: emailSubject, kind: 'proposal-email', lifecycle: 'submission',
         messageId: result.messageId, status: 'sent',
         attachmentNames: [`${oppId}_Priced_BoQ_Rev_${p.revision}.xlsx`,
           ...optionalAttachments.map(a => a.filename)],
+      })
+      store.updateOpportunity(oppId, {
+        milestone: 'Submitted',
+        proposalDate: new Date().toISOString().slice(0, 10),
       })
       setEmailOpen(false)
     } catch (error) {
@@ -846,7 +855,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           <button className="btn-secondary" onClick={() => setPreviewOpen(true)}><Icon name="eye" size={13} /> Preview proposal</button>
           {reviewReady && !pendingForOpp.length && !blocked && <button className="primary" onClick={openEmail}><Icon name="mail" size={13} /> Send to customer</button>}
           {reviewReady && approvalRequired && <button className="btn-secondary" onClick={submitForApproval}><Icon name="send" size={13} /> Request approval</button>}
-          {(route === 'Spares' || route === 'Services') && <button className="btn-secondary" onClick={openTemplatePreview}><Icon name="fileSheet" size={13} /> Preview template</button>}
+          {['Project', 'Spares', 'Services'].includes(route) && <button className="btn-secondary" onClick={openTemplatePreview}><Icon name="fileSheet" size={13} /> Preview template</button>}
         </div>
       </div>
 
@@ -894,11 +903,13 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           {blockers.length === 0 && (
             <div className="gate-row">
               <Icon name="checkCircle" size={15} />
-              <span>No blockers — the proposal is clear to go to the customer.</span>
+              <span>No blockers — the reviewed proposal is ready to send.</span>
               <span className="spacer" />
               {submitted
                 ? <span className="pill won">Submitted</span>
-                : <button className="primary" onClick={markSubmitted}>Mark as submitted to customer</button>}
+                : <button className="primary" disabled={!reviewReady} onClick={openEmail}>
+                  <Icon name="mail" size={13} /> Send to customer
+                </button>}
             </div>
           )}
           {/* Embedded, the readiness panel directly above already lists every
@@ -929,7 +940,9 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           {blockers.length > 0 && !blocked && !submitted && (
             <div className="gate-row">
               <span className="spacer" />
-              <button className="primary" onClick={markSubmitted}>Mark as submitted to customer</button>
+              <button className="primary" disabled={!reviewReady} onClick={openEmail}>
+                <Icon name="mail" size={13} /> Send to customer
+              </button>
             </div>
           )}
           {blockers.length > 0 && !blocked && submitted && (
@@ -1374,7 +1387,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
       )}
 
       {templatePreviewOpen && (
-        <Modal title={`${route === 'Spares' ? 'Spares Firm Offer' : 'Service Proposal'} - ${oppId}`} onClose={() => setTemplatePreviewOpen(false)} wide className="proposal-preview-modal">
+          <Modal title={`${route === 'Project' ? 'Project Proposal' : route === 'Spares' ? 'Spares Firm Offer' : 'Service Proposal'} - ${oppId}`} onClose={() => setTemplatePreviewOpen(false)} wide className="proposal-preview-modal">
           <div className="proposal-preview-toolbar">
             <span className="hint">Editable Excel template - each tab is a worksheet - changes are saved to this proposal</span>
             <button onClick={() => setTemplatePreviewOpen(false)}>Close</button>

@@ -73,6 +73,7 @@ export function migrate(s) {
   s.config.classRules = { ...seedConfig.classRules, ...(s.config.classRules || {}) }
   if (!Array.isArray(s.config.stateRegions)) s.config.stateRegions = seedConfig.stateRegions
   if (!s.config.uploads) s.config.uploads = seedConfig.uploads
+  if (!Array.isArray(s.config.uploads.proposalTemplates)) s.config.uploads.proposalTemplates = seedConfig.uploads.proposalTemplates || []
   if (!s.config.aiModel) s.config.aiModel = seedConfig.aiModel
   // Gemini is wired for real now: drop the key fields saved state used to carry
   // (a key must never live in client state), and retire the placeholder model

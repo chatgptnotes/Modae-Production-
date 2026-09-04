@@ -28,15 +28,19 @@ export const AiBadge = ({ label = 'AI' }) => (
   <span className="chip ai-badge"><Icon name="sparkles" size={11} /> {label}</span>
 )
 
-// 13-milestone lifecycle stepper.
+// Compact lifecycle stepper. The Previous/Next controls in the Workbench still
+// reach the three post-submission milestones that are intentionally omitted
+// from this narrow row.
 const VISIBLE_MILESTONES = MILESTONES.filter(m => !['Follow-up', 'PO Validation', 'Handover'].includes(m))
 
 export function Stepper({ current, onStep }) {
   const at = VISIBLE_MILESTONES.indexOf(current)
   return (
-    <div className="stepper">
+    <div className="stepper" aria-label="Opportunity lifecycle">
       {VISIBLE_MILESTONES.map((m, i) => (
-        <button key={m} type="button" className={`step ${i < at ? 'done' : i === at ? 'now' : ''} ${onStep ? 'clickable' : ''}`} title={onStep ? `Move opportunity to ${m}` : m} onClick={() => onStep?.(m)}>
+        <button key={m} type="button" className={`step ${i < at ? 'done' : i === at ? 'now' : 'future'} ${onStep ? 'clickable' : ''}`}
+          aria-label={onStep ? `Select ${m} milestone` : m} aria-current={i === at ? 'step' : undefined}
+          title={onStep ? `Move opportunity to ${m}` : m} onClick={() => onStep?.(m)}>
           <span className="step-dot">{i < at ? <Icon name="check" size={9} /> : null}</span>
           <span className="step-label">{m}</span>
         </button>

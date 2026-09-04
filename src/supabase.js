@@ -24,6 +24,13 @@ export const supabase = makeClient()
 
 export const BUCKET = 'opportunity-files'
 
+export async function uploadAdminTemplate(path, file) {
+  if (!supabase) throw new Error('Supabase storage is not configured')
+  const { error } = await supabase.storage.from(BUCKET).upload(path, file, { upsert: true })
+  if (error) throw error
+  return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl
+}
+
 // Objects live at <oppId>/<subfolder>/<filename>.
 export async function uploadFile(path, file) {
   const { error } = await supabase.storage.from(BUCKET).upload(path, file, { upsert: true })

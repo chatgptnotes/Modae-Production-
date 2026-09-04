@@ -4,9 +4,12 @@ import { useStore } from '../store.jsx'
 import { OWNERS, AI_PROVIDERS } from '../seed.js'
 import { isAdminRole, canSeePage } from '../utils.js'
 import { Icon } from '../icons.jsx'
-import { Chip, WarnBox, DemoDataControls } from '../ui.jsx'
+import { Chip, WarnBox, DemoDataControls, Modal } from '../ui.jsx'
 import { saveAiKey, testConnection, usesVercelAi } from '../ai.js'
 import * as sp from '../sharepoint.js'
+import { uploadAdminTemplate } from '../filestore.js'
+import WorkbookPreview from '../proposal/WorkbookPreview.jsx'
+import { parseProposalWorkbook, serializeProposalWorkbook, updateWorkbookCell } from '../proposal/workbook.js'
 import { DEFAULT_COMMON_MAILBOX } from '../leadClarification.js'
 
 // Admin — every runtime rule the app obeys, in one card grid. Data lives in
@@ -32,6 +35,11 @@ const isCustomModel = m => {
 }
 const FALLBACK_PROVIDER = 'Built-in fallback'
 const DEMO_CONTROLS_PASSWORD = '32605'
+const TEMPLATE_LANES = [
+  { key: 'Project', label: 'Project proposal', url: new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Big Project Opp/2608222RS  Project Rev-00.xlsx', import.meta.url).href, filename: '2608222RS Project Rev-00.xlsx' },
+  { key: 'Service', label: 'Service proposal', url: new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Big Service Opp-1 (Won) With SoW/Service Proposal 14Apr26 Rev-01.xlsx', import.meta.url).href, filename: 'Service Proposal 14Apr26 Rev-01.xlsx' },
+  { key: 'Spares', label: 'Spares firm offer', url: new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx', import.meta.url).href, filename: 'Spares Firm Offer Rev00 2May2026.xlsx' },
+]
 
 function NumField({ label, value, disabled, onChange }) {
   return (
@@ -44,11 +52,11 @@ function NumField({ label, value, disabled, onChange }) {
 
 // A real <input type="file"> behind a button — metadata only, contents are
 // never read or stored in the demo.
-function FileButton({ label, disabled, onFile, primary }) {
+function FileButton({ label, disabled, onFile, primary, accept }) {
   const ref = useRef(null)
   return (
     <>
-      <input ref={ref} type="file" style={{ display: 'none' }}
+      <input ref={ref} type="file" accept={accept} style={{ display: 'none' }}
         onChange={e => { const f = e.target.files && e.target.files[0]; if (f) onFile(f); e.target.value = '' }} />
       <button className={primary ? 'primary' : ''} disabled={disabled} onClick={() => ref.current && ref.current.click()}>
         <Icon name="upload" size={11} /> {label}
@@ -175,6 +183,12 @@ export default function Admin() {
   const [demoPassword, setDemoPassword] = useState('')
   const [demoUnlocked, setDemoUnlocked] = useState(false)
   const [demoPasswordError, setDemoPasswordError] = useState('')
+  const [templateBusy, setTemplateBusy] = useState('')
+  const [templateError, setTemplateError] = useState('')
+  const [templatePreview, setTemplatePreview] = useState(null)
+  const [templatePreviewBusy, setTemplatePreviewBusy] = useState(false)
+  const [templatePreviewError, setTemplatePreviewError] = useState('')
+  const [templateDirty, setTemplateDirty] = useState(false)
 
   // Route-level gate AFTER the hooks (an early return before them would change
   // the hook count when the persona flips while /admin is mounted). Approval
@@ -217,6 +231,70 @@ export default function Admin() {
 
   const patchList = (listKey, i, itemPatch) =>
     store.updateConfig({ [listKey]: config[listKey].map((x, j) => (j === i ? { ...x, ...itemPatch } : x)) })
+
+  const proposalTemplates = uploads.proposalTemplates || []
+  const uploadedTemplateFor = lane => proposalTemplates.find(item => item.lane === lane && item.status === 'Current')
+  const templateInfo = lane => uploadedTemplateFor(lane) || TEMPLATE_LANES.find(item => item.key === lane)
+
+  const openTemplate = async lane => {
+    const info = templateInfo(lane)
+    setTemplatePreview({ lane, info, workbook: null })
+    setTemplatePreviewError('')
+    setTemplatePreviewBusy(true)
+    try {
+      const response = await fetch(info.url)
+      if (!response.ok) throw new Error('Template file could not be loaded')
+      const workbook = parseProposalWorkbook(await response.arrayBuffer(), info.name || info.filename)
+      setTemplatePreview({ lane, info, workbook })
+      setTemplateDirty(false)
+    } catch (error) {
+      setTemplatePreviewError(error?.message || 'Template file could not be loaded')
+    } finally {
+      setTemplatePreviewBusy(false)
+    }
+  }
+
+  const uploadTemplate = async (lane, file) => {
+    if (!/\.(xlsx|xlsm)$/i.test(file.name)) {
+      setTemplateError('Proposal templates must be Excel workbooks (.xlsx or .xlsm).')
+      return
+    }
+    setTemplateError(''); setTemplateBusy(lane)
+    try {
+      const workbook = parseProposalWorkbook(await file.arrayBuffer(), file.name)
+      const stored = await uploadAdminTemplate(lane, file)
+      store.saveProposalTemplate({ lane, name: file.name, size: file.size, ...stored })
+      setTemplatePreview({ lane, info: { lane, name: file.name, size: file.size, ...stored }, workbook })
+      setTemplateDirty(false)
+    } catch (error) {
+      setTemplateError(error?.message || 'Template upload failed')
+    } finally {
+      setTemplateBusy('')
+    }
+  }
+
+  const updatePreviewCell = (sheetName, rowIndex, columnIndex, value) => {
+    setTemplatePreview(current => ({ ...current, workbook: updateWorkbookCell(current.workbook, sheetName, rowIndex, columnIndex, value) }))
+    setTemplateDirty(true)
+  }
+
+  const saveTemplateEdits = async () => {
+    if (!templatePreview?.workbook || !templateDirty) return
+    setTemplateError(''); setTemplateBusy(templatePreview.lane)
+    try {
+      const bytes = serializeProposalWorkbook(templatePreview.workbook)
+      const name = templatePreview.info.name.replace(/\.(xlsx|xlsm)$/i, '') + '.xlsx'
+      const file = new File([bytes], name, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      const stored = await uploadAdminTemplate(templatePreview.lane, file)
+      store.saveProposalTemplate({ lane: templatePreview.lane, name, size: file.size, ...stored })
+      setTemplatePreview(current => ({ ...current, info: { ...current.info, name, size: file.size, ...stored } }))
+      setTemplateDirty(false)
+    } catch (error) {
+      setTemplateError(error?.message || 'Template changes could not be saved')
+    } finally {
+      setTemplateBusy('')
+    }
+  }
 
   const userCounts = ['Active', 'Pending', 'Suspended']
     .map(st => [st, (store.users || []).filter(u => u.status === st).length])
@@ -486,11 +564,38 @@ export default function Admin() {
         </div>
 
         {/* 9 — Templates & reminders */}
-        <div className="admin-card">
+        <div className="admin-card" style={{ gridColumn: '1 / -1' }}>
           <h3><Icon name="fileText" size={14} /> Proposal templates &amp; reminder rules</h3>
-          {(config.templates || []).map(t => (
-            <div key={t} className="arow"><span>{t}</span><Chip tone="grey">Template</Chip></div>
-          ))}
+          <p className="hint">Current Excel templates are stored in Supabase. Replacements become active immediately and prior versions remain available below.</p>
+          {templateError && <div className="errbox" role="alert">{templateError}</div>}
+          <div className="admin-template-list">
+            {TEMPLATE_LANES.map(lane => {
+              const current = templateInfo(lane.key)
+              const uploaded = uploadedTemplateFor(lane.key)
+              const history = proposalTemplates.filter(item => item.lane === lane.key && item.status === 'Archived')
+              return <div key={lane.key} className="admin-template-row">
+                <div className="admin-template-meta">
+                  <b>{lane.label}</b>
+                  <span>{current.name || current.filename}</span>
+                  <span className="hint">{uploaded ? `uploaded ${uploaded.uploaded || 'recently'} · Supabase` : 'Built-in default · upload a replacement to activate'}</span>
+                </div>
+                <div className="admin-template-actions">
+                  <button type="button" onClick={() => openTemplate(lane.key)} disabled={templateBusy === lane.key || templatePreviewBusy}>
+                    <Icon name="eye" size={11} /> View current
+                  </button>
+                  <FileButton label={uploaded ? 'Replace' : 'Upload'} primary disabled={!canEdit || templateBusy === lane.key}
+                    accept=".xlsx,.xlsm" onFile={file => uploadTemplate(lane.key, file)} />
+                </div>
+                {!!history.length && <details className="admin-template-history">
+                  <summary>{history.length} archived version{history.length === 1 ? '' : 's'}</summary>
+                  {history.map(item => <div key={`${item.path}-${item.uploaded}`} className="arow">
+                    <span>{item.name}<br /><span className="hint">uploaded {item.uploaded}</span></span>
+                    <button type="button" onClick={() => openTemplate(lane.key)} disabled>Archived</button>
+                  </div>)}
+                </details>}
+              </div>
+            })}
+          </div>
           {(config.reminders || []).map((r, i) => (
             <label key={r.id || i} className="check-row">
               <input type="checkbox" checked={!!r.on} disabled={!canEdit}
@@ -499,6 +604,21 @@ export default function Admin() {
             </label>
           ))}
         </div>
+
+        {templatePreview && (
+          <Modal title={`${templatePreview.info.name || templatePreview.info.filename} — ${templatePreview.lane} template`}
+            onClose={() => { if (!templateBusy) setTemplatePreview(null) }} wide className="proposal-preview-modal">
+            <div className="proposal-preview-toolbar">
+              <span className="hint">Edit the workbook template, then save it as a new current version.</span>
+              <span style={{ display: 'inline-flex', gap: 6 }}>
+                <button type="button" className="primary" disabled={!canEdit || !templateDirty || !!templateBusy} onClick={saveTemplateEdits}>Save changes</button>
+                <button type="button" onClick={() => setTemplatePreview(null)} disabled={!!templateBusy}>Close</button>
+              </span>
+            </div>
+            <WorkbookPreview workbook={templatePreview.workbook} editable={canEdit} onChange={updatePreviewCell}
+              loading={templatePreviewBusy} error={templatePreviewError} />
+          </Modal>
+        )}
 
         {/* 10 — Connector state */}
         <div className="admin-card">

@@ -17,6 +17,8 @@ export default function ProposalSheetEditor({
 }) {
   const [localWorkbook, setLocalWorkbook] = useState('proposal')
   const activeWorkbook = setWorkbook ? workbook : localWorkbook
+  const isSpares = p?.proposalType === 'Spares' || opp?.route === 'Spares'
+  const isServices = p?.proposalType === 'Services' || opp?.route === 'Service' || opp?.route === 'Services'
   // Edit Sheet is the single entry point from the proposal navigation. Start on
   // BOQ so extracted buyer parts are immediately visible without another tab row.
   const [sheet, setSheet] = useState('BOQ')
@@ -32,6 +34,22 @@ export default function ProposalSheetEditor({
     const values = e.clipboardData.getData('text').split(/\r?\n/).map(row => row.split('\t'))
     if (values.length === 1 && values[0].length === 1) return
     e.preventDefault()
+    if (isSpares || isServices) {
+      const keys = ['desc', 'common', 'quoted']
+      const bom = p.bom.map(line => ({ ...line }))
+      values.forEach((row, rowOffset) => row.forEach((value, colOffset) => {
+        const line = bom[startRow + rowOffset]
+        const key = keys[startCol + colOffset]
+        if (!line || !key) return
+        line[key] = key === 'desc' ? value : key === 'quoted' ? value : Math.max(0, Number(value) || 0)
+        if (key === 'common') {
+          line.qtyPerUnit = 0
+          line.spares = 0
+        }
+      }))
+      save({ ...p, bom })
+      return
+    }
     pasteBoq(startRow, startCol, values)
   }
   const field = (label, key, type = 'text') => (
@@ -87,20 +105,52 @@ export default function ProposalSheetEditor({
       {show('BOQ') && <section className="form-card wide">
         <div className="section-title">Bill of quantities</div>
         <p className="hint proposal-boq-edit-note">Edit the existing rows directly. Use copy/paste or the keyboard to update the white cells.</p>
-        <div className="sheet-wrap">
-           <table className="sheet proposal-edit-grid">
-             <colgroup>
-               <col className="boq-col-si" /><col className="boq-col-category" /><col className="boq-col-description" /><col className="boq-col-part" />
-               <col className="boq-col-qty" /><col className="boq-col-qty" /><col className="boq-col-qty" /><col className="boq-col-total-qty" /><col className="boq-col-uom" />
-               {priced && <><col className="boq-col-unit-price" /><col className="boq-col-total-price" /></>}<col className="boq-col-action" />
-             </colgroup>
+        <div className="sheet-wrap proposal-edit-wrap">
+           <table className={`sheet proposal-edit-grid ${isSpares ? 'proposal-edit-grid-spares' : isServices ? 'proposal-edit-grid-services' : 'proposal-edit-grid-project'}`}>
+             {isSpares || isServices ? (
+               <colgroup>
+                 <col className="boq-col-si" /><col className="boq-col-description" />
+                 {isSpares && <col className="boq-col-part" />}
+                 <col className="boq-col-total-qty" />
+                 {priced && <><col className="boq-col-unit-price" /><col className="boq-col-total-price" /></>}<col className="boq-col-action" />
+               </colgroup>
+             ) : (
+               <colgroup>
+                 <col className="boq-col-si" /><col className="boq-col-category" /><col className="boq-col-description" /><col className="boq-col-part" />
+                 <col className="boq-col-qty" /><col className="boq-col-qty" /><col className="boq-col-qty" /><col className="boq-col-total-qty" /><col className="boq-col-uom" />
+                 {priced && <><col className="boq-col-unit-price" /><col className="boq-col-total-price" /></>}<col className="boq-col-action" />
+               </colgroup>
+             )}
              <thead><tr>
-              <th>Sl.</th><th>Item category</th><th>Description</th><th>Model / part number</th>
-              <th>Qty/unit</th><th>Common</th><th>Spares</th><th>Total qty</th><th>UOM</th>
-              {priced && <><th>Unit price ₹</th><th>Total price ₹</th></>}<th />
+              {isSpares || isServices ? (
+                <><th>Sl.</th><th>{isServices ? 'Scope / activity' : 'Description'}</th>{isSpares && <th>Model / part number</th>}<th>{isServices ? 'Days / hours' : 'Quantity'}</th>
+                  {priced && <><th>{isServices ? 'Rate ₹' : 'Unit price ₹'}</th><th>Total price ₹</th></>}<th>Actions</th></>
+              ) : (
+                <><th>Sl.</th><th>Item category</th><th>Description</th><th>Model / part number</th>
+                  <th>Qty/unit</th><th>Common</th><th>Spares</th><th>Total qty</th><th>UOM</th>
+                  {priced && <><th>Unit price ₹</th><th>Total price ₹</th></>}<th /></>
+              )}
             </tr></thead>
             <tbody>{p.bom.map((l, i) => {
               const editable = ['itemCategory', 'desc', 'qtyPerUnit', 'common', 'spares', 'quoted']
+              if (isSpares || isServices) {
+                const quantity = totalQty(l)
+                return <tr key={i}>
+                  <td className="rowhead">{i + 1}</td>
+                  <td><textarea rows={2} className="proposal-description-editor" {...inputProps(i, 0, e => { paste(i, 0, e); keyNav(e, i, 0, p.bom.length, 4) })} value={l.desc || ''} onChange={updLine(i, 'desc', false)} /></td>
+                  {isSpares && <td>{l.pn || '—'}{l.custRef && <div className="hint">{l.custRef}</div>}</td>}
+                  <td className="num">
+                    <input type="number" min="0" {...inputProps(i, 1, e => { paste(i, 1, e); keyNav(e, i, 1, p.bom.length, 4) })}
+                      value={quantity || ''} onChange={e => {
+                        const nextQuantity = Math.max(0, Number(e.target.value) || 0)
+                        save({ ...p, bom: p.bom.map((line, j) => j === i ? { ...line, qtyPerUnit: 0, common: nextQuantity, spares: 0 } : line) })
+                      }} />
+                  </td>
+                  {priced && <><td className="num"><input type="number" min="0" {...inputProps(i, 2, e => { paste(i, 2, e); keyNav(e, i, 2, p.bom.length, 4) })} value={l.quoted || ''} placeholder={fmt(Math.round(lineComputed(l)))} onChange={updLine(i, 'quoted', false)} /></td>
+                    <td className="num">₹ {fmt(lineQuoted(l) * quantity)}</td></>}
+                  <td><button type="button" onClick={removeLine(i)} title="Remove line"><span className="proposal-row-control">Remove</span></button></td>
+                </tr>
+              }
               return <tr key={i}>
                 <td className="rowhead">{i + 1}</td>
                 <td><input {...inputProps(i, 0, e => { paste(i, 0, e); keyNav(e, i, 0, p.bom.length, 6) })} value={l.itemCategory || ''} onChange={updLine(i, 'itemCategory', false)} /></td>
@@ -122,7 +172,7 @@ export default function ProposalSheetEditor({
                 <td><span className="proposal-row-control" title="Adjust quantity with the stepper">Qty</span></td>
               </tr>
             })}</tbody>
-            {priced && <tfoot><tr><td colSpan={10}>Totals</td><td className="num">₹ {fmt(totals.target)}</td><td /></tr></tfoot>}
+            {priced && <tfoot><tr><td colSpan={isSpares ? 5 : isServices ? 4 : 10}>Totals</td><td className="num">₹ {fmt(totals.target)}</td><td /></tr></tfoot>}
           </table>
         </div>
         <div className="costing-note">Internal cost and margin calculations remain protected; {priced ? 'the customer-facing quoted price is editable.' : 'pricing is restricted for this role.'}</div>

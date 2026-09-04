@@ -1108,6 +1108,14 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
   padding-bottom: 10px; border-bottom: 1px solid var(--border-soft);
 }
 .proposal-preview-toolbar .forms-actions { margin: 0; }
+.admin-template-list { display: grid; gap: 8px; margin-top: 10px; }
+.admin-template-row { padding: 10px 0; border-top: 1px solid var(--grid-line); }
+.admin-template-meta { display: grid; gap: 3px; min-width: 0; }
+.admin-template-meta > span:not(.hint) { color: var(--text-main); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-template-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.admin-template-history { margin-top: 8px; color: var(--text-muted); font-size: 11px; }
+.admin-template-history summary { cursor: pointer; }
+.admin-template-history .arow { padding: 6px 0; }
 .proposal-preview-scroll {
   max-height: calc(94vh - 92px); overflow-y: auto; overflow-x: hidden; margin-top: 12px;
   padding: 16px; background: var(--surface-sunken, #eceff3); border: 1px solid var(--border-soft);
@@ -1802,6 +1810,7 @@ input.needs-input, select.needs-input { background: #fffbeb; border-color: var(-
 .step { appearance: none; border: 0; background: transparent; display: flex; align-items: center; gap: 5px; padding: 5px 10px 5px 4px; font-size: 11px; color: var(--text-subtle); position: relative; white-space: nowrap; min-width: 112px; cursor: default; }
 .step.clickable { cursor: pointer; }
 .step.clickable:hover { color: var(--xl-green-dark); background: #f5f9fc; border-radius: 5px; }
+.step.clickable:focus-visible { outline: 2px solid var(--primary-accent); outline-offset: -2px; border-radius: 5px; }
 .step:not(:last-child)::after { content: ''; width: 12px; height: 1.5px; background: var(--border-color); margin-left: 8px; }
 .step-dot { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border-color); background: #fff; display: inline-flex; align-items: center; justify-content: center; color: #fff; flex: 0 0 auto; }
 .step.done .step-dot { background: var(--xl-green); border-color: var(--xl-green); }
@@ -3714,6 +3723,16 @@ table.sheet td .wrapcell:focus { outline: 2px solid var(--xl-green); background:
 .doc-terms-list li { padding: 3px 0; line-height: 1.45; break-inside: avoid; }
 
 /* ---- Lead clarification mail (Inbox column 3) --------------------------- */
+.sourcing-clarification-context {
+  margin: 10px 0 12px;
+  border-left: 3px solid var(--brand-red);
+}
+
+.sourcing-clarification-row {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--brand-red) 18%, transparent);
+}
 /* AI drafts it, a human reviews and sends it. The From line is shown, never
    edited: which mailbox it leaves from is a rule, not a preference. */
 .clar-mail {
@@ -4982,6 +5001,88 @@ body {
   overflow: visible;
   position: relative;
   z-index: 2;
+}
+
+/* Route-specific editors must use the available workspace width. Spares and
+   Services are intentionally compact; Projects retain their full workbook
+   detail but collapse into labelled records on narrow screens. */
+.proposal-edit-wrap { overflow-x: visible; }
+.proposal-edit-grid-spares .boq-col-si { width: 5%; }
+.proposal-edit-grid-spares .boq-col-description { width: 32%; }
+.proposal-edit-grid-spares .boq-col-part { width: 22%; }
+.proposal-edit-grid-spares .boq-col-total-qty { width: 10%; }
+.proposal-edit-grid-spares .boq-col-unit-price { width: 14%; }
+.proposal-edit-grid-spares .boq-col-total-price { width: 14%; }
+.proposal-edit-grid-spares .boq-col-action { width: 8%; }
+.proposal-edit-grid-services .boq-col-si { width: 6%; }
+.proposal-edit-grid-services .boq-col-description { width: 45%; }
+.proposal-edit-grid-services .boq-col-total-qty { width: 14%; }
+.proposal-edit-grid-services .boq-col-unit-price { width: 16%; }
+.proposal-edit-grid-services .boq-col-total-price { width: 16%; }
+.proposal-edit-grid-services .boq-col-action { width: 10%; }
+
+@media (max-width: 760px) {
+  .proposal-edit-wrap { overflow-x: visible; }
+  .proposal-edit-grid,
+  .proposal-edit-grid tbody,
+  .proposal-edit-grid tfoot,
+  .proposal-edit-grid tr { display: block; width: 100%; }
+  .proposal-edit-grid thead { display: none; }
+  .proposal-edit-grid tbody { display: grid; gap: 10px; }
+  .proposal-edit-grid tbody tr {
+    padding: 8px 10px;
+    border: 1px solid var(--border-soft);
+    border-radius: 6px;
+    background: #fff;
+  }
+  .proposal-edit-grid tbody td {
+    display: grid;
+    grid-template-columns: 112px minmax(0, 1fr);
+    gap: 8px;
+    width: 100% !important;
+    min-height: 34px;
+    padding: 6px 0;
+    border: 0;
+    overflow: visible;
+  }
+  .proposal-edit-grid tbody td::before {
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+  .proposal-edit-grid-project tbody td:nth-child(1)::before { content: 'Sl.'; }
+  .proposal-edit-grid-project tbody td:nth-child(2)::before { content: 'Item category'; }
+  .proposal-edit-grid-project tbody td:nth-child(3)::before { content: 'Description'; }
+  .proposal-edit-grid-project tbody td:nth-child(4)::before { content: 'Model / part'; }
+  .proposal-edit-grid-project tbody td:nth-child(5)::before { content: 'Qty / unit'; }
+  .proposal-edit-grid-project tbody td:nth-child(6)::before { content: 'Common'; }
+  .proposal-edit-grid-project tbody td:nth-child(7)::before { content: 'Spares'; }
+  .proposal-edit-grid-project tbody td:nth-child(8)::before { content: 'Total quantity'; }
+  .proposal-edit-grid-project tbody td:nth-child(9)::before { content: 'UOM'; }
+  .proposal-edit-grid-project tbody td:nth-child(10)::before { content: 'Unit price'; }
+  .proposal-edit-grid-project tbody td:nth-child(11)::before { content: 'Total price'; }
+  .proposal-edit-grid-project tbody td:nth-child(12)::before { content: 'Actions'; }
+  .proposal-edit-grid-spares tbody td:nth-child(1)::before { content: 'Sl.'; }
+  .proposal-edit-grid-spares tbody td:nth-child(2)::before { content: 'Description'; }
+  .proposal-edit-grid-spares tbody td:nth-child(3)::before { content: 'Model / part'; }
+  .proposal-edit-grid-spares tbody td:nth-child(4)::before { content: 'Quantity'; }
+  .proposal-edit-grid-spares tbody td:nth-child(5)::before { content: 'Unit price'; }
+  .proposal-edit-grid-spares tbody td:nth-child(6)::before { content: 'Total price'; }
+  .proposal-edit-grid-spares tbody td:nth-child(7)::before { content: 'Actions'; }
+  .proposal-edit-grid-services tbody td:nth-child(1)::before { content: 'Sl.'; }
+  .proposal-edit-grid-services tbody td:nth-child(2)::before { content: 'Scope / activity'; }
+  .proposal-edit-grid-services tbody td:nth-child(3)::before { content: 'Days / hours'; }
+  .proposal-edit-grid-services tbody td:nth-child(4)::before { content: 'Rate'; }
+  .proposal-edit-grid-services tbody td:nth-child(5)::before { content: 'Total price'; }
+  .proposal-edit-grid-services tbody td:nth-child(6)::before { content: 'Actions'; }
+  .proposal-edit-grid tbody td input,
+  .proposal-edit-grid tbody td textarea { max-width: 100%; }
+  .proposal-edit-grid tfoot { margin-top: 10px; }
+  .proposal-edit-grid tfoot tr,
+  .proposal-edit-grid tfoot td { display: block; width: 100% !important; }
+  .proposal-edit-grid tfoot td:not(:first-child) { display: none; }
 }
 
 .stepper {

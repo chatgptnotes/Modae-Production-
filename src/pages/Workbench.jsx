@@ -30,6 +30,7 @@ import DetailTabs from '../DetailTabs.jsx'
 const TABS = [
   ['overview', 'Overview'], ['requirement', 'Requirement'], ['customer', 'Customer/KYC'],
   ['clarifications', 'Clarifications'], ['sourcing', 'Sourcing'], ['proposal', 'Proposal'],
+  ['approval', 'Approval'], ['submitted', 'Submitted'],
   ['approvals', 'Approvals'], ['comms', 'Communications'],
   ['files', 'Files'], ['audit', 'Audit'],
 ]
@@ -237,7 +238,7 @@ export default function Workbench() {
         <div className="opp-summary-action"><span>Next action</span><b>{nextAction.text || NEXT_ACTION[opp.milestone] || 'Progress the opportunity'}</b></div>
         <div><span>Due</span><b>{ddMmmYY(due) || '-'}</b></div>
       </div>
-      <DetailTabs ariaLabel="Opportunity views" activeId={tab} items={tabItems} onChange={goTab} />
+      <DetailTabs ariaLabel="Opportunity views" primaryCount={8} showOverflow={false} activeId={tab} items={tabItems} onChange={goTab} />
       <div className="opp-lifecycle">
         <div className="lifecycle-heading">
           <div><div className="workbench-section-title">Lifecycle</div><span className="hint">Select any stop to move the opportunity, including backward corrections.</span></div>
@@ -294,6 +295,8 @@ export default function Workbench() {
         {tab === 'clarifications' && <ClarificationsTab opp={opp} />}
         {tab === 'sourcing' && <SourcingTab opp={opp} goTab={goTab} />}
         {tab === 'proposal' && <ProposalTab opp={opp} />}
+        {tab === 'approval' && <ApprovalsTab opp={opp} />}
+        {tab === 'submitted' && <OverviewTab opp={opp} goTab={goTab} detailsRef={detailsRef} />}
         {tab === 'approvals' && <ApprovalsTab opp={opp} />}
         {tab === 'comms' && <CommsTab opp={opp} />}
         {tab === 'po' && <PoHandover opp={opp} />}
@@ -1109,7 +1112,7 @@ function SourcingTab({ opp, goTab }) {
       <div className="ana-card c-6">
         <div className="ana-title">Vendor actions</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button onClick={openRfq}><Icon name="mail" size={13} /> Draft manufacturer RFQ</button>
+          <button onClick={openRfq}><Icon name="mail" size={13} /> Request exceptional vendor price</button>
           <button onClick={simulateVendorResponse} disabled={vendorSimBusy} title="Ask AI to create a test vendor response">
             <Icon name="sparkles" size={13} /> {vendorSimBusy ? 'Generating…' : 'Simulate vendor response'}
           </button>
@@ -1118,7 +1121,7 @@ function SourcingTab({ opp, goTab }) {
           </button>
         </div>
         {vendorSimErr && <ErrBox>{vendorSimErr}</ErrBox>}
-        <p className="hint">Send RFQs to multiple manufacturers, attach their replies, then apply the chosen price to the opportunity line.</p>
+        <p className="hint">Approved price lists are used first. Request a vendor price only when a current approved source is unavailable.</p>
       </div>
 
       <div className="ana-card c-12">
@@ -1216,14 +1219,6 @@ function ProposalTab({ opp }) {
   const SUBS = [['edit-sheet', 'Edit proposal']]
   return (
     <div className="proposal-tab-shell">
-      <header className="proposal-subnav-header">
-        <div>
-          <span className="eyebrow">Proposal workspace</span>
-          <h3>Prepare customer proposal</h3>
-        </div>
-      <DetailTabs ariaLabel="Proposal workspace views" activeId={sub}
-        items={SUBS.map(([id, label]) => ({ id, label }))} onChange={setSub} />
-      </header>
       {sub === 'workbench' && (
         opp.route === 'Spares' ? <WbSpares opp={opp} openBuilder={openBuilder} />
         : opp.route === 'Service' ? <WbService opp={opp} openBuilder={openBuilder} />
