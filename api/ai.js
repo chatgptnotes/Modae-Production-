@@ -49,7 +49,7 @@ const leadSchema = {
       qty: { type: 'NUMBER' }, uom: { type: 'STRING' }, confidence: { type: 'INTEGER' }, evidence: { type: 'STRING' },
     }, required: ['description', 'qty', 'confidence', 'evidence'] } },
     fields: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
-      group: { type: 'STRING', enum: ['Customer', 'RFQ', 'Known Project'] },
+      group: { type: 'STRING', enum: ['Customer', 'RFQ', 'Schedule', 'Commercial', 'Compliance', 'Known Project'] },
       k: { type: 'STRING' }, v: { type: 'STRING' }, conf: { type: 'INTEGER' },
       ev: { type: 'STRING' }, note: { type: 'STRING' },
     }, required: ['group', 'k', 'v', 'conf', 'ev'] } },
@@ -83,8 +83,9 @@ const vendorQuoteSchema = {
 function leadPrompt(p) {
   return `${HOUSE}
 
-Read the complete inbound sales enquiry for human review. Use BOTH the email
-and every attached document. If an attachment is an image or scanned PDF, read
+Read the complete inbound sales enquiry for human review. Treat the email body
+and every attachment as one single enquiry — do not report a fact as missing if
+any attachment supports it. If an attachment is an image or scanned PDF, read
 its visible content from the supplied document part.
 
 FROM: ${cap(p.from, 200)}
@@ -93,22 +94,33 @@ BODY:
 ${cap(p.body, 20000)}
 
 ATTACHMENTS AND EXTRACTED TEXT:
-${cap((p.attachments || []).map(a => `--- ${a.name} ---\n${a.text || '(visual document part supplied; read it directly)'}`).join('\n\n'), 40000) || 'none'}
-
+${cap((p.attachments || []).map(a => `--- ${a.name} ---\n${a.text || '(visual document part supplied; read it directly)'}`).join('\n\n'), 100000) || 'none'}
+${p.deterministicContext ? `
+DETERMINISTIC PARSE (already extracted mechanically from an attachment — cross-check
+and correct only if it looks wrong; do not restate these as new facts, add what
+it does not cover):
+${cap(p.deterministicContext, 4000)}
+` : ''}
 Customers already in our master:
 ${cap((p.customers || []).join(', '), 3000)}
 
 Ownership rules:
 ${cap((p.ownershipRules || []).map(r => `${r.region} -> ${r.owner}`).join('\n'), 1000)}
 
-Always attempt Sell-to customer, Category, Contact, Opp type, Opportunity
-scope, line items, quantities, BU and Segment. Return every requested material
-as lineItems with one row per item. Cite the email or attachment
-name in evidence. For Opp type, classify procurement of physical items with part
-numbers, quantities, sensors, probes, cables or spare materials as Spares, even
-if the document mentions service/support in a commercial clause. Use Service
-only when the requested work is labour such as maintenance, repair, calibration,
-commissioning or field engineering. Ask only for information absent from both sources.`
+Always attempt to extract, grouped as shown: Sell-to customer, Category, Contact
+person, Contact email, Contact phone, Plant/station/location (Customer); RFQ or
+tender reference, RFQ date, submission mode/platform, Opp type, Opportunity
+scope (RFQ); delivery schedule, other schedule dates (Schedule); payment terms,
+warranty, price basis, EMD/security deposit (Commercial); certification asks,
+documentation/compliance asks (Compliance); BU and Segment (Customer); any
+installed-base or known-project reference (Known Project). Return every
+requested material as lineItems with one row per item. Cite the email or
+attachment name in evidence. For Opp type, classify procurement of physical
+items with part numbers, quantities, sensors, probes, cables or spare materials
+as Spares, even if the document mentions service/support in a commercial
+clause. Use Service only when the requested work is labour such as
+maintenance, repair, calibration, commissioning or field engineering. Ask only
+for information absent from both sources.`
 }
 
 function fillPrompt(p) {

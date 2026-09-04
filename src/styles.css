@@ -1031,6 +1031,26 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .pill.status-Pending { background: var(--amber-fill); color: var(--amber-text); }
 .pill.status-Suspended { background: var(--lost-fill); color: var(--lost-text); }
 .modal { position: fixed; z-index: 56; top: 90px; left: 50%; transform: translateX(-50%); width: 420px; max-width: 92vw; box-shadow: 0 6px 24px rgba(0,0,0,.25); }
+.lead-paste-modal {
+  top: 20px;
+  width: min(560px, calc(100vw - 32px));
+  max-width: min(560px, calc(100vw - 32px));
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+}
+.lead-paste-form {
+  padding: 2px 12px 8px;
+}
+.lead-paste-form textarea {
+  min-height: 220px;
+  max-height: 32dvh;
+}
+.lead-paste-form .tender-drop.compact {
+  min-height: 132px;
+}
+.lead-paste-form .attach-row {
+  padding: 6px 0;
+}
 /* Five selectors, five choice cards and a footer row outgrow a single 420px
    column — widen the dialog and wrap the controls and cards into two columns
    so the whole thing fits on screen without scrolling. */
@@ -1310,6 +1330,17 @@ tr.rowclick { cursor: pointer; }
 .opportunity-details-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
 .opportunity-details-heading .hint { font-size: 11px; line-height: 1.25; }
 .opportunity-details-group { margin: 9px 0 4px; padding-bottom: 2px; border-bottom: 1px solid var(--grid-line); color: var(--text-muted); font-size: 10px; line-height: 1.2; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+@media (max-width: 640px) {
+  .lead-paste-modal {
+    top: 12px;
+    width: calc(100vw - 20px);
+    max-width: calc(100vw - 20px);
+    max-height: calc(100dvh - 24px);
+  }
+  .lead-paste-form textarea {
+    max-height: 28dvh;
+  }
+}
 .opportunity-details-grid { gap: 5px 10px; }
 .opportunity-details-grid > div > label { margin-bottom: 1px; font-size: 10.5px; line-height: 1.15; }
 .opportunity-details-grid input[type=text], .opportunity-details-grid input[type=tel], .opportunity-details-grid select { min-height: 22px; padding: 2px 5px; font-size: 11.5px; }

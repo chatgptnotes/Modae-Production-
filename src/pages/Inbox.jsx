@@ -18,6 +18,7 @@ import { findDuplicates } from '../insights.js'
 import { leadWorkflow } from '../leadWorkflow.js'
 import { parseLeadLineItems } from '../tenderParse.js'
 import { deterministicLeadRoute, leadTextChunks, mergeLeadResults } from '../leadExtraction.js'
+import { scanAttachment, parsedToLeadFields, deterministicPromptContext, mergeDeterministicIntoAi } from '../docScan.js'
 import { buildLeadProposalData } from '../leadBoq.js'
 import { isFastTrackLead, routeOwner, supplyMissing } from '../leadRules.js'
 import { INDIA_LOCATION_GROUPS, indiaLocation, indiaRegionForLocation } from '../indiaLocations.js'
@@ -88,11 +89,49 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
   const attachmentHasSpecs = /specification|part\s*code|short\s*description|parameters|make\s*:/i.test(attachmentText)
   const attachmentHasQuantity = /\b(?:quantity|qty|quantities)\b|\b\d+\s*(?:nos?|pcs?|pieces?|sets?|ea)\b/i.test(attachmentText)
 
+  // parseTender() reads RFQ header/line-item structure deterministically from
+  // any attachment that still carries its transient page structure (PDFs read
+  // via readAttachment in this session — never persisted). Its output is a
+  // scaffold the AI cross-checks rather than re-derives, and wins outright for
+  // the handful of header keys it reads reliably (see docScan.js).
+  const scanned = (attachments || [])
+    .map(a => ({ name: a.name, parsed: scanAttachment(a) }))
+    .filter(x => x.parsed)
+  const deterministic = scanned.reduce((acc, { name, parsed }) => {
+    const found = parsedToLeadFields(parsed, name)
+    acc.fields.push(...found.fields)
+    acc.lineItems.push(...found.lineItems)
+    return acc
+  }, { fields: [], lineItems: [] })
+  const deterministicContext = scanned.length ? deterministicPromptContext(scanned) : ''
+
+  // Mirrors attachmentMeta()'s budget-shrinking order so "truncated" here
+  // matches what actually gets persisted, without the two implementations
+  // needing to be the same function.
+  const scanDiagnostics = () => {
+    let budget = TEXT_TOTAL
+    const truncatedFiles = []
+    for (const a of attachments || []) {
+      if (!a.text) continue
+      if (budget <= 0 || a.text.length > budget) truncatedFiles.push(a.name)
+      budget -= Math.min(a.text.length, Math.max(budget, 0))
+    }
+    return {
+      files: (attachments || []).length,
+      filesScanned: (attachments || []).filter(a => a.text?.trim()).length,
+      pages: (attachments || []).reduce((n, a) => n + (a.pages || 0), 0),
+      truncatedFiles,
+      visualOnlyFiles: (attachments || []).filter(a => a.err).map(a => a.name),
+      parserHits: scanned.map(s => s.name),
+    }
+  }
+
   const chunks = leadTextChunks(body, attachments)
   const common = {
     from, subject,
     customers: (store.customers || []).map(c => c.name),
     ownershipRules: store.config?.ownershipRules || [],
+    deterministicContext,
   }
   const fallback = store.config?.aiModel?.provider === 'Built-in fallback'
   const results = []
@@ -112,7 +151,14 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
     aiResult = await runTaskResult('lead.extract', { ...common, body, attachments, aiAttachments }, { fallback })
     if (aiResult.data?.data) results.push(aiResult.data.data)
   }
-  const ai = mergeLeadResults(results)
+  const mergedResults = mergeLeadResults(results)
+  // When Gemini fails outright but a deterministic parse succeeded, still hand
+  // back that scaffold rather than falling through to the plain-text fallback
+  // below — a mechanical RFQ read beats an unstructured text preview.
+  const baseAi = mergedResults || (deterministic.fields.length || deterministic.lineItems.length
+    ? { summary: '', route: '', urgency: 'Normal', completeness: 0, suggestedOwner: '', fields: [], lineItems: [], missing: [], next: [] }
+    : null)
+  const ai = mergeDeterministicIntoAi(baseAi, deterministic.fields, deterministic.lineItems)
   // The proxy is optional in demo/staging builds. Keep the intake usable when
   // it is absent or temporarily unavailable: preserve only facts present in
   // the pasted mail and leave the lead visibly pending human structure.
@@ -149,7 +195,7 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
         missing,
         duplicates: [],
         next: ['Confirm the customer and opportunity route', 'Structure the requested scope', 'Add missing quantities and specifications'],
-        scan: { chunks: chunks.length || 1, completed: 0, complete: false },
+        scan: { chunks: chunks.length || 1, completed: 0, complete: false, ...scanDiagnostics() },
       },
     }
   }
@@ -187,15 +233,14 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
       missing: ai.missing || [],
       duplicates: [],
       next: ai.next || [],
-      scan: { chunks: chunks.length || 1, completed: results.length, complete: results.length === (chunks.length || 1) },
+      scan: { chunks: chunks.length || 1, completed: results.length, complete: results.length === (chunks.length || 1), ...scanDiagnostics() },
     },
   }
 }
 
 // Attachment text kept on the lead — the store persists to localStorage, so the
 // whole document is not carried; this is enough for the AI and for evidence.
-const TEXT_PER_FILE = 12000
-const TEXT_TOTAL = 60000
+const TEXT_TOTAL = 150000
 const AI_FILE_BYTES = 4 * 1024 * 1024
 const AI_TOTAL_BYTES = 8 * 1024 * 1024
 
@@ -340,9 +385,13 @@ function attachmentMeta(files) {
   return files.map(f => {
     const rec = { name: f.name, size: f.size }
     if (f.pages) rec.pages = f.pages
+    if (f.err) rec.err = f.err
     if (f.text && budget > 0) {
       rec.text = f.text.slice(0, budget)
+      if (rec.text.length < f.text.length) rec.truncated = true
       budget -= rec.text.length
+    } else if (f.text) {
+      rec.truncated = true
     }
     return rec
   })
@@ -456,8 +505,8 @@ function PasteLeadModal({ onClose }) {
   }
 
   return (
-    <Modal title="New enquiry — paste the email" onClose={onClose} wide>
-      <div className="drawer-form">
+    <Modal title="New enquiry — paste the email" onClose={onClose} className="lead-paste-modal">
+      <div className="drawer-form lead-paste-form">
         {/* Section 1 of the lead workflow. Where the enquiry came from is a
             separate fact from the mailbox it arrived in, and it is the one that
             answers "which channels actually produce work". */}
@@ -1186,12 +1235,23 @@ function AiLeadDetail({ lead }) {
         <div className="ws-body">
           <p className="ws-summary">{ai.summary}</p>
           {ai.scan && (
-            <p className="hint" role="status">
-              <Icon name={ai.scan.complete ? 'checkCircle' : 'alert'} size={12} />{' '}
-              {ai.scan.complete
-                ? `Complete document scan: ${ai.scan.completed} section${ai.scan.completed === 1 ? '' : 's'} processed.`
-                : `Partial document scan: ${ai.scan.completed || 0} of ${ai.scan.chunks || 1} sections processed.`}
-            </p>
+            <>
+              <p className="hint" role="status">
+                <Icon name={ai.scan.complete ? 'checkCircle' : 'alert'} size={12} />{' '}
+                {ai.scan.complete
+                  ? `Complete document scan: ${ai.scan.completed} section${ai.scan.completed === 1 ? '' : 's'} processed${ai.scan.files ? ` across ${ai.scan.files} file${ai.scan.files === 1 ? '' : 's'}` : ''}.`
+                  : `Partial document scan: ${ai.scan.completed || 0} of ${ai.scan.chunks || 1} sections processed.`}
+              </p>
+              {(ai.scan.truncatedFiles?.length > 0 || ai.scan.visualOnlyFiles?.length > 0) && (
+                <p className="hint" role="status">
+                  <Icon name="alert" size={12} />{' '}
+                  {[
+                    ai.scan.truncatedFiles?.length ? `${ai.scan.truncatedFiles.length} file${ai.scan.truncatedFiles.length === 1 ? '' : 's'} truncated by the text budget` : '',
+                    ai.scan.visualOnlyFiles?.length ? `${ai.scan.visualOnlyFiles.length} file${ai.scan.visualOnlyFiles.length === 1 ? '' : 's'} could not be read as text` : '',
+                  ].filter(Boolean).join(' — ')}. The scan may be incomplete for these files.
+                </p>
+              )}
+            </>
           )}
           {reErr && <ErrBox>{reErr}</ErrBox>}
           {reNote && !reErr && <p className="hint"><Icon name="checkCircle" size={12} /> {reNote}</p>}

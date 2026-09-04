@@ -30,10 +30,56 @@ export function textChunks(text, { source = 'Email body', size = EXTRACTION_CHUN
   return out
 }
 
+// Page-aware alternative to textChunks() for PDFs whose positional page
+// structure (extractPdfText()'s `struct`) is still available. Whole pages are
+// packed into a chunk up to `size` chars so a table row is never split across
+// two AI calls; a single page bigger than `size` still falls back to a plain
+// character slice for that one page only.
+export function pageAwareChunks(structPages, { source = 'Email body', size = EXTRACTION_CHUNK_CHARS } = {}) {
+  if (!Array.isArray(structPages) || !structPages.length) return []
+  const pages = structPages.map(page => (page || []).map(l => l.text).join('\n'))
+  const groups = []
+  let buf = '', bufStart = 1
+  for (let i = 0; i < pages.length; i++) {
+    const pageNum = i + 1
+    const pageText = pages[i]
+    if (pageText.length > size) {
+      if (buf) { groups.push({ pageStart: bufStart, pageEnd: pageNum - 1, text: buf }); buf = '' }
+      for (const slice of textChunks(pageText, { source, size })) {
+        groups.push({ pageStart: pageNum, pageEnd: pageNum, text: slice.text })
+      }
+      bufStart = pageNum + 1
+      continue
+    }
+    const next = buf ? `${buf}\n${pageText}` : pageText
+    if (buf && next.length > size) {
+      groups.push({ pageStart: bufStart, pageEnd: pageNum - 1, text: buf })
+      buf = pageText
+      bufStart = pageNum
+    } else {
+      buf = next
+    }
+  }
+  if (buf) groups.push({ pageStart: bufStart, pageEnd: pages.length, text: buf })
+
+  let offset = 0
+  const out = groups.map(g => {
+    const chunk = { source, start: offset, end: offset + g.text.length, text: g.text, pageStart: g.pageStart, pageEnd: g.pageEnd }
+    offset += g.text.length
+    return chunk
+  })
+  return out.map((chunk, index, all) => ({ ...chunk, index, total: all.length }))
+}
+
 export function leadTextChunks(body, attachments = []) {
   const chunks = textChunks(body)
   for (const attachment of attachments || []) {
-    chunks.push(...textChunks(attachment.text, { source: `Attachment: ${attachment.name}` }))
+    const source = `Attachment: ${attachment.name}`
+    if (Array.isArray(attachment.structPages) && attachment.structPages.length) {
+      chunks.push(...pageAwareChunks(attachment.structPages, { source }))
+    } else {
+      chunks.push(...textChunks(attachment.text, { source }))
+    }
   }
   return chunks.map((chunk, index, all) => ({ ...chunk, index, total: all.length }))
 }
@@ -53,7 +99,12 @@ export function mergeLeadResults(results = []) {
     existing.conf = valuesDiffer ? Math.min(74, Math.max(Number(existing.conf) || 0, Number(field.conf) || 0)) : Math.max(Number(existing.conf) || 0, Number(field.conf) || 0)
     existing.ev = unique([existing.ev, field.ev]).join('; ')
     if (valuesDiffer) {
-      existing.v = `${existing.v}; ${field.v}`
+      // Two chunks/sources disagree on a genuinely distinct fact (e.g. two
+      // different contacts). Keep both values addressable — existing.v/.conf/.ev
+      // stay the winning (higher-confidence-seen-so-far) value for anything that
+      // only reads those, while alt[] carries every other value seen so a UI can
+      // show "conflicting values found" without losing the alternatives.
+      existing.alt = [...(existing.alt || []), { v: field.v, conf: field.conf, ev: field.ev, source: field.source }]
       existing.note = [existing.note, 'Conflicting values found across document sections.'].filter(Boolean).join(' ')
     }
   }

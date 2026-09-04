@@ -169,7 +169,7 @@ ${cap((p.lines || []).map((l: any) => `${l.id}: ${l.pn || l.custRef || 'No part 
         fields: arrOf({
           type: 'OBJECT',
           properties: {
-            group: { type: 'STRING', enum: ['Customer', 'RFQ', 'Known Project'] },
+            group: { type: 'STRING', enum: ['Customer', 'RFQ', 'Schedule', 'Commercial', 'Compliance', 'Known Project'] },
             k: STR, v: STR, conf: INT, ev: STR, note: STR,
           },
           required: ['group', 'k', 'v', 'conf', 'ev'],
@@ -181,7 +181,9 @@ ${cap((p.lines || []).map((l: any) => `${l.id}: ${l.pn || l.custRef || 'No part 
     },
     build: p => `${HOUSE}
 
-Read this inbound sales enquiry and extract it for human review.
+Read this inbound sales enquiry and extract it for human review. Treat the
+email body and every attachment as one single enquiry — do not report a fact
+as missing if any attachment supports it.
 
 FROM: ${cap(p.from, 200)}
 SUBJECT: ${cap(p.subject, 300)}
@@ -193,8 +195,13 @@ ATTACHMENT CONTENTS (read these as part of the enquiry — the line items usuall
 live here, not in the covering mail; cite the file name in ev for any fact taken
 from one):
 ${cap((p.attachments || []).map((a: any) =>
-  `--- ${a.name} ---\n${a.text || '(no text extracted — do not infer its contents)'}`).join('\n\n'), 40000) || 'none'}
-
+  `--- ${a.name} ---\n${a.text || '(no text extracted — do not infer its contents)'}`).join('\n\n'), 100000) || 'none'}
+${p.deterministicContext ? `
+DETERMINISTIC PARSE (already extracted mechanically from an attachment — cross-check
+and correct only if it looks wrong; do not restate these as new facts, add what
+it does not cover):
+${cap(p.deterministicContext, 4000)}
+` : ''}
 Customers already in our master (match against these before proposing a new name):
 ${cap((p.customers || []).join(', '), 3000)}
 
@@ -204,10 +211,15 @@ ${cap((p.ownershipRules || []).map((r: any) => `${r.region} → ${r.owner}`).joi
 Produce:
 - summary: 2-3 sentences a salesperson can act on, naming what is being asked for
   and what blocks pricing it.
-- fields: the extractable facts, grouped. Always attempt Sell-to customer,
-  Category, Contact, Opp type, Line items, BU / Segment. Add a "Known Project"
-  entry for any installed base named in the mail. If the source contradicts
-  itself, add a field naming the conflict with a confidence below 75 and a note.
+- fields: the extractable facts, grouped. Always attempt: Sell-to customer,
+  Category, Contact person, Contact email, Contact phone, Plant/station/location
+  (Customer); RFQ or tender reference, RFQ date, submission mode/platform, Opp
+  type, Opportunity scope (RFQ); delivery schedule and other schedule dates
+  (Schedule); payment terms, warranty, price basis, EMD/security deposit
+  (Commercial); certification and documentation/compliance asks (Compliance);
+  BU / Segment (Customer). Add a "Known Project" entry for any installed base
+  named in the mail. If the source contradicts itself, add a field naming the
+  conflict with a confidence below 75 and a note.
 - completeness: 0-100, how much of what we need to quote is actually present.
 - lineItems: one row for every requested material or spare, with description,
   partNumber/customerRef when present, quantity, UOM, confidence and evidence.

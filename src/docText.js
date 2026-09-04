@@ -112,8 +112,8 @@ const TEXT_EXT = ['txt', 'csv', 'md', 'eml', 'json', 'log']
 
 const NO_TEXT = 'No text layer in this file type — the name is attached, not the contents.'
 
-// One picked file → { text?, pages?, err? }. Never throws: a file we cannot read
-// still attaches by name, which is what the old PDF-only path did.
+// One picked file → { text?, pages?, structPages?, err? }. Never throws: a file
+// we cannot read still attaches by name, which is what the old PDF-only path did.
 export async function extractDocText(file) {
   const ext = extOf(file.name)
   const type = file.type || ''
@@ -123,7 +123,10 @@ export async function extractDocText(file) {
       const { extractPdfText } = await import('./tenderParse.js')
       const { struct, fullText, charCount } = await extractPdfText(file)
       if (!charCount) return { pages: struct.length, err: 'Scanned — no text layer; the name is attached, not the contents.' }
-      return { pages: struct.length, text: fullText }
+      // structPages is the page/line-positional reconstruction from pdfjs — kept
+      // only transiently by callers (never persisted) so parseTender() and
+      // page-aware chunking can run against lead/tender attachments alike.
+      return { pages: struct.length, text: fullText, structPages: struct }
     } catch (e) {
       return { err: 'Could not read this PDF (' + (e?.message || e?.code || 'unknown') + ') — the name is attached, not the contents.' }
     }
