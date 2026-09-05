@@ -13,6 +13,8 @@ import { leadConfig, routeOwner, expiredLeadDeadline, aiAuditDetail } from './le
 import { withoutSimulated, simulatedCount } from './simulatedLeads.js'
 import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLeadSlice, defaultViewMode } from './appState.js'
 import { unitCostINR, unitSellINR } from './utils.js'
+import { PRICE_SOURCES, normalizePriceFields } from './pricing.js'
+import { syncProposalFromOpportunity } from './proposal/opportunitySync.js'
 
 const StoreCtx = createContext(null)
 
@@ -20,7 +22,7 @@ const StoreCtx = createContext(null)
 // conversion pure so both explicit synchronization and proposal-load repair
 // produce exactly the same BoQ shape.
 export function sparesProposalBom(lines = []) {
-  return lines.filter(line => line?.confirmed).map(line => ({
+  return lines.filter(line => line?.confirmed && Number(line.qty) > 0).map(line => ({
     itemCategory: 'Hardware',
     pn: line.pn || '',
     custRef: line.custRef || line.pn || line.desc || '',
@@ -30,10 +32,25 @@ export function sparesProposalBom(lines = []) {
     qtyPerUnit: 0,
     common: Number(line.qty) || 0,
     spares: 0,
-    quoted: '',
+    quoted: (() => {
+      const list = Number(line.listUnitPrice ?? line.listPrice) || 0
+      const discount = Math.max(0, Math.min(100, Number(line.discountPct) || 0))
+      const markup = Math.max(0, Number(line.markupPct) || 0)
+      return list * (1 - discount / 100) * (1 + markup / 100)
+    })(),
     uom: line.uom || 'EA',
     list: String(line.priceList || '').startsWith('BNK') ? 'BNK' : 'Ad-hoc',
     currency: line.currency || 'INR',
+    priceSource: line.priceSource || (String(line.priceList || '').startsWith('Ad-hoc') ? PRICE_SOURCES.MANUAL : PRICE_SOURCES.LIST),
+    priceSourceName: line.priceSourceName || line.priceList || '',
+    priceSourceVersion: line.priceSourceVersion || '',
+    priceSourceRef: line.priceSourceRef || line.quoteRef || '',
+    priceSourceDate: line.priceSourceDate || '',
+    listUnitPrice: Number(line.listUnitPrice ?? line.listPrice) || 0,
+    listTotalPrice: (Number(line.listUnitPrice ?? line.listPrice) || 0) * (Number(line.qty) || 0),
+    baseCost: line.baseCost == null ? undefined : Number(line.baseCost) || 0,
+    discountPct: Number(line.discountPct) || 0,
+    markupPct: Number(line.markupPct) || 0,
   }))
 }
 
@@ -86,7 +103,32 @@ function applyApprovalEffects(s, appr) {
   if (appr.type === 'Final quote release' && appr.oppId) {
     if (appr.status === 'Approved' || appr.status === 'Approved with conditions') {
       const p = next.proposals[appr.oppId]
-      if (p) next = { ...next, proposals: { ...next.proposals, [appr.oppId]: { ...p, releaseStatus: 'Released' } } }
+      if (p) next = {
+        ...next,
+        proposals: { ...next.proposals, [appr.oppId]: {
+          ...p,
+          releaseStatus: 'Released',
+          approvedPricing: {
+            revision: p.revision,
+            listValue: appr.listValue ?? null,
+            approvedValue: appr.requestedValue ?? null,
+            discountPct: appr.discountPct ?? 0,
+            markupPct: appr.markupPct ?? 0,
+            approvedAt: new Date().toISOString(),
+            approvalId: appr.id,
+          },
+          pricingHistory: [...(p.pricingHistory || []), {
+            revision: p.revision,
+            status: appr.status,
+            when: new Date().toISOString(),
+            listValue: appr.listValue ?? null,
+            approvedValue: appr.requestedValue ?? null,
+            discountPct: appr.discountPct ?? 0,
+            markupPct: appr.markupPct ?? 0,
+            approvalId: appr.id,
+          }],
+        } },
+      }
     } else if (appr.status === 'Returned') {
       next = { ...next, opportunities: next.opportunities.map(o => (o.id === appr.oppId ? { ...o, milestone: 'Proposal' } : o)) }
     } else if (appr.status === 'Rejected') {
@@ -300,11 +342,19 @@ export function StoreProvider({ children }) {
       if (patch.oppType) {
         patch = { route: routeForType(patch.oppType), context: contextForType(patch.oppType), ...patch }
       }
-      setState(s => withAudit({
-        ...s,
-        opportunities: s.opportunities.map(o =>
-          o.id === id ? { ...o, ...patch, lastUpdated: today } : o),
-      }, 'Opportunity updated', id, Object.keys(patch).join(', ')))
+      setState(s => {
+        const opportunities = s.opportunities.map(o =>
+          o.id === id ? { ...o, ...patch, lastUpdated: today } : o)
+        const updated = opportunities.find(o => o.id === id)
+        const proposal = s.proposals[id]
+        return withAudit({
+          ...s,
+          opportunities,
+          ...(proposal && updated
+            ? { proposals: { ...s.proposals, [id]: syncProposalFromOpportunity(proposal, updated) } }
+            : {}),
+        }, 'Opportunity updated', id, Object.keys(patch).join(', '))
+      })
       if (before) {
         const after = { ...before, ...patch }
         const from = statusFolderFor(before)
@@ -385,7 +435,7 @@ export function StoreProvider({ children }) {
       const s = stateRef.current
       if (s.proposals[oppId]) return s.proposals[oppId]
       const opp = s.opportunities.find(o => o.id === oppId)
-      return newProposal(oppId, opp)
+      return newProposal(oppId, opp, { validityDays: s.config?.proposalValidityDays })
     },
 
     saveProposal(oppId, proposal) {
@@ -424,7 +474,7 @@ export function StoreProvider({ children }) {
         return withAudit({
           ...s,
           proposals: { ...s.proposals, [oppId]: next },
-          opportunities: s.opportunities.map(o => (o.id === oppId ? { ...o, milestone: 'Proposal' } : o)),
+          opportunities: s.opportunities.map(o => (o.id === oppId ? { ...o, milestone: 'Sourcing' } : o)),
         }, 'Quote revision opened', oppId,
         `Rev ${next.revision} - ${spec.id} change, re-approval required - ${note || 'no reason given'}`)
       })
@@ -958,6 +1008,11 @@ export function StoreProvider({ children }) {
             currency: price.currency || l.currency || 'INR',
             leadTime: price.leadTime || l.leadTime || 'TBC',
             priceList: label,
+            priceSource: PRICE_SOURCES.VENDOR,
+            priceSourceName: price.manufacturer || quote?.manufacturer || 'Vendor',
+            priceSourceRef: price.quoteRef || quote?.quoteRef || quote?.id || '',
+            priceSourceDate: new Date().toISOString().slice(0, 10),
+            listUnitPrice: price.unitPrice === '' || price.unitPrice == null ? (l.listPrice || 0) : Number(price.unitPrice),
             priceState: 'Current',
             oem: price.manufacturer || quote?.manufacturer || l.oem,
             quoteRef: price.quoteRef || quote?.subject || quote?.id,
@@ -984,10 +1039,10 @@ export function StoreProvider({ children }) {
         const id = mintId('SL', s.sparesLines)
         return withAudit({
           ...s,
-          sparesLines: [...s.sparesLines, {
+          sparesLines: [...s.sparesLines, normalizePriceFields({
             id, oppId, match: 'Manual', conf: 100, confirmed: true,
             priceList: 'Ad-hoc', priceState: 'Current', currency: 'INR', qty: 1, ...line,
-          }],
+          })],
         }, 'Manual part added', oppId, line.pn || line.desc)
       })
     },
@@ -1003,13 +1058,13 @@ export function StoreProvider({ children }) {
           seen.add(k)
           return true
         }).forEach(row => {
-          additions.push({
+          additions.push(normalizePriceFields({
           id: mintId('SL', [...s.sparesLines, ...additions]), oppId,
           match: row.match || 'AI suggested', conf: Number(row.conf) || 0,
           confirmed: !!row.confirmed, priceList: row.priceList || 'Ad-hoc',
           priceState: row.priceState || 'Current', currency: row.currency || 'INR',
           qty: Number(row.qty) || 1, uom: row.uom || 'EA', ...row,
-          })
+          }))
         })
         if (!additions.length) return s
         return withAudit({ ...s, sparesLines: [...s.sparesLines, ...additions] }, 'Lead lines imported', oppId, `${additions.length} line(s)`)
@@ -1024,7 +1079,7 @@ export function StoreProvider({ children }) {
       setState(s => withAudit({
         ...s,
         sparesLines: s.sparesLines.map(l => (l.id === id
-          ? { ...l, priceList: 'BNK 2026-Q2', priceState: 'Current', listPrice: Math.round(l.listPrice * 1.04) }
+          ? { ...l, priceList: 'BNK 2026-Q2', priceState: 'Current', listPrice: Math.round(l.listPrice * 1.04), listUnitPrice: Math.round((l.listUnitPrice ?? l.listPrice) * 1.04), priceSource: PRICE_SOURCES.LIST, priceSourceName: 'BNK', priceSourceVersion: '2026-Q2' }
           : l)),
       }, 'Price source refreshed', id, 'BNK 2026-Q2 (+4% list)'))
     },
@@ -1036,7 +1091,7 @@ export function StoreProvider({ children }) {
         const lines = s.sparesLines.filter(l => l.oppId === oppId && l.confirmed)
         if (!lines.length) return s
         const opp = s.opportunities.find(o => o.id === oppId)
-        const base = s.proposals[oppId] || newProposal(oppId, opp)
+        const base = s.proposals[oppId] || newProposal(oppId, opp, { validityDays: s.config?.proposalValidityDays })
         const bom = sparesProposalBom(lines)
         const costing = base.costing || {}
         const pricedLines = lines.reduce((totals, line) => {

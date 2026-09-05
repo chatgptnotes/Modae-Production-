@@ -11,6 +11,7 @@ import { defaultCosting, newProposal, proposalTypeForOpp } from '../seed.js'
 import { unitCostINR, unitSellINR } from '../utils.js'
 import { docModel, docRoute } from '../proposalDoc.js'
 import { signalsFromBom, signalsAreEmpty } from '../rack.js'
+import { applyAdjustment, normalizePriceFields, resolvePriceSource } from '../pricing.js'
 
 // Qty/Unit × units + Common + Spares — the BoQ quantity rule, in one place so
 // the signal-list derivation reads the same totals the sheet shows.
@@ -23,7 +24,7 @@ export function normalizeProposal(pr, opp) {
   const bom = (pr.bom || []).map(l => ({
     itemCategory: '', qtyPerUnit: 0, common: 0, spares: 0, quoted: '',
     list: 'BNK', currency: 'EUR', uom: 'EA', custRef: '',
-    ...l,
+    ...normalizePriceFields(l),
     ...(l.qtyPerUnit === undefined && l.qty != null ? { common: l.qty } : {}),
   }))
   // Tender intake saves the signal rows zeroed (spares quantities are absolute,
@@ -56,6 +57,11 @@ export function normalizeProposal(pr, opp) {
       evidence: 'Saved proposal BoQ',
     })),
     units,
+    pricingMode: pr.pricingMode || (pr.discountPct > 0 ? 'discount' : pr.markupPct > 0 ? 'markup' : 'none'),
+    discountPct: Number(pr.discountPct) || 0,
+    markupPct: Number(pr.markupPct) || 0,
+    pricingHistory: pr.pricingHistory || [],
+    approvedPricing: pr.approvedPricing || null,
     costing: { ...defaultCosting, ...pr.costing },
     // `section`, `compliance` and `workflowStatus` are the sample compliance
     // table's own columns. `status` is left exactly as stored — gates.js reads
@@ -85,46 +91,46 @@ export function normalizeProposal(pr, opp) {
 export function buildPricing(store, p) {
   const units = p.units || 7
   const sparesLines = p.route === 'Spares' ? (store.sparesLines || []) : []
-  const allParts = [
-    ...Object.entries(store.priceLists).flatMap(([list, pl]) =>
-      pl.parts.map(part => ({ ...part, list, currency: pl.currency }))),
-    // Trader quotes captured on Price Lists → Ad-hoc parts (latest first = reference price)
-    ...store.adhocParts.map(a => ({
-      pn: a.pn, desc: a.note ? `${a.note} (${a.supplier})` : a.supplier,
-      price: a.price, adders: [], list: 'Ad-hoc', currency: a.currency,
-    })),
-  ]
+  const allParts = Object.entries(store.priceLists).flatMap(([list, pl]) =>
+    pl.parts.map(part => ({ ...part, list, currency: pl.currency })))
 
   const totalQty = (l, u = units) => lineQty(l, u)
   const sourceLine = l => sparesLines.find(x =>
     (l.pn && x.pn === l.pn) ||
     (l.custRef && x.custRef === l.custRef) ||
     (l.desc && x.desc === l.desc))
+  const lineSource = l => resolvePriceSource(
+    { ...l, ...(sourceLine(l) || {}) },
+    store.priceLists,
+    store.adhocParts,
+    store.vendorQuotes,
+  )
   const linePrice = l => {
-    const part = allParts.find(x => x.pn === l.pn && (x.list === l.list || !l.list))
-    const adderSum = (part?.adders || []).filter(a => l.adders.includes(a.code)).reduce((s, a) => s + a.price, 0)
-    const storedPrice = Number(l.listPrice)
-    const sourcePrice = Number(sourceLine(l)?.listPrice)
-    const catalogPrice = Number(part?.price)
-    const basePrice = Number.isFinite(storedPrice) && storedPrice > 0
-      ? storedPrice
-      : Number.isFinite(sourcePrice) && sourcePrice > 0
-        ? sourcePrice
-        : Number.isFinite(catalogPrice) && catalogPrice > 0 ? catalogPrice : 0
-    return basePrice + adderSum
+    const source = lineSource(l)
+    const part = allParts.find(x => x.pn === l.pn)
+    const adderSum = (source?.adders || part?.adders || [])
+      .filter(a => (l.adders || []).includes(a.code)).reduce((s, a) => s + a.price, 0)
+    return (source?.price || 0) + adderSum
   }
-  const isBnk = l => (l.list || 'BNK') === 'BNK'
-  const lineCost = (l, c = p.costing) => unitCostINR(linePrice(l), c, l.currency || 'EUR', isBnk(l))
-  const lineComputed = (l, c = p.costing) => unitSellINR(linePrice(l), c, l.currency || 'EUR', isBnk(l))
+  const isBnk = l => (lineSource(l)?.sourceName || l.list || 'BNK') === 'BNK'
+  const lineCurrency = l => lineSource(l)?.currency || l.currency || 'EUR'
+  const lineCost = (l, c = p.costing) => unitCostINR(linePrice(l), c, lineCurrency(l), isBnk(l))
+  const lineComputed = (l, c = p.costing) => applyAdjustment(
+    unitSellINR(linePrice(l), c, lineCurrency(l), isBnk(l)), p)
   // Customer-facing (target) price — editable; defaults to the computed GM price.
   const lineQuoted = (l, c = p.costing) => (l.quoted !== '' && l.quoted != null ? +l.quoted : Math.round(lineComputed(l, c)))
 
   const computeTotals = pr => pr.bom.reduce((t, l) => {
     const q = totalQty(l, pr.units || 7)
-    return { cost: t.cost + lineCost(l, pr.costing) * q, target: t.target + lineQuoted(l, pr.costing) * q }
-  }, { cost: 0, target: 0 })
+    const base = unitSellINR(linePrice(l), pr.costing, lineCurrency(l), isBnk(l))
+    return {
+      cost: t.cost + lineCost(l, pr.costing) * q,
+      listValue: t.listValue + base * q,
+      target: t.target + lineQuoted(l, pr.costing) * q,
+    }
+  }, { cost: 0, listValue: 0, target: 0 })
 
-  return { allParts, totalQty, linePrice, isBnk, lineCost, lineComputed, lineQuoted, computeTotals }
+  return { allParts, totalQty, linePrice, lineSource, lineCurrency, isBnk, lineCost, lineComputed, lineQuoted, computeTotals }
 }
 
 // The six props PrintDoc wants, read-only, straight off the store. Returns null

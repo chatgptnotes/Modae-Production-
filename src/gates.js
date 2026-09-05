@@ -8,6 +8,7 @@
 
 import { unitCostINR, unitSellINR } from './utils.js'
 import { defaultCosting, MILESTONES } from './seed.js'
+import { applyAdjustment } from './pricing.js'
 
 const isLeadKycVerified = opp =>
   opp?.leadVerification?.type === 'KYC' && opp.leadVerification.status === 'Verified'
@@ -29,10 +30,11 @@ function lineQty(l, units) {
 // with the same costing math the Priced BoQ sheet uses. A hand-quoted price
 // (l.quoted) wins over the computed GM price, as in the workbook.
 export function computeProposalTotals(proposal) {
-  if (!proposal) return { value: 0, cogs: 0, gmPct: 0 }
+  if (!proposal) return { value: 0, listValue: 0, cogs: 0, gmPct: 0 }
   const costing = { ...defaultCosting, ...(proposal.costing || {}) }
   const units = proposal.units || 7
   let value = 0
+  let listValue = 0
   let cogs = 0
   for (const l of proposal.bom || []) {
     const q = lineQty(l, units)
@@ -40,11 +42,13 @@ export function computeProposalTotals(proposal) {
     const sell = l.quoted !== '' && l.quoted != null
       ? +l.quoted
       : unitSellINR(l.listPrice || 0, costing, l.currency || 'EUR', isBnk)
-    value += sell * q
+    const adjusted = l.quoted !== '' && l.quoted != null ? sell : applyAdjustment(sell, proposal)
+    value += adjusted * q
+    listValue += sell * q
     cogs += unitCostINR(l.listPrice || 0, costing, l.currency || 'EUR', isBnk) * q
   }
   const gmPct = value ? ((value - cogs) / value) * 100 : 0
-  return { value, cogs, gmPct }
+  return { value, listValue, cogs, gmPct }
 }
 
 // Diagram 02 §5C — the margin approval matrix. Routing is on *order value*
@@ -58,14 +62,15 @@ export function computeProposalTotals(proposal) {
 // `needed` is the list of roles that must decide; `anyOf` marks the row where
 // one of two approvers is enough, and `selfApprove` the row the owner clears.
 export function commercialGate(opp, proposal, config) {
-  const { value, cogs, gmPct } = computeProposalTotals(proposal)
+  const { value, listValue, cogs, gmPct } = computeProposalTotals(proposal)
   const disc = proposal?.discountPct || 0
   const t = config?.approvalThresholds || {}
   const valueBreak = t.valueBreak ?? 1000000
   const marginBreak = t.marginBreak ?? 50
   const big = value >= valueBreak
   const healthy = gmPct > marginBreak
-  const base = { gmPct, disc, value, cogs, valueBreak, marginBreak }
+  const effectiveDisc = listValue ? ((listValue - value) / listValue) * 100 : 0
+  const base = { gmPct, disc: effectiveDisc, value, listValue, cogs, valueBreak, marginBreak }
   if (!big && healthy) {
     return { ...base, needed: [opp?.owner].filter(Boolean), selfApprove: true, label: 'Assigned salesperson' }
   }

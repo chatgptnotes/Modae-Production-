@@ -28,10 +28,10 @@ export const AiBadge = ({ label = 'AI' }) => (
   <span className="chip ai-badge"><Icon name="sparkles" size={11} /> {label}</span>
 )
 
-// Compact lifecycle stepper. The Previous/Next controls in the Workbench still
-// reach the three post-submission milestones that are intentionally omitted
-// from this narrow row.
-const VISIBLE_MILESTONES = MILESTONES.filter(m => !['Follow-up', 'PO Validation', 'Handover'].includes(m))
+// Compact lifecycle stepper. Post-submission terminal states remain in the
+// domain model, but the visible workflow stays focused on the ten user-facing
+// phases used by the Workbench.
+const VISIBLE_MILESTONES = MILESTONES.filter(m => !['Submitted', 'PO Validation', 'Handover'].includes(m))
 
 export function Stepper({ current, onStep }) {
   const at = VISIBLE_MILESTONES.indexOf(current)

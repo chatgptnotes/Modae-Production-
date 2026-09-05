@@ -2032,9 +2032,9 @@ export default function Inbox() {
     }
     store.addOpportunity(opp)
     if (routeForType(resolvedOppType) !== 'Service') {
-      const { extracted, workbenchRows, bom } = buildLeadProposalData(lead, store.priceLists)
+      const { extracted, workbenchRows, bom } = buildLeadProposalData(lead, store.priceLists, store.adhocParts)
       store.addSparesLinesFromLead(oppId, workbenchRows)
-      const proposal = newProposal(oppId, opp)
+      const proposal = newProposal(oppId, opp, { validityDays: store.config?.proposalValidityDays })
       store.saveProposal(oppId, {
         ...proposal,
         rfqNumber: lead.ref || '', subject: lead.subject || proposal.subject,

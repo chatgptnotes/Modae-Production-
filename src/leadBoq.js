@@ -31,10 +31,14 @@ export function lineItemsFromLead(lead) {
   })
 }
 
-export function buildLeadProposalData(lead, priceLists) {
+export function buildLeadProposalData(lead, priceLists, vendorPrices = []) {
   const extracted = lineItemsFromLead(lead)
   const allParts = Object.entries(priceLists || {})
-    .flatMap(([list, pl]) => (pl.parts || []).map(p => ({ ...p, list, currency: pl.currency || 'INR' })))
+    .flatMap(([list, pl]) => (pl.parts || []).map(p => ({ ...p, list, version: pl.version || '', currency: pl.currency || 'INR' })))
+    .concat((vendorPrices || []).map(a => ({
+      pn: a.pn, desc: a.note ? `${a.note} (${a.supplier || 'Vendor'})` : a.supplier || 'Vendor reference',
+      price: a.price, adders: [], list: 'Vendor quote', currency: a.currency || 'INR',
+    })))
   const workbenchRows = matchParts(extracted.map(item => ({
     description: item.description,
     pn: item.partNumber,
@@ -50,6 +54,8 @@ export function buildLeadProposalData(lead, priceLists) {
     conf: match ? (match.tier === 1 ? 100 : Math.max(60, extracted[i].confidence)) : extracted[i].confidence,
     confirmed: !!match && match.tier === 1,
     priceList: match ? `${match.list || 'Price list'}${match.version ? ` ${match.version}` : ''}` : 'Ad-hoc',
+    priceSource: match?.list === 'Vendor quote' ? 'vendor-quote' : match ? 'price-list' : 'manual',
+    priceSourceName: match?.list === 'Vendor quote' ? (match.desc || 'Vendor reference') : match?.list || 'Manual entry',
     priceState: match ? 'Current' : 'Expired',
     listPrice: match?.price || 0,
     currency: match?.currency || 'INR',

@@ -8,6 +8,7 @@ import {
   seedPoCompare, milestoneForStage, routeForType, contextForType,
   ROLES, B_STEPS, defaultBStepOwners,
 } from './seed.js'
+import { normalizePriceFields } from './pricing.js'
 
 // The store's pure state layer, lifted out of store.jsx so it can be imported
 // and *run* by the tests — store.jsx is JSX and node --test cannot parse it,
@@ -69,6 +70,7 @@ export function migrate(s) {
   // ---- phase 2 slices ----
   if (!s.config) s.config = seedConfig
   s.config.leadDeadlines = { ...seedConfig.leadDeadlines, ...(s.config.leadDeadlines || {}) }
+  if (!Number.isFinite(Number(s.config.proposalValidityDays)) || Number(s.config.proposalValidityDays) < 1) s.config.proposalValidityDays = seedConfig.proposalValidityDays
   s.config.fastTrack = { ...seedConfig.fastTrack, ...(s.config.fastTrack || {}) }
   s.config.classRules = { ...seedConfig.classRules, ...(s.config.classRules || {}) }
   if (!Array.isArray(s.config.stateRegions)) s.config.stateRegions = seedConfig.stateRegions
@@ -97,16 +99,16 @@ export function migrate(s) {
   {
     const seen = new Set()
     let repair = 1
-    s.sparesLines = s.sparesLines.map(line => {
+  s.sparesLines = s.sparesLines.map(line => {
       const original = String(line.id || '')
       if (original && !seen.has(original)) {
         seen.add(original)
-        return line
+        return normalizePriceFields(line)
       }
       let id
       do { id = `SL-repair-${repair++}` } while (seen.has(id))
       seen.add(id)
-      return { ...line, id }
+      return normalizePriceFields({ ...line, id })
     })
   }
   if (!Array.isArray(s.sparesAlternatives)) s.sparesAlternatives = demo ? seedSparesAlternatives : []

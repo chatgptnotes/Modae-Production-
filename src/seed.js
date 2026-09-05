@@ -1076,7 +1076,7 @@ export const defaultCosting = {
   financeCostK: 0,      // Finance Cost (K₹) — deducted before Net GM, as on the real sheet
 }
 
-export function newProposal(oppId, opp) {
+export function newProposal(oppId, opp, options = {}) {
   const route = routeForType(opp?.oppType)
   const artifactSheets = route === 'Project'
     ? ['Cover Letter', 'Signal List', 'Rack Layout', 'Priced BoQ', 'Compliance Table']
@@ -1093,15 +1093,21 @@ export function newProposal(oppId, opp) {
     bidStage: 'Binding',
     bidType: 'Priced',
     revision: '00',
-    revisionDate: new Date().toISOString().slice(0, 10),
+    revisionDate: opp?.rfqDate || new Date().toISOString().slice(0, 10),
+    validityDays: Math.max(1, Number(options.validityDays) || 30),
     units: 7,           // № of machines/units — Total Qty = Qty/Unit × units + Common + Spares
     addressee: opp ? `M/s. ${opp.sellTo}` : '',
     kindAttn: opp ? opp.contactPerson : '',
     attnPhone: opp ? opp.contactPhone : '',
-    rfqNumber: '',
+    rfqNumber: opp?.rfqNumber || '',
     subject: opp ? `Proposal For ${opp.oppName}` : '',
     project: opp ? opp.oppName : '',
     bom: [],
+    pricingMode: 'none',
+    discountPct: 0,
+    markupPct: 0,
+    pricingHistory: [],
+    approvedPricing: null,
     costing: { ...defaultCosting },
     signals: [
       { signal: 'Radial Vibration X/Y', perUnit: 8, units: 7 },
@@ -1153,6 +1159,7 @@ export const seedConfig = {
     { region: 'Unclassified leads', owner: 'LJS', unclassified: true, approvalNeeded: true },
   ],
   leadDeadlines: { kycDays: 7, amberFeeDays: 7, clarificationDays: 7 },
+  proposalValidityDays: 30,
   // The mailbox every enquiry lands in. Clarification mail goes out from here
   // until a lead is assigned, and from the assigned salesperson after that.
   commonMailbox: 'sales@modae.demo',

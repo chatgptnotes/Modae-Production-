@@ -1,269 +1,167 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useStore } from '../store.jsx'
 import { defaultCosting } from '../seed.js'
-import { canPriceProposal, unitCostINR, unitSellINR, fmt } from '../utils.js'
+import { canPriceProposal, unitCostINR, fmt } from '../utils.js'
 import { Chip, ConfChip, AiBadge, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 
-// Spares workbench — customer references vs interpreted part numbers, match
-// confidence, price-source freshness, and the merge into the proposal BoQ.
+const n = value => Number.isFinite(Number(value)) ? Number(value) : 0
+const money = value => `₹ ${fmt(n(value))}`
+
 export default function WbSpares({ opp, openBuilder }) {
   const store = useStore()
   const comm = canPriceProposal(store.role)
   const lines = store.sparesLines.filter(l => l.oppId === opp.id)
+  const proposal = store.getProposal(opp.id)
   const [compareFor, setCompareFor] = useState(null)
   const [evidence, setEvidence] = useState(null)
   const [sent, setSent] = useState(false)
-  const [np, setNp] = useState({ pn: '', desc: '', qty: '1', listPrice: '' })
-  const [priceDrafts, setPriceDrafts] = useState({})
+  const [showAddPart, setShowAddPart] = useState(false)
+  const [newLine, setNewLine] = useState({ pn: '', desc: '', qty: '1', listPrice: '' })
+  const quoteValidityDays = Math.max(1, n(store.config?.proposalValidityDays ?? 30))
 
-  const isBnk = l => String(l.priceList || '').startsWith('BNK')
-  const sellINR = l => unitSellINR(l.listPrice || 0, defaultCosting, l.currency || 'EUR', isBnk(l))
-  const costINR = l => unitCostINR(l.listPrice || 0, defaultCosting, l.currency || 'EUR', isBnk(l))
-  const totals = lines.reduce((t, l) => ({
-    value: t.value + sellINR(l) * (l.qty || 0),
-    cogs: t.cogs + costINR(l) * (l.qty || 0),
-  }), { value: 0, cogs: 0 })
-  const gmPct = totals.value ? ((totals.value - totals.cogs) / totals.value) * 100 : 0
+  const isBnk = line => String(line.priceList || '').startsWith('BNK')
+  const fallbackBaseCost = line => unitCostINR(n(line.listUnitPrice ?? line.listPrice), { ...defaultCosting, ...(proposal.costing || {}) }, line.currency || 'INR', isBnk(line))
+  const values = line => {
+    const qty = Math.max(0, n(line.qty))
+    const listUnitPrice = n(line.listUnitPrice ?? line.listPrice)
+    const discountPct = Math.max(0, Math.min(100, n(line.discountPct)))
+    const markupPct = Math.max(0, n(line.markupPct))
+    const adjustedUnitPrice = listUnitPrice * (1 - discountPct / 100) * (1 + markupPct / 100)
+    const baseCost = line.baseCost == null ? fallbackBaseCost(line) : Math.max(0, n(line.baseCost))
+    return { qty, listUnitPrice, discountPct, markupPct, adjustedUnitPrice, baseCost, listTotal: listUnitPrice * qty, lineTotal: adjustedUnitPrice * qty, cogs: baseCost * qty }
+  }
+  // Adapt persisted sourcing rows to the calculation schema, then derive every
+  // monetary value from the current inputs. Store updates trigger this memo to
+  // recalculate immediately without duplicating business values in local state.
+  const lineItems = useMemo(() => lines.map(line => {
+    const row = values(line)
+    return {
+      id: line.id,
+      partNo: line.pn || line.custRef || '',
+      description: line.desc || '',
+      qty: row.qty,
+      listUnitPrice: row.listUnitPrice,
+      discountPercent: row.discountPct,
+      markupPercent: row.markupPct,
+      baseCost: row.baseCost,
+      confirmed: !!line.confirmed,
+      sourceLine: line,
+    }
+  }), [lines, proposal])
+  const calculatedItems = useMemo(() => lineItems.map(item => {
+    const listTotal = item.qty * item.listUnitPrice
+    const adjustedUnitPrice = item.listUnitPrice
+      * (1 - item.discountPercent / 100)
+      * (1 + item.markupPercent / 100)
+    const lineTotal = item.qty * adjustedUnitPrice
+    const lineTotalCogs = item.qty * item.baseCost
+    return { ...item, listTotal, adjustedUnitPrice, lineTotal, lineTotalCogs, lineProfit: lineTotal - lineTotalCogs }
+  }), [lineItems])
+  const activeItems = calculatedItems.filter(item => item.qty > 0 && item.confirmed)
+  const totals = useMemo(() => activeItems.reduce((total, item) => ({
+    revenue: total.revenue + item.lineTotal,
+    cogs: total.cogs + item.lineTotalCogs,
+    originalTotal: total.originalTotal + item.listTotal,
+    quantity: total.quantity + item.qty,
+  }), { revenue: 0, cogs: 0, originalTotal: 0, quantity: 0 }), [activeItems])
+  const grossProfit = totals.revenue - totals.cogs
+  const grossMarginPct = totals.revenue > 0 ? grossProfit / totals.revenue * 100 : 0
   const expiredLines = lines.filter(l => l.priceState === 'Expired')
   const clarifications = (store.clarifications || []).filter(c => c.oppId === opp.id && c.status === 'Answered')
 
-  const bumpQty = (l, d) => store.updateSparesLine(l.id, { qty: Math.max(1, (l.qty || 1) + d) })
-
-  const commitPrice = l => {
-    const raw = priceDrafts[l.id]
-    if (raw == null) return
-    const value = Number(raw)
-    if (!Number.isFinite(value) || value < 0) {
-      setPriceDrafts(drafts => ({ ...drafts, [l.id]: String(l.listPrice ?? '') }))
-      return
+  const updateLine = (line, field, value) => {
+    if (!comm) return
+    const patch = { [field]: value }
+    if (field === 'listUnitPrice') {
+      patch.listPrice = value
+      patch.priceSource = 'manual'
+      patch.priceSourceName = 'Manual override'
+      patch.priceList = 'Manual override'
+      patch.priceState = 'Current'
     }
-    store.updateSparesLine(l.id, {
-      listPrice: value,
-      currency: 'INR',
-      priceList: 'Manual entry',
-      priceState: 'Current',
-    })
-    setPriceDrafts(drafts => {
-      const next = { ...drafts }
-      delete next[l.id]
-      return next
-    })
-  }
-
-  // Selecting an alternative must carry ITS price data — keeping the
-  // superseded part's price while flipping to "Current" would silently bypass
-  // the expired-price readiness gate.
-  const useAlternative = (l, alt) => {
-    let priced = null
-    for (const [name, pl] of Object.entries(store.priceLists || {})) {
-      const row = (pl.parts || []).find(p => p.pn === alt.pn)
-      if (row) { priced = { listPrice: row.price, currency: pl.currency, priceList: `${name} ${pl.version}` }; break }
-    }
-    store.updateSparesLine(l.id, {
-      pn: alt.pn, desc: alt.desc, confirmed: true,
-      ...(priced || {}),
-      priceState: priced ? (alt.priceState || 'Current') : 'Expired',
-    })
-    setCompareFor(null)
+    store.updateSparesLine(line.id, patch)
   }
 
   const addManual = () => {
-    if (!np.pn.trim() && !np.desc.trim()) return
-    store.addSparesLine(opp.id, {
-      custRef: np.pn.trim() || np.desc.trim(), pn: np.pn.trim(), desc: np.desc.trim(),
-      qty: +np.qty || 1, listPrice: +np.listPrice || 0, currency: 'INR',
-      priceList: 'Manual entry', priceState: 'Current', oem: 'Manual', leadTime: 'TBC',
-    })
-    setNp({ pn: '', desc: '', qty: '1', listPrice: '' })
+    if (!newLine.pn.trim() && !newLine.desc.trim()) return
+    const price = Math.max(0, n(newLine.listPrice))
+    store.addSparesLine(opp.id, { custRef: newLine.pn.trim() || newLine.desc.trim(), pn: newLine.pn.trim(), desc: newLine.desc.trim(), qty: Math.max(0, n(newLine.qty)), confirmed: true, listPrice: price, listUnitPrice: price, baseCost: price, currency: 'INR', priceList: 'Manual entry', priceSource: 'manual', priceState: 'Current', oem: 'Manual', leadTime: 'TBC' })
+    setNewLine({ pn: '', desc: '', qty: '1', listPrice: '' })
+    setShowAddPart(false)
+  }
+  const onNewKeyDown = event => { if (event.key === 'Enter') { event.preventDefault(); addManual() } }
+  const sourceLabel = line => `${line.priceSourceName || line.priceList || 'Unpriced'}${line.priceSourceVersion ? ` ${line.priceSourceVersion}` : ''}`
+
+  const useAlternative = (line, alt) => {
+    let priced = null
+    for (const [name, pl] of Object.entries(store.priceLists || {})) {
+      const row = (pl.parts || []).find(p => p.pn === alt.pn)
+      if (row) { priced = { listPrice: row.price, listUnitPrice: row.price, currency: pl.currency, priceList: `${name} ${pl.version}` }; break }
+    }
+    store.updateSparesLine(line.id, { pn: alt.pn, desc: alt.desc, confirmed: true, ...(priced || {}), priceState: priced ? (alt.priceState || 'Current') : 'Expired' })
+    setCompareFor(null)
+  }
+  const sendToProposal = () => { store.sendLinesToProposal(opp.id); setSent(true) }
+  const downloadBoqDraft = () => {
+    const previousTitle = document.title
+    document.title = `${opp.id}_BOQ_Draft`
+    window.print()
+    window.setTimeout(() => { document.title = previousTitle }, 1000)
   }
 
-  const sendToProposal = () => {
-    store.sendLinesToProposal(opp.id)
-    setSent(true)
-  }
-
-  return (
-    <div>
-      <div className="section-title">Spares workbench — part matching ({lines.length} line{lines.length === 1 ? '' : 's'})</div>
-      {clarifications.length > 0 && (
-        <div className="okbox sourcing-clarification-context">
-          <b>Confirmed customer information</b>
-          <span className="hint"> These answers stay attached to the opportunity and should be checked while validating each line.</span>
-          {clarifications.map(c => (
-            <div key={c.id} className="sourcing-clarification-row">
-              <b>{c.category || 'Clarification'}:</b> {c.response}
-              <span className="hint"> · {c.answerSource || 'Customer'}{c.answeredAt ? ` · ${c.answeredAt}` : ''}</span>
-            </div>
-          ))}
+  return <div className="sourcing-workbench">
+    <div className="section-title">Spares workbench — part matching ({lines.length} line{lines.length === 1 ? '' : 's'})</div>
+    {clarifications.length > 0 && <div className="okbox customer-information-banner sourcing-clarification-context"><b>Confirmed customer information</b><span className="hint"> These answers stay attached to the opportunity and should be checked while validating each line.</span>{clarifications.map(c => <div key={c.id} className="sourcing-clarification-row"><b>{c.category || 'Clarification'}:</b> {c.response}<span className="hint"> · {c.answerSource || 'Customer'}{c.answeredAt ? ` · ${c.answeredAt}` : ''}</span></div>)}</div>}
+    {!!expiredLines.length && <div className="warnbox spares-price-warning"><b>{expiredLines.length} price source{expiredLines.length === 1 ? '' : 's'} expired.</b>{' '}Use <b>Refresh</b> in the Actions column, or apply a current manufacturer quote only when the approved price list cannot be used.</div>}
+    <div className="sourcing-table-card">
+      <div className="sourcing-table-heading"><div><b>Source, adjust and validate each line here</b><span className="hint"> Price-list values are loaded first; vendor values are the fallback.</span></div><div className="sourcing-table-heading-actions">{comm && <button type="button" className="sourcing-add-part-link" aria-expanded={showAddPart} aria-controls="sourcing-manual-line" onClick={() => setShowAddPart(open => !open)}>{showAddPart ? 'Close manual line' : 'Add manual line'}</button>}{!comm && <span className="restricted"><Icon name="lock" size={12} /> Pricing restricted</span>}</div></div>
+      <div className="sheet-wrap sourcing-sheet-wrap"><table className="sheet sourcing-sheet sourcing-sheet--fixed table-fixed w-full border-collapse">
+        <thead><tr><th className="w-[36%]">Part / customer reference</th><th className="w-[10%]">Source</th><th className="w-[5%]">Qty</th><th className="w-[7%]">List unit</th><th className="w-[5%]">Discount %</th><th className="w-[5%]">Markup %</th><th className="w-[8%]">Adjusted U</th><th className="w-[8%]">Base cost</th><th className="w-[8%]">Original total</th><th className="w-[8%]">Quoted total</th></tr></thead>
+        <tbody>
+          {calculatedItems.map(item => { const line = item.sourceLine; const row = { ...item, discountPct: item.discountPercent, markupPct: item.markupPercent, listTotal: item.listTotal, lineTotal: item.lineTotal, cogs: item.lineTotalCogs }; const partDescription = `${line.pn || 'Manual part'}${line.desc ? ` — ${line.desc}` : ''}`; return <tr key={line.id} className={row.qty === 0 ? 'sourcing-zero-row' : ''}>
+            <td className="sourcing-cell-part align-top p-2 overflow-hidden"><div className="sourcing-part-line"><div className="sourcing-part-copy"><span className="hint sourcing-part-ref truncate overflow-hidden text-ellipsis whitespace-nowrap">{line.custRef}</span><div className="sourcing-part-description line-clamp-2 text-xs font-medium text-gray-900 leading-snug" title={partDescription}>{partDescription}</div><small className="hint truncate overflow-hidden text-ellipsis whitespace-nowrap">{line.oem || '—'} · Lead: {line.leadTime || 'TBC'}</small></div>{comm && <button className="sourcing-remove-row" title="Remove row from active proposal" aria-label={`Remove ${line.pn || line.id}`} onClick={() => updateLine(line, 'qty', 0)}>×</button>}</div></td>
+            <td className="sourcing-cell-source align-top p-2 overflow-hidden"><div className="sourcing-source-stack"><span className="sourcing-source-name truncate overflow-hidden text-ellipsis whitespace-nowrap">{sourceLabel(line)}</span>{line.priceSource === 'vendor-quote' && <Chip tone="state-Review">Vendor fallback</Chip>}{line.priceSource === 'manual' && <Chip tone="grey">Manual/override</Chip>}{line.priceState === 'Expired' ? <><Chip tone="state-Blocks">Expired</Chip><AiBadge label="pricing anomaly" /></> : <Chip tone="state-Accepted">Current</Chip>}</div></td>
+            <td className="num"><input className="sourcing-number sourcing-qty w-full max-w-[60px] px-1 py-0.5 text-xs text-right" aria-label={`Quantity for ${line.pn || line.id}`} type="number" min="0" step="1" value={line.qty ?? 0} disabled={!comm} onChange={e => updateLine(line, 'qty', Math.max(0, n(e.target.value)))} /></td>
+            <td className="num"><EditableNumber value={row.listUnitPrice} label={`List price for ${line.pn || line.id}`} disabled={!comm} onChange={value => updateLine(line, 'listUnitPrice', value)} /></td>
+            <td className="num"><EditableNumber value={row.discountPct} label={`Discount for ${line.pn || line.id}`} disabled={!comm} onChange={value => updateLine(line, 'discountPct', Math.min(100, Math.max(0, value)))} suffix="%" /></td>
+            <td className="num"><EditableNumber value={row.markupPct} label={`Markup for ${line.pn || line.id}`} disabled={!comm} onChange={value => updateLine(line, 'markupPct', Math.max(0, value))} suffix="%" /></td>
+            <td className="num">{comm ? money(row.adjustedUnitPrice) : <span className="restricted"><Icon name="lock" size={11} /></span>}</td>
+            <td className="num"><EditableNumber className={`sourcing-base-cost-input ${line.baseCost == null || n(line.baseCost) <= 0 || row.adjustedUnitPrice < row.baseCost ? 'is-warning' : ''}`} value={row.baseCost} label={`Base cost for ${line.pn || line.id}`} disabled={!comm} onChange={value => updateLine(line, 'baseCost', Math.max(0, value))} /></td>
+            <td className="num">{comm ? money(row.listTotal) : '—'}</td><td className="num"><b>{comm ? money(row.lineTotal) : '—'}</b></td>
+          </tr> })}
+          {comm && showAddPart && <tr id="sourcing-manual-line" className="sourcing-manual-row">
+            <td><input aria-label="Manual part number" placeholder="Part number" value={newLine.pn} onKeyDown={onNewKeyDown} onChange={e => setNewLine({ ...newLine, pn: e.target.value })} /></td>
+            <td><input aria-label="Manual description" placeholder="Description" value={newLine.desc} onKeyDown={onNewKeyDown} onChange={e => setNewLine({ ...newLine, desc: e.target.value })} /></td>
+            <td className="num"><input className="sourcing-number sourcing-qty w-full max-w-[60px] px-1 py-0.5 text-xs text-right" aria-label="Manual quantity" type="number" min="0" value={newLine.qty} onKeyDown={onNewKeyDown} onChange={e => setNewLine({ ...newLine, qty: e.target.value })} /></td>
+            <td className="num"><input className="sourcing-number w-full max-w-[60px] px-1 py-0.5 text-xs text-right" aria-label="Manual list price" placeholder="List price" type="number" min="0" step="0.01" value={newLine.listPrice} onKeyDown={onNewKeyDown} onChange={e => setNewLine({ ...newLine, listPrice: e.target.value })} /></td>
+            <td colSpan="5"><span className="sourcing-helper-text">Press Enter in any field to add a line.</span></td>
+            <td><button className="primary sourcing-manual-add" onClick={addManual}><Icon name="plus" size={13} /> Add line</button></td>
+          </tr>}
+        </tbody>
+        {comm && <tfoot className="sourcing-total-row"><tr>
+          <td><b>Totals</b></td><td></td><td className="num"><b>{totals.quantity}</b></td><td></td><td></td><td></td><td></td><td></td>
+          <td className="num"><b>{money(totals.originalTotal)}</b></td><td className="num"><b>{money(totals.revenue)}</b></td>
+        </tr></tfoot>}
+      </table></div>
+      {comm && <div className="sourcing-financial-summary-bar mt-3 flex flex-col sm:flex-row items-center justify-between bg-slate-50 border border-slate-200 rounded-lg p-3.5 shadow-sm" aria-label="BOQ financial totals" aria-live="polite">
+        <div className="sourcing-financial-summary-metrics flex items-center space-x-6 text-xs">
+          <div><span>BOQ Revenue</span><strong className="font-semibold text-gray-900">{money(totals.revenue)}</strong></div>
+          <div><span>Projected COGS</span><strong className="font-semibold text-gray-700">{money(totals.cogs)}</strong></div>
+          <div><span>Gross Profit</span><strong className="font-bold text-red-600">{money(grossProfit)}</strong></div>
+          <div><span>Gross Margin</span><strong className={`inline-flex items-center px-2 py-0.5 rounded font-bold bg-red-100 text-red-700 text-xs ${grossMarginPct >= 0 ? 'is-positive' : ''}`}>{grossMarginPct.toFixed(1)}%</strong></div>
+          <div className="sourcing-summary-validity"><span>Quote Validity</span><strong>{quoteValidityDays} days</strong><small>Managed in Admin</small></div>
         </div>
-      )}
-      {!!expiredLines.length && (
-        <div className="warnbox spares-price-warning">
-          <b>{expiredLines.length} price source{expiredLines.length === 1 ? '' : 's'} expired.</b>{' '}
-          Use <b>Request price update</b> in the Actions column, or apply a current manufacturer quote only when the approved price list cannot be used.
-        </div>
-      )}
-      <div className="sheet-wrap">
-        <table className="sheet">
-          <thead>
-            <tr>
-              <th>Customer reference → interpreted part</th>
-              <th>Match</th>
-              <th>OEM</th>
-              <th>Qty</th>
-              <th>Lead time</th>
-              <th>Price source</th>
-              <th>List price</th>
-              <th>Evidence</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {lines.map(l => (
-              <tr key={l.id}>
-                <td>
-                  <span className="hint">{l.custRef}</span>
-                  <div><b>{l.pn}</b> — {l.desc}</div>
-                </td>
-                <td>
-                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-                    <span>{l.match}</span>
-                    <ConfChip conf={l.conf} thresholds={store.config?.aiThresholds} />
-                    {l.confirmed
-                      ? <Chip tone="state-Accepted">Confirmed</Chip>
-                      : <Chip tone="state-Blocks">Blocks readiness</Chip>}
-                  </div>
-                </td>
-                <td>{l.oem}</td>
-                <td className="num" style={{ whiteSpace: 'nowrap' }}>
-                  <button onClick={() => bumpQty(l, -1)} title="Decrease quantity">-</button>
-                  <b style={{ padding: '0 8px' }}>{l.qty}</b>
-                  <button onClick={() => bumpQty(l, 1)} title="Increase quantity">+</button>
-                </td>
-                <td>{l.leadTime}</td>
-                <td>
-                  {l.priceList}{' '}
-                  {l.priceState === 'Expired'
-                    ? <><Chip tone="state-Blocks">Expired price source</Chip> <AiBadge label="pricing anomaly" /></>
-                    : <Chip tone="state-Accepted">Current</Chip>}
-                </td>
-                <td className="num">
-                  {comm
-                    ? <input aria-label={`List price for ${l.pn || l.custRef || l.id}`} type="number" min="0" step="0.01"
-                        value={priceDrafts[l.id] ?? (l.listPrice ?? '')} style={{ width: 100 }}
-                        onChange={e => setPriceDrafts(drafts => ({ ...drafts, [l.id]: e.target.value }))}
-                        onBlur={() => commitPrice(l)} />
-                    : <span className="restricted"><Icon name="lock" size={11} /> Restricted</span>}
-                </td>
-                <td>
-                  <a style={{ cursor: 'pointer' }} onClick={() => setEvidence(l)}>
-                    {l.priceList === 'Manual entry' ? 'Manual price' : 'Price-list row'}
-                  </a>
-                </td>
-                <td style={{ whiteSpace: 'nowrap' }}>
-                  {!l.confirmed && (
-                    <button className="primary" onClick={() => store.updateSparesLine(l.id, { confirmed: true })}>
-                      <Icon name="check" size={12} /> Confirm
-                    </button>
-                  )}{' '}
-                  <button onClick={() => setCompareFor(l.id)}><Icon name="gitCompare" size={12} /> Compare</button>{' '}
-                  {l.priceState === 'Expired' && (
-                    <button onClick={() => store.refreshPrice(l.id)}><Icon name="refresh" size={12} /> Request price update</button>
-                  )}{' '}
-                  <button onClick={() => store.removeSparesLine(l.id)}><Icon name="x" size={12} /> Remove</button>
-                </td>
-              </tr>
-            ))}
-            {!lines.length && (
-              <tr><td colSpan={9} className="hint">No imported or manual spares lines yet — add a part below or re-run lead extraction.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="form-card" style={{ marginTop: 12 }}>
-        <div className="section-title">Add manual part</div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <input placeholder="Part number" value={np.pn} style={{ width: 160 }}
-            onChange={e => setNp({ ...np, pn: e.target.value })} />
-          <input placeholder="Description" value={np.desc} style={{ width: 260 }}
-            onChange={e => setNp({ ...np, desc: e.target.value })} />
-          <input placeholder="Qty" type="number" min="1" value={np.qty} style={{ width: 70 }}
-            onChange={e => setNp({ ...np, qty: e.target.value })} />
-          <input placeholder="List price (INR)" type="number" value={np.listPrice} style={{ width: 130 }}
-            onChange={e => setNp({ ...np, listPrice: e.target.value })} />
-          <button onClick={addManual}><Icon name="plus" size={13} /> Add part</button>
-        </div>
-
-        <div className="section-title" style={{ marginTop: 14 }}>Totals</div>
-        {comm ? (
-          <table className="cost-table">
-            <tbody>
-              <tr><td>Proposal value</td><td className="num">₹ {fmt(totals.value)}</td></tr>
-              <tr><td>COGS</td><td className="num">₹ {fmt(totals.cogs)}</td></tr>
-              <tr className="total"><td>GM</td><td className="num">₹ {fmt(totals.value - totals.cogs)} ({gmPct.toFixed(1)}%)</td></tr>
-            </tbody>
-          </table>
-        ) : (
-          <div className="restricted"><Icon name="lock" size={12} /> Totals and margin are restricted — sales owners, approvers and admin only</div>
-        )}
-
-        <div style={{ marginTop: 10, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button className="primary" onClick={sendToProposal}>
-            <Icon name="arrowRight" size={13} /> Continue to proposal
-          </button>
-          <span className="hint">Only confirmed sourcing lines synchronize into the draft proposal.</span>
-        </div>
-        {sent && (
-          <div className="okbox">
-            Proposal workbook BoM synchronized from the confirmed sourcing lines.{' '}
-            <a style={{ cursor: 'pointer' }} onClick={openBuilder}>Open the proposal builder</a>
-          </div>
-        )}
-      </div>
-
-      {compareFor && (() => {
-        const l = lines.find(x => x.id === compareFor)
-        if (!l) return null
-        const alts = store.sparesAlternatives.filter(a => a.forPn === l.pn)
-        return (
-          <Modal title={`Compare / select alternative — ${l.pn}`} onClose={() => setCompareFor(null)} wide>
-            {alts.map((a, i) => (
-              <div key={i} className="check-row">
-                <b>{a.pn}</b>
-                <span>{a.desc}</span>
-                <ConfChip conf={a.conf} thresholds={store.config?.aiThresholds} />
-                {a.priceState === 'Expired'
-                  ? <Chip tone="state-Blocks">Expired price</Chip>
-                  : <Chip tone="state-Accepted">Current price</Chip>}
-                <span className="hint">{a.note}</span>
-                <span style={{ marginLeft: 'auto' }}>
-                  <button className="primary" onClick={() => useAlternative(l, a)}>Use this</button>
-                </span>
-              </div>
-            ))}
-            {!alts.length && <p className="hint">No catalogued alternatives for this part — confirm the match or add a manual line.</p>}
-            <div style={{ marginTop: 10, textAlign: 'right' }}>
-              <button onClick={() => setCompareFor(null)}>Close</button>
-            </div>
-          </Modal>
-        )
-      })()}
-
-      {evidence && (
-        <Modal title="Evidence — price source" onClose={() => setEvidence(null)}>
-          <p style={{ fontSize: 12.5 }}>
-            <b>{evidence.pn}</b> priced from <b>{evidence.priceList}</b> ({evidence.priceState}),{' '}
-            {comm
-              ? <>{fmt(evidence.listPrice)} {evidence.currency} list. </>
-              : <span className="restricted"><Icon name="lock" size={11} /> list price restricted. </span>}
-            Row-level evidence is simulated in this demo —
-            the production system links the exact price-list row.
-          </p>
-          <div style={{ textAlign: 'right' }}><button onClick={() => setEvidence(null)}>Close</button></div>
-        </Modal>
-      )}
+        <div className="sourcing-summary-actions ml-auto flex-shrink-0"><button className="btn-secondary sourcing-summary-download" onClick={downloadBoqDraft}><Icon name="download" size={13} /> Download BOQ Draft (PDF)</button><button className="primary sourcing-summary-action bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded text-xs transition-colors" onClick={sendToProposal}><Icon name="arrowRight" size={13} /> Continue to proposal</button></div>
+      </div>}
+      {!comm && <div className="restricted sourcing-restricted-footer"><Icon name="lock" size={12} /> Totals and margin are restricted — sales owners, approvers and admin only</div>}
+      {sent && <div className="okbox">Proposal workbook BoM synchronized from the confirmed sourcing lines. <a style={{ cursor: 'pointer' }} onClick={openBuilder}>Open the proposal builder</a></div>}
     </div>
-  )
+    {compareFor && (() => { const line = lines.find(x => x.id === compareFor); if (!line) return null; const alts = store.sparesAlternatives.filter(a => a.forPn === line.pn); return <Modal title={`Compare / select alternative — ${line.pn}`} onClose={() => setCompareFor(null)} wide>{alts.map((a, i) => <div key={i} className="check-row"><b>{a.pn}</b><span>{a.desc}</span><ConfChip conf={a.conf} thresholds={store.config?.aiThresholds} />{a.priceState === 'Expired' ? <Chip tone="state-Blocks">Expired price</Chip> : <Chip tone="state-Accepted">Current price</Chip>}<span className="hint">{a.note}</span><span style={{ marginLeft: 'auto' }}><button className="primary" onClick={() => useAlternative(line, a)}>Use this</button></span></div>)}{!alts.length && <p className="hint">No catalogued alternatives for this part — confirm the match or add a manual line.</p>}<div style={{ marginTop: 10, textAlign: 'right' }}><button onClick={() => setCompareFor(null)}>Close</button></div></Modal> })()}
+    {evidence && <Modal title="Evidence — price source" onClose={() => setEvidence(null)}><p style={{ fontSize: 12.5 }}><b>{evidence.pn}</b> priced from <b>{evidence.priceList}</b> ({evidence.priceState}), {comm ? <span>{fmt(evidence.listPrice)} {evidence.currency} list. </span> : <span className="restricted"><Icon name="lock" size={11} /> list price restricted. </span>}Row-level evidence is simulated in this demo — the production system links the exact price-list row.</p><div style={{ textAlign: 'right' }}><button onClick={() => setEvidence(null)}>Close</button></div></Modal>}
+  </div>
+}
+
+function EditableNumber({ value, label, disabled, onChange, suffix = '', className = '' }) {
+  return <span className={`sourcing-edit-number ${className}`.trim()}><input className="sourcing-number w-full max-w-[60px] px-1 py-0.5 text-xs text-right" aria-label={label} type="number" min="0" step="0.01" value={value} disabled={disabled} onChange={e => onChange(n(e.target.value))} />{suffix && <small>{suffix}</small>}</span>
 }

@@ -3,7 +3,7 @@ import { CATEGORIES, CUSTOMER_STATUSES, OWNERS, OPP_TYPES, BUS, SEGMENTS, SOLUTI
 import { displayRole, productList } from './utils.js'
 
 const Field = ({ label, children }) => (
-  <div><label>{label}</label>{children}</div>
+  <div className="opportunity-field"><label>{label}</label>{children}</div>
 )
 
 const fields = [
@@ -78,20 +78,20 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
       <div className="opportunity-details-heading">
         <div>
           <div className="workbench-section-title">Opportunity details</div>
-          <span className="hint">Edit the opportunity record. Changes are saved to this opportunity only.</span>
+          <span className="hint" title="Saved changes also update the next proposal workbook draft.">Changes save to this opportunity</span>
         </div>
         {dirty && <span className="opportunity-details-dirty">Unsaved changes</span>}
       </div>
 
       <div className="opportunity-details-group">Identity</div>
       <div className="dgrid2 opportunity-details-grid">
-        <Field label="Opp ID"><div className="ro">{opp.id} (Sl {opp.sl})</div></Field>
+        <Field label="Opp ID"><div className="ro read-only-field">{opp.id} <span>(Sl {opp.sl})</span></div></Field>
         <Field label="Owner"><select value={draft.owner} onChange={e => set('owner', e.target.value)}>{OWNERS.map(x => <option key={x}>{displayRole(x)}</option>)}</select></Field>
         <Field label="RFQ Number"><input type="text" value={draft.rfqNumber} onChange={e => set('rfqNumber', e.target.value)} /></Field>
         <Field label="RFQ Date"><input type="date" value={draft.rfqDate} onChange={e => set('rfqDate', e.target.value)} /></Field>
         <div style={{ gridColumn: '1 / -1' }}>
           <label>Opportunity Name/Description</label>
-          <input type="text" value={draft.oppName} onChange={e => set('oppName', e.target.value)} />
+          <input className="editable-field" type="text" value={draft.oppName} onChange={e => set('oppName', e.target.value)} />
         </div>
       </div>
 

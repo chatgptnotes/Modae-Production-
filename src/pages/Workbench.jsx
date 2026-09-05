@@ -1,11 +1,11 @@
 import React, { useRef, useState } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, REVISION_TYPES } from '../seed.js'
-import { canPriceProposal, isAdminRole, isApprover, fmt, ageDays, ddMmmYY, gmailComposeHref, displayRole, displayRoles, displayRoleLabel } from '../utils.js'
+import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY, gmailComposeHref, displayRole, displayRoles, displayRoleLabel } from '../utils.js'
 import { readiness, isBlocked, nextActionWith, transitionBlockers } from '../gates.js'
 import { COMMERCIAL_RX } from './Approvals.jsx'
-import { Chip, ClassChip, AiBadge, Stepper, WarnBox, ErrBox, Modal } from '../ui.jsx'
+import { Chip, ClassChip, AiBadge, WarnBox, ErrBox, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 import { productBrandProfiles } from '../branding/modae.js'
 import { MODAE_COMPANY } from '../proposalDoc.js'
@@ -25,15 +25,6 @@ import AttachmentViewer from '../AttachmentViewer.jsx'
 import { extractDocText } from '../docText.js'
 import { putFiles } from '../leadBlobs.js'
 import { uploadOppFile, fmtSize } from '../filestore.js'
-import DetailTabs from '../DetailTabs.jsx'
-
-const TABS = [
-  ['overview', 'Overview'], ['requirement', 'Requirement'], ['customer', 'Customer/KYC'],
-  ['clarifications', 'Clarifications'], ['sourcing', 'Sourcing'], ['proposal', 'Proposal'],
-  ['approval', 'Approval'], ['submitted', 'Submitted'],
-  ['approvals', 'Approvals'], ['comms', 'Communications'],
-  ['files', 'Files'], ['audit', 'Audit'],
-]
 
 const statusPill = s =>
   s === 'Approved' ? 'Green' : s === 'Rejected' ? 'Red' : s === 'Approved with conditions' ? 'Amber' : 'Blue'
@@ -70,10 +61,69 @@ const LIFECYCLE_TABS = {
   'Follow-up': 'overview',
 }
 
+const WORKFLOW_STEPS = [
+  { slug: 'intake', label: 'Intake', tab: 'overview' },
+  { slug: 'qualification', label: 'Qualification', tab: 'requirement' },
+  { slug: 'customer-kyc', label: 'Customer/KYC', tab: 'customer' },
+  { slug: 'registration', label: 'Registration', tab: 'customer' },
+  { slug: 'screening', label: 'Screening', tab: 'requirement' },
+  { slug: 'clarification', label: 'Clarification', tab: 'clarifications' },
+  { slug: 'sourcing', label: 'Sourcing', tab: 'sourcing' },
+  { slug: 'proposal', label: 'Proposal', tab: 'proposal' },
+  { slug: 'approval', label: 'Approval', tab: 'approval' },
+  { slug: 'follow-up', label: 'Follow-up', tab: 'followup' },
+]
+
+const WORKFLOW_STEP_BY_SLUG = Object.fromEntries(WORKFLOW_STEPS.map(step => [step.slug, step]))
+const WORKFLOW_STEP_BY_TAB = Object.fromEntries(WORKFLOW_STEPS.map(step => [step.tab, step.slug]))
+const REMOVED_WORKFLOW_MILESTONES = new Set(['Submitted', 'PO Validation', 'Handover'])
+const milestoneSlug = milestone => {
+  if (REMOVED_WORKFLOW_MILESTONES.has(milestone)) return 'follow-up'
+  return WORKFLOW_STEPS.find(step => step.label === milestone)?.slug || 'intake'
+}
+
+const titleCase = value => String(value || '').toLowerCase().split(/\s+/).map((word, index) => {
+  const small = ['for', 'of', 'and', 'the', 'to', 'in'].includes(word) && index > 0
+  return small ? word : word.charAt(0).toUpperCase() + word.slice(1)
+}).join(' ').replace(/\bBoq\b/g, 'BOQ').replace(/\bKyc\b/g, 'KYC').replace(/\bRfq\b/g, 'RFQ')
+
+function OpportunityProgress({ activeStep, completedThrough, onStep }) {
+  const activeIndex = WORKFLOW_STEPS.findIndex(step => step.slug === activeStep)
+  return (
+    <nav className="opportunity-progress" aria-label="Opportunity progress">
+      <div className="progress-head">
+        <div>
+          <span className="progress-kicker">Workflow</span>
+          <strong>Opportunity progress</strong>
+        </div>
+        <div className="progress-controls" aria-label="Navigate workflow views">
+          <button type="button" disabled={activeIndex <= 0} onClick={() => onStep(WORKFLOW_STEPS[activeIndex - 1].slug)}>Previous</button>
+          <span>{WORKFLOW_STEP_BY_SLUG[activeStep]?.label}</span>
+          <button type="button" disabled={activeIndex < 0 || activeIndex >= WORKFLOW_STEPS.length - 1} onClick={() => onStep(WORKFLOW_STEPS[activeIndex + 1].slug)}>Next</button>
+        </div>
+      </div>
+      <div className="progress-steps">
+        <span className="progress-track" aria-hidden="true" />
+        {WORKFLOW_STEPS.map((step, index) => (
+          <button key={step.slug} type="button"
+            className={`progress-step ${index < completedThrough ? 'done' : ''} ${index === activeIndex ? 'current' : ''}`}
+            aria-current={index === activeIndex ? 'step' : undefined}
+            aria-label={`${step.label}${index === activeIndex ? ', selected step' : ''}`}
+            title={`View ${step.label}`} onClick={() => onStep(step.slug)}>
+            <span className="progress-node">{index < completedThrough ? '✓' : String(index + 1).padStart(2, '0')}</span>
+            <span className="progress-label">{step.label}</span>
+          </button>
+        ))}
+      </div>
+    </nav>
+  )
+}
+
 export default function Workbench() {
   const { oppId, tab = 'overview' } = useParams()
   const store = useStore()
   const nav = useNavigate()
+  const [searchParams] = useSearchParams()
   const [transition, setTransition] = useState(null)
   const detailsRef = useRef(null)
   const opp = store.opportunities.find(o => o.id === oppId)
@@ -89,20 +139,27 @@ export default function Workbench() {
   }
 
   const goTab = k => nav(`/opp/${opp.id}/${k}`)
+  const legacyStep = tab === 'overview' ? null : WORKFLOW_STEP_BY_TAB[tab]
+  const requestedStep = searchParams.get('step')
+  const activeStep = WORKFLOW_STEP_BY_SLUG[requestedStep] ? requestedStep : legacyStep || milestoneSlug(opp.milestone)
+  const activeStepConfig = WORKFLOW_STEP_BY_SLUG[activeStep]
+  const viewTab = WORKFLOW_STEP_BY_SLUG[requestedStep] ? activeStepConfig.tab : tab
+  const persistedStepIndex = WORKFLOW_STEPS.findIndex(step => step.slug === milestoneSlug(opp.milestone))
+  const selectStep = step => {
+    if (!WORKFLOW_STEP_BY_SLUG[step]) return
+    nav(`/opp/${opp.id}?step=${encodeURIComponent(step)}`)
+  }
+  const proposal = store.getProposal(opp.id)
   const moveToMilestone = (milestone, reason = '') => {
     store.setMilestone(opp.id, milestone, reason)
     goTab(LIFECYCLE_TABS[milestone] || 'overview')
   }
-  const proposal = store.getProposal(opp.id)
   const blockers = readiness(opp, proposal, store)
   const nextAction = nextActionWith(opp, proposal, store)
   const canSeeValue = canPriceProposal(store.role)
   const due = opp.orderDate || opp.proposalDate || opp.lastUpdated
+  const isOverdue = !!due && new Date(`${due}T23:59:59`) < new Date()
   const milestoneIndex = MILESTONES.indexOf(opp.milestone)
-  const tabItems = TABS.map(([id, label]) => ({
-    id, label,
-    show: id !== 'approvals' || isApprover(store.role) || blockers.length > 0,
-  }))
   const moveMilestone = milestone => {
     if (milestone === opp.milestone) return
     if (MILESTONES.indexOf(milestone) < milestoneIndex) {
@@ -115,10 +172,6 @@ export default function Workbench() {
       return
     }
     moveToMilestone(milestone)
-  }
-  const moveRelative = delta => {
-    const next = MILESTONES[milestoneIndex + delta]
-    if (next) moveMilestone(next)
   }
   const exceptionApprovalFor = blocker => (store.approvals || []).find(a =>
     a.type === 'Milestone exception' && a.oppId === opp.id
@@ -194,6 +247,10 @@ export default function Workbench() {
     if (tab !== 'overview') nav(`/opp/${opp.id}/overview`)
     window.setTimeout(() => detailsRef.current?.focusField(field), tab === 'overview' ? 0 : 120)
   }
+  const openDetails = () => {
+    if (tab !== 'overview') nav(`/opp/${opp.id}/overview`)
+    window.setTimeout(() => detailsRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), tab === 'overview' ? 0 : 120)
+  }
   const clarificationRows = (store.clarifications || []).filter(c => c.oppId === opp.id && ['Draft', 'Open', 'Sent'].includes(c.status))
   const deviationRows = (proposal?.terms || []).filter(t => t.status === 'Deviation')
   // `anyOf` blockers (§5A "LJS OR AN") name two approvers but need only one, so
@@ -221,35 +278,24 @@ export default function Workbench() {
           <Icon name="arrowLeft" size={13} /> Back to opportunities
         </Link>
         <div className="opp-summary-title">
-          <span className="opp-id">{opp.id}</span>
-          <h2>{opp.oppName}</h2>
+          <h1><span className="opp-id">{opp.id}</span><span className="opp-title-separator">-</span>{titleCase(opp.oppName)}</h1>
           <ClassChip cls={opp.customerStatus} />
           <Chip tone="grey">{opp.route}</Chip>
           {/* Which of the diagram's three worlds this runs in — it decides the
               B-step chain, the pricing embargo and the survey path. */}
           {opp.context && <Chip tone="grey" title={`${opp.context} lane`}>{opp.context}</Chip>}
           <Chip tone={blockers.length ? 'state-Review' : 'state-Accepted'}>{blockers.length ? 'At risk' : 'On track'}</Chip>
+          <button type="button" className="summary-header-action" onClick={openDetails}>Edit opportunity</button>
         </div>
       </div>
-      <div className="opp-summary-grid clean-summary-grid">
-        <div><span>Owner</span><b>{displayRole(opp.owner)}</b></div>
-        <div><span>Milestone</span><b>{opp.milestone || opp.stage}</b></div>
-        <div><span>Customer value</span><b>{canSeeValue ? `₹${fmt(opp.valueK || 0)},000` : 'Restricted'}</b></div>
-        <div className="opp-summary-action"><span>Next action</span><b>{nextAction.text || NEXT_ACTION[opp.milestone] || 'Progress the opportunity'}</b></div>
-        <div><span>Due</span><b>{ddMmmYY(due) || '-'}</b></div>
+      <div className="opp-summary-grid clean-summary-grid summary-strip bg-gray-50 border border-gray-200 rounded-lg p-4 divide-x divide-gray-200" aria-label="Opportunity summary">
+        <div className="summary-meta-item"><span>Owner</span><b>{displayRole(opp.owner)}</b></div>
+        <div className="summary-meta-item"><span>Milestone</span><b>{opp.milestone || opp.stage}</b></div>
+        <div className="summary-meta-item"><span>Customer value</span><b>{canSeeValue ? `₹${fmt(opp.valueK || 0)},000` : 'Restricted'}</b></div>
+        <div className="summary-meta-item opp-summary-action"><span>Next action</span><b>{nextAction.text || NEXT_ACTION[opp.milestone] || 'Progress the opportunity'}</b></div>
+        <div className={`summary-meta-item summary-due ${isOverdue ? 'is-overdue' : ''}`}><span>Due</span><div className="summary-meta-value"><b>{ddMmmYY(due) || '-'}</b>{isOverdue && <Chip tone="state-Blocks">Overdue</Chip>}</div></div>
       </div>
-      <DetailTabs ariaLabel="Opportunity views" primaryCount={8} showOverflow={false} activeId={tab} items={tabItems} onChange={goTab} />
-      <div className="opp-lifecycle">
-        <div className="lifecycle-heading">
-          <div><div className="workbench-section-title">Lifecycle</div><span className="hint">Select any stop to move the opportunity, including backward corrections.</span></div>
-           <div className="lifecycle-controls" aria-label="Lifecycle navigation">
-            <button disabled={milestoneIndex <= 0} onClick={() => moveRelative(-1)}>&larr; Previous</button>
-            <b>{opp.milestone}</b>
-            <button disabled={milestoneIndex < 0 || milestoneIndex >= MILESTONES.length - 1} onClick={() => moveRelative(1)}>Next &rarr;</button>
-          </div>
-        </div>
-        <Stepper current={opp.milestone} onStep={moveMilestone} />
-      </div>
+      <OpportunityProgress activeStep={activeStep} completedThrough={persistedStepIndex} onStep={selectStep} />
       {transition && (
         <Modal title={transition.kind === 'blocked' ? `Cannot move from ${opp.milestone} to ${transition.target}` : `Move back to ${transition.target}`} onClose={() => setTransition(null)} wide>
           {transition.kind === 'blocked' ? (
@@ -289,19 +335,19 @@ export default function Workbench() {
         </Modal>
       )}
       <div className="wb-body">
-        {tab === 'overview' && <OverviewTab opp={opp} goTab={goTab} detailsRef={detailsRef} />}
-        {tab === 'requirement' && <RequirementTab opp={opp} />}
-        {tab === 'customer' && <CustomerKycTab opp={opp} />}
-        {tab === 'clarifications' && <ClarificationsTab opp={opp} />}
-        {tab === 'sourcing' && <SourcingTab opp={opp} goTab={goTab} />}
-        {tab === 'proposal' && <ProposalTab opp={opp} />}
-        {tab === 'approval' && <ApprovalsTab opp={opp} />}
-        {tab === 'submitted' && <OverviewTab opp={opp} goTab={goTab} detailsRef={detailsRef} />}
-        {tab === 'approvals' && <ApprovalsTab opp={opp} />}
-        {tab === 'comms' && <CommsTab opp={opp} />}
-        {tab === 'po' && <PoHandover opp={opp} />}
-        {tab === 'files' && <FilesTab opp={opp} />}
-        {tab === 'audit' && <AuditTab opp={opp} />}
+        {viewTab === 'overview' && <OverviewTab opp={opp} goTab={goTab} detailsRef={detailsRef} />}
+        {viewTab === 'requirement' && <RequirementTab opp={opp} />}
+        {viewTab === 'customer' && <CustomerKycTab opp={opp} />}
+        {viewTab === 'clarifications' && <ClarificationsTab opp={opp} />}
+        {viewTab === 'sourcing' && <SourcingTab opp={opp} goTab={goTab} />}
+        {viewTab === 'proposal' && <ProposalTab opp={opp} goTab={goTab} />}
+        {viewTab === 'approval' && <ApprovalsTab opp={opp} />}
+        {viewTab === 'followup' && <FollowUpTab opp={opp} goTab={goTab} />}
+        {!activeStepConfig && viewTab === 'approvals' && <ApprovalsTab opp={opp} />}
+        {!activeStepConfig && viewTab === 'comms' && <CommsTab opp={opp} />}
+        {!activeStepConfig && viewTab === 'po' && <PoHandover opp={opp} />}
+        {!activeStepConfig && viewTab === 'files' && <FilesTab opp={opp} />}
+        {!activeStepConfig && viewTab === 'audit' && <AuditTab opp={opp} />}
       </div>
     </div>
   )
@@ -938,8 +984,13 @@ function ClarificationsTab({ opp }) {
 function SourcingTab({ opp, goTab }) {
   const store = useStore()
   const lines = store.sparesLines.filter(l => l.oppId === opp.id)
+  const proposal = store.getProposal(opp.id)
   const quotes = (store.vendorQuotes || []).filter(q => q.oppId === opp.id)
   const superseded = lines.some(l => String(l.match).toLowerCase().includes('superseded'))
+  const usingApprovedPriceList = lines.length > 0 && lines.every(l => {
+    const source = String(l.priceList || '')
+    return l.priceState !== 'Expired' && source && source !== 'Manual entry' && source !== 'Ad-hoc'
+  })
   const [rfqOpen, setRfqOpen] = useState(false)
   const [rfqForm, setRfqForm] = useState({ manufacturer: '', to: '', cc: '', subject: '', body: '' })
   const [rfqErr, setRfqErr] = useState('')
@@ -1138,7 +1189,13 @@ function SourcingTab({ opp, goTab }) {
             <button onClick={() => openVendorResponse(q)}><Icon name="upload" size={12} /> Upload / apply response</button>
           </div>
         ))}
-        {!quotes.length && <p className="hint">No manufacturer RFQs sent yet.</p>}
+        {!quotes.length && (
+          <p className="hint">
+            {usingApprovedPriceList
+              ? 'Using approved price list — no manufacturer RFQ required.'
+              : 'No manufacturer RFQs sent yet.'}
+          </p>
+        )}
       </div>
 
       {rfqOpen && (
@@ -1211,7 +1268,11 @@ function SourcingTab({ opp, goTab }) {
   )
 }
 // ---------------------------------------------------------------------------
-function ProposalTab({ opp }) {
+function FollowUpTab({ opp, goTab }) {
+  return <FollowUpPane opp={opp} onRevision={() => goTab('sourcing')} />
+}
+
+function ProposalTab({ opp, goTab }) {
   const [sub, setSub] = useState('edit-sheet')
   const openBuilder = () => setSub('builder')
   // Diagram 02 §3 is the Brownfield lane only — Greenfield runs Phase-1
@@ -1226,13 +1287,13 @@ function ProposalTab({ opp }) {
       )}
       {sub === 'builder' && (
         <>
-          <PropBuilder opp={opp} />
+          <PropBuilder opp={opp} onRevision={() => goTab('sourcing')} />
           <div className="builder-divider" />
           <Proposal oppId={opp.id} embedded initialTab="Cover Letter" />
         </>
       )}
       {sub === 'edit-sheet' && <Proposal oppId={opp.id} embedded initialTab="Edit Sheet" />}
-      {sub === 'followup' && <FollowUpPane opp={opp} />}
+      {sub === 'followup' && <FollowUpPane opp={opp} onRevision={() => goTab('sourcing')} />}
     </div>
   )
 }
@@ -1263,7 +1324,7 @@ function PreviewPane({ opp, openBuilder, openEditSheet }) {
   )
 }
 
-function FollowUpPane({ opp }) {
+function FollowUpPane({ opp, onRevision }) {
   const store = useStore()
   const p = store.getProposal(opp.id)
   const revisions = p.revisions || []
@@ -1293,6 +1354,7 @@ function FollowUpPane({ opp }) {
   const addRevision = () => {
     if (!note.trim()) return
     store.reviseProposal(opp.id, note.trim(), revType)
+    onRevision?.()
     setNote('')
     setRevType(REVISION_TYPES[0].id)
   }

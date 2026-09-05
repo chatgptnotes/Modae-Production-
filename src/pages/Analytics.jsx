@@ -207,7 +207,7 @@ export function Funnel({ stages, showValue, conversion = false }) {
             <polygon fill="url(#fnlRamp)"
               points={`${cx - wTop / 2},${top} ${cx + wTop / 2},${top} ${cx + wBot / 2},${bot} ${cx - wBot / 2},${bot}`} />
             <text x={cx} y={y(i) + ROW / 2 + 5} textAnchor="middle" fontSize={showValue ? 12.5 : 14} fontWeight="800"
-              fill={i < 2 ? 'var(--text-main)' : '#fff'}>{label(s)}</text>
+              fill={i < 2 ? 'var(--text-main)' : 'var(--text-on-inverse)'}>{label(s)}</text>
 
             <line x1={cx + wTop / 2 + 6} y1={y(i) + ROW / 2} x2={W - DETAIL + 4} y2={y(i) + ROW / 2}
               stroke="var(--border-soft)" strokeWidth="1" strokeDasharray="3 3" />

@@ -130,9 +130,9 @@ export default function Register() {
     }
     store.addOpportunity(opp)
     if (routeForType(oppType) !== 'Service') {
-      const { extracted, workbenchRows, bom } = buildLeadProposalData(lead, store.priceLists)
+      const { extracted, workbenchRows, bom } = buildLeadProposalData(lead, store.priceLists, store.adhocParts)
       store.addSparesLinesFromLead(opp.id, workbenchRows)
-      const proposal = newProposal(opp.id, opp)
+      const proposal = newProposal(opp.id, opp, { validityDays: store.config?.proposalValidityDays })
       store.saveProposal(opp.id, {
         ...proposal,
         rfqNumber: lead.ref || '',

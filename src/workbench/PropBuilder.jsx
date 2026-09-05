@@ -11,7 +11,7 @@ import { PROP_SECTIONS, recommendTerms } from '../proposalDoc.js'
 
 // Proposal builder: section checklist, customer-facing excerpt, and the
 // readiness / approval column that gates 'Submit for approval'.
-export default function PropBuilder({ opp }) {
+export default function PropBuilder({ opp, onRevision }) {
   const store = useStore()
   const comm = canPriceProposal(store.role)
   const p = store.getProposal(opp.id)
@@ -68,6 +68,7 @@ export default function PropBuilder({ opp }) {
   const applyRevision = () => {
     if (!reviseReason.trim()) return
     store.reviseProposal(opp.id, reviseReason.trim(), reviseType)
+    onRevision?.()
     setReviseOpen(false)
     setReviseReason('')
     setReviseType(REVISION_TYPES[0].id)
@@ -96,6 +97,10 @@ export default function PropBuilder({ opp }) {
     store.requestApproval({
       oppId: opp.id, type: 'Final quote release', rev,
       detail: `GM ${gate.gmPct.toFixed(1)}% — ${gate.label}`,
+      listValue: gate.listValue,
+      requestedValue: gate.value,
+      discountPct: gate.disc,
+      markupPct: p.markupPct || 0,
       // Final quote release is a joint AH + LJS decision. The commercial gate
       // still determines the routing context, but neither approver can release
       // the quote alone.
@@ -105,6 +110,16 @@ export default function PropBuilder({ opp }) {
     store.saveProposal(opp.id, {
       ...p,
       revision: rev,
+      pricingHistory: [...(p.pricingHistory || []), {
+        revision: rev,
+        status: 'Submitted for approval',
+        when: new Date().toISOString(),
+        listValue: gate.listValue,
+        requestedValue: gate.value,
+        discountPct: gate.disc,
+        markupPct: p.markupPct || 0,
+        by: store.role,
+      }],
       // A submission is not a revision — it gets its own S-series so the
       // customer-facing V-numbers stay the diagram's V1, V2, V3.
       revisions: [...revisions, {

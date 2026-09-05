@@ -442,6 +442,9 @@ export default function Admin() {
             onChange={v => store.updateConfig({ leadDeadlines: { ...(config.leadDeadlines || {}), kycDays: v } })} />
           <NumField label="Clarification deadline (days)" value={config.leadDeadlines?.clarificationDays ?? 7} disabled={!canEdit}
             onChange={v => store.updateConfig({ leadDeadlines: { ...(config.leadDeadlines || {}), clarificationDays: v } })} />
+          <NumField label="Proposal validity (days)" value={config.proposalValidityDays ?? 30} disabled={!canEdit}
+            onChange={v => store.updateConfig({ proposalValidityDays: Math.max(1, v) })} />
+          <p className="hint">Default validity used when creating new proposals. Existing proposals keep their saved terms.</p>
           {/* Clarification mail goes out from here until a lead is assigned,
               and from the assigned salesperson once it is. */}
           <label className="afield">Common mailbox

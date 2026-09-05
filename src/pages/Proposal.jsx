@@ -313,7 +313,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
     if (!opp || routeForType(opp.oppType) === 'Service') return
     const current = store.getProposal(oppId)
     if (!linkedLead || (current.leadImportId === linkedLead.id && current.bom?.length) || !linkedLead.ai) return
-    const { extracted, workbenchRows, bom } = buildLeadProposalData(linkedLead, store.priceLists)
+    const { extracted, workbenchRows, bom } = buildLeadProposalData(linkedLead, store.priceLists, store.adhocParts)
     if (!bom.length) return
     const next = { ...current, bom, extractedItems: extracted, units: 1, rfqNumber: linkedLead.ref || current.rfqNumber, subject: linkedLead.subject || current.subject, project: linkedLead.subject || current.project, leadImportId: linkedLead.id }
     store.addSparesLinesFromLead(oppId, workbenchRows)
@@ -1275,7 +1275,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
                       <td className="num internal">₹ {fmt(lineCost(l))}</td>
                       <td className="num internal">₹ {fmt(lineCost(l) * q)}</td>
                       <td className="num internal">₹ {fmt(Math.round(lineComputed(l)))}</td>
-                      <td className="num internal">{l.currency === 'USD' ? '$' : l.currency === 'INR' ? '₹' : '€'} {fmt(linePrice(l))}</td>
+                        <td className="num internal">{l.currency === 'USD' ? '$' : l.currency === 'INR' ? '₹' : '€'} {fmt(linePrice(l))}<div className="hint">{l.priceSourceName || l.priceList || 'Price source'}</div></td>
                       <td><span className="proposal-row-control" title="Adjust quantity with the stepper">Qty</span></td>
                     </tr>
                   )
