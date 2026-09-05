@@ -10,7 +10,7 @@ import { proposalWorkbookAttachment, enclosureAttachments } from '../proposal/em
 
 // Customer send — only unlocked by an approved 'Final quote release'
 // and a three-point human-in-the-loop checklist.
-export default function SubmissionPanel({ opp }) {
+export default function SubmissionPanel({ opp, onSubmitted }) {
   const store = useStore()
   const p = store.getProposal(opp.id)
   const [checks, setChecks] = useState({ c1: false, c2: false, c3: false })
@@ -77,10 +77,11 @@ export default function SubmissionPanel({ opp }) {
         ...enclosures.map(a => a.filename),
       ] })
       store.updateOpportunity(opp.id, {
-        milestone: 'Submitted',
+        milestone: 'Follow-up',
         proposalDate: new Date().toISOString().slice(0, 10),
       })
       setSentNow(true)
+      onSubmitted?.()
     } catch (error) {
       setSendError(error?.message || 'Email could not be sent')
     } finally {
@@ -134,7 +135,7 @@ export default function SubmissionPanel({ opp }) {
         </button>
       </div>
       {(sentNow || alreadySent) && (
-        <div className="okbox">Proposal email sent — logged in Communications; milestone moved to Submitted.</div>
+        <div className="okbox">Proposal email sent — logged in Communications; moved to Follow-up.</div>
       )}
     </div>
   )

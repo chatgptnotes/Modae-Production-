@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { ROLES, PERMS, DEMO_PASSWORD, PORTAL_ENABLED, selectableRoles } from '../seed.js'
+import { DEMO_PASSWORD, PORTAL_ENABLED, selectableRoles } from '../seed.js'
 import { ddMmmYY, isAdminRole, displayRoleLabel } from '../utils.js'
 import { Icon } from '../icons.jsx'
 
@@ -9,17 +9,15 @@ import { Icon } from '../icons.jsx'
 // offered, and CUST only while the portal is enabled (seed.js PORTAL_ENABLED).
 const ASSIGNABLE = selectableRoles().map(([id]) => id).filter(r => r !== 'SUPER')
 
-// Page keys shown in the permissions matrix, in navigation order.
-const PAGE_KEYS = ['home', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders',
-  'pricelists', 'dashboard', 'analytics', 'customers', 'po', 'aimap', 'admin', 'audit', 'users',
-  'launcher', 'voice', ...(PORTAL_ENABLED ? ['portal'] : [])]
-
 export default function Users() {
   const store = useStore()
   const nav = useNavigate()
   const canManage = isAdminRole(store.role)
   const [modal, setModal] = useState(false)
   const [err, setErr] = useState('')
+  const [editingUserId, setEditingUserId] = useState(null)
+  const [userDraft, setUserDraft] = useState(null)
+  const [userErr, setUserErr] = useState('')
 
   // Route-level gate: the account roster (names, emails, roles) is restricted
   // directory data — non-admins get a restricted block, not a read-only view.
@@ -38,6 +36,53 @@ export default function Users() {
   const nextId = () => {
     const n = Math.max(0, ...store.users.map(u => parseInt(String(u.id).slice(2), 10) || 0)) + 1
     return `U-${String(n).padStart(3, '0')}`
+  }
+
+  const startUserEdit = user => {
+    setEditingUserId(user.id)
+    setUserDraft({ name: user.name || '', email: user.email || '', role: user.role, status: user.status })
+    setUserErr('')
+  }
+
+  const cancelUserEdit = () => {
+    setEditingUserId(null)
+    setUserDraft(null)
+    setUserErr('')
+  }
+
+  const saveUser = user => {
+    const name = String(userDraft?.name || '').trim()
+    const email = String(userDraft?.email || '').trim()
+    const role = userDraft?.role
+    const status = userDraft?.status
+    if (!name) {
+      setUserErr('Name is required.')
+      return
+    }
+    const validEmail = !email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    if (!validEmail) {
+      setUserErr('Enter a valid email address or leave it blank.')
+      return
+    }
+    const duplicate = email && store.users.some(u => u.id !== user.id && (u.email || '').trim().toLowerCase() === email.toLowerCase())
+    if (duplicate) {
+      setUserErr('That email is already registered.')
+      return
+    }
+    if (role !== user.role && user.role === 'SUPER') {
+      setUserErr('The System Owner role cannot be changed.')
+      return
+    }
+    if (!ASSIGNABLE.includes(role) && role !== 'SUPER') {
+      setUserErr('Select a valid role.')
+      return
+    }
+    if (!['Active', 'Pending', 'Suspended'].includes(status)) {
+      setUserErr('Select a valid status.')
+      return
+    }
+    store.updateUser(user.id, { name, email, role, status })
+    cancelUserEdit()
   }
 
   const register = e => {
@@ -99,32 +144,61 @@ export default function Users() {
       <div className="sheet-wrap" style={{ maxWidth: 900 }}>
         <table className="sheet">
           <thead>
-            <tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Created</th>{canManage && <th>Actions</th>}</tr>
+            <tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Created</th>{canManage && <><th>Edit</th><th>Actions</th></>}</tr>
           </thead>
           <tbody>
             {store.users.map(u => (
               <tr key={u.id}>
-                <td><b>{u.name}</b>{u.role === store.role && <span className="pill you"> You</span>}</td>
-                <td>{u.email}</td>
-                <td>
-                  {canManage && u.role !== 'SUPER' ? (
-                    <select value={u.role} onChange={e => store.updateUser(u.id, { role: e.target.value })}>
-                      {ASSIGNABLE.map(r => <option key={r} value={r}>{displayRoleLabel(r)}</option>)}
-                    </select>
-                  ) : (displayRoleLabel(u.role) || u.role)}
-                </td>
-                <td><span className={`pill status-${u.status}`}>{u.status}</span></td>
+                {editingUserId === u.id ? (
+                  <>
+                    <td>
+                      <input
+                        className="user-field-input"
+                        value={userDraft.name}
+                        onChange={e => { setUserDraft(d => ({ ...d, name: e.target.value })); setUserErr('') }}
+                        onKeyDown={e => { if (e.key === 'Enter') saveUser(u); if (e.key === 'Escape') cancelUserEdit() }}
+                        autoFocus
+                        aria-label={`Name for ${u.name}`}
+                      />
+                      {u.role === store.role && <span className="pill you"> You</span>}
+                    </td>
+                    <td><input className="user-field-input" type="email" value={userDraft.email} onChange={e => { setUserDraft(d => ({ ...d, email: e.target.value })); setUserErr('') }} aria-label={`Email for ${u.name}`} /></td>
+                    <td>
+                      <select value={userDraft.role} disabled={u.role === 'SUPER'} onChange={e => { setUserDraft(d => ({ ...d, role: e.target.value })); setUserErr('') }} aria-label={`Role for ${u.name}`}>
+                        {u.role === 'SUPER' && <option value="SUPER">{displayRoleLabel('SUPER')}</option>}
+                        {ASSIGNABLE.map(r => <option key={r} value={r}>{displayRoleLabel(r)}</option>)}
+                      </select>
+                    </td>
+                    <td><select value={userDraft.status} onChange={e => { setUserDraft(d => ({ ...d, status: e.target.value })); setUserErr('') }} aria-label={`Status for ${u.name}`}>
+                      {['Active', 'Pending', 'Suspended'].map(status => <option key={status} value={status}>{status}</option>)}
+                    </select></td>
+                  </>
+                ) : (
+                  <>
+                    <td><div className="user-name-display"><b>{u.name}</b>{u.role === store.role && <span className="pill you"> You</span>}</div></td>
+                    <td>{u.email || 'No email assigned'}</td>
+                    <td>{displayRoleLabel(u.role) || u.role}</td>
+                    <td><span className={`pill status-${u.status}`}>{u.status}</span></td>
+                  </>
+                )}
                 <td>{ddMmmYY(u.created)}</td>
                 {canManage && (
                   <td>
-                    {u.status === 'Active' && u.role !== 'SUPER' &&
-                      <button onClick={() => store.updateUser(u.id, { status: 'Suspended' })}>Suspend</button>}
+                    {editingUserId === u.id ? (
+                      <div className="user-row-editor-actions">
+                        <button type="button" className="primary" onClick={() => saveUser(u)} title="Save user details" aria-label={`Save details for ${u.name}`}><Icon name="check" size={15} /></button>
+                        <button type="button" onClick={cancelUserEdit} title="Cancel user edit" aria-label={`Cancel edit for ${u.name}`}><Icon name="x" size={15} /></button>
+                        {userErr && <div className="err-text">{userErr}</div>}
+                      </div>
+                    ) : (
+                      <button type="button" className="user-email-action" onClick={() => startUserEdit(u)} title="Edit user details" aria-label={`Edit details for ${u.name}`}><Icon name="edit" size={15} /></button>
+                    )}
+                  </td>
+                )}
+                {canManage && (
+                  <td>
                     {u.status === 'Active' &&
                       <> <button onClick={() => { store.signInAs(u.id); nav('/opportunities') }}>Sign in as</button></>}
-                    {u.status === 'Suspended' &&
-                      <button onClick={() => store.updateUser(u.id, { status: 'Active' })}>Reactivate</button>}
-                    {u.status === 'Pending' &&
-                      <button className="primary" onClick={() => store.updateUser(u.id, { status: 'Active' })}>Approve</button>}
                   </td>
                 )}
               </tr>
@@ -132,28 +206,6 @@ export default function Users() {
           </tbody>
         </table>
       </div>
-
-      <div className="section-title">Page permissions</div>
-      <div className="sheet-wrap">
-        <table className="sheet">
-          <thead>
-            <tr><th>Role</th>{PAGE_KEYS.map(p => <th key={p}>{p}</th>)}</tr>
-          </thead>
-          <tbody>
-            {selectableRoles().map(([r]) => (
-              <tr key={r}>
-                <td style={{ whiteSpace: 'nowrap' }}><b>{displayRoleLabel(r)}</b></td>
-                {PAGE_KEYS.map(p => (
-                  <td key={p} style={{ textAlign: 'center' }}>
-                    {(PERMS[r] || []).includes(p) && <Icon name="check" size={12} />}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="hint">Matrix is configuration-as-code in this demo; editable per-tenant in production.</p>
 
       {modal && (
         <>

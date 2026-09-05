@@ -44,6 +44,7 @@ export function buildLeadProposalData(lead, priceLists, vendorPrices = []) {
     pn: item.partNumber,
     qty: item.qty,
   })), allParts).map(({ item, match }, i) => ({
+    origin: 'customer',
     custRef: extracted[i].customerRef || item.pn || item.description,
     pn: match?.pn || item.pn || '',
     desc: item.description,

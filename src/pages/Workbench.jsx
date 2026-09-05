@@ -1292,7 +1292,7 @@ function ProposalTab({ opp, goTab }) {
           <Proposal oppId={opp.id} embedded initialTab="Cover Letter" />
         </>
       )}
-      {sub === 'edit-sheet' && <Proposal oppId={opp.id} embedded initialTab="Edit Sheet" />}
+      {sub === 'edit-sheet' && <Proposal oppId={opp.id} embedded initialTab="Edit Sheet" onSubmitted={() => goTab('followup')} />}
       {sub === 'followup' && <FollowUpPane opp={opp} onRevision={() => goTab('sourcing')} />}
     </div>
   )

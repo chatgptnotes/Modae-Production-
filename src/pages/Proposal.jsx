@@ -259,7 +259,7 @@ const normalize = normalizeProposal
 // Rendered two ways: as the standalone /proposal/:oppId page, and embedded in the
 // opportunity workspace (Proposal tab → Builder). Embedded mode drops the page
 // chrome — title, back link, duplicated blocker list — and unpins the sheet tabs.
-export default function Proposal({ oppId: oppIdProp, embedded = false, initialTab = 'Edit Sheet' }) {
+export default function Proposal({ oppId: oppIdProp, embedded = false, initialTab = 'Edit Sheet', onSubmitted }) {
   const { oppId: routeOppId } = useParams()
   const oppId = oppIdProp || routeOppId
   const store = useStore()
@@ -310,7 +310,10 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   // their BoQ once from the linked lead so existing work does not stay on the
   // generic starter rows. New registrations carry leadImportId themselves.
   useEffect(() => {
-    if (!opp || routeForType(opp.oppType) === 'Service') return
+    // Spares must always enter Proposal through the Sourcing workbench. Do not
+    // manufacture sourcing rows from a saved/demo Proposal BoQ when this page
+    // is opened; real Spares creation paths write sparesLines first.
+    if (!opp || ['Service', 'Spares'].includes(routeForType(opp.oppType))) return
     const current = store.getProposal(oppId)
     if (!linkedLead || (current.leadImportId === linkedLead.id && current.bom?.length) || !linkedLead.ai) return
     const { extracted, workbenchRows, bom } = buildLeadProposalData(linkedLead, store.priceLists, store.adhocParts)
@@ -764,10 +767,11 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           ...optionalAttachments.map(a => a.filename)],
       })
       store.updateOpportunity(oppId, {
-        milestone: 'Submitted',
+        milestone: 'Follow-up',
         proposalDate: new Date().toISOString().slice(0, 10),
       })
       setEmailOpen(false)
+      onSubmitted?.()
     } catch (error) {
       setEmailError(error?.message || 'Email could not be sent')
     } finally {
@@ -874,8 +878,8 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
             <input type="file" accept=".xlsx,.xls" onChange={uploadReviewedProposal} />
           </label>
           <button className="btn-secondary" onClick={() => setPreviewOpen(true)}><Icon name="eye" size={13} /> Preview proposal</button>
-          {reviewReady && !pendingForOpp.length && !blocked && <button className="primary" onClick={openEmail}><Icon name="mail" size={13} /> Send to customer</button>}
-          {reviewReady && approvalRequired && <button className="btn-secondary" onClick={submitForApproval}><Icon name="send" size={13} /> Request approval</button>}
+          {reviewReady && !pendingForOpp.length && !blocked && !approvalRequired && <button className="primary" onClick={openEmail}><Icon name="mail" size={13} /> Send to customer</button>}
+          {reviewReady && approvalRequired && !pendingForOpp.length && <button className="btn-secondary" onClick={submitForApproval}><Icon name="send" size={13} /> Request approval</button>}
           {['Project', 'Spares', 'Services'].includes(route) && <button className="btn-secondary" onClick={openTemplatePreview}><Icon name="fileSheet" size={13} /> Preview template</button>}
         </div>
       </div>

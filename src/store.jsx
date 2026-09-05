@@ -21,8 +21,13 @@ const StoreCtx = createContext(null)
 // Sourcing is the canonical line-item source for Spares proposals. Keep this
 // conversion pure so both explicit synchronization and proposal-load repair
 // produce exactly the same BoQ shape.
+export const isPlaceholderSparesLine = line => {
+  const values = [line?.pn, line?.custRef, line?.desc].map(value => String(value || '').trim())
+  return values.some(value => /^item[-\s]?\d+$/i.test(value))
+}
+
 export function sparesProposalBom(lines = []) {
-  return lines.filter(line => line?.confirmed && Number(line.qty) > 0).map(line => ({
+  return lines.filter(line => line?.confirmed && Number(line.qty) > 0 && !isPlaceholderSparesLine(line)).map(line => ({
     itemCategory: 'Hardware',
     pn: line.pn || '',
     custRef: line.custRef || line.pn || line.desc || '',
@@ -804,7 +809,20 @@ export function StoreProvider({ children }) {
     },
 
     updateUser(id, patch) {
-      setState(s => ({ ...s, users: s.users.map(u => (u.id === id ? { ...u, ...patch } : u)) }))
+      setState(s => {
+        const users = s.users.map(u => (u.id === id ? { ...u, ...patch } : u))
+        const authUser = s.auth?.user
+        const isCurrentUser = authUser?.id === id
+        const auth = isCurrentUser && (patch.email !== undefined || patch.name !== undefined || patch.role !== undefined)
+          ? { ...s.auth, user: {
+            ...authUser,
+            ...(patch.email !== undefined ? { email: patch.email } : {}),
+            ...(patch.name !== undefined ? { name: patch.name } : {}),
+            ...(patch.role !== undefined ? { role: patch.role } : {}),
+          } }
+          : s.auth
+        return { ...s, users, auth, role: isCurrentUser && patch.role !== undefined ? patch.role : s.role }
+      })
     },
 
     // Only used to reject a pending registration — active accounts are
@@ -1041,7 +1059,7 @@ export function StoreProvider({ children }) {
           ...s,
           sparesLines: [...s.sparesLines, normalizePriceFields({
             id, oppId, match: 'Manual', conf: 100, confirmed: true,
-            priceList: 'Ad-hoc', priceState: 'Current', currency: 'INR', qty: 1, ...line,
+            origin: 'manual', priceList: 'Ad-hoc', priceState: 'Current', currency: 'INR', qty: 1, ...line,
           })],
         }, 'Manual part added', oppId, line.pn || line.desc)
       })
@@ -1088,19 +1106,27 @@ export function StoreProvider({ children }) {
     // extraction rows must not remain alongside the confirmed matches.
     sendLinesToProposal(oppId) {
       setState(s => {
-        const lines = s.sparesLines.filter(l => l.oppId === oppId && l.confirmed)
+        const lines = s.sparesLines.filter(l => l.oppId === oppId && l.confirmed && !isPlaceholderSparesLine(l))
         if (!lines.length) return s
         const opp = s.opportunities.find(o => o.id === oppId)
         const base = s.proposals[oppId] || newProposal(oppId, opp, { validityDays: s.config?.proposalValidityDays })
         const bom = sparesProposalBom(lines)
         const costing = base.costing || {}
         const pricedLines = lines.reduce((totals, line) => {
+          const listUnitPrice = Number(line.listUnitPrice ?? line.listPrice) || 0
+          const qty = Math.max(0, Number(line.qty) || 0)
+          const discountPct = Math.max(0, Math.min(100, Number(line.discountPct) || 0))
+          const markupPct = Math.max(0, Number(line.markupPct) || 0)
+          const adjustedUnitPrice = listUnitPrice
+            * (1 - discountPct / 100)
+            * (1 + markupPct / 100)
           const bnk = String(line.priceList || '').startsWith('BNK')
-          const price = Number(line.listPrice) || 0
-          const qty = Number(line.qty) || 0
+          const baseCost = line.baseCost == null
+            ? unitCostINR(listUnitPrice, costing, line.currency || 'EUR', bnk)
+            : Math.max(0, Number(line.baseCost) || 0)
           return {
-            value: totals.value + unitSellINR(price, costing, line.currency || 'EUR', bnk) * qty,
-            cogs: totals.cogs + unitCostINR(price, costing, line.currency || 'EUR', bnk) * qty,
+            value: totals.value + adjustedUnitPrice * qty,
+            cogs: totals.cogs + baseCost * qty,
           }
         }, { value: 0, cogs: 0 })
         return withAudit({

@@ -731,6 +731,10 @@ select, input[type=text], input[type=number], input[type=date], input[type=tel],
 .sourcing-add-part-link:focus-visible { outline: 2px solid var(--primary-accent); outline-offset: 3px; }
 .sourcing-part-line { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
 .sourcing-part-copy { min-width: 0; flex: 1; }
+.sourcing-row-actions { display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto; }
+.sourcing-edit-row { padding: 2px 5px; border: 1px solid var(--border-default); border-radius: 4px; background: var(--surface-default); color: var(--text-secondary); font-size: 10px; font-weight: 700; }
+.sourcing-edit-row:hover { color: var(--action-accent-ink); border-color: var(--action-accent); }
+.sourcing-read-value { display: inline-block; min-width: 18px; line-height: 22px; }
 .sourcing-remove-row { flex: 0 0 auto; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; color: var(--text-secondary); background: transparent; font-size: 18px; line-height: 18px; }
 .sourcing-remove-row:hover { color: var(--accent, #e5382b); background: var(--surface-sunken); }
 .sourcing-sheet-wrap { overflow: hidden; }
@@ -1458,6 +1462,19 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .pill.status-Active { background: var(--won-fill); color: var(--won-text); }
 .pill.status-Pending { background: var(--amber-fill); color: var(--amber-text); }
 .pill.status-Suspended { background: var(--lost-fill); color: var(--lost-text); }
+.user-name-display,
+.user-email-editor-row,
+.user-row-editor-actions { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.user-name-display > b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.user-email-action {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0; flex: 0 0 28px; line-height: 1;
+}
+.user-email-action .ic { display: block; vertical-align: 0; }
+.user-field-input,
+.user-email-editor-row input { width: 100%; min-width: 0; box-sizing: border-box; }
+.user-row-editor-actions { flex-wrap: wrap; }
+.user-row-editor-actions .err-text { flex-basis: 100%; margin-top: 2px; white-space: nowrap; }
 .modal { position: fixed; z-index: 56; top: 90px; left: 50%; transform: translateX(-50%); width: 420px; max-width: 92vw; box-shadow: 0 6px 24px var(--palette-9d894303); }
 .lead-paste-modal {
   top: 20px;
@@ -6116,7 +6133,16 @@ button.install, .btn.install,
   vertical-align: top;
   padding: 8px 10px;
 }
-.sourcing-sheet--fixed th { white-space: normal; line-height: 1.25; }
+/* Override the generic sheet `white-space: nowrap` rule so the intentionally
+   narrow percentage columns remain readable instead of clipping their labels. */
+table.sheet.sourcing-sheet--fixed th {
+  white-space: normal;
+  overflow-wrap: normal;
+  word-break: normal;
+  line-height: 1.15;
+  font-size: 10px;
+  letter-spacing: .02em;
+}
 .sourcing-sheet--fixed td { min-width: 0; overflow: hidden; }
 .sourcing-sheet--fixed td > * { min-width: 0; max-width: 100%; }
 .sourcing-sheet--fixed input,
