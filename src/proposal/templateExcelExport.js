@@ -284,32 +284,20 @@ function stripInternalCosting(worksheet) {
   // Everything from column J rightwards is the internal cost/margin block —
   // unit and total cost in ₹ and €, the costing-factors card, the ModAE
   // cost/target/GM roll-up and the deal notes beside it.
-  const firstInternal = 10 // column J
+  const firstInternal = 9 // column I is the spacer before the internal block
   for (const range of Object.values(worksheet._merges || {})) {
     const model = range?.model
     if (!model || model.right < firstInternal) continue
     worksheet.unMergeCells(`${columnName(model.left)}${model.top}:${columnName(model.right)}${model.bottom}`)
   }
-  const lastColumn = Math.max(worksheet.columnCount, firstInternal)
-  worksheet.spliceColumns(firstInternal, lastColumn - firstInternal + 1)
-
-  // Splicing moves values out but leaves the template's borders, fills and
-  // widths behind — that empty-but-formatted band to the right is what reads
-  // as "much space" when the customer opens the file. Clear it via eachCell so
-  // no new cells are materialised (that would defeat the row trim below).
+  // Do not use worksheet.columnCount here. ExcelJS reports the full XLSX
+  // column universe (16,384) when the source template has default styles.
+  // Removing cells and columns directly avoids reintroducing the internal
+  // costing block or its style-only tail during serialization.
   worksheet.eachRow({ includeEmpty: false }, row => {
-    row.eachCell({ includeEmpty: false }, (cell, column) => {
-      if (column < firstInternal) return
-      cell.value = null
-      cell.style = {}
-    })
+    row._cells = row._cells.filter(cell => cell && cell.col < firstInternal)
   })
-  for (let column = firstInternal; column <= lastColumn; column++) {
-    const col = worksheet.getColumn(column)
-    col.width = undefined
-    col.style = {}
-    col.hidden = false
-  }
+  worksheet._columns = worksheet._columns.slice(0, firstInternal - 1)
 
   // Drop the template's trailing blank rows so the sheet ends with the terms.
   let lastUsedRow = 0

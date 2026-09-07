@@ -129,6 +129,28 @@ test('exact proposal export preserves template artwork, merges and print layout'
   assert.equal(cover.getCell('C6').value, '2608227RS')
 })
 
+test('customer-facing proposal export removes internal and template-only columns', async () => {
+  const templateBuffer = fs.readFileSync('branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx')
+  const output = await generateProposalWorkbook({
+    templateBuffer,
+    logoBuffer: fs.readFileSync('branding/mod-ae/assets/modae-official-logo.png'),
+    route: 'Spares',
+    redactInternalCosting: true,
+    p: { revision: '00', bom: [{ pn: 'P-1', desc: 'Probe', common: 1 }] },
+    opp: { id: '2609001PJS', sellTo: 'Customer' },
+    doc: { docTerms: [] },
+    totalQty: line => line.common,
+    lineQuoted: () => 100,
+  })
+  const workbook = new ExcelJS.Workbook()
+  await workbook.xlsx.load(output)
+  const firm = workbook.getWorksheet('Firm Rev-00')
+  assert.ok(firm.columnCount <= 8)
+  assert.equal(firm.getCell('H10').value, null)
+  assert.equal(firm.getCell('J10').value, null)
+  assert.equal(firm.getCell('N9').value, null)
+})
+
 test('spares export keeps the reference offer rows and file quantities', async () => {
   const templateBuffer = fs.readFileSync('branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx')
   const output = await generateProposalWorkbook({

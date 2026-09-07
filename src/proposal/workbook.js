@@ -7,12 +7,26 @@ export function parseProposalWorkbook(buffer, filename) {
     sheets: workbook.SheetNames.map(name => {
       const sheet = workbook.Sheets[name]
       const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1:A1')
+      const sourceMerges = sheet['!merges'] || []
+      const lastValueColumn = (() => {
+        let last = range.s.c
+        for (let c = range.s.c; c <= range.e.c; c++) {
+          for (let r = range.s.r; r <= range.e.r; r++) {
+            const cell = sheet[XLSX.utils.encode_cell({ r, c })]
+            if (cell?.v != null || cell?.w != null) last = c
+          }
+        }
+        return last
+      })()
+      const lastMergeColumn = sourceMerges.reduce((last, merge) => Math.max(last, merge.e.c), range.s.c)
+      const effectiveEndColumn = Math.max(lastValueColumn, lastMergeColumn)
+      const effectiveRange = { ...range, e: { ...range.e, c: effectiveEndColumn } }
       const rows = []
       const styles = []
-      for (let r = range.s.r; r <= range.e.r; r++) {
+      for (let r = effectiveRange.s.r; r <= effectiveRange.e.r; r++) {
         const row = []
         const styleRow = []
-        for (let c = range.s.c; c <= range.e.c; c++) {
+        for (let c = effectiveRange.s.c; c <= effectiveRange.e.c; c++) {
           const cell = sheet[XLSX.utils.encode_cell({ r, c })]
           row.push(cell?.w ?? (cell?.v == null ? '' : String(cell.v)))
           styleRow.push(cell?.s ? { ...cell.s } : null)
@@ -21,7 +35,7 @@ export function parseProposalWorkbook(buffer, filename) {
         styles.push(styleRow)
       }
       const rawWidths = sheet['!cols'] || []
-      const merges = (sheet['!merges'] || []).map(merge => ({
+      const merges = sourceMerges.map(merge => ({
         s: { r: merge.s.r - range.s.r, c: merge.s.c - range.s.c },
         e: { r: merge.e.r - range.s.r, c: merge.e.c - range.s.c },
       }))
@@ -40,8 +54,8 @@ export function parseProposalWorkbook(buffer, filename) {
         rows: visibleRows,
         styles: visibleStyles,
         merges: visibleMerges,
-        heights: Array.from({ length: range.e.r - range.s.r + 1 }, (_, i) => rawRows[range.s.r + i]?.hpx || rawRows[range.s.r + i]?.hpt || 24).slice(dropFirstRow ? 1 : 0),
-        widths: Array.from({ length: range.e.c - range.s.c + 1 }, (_, i) => rawWidths[range.s.c + i]?.wpx || 110),
+        heights: Array.from({ length: effectiveRange.e.r - effectiveRange.s.r + 1 }, (_, i) => rawRows[effectiveRange.s.r + i]?.hpx || rawRows[effectiveRange.s.r + i]?.hpt || 24).slice(dropFirstRow ? 1 : 0),
+        widths: Array.from({ length: effectiveRange.e.c - effectiveRange.s.c + 1 }, (_, i) => rawWidths[effectiveRange.s.c + i]?.wpx || 110),
       }
     }),
   }
