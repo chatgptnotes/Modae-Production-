@@ -54,6 +54,22 @@ test('proposal workbook parser drops an empty leading worksheet column', () => {
   assert.deepEqual(parsed.sheets[0].rows[0], ['Date', '5-Sep-2026'])
 })
 
+test('proposal workbook parser drops only the blank rows above customer content', () => {
+  const book = XLSX.utils.book_new()
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ['', '', '', '', '', '', '', 'internal note'],
+    ['', '', '', '', '', '', '', 'another internal note'],
+    ['Title', 'Proposal'],
+    ['', 'Customer detail'],
+    ['', ''],
+    ['Total', '100'],
+  ])
+  XLSX.utils.book_append_sheet(book, sheet, 'Firm Offer')
+  const parsed = parseProposalWorkbook(XLSX.write(book, { bookType: 'xlsx', type: 'array' }), 'offer.xlsx')
+  assert.deepEqual(parsed.sheets[0].rows[0].slice(0, 2), ['Title', 'Proposal'])
+  assert.deepEqual(parsed.sheets[0].rows.at(-1).slice(0, 2), ['Total', '100'])
+})
+
 test('seed config has a proposal template registry for migration', () => {
   assert.ok(Array.isArray(seedConfig.uploads.proposalTemplates))
 })

@@ -53,14 +53,18 @@ export function parseProposalWorkbook(buffer, filename) {
         e: { r: merge.e.r - effectiveRange.s.r, c: merge.e.c - effectiveRange.s.c },
       }))
       const rawRows = sheet['!rows'] || []
-      const dropFirstRow = rows.length > 1 && rows[0].every(value => String(value ?? '').trim() === '')
-      const visibleRows = dropFirstRow ? rows.slice(1) : rows
-      const visibleStyles = dropFirstRow ? styles.slice(1) : styles
-      const visibleKinds = dropFirstRow ? kinds.slice(1) : kinds
-      const visibleMerges = dropFirstRow
-        ? merges.filter(merge => merge.e.r > 0).map(merge => ({
-          s: { ...merge.s, r: Math.max(0, merge.s.r - 1) },
-          e: { ...merge.e, r: merge.e.r - 1 },
+      const customerColumnCount = /firm|pricing|proposal/i.test(name)
+        ? Math.min(7, rows[0]?.length || 7)
+        : rows[0]?.length || 1
+      const isBlankCustomerRow = row => row.slice(0, customerColumnCount).every(value => String(value ?? '').trim() === '')
+      const leadingBlankRows = Math.max(0, rows.findIndex(row => !isBlankCustomerRow(row)))
+      const visibleRows = leadingBlankRows ? rows.slice(leadingBlankRows) : rows
+      const visibleStyles = leadingBlankRows ? styles.slice(leadingBlankRows) : styles
+      const visibleKinds = leadingBlankRows ? kinds.slice(leadingBlankRows) : kinds
+      const visibleMerges = leadingBlankRows
+        ? merges.filter(merge => merge.e.r >= leadingBlankRows).map(merge => ({
+          s: { ...merge.s, r: Math.max(0, merge.s.r - leadingBlankRows) },
+          e: { ...merge.e, r: merge.e.r - leadingBlankRows },
         }))
         : merges
       return {
@@ -69,7 +73,7 @@ export function parseProposalWorkbook(buffer, filename) {
         styles: visibleStyles,
         kinds: visibleKinds,
         merges: visibleMerges,
-        heights: Array.from({ length: effectiveRange.e.r - effectiveRange.s.r + 1 }, (_, i) => rawRows[effectiveRange.s.r + i]?.hpx || rawRows[effectiveRange.s.r + i]?.hpt || 24).slice(dropFirstRow ? 1 : 0),
+        heights: Array.from({ length: effectiveRange.e.r - effectiveRange.s.r + 1 }, (_, i) => rawRows[effectiveRange.s.r + i]?.hpx || rawRows[effectiveRange.s.r + i]?.hpt || 24).slice(leadingBlankRows),
         widths: Array.from({ length: effectiveRange.e.c - effectiveRange.s.c + 1 }, (_, i) => rawWidths[effectiveRange.s.c + i]?.wpx || 110),
       }
     }),
