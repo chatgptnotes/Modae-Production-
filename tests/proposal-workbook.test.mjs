@@ -70,6 +70,19 @@ test('proposal workbook parser drops only the blank rows above customer content'
   assert.deepEqual(parsed.sheets[0].rows.at(-1).slice(0, 2), ['Total', '100'])
 })
 
+test('proposal workbook parser ignores branding-only rows above customer content', () => {
+  const book = XLSX.utils.book_new()
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ['', '', '', '', '', 'Your Partners In Achieving Excellence'],
+    ['', '', '', '', '', 'Your Partners In Achieving Excellence'],
+    ['Item-10', 'Proposal for NMCL'],
+    ['Sl. No.', 'Item Description'],
+  ])
+  XLSX.utils.book_append_sheet(book, sheet, 'Firm Rev-00')
+  const parsed = parseProposalWorkbook(XLSX.write(book, { bookType: 'xlsx', type: 'array' }), 'offer.xlsx')
+  assert.deepEqual(parsed.sheets[0].rows[0].slice(0, 2), ['Item-10', 'Proposal for NMCL'])
+})
+
 test('seed config has a proposal template registry for migration', () => {
   assert.ok(Array.isArray(seedConfig.uploads.proposalTemplates))
 })

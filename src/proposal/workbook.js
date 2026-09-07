@@ -1,5 +1,7 @@
 import XLSX from 'xlsx-js-style'
 
+const DOCUMENT_HEADER_TAGLINE = 'Your Partners In Achieving Excellence'
+
 export function parseProposalWorkbook(buffer, filename) {
   const workbook = XLSX.read(buffer, { type: 'array', cellStyles: true })
   return {
@@ -56,7 +58,12 @@ export function parseProposalWorkbook(buffer, filename) {
       const customerColumnCount = /firm|pricing|proposal/i.test(name)
         ? Math.min(7, rows[0]?.length || 7)
         : rows[0]?.length || 1
-      const isBlankCustomerRow = row => row.slice(0, customerColumnCount).every(value => String(value ?? '').trim() === '')
+      // Templates keep the document tagline in a far-right/header cell before
+      // the actual customer-facing content. It is structural, not row data.
+      const isBlankCustomerRow = row => row.slice(0, customerColumnCount).every(value => {
+        const text = String(value ?? '').trim()
+        return text === '' || text === DOCUMENT_HEADER_TAGLINE
+      })
       const leadingBlankRows = Math.max(0, rows.findIndex(row => !isBlankCustomerRow(row)))
       const visibleRows = leadingBlankRows ? rows.slice(leadingBlankRows) : rows
       const visibleStyles = leadingBlankRows ? styles.slice(leadingBlankRows) : styles
