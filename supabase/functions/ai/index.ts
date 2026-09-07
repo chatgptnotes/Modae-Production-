@@ -151,6 +151,44 @@ REQUESTED LINES:
 ${cap((p.lines || []).map((l: any) => `${l.id}: ${l.pn || l.custRef || 'No part number'} - ${l.desc || 'Item'} - Qty ${l.qty || 1}`).join('\n'), 12000) || 'No priced lines are available yet; return an overall indicative response with an empty prices list.'}`,
   },
 
+  // ---- Workbench: customer reply → reviewed next action
+  'reply.classify': {
+    model: FLASH,
+    schema: {
+      type: 'OBJECT',
+      properties: {
+        outcome: { type: 'STRING', enum: ['accepted', 'rejected', 'revision', 'follow-up'] },
+        confidence: INT,
+        summary: STR,
+        nextStep: STR,
+        revisionType: { type: 'STRING', enum: ['Technical', 'Commercial', 'Pricing', 'Other', 'None'] },
+        evidence: STR,
+      },
+      required: ['outcome', 'confidence', 'summary', 'nextStep', 'revisionType', 'evidence'],
+    },
+    build: p => `${HOUSE}
+
+Classify a customer's reply to a ModAE quotation for human review. Do not
+assume acceptance from politeness, acknowledgement, or a request for more
+information. Use accepted only when the customer clearly accepts or awards
+the quoted scope. Use rejected only when the customer clearly declines,
+cancels, or confirms another supplier. Use revision when the customer asks for
+changes to the technical scope, commercial terms, pricing, delivery, validity,
+documents, or compliance. Use follow-up when the reply is ambiguous, asks for
+an update without deciding, or needs an answer before a decision.
+
+Return confidence as an integer from 0 to 100. Extract one concise next step;
+do not invent a date, price, commitment, or purchase order. revisionType must
+be None unless outcome is revision.
+
+OPPORTUNITY: ${cap(p.oppName, 300)} (${cap(p.oppId, 100)})
+CUSTOMER: ${cap(p.customer, 300)}
+PROPOSAL REVISION: ${cap(p.revision, 30)}
+SUBJECT: ${cap(p.subject, 500)}
+CUSTOMER REPLY:
+${cap(p.body, 12000)}`,
+  },
+
   'lead.extract': {
     model: PRO,
     schema: {

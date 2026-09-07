@@ -1343,15 +1343,68 @@ function FollowUpPane({ opp, onRevision }) {
   const [replySubject, setReplySubject] = useState('')
   const [replyBody, setReplyBody] = useState('')
   const [replyErr, setReplyErr] = useState('')
-  const logReply = () => {
+  const [replyReview, setReplyReview] = useState(null)
+  const [replyAction, setReplyAction] = useState('')
+  const [replyRevisionType, setReplyRevisionType] = useState(REVISION_TYPES[0].id)
+  const logReply = async () => {
     if (!replyBody.trim()) { setReplyErr('Paste the customer reply body.'); return }
+    const communicationId = `CM-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const body = replyBody.trim()
+    const subject = replySubject.trim() || `Re: ${opp.oppName}`
     store.addCommunication(opp.id, {
+      id: communicationId,
       dir: 'In', kind: 'clarification-response',
       from: replyFrom.trim() || opp.contactPerson || opp.sellTo,
-      subject: replySubject.trim() || `Re: ${opp.oppName}`,
-      body: replyBody.trim(),
+      subject,
+      body,
     })
     setReplyOpen(false); setReplyFrom(''); setReplySubject(''); setReplyBody(''); setReplyErr('')
+    setReplyReview({ id: communicationId, status: 'analyzing', subject, body })
+    const classification = await runJson('reply.classify', {
+      oppId: opp.id,
+      oppName: opp.oppName,
+      customer: opp.sellTo,
+      revision: p?.revision || '00',
+      subject,
+      body,
+    })
+    const valid = classification && ['accepted', 'rejected', 'revision', 'follow-up'].includes(classification.outcome)
+      && Number.isFinite(Number(classification.confidence))
+    const result = valid ? {
+      ...classification,
+      confidence: Math.max(0, Math.min(100, Number(classification.confidence))),
+      revisionType: classification.revisionType === 'None' ? '' : classification.revisionType,
+    } : null
+    store.updateCommunication(opp.id, communicationId, {
+      aiClassification: result,
+      classificationStatus: result ? (result.confidence >= 75 ? 'review' : 'manual') : 'unavailable',
+    }, 'Customer reply classified')
+    const suggestedAction = result && result.confidence >= 75
+      ? result.outcome === 'accepted' ? '' : result.outcome
+      : ''
+    setReplyReview({ id: communicationId, status: result ? 'ready' : 'manual', subject, body, classification: result })
+    setReplyAction(suggestedAction)
+    setReplyRevisionType(result?.revisionType || REVISION_TYPES[0].id)
+  }
+  const confirmReplyAction = (action, revisionType = '') => {
+    const result = replyReview?.classification
+    if (!replyReview || replyReview.status === 'analyzing') return
+    if (action === 'accepted-won') store.markWon(opp.id, 'Customer acceptance')
+    if (action === 'accepted-po') store.setMilestone(opp.id, 'PO Validation', 'Customer accepted proposal — PO required')
+    if (action === 'rejected') store.closeLost(opp.id, 'Others')
+    if (action === 'revision') {
+      const type = revisionType || result?.revisionType || REVISION_TYPES[0].id
+      store.reviseProposal(opp.id, result?.nextStep || result?.summary || 'Customer requested a proposal change', type)
+      onRevision?.()
+    }
+    if (action === 'follow-up') store.setMilestone(opp.id, 'Follow-up', result?.nextStep || 'Customer reply requires follow-up')
+    store.updateCommunication(opp.id, replyReview.id, {
+      reviewerDecision: action,
+      reviewerAt: new Date().toISOString(),
+      classificationStatus: 'confirmed',
+    }, 'Customer reply action confirmed')
+    setReplyReview(null)
+    setReplyAction('')
   }
   const [note, setNote] = useState('')
   const [revType, setRevType] = useState(REVISION_TYPES[0].id)
@@ -1453,6 +1506,57 @@ function FollowUpPane({ opp, onRevision }) {
               <button className="primary" type="button" onClick={logReply}>Save reply</button>
               <button type="button" onClick={() => { setReplyOpen(false); setReplyErr('') }}>Cancel</button>
             </div>
+          </div>
+        )}
+        {replyReview && (
+          <div className="drawer-form" style={{ marginTop: 12, borderLeft: '3px solid var(--accent, #e33)' }}>
+            <b>{replyReview.status === 'analyzing' ? 'Reading customer reply…' : 'Review suggested next action'}</b>
+            {replyReview.status === 'analyzing' ? (
+              <p className="hint">The reply was saved. AI is checking whether the customer accepted, rejected, requested a change, or needs follow-up.</p>
+            ) : replyReview.classification ? (
+              <>
+                <div className="check-row" style={{ marginTop: 8 }}>
+                  <Chip tone="state-Review">{replyReview.classification.outcome}</Chip>
+                  <Chip tone={replyReview.classification.confidence >= 75 ? 'state-Accepted' : 'state-Review'}>
+                    {replyReview.classification.confidence}% confidence
+                  </Chip>
+                </div>
+                <p style={{ margin: '8px 0 4px' }}>{replyReview.classification.summary}</p>
+                <p className="hint" style={{ margin: '4px 0' }}><b>Next step:</b> {replyReview.classification.nextStep}</p>
+                <p className="hint" style={{ margin: '4px 0' }}><b>Evidence:</b> {replyReview.classification.evidence}</p>
+                {replyReview.classification.confidence < 75 && (
+                  <WarnBox>Confidence is below the review threshold. Select the correct route manually.</WarnBox>
+                )}
+              </>
+            ) : (
+              <WarnBox>AI could not classify this reply. Choose the next route manually.</WarnBox>
+            )}
+            {replyReview.status !== 'analyzing' && (
+              <>
+                <label style={{ marginTop: 8 }}>Confirmed route</label>
+                <select value={replyAction} onChange={e => setReplyAction(e.target.value)}>
+                  <option value="">Select a route</option>
+                  <option value="follow-up">Keep open for follow-up</option>
+                  <option value="revision">Open a revision</option>
+                  <option value="accepted-po">Accepted — move to PO Validation</option>
+                  <option value="accepted-won">Accepted — mark Won</option>
+                  <option value="rejected">Rejected — close as lost</option>
+                </select>
+                {replyAction === 'revision' && (
+                  <select value={replyRevisionType} onChange={e => setReplyRevisionType(e.target.value)} style={{ marginTop: 6 }}>
+                    {REVISION_TYPES.map(type => <option key={type.id} value={type.id}>{type.label}</option>)}
+                  </select>
+                )}
+                {replyAction === 'rejected' && <p className="hint">This will close the opportunity as Lost with reason “Others”.</p>}
+                <div className="toolbar" style={{ margin: '8px 0 0' }}>
+                  <button className="primary" type="button" disabled={!replyAction}
+                    onClick={() => confirmReplyAction(replyAction, replyRevisionType)}>
+                    <Icon name="check" size={13} /> Confirm action
+                  </button>
+                  <button type="button" onClick={() => { setReplyReview(null); setReplyAction('') }}>Dismiss</button>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>

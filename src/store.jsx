@@ -614,17 +614,33 @@ export function StoreProvider({ children }) {
       }
     },
 
+    markWon(oppId, reason = 'Customer acceptance') {
+      const today = new Date().toISOString().slice(0, 10)
+      const before = stateRef.current.opportunities.find(o => o.id === oppId)
+      if (!before) return
+      setState(s => withAudit({
+        ...s,
+        opportunities: s.opportunities.map(o => (o.id === oppId
+          ? { ...o, stage: 'Won', status: 'Closed', closedReason: reason, milestone: 'Handover', lastUpdated: today }
+          : o)),
+      }, 'Opportunity won', oppId, reason))
+      const after = { ...before, stage: 'Won', status: 'Closed', milestone: 'Handover' }
+      const from = statusFolderFor(before)
+      const to = statusFolderFor(after)
+      if (from !== to) spTrack(oppId, to, () => filestore.moveOppFolder(after, from, to))
+    },
+
     addAdhocPart(part) {
       setState(s => ({ ...s, adhocParts: [part, ...s.adhocParts] }))
     },
 
-    // communications[oppId] = [{ ts, to, subject, kind }], newest first.
+    // communications[oppId] = [{ id, ts, to, subject, kind }], newest first.
     addCommunication(oppId, entry) {
       setState(s => withAudit({
         ...s,
         communications: {
           ...(s.communications || {}),
-          [oppId]: [{ ts: new Date().toISOString(), ...entry }, ...((s.communications || {})[oppId] || [])],
+          [oppId]: [{ id: entry.id || `CM-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, ts: new Date().toISOString(), ...entry }, ...((s.communications || {})[oppId] || [])],
         },
       }, entry.kind === 'submission'
         ? 'Proposal submitted'
@@ -632,6 +648,18 @@ export function StoreProvider({ children }) {
         : entry.kind === 'vendor-rfq' ? 'Manufacturer RFQ sent'
         : entry.kind === 'clarification' ? 'Clarification emailed' : 'Proposal emailed',
       oppId, entry.subject))
+    },
+
+    updateCommunication(oppId, communicationId, patch, action = 'Communication updated') {
+      setState(s => withAudit({
+        ...s,
+        communications: {
+          ...(s.communications || {}),
+          [oppId]: ((s.communications || {})[oppId] || []).map(c => (
+            c.id === communicationId ? { ...c, ...patch } : c
+          )),
+        },
+      }, action, oppId, patch.reviewerDecision || patch.aiClassification?.outcome || communicationId))
     },
 
     // ---- Lead inbox -------------------------------------------------------
