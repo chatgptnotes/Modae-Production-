@@ -80,6 +80,14 @@ const vendorQuoteSchema = {
   required: ['manufacturer', 'quoteRef', 'leadTime', 'notes', 'prices'],
 }
 
+const emailProposalSchema = {
+  type: 'OBJECT',
+  properties: {
+    text: { type: 'STRING' },
+  },
+  required: ['text'],
+}
+
 function leadPrompt(p) {
   return `${HOUSE}
 
@@ -163,6 +171,25 @@ REQUESTED LINES:
 ${cap((p.lines || []).map(l => `${l.id}: ${l.pn || l.custRef || 'No part number'} - ${l.desc || 'Item'} - Qty ${l.qty || 1}`).join('\n'), 12000) || 'No priced lines are available yet; return an overall indicative response with an empty prices list.'}`
 }
 
+function proposalEmailPrompt(p) {
+  return `${HOUSE}
+
+Draft a concise customer email for sending an approved Techno-Commercial
+Proposal. Use a polite Indian industrial B2B tone. Do not invent commercial
+terms, prices, delivery dates, attachments or commitments. Mention the proposal
+revision, opportunity reference and validity only if supplied. Return only the
+message body text, including greeting and sign-off.
+
+OPPORTUNITY: ${cap(p.oppName, 300)} (${cap(p.oppId, 100)})
+CUSTOMER: ${cap(p.customer, 300)}
+ROUTE: ${cap(p.route, 100)}
+REVISION: ${cap(p.revision, 50)}
+VALIDITY: ${cap(p.validity, 200)}
+SENDER: ${cap(p.senderName, 200)}
+TERMS:
+${cap((p.terms || []).map(t => `${t.term || 'Term'}: ${t.ourResponse || t.customerAsk || t.status || ''}`).join('\n'), 6000) || 'No special terms supplied.'}`
+}
+
 function inlineParts(payload) {
   return Array.isArray(payload?.aiAttachments)
     ? payload.aiAttachments
@@ -190,15 +217,25 @@ export default async function handler(req, res) {
   const task = String(input.task || '')
   const payload = input.payload || {}
   const model = /^gemini-[\w.-]+$/.test(String(input.model || '')) ? String(input.model) : DEFAULT_MODEL
-  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote'].includes(task)) {
+  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal'].includes(task)) {
     return fail(res, 400, 'AI_BAD_REQUEST', `Unsupported task: ${task}`)
   }
 
-  const prompt = task === 'health' ? 'Reply with the single word: ok' : task === 'lead.fill' ? fillPrompt(payload) : task === 'vendor.quote' ? vendorQuotePrompt(payload) : leadPrompt(payload)
+  const prompt = task === 'health' ? 'Reply with the single word: ok'
+    : task === 'lead.fill' ? fillPrompt(payload)
+      : task === 'vendor.quote' ? vendorQuotePrompt(payload)
+        : task === 'email.proposal' ? proposalEmailPrompt(payload)
+          : leadPrompt(payload)
   const requestBody = {
     contents: [{ parts: [{ text: prompt }, ...(task === 'lead.extract' ? inlineParts(payload) : [])] }],
-    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote'].includes(task)
-      ? { responseMimeType: 'application/json', responseSchema: task === 'lead.fill' ? fillSchema : task === 'vendor.quote' ? vendorQuoteSchema : leadSchema }
+    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal'].includes(task)
+      ? {
+          responseMimeType: 'application/json',
+          responseSchema: task === 'lead.fill' ? fillSchema
+            : task === 'vendor.quote' ? vendorQuoteSchema
+              : task === 'email.proposal' ? emailProposalSchema
+                : leadSchema,
+        }
       : {},
   }
 

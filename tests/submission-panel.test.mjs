@@ -9,6 +9,7 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8')
 
 const submission = read('src/workbench/SubmissionPanel.jsx')
 const api = read('api/send-proposal-email.js')
+const aiApi = read('api/ai.js')
 
 // The To field used to be read-only and silently empty whenever the
 // opportunity carried no contact address — the quote could then never be
@@ -59,11 +60,14 @@ test('proposal message can be created by AI and remains editable', () => {
   assert.match(submission, /AI: create message/)
   assert.match(submission, /setEmailBody\(text\.trim\(\)\)/)
   assert.match(submission, /<textarea value=\{emailBody\}/)
+  assert.match(aiApi, /'email\.proposal'/)
+  assert.match(aiApi, /proposalEmailPrompt/)
+  assert.match(aiApi, /emailProposalSchema/)
 })
 
 test('proposal attachment is opt-in and requires validated review', () => {
   assert.match(submission, /const \[attachProposal, setAttachProposal\]/)
-  assert.match(submission, /p\.reviewStatus === 'Validated'/)
+  assert.match(submission, /p\.reviewStatus === 'Validated' \|\| !!release/)
   assert.match(submission, /Attach validated proposal/)
   assert.match(submission, /attachProposal && !proposalValidated/)
   assert.match(submission, /\.\.\.\(attachProposal \? \[/)
