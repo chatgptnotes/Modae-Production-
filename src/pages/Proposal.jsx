@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import XLSX from 'xlsx-js-style'
 import { useParams, Link } from 'react-router-dom'
-import { useStore, sparesProposalBom } from '../store.jsx'
+import { useStore, sparesProposalBom, snapshotProposal } from '../store.jsx'
 import { effectiveRate, fmt, exportCSV, canPriceProposal, clampCosting, clampQty, MAX_GM_PCT } from '../utils.js'
 import { useFormulaBar } from '../formulabar.jsx'
 import { Icon, ModaeImageLogo } from '../icons.jsx'
@@ -639,6 +639,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
         rev: `V${(p.revisions || []).filter(item => item.status === 'Revised').length + 2}`,
         when: new Date().toISOString().slice(0, 10), by: store.role,
         note: 'Proposal edited and revalidated', status: 'Revised', type: 'Other',
+        snapshot: snapshotProposal(p),
       }] : (p.revisions || [])
       if (!p.bom?.length && route !== 'Services') issues.push({ severity: 'block', text: 'No proposal line items were found.' })
       if (p.bom?.some(line => !String(line.pn || '').trim())) issues.push({ severity: 'warning', text: 'One or more line items are missing a model or part number.' })

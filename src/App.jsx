@@ -76,7 +76,6 @@ const NAV = [
   { to: '/folders', label: 'SharePoint folders', icon: 'folder', page: 'folders' },
   { to: '/pricelists', label: 'Price Lists', icon: 'tag', page: 'pricelists' },
   { to: '/customers', label: 'Customers', icon: 'users', page: 'customers' },
-  { to: '/aimap', label: 'AI and automation', icon: 'sparkles', page: 'aimap', show: role => isAdminRole(role) || role === 'AH' || role === 'LJS' },
   { to: '/admin', label: 'Admin', icon: 'gear', page: 'admin' },
   { to: '/audit', label: 'Audit Trail', icon: 'list', page: 'audit' },
   { to: '/users', label: 'Users and roles', icon: 'shield', page: 'users' },

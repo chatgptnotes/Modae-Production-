@@ -59,6 +59,21 @@ export function sparesProposalBom(lines = []) {
   }))
 }
 
+// Captures what a proposal actually looked like at the moment a revision
+// entry is logged, so "Revisions" has real content to show instead of just
+// who/when/why metadata. Deep-cloned so later edits to the live proposal
+// can't mutate an already-logged revision's snapshot.
+export function snapshotProposal(p) {
+  return JSON.parse(JSON.stringify({
+    bom: p.bom, terms: p.terms, signals: p.signals, costing: p.costing,
+    pricingMode: p.pricingMode, discountPct: p.discountPct, markupPct: p.markupPct,
+    approvedPricing: p.approvedPricing,
+    revisionDate: p.revisionDate, validityDays: p.validityDays,
+    addressee: p.addressee, kindAttn: p.kindAttn, subject: p.subject,
+    bidStage: p.bidStage, bidType: p.bidType,
+  }))
+}
+
 // The localStorage read is all that is left here; the decision itself lives in
 // appState.js so the tests can drive the boot path directly.
 const initialState = () => stateFromSaved(localStorage.getItem(KEY))
@@ -474,6 +489,7 @@ export function StoreProvider({ children }) {
             rev: `V${revisions.filter(r => r.status === 'Revised').length + 2}`,
             when: new Date().toISOString().slice(0, 10),
             by: s.role, note: note || 'Revision opened', status: 'Revised', type: spec.id,
+            snapshot: snapshotProposal(p),
           }],
         }
         return withAudit({

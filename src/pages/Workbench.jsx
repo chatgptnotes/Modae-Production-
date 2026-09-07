@@ -87,7 +87,7 @@ const titleCase = value => String(value || '').toLowerCase().split(/\s+/).map((w
   return small ? word : word.charAt(0).toUpperCase() + word.slice(1)
 }).join(' ').replace(/\bBoq\b/g, 'BOQ').replace(/\bKyc\b/g, 'KYC').replace(/\bRfq\b/g, 'RFQ')
 
-function OpportunityProgress({ activeStep, completedThrough, onStep }) {
+function OpportunityProgress({ activeStep, completedThrough, onStep, onNext }) {
   const activeIndex = WORKFLOW_STEPS.findIndex(step => step.slug === activeStep)
   return (
     <nav className="opportunity-progress" aria-label="Opportunity progress">
@@ -99,7 +99,7 @@ function OpportunityProgress({ activeStep, completedThrough, onStep }) {
         <div className="progress-controls" aria-label="Navigate workflow views">
           <button type="button" disabled={activeIndex <= 0} onClick={() => onStep(WORKFLOW_STEPS[activeIndex - 1].slug)}>Previous</button>
           <span>{WORKFLOW_STEP_BY_SLUG[activeStep]?.label}</span>
-          <button type="button" disabled={activeIndex < 0 || activeIndex >= WORKFLOW_STEPS.length - 1} onClick={() => onStep(WORKFLOW_STEPS[activeIndex + 1].slug)}>Next</button>
+          <button type="button" disabled={activeIndex < 0 || activeIndex >= WORKFLOW_STEPS.length - 1} onClick={() => onNext(WORKFLOW_STEPS[activeIndex + 1].slug)}>Next</button>
         </div>
       </div>
       <div className="progress-steps">
@@ -172,6 +172,12 @@ export default function Workbench() {
       return
     }
     moveToMilestone(milestone)
+  }
+  const advanceStep = slug => {
+    const step = WORKFLOW_STEP_BY_SLUG[slug]
+    if (!step) return
+    moveMilestone(step.label)
+    selectStep(slug)
   }
   const exceptionApprovalFor = blocker => (store.approvals || []).find(a =>
     a.type === 'Milestone exception' && a.oppId === opp.id
@@ -295,7 +301,7 @@ export default function Workbench() {
         <div className="summary-meta-item opp-summary-action"><span>Next action</span><b>{nextAction.text || NEXT_ACTION[opp.milestone] || 'Progress the opportunity'}</b></div>
         <div className={`summary-meta-item summary-due ${isOverdue ? 'is-overdue' : ''}`}><span>Due</span><div className="summary-meta-value"><b>{ddMmmYY(due) || '-'}</b>{isOverdue && <Chip tone="state-Blocks">Overdue</Chip>}</div></div>
       </div>
-      <OpportunityProgress activeStep={activeStep} completedThrough={persistedStepIndex} onStep={selectStep} />
+      <OpportunityProgress activeStep={activeStep} completedThrough={persistedStepIndex} onStep={selectStep} onNext={advanceStep} />
       {transition && (
         <Modal title={transition.kind === 'blocked' ? `Cannot move from ${opp.milestone} to ${transition.target}` : `Move back to ${transition.target}`} onClose={() => setTransition(null)} wide>
           {transition.kind === 'blocked' ? (

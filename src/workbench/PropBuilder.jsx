@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useStore } from '../store.jsx'
+import { useStore, snapshotProposal } from '../store.jsx'
 import { canPriceProposal, fmt, ddMmmYY, displayRole, displayRoles } from '../utils.js'
 import { readiness, isBlocked, commercialGate, releaseState, approvalSet } from '../gates.js'
 import { REVISION_TYPES } from '../seed.js'
@@ -126,6 +126,7 @@ export default function PropBuilder({ opp, onRevision }) {
         rev: `S${revisions.filter(r => r.status === 'Submitted').length + 1}`,
         when: today, by: store.role,
         note: 'Submitted for approval', status: 'Submitted',
+        snapshot: snapshotProposal(p),
       }],
     })
   }
@@ -322,16 +323,32 @@ export default function PropBuilder({ opp, onRevision }) {
 
       {compareOpen && (
         <Modal title="Compare revisions" onClose={() => setCompareOpen(false)}>
-          {revisions.map((r, i) => (
-            <div key={i} className="check-row">
-              <b>{r.rev}</b><span>{r.note}</span>
-              <Chip tone="grey">{r.status}</Chip>
-              {r.type && <Chip tone="state-Review">{r.type} revision</Chip>}
-              <span className="hint" style={{ marginLeft: 'auto' }}>{ddMmmYY(r.when)} · {r.by}</span>
-            </div>
-          ))}
-          <p className="hint" style={{ marginTop: 8 }}>Naive comparison — the production system diffs BoQ lines, totals and terms between revisions.</p>
-          <div style={{ textAlign: 'right' }}><button onClick={() => setCompareOpen(false)}>Close</button></div>
+          {revisions.map((r, i) => {
+            const snap = r.snapshot
+            const dev = snap?.terms?.filter(t => t.status === 'Deviation').length || 0
+            return (
+              <div key={i} style={{ padding: '8px 0', borderBottom: '1px solid var(--border-soft)' }}>
+                <div className="check-row">
+                  <b>{r.rev}</b><span>{r.note}</span>
+                  <Chip tone="grey">{r.status}</Chip>
+                  {r.type && <Chip tone="state-Review">{r.type} revision</Chip>}
+                  <span className="hint" style={{ marginLeft: 'auto' }}>{ddMmmYY(r.when)} · {r.by}</span>
+                </div>
+                {snap ? (
+                  <div className="hint" style={{ marginTop: 4 }}>
+                    {(snap.bom || []).length} BoQ line{(snap.bom || []).length === 1 ? '' : 's'}
+                    {' · '}{(snap.terms || []).length} term{(snap.terms || []).length === 1 ? '' : 's'}{dev ? ` (${dev} deviation${dev === 1 ? '' : 's'})` : ''}
+                    {' · '}Discount {snap.discountPct || 0}% · Markup {snap.markupPct || 0}%
+                    {snap.approvedPricing?.requestedValue != null && ` · Requested ₹ ${fmt(snap.approvedPricing.requestedValue)}`}
+                    {snap.subject && ` · ${snap.subject}`}
+                  </div>
+                ) : (
+                  <div className="hint" style={{ marginTop: 4 }}>No content captured for this revision.</div>
+                )}
+              </div>
+            )
+          })}
+          <div style={{ textAlign: 'right', marginTop: 8 }}><button onClick={() => setCompareOpen(false)}>Close</button></div>
         </Modal>
       )}
     </div>

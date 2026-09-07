@@ -104,6 +104,19 @@ export function BrandMark({ height = 30, className = '' }) {
   )
 }
 
+// Microsoft's four-color squares mark — kept separate from the monochrome
+// Icon/PATHS set below since that renders single-color currentColor strokes.
+export function MicrosoftLogo({ size = 16, className = '' }) {
+  return (
+    <svg className={className} width={size} height={size} viewBox="0 0 21 21" aria-hidden="true">
+      <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+      <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+      <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+      <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+    </svg>
+  )
+}
+
 export function Icon({ name, size = 18, className = '' }) {
   return (
     <svg className={`ic ${className}`} width={size} height={size} viewBox="0 0 24 24"

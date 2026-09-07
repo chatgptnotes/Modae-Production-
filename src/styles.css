@@ -2406,6 +2406,11 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 }
 .check-row { display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-bottom: 1px solid var(--border-soft); font-size: 12.5px; }
 .check-row input[type=checkbox] { width: 17px; height: 17px; }
+.compare-alt-row { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--border-soft); font-size: 12.5px; }
+.compare-alt-info { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.compare-alt-header { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.compare-alt-desc { color: var(--muted, #667085); line-height: 1.4; }
+.compare-alt-action { flex: 0 0 auto; align-self: center; }
 .kyc-file { display: flex; align-items: center; gap: 8px; padding: 0 4px 6px; border-bottom: 1px solid var(--border-soft); }
 .kyc-file-open {
   display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 8px;
@@ -2426,6 +2431,10 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .login-card input, .login-card select { width: 100%; padding: 8px 10px; font-size: 14px; }
 .login-card .login-actions { margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
 .login-card .login-actions button { min-height: 42px; font-size: 14px; }
+.login-divider { display: flex; align-items: center; gap: 10px; margin: 14px 0; color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.login-divider::before, .login-divider::after { content: ''; flex: 1; height: 1px; background: var(--border-soft); }
+.btn-microsoft { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 42px; padding: 8px 10px; border: 1px solid var(--border-soft); border-radius: 4px; background: var(--palette-4843938); color: var(--text-main); font-size: 14px; font-weight: 600; cursor: pointer; }
+.btn-microsoft:hover { border-color: var(--text-muted); background: var(--primary-soft); }
 .login-demo { background: var(--primary-soft); border: 1px solid var(--primary-border); border-radius: 4px; padding: 8px 10px; font-size: 11.5px; color: var(--text-muted); margin-top: 14px; }
 .login-switch { text-align: center; font-size: 12px; margin-top: 12px; }
 .login-switch a { color: var(--bg-sidebar); cursor: pointer; }
@@ -4900,7 +4909,7 @@ body {
 .opp-summary-title h1 { display: flex; align-items: baseline; gap: 10px; min-width: 0; margin: 0; color: var(--text-main); font-size: clamp(24px, 2.3vw, 34px); font-weight: 700; letter-spacing: -.045em; line-height: 1.08; }
 .opp-summary-title h1 .opp-id { color: var(--text-muted); font-size: .56em; font-weight: 600; letter-spacing: .03em; background: var(--surface-raised); border: 1px solid var(--border-subtle); border-radius: 7px; padding: 6px 8px; }
 .opp-title-separator { color: var(--text-tertiary); font-weight: 400; }
-.opportunity-progress { margin-top: 16px; padding: 20px 20px 0; background: var(--card-bg); border: 1px solid var(--border-default); border-radius: 12px; box-shadow: 0 3px 12px var(--shadow-color); overflow: hidden; }
+.opportunity-progress { --progress-node-size: 40px; --progress-step-pad-top: 8px; margin-top: 16px; padding: 20px 20px 0; background: var(--card-bg); border: 1px solid var(--border-default); border-radius: 12px; box-shadow: 0 3px 12px var(--shadow-color); overflow: hidden; }
 .progress-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .progress-kicker { display: block; margin-bottom: 4px; color: var(--text-secondary); font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
 .progress-head strong { color: var(--text-primary); font-size: 17px; letter-spacing: -.02em; }
@@ -4955,7 +4964,7 @@ body {
 .summary-header-action:active { transform: translateY(1px); }
 .progress-steps { grid-template-columns: repeat(10, minmax(82px, 1fr)); padding-bottom: 4px; }
 .progress-step { min-height: 86px; padding-inline: 10px; }
-.progress-node { width: 40px; height: 40px; }
+.progress-node { width: var(--progress-node-size); height: var(--progress-node-size); }
 .progress-step::after { top: 20px; left: calc(50% + 20px); width: calc(100% - 40px); }
 .progress-label { font-size: 11.5px; }
 .workbench-details-editor .opportunity-details-grid > div[style] { grid-column: 1 / -1; }
@@ -6043,7 +6052,7 @@ button.install, .btn.install,
 .page .progress-track {
   position: absolute;
   z-index: -1;
-  top: 20px;
+  top: calc(var(--progress-step-pad-top) + var(--progress-node-size) / 2);
   left: 0;
   width: 100%;
   height: 2px;

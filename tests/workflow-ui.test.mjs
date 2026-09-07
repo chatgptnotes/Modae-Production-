@@ -103,7 +103,7 @@ test('confirmed spares sourcing replaces stale proposal rows instead of appendin
 
 test('opening a Spares proposal repairs stale lead rows from confirmed sourcing data', () => {
   const proposal = read('src/pages/Proposal.jsx')
-  assert.match(proposal, /import \{ useStore, sparesProposalBom \} from '\.\.\/store\.jsx'/)
+  assert.match(proposal, /import \{ useStore, sparesProposalBom, snapshotProposal \} from '\.\.\/store\.jsx'/)
   assert.match(proposal, /routeForType\(opp\.oppType\) !== 'Spares'/)
   assert.match(proposal, /store\.sendLinesToProposal\(oppId\)/)
   assert.match(proposal, /setP\(normalize\(next, opp\)\)/)

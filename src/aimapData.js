@@ -34,7 +34,7 @@ export const AI_MAP = [
       { t: 'Auto-fill of quotation / proposal template', phase: 1, kind: 'rule', d: 'Populates the proposal document from structured opportunity data.', to: '/opp/2607217RS/proposal' },
       { t: 'Pricing-anomaly detection', phase: 1, kind: 'rule', d: 'Flags expired price-list sources and out-of-band pricing before a proposal goes out.', to: '/opp/2607217RS/proposal' },
       { t: 'Compliance matrix generation', phase: 1, kind: 'rule', d: 'Drafts the technical compliance matrix against ModAE\'s standard capability list, for engineer review.', to: '/opp/2608222RS/proposal' },
-      { t: 'Revision history & comparison', phase: 1, kind: 'preview', d: 'Tracks and compares quote revisions side by side.', to: '/opp/2607217RS/proposal' },
+      { t: 'Revision history & comparison', phase: 1, kind: 'rule', d: 'Tracks and compares quote revisions side by side.', to: '/opp/2607217RS/proposal' },
       { t: 'Commercial-terms recommendation', phase: 1, kind: 'rule', d: 'Suggests payment, delivery and validity terms from customer class and route, for one-click insertion.', to: '/opp/2607217RS/proposal' },
       { t: 'RFP / SOW scope parsing', phase: 2, kind: 'ai', d: 'Parse a full RFP or Scope-of-Work document into structured, confidence-scored requirements, reviewed the same way as lead intake.', to: '/tender' },
       { t: 'Multi-currency conversion', phase: 2, kind: 'preview', d: 'Convert the proposal total using a configurable hedge rate for international tenders.', to: '/opp/2608222RS/proposal' },

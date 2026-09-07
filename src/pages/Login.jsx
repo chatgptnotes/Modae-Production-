@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS, DEMO_PASSWORD, PORTAL_ENABLED } from '../seed.js'
 import { WarnBox } from '../ui.jsx'
-import { Icon, ModaeImageLogo } from '../icons.jsx'
+import { Icon, ModaeImageLogo, MicrosoftLogo } from '../icons.jsx'
 import { InstallBanner } from '../install.jsx'
 import BrandWatermark from '../branding/BrandWatermark.jsx'
 
@@ -21,8 +21,10 @@ export default function Login() {
   const [role, setRole] = useState('RS')
   const [err, setErr] = useState('')
   const [ok, setOk] = useState('')
+  const [msNotice, setMsNotice] = useState(false)
 
-  const switchMode = m => { setMode(m); setErr(''); setOk('') }
+  const switchMode = m => { setMode(m); setErr(''); setOk(''); setMsNotice(false) }
+  const microsoftSignIn = () => setMsNotice(true)
 
   // One-click demo sign-in — every ACTIVE account, same audited login path.
   // The customer account is only offered while its portal is on (seed.js).
@@ -80,6 +82,11 @@ export default function Login() {
             <div className="login-actions">
               <button className="primary" type="submit">Sign in</button>
             </div>
+            <div className="login-divider"><span>or</span></div>
+            <button type="button" className="btn-microsoft" onClick={microsoftSignIn}>
+              <MicrosoftLogo size={16} /> Sign in with Microsoft
+            </button>
+            {msNotice && <WarnBox>Microsoft sign-in isn't configured in this demo yet — use a quick-login account below or sign in with email/password.</WarnBox>}
             <div className="login-switch">
               Need an account? <a onClick={() => switchMode('register')}>Request access</a>
             </div>
@@ -122,13 +129,6 @@ export default function Login() {
             </div>
           </div>
         )}
-        <div className="login-demo">
-          Demo accounts — password Demo@1234 for all. Manual sign-in above works too:
-          admin@modae.demo (Super Admin), ljs@modae.demo (Strategic Approver),
-          ah@modae.demo (Commercial &amp; Ops), rs@modae.demo / pp@modae.demo (Sales),
-          tech@modae.demo (Technical){PORTAL_ENABLED ? ', customer@portal.demo (Customer portal)' : ''}.
-        </div>
-        <WarnBox>Demo authentication — passwords are stored in plain text in this browser only. Not for production.</WarnBox>
       </div>
     </div>
   )
