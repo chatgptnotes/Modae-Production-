@@ -379,6 +379,21 @@ export default function Admin() {
           <p className="hint">Suggested owner on intake. Overriding a routed owner requires LJS or AH with a mandatory reason.</p>
         </div>
 
+        {/* 2a — Owner by opportunity type */}
+        <div className="admin-card">
+          <h3><Icon name="target" size={14} /> Owner by opportunity type</h3>
+          {(config.ownerRules || []).map((r, i) => (
+            <div key={r.oppType} className="arow">
+              <span style={{ flex: 1 }}>{r.oppType}</span>
+              <select value={r.owner} disabled={!canEdit} style={{ width: 'auto' }}
+                onChange={e => patchList('ownerRules', i, { owner: e.target.value })}>
+                {OWNERS.map(o => <option key={o}>{o}</option>)}
+              </select>
+            </div>
+          ))}
+          <p className="hint">Fallback owner used when no regional rule matches (e.g. Spares leads → PJS by default).</p>
+        </div>
+
         {/* 2b — State → region mapping */}
         <div className="admin-card">
           <h3><Icon name="target" size={14} /> State → region mapping</h3>

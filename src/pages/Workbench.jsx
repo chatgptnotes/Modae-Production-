@@ -161,23 +161,23 @@ export default function Workbench() {
   const isOverdue = !!due && new Date(`${due}T23:59:59`) < new Date()
   const milestoneIndex = MILESTONES.indexOf(opp.milestone)
   const moveMilestone = milestone => {
-    if (milestone === opp.milestone) return
+    if (milestone === opp.milestone) return true
     if (MILESTONES.indexOf(milestone) < milestoneIndex) {
       setTransition({ kind: 'backward', target: milestone, reason: '' })
-      return
+      return false
     }
     const blockersForMove = transitionBlockers(opp, milestone, proposal, store)
     if (blockersForMove.length) {
       setTransition({ kind: 'blocked', target: milestone, blockers: blockersForMove })
-      return
+      return false
     }
     moveToMilestone(milestone)
+    return true
   }
   const advanceStep = slug => {
     const step = WORKFLOW_STEP_BY_SLUG[slug]
     if (!step) return
-    moveMilestone(step.label)
-    selectStep(slug)
+    if (moveMilestone(step.label)) selectStep(slug)
   }
   const exceptionApprovalFor = blocker => (store.approvals || []).find(a =>
     a.type === 'Milestone exception' && a.oppId === opp.id
@@ -274,6 +274,8 @@ export default function Workbench() {
     if (blocker.key === 'tech-approval') return 'Section 5A: the technical scope must be signed off by LJS or AN before the quote can be dispatched. Either approver alone clears it.'
     if (blocker.key === 'comm-approval') return 'Section 5B: the commercial position must be signed off by AH before the quote can be dispatched.'
     if (blocker.key === 'release') return 'Section 5C: the final quote release, routed by order value and margin. It covers this revision only — a revised quote must be released again.'
+    if (blocker.key.startsWith('sp-conf-')) return 'This spares line’s part match has not been confirmed. Confirm the match — or pick an alternative — in Sourcing before the proposal can be built.'
+    if (blocker.key.startsWith('sp-price-')) return 'This spares line’s price source has expired. Refresh it against a current price list or vendor quote in Sourcing.'
     return 'Complete the requirement shown below before continuing.'
   }
 
@@ -322,6 +324,7 @@ export default function Workbench() {
                   {item.key === 'kyc' && <button className="exception-action" onClick={() => openTransitionTab('customer')}>Open Customer/KYC</button>}
                   {item.key === 'required-contactPerson' && <button className="exception-action" onClick={() => openMissingContact('contactPerson')}>Edit contact person</button>}
                   {item.key === 'required-contactPhone' && <button className="exception-action" onClick={() => openMissingContact('contactPhone')}>Edit contact phone</button>}
+                  {(item.key.startsWith('sp-conf-') || item.key.startsWith('sp-price-')) && <button className="exception-action" onClick={() => openTransitionTab('sourcing')}>Open sourcing</button>}
                   {approvable && openRequest && <span>{item.approvalType === 'Commercial deviation' ? 'AH approval for commercial deviations' : item.approvalType} <b>{openRequest.id}</b> is pending with {openRequest.needed?.join(openRequest.anyOf ? ' or ' : ' + ') || openRequest.approver} — <button className="inline-action" onClick={() => openTransitionTab('approvals')}>Open approval</button></span>}
                   {approvable && !openRequest && <button className="exception-action" onClick={() => requestBlockerApproval(item)}>{item.approvalType === 'Commercial deviation' ? 'Request AH approval for commercial deviations' : `Request ${item.approvalType.toLowerCase()} from ${blockerOwner(item)}`}</button>}
                   {requestable && exception?.status === 'Pending' && <span>Exception approval <b>{exception.id}</b> is pending — <button className="inline-action" onClick={() => openTransitionTab('approvals')}>Open approval</button></span>}
@@ -1298,7 +1301,7 @@ function ProposalTab({ opp, goTab }) {
           <Proposal oppId={opp.id} embedded initialTab="Cover Letter" />
         </>
       )}
-      {sub === 'edit-sheet' && <Proposal oppId={opp.id} embedded initialTab="Edit Sheet" onSubmitted={() => goTab('followup')} />}
+      {sub === 'edit-sheet' && <Proposal oppId={opp.id} embedded initialTab="Edit Sheet" />}
       {sub === 'followup' && <FollowUpPane opp={opp} onRevision={() => goTab('sourcing')} />}
     </div>
   )
@@ -1334,6 +1337,22 @@ function FollowUpPane({ opp, onRevision }) {
   const store = useStore()
   const p = store.getProposal(opp.id)
   const revisions = p.revisions || []
+  const commsRows = (store.communications?.[opp.id] || []).slice().sort((a, b) => new Date(b.ts || 0) - new Date(a.ts || 0))
+  const [replyOpen, setReplyOpen] = useState(false)
+  const [replyFrom, setReplyFrom] = useState('')
+  const [replySubject, setReplySubject] = useState('')
+  const [replyBody, setReplyBody] = useState('')
+  const [replyErr, setReplyErr] = useState('')
+  const logReply = () => {
+    if (!replyBody.trim()) { setReplyErr('Paste the customer reply body.'); return }
+    store.addCommunication(opp.id, {
+      dir: 'In', kind: 'clarification-response',
+      from: replyFrom.trim() || opp.contactPerson || opp.sellTo,
+      subject: replySubject.trim() || `Re: ${opp.oppName}`,
+      body: replyBody.trim(),
+    })
+    setReplyOpen(false); setReplyFrom(''); setReplySubject(''); setReplyBody(''); setReplyErr('')
+  }
   const [note, setNote] = useState('')
   const [revType, setRevType] = useState(REVISION_TYPES[0].id)
   const [fuOpen, setFuOpen] = useState(false)
@@ -1402,6 +1421,41 @@ function FollowUpPane({ opp, onRevision }) {
 
   return (
     <div className="ana-grid">
+      <div className="ana-card c-6">
+        <SubmissionPanel opp={opp} />
+      </div>
+      <div className="ana-card c-6">
+        <div className="ana-title">Customer communications</div>
+        {commsRows.map((c, i) => (
+          <div key={c.id || `${c.ts}-${i}`} className="check-row">
+            <Icon name="mail" size={13} />
+            <span>
+              <b>{c.subject}</b>
+              <div className="hint">{formatKind(c.kind)} · {c.ts ? new Date(c.ts).toLocaleString() : '—'}</div>
+              {c.body && <div className="hint">{c.body}</div>}
+            </span>
+          </div>
+        ))}
+        {!commsRows.length && <p className="hint">No communications logged yet.</p>}
+        {!replyOpen ? (
+          <button onClick={() => setReplyOpen(true)} style={{ marginTop: 8 }}><Icon name="mail" size={13} /> Log customer reply</button>
+        ) : (
+          <div className="drawer-form">
+            <b>Log customer reply</b>
+            <label style={{ marginTop: 6 }}>From</label>
+            <input value={replyFrom} onChange={e => setReplyFrom(e.target.value)} placeholder={opp.contactPerson || opp.sellTo} />
+            <label style={{ marginTop: 6 }}>Subject</label>
+            <input value={replySubject} onChange={e => setReplySubject(e.target.value)} placeholder={`Re: ${opp.oppName}`} />
+            <label style={{ marginTop: 6 }}>Reply body</label>
+            <textarea rows={5} value={replyBody} onChange={e => setReplyBody(e.target.value)} placeholder="Paste the customer's reply" />
+            {replyErr && <ErrBox>{replyErr}</ErrBox>}
+            <div className="toolbar" style={{ margin: 0 }}>
+              <button className="primary" type="button" onClick={logReply}>Save reply</button>
+              <button type="button" onClick={() => { setReplyOpen(false); setReplyErr('') }}>Cancel</button>
+            </div>
+          </div>
+        )}
+      </div>
       <div className="ana-card c-6">
         <div className="ana-title">Revisions</div>
         {revisions.map((r, i) => (
@@ -1603,6 +1657,13 @@ function communicationSender(entry, opp, lead) {
   return { name: entry.fromName || ROLES[opp.owner]?.name || opp.owner || 'ModAE Sales Desk', email: raw }
 }
 
+const formatKind = kind => ({
+  enquiry: 'Incoming enquiry', 'clarification-response': 'Customer reply',
+  clarification: 'Clarification', 'vendor-rfq': 'Manufacturer RFQ',
+  'proposal-email': 'Proposal email', submission: 'Proposal submission',
+  'follow-up': 'Follow-up', ack: 'Customer acknowledgement',
+}[kind] || kind || 'Communication')
+
 function LegacyCommsTab({ opp }) {
   const store = useStore()
   const lead = [...(store.leads || []), ...(store.leadArchive || [])].find(l => l.id === opp.sourceLeadId)
@@ -1670,12 +1731,6 @@ function CommsTab({ opp }) {
   }] : []
   const rows = [...inbound, ...leadRows, ...opportunityRows]
     .sort((a, b) => new Date(b.ts || 0) - new Date(a.ts || 0))
-  const formatKind = kind => ({
-    enquiry: 'Incoming enquiry', 'clarification-response': 'Customer reply',
-    clarification: 'Clarification', 'vendor-rfq': 'Manufacturer RFQ',
-    'proposal-email': 'Proposal email', submission: 'Proposal submission',
-    'follow-up': 'Follow-up', ack: 'Customer acknowledgement',
-  }[kind] || kind || 'Communication')
   return (
     <div className="ana-grid">
       <div className="ana-card c-6">

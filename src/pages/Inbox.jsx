@@ -187,7 +187,7 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
       route,
       urgency: 'Normal',
       completeness: fields.length ? 20 : 0,
-      suggestedOwner: ownerForOppType(route === 'Spares' ? 'Spares' : route === 'Service' ? 'Service' : 'Project'),
+      suggestedOwner: ownerForOppType(route === 'Spares' ? 'Spares' : route === 'Service' ? 'Service' : 'Project', store.config),
       ai: {
         summary: `AI extraction was unavailable${aiResult.error ? `: ${aiResult.error}` : ''}. The original enquiry was saved for manual structuring.`,
         fields: fields.map(f => ({ ...f, state: 'pending' })),
@@ -203,7 +203,7 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
   const resolvedRoute = sourceRoute || ai.route || 'Spares'
   const owner = ROLES[ai.suggestedOwner]?.sales
     ? ai.suggestedOwner
-    : ownerForOppType(resolvedRoute === 'Spares' ? 'Spares' : resolvedRoute === 'Service' ? 'Service' : 'Project')
+    : ownerForOppType(resolvedRoute === 'Spares' ? 'Spares' : resolvedRoute === 'Service' ? 'Service' : 'Project', store.config)
   const resolvedFields = ai.fields.map(f => {
     if (!/^(opp type|opportunity type)$/i.test(f.k) || !sourceRoute) return f
     return {
@@ -876,6 +876,10 @@ function AiLeadDetail({ lead }) {
   }
 
   const rule = (store.config.ownershipRules || []).find(r => r.owner === lead.suggestedOwner)
+  const oppTypeRule = !rule && (store.config.ownerRules || []).find(r => r.oppType === resolvedRoute && r.owner === lead.suggestedOwner)
+  const ownerRuleLabel = rule ? `${rule.region} rule`
+    : oppTypeRule ? `${oppTypeRule.oppType} opportunity-type rule`
+    : `${resolvedRoute} opportunity-type rule`
 
   const qualifyBlocked = isRed && !redCleared
   const verificationBlocked = !leadVerificationComplete(lead, previewCustomerStatus, { redCleared })
@@ -1429,7 +1433,7 @@ function AiLeadDetail({ lead }) {
             <span className="ws-kv-k">Suggested owner</span>
             <span className="ws-kv-v">
               {lead.suggestedOwner}
-              <span className="ws-kv-note">{rule ? `${rule.region} rule` : 'regional rule'} · override needs LJS/AH + reason</span>
+              <span className="ws-kv-note">{ownerRuleLabel} · override needs LJS/AH + reason</span>
             </span>
           </div>
 

@@ -1566,6 +1566,19 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
   padding: 16px; background: var(--surface-sunken, var(--palette-d973c5da)); border: 1px solid var(--border-soft);
 }
 .proposal-preview-scroll .propdoc { max-width: 820px; margin: 0 auto; }
+/* ModAE-internal costing shown under the customer document in the preview.
+   Visually separated so it can never be mistaken for part of the document. */
+.proposal-preview-internal {
+  max-width: 820px;
+  margin: 18px auto 0;
+  padding: 14px 16px;
+  border: 1px dashed var(--border-color);
+  border-left: 3px solid var(--primary-accent, var(--text-muted));
+  border-radius: 8px;
+  background: var(--palette-4843938);
+}
+.proposal-preview-internal > .section-title { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; }
+.proposal-preview-internal .sheet-wrap { overflow-x: auto; }
 /* The same preview inside the opportunity workspace's Proposal → Preview tab.
    It is a pane on a page that already scrolls, so the modal's viewport-height
    cap would trap the document in a second scrollbar. */
@@ -1589,9 +1602,12 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .template-workbook-page.template-page-portrait { max-width: 900px; }
 .template-workbook-page.template-page-landscape { max-width: none; }
 .template-workbook-page.template-page-wide { max-width: none; }
-.template-workbook-page.template-page-wide .template-workbook-page-scroll { overflow-x: auto; overflow-y: auto; }
+.template-workbook-page.template-page-wide .template-workbook-page-scroll { overflow-x: auto; }
 .template-workbook-page-title { font-weight: 700; color: var(--text-strong); padding-bottom: 10px; border-bottom: 2px solid var(--primary-fill); margin-bottom: 10px; }
-.template-workbook-page-scroll { overflow-x: auto; overflow-y: auto; width: 100%; max-height: calc(94vh - 190px); }
+/* Horizontal scroll only. A per-sheet vertical scrollbox (plus a height cap)
+   split the workbook into separate scrolling pages; the modal's
+   .proposal-preview-scroll is now the single vertical scroller. */
+.template-workbook-page-scroll { overflow-x: auto; width: 100%; }
 .template-workbook-page .sheet { margin: 0; }
 .template-workbook-table { width: max-content; min-width: 100%; table-layout: auto; border-collapse: collapse; }
 .template-workbook-page .sheet td.template-workbook-cell {
@@ -1615,22 +1631,6 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .template-cell-code .template-cell-editor,
 .template-cell-number .template-cell-editor { white-space: nowrap; word-break: normal; overflow-wrap: normal; }
 .template-workbook-page .sheet td.template-workbook-empty { background: var(--palette-4843938); }
-.template-workbook-page-nav {
-  width: 100%; display: flex; align-items: center; gap: 10px;
-  justify-content: space-between; padding: 8px 10px; box-sizing: border-box;
-  background: var(--palette-4843938); border: 1px solid var(--border-soft); margin-top: 10px;
-}
-.template-workbook-page-nav-top {
-  position: relative; z-index: 1;
-}
-.template-workbook-page-tabs { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; }
-.template-workbook-page-tabs button { border-radius: 3px; padding: 6px 10px; }
-.template-workbook-page-tabs button.active { background: var(--primary-fill); color: var(--palette-4843938); border-color: var(--primary-fill); }
-.template-workbook-page-nav button:disabled { opacity: .45; cursor: not-allowed; }
-@media (max-width: 800px) {
-  .template-workbook-page-nav { align-items: stretch; flex-wrap: wrap; }
-  .template-workbook-page-tabs { order: 3; width: 100%; }
-}
 .workbook-scroll { max-height: calc(100vh - 300px); min-height: 260px; overflow: auto; }
 .workbook-table { min-width: 980px; }
 .workbook-colour.c0 { color: var(--won-text); background: var(--won-fill); }
@@ -5186,6 +5186,51 @@ body {
 .proposal-action-toolbar { display: none; }
 .proposal-upload-button { cursor: pointer; }
 .proposal-upload-button input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.proposal-toolbar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 8px;
+  margin-left: auto;
+  max-width: 100%;
+}
+@media (max-width: 760px) {
+  .proposal-toolbar { flex-wrap: wrap; justify-content: flex-start; }
+}
+.proposal-toolbar button,
+.proposal-toolbar .btn-secondary,
+.proposal-toolbar label {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.proposal-toolbar-menu { position: relative; flex: 0 0 auto; }
+.proposal-toolbar-menu-list {
+  position: absolute;
+  z-index: 50;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 180px;
+  padding: 4px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--card-bg, var(--palette-4843938));
+  box-shadow: 0 12px 28px var(--palette-53e02ea4);
+}
+.proposal-toolbar-menu-list button {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  justify-content: flex-start;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 5px;
+  text-align: left;
+}
 .proposal-review-strip {
   display: flex;
   align-items: center;

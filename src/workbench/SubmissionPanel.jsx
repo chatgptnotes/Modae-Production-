@@ -45,7 +45,8 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
   const subject = `Proposal — ${opp.oppName} (${opp.id} Rev ${p.revision})`
   const doc = docModel(p, opp, { files: [], config: store.config })
   const route = docRoute(p, opp)
-  const { totalQty, lineQuoted } = buildPricing(store, p)
+  const { totalQty, lineQuoted, lineCost, linePrice, computeTotals } = buildPricing(store, p)
+  const totals = computeTotals(p)
   const priced = p.bidType !== 'Unpriced (Technical)'
   const allChecked = checks.c1 && checks.c2 && checks.c3
   const canSend = allChecked && !pendingConds.length && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)
@@ -64,7 +65,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
           subject,
           body: `Dear Sir/Madam,\n\nPlease find our approved Techno-Commercial Proposal ${opp.id}, revision ${p.revision}.\n\nBest regards,\nModAE India Pvt Ltd`,
           attachments: [
-            await proposalWorkbookAttachment({ p, opp, doc, priced, totalQty, lineQuoted, route }),
+            await proposalWorkbookAttachment({ p, opp, doc, priced, totalQty, lineQuoted, lineCost, linePrice, totals, route }),
             ...enclosures,
           ],
           cc: emailCc,

@@ -95,12 +95,30 @@ export function buildPricing(store, p) {
     pl.parts.map(part => ({ ...part, list, currency: pl.currency })))
 
   const totalQty = (l, u = units) => lineQty(l, u)
-  const sourceLine = l => sparesLines.find(x =>
-    (l.pn && x.pn === l.pn) ||
-    (l.custRef && x.custRef === l.custRef) ||
-    (l.desc && x.desc === l.desc))
+  // Identity is strongest first: a part number identifies a line, a customer
+  // reference next, and the description only when the line carries neither.
+  // Treating all three as equal alternatives let a shared description match the
+  // wrong spares line, and — because the match used to be spread OVER the line
+  // — overwrite its part number, so every line resolved to the same price.
+  const sourceLine = l => {
+    if (l.pn) return sparesLines.find(x => x.pn === l.pn)
+    if (l.custRef) return sparesLines.find(x => x.custRef === l.custRef)
+    if (l.desc) return sparesLines.find(x => x.desc === l.desc)
+    return undefined
+  }
+  // The matched spares line fills gaps only — it must never replace a value the
+  // proposal line already carries (a blank/undefined field is not a value).
+  const withSource = l => {
+    const source = sourceLine(l)
+    if (!source) return l
+    const merged = { ...source }
+    for (const [key, value] of Object.entries(l)) {
+      if (value !== undefined && value !== null && value !== '') merged[key] = value
+    }
+    return merged
+  }
   const lineSource = l => resolvePriceSource(
-    { ...l, ...(sourceLine(l) || {}) },
+    withSource(l),
     store.priceLists,
     store.adhocParts,
     store.vendorQuotes,

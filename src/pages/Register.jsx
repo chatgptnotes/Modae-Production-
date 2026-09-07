@@ -38,7 +38,7 @@ export default function Register() {
   const oppTypeSeed = OPP_TYPES.includes(lead?.oppType)
     ? lead.oppType
     : (lead?.route === 'Service' ? 'Service' : lead?.route === 'Project' ? 'Project' : 'Spares')
-  const suggested = guessFromList(ownerFieldV, OWNERS) || lead?.suggestedOwner || ownerForOppType(oppTypeSeed)
+  const suggested = guessFromList(ownerFieldV, OWNERS) || lead?.suggestedOwner || ownerForOppType(oppTypeSeed, store.config)
   const typeV = fieldVal(fields, /opp type/i)
   const buSegV = fieldVal(fields, /bu|segment/i)
   const allText = fields.map(f => f.v).join(' ') + ' ' + (lead?.subject || '')

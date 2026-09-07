@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs'
 import { MODAE_DOCUMENT_STANDARDS } from '../branding/modae.js'
+import { effectiveRate } from '../utils.js'
 
 const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 const SPARES_TEMPLATE_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx', import.meta.url).href
@@ -7,6 +8,16 @@ const SERVICES_TEMPLATE_URL = new URL('../../branding/Further Inputs/Further Inp
 const LOGO_URL = new URL('../../branding/mod-ae/assets/modae-official-logo.png', import.meta.url).href
 
 const clean = value => value == null ? '' : String(value)
+
+// Lead intake stores 'Unknown sender' / '(no subject)' as placeholders when an
+// enquiry arrives without them (Inbox.jsx), and those strings travel into
+// opp.sellTo/oppName and the proposal's addressee/subject/project. They are
+// fine as internal state, but must never be printed on a customer document.
+const INTAKE_PLACEHOLDERS = [/unknown sender/i, /\(no subject\)/i, /unknown@sender/i]
+export const customerSafe = value => {
+  const text = clean(value).trim()
+  return INTAKE_PLACEHOLDERS.some(pattern => pattern.test(text)) ? '' : text
+}
 const number = value => Number(value) || 0
 const excelDate = value => {
   if (value instanceof Date) return value
@@ -92,7 +103,10 @@ function ensureLogo(workbook, worksheet, logoBuffer, lastColumn) {
 }
 
 function setPrintLayout(worksheet, orientation) {
-  worksheet.views = [{ showGridLines: false, style: 'pageLayout', activeCell: 'A1' }]
+  // Normal (continuous) view. 'pageLayout' made Excel open the workbook broken
+  // into separate printed pages with margin gaps and repeated header bands —
+  // the page setup below still governs how it prints.
+  worksheet.views = [{ showGridLines: false, activeCell: 'A1' }]
   worksheet.pageSetup = {
     ...(worksheet.pageSetup || {}),
     orientation,
@@ -172,7 +186,7 @@ function sanitizeWorkbook(workbook) {
   }
 }
 
-function setCoverSheet(workbook, worksheet, { p, opp, doc }) {
+function setCoverSheet(workbook, worksheet, { p, opp, doc, route }) {
   setPrintLayout(worksheet, 'portrait')
   // A1:B3 is the reference logo area. Do not write a title into A3: that
   // merged region is occupied by the logo in Excel and caused cover overlap.
@@ -182,13 +196,15 @@ function setCoverSheet(workbook, worksheet, { p, opp, doc }) {
   setValue(worksheet.getCell('C7'), p.bidStage)
   setValue(worksheet.getCell('C8'), p.bidType)
   setValue(worksheet.getCell('C9'), p.revision)
-  setCoverRow(worksheet, 'B11:Q11', p.addressee || `M/s. ${opp.sellTo}`)
+  const customerName = customerSafe(p.addressee) || (customerSafe(opp.sellTo) && `M/s. ${customerSafe(opp.sellTo)}`)
+  const subject = customerSafe(p.subject) || customerSafe(opp.oppName) || `${route || 'Techno-Commercial'} Proposal`
+  setCoverRow(worksheet, 'B11:Q11', customerName || '')
   setCoverRow(worksheet, 'B12:Q12', opp.eucLocation || opp.location || '')
   setCoverRow(worksheet, 'B13:Q13', opp.customerAddress || '')
   setCoverRow(worksheet, 'B14:Q14', opp.customerCity || '')
-  setCoverRow(worksheet, 'C16:Q16', p.kindAttn || opp.contactPerson || '')
-  setCoverRow(worksheet, 'C18:Q18', [p.rfqNumber && `RFQ ${p.rfqNumber}`, p.subject || opp.oppName].filter(Boolean).join(' - '))
-  setCoverRow(worksheet, 'C20:Q20', p.project || '')
+  setCoverRow(worksheet, 'C16:Q16', customerSafe(p.kindAttn) || customerSafe(opp.contactPerson))
+  setCoverRow(worksheet, 'C18:Q18', [p.rfqNumber && `RFQ ${p.rfqNumber}`, subject].filter(Boolean).join(' - '))
+  setCoverRow(worksheet, 'C20:Q20', customerSafe(p.project))
   setCoverRow(worksheet, 'B22:Q22', doc.letterSalutation || 'Dear Sir,')
   setCoverRow(worksheet, 'B24:Q24', doc.letterBody || '')
   setCoverRow(worksheet, 'B26:Q26', [
@@ -218,13 +234,29 @@ function setCoverSheet(workbook, worksheet, { p, opp, doc }) {
 
 const MODAE_PHONE_EMAIL = '+91 973 15 77 199 · ceo@mod-ae.com'
 
-function setSummaryCard(worksheet, p) {
+// The costing keys the app actually stores are baseRate/bnkDiscPct/
+// cdErvContPct (see clampCosting in utils.js); Eff. Rate is derived, never
+// stored. This used to read euroBase/discount/cdErv/effectiveRate — keys that
+// exist nowhere — so every export silently shipped the hardcoded defaults
+// instead of the proposal's real factors.
+function setSummaryCard(worksheet, p, totals, financeCost = 0) {
+  const costing = p.costing || {}
+  // K4/K5 and M6 are percent-formatted in the template, so they take fractions:
+  // writing the app's whole-number 50 into K4 rendered as 5000%, and dragged
+  // the template's =O18*(1-K4) "ModAE PO to BKV" negative with it.
+  const netGM = totals ? totals.target - totals.cost - financeCost : null
   const values = [
     ['J2', 'Imported Items Pricing & Costing Factors'],
-    ['J3', 'Euro-₹ Base'], ['K3', number(p.costing?.euroBase || 112)],
-    ['J4', 'B&K Disc%'], ['K4', number(p.costing?.discount || 0.35)],
-    ['J5', 'CD+ Handl+ERV'], ['K5', number(p.costing?.cdErv || 0.15)],
-    ['J6', 'Eff. Rate-€'], ['K6', number(p.costing?.effectiveRate || 84.4675)],
+    ['J3', 'Euro-₹ Base'], ['K3', number(costing.baseRate || 112)],
+    ['J4', 'B&K Disc%'], ['K4', number(costing.bnkDiscPct ?? 35) / 100],
+    ['J5', 'CD+ Handl+ERV'], ['K5', number(costing.cdErvContPct ?? 15) / 100],
+    ['J6', 'Eff. Rate-€'], ['K6', number(costing.baseRate ? effectiveRate(costing) : 84.4675)],
+    // M4:M6 are blank in the template — the roll-up the app already computes.
+    ...(totals ? [
+      ['M4', number(totals.target)],
+      ['M5', number(netGM)],
+      ['M6', totals.target ? number(netGM) / number(totals.target) : 0],
+    ] : []),
   ]
   for (const [ref, value] of values) {
     const cell = worksheet.getCell(ref)
@@ -236,10 +268,69 @@ function setSummaryCard(worksheet, p) {
   }
 }
 
+const isEmptyCell = cell => {
+  const value = cell?.value
+  if (value == null) return true
+  if (typeof value === 'object') return !value.formula && !value.richText && !value.text
+  return String(value).trim() === ''
+}
+
+// The customer-bound copy must never carry the J:O internal costing block, and
+// must not trail a wide empty region either — the template's used range runs to
+// column Y and row 41 while the customer table ends at H. Delete rather than
+// blank: hidden columns still travel with the file, and the empty padding is
+// what reads as "much space" when the customer opens it.
+function stripInternalCosting(worksheet) {
+  // Everything from column J rightwards is the internal cost/margin block —
+  // unit and total cost in ₹ and €, the costing-factors card, the ModAE
+  // cost/target/GM roll-up and the deal notes beside it.
+  const firstInternal = 10 // column J
+  for (const range of Object.values(worksheet._merges || {})) {
+    const model = range?.model
+    if (!model || model.right < firstInternal) continue
+    worksheet.unMergeCells(`${columnName(model.left)}${model.top}:${columnName(model.right)}${model.bottom}`)
+  }
+  const lastColumn = Math.max(worksheet.columnCount, firstInternal)
+  worksheet.spliceColumns(firstInternal, lastColumn - firstInternal + 1)
+
+  // Splicing moves values out but leaves the template's borders, fills and
+  // widths behind — that empty-but-formatted band to the right is what reads
+  // as "much space" when the customer opens the file. Clear it via eachCell so
+  // no new cells are materialised (that would defeat the row trim below).
+  worksheet.eachRow({ includeEmpty: false }, row => {
+    row.eachCell({ includeEmpty: false }, (cell, column) => {
+      if (column < firstInternal) return
+      cell.value = null
+      cell.style = {}
+    })
+  })
+  for (let column = firstInternal; column <= lastColumn; column++) {
+    const col = worksheet.getColumn(column)
+    col.width = undefined
+    col.style = {}
+    col.hidden = false
+  }
+
+  // Drop the template's trailing blank rows so the sheet ends with the terms.
+  let lastUsedRow = 0
+  worksheet.eachRow({ includeEmpty: false }, (row, number) => {
+    let used = false
+    row.eachCell({ includeEmpty: false }, cell => { if (!isEmptyCell(cell)) used = true })
+    if (used) lastUsedRow = number
+  })
+  if (worksheet.rowCount > lastUsedRow) worksheet.spliceRows(lastUsedRow + 1, worksheet.rowCount - lastUsedRow)
+}
+
 function setCommercialSheet(workbook, worksheet, args) {
-  const { p, opp, doc, totalQty, lineQuoted, route } = args
+  const { p, opp, doc, totalQty, lineQuoted, lineCost, linePrice, totals, route, redactInternalCosting } = args
   setPrintLayout(worksheet, 'landscape')
-  setSummaryCard(worksheet, p)
+  setSummaryCard(worksheet, p, totals, (p.costing?.financeCostK || 0) * 1000)
+  // B8/C8 were never written, so every proposal shipped the source template's
+  // own deal title ("Item-10 · Proposal For B&K Vibro Spare Sensors…").
+  const group = (doc.groups || [])[0]
+  setValue(worksheet.getCell('B8'), group?.no || 'Item-10')
+  setValue(worksheet.getCell('C8'), customerSafe(group?.title) || customerSafe(p.subject)
+    || customerSafe(opp.oppName) || `${route || 'Techno-Commercial'} Proposal`)
   const lines = p.bom || []
   const firstRow = 10
   const originalTotalRow = 18
@@ -291,7 +382,11 @@ function setCommercialSheet(workbook, worksheet, args) {
     const templateProduct = templateProducts.get(clean(line.pn || line.custRef).trim().toLowerCase())
     const qty = templateProduct == null ? number(totalQty(line)) : number(templateProduct.quantity)
     const unitPrice = number(lineQuoted(line))
-    const unitEuro = number(line.unitPriceEuro || line.priceEuro)
+    // Landed cost and list price are derived (docProps.buildPricing), never
+    // stored on the line — reading line.unitCost/unitPriceEuro wrote 0 into
+    // every internal cost cell of the ModAE copy.
+    const unitLandedCost = lineCost ? number(lineCost(line)) : 0
+    const unitEuro = linePrice ? number(linePrice(line)) : 0
     setValue(worksheet.getCell(`B${row}`), index + 1, { alignment: { horizontal: 'center', vertical: 'top' } })
     setValue(worksheet.getCell(`C${row}`), templateProduct?.description || line.desc || line.itemCategory || '', { alignment: { vertical: 'top', wrapText: true } })
     setValue(worksheet.getCell(`D${row}`), line.pn || line.custRef || '', { alignment: { vertical: 'top', wrapText: true } })
@@ -300,7 +395,7 @@ function setCommercialSheet(workbook, worksheet, args) {
     setValue(worksheet.getCell(`G${row}`), { formula: `F${row}*E${row}` }, { alignment: { horizontal: 'right', vertical: 'top' } })
     setValue(worksheet.getCell(`J${row}`), unitPrice, { alignment: { horizontal: 'right', vertical: 'top' } })
     setValue(worksheet.getCell(`K${row}`), { formula: `J${row}*E${row}` }, { alignment: { horizontal: 'right', vertical: 'top' } })
-    setValue(worksheet.getCell(`L${row}`), number(line.unitCost), { alignment: { horizontal: 'right', vertical: 'top' } })
+    setValue(worksheet.getCell(`L${row}`), unitLandedCost, { alignment: { horizontal: 'right', vertical: 'top' } })
     setValue(worksheet.getCell(`M${row}`), { formula: `L${row}*E${row}` }, { alignment: { horizontal: 'right', vertical: 'top' } })
     setValue(worksheet.getCell(`N${row}`), unitEuro, { alignment: { horizontal: 'right', vertical: 'top' } })
     setValue(worksheet.getCell(`O${row}`), { formula: `N${row}*E${row}` }, { alignment: { horizontal: 'right', vertical: 'top' } })
@@ -329,7 +424,8 @@ function setCommercialSheet(workbook, worksheet, args) {
 
   const footer = totalRow
   setValue(worksheet.getCell(`B${footer}`), 'Total For', { font: { bold: true }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDE9D9' } } })
-  setValue(worksheet.getCell(`C${footer}`), doc.subject || p.subject || opp.oppName, { font: { bold: true }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDE9D9' } }, alignment: { wrapText: true } })
+  setValue(worksheet.getCell(`C${footer}`), customerSafe(doc.subject) || customerSafe(p.subject)
+    || customerSafe(opp.oppName) || `${route || 'Techno-Commercial'} Proposal`, { font: { bold: true }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDE9D9' } }, alignment: { wrapText: true } })
   for (const column of ['F', 'G', 'J', 'K', 'L', 'M', 'N', 'O']) {
     const cell = worksheet.getCell(`${column}${footer}`)
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDE9D9' } }
@@ -377,6 +473,8 @@ function setCommercialSheet(workbook, worksheet, args) {
   worksheet.getColumn('E').width = 10
   worksheet.getColumn('F').width = 18
   worksheet.getColumn('G').width = 18
+
+  if (redactInternalCosting) stripInternalCosting(worksheet)
 }
 
 async function readBuffer(input) {

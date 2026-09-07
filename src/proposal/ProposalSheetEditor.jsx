@@ -13,7 +13,7 @@ const inputProps = (row, col, onKeyDown) => ({
 
 export default function ProposalSheetEditor({
   p, opp, doc, save, totals, units, totalQty, lineComputed, lineQuoted, priced,
-   lineCost, linePrice, updLine, removeLine, adjustLineQty, updTerm, addTerm, removeTerm, pasteBoq, store, workbook = 'proposal', setWorkbook,
+   lineCost, linePrice, updLine, removeLine, adjustLineQty, updTerm, addTerm, removeTerm, addLine, pasteBoq, store, workbook = 'proposal', setWorkbook,
 }) {
   const [localWorkbook, setLocalWorkbook] = useState('proposal')
   const activeWorkbook = setWorkbook ? workbook : localWorkbook
@@ -138,7 +138,10 @@ export default function ProposalSheetEditor({
                 return <tr key={i}>
                   <td className="rowhead">{i + 1}</td>
                   <td><textarea rows={2} className="proposal-description-editor" {...inputProps(i, 0, e => { paste(i, 0, e); keyNav(e, i, 0, p.bom.length, 4) })} value={l.desc || ''} onChange={updLine(i, 'desc', false)} /></td>
-                  {isSpares && <td>{l.pn || '—'}{l.custRef && <div className="hint">{l.custRef}</div>}</td>}
+                  {isSpares && <td>
+                    <input value={l.pn || ''} onChange={updLine(i, 'pn', false)} />
+                    {l.custRef && l.custRef.trim().toLowerCase() !== (l.pn || '').trim().toLowerCase() && <div className="hint">{l.custRef}</div>}
+                  </td>}
                   <td className="num">
                     <input type="number" min="0" {...inputProps(i, 1, e => { paste(i, 1, e); keyNav(e, i, 1, p.bom.length, 4) })}
                       value={quantity || ''} onChange={e => {
@@ -155,7 +158,7 @@ export default function ProposalSheetEditor({
                 <td className="rowhead">{i + 1}</td>
                 <td><input {...inputProps(i, 0, e => { paste(i, 0, e); keyNav(e, i, 0, p.bom.length, 6) })} value={l.itemCategory || ''} onChange={updLine(i, 'itemCategory', false)} /></td>
                 <td><textarea rows={2} className="proposal-description-editor" {...inputProps(i, 1, e => { paste(i, 1, e); keyNav(e, i, 1, p.bom.length, 6) })} value={l.desc || ''} onChange={updLine(i, 'desc', false)} /></td>
-                <td>{l.pn || '—'}{l.custRef && <div className="hint">{l.custRef}</div>}</td>
+                <td>{l.pn || '—'}{l.custRef && l.custRef.trim().toLowerCase() !== (l.pn || '').trim().toLowerCase() && <div className="hint">{l.custRef}</div>}</td>
                 {editable.slice(2, 5).map((key, j) => <td className="num" key={key}>
                   {key === 'qtyPerUnit'
                     ? <div className="quantity-stepper">
@@ -175,6 +178,7 @@ export default function ProposalSheetEditor({
             {priced && <tfoot><tr><td colSpan={isSpares ? 5 : isServices ? 4 : 10}>Totals</td><td className="num">₹ {fmt(totals.target)}</td><td /></tr></tfoot>}
           </table>
         </div>
+        <button onClick={addLine}>+ Add line</button>
         <div className="costing-note">Internal cost and margin calculations remain protected; {priced ? 'the customer-facing quoted price is editable.' : 'pricing is restricted for this role.'}</div>
       </section>}
 

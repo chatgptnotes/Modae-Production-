@@ -28,8 +28,11 @@ export function enclosureAttachments(route) {
   }))
 }
 
+// The customer never sees the internal cost/margin columns — redact them
+// unconditionally for the emailed attachment, unlike the internal "Download
+// Draft" copy which keeps them for pre-send review.
 export async function proposalWorkbookAttachment(args) {
-  const bytes = await generateProposalWorkbook(args)
+  const bytes = await generateProposalWorkbook({ ...args, redactInternalCosting: true })
   return {
     filename: `${args.opp.id}_Proposal_Rev_${args.p.revision}.xlsx`,
     mimeType: MIME_XLSX,

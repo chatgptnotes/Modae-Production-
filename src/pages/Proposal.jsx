@@ -6,14 +6,13 @@ import { effectiveRate, fmt, exportCSV, canPriceProposal, clampCosting, clampQty
 import { useFormulaBar } from '../formulabar.jsx'
 import { Icon, ModaeImageLogo } from '../icons.jsx'
 import { Modal } from '../ui.jsx'
-import { oppBlockers, isBlocked } from '../gates.js'
+import { readiness, isBlocked } from '../gates.js'
 import { docModel, docRoute, enclosuresFor, MODAE_COMPANY } from '../proposalDoc.js'
 import DocEditor from '../proposal/DocEditor.jsx'
 import PrintDoc from '../proposal/PrintDoc.jsx'
 import { signalsFromBom, countSignals, rackLayout, UMM_CHANNELS, RACK_SLOTS } from '../rack.js'
 import { normalizeProposal, buildPricing } from '../proposal/docProps.js'
 import ProposalSheetEditor from '../proposal/ProposalSheetEditor.jsx'
-import { blobAttachment, pricedBoqAttachment } from '../proposal/emailAttachments.js'
 import { downloadProposalXlsx } from '../proposal/excelExport.js'
 import { routeForType } from '../seed.js'
 import { buildLeadProposalData } from '../leadBoq.js'
@@ -139,21 +138,6 @@ const templateCellsForRow = (sheet, rowIndex) => {
   return cells
 }
 
-const templateColumnPercentages = (sheet, route) => {
-  const widths = sheet.widths || []
-  const sheetName = String(sheet.name || '').toLowerCase()
-  if (sheetName.includes('cover letter') || sheetName.includes('scope of work') || sheetName === 'sow') {
-    const percentages = widths.map(() => 1)
-    if (percentages.length > 0) percentages[0] = 3
-    if (percentages.length > 1) percentages[1] = 14
-    if (percentages.length > 2) percentages[2] = 18
-    const total = percentages.reduce((sum, item) => sum + item, 0) || 1
-    return percentages.map(width => `${(width / total) * 100}%`)
-  }
-  const total = widths.reduce((sum, width) => sum + Math.max(1, Number(width) || 1), 0) || 1
-  return widths.map(width => `${(Math.max(1, Number(width) || 1) / total) * 100}%`)
-}
-
 const templatePageClass = (sheet, route) => {
   const name = String(sheet.name || '').toLowerCase()
   const portrait = name.includes('cover letter') || name.includes('scope of work') || name === 'sow' || name.includes('issues')
@@ -256,10 +240,40 @@ function RouteTemplateTab({ route, tab, p, doc, priced, lineQuoted }) {
 // prints. `normalize` keeps its old name here to leave the call sites alone.
 const normalize = normalizeProposal
 
+// Combines "Preview proposal" and "Preview template" into one toolbar dropdown,
+// following the same open/close + click-outside pattern as DetailTabs' overflow menu.
+function PreviewMenu({ onPreviewProposal, onPreviewTemplate }) {
+  const [open, setOpen] = useState(false)
+  const menuRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return undefined
+    const close = event => {
+      if (!menuRef.current?.contains(event.target)) setOpen(false)
+    }
+    document.addEventListener('pointerdown', close)
+    return () => document.removeEventListener('pointerdown', close)
+  }, [open])
+
+  return (
+    <div className="proposal-toolbar-menu" ref={menuRef}>
+      <button type="button" className="btn-secondary" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(v => !v)}>
+        <Icon name="eye" size={13} /> Preview <Icon name="chevronDown" size={12} />
+      </button>
+      {open && (
+        <div className="proposal-toolbar-menu-list" role="menu">
+          <button type="button" role="menuitem" onClick={() => { setOpen(false); onPreviewProposal() }}>Preview proposal</button>
+          {onPreviewTemplate && <button type="button" role="menuitem" onClick={() => { setOpen(false); onPreviewTemplate() }}>Preview template</button>}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Rendered two ways: as the standalone /proposal/:oppId page, and embedded in the
 // opportunity workspace (Proposal tab → Builder). Embedded mode drops the page
 // chrome — title, back link, duplicated blocker list — and unpins the sheet tabs.
-export default function Proposal({ oppId: oppIdProp, embedded = false, initialTab = 'Edit Sheet', onSubmitted }) {
+export default function Proposal({ oppId: oppIdProp, embedded = false, initialTab = 'Edit Sheet' }) {
   const { oppId: routeOppId } = useParams()
   const oppId = oppIdProp || routeOppId
   const store = useStore()
@@ -273,20 +287,12 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   const [referenceLoading, setReferenceLoading] = useState(false)
   const [referenceError, setReferenceError] = useState('')
   const [templatePreviewOpen, setTemplatePreviewOpen] = useState(false)
-  const [activeTemplateSheet, setActiveTemplateSheet] = useState(0)
   const [editingTemplateCell, setEditingTemplateCell] = useState(null)
   const [templateLoading, setTemplateLoading] = useState(false)
   const [templateError, setTemplateError] = useState('')
-  const [emailOpen, setEmailOpen] = useState(false)
-  const [emailTo, setEmailTo] = useState('')
-  const [emailCc, setEmailCc] = useState('')
-  const [emailSubject, setEmailSubject] = useState('')
-  const [emailBody, setEmailBody] = useState('')
-  const [emailAttachments, setEmailAttachments] = useState([])
-  const [emailPreview, setEmailPreview] = useState(false)
-  const [emailBusy, setEmailBusy] = useState(false)
-  const [emailError, setEmailError] = useState('')
   const [reviewBusy, setReviewBusy] = useState(false)
+  const [validateChoice, setValidateChoice] = useState(false)
+  const uploadInputRef = useRef(null)
   const [reviewMessage, setReviewMessage] = useState('')
   const [reviewError, setReviewError] = useState('')
   const [conditionTarget, setConditionTarget] = useState(null)
@@ -366,7 +372,6 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   if (!opp) return <div className="page"><h2>Unknown opportunity</h2><Link to="/">Back to tracker</Link></div>
 
   const comm = canPriceProposal(store.role)
-  const customer = store.customers.find(c => c.name === opp.sellTo)
   const pendingForOpp = (store.approvals || []).filter(a => a.oppId === oppId && a.status === 'Pending')
 
   const units = p.units || 7
@@ -382,7 +387,6 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
     : route === 'Spares' ? p.sparesProposalWorkbook
       : route === 'Services' ? p.serviceProposalWorkbook : null
   const proposalTemplateSheets = proposalTemplate?.sheets || []
-  const activeTemplateSheetData = proposalTemplateSheets[activeTemplateSheet] || proposalTemplateSheets[0]
   const referencePartNumber = description => String(description || '').match(/[A-Z]{1,8}[A-Z0-9]*(?:[./-][A-Z0-9]+){2,}/i)?.[0] || ''
   const referenceBom = rows => rows.map(row => {
     const pn = referencePartNumber(row.description)
@@ -456,7 +460,6 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   }
 
   const openTemplatePreview = () => {
-    setActiveTemplateSheet(0)
     setEditingTemplateCell(null)
     setTemplatePreviewOpen(true)
   }
@@ -583,13 +586,17 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
 
   const updTerm = (i, k) => e => save({ ...p, terms: p.terms.map((t, j) => (j === i ? { ...t, [k]: e.target.value } : t)) })
   const addTerm = () => save({ ...p, terms: [...p.terms, { term: '', customerAsk: '', ourResponse: '', status: 'Comply' }] })
+  const addLine = () => save({ ...p, bom: [...p.bom, {
+    itemCategory: '', desc: '', pn: '', custRef: '', listPrice: 0, adders: [],
+    qtyPerUnit: 0, common: 1, spares: 0, quoted: '', uom: 'EA',
+  }] })
   const removeTerm = i => () => save({ ...p, terms: p.terms.filter((_, j) => j !== i) })
 
   const comms = (store.communications || {})[oppId] || []
 
   // Submission gates: red-customer clearance, deviation approvals, and
   // approved-with-conditions confirmations, per the Aug 10 review.
-  const blockers = oppBlockers(opp, p, store.approvals || [])
+  const blockers = readiness(opp, p, store)
   const blocked = isBlocked(blockers)
   const submitted = comms.some(c => c.kind === 'submission' || c.kind === 'proposal-email')
   const reviewStatus = p.reviewStatus || 'Not reviewed'
@@ -697,106 +704,12 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
     }
   }
 
-  const generatedEmailBody = [
-      'Dear Sir/Madam,',
-      '',
-      `Please find our Techno-Commercial Proposal ${oppId}${p.project ? ' for ' + p.project : ''}.`,
-      ...(p.rfqNumber ? [`Ref: ${p.rfqNumber}`] : []),
-      '',
-      ...p.bom.slice(0, 6).map((l, i) => `${i + 1}. ${l.desc} — ${totalQty(l)} nos`),
-      ...(p.bom.length > 6 ? [`…and ${p.bom.length - 6} more items`] : []),
-      '',
-      'Please find the priced Bill of Quantities attached.',
-      '',
-      'Best regards,',
-      MODAE_COMPANY.name,
-  ].join('\n')
-  const emailAttachmentMimeType = file => file.type || (file.name.toLowerCase().endsWith('.pdf')
-    ? 'application/pdf'
-    : file.name.toLowerCase().endsWith('.xlsx')
-      ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      : '')
-  const addEmailFiles = event => {
-    const selected = Array.from(event.target.files || [])
-    event.target.value = ''
-    const allowed = new Set([
-      'application/pdf',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    ])
-    const invalid = selected.find(file => !allowed.has(emailAttachmentMimeType(file)))
-    if (invalid) {
-      setEmailError('Only PDF and XLSX files can be attached')
-      return
-    }
-    setEmailAttachments(current => {
-      const next = [...current, ...selected.filter(file => !current.some(existing => existing.name === file.name && existing.size === file.size))]
-      if (next.length > 4) {
-        setEmailError('You can add up to four extra files (five attachments in total)')
-        return next.slice(0, 4)
-      }
-      setEmailError('')
-      return next
-    })
-  }
-  // Shared with the lead-stage clarification draft (src/leadClarification.js),
-  // so the two dispatch paths cannot drift apart.
-  const sendEmail = async () => {
-    if (!emailTo.trim()) {
-      setEmailError('A recipient email is required')
-      return
-    }
-    setEmailBusy(true)
-    setEmailError('')
-    try {
-      const optionalAttachments = await Promise.all(emailAttachments.map(file => blobAttachment(file, file.name, emailAttachmentMimeType(file))))
-      const response = await fetch('/api/send-proposal-email', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          oppId, to: emailTo.trim(), cc: emailCc.trim(), subject: emailSubject, body: emailBody,
-          attachments: [
-            pricedBoqAttachment({ p, opp, priced, totalQty, lineQuoted, route }),
-            ...optionalAttachments,
-          ],
-        }),
-      })
-      const result = await response.json().catch(() => ({}))
-      if (!response.ok || !result.ok) throw new Error(result.error || 'Email could not be sent')
-      store.addCommunication(oppId, {
-        to: emailTo.trim(), cc: emailCc.trim(), subject: emailSubject, kind: 'proposal-email', lifecycle: 'submission',
-        messageId: result.messageId, status: 'sent',
-        attachmentNames: [`${oppId}_Priced_BoQ_Rev_${p.revision}.xlsx`,
-          ...optionalAttachments.map(a => a.filename)],
-      })
-      store.updateOpportunity(oppId, {
-        milestone: 'Follow-up',
-        proposalDate: new Date().toISOString().slice(0, 10),
-      })
-      setEmailOpen(false)
-      onSubmitted?.()
-    } catch (error) {
-      setEmailError(error?.message || 'Email could not be sent')
-    } finally {
-      setEmailBusy(false)
-    }
-  }
-
-  const openEmail = () => {
-    setEmailSubject(`${oppId} — Techno-Commercial Proposal${p.project ? ' — ' + p.project.slice(0, 60) : ''}`)
-    setEmailTo(opp.contactEmail || customer?.email || '')
-    setEmailCc('')
-    setEmailBody(generatedEmailBody)
-    setEmailAttachments([])
-    setEmailPreview(false)
-    setEmailError('')
-    setEmailOpen(true)
-  }
-
   const exportBoQ = () => exportCSV(
     `${oppId}_Priced_BoQ.csv`,
     ['Sl.', 'Item Category', 'Item/Scope Description', 'Proposed Model & Part Number', 'Customer Item Code', 'Adders', 'Qty/Unit', 'Common', 'Spares', 'Total Qty', 'UOM', 'Unit Price ₹', 'Total Price ₹', 'Unit Cost ₹', 'Total Cost ₹', `List Price`, 'Currency'],
     p.bom.map((l, i) => [i + 1, l.itemCategory, l.desc, l.pn, l.custRef, l.adders.join('+'), l.qtyPerUnit, l.common, l.spares, totalQty(l), l.uom, lineQuoted(l), lineQuoted(l) * totalQty(l), Math.round(lineCost(l)), Math.round(lineCost(l) * totalQty(l)), linePrice(l), l.currency])
   )
-  const exportExcel = () => downloadProposalXlsx({ p, opp, doc, priced, totalQty, lineQuoted, route }).catch(error => {
+  const exportExcel = () => downloadProposalXlsx({ p, opp, doc, priced, totalQty, lineQuoted, lineCost, linePrice, totals, route }).catch(error => {
     console.error('Proposal Excel export failed', error)
     window.alert(`The proposal workbook could not be downloaded: ${error?.message || 'unknown export error'}`)
   })
@@ -836,6 +749,48 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   // normal flow, so the 64px clearance `.page` reserves for the fixed bar is wrong.
   const shellClass = embedded ? 'proposal-embedded' : 'page'
 
+  // One definition, rendered both on the Priced BoQ tab and inside the preview
+  // modal's ModAE-internal section — the same controlled inputs, so an edit in
+  // either place lands on the same proposal state.
+  const costingFactorsPanel = (
+    <>
+      <div className="factors">
+        <table>
+          <thead><tr><th colSpan={2}>Imported Items Pricing &amp; Costing Factors</th></tr></thead>
+          <tbody>
+            <tr onClick={selCosting('O3', p.costing.baseRate, 'baseRate')}><td>Euro-₹ Base</td><td className="num"><input type="number" step="0.01" min="0" value={p.costing.baseRate} onChange={setCosting('baseRate')} /></td></tr>
+            <tr onClick={selCosting('P3', p.costing.usdBase, 'usdBase')}><td>USD-₹ Base</td><td className="num"><input type="number" step="0.01" min="0" value={p.costing.usdBase} onChange={setCosting('usdBase')} /></td></tr>
+            <tr onClick={selCosting('O4', p.costing.cdErvContPct === 16 ? '=8.5%+2.5%+5%' : p.costing.cdErvContPct, 'cdErvContPct', 'pct')}><td>CD+ERV+Cont.</td><td className="num"><input type="number" step="0.1" min="0" value={p.costing.cdErvContPct} onChange={setCosting('cdErvContPct')} />%</td></tr>
+            <tr onClick={selCosting('O5', p.costing.bnkDiscPct, 'bnkDiscPct', 'pct')}><td>B&amp;K Disc%</td><td className="num"><input type="number" step="0.1" min="0" max="100" value={p.costing.bnkDiscPct} onChange={setCosting('bnkDiscPct')} />%</td></tr>
+            <tr onClick={selCosting('O6', '=ROUNDUP((O3*(1+O4)*(1-O5)),0)', null)}><td><b>Eff. Rate</b></td><td className="num"><b>₹ {fmt(effectiveRate(p.costing))} / €&nbsp;·&nbsp;₹ {fmt(effectiveRate(p.costing, 'USD', false))} / $</b></td></tr>
+            <tr onClick={selCosting('O7', p.costing.inputGMPct, 'inputGMPct', 'pct')}><td>Input GM%</td><td className="num"><input type="number" step="0.1" min="0" max={MAX_GM_PCT} value={p.costing.inputGMPct} onChange={setCosting('inputGMPct')} />%</td></tr>
+          </tbody>
+        </table>
+        <table>
+          <thead><tr><th colSpan={2}>Roll-up (internal)</th></tr></thead>
+          <tbody>
+            <tr onClick={selCosting('Q3', '=SUM(Total Cost ₹)', null)}><td>ModAE Costs</td><td className="num">₹ {fmt(totals.cost)}</td></tr>
+            <tr onClick={selCosting('Q4', '=SUM(Total Price ₹)', null)}><td>Target Price</td><td className="num">₹ {fmt(totals.target)}</td></tr>
+            <tr onClick={selCosting('Q5', p.costing.financeCostK, 'financeCostK')}><td>Finance Cost (K₹)</td><td className="num"><input type="number" step="1" min="0" value={p.costing.financeCostK} onChange={setCosting('financeCostK')} /></td></tr>
+            <tr onClick={selCosting('Q6', '=Q4-Q3-Q5*1000', null)}><td><b>Net GM ₹</b></td><td className="num"><b>₹ {fmt(netGM)}</b></td></tr>
+            <tr onClick={selCosting('Q7', '=Q6/Q4', null)}><td><b>Net GM %</b></td><td className="num"><b>{totals.target ? ((netGM / totals.target) * 100).toFixed(2) + '%' : '—'}</b></td></tr>
+          </tbody>
+        </table>
+        <table>
+          <thead><tr><th colSpan={2}>Project</th></tr></thead>
+          <tbody>
+            <tr><td>№ of Units</td><td className="num"><input type="number" min="1" value={units} onChange={e => save({ ...p, units: +e.target.value || 1 })} /></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div className="costing-note">
+        Eff. Rate = ROUNDUP(base × (1 + CD+ERV+Cont.) × (1 − B&amp;K Disc)) — e.g. 112 × 1.16 × 0.50 → ₹65 (B&amp;K discount applies to the B&amp;K list only).
+        Unit ₹ price = list × Eff. Rate ÷ (1 − GM). Net GM = Target − ModAE Costs − Finance Cost, so quoting below the computed price or adding finance cost pulls Net GM% under the Input GM%.
+        Input GM% is capped at {MAX_GM_PCT}%, the discount at 100%, and finance cost cannot be negative — the cells hold at those limits.
+      </div>
+    </>
+  )
+
   if (printing) {
     return (
       <div className={shellClass}>
@@ -854,9 +809,22 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           <span className="eyebrow">Customer proposal</span>
           <h3>{route} proposal <span className="proposal-meta-chip">Rev {p.revision || '00'}</span></h3>
         </div>
-        <div className="proposal-primary-actions" aria-label="Primary proposal actions">
-          <button className="btn-secondary" onClick={exportExcel}><Icon name="download" size={13} /> Download Draft</button>
-          <button className="primary" onClick={validateReviewedProposal} disabled={reviewBusy}>
+        <div className="proposal-toolbar" aria-label="Proposal actions">
+          <button className="btn-secondary" onClick={exportExcel} title="Download Draft">
+            <Icon name="download" size={13} /> Draft
+          </button>
+          <label className="btn-secondary proposal-upload-button" title="Upload reviewed XLSX">
+            <Icon name="upload" size={13} /> Upload
+            <input type="file" accept=".xlsx,.xls" ref={uploadInputRef} onChange={uploadReviewedProposal} />
+          </label>
+          <PreviewMenu
+            onPreviewProposal={() => setPreviewOpen(true)}
+            onPreviewTemplate={['Project', 'Spares', 'Services'].includes(route) ? openTemplatePreview : null}
+          />
+          {reviewReady && approvalRequired && !pendingForOpp.length && (
+            <button className="btn-secondary" onClick={submitForApproval}><Icon name="send" size={13} /> Request approval</button>
+          )}
+          <button className="primary" onClick={() => setValidateChoice(true)} disabled={reviewBusy}>
             <Icon name="checkCircle" size={13} /> {reviewBusy ? 'Checking…' : 'Validate review'}
           </button>
         </div>
@@ -873,27 +841,27 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           <span className={`pill ${reviewReady ? 'won' : reviewStatus === 'Needs attention' ? 'Red' : 'grey'}`}>{reviewStatus}</span>
           {pendingForOpp.length > 0 && <span className="pill Amber">{pendingForOpp.length} approval{pendingForOpp.length > 1 ? 's' : ''} pending</span>}
         </div>
-        <div className="proposal-secondary-actions" aria-label="Customer-facing actions">
-          <label className="btn-secondary proposal-upload-button">
-            <Icon name="upload" size={13} /> Upload reviewed XLSX
-            <input type="file" accept=".xlsx,.xls" onChange={uploadReviewedProposal} />
-          </label>
-          <button className="btn-secondary" onClick={() => setPreviewOpen(true)}><Icon name="eye" size={13} /> Preview proposal</button>
-          {reviewReady && !pendingForOpp.length && !blocked && !approvalRequired && <button className="primary" onClick={openEmail}><Icon name="mail" size={13} /> Send to customer</button>}
-          {reviewReady && approvalRequired && !pendingForOpp.length && <button className="btn-secondary" onClick={submitForApproval}><Icon name="send" size={13} /> Request approval</button>}
-          {['Project', 'Spares', 'Services'].includes(route) && <button className="btn-secondary" onClick={openTemplatePreview}><Icon name="fileSheet" size={13} /> Preview template</button>}
-        </div>
       </div>
 
       <section className="proposal-review-strip" aria-label="Human review checkpoint">
         <div>
           <strong>Review the AI draft before approval</strong>
-          <span>Edit inline, download and revise externally, or upload the reviewed workbook. Validation runs after that review.</span>
+          <span>Edit inline, download and revise externally, or upload the reviewed workbook, then use Validate review above.</span>
         </div>
-        <button className="primary" onClick={validateReviewedProposal} disabled={reviewBusy}>
-          <Icon name="checkCircle" size={13} /> {reviewBusy ? 'Checking…' : 'Run validation'}
-        </button>
       </section>
+      {validateChoice && (
+        <Modal title="Validate review" onClose={() => setValidateChoice(false)}>
+          <p className="hint">Validate the current AI-generated draft as-is, or upload a workbook that's already been reviewed outside the app.</p>
+          <div className="forms-actions">
+            <button className="primary" onClick={() => { setValidateChoice(false); validateReviewedProposal() }}>
+              <Icon name="checkCircle" size={13} /> Continue with AI draft
+            </button>
+            <button onClick={() => { setValidateChoice(false); uploadInputRef.current?.click() }}>
+              <Icon name="upload" size={13} /> Upload reviewed workbook
+            </button>
+          </div>
+        </Modal>
+      )}
       {(reviewError || reviewMessage || p.reviewIssues?.length > 0) && (
         <section className="proposal-review-results" aria-live="polite">
           {reviewError && <div className="errbox">{reviewError}</div>}
@@ -908,19 +876,15 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
       <div className="proposal-tab-bar">
         <DetailTabs ariaLabel="Proposal documents" activeId={tab}
           items={visibleTabs.map(name => ({ id: name, label: name }))}
+          showOverflow={false}
           onChange={setTab} />
-        {tab === 'Edit Sheet' && (
-          <DetailTabs ariaLabel="Workbook mode" activeId={workbook}
-            items={[{ id: 'proposal', label: 'Proposal' }, { id: 'inputs', label: 'Inputs' }]}
-            onChange={setWorkbook} />
-        )}
       </div>
 
       {opp.status === 'Open' && (
         <details className="proposal-alert-drawer" open={readinessOpen || blocked || pendingForOpp.length > 0} onToggle={e => setReadinessOpen(e.currentTarget.open)}>
           <summary>
             <span className={`proposal-alert-indicator ${blocked ? 'blocked' : 'ready'}`} />
-            <span>{blocked ? `${blockers.length} readiness item${blockers.length === 1 ? '' : 's'} need attention` : 'Proposal is ready to progress'}</span>
+            <span>{blocked ? `${blockers.length} readiness item${blockers.length === 1 ? '' : 's'} need attention` : ''}</span>
             {submitted && <span className="pill won">Submitted</span>}
             <span className="proposal-alert-toggle">Review status</span>
           </summary>
@@ -933,9 +897,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
               <span className="spacer" />
               {submitted
                 ? <span className="pill won">Submitted</span>
-                : <button className="primary" disabled={!reviewReady} onClick={openEmail}>
-                  <Icon name="mail" size={13} /> Send to customer
-                </button>}
+                : reviewReady && <span className="pill grey">Ready — send from the Follow-up step</span>}
             </div>
           )}
           {/* Embedded, the readiness panel directly above already lists every
@@ -963,12 +925,10 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
               )}
             </div>
           ))}
-          {blockers.length > 0 && !blocked && !submitted && (
+          {blockers.length > 0 && !blocked && !submitted && reviewReady && (
             <div className="gate-row">
               <span className="spacer" />
-              <button className="primary" disabled={!reviewReady} onClick={openEmail}>
-                <Icon name="mail" size={13} /> Send to customer
-              </button>
+              <span className="pill grey">Ready — send from the Follow-up step</span>
             </div>
           )}
           {blockers.length > 0 && !blocked && submitted && (
@@ -1082,7 +1042,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           <ProposalSheetEditor p={p} opp={opp} doc={doc} save={save} totals={totals} units={units} priced={priced} workbook={workbook} setWorkbook={setWorkbook}
           totalQty={totalQty} lineComputed={lineComputed} lineQuoted={lineQuoted} lineCost={lineCost}
           linePrice={linePrice} updLine={updLine} removeLine={removeLine} adjustLineQty={adjustLineQty}
-          updTerm={updTerm} addTerm={addTerm} removeTerm={removeTerm} pasteBoq={pasteBoq} store={store}
+          updTerm={updTerm} addTerm={addTerm} removeTerm={removeTerm} addLine={addLine} pasteBoq={pasteBoq} store={store}
           />
       )}
 
@@ -1194,40 +1154,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
 
       {tab === 'Priced BoQ' && comm && (
         <>
-          <div className="factors">
-            <table>
-              <thead><tr><th colSpan={2}>Imported Items Pricing &amp; Costing Factors</th></tr></thead>
-              <tbody>
-                <tr onClick={selCosting('O3', p.costing.baseRate, 'baseRate')}><td>Euro-₹ Base</td><td className="num"><input type="number" step="0.01" min="0" value={p.costing.baseRate} onChange={setCosting('baseRate')} /></td></tr>
-                <tr onClick={selCosting('P3', p.costing.usdBase, 'usdBase')}><td>USD-₹ Base</td><td className="num"><input type="number" step="0.01" min="0" value={p.costing.usdBase} onChange={setCosting('usdBase')} /></td></tr>
-                <tr onClick={selCosting('O4', p.costing.cdErvContPct === 16 ? '=8.5%+2.5%+5%' : p.costing.cdErvContPct, 'cdErvContPct', 'pct')}><td>CD+ERV+Cont.</td><td className="num"><input type="number" step="0.1" min="0" value={p.costing.cdErvContPct} onChange={setCosting('cdErvContPct')} />%</td></tr>
-                <tr onClick={selCosting('O5', p.costing.bnkDiscPct, 'bnkDiscPct', 'pct')}><td>B&amp;K Disc%</td><td className="num"><input type="number" step="0.1" min="0" max="100" value={p.costing.bnkDiscPct} onChange={setCosting('bnkDiscPct')} />%</td></tr>
-                <tr onClick={selCosting('O6', '=ROUNDUP((O3*(1+O4)*(1-O5)),0)', null)}><td><b>Eff. Rate</b></td><td className="num"><b>₹ {fmt(effectiveRate(p.costing))} / €&nbsp;·&nbsp;₹ {fmt(effectiveRate(p.costing, 'USD', false))} / $</b></td></tr>
-                <tr onClick={selCosting('O7', p.costing.inputGMPct, 'inputGMPct', 'pct')}><td>Input GM%</td><td className="num"><input type="number" step="0.1" min="0" max={MAX_GM_PCT} value={p.costing.inputGMPct} onChange={setCosting('inputGMPct')} />%</td></tr>
-              </tbody>
-            </table>
-            <table>
-              <thead><tr><th colSpan={2}>Roll-up (internal)</th></tr></thead>
-              <tbody>
-                <tr onClick={selCosting('Q3', '=SUM(Total Cost ₹)', null)}><td>ModAE Costs</td><td className="num">₹ {fmt(totals.cost)}</td></tr>
-                <tr onClick={selCosting('Q4', '=SUM(Total Price ₹)', null)}><td>Target Price</td><td className="num">₹ {fmt(totals.target)}</td></tr>
-                <tr onClick={selCosting('Q5', p.costing.financeCostK, 'financeCostK')}><td>Finance Cost (K₹)</td><td className="num"><input type="number" step="1" min="0" value={p.costing.financeCostK} onChange={setCosting('financeCostK')} /></td></tr>
-                <tr onClick={selCosting('Q6', '=Q4-Q3-Q5*1000', null)}><td><b>Net GM ₹</b></td><td className="num"><b>₹ {fmt(netGM)}</b></td></tr>
-                <tr onClick={selCosting('Q7', '=Q6/Q4', null)}><td><b>Net GM %</b></td><td className="num"><b>{totals.target ? ((netGM / totals.target) * 100).toFixed(2) + '%' : '—'}</b></td></tr>
-              </tbody>
-            </table>
-            <table>
-              <thead><tr><th colSpan={2}>Project</th></tr></thead>
-              <tbody>
-                <tr><td>№ of Units</td><td className="num"><input type="number" min="1" value={units} onChange={e => save({ ...p, units: +e.target.value || 1 })} /></td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div className="costing-note">
-            Eff. Rate = ROUNDUP(base × (1 + CD+ERV+Cont.) × (1 − B&amp;K Disc)) — e.g. 112 × 1.16 × 0.50 → ₹65 (B&amp;K discount applies to the B&amp;K list only).
-            Unit ₹ price = list × Eff. Rate ÷ (1 − GM). Net GM = Target − ModAE Costs − Finance Cost, so quoting below the computed price or adding finance cost pulls Net GM% under the Input GM%.
-            Input GM% is capped at {MAX_GM_PCT}%, the discount at 100%, and finance cost cannot be negative — the cells hold at those limits.
-          </div>
+          {costingFactorsPanel}
 
           <div className="sheet-wrap proposal-boq-sheet-wrap">
             <table className="sheet">
@@ -1306,75 +1233,13 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
         </>
       )}
 
-      {emailOpen && (
-        <div className="modal form-card no-print">
-          <div className="section-title"><Icon name="mail" size={15} /> Email proposal — {oppId}</div>
-          <div className="q">
-            <div className="q-label">From</div>
-            <input type="text" value="Configured Gmail account" readOnly />
-          </div>
-          <div className="q">
-            <div className="q-label">To</div>
-            <input type="text" value={emailTo} onChange={e => setEmailTo(e.target.value)} placeholder="customer@company.com" autoFocus />
-          </div>
-          <div className="q">
-            <div className="q-label">CC</div>
-            <input type="text" value={emailCc} onChange={e => setEmailCc(e.target.value)} placeholder="name@company.com, another@company.com" />
-          </div>
-          <div className="q">
-            <div className="q-label">Subject</div>
-            <input type="text" value={emailSubject} onChange={e => setEmailSubject(e.target.value)} />
-          </div>
-          <div className="q">
-            <div className="q-label">Message body</div>
-            <textarea rows={11} value={emailBody} onChange={e => setEmailBody(e.target.value)} />
-          </div>
-          <div className="costing-note">
-            The priced BoQ Excel is attached automatically. Add only the extra customer-facing files you want to send.
-          </div>
-          <div className="q">
-            <div className="q-label">Additional attachments (optional)</div>
-            <input type="file" accept=".pdf,.xlsx,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple onChange={addEmailFiles} />
-            <div className="hint">Up to four extra PDF or XLSX files. The priced BoQ is always included.</div>
-            {!!emailAttachments.length && <div className="email-attachment-list">
-              {emailAttachments.map((file, index) => <div key={`${file.name}-${file.size}`} className="email-attachment-row">
-                <span>{file.name}</span>
-                <button type="button" onClick={() => setEmailAttachments(current => current.filter((_, i) => i !== index))}>Remove</button>
-              </div>)}
-            </div>}
-          </div>
-          {emailError && <div className="errbox" style={{ marginTop: 8 }}>{emailError}</div>}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button type="button" onClick={() => setEmailPreview(!emailPreview)}>
-              {emailPreview ? 'Hide proposal preview' : 'Preview proposal'}
-            </button>
-            <button type="button" onClick={() => { setEmailOpen(false); setPrinting(true) }}>
-              <Icon name="printer" size={13} /> Save proposal PDF
-            </button>
-          </div>
-          {emailPreview && (
-            <div className="email-preview">
-              <div className="hint" style={{ padding: '6px 0' }}>
-                To {emailTo || '— no recipient —'}{emailCc.trim() ? ` · CC ${emailCc}` : ''} · Subject: {emailSubject}
-              </div>
-              <div className="email-preview-doc">
-                <PrintDoc p={p} opp={opp} doc={doc} priced={priced} totals={totals} lineQuoted={lineQuoted} />
-              </div>
-            </div>
-          )}
-          <div className="forms-actions">
-            <button className="primary" disabled={emailBusy || !emailTo.trim()} onClick={sendEmail}>
-              <Icon name="send" size={13} /> {emailBusy ? 'Sending…' : `Send with ${1 + emailAttachments.length} attachment${emailAttachments.length ? 's' : ''}`}
-            </button>
-            <button onClick={() => setEmailOpen(false)}>Cancel</button>
-          </div>
-        </div>
-      )}
-
       {previewOpen && (
         <Modal title={`Proposal preview — ${oppId}`} onClose={() => setPreviewOpen(false)} wide className="proposal-preview-modal">
           <div className="proposal-preview-toolbar">
-            <span className="hint">Customer-facing document · Rev {p.revision} · Read-only preview</span>
+            <span className="hint">
+              Customer-facing document · Rev {p.revision}
+              {comm ? ' · the ModAE costing block below is internal and editable' : ' · read-only preview'}
+            </span>
             <div className="forms-actions">
               <button onClick={() => setPreviewOpen(false)}>Close</button>
               <button className="primary" onClick={() => { setPreviewOpen(false); setPrinting(true) }}>
@@ -1384,6 +1249,58 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           </div>
           <div className="proposal-preview-scroll">
             <PrintDoc p={p} opp={opp} doc={doc} priced={priced} totals={totals} lineQuoted={lineQuoted} />
+            {/* ModAE-internal costing — deliberately outside PrintDoc, which is
+                the customer document. None of this reaches the customer copy. */}
+            {comm && (
+              <section className="proposal-preview-internal">
+                <div className="section-title"><Icon name="lock" size={13} /> ModAE internal — costing (not sent to the customer)</div>
+                {costingFactorsPanel}
+                <div className="sheet-wrap">
+                  <table className="sheet">
+                    <thead>
+                      <tr>
+                        <th>Sl.</th><th>Item</th><th className="num">Total Qty</th>
+                        <th className="num">Quoted ₹</th>
+                        <th className="num internal">Unit Cost ₹</th><th className="num internal">Total Cost ₹</th>
+                        <th className="num internal">Computed ₹</th><th className="num internal">List Price</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {p.bom.map((l, i) => {
+                        const q = totalQty(l)
+                        return (
+                          <tr key={i}>
+                            <td className="num">{i + 1}</td>
+                            <td>{l.desc || l.itemCategory}<div className="hint">{l.pn || l.custRef || ''}</div></td>
+                            <td className="num">{q}</td>
+                            <td className="num"><input type="number" min="0" value={l.quoted} onChange={updLine(i, 'quoted', false)} placeholder={fmt(Math.round(lineComputed(l)))} style={{ width: 90, textAlign: 'right' }} title="Customer-facing (target) price — blank = computed price" /></td>
+                            <td className="num internal">₹ {fmt(lineCost(l))}</td>
+                            <td className="num internal">₹ {fmt(lineCost(l) * q)}</td>
+                            <td className="num internal">₹ {fmt(Math.round(lineComputed(l)))}</td>
+                            <td className="num internal">{l.currency === 'USD' ? '$' : l.currency === 'INR' ? '₹' : '€'} {fmt(linePrice(l))}</td>
+                          </tr>
+                        )
+                      })}
+                      {!p.bom.length && <tr><td colSpan={8} className="hint">No lines yet.</td></tr>}
+                    </tbody>
+                    {p.bom.length > 0 && (
+                      <tfoot>
+                        <tr>
+                          <td colSpan={3}>Totals</td>
+                          <td className="num">₹ {fmt(totals.target)}</td>
+                          <td className="internal"></td>
+                          <td className="num internal">₹ {fmt(totals.cost)}</td>
+                          <td className="internal" colSpan={2}></td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+                <div className="costing-note">
+                  Grey columns are calculated from the costing factors and the price list — edit the factors above or a line's Quoted ₹ to change them.
+                </div>
+              </section>
+            )}
           </div>
         </Modal>
       )}
@@ -1418,39 +1335,35 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
             <span className="hint">Editable Excel template - each tab is a worksheet - changes are saved to this proposal</span>
             <button onClick={() => setTemplatePreviewOpen(false)}>Close</button>
           </div>
-          {!!proposalTemplateSheets.length && <nav className="template-workbook-page-nav template-workbook-page-nav-top" aria-label="Workbook pages">
-            <button type="button" onClick={() => setActiveTemplateSheet(index => Math.max(0, index - 1))} disabled={activeTemplateSheet <= 0}>Previous page</button>
-            <div className="template-workbook-page-tabs">
-              {proposalTemplateSheets.map((sheet, index) => <button type="button" key={sheet.name} className={index === activeTemplateSheet ? 'active' : ''} onClick={() => { setEditingTemplateCell(null); setActiveTemplateSheet(index) }}>Page {index + 1} - {sheet.name.trim() || 'Sheet'}</button>)}
-            </div>
-            <button type="button" onClick={() => setActiveTemplateSheet(index => Math.min(proposalTemplateSheets.length - 1, index + 1))} disabled={activeTemplateSheet >= proposalTemplateSheets.length - 1}>Next page</button>
-          </nav>}
           {templateLoading && <div className="hint">Loading proposal workbook...</div>}
           {templateError && <div className="errbox" role="alert">{templateError}</div>}
-          {!!activeTemplateSheetData && <div className="proposal-preview-scroll template-workbook-preview">
-            <section className={`template-workbook-page ${templatePageClass(activeTemplateSheetData, route)}`}>
-              <div className="template-workbook-page-title">Page {activeTemplateSheet + 1} - {activeTemplateSheetData.name.trim() || 'Sheet'}</div>
+          {/* Every worksheet stacked in one scroller \u2014 the old Page 1 / Page 2
+              tabs with their own inner scrollboxes broke the workbook up. */}
+          {!!proposalTemplateSheets.length && <div className="proposal-preview-scroll template-workbook-preview">
+            {proposalTemplateSheets.map(sheet => (
+            <section key={sheet.name} className={`template-workbook-page ${templatePageClass(sheet, route)}`}>
+              <div className="template-workbook-page-title">{sheet.name.trim() || 'Sheet'}</div>
               <div className="template-workbook-page-scroll">
                 <table className="sheet template-workbook-table">
-                  <colgroup>{(activeTemplateSheetData.widths || []).map((width, i) => <col key={i} style={{ width: `${Math.max(90, Number(width) || 110)}px` }} />)}</colgroup>
-                  <tbody>{activeTemplateSheetData.rows.map((row, rowIndex) => <tr key={rowIndex} style={{ minHeight: activeTemplateSheetData.heights?.[rowIndex] || 24 }}>
-                    {templateCellsForRow(activeTemplateSheetData, rowIndex).map(cell => {
+                  <colgroup>{(sheet.widths || []).map((width, i) => <col key={i} style={{ width: `${Math.max(90, Number(width) || 110)}px` }} />)}</colgroup>
+                  <tbody>{sheet.rows.map((row, rowIndex) => <tr key={rowIndex} style={{ minHeight: sheet.heights?.[rowIndex] || 24 }}>
+                    {templateCellsForRow(sheet, rowIndex).map(cell => {
                       const editing = editingTemplateCell
-                        && editingTemplateCell.sheetName === activeTemplateSheetData.name
+                        && editingTemplateCell.sheetName === sheet.name
                         && editingTemplateCell.rowIndex === rowIndex
                         && editingTemplateCell.columnIndex === cell.columnIndex
                       return <td key={cell.columnIndex} rowSpan={cell.rowSpan} colSpan={cell.colSpan}
-                        className={`${templateCellClass(activeTemplateSheetData, cell)}${editing ? ' is-editing' : ''}`}
+                        className={`${templateCellClass(sheet, cell)}${editing ? ' is-editing' : ''}`}
                         tabIndex={editing ? -1 : 0}
-                        onClick={() => { if (!editing) beginTemplateCellEdit(activeTemplateSheetData.name, rowIndex, cell.columnIndex, cell.value) }}
-                        onDoubleClick={() => beginTemplateCellEdit(activeTemplateSheetData.name, rowIndex, cell.columnIndex, cell.value)}
+                        onClick={() => { if (!editing) beginTemplateCellEdit(sheet.name, rowIndex, cell.columnIndex, cell.value) }}
+                        onDoubleClick={() => beginTemplateCellEdit(sheet.name, rowIndex, cell.columnIndex, cell.value)}
                         onKeyDown={event => {
                           if (event.key === 'Enter' || event.key === 'F2') {
                             event.preventDefault()
-                            beginTemplateCellEdit(activeTemplateSheetData.name, rowIndex, cell.columnIndex, cell.value)
+                            beginTemplateCellEdit(sheet.name, rowIndex, cell.columnIndex, cell.value)
                           }
                         }}>
-                        {editing ? <textarea autoFocus className="template-cell-editor" aria-label={`${activeTemplateSheetData.name} row ${rowIndex + 1} column ${cell.columnIndex + 1}`} value={editingTemplateCell.value}
+                        {editing ? <textarea autoFocus className="template-cell-editor" aria-label={`${sheet.name} row ${rowIndex + 1} column ${cell.columnIndex + 1}`} value={editingTemplateCell.value}
                           onChange={event => setEditingTemplateCell(current => ({ ...current, value: event.target.value }))}
                           onBlur={() => finishTemplateCellEdit()}
                           onKeyDown={event => {
@@ -1463,6 +1376,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
                 </table>
               </div>
             </section>
+            ))}
           </div>}
         </Modal>
       )}

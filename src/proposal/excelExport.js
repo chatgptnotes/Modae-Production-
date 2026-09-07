@@ -1,7 +1,7 @@
 import XLSX from 'xlsx-js-style'
 import { MODAE_COMPANY } from '../proposalDoc.js'
 import { MODAE_DOCUMENT_STANDARDS } from '../branding/modae.js'
-import { generateProposalWorkbook } from './templateExcelExport.js'
+import { generateProposalWorkbook, customerSafe } from './templateExcelExport.js'
 
 const routeSheetName = (route, revision) => route === 'Services'
   ? `BoQ & Price-${revision}`
@@ -24,12 +24,13 @@ export function proposalWorkbookRows({ p, opp, doc, priced, totalQty, lineQuoted
     ['Bid Type:', p.bidType],
     ['Revision', p.revision],
     [],
-    ['', p.addressee || `M/s. ${opp.sellTo}`],
+    ['', customerSafe(p.addressee) || (customerSafe(opp.sellTo) && `M/s. ${customerSafe(opp.sellTo)}`)],
     ['', opp.eucLocation || opp.location || ''],
     [],
-    ['Kind Attn:', p.kindAttn || opp.contactPerson || ''],
-    ['Subject:', [p.rfqNumber && `RFQ ${p.rfqNumber}`, p.subject || opp.oppName].filter(Boolean).join(' — ')],
-    ...(p.project ? [['Project:', p.project]] : []),
+    ['Kind Attn:', customerSafe(p.kindAttn) || customerSafe(opp.contactPerson)],
+    ['Subject:', [p.rfqNumber && `RFQ ${p.rfqNumber}`, customerSafe(p.subject) || customerSafe(opp.oppName)
+      || `${route || 'Techno-Commercial'} Proposal`].filter(Boolean).join(' — ')],
+    ...(customerSafe(p.project) ? [['Project:', customerSafe(p.project)]] : []),
     [],
     ['', doc.letterSalutation || 'Dear Sir,'],
     ['', doc.letterBody || ''],

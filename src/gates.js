@@ -9,6 +9,7 @@
 import { unitCostINR, unitSellINR } from './utils.js'
 import { defaultCosting, MILESTONES } from './seed.js'
 import { applyAdjustment } from './pricing.js'
+import { isPlaceholderSparesLine } from './store.jsx'
 
 const isLeadKycVerified = opp =>
   opp?.leadVerification?.type === 'KYC' && opp.leadVerification.status === 'Verified'
@@ -104,7 +105,7 @@ export function readiness(opp, proposal, state) {
   }
 
   if (opp.route === 'Spares') {
-    for (const l of (state.sparesLines || []).filter(x => x.oppId === opp.id)) {
+    for (const l of (state.sparesLines || []).filter(x => x.oppId === opp.id && !isPlaceholderSparesLine(x))) {
       if (!l.confirmed) {
         b.push({ key: `sp-conf-${l.id}`, severity: 'block', text: `Unconfirmed part match — ${l.custRef || l.pn}` })
       } else if (l.priceState === 'Expired') {

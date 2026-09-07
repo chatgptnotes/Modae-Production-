@@ -74,6 +74,7 @@ export function migrate(s) {
   s.config.fastTrack = { ...seedConfig.fastTrack, ...(s.config.fastTrack || {}) }
   s.config.classRules = { ...seedConfig.classRules, ...(s.config.classRules || {}) }
   if (!Array.isArray(s.config.stateRegions)) s.config.stateRegions = seedConfig.stateRegions
+  if (!Array.isArray(s.config.ownerRules)) s.config.ownerRules = seedConfig.ownerRules
   if (!s.config.uploads) s.config.uploads = seedConfig.uploads
   if (!Array.isArray(s.config.uploads.proposalTemplates)) s.config.uploads.proposalTemplates = seedConfig.uploads.proposalTemplates || []
   if (!s.config.aiModel) s.config.aiModel = seedConfig.aiModel
