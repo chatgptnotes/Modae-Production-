@@ -76,6 +76,22 @@ const pageClass = sheet => {
   return `${portrait ? 'template-page-portrait' : 'template-page-landscape'}${wide ? ' template-page-wide' : ''}`
 }
 
+const customerFacingSheet = sheet => {
+  if (!/firm|pricing|proposal/i.test(String(sheet.name || ''))) return sheet
+  const customerColumnCount = Math.min(7, sheet.widths?.length || 7)
+  return {
+    ...sheet,
+    rows: (sheet.rows || []).map(row => row.slice(0, customerColumnCount)),
+    styles: (sheet.styles || []).map(row => row.slice(0, customerColumnCount)),
+    kinds: (sheet.kinds || []).map(row => row.slice(0, customerColumnCount)),
+    widths: (sheet.widths || []).slice(0, customerColumnCount),
+    merges: (sheet.merges || []).flatMap(merge => {
+      if (merge.s.c >= customerColumnCount) return []
+      return [{ ...merge, e: { ...merge.e, c: Math.min(merge.e.c, customerColumnCount - 1) } }]
+    }),
+  }
+}
+
 const cellClass = (sheet, cell) => {
   const value = String(cell.value ?? '')
   const name = String(sheet.name || '').toLowerCase()
@@ -95,7 +111,8 @@ export default function WorkbookPreview({ workbook, editable = false, onChange, 
   const [activeSheet, setActiveSheet] = useState(0)
   const [editing, setEditing] = useState(null)
   const [draft, setDraft] = useState('')
-  const sheet = workbook?.sheets?.[activeSheet] || workbook?.sheets?.[0]
+  const sourceSheet = workbook?.sheets?.[activeSheet] || workbook?.sheets?.[0]
+  const sheet = sourceSheet ? (editable ? sourceSheet : customerFacingSheet(sourceSheet)) : sourceSheet
 
   const beginEdit = (sheetName, rowIndex, columnIndex, value) => {
     if (!editable) return
