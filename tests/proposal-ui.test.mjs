@@ -13,9 +13,11 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8')
 test('proposal review and context panels use distinct, descriptive labels', () => {
   const proposal = read('src/pages/Proposal.jsx')
 
+  assert.match(proposal, /<div className="proposal-header-meta" aria-label="Proposal setup">/)
   assert.match(proposal, /<span className="proposal-status-label">Review status<\/span>/)
   assert.match(proposal, /<span className="proposal-alert-toggle">Readiness &amp; approval<\/span>/)
   assert.match(proposal, /<summary>Route context<\/summary>/)
+  assert.doesNotMatch(proposal, /<div className="proposal-control-groups">/)
   assert.doesNotMatch(proposal, /<summary>Proposal notes/)
 })
 

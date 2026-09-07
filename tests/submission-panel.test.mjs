@@ -88,6 +88,18 @@ test('Excel workbook preview carries the approved document branding', () => {
   assert.match(css, /font-family: var\(--font-document\)/)
 })
 
+test('workbook preview resets scroll position when the worksheet changes', () => {
+  const preview = read('src/proposal/WorkbookPreview.jsx')
+  const css = read('src/styles.css')
+  assert.match(preview, /useEffect, useRef/)
+  assert.match(preview, /previewScrollRef = useRef\(null\)/)
+  assert.match(preview, /preview\.scrollTop = 0/)
+  assert.match(preview, /preview\.scrollLeft = 0/)
+  assert.match(preview, /ref=\{previewScrollRef\}/)
+  assert.match(css, /\.template-workbook-preview \{[\s\S]*align-items: center;/)
+  assert.match(css, /\.template-workbook-page-scroll \{[\s\S]*overflow-x: auto;/)
+})
+
 test('server-side mail failures surface their real message, not a generic one', () => {
   assert.match(submission, /result\?\.error/)
   assert.match(submission, /The email service is unreachable/)

@@ -852,6 +852,17 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
         <div className="proposal-workspace-title">
           <span className="eyebrow">Customer proposal</span>
           <h3>{route} proposal <span className="proposal-meta-chip">Rev {p.revision || '00'}</span></h3>
+          <div className="proposal-header-meta" aria-label="Proposal setup">
+            {!embedded && <Link className="btn proposal-folder-link" to={`/folders/${oppId}`}>Back to folder</Link>}
+            <label className="proposal-type-control">Type
+              <select value={p.proposalType || 'Project'} onChange={set('proposalType')}>
+                <option>Project</option><option>Spares</option><option>Services</option>
+              </select>
+            </label>
+            <span className="proposal-status-label">Review status</span>
+            <span className={`pill ${reviewReady ? 'won' : reviewStatus === 'Needs attention' ? 'Red' : 'grey'}`}>{reviewStatus}</span>
+            {pendingForOpp.length > 0 && <span className="pill Amber">{pendingForOpp.length} approval{pendingForOpp.length > 1 ? 's' : ''} pending</span>}
+          </div>
         </div>
         <div className="proposal-toolbar" aria-label="Proposal actions">
           <button className="btn-secondary" onClick={exportExcel} title="Download Draft">
@@ -873,20 +884,6 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           </button>
         </div>
       </header>
-
-      <div className="proposal-control-groups">
-        <div className="proposal-context-actions" aria-label="Proposal setup">
-          {!embedded && <Link className="btn" to={`/folders/${oppId}`}>Back to folder</Link>}
-          <label className="proposal-type-control">Type
-            <select value={p.proposalType || 'Project'} onChange={set('proposalType')}>
-              <option>Project</option><option>Spares</option><option>Services</option>
-            </select>
-          </label>
-          <span className="proposal-status-label">Review status</span>
-          <span className={`pill ${reviewReady ? 'won' : reviewStatus === 'Needs attention' ? 'Red' : 'grey'}`}>{reviewStatus}</span>
-          {pendingForOpp.length > 0 && <span className="pill Amber">{pendingForOpp.length} approval{pendingForOpp.length > 1 ? 's' : ''} pending</span>}
-        </div>
-      </div>
 
       <section className="proposal-review-strip" aria-label="Human review checkpoint">
         <div>

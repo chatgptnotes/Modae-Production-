@@ -1615,7 +1615,7 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .workbook-switcher button.active, .workbook-tabs button.active { background: var(--primary-fill); color: var(--palette-4843938); border-color: var(--primary-fill); }
 .workbook-tabs { display: flex; gap: 4px; flex-wrap: wrap; padding: 8px 0 0; border-top: 1px solid var(--grid-line); }
 .workbook-tabs button { border-radius: 3px 3px 0 0; }
-.template-workbook-preview { display: flex; flex-direction: column; gap: 18px; align-items: stretch; width: 100%; min-width: 0; }
+.template-workbook-preview { display: flex; flex-direction: column; gap: 18px; align-items: center; width: 100%; min-width: 0; }
 .template-workbook-brandbar {
   width: 100%; max-width: 100%; min-width: 0; display: flex; align-items: center; gap: 12px;
   padding: 8px 10px; border-top: 3px solid var(--primary-accent); border-bottom: 1px solid var(--border-soft);
@@ -5553,6 +5553,32 @@ body {
   letter-spacing: .01em;
   vertical-align: 2px;
 }
+.proposal-header-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 9px;
+  margin-top: 8px;
+}
+.proposal-header-meta .proposal-folder-link {
+  min-height: 30px;
+  padding: 5px 9px;
+  font-size: 11px;
+}
+.proposal-header-meta .proposal-type-control {
+  gap: 6px;
+}
+.proposal-header-meta .proposal-type-control select {
+  min-height: 30px;
+  width: 104px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.proposal-header-meta .pill {
+  min-height: 24px;
+  padding: 3px 8px;
+  font-size: 10px;
+}
 .proposal-subnav-header .wb-sub { flex: 0 0 auto; margin: 0; }
 .proposal-action-toolbar {
   display: flex;
@@ -5906,11 +5932,13 @@ body {
   .proposal-tab-bar .workbook-switcher { align-self: flex-start; margin-bottom: 0; }
   .proposal-review-strip { align-items: stretch; flex-direction: column; }
   .proposal-review-strip button { width: 100%; }
+  .proposal-header-meta { width: 100%; }
   .proposal-action-toolbar > button,
   .proposal-action-toolbar > .btn,
-  .proposal-type-control { flex: 1 1 calc(50% - 8px); }
-  .proposal-type-control { justify-content: space-between; }
-  .proposal-type-control select { flex: 1; width: auto; }
+  .proposal-context-actions .proposal-type-control { flex: 1 1 calc(50% - 8px); }
+  .proposal-context-actions .proposal-type-control { justify-content: space-between; }
+  .proposal-context-actions .proposal-type-control select { flex: 1; width: auto; }
+  .proposal-header-meta .proposal-type-control { flex: 0 1 auto; }
   .stepper .step-label { font-size: 8px; }
   .proposal-workspace-header,
   .proposal-subnav-header { padding: 15px; }

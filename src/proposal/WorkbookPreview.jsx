@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { ModaeImageLogo } from '../icons.jsx'
 import { MODAE_DOCUMENT_STANDARDS } from '../branding/modae.js'
 
@@ -118,8 +118,17 @@ export default function WorkbookPreview({ workbook, editable = false, onChange, 
   const [activeSheet, setActiveSheet] = useState(0)
   const [editing, setEditing] = useState(null)
   const [draft, setDraft] = useState('')
+  const previewScrollRef = useRef(null)
   const sourceSheet = workbook?.sheets?.[activeSheet] || workbook?.sheets?.[0]
   const sheet = sourceSheet ? customerFacingSheet(sourceSheet) : sourceSheet
+  const workbookSignature = (workbook?.sheets || []).map(item => item.name).join('|')
+
+  useEffect(() => {
+    const preview = previewScrollRef.current
+    if (!preview) return
+    preview.scrollTop = 0
+    preview.scrollLeft = 0
+  }, [activeSheet, workbookSignature])
 
   const beginEdit = (sheetName, rowIndex, columnIndex, value) => {
     if (!editable) return
@@ -143,7 +152,7 @@ export default function WorkbookPreview({ workbook, editable = false, onChange, 
               onClick={() => { setEditing(null); setActiveSheet(index) }}>Page {index + 1} - {item.name.trim() || 'Sheet'}</button>)}
           </div>
         </nav>
-        {!!sheet && <div className="proposal-preview-scroll template-workbook-preview">
+        {!!sheet && <div ref={previewScrollRef} className="proposal-preview-scroll template-workbook-preview">
           <section className={`template-workbook-page ${pageClass(sheet)}`}>
             <div className="template-workbook-page-title">Page {activeSheet + 1} - {sheet.name.trim() || 'Sheet'}{editable ? ' · editable' : ' · read-only'}</div>
             <header className="template-workbook-sheet-header">
