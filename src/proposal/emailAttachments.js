@@ -1,6 +1,7 @@
 import { pricedBoqWorkbookBase64 } from './excelExport.js'
 import { generateProposalWorkbook, MIME_XLSX } from './templateExcelExport.js'
 import { ENCLOSURES, enclosuresFor } from '../proposalDoc.js'
+import { parseProposalWorkbook } from './workbook.js'
 
 export const STANDARD_TERMS_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/ModAE Standard Terms-Sales.pdf', import.meta.url).href
 export const SERVICE_RATE_SCHEDULE_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/ModAE Services Rate Schedule FY2025-26.pdf', import.meta.url).href
@@ -38,6 +39,14 @@ export async function proposalWorkbookAttachment(args) {
     mimeType: MIME_XLSX,
     contentBase64: bytesBase64(bytes),
   }
+}
+
+// The send panel previews the exact generated XLSX, rather than a separate
+// HTML document. Parsing the same bytes that will be attached keeps worksheet
+// names, values, and customer-facing redaction in sync with the sent file.
+export async function proposalWorkbookPreview(args) {
+  const bytes = await generateProposalWorkbook({ ...args, redactInternalCosting: true })
+  return parseProposalWorkbook(bytes, `${args.opp.id}_Proposal_Rev_${args.p.revision}.xlsx`)
 }
 
 export function pricedBoqAttachment(args) {

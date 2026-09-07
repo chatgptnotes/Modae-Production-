@@ -1,4 +1,6 @@
 import React, { useState } from 'react'
+import { ModaeImageLogo } from '../icons.jsx'
+import { MODAE_DOCUMENT_STANDARDS } from '../branding/modae.js'
 
 const cellsForRow = (sheet, rowIndex) => {
   const columnCount = sheet.widths.length || Math.max(1, ...sheet.rows.map(row => row.length))
@@ -24,10 +26,36 @@ const cellsForRow = (sheet, rowIndex) => {
     const totalWidth = (sheet.widths || []).reduce((sum, item) => sum + Math.max(1, Number(item) || 1), 0) || 1
     const renderedWidth = Math.max(24, (width / totalWidth) * previewWidth)
     const rows = Math.max(1, Math.ceil(String(value).length / Math.max(12, Math.floor(renderedWidth / 7))))
-    cells.push({ columnIndex, colSpan, rowSpan, value, rows })
+    cells.push({ columnIndex, colSpan, rowSpan, value, rows, style: sheet.styles?.[rowIndex]?.[columnIndex] || null })
     columnIndex += colSpan - 1
   }
   return cells
+}
+
+const colorValue = color => {
+  if (!color) return ''
+  if (color.rgb) return `#${String(color.rgb).replace(/^FF/i, '')}`
+  if (color.indexed === 64 || color.theme != null) return ''
+  return ''
+}
+
+const cellStyle = cell => {
+  const source = cell.style || {}
+  const style = {}
+  const fill = colorValue(source.fgColor)
+  const fontColor = colorValue(source.color)
+  const borderColor = colorValue(source.border?.color) || 'var(--grid-line)'
+  if (fill && source.patternType !== 'none') style.backgroundColor = fill
+  if (fontColor) style.color = fontColor
+  if (source.font?.bold) style.fontWeight = 700
+  if (source.font?.italic) style.fontStyle = 'italic'
+  if (source.font?.sz) style.fontSize = `${source.font.sz}pt`
+  if (source.font?.name) style.fontFamily = `'${source.font.name}', var(--font-document)`
+  if (source.alignment?.horizontal) style.textAlign = source.alignment.horizontal
+  if (source.alignment?.vertical) style.verticalAlign = source.alignment.vertical
+  if (source.alignment?.wrapText) style.whiteSpace = 'pre-wrap'
+  if (source.border) style.borderColor = borderColor
+  return style
 }
 
 const pageClass = sheet => {
@@ -43,9 +71,11 @@ const cellClass = (sheet, cell) => {
   const numeric = /^\s*[₹$€£]?[-+\d.,%]+\s*$/.test(value)
   const code = /^[A-Z0-9][A-Z0-9._\-/]{10,}$/i.test(value.replace(/\s+/g, ''))
   const wideText = value.length >= 42 || /description|terms|conditions|address|subject|project|paragraph|letter/i.test(value)
+  const label = /:\s*$/.test(value)
+  const heading = /firm|pricing|proposal/i.test(name) && cell.columnIndex <= 2 && value.length > 0 && !numeric
   return [
     'template-workbook-cell', value ? '' : 'template-workbook-empty', wideText ? 'template-cell-description' : '',
-    code ? 'template-cell-code' : '', numeric ? 'template-cell-number' : '',
+    code ? 'template-cell-code' : '', numeric ? 'template-cell-number' : '', label ? 'template-cell-label' : '', heading ? 'template-cell-heading' : '',
     !wideText && !code && !numeric && /firm|pricing|proposal/i.test(name) && value.length <= 14 ? 'template-cell-compact' : '',
   ].filter(Boolean).join(' ')
 }
@@ -72,6 +102,11 @@ export default function WorkbookPreview({ workbook, editable = false, onChange, 
       {loading && <div className="hint">Loading proposal workbook…</div>}
       {error && <div className="errbox" role="alert">{error}</div>}
       {!!workbook?.sheets?.length && <>
+        <div className="template-workbook-brandbar">
+          <ModaeImageLogo height={28} />
+          <span>{MODAE_DOCUMENT_STANDARDS.header.tagline}</span>
+          <small>{MODAE_DOCUMENT_STANDARDS.footerLines[0]}</small>
+        </div>
         <nav className="template-workbook-page-nav template-workbook-page-nav-top" aria-label="Workbook pages">
           <button type="button" onClick={() => setActiveSheet(index => Math.max(0, index - 1))} disabled={activeSheet <= 0}>Previous page</button>
           <div className="template-workbook-page-tabs">
@@ -83,13 +118,21 @@ export default function WorkbookPreview({ workbook, editable = false, onChange, 
         {!!sheet && <div className="proposal-preview-scroll template-workbook-preview">
           <section className={`template-workbook-page ${pageClass(sheet)}`}>
             <div className="template-workbook-page-title">Page {activeSheet + 1} - {sheet.name.trim() || 'Sheet'}{editable ? ' · editable' : ' · read-only'}</div>
+            <header className="template-workbook-sheet-header">
+              <ModaeImageLogo height={34} />
+              <div>
+                <strong>{MODAE_DOCUMENT_STANDARDS.header.tagline}</strong>
+                <span>Customer-facing proposal workbook</span>
+              </div>
+              <small>{MODAE_DOCUMENT_STANDARDS.footerLines[0]}</small>
+            </header>
             <div className="template-workbook-page-scroll">
               <table className="sheet template-workbook-table">
                 <colgroup>{(sheet.widths || []).map((width, i) => <col key={i} style={{ width: `${Math.max(90, Number(width) || 110)}px` }} />)}</colgroup>
                 <tbody>{sheet.rows.map((row, rowIndex) => <tr key={rowIndex} style={{ minHeight: sheet.heights?.[rowIndex] || 24 }}>
                   {cellsForRow(sheet, rowIndex).map(cell => {
                     const isEditing = editing?.sheetName === sheet.name && editing.rowIndex === rowIndex && editing.columnIndex === cell.columnIndex
-                    return <td key={cell.columnIndex} rowSpan={cell.rowSpan} colSpan={cell.colSpan}
+                    return <td key={cell.columnIndex} rowSpan={cell.rowSpan} colSpan={cell.colSpan} style={cellStyle(cell)}
                       className={`${cellClass(sheet, cell)}${isEditing ? ' is-editing' : ''}`} tabIndex={editable && !isEditing ? 0 : -1}
                       onClick={() => beginEdit(sheet.name, rowIndex, cell.columnIndex, cell.value)}
                       onDoubleClick={() => beginEdit(sheet.name, rowIndex, cell.columnIndex, cell.value)}

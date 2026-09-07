@@ -1475,9 +1475,26 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .user-email-editor-row input { width: 100%; min-width: 0; box-sizing: border-box; }
 .user-row-editor-actions { flex-wrap: wrap; }
 .user-row-editor-actions .err-text { flex-basis: 100%; margin-top: 2px; white-space: nowrap; }
-.modal { position: fixed; z-index: 56; top: 90px; left: 50%; transform: translateX(-50%); width: 420px; max-width: 92vw; box-shadow: 0 6px 24px var(--palette-9d894303); }
+.modal {
+  /* Centered dialog. It used to sit at a fixed top: 90px — pinned over the
+     sticky workspace header and floating high on tall screens — and had no
+     height cap, so tall content spilled past the viewport with no scroll. */
+  position: fixed;
+  z-index: 56;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 420px;
+  max-width: 92vw;
+  max-height: 86vh;
+  overflow-y: auto;
+  box-shadow: 0 6px 24px var(--palette-9d894303);
+}
 .lead-paste-modal {
+  /* Re-anchor near the top: this tall form intentionally hugs the top edge,
+     so reset the base's vertical translate but keep horizontal centering. */
   top: 20px;
+  transform: translateX(-50%);
   width: min(560px, calc(100vw - 32px));
   max-width: min(560px, calc(100vw - 32px));
   max-height: calc(100dvh - 40px);
@@ -1522,6 +1539,7 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 }
 .clarification-compose-modal {
   top: 5vh;
+  transform: translateX(-50%);
   width: min(760px, 92vw);
   max-width: none;
   max-height: 90vh;
@@ -1529,6 +1547,7 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 }
 .opportunity-create-modal {
   top: 3vh;
+  transform: translateX(-50%);
   left: calc(50% + 108px);
   width: min(1500px, calc(100vw - 248px));
   max-width: none;
@@ -1544,7 +1563,7 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .opportunity-create-modal .create-opportunity-workspace { margin-top: 0; }
 .opportunity-create-modal .forms-card.wide { margin: 0; width: 100%; max-width: none; }
 .proposal-preview-modal {
-  top: 3vh; width: 95vw; max-width: 1400px; max-height: 94vh;
+  top: 3vh; transform: translateX(-50%); width: 95vw; max-width: 1400px; max-height: 94vh;
   overflow: hidden; padding: 16px 18px 18px;
 }
 .proposal-preview-modal > .section-title { margin: 0 0 8px; font-size: 15px; }
@@ -1593,7 +1612,14 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .workbook-switcher button.active, .workbook-tabs button.active { background: var(--primary-fill); color: var(--palette-4843938); border-color: var(--primary-fill); }
 .workbook-tabs { display: flex; gap: 4px; flex-wrap: wrap; padding: 8px 0 0; border-top: 1px solid var(--grid-line); }
 .workbook-tabs button { border-radius: 3px 3px 0 0; }
-.template-workbook-preview { display: flex; flex-direction: column; gap: 28px; align-items: center; }
+.template-workbook-preview { display: flex; flex-direction: column; gap: 18px; align-items: center; }
+.template-workbook-brandbar {
+  width: min(100%, 1400px); display: flex; align-items: center; gap: 12px;
+  padding: 8px 10px; border-top: 3px solid var(--primary-accent); border-bottom: 1px solid var(--border-soft);
+  background: var(--palette-4843938); color: var(--text-main); font-family: var(--font-document);
+}
+.template-workbook-brandbar > span { font-size: 12pt; font-weight: 700; color: var(--text-main); }
+.template-workbook-brandbar small { margin-left: auto; color: var(--text-muted); font-size: 10pt; }
 .template-workbook-page {
   width: 100%; box-sizing: border-box; background: var(--surface, var(--palette-4843938));
   border: 1px solid var(--border-soft); box-shadow: 0 2px 8px var(--palette-b8b4ba37);
@@ -1604,12 +1630,21 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .template-workbook-page.template-page-wide { max-width: none; }
 .template-workbook-page.template-page-wide .template-workbook-page-scroll { overflow-x: auto; }
 .template-workbook-page-title { font-weight: 700; color: var(--text-strong); padding-bottom: 10px; border-bottom: 2px solid var(--primary-fill); margin-bottom: 10px; }
+.template-workbook-sheet-header {
+  display: flex; align-items: center; gap: 14px; min-height: 56px; padding: 8px 10px 10px;
+  border-bottom: 2px solid var(--primary-accent); font-family: var(--font-document); color: var(--text-strong);
+}
+.template-workbook-sheet-header > div { display: grid; gap: 2px; }
+.template-workbook-sheet-header strong { font-size: 12pt; }
+.template-workbook-sheet-header span, .template-workbook-sheet-header small { color: var(--text-muted); font-size: 10pt; }
+.template-workbook-sheet-header small { margin-left: auto; text-align: right; }
 /* Horizontal scroll only. A per-sheet vertical scrollbox (plus a height cap)
    split the workbook into separate scrolling pages; the modal's
    .proposal-preview-scroll is now the single vertical scroller. */
 .template-workbook-page-scroll { overflow-x: auto; width: 100%; }
 .template-workbook-page .sheet { margin: 0; }
-.template-workbook-table { width: max-content; min-width: 100%; table-layout: auto; border-collapse: collapse; }
+.template-workbook-table { width: max-content; min-width: 0; table-layout: fixed; border-collapse: collapse; }
+.template-workbook-table { font-family: var(--font-document); font-size: 11pt; }
 .template-workbook-page .sheet td.template-workbook-cell {
   min-width: 110px; min-height: 24px; padding: 5px 7px; vertical-align: top;
   border: 1px solid var(--palette-951c7b4e); background: var(--palette-4843938); white-space: normal;
@@ -1618,6 +1653,8 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .template-workbook-page .sheet td.template-cell-description { min-width: 260px; max-width: 460px; }
 .template-workbook-page .sheet td.template-cell-code { min-width: 160px; white-space: nowrap; word-break: normal; overflow-wrap: normal; }
 .template-workbook-page .sheet td.template-cell-number { min-width: 90px; text-align: right; white-space: nowrap; word-break: normal; overflow-wrap: normal; }
+.template-workbook-page .sheet td.template-cell-label { font-weight: 700; color: var(--text-strong); }
+.template-workbook-page .sheet td.template-cell-heading { font-weight: 700; color: var(--text-strong); background: var(--primary-soft); }
 .template-workbook-page .sheet td.template-cell-compact { min-width: 110px; white-space: nowrap; }
 .template-workbook-page .sheet td.template-workbook-cell:focus,
 .template-workbook-page .sheet td.template-workbook-cell.is-editing { outline: 2px solid var(--palette-67d9686); outline-offset: -2px; background: var(--palette-4843938); }
@@ -1631,6 +1668,7 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .template-cell-code .template-cell-editor,
 .template-cell-number .template-cell-editor { white-space: nowrap; word-break: normal; overflow-wrap: normal; }
 .template-workbook-page .sheet td.template-workbook-empty { background: var(--palette-4843938); }
+.template-workbook-page .sheet tr:first-child td { border-top-color: var(--primary-accent); }
 .workbook-scroll { max-height: calc(100vh - 300px); min-height: 260px; overflow: auto; }
 .workbook-table { min-width: 980px; }
 .workbook-colour.c0 { color: var(--won-text); background: var(--won-fill); }
@@ -1720,6 +1758,12 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .form-card { background: var(--palette-4843938); border: 1px solid var(--grid-line); padding: 18px 22px; max-width: 760px; }
 /* Cards holding a full grid: fill the content area instead of the 760px form column */
 .form-card.wide { max-width: none; }
+/* Modals also carry .form-card, whose max-width above (same specificity, later
+   source order) was winning the cascade over every earlier modal rule — it
+   knocked out the 92vw viewport cap, so dialogs could not shrink and narrow
+   windows clipped them (e.g. the Validate review popup). Re-assert the cap
+   after it so no dialog can ever exceed the viewport. */
+.modal { max-width: 92vw; }
 
 /* Slide-in record-detail drawer */
 tr.rowclick { cursor: pointer; }
@@ -3996,7 +4040,7 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .lead-workspace .attach-row.attach-row-open:hover .attach-open { color: var(--ws-blue); }
 .lead-workspace .attach-add { margin-top: 8px; border-radius: 10px; }
 
-.attachment-viewer-modal { width: 780px; top: 60px; }
+.attachment-viewer-modal { width: 780px; top: 60px; transform: translateX(-50%); }
 .att-view-sub { margin: -2px 0 10px; }
 .att-view-body {
   border: 1px solid var(--border-soft); border-radius: 4px; background: var(--palette-f58d7116);

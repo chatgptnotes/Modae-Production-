@@ -8,13 +8,17 @@ export function parseProposalWorkbook(buffer, filename) {
       const sheet = workbook.Sheets[name]
       const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1:A1')
       const rows = []
+      const styles = []
       for (let r = range.s.r; r <= range.e.r; r++) {
         const row = []
+        const styleRow = []
         for (let c = range.s.c; c <= range.e.c; c++) {
           const cell = sheet[XLSX.utils.encode_cell({ r, c })]
           row.push(cell?.w ?? (cell?.v == null ? '' : String(cell.v)))
+          styleRow.push(cell?.s ? { ...cell.s } : null)
         }
         rows.push(row)
+        styles.push(styleRow)
       }
       const rawWidths = sheet['!cols'] || []
       const merges = (sheet['!merges'] || []).map(merge => ({
@@ -24,6 +28,7 @@ export function parseProposalWorkbook(buffer, filename) {
       const rawRows = sheet['!rows'] || []
       const dropFirstRow = rows.length > 1 && rows[0].every(value => String(value ?? '').trim() === '')
       const visibleRows = dropFirstRow ? rows.slice(1) : rows
+      const visibleStyles = dropFirstRow ? styles.slice(1) : styles
       const visibleMerges = dropFirstRow
         ? merges.filter(merge => merge.e.r > 0).map(merge => ({
           s: { ...merge.s, r: Math.max(0, merge.s.r - 1) },
@@ -33,6 +38,7 @@ export function parseProposalWorkbook(buffer, filename) {
       return {
         name,
         rows: visibleRows,
+        styles: visibleStyles,
         merges: visibleMerges,
         heights: Array.from({ length: range.e.r - range.s.r + 1 }, (_, i) => rawRows[range.s.r + i]?.hpx || rawRows[range.s.r + i]?.hpt || 24).slice(dropFirstRow ? 1 : 0),
         widths: Array.from({ length: range.e.c - range.s.c + 1 }, (_, i) => rawWidths[range.s.c + i]?.wpx || 110),
@@ -56,6 +62,13 @@ export function serializeProposalWorkbook(workbook) {
   const output = XLSX.utils.book_new()
   for (const sheet of workbook?.sheets || []) {
     const worksheet = XLSX.utils.aoa_to_sheet(sheet.rows || [])
+    for (let rowIndex = 0; rowIndex < (sheet.styles || []).length; rowIndex++) {
+      for (let columnIndex = 0; columnIndex < (sheet.styles[rowIndex] || []).length; columnIndex++) {
+        const style = sheet.styles[rowIndex][columnIndex]
+        const address = XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })
+        if (style && worksheet[address]) worksheet[address].s = { ...style }
+      }
+    }
     worksheet['!merges'] = (sheet.merges || []).map(merge => ({
       s: { ...merge.s }, e: { ...merge.e },
     }))

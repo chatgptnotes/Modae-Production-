@@ -1,5 +1,41 @@
 const clean = value => String(value || '').trim()
 const headerValue = value => clean(value).replace(/[\r\n"]/g, '_')
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+// To and CC accept comma-separated recipient lists, e.g. a buyer plus their
+// purchase department.
+const recipientList = value => String(value || '').split(',').map(clean).filter(Boolean)
+const recipientsValid = list => list.length > 0 && list.every(a => EMAIL_RE.test(a))
+
+// The salesperson can attach their own supporting files from the Submission
+// panel, so anything a customer could reasonably be sent is accepted here;
+// executables are the only hard refusal.
+const ALLOWED_ATTACHMENT_MIME = new Set([
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.ms-powerpoint',
+  'application/zip',
+  'application/x-zip-compressed',
+  'application/rtf',
+  'text/plain',
+  'text/csv',
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+  'application/octet-stream',
+])
+const BLOCKED_ATTACHMENT_MIME = new Set([
+  'application/x-msdownload',
+  'application/x-dosexec',
+  'application/x-sh',
+  'application/javascript',
+  'text/javascript',
+])
 
 function encodeBase64Url(value) {
   return Buffer.from(value).toString('base64')
@@ -60,25 +96,37 @@ export default async function handler(req, res) {
   let input
   try { input = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {}) }
   catch { return res.status(400).json({ ok: false, error: 'Malformed request body' }) }
-  const to = clean(input.to)
-  const subject = clean(input.subject)
-  const body = clean(input.body)
-  const cc = clean(input.cc)
-  if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
+  const from = clean(input.from || account)
+  if (!EMAIL_RE.test(from) || from.includes(',')) {
+    return res.status(400).json({ ok: false, error: 'From address is not valid' })
+  }
+  const toList = recipientList(input.to)
+  if (!recipientsValid(toList)) {
     return res.status(400).json({ ok: false, error: 'A valid recipient email is required' })
   }
+  const ccList = recipientList(input.cc)
+  if (ccList.length && !ccList.every(a => EMAIL_RE.test(a))) {
+    return res.status(400).json({ ok: false, error: 'The CC address is not valid' })
+  }
+  const to = toList.join(', ')
+  const subject = clean(input.subject)
+  const body = clean(input.body)
+  const cc = ccList.join(', ')
   if (!subject || !body || body.length > 50000) {
     return res.status(400).json({ ok: false, error: 'Subject and a valid message body are required' })
   }
   const attachments = Array.isArray(input.attachments)
     ? input.attachments
     : input.attachment ? [input.attachment] : []
-  if (!attachments.length || attachments.length > 5) {
-    return res.status(400).json({ ok: false, error: 'One to five attachments are required' })
+  if (!attachments.length || attachments.length > 8) {
+    return res.status(400).json({ ok: false, error: 'One to eight attachments are required' })
   }
-  const allowed = new Set(['application/pdf', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])
-  if (attachments.some(a => !a?.filename || !a.contentBase64 || !allowed.has(a.mimeType))) {
-    return res.status(400).json({ ok: false, error: 'Attachments must be PDF or XLSX files' })
+  if (attachments.some(a => !a?.filename || !a.contentBase64
+    || BLOCKED_ATTACHMENT_MIME.has(a.mimeType) || !ALLOWED_ATTACHMENT_MIME.has(a.mimeType))) {
+    return res.status(400).json({
+      ok: false,
+      error: 'Attachments must be documents, spreadsheets, presentations, images, text or ZIP files — executables are rejected',
+    })
   }
   if (attachments.reduce((sum, a) => sum + String(a.contentBase64).length, 0) > 30_000_000) {
     return res.status(400).json({ ok: false, error: 'Attachments are too large' })
@@ -108,7 +156,7 @@ export default async function handler(req, res) {
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        raw: mimeMessage({ from: account, to, cc, subject, body, attachments }),
+        raw: mimeMessage({ from, to, cc, subject, body, attachments }),
       }),
     })
     const result = await gmailResponse.json()

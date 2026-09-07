@@ -189,6 +189,30 @@ CUSTOMER REPLY:
 ${cap(p.body, 12000)}`,
   },
 
+  // ---- Workbench: proposal submission covering message
+  'email.proposal': {
+    model: FLASH,
+    build: p => `${HOUSE}
+
+Write a concise, professional email body for sending an approved ModAE
+proposal to a customer. Plain text only, no subject line and no markdown.
+Open with "Dear Sir/Madam," and close with the sender block. Mention the
+opportunity, proposal reference and revision, and that the attached proposal
+is available for the customer's review. Mention validity only when supplied.
+Do not invent prices, delivery dates, technical claims, attachments, terms or
+commitments. Keep it under 150 words.
+
+Opportunity: ${cap(p.oppName, 300)}
+Customer: ${cap(p.customer, 300)}
+Proposal reference: ${cap(p.oppId, 100)}
+Revision: ${cap(p.revision, 30)}
+Validity: ${cap(p.validity, 100)}
+Route: ${cap(p.route, 50)}
+Sender: ${cap(p.senderName, 150)}
+Existing commercial terms:
+${cap((p.terms || []).map((t: any) => `${t.term}: ${t.ourResponse}`).join('\n'), 3000) || '(none supplied)'}`,
+  },
+
   'lead.extract': {
     model: PRO,
     schema: {

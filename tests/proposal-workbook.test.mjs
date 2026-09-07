@@ -35,6 +35,14 @@ test('edited proposal workbooks can be serialized and parsed again', () => {
   assert.equal(roundTrip.sheets[0].rows[1][1], 'Updated customer')
 })
 
+test('proposal workbook parser keeps a style matrix for rendered worksheet cells', () => {
+  const parsed = parseProposalWorkbook(workbookBytes(), 'template.xlsx')
+  assert.equal(parsed.sheets[0].styles.length, parsed.sheets[0].rows.length)
+  assert.equal(parsed.sheets[0].styles[0].length, parsed.sheets[0].rows[0].length)
+  const roundTrip = parseProposalWorkbook(serializeProposalWorkbook(parsed), 'template.xlsx')
+  assert.equal(roundTrip.sheets[0].styles.length, roundTrip.sheets[0].rows.length)
+})
+
 test('seed config has a proposal template registry for migration', () => {
   assert.ok(Array.isArray(seedConfig.uploads.proposalTemplates))
 })
