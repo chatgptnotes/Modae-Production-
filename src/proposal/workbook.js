@@ -26,8 +26,10 @@ export function parseProposalWorkbook(buffer, filename) {
         for (let c = range.s.c; c <= effectiveEndColumn; c++) {
           const hasValue = Array.from({ length: range.e.r - range.s.r + 1 }, (_, index) => sheet[XLSX.utils.encode_cell({ r: range.s.r + index, c })])
             .some(cell => String(cell?.v ?? cell?.w ?? '').trim() !== '')
-          const hasMerge = sourceMerges.some(merge => merge.s.c <= c && merge.e.c >= c)
-          if (hasValue || hasMerge) return c
+          // Empty logo/header merges are structural placeholders. The preview
+          // renders branding independently, so only actual cell content keeps
+          // a leading worksheet column visible.
+          if (hasValue) return c
         }
         return range.s.c
       })()
@@ -50,10 +52,13 @@ export function parseProposalWorkbook(buffer, filename) {
         kinds.push(kindRow)
       }
       const rawWidths = sheet['!cols'] || []
-      const merges = sourceMerges.map(merge => ({
-        s: { r: merge.s.r - effectiveRange.s.r, c: merge.s.c - effectiveRange.s.c },
-        e: { r: merge.e.r - effectiveRange.s.r, c: merge.e.c - effectiveRange.s.c },
-      }))
+      const merges = sourceMerges.flatMap(merge => {
+        if (merge.e.c < effectiveRange.s.c || merge.s.c > effectiveRange.e.c) return []
+        return [{
+          s: { r: merge.s.r - effectiveRange.s.r, c: Math.max(merge.s.c, effectiveRange.s.c) - effectiveRange.s.c },
+          e: { r: merge.e.r - effectiveRange.s.r, c: Math.min(merge.e.c, effectiveRange.e.c) - effectiveRange.s.c },
+        }]
+      })
       const rawRows = sheet['!rows'] || []
       const customerColumnCount = /firm|pricing|proposal/i.test(name)
         ? Math.min(7, rows[0]?.length || 7)

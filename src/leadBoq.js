@@ -47,7 +47,7 @@ export function buildLeadProposalData(lead, priceLists, vendorPrices = []) {
     origin: 'customer',
     custRef: extracted[i].customerRef || item.pn || item.description,
     pn: match?.pn || item.pn || '',
-    desc: item.description,
+    desc: match?.desc || item.description,
     qty: item.qty,
     uom: extracted[i].uom || 'EA',
     oem: match ? 'B&K' : 'TBD',

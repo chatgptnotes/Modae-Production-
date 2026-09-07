@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs'
 import { MODAE_DOCUMENT_STANDARDS } from '../branding/modae.js'
 import { effectiveRate } from '../utils.js'
+import { isSparesSupportRow } from './sparesBoq.js'
 
 const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 const SPARES_TEMPLATE_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx', import.meta.url).href
@@ -319,7 +320,9 @@ function setCommercialSheet(workbook, worksheet, args) {
   setValue(worksheet.getCell('B8'), group?.no || 'Item-10')
   setValue(worksheet.getCell('C8'), customerSafe(group?.title) || customerSafe(p.subject)
     || customerSafe(opp.oppName) || `${route || 'Techno-Commercial'} Proposal`)
-  const lines = p.bom || []
+  // The reference Spares template owns the three standard support rows. They
+  // are restored below, so do not write proposal-level support rows twice.
+  const lines = (p.bom || []).filter(line => !isSparesSupportRow(line))
   const firstRow = 10
   const originalTotalRow = 18
   // The supplied Spares workbook has three required non-product rows after
@@ -328,6 +331,7 @@ function setCommercialSheet(workbook, worksheet, args) {
   // of treating them as disposable template leftovers.
   const templateProducts = new Map()
   const templateSupportRows = []
+  const proposalSupportRows = (p.bom || []).filter(isSparesSupportRow)
   for (let rowNumber = firstRow; rowNumber < originalTotalRow; rowNumber++) {
     const partNumber = clean(worksheet.getCell(`D${rowNumber}`).value).trim()
     const description = clean(worksheet.getCell(`C${rowNumber}`).value).trim()
@@ -368,7 +372,9 @@ function setCommercialSheet(workbook, worksheet, args) {
   lines.forEach((line, index) => {
     const row = firstRow + index
     const templateProduct = templateProducts.get(clean(line.pn || line.custRef).trim().toLowerCase())
-    const qty = templateProduct == null ? number(totalQty(line)) : number(templateProduct.quantity)
+    // The proposal BoQ is the source of truth. Template rows provide layout
+    // and fallback descriptions only; they must not override live quantities.
+    const qty = number(totalQty(line))
     const unitPrice = number(lineQuoted(line))
     // Landed cost and list price are derived (docProps.buildPricing), never
     // stored on the line — reading line.unitCost/unitPriceEuro wrote 0 into
@@ -376,7 +382,7 @@ function setCommercialSheet(workbook, worksheet, args) {
     const unitLandedCost = lineCost ? number(lineCost(line)) : 0
     const unitEuro = linePrice ? number(linePrice(line)) : 0
     setValue(worksheet.getCell(`B${row}`), index + 1, { alignment: { horizontal: 'center', vertical: 'top' } })
-    setValue(worksheet.getCell(`C${row}`), templateProduct?.description || line.desc || line.itemCategory || '', { alignment: { vertical: 'top', wrapText: true } })
+    setValue(worksheet.getCell(`C${row}`), line.desc || line.itemCategory || templateProduct?.description || '', { alignment: { vertical: 'top', wrapText: true } })
     setValue(worksheet.getCell(`D${row}`), line.pn || line.custRef || '', { alignment: { vertical: 'top', wrapText: true } })
     setValue(worksheet.getCell(`E${row}`), qty, { alignment: { horizontal: 'center', vertical: 'top' } })
     setValue(worksheet.getCell(`F${row}`), unitPrice, { alignment: { horizontal: 'right', vertical: 'top' } })
@@ -388,7 +394,7 @@ function setCommercialSheet(workbook, worksheet, args) {
     setValue(worksheet.getCell(`N${row}`), unitEuro, { alignment: { horizontal: 'right', vertical: 'top' } })
     setValue(worksheet.getCell(`O${row}`), { formula: `N${row}*E${row}`, result: unitEuro * qty }, { alignment: { horizontal: 'right', vertical: 'top' } })
     setWrappedHeight(worksheet, row, [
-      { value: templateProduct?.description || line.desc || line.itemCategory || '', width: columnWidth(worksheet, 3) },
+      { value: line.desc || line.itemCategory || templateProduct?.description || '', width: columnWidth(worksheet, 3) },
       { value: line.pn || line.custRef || '', width: columnWidth(worksheet, 4) },
     ], { min: 30, max: 120, lineHeight: 15 })
     for (const column of ['F', 'G', 'J', 'K', 'L', 'M']) worksheet.getCell(`${column}${row}`).numFmt = rupeeFormat
@@ -401,6 +407,7 @@ function setCommercialSheet(workbook, worksheet, args) {
   // the customer-facing Firm Offer structure.
   templateSupportRows.forEach((templateRow, index) => {
     const row = firstRow + lines.length + index
+    const proposalRow = proposalSupportRows[index]
     worksheet.getRow(row).height = templateRow.height
     templateRow.cells.forEach((source, cellIndex) => {
       const cell = worksheet.getRow(row).getCell(cellIndex + 2)
@@ -408,6 +415,18 @@ function setCommercialSheet(workbook, worksheet, args) {
       cell.style = { ...source.style }
       if (source.numFmt) cell.numFmt = source.numFmt
     })
+    if (proposalRow) {
+      const qty = number(totalQty(proposalRow))
+      const unitPrice = proposalRow.quoted === '' || proposalRow.quoted == null ? 0 : number(lineQuoted(proposalRow))
+      setValue(worksheet.getCell(`C${row}`), proposalRow.desc || templateRow.description, { alignment: { vertical: 'top', wrapText: true } })
+      setValue(worksheet.getCell(`D${row}`), proposalRow.pn || 'NA', { alignment: { vertical: 'top', wrapText: true } })
+      setValue(worksheet.getCell(`E${row}`), qty, { alignment: { horizontal: 'center', vertical: 'top' } })
+      setValue(worksheet.getCell(`F${row}`), proposalRow.quoted === '' || proposalRow.quoted == null ? null : unitPrice, { alignment: { horizontal: 'right', vertical: 'top' } })
+      setValue(worksheet.getCell(`G${row}`), { formula: `F${row}*E${row}`, result: unitPrice * qty }, { alignment: { horizontal: 'right', vertical: 'top' } })
+      worksheet.getCell(`E${row}`).numFmt = '#,##0'
+      worksheet.getCell(`F${row}`).numFmt = rupeeFormat
+      worksheet.getCell(`G${row}`).numFmt = rupeeFormat
+    }
   })
 
   const footer = totalRow
@@ -418,12 +437,16 @@ function setCommercialSheet(workbook, worksheet, args) {
     const cell = worksheet.getCell(`${column}${footer}`)
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDE9D9' } }
     cell.border = allBorders
+    cell.numFmt = ['N', 'O'].includes(column) ? euroFormat : rupeeFormat
     if (['G', 'K', 'M', 'O'].includes(column)) {
       const result = lines.reduce((sum, line, index) => {
         const row = firstRow + index
-        const qty = templateProducts.get(clean(line.pn || line.custRef).trim().toLowerCase())?.quantity ?? totalQty(line)
+        const qty = totalQty(line)
         const unit = column === 'G' || column === 'K' ? number(lineQuoted(line)) : column === 'M' ? (lineCost ? number(lineCost(line)) : 0) : (linePrice ? number(linePrice(line)) : 0)
         return sum + unit * number(qty)
+      }, 0) + proposalSupportRows.reduce((sum, line, index) => {
+        const row = firstRow + lines.length + index
+        return sum + number(line.quoted === '' || line.quoted == null ? 0 : lineQuoted(line)) * number(totalQty(line))
       }, 0)
       cell.value = { formula: `SUM(${column}${firstRow}:${column}${footer - 1})`, result }
     }

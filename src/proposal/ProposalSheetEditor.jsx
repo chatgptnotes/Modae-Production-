@@ -123,8 +123,8 @@ export default function ProposalSheetEditor({
              )}
              <thead><tr>
               {isSpares || isServices ? (
-                <><th>Sl.</th><th>{isServices ? 'Scope / activity' : 'Description'}</th>{isSpares && <th>Model / part number</th>}<th>{isServices ? 'Days / hours' : 'Quantity'}</th>
-                  {priced && <><th>{isServices ? 'Rate ₹' : 'Unit price ₹'}</th><th>Total price ₹</th></>}<th>Actions</th></>
+                <><th>Sl.</th><th>{isServices ? 'Scope / activity' : 'Item Description'}</th>{isSpares && <th>Proposed Model/Part No.</th>}<th>{isServices ? 'Days / hours' : 'Qty'}</th>
+                  {priced && <><th>{isServices ? 'Rate ₹' : 'Unit Price ₹'}</th><th>Total Price ₹</th></>}<th>Actions</th></>
               ) : (
                 <><th>Sl.</th><th>Item category</th><th>Description</th><th>Model / part number</th>
                   <th>Qty/unit</th><th>Common</th><th>Spares</th><th>Total qty</th><th>UOM</th>
@@ -139,7 +139,7 @@ export default function ProposalSheetEditor({
                   <td className="rowhead">{i + 1}</td>
                   <td><textarea rows={2} className="proposal-description-editor" {...inputProps(i, 0, e => { paste(i, 0, e); keyNav(e, i, 0, p.bom.length, 4) })} value={l.desc || ''} onChange={updLine(i, 'desc', false)} /></td>
                   {isSpares && <td>
-                    <input value={l.pn || ''} onChange={updLine(i, 'pn', false)} />
+                    <textarea rows={2} className="proposal-pn-editor" value={l.pn || ''} onChange={updLine(i, 'pn', false)} />
                     {l.custRef && l.custRef.trim().toLowerCase() !== (l.pn || '').trim().toLowerCase() && <div className="hint">{l.custRef}</div>}
                   </td>}
                   <td className="num">
@@ -175,7 +175,7 @@ export default function ProposalSheetEditor({
                 <td><span className="proposal-row-control" title="Adjust quantity with the stepper">Qty</span></td>
               </tr>
             })}</tbody>
-            {priced && <tfoot><tr><td colSpan={isSpares ? 5 : isServices ? 4 : 10}>Totals</td><td className="num">₹ {fmt(totals.target)}</td><td /></tr></tfoot>}
+            {priced && <tfoot><tr><td colSpan={isSpares ? 5 : isServices ? 4 : 10}>{isSpares ? `Total For ${p.subject || opp?.oppName || 'Proposal'}` : 'Totals'}</td><td className="num">₹ {fmt(totals.target)}</td><td /></tr></tfoot>}
           </table>
         </div>
         <button onClick={addLine}>+ Add line</button>

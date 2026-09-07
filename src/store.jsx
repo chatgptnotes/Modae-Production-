@@ -15,49 +15,16 @@ import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLea
 import { unitCostINR, unitSellINR } from './utils.js'
 import { PRICE_SOURCES, normalizePriceFields } from './pricing.js'
 import { syncProposalFromOpportunity } from './proposal/opportunitySync.js'
+import {
+  isPlaceholderSparesLine,
+  isSparesSupportRow,
+  sparesProposalBom,
+  withSparesSupportRows,
+} from './proposal/sparesBoq.js'
 
 const StoreCtx = createContext(null)
 
-// Sourcing is the canonical line-item source for Spares proposals. Keep this
-// conversion pure so both explicit synchronization and proposal-load repair
-// produce exactly the same BoQ shape.
-export const isPlaceholderSparesLine = line => {
-  const values = [line?.pn, line?.custRef, line?.desc].map(value => String(value || '').trim())
-  return values.some(value => /^item[-\s]?\d+$/i.test(value))
-}
-
-export function sparesProposalBom(lines = []) {
-  return lines.filter(line => line?.confirmed && Number(line.qty) > 0 && !isPlaceholderSparesLine(line)).map(line => ({
-    itemCategory: 'Hardware',
-    pn: line.pn || '',
-    custRef: line.custRef || line.pn || line.desc || '',
-    desc: line.desc || line.custRef || line.pn || '',
-    listPrice: Number(line.listPrice) || 0,
-    adders: [],
-    qtyPerUnit: 0,
-    common: Number(line.qty) || 0,
-    spares: 0,
-    quoted: (() => {
-      const list = Number(line.listUnitPrice ?? line.listPrice) || 0
-      const discount = Math.max(0, Math.min(100, Number(line.discountPct) || 0))
-      const markup = Math.max(0, Number(line.markupPct) || 0)
-      return list * (1 - discount / 100) * (1 + markup / 100)
-    })(),
-    uom: line.uom || 'EA',
-    list: String(line.priceList || '').startsWith('BNK') ? 'BNK' : 'Ad-hoc',
-    currency: line.currency || 'INR',
-    priceSource: line.priceSource || (String(line.priceList || '').startsWith('Ad-hoc') ? PRICE_SOURCES.MANUAL : PRICE_SOURCES.LIST),
-    priceSourceName: line.priceSourceName || line.priceList || '',
-    priceSourceVersion: line.priceSourceVersion || '',
-    priceSourceRef: line.priceSourceRef || line.quoteRef || '',
-    priceSourceDate: line.priceSourceDate || '',
-    listUnitPrice: Number(line.listUnitPrice ?? line.listPrice) || 0,
-    listTotalPrice: (Number(line.listUnitPrice ?? line.listPrice) || 0) * (Number(line.qty) || 0),
-    baseCost: line.baseCost == null ? undefined : Number(line.baseCost) || 0,
-    discountPct: Number(line.discountPct) || 0,
-    markupPct: Number(line.markupPct) || 0,
-  }))
-}
+export { isPlaceholderSparesLine, sparesProposalBom }
 
 // Captures what a proposal actually looked like at the moment a revision
 // entry is logged, so "Revisions" has real content to show instead of just
@@ -1154,7 +1121,9 @@ export function StoreProvider({ children }) {
         if (!lines.length) return s
         const opp = s.opportunities.find(o => o.id === oppId)
         const base = s.proposals[oppId] || newProposal(oppId, opp, { validityDays: s.config?.proposalValidityDays })
-        const bom = sparesProposalBom(lines)
+        const productBom = sparesProposalBom(lines, s.priceLists)
+        const supportBom = withSparesSupportRows((base.bom || []).filter(isSparesSupportRow))
+        const bom = [...productBom, ...supportBom]
         const costing = base.costing || {}
         const pricedLines = lines.reduce((totals, line) => {
           const listUnitPrice = Number(line.listUnitPrice ?? line.listPrice) || 0

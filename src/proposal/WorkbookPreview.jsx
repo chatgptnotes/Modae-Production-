@@ -41,11 +41,12 @@ const colorValue = color => {
 
 const cellStyle = cell => {
   const source = cell.style || {}
+  const empty = String(cell.value ?? '').trim() === ''
   const style = {}
-  const fill = colorValue(source.fgColor)
   const fontColor = colorValue(source.color)
   const borderColor = colorValue(source.border?.color) || 'var(--grid-line)'
-  if (fill && source.patternType !== 'none') style.backgroundColor = fill
+  // The viewer uses a clean white document surface; source workbook fills
+  // such as yellow/red review blocks are not part of the customer preview.
   if (fontColor) style.color = fontColor
   if (source.font?.bold) style.fontWeight = 700
   if (source.font?.italic) style.fontStyle = 'italic'
@@ -55,6 +56,10 @@ const cellStyle = cell => {
   if (source.alignment?.vertical) style.verticalAlign = source.alignment.vertical
   if (source.alignment?.wrapText) style.whiteSpace = 'pre-wrap'
   if (source.border) style.borderColor = borderColor
+  if (empty) {
+    style.backgroundColor = 'transparent'
+    style.borderColor = 'transparent'
+  }
   return style
 }
 
@@ -78,7 +83,9 @@ const pageClass = sheet => {
 
 const customerFacingSheet = sheet => {
   if (!/firm|pricing|proposal/i.test(String(sheet.name || ''))) return sheet
-  const customerColumnCount = Math.min(7, sheet.widths?.length || 7)
+  // B:G are the six customer-facing commercial columns. H is only a
+  // template spacer before the internal costing block begins at J.
+  const customerColumnCount = Math.min(6, sheet.widths?.length || 6)
   return {
     ...sheet,
     rows: (sheet.rows || []).map(row => row.slice(0, customerColumnCount)),
@@ -112,7 +119,7 @@ export default function WorkbookPreview({ workbook, editable = false, onChange, 
   const [editing, setEditing] = useState(null)
   const [draft, setDraft] = useState('')
   const sourceSheet = workbook?.sheets?.[activeSheet] || workbook?.sheets?.[0]
-  const sheet = sourceSheet ? (editable ? sourceSheet : customerFacingSheet(sourceSheet)) : sourceSheet
+  const sheet = sourceSheet ? customerFacingSheet(sourceSheet) : sourceSheet
 
   const beginEdit = (sheetName, rowIndex, columnIndex, value) => {
     if (!editable) return
@@ -130,29 +137,20 @@ export default function WorkbookPreview({ workbook, editable = false, onChange, 
       {loading && <div className="hint">Loading proposal workbook…</div>}
       {error && <div className="errbox" role="alert">{error}</div>}
       {!!workbook?.sheets?.length && <>
-        <div className="template-workbook-brandbar">
-          <ModaeImageLogo height={28} />
-          <span>{MODAE_DOCUMENT_STANDARDS.header.tagline}</span>
-          <small>{MODAE_DOCUMENT_STANDARDS.footerLines[0]}</small>
-        </div>
         <nav className="template-workbook-page-nav template-workbook-page-nav-top" aria-label="Workbook pages">
-          <button type="button" onClick={() => setActiveSheet(index => Math.max(0, index - 1))} disabled={activeSheet <= 0}>Previous page</button>
           <div className="template-workbook-page-tabs">
             {workbook.sheets.map((item, index) => <button type="button" key={item.name} className={index === activeSheet ? 'active' : ''}
               onClick={() => { setEditing(null); setActiveSheet(index) }}>Page {index + 1} - {item.name.trim() || 'Sheet'}</button>)}
           </div>
-          <button type="button" onClick={() => setActiveSheet(index => Math.min(workbook.sheets.length - 1, index + 1))} disabled={activeSheet >= workbook.sheets.length - 1}>Next page</button>
         </nav>
         {!!sheet && <div className="proposal-preview-scroll template-workbook-preview">
           <section className={`template-workbook-page ${pageClass(sheet)}`}>
             <div className="template-workbook-page-title">Page {activeSheet + 1} - {sheet.name.trim() || 'Sheet'}{editable ? ' · editable' : ' · read-only'}</div>
             <header className="template-workbook-sheet-header">
               <ModaeImageLogo height={34} />
-              <div>
+              <div className="template-workbook-sheet-header-copy">
                 <strong>{MODAE_DOCUMENT_STANDARDS.header.tagline}</strong>
-                <span>Customer-facing proposal workbook</span>
               </div>
-              <small>{MODAE_DOCUMENT_STANDARDS.footerLines[0]}</small>
             </header>
             <div className="template-workbook-page-scroll">
               <table className="sheet template-workbook-table">

@@ -12,6 +12,7 @@ import { unitCostINR, unitSellINR } from '../utils.js'
 import { docModel, docRoute } from '../proposalDoc.js'
 import { signalsFromBom, signalsAreEmpty } from '../rack.js'
 import { applyAdjustment, normalizePriceFields, resolvePriceSource } from '../pricing.js'
+import { withSparesSupportRows } from './sparesBoq.js'
 
 // Qty/Unit × units + Common + Spares — the BoQ quantity rule, in one place so
 // the signal-list derivation reads the same totals the sheet shows.
@@ -21,6 +22,7 @@ export const lineQty = (l, u) => (l.qtyPerUnit || 0) * u + (l.common || 0) + (l.
 // `qty`; the real BoQ splits quantities into Qty/Unit × units + Common + Spares.
 export function normalizeProposal(pr, opp) {
   const units = pr.units || 7
+  const route = docRoute(pr, opp)
   const bom = (pr.bom || []).map(l => ({
     itemCategory: '', qtyPerUnit: 0, common: 0, spares: 0, quoted: '',
     list: 'BNK', currency: 'EUR', uom: 'EA', custRef: '',
@@ -33,21 +35,22 @@ export function normalizeProposal(pr, opp) {
   const stored = pr.signals || newProposal(pr.oppId).signals
   const derived = signalsFromBom(bom, units, l => lineQty(l, units))
   const signals = signalsAreEmpty(stored) && !signalsAreEmpty(derived) ? derived : stored
-  const defaultArtifacts = docRoute(pr, opp) === 'Project'
+  const defaultArtifacts = route === 'Project'
     ? ['Cover Letter', 'Signal List', 'Rack Layout', 'Priced BoQ', 'Compliance Table']
-    : docRoute(pr, opp) === 'Service'
+      : route === 'Service'
       ? ['Cover Letter', 'Scope of Work', 'Issues List', 'Proposal', 'Service Rate Schedule']
       : ['Cover Letter', 'Firm Offer', 'Clarifications', 'Sensor Comparison', 'Priced BoQ']
   return {
     ...pr,
     proposalType: pr.proposalType || proposalTypeForOpp(opp),
-    route: pr.route || docRoute(pr, opp),
+    route: pr.route || route,
     // Edit Sheet is an application navigation action, not a customer-facing
     // artifact. Remove it from older saved proposals so it cannot duplicate the
     // opportunity-level Edit Sheet control.
     artifactSheets: (pr.artifactSheets || defaultArtifacts).filter(x => x !== 'Edit Sheet'),
     signals: signals.map(s => ({ parameter: s.signal, sensorType: '', location: '', ...s })),
-    bom: bom.map(l => ({ groupId: 'g1', custDesc: '', rfqItem: '', ...l })),
+    bom: (route === 'Spares' ? withSparesSupportRows(bom) : bom)
+      .map(l => ({ groupId: 'g1', custDesc: '', rfqItem: '', ...l })),
     extractedItems: pr.extractedItems || bom.map(l => ({
       description: l.desc || '',
       partNumber: l.custRef || l.pn || '',

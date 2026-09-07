@@ -14,7 +14,7 @@ const labels = variant => BOQ_COLUMNS[variant].map(c => c.label)
 const lineQuoted = l => l.quoted || 100
 
 const proposal = (bom, extra = {}) => normalizeProposal(
-  { oppId: 'X', units: 2, bom, ...extra }, { oppType: 'Spares' })
+  { oppId: 'X', units: 2, bom, ...extra }, { oppType: 'Project' })
 
 // The sample pricing sheets are built from numbered item groups — `Item-10`,
 // `Item-20` — each with its own header, its own `Total For` line and its own
@@ -81,6 +81,15 @@ test('each variant carries its sample column set', () => {
   ])
   assert.deepEqual(labels('rate'), [
     'Sl.', 'Item Description', 'Total Qty', 'Unit Price ₹', 'Total Price ₹',
+  ])
+})
+
+test('Spares proposals add the three standard support rows in order', () => {
+  const p = normalizeProposal({ oppId: 'X', bom: [{ pn: 'P-1', desc: 'Probe', common: 10 }] }, { oppType: 'Spares' })
+  assert.deepEqual(p.bom.slice(-3).map(line => [line.desc, line.pn, line.common]), [
+    ['Warranty Certificate', 'NA', 1],
+    ['Country of Origin Certificate', 'NA', 1],
+    ['Freight Charges from B&K Germany To ModAE India', 'NA', 1],
   ])
 })
 

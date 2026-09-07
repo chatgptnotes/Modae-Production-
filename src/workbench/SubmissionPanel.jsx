@@ -298,9 +298,8 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
         <div className="okbox">Proposal email sent — logged in Communications; moved to Follow-up.</div>
       )}
       {previewOpen && (
-        <Modal title={`Customer-facing proposal workbook — ${opp.id}`} onClose={() => setPreviewOpen(false)} wide className="proposal-preview-modal">
+        <Modal onClose={() => setPreviewOpen(false)} wide className="proposal-preview-modal">
           <div className="proposal-preview-toolbar">
-            <span className="hint">Excel workbook preview · customer-facing copy · Rev {p.revision}</span>
             <button type="button" onClick={() => setPreviewOpen(false)}>Close</button>
           </div>
           <WorkbookPreview workbook={previewWorkbook} loading={previewLoading} error={previewError} />

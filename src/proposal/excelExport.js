@@ -41,11 +41,11 @@ export function proposalWorkbookRows({ p, opp, doc, priced, totalQty, lineQuoted
     ['', doc.preparedBy?.division || ''],
   ]
 
-  const priceHeader = route === 'Spares' ? ['Part number', 'Description', 'Total quantity'] : ['Sl.', 'Item Description', 'Model / Part Number', 'Total Qty', 'UOM']
+  const priceHeader = route === 'Spares' ? ['Sl.', 'Item Description', 'Proposed Model/Part No.', 'Qty'] : ['Sl.', 'Item Description', 'Model / Part Number', 'Total Qty', 'UOM']
   if (priced) priceHeader.push('Unit Price ₹', 'Total Price ₹')
   const rows = (p.bom || []).map((line, i) => {
     const qty = totalQty(line)
-    const row = route === 'Spares' ? [line.pn || '', line.desc || line.itemCategory || '', qty] : [i + 1, line.desc || line.itemCategory || '', line.pn || '', qty, line.uom || '']
+    const row = route === 'Spares' ? [i + 1, line.desc || line.itemCategory || '', line.pn || '', qty] : [i + 1, line.desc || line.itemCategory || '', line.pn || '', qty, line.uom || '']
     if (priced) row.push(lineQuoted(line), lineQuoted(line) * qty)
     return row
   })
@@ -55,7 +55,7 @@ export function proposalWorkbookRows({ p, opp, doc, priced, totalQty, lineQuoted
     [],
     priceHeader,
     ...rows,
-    ...(priced ? [['', '', '', '', 'Total', '', total]] : []),
+    ...(priced ? [['', '', '', '', 'Total For', '', total]] : []),
     [],
     [doc.docTermsHeading || 'Terms & Conditions:'],
     ...(doc.docTerms || []).map((term, i) => [`${i + 1}. ${term.label || ''}`, term.text || '']),
@@ -150,15 +150,15 @@ export function proposalWorkbookBase64(args) {
 // covering letter and optional documents can still be shared explicitly, but
 // no standard terms or internal workbook sheets are sent without a choice.
 export function buildPricedBoqWorkbook({ p, opp, priced, totalQty, lineQuoted, route }) {
-  const headers = route === 'Spares' ? ['Part number', 'Description', 'Total quantity'] : ['Sl.', 'Item Description', 'Model / Part Number', 'Total Qty', 'UOM']
+  const headers = route === 'Spares' ? ['Sl.', 'Item Description', 'Proposed Model/Part No.', 'Qty'] : ['Sl.', 'Item Description', 'Model / Part Number', 'Total Qty', 'UOM']
   if (priced) headers.push('Unit Price ₹', 'Total Price ₹')
   const rows = (p.bom || []).map((line, i) => {
     const qty = totalQty(line)
-    const row = route === 'Spares' ? [line.pn || '', line.desc || line.itemCategory || '', qty] : [i + 1, line.desc || line.itemCategory || '', line.pn || '', qty, line.uom || '']
+    const row = route === 'Spares' ? [i + 1, line.desc || line.itemCategory || '', line.pn || '', qty] : [i + 1, line.desc || line.itemCategory || '', line.pn || '', qty, line.uom || '']
     if (priced) row.push(lineQuoted(line), lineQuoted(line) * qty)
     return row
   })
-  if (priced) rows.push(['', '', '', '', 'Total', '', rows.reduce((sum, row) => sum + (Number(row.at(-1)) || 0), 0)])
+  if (priced) rows.push(['', '', '', '', 'Total For', '', rows.reduce((sum, row) => sum + (Number(row.at(-1)) || 0), 0)])
   return buildTableWorkbook(routeSheetName(route, p.revision), headers, rows)
 }
 

@@ -9,7 +9,7 @@
 import { unitCostINR, unitSellINR } from './utils.js'
 import { defaultCosting, MILESTONES } from './seed.js'
 import { applyAdjustment } from './pricing.js'
-import { isPlaceholderSparesLine } from './store.jsx'
+import { isPlaceholderSparesLine } from './proposal/sparesBoq.js'
 
 const isLeadKycVerified = opp =>
   opp?.leadVerification?.type === 'KYC' && opp.leadVerification.status === 'Verified'

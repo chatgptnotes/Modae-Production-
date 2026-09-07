@@ -54,6 +54,20 @@ test('proposal workbook parser drops an empty leading worksheet column', () => {
   assert.deepEqual(parsed.sheets[0].rows[0], ['Date', '5-Sep-2026'])
 })
 
+test('proposal workbook parser drops merge-only logo columns before content', () => {
+  const book = XLSX.utils.book_new()
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ['', ''],
+    ['', '5-Sep-2026'],
+    ['', 'Our Ref:'],
+  ])
+  sheet['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }]
+  XLSX.utils.book_append_sheet(book, sheet, 'Cover Letter')
+  const parsed = parseProposalWorkbook(XLSX.write(book, { bookType: 'xlsx', type: 'array' }), 'cover.xlsx')
+  assert.deepEqual(parsed.sheets[0].rows[0], ['5-Sep-2026'])
+  assert.deepEqual(parsed.sheets[0].merges, [])
+})
+
 test('proposal workbook parser drops only the blank rows above customer content', () => {
   const book = XLSX.utils.book_new()
   const sheet = XLSX.utils.aoa_to_sheet([

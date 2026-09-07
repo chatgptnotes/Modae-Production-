@@ -1622,7 +1622,9 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
   background: var(--palette-4843938); color: var(--text-main); font-family: var(--font-document);
 }
 .template-workbook-brandbar > span { font-size: 12pt; font-weight: 700; color: var(--text-main); }
-.template-workbook-brandbar small { margin-left: auto; color: var(--text-muted); font-size: 10pt; }
+.template-workbook-brandbar-copy { display: grid; gap: 2px; margin-left: auto; text-align: right; }
+.template-workbook-brandbar-copy > span { color: #3d3df2; font-size: 18pt; font-style: italic; font-weight: 700; }
+.template-workbook-brandbar small { color: var(--text-muted); font-size: 10pt; }
 .workbook-preview-mode-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 12px; }
 .workbook-preview-mode-tabs button.active { background: var(--primary-fill); color: var(--palette-4843938); border-color: var(--primary-fill); }
 .template-workbook-page {
@@ -1630,7 +1632,7 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
   border: 1px solid var(--border-soft); box-shadow: 0 2px 8px var(--palette-b8b4ba37);
   padding: 20px 24px; overflow: visible;
 }
-.template-workbook-page.template-page-portrait { width: min(100%, 900px); }
+.template-workbook-page.template-page-portrait { width: 100%; }
 .template-workbook-page.template-page-landscape { max-width: none; }
 .template-workbook-page.template-page-wide { max-width: 100%; }
 .template-workbook-page-title { font-weight: 700; color: var(--text-strong); padding-bottom: 10px; border-bottom: 2px solid var(--primary-fill); margin-bottom: 10px; }
@@ -1638,27 +1640,28 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
   display: flex; align-items: center; gap: 14px; min-height: 56px; padding: 8px 10px 10px;
   border-bottom: 2px solid var(--primary-accent); font-family: var(--font-document); color: var(--text-strong);
 }
-.template-workbook-sheet-header > div { display: grid; gap: 2px; }
-.template-workbook-sheet-header strong { font-size: 12pt; }
+.template-workbook-sheet-header > div { display: grid; gap: 2px; margin-left: auto; text-align: right; }
+.template-workbook-sheet-header strong { color: #3d3df2; font-size: 18pt; font-style: italic; font-weight: 700; }
 .template-workbook-sheet-header span, .template-workbook-sheet-header small { color: var(--text-muted); font-size: 10pt; }
-.template-workbook-sheet-header small { margin-left: auto; text-align: right; }
 /* Horizontal scroll only. A per-sheet vertical scrollbox (plus a height cap)
    split the workbook into separate scrolling pages; the modal's
    .proposal-preview-scroll is now the single vertical scroller. */
 .template-workbook-page-scroll { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; overflow-y: hidden; box-sizing: border-box; overscroll-behavior-x: contain; }
 .template-workbook-page .sheet { margin: 0; }
-.template-workbook-table { width: max-content; min-width: 0; table-layout: fixed; border-collapse: collapse; }
+.template-workbook-table { width: 100%; min-width: 720px; max-width: 100%; table-layout: fixed; border-collapse: collapse; }
 .template-workbook-table { font-family: var(--font-document); font-size: 11pt; }
 .template-workbook-page .sheet td.template-workbook-cell {
   min-width: 110px; min-height: 24px; padding: 5px 7px; vertical-align: top;
   border: 1px solid var(--palette-951c7b4e); background: var(--palette-4843938); white-space: normal;
   overflow-wrap: break-word; word-break: break-word; box-sizing: border-box;
 }
+.template-workbook-page .sheet td.template-workbook-cell,
+.template-workbook-page .sheet td.template-cell-heading { background: #fff; }
 .template-workbook-page .sheet td.template-cell-description { min-width: 260px; max-width: 460px; }
 .template-workbook-page .sheet td.template-cell-code { min-width: 160px; white-space: nowrap; word-break: normal; overflow-wrap: normal; }
 .template-workbook-page .sheet td.template-cell-number { min-width: 90px; text-align: right; white-space: nowrap; word-break: normal; overflow-wrap: normal; }
 .template-workbook-page .sheet td.template-cell-label { font-weight: 700; color: var(--text-strong); }
-.template-workbook-page .sheet td.template-cell-heading { font-weight: 700; color: var(--text-strong); background: var(--primary-soft); }
+.template-workbook-page .sheet td.template-cell-heading { font-weight: 700; color: var(--text-strong); background: #fff; }
 .template-workbook-page .sheet td.template-cell-locked { cursor: default; }
 .template-workbook-page .sheet td.template-cell-editable { cursor: text; }
 .template-workbook-page .sheet td.template-cell-compact { min-width: 110px; white-space: nowrap; }
@@ -1673,7 +1676,7 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 }
 .template-cell-code .template-cell-editor,
 .template-cell-number .template-cell-editor { white-space: nowrap; word-break: normal; overflow-wrap: normal; }
-.template-workbook-page .sheet td.template-workbook-empty { background: var(--palette-4843938); }
+.template-workbook-page .sheet td.template-workbook-empty { background: transparent; border-color: transparent; }
 .template-workbook-page .sheet tr:first-child td { border-top-color: var(--primary-accent); }
 .workbook-scroll { max-height: calc(100vh - 300px); min-height: 260px; overflow: auto; }
 .workbook-table { min-width: 980px; }

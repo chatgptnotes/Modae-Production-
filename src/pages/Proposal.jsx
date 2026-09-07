@@ -20,6 +20,7 @@ import { parseProposalWorkbook as parseRenderedWorkbook } from '../proposal/work
 import { routeForType } from '../seed.js'
 import { buildLeadProposalData } from '../leadBoq.js'
 import DetailTabs from '../DetailTabs.jsx'
+import { isSparesSupportRow, withSparesSupportRows } from '../proposal/sparesBoq.js'
 
 const ROUTE_TABS = {
   Project: ['Cover Letter', 'Edit Sheet', 'Document', 'Signal List', 'Rack Layout', 'Priced BoQ'],
@@ -343,7 +344,8 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
     const confirmed = (store.sparesLines || []).filter(line => line.oppId === oppId && line.confirmed)
     if (!confirmed.length) return
     const current = store.getProposal(oppId)
-    const nextBom = sparesProposalBom(confirmed)
+    const productBom = sparesProposalBom(confirmed, store.priceLists)
+    const nextBom = withSparesSupportRows([...productBom, ...(current.bom || []).filter(isSparesSupportRow)])
     const same = current.bom?.length === nextBom.length
       && current.bom.every((line, index) => {
         const next = nextBom[index]
@@ -533,6 +535,8 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   const rack = rackLayout(totalSignals)
 
   const save = next => {
+    const isSparesProposal = next.proposalType === 'Spares' || next.route === 'Spares' || opp?.route === 'Spares'
+    if (isSparesProposal) next = { ...next, bom: withSparesSupportRows(next.bom) }
     // Once a BoQ has ever been priced, keep syncing even down to 0 — an emptied
     // BoQ must not leave stale Value/COGS on the tracker. Never-priced proposals
     // don't overwrite the intake estimate.

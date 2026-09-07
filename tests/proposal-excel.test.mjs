@@ -24,15 +24,15 @@ const input = {
 test('proposal Excel rows contain the cover and customer pricing sheets', () => {
   const { cover, pricing } = proposalWorkbookRows(input)
   assert.equal(cover[6][1], '2608227RS')
-  assert.deepEqual(pricing[2], ['Part number', 'Description', 'Total quantity', 'Unit Price ₹', 'Total Price ₹'])
-  assert.deepEqual(pricing[3], ['P-1', 'Probe', 3, 100, 300])
+  assert.deepEqual(pricing[2], ['Sl.', 'Item Description', 'Proposed Model/Part No.', 'Qty', 'Unit Price ₹', 'Total Price ₹'])
+  assert.deepEqual(pricing[3], [1, 'Probe', 'P-1', 3, 100, 300])
   assert.deepEqual(pricing.at(-1), ['1. Validity', '30 days'])
 })
 
 test('restricted Excel rows omit customer prices', () => {
   const { pricing } = proposalWorkbookRows({ ...input, priced: false })
-  assert.deepEqual(pricing[2], ['Part number', 'Description', 'Total quantity'])
-  assert.equal(pricing[3].length, 3)
+  assert.deepEqual(pricing[2], ['Sl.', 'Item Description', 'Proposed Model/Part No.', 'Qty'])
+  assert.equal(pricing[3].length, 4)
 })
 
 // 18 Aug branding guideline: document templates in Candara, 11pt body,
@@ -151,7 +151,7 @@ test('customer-facing proposal export removes internal and template-only columns
   assert.equal(firm.getCell('N9').value, null)
 })
 
-test('spares export keeps the reference offer rows and file quantities', async () => {
+test('spares export keeps reference rows but uses live proposal quantities', async () => {
   const templateBuffer = fs.readFileSync('branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx')
   const output = await generateProposalWorkbook({
     templateBuffer,
@@ -169,7 +169,7 @@ test('spares export keeps the reference offer rows and file quantities', async (
     opp: { id: '2609001PJS', sellTo: 'Customer' },
     doc: { docTerms: [] },
     totalQty: line => line.common,
-    lineQuoted: () => 0,
+    lineQuoted: () => 100,
   })
   const workbook = new ExcelJS.Workbook()
   await workbook.xlsx.load(output)
@@ -177,15 +177,14 @@ test('spares export keeps the reference offer rows and file quantities', async (
   assert.deepEqual(
     Array.from({ length: 8 }, (_, index) => firm.getCell(`C${index + 10}`).value),
     [
-      'Non-contact Displacement Sensor with full length thread, Measuring Range 2mm, With 0.5m Integral Cable',
-      'Non-contact Displacement Sensor, Reverse Mount Sensor for Sensor Holder with Adjustment Spindle, With 0.5m integral cable',
-      'Sensor Extension Cable Extension Cable without protection, 4.5m length',
-      'Sensor Driver Electronics for 2mm Measuring Range (oscillator/de-modulator), supports all nominal system lengths (5 m and 10 m)',
-      'Sensor Holder, With Adjustment Spindle Uncut, Without Sensor Thread, FKM O-ring', 'Warranty Certificate',
+      'Wrong live description', 'Wrong live description', 'Wrong live description', 'Wrong live description', 'Wrong live description', 'Warranty Certificate',
       'Country of Origin Certificate', 'Freight Charges from B&K Germany To ModAE India',
     ],
   )
-  assert.deepEqual(Array.from({ length: 5 }, (_, index) => firm.getCell(`E${index + 10}`).value), [10, 10, 15, 10, 10])
+  assert.deepEqual(Array.from({ length: 5 }, (_, index) => firm.getCell(`E${index + 10}`).value), [1, 1, 1, 1, 1])
+  assert.deepEqual(Array.from({ length: 5 }, (_, index) => firm.getCell(`F${index + 10}`).value), [100, 100, 100, 100, 100])
+  assert.equal(firm.getCell('G10').value.result, 100)
+  assert.equal(firm.getCell('G18').value.result, 500)
   assert.equal(firm.getCell('B18').value, 'Total For')
 })
 
