@@ -14,6 +14,9 @@ import { signalsFromBom, countSignals, rackLayout, UMM_CHANNELS, RACK_SLOTS } fr
 import { normalizeProposal, buildPricing } from '../proposal/docProps.js'
 import ProposalSheetEditor from '../proposal/ProposalSheetEditor.jsx'
 import { downloadProposalXlsx } from '../proposal/excelExport.js'
+import WorkbookPreview from '../proposal/WorkbookPreview.jsx'
+import { generateProposalWorkbook } from '../proposal/templateExcelExport.js'
+import { parseProposalWorkbook as parseRenderedWorkbook } from '../proposal/workbook.js'
 import { routeForType } from '../seed.js'
 import { buildLeadProposalData } from '../leadBoq.js'
 import DetailTabs from '../DetailTabs.jsx'
@@ -287,6 +290,8 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   const [referenceLoading, setReferenceLoading] = useState(false)
   const [referenceError, setReferenceError] = useState('')
   const [templatePreviewOpen, setTemplatePreviewOpen] = useState(false)
+  const [templatePreviewMode, setTemplatePreviewMode] = useState('draft')
+  const [renderedTemplateWorkbook, setRenderedTemplateWorkbook] = useState(null)
   const [editingTemplateCell, setEditingTemplateCell] = useState(null)
   const [templateLoading, setTemplateLoading] = useState(false)
   const [templateError, setTemplateError] = useState('')
@@ -459,19 +464,47 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
     save(next)
   }
 
-  const openTemplatePreview = () => {
+  const openTemplatePreview = async () => {
     setEditingTemplateCell(null)
     setTemplatePreviewOpen(true)
+    setTemplatePreviewMode('draft')
+    setTemplateLoading(true)
+    setTemplateError('')
+    try {
+      const configured = (store.config?.uploads?.proposalTemplates || []).find(item => item.lane === (route === 'Services' ? 'Service' : route) && item.status === 'Current')
+      const url = configured?.url || (route === 'Project' ? PROJECT_PROPOSAL_URL : route === 'Spares' ? SPARES_PROPOSAL_URL : SERVICE_PROPOSAL_URL)
+      const response = await fetch(url)
+      if (!response.ok) throw new Error('Proposal template could not be loaded')
+      const bytes = await generateProposalWorkbook({
+        templateBuffer: await response.arrayBuffer(),
+        p, opp, doc, priced, totalQty, lineQuoted, lineCost, linePrice, totals, route,
+        redactInternalCosting: false,
+      })
+      setRenderedTemplateWorkbook(parseRenderedWorkbook(bytes, configured?.name || proposalTemplate?.filename || `${oppId} Proposal.xlsx`))
+    } catch (error) {
+      setTemplateError(error?.message || 'Proposal workbook could not be generated')
+      setRenderedTemplateWorkbook(null)
+    } finally {
+      setTemplateLoading(false)
+    }
   }
 
   const updateTemplateCell = (sheetName, rowIndex, columnIndex, value) => {
-    const targetSheet = proposalTemplateSheets.find(sheet => sheet.name === sheetName)
+    const targetSheet = renderedTemplateWorkbook?.sheets?.find(sheet => sheet.name === sheetName)
     if (!targetSheet) return
+    const currentValue = String(targetSheet.rows?.[rowIndex]?.[columnIndex] ?? '').trim()
+    const kind = targetSheet.kinds?.[rowIndex]?.[columnIndex]
+    if (!currentValue || kind === 'formula' || kind === 'number'
+      || /^\s*[₹$€£]?[-+\d.,%]+\s*$/.test(currentValue)
+      || /^[A-Z0-9][A-Z0-9._\-/]{10,}$/i.test(currentValue.replace(/\s+/g, ''))
+      || /^(our ref|bid stage|bid type|revision|sl\.?\s*no\.?|item description|proposed model|part no\.?|qty|quantity|unit price|total price|unit cost|total cost|computed|list price|total for|terms\s*&?\s*conditions?)\s*:?$/i.test(currentValue)) return
     const key = route === 'Project' ? 'projectProposalWorkbook' : route === 'Spares' ? 'sparesProposalWorkbook' : 'serviceProposalWorkbook'
-    const sheets = proposalTemplateSheets.map(sheet => sheet.name !== sheetName ? sheet : {
+    const sheets = renderedTemplateWorkbook.sheets.map(sheet => sheet.name !== sheetName ? sheet : {
       ...sheet,
       rows: sheet.rows.map((row, r) => r !== rowIndex ? row : row.map((cell, c) => c !== columnIndex ? cell : value)),
     })
+    const nextWorkbook = { ...renderedTemplateWorkbook, sheets }
+    setRenderedTemplateWorkbook(nextWorkbook)
     save({ ...p, [key]: { ...proposalTemplate, sheets } })
   }
 
@@ -602,6 +635,13 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   const reviewStatus = p.reviewStatus || 'Not reviewed'
   const reviewReady = reviewStatus === 'Validated'
   const approvalRequired = blockers.some(bl => bl.approvalType && bl.severity !== 'wait') || pendingForOpp.length > 0
+  const readinessSummary = blocked
+    ? `${blockers.length} readiness item${blockers.length === 1 ? '' : 's'} need attention`
+    : pendingForOpp.length > 0
+      ? `${pendingForOpp.length} approval${pendingForOpp.length === 1 ? '' : 's'} pending`
+      : submitted
+        ? 'Submitted to customer'
+        : 'Ready — no blockers'
 
   // Forward `needed` and `anyOf`. Dropping them let recordDecision fall back to
   // [approver], so a joint LJS+AH gate raised from this page — the Red customer
@@ -838,6 +878,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
               <option>Project</option><option>Spares</option><option>Services</option>
             </select>
           </label>
+          <span className="proposal-status-label">Review status</span>
           <span className={`pill ${reviewReady ? 'won' : reviewStatus === 'Needs attention' ? 'Red' : 'grey'}`}>{reviewStatus}</span>
           {pendingForOpp.length > 0 && <span className="pill Amber">{pendingForOpp.length} approval{pendingForOpp.length > 1 ? 's' : ''} pending</span>}
         </div>
@@ -884,9 +925,9 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
         <details className="proposal-alert-drawer" open={readinessOpen || blocked || pendingForOpp.length > 0} onToggle={e => setReadinessOpen(e.currentTarget.open)}>
           <summary>
             <span className={`proposal-alert-indicator ${blocked ? 'blocked' : 'ready'}`} />
-            <span>{blocked ? `${blockers.length} readiness item${blockers.length === 1 ? '' : 's'} need attention` : ''}</span>
+            <span className="proposal-alert-summary">{readinessSummary}</span>
             {submitted && <span className="pill won">Submitted</span>}
-            <span className="proposal-alert-toggle">Review status</span>
+            <span className="proposal-alert-toggle">Readiness &amp; approval</span>
           </summary>
           <div className="proposal-alert-drawer-body">
         <div className={`gate-strip ${blocked ? 'blocked' : 'ready'}`}>
@@ -941,7 +982,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
 
       {route !== 'Project' && (
         <details className="proposal-context-drawer">
-          <summary>Proposal notes <span className="hint">Route context</span></summary>
+          <summary>Route context</summary>
           <div className="proposal-context-drawer-body">
         <div className="ai-notice">
           <b>{route} proposal route.</b> The printed document follows the{' '}
@@ -1330,54 +1371,22 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
       )}
 
       {templatePreviewOpen && (
-          <Modal title={`${route === 'Project' ? 'Project Proposal' : route === 'Spares' ? 'Spares Firm Offer' : 'Service Proposal'} - ${oppId}`} onClose={() => setTemplatePreviewOpen(false)} wide className="proposal-preview-modal">
+        <Modal title={`${route === 'Project' ? 'Project Proposal' : route === 'Spares' ? 'Spares Firm Offer' : 'Service Proposal'} - ${oppId}`} onClose={() => setTemplatePreviewOpen(false)} wide className="proposal-preview-modal">
           <div className="proposal-preview-toolbar">
-            <span className="hint">Editable Excel template - each tab is a worksheet - changes are saved to this proposal</span>
+            <span className="hint">Live Excel workbook - narrative text is editable; prices, costs, quantities, formulas and totals are locked</span>
             <button onClick={() => setTemplatePreviewOpen(false)}>Close</button>
           </div>
+          {!!renderedTemplateWorkbook && <div className="workbook-preview-mode-tabs" role="tablist" aria-label="Proposal workbook view">
+            <button type="button" className={templatePreviewMode === 'draft' ? 'active' : ''} onClick={() => setTemplatePreviewMode('draft')}>Draft · text editable</button>
+            <button type="button" className={templatePreviewMode === 'customer' ? 'active' : ''} onClick={() => setTemplatePreviewMode('customer')}>Customer Preview · read-only</button>
+          </div>}
           {templateLoading && <div className="hint">Loading proposal workbook...</div>}
           {templateError && <div className="errbox" role="alert">{templateError}</div>}
-          {/* Every worksheet stacked in one scroller \u2014 the old Page 1 / Page 2
-              tabs with their own inner scrollboxes broke the workbook up. */}
-          {!!proposalTemplateSheets.length && <div className="proposal-preview-scroll template-workbook-preview">
-            {proposalTemplateSheets.map(sheet => (
-            <section key={sheet.name} className={`template-workbook-page ${templatePageClass(sheet, route)}`}>
-              <div className="template-workbook-page-title">{sheet.name.trim() || 'Sheet'}</div>
-              <div className="template-workbook-page-scroll">
-                <table className="sheet template-workbook-table">
-                  <colgroup>{(sheet.widths || []).map((width, i) => <col key={i} style={{ width: `${Math.max(90, Number(width) || 110)}px` }} />)}</colgroup>
-                  <tbody>{sheet.rows.map((row, rowIndex) => <tr key={rowIndex} style={{ minHeight: sheet.heights?.[rowIndex] || 24 }}>
-                    {templateCellsForRow(sheet, rowIndex).map(cell => {
-                      const editing = editingTemplateCell
-                        && editingTemplateCell.sheetName === sheet.name
-                        && editingTemplateCell.rowIndex === rowIndex
-                        && editingTemplateCell.columnIndex === cell.columnIndex
-                      return <td key={cell.columnIndex} rowSpan={cell.rowSpan} colSpan={cell.colSpan}
-                        className={`${templateCellClass(sheet, cell)}${editing ? ' is-editing' : ''}`}
-                        tabIndex={editing ? -1 : 0}
-                        onClick={() => { if (!editing) beginTemplateCellEdit(sheet.name, rowIndex, cell.columnIndex, cell.value) }}
-                        onDoubleClick={() => beginTemplateCellEdit(sheet.name, rowIndex, cell.columnIndex, cell.value)}
-                        onKeyDown={event => {
-                          if (event.key === 'Enter' || event.key === 'F2') {
-                            event.preventDefault()
-                            beginTemplateCellEdit(sheet.name, rowIndex, cell.columnIndex, cell.value)
-                          }
-                        }}>
-                        {editing ? <textarea autoFocus className="template-cell-editor" aria-label={`${sheet.name} row ${rowIndex + 1} column ${cell.columnIndex + 1}`} value={editingTemplateCell.value}
-                          onChange={event => setEditingTemplateCell(current => ({ ...current, value: event.target.value }))}
-                          onBlur={() => finishTemplateCellEdit()}
-                          onKeyDown={event => {
-                            if (event.key === 'Escape') { event.preventDefault(); finishTemplateCellEdit(true) }
-                            if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); finishTemplateCellEdit() }
-                          }} /> : <span className="template-cell-value">{cell.value || '\u00a0'}</span>}
-                      </td>
-                    })}
-                  </tr>)}</tbody>
-                </table>
-              </div>
-            </section>
-            ))}
-          </div>}
+          {!!renderedTemplateWorkbook && <WorkbookPreview
+            workbook={renderedTemplateWorkbook}
+            editable={templatePreviewMode === 'draft'}
+            onChange={updateTemplateCell}
+          />}
         </Modal>
       )}
 

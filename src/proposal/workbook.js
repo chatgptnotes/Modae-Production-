@@ -13,36 +13,50 @@ export function parseProposalWorkbook(buffer, filename) {
         for (let c = range.s.c; c <= range.e.c; c++) {
           for (let r = range.s.r; r <= range.e.r; r++) {
             const cell = sheet[XLSX.utils.encode_cell({ r, c })]
-            if (cell?.v != null || cell?.w != null) last = c
+            if (String(cell?.v ?? cell?.w ?? '').trim() !== '') last = c
           }
         }
         return last
       })()
       const lastMergeColumn = sourceMerges.reduce((last, merge) => Math.max(last, merge.e.c), range.s.c)
       const effectiveEndColumn = Math.max(lastValueColumn, lastMergeColumn)
-      const effectiveRange = { ...range, e: { ...range.e, c: effectiveEndColumn } }
+      const firstMeaningfulColumn = (() => {
+        for (let c = range.s.c; c <= effectiveEndColumn; c++) {
+          const hasValue = Array.from({ length: range.e.r - range.s.r + 1 }, (_, index) => sheet[XLSX.utils.encode_cell({ r: range.s.r + index, c })])
+            .some(cell => String(cell?.v ?? cell?.w ?? '').trim() !== '')
+          const hasMerge = sourceMerges.some(merge => merge.s.c <= c && merge.e.c >= c)
+          if (hasValue || hasMerge) return c
+        }
+        return range.s.c
+      })()
+      const effectiveRange = { ...range, s: { ...range.s, c: firstMeaningfulColumn }, e: { ...range.e, c: effectiveEndColumn } }
       const rows = []
       const styles = []
+      const kinds = []
       for (let r = effectiveRange.s.r; r <= effectiveRange.e.r; r++) {
         const row = []
         const styleRow = []
+        const kindRow = []
         for (let c = effectiveRange.s.c; c <= effectiveRange.e.c; c++) {
           const cell = sheet[XLSX.utils.encode_cell({ r, c })]
           row.push(cell?.w ?? (cell?.v == null ? '' : String(cell.v)))
           styleRow.push(cell?.s ? { ...cell.s } : null)
+          kindRow.push(cell?.f ? 'formula' : cell?.v == null ? 'empty' : typeof cell.v === 'number' || cell.t === 'n' ? 'number' : 'text')
         }
         rows.push(row)
         styles.push(styleRow)
+        kinds.push(kindRow)
       }
       const rawWidths = sheet['!cols'] || []
       const merges = sourceMerges.map(merge => ({
-        s: { r: merge.s.r - range.s.r, c: merge.s.c - range.s.c },
-        e: { r: merge.e.r - range.s.r, c: merge.e.c - range.s.c },
+        s: { r: merge.s.r - effectiveRange.s.r, c: merge.s.c - effectiveRange.s.c },
+        e: { r: merge.e.r - effectiveRange.s.r, c: merge.e.c - effectiveRange.s.c },
       }))
       const rawRows = sheet['!rows'] || []
       const dropFirstRow = rows.length > 1 && rows[0].every(value => String(value ?? '').trim() === '')
       const visibleRows = dropFirstRow ? rows.slice(1) : rows
       const visibleStyles = dropFirstRow ? styles.slice(1) : styles
+      const visibleKinds = dropFirstRow ? kinds.slice(1) : kinds
       const visibleMerges = dropFirstRow
         ? merges.filter(merge => merge.e.r > 0).map(merge => ({
           s: { ...merge.s, r: Math.max(0, merge.s.r - 1) },
@@ -53,6 +67,7 @@ export function parseProposalWorkbook(buffer, filename) {
         name,
         rows: visibleRows,
         styles: visibleStyles,
+        kinds: visibleKinds,
         merges: visibleMerges,
         heights: Array.from({ length: effectiveRange.e.r - effectiveRange.s.r + 1 }, (_, i) => rawRows[effectiveRange.s.r + i]?.hpx || rawRows[effectiveRange.s.r + i]?.hpt || 24).slice(dropFirstRow ? 1 : 0),
         widths: Array.from({ length: effectiveRange.e.c - effectiveRange.s.c + 1 }, (_, i) => rawWidths[effectiveRange.s.c + i]?.wpx || 110),

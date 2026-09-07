@@ -43,6 +43,17 @@ test('proposal workbook parser keeps a style matrix for rendered worksheet cells
   assert.equal(roundTrip.sheets[0].styles.length, roundTrip.sheets[0].rows.length)
 })
 
+test('proposal workbook parser drops an empty leading worksheet column', () => {
+  const book = XLSX.utils.book_new()
+  const sheet = XLSX.utils.aoa_to_sheet([
+    ['', 'Date', '5-Sep-2026'],
+    ['', 'Our Ref:', '2609001PJS'],
+  ])
+  XLSX.utils.book_append_sheet(book, sheet, 'Cover Letter')
+  const parsed = parseProposalWorkbook(XLSX.write(book, { bookType: 'xlsx', type: 'array' }), 'cover.xlsx')
+  assert.deepEqual(parsed.sheets[0].rows[0], ['Date', '5-Sep-2026'])
+})
+
 test('seed config has a proposal template registry for migration', () => {
   assert.ok(Array.isArray(seedConfig.uploads.proposalTemplates))
 })

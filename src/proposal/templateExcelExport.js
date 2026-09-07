@@ -380,13 +380,13 @@ function setCommercialSheet(workbook, worksheet, args) {
     setValue(worksheet.getCell(`D${row}`), line.pn || line.custRef || '', { alignment: { vertical: 'top', wrapText: true } })
     setValue(worksheet.getCell(`E${row}`), qty, { alignment: { horizontal: 'center', vertical: 'top' } })
     setValue(worksheet.getCell(`F${row}`), unitPrice, { alignment: { horizontal: 'right', vertical: 'top' } })
-    setValue(worksheet.getCell(`G${row}`), { formula: `F${row}*E${row}` }, { alignment: { horizontal: 'right', vertical: 'top' } })
+    setValue(worksheet.getCell(`G${row}`), { formula: `F${row}*E${row}`, result: unitPrice * qty }, { alignment: { horizontal: 'right', vertical: 'top' } })
     setValue(worksheet.getCell(`J${row}`), unitPrice, { alignment: { horizontal: 'right', vertical: 'top' } })
-    setValue(worksheet.getCell(`K${row}`), { formula: `J${row}*E${row}` }, { alignment: { horizontal: 'right', vertical: 'top' } })
+    setValue(worksheet.getCell(`K${row}`), { formula: `J${row}*E${row}`, result: unitPrice * qty }, { alignment: { horizontal: 'right', vertical: 'top' } })
     setValue(worksheet.getCell(`L${row}`), unitLandedCost, { alignment: { horizontal: 'right', vertical: 'top' } })
-    setValue(worksheet.getCell(`M${row}`), { formula: `L${row}*E${row}` }, { alignment: { horizontal: 'right', vertical: 'top' } })
+    setValue(worksheet.getCell(`M${row}`), { formula: `L${row}*E${row}`, result: unitLandedCost * qty }, { alignment: { horizontal: 'right', vertical: 'top' } })
     setValue(worksheet.getCell(`N${row}`), unitEuro, { alignment: { horizontal: 'right', vertical: 'top' } })
-    setValue(worksheet.getCell(`O${row}`), { formula: `N${row}*E${row}` }, { alignment: { horizontal: 'right', vertical: 'top' } })
+    setValue(worksheet.getCell(`O${row}`), { formula: `N${row}*E${row}`, result: unitEuro * qty }, { alignment: { horizontal: 'right', vertical: 'top' } })
     setWrappedHeight(worksheet, row, [
       { value: templateProduct?.description || line.desc || line.itemCategory || '', width: columnWidth(worksheet, 3) },
       { value: line.pn || line.custRef || '', width: columnWidth(worksheet, 4) },
@@ -418,7 +418,15 @@ function setCommercialSheet(workbook, worksheet, args) {
     const cell = worksheet.getCell(`${column}${footer}`)
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDE9D9' } }
     cell.border = allBorders
-    if (['G', 'K', 'M', 'O'].includes(column)) cell.value = { formula: `SUM(${column}${firstRow}:${column}${footer - 1})` }
+    if (['G', 'K', 'M', 'O'].includes(column)) {
+      const result = lines.reduce((sum, line, index) => {
+        const row = firstRow + index
+        const qty = templateProducts.get(clean(line.pn || line.custRef).trim().toLowerCase())?.quantity ?? totalQty(line)
+        const unit = column === 'G' || column === 'K' ? number(lineQuoted(line)) : column === 'M' ? (lineCost ? number(lineCost(line)) : 0) : (linePrice ? number(linePrice(line)) : 0)
+        return sum + unit * number(qty)
+      }, 0)
+      cell.value = { formula: `SUM(${column}${firstRow}:${column}${footer - 1})`, result }
+    }
   }
   const termsStart = footer + 2
   // The source templates contain leftover customer-facing rows below the BOQ

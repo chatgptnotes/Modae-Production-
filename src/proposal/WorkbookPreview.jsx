@@ -26,7 +26,7 @@ const cellsForRow = (sheet, rowIndex) => {
     const totalWidth = (sheet.widths || []).reduce((sum, item) => sum + Math.max(1, Number(item) || 1), 0) || 1
     const renderedWidth = Math.max(24, (width / totalWidth) * previewWidth)
     const rows = Math.max(1, Math.ceil(String(value).length / Math.max(12, Math.floor(renderedWidth / 7))))
-    cells.push({ columnIndex, colSpan, rowSpan, value, rows, style: sheet.styles?.[rowIndex]?.[columnIndex] || null })
+    cells.push({ columnIndex, colSpan, rowSpan, value, rows, style: sheet.styles?.[rowIndex]?.[columnIndex] || null, kind: sheet.kinds?.[rowIndex]?.[columnIndex] || (value ? 'text' : 'empty') })
     columnIndex += colSpan - 1
   }
   return cells
@@ -56,6 +56,17 @@ const cellStyle = cell => {
   if (source.alignment?.wrapText) style.whiteSpace = 'pre-wrap'
   if (source.border) style.borderColor = borderColor
   return style
+}
+
+const isEditableTextCell = (sheet, cell) => {
+  const value = String(cell.value ?? '').trim()
+  if (!value || cell.kind === 'formula' || cell.kind === 'number') return false
+  if (/^\s*[₹$€£]?[-+\d.,%]+\s*$/.test(value)) return false
+  if (/^[A-Z0-9][A-Z0-9._\-/]{10,}$/i.test(value.replace(/\s+/g, ''))) return false
+  if (/^(our ref|bid stage|bid type|revision|sl\.?\s*no\.?|item description|proposed model|part no\.?|qty|quantity|unit price|total price|unit cost|total cost|computed|list price|total for|terms\s*&?\s*conditions?)\s*:?$/i.test(value)) return false
+  if (/^(binding|priced|unpriced|read-only|editable)$/i.test(value)) return false
+  if (/firm|pricing|proposal/i.test(String(sheet.name || '')) && cell.columnIndex <= 1 && value.length < 32) return false
+  return true
 }
 
 const pageClass = sheet => {
@@ -132,11 +143,12 @@ export default function WorkbookPreview({ workbook, editable = false, onChange, 
                 <tbody>{sheet.rows.map((row, rowIndex) => <tr key={rowIndex} style={{ minHeight: sheet.heights?.[rowIndex] || 24 }}>
                   {cellsForRow(sheet, rowIndex).map(cell => {
                     const isEditing = editing?.sheetName === sheet.name && editing.rowIndex === rowIndex && editing.columnIndex === cell.columnIndex
+                    const editableCell = editable && isEditableTextCell(sheet, cell)
                     return <td key={cell.columnIndex} rowSpan={cell.rowSpan} colSpan={cell.colSpan} style={cellStyle(cell)}
-                      className={`${cellClass(sheet, cell)}${isEditing ? ' is-editing' : ''}`} tabIndex={editable && !isEditing ? 0 : -1}
-                      onClick={() => beginEdit(sheet.name, rowIndex, cell.columnIndex, cell.value)}
-                      onDoubleClick={() => beginEdit(sheet.name, rowIndex, cell.columnIndex, cell.value)}
-                      onKeyDown={event => { if (editable && (event.key === 'Enter' || event.key === 'F2')) { event.preventDefault(); beginEdit(sheet.name, rowIndex, cell.columnIndex, cell.value) } }}>
+                      className={`${cellClass(sheet, cell)}${editableCell ? ' template-cell-editable' : ' template-cell-locked'}${isEditing ? ' is-editing' : ''}`} tabIndex={editableCell && !isEditing ? 0 : -1}
+                      onClick={() => { if (editableCell) beginEdit(sheet.name, rowIndex, cell.columnIndex, cell.value) }}
+                      onDoubleClick={() => { if (editableCell) beginEdit(sheet.name, rowIndex, cell.columnIndex, cell.value) }}
+                      onKeyDown={event => { if (editableCell && (event.key === 'Enter' || event.key === 'F2')) { event.preventDefault(); beginEdit(sheet.name, rowIndex, cell.columnIndex, cell.value) } }}>
                       {isEditing ? <textarea autoFocus className="template-cell-editor" aria-label={`${sheet.name} row ${rowIndex + 1} column ${cell.columnIndex + 1}`} value={draft}
                         onChange={event => setDraft(event.target.value)} onBlur={() => finishEdit()}
                         onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); finishEdit(true) } if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); finishEdit() } }} />
