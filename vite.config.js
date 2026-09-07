@@ -11,8 +11,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 // req.body plus res.status(...).json(...)) onto Node's raw response. Secrets
 // from .env.local are loaded into process.env exactly as Vercel injects them,
 // so local dev behaves like the deployed app — including real Gmail sending
-// once GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN and
-// GMAIL_ACCOUNT are configured (see DEPLOYMENT.md).
+// once GMAIL_ACCOUNT and GMAIL_APP_PASSWORD are configured (see DEPLOYMENT.md).
 function vercelApiDevServer() {
   const apiDir = path.join(path.dirname(fileURLToPath(import.meta.url)), 'api')
   const routes = new Map(fs.readdirSync(apiDir)

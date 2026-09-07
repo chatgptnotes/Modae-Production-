@@ -16,6 +16,7 @@
     "codex": "^0.2.3",
     "exceljs": "^4.4.0",
     "install": "^0.13.0",
+    "nodemailer": "^10.0.0",
     "pdfjs-dist": "^4.10.38",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

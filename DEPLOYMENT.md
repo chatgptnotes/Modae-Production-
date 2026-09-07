@@ -65,15 +65,18 @@ bodies or attachments.
 ### Customer quote email
 
 The approval decision stays inside WinTrack. After the final release approval,
-the Submission panel calls the Vercel `/api/send-proposal-email` function. Add
-these as **server-side** Vercel variables (never `VITE_` variables):
+the Submission panel calls the Vercel `/api/send-proposal-email` function,
+which logs into Gmail directly over SMTP (no Google Cloud OAuth app) using
+the mailbox address and an app password. Add these as **server-side** Vercel
+variables (never `VITE_` variables):
 
 ```bash
-GOOGLE_CLIENT_ID=...
-GOOGLE_CLIENT_SECRET=...
-GOOGLE_REFRESH_TOKEN=...
 GMAIL_ACCOUNT=...
+GMAIL_APP_PASSWORD=...
 ```
+
+Generate the app password from the sending Google account at
+https://myaccount.google.com/apppasswords (requires 2-Step Verification).
 
 The sender requires a customer email and a PDF selected in the Submission
 panel. A successful Gmail response is then logged in the opportunity's

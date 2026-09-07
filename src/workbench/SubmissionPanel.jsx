@@ -9,13 +9,7 @@ import { buildPricing } from '../proposal/docProps.js'
 import { blobAttachment, proposalWorkbookAttachment, proposalWorkbookPreview, enclosureAttachments } from '../proposal/emailAttachments.js'
 import { runText } from '../ai.js'
 import WorkbookPreview from '../proposal/WorkbookPreview.jsx'
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const splitRecipients = value => String(value || '').split(',').map(s => s.trim()).filter(Boolean)
-const recipientsValid = value => {
-  const list = splitRecipients(value)
-  return list.length > 0 && list.every(a => EMAIL_RE.test(a))
-}
+import { EMAIL_RE, splitRecipients, recipientsValid } from '../emailValidation.js'
 
 // Customer send — only unlocked by an approved 'Final quote release'
 // and a three-point human-in-the-loop checklist. To, CC, Subject, the covering

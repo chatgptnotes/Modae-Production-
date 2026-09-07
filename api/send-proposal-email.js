@@ -1,5 +1,6 @@
+import nodemailer from 'nodemailer'
+
 const clean = value => String(value || '').trim()
-const headerValue = value => clean(value).replace(/[\r\n"]/g, '_')
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 // To and CC accept comma-separated recipient lists, e.g. a buyer plus their
@@ -37,59 +38,12 @@ const BLOCKED_ATTACHMENT_MIME = new Set([
   'text/javascript',
 ])
 
-function encodeBase64Url(value) {
-  return Buffer.from(value).toString('base64')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=+$/, '')
-}
-
-function mimeMessage({ from, to, cc, subject, body, attachments = [] }) {
-  if (!attachments.length) {
-    const lines = [
-      `From: ${headerValue(from)}`, `To: ${headerValue(to)}`, ...(cc ? [`Cc: ${headerValue(cc)}`] : []), `Subject: ${headerValue(subject)}`,
-      'MIME-Version: 1.0', 'Content-Type: text/plain; charset="UTF-8"',
-      'Content-Transfer-Encoding: 8bit', '', body,
-    ]
-    return encodeBase64Url(lines.join('\r\n'))
-  }
-  const boundary = `=_wintrack_${Date.now()}`
-  const lines = [
-    `From: ${headerValue(from)}`,
-    `To: ${headerValue(to)}`,
-    ...(cc ? [`Cc: ${headerValue(cc)}`] : []),
-    `Subject: ${headerValue(subject)}`,
-    'MIME-Version: 1.0',
-    `Content-Type: multipart/mixed; boundary="${boundary}"`,
-    '',
-    `--${boundary}`,
-    'Content-Type: text/plain; charset="UTF-8"',
-    'Content-Transfer-Encoding: 8bit', '',
-    body,
-    '',
-  ]
-  for (const attachment of attachments) {
-    const encoded = String(attachment.contentBase64 || '').replace(/\s/g, '').match(/.{1,76}/g)?.join('\r\n') || ''
-    lines.push(
-      `--${boundary}`,
-      `Content-Type: ${attachment.mimeType}; name="${headerValue(attachment.filename)}"`,
-      'Content-Transfer-Encoding: base64',
-      `Content-Disposition: attachment; filename="${headerValue(attachment.filename)}"`, '',
-      encoded,
-    )
-  }
-  lines.push(`--${boundary}--`, '')
-  return encodeBase64Url(lines.join('\r\n'))
-}
-
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'POST only' })
 
-  const clientId = clean(process.env.GOOGLE_CLIENT_ID)
-  const clientSecret = clean(process.env.GOOGLE_CLIENT_SECRET)
-  const refreshToken = clean(process.env.GOOGLE_REFRESH_TOKEN)
   const account = clean(process.env.GMAIL_ACCOUNT)
-  if (!clientId || !clientSecret || !refreshToken || !account) {
+  const appPassword = clean(process.env.GMAIL_APP_PASSWORD)
+  if (!account || !appPassword) {
     return res.status(503).json({ ok: false, error: 'Gmail is not configured on the server' })
   }
 
@@ -133,38 +87,22 @@ export default async function handler(req, res) {
   }
 
   try {
-    const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        refresh_token: refreshToken,
-        grant_type: 'refresh_token',
-      }),
+    // Direct Gmail login (mailbox address + app password) via SMTP, rather
+    // than a Google Cloud OAuth app + refresh token — the mailbox owner
+    // generates the app password once from their own Google account.
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: { user: account, pass: appPassword },
     })
-    const token = await tokenResponse.json()
-    if (!tokenResponse.ok || !token.access_token) {
-      console.error('Gmail token exchange failed', token.error || tokenResponse.status)
-      return res.status(502).json({ ok: false, error: 'Gmail authentication failed' })
-    }
-
-    const gmailResponse = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
-      method: 'POST',
-      headers: {
-        authorization: `Bearer ${token.access_token}`,
-        'content-type': 'application/json',
-      },
-      body: JSON.stringify({
-        raw: mimeMessage({ from, to, cc, subject, body, attachments }),
-      }),
+    const info = await transporter.sendMail({
+      from, to, cc: cc || undefined, subject, text: body,
+      attachments: attachments.map(a => ({
+        filename: a.filename,
+        content: Buffer.from(a.contentBase64, 'base64'),
+        contentType: a.mimeType,
+      })),
     })
-    const result = await gmailResponse.json()
-    if (!gmailResponse.ok || !result.id) {
-      console.error('Gmail send failed', result.error?.message || gmailResponse.status)
-      return res.status(502).json({ ok: false, error: 'Gmail rejected the message' })
-    }
-    return res.status(200).json({ ok: true, messageId: result.id, threadId: result.threadId })
+    return res.status(200).json({ ok: true, messageId: info.messageId })
   } catch (error) {
     console.error('Gmail send error', error?.message || error)
     return res.status(502).json({ ok: false, error: 'Could not reach Gmail' })

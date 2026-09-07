@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import nodemailer from 'nodemailer'
 import handler from '../api/send-proposal-email.js'
 
 const response = () => {
@@ -11,6 +12,27 @@ const response = () => {
   }
 }
 
+const MAIL_ENV_KEYS = ['GMAIL_ACCOUNT', 'GMAIL_APP_PASSWORD']
+
+const withMailEnv = fn => async () => {
+  const old = MAIL_ENV_KEYS.map(key => [key, process.env[key]])
+  process.env.GMAIL_ACCOUNT = 'sales@example.com'
+  process.env.GMAIL_APP_PASSWORD = 'app-password'
+  try { await fn() }
+  finally {
+    for (const [key, value] of old) {
+      if (value === undefined) delete process.env[key]
+      else process.env[key] = value
+    }
+  }
+}
+
+const mockTransport = sendMail => {
+  const original = nodemailer.createTransport
+  nodemailer.createTransport = () => ({ sendMail })
+  return () => { nodemailer.createTransport = original }
+}
+
 test('mail endpoint rejects non-POST requests', async () => {
   const res = response()
   await handler({ method: 'GET' }, res)
@@ -18,8 +40,7 @@ test('mail endpoint rejects non-POST requests', async () => {
 })
 
 test('mail endpoint fails safely when server mail secrets are absent', async () => {
-  const old = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REFRESH_TOKEN', 'GMAIL_ACCOUNT']
-    .map(key => [key, process.env[key]])
+  const old = MAIL_ENV_KEYS.map(key => [key, process.env[key]])
   for (const [key] of old) delete process.env[key]
   try {
     const res = response()
@@ -34,40 +55,19 @@ test('mail endpoint fails safely when server mail secrets are absent', async () 
   }
 })
 
-test('mail endpoint rejects executable attachments', async () => {
-  const old = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REFRESH_TOKEN', 'GMAIL_ACCOUNT']
-    .map(key => [key, process.env[key]])
-  process.env.GOOGLE_CLIENT_ID = 'client'
-  process.env.GOOGLE_CLIENT_SECRET = 'secret'
-  process.env.GOOGLE_REFRESH_TOKEN = 'refresh'
-  process.env.GMAIL_ACCOUNT = 'sales@example.com'
-  try {
-    const res = response()
-    await handler({ method: 'POST', body: { to: 'customer@example.com', subject: 'Proposal', body: 'Attached', attachments: [{ filename: 'setup.exe', mimeType: 'application/x-msdownload', contentBase64: 'YQ==' }] } }, res)
-    assert.equal(res.out.status, 400)
-    assert.match(res.out.body.error, /executables are rejected/)
-  } finally {
-    for (const [key, value] of old) {
-      if (value === undefined) delete process.env[key]
-      else process.env[key] = value
-    }
-  }
-})
+test('mail endpoint rejects executable attachments', withMailEnv(async () => {
+  const res = response()
+  await handler({ method: 'POST', body: { to: 'customer@example.com', subject: 'Proposal', body: 'Attached', attachments: [{ filename: 'setup.exe', mimeType: 'application/x-msdownload', contentBase64: 'YQ==' }] } }, res)
+  assert.equal(res.out.status, 400)
+  assert.match(res.out.body.error, /executables are rejected/)
+}))
 
-test('mail endpoint accepts everyday business files picked by the salesperson', async () => {
-  const old = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REFRESH_TOKEN', 'GMAIL_ACCOUNT']
-    .map(key => [key, process.env[key]])
-  const oldFetch = globalThis.fetch
-  const requests = []
-  process.env.GOOGLE_CLIENT_ID = 'client'
-  process.env.GOOGLE_CLIENT_SECRET = 'secret'
-  process.env.GOOGLE_REFRESH_TOKEN = 'refresh'
-  process.env.GMAIL_ACCOUNT = 'sales@example.com'
-  globalThis.fetch = async (url, options) => {
-    requests.push({ url, options })
-    if (url.includes('oauth2')) return { ok: true, json: async () => ({ access_token: 'token' }) }
-    return { ok: true, json: async () => ({ id: 'msg-1', threadId: 'thread-1' }) }
-  }
+test('mail endpoint accepts everyday business files picked by the salesperson', withMailEnv(async () => {
+  const calls = []
+  const restore = mockTransport(async options => {
+    calls.push(options)
+    return { messageId: 'msg-1' }
+  })
   try {
     const res = response()
     await handler({ method: 'POST', body: {
@@ -79,60 +79,33 @@ test('mail endpoint accepts everyday business files picked by the salesperson', 
       ],
     } }, res)
     assert.equal(res.out.status, 200)
-    const gmailRequest = requests.find(r => r.url.includes('gmail.googleapis.com'))
-    const raw = JSON.parse(gmailRequest.options.body).raw
-    const message = Buffer.from(raw, 'base64url').toString()
-    assert.match(message, /From: projects@example\.com/)
-    assert.match(message, /To: buyer@example\.com, purchasing@example\.com/,
+    assert.equal(res.out.body.messageId, 'msg-1')
+    assert.equal(calls.length, 1)
+    assert.equal(calls[0].from, 'projects@example.com')
+    assert.equal(calls[0].to, 'buyer@example.com, purchasing@example.com',
       'comma-separated recipients must all land in the To header')
-    assert.match(message, /filename="compliance\.docx"/)
-    assert.match(message, /filename="notes\.txt"/)
+    assert.deepEqual(calls[0].attachments.map(a => a.filename), ['proposal.xlsx', 'compliance.docx', 'notes.txt'])
   } finally {
-    globalThis.fetch = oldFetch
-    for (const [key, value] of old) {
-      if (value === undefined) delete process.env[key]
-      else process.env[key] = value
-    }
+    restore()
   }
-})
+}))
 
-test('mail endpoint rejects a malformed From address', async () => {
-  const old = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REFRESH_TOKEN', 'GMAIL_ACCOUNT']
-    .map(key => [key, process.env[key]])
-  process.env.GOOGLE_CLIENT_ID = 'client'
-  process.env.GOOGLE_CLIENT_SECRET = 'secret'
-  process.env.GOOGLE_REFRESH_TOKEN = 'refresh'
-  process.env.GMAIL_ACCOUNT = 'sales@example.com'
-  try {
-    const res = response()
-    await handler({ method: 'POST', body: {
-      from: 'not-an-email', to: 'customer@example.com', subject: 'Proposal', body: 'Attached',
-      attachments: [{ filename: 'proposal.pdf', mimeType: 'application/pdf', contentBase64: 'cA==' }],
-    } }, res)
-    assert.equal(res.out.status, 400)
-    assert.equal(res.out.body.error, 'From address is not valid')
-  } finally {
-    for (const [key, value] of old) {
-      if (value === undefined) delete process.env[key]
-      else process.env[key] = value
-    }
-  }
-})
+test('mail endpoint rejects a malformed From address', withMailEnv(async () => {
+  const res = response()
+  await handler({ method: 'POST', body: {
+    from: 'not-an-email', to: 'customer@example.com', subject: 'Proposal', body: 'Attached',
+    attachments: [{ filename: 'proposal.pdf', mimeType: 'application/pdf', contentBase64: 'cA==' }],
+  } }, res)
+  assert.equal(res.out.status, 400)
+  assert.equal(res.out.body.error, 'From address is not valid')
+}))
 
-test('mail endpoint puts every attachment in one MIME message', async () => {
-  const old = ['GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REFRESH_TOKEN', 'GMAIL_ACCOUNT']
-    .map(key => [key, process.env[key]])
-  const oldFetch = globalThis.fetch
-  const requests = []
-  process.env.GOOGLE_CLIENT_ID = 'client'
-  process.env.GOOGLE_CLIENT_SECRET = 'secret'
-  process.env.GOOGLE_REFRESH_TOKEN = 'refresh'
-  process.env.GMAIL_ACCOUNT = 'sales@example.com'
-  globalThis.fetch = async (url, options) => {
-    requests.push({ url, options })
-    if (url.includes('oauth2')) return { ok: true, json: async () => ({ access_token: 'token' }) }
-    return { ok: true, json: async () => ({ id: 'msg-1', threadId: 'thread-1' }) }
-  }
+test('mail endpoint sends every attachment in one message', withMailEnv(async () => {
+  const calls = []
+  const restore = mockTransport(async options => {
+    calls.push(options)
+    return { messageId: 'msg-1' }
+  })
   try {
     const res = response()
     await handler({ method: 'POST', body: {
@@ -144,17 +117,25 @@ test('mail endpoint puts every attachment in one MIME message', async () => {
       ],
     } }, res)
     assert.equal(res.out.status, 200)
-    const gmailRequest = requests.find(r => r.url.includes('gmail.googleapis.com'))
-    const raw = JSON.parse(gmailRequest.options.body).raw
-    const message = Buffer.from(raw, 'base64url').toString()
-    assert.match(message, /filename="proposal\.xlsx"/)
-    assert.match(message, /filename="proposal\.pdf"/)
-    assert.match(message, /filename="ModAE Standard Terms-Sales\.pdf"/)
+    assert.equal(calls.length, 1)
+    assert.deepEqual(calls[0].attachments.map(a => a.filename),
+      ['proposal.xlsx', 'proposal.pdf', 'ModAE Standard Terms-Sales.pdf'])
   } finally {
-    globalThis.fetch = oldFetch
-    for (const [key, value] of old) {
-      if (value === undefined) delete process.env[key]
-      else process.env[key] = value
-    }
+    restore()
   }
-})
+}))
+
+test('mail endpoint surfaces the real error when Gmail rejects the message', withMailEnv(async () => {
+  const restore = mockTransport(async () => { throw new Error('Invalid login') })
+  try {
+    const res = response()
+    await handler({ method: 'POST', body: {
+      to: 'customer@example.com', subject: 'Proposal', body: 'Attached',
+      attachments: [{ filename: 'proposal.pdf', mimeType: 'application/pdf', contentBase64: 'cA==' }],
+    } }, res)
+    assert.equal(res.out.status, 502)
+    assert.equal(res.out.body.ok, false)
+  } finally {
+    restore()
+  }
+}))

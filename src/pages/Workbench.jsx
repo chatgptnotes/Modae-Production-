@@ -25,6 +25,8 @@ import AttachmentViewer from '../AttachmentViewer.jsx'
 import { extractDocText } from '../docText.js'
 import { putFiles } from '../leadBlobs.js'
 import { uploadOppFile, fmtSize } from '../filestore.js'
+import { isPlaceholderSparesLine, isSparesSupportRow, catalogueDescriptionForLine } from '../proposal/sparesBoq.js'
+import { recipientsValid } from '../emailValidation.js'
 
 const statusPill = s =>
   s === 'Approved' ? 'Green' : s === 'Rejected' ? 'Red' : s === 'Approved with conditions' ? 'Amber' : 'Blue'
@@ -992,8 +994,21 @@ function ClarificationsTab({ opp }) {
 // ---------------------------------------------------------------------------
 function SourcingTab({ opp, goTab }) {
   const store = useStore()
-  const lines = store.sparesLines.filter(l => l.oppId === opp.id)
   const proposal = store.getProposal(opp.id)
+  const sourcingLines = store.sparesLines.filter(l => l.oppId === opp.id && !isPlaceholderSparesLine(l))
+  // Keep manufacturer RFQs aligned with the customer-facing proposal BoQ.
+  // Older sourcing rows can retain placeholder text or a default quantity of
+  // one after a lead import, while the approved proposal has the corrected
+  // catalogue description and quantity in `common`.
+  const lines = sourcingLines.map(line => {
+    const bomLine = (proposal.bom || []).find(b => !isSparesSupportRow(b)
+      && String(b.pn || b.custRef || '').trim().toLowerCase() === String(line.pn || line.custRef || '').trim().toLowerCase())
+    return {
+      ...line,
+      desc: catalogueDescriptionForLine(line, store.priceLists) || bomLine?.desc || line.desc,
+      qty: Number(bomLine?.common) > 0 ? Number(bomLine.common) : Number(line.qty) || 1,
+    }
+  })
   const quotes = (store.vendorQuotes || []).filter(q => q.oppId === opp.id)
   const superseded = lines.some(l => String(l.match).toLowerCase().includes('superseded'))
   const usingApprovedPriceList = lines.length > 0 && lines.every(l => {
@@ -1003,6 +1018,7 @@ function SourcingTab({ opp, goTab }) {
   const [rfqOpen, setRfqOpen] = useState(false)
   const [rfqForm, setRfqForm] = useState({ manufacturer: '', to: '', cc: '', subject: '', body: '' })
   const [rfqErr, setRfqErr] = useState('')
+  const [rfqSending, setRfqSending] = useState(false)
   const [quoteFor, setQuoteFor] = useState(null)
   const [quoteForm, setQuoteForm] = useState({ lineId: '', unitPrice: '', currency: 'INR', leadTime: '', quoteRef: '', notes: '' })
   const [quoteFiles, setQuoteFiles] = useState([])
@@ -1080,21 +1096,62 @@ function SourcingTab({ opp, goTab }) {
     setVendorSimBusy(false)
   }
 
-  const sendRfq = () => {
-    if (!rfqForm.to.trim()) { setRfqErr('Add the manufacturer email address before opening compose.'); return }
-    const href = gmailComposeHref({ to: rfqForm.to, cc: rfqForm.cc, subject: rfqForm.subject, body: rfqForm.body })
-    if (!href) { setRfqErr('Add the manufacturer email address before opening compose.'); return }
-    window.open(href, '_blank', 'noopener')
-    store.addVendorQuote(opp.id, {
-      manufacturer: rfqForm.manufacturer.trim() || rfqForm.to.trim(),
-      email: rfqForm.to.trim(), cc: rfqForm.cc.trim(), subject: rfqForm.subject,
-      body: rfqForm.body, lineIds: lines.map(l => l.id), status: 'Sent',
-    })
-    store.addCommunication(opp.id, {
-      to: rfqForm.to.trim(), cc: rfqForm.cc.trim(), subject: rfqForm.subject,
-      kind: 'vendor-rfq',
-    })
-    setRfqOpen(false)
+  const sendRfq = async () => {
+    const to = rfqForm.to.trim()
+    const from = store.config?.gmailAccount || 'sales@mod-ae.com'
+    if (!recipientsValid(to)) { setRfqErr('Add a valid manufacturer email address before sending.'); return }
+    if (rfqForm.cc.trim() && !recipientsValid(rfqForm.cc)) {
+      setRfqErr('Check the CC email address before sending.')
+      return
+    }
+    setRfqSending(true)
+    setRfqErr('')
+    try {
+      // The shared mail endpoint requires an attachment. A plain-text copy of
+      // the reviewed RFQ keeps this vendor request auditable without inventing
+      // a customer proposal workbook attachment.
+      const bytes = new TextEncoder().encode(rfqForm.body)
+      let binary = ''
+      bytes.forEach(byte => { binary += String.fromCharCode(byte) })
+      const response = await fetch('/api/send-proposal-email', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          oppId: opp.id,
+          from,
+          to,
+          cc: rfqForm.cc,
+          subject: rfqForm.subject,
+          body: rfqForm.body,
+          attachments: [{
+            filename: `${opp.id}_Manufacturer_RFQ.txt`,
+            mimeType: 'text/plain',
+            contentBase64: btoa(binary),
+          }],
+        }),
+      })
+      const result = await response.json().catch(() => null)
+      if (!response.ok || !result?.ok) {
+        throw new Error(result?.error || `The email service is unreachable (HTTP ${response.status}) — check the server's Gmail configuration`)
+      }
+      store.addVendorQuote(opp.id, {
+        manufacturer: rfqForm.manufacturer.trim() || to,
+        email: to, cc: rfqForm.cc.trim(), subject: rfqForm.subject,
+        body: rfqForm.body, lineIds: lines.map(l => l.id), status: 'Sent',
+        sentAt: new Date().toISOString(), messageId: result.messageId,
+        attachmentNames: [`${opp.id}_Manufacturer_RFQ.txt`],
+      })
+      store.addCommunication(opp.id, {
+        to, cc: rfqForm.cc.trim(), subject: rfqForm.subject, body: rfqForm.body,
+        kind: 'vendor-rfq', status: 'sent', messageId: result.messageId,
+        attachmentNames: [`${opp.id}_Manufacturer_RFQ.txt`],
+      })
+      setRfqOpen(false)
+    } catch (error) {
+      setRfqErr(error?.message || 'RFQ email could not be sent')
+    } finally {
+      setRfqSending(false)
+    }
   }
 
   const openVendorResponse = q => {
@@ -1227,10 +1284,10 @@ function SourcingTab({ opp, goTab }) {
               <textarea rows={14} value={rfqForm.body} onChange={e => setRfqForm({ ...rfqForm, body: e.target.value })} />
             </label>
           </div>
-          <WarnBox>Review the message before sending. Gmail will open a compose window and log the RFQ against this opportunity.</WarnBox>
+          <WarnBox>Review the message before sending. The RFQ will be sent through the configured Gmail account and logged against this opportunity after Gmail accepts it.</WarnBox>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
             <button onClick={() => setRfqOpen(false)}>Cancel</button>
-            <button className="primary" onClick={sendRfq}><Icon name="send" size={13} /> Open Gmail compose</button>
+            <button className="primary" onClick={sendRfq} disabled={rfqSending}><Icon name="send" size={13} /> {rfqSending ? 'Sending…' : 'Send RFQ email'}</button>
           </div>
         </Modal>
       )}
