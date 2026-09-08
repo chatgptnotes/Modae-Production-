@@ -8,6 +8,7 @@ import { useFormulaBar } from '../formulabar.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { nextActionWith } from '../gates.js'
 import { suggestProbability } from '../insights.js'
+import { Modal } from '../ui.jsx'
 
 const OPEN_STAGES = STAGES.filter(s => s !== 'Won' && s !== 'Lost')
 
@@ -168,6 +169,12 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const [sort, setSort] = useState(null)               // { key, dir: 1 | -1 }
   const [openFilter, setOpenFilter] = useState(null)   // { key, x, y } of the open dropdown
   const [productPick, setProductPick] = useState(null) // { id, x, y } of the open product picker
+  const [closePending, setClosePending] = useState(null) // { id, stage } awaiting a closed reason
+  const [closeReason, setCloseReason] = useState('')
+  const sheetWrapRef = useRef(null)
+  const lastSheetScrollLeft = useRef(0)
+  const horizontalGestureNudged = useRef(false)
+  const horizontalGestureTimer = useRef(null)
   // Sales owners open on the eight columns they work from; everyone else on the
   // full sheet. Either can switch — nothing is taken away, only folded.
   const [colView, setColView] = useState(() => ((OWNERS.includes(store.role)
@@ -259,8 +266,44 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     const patch = { [field]: value }
     // Reopening clears the closure fields; a Won/Lost stage must not survive.
     if (field === 'status' && value === 'Open') Object.assign(patch, { closedReason: '', stage: 'Firm Bid' })
-    if (field === 'stage' && (value === 'Won' || value === 'Lost')) patch.status = 'Closed'
+    if (field === 'stage' && (value === 'Won' || value === 'Lost')) {
+      setClosePending({ id, stage: value })
+      setCloseReason('')
+      return
+    }
     store.updateOpportunity(id, patch)
+  }
+
+  const cancelClose = () => {
+    setClosePending(null)
+    setCloseReason('')
+  }
+
+  const confirmClose = () => {
+    if (!closePending || !closeReason) return
+    store.updateOpportunity(closePending.id, {
+      stage: closePending.stage,
+      status: 'Closed',
+      closedReason: closeReason,
+    })
+    cancelClose()
+  }
+
+  useEffect(() => () => clearTimeout(horizontalGestureTimer.current), [])
+
+  const handleSheetScroll = e => {
+    const wrap = e.currentTarget
+    const movedHorizontally = Math.abs(wrap.scrollLeft - lastSheetScrollLeft.current) > 0
+    if (movedHorizontally && !horizontalGestureNudged.current && wrap.scrollHeight > wrap.clientHeight) {
+      const maxTop = wrap.scrollHeight - wrap.clientHeight
+      wrap.scrollTop = Math.min(wrap.scrollTop + 12, maxTop)
+      horizontalGestureNudged.current = true
+    }
+    lastSheetScrollLeft.current = wrap.scrollLeft
+    clearTimeout(horizontalGestureTimer.current)
+    horizontalGestureTimer.current = setTimeout(() => {
+      horizontalGestureNudged.current = false
+    }, 140)
   }
 
   // Formula-bar selection: address + underlying formula + commit (for editable cells).
@@ -402,7 +445,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
           : <Link className="btn primary" to="/new">Create Opportunity</Link>}
       </div>
 
-      <div className="sheet-wrap fill">
+      <div ref={sheetWrapRef} className="sheet-wrap fill" onScroll={handleSheetScroll}>
         {colView === 'key'
           ? <style>{[
             hiddenColumnCss(COLS.map((c, i) => (KEY_COLS.includes(c.key) ? -1 : i)).filter(i => i >= 0)),
@@ -596,6 +639,26 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
         ))}
         <div className="tab">＋</div>
       </div>
+
+      {closePending && (
+        <Modal title={`Close opportunity as ${closePending.stage}`} onClose={cancelClose}>
+          <p className="hint">Select a reason before this opportunity is moved to {closePending.stage}.</p>
+          <label htmlFor="tracker-close-reason">Closed reason</label>
+          <select
+            id="tracker-close-reason"
+            value={closeReason}
+            onChange={e => setCloseReason(e.target.value)}
+            autoFocus
+          >
+            <option value="">— select a reason —</option>
+            {CLOSE_REASONS.map(reason => <option key={reason} value={reason}>{reason}</option>)}
+          </select>
+          <div className="forms-actions">
+            <button className="primary" disabled={!closeReason} onClick={confirmClose}>Confirm</button>
+            <button onClick={cancelClose}>Cancel</button>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }
