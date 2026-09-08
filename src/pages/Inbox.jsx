@@ -589,6 +589,14 @@ const leadFieldValue = (fields, pattern) => {
   return field?.v || ''
 }
 
+const REQUIRED_IDENTITY_FIELDS = [
+  ['sellTo', 'Sell-to customer'],
+  ['eucName', 'EUC Name'],
+  ['eucLocation', 'EUC Location'],
+  ['contactPerson', 'Contact Person'],
+  ['contactPhone', 'Contact Phone'],
+]
+
 const updateLeadField = (fields, key, value, group = 'RFQ') => {
   const index = fields.findIndex(f => f.k.toLowerCase() === key.toLowerCase())
   const next = { group, k: key, v: value, conf: 100, state: 'accepted', ev: 'Edited on lead detail', note: 'Confirmed by user' }
@@ -705,8 +713,13 @@ function AiLeadDetail({ lead }) {
   const initialLocation = lead.location || (lead.region && !indiaRegionForLocation(lead.region, store.config) ? lead.region : '') || leadFieldValue(ai.fields, /location|region/i)
   const initialRegion = lead.region || indiaRegionForLocation(initialLocation, store.config) || initialLocation
   const initialDecisions = () => ({
+    sellTo: lead.sellTo || leadFieldValue(ai.fields, /sell-to/i) || lead.parse?.sellTo || '',
     location: initialLocation,
     region: initialRegion,
+    eucName: lead.eucName || leadFieldValue(ai.fields, /euc\s*name/i) || lead.parse?.eucName || '',
+    eucLocation: lead.eucLocation || leadFieldValue(ai.fields, /euc\s*location/i) || lead.parse?.eucLocation || initialLocation,
+    contactPerson: lead.contactPerson || leadFieldValue(ai.fields, /contact\s*person|contact/i) || lead.parse?.contactPerson || '',
+    contactPhone: lead.contactPhone || leadFieldValue(ai.fields, /contact\s*phone|phone/i) || lead.parse?.contactPhone || '',
     owner: lead.assignedOwner || lead.suggestedOwner || routeOwner(initialRegion, store.config, OWNERS[0]),
     oppType: OPP_TYPES.includes(lead.oppType)
       ? lead.oppType
@@ -876,14 +889,17 @@ function AiLeadDetail({ lead }) {
   }
 
   const rule = (store.config.ownershipRules || []).find(r => r.owner === lead.suggestedOwner)
-  const oppTypeRule = !rule && (store.config.ownerRules || []).find(r => r.oppType === resolvedRoute && r.owner === lead.suggestedOwner)
+  const oppTypeRule = !rule && (store.config.ownerRules || []).find(r => r.oppType === decisionDraft.oppType && r.owner === lead.suggestedOwner)
   const ownerRuleLabel = rule ? `${rule.region} rule`
     : oppTypeRule ? `${oppTypeRule.oppType} opportunity-type rule`
-    : `${resolvedRoute} opportunity-type rule`
+    : `${decisionDraft.oppType} opportunity-type rule`
 
   const qualifyBlocked = isRed && !redCleared
   const verificationBlocked = !leadVerificationComplete(lead, previewCustomerStatus, { redCleared })
-  const registrationBlocked = !!(ai.missing || []).length || pendingLow.length > 0 || verificationBlocked
+  const missingIdentity = REQUIRED_IDENTITY_FIELDS
+    .filter(([key]) => !String(decisionDraft[key] || '').trim())
+    .map(([, label]) => label)
+  const registrationBlocked = missingIdentity.length > 0 || !!(ai.missing || []).length || pendingLow.length > 0 || verificationBlocked
   const canAct = !['Converted', 'Dropped'].includes(lead.status)
 
   // ---- Clarification mail: AI drafts, a human sends -----------------------
@@ -964,6 +980,13 @@ function AiLeadDetail({ lead }) {
 
   const saveDecisions = () => {
     setDecisionErr('')
+    const missingIdentity = REQUIRED_IDENTITY_FIELDS
+      .filter(([key]) => !String(decisionDraft[key] || '').trim())
+      .map(([, label]) => label)
+    if (missingIdentity.length) {
+      setDecisionErr(`Complete the mandatory fields before saving: ${missingIdentity.join(', ')}.`)
+      return
+    }
     const routedOwner = routeOwner(decisionDraft.region, store.config, decisionDraft.owner)
     const isOverride = routedOwner && decisionDraft.owner !== routedOwner
     if (isOverride && !['LJS', 'AH'].includes(store.role)) {
@@ -975,7 +998,9 @@ function AiLeadDetail({ lead }) {
       return
     }
     const previous = initialDecisions()
-    const nextFields = updateLeadField(updateLeadField(updateLeadField(updateLeadField(ai.fields,
+    const identityFields = REQUIRED_IDENTITY_FIELDS.reduce((next, [key, label]) =>
+      updateLeadField(next, label, decisionDraft[key], 'Customer'), ai.fields)
+    const nextFields = updateLeadField(updateLeadField(updateLeadField(updateLeadField(identityFields,
       'Location', decisionDraft.location, 'Customer'), 'Opp Type', decisionDraft.oppType),
       'BU / Segment', `${decisionDraft.bu} / ${decisionDraft.segment}`), 'Product', decisionDraft.product)
     const changed = Object.keys(decisionDraft)
@@ -983,8 +1008,13 @@ function AiLeadDetail({ lead }) {
       .map(key => `${key}: ${previous[key] || '—'} → ${decisionDraft[key] || '—'}`)
     if (!changed.length) { setDecisionSaved(true); return }
     store.updateLead(lead.id, {
+      sellTo: decisionDraft.sellTo.trim(),
       region: decisionDraft.region,
       location: decisionDraft.location,
+      eucName: decisionDraft.eucName.trim(),
+      eucLocation: decisionDraft.eucLocation.trim(),
+      contactPerson: decisionDraft.contactPerson.trim(),
+      contactPhone: decisionDraft.contactPhone.trim(),
       suggestedOwner: decisionDraft.owner,
       assignedOwner: decisionDraft.owner,
       ownerOverrideReason: isOverride ? lead.ownerOverrideReason.trim() : '',
@@ -1068,6 +1098,12 @@ function AiLeadDetail({ lead }) {
         ? routeOwner(mappedRegion, store.config, previous.owner)
         : previous.owner,
     }))
+    setDecisionErr('')
+    setDecisionSaved(false)
+  }
+
+  const updateDecisionField = (key, value) => {
+    setDecisionDraft(previous => ({ ...previous, [key]: value }))
     setDecisionErr('')
     setDecisionSaved(false)
   }
@@ -1446,8 +1482,8 @@ function AiLeadDetail({ lead }) {
               {decisionSaved && <span className="lead-decision-saved">Saved</span>}
             </div>
             <div className="lead-decision-grid">
-              <label>City / location
-                <input type="search" value={locationSearch} disabled={lead.status === 'Dropped'}
+              <label className="lead-decision-full">City / location
+                <input type="search" value={locationSearch || (selectedLocation ? selectedLocation.city : '')} disabled={lead.status === 'Dropped'}
                   onChange={e => setLocationSearch(e.target.value)} placeholder="Search city or state" aria-label="Search city or state" />
                 <div className="location-suggestions" role="listbox" aria-label="City suggestions">
                   {locationQuery && visibleLocations.map(item => (
@@ -1471,6 +1507,26 @@ function AiLeadDetail({ lead }) {
                   <button type="button" className="location-other" disabled={lead.status === 'Dropped'}
                     onClick={() => updateDecisionRegion('Other / Unclassified')}>Other / Unclassified</button>
                 </div>
+              </label>
+              <label>Sell To Customer <span className="required-mark">*</span>
+                <input type="text" value={decisionDraft.sellTo} disabled={lead.status === 'Dropped'}
+                  onChange={e => updateDecisionField('sellTo', e.target.value)} placeholder="Enter customer name" />
+              </label>
+              <label>EUC Name <span className="required-mark">*</span>
+                <input type="text" value={decisionDraft.eucName} disabled={lead.status === 'Dropped'}
+                  onChange={e => updateDecisionField('eucName', e.target.value)} placeholder="Enter end user/customer name" />
+              </label>
+              <label>EUC Location <span className="required-mark">*</span>
+                <input type="text" value={decisionDraft.eucLocation} disabled={lead.status === 'Dropped'}
+                  onChange={e => updateDecisionField('eucLocation', e.target.value)} placeholder="Enter end user location" />
+              </label>
+              <label>Contact Person <span className="required-mark">*</span>
+                <input type="text" value={decisionDraft.contactPerson} disabled={lead.status === 'Dropped'}
+                  onChange={e => updateDecisionField('contactPerson', e.target.value)} placeholder="Enter contact person" />
+              </label>
+              <label>Contact Phone <span className="required-mark">*</span>
+                <input type="tel" value={decisionDraft.contactPhone} disabled={lead.status === 'Dropped'}
+                  onChange={e => updateDecisionField('contactPhone', e.target.value)} placeholder="Enter contact phone" />
               </label>
               <label>Assigned owner
                 <select value={decisionDraft.owner} disabled={lead.status === 'Dropped'}
@@ -1513,6 +1569,11 @@ function AiLeadDetail({ lead }) {
                 </select>
               </label>
             </div>
+            {missingIdentity.length > 0 && lead.status !== 'Dropped' && (
+              <div className="warnbox" style={{ marginTop: 8 }}>
+                <b>Required before registration:</b> {missingIdentity.join(', ')}.
+              </div>
+            )}
             {decisionErr && <div className="errbox" style={{ marginTop: 8 }}>{decisionErr}</div>}
             {decisionDraft.owner !== routeOwner(decisionDraft.region, store.config, decisionDraft.owner) && (
               <label className="afield" style={{ display: 'block', marginTop: 8 }}>Owner override reason
@@ -1648,6 +1709,8 @@ function AiLeadDetail({ lead }) {
                 title={registrationBlocked
                   ? verificationBlocked
                     ? `Complete ${previewCustomerStatus} customer verification first`
+                    : missingIdentity.length > 0
+                    ? 'Complete the mandatory customer, EUC and contact fields first'
                     : (ai.missing || []).length > 0
                     ? 'Fill the missing information first'
                     : 'Resolve the low-confidence fields first'

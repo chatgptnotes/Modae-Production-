@@ -23,6 +23,9 @@ const fieldVal = (fields, re) => {
 const guessFromList = (text, list) =>
   list.find(x => text.toLowerCase().includes(x.toLowerCase())) || ''
 
+const identityValue = (lead, fields, key, pattern) =>
+  String(lead?.[key] || fieldVal(fields, pattern) || lead?.parse?.[key] || '').trim()
+
 export default function Register() {
   const store = useStore()
   const nav = useNavigate()
@@ -87,11 +90,23 @@ export default function Register() {
   // could never be registered.
   const verificationBlockers = leadVerificationBlockers(lead, leadCustomerStatus, { redCleared })
   const missingInfo = lead?.ai?.missing || []
+  const identity = {
+    sellTo: identityValue(lead, fields, 'sellTo', /sell-to/i),
+    eucName: identityValue(lead, fields, 'eucName', /euc\s*name/i),
+    eucLocation: identityValue(lead, fields, 'eucLocation', /euc\s*location/i),
+    contactPerson: identityValue(lead, fields, 'contactPerson', /contact\s*person|contact/i),
+    contactPhone: identityValue(lead, fields, 'contactPhone', /contact\s*phone|phone/i),
+  }
+  const missingIdentity = [
+    ['sellTo', 'Sell To Customer'], ['eucName', 'EUC Name'], ['eucLocation', 'EUC Location'],
+    ['contactPerson', 'Contact Person'], ['contactPhone', 'Contact Phone'],
+  ].filter(([key]) => !identity[key]).map(([, label]) => label)
 
   const blockers = []
   if (lead.status !== 'Qualified') blockers.push('Lead is not Qualified yet — qualify it in the inbox first')
   pendingLow.forEach(f => blockers.push(`Low-confidence field unresolved: ${f.k} (${f.conf}%)`))
   missingInfo.forEach(item => blockers.push(`Missing information: ${item}`))
+  missingIdentity.forEach(item => blockers.push(`${item} is required before registration`))
   verificationBlockers.forEach(item => blockers.push(item))
   const blocked = blockers.length > 0
 
@@ -100,11 +115,13 @@ export default function Register() {
   const today = new Date().toISOString().slice(0, 10)
 
   const create = async () => {
+    if (missingIdentity.length) return
     setCreating(true)
-    const sellTo = fieldVal(fields, /sell-to/i) || lead.sender || lead.from
-    const contactV = fieldVal(fields, /contact/i)
-    const contactPerson = contactV.split(',')[0] || lead.sender || ''
-    const contactPhone = (contactV.match(/\+?\d[\d\s-]{7,}/) || [''])[0].trim()
+    const sellTo = identity.sellTo
+    const eucName = identity.eucName
+    const eucLocation = identity.eucLocation
+    const contactPerson = identity.contactPerson
+    const contactPhone = identity.contactPhone
     const catV = fieldVal(fields, /category/i)
     const category = guessFromList(catV, ['EUC', 'EPC', 'OEM', 'ACP', 'SI', 'RE/TR']) || '—'
     const location = fieldVal(fields, /location|region/i) || lead.location || lead.region || ''
@@ -115,7 +132,7 @@ export default function Register() {
       sellTo, category, location,
       customerStatus: leadCustomerStatus,
       leadVerification: verificationSnapshot(lead, leadCustomerStatus, { approval: redApproval }),
-      eucName: category === 'EUC' ? sellTo : '', eucLocation: location,
+      eucName, eucLocation,
       oppName: lead.subject, owner, oppType, bu, segment, product,
       prob: 'Low', valueK: 0, cogsK: 0,
       createDate: today, proposalDate: '', orderDate: '', invoiceDate: '',

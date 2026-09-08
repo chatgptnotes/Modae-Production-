@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { isPlaceholderSparesLine, useStore } from '../store.jsx'
 import { defaultCosting } from '../seed.js'
 import { canPriceProposal, unitCostINR, fmt } from '../utils.js'
@@ -11,6 +12,7 @@ const money = value => `₹ ${fmt(n(value))}`
 
 export default function WbSpares({ opp, openBuilder }) {
   const store = useStore()
+  const navigate = useNavigate()
   const comm = canPriceProposal(store.role)
   const lines = store.sparesLines.filter(l => l.oppId === opp.id && !isPlaceholderSparesLine(l))
   const proposal = store.getProposal(opp.id)
@@ -103,6 +105,18 @@ export default function WbSpares({ opp, openBuilder }) {
     const base = `${line.priceSourceName || line.priceList || 'Unpriced'}${line.priceSourceVersion ? ` ${line.priceSourceVersion}` : ''}`
     return line.priceSource === PRICE_SOURCES.LIST ? `${base} (price list)` : base
   }
+  const priceListNameFor = line => {
+    const sourceName = String(line.priceSourceName || '').trim()
+    const sourceLabel = String(line.priceList || '').trim()
+    return Object.keys(store.priceLists || {}).find(name =>
+      name === sourceName || name === sourceLabel || sourceLabel.startsWith(`${name} `)) || sourceName
+  }
+  const openPriceList = line => {
+    const part = line.pn || line.custRef || ''
+    const list = priceListNameFor(line)
+    if (!part || !list) return
+    navigate(`/pricelists?list=${encodeURIComponent(list)}&part=${encodeURIComponent(part)}`)
+  }
   // Where an alternative's price would come from if selected — mirrors the same
   // price-list → vendor-quote → manual precedence used for confirmed lines.
   const altSourceInfo = alt => {
@@ -174,7 +188,7 @@ export default function WbSpares({ opp, openBuilder }) {
   return <div className="sourcing-workbench">
     <div className="section-title">Spares workbench — part matching ({lines.length} line{lines.length === 1 ? '' : 's'})</div>
     {clarifications.length > 0 && <div className="okbox customer-information-banner sourcing-clarification-context"><b>Confirmed customer information</b><span className="hint"> These answers stay attached to the opportunity and should be checked while validating each line.</span>{clarifications.map(c => <div key={c.id} className="sourcing-clarification-row"><b>{c.category || 'Clarification'}:</b> {c.response}<span className="hint"> · {c.answerSource || 'Customer'}{c.answeredAt ? ` · ${c.answeredAt}` : ''}</span></div>)}</div>}
-    {!!expiredLines.length && <div className="warnbox spares-price-warning"><b>{expiredLines.length} price source{expiredLines.length === 1 ? '' : 's'} expired.</b>{' '}Use <b>Refresh</b> in the Actions column, or apply a current manufacturer quote only when the approved price list cannot be used.</div>}
+    {!!expiredLines.length && <div className="warnbox spares-price-warning"><b>{expiredLines.length} price source{expiredLines.length === 1 ? '' : 's'} expired.</b>{' '}Use <b>Compare</b> in the Actions column to select a current price-list part, or apply a current manufacturer quote only when the approved price list cannot be used.</div>}
     {proposalOnlyMismatch && <div className="warnbox sourcing-flow-warning"><b>Proposal data is not linked to Sourcing.</b> Existing proposal rows are not imported automatically. Add or import the real parts here before continuing to Proposal.</div>}
     <div className="sourcing-table-card">
       <div className="sourcing-table-heading"><div><b>Source, adjust and validate each line here</b><span className="hint"> Price-list values are loaded first; vendor values are the fallback.</span></div><div className="sourcing-table-heading-actions">{comm && <button type="button" className="sourcing-add-part-link" aria-expanded={showAddPart} aria-controls="sourcing-manual-line" onClick={() => setShowAddPart(open => !open)}>{showAddPart ? 'Close manual line' : 'Add manual line'}</button>}{!comm && <span className="restricted"><Icon name="lock" size={12} /> Pricing restricted</span>}</div></div>
@@ -183,7 +197,7 @@ export default function WbSpares({ opp, openBuilder }) {
         <tbody>
           {calculatedItems.map(item => { const line = item.sourceLine; const row = { ...item, discountPct: item.discountPercent, markupPct: item.markupPercent, listTotal: item.listTotal, lineTotal: item.lineTotal, cogs: item.lineTotalCogs }; const partDescription = `${line.pn || 'Manual part'}${line.desc ? ` — ${line.desc}` : ''}`; return <tr key={line.id} className={row.qty === 0 ? 'sourcing-zero-row' : ''}>
             <td className="sourcing-cell-part align-top p-2 overflow-hidden"><div className="sourcing-part-line"><div className="sourcing-part-copy"><span className="hint sourcing-part-ref truncate overflow-hidden text-ellipsis whitespace-nowrap">{line.custRef}</span><div className="sourcing-part-description line-clamp-2 text-xs font-medium text-gray-900 leading-snug" title={partDescription}>{partDescription}</div><small className="hint truncate overflow-hidden text-ellipsis whitespace-nowrap">{line.oem || '—'} · Lead: {line.leadTime || 'TBC'}</small></div>{comm && <button className="sourcing-remove-row" title="Remove row from active proposal" aria-label={`Remove ${line.pn || line.id}`} onClick={() => updateLine(line, 'qty', 0)}>×</button>}</div></td>
-            <td className="sourcing-cell-source align-top p-2 overflow-hidden"><div className="sourcing-source-stack"><span className="sourcing-source-name truncate overflow-hidden text-ellipsis whitespace-nowrap">{sourceLabel(line)}</span>{line.priceSource === 'vendor-quote' && <Chip tone="state-Review">Vendor fallback</Chip>}{line.priceSource === 'manual' && <Chip tone="grey">Manual/override</Chip>}{line.priceState === 'Expired' ? <><Chip tone="state-Blocks">Expired</Chip><AiBadge label="pricing anomaly" /></> : <Chip tone="state-Accepted">Current</Chip>}</div></td>
+            <td className="sourcing-cell-source align-top p-2 overflow-hidden"><div className="sourcing-source-stack">{line.priceSource === PRICE_SOURCES.LIST && priceListNameFor(line) ? <button type="button" className="sourcing-source-link truncate overflow-hidden text-ellipsis whitespace-nowrap" title="Open this part in the price list" onClick={() => openPriceList(line)}>{sourceLabel(line)}</button> : <span className="sourcing-source-name truncate overflow-hidden text-ellipsis whitespace-nowrap">{sourceLabel(line)}</span>}{line.priceSource === 'vendor-quote' && <Chip tone="state-Review">Vendor fallback</Chip>}{line.priceSource === 'manual' && <Chip tone="grey">Manual/override</Chip>}{line.priceState === 'Expired' ? <><Chip tone="state-Blocks">Expired</Chip><AiBadge label="pricing anomaly" /></> : <Chip tone="state-Accepted">Current</Chip>}</div></td>
             <td className="num"><EditableNumber value={row.qty} label={`Quantity for ${line.pn || line.id}`} disabled={!comm} step="1" onChange={value => updateLine(line, 'qty', Math.max(0, Math.round(value)))} /></td>
             <td className="num"><EditableNumber value={row.listUnitPrice} label={`List price for ${line.pn || line.id}`} disabled={!comm} onChange={value => updateLine(line, 'listUnitPrice', value)} /></td>
             <td className="num"><EditableNumber value={Math.round(row.discountPct)} label={`Discount for ${line.pn || line.id}`} disabled={!comm} step="1" onChange={value => updateLine(line, 'discountPct', Math.min(100, Math.max(0, Math.round(value))))} suffix="%" /></td>

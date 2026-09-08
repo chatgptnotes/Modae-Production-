@@ -546,7 +546,7 @@ export const selectableRoles = () =>
 // the same set; CUST sees the external portal only.
 const pages = list => (PORTAL_ENABLED ? list : list.filter(p => p !== 'portal'))
 const SALES_PAGES = ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders',
-  'proposal', 'analytics', 'customers', 'po', 'aimap', 'launcher', 'voice']
+  'proposal', 'pricelists', 'analytics', 'customers', 'po', 'aimap', 'launcher', 'voice']
 export const PERMS = {
   SUPER: pages(['home', 'mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'pricelists',
     'dashboard', 'analytics', 'customers', 'audit', 'users', 'aimap', 'admin', 'po', 'launcher', 'voice', 'portal']),
@@ -557,8 +557,8 @@ export const PERMS = {
   AH: ['home', 'mydashboard', 'tracker', 'my', 'approvals', 'folders', 'proposal', 'pricelists', 'dashboard', 'analytics',
     'customers', 'audit', 'aimap', 'po', 'launcher'],
   RS: SALES_PAGES, PP: SALES_PAGES, SS: SALES_PAGES, PJS: SALES_PAGES, RJS: SALES_PAGES, SR: SALES_PAGES,
-  AN: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'proposal', 'approvals', 'folders', 'aimap', 'launcher'],
-  TECH: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'proposal', 'approvals', 'aimap', 'launcher'],
+  AN: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'proposal', 'pricelists', 'approvals', 'folders', 'aimap', 'launcher'],
+  TECH: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'proposal', 'pricelists', 'approvals', 'aimap', 'launcher'],
   CUST: pages(['portal']),
 }
 

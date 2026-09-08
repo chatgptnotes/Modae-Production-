@@ -2687,13 +2687,15 @@ button.install:hover { background: var(--primary-hover); }
 .lead-flow-step.blocked .lead-flow-dot { color: var(--ws-amber); background: var(--ws-amber-soft); border-color: var(--ws-amber); }
 .lead-flow-note { margin: 9px 0 0; color: var(--ws-text-3); font-size: 11px; }
 .lead-decision-card { margin-top: 14px; border: 1px solid var(--ws-blue-line); border-radius: 10px; padding: 11px 12px; background: var(--ws-blue-soft); }
-.lead-decision-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 9px; }
+.lead-decision-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 9px; }
 .lead-decision-head > div { display: flex; flex-direction: column; gap: 2px; }
 .lead-decision-head b { font-size: 12px; color: var(--ws-text); }
 .lead-decision-head span:not(.lead-decision-saved) { font-size: 10.5px; color: var(--ws-text-3); }
-.lead-decision-saved { color: var(--ws-emerald); background: var(--ws-emerald-soft); border: 1px solid var(--ws-emerald-line); border-radius: 999px; padding: 2px 7px; font-size: 10px; font-weight: 700; }
-.lead-decision-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.lead-decision-saved { flex: 0 0 auto; color: var(--ws-emerald); background: var(--ws-emerald-soft); border: 1px solid var(--ws-emerald-line); border-radius: 999px; padding: 2px 7px; font-size: 10px; font-weight: 700; }
+.lead-decision-grid { display: grid; grid-template-columns: 1fr 1fr; align-items: start; gap: 8px 12px; }
 .lead-decision-grid label { display: flex; flex-direction: column; gap: 3px; color: var(--ws-text-2); font-size: 10.5px; font-weight: 700; }
+.lead-decision-full { grid-column: 1 / -1; }
+.required-mark { color: var(--ws-rose); font-weight: 700; margin-left: 2px; }
 .lead-decision-grid input, .lead-decision-grid select { width: 100%; min-width: 0; border: 1px solid var(--ws-border-strong); border-radius: 6px; padding: 7px 8px; background: var(--ws-surface); color: var(--ws-text); font-size: 11.5px; }
 .lead-decision-grid input:focus, .lead-decision-grid select:focus { outline: 2px solid var(--ws-blue-line); border-color: var(--ws-primary); }
 .lead-decision-grid input:disabled, .lead-decision-grid select:disabled { background: var(--ws-surface-2); color: var(--ws-text-3); cursor: not-allowed; }
@@ -3682,9 +3684,6 @@ button.linklike:hover { text-decoration: underline; }
 .funnel-stage-label { z-index: 2; font-size: 10.5px; color: var(--text-main); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ideal-funnel { position: absolute; left: 116px; height: 18px; background: var(--palette-951c7b4e); clip-path: polygon(0 0, 100% 0, 94% 100%, 6% 100%); }
 .actual-funnel { position: relative; z-index: 1; display: flex; align-items: center; justify-content: flex-end; height: 18px; min-width: 0; padding-right: 6px; background: var(--primary-accent); color: var(--palette-4843938); border-radius: 2px; font-size: 10px; font-weight: 800; }
-.dashboard-view-switch { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--border-soft); border-radius: 7px; background: var(--bg-app); }
-.dashboard-view-switch button { min-height: 0; padding: 4px 7px; border: 0; border-radius: 5px; background: transparent; color: var(--text-muted); font-size: 10.5px; cursor: pointer; }
-.dashboard-view-switch button.active { background: var(--palette-4843938); color: var(--primary-hover); box-shadow: 0 1px 2px var(--palette-ebd69090); font-weight: 700; }
 .dashboard-table-scroll { overflow-x: auto; }
 .dashboard-table { width: 100%; min-width: 860px; border-collapse: collapse; font-size: 11.5px; table-layout: fixed; }
 .dashboard-table th { padding: 5px 6px; color: var(--text-subtle); border-bottom: 1px solid var(--border-color); text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
@@ -3697,14 +3696,6 @@ button.linklike:hover { text-decoration: underline; }
 .dashboard-table th:nth-child(4) { width: 105px; }
 .dashboard-table th:nth-child(5), .dashboard-table th:nth-child(6), .dashboard-table th:nth-child(8) { width: 80px; }
 .dashboard-table th:nth-child(7) { width: 28%; }
-.sales-opportunity-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
-.sales-opportunity-cards button { display: grid; gap: 4px; padding: 10px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--bg-app); text-align: left; cursor: pointer; }
-.sales-opportunity-cards button:hover { border-color: var(--primary-accent); filter: none; }
-.sales-opportunity-cards strong { color: var(--text-main); font-size: 12px; }
-.sales-opportunity-cards span, .sales-opportunity-cards small { color: var(--text-muted); font-size: 11px; }
-.sales-compact-list { display: grid; }
-.sales-compact-list button { display: grid; grid-template-columns: 90px 1fr 110px 80px; gap: 8px; padding: 6px; border: 0; border-bottom: 1px solid var(--border-soft); background: transparent; text-align: left; cursor: pointer; font-size: 11px; }
-.sales-compact-list button:hover { background: var(--primary-soft); filter: none; }
 .dashboard-empty { padding: 14px 6px; color: var(--text-subtle); font-size: 12px; }
 .customer-table { min-width: 680px; }
 .customer-table th:nth-child(1) { width: 28%; }
@@ -3713,13 +3704,9 @@ button.linklike:hover { text-decoration: underline; }
 .customer-table th:nth-child(4), .customer-table th:nth-child(5), .customer-table th:nth-child(6) { width: 120px; }
 @media (max-width: 900px) {
   .sales-kpi-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .sales-opportunity-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 560px) {
   .sales-kpi-strip { grid-template-columns: 1fr 1fr; gap: 7px; }
-  .sales-opportunity-cards { grid-template-columns: 1fr; }
-  .sales-compact-list button { grid-template-columns: 75px 1fr 72px; }
-  .sales-compact-list button span:last-child { display: none; }
 }
 
 /* Metric tiles are buttons when they navigate. */
@@ -4982,6 +4969,9 @@ body {
 .progress-step.current .progress-label { color: var(--action-accent-ink); font-weight: 800; }
 .progress-step:hover { background: var(--surface-raised); color: var(--text-primary); filter: none; transform: scale(1.05); z-index: 2; }
 .progress-step.current:hover { background: var(--action-accent-soft); }
+.sourcing-source-link { max-width: 100%; padding: 0; border: 0; background: transparent; color: var(--action-accent-ink); font: inherit; text-align: left; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 45%, transparent); text-underline-offset: 2px; cursor: pointer; }
+.sourcing-source-link:hover { color: var(--primary-deep); text-decoration-color: currentColor; }
+.price-list-highlight { outline: 3px solid var(--action-accent); outline-offset: -3px; background: var(--action-accent-soft) !important; }
 .progress-step.done .progress-node { border-color: var(--status-success); background: var(--status-success); color: var(--text-on-accent); }
 .progress-step.done::after { background: var(--status-success); }
 .progress-step.done .progress-label { color: var(--status-success); }
@@ -5426,7 +5416,7 @@ body {
   box-shadow: none;
 }
 .dashboard-page .dashboard-card .ana-title { margin-bottom: 12px; }
-.dashboard-page button:not(.dashboard-view-switch button):not(.home-funnel-row):not(.home-alert-rail button):not(.sales-opportunity-cards button):not(.sales-compact-list button),
+.dashboard-page button:not(.home-funnel-row):not(.home-alert-rail button),
 .dashboard-page .btn {
   min-height: 40px;
   padding: 0 16px;

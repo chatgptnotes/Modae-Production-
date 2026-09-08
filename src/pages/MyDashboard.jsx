@@ -301,21 +301,12 @@ function RunRateChart({ perf }) {
   )
 }
 
-function ViewSwitch({ value, onChange }) {
-  return <div className="dashboard-view-switch" role="group" aria-label="View mode">
-    {['table', 'cards', 'compact'].map(mode => <button key={mode} className={value === mode ? 'active' : ''} onClick={() => onChange(mode)}>{mode === 'table' ? '▤ Table' : mode === 'cards' ? '▦ Cards' : '☰ Compact'}</button>)}
-  </div>
-}
-
 function SalesOpportunitySection({ store, open, nav, money }) {
-  const [view, setView] = useState('table')
   const rows = [...open].sort((a, b) => (b.lastUpdated || '').localeCompare(a.lastUpdated || ''))
   const action = o => nextActionWith(o, store.getProposal(o.id), store)
   return (
-    <Card title="My opportunities" icon="sheet" tone="tone-sky" span={12} action={<ViewSwitch value={view} onChange={setView} />}>
-      {view === 'table' && <div className="dashboard-table-scroll"><table className="dashboard-table"><thead><tr><th>ID</th><th>Opportunity</th><th>Customer</th><th>Stage</th><th>Value (₹)</th><th>Win %</th><th>Next action</th><th>Due</th></tr></thead><tbody>{rows.map(o => { const na = action(o); return <tr key={o.id} onClick={() => nav(`/opp/${o.id}`)}><td><b>{o.id}</b></td><td>{o.oppName}</td><td>{o.sellTo}</td><td><span className="pill open">{o.stage}</span></td><td>{money ? fmtLakh(o.valueK) : '—'}</td><td>{o.prob || '—'}</td><td title={na.text}>{na.text || o.remarks || 'Review next step'}</td><td>{o.orderDate ? ddMmmYY(o.orderDate) : '—'}</td></tr>})}</tbody></table></div>}
-      {view === 'cards' && <div className="sales-opportunity-cards">{rows.map(o => { const na = action(o); return <button key={o.id} onClick={() => nav(`/opp/${o.id}`)}><b>{o.id}</b><strong>{o.oppName}</strong><span>{o.sellTo} · {o.stage}</span><span>{money ? fmtLakh(o.valueK) : '—'} · {o.prob || 'No probability'}</span><small>{na.text || o.remarks || 'Review next step'}</small></button> })}</div>}
-      {view === 'compact' && <div className="sales-compact-list">{rows.map(o => <button key={o.id} onClick={() => nav(`/opp/${o.id}`)}><b>{o.id}</b><span>{o.oppName}</span><span>{o.stage}</span><span>{money ? fmtLakh(o.valueK) : '—'}</span></button>)}</div>}
+    <Card title="My opportunities" icon="sheet" tone="tone-sky" span={12}>
+      <div className="dashboard-table-scroll"><table className="dashboard-table"><thead><tr><th>ID</th><th>Opportunity</th><th>Customer</th><th>Stage</th><th>Value (₹)</th><th>Win %</th><th>Next action</th><th>Due</th></tr></thead><tbody>{rows.map(o => { const na = action(o); return <tr key={o.id} onClick={() => nav(`/opp/${o.id}`)}><td><b>{o.id}</b></td><td>{o.oppName}</td><td>{o.sellTo}</td><td><span className="pill open">{o.stage}</span></td><td>{money ? fmtLakh(o.valueK) : '—'}</td><td>{o.prob || '—'}</td><td title={na.text}>{na.text || o.remarks || 'Review next step'}</td><td>{o.orderDate ? ddMmmYY(o.orderDate) : '—'}</td></tr>})}</tbody></table></div>
       {!rows.length && <div className="dashboard-empty">No open opportunities are assigned to you.</div>}
     </Card>
   )

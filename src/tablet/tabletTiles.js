@@ -1,4 +1,4 @@
-import { isAdminRole, isSalesOwner, canSeePage, canViewCommercial } from '../utils.js'
+import { isAdminRole, isSalesOwner, canSeePage } from '../utils.js'
 import { counts } from '../kpi.js'
 
 export const tabletRoleGroup = role =>
@@ -8,7 +8,6 @@ export function buildTabletTiles(store) {
   const role = store.role
   const admin = isAdminRole(role)
   const approver = role === 'LJS' || role === 'AH' || admin
-  const comm = canViewCommercial(role)
   const c = counts(store, role)
 
   return [
@@ -21,7 +20,7 @@ export function buildTabletTiles(store) {
     { key: 'folders', page: 'folders', icon: 'folder', label: 'SharePoint folders', hint: 'Opportunity documents stored in SharePoint', to: '/folders', color: 'teal' },
     { key: 'po', page: 'po', icon: 'clipboardCheck', label: isSalesOwner(role) ? 'My Purchase Orders' : 'Purchase Orders', hint: 'PO validation & booked orders', to: '/po', color: 'navy', badge: approver ? c.poReview : 0, badgeHint: 'POs in validation' },
     { key: 'aimap', page: 'aimap', icon: 'sparkles', label: 'AI and automation', hint: '28 AI interventions and live demonstrations', to: '/aimap', color: 'purple', show: admin || role === 'AH' || role === 'LJS' },
-    { key: 'pricelists', page: 'pricelists', icon: 'tag', label: 'Price Lists', hint: 'B&K · Metrix · ad-hoc quotes', to: '/pricelists', color: 'amber', show: comm },
+    { key: 'pricelists', page: 'pricelists', icon: 'tag', label: 'Price Lists', hint: 'B&K · Metrix · ad-hoc quotes', to: '/pricelists', color: 'amber' },
     { key: 'customers', page: 'customers', icon: 'users', label: 'Customers', hint: 'Master + Green/Blue/Amber/Red', to: '/customers', color: 'rust' },
     { key: 'launcher', page: 'launcher', icon: 'play', label: 'Demo launcher', hint: 'Guided demonstration scenarios', to: '/launcher', color: 'slate', show: admin },
     { key: 'admin', page: 'admin', icon: 'gear', label: 'Admin', hint: 'Rules, AI model, SharePoint, uploads', to: '/admin', color: 'wine', show: admin || role === 'LJS' },

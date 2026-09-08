@@ -1,22 +1,35 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { fmt, exportCSV, canViewCommercial } from '../utils.js'
 
 export default function PriceLists() {
   const store = useStore()
-  const [list, setList] = useState('BNK')
+  const canEdit = canViewCommercial(store.role)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedList = searchParams.get('list') || ''
+  const requestedPart = searchParams.get('part') || ''
+  const firstList = Object.keys(store.priceLists || {})[0] || 'BNK'
+  const initialList = store.priceLists?.[requestedList] ? requestedList : firstList
+  const [list, setList] = useState(initialList)
+  const [highlightedPart, setHighlightedPart] = useState('')
+  const rowRefs = useRef({})
   const pl = store.priceLists[list]
+  const requestedPartMatch = pl?.parts.find(part => String(part.pn).trim().toUpperCase() === requestedPart.trim().toUpperCase())
+  const requestedListAvailable = !requestedList || !!store.priceLists?.[requestedList]
 
-  if (!canViewCommercial(store.role)) {
-    return (
-      <div className="page">
-        <h2>Price Lists (Admin)</h2>
-        <div className="restricted" style={{ maxWidth: 640 }}>
-          Restricted — supplier price lists, trader quotes and rate sheets are visible to approvers/admin only.
-        </div>
-      </div>
-    )
-  }
+  useEffect(() => {
+    if (store.priceLists?.[requestedList] && requestedList !== list) setList(requestedList)
+  }, [list, requestedList, store.priceLists])
+
+  useEffect(() => {
+    if (!requestedPart || !pl) return
+    const match = pl.parts.find(part => String(part.pn).trim().toUpperCase() === requestedPart.trim().toUpperCase())
+    setHighlightedPart(match?.pn || '')
+    if (!match) return
+    const timer = window.setTimeout(() => rowRefs.current[match.pn]?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 0)
+    return () => window.clearTimeout(timer)
+  }, [list, pl, requestedPart])
 
   const addAdhoc = e => {
     e.preventDefault()
@@ -31,23 +44,35 @@ export default function PriceLists() {
 
   return (
     <div className="page">
-      <h2>Price Lists (Admin)</h2>
+      <h2>Price Lists</h2>
       <div className="toolbar">
         {Object.keys(store.priceLists).map(k => (
-          <button key={k} className={list === k ? 'primary' : ''} onClick={() => setList(k)}>{k}</button>
+          <button key={k} className={list === k ? 'primary' : ''} onClick={() => {
+            setList(k)
+            setHighlightedPart('')
+            setSearchParams({ list: k })
+          }}>{k}</button>
         ))}
-        <span className="hint">Version {pl.version} · uploaded {pl.uploaded} · {pl.currency}. Admin uploads the current file; the tool uses whatever is uploaded.</span>
+        <span className="hint">Version {pl.version} · uploaded {pl.uploaded} · {pl.currency}. Current approved pricing reference.</span>
         <span className="spacer" />
         <button onClick={() => exportCSV(`${list}_pricelist.csv`, ['Part Number','Description',`Price (${pl.currency})`,'Adders'], pl.parts.map(x => [x.pn, x.desc, x.price, x.adders.map(a => `${a.desc} +${a.price}`).join('; ')]))}>Extract to Excel</button>
-        <button onClick={() => alert('Upload new version (mock): in Phase 1 the admin uploads the yearly B&K / Metrics Excel here; the latest upload becomes current and older versions are kept.')}>Upload new version</button>
+        {canEdit && <button onClick={() => alert('Upload new version (mock): in Phase 1 the admin uploads the yearly B&K / Metrics Excel here; the latest upload becomes current and older versions are kept.')}>Upload new version</button>}
       </div>
+
+      {requestedPart && (!requestedListAvailable || !requestedPartMatch) && (
+        <div className="warnbox" role="status" style={{ maxWidth: 900, marginBottom: 10 }}>
+          {!requestedListAvailable
+            ? <>The original source list <b>{requestedList}</b> is not available. Showing <b>{list}</b>; part <b>{requestedPart}</b> was not found there.</>
+            : <>Part <b>{requestedPart}</b> was not found in the <b>{list}</b> price list. Search the selected list or choose another list above.</>}
+        </div>
+      )}
 
       <div className="sheet-wrap" style={{ maxWidth: 900 }}>
         <table className="sheet">
           <thead><tr><th>Part Number</th><th>Description</th><th>Price ({pl.currency})</th><th>Configurable Adders</th></tr></thead>
           <tbody>
             {pl.parts.map(x => (
-              <tr key={x.pn}>
+              <tr key={x.pn} ref={row => { rowRefs.current[x.pn] = row }} className={highlightedPart === x.pn ? 'price-list-highlight' : undefined}>
                 <td>{x.pn}</td><td>{x.desc}</td>
                 <td className="num">{fmt(x.price)}</td>
                 <td>{x.adders.length ? x.adders.map(a => `${a.desc} (+${a.price})`).join(' · ') : '—'}</td>
@@ -71,14 +96,16 @@ export default function PriceLists() {
           </tbody>
         </table>
       </div>
-      <form className="toolbar" onSubmit={addAdhoc} style={{ marginTop: 8 }}>
-        <input name="pn" type="text" placeholder="Part number" />
-        <input name="supplier" type="text" placeholder="Supplier" />
-        <input name="price" type="number" placeholder="Price" style={{ width: 90 }} />
-        <select name="currency"><option>INR</option><option>USD</option><option>EUR</option></select>
-        <input name="note" type="text" placeholder="Note" />
-        <button className="primary" type="submit">+ Capture quote</button>
-      </form>
+      {canEdit && (
+        <form className="toolbar" onSubmit={addAdhoc} style={{ marginTop: 8 }}>
+          <input name="pn" type="text" placeholder="Part number" />
+          <input name="supplier" type="text" placeholder="Supplier" />
+          <input name="price" type="number" placeholder="Price" style={{ width: 90 }} />
+          <select name="currency"><option>INR</option><option>USD</option><option>EUR</option></select>
+          <input name="note" type="text" placeholder="Note" />
+          <button className="primary" type="submit">+ Capture quote</button>
+        </form>
+      )}
 
       <div className="section-title">Service Rate Sheet</div>
       <div className="sheet-wrap" style={{ maxWidth: 520 }}>

@@ -286,7 +286,8 @@ export function transitionBlockers(opp, target, proposal, state) {
   if (next <= current) return []
   const b = []
   const required = [
-    ['sellTo', 'Customer is required'], ['oppName', 'Opportunity name is required'],
+    ['sellTo', 'Customer is required'], ['eucName', 'EUC name is required'], ['eucLocation', 'EUC location is required'],
+    ['oppName', 'Opportunity name is required'],
     ['owner', 'Opportunity owner is required'], ['route', 'Opportunity route is required'],
     ['contactPerson', 'Customer contact person is required'], ['contactPhone', 'Customer contact phone is required'],
   ]

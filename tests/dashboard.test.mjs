@@ -320,3 +320,10 @@ test('LJS and AH can set targets for the owners, and it is audited', () => {
   // Every owner gets a row, including ones not yet in the seed targets.
   assert.match(source, /\[\.\.\.new Set\(\[\.\.\.OWNERS, \.\.\.Object\.keys\(targets\)\]\)\]/)
 })
+
+test('My opportunities is table-only', () => {
+  const source = read('src/pages/MyDashboard.jsx')
+  assert.match(source, /title="My opportunities"[\s\S]*dashboard-table/)
+  assert.doesNotMatch(source, /ViewSwitch|dashboard-view-switch|sales-opportunity-cards|sales-compact-list/)
+  assert.doesNotMatch(source, /view === ['"](?:cards|compact)['"]/) 
+})

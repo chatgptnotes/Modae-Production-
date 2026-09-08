@@ -67,3 +67,12 @@ test('lead field edits are persisted and audited with the current role', () => {
   assert.match(store, /withAudit\(next, patch\.status \? `Lead \$\{patch\.status\.toLowerCase\(\)\}` : 'Lead updated'/)
   assert.match(inbox, /AI field "\$\{field\?\.k \|\| 'unknown'\}" updated/)
 })
+
+test('lead decisions collect the identity fields required for registration', () => {
+  for (const field of ['sellTo', 'eucName', 'eucLocation', 'contactPerson', 'contactPhone']) {
+    assert.match(inbox, new RegExp(`decisionDraft\\.${field}`), `${field} must be editable in Lead decisions`)
+  }
+  assert.match(inbox, /REQUIRED_IDENTITY_FIELDS/)
+  assert.match(inbox, /Complete the mandatory fields before saving/)
+  assert.match(inbox, /registrationBlocked = missingIdentity\.length > 0/)
+})

@@ -37,13 +37,12 @@ test('every tile carries a key, label and route', () => {
   }
 })
 
-// Commercial tiles are the ones that leaked the crash. Price Lists is money
-// data: approvers and admins see it, sales owners must not.
-test('Price Lists is gated to commercial roles', () => {
+// Price Lists is a read-only reference for every internal persona. Editing
+// remains gated inside the page to commercial/admin roles.
+test('Price Lists is available to every internal role', () => {
   for (const role of Object.keys(ROLES)) {
     const has = buildTabletTiles({ ...store, role }).some(t => t.key === 'pricelists')
-    assert.equal(has, !!ROLES[role].commercial && !!role,
-      `${role} ${ROLES[role].commercial ? 'must' : 'must not'} see the Price Lists tile`)
+    assert.equal(has, role !== 'CUST', `${role} must ${role === 'CUST' ? 'not ' : ''}see the Price Lists tile`)
   }
 })
 
