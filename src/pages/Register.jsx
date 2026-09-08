@@ -81,14 +81,14 @@ export default function Register() {
   // drop the `redFlag ? 'Red' : 'Blue'` fallback, so a red-flagged lead with no
   // master match silently registered as Blue.
   const leadCustomerStatus = customerStatusForLead(lead, store.customers)
-  const redApproval = redClearanceFor(store.approvals, lead.id)
-  const redCleared = isRedCleared(redApproval)
+  const redApproval = redClearanceFor(store.approvals, lead.id, store.config)
+  const redCleared = isRedCleared(redApproval, store.config)
   const pendingLow = fields.filter(f => f.state === 'pending' && f.conf < med)
   // Red clears on the joint approval now. The same blocker used to be raised
   // here *and* unconditionally inside leadVerificationBlockers; that second
   // copy read no approvals, so it could never clear and an approved Red lead
   // could never be registered.
-  const verificationBlockers = leadVerificationBlockers(lead, leadCustomerStatus, { redCleared })
+  const verificationBlockers = leadVerificationBlockers(lead, leadCustomerStatus, { redCleared, config: store.config })
   const missingInfo = lead?.ai?.missing || []
   const identity = {
     sellTo: identityValue(lead, fields, 'sellTo', /sell-to/i),
@@ -131,7 +131,7 @@ export default function Register() {
       sl: Math.max(0, ...store.opportunities.map(o => o.sl || 0)) + 1,
       sellTo, category, location,
       customerStatus: leadCustomerStatus,
-      leadVerification: verificationSnapshot(lead, leadCustomerStatus, { approval: redApproval }),
+      leadVerification: verificationSnapshot(lead, leadCustomerStatus, { approval: redApproval, config: store.config }),
       eucName, eucLocation,
       oppName: lead.subject, owner, oppType, bu, segment, product,
       prob: 'Low', valueK: 0, cogsK: 0,

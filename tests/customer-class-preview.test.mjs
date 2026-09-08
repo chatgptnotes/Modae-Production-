@@ -9,7 +9,7 @@ test('customer class draft previews workflow and blockers before save', () => {
   assert.match(source, /<LeadWorkflowBar lead=\{lead\} customerStatus=\{previewCustomerStatus\}/)
   assert.match(source, /<LeadVerification lead=\{lead\} customerStatus=\{previewCustomerStatus\}/)
   assert.match(source, /const isRed = previewCustomerStatus === 'Red'/)
-  assert.match(source, /const verificationBlocked = !leadVerificationComplete\(lead, previewCustomerStatus, \{ redCleared \}\)/)
+  assert.match(source, /const verificationBlocked = !leadVerificationComplete\(lead, previewCustomerStatus, \{ redCleared[^}]*\}\)/)
   assert.match(source, /const registrationBlocked = .*verificationBlocked/)
   assert.match(source, /isFastTrackLead\(previewLead, store\.config, customer\)/)
 })

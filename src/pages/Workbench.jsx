@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react'
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, REVISION_TYPES } from '../seed.js'
+import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, REVISION_TYPES, DEFAULT_WORKFLOW } from '../seed.js'
 import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY, gmailComposeHref, displayRole, displayRoles, displayRoleLabel } from '../utils.js'
 import { readiness, isBlocked, nextActionWith, transitionBlockers } from '../gates.js'
 import { COMMERCIAL_RX } from './Approvals.jsx'
@@ -78,6 +78,17 @@ const WORKFLOW_STEPS = [
 
 const WORKFLOW_STEP_BY_SLUG = Object.fromEntries(WORKFLOW_STEPS.map(step => [step.slug, step]))
 const WORKFLOW_STEP_BY_TAB = Object.fromEntries(WORKFLOW_STEPS.map(step => [step.tab, step.slug]))
+const workflowStepsFor = config => {
+  const configured = Array.isArray(config?.workflow) && config.workflow.length
+    ? [...config.workflow].sort((a, b) => a.order - b.order)
+    : DEFAULT_WORKFLOW
+  return configured.filter(step => step.enabled !== false).map(step => ({
+    slug: step.id,
+    label: step.label,
+    milestone: step.milestone || step.label,
+    tab: step.tab || WORKFLOW_STEPS.find(item => item.label === step.milestone)?.tab || 'overview',
+  }))
+}
 const REMOVED_WORKFLOW_MILESTONES = new Set(['Submitted', 'PO Validation', 'Handover'])
 const milestoneSlug = milestone => {
   if (REMOVED_WORKFLOW_MILESTONES.has(milestone)) return 'follow-up'
@@ -89,8 +100,8 @@ const titleCase = value => String(value || '').toLowerCase().split(/\s+/).map((w
   return small ? word : word.charAt(0).toUpperCase() + word.slice(1)
 }).join(' ').replace(/\bBoq\b/g, 'BOQ').replace(/\bKyc\b/g, 'KYC').replace(/\bRfq\b/g, 'RFQ')
 
-function OpportunityProgress({ activeStep, completedThrough, onStep, onNext }) {
-  const activeIndex = WORKFLOW_STEPS.findIndex(step => step.slug === activeStep)
+function OpportunityProgress({ activeStep, completedThrough, onStep, onNext, steps = WORKFLOW_STEPS }) {
+  const activeIndex = steps.findIndex(step => step.slug === activeStep)
   return (
     <nav className="opportunity-progress" aria-label="Opportunity progress">
       <div className="progress-head">
@@ -99,14 +110,14 @@ function OpportunityProgress({ activeStep, completedThrough, onStep, onNext }) {
           <strong>Opportunity progress</strong>
         </div>
         <div className="progress-controls" aria-label="Navigate workflow views">
-          <button type="button" disabled={activeIndex <= 0} onClick={() => onStep(WORKFLOW_STEPS[activeIndex - 1].slug)}>Previous</button>
-          <span>{WORKFLOW_STEP_BY_SLUG[activeStep]?.label}</span>
-          <button type="button" disabled={activeIndex < 0 || activeIndex >= WORKFLOW_STEPS.length - 1} onClick={() => onNext(WORKFLOW_STEPS[activeIndex + 1].slug)}>Next</button>
+          <button type="button" disabled={activeIndex <= 0} onClick={() => onStep(steps[activeIndex - 1].slug)}>Previous</button>
+          <span>{steps[activeIndex]?.label}</span>
+          <button type="button" disabled={activeIndex < 0 || activeIndex >= steps.length - 1} onClick={() => onNext(steps[activeIndex + 1].slug)}>Next</button>
         </div>
       </div>
       <div className="progress-steps">
         <span className="progress-track" aria-hidden="true" />
-        {WORKFLOW_STEPS.map((step, index) => (
+        {steps.map((step, index) => (
           <button key={step.slug} type="button"
             className={`progress-step ${index < completedThrough ? 'done' : ''} ${index === activeIndex ? 'current' : ''}`}
             aria-current={index === activeIndex ? 'step' : undefined}
@@ -141,14 +152,17 @@ export default function Workbench() {
   }
 
   const goTab = k => nav(`/opp/${opp.id}/${k}`)
-  const legacyStep = tab === 'overview' ? null : WORKFLOW_STEP_BY_TAB[tab]
+  const workflowSteps = workflowStepsFor(store.config)
+  const workflowBySlug = Object.fromEntries(workflowSteps.map(step => [step.slug, step]))
+  const workflowByTab = Object.fromEntries(workflowSteps.map(step => [step.tab, step.slug]))
+  const legacyStep = tab === 'overview' ? null : workflowByTab[tab] || WORKFLOW_STEP_BY_TAB[tab]
   const requestedStep = searchParams.get('step')
-  const activeStep = WORKFLOW_STEP_BY_SLUG[requestedStep] ? requestedStep : legacyStep || milestoneSlug(opp.milestone)
-  const activeStepConfig = WORKFLOW_STEP_BY_SLUG[activeStep]
-  const viewTab = WORKFLOW_STEP_BY_SLUG[requestedStep] ? activeStepConfig.tab : tab
-  const persistedStepIndex = WORKFLOW_STEPS.findIndex(step => step.slug === milestoneSlug(opp.milestone))
+  const activeStep = workflowBySlug[requestedStep] ? requestedStep : legacyStep || workflowSteps.find(step => step.milestone === opp.milestone)?.slug || 'intake'
+  const activeStepConfig = workflowBySlug[activeStep]
+  const viewTab = workflowBySlug[requestedStep] ? activeStepConfig.tab : tab
+  const persistedStepIndex = workflowSteps.findIndex(step => step.milestone === opp.milestone)
   const selectStep = step => {
-    if (!WORKFLOW_STEP_BY_SLUG[step]) return
+    if (!workflowBySlug[step]) return
     nav(`/opp/${opp.id}?step=${encodeURIComponent(step)}`)
   }
   const proposal = store.getProposal(opp.id)
@@ -177,9 +191,9 @@ export default function Workbench() {
     return true
   }
   const advanceStep = slug => {
-    const step = WORKFLOW_STEP_BY_SLUG[slug]
+    const step = workflowBySlug[slug]
     if (!step) return
-    if (moveMilestone(step.label)) selectStep(slug)
+    if (moveMilestone(step.milestone)) selectStep(slug)
   }
   const exceptionApprovalFor = blocker => (store.approvals || []).find(a =>
     a.type === 'Milestone exception' && a.oppId === opp.id
@@ -278,6 +292,7 @@ export default function Workbench() {
     if (blocker.key === 'release') return 'Section 5C: the final quote release, routed by order value and margin. It covers this revision only — a revised quote must be released again.'
     if (blocker.key.startsWith('sp-conf-')) return 'This spares line’s part match has not been confirmed. Confirm the match — or pick an alternative — in Sourcing before the proposal can be built.'
     if (blocker.key.startsWith('sp-price-')) return 'This spares line’s price source has expired. Refresh it against a current price list or vendor quote in Sourcing.'
+    if (blocker.key === 'pricing-threshold') return 'A discount or markup exceeds the Admin-configured limit. Request one approval from AH or LJS before continuing.'
     return 'Complete the requirement shown below before continuing.'
   }
 
@@ -305,7 +320,7 @@ export default function Workbench() {
         <div className="summary-meta-item opp-summary-action"><span>Next action</span><b>{nextAction.text || NEXT_ACTION[opp.milestone] || 'Progress the opportunity'}</b></div>
         <div className={`summary-meta-item summary-due ${isOverdue ? 'is-overdue' : ''}`}><span>Due</span><div className="summary-meta-value"><b>{ddMmmYY(due) || '-'}</b>{isOverdue && <Chip tone="state-Blocks">Overdue</Chip>}</div></div>
       </div>
-      <OpportunityProgress activeStep={activeStep} completedThrough={persistedStepIndex} onStep={selectStep} onNext={advanceStep} />
+      <OpportunityProgress steps={workflowSteps} activeStep={activeStep} completedThrough={persistedStepIndex} onStep={selectStep} onNext={advanceStep} />
       {transition && (
         <Modal title={transition.kind === 'blocked' ? `Cannot move from ${opp.milestone} to ${transition.target}` : `Move back to ${transition.target}`} onClose={() => setTransition(null)} wide>
           {transition.kind === 'blocked' ? (

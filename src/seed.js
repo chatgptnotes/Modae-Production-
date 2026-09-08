@@ -2,6 +2,7 @@
 // (Sales Pipeline Report FY26 Excel + New Sales Opportunity Intake form,
 // as shown in the Aug 10 meeting screenshots).
 import { STATES, STATE_REGION } from './indiaLocations.js'
+import { DEFAULT_CUSTOMER_CLASSES, DEFAULT_DOC_CHECKLISTS } from './customerClasses.js'
 
 // Fx-1..Fx-5 are the client's own reserved slots — they appear on Category,
 // Segment, Product and Solution in the Field List sheet, so a pipeline export
@@ -565,6 +566,16 @@ export const PERMS = {
 // Opportunity lifecycle milestones (BT prototype stepper).
 export const MILESTONES = ['Intake', 'Qualification', 'Customer/KYC', 'Registration', 'Screening',
   'Clarification', 'Sourcing', 'Proposal', 'Approval', 'Submitted', 'Follow-up', 'PO Validation', 'Handover']
+
+// Stable IDs let Admin change labels and ordering without breaking existing
+// opportunities that store the canonical milestone value.
+export const DEFAULT_WORKFLOW = MILESTONES.map((label, order) => ({
+  id: label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+  milestone: label,
+  label,
+  order,
+  enabled: !['Submitted', 'PO Validation', 'Handover'].includes(label),
+}))
 
 // Map the pipeline stage onto a lifecycle milestone for rows that predate the workbench.
 export function milestoneForStage(stage, status) {
@@ -1173,7 +1184,7 @@ export const seedConfig = {
   fastTrack: { enabled: true, customerStatus: 'Green' },
   aiThresholds: { high: 90, med: 75 },
   // Diagram 02 §5C margin matrix: order value against ₹10 Lakh, margin against 50%.
-  approvalThresholds: { valueBreak: 1000000, marginBreak: 50 },
+  approvalThresholds: { valueBreak: 1000000, marginBreak: 50, discountPct: 5, markupPct: 10, pricingApprovers: ['AH', 'LJS'] },
   amberFee: { amount: 25000, cur: 'INR', days: 7 },
   classRules: {
     Green: '30 days credit from invoice',
@@ -1181,11 +1192,16 @@ export const seedConfig = {
     Amber: '100% advance before dispatch',
     Red: '100% prepayment only',
   },
+  // The Green/Blue/Amber/Red rules themselves — what each class must verify,
+  // who approves it, where it gates. See customerClasses.js.
+  customerClasses: DEFAULT_CUSTOMER_CLASSES,
+  documentChecklists: DEFAULT_DOC_CHECKLISTS,
   // Which region (and thus which owner, via ownershipRules) each Indian
   // state/UT routes to. Defaults mirror indiaLocations.js's STATE_REGION.
   stateRegions: Object.entries(STATES)
     .map(([code, name]) => ({ code, name, region: STATE_REGION[code] || 'Unclassified leads' }))
     .sort((a, b) => a.name.localeCompare(b.name)),
+  workflow: DEFAULT_WORKFLOW,
   kycItems: ['GST certificate', 'PAN certificate', 'Cancelled cheque', 'EFT / bank mandate', 'CIN reference', 'Registered & business address'],
   templates: ['Spares quotation', 'Reactive service offer', 'Project techno-commercial proposal'],
   reminders: [

@@ -10,14 +10,27 @@ import { unitCostINR, unitSellINR } from './utils.js'
 import { defaultCosting, MILESTONES } from './seed.js'
 import { applyAdjustment } from './pricing.js'
 import { isPlaceholderSparesLine } from './proposal/sparesBoq.js'
+import { classRule, classOrder, noExceptionKeys } from './customerClasses.js'
 
-const isLeadKycVerified = opp =>
-  opp?.leadVerification?.type === 'KYC' && opp.leadVerification.status === 'Verified'
+// A lead-stage verification snapshot of the shape this class records satisfies
+// the opportunity-stage gate — the salesperson is not asked to verify twice.
+const isLeadVerified = (opp, rule) =>
+  !!rule?.verification?.snapshot
+  && opp?.leadVerification?.type === rule.verification.snapshot.type
+  && opp.leadVerification.status === rule.verification.snapshot.status
 
-function blueKycComplete(opp, state) {
-  if (isLeadKycVerified(opp)) return true
+function customerChecklistComplete(opp, state, rule) {
+  if (isLeadVerified(opp, rule)) return true
   const items = (state.kyc || {})[opp.sellTo]
   return !!items?.length && items.every(item => item.state === 'Verified')
+}
+
+// Whether the evidence a class gate names has actually been provided.
+function gateSatisfied(opp, state, rule, gate, approvedFn) {
+  if (gate.evidence === 'customerKycChecklist') return customerChecklistComplete(opp, state, rule)
+  if (gate.evidence === 'approval') return !!approvedFn?.(gate.approvalType)
+  if (gate.evidence) return opp[gate.evidence] === true
+  return true
 }
 
 // Total quantity of a BoQ line, matching the workbook: Qty/Unit × units +
@@ -50,6 +63,42 @@ export function computeProposalTotals(proposal) {
   }
   const gmPct = value ? ((value - cogs) / value) * 100 : 0
   return { value, listValue, cogs, gmPct }
+}
+
+// Pricing exceptions are checked independently of the margin matrix. They are
+// configurable commercial controls and apply to both proposal-level pricing
+// and line-level pricing (including the spares sourcing workbench).
+export function pricingThresholdExceptions(opp, proposal, state = {}) {
+  const thresholds = state.config?.approvalThresholds || {}
+  const discountPct = Number.isFinite(Number(thresholds.discountPct)) ? Number(thresholds.discountPct) : 5
+  const markupPct = Number.isFinite(Number(thresholds.markupPct)) ? Number(thresholds.markupPct) : 10
+  const rows = []
+  const add = (row, label) => {
+    const discount = Number(row?.discountPct) || 0
+    const markup = Number(row?.markupPct) || 0
+    if (discount > discountPct || markup > markupPct) rows.push({
+      label, discount, markup, discountPct, markupPct,
+    })
+  }
+  add(proposal, 'Proposal pricing')
+  ;(proposal?.bom || []).forEach((line, i) => add(line, line.pn || line.custRef || line.desc || `Line ${i + 1}`))
+  if (opp?.route === 'Spares') {
+    ;(state.sparesLines || []).filter(line => line.oppId === opp.id && !isPlaceholderSparesLine(line))
+      .forEach(line => add(line, line.pn || line.custRef || line.desc || line.id))
+  }
+  return { discountPct, markupPct, rows }
+}
+
+function pricingApprovers(state) {
+  const configured = state.config?.approvalThresholds?.pricingApprovers
+  const roles = Array.isArray(configured) ? configured.filter(Boolean) : ['AH', 'LJS']
+  return roles.length ? roles : ['AH', 'LJS']
+}
+
+function pricingApprovalFor(opp, proposal, approvals) {
+  const rev = String(proposal?.revision ?? '')
+  return (approvals || []).find(a => a.oppId === opp.id && a.type === 'Pricing threshold exception'
+    && (a.rev == null || String(a.rev) === rev))
 }
 
 // Diagram 02 §5C — the margin approval matrix. Routing is on *order value*
@@ -87,21 +136,19 @@ export function commercialGate(opp, proposal, config) {
 // price sources, service travel confirmation, empty BoQ).
 export function readiness(opp, proposal, state) {
   if (!opp) return []
-  const b = [...oppBlockers(opp, proposal, state.approvals || [])]
-
-  if (opp.customerStatus === 'Blue' && !opp.kycOverride && !blueKycComplete(opp, state)) {
-    b.push({
-      key: 'kyc-block', severity: 'block', kyc: true,
-      text: 'KYC verification pending (AH) — or override with reason',
-    })
-  }
+  const b = [...oppBlockers(opp, proposal, state.approvals || [], state.config)]
 
   // Diagram 01's Amber lane makes the pre-quote fee a condition of proceeding,
   // and transitionBlockers blocks Registration on it. Readiness said `info`,
   // so the same unpaid fee read as advisory on one panel and blocking on the
   // other. It blocks in both.
-  if (opp.customerStatus === 'Amber' && opp.amberFeePaid !== true) {
-    b.push({ key: 'amber-fee', severity: 'block', text: 'Amber pre-quote processing fee not received' })
+  const classGate = classRule(state.config, opp.customerStatus)?.gate
+  if (classGate?.readiness) {
+    const rule = classRule(state.config, opp.customerStatus)
+    const overridden = classGate.overrideField && opp[classGate.overrideField]
+    if (!overridden && !gateSatisfied(opp, state, rule, classGate)) {
+      b.push({ ...classGate.readiness })
+    }
   }
 
   if (opp.route === 'Spares') {
@@ -141,6 +188,28 @@ export function readiness(opp, proposal, state) {
     b.push({ key: 'no-bom', severity: 'block', text: 'No priced lines in proposal' })
   }
 
+  const pricing = pricingThresholdExceptions(opp, proposal, state)
+  if (pricing.rows.length) {
+    const approval = pricingApprovalFor(opp, proposal, state.approvals)
+    const approved = approval && ['Approved', 'Approved with conditions'].includes(approval.status)
+    if (!approved) {
+      const pending = approval?.status === 'Pending'
+      const details = pricing.rows.map(row => {
+        const changes = []
+        if (row.discount > row.discountPct) changes.push(`discount ${row.discount}% (limit ${row.discountPct}%)`)
+        if (row.markup > row.markupPct) changes.push(`markup ${row.markup}% (limit ${row.markupPct}%)`)
+        return `${row.label}: ${changes.join(' and ')}`
+      }).join('; ')
+      const approvers = pricingApprovers(state)
+      b.push({
+        key: 'pricing-threshold', severity: pending ? 'wait' : 'block',
+        text: pending ? `Pricing threshold approval is awaiting ${approvers.join(' or ')} — ${details}` : `Pricing threshold approval required from ${approvers.join(' or ')} — ${details}`,
+        approvalType: 'Pricing threshold exception', approver: approvers[0], needed: approvers, anyOf: approvers.length > 1,
+        rev: String(proposal?.revision ?? ''), pricingRows: pricing.rows,
+      })
+    }
+  }
+
   return b
 }
 
@@ -163,7 +232,7 @@ export function nextActionWith(opp, proposal, state) {
   return { owner, text: b.text, derived: true }
 }
 
-export function oppBlockers(opp, proposal, approvals) {
+export function oppBlockers(opp, proposal, approvals, config = null) {
   if (!opp) return []
   const b = []
   const mine = approvals.filter(a => a.oppId === opp.id)
@@ -171,31 +240,26 @@ export function oppBlockers(opp, proposal, approvals) {
     && (a.status === 'Approved' || a.status === 'Approved with conditions'))
   const hasOpen = type => mine.some(a => a.type === type && a.status === 'Pending')
 
-  if (opp.customerStatus === 'Red' && !hasApproved('Red customer clearance')) {
-    if (hasOpen('Red customer clearance')) {
-      b.push({ key: 'red-wait', severity: 'wait', text: 'Red customer clearance awaiting joint LJS + AH decision.' })
-    } else {
-      // `needed` matters: without it, requestBlockerApproval builds the gate
-      // from `approver` alone, and a Red clearance raised off this blocker
-      // would clear on LJS by himself — bypassing the AH half of the joint
-      // decision that transitionBlockers and the inbox both demand.
+  // The customer-class advisory row. `needed` matters on a joint gate: without
+  // it, requestBlockerApproval builds the gate from `approver` alone, and a Red
+  // clearance raised off this blocker would clear on LJS by himself — bypassing
+  // the AH half of the joint decision that transitionBlockers and the inbox
+  // both demand. Classes with no approval type of their own (Blue) carry
+  // neither, exactly as before.
+  const advisory = classRule(config, opp.customerStatus)?.advisory
+  if (advisory && !(advisory.approvalType && hasApproved(advisory.approvalType))) {
+    const waiting = advisory.approvalType && hasOpen(advisory.approvalType)
+    if (waiting && advisory.waitKey) {
+      b.push({ key: advisory.waitKey, severity: advisory.waitSeverity || 'wait', text: advisory.waitText })
+    } else if (!waiting) {
       b.push({
-        key: 'red', severity: 'block',
-        text: 'Red customer — high risk / unpaid record. Joint LJS + AH clearance required before any proposal goes out.',
-        approvalType: 'Red customer clearance', approver: 'LJS', needed: ['LJS', 'AH'],
+        key: advisory.key, severity: advisory.severity, text: advisory.text,
+        ...(advisory.approvalType ? { approvalType: advisory.approvalType } : {}),
+        ...(advisory.approvers?.length
+          ? { approver: advisory.approvers[0], ...(advisory.approvers.length > 1 ? { needed: [...advisory.approvers] } : {}) }
+          : {}),
       })
     }
-  }
-
-  if (opp.customerStatus === 'Blue') {
-    b.push({ key: 'kyc', severity: 'info', text: 'New (Blue) customer — KYC verification pending with admin.' })
-  }
-  if (opp.customerStatus === 'Amber' && !hasApproved('Amber credit terms') && !hasOpen('Amber credit terms')) {
-    b.push({
-      key: 'amber', severity: 'info',
-      text: 'Amber customer — credit terms are subject to AH approval.',
-      approvalType: 'Amber credit terms', approver: 'AH',
-    })
   }
 
   const devs = (proposal?.terms || []).filter(t => t.status === 'Deviation')
@@ -248,7 +312,7 @@ export const APPROVAL_5C = 'Final quote release'
 // here; `red-clearance` joins them because the Red gate is a joint LJS + AH
 // decision about whether to trade with the customer at all — not a schedule
 // concession one approver can sign away.
-export const NO_EXCEPTION = ['tech-approval', 'comm-approval', 'release', 'red-clearance']
+export const NO_EXCEPTION = noExceptionKeys()
 
 export function approvalForRev(type, proposal, approvals, oppId) {
   const rev = String(proposal?.revision ?? '')
@@ -297,21 +361,28 @@ export function transitionBlockers(opp, target, proposal, state) {
   const mine = approvals.filter(a => a.oppId === opp.id)
   const approved = type => mine.some(a => a.type === type && ['Approved', 'Approved with conditions'].includes(a.status))
   const pending = type => mine.some(a => a.type === type && a.status === 'Pending')
-  const kycComplete = blueKycComplete(opp, state)
-
-  if (next >= MILESTONES.indexOf('Customer/KYC') && opp.customerStatus === 'Blue' && !kycComplete && !opp.kycOverride) {
-    b.push({ key: 'kyc', severity: 'block', text: 'Blue customer KYC must be fully verified by AH', approver: 'AH' })
-  }
-  if (next >= MILESTONES.indexOf('Registration') && opp.customerStatus === 'Amber' && !opp.amberFeePaid) {
-    b.push({ key: 'amber-fee', severity: 'block', text: 'Amber customer pre-quote fee must be received', approver: 'AH' })
-  }
-  if (next >= MILESTONES.indexOf('Registration') && opp.customerStatus === 'Red' && !approved('Red customer clearance')) {
-    // `approvalType` matters as much as `needed`: without it Workbench treats
-    // this as exception-eligible and offers a Milestone exception instead, which
-    // waived the Red gate outright — the opportunity moved past Registration
-    // with no clearance record in existence. With it, the real approval is
-    // requested, and NO_EXCEPTION refuses the waiver at the model layer too.
-    b.push({ key: 'red-clearance', severity: pending('Red customer clearance') ? 'wait' : 'block', text: pending('Red customer clearance') ? 'Red customer clearance is awaiting LJS/AH approval' : 'Red customer clearance from LJS/AH is required', approvalType: 'Red customer clearance', approver: 'LJS', needed: ['LJS', 'AH'] })
+  // The customer-class gate, at whichever milestone its class declares.
+  // `approvalType` matters as much as `needed`: without it Workbench treats
+  // this as exception-eligible and offers a Milestone exception instead, which
+  // waived the Red gate outright — the opportunity moved past Registration
+  // with no clearance record in existence. With it, the real approval is
+  // requested, and NO_EXCEPTION refuses the waiver at the model layer too.
+  const classGate = classRule(state.config, opp.customerStatus)?.gate
+  if (classGate && next >= MILESTONES.indexOf(classGate.milestone)) {
+    const rule = classRule(state.config, opp.customerStatus)
+    const overridden = classGate.overrideField && opp[classGate.overrideField]
+    if (!overridden && !gateSatisfied(opp, state, rule, classGate, approved)) {
+      const waiting = classGate.approvalType && pending(classGate.approvalType)
+      b.push({
+        key: classGate.key,
+        severity: waiting ? 'wait' : classGate.severity,
+        text: waiting ? (classGate.waitText || classGate.text) : classGate.text,
+        ...(classGate.approvers?.length ? { approver: classGate.approvers[0] } : {}),
+        ...(classGate.approvalType
+          ? { approvalType: classGate.approvalType, needed: [...classGate.approvers], anyOf: !!classGate.anyOf }
+          : {}),
+      })
+    }
   }
 
   const clarifications = (state.clarifications || []).filter(c => c.oppId === opp.id)

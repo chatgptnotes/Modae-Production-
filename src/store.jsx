@@ -45,19 +45,16 @@ export function snapshotProposal(p) {
 // appState.js so the tests can drive the boot path directly.
 const initialState = () => stateFromSaved(localStorage.getItem(KEY))
 
-// Read-only event log, newest first. Successive identical action+object+detail
-// entries within a minute merge (inline cell edits fire per keystroke) — the
-// detail must match too, or editing a second field would silently erase the
-// record that the first one changed.
-const AUDIT_CAP = 500
+// Append-only event log, newest first. Every mutation gets its own entry: audit
+// history is business data and must not be compacted or capped away.
 function withAudit(s, action, objectId, detail = '') {
-  const entry = { ts: new Date().toISOString(), role: s.role, action, objectId: String(objectId ?? ''), detail: String(detail ?? '') }
+  const entry = {
+    id: `AUD-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    ts: new Date().toISOString(), role: s.role, action,
+    objectId: String(objectId ?? ''), detail: String(detail ?? ''),
+  }
   const prev = s.audit || []
-  const head = prev[0]
-  const merge = head && head.action === action && head.objectId === entry.objectId
-    && head.detail === entry.detail
-    && Date.parse(entry.ts) - Date.parse(head.ts) < 60000
-  return { ...s, audit: [entry, ...(merge ? prev.slice(1) : prev)].slice(0, AUDIT_CAP) }
+  return { ...s, audit: [entry, ...prev] }
 }
 
 // Side effects of a resolved approval (BT prototype's applyApprovalEffects):
@@ -785,7 +782,7 @@ export function StoreProvider({ children }) {
     addCustomer(cust) {
       setState(s => s.customers.some(c => c.name.toLowerCase() === cust.name.toLowerCase())
         ? s
-        : { ...s, customers: [...s.customers, cust] })
+        : withAudit({ ...s, customers: [...s.customers, cust] }, 'Customer added', cust.name, 'Customer master record created'))
     },
 
     // Bulk import of the client's existing customer list (the Customer
@@ -816,7 +813,7 @@ export function StoreProvider({ children }) {
     addUser(user) {
       setState(s => s.users.some(u => u.email.toLowerCase() === user.email.toLowerCase())
         ? s
-        : { ...s, users: [...s.users, user] })
+        : withAudit({ ...s, users: [...s.users, user] }, 'User added', user.id || user.email, `role ${user.role || '—'}`))
     },
 
     updateUser(id, patch) {
@@ -832,14 +829,14 @@ export function StoreProvider({ children }) {
             ...(patch.role !== undefined ? { role: patch.role } : {}),
           } }
           : s.auth
-        return { ...s, users, auth, role: isCurrentUser && patch.role !== undefined ? patch.role : s.role }
+        return withAudit({ ...s, users, auth, role: isCurrentUser && patch.role !== undefined ? patch.role : s.role }, 'User updated', id, JSON.stringify({ before: s.users.find(u => u.id === id), patch }))
       })
     },
 
     // Only used to reject a pending registration — active accounts are
     // suspended, never deleted.
     deleteUser(id) {
-      setState(s => ({ ...s, users: s.users.filter(u => u.id !== id) }))
+      setState(s => withAudit({ ...s, users: s.users.filter(u => u.id !== id) }, 'User removed', id, 'Pending registration rejected'))
     },
 
     // Approvers (LJS/AH) and admins set the FY numbers each owner is measured
@@ -1248,8 +1245,11 @@ export function StoreProvider({ children }) {
 
     // ---- Admin config ------------------------------------------------------
     updateConfig(patch) {
-      setState(s => withAudit({ ...s, config: { ...s.config, ...patch } },
-        'Config updated', 'admin', Object.keys(patch).join(', ')))
+      setState(s => {
+        const nextConfig = { ...s.config, ...patch }
+        return withAudit({ ...s, config: nextConfig }, 'Config updated', 'admin',
+          JSON.stringify({ fields: Object.keys(patch), before: Object.fromEntries(Object.keys(patch).map(k => [k, s.config?.[k]])), after: patch }))
+      })
     },
     saveAiModel(aiModel) {
       setState(s => withAudit({
@@ -1284,10 +1284,10 @@ export function StoreProvider({ children }) {
       })
     },
     setConnectorState(id, stateVal) {
-      setState(s => ({
+      setState(s => withAudit({
         ...s,
         config: { ...s.config, connectors: s.config.connectors.map(c => (c.id === id ? { ...c, state: stateVal } : c)) },
-      }))
+      }, 'Connector state updated', id, `${s.config?.connectors?.find(c => c.id === id)?.state || '—'} → ${stateVal}`))
     },
 
     // ---- SharePoint sync bookkeeping --------------------------------------
@@ -1351,14 +1351,16 @@ export function StoreProvider({ children }) {
     // seedState(), which carries demoData: true, so this doubles as "bring the
     // demo data back" once clearDemo has removed it.
     async restoreDemo() {
+      const next = withAudit({ ...seedState(), audit: stateRef.current.audit || [] }, 'Demo data restored', 'demo', 'Seed business records restored; audit history retained')
       if (datastore.dbEnabled()) {
-        try { await datastore.resetAll(syncedOf(seedState())) }
+        try { await datastore.resetAll(syncedOf(next)) }
         catch (e) { console.warn('Supabase reset failed — server data left as-is:', e?.message) }
       }
       // Lead file blobs live in IndexedDB, outside the localStorage snapshot.
       try { await leadBlobs.clearAll() }
       catch (e) { console.warn('Lead file store reset failed:', e?.message) }
-      localStorage.removeItem(KEY)
+      try { localStorage.setItem(KEY, JSON.stringify(next)) }
+      catch (e) { console.warn('Local save failed — restored demo data may not persist:', e?.message) }
       window.location.reload()
     },
     // The original name of the action above — kept so existing callers and the
@@ -1367,7 +1369,9 @@ export function StoreProvider({ children }) {
 
     // Empty the app: every business record goes, logins and configuration stay.
     async clearDemo() {
-      const next = emptyState(stateRef.current)
+      // Preserve the audit history and append the cleanup action itself. The
+      // audit trail is never part of demo data and is never cleared here.
+      const next = withAudit(emptyState(stateRef.current), 'Demo data cleared', 'demo', 'Business records removed; audit history retained')
       if (datastore.dbEnabled()) {
         try { await datastore.resetAll(syncedOf(next)) }
         catch (e) { console.warn('Supabase clear failed — server data left as-is:', e?.message) }

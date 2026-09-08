@@ -4,6 +4,7 @@
 // ran when one did not.
 
 import { ageDays } from './utils.js'
+import { classRule } from './customerClasses.js'
 
 // ---------------------------------------------------------- customer health
 // A relationship read from what the app already knows: how the account is
@@ -103,7 +104,7 @@ const STAGE_BASE = {
   'Firm Bid': 'Medium', Negotiate: 'High', Won: 'High', Lost: 'Low',
 }
 
-export function suggestProbability(opp, proposal) {
+export function suggestProbability(opp, proposal, config = null) {
   if (!opp) return null
   let level = STAGE_BASE[opp.stage] || 'Low'
   const why = [`${opp.stage} stage`]
@@ -117,10 +118,13 @@ export function suggestProbability(opp, proposal) {
   if (age != null && age > 45 && level === 'High') { level = 'Medium'; why.push(`no movement for ${age} days`) }
   else if (age != null && age > 45) why.push(`no movement for ${age} days`)
 
-  if (opp.customerStatus === 'Red') { level = 'Low'; why.push('Red account') }
-  else if (opp.customerStatus === 'Green' && level === 'Low' && opp.stage !== 'Lost') {
-    level = 'Medium'
-    why.push('Green account')
+  // Each class may nudge the probability: a bias that lowers it wins outright,
+  // one that raises it only rescues a Low on a still-live opportunity.
+  const bias = classRule(config, opp.customerStatus)?.probabilityBias
+  if (bias === 'Low') { level = 'Low'; why.push(`${opp.customerStatus} account`) }
+  else if (bias && bias !== 'Low' && level === 'Low' && opp.stage !== 'Lost') {
+    level = bias
+    why.push(`${opp.customerStatus} account`)
   }
   return { level, why: why.join(' · ') }
 }

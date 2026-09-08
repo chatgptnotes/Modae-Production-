@@ -652,7 +652,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   // clearance among them — cleared on LJS alone. Workbench.jsx and PropBuilder
   // already forward both; this call site was the odd one out.
   const requestApproval = bl => () => store.requestApproval({
-    oppId, type: bl.approvalType, approver: bl.approver, detail: bl.text,
+    oppId, type: bl.approvalType, approver: bl.approver, rev: bl.rev || String(p.revision ?? ''), detail: bl.text,
     ...(bl.needed ? { needed: bl.needed } : {}),
     ...(bl.anyOf ? { anyOf: bl.anyOf } : {}),
   })
@@ -765,7 +765,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
     const pendingTypes = new Set(pendingForOpp.map(item => item.type))
     const actionable = blockers.filter(bl => bl.approvalType && bl.severity !== 'wait' && !pendingTypes.has(bl.approvalType))
     actionable.forEach(bl => store.requestApproval({
-      oppId, type: bl.approvalType, approver: bl.approver, detail: bl.text,
+      oppId, type: bl.approvalType, approver: bl.approver, rev: bl.rev || String(p.revision ?? ''), detail: bl.text,
       ...(bl.needed ? { needed: bl.needed } : {}),
       ...(bl.anyOf ? { anyOf: bl.anyOf } : {}),
     }))

@@ -531,7 +531,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                     sat still — always a suggestion, never a write. */}
                 <td onClick={selectCell(o, COLS[13])} className={isSel(o, COLS[13]) ? 'cell-sel' : ''}>
                   {(() => {
-                    const sug = suggestProbability(o, store.getProposal(o.id))
+                    const sug = suggestProbability(o, store.getProposal(o.id), store.config)
                     return (
                       <select value={o.prob || ''} onChange={upd(o.id, 'prob')}
                         className={!o.prob && sug ? 'derived' : ''}

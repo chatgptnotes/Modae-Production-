@@ -256,7 +256,7 @@ export default function Customers() {
         )}
       </div>
       {uploadErr && <ErrBox>{uploadErr}</ErrBox>}
-      <div className="sheet-wrap" style={{ maxWidth: 980 }}>
+      <div className="sheet-wrap sheet-wrap-fill">
         <table className="sheet">
           <thead><tr><th>Customer</th><th>Category</th><th>Status</th><th>KYC</th><th>Payment Pattern</th><th>Health</th><th></th></tr></thead>
           <tbody>

@@ -710,6 +710,11 @@ select, input[type=text], input[type=number], input[type=date], input[type=tel],
 
 /* Pipeline-report grid: navy header band like the real sheet */
 .sheet-wrap { overflow-x: auto; background: var(--palette-4843938); border: 1px solid var(--grid-line); }
+/* Data tables that should use the width they are given. These wrappers used to
+   carry hardcoded inline caps (720-980px), which left a wide blank band to the
+   right of the table on every screen bigger than the cap. The cap is now a
+   readability ceiling rather than a fixed pixel width. */
+.sheet-wrap-fill { width: 100%; max-width: 1400px; }
 .sourcing-table-card { margin-top: 12px; border: 1px solid var(--grid-line); background: var(--surface, #fff); }
 .sourcing-table-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; border-top: 3px solid var(--accent, #e5382b); }
 .sourcing-table-heading .hint { margin-left: 8px; }
@@ -967,7 +972,11 @@ table.sheet td.internal { background: var(--border-soft) !important; color: var(
 }
 
 /* OneDrive-style folder wall */
-.folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
+/* Fixed 150px tracks, not 1fr: a file browser should pack its tiles at their
+   natural size from the left. With 1fr the columns stretched to fill the row,
+   so two folders in a wide container drifted apart with dead space between
+   them. min() keeps a single tile from overflowing a very narrow container. */
+.folder-grid { display: grid; grid-template-columns: repeat(auto-fill, min(150px, 100%)); gap: 6px; justify-content: start; }
 .folder-card { position: relative; padding: 8px 6px; cursor: pointer; text-align: center; border-radius: 4px; }
 .folder-card:hover { background: var(--palette-fcdb9abd); }
 .folder-del {
@@ -1289,7 +1298,11 @@ button.secondary:hover, .btn.secondary:hover {
 
 
 /* Analytics card grid + bar charts */
-.ana-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 12px; }
+/* align-items:start matters: grid items default to `stretch`, which forced a
+   short card (an empty state such as "No registrations are waiting") to the
+   height of the tallest card beside it and left a large blank area inside it.
+   Cards now size to their own content. */
+.ana-grid { display: grid; grid-template-columns: repeat(12, 1fr); align-items: start; gap: 12px; }
 .ana-card { background: var(--palette-4843938); border: 1px solid var(--grid-line); border-top: 3px solid var(--xl-green); padding: 12px 14px; min-width: 0; }
 .ana-card.c-4 { grid-column: span 4; }
 .ana-card.c-6 { grid-column: span 6; }
@@ -1721,6 +1734,12 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 @media (max-width: 800px) {
   .proposal-sheet-fields { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
 }
+/* A fixed column count cannot be rescued by min(), because N tracks at 100%
+   each still overflow — so the last step down has to be an explicit single
+   column, otherwise the two-column floor (320px) overflows a phone viewport. */
+@media (max-width: 560px) {
+  .proposal-sheet-fields { grid-template-columns: 1fr; }
+}
 .email-launch-link { display: inline-flex; align-items: center; text-decoration: none; }
 .email-launch-link.disabled { opacity: .5; pointer-events: none; }
 @media (max-width: 1024px) {
@@ -1943,8 +1962,8 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
   font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
   color: var(--text-muted); border-bottom: 1px solid var(--grid-line); padding-bottom: 3px; margin: 18px 0 10px;
 }
-.tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; max-width: 1100px; }
-.tile-grid.primary { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); max-width: 1000px; }
+.tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(160px, 100%), 1fr)); gap: 10px; max-width: 1100px; }
+.tile-grid.primary { grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr)); max-width: 1000px; }
 .tile {
   position: relative; background: var(--palette-4843938); border: 1px solid var(--grid-line);
   border-top: 3px solid var(--xl-green); border-radius: 4px;
@@ -1965,7 +1984,7 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .pick-list { max-height: 300px; overflow-y: auto; border: 1px solid var(--grid-line); }
 
 /* Opportunity cards (My Opportunities) */
-.opp-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 10px; max-width: 1100px; }
+.opp-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(270px, 100%), 1fr)); gap: 10px; max-width: 1100px; }
 .opp-card {
   background: var(--palette-4843938); border: 1px solid var(--grid-line); border-left: 4px solid var(--xl-green);
   border-radius: 3px; padding: 10px 12px; cursor: pointer;
@@ -2376,14 +2395,85 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .aimap-open { margin-left: auto; white-space: nowrap; align-self: center; }
 
 /* Admin cards */
-.admin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; max-width: 1300px; }
-.admin-card { background: var(--palette-4843938); border: 1px solid var(--grid-line); border-top: 3px solid var(--xl-green); border-radius: 4px; padding: 12px 16px; min-width: 0; }
+/* One centred measure for the whole page, so the heading, toolbar, demo card
+   and card grid all share the same left and right edges at every width. */
+.admin-page { max-width: 1300px; margin-inline: auto; }
+.admin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); align-items: start; gap: 12px; }
+/* Cards are flex columns so a trailing action row can be pinned to the bottom.
+   Switch align-items above to `stretch` if you want equal-height cards with
+   their footers lined up; `start` keeps them content-height and avoids the
+   dead space that stretching used to leave beside the tall cards. */
+.admin-card { display: flex; flex-direction: column; background: var(--palette-4843938); border: 1px solid var(--grid-line); border-top: 3px solid var(--xl-green); border-radius: 4px; padding: 12px 16px; min-width: 0; line-height: 1.45; }
+/* Normalised text rhythm. These paragraphs used to rely on the default <p>
+   margins collapsing into each other, which does not happen inside a flex
+   column — without this the cards would grow noticeably taller. */
+.admin-card > p { margin: 7px 0 0; }
+.admin-card > p:first-of-type { margin-top: 4px; }
+.admin-card > .admin-actions:last-child { margin-top: auto; }
+.admin-card-wide { grid-column: 1 / -1; }
+.demo-controls-card { margin-bottom: 12px; }
+/* A scrolling list inside a card, in place of a hardcoded inline height. */
+.admin-scroll-list { max-height: min(260px, 50vh); overflow-y: auto; }
 .admin-card h3 { margin: 0 0 8px; font-size: 13px; color: var(--xl-green-dark); display: flex; align-items: center; gap: 7px; }
-.admin-card .arow { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--palette-a7a9e790); font-size: 12.5px; }
+.admin-card h3 .h3-end { margin-left: auto; }
+.admin-card .arow { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--palette-a7a9e790); font-size: 12.5px; min-width: 0; }
 .admin-card .arow:last-child { border-bottom: none; }
+/* One idiom for every settings row: the label flexes and truncates, a text input
+   takes the slack, a select keeps its natural width instead of stretching. */
+.admin-card .arow > span { min-width: 0; overflow-wrap: anywhere; }
+.admin-card .arow input:not([type='checkbox']) { flex: 1; min-width: 0; }
+.admin-card .arow select { width: auto; flex: 0 0 auto; }
+/* A fixed column keeps every class input on the same left edge. 58px was too
+   tight once the pill's own padding and an inherited ellipsis were counted, so
+   the labels rendered as "GRE…" — size it to the longest label and let it show. */
+.admin-card .arow .pill,
+.class-rule-head .pill { flex: 0 0 68px; text-align: center; overflow: visible; text-overflow: clip; }
 .admin-card label.afield { display: block; font-size: 11px; color: var(--text-muted); margin: 6px 0 2px; }
 .admin-card input, .admin-card select { width: 100%; }
-.admin-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.admin-field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 0 12px; }
+/* Customer-class rules: one collapsed row per class, expanding in place. */
+.class-rule { border-bottom: 1px solid var(--palette-a7a9e790); }
+.class-rule:last-of-type { border-bottom: none; }
+/* white-space:normal is load-bearing — the UA stylesheet sets buttons to
+   nowrap, which overrides the wrapping on the summary and pushes the whole
+   card (and with it the grid and the page) wider than its container. */
+.class-rule-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 0; border: 0; background: transparent; box-shadow: none; color: var(--text-muted); font-size: 12.5px; text-align: left; white-space: normal; cursor: pointer; }
+.class-rule-head:hover, .class-rule-head:focus-visible { color: var(--xl-green-dark); outline: 0; }
+.class-rule-summary { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.class-rule-body { padding: 2px 0 10px 8px; border-left: 2px solid var(--grid-line); margin-left: 4px; }
+.admin-actions { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.admin-actions input:not([type='checkbox']) { flex: 1; min-width: 140px; }
+/* Trailing action rows (Save configuration, Upload) sit against the right edge
+   so they line up across cards; rows that pair an input with a button keep the
+   default left flow, since the input already takes the slack. */
+.admin-actions-end { justify-content: flex-end; }
+.admin-approver-options { display: flex; gap: 10px; margin-top: 5px; flex-wrap: wrap; }
+.admin-approver-options label { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; }
+.workflow-admin-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 14px; }
+.workflow-admin-head h2 { margin: 8px 0 4px; }
+.text-button { padding: 0; border: 0; background: transparent; color: var(--xl-green-dark); box-shadow: none; }
+.workflow-editor-card { max-width: 1100px; border-top-color: var(--primary-accent); }
+.workflow-editor-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.workflow-editor-title h3 { margin-bottom: 4px; }
+.workflow-stage-list { display: grid; gap: 6px; margin-top: 14px; }
+.workflow-stage-row { display: grid; grid-template-columns: 34px minmax(180px, 1fr) minmax(130px, .7fr) auto auto; align-items: center; gap: 9px; padding: 8px 0; border-top: 1px solid var(--grid-line); }
+.workflow-stage-row.retired { opacity: .58; }
+.workflow-stage-order { color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.workflow-stage-id { color: var(--text-subtle); font-family: 'JetBrains Mono', monospace; font-size: 10px; overflow: hidden; text-overflow: ellipsis; }
+.workflow-stage-actions { display: inline-flex; gap: 4px; }
+.workflow-stage-actions button { min-width: 28px; padding: 5px 7px; }
+.workflow-add-form { align-items: center; }
+.workflow-add-form input { flex: 1; min-width: 180px; }
+.workflow-protected-note { display: flex; align-items: flex-start; gap: 7px; margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--grid-line); color: var(--text-muted); font-size: 11px; }
+@media (max-width: 760px) {
+  .admin-grid { grid-template-columns: 1fr; }
+  .workflow-admin-head { display: block; }
+  .workflow-admin-head .warn-box { margin-top: 10px; }
+  .workflow-stage-row { grid-template-columns: 28px minmax(0, 1fr) auto; }
+  .workflow-stage-id { display: none; }
+  .workflow-stage-row .check-row { grid-column: 2; }
+  .workflow-stage-actions { grid-column: 3; grid-row: 1 / span 2; }
+}
 .conn-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
 .conn-dot.Healthy { background: var(--primary-accent); }
 .conn-dot.Degraded { background: var(--amber-text); }
@@ -2543,7 +2633,7 @@ button.install:hover { background: var(--primary-hover); }
 .mode-switch { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; white-space: nowrap; }
 /* Colorful task tiles */
 .tablet-home h2 { font-size: 17px; }
-.ttile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 13px; max-width: 1100px; }
+.ttile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr)); gap: 13px; max-width: 1100px; }
 .ttile {
   position: relative; border: none; border-radius: 14px; min-height: 140px; padding: 16px;
   color: var(--palette-4843938); display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end;
@@ -3004,7 +3094,7 @@ button.install:hover { background: var(--primary-hover); }
   background: var(--dash-surface-2); border: 1px solid var(--dash-border);
   border-radius: 999px; padding: 1px 8px;
 }
-.dash-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 12px; align-items: start; }
+.dash-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(232px, 100%), 1fr)); gap: 12px; align-items: start; }
 
 /* ---- tiles ---- */
 .dash-tile {
@@ -3158,7 +3248,7 @@ button.install:hover { background: var(--primary-hover); }
 .home-analytics-link:hover, .home-forecast-action:hover { background: var(--primary-soft); border-color: var(--primary-accent); filter: none; }
 .home-analytics-link:active, .home-forecast-action:active, .home-funnel-row:active, .home-alert-rail button:active { transform: translateY(1px); }
 .workbench-brand-panel { grid-column: 1 / -1; }
-.workbench-brand-products { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.workbench-brand-products { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr)); gap: 10px; }
 .workbench-brand-product { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 10px; min-width: 0; }
 .workbench-brand-product img { width: 76px; height: 62px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-soft); }
 .workbench-brand-product b { display: block; font-size: 12px; color: var(--text-main); }

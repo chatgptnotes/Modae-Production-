@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { isPlaceholderSparesLine, useStore } from '../store.jsx'
 import { defaultCosting } from '../seed.js'
 import { canPriceProposal, unitCostINR, fmt } from '../utils.js'
+import { pricingThresholdExceptions } from '../gates.js'
 import { Chip, ConfChip, AiBadge, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 import { PRICE_SOURCES, resolvePriceSource } from '../pricing.js'
@@ -73,6 +74,7 @@ export default function WbSpares({ opp, openBuilder }) {
   const grossMarginPct = totals.revenue > 0 ? grossProfit / totals.revenue * 100 : 0
   const proposalOnlyMismatch = !lines.length && (proposal.bom || []).length > 0
   const expiredLines = lines.filter(l => l.priceState === 'Expired')
+  const pricingExceptions = pricingThresholdExceptions(opp, proposal, store)
   const clarifications = (store.clarifications || []).filter(c => c.oppId === opp.id && c.status === 'Answered')
 
   const updateLine = (line, field, value) => {
@@ -189,6 +191,7 @@ export default function WbSpares({ opp, openBuilder }) {
     <div className="section-title">Spares workbench — part matching ({lines.length} line{lines.length === 1 ? '' : 's'})</div>
     {clarifications.length > 0 && <div className="okbox customer-information-banner sourcing-clarification-context"><b>Confirmed customer information</b><span className="hint"> These answers stay attached to the opportunity and should be checked while validating each line.</span>{clarifications.map(c => <div key={c.id} className="sourcing-clarification-row"><b>{c.category || 'Clarification'}:</b> {c.response}<span className="hint"> · {c.answerSource || 'Customer'}{c.answeredAt ? ` · ${c.answeredAt}` : ''}</span></div>)}</div>}
     {!!expiredLines.length && <div className="warnbox spares-price-warning"><b>{expiredLines.length} price source{expiredLines.length === 1 ? '' : 's'} expired.</b>{' '}Use <b>Compare</b> in the Actions column to select a current price-list part, or apply a current manufacturer quote only when the approved price list cannot be used.</div>}
+    {!!pricingExceptions.rows.length && <div className="warnbox" role="status"><b>Pricing approval required.</b>{' '}A discount above {pricingExceptions.discountPct}% or markup above {pricingExceptions.markupPct}% needs one approval from AH or LJS before Proposal.</div>}
     {proposalOnlyMismatch && <div className="warnbox sourcing-flow-warning"><b>Proposal data is not linked to Sourcing.</b> Existing proposal rows are not imported automatically. Add or import the real parts here before continuing to Proposal.</div>}
     <div className="sourcing-table-card">
       <div className="sourcing-table-heading"><div><b>Source, adjust and validate each line here</b><span className="hint"> Price-list values are loaded first; vendor values are the fallback.</span></div><div className="sourcing-table-heading-actions">{comm && <button type="button" className="sourcing-add-part-link" aria-expanded={showAddPart} aria-controls="sourcing-manual-line" onClick={() => setShowAddPart(open => !open)}>{showAddPart ? 'Close manual line' : 'Add manual line'}</button>}{!comm && <span className="restricted"><Icon name="lock" size={12} /> Pricing restricted</span>}</div></div>

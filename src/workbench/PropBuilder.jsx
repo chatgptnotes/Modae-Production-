@@ -55,6 +55,7 @@ export default function PropBuilder({ opp, onRevision }) {
   // lets a single decision clear it.
   const requestForBlocker = bl => store.requestApproval({
     oppId: opp.id, type: bl.approvalType, approver: bl.approver,
+    rev: bl.rev || String(p.revision ?? ''),
     needed: bl.needed || [bl.approver], anyOf: !!bl.anyOf, detail: bl.text,
   })
 
@@ -178,7 +179,7 @@ export default function PropBuilder({ opp, onRevision }) {
             {bl.text}
             <div style={{ marginTop: 6, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {bl.approvalType && bl.severity !== 'wait' && (
-                <button onClick={() => requestForBlocker(bl)}>Request {bl.approver} approval</button>
+                <button onClick={() => requestForBlocker(bl)}>Request {bl.anyOf ? 'AH or LJS' : bl.approver} approval</button>
               )}
               {bl.kyc && !overrideOpen && (
                 <button onClick={() => setOverrideOpen(true)}>Override with reason</button>

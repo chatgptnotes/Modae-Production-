@@ -1,6 +1,7 @@
 import { findDuplicates } from './insights.js'
 import { routeOwner } from './leadRules.js'
 import { OPP_TYPES, routeForType } from './seed.js'
+import { classRule } from './customerClasses.js'
 
 // The demo simulator behind "Simulate incoming inquiry".
 //
@@ -453,7 +454,10 @@ export function simulatedLead(customerStatus = 'Green', now = new Date(), option
     from, sender, subject, ref, body,
     attachments: chased ? (chased.attachments || []) : (template.attachments || []),
     status: 'New', customerStatus: status, customerClassifiedAt: ts,
-    verification: ['Blue', 'Amber'].includes(status) ? { requestedAt: ts, requestedFor: status } : {},
+    // Classes whose evidence lives on the lead get a verification record;
+    // Green needs none and Red's clearance is an approval, not a document.
+    verification: ['documents', 'fee'].includes(classRule(null, status)?.verification?.requires)
+      ? { requestedAt: ts, requestedFor: status } : {},
     redFlag: status === 'Red',
     projectType: projectTypeValue,
     oppType: finalOppType,

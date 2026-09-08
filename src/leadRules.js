@@ -1,3 +1,5 @@
+import { classRule, classDeadlineDays } from './customerClasses.js'
+
 export const DEFAULT_LEAD_DEADLINES = {
   kycDays: 7,
   amberFeeDays: 7,
@@ -14,7 +16,6 @@ export function leadConfig(config = {}) {
     ownershipRules: Array.isArray(config.ownershipRules) ? config.ownershipRules : [],
     leadDeadlines: { ...DEFAULT_LEAD_DEADLINES, ...(config.leadDeadlines || {}) },
     fastTrack: { ...DEFAULT_FAST_TRACK, ...(config.fastTrack || {}) },
-    kycItems: Array.isArray(config.kycItems) ? config.kycItems : [],
   }
 }
 
@@ -50,11 +51,19 @@ export function deadlineForLead(lead, config = {}, now = new Date()) {
     dueAt: new Date(base + Number(days || 0) * 86400000).toISOString(),
   })
   const rows = []
-  if (lead?.customerStatus === 'Blue' && !lead?.kycCompletedAt) {
-    rows.push(add(cfg.leadDeadlines.kycDays, 'kyc', 'KYC documents not received'))
-  }
-  if (lead?.customerStatus === 'Amber' && lead?.amberFeePaid !== true) {
-    rows.push(add(cfg.leadDeadlines.amberFeeDays, 'amberFee', 'Amber processing fee not received'))
+  // The class's own deadline, in the class's own terms. This used to read
+  // config.leadDeadlines directly, which meant the Amber timer edited on the
+  // Admin page (written to amberFee.days) was never actually applied.
+  const verification = classRule(config, lead?.customerStatus)?.verification
+  const days = classDeadlineDays(config, lead?.customerStatus)
+  if (verification?.required && days) {
+    const done = verification.requires === 'documents' ? lead?.kycCompletedAt
+      : verification.requires === 'fee' ? lead?.amberFeePaid === true
+      : true
+    if (!done) {
+      rows.push(add(days, verification.deadlineType || 'verification',
+        verification.requires === 'fee' ? 'Amber processing fee not received' : 'KYC documents not received'))
+    }
   }
   if ((lead?.ai?.missing || []).length && !lead?.clarificationCompletedAt) {
     rows.push(add(cfg.leadDeadlines.clarificationDays, 'clarification', 'Required clarification not received'))

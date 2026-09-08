@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { OWNERS, AI_PROVIDERS } from '../seed.js'
+import { OWNERS, AI_PROVIDERS, MILESTONES } from '../seed.js'
 import { isAdminRole, canSeePage } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { Chip, WarnBox, DemoDataControls, Modal } from '../ui.jsx'
@@ -11,12 +11,14 @@ import { uploadAdminTemplate } from '../filestore.js'
 import WorkbookPreview from '../proposal/WorkbookPreview.jsx'
 import { parseProposalWorkbook, serializeProposalWorkbook, updateWorkbookCell } from '../proposal/workbook.js'
 import { DEFAULT_COMMON_MAILBOX } from '../leadClarification.js'
+import { DEFAULT_CUSTOMER_CLASSES } from '../customerClasses.js'
 
 // Admin — every runtime rule the app obeys, in one card grid. Data lives in
 // store.config; all changes are audited by the store mutators.
 
 const CLASS_ORDER = ['Green', 'Blue', 'Amber', 'Red']
 const REGION_OPTIONS = ['North & West India', 'South & East India', 'Unclassified leads']
+const PRICING_APPROVER_OPTIONS = ['AH', 'LJS', 'AN']
 
 const CONNECTOR_CYCLE = {
   'Healthy': 'Degraded (read-only)',
@@ -115,13 +117,13 @@ function SharePointCard({ canEdit }) {
   ]
 
   return (
-    <div className="admin-card" style={{ gridColumn: '1 / -1' }}>
-      <h3><Icon name="cloud" size={14} /> SharePoint connector <span style={{ marginLeft: 'auto' }}>{health}</span></h3>
+    <div className="admin-card admin-card-wide">
+      <h3><Icon name="cloud" size={14} /> SharePoint connector <span className="h3-end">{health}</span></h3>
       <p className="hint">
         Files stay in SharePoint; the app only links to them. Opportunity folders move between
         Open / WON / Closed / Not In Opp List as the status changes. {configured ? 'Connector configured.' : 'Unconfigured — file flows fall back to local demo mode.'}
       </p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '0 12px' }}>
+      <div className="admin-field-grid">
         {fields.map(([k, label, ph]) => (
           <label key={k} className="afield">{label}
             <input type="text" value={cfg[k] || ''} placeholder={ph} disabled={!canEdit}
@@ -129,7 +131,7 @@ function SharePointCard({ canEdit }) {
           </label>
         ))}
       </div>
-      <div className="admin-actions">
+      <div className="admin-actions admin-actions-end">
         <button className="primary" disabled={!canEdit} onClick={save}>Save configuration</button>
         <button disabled={!canEdit || busy} onClick={connect}><Icon name="key" size={11} /> Connect</button>
         <button disabled={busy} onClick={runTest}><Icon name="refresh" size={11} /> Test connection</button>
@@ -152,6 +154,133 @@ function SharePointCard({ canEdit }) {
           <li>Copy the Application (client) ID into this card</li>
         </ol>
       </details>
+    </div>
+  )
+}
+
+
+const REQUIRES_OPTIONS = [
+  ['none', 'Nothing — cleared on sight'],
+  ['documents', 'A document checklist'],
+  ['fee', 'A payment confirmation'],
+  ['jointApproval', 'An approval record'],
+]
+const SEVERITY_OPTIONS = ['block', 'wait', 'info']
+const CLASS_APPROVER_OPTIONS = ['AH', 'LJS', 'AN']
+
+// One collapsed row per class; expanding reveals just that class's rules, so
+// the resting card stays as short as the four-input version it replaced.
+function ClassRuleRow({ cls, rule, canEdit, open, onToggle, checklistNames, onPatch, onPatchVerification, onPatchGate }) {
+  const verification = rule?.verification || {}
+  const gate = rule?.gate || null
+  const requiresLabel = (REQUIRES_OPTIONS.find(([k]) => k === verification.requires) || [])[1] || 'Nothing'
+  const summary = [
+    requiresLabel,
+    verification.deadlineDays ? `${verification.deadlineDays} days` : null,
+    gate ? `${gate.severity}s at ${gate.milestone}` : 'no gate',
+    gate?.approvers?.length ? gate.approvers.join(' + ') : null,
+  ].filter(Boolean).join(' · ')
+
+  return (
+    <div className="class-rule">
+      <button type="button" className="class-rule-head" aria-expanded={open} onClick={onToggle}>
+        <span className={`pill ${cls}`}>{cls}</span>
+        <span className="class-rule-summary">{summary}</span>
+        <Icon name={open ? 'chevronUp' : 'chevronDown'} size={11} />
+      </button>
+      {open && (
+        <div className="class-rule-body">
+          <label className="check-row">
+            <input type="checkbox" checked={verification.required !== false} disabled={!canEdit}
+              onChange={e => onPatchVerification({ required: e.target.checked })} />
+            Requires verification before registration
+          </label>
+
+          {verification.required !== false && (
+            <>
+              <label className="afield">What must be provided
+                <select value={verification.requires || 'none'} disabled={!canEdit}
+                  onChange={e => onPatchVerification({ requires: e.target.value })}>
+                  {REQUIRES_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </label>
+
+              {verification.requires === 'documents' && (
+                <label className="afield">Document checklist
+                  <select value={verification.checklist || ''} disabled={!canEdit}
+                    onChange={e => onPatchVerification({ checklist: e.target.value })}>
+                    {checklistNames.map(name => <option key={name} value={name}>{name}</option>)}
+                  </select>
+                </label>
+              )}
+
+              {verification.requires === 'jointApproval' && (
+                <label className="afield">Approval type
+                  <input type="text" value={verification.approvalType || ''} disabled={!canEdit}
+                    onChange={e => onPatchVerification({ approvalType: e.target.value })} />
+                </label>
+              )}
+
+              <NumField label="Deadline (days, 0 = none)" value={verification.deadlineDays ?? 0} disabled={!canEdit}
+                onChange={v => onPatchVerification({ deadlineDays: Math.max(0, v) })} />
+            </>
+          )}
+
+          {gate && (
+            <>
+              <div className="section-title" style={{ marginTop: 8 }}>Opportunity gate</div>
+              <label className="afield">Blocks from milestone
+                <select value={gate.milestone} disabled={!canEdit}
+                  onChange={e => onPatchGate({ milestone: e.target.value })}>
+                  {MILESTONES.map(m => <option key={m}>{m}</option>)}
+                </select>
+              </label>
+              <label className="afield">Severity
+                <select value={gate.severity} disabled={!canEdit}
+                  onChange={e => onPatchGate({ severity: e.target.value })}>
+                  {SEVERITY_OPTIONS.map(x => <option key={x}>{x}</option>)}
+                </select>
+              </label>
+              <div className="afield">Signed off by
+                <div className="admin-approver-options">
+                  {CLASS_APPROVER_OPTIONS.map(role => {
+                    const selected = (gate.approvers || []).includes(role)
+                    return <label key={role}>
+                      <input type="checkbox" checked={selected}
+                        disabled={!canEdit || (selected && (gate.approvers || []).length === 1)}
+                        onChange={e => {
+                          const current = gate.approvers || []
+                          const next = e.target.checked
+                            ? [...new Set([...current, role])]
+                            : current.filter(item => item !== role)
+                          if (next.length) onPatchGate({ approvers: next })
+                        }} />
+                      {role}
+                    </label>
+                  })}
+                </div>
+              </div>
+              {(gate.approvers || []).length > 1 && (
+                <label className="check-row">
+                  <input type="checkbox" checked={!!gate.anyOf} disabled={!canEdit}
+                    onChange={e => onPatchGate({ anyOf: e.target.checked })} />
+                  Any one of them is enough (otherwise all must sign)
+                </label>
+              )}
+              <label className="check-row">
+                <input type="checkbox" checked={gate.exceptionWaivable !== false} disabled={!canEdit}
+                  onChange={e => onPatchGate({ exceptionWaivable: e.target.checked })} />
+                May be waived by an approved milestone exception
+              </label>
+            </>
+          )}
+
+          <label className="afield">Payment terms on the proposal
+            <input type="text" value={rule?.paymentTerms || ''} disabled={!canEdit}
+              onChange={e => onPatch({ paymentTerms: e.target.value })} />
+          </label>
+        </div>
+      )}
     </div>
   )
 }
@@ -180,6 +309,7 @@ export default function Admin() {
   const [supplier, setSupplier] = useState('')
   const [plVersion, setPlVersion] = useState('')
   const [newKyc, setNewKyc] = useState('')
+  const [openClass, setOpenClass] = useState('')
   const [demoPassword, setDemoPassword] = useState('')
   const [demoUnlocked, setDemoUnlocked] = useState(false)
   const [demoPasswordError, setDemoPasswordError] = useState('')
@@ -299,6 +429,14 @@ export default function Admin() {
   const userCounts = ['Active', 'Pending', 'Suspended']
     .map(st => [st, (store.users || []).filter(u => u.status === st).length])
 
+  const classes = config.customerClasses || DEFAULT_CUSTOMER_CLASSES
+  const checklistNames = [...new Set([...Object.keys(config.documentChecklists || {}), 'kycItems'])]
+  // updateConfig is a shallow top-level merge, so the whole customerClasses
+  // object goes with every write — that also keeps it one audit entry.
+  const patchClass = (cls, patch) => store.updateConfig({
+    customerClasses: { ...classes, [cls]: { ...classes[cls], ...patch } },
+  })
+
   const thresholds = config.approvalThresholds || {}
   const aiTh = config.aiThresholds || {}
   const amber = config.amberFee || {}
@@ -315,14 +453,15 @@ export default function Admin() {
   }
 
   return (
-    <div className="page">
+    <div className="page admin-page">
       <h2>Admin — configuration</h2>
       <div className="toolbar">
         <span className="hint">Configuration is separated from demo data. Changes update behaviour immediately and are audited.</span>
         <span className="spacer" />
+        <button type="button" onClick={() => nav('/admin/workflow')}><Icon name="list" size={11} /> Configure workflow separately</button>
       </div>
 
-      <div className="admin-card demo-controls-card" style={{ marginBottom: 12 }}>
+      <div className="admin-card demo-controls-card">
         <h3><Icon name="shield" size={14} /> Demo data controls</h3>
         {!demoUnlocked ? (
           <form className="admin-actions" onSubmit={unlockDemoControls}>
@@ -357,7 +496,7 @@ export default function Admin() {
           {userCounts.map(([st, n]) => (
             <div key={st} className="arow"><span>{st} accounts</span><b>{n}</b></div>
           ))}
-          <div className="admin-actions">
+          <div className="admin-actions admin-actions-end">
             <button onClick={() => nav('/users')}><Icon name="users" size={11} /> Manage users &amp; roles</button>
           </div>
           <p className="hint">AI Copilot is a system actor, not a login role.</p>
@@ -368,9 +507,9 @@ export default function Admin() {
           <h3><Icon name="target" size={14} /> Ownership rules</h3>
           {(config.ownershipRules || []).map((r, i) => (
             <div key={i} className="arow">
-              <input type="text" value={r.region || ''} disabled={!canEdit} style={{ flex: 1, minWidth: 160 }}
+              <input type="text" value={r.region || ''} disabled={!canEdit}
                 onChange={e => patchList('ownershipRules', i, { region: e.target.value })} />
-              <select value={r.owner} disabled={!canEdit} style={{ width: 'auto' }}
+              <select value={r.owner} disabled={!canEdit}
                 onChange={e => patchList('ownershipRules', i, { owner: e.target.value })}>
                 {OWNERS.map(o => <option key={o}>{o}</option>)}
               </select>
@@ -384,8 +523,8 @@ export default function Admin() {
           <h3><Icon name="target" size={14} /> Owner by opportunity type</h3>
           {(config.ownerRules || []).map((r, i) => (
             <div key={r.oppType} className="arow">
-              <span style={{ flex: 1 }}>{r.oppType}</span>
-              <select value={r.owner} disabled={!canEdit} style={{ width: 'auto' }}
+              <span>{r.oppType}</span>
+              <select value={r.owner} disabled={!canEdit}
                 onChange={e => patchList('ownerRules', i, { owner: e.target.value })}>
                 {OWNERS.map(o => <option key={o}>{o}</option>)}
               </select>
@@ -398,11 +537,11 @@ export default function Admin() {
         <div className="admin-card">
           <h3><Icon name="target" size={14} /> State → region mapping</h3>
           <p className="hint">Which Ownership-rules region each Indian state/UT feeds into. Location text typed on lead intake is matched to a state, then routed here.</p>
-          <div style={{ maxHeight: 260, overflowY: 'auto' }}>
+          <div className="admin-scroll-list">
             {(config.stateRegions || []).map((r, i) => (
               <div key={r.code} className="arow">
-                <span style={{ flex: 1 }}>{r.name}</span>
-                <select value={r.region} disabled={!canEdit} style={{ width: 'auto' }}
+                <span>{r.name}</span>
+                <select value={r.region} disabled={!canEdit}
                   onChange={e => patchList('stateRegions', i, { region: e.target.value })}>
                   {REGION_OPTIONS.map(o => <option key={o}>{o}</option>)}
                 </select>
@@ -428,33 +567,50 @@ export default function Admin() {
             onChange={v => store.updateConfig({ approvalThresholds: { ...thresholds, valueBreak: v } })} />
           <NumField label="Margin break (%)" value={thresholds.marginBreak} disabled={!canEdit}
             onChange={v => store.updateConfig({ approvalThresholds: { ...thresholds, marginBreak: v } })} />
-          <p className="hint">Below value break &amp; margin above break → assigned salesperson self-approves. Below value break &amp; margin at/below break → AH or LJS. At/above value break → AH + LJS jointly.</p>
+          <NumField label="Max discount before approval (%)" value={thresholds.discountPct ?? 5} disabled={!canEdit}
+            onChange={v => store.updateConfig({ approvalThresholds: { ...thresholds, discountPct: Math.max(0, Math.min(100, v)) } })} />
+          <NumField label="Max markup before approval (%)" value={thresholds.markupPct ?? 10} disabled={!canEdit}
+            onChange={v => store.updateConfig({ approvalThresholds: { ...thresholds, markupPct: Math.max(0, Math.min(100, v)) } })} />
+          <div className="afield">Pricing approval required from
+            <div className="admin-approver-options">
+              {PRICING_APPROVER_OPTIONS.map(role => {
+                const selected = (thresholds.pricingApprovers || ['AH', 'LJS']).includes(role)
+                return <label key={role}>
+                  <input type="checkbox" checked={selected} disabled={!canEdit || (selected && (thresholds.pricingApprovers || ['AH', 'LJS']).length === 1)}
+                    onChange={e => {
+                      const current = thresholds.pricingApprovers || ['AH', 'LJS']
+                      const next = e.target.checked ? [...new Set([...current, role])] : current.filter(item => item !== role)
+                      if (next.length) store.updateConfig({ approvalThresholds: { ...thresholds, pricingApprovers: next } })
+                    }} />
+                  {role}
+                </label>
+              })}
+            </div>
+          </div>
+          <p className="hint">Values above the discount or markup limits require one approval from the selected role(s). Existing value/margin routing remains unchanged.</p>
         </div>
 
         {/* 5 — Customer-class rules & Amber fee */}
         <div className="admin-card">
           <h3><Icon name="flag" size={14} /> Customer-class rules &amp; Amber fee</h3>
+          <p className="hint">What each class must verify, who signs it off and where it gates. Open a class to edit it.</p>
           {CLASS_ORDER.map(cls => (
-            <div key={cls} className="arow">
-              <span className={`pill ${cls}`}>{cls}</span>
-              <input type="text" style={{ flex: 1, marginLeft: 8 }} disabled={!canEdit}
-                value={config.classRules?.[cls] || ''}
-                onChange={e => store.updateConfig({ classRules: { ...(config.classRules || {}), [cls]: e.target.value } })} />
-            </div>
+            <ClassRuleRow key={cls} cls={cls} rule={classes[cls]} canEdit={canEdit}
+              open={openClass === cls} onToggle={() => setOpenClass(openClass === cls ? '' : cls)}
+              checklistNames={checklistNames}
+              onPatch={patch => patchClass(cls, patch)}
+              onPatchVerification={patch => patchClass(cls, { verification: { ...classes[cls]?.verification, ...patch } })}
+              onPatchGate={patch => patchClass(cls, { gate: { ...classes[cls]?.gate, ...patch } })} />
           ))}
           <NumField label="Amber pre-quote processing fee (INR)" value={amber.amount} disabled={!canEdit}
             onChange={v => store.updateConfig({ amberFee: { ...amber, amount: v } })} />
-          <NumField label="Amber timer (days)" value={amber.days} disabled={!canEdit}
-            onChange={v => store.updateConfig({ amberFee: { ...amber, days: v } })} />
-          <p className="hint">Fee is adjustable against the order value once the PO lands.</p>
+          <p className="hint">Fee is adjustable against the order value once the PO lands. The Amber timer is on the Amber row above.</p>
         </div>
 
         {/* Lead workflow controls */}
         <div className="admin-card">
           <h3><Icon name="clock" size={14} /> Lead workflow controls</h3>
           <p className="hint">These rules control expiry and fast-track behavior for active leads.</p>
-          <NumField label="KYC deadline (days)" value={config.leadDeadlines?.kycDays ?? 7} disabled={!canEdit}
-            onChange={v => store.updateConfig({ leadDeadlines: { ...(config.leadDeadlines || {}), kycDays: v } })} />
           <NumField label="Clarification deadline (days)" value={config.leadDeadlines?.clarificationDays ?? 7} disabled={!canEdit}
             onChange={v => store.updateConfig({ leadDeadlines: { ...(config.leadDeadlines || {}), clarificationDays: v } })} />
           <NumField label="Proposal validity (days)" value={config.proposalValidityDays ?? 30} disabled={!canEdit}
@@ -501,7 +657,7 @@ export default function Admin() {
           {canEdit && (
             <div className="admin-actions">
               <input type="text" value={newKyc} placeholder="New checklist item"
-                style={{ flex: 1, minWidth: 140 }} onChange={e => setNewKyc(e.target.value)} />
+                onChange={e => setNewKyc(e.target.value)} />
               <button onClick={() => {
                 const v = newKyc.trim()
                 if (v && !config.kycItems.includes(v)) store.updateConfig({ kycItems: [...config.kycItems, v] })
@@ -529,16 +685,16 @@ export default function Admin() {
         </div>
 
         {/* 8 — Document uploads */}
-        <div className="admin-card" style={{ gridColumn: '1 / -1' }}>
+        <div className="admin-card admin-card-wide">
           <h3><Icon name="upload" size={14} /> Document uploads</h3>
           <p className="hint">Metadata only in the demo — file contents are not stored.</p>
 
           <div className="section-title" style={{ marginTop: 6 }}>Supplier price list</div>
           <div className="admin-actions">
             <input type="text" value={supplier} placeholder="Supplier (e.g. B&K)" disabled={!canEdit}
-              style={{ flex: 1, minWidth: 120 }} onChange={e => setSupplier(e.target.value)} />
+              onChange={e => setSupplier(e.target.value)} />
             <input type="text" value={plVersion} placeholder="Version (e.g. 2026-Q3)" disabled={!canEdit}
-              style={{ flex: 1, minWidth: 120 }} onChange={e => setPlVersion(e.target.value)} />
+              onChange={e => setPlVersion(e.target.value)} />
             <FileButton primary label="Upload price list" disabled={!canEdit}
               onFile={f => {
                 store.addUpload('priceLists', {
@@ -559,7 +715,7 @@ export default function Admin() {
                 onFile={f => store.addUpload('interchangeability', { name: f.name, size: f.size })} />
             </div>
           ) : (
-            <div className="admin-actions">
+            <div className="admin-actions admin-actions-end">
               <FileButton primary label="Upload matrix" disabled={!canEdit}
                 onFile={f => store.addUpload('interchangeability', { name: f.name, size: f.size })} />
             </div>
@@ -574,7 +730,7 @@ export default function Admin() {
                 onFile={f => store.addUpload('customerClassification', { name: f.name, size: f.size })} />
             </div>
           ) : (
-            <div className="admin-actions">
+            <div className="admin-actions admin-actions-end">
               <FileButton primary label="Upload classification" disabled={!canEdit}
                 onFile={f => store.addUpload('customerClassification', { name: f.name, size: f.size })} />
             </div>
@@ -582,7 +738,7 @@ export default function Admin() {
         </div>
 
         {/* 9 — Templates & reminders */}
-        <div className="admin-card" style={{ gridColumn: '1 / -1' }}>
+        <div className="admin-card admin-card-wide">
           <h3><Icon name="fileText" size={14} /> Proposal templates &amp; reminder rules</h3>
           <p className="hint">Current Excel templates are stored in Supabase. Replacements become active immediately and prior versions remain available below.</p>
           {templateError && <div className="errbox" role="alert">{templateError}</div>}
@@ -623,21 +779,6 @@ export default function Admin() {
           ))}
         </div>
 
-        {templatePreview && (
-          <Modal title={`${templatePreview.info.name || templatePreview.info.filename} — ${templatePreview.lane} template`}
-            onClose={() => { if (!templateBusy) setTemplatePreview(null) }} wide className="proposal-preview-modal">
-            <div className="proposal-preview-toolbar">
-              <span className="hint">Edit the workbook template, then save it as a new current version.</span>
-              <span style={{ display: 'inline-flex', gap: 6 }}>
-                <button type="button" className="primary" disabled={!canEdit || !templateDirty || !!templateBusy} onClick={saveTemplateEdits}>Save changes</button>
-                <button type="button" onClick={() => setTemplatePreview(null)} disabled={!!templateBusy}>Close</button>
-              </span>
-            </div>
-            <WorkbookPreview workbook={templatePreview.workbook} editable={canEdit} onChange={updatePreviewCell}
-              loading={templatePreviewBusy} error={templatePreviewError} />
-          </Modal>
-        )}
-
         {/* 10 — Connector state */}
         <div className="admin-card">
           <h3><Icon name="globe" size={14} /> Connector state</h3>
@@ -663,10 +804,10 @@ export default function Admin() {
         <SharePointCard canEdit={canEdit} />
 
         {/* 12 — AI model configuration */}
-        <div className="admin-card" style={{ gridColumn: '1 / -1' }}>
+        <div className="admin-card admin-card-wide">
           <h3>
             <Icon name="sparkles" size={14} /> AI model configuration
-            <span style={{ marginLeft: 'auto' }}>
+            <span className="h3-end">
               {provider === FALLBACK_PROVIDER
                 ? <Chip tone="state-Review">Built-in fallback</Chip>
                 : testResult?.ok
@@ -682,7 +823,7 @@ export default function Admin() {
             lives in that function's secrets and never reaches this browser.
             {ai.updatedBy ? <> Active: <b>{ai.provider} — {isCustomModel(ai.model) ? (ai.customModel || '(model id not set)') : ai.model}</b> · set by {ai.updatedBy} on {ai.updatedOn}</> : null}
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '0 12px' }}>
+          <div className="admin-field-grid">
             <label className="afield">Provider
               <select value={provider} disabled={!canEdit}
                 onChange={e => { setProvider(e.target.value); setModel('') }}>
@@ -702,7 +843,7 @@ export default function Admin() {
                 onChange={e => setApiKey(e.target.value)} />
             </label>}
           </div>
-          <div className="admin-actions">
+          <div className="admin-actions admin-actions-end">
             <button className="primary" disabled={!canEdit || savingAi} onClick={saveAi}>Save configuration</button>
             <button disabled={!canEdit || testing || savingAi || provider === FALLBACK_PROVIDER} onClick={testAi}>
               <Icon name="play" size={11} /> Test connection
@@ -729,6 +870,21 @@ export default function Admin() {
         </div>
 
       </div>
+
+      {templatePreview && (
+        <Modal title={`${templatePreview.info.name || templatePreview.info.filename} — ${templatePreview.lane} template`}
+          onClose={() => { if (!templateBusy) setTemplatePreview(null) }} wide className="proposal-preview-modal">
+          <div className="proposal-preview-toolbar">
+            <span className="hint">Edit the workbook template, then save it as a new current version.</span>
+            <span style={{ display: 'inline-flex', gap: 6 }}>
+              <button type="button" className="primary" disabled={!canEdit || !templateDirty || !!templateBusy} onClick={saveTemplateEdits}>Save changes</button>
+              <button type="button" onClick={() => setTemplatePreview(null)} disabled={!!templateBusy}>Close</button>
+            </span>
+          </div>
+          <WorkbookPreview workbook={templatePreview.workbook} editable={canEdit} onChange={updatePreviewCell}
+            loading={templatePreviewBusy} error={templatePreviewError} />
+        </Modal>
+      )}
     </div>
   )
 }

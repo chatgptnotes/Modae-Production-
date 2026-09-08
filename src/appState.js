@@ -6,7 +6,7 @@ import {
   seedRateSheets, seedSvcEstimates, seedClarifications, seedHandover,
   seedAiLeads, seedJointApprovals, seedCatalogRev,
   seedPoCompare, milestoneForStage, routeForType, contextForType,
-  ROLES, B_STEPS, defaultBStepOwners,
+  ROLES, B_STEPS, defaultBStepOwners, DEFAULT_WORKFLOW,
 } from './seed.js'
 import { normalizePriceFields } from './pricing.js'
 
@@ -69,12 +69,59 @@ export function migrate(s) {
   if (!Array.isArray(s.audit)) s.audit = []
   // ---- phase 2 slices ----
   if (!s.config) s.config = seedConfig
+  s.config.approvalThresholds = { ...seedConfig.approvalThresholds, ...(s.config.approvalThresholds || {}) }
+  if (!Array.isArray(s.config.approvalThresholds.pricingApprovers) || !s.config.approvalThresholds.pricingApprovers.length) {
+    s.config.approvalThresholds.pricingApprovers = [...seedConfig.approvalThresholds.pricingApprovers]
+  }
   s.config.leadDeadlines = { ...seedConfig.leadDeadlines, ...(s.config.leadDeadlines || {}) }
   if (!Number.isFinite(Number(s.config.proposalValidityDays)) || Number(s.config.proposalValidityDays) < 1) s.config.proposalValidityDays = seedConfig.proposalValidityDays
   s.config.fastTrack = { ...seedConfig.fastTrack, ...(s.config.fastTrack || {}) }
   s.config.classRules = { ...seedConfig.classRules, ...(s.config.classRules || {}) }
+  // Customer-class rules moved from hardcoded branches into config. Merge per
+  // class (and per sub-object) so a state that has edited one class keeps that
+  // edit while still picking up fields added later. Two legacy values are
+  // adopted on the first run: the Amber timer the Admin page used to write to a
+  // key nothing read, and the per-class payment terms from classRules.
+  {
+    const saved = s.config.customerClasses || {}
+    const legacyDays = {
+      Blue: s.config.leadDeadlines?.kycDays,
+      Amber: s.config.amberFee?.days ?? s.config.leadDeadlines?.amberFeeDays,
+    }
+    const mergeSub = (defSub, prevSub) => {
+      if (prevSub === null) return null
+      if (!defSub) return prevSub ?? null
+      return { ...defSub, ...(prevSub || {}) }
+    }
+    s.config.customerClasses = Object.fromEntries(
+      Object.entries(seedConfig.customerClasses).map(([cls, def]) => {
+        const prev = saved[cls] || {}
+        const days = prev.verification?.deadlineDays
+          ?? (def.verification?.deadlineDays ? legacyDays[cls] : undefined)
+          ?? def.verification?.deadlineDays
+        return [cls, {
+          ...def, ...prev,
+          verification: { ...mergeSub(def.verification, prev.verification), deadlineDays: Number(days) || 0 },
+          gate: mergeSub(def.gate, prev.gate),
+          advisory: mergeSub(def.advisory, prev.advisory),
+          paymentTerms: prev.paymentTerms ?? s.config.classRules?.[cls] ?? def.paymentTerms,
+        }]
+      }))
+    // Keep any class a state carries beyond the four seeded ones.
+    for (const [cls, rule] of Object.entries(saved)) {
+      if (!s.config.customerClasses[cls]) s.config.customerClasses[cls] = rule
+    }
+  }
+  s.config.documentChecklists = { ...seedConfig.documentChecklists, ...(s.config.documentChecklists || {}) }
   if (!Array.isArray(s.config.stateRegions)) s.config.stateRegions = seedConfig.stateRegions
   if (!Array.isArray(s.config.ownerRules)) s.config.ownerRules = seedConfig.ownerRules
+  if (!Array.isArray(s.config.workflow) || !s.config.workflow.length) s.config.workflow = DEFAULT_WORKFLOW.map(x => ({ ...x }))
+  s.config.workflow = s.config.workflow.map((stage, i) => ({
+    ...DEFAULT_WORKFLOW[i], ...stage,
+    id: stage.id || DEFAULT_WORKFLOW[i]?.id || `stage-${i + 1}`,
+    order: Number.isFinite(Number(stage.order)) ? Number(stage.order) : i,
+    enabled: stage.enabled !== false,
+  }))
   if (!s.config.uploads) s.config.uploads = seedConfig.uploads
   if (!Array.isArray(s.config.uploads.proposalTemplates)) s.config.uploads.proposalTemplates = seedConfig.uploads.proposalTemplates || []
   if (!s.config.aiModel) s.config.aiModel = seedConfig.aiModel
@@ -265,7 +312,7 @@ export function emptyState(prev) {
     ...prev,
     demoData: false,
     opportunities: [], leads: [], leadArchive: [], leadDeadlines: [],
-    approvals: [], audit: [], customers: [],
+    approvals: [], customers: [],
     sparesLines: [], sparesAlternatives: [], svcEstimates: [], clarifications: [], vendorQuotes: [],
     surveys: [], competitors: [],
     files: {}, proposals: {}, communications: {}, kyc: {},

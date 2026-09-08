@@ -121,7 +121,7 @@ export default function Users() {
       {canManage && pending.length > 0 && (
         <>
           <div className="section-title">Awaiting approval ({pending.length})</div>
-          <div className="sheet-wrap" style={{ maxWidth: 760, marginBottom: 14 }}>
+          <div className="sheet-wrap sheet-wrap-fill" style={{ marginBottom: 14 }}>
             <table className="sheet">
               <tbody>
                 {pending.map(u => (
@@ -141,7 +141,7 @@ export default function Users() {
       )}
 
       <div className="section-title">Accounts ({store.users.length})</div>
-      <div className="sheet-wrap" style={{ maxWidth: 900 }}>
+      <div className="sheet-wrap sheet-wrap-fill">
         <table className="sheet">
           <thead>
             <tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Created</th>{canManage && <><th>Edit</th><th>Actions</th></>}</tr>

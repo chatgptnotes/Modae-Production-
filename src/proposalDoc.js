@@ -8,6 +8,7 @@ import { productLabel } from './utils.js'
 import { routeForType } from './seed.js'
 import { MODAE_STANDARD_TERMS } from './tenderParse.js'
 import { MODAE_BRAND } from './branding/modae.js'
+import { classRule } from './customerClasses.js'
 
 export const MODAE_COMPANY = {
   name: MODAE_BRAND.letterhead.legalName,
@@ -33,11 +34,11 @@ export const PROP_SECTIONS = [
 // Rule-based commercial-term suggestions (AI-labelled in the UI): payment by
 // customer class, delivery by route, standard validity and warranty.
 export function recommendTerms(opp, config = {}) {
-  const payment = config.classRules?.[opp.customerStatus]
-    || (opp.customerStatus === 'Green' ? '30 days credit from invoice'
-    : opp.customerStatus === 'Blue' ? '50% advance, balance on delivery'
-    : opp.customerStatus === 'Amber' ? '100% advance before dispatch'
-    : '100% prepayment only')
+  // Per-class payment terms live on the class rule; classRules is the legacy
+  // key kept for states saved before the rules became configurable.
+  const payment = classRule(config, opp.customerStatus)?.paymentTerms
+    || config.classRules?.[opp.customerStatus]
+    || '100% prepayment only'
   const delivery = opp.route === 'Spares' ? '6-8 weeks ex-works'
     : opp.route === 'Service' ? 'Engineer mobilisation within 2 weeks of PO'
     : '16-20 weeks per milestone schedule'

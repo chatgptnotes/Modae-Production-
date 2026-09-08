@@ -228,7 +228,7 @@ export default function Folders() {
             <button onClick={addMockFile}><Icon name="upload" size={13} /> Upload (mock)</button>
           )}
         </div>
-        <div className="sheet-wrap" style={{ maxWidth: 720 }}>
+        <div className="sheet-wrap sheet-wrap-fill">
           <table className="sheet">
             <thead><tr><th>Name</th><th>Date modified</th><th>Size</th><th style={{ width: 60 }}></th></tr></thead>
             <tbody>
@@ -295,7 +295,7 @@ export default function Folders() {
       <div className="hint" style={{ marginBottom: 12 }}>
         {opp.sellTo} · EUC: {opp.eucName} ({opp.eucLocation}) · Owner {displayRole(opp.owner)}
       </div>
-      <div className="folder-grid" style={{ maxWidth: 640 }}>
+      <div className="folder-grid">
         {subNames.map(sf => {
           const count = (files[sf] || []).length + (sf === 'Proposal' && !(files.Proposal || []).some(fl => fl.name.endsWith('.xlsx')) ? 1 : 0)
           return (

@@ -67,7 +67,7 @@ export default function PriceLists() {
         </div>
       )}
 
-      <div className="sheet-wrap" style={{ maxWidth: 900 }}>
+      <div className="sheet-wrap sheet-wrap-fill">
         <table className="sheet">
           <thead><tr><th>Part Number</th><th>Description</th><th>Price ({pl.currency})</th><th>Configurable Adders</th></tr></thead>
           <tbody>
@@ -86,7 +86,7 @@ export default function PriceLists() {
       <div className="hint" style={{ marginBottom: 6 }}>
         Every trader quote for a non-price-list part is captured here with its date; the latest entry becomes the reference price for future quotes.
       </div>
-      <div className="sheet-wrap" style={{ maxWidth: 900 }}>
+      <div className="sheet-wrap sheet-wrap-fill">
         <table className="sheet">
           <thead><tr><th>Part Number</th><th>Supplier</th><th>Price</th><th>Currency</th><th>Quoted On</th><th>Note</th></tr></thead>
           <tbody>

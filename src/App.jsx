@@ -25,6 +25,7 @@ import Audit from './pages/Audit.jsx'
 import VoiceUpdate from './pages/VoiceUpdate.jsx'
 import AiMap from './pages/AiMap.jsx'
 import Admin from './pages/Admin.jsx'
+import WorkflowAdmin from './pages/WorkflowAdmin.jsx'
 import Login, { RequireAuth } from './pages/Login.jsx'
 import Register from './pages/Register.jsx'
 import Workbench from './pages/Workbench.jsx'
@@ -77,6 +78,7 @@ const NAV = [
   { to: '/pricelists', label: 'Price Lists', icon: 'tag', page: 'pricelists' },
   { to: '/customers', label: 'Customers', icon: 'users', page: 'customers' },
   { to: '/admin', label: 'Admin', icon: 'gear', page: 'admin' },
+  { to: '/admin/workflow', label: 'Workflow settings', icon: 'list', page: 'admin' },
   { to: '/audit', label: 'Audit Trail', icon: 'list', page: 'audit' },
   { to: '/users', label: 'Users and roles', icon: 'shield', page: 'users' },
   { to: '/launcher', label: 'Demo launcher', icon: 'play', page: 'launcher', show: role => isAdminRole(role) },
@@ -167,6 +169,7 @@ export default function App() {
       <Route path="/users" element={<PageGate page="users"><Users /></PageGate>} />
       <Route path="/aimap" element={<PageGate page="aimap"><AiMap /></PageGate>} />
       <Route path="/admin" element={<PageGate page="admin"><Admin /></PageGate>} />
+      <Route path="/admin/workflow" element={<PageGate page="admin"><WorkflowAdmin /></PageGate>} />
       <Route path="/launcher" element={<PageGate page="launcher"><Launcher /></PageGate>} />
       {PORTAL_ENABLED && <Route path="/portal" element={<PageGate page="portal"><Portal /></PageGate>} />}
       <Route path="/voice" element={<PageGate page="voice"><VoiceUpdate /></PageGate>} />

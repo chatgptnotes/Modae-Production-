@@ -17,7 +17,7 @@ import DetailTabs from '../DetailTabs.jsx'
 import { findDuplicates } from '../insights.js'
 import { leadWorkflow } from '../leadWorkflow.js'
 import { parseLeadLineItems } from '../tenderParse.js'
-import { deterministicLeadRoute, leadTextChunks, mergeLeadResults } from '../leadExtraction.js'
+import { deterministicLeadRoute, leadTextChunks, mergeLeadResults, cleanDisplayValue } from '../leadExtraction.js'
 import { scanAttachment, parsedToLeadFields, deterministicPromptContext, mergeDeterministicIntoAi } from '../docScan.js'
 import { buildLeadProposalData } from '../leadBoq.js'
 import { isFastTrackLead, routeOwner, supplyMissing } from '../leadRules.js'
@@ -27,7 +27,8 @@ import {
   QUOTE_FEE_DOCUMENTS, answeredPatch, clarificationItems, clarificationKindFor,
   clarificationSender, draftClarification, draftPatch, senderLabel, sentPatch,
 } from '../leadClarification.js'
-import { BLUE_KYC_ITEMS, leadVerificationComplete, verificationDeadline, verificationItem, redClearanceFor, isRedCleared } from '../leadVerification.js'
+import { leadVerificationComplete, verificationDeadline, verificationItem, redClearanceFor, isRedCleared } from '../leadVerification.js'
+import { checklistFor } from '../customerClasses.js'
 // Common-mailbox lead inbox: AI parses each inquiry, a human decides whether it
 // becomes an opportunity (Qualify → registration / intake form) or is dropped.
 const PILL = { New: 'Blue', Qualified: 'Amber', Dropped: 'Red', Converted: 'Green' }
@@ -173,8 +174,8 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
     const fields = []
     if (from?.trim()) fields.push({ group: 'Customer', k: 'Sender', v: from.trim(), conf: 45, ev: 'From address', note: 'Confirm the customer and contact person.' })
     if (subject?.trim()) fields.push({ group: 'RFQ', k: 'Subject', v: subject.trim(), conf: 55, ev: 'Email subject', note: 'Confirm the opportunity name and route.' })
-    if (body?.trim()) fields.push({ group: 'RFQ', k: 'Email body', v: body.trim().slice(0, 2000), conf: 35, ev: 'Email body', note: 'Fallback preview; the complete source is retained separately. Structure the requested scope and quantities.' })
-    if (attachmentText) fields.push({ group: 'RFQ', k: 'Attachment content', v: attachmentText.slice(0, 4000), conf: 45, ev: 'Attached document content', note: 'Fallback preview; the complete source is retained separately. Confirm the scope, quantities and specifications.' })
+    if (body?.trim()) fields.push({ group: 'RFQ', k: 'Email body', v: sliceAtWordBoundary(cleanDisplayValue(body), 2000), conf: 35, ev: 'Email body', note: 'Fallback preview; the complete source is retained separately. Structure the requested scope and quantities.' })
+    if (attachmentText) fields.push({ group: 'RFQ', k: 'Attachment content', v: sliceAtWordBoundary(cleanDisplayValue(attachmentText), 4000), conf: 45, ev: 'Attached document content', note: 'Fallback preview; the complete source is retained separately. Confirm the scope, quantities and specifications.' })
     const missing = ['Customer name', 'Opportunity scope', 'Required quantities and specifications']
     const lineItems = parseLeadLineItems(`${body || ''}\n${attachmentText}`)
     if (attachmentText) missing.splice(missing.indexOf('Opportunity scope'), 1)
@@ -190,7 +191,7 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
       suggestedOwner: ownerForOppType(route === 'Spares' ? 'Spares' : route === 'Service' ? 'Service' : 'Project', store.config),
       ai: {
         summary: `AI extraction was unavailable${aiResult.error ? `: ${aiResult.error}` : ''}. The original enquiry was saved for manual structuring.`,
-        fields: fields.map(f => ({ ...f, state: 'pending' })),
+        fields: fields.map(f => ({ ...f, v: cleanDisplayValue(f.v), state: 'pending' })),
         lineItems,
         missing,
         duplicates: [],
@@ -219,7 +220,7 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
     suggestedOwner: owner,
     ai: {
       summary: ai.summary || '',
-      fields: resolvedFields.map(f => ({ ...f, conf: Math.max(0, Math.min(100, Math.round(f.conf ?? 0))), state: 'pending' })),
+      fields: resolvedFields.map(f => ({ ...f, v: cleanDisplayValue(f.v), conf: Math.max(0, Math.min(100, Math.round(f.conf ?? 0))), state: 'pending' })),
       lineItems: (Array.isArray(ai.lineItems) && ai.lineItems.length
         ? ai.lineItems
         : parseLeadLineItems(`${body || ''}\n${attachmentText}`)).map(x => ({
@@ -250,6 +251,9 @@ function LeadVerification({ lead, customerStatus, store }) {
   const verification = lead.verification || {}
   const editable = !['Converted', 'Dropped'].includes(lead.status)
   const deadline = verificationDeadline(lead, customerStatus, store.config)
+  // Was a hardcoded "within 1 week" on both cards, which ignored the
+  // configured deadline entirely.
+  const windowLabel = deadline?.days ? `within ${deadline.days} day${deadline.days === 1 ? '' : 's'}` : 'on request'
   const dateLabel = value => value
     ? new Date(value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
     : '—'
@@ -272,7 +276,7 @@ function LeadVerification({ lead, customerStatus, store }) {
       state: 'Verified', mode, verifiedAt: new Date().toISOString(), ...fileMeta,
     }
     const nextKyc = { ...(verification.kyc || {}), [item]: itemRecord }
-    const complete = BLUE_KYC_ITEMS.every(name => nextKyc[name]?.state === 'Verified')
+    const complete = checklistFor(store.config, customerStatus).every(name => nextKyc[name]?.state === 'Verified')
     store.updateLead(lead.id, {
       verification: {
         ...verification,
@@ -302,7 +306,7 @@ function LeadVerification({ lead, customerStatus, store }) {
     const confirmed = verification.payment?.state === 'Confirmed'
     return (
       <div className="lead-decision-card" style={{ marginTop: 12 }}>
-        <div className="lead-decision-head"><div><b>Amber customer — fee request</b><span>Customer pays the processing fee within 1 week</span></div>
+        <div className="lead-decision-head"><div><b>Amber customer — fee request</b><span>Customer pays the processing fee {windowLabel}</span></div>
           <span className={confirmed ? 'lead-decision-saved' : 'lead-decision-note'}>{confirmed ? 'Confirmed' : 'Pending'}</span></div>
         <div className="verification-deadline">
           <span><b>Request sent:</b> {dateLabel(deadline?.requestedAt)}</span>
@@ -322,9 +326,9 @@ function LeadVerification({ lead, customerStatus, store }) {
 
   if (customerStatus === 'Blue') return (
     <div className="lead-decision-card" style={{ marginTop: 12 }}>
-      <div className="lead-decision-head"><div><b>Blue customer — KYC request</b><span>Customer shares KYC documents within 1 week</span></div>
-        <span className={leadVerificationComplete(lead, customerStatus) ? 'lead-decision-saved' : 'lead-decision-note'}>
-          {leadVerificationComplete(lead, customerStatus) ? 'Verified' : 'Pending'}
+      <div className="lead-decision-head"><div><b>Blue customer — KYC request</b><span>Customer shares KYC documents {windowLabel}</span></div>
+        <span className={leadVerificationComplete(lead, customerStatus, { config: store.config }) ? 'lead-decision-saved' : 'lead-decision-note'}>
+          {leadVerificationComplete(lead, customerStatus, { config: store.config }) ? 'Verified' : 'Pending'}
         </span></div>
       <div className="verification-deadline">
         <span><b>Request sent:</b> {dateLabel(deadline?.requestedAt)}</span>
@@ -332,7 +336,7 @@ function LeadVerification({ lead, customerStatus, store }) {
         <span className={deadline?.expired ? 'deadline-overdue' : ''}><b>{deadlineLabel}</b></span>
       </div>
       <div style={{ display: 'grid', gap: 7 }}>
-        {BLUE_KYC_ITEMS.map(item => {
+        {checklistFor(store.config, customerStatus).map(item => {
           const row = verificationItem(verification, item)
           const pending = pendingUpload?.item === item
           return <div key={item} className="check-row">
@@ -361,7 +365,7 @@ function LeadVerification({ lead, customerStatus, store }) {
           </div>
         })}
       </div>
-      {!leadVerificationComplete(lead, customerStatus) && <p className="lead-decision-note">Customer KYC is not complete — Opportunity creation is blocked.</p>}
+      {!leadVerificationComplete(lead, customerStatus, { config: store.config }) && <p className="lead-decision-note">Customer KYC is not complete — Opportunity creation is blocked.</p>}
     </div>
   )
 
@@ -586,7 +590,16 @@ export const customerStatusForLead = (lead, customers) =>
 
 const leadFieldValue = (fields, pattern) => {
   const field = (fields || []).find(f => pattern.test(f.k) && f.state !== 'rejected')
-  return field?.v || ''
+  return field?.v ? cleanDisplayValue(field.v) : ''
+}
+
+// Avoids landing mid-word; only backs off within the last ~40 chars of the
+// cut so it can't runaway-shrink a field to near-empty on unusual input.
+const sliceAtWordBoundary = (text, maxLen) => {
+  if (text.length <= maxLen) return text
+  const cut = text.slice(0, maxLen)
+  const lastSpace = cut.lastIndexOf(' ')
+  return (lastSpace > maxLen - 40 ? cut.slice(0, lastSpace) : cut).trimEnd() + '…'
 }
 
 const REQUIRED_IDENTITY_FIELDS = [
@@ -815,8 +828,8 @@ function AiLeadDetail({ lead }) {
   const previewCustomerStatus = decisionDraft.customerStatus || leadCustomerStatus
   const previewLead = { ...lead, customerStatus: previewCustomerStatus, redFlag: previewCustomerStatus === 'Red' }
   const isRed = previewCustomerStatus === 'Red'
-  const redApproval = redClearanceFor(store.approvals, lead.id)
-  const redCleared = isRedCleared(redApproval)
+  const redApproval = redClearanceFor(store.approvals, lead.id, store.config)
+  const redCleared = isRedCleared(redApproval, store.config)
   // A Returned clearance is not a decision, it is a request for rework — so the
   // salesperson must be able to raise it again. Without this the ErrBox showed
   // "Returned" with nowhere to go, and the Approvals page had no route back
@@ -895,7 +908,7 @@ function AiLeadDetail({ lead }) {
     : `${decisionDraft.oppType} opportunity-type rule`
 
   const qualifyBlocked = isRed && !redCleared
-  const verificationBlocked = !leadVerificationComplete(lead, previewCustomerStatus, { redCleared })
+  const verificationBlocked = !leadVerificationComplete(lead, previewCustomerStatus, { redCleared, config: store.config })
   const missingIdentity = REQUIRED_IDENTITY_FIELDS
     .filter(([key]) => !String(decisionDraft[key] || '').trim())
     .map(([, label]) => label)
