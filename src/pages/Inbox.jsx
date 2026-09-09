@@ -2183,7 +2183,7 @@ export default function Inbox() {
         </div>
         <div className="mail-column-head">
           <span></span><span></span><span><select className={`mail-head-filter ${receivedF ? 'active' : ''}`} value={receivedF} onChange={e => setReceivedF(e.target.value)} aria-label="Filter by received date"><option value="">Received</option><option value="today">Today</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select></span>
-          <span>{filterSelect(sourceF, setSourceF, 'Source / sender', sourceOptions)}</span><span title="Subject / preview">Subject / preview</span>
+          <span>{filterSelect(sourceF, setSourceF, 'Source / sender', sourceOptions)}</span><span className="mail-subject-head" title="Subject / preview">Subject / preview</span>
           <span>{filterSelect(routeF, setRouteF, 'AI route', ROUTE_OPTIONS)}</span>
           <span>{filterSelect(urgencyF, setUrgencyF, 'Urgency', ['Normal', 'Urgent'])}</span>
           <span>{filterSelect(duplicateF, setDuplicateF, 'Dup. risk', ['Low', 'Medium', 'High'])}</span>
@@ -2202,7 +2202,11 @@ export default function Inbox() {
               <button className={`mail-star ${l.starred ? 'starred' : ''}`} title={l.starred ? 'Remove star' : 'Star'} onClick={e => { e.stopPropagation(); store.updateLead(l.id, { starred: !l.starred }) }}><Icon name="star" size={15} /></button>
               <div className="mail-date"><b>{ddMmmYY((l.ts || '').slice(0, 10))}</b><small>{receivedTime(l.ts)}</small></div>
               <div className="mail-sender" title={[l.source || l.channel || 'Common mailbox', l.sender || l.from].filter(Boolean).join(' — ')}><b>{l.source || l.channel || 'Common mailbox'}</b><small>{l.sender || l.from}</small></div>
-              <div className="mail-content" title={l.subject}><b>{l.subject}</b>{l.ref && <span className="mail-ref"> · {l.ref}</span>}{l.status === 'Converted' && l.oppId && <button className="mail-opportunity-link" onClick={e => { e.stopPropagation(); nav('/opp/' + l.oppId) }} title="Open linked opportunity"><span className="pill Green">Opportunity</span> {l.oppId}</button>}<small>{l.ai?.summary || l.body?.replace(/\s+/g, ' ').slice(0, 130) || 'No preview available'}</small></div>
+              <div className="mail-content" title={l.subject}>
+                <div className="mail-subject-line"><b>{l.subject}</b>{l.ref && <span className="mail-ref"> · {l.ref}</span>}</div>
+                {l.status === 'Converted' && l.oppId && <button className="mail-opportunity-link" onClick={e => { e.stopPropagation(); nav('/opp/' + l.oppId) }} title="Open linked opportunity"><span className="pill Green">Opportunity</span> {l.oppId}</button>}
+                <small>{l.ai?.summary || l.body?.replace(/\s+/g, ' ').slice(0, 130) || 'No preview available'}</small>
+              </div>
               <div><Chip tone="grey">{route}</Chip></div>
               <div><Chip tone={l.urgency === 'Urgent' ? 'state-Rejected' : 'grey'}>{l.urgency || 'Normal'}</Chip></div>
               <div><Chip tone={l.duplicateRisk === 'Medium' || l.duplicateRisk === 'High' ? 'conf-med' : 'grey'}>{l.duplicateRisk || 'Low'}</Chip></div>

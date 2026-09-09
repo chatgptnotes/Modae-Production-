@@ -63,6 +63,27 @@ test('revision categories no longer route to Brownfield sign-off steps', () => {
   assert.doesNotMatch(store, /back to \$\{spec\.step\}|delete steps\[spec\.step\]/)
 })
 
+test('follow-up communications keep message bodies inside expandable rows', () => {
+  const workbench = read('src/pages/Workbench.jsx')
+  assert.match(workbench, /<details key=\{c\.id \|\| `\$\{c\.ts\}-\$\{i\}`\} className="communication-disclosure">/)
+  assert.match(workbench, /<summary className="communication-summary">/)
+  assert.match(workbench, /className="communication-expanded-body">\{c\.body\}/)
+  assert.doesNotMatch(workbench, /<div className="hint">\{c\.body\}<\/div>/)
+})
+
+test('follow-up panels use a compact aligned responsive grid', () => {
+  const workbench = read('src/pages/Workbench.jsx')
+  const styles = read('src/styles.css')
+  assert.match(workbench, /<div className="ana-grid follow-up-grid">/)
+  assert.equal((workbench.match(/follow-up-panel/g) || []).length, 6)
+  assert.match(workbench, /className="follow-up-control-row revision-control-row"/)
+  assert.match(workbench, /className="follow-up-control-row competitor-control-row"/)
+  assert.match(workbench, /className="follow-up-form-stack"/)
+  assert.match(styles, /\.follow-up-grid \{ align-items: stretch;/)
+  assert.match(styles, /\.follow-up-panel \{ display: flex; min-width: 0; flex-direction: column;/)
+  assert.match(styles, /@media \(max-width: 760px\) \{[\s\S]*\.follow-up-panel \{ grid-column: span 12;/)
+})
+
 
 
 test('spares confirmation workbench is reachable before Sourcing advances', () => {

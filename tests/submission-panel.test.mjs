@@ -45,14 +45,18 @@ test('extra files can be attached, listed and removed before sending', () => {
   assert.match(submission, /Attach files/)
 })
 
-// The governed documents still ride along automatically — the picker only
-// adds to the workbook and enclosures, it never replaces them.
-test('sending still carries the proposal workbook and the governed enclosures', () => {
-  assert.match(submission, /enclosureAttachments\(route\)/)
-  assert.match(submission, /\.\.\.enclosures/)
+// The Gmail compose draft records the governed documents that the salesperson
+// must attach before submitting the message.
+test('sending opens Gmail with the proposal and governed enclosure list', () => {
+  assert.match(submission, /gmailComposeHref/)
+  assert.match(submission, /window\.open\(href, '_blank', 'noopener'\)/)
+  assert.match(submission, /attachments\.forEach\(downloadAttachment\)/)
   assert.match(submission, /proposalWorkbookAttachment/)
+  assert.match(submission, /enclosureAttachments\(route\)/)
+  assert.match(submission, /enclosuresFor\(route\)\.map\(a => a\.filename\)/)
+  assert.match(submission, /Open Gmail compose/)
   assert.match(submission, /cc: emailCc/)
-  assert.match(submission, /fetch\('\/api\/send-proposal-email'/)
+  assert.doesNotMatch(submission, /fetch\('\/api\/send-proposal-email'/)
 })
 
 test('proposal message can be created by AI and remains editable', () => {
@@ -104,9 +108,16 @@ test('workbook preview resets scroll position when the worksheet changes', () =>
   assert.match(css, /\.template-workbook-page-scroll \{[\s\S]*overflow-x: auto;/)
 })
 
-test('server-side mail failures surface their real message, not a generic one', () => {
-  assert.match(submission, /result\?\.error/)
-  assert.match(submission, /The email service is unreachable/)
+test('Gmail compose failures surface a useful message', () => {
+  assert.match(submission, /Gmail draft could not be opened/)
+  assert.match(submission, /Add a recipient email address before opening the Gmail draft/)
+})
+
+test('the page distinguishes an opened Gmail draft from a confirmed sent email', () => {
+  assert.match(submission, /status: 'draft'/)
+  assert.match(submission, /Mark as sent/)
+  assert.match(submission, /status: 'sent'/)
+  assert.match(submission, /Proposal email marked as sent/)
 })
 
 test('the mail API accepts business documents and rejects executables', () => {

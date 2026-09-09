@@ -35,7 +35,7 @@ export const COLS = [
   { key: 'segment', letter: 'N', label: 'Segment', w: 5 },
   { key: 'product', letter: 'O', label: 'Product', w: 6 },
   { key: 'prob', letter: 'P', label: 'Prob (%)', w: 9, wAll: 7 },
-  { key: 'valueK', letter: 'Q', label: 'Value (₹)*', num: true, w: 8 },
+  { key: 'valueK', letter: 'Q', label: 'Value (K₹)*', num: true, w: 8 },
   { key: 'cogsK', letter: 'R', label: 'COGS (K₹)*', num: true, w: 5 },
   { key: 'gmK', letter: 'S', label: 'GM (K₹)', num: true, w: 4 },
   { key: 'gmPct', letter: 'T', label: 'GM%', num: true, w: 3 },

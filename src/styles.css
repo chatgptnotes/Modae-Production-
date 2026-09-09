@@ -1322,6 +1322,21 @@ button.secondary:hover, .btn.secondary:hover {
    height of the tallest card beside it and left a large blank area inside it.
    Cards now size to their own content. */
 .ana-grid { display: grid; grid-template-columns: repeat(12, 1fr); align-items: start; gap: 12px; }
+.follow-up-grid { align-items: stretch; gap: 12px; }
+.follow-up-panel { display: flex; min-width: 0; flex-direction: column; }
+.follow-up-panel > .form-card { flex: 1; }
+.follow-up-control-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.follow-up-control-row input, .follow-up-control-row select { min-width: 0; }
+.revision-control-row select { flex: 0 1 190px; }
+.revision-control-row input { flex: 1 1 220px; }
+.competitor-control-row input:first-child { flex: 1 1 120px; }
+.competitor-control-row input:nth-child(2) { flex: 2 1 180px; }
+.follow-up-form-stack { display: grid; gap: 6px; }
+@media (max-width: 760px) {
+  .follow-up-grid { gap: 10px; }
+  .follow-up-panel { grid-column: span 12; }
+  .follow-up-control-row > input, .follow-up-control-row > select, .follow-up-control-row > button { flex: 1 1 100%; }
+}
 .ana-card { background: var(--palette-4843938); border: 1px solid var(--grid-line); border-top: 3px solid var(--xl-green); padding: 12px 14px; min-width: 0; }
 .ana-card.c-4 { grid-column: span 4; }
 .ana-card.c-6 { grid-column: span 6; }
@@ -2066,14 +2081,15 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
   display: grid; align-items: center;
   grid-template-columns:
     30px 28px 86px
-    minmax(0, 1.5fr)
-    minmax(0, 3.2fr)
+    minmax(0, 1.35fr)
+    minmax(0, 4fr)
     minmax(0, .85fr) minmax(0, .85fr)
     minmax(0, .9fr) minmax(0, .95fr)
     minmax(0, .8fr) minmax(0, 1fr)
     46px;
 }
 .mail-column-head { min-height: 34px; padding: 0 10px 0 8px; background: var(--palette-f58d7116); border-bottom: 1px solid var(--border-color); color: var(--text-muted); font-size: 10px; font-weight: 700; letter-spacing: .25px; text-transform: uppercase; }
+.mail-column-head .mail-subject-head { white-space: normal; line-height: 1.15; }
 .mail-column-head span { overflow: hidden; padding-right: 8px; text-overflow: ellipsis; white-space: nowrap; }
 .mail-head-filter { width: 100%; min-width: 0; padding: 2px 3px; border: 0; border-radius: 3px; background: transparent; color: var(--text-muted); font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
 .mail-head-filter:hover, .mail-head-filter:focus { background: var(--primary-soft); color: var(--primary-deep); outline: none; }
@@ -2173,15 +2189,24 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .mail-sender { overflow: hidden; padding-right: 12px; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .mail-sender b, .mail-sender small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mail-sender small, .mail-date small { margin-top: 3px; color: var(--text-subtle); font-size: 10.5px; }
-.mail-content { min-width: 0; overflow: hidden; padding-right: 12px; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
-.mail-content b { color: var(--text-main); }
-.mail-content small { display: block; overflow: hidden; margin-top: 3px; color: var(--text-subtle); text-overflow: ellipsis; white-space: nowrap; font-size: 10.5px; }
+.mail-content { min-width: 0; overflow: hidden; padding-right: 12px; font-size: 12px; }
+.mail-subject-line { display: -webkit-box; overflow: hidden; color: var(--text-main); line-height: 1.25; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.mail-content small { display: -webkit-box; overflow: hidden; margin-top: 3px; color: var(--text-subtle); line-height: 1.25; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .mail-ref { color: var(--primary-deep) !important; font-size: 10.5px; font-weight: 600; }
 .mail-opportunity-link { display: block; max-width: 100%; margin-top: 3px; padding: 0; overflow: hidden; border: 0; background: transparent; color: var(--primary-deep); font: inherit; font-size: 10.5px; font-weight: 700; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .mail-opportunity-link:hover { text-decoration: underline; }
 .mail-opportunity-link .pill { margin-right: 4px; font-size: 9px; vertical-align: 1px; }
 .communication-row { cursor: pointer; }
 .communication-row:hover, .communication-row:focus { background: var(--primary-soft); outline: none; }
+.communication-disclosure { border-bottom: 1px solid var(--border-soft); }
+.communication-summary { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 7px 4px; cursor: pointer; list-style-position: inside; }
+.communication-summary:hover { background: var(--primary-soft); }
+.communication-summary-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 2px; overflow: hidden; }
+.communication-summary-copy b, .communication-summary-copy .hint { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.communication-summary > .chip { flex: 0 0 auto; }
+.communication-expanded { margin: 0 4px 8px 25px; padding: 8px 10px; border-left: 2px solid var(--border-soft); overflow-wrap: anywhere; }
+.communication-expanded-body { margin-top: 6px; white-space: pre-wrap; font-size: 12px; line-height: 1.45; }
+.communication-expanded-attachments { margin-top: 6px; color: var(--text-muted); font-size: 11px; }
 .communication-detail-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 18px; padding: 12px; background: var(--palette-f58d7116); border: 1px solid var(--border-soft); border-radius: 6px; }
 .communication-detail-meta div { min-width: 0; }
 .communication-detail-meta b, .communication-detail-attachments b { display: block; margin-bottom: 3px; color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .35px; }
@@ -2210,8 +2235,8 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
   .mail-column-head, .mail-row {
     grid-template-columns:
       26px 24px 78px
-      minmax(0, 1.25fr)
-      minmax(0, 2.8fr)
+      minmax(0, 1.15fr)
+      minmax(0, 3.5fr)
       minmax(0, .75fr) minmax(0, .75fr)
       minmax(0, .85fr)
       minmax(0, .9fr);
@@ -4305,8 +4330,8 @@ table.sheet td .wrapcell:focus { outline: 2px solid var(--xl-green); background:
   .mail-column-head, .mail-row {
     grid-template-columns:
       30px 28px 86px
-      minmax(0, 1.5fr)
-      minmax(0, 3.2fr)
+      minmax(0, 1.35fr)
+      minmax(0, 3.8fr)
       minmax(0, .85fr) minmax(0, .85fr)
       minmax(0, .95fr)
       minmax(0, .8fr) minmax(0, 1fr);
@@ -4317,8 +4342,8 @@ table.sheet td .wrapcell:focus { outline: 2px solid var(--xl-green); background:
   .mail-column-head, .mail-row {
     grid-template-columns:
       30px 28px 86px
-      minmax(0, 1.5fr)
-      minmax(0, 3.2fr)
+      minmax(0, 1.3fr)
+      minmax(0, 3.6fr)
       minmax(0, .85fr) minmax(0, .85fr)
       minmax(0, .95fr)
       minmax(0, 1fr);

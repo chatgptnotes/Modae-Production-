@@ -310,7 +310,6 @@ export default function Workbench() {
               B-step chain, the pricing embargo and the survey path. */}
           {opp.context && <Chip tone="grey" title={`${opp.context} lane`}>{opp.context}</Chip>}
           <Chip tone={blockers.length ? 'state-Review' : 'state-Accepted'}>{blockers.length ? 'At risk' : 'On track'}</Chip>
-          <button type="button" className="summary-header-action" onClick={openDetails}>Edit opportunity</button>
         </div>
       </div>
       <div className="opp-summary-grid clean-summary-grid summary-strip bg-gray-50 border border-gray-200 rounded-lg p-4 divide-x divide-gray-200" aria-label="Opportunity summary">
@@ -1666,21 +1665,36 @@ function FollowUpPane({ opp, onRevision }) {
   }
 
   return (
-    <div className="ana-grid">
-      <div className="ana-card c-6">
+    <div className="ana-grid follow-up-grid">
+      <div className="ana-card c-6 follow-up-panel">
         <SubmissionPanel opp={opp} />
       </div>
-      <div className="ana-card c-6">
+      <div className="ana-card c-6 follow-up-panel">
         <div className="ana-title">Customer communications</div>
         {commsRows.map((c, i) => (
-          <div key={c.id || `${c.ts}-${i}`} className="check-row">
-            <Icon name="mail" size={13} />
-            <span>
-              <b>{c.subject}</b>
-              <div className="hint">{formatKind(c.kind)} · {c.ts ? new Date(c.ts).toLocaleString() : '—'}</div>
-              {c.body && <div className="hint">{c.body}</div>}
-            </span>
-          </div>
+          <details key={c.id || `${c.ts}-${i}`} className="communication-disclosure">
+            <summary className="communication-summary">
+              <Icon name="mail" size={13} />
+              <span className="communication-summary-copy">
+                <b>{c.subject}</b>
+                <span className="hint">{formatKind(c.kind)} · {c.ts ? new Date(c.ts).toLocaleString() : '—'}</span>
+              </span>
+              {c.status && <Chip tone={c.status === 'sent' ? 'Green' : 'Amber'}>{formatCommunicationStatus(c.status)}</Chip>}
+            </summary>
+            <div className="communication-expanded">
+              <div className="hint">
+                {c.from && <>From: {c.from} · </>}
+                To: {c.to || '—'}
+                {c.cc && <> · CC: {c.cc}</>}
+              </div>
+              {c.body && <div className="communication-expanded-body">{c.body}</div>}
+              {(c.attachmentNames || []).length > 0 && (
+                <div className="communication-expanded-attachments">
+                  <b>Attachments:</b> {c.attachmentNames.join(' · ')}
+                </div>
+              )}
+            </div>
+          </details>
         ))}
         {!commsRows.length && <p className="hint">No communications logged yet.</p>}
         {!replyOpen ? (
@@ -1753,7 +1767,7 @@ function FollowUpPane({ opp, onRevision }) {
           </div>
         )}
       </div>
-      <div className="ana-card c-6">
+      <div className="ana-card c-6 follow-up-panel">
         <div className="ana-title">Revisions</div>
         {revisions.map((r, i) => (
           <div key={i} className="check-row">
@@ -1764,7 +1778,7 @@ function FollowUpPane({ opp, onRevision }) {
           </div>
         ))}
         {!revisions.length && <p className="hint">No revisions recorded yet.</p>}
-        <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+        <div className="follow-up-control-row revision-control-row">
           <select value={revType} onChange={e => setRevType(e.target.value)}>
             {REVISION_TYPES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
           </select>
@@ -1776,7 +1790,7 @@ function FollowUpPane({ opp, onRevision }) {
           The revised quote must pass the approval checks again before it can be sent.
         </p>
       </div>
-      <div className="ana-card c-6">
+      <div className="ana-card c-6 follow-up-panel">
         <div className="ana-title">Follow-up & reminders</div>
         {age == null
           ? <p className="hint">Not yet submitted — the validity countdown starts at the proposal date.</p>
@@ -1789,7 +1803,7 @@ function FollowUpPane({ opp, onRevision }) {
             {r.on ? <Chip tone="state-Accepted">On</Chip> : <Chip tone="grey">Off</Chip>}
           </div>
         ))}
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+        <div className="follow-up-control-row">
           <button onClick={openFu} disabled={fuBusy}>
             <Icon name="sparkles" size={13} /> {fuBusy ? 'Drafting…' : 'AI: draft follow-up'}
           </button>
@@ -1804,7 +1818,7 @@ function FollowUpPane({ opp, onRevision }) {
         )}
       </div>
 
-      <div className="ana-card c-6">
+      <div className="ana-card c-6 follow-up-panel">
         <div className="ana-title">Close-out</div>
         {opp.status === 'Closed' ? (
           <div className={opp.stage === 'Won' ? 'okbox' : 'warnbox'}>
@@ -1815,7 +1829,7 @@ function FollowUpPane({ opp, onRevision }) {
             <p className="hint">
               A lost opportunity always carries a reason — it is what the win/loss analytics read.
             </p>
-            <div style={{ display: 'grid', gap: 6 }}>
+            <div className="follow-up-form-stack">
               <select value={lossReason} onChange={e => setLossReason(e.target.value)}>
                 <option value="">— loss reason (required) —</option>
                 {CLOSE_REASONS.map(r => <option key={r}>{r}</option>)}
@@ -1837,7 +1851,7 @@ function FollowUpPane({ opp, onRevision }) {
         )}
       </div>
 
-      <div className="ana-card c-6">
+      <div className="ana-card c-6 follow-up-panel">
         <div className="ana-title">Competitors</div>
         {competitors.map(c => (
           <div key={c.id} className="check-row">
@@ -1848,7 +1862,7 @@ function FollowUpPane({ opp, onRevision }) {
           </div>
         ))}
         {!competitors.length && <p className="hint">No competitor recorded on this opportunity.</p>}
-        <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+        <div className="follow-up-control-row competitor-control-row">
           <input placeholder="Competitor" value={compName} style={{ flex: '1 1 120px' }}
             onChange={e => setCompName(e.target.value)} />
           <input placeholder="What we know (price, position)" value={compNote} style={{ flex: '2 1 180px' }}
@@ -1961,6 +1975,8 @@ const formatKind = kind => ({
   'follow-up': 'Follow-up', ack: 'Customer acknowledgement',
 }[kind] || kind || 'Communication')
 
+const formatCommunicationStatus = status => status === 'sent' ? 'Sent' : status === 'draft' ? 'Draft opened' : 'Logged'
+
 function LegacyCommsTab({ opp }) {
   const store = useStore()
   const lead = [...(store.leads || []), ...(store.leadArchive || [])].find(l => l.id === opp.sourceLeadId)
@@ -2044,7 +2060,10 @@ function CommsTab({ opp }) {
                 <b>{c.subject}</b>
                 <div className="hint"><CommsName value={sender.name} email={sender.email} /> → <CommsName value={recipient.name} email={recipient.email} /> · {new Date(c.ts).toLocaleString()}</div>
               </span>
-              <Chip tone={c.dir === 'In' ? 'Blue' : 'grey'}>{formatKind(c.kind)}</Chip>
+              <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center', marginLeft: 'auto' }}>
+                <Chip tone={c.dir === 'In' ? 'Blue' : 'grey'}>{formatKind(c.kind)}</Chip>
+                {c.status && <Chip tone={c.status === 'sent' ? 'Green' : 'Amber'}>{formatCommunicationStatus(c.status)}</Chip>}
+              </span>
             </div>
           )
         })}
@@ -2066,6 +2085,7 @@ function CommsTab({ opp }) {
                 {c.cc && <div><b>CC</b><span>{c.cc}</span></div>}
                 <div><b>Date</b><span>{c.ts ? new Date(c.ts).toLocaleString() : '—'}</span></div>
                 <div><b>Type</b><span>{formatKind(c.kind)}</span></div>
+                {c.status && <div><b>Status</b><span>{formatCommunicationStatus(c.status)}</span></div>}
               </div>
               <div className="communication-detail-body">{c.body || 'No message body was recorded for this communication.'}</div>
               {(c.attachmentNames || []).length > 0 && <div className="communication-detail-attachments"><b>Attachments</b><span>{c.attachmentNames.join(' · ')}</span></div>}

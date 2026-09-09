@@ -10,6 +10,7 @@ import { blobAttachment, proposalWorkbookAttachment, proposalWorkbookPreview, en
 import { formatEmailBody, runText } from '../ai.js'
 import WorkbookPreview from '../proposal/WorkbookPreview.jsx'
 import { EMAIL_RE, splitRecipients, recipientsValid } from '../emailValidation.js'
+import { gmailComposeHref } from '../utils.js'
 
 // Customer send — only unlocked by an approved 'Final quote release'
 // and a three-point human-in-the-loop checklist. To, CC, Subject, the covering
@@ -19,6 +20,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
   const p = store.getProposal(opp.id)
   const [checks, setChecks] = useState({ c1: false, c2: false, c3: false })
   const [sentNow, setSentNow] = useState(false)
+  const [communicationId, setCommunicationId] = useState('')
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState('')
   const [readingFiles, setReadingFiles] = useState(false)
@@ -48,7 +50,9 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
     .filter(a => a.oppId === opp.id && a.status === 'Approved with conditions')
     .flatMap(a => (a.conditions || []).filter(c => !c.incorporated)
       .map(c => ({ ...c, approver: a.approver, type: a.type })))
-  const alreadySent = (store.communications[opp.id] || []).some(c => c.kind === 'submission')
+  const submission = (store.communications[opp.id] || []).find(c => c.kind === 'submission')
+  const alreadySent = submission?.status === 'sent'
+  const draftOpened = sentNow || submission?.status === 'draft'
 
   if (!release) {
     return (
@@ -130,47 +134,49 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
     }
   }
 
+  const downloadAttachment = attachment => {
+    const binary = atob(attachment.contentBase64)
+    const bytes = Uint8Array.from(binary, character => character.charCodeAt(0))
+    const url = URL.createObjectURL(new Blob([bytes], { type: attachment.mimeType }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = attachment.filename
+    link.style.display = 'none'
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+  }
+
   const send = async () => {
     setSending(true)
     setSendError('')
     try {
-      const enclosures = await enclosureAttachments(route)
-      const response = await fetch('/api/send-proposal-email', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          oppId: opp.id,
-          from: emailFrom,
-          to: emailTo,
-          subject: emailSubject,
-          body: emailBody,
-          attachments: [
-            ...(attachProposal ? [await proposalWorkbookAttachment({ p, opp, doc, priced, totalQty, lineQuoted, lineCost, linePrice, totals, route })] : []),
-            ...enclosures,
-            ...extraFiles,
-          ],
-          cc: emailCc,
-        }),
-      })
-      const result = await response.json().catch(() => null)
-      if (!response.ok || !result?.ok) {
-        throw new Error(result?.error
-          || `The email service is unreachable (HTTP ${response.status}) — check the server's Gmail configuration`)
-      }
+      const attachments = [
+        ...(attachProposal ? [await proposalWorkbookAttachment({ p, opp, doc, priced, totalQty, lineQuoted, lineCost, linePrice, totals, route })] : []),
+        ...(await enclosureAttachments(route)),
+        ...extraFiles,
+      ]
+      attachments.forEach(downloadAttachment)
+      const href = gmailComposeHref({ to: emailTo, cc: emailCc, subject: emailSubject, body: emailBody })
+      if (!href) throw new Error('Add a recipient email address before opening the Gmail draft')
+      window.open(href, '_blank', 'noopener')
+      const id = 'CM-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8)
       store.addCommunication(opp.id, {
+        id,
         to: emailTo,
         cc: emailCc,
         subject: emailSubject,
         body: emailBody,
         kind: 'submission',
-        messageId: result.messageId,
-        status: 'sent',
+        status: 'draft',
         attachmentNames: [
           ...(attachProposal ? [`${opp.id}_Proposal_Rev_${p.revision}.xlsx`] : []),
-          ...enclosures.map(a => a.filename),
+          ...enclosuresFor(route).map(a => a.filename),
           ...extraFiles.map(a => a.filename),
         ],
       })
+      setCommunicationId(id)
       store.updateOpportunity(opp.id, {
         milestone: 'Follow-up',
         proposalDate: new Date().toISOString().slice(0, 10),
@@ -178,10 +184,17 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
       setSentNow(true)
       onSubmitted?.()
     } catch (error) {
-      setSendError(error?.message || 'Email could not be sent')
+      setSendError(error?.message || 'Gmail draft could not be opened')
     } finally {
       setSending(false)
     }
+  }
+
+  const markAsSent = () => {
+    const id = communicationId || submission?.id
+    if (!id) return
+    store.updateCommunication(opp.id, id, { status: 'sent' }, 'Proposal email marked as sent')
+    setSentNow(false)
   }
 
   const attachmentNames = [
@@ -247,7 +260,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
           </div>
         ))}
         <div className="hint" style={{ marginTop: 4 }}>
-          Extra files travel with the proposal workbook and the standard enclosures (max 8 attachments, 30 MB total).
+          Files are downloaded when Gmail opens so you can attach them to the draft (max 8 files, 30 MB total).
         </div>
       </div>
 
@@ -285,11 +298,19 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
             : !emailBody.trim() ? 'Enter a message'
             : ''}
           onClick={send}>
-          <Icon name="send" size={13} /> {sending ? 'Sending…' : 'Send quote email'}
+          <Icon name="send" size={13} /> {sending ? 'Opening Gmail…' : 'Open Gmail compose'}
         </button>
       </div>
-      {(sentNow || alreadySent) && (
-        <div className="okbox">Proposal email sent — logged in Communications; moved to Follow-up.</div>
+      {draftOpened && !alreadySent && (
+        <div className="errbox">
+          Gmail draft opened — attach the downloaded files and send it in Gmail.
+          <button type="button" className="secondary" style={{ marginLeft: 8 }} onClick={markAsSent}>
+            Mark as sent
+          </button>
+        </div>
+      )}
+      {alreadySent && (
+        <div className="okbox">Proposal email marked as sent — logged in Communications; moved to Follow-up.</div>
       )}
       {previewOpen && (
         <Modal onClose={() => setPreviewOpen(false)} wide className="proposal-preview-modal">
