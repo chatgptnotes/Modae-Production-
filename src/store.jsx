@@ -1000,16 +1000,18 @@ export function StoreProvider({ children }) {
       }, patch.status ? `Clarification ${patch.status.toLowerCase()}` : 'Clarification updated', id))
     },
 
-    answerClarification(id, { response, answerSource = '', answeredAt = '', attachments = [] }) {
+    answerClarification(id, { response, answerSource = '', answeredAt = '', attachments = [], evidence = '', aiConfidence = null }) {
       setState(s => withAudit({
         ...s,
         clarifications: s.clarifications.map(c => (c.id === id ? {
           ...c,
-          response,
-          answerSource,
-          answeredAt: answeredAt || new Date().toISOString().slice(0, 10),
-          answeredBy: s.role,
-          attachments: [...(c.attachments || []), ...attachments],
+           response,
+           answerSource,
+           answeredAt: answeredAt || new Date().toISOString().slice(0, 10),
+           answeredBy: s.role,
+           ...(evidence ? { answerEvidence: evidence } : {}),
+           ...(aiConfidence !== null && aiConfidence !== undefined ? { aiConfidence } : {}),
+           attachments: [...(c.attachments || []), ...attachments],
           status: 'Answered',
         } : c)),
       }, 'Clarification answered', id, response))

@@ -9,7 +9,7 @@ import { Chip, ClassChip, AiBadge, WarnBox, ErrBox, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 import { productBrandProfiles } from '../branding/modae.js'
 import { MODAE_COMPANY } from '../proposalDoc.js'
-import { runJson, runText } from '../ai.js'
+import { runJson, runTaskResult, runText } from '../ai.js'
 import { clarificationSender } from '../leadClarification.js'
 import WbSpares from '../workbench/WbSpares.jsx'
 import WbService from '../workbench/WbService.jsx'
@@ -783,7 +783,9 @@ const deviationClarification = term => ({
 function ClarificationsTab({ opp }) {
   const store = useStore()
   const rows = store.clarifications.filter(c => c.oppId === opp.id)
-  const open = rows.filter(c => c.status === 'Draft' || c.status === 'Open')
+  // Sent questions are still waiting for the customer's reply. Only answered
+  // questions should be excluded from the single-reply update flow.
+  const open = rows.filter(c => c.status !== 'Answered')
   const [draftOpen, setDraftOpen] = useState(false)
   const [draft, setDraft] = useState(null)
   const [sentOk, setSentOk] = useState(false)
@@ -793,6 +795,11 @@ function ClarificationsTab({ opp }) {
   const [answerForm, setAnswerForm] = useState({ response: '', answerSource: 'Customer', receivedAt: '' })
   const [answerFiles, setAnswerFiles] = useState([])
   const [answerErr, setAnswerErr] = useState('')
+  const [replyOpen, setReplyOpen] = useState(false)
+  const [replyForm, setReplyForm] = useState({ from: '', subject: '', receivedAt: new Date().toISOString().slice(0, 10), body: '' })
+  const [replyFiles, setReplyFiles] = useState([])
+  const [replyErr, setReplyErr] = useState('')
+  const [replyOk, setReplyOk] = useState('')
 
   // Gemini proposes gap-specific questions; the canned per-route list is the
   // fallback whenever the AI is unavailable (see src/ai.js).
@@ -889,6 +896,78 @@ function ClarificationsTab({ opp }) {
     setAnswerErr('')
   }
 
+  const openCustomerReply = () => {
+    setReplyForm({ from: '', subject: '', receivedAt: new Date().toISOString().slice(0, 10), body: '' })
+    setReplyFiles([])
+    setReplyErr('')
+    setReplyOk('')
+    setReplyOpen(true)
+  }
+
+  const saveCustomerReply = async () => {
+    if (!replyForm.body.trim() && !replyFiles.length) {
+      setReplyErr('Paste the customer reply or attach the email/file first.')
+      return
+    }
+    setBusy('reply')
+    setReplyErr('')
+    const attachments = []
+    const attachmentMeta = []
+    for (const file of replyFiles) {
+      let text = ''
+      try { text = (await extractDocText(file))?.text || '' } catch (err) { text = `Could not extract text: ${err?.message || String(err)}` }
+      try {
+        const rec = await uploadOppFile(opp, 'Customer Specs', file)
+        store.addFile(opp.id, 'Customer Specs', rec)
+        attachmentMeta.push({ ...rec, folder: 'Customer Specs' })
+      } catch (err) {
+        attachmentMeta.push({ name: file.name, date: replyForm.receivedAt, size: fmtSize(file.size), folder: 'Customer Specs', cloud: false, error: err?.message || String(err) })
+      }
+      attachments.push({ name: file.name, text })
+    }
+    const aiResult = await runTaskResult('clarification.answer', {
+      oppName: opp.oppName,
+      customer: opp.sellTo,
+      from: replyForm.from,
+      subject: replyForm.subject,
+      receivedAt: replyForm.receivedAt,
+      body: replyForm.body,
+      attachments,
+      questions: open.map(c => ({ id: c.id, question: c.q, category: c.category, gap: c.gap })),
+    }, { fallback: store.config?.aiModel?.provider === 'Built-in fallback' })
+    // runTaskResult returns the transport envelope; the matcher rows are in
+    // its nested data payload (the same shape consumed by runJson).
+    const ai = aiResult?.data?.data
+    store.addCommunication(opp.id, {
+      from: replyForm.from,
+      subject: replyForm.subject || `Customer reply — ${opp.oppName}`,
+      body: replyForm.body,
+      attachmentNames: attachmentMeta.map(f => f.name),
+      kind: 'clarification-response',
+    })
+    const byId = new Map(open.map(c => [c.id, c]))
+    const matches = (ai?.rows || []).filter(row => byId.has(row.id) && String(row.response || '').trim())
+    for (const row of matches) {
+      store.answerClarification(row.id, {
+        response: String(row.response).trim(),
+        answerSource: 'Customer',
+        answeredAt: replyForm.receivedAt,
+        attachments: attachmentMeta,
+        evidence: row.evidence,
+        aiConfidence: row.confidence,
+      })
+    }
+    const remaining = Math.max(0, open.length - matches.length)
+    setBusy('')
+    setReplyOpen(false)
+    setReplyFiles([])
+    setReplyOk(matches.length
+      ? `AI checked the reply and matched ${matches.length} question${matches.length === 1 ? '' : 's'}. Customer reply saved${remaining ? `; ${remaining} remain open` : ''}.`
+      : ai
+        ? 'AI checked the reply but found no answer for the open questions. Customer reply saved; use “Update information” to assign answers manually.'
+        : `Customer reply saved, but AI could not check it (${aiResult?.error || 'AI connection unavailable'}). Use “Update information” to assign answers manually.`)
+  }
+
   const saveAnswer = async () => {
     if (!answerFor) return
     if (!answerForm.response.trim()) { setAnswerErr('Add the missing information received before marking this resolved.'); return }
@@ -923,9 +1002,14 @@ function ClarificationsTab({ opp }) {
           title={open.length ? '' : 'No open questions to draft from'}>
           <Icon name="mail" size={13} /> {busy === 'draft' ? 'Drafting…' : 'AI: draft email'}
         </button>
+        <button onClick={openCustomerReply} disabled={!open.length || !!busy}
+          title={open.length ? 'Paste one customer reply and attach supporting files' : 'No open questions'}>
+          <Icon name="upload" size={13} /> Update information
+        </button>
         <span className="spacer" />
       </div>
       {sentOk && <div className="okbox">Clarification email sent and logged in Communications.</div>}
+      {replyOk && <div className="okbox">{replyOk}</div>}
       <div className="sheet-wrap">
         <table className="sheet">
           <thead><tr><th>ID</th><th>Category</th><th>Gap / evidence</th><th>Question</th><th>Owner</th><th>Audience</th><th>Due</th><th>Status</th><th></th></tr></thead>
@@ -949,6 +1033,35 @@ function ClarificationsTab({ opp }) {
           </tbody>
         </table>
       </div>
+
+      {replyOpen && (
+        <Modal title="Add customer reply" onClose={() => setReplyOpen(false)} wide>
+          {replyErr && <ErrBox>{replyErr}</ErrBox>}
+          <div className="clar-mail-form">
+            <label className="afield">From
+              <input value={replyForm.from} onChange={e => setReplyForm({ ...replyForm, from: e.target.value })} placeholder="customer@company.com" autoFocus />
+            </label>
+            <label className="afield">Subject
+              <input value={replyForm.subject} onChange={e => setReplyForm({ ...replyForm, subject: e.target.value })} placeholder="Customer reply subject" />
+            </label>
+            <label className="afield">Received date
+              <input type="date" value={replyForm.receivedAt} onChange={e => setReplyForm({ ...replyForm, receivedAt: e.target.value })} />
+            </label>
+            <label className="afield">Reply message
+              <textarea rows={9} value={replyForm.body} onChange={e => setReplyForm({ ...replyForm, body: e.target.value })} placeholder="Paste the customer’s complete reply here." />
+            </label>
+            <label className="afield">Attach email or supporting file
+              <input type="file" multiple onChange={e => setReplyFiles(Array.from(e.target.files || []))} />
+            </label>
+            {!!replyFiles.length && <div className="hint">{replyFiles.length} file(s) will be saved in Customer Specs and read by AI.</div>}
+          </div>
+          <div className="hint" style={{ marginTop: 8 }}>AI will answer only the open questions supported by this reply. Anything unanswered will remain open.</div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+            <button onClick={() => setReplyOpen(false)}>Cancel</button>
+            <button className="primary" disabled={busy === 'reply'} onClick={saveCustomerReply}><Icon name="check" size={13} /> {busy === 'reply' ? 'Reading reply…' : 'Save and match answers'}</button>
+          </div>
+        </Modal>
+      )}
 
       {answerFor && (
         <Modal title={`Update information - ${answerFor.id}`} onClose={() => setAnswerFor(null)} wide>

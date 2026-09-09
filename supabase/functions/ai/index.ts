@@ -380,6 +380,38 @@ commercial deviation and ask for confirmation of the exact proposed term. Do
 not ask generic questions when the information is already present.`,
   },
 
+  // ---- Workbench: match one customer reply to open clarification questions
+  'clarification.answer': {
+    model: FLASH,
+    schema: {
+      type: 'OBJECT',
+      properties: {
+        rows: arrOf({
+          type: 'OBJECT',
+          properties: { id: STR, response: STR, confidence: INT, evidence: STR },
+          required: ['id', 'response', 'confidence', 'evidence'],
+        }),
+      },
+      required: ['rows'],
+    },
+    build: p => `${HOUSE}
+
+Match a customer's reply to the open clarification questions for this opportunity.
+Return only questions directly answered by the reply. Preserve each question ID
+exactly. Do not infer, combine, or invent information; return an empty rows list
+when the reply does not answer a question. Evidence must identify the email body
+or attachment text supporting the answer.
+
+Opportunity: ${cap(p.oppName, 300)} · customer: ${cap(p.customer, 200)}
+From: ${cap(p.from, 300)} · Subject: ${cap(p.subject, 300)}
+EMAIL BODY:
+${cap(p.body, 30000)}
+ATTACHMENTS:
+${cap((p.attachments || []).map((a: any) => `--- ${a.name} ---\n${a.text || '(no text extracted)'}`).join('\n\n'), 60000) || '(none)'}
+OPEN QUESTIONS:
+${cap((p.questions || []).map((q: any) => `${q.id}: ${q.question} [${q.category || ''}]`).join('\n'), 12000) || '(none)'}`,
+  },
+
   // ---- Workbench: clarification email body
   'email.clarification': {
     model: FLASH,

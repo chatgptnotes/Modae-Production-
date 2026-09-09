@@ -98,6 +98,16 @@ const clarificationSuggestSchema = {
   required: ['rows'],
 }
 
+const clarificationAnswerSchema = {
+  type: 'OBJECT',
+  properties: {
+    rows: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+      id: { type: 'STRING' }, response: { type: 'STRING' }, confidence: { type: 'INTEGER' }, evidence: { type: 'STRING' },
+    }, required: ['id', 'response', 'confidence', 'evidence'] } },
+  },
+  required: ['rows'],
+}
+
 function leadPrompt(p) {
   return `${HOUSE}
 
@@ -209,6 +219,29 @@ customer-facing question. Do not invent prices, dates, quantities, terms, or
 technical specifications.`
 }
 
+function clarificationAnswerPrompt(p) {
+  return `${HOUSE}
+
+Match a customer's reply to the open clarification questions for this opportunity.
+Return only questions directly answered by the reply. Preserve each question ID
+exactly. Do not infer, combine, or invent information; return an empty rows list
+when the reply does not answer a question. Evidence must identify the email body
+or attachment text supporting the answer.
+
+Opportunity: ${cap(p.oppName, 300)} · customer: ${cap(p.customer, 200)}
+From: ${cap(p.from, 300)}
+Subject: ${cap(p.subject, 300)}
+Received: ${cap(p.receivedAt, 40)}
+EMAIL BODY:
+${cap(p.body, 30000)}
+
+ATTACHMENTS:
+${cap((p.attachments || []).map(a => `--- ${a.name} ---\n${a.text || '(no text extracted)'}`).join('\n\n'), 60000) || '(none)'}
+
+OPEN QUESTIONS:
+${cap((p.questions || []).map(q => `${q.id}: ${q.question} [${q.category || ''}]`).join('\n'), 12000) || '(none)'}`
+}
+
 function proposalEmailPrompt(p) {
   return `${HOUSE}
 
@@ -270,7 +303,7 @@ export default async function handler(req, res) {
   const task = String(input.task || '')
   const payload = input.payload || {}
   const model = /^gemini-[\w.-]+$/.test(String(input.model || '')) ? String(input.model) : DEFAULT_MODEL
-  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'clarification.suggest'].includes(task)) {
+  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'clarification.suggest', 'clarification.answer'].includes(task)) {
     return fail(res, 400, 'AI_BAD_REQUEST', `Unsupported task: ${task}`)
   }
 
@@ -279,16 +312,18 @@ export default async function handler(req, res) {
       : task === 'vendor.quote' ? vendorQuotePrompt(payload)
         : task === 'email.proposal' ? proposalEmailPrompt(payload)
           : task === 'clarification.suggest' ? clarificationSuggestPrompt(payload)
+            : task === 'clarification.answer' ? clarificationAnswerPrompt(payload)
           : leadPrompt(payload)
   const requestBody = {
     contents: [{ parts: [{ text: prompt }, ...(task === 'lead.extract' ? inlineParts(payload) : [])] }],
-    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'clarification.suggest'].includes(task)
+    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'clarification.suggest', 'clarification.answer'].includes(task)
       ? {
           responseMimeType: 'application/json',
           responseSchema: task === 'lead.fill' ? fillSchema
             : task === 'vendor.quote' ? vendorQuoteSchema
               : task === 'email.proposal' ? emailProposalSchema
                 : task === 'clarification.suggest' ? clarificationSuggestSchema
+                  : task === 'clarification.answer' ? clarificationAnswerSchema
                 : leadSchema,
         }
       : {},
