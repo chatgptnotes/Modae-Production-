@@ -207,7 +207,9 @@ export function StoreProvider({ children }) {
       const nextBaseline = { ...(s.leadSyncBaseline || {}) }
       for (const [k, v] of Object.entries(serverSlices)) {
         if (k === 'leads' || k === 'leadArchive') {
-          const mergedLead = mergeLeadSlice(s[k], v, nextBaseline[k])
+          const deletedLeadIds = [...new Set([...(s.deletedLeadIds || []), ...(serverSlices.deletedLeadIds || [])])]
+          accepted.deletedLeadIds = deletedLeadIds
+          const mergedLead = mergeLeadSlice(s[k], v, nextBaseline[k], deletedLeadIds)
           accepted[k] = mergedLead.rows
           nextBaseline[k] = mergedLead.baseline
           continue
@@ -684,6 +686,7 @@ export function StoreProvider({ children }) {
         leads: (s.leads || []).filter(l => l.id !== id),
         leadArchive: (s.leadArchive || []).filter(l => l.id !== id),
         leadDeadlines: (s.leadDeadlines || []).filter(d => d.leadId !== id),
+        deletedLeadIds: [...new Set([...(s.deletedLeadIds || []), id])],
       }, 'Lead deleted', id, lead.subject || lead.sender || 'Inbox lead'))
       return true
     },

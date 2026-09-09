@@ -65,6 +65,7 @@ export function migrate(s) {
   if (!ROLES[s.role]) s.role = 'SUPER'
   if (!s.communications) s.communications = {}
   if (!Array.isArray(s.leads)) s.leads = demo ? seedLeads : []
+  if (!Array.isArray(s.deletedLeadIds)) s.deletedLeadIds = []
   if (!Array.isArray(s.approvals)) s.approvals = demo ? seedApprovals : []
   if (!Array.isArray(s.audit)) s.audit = []
   // ---- phase 2 slices ----
@@ -256,6 +257,13 @@ export function migrate(s) {
       if (!s.approvals.some(x => x.id === a.id)) s.approvals = [...s.approvals, a]
     }
   }
+  // A deleted inbox row must stay deleted when demo/server data is merged back
+  // in on a later refresh.
+  if (s.deletedLeadIds.length) {
+    const deleted = new Set(s.deletedLeadIds)
+    s.leads = s.leads.filter(lead => !deleted.has(lead.id))
+    s.leadArchive = (s.leadArchive || []).filter(lead => !deleted.has(lead.id))
+  }
   // Per-row backfills.
   s.opportunities = s.opportunities.map(o => {
     // AMC and Training left OPP_TYPES when the client's Field List became the
@@ -359,6 +367,7 @@ export function seedState() {
     audit: [],
     leadArchive: [],
     leadDeadlines: [],
+    deletedLeadIds: [],
     users: seedUsers,
     role: 'SUPER',
   })
@@ -396,7 +405,7 @@ const sameValue = (a, b) => JSON.stringify(a) === JSON.stringify(b)
 
 // Preserve local lead creates/edits/deletes while accepting server-only rows and
 // remote edits. The baseline is the last server snapshot known to this device.
-export function mergeLeadSlice(local = [], server = [], baseline = []) {
+export function mergeLeadSlice(local = [], server = [], baseline = [], deletedIds = []) {
   const localRows = Array.isArray(local) ? local : []
   const serverRows = Array.isArray(server) ? server : []
   const baseRows = Array.isArray(baseline) ? baseline : []
@@ -404,10 +413,12 @@ export function mergeLeadSlice(local = [], server = [], baseline = []) {
   const localById = byId(localRows)
   const serverById = byId(serverRows)
   const baseById = byId(baseRows)
+  const deleted = new Set(deletedIds || [])
   const ids = [...new Set([...localRows, ...serverRows].map(row => row?.id).filter(Boolean))]
 
   const nextBaseline = []
   const rows = ids.flatMap(id => {
+    if (deleted.has(id)) return []
     const localRow = localById.get(id)
     const serverRow = serverById.get(id)
     const baseRow = baseById.get(id)

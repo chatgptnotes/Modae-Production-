@@ -14,6 +14,14 @@ export const LEAD_WORKFLOW_STEPS = [
 
 export function leadWorkflow(lead, { customerStatus = '', med = 75 } = {}) {
   const fields = lead?.ai?.fields || []
+  const missing = (lead?.ai?.missing || []).filter(label => {
+    const text = String(label || '').toLowerCase()
+    if (text.includes('customer name')) return !String(lead?.sellTo || fields.find(f => /sell[- ]?to.*customer/i.test(f.k))?.v || '').trim()
+    if (text.includes('quantit') || text.includes('specification')) {
+      return !(lead?.ai?.lineItems || []).some(item => String(item.description || item.desc || '').trim() && Number(item.qty) > 0)
+    }
+    return true
+  })
   const decided = fields.filter(f => f.state !== 'pending').length
   const pendingLow = fields.filter(f => f.state === 'pending' && Number(f.conf || 0) < med).length
   const hasReview = !!lead?.readAt || decided > 0 || lead?.status !== 'New'
@@ -27,7 +35,7 @@ export function leadWorkflow(lead, { customerStatus = '', med = 75 } = {}) {
     || !!lead?.ai
   const hasOwner = !!(lead?.assignedOwner || lead?.suggestedOwner)
   const hasType = !!(lead?.route || lead?.parse?.oppType || lead?.ai?.route)
-  const aiComplete = fields.length > 0 && pendingLow === 0 && (lead?.ai?.missing || []).length === 0
+  const aiComplete = fields.length > 0 && pendingLow === 0 && missing.length === 0
   const classified = !!(customerStatus || lead?.customerStatus || lead?.redFlag)
   const registered = !!lead?.oppId || lead?.status === 'Converted'
 
@@ -53,8 +61,8 @@ export function leadWorkflow(lead, { customerStatus = '', med = 75 } = {}) {
     ? 'Lead discarded'
     : pendingLow > 0
       ? `${pendingLow} AI field${pendingLow === 1 ? '' : 's'} need review`
-      : (lead?.ai?.missing || []).length > 0
-        ? `${lead.ai.missing.length} clarification${lead.ai.missing.length === 1 ? '' : 's'} required`
+      : missing.length > 0
+        ? `${missing.length} clarification${missing.length === 1 ? '' : 's'} required`
         : ''
 
   return {

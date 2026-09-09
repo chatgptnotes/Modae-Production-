@@ -65,7 +65,8 @@ export async function runTask(task, payload = {}, options = {}) {
 
 // Convenience wrappers so call sites read as intent, not transport.
 export const runJson = async (task, payload, opts) => (await runTask(task, payload, opts))?.data ?? null
-export const runText = async (task, payload, opts) => (await runTask(task, payload, opts))?.text ?? null
+export const textFromTaskResult = result => result?.text ?? result?.data?.text ?? null
+export const runText = async (task, payload, opts) => textFromTaskResult(await runTask(task, payload, opts))
 
 // Admin "Test connection" — resolves to { ok, model, ms } either way.
 export async function testConnection(model) {

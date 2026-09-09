@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import handler from '../api/ai.js'
+import { textFromTaskResult } from '../src/ai.js'
 
 const response = () => {
   const out = {}
@@ -58,4 +59,10 @@ test('AI route health check returns the configured model on success', async () =
       assert.equal(res.out.body.model, 'gemini-2.5-flash')
     })
   } finally { globalThis.fetch = oldFetch }
+})
+
+test('text helper accepts proposal text returned inside task data', () => {
+  assert.equal(textFromTaskResult({ data: { text: 'Dear Sir/Madam,' } }), 'Dear Sir/Madam,')
+  assert.equal(textFromTaskResult({ text: 'top-level text' }), 'top-level text')
+  assert.equal(textFromTaskResult({ data: {} }), null)
 })

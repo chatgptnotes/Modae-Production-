@@ -617,6 +617,23 @@ const updateLeadField = (fields, key, value, group = 'RFQ') => {
   return fields.map((field, i) => i === index ? { ...field, ...next } : field)
 }
 
+// The AI missing list is created before a salesperson completes the decision
+// form. Reconcile the labels that the form can satisfy so an old AI warning
+// does not keep asking for information that has already been saved.
+export function reconcileMissingWithDecisions(missing = [], decisions = {}, fields = [], lineItems = []) {
+  return (missing || []).filter(label => {
+    const text = String(label || '').toLowerCase()
+    if (text.includes('customer name')) return !String(decisions.sellTo || '').trim()
+    if (text.includes('opportunity scope')) {
+      return !fields.some(field => /scope|opp(ortunity)?s*(scope|description)/i.test(field.k) && String(field.v || '').trim())
+    }
+    if (text.includes('quantit') || text.includes('specification')) {
+      return !(lineItems || []).some(item => String(item.description || item.desc || '').trim() && Number(item.qty) > 0)
+    }
+    return true
+  })
+}
+
 // Re-extraction after a document is added must not silently undo human work:
 // a field somebody accepted, edited or rejected is kept as decided, and only
 // the still-pending ones take the fresh AI value. Fields the new run discovers
@@ -912,7 +929,8 @@ function AiLeadDetail({ lead }) {
   const missingIdentity = REQUIRED_IDENTITY_FIELDS
     .filter(([key]) => !String(decisionDraft[key] || '').trim())
     .map(([, label]) => label)
-  const registrationBlocked = missingIdentity.length > 0 || !!(ai.missing || []).length || pendingLow.length > 0 || verificationBlocked
+  const effectiveMissing = reconcileMissingWithDecisions(ai.missing, decisionDraft, ai.fields, ai.lineItems)
+  const registrationBlocked = missingIdentity.length > 0 || effectiveMissing.length > 0 || pendingLow.length > 0 || verificationBlocked
   const canAct = !['Converted', 'Dropped'].includes(lead.status)
 
   // ---- Clarification mail: AI drafts, a human sends -----------------------
@@ -1016,6 +1034,7 @@ function AiLeadDetail({ lead }) {
     const nextFields = updateLeadField(updateLeadField(updateLeadField(updateLeadField(identityFields,
       'Location', decisionDraft.location, 'Customer'), 'Opp Type', decisionDraft.oppType),
       'BU / Segment', `${decisionDraft.bu} / ${decisionDraft.segment}`), 'Product', decisionDraft.product)
+    const nextMissing = reconcileMissingWithDecisions(ai.missing, decisionDraft, nextFields, ai.lineItems)
     const changed = Object.keys(decisionDraft)
       .filter(key => previous[key] !== decisionDraft[key])
       .map(key => `${key}: ${previous[key] || '—'} → ${decisionDraft[key] || '—'}`)
@@ -1041,7 +1060,7 @@ function AiLeadDetail({ lead }) {
         ? { ...(lead.verification || {}), requestedAt: lead.verification?.requestedAt || new Date().toISOString(), requestedFor: decisionDraft.customerStatus }
         : (lead.verification || {}),
       redFlag: decisionDraft.customerStatus === 'Red',
-      ai: { ...ai, route: routeForType(decisionDraft.oppType), fields: nextFields },
+      ai: { ...ai, route: routeForType(decisionDraft.oppType), fields: nextFields, missing: nextMissing },
     }, `Lead decisions saved — ${changed.join('; ')}`)
     setReassignTo(decisionDraft.owner)
     setDecisionSaved(true)
@@ -1312,11 +1331,11 @@ function AiLeadDetail({ lead }) {
           {/* Each outstanding item is answerable on the spot. Waiting on the
               customer is one way to close a clarification; typing in what you
               already know is the other, and it was the one with no button. */}
-          {ai.missing?.length > 0 && (
+          {effectiveMissing.length > 0 && (
             <WarnBox>
               <b>Missing information</b>
               <ul className="ws-missing">
-                {(ai.missing || []).map((m, i) => (
+                {effectiveMissing.map((m, i) => (
                   <li key={i}>
                     <div className="ws-missing-row">
                       <span>{m}</span>
@@ -1652,10 +1671,10 @@ function AiLeadDetail({ lead }) {
               Each must be accepted, edited or rejected.
             </WarnBox>
           )}
-          {lead.status === 'Qualified' && (ai.missing || []).length > 0 && (
+          {lead.status === 'Qualified' && effectiveMissing.length > 0 && (
             <WarnBox>
               <b>Registration still blocked</b> until the missing information is filled in:
-              <ul>{ai.missing.map((item, i) => <li key={i}>{item}</li>)}</ul>
+              <ul>{effectiveMissing.map((item, i) => <li key={i}>{item}</li>)}</ul>
               Use the Add button above to answer each item before continuing.
             </WarnBox>
           )}
@@ -1724,7 +1743,7 @@ function AiLeadDetail({ lead }) {
                     ? `Complete ${previewCustomerStatus} customer verification first`
                     : missingIdentity.length > 0
                     ? 'Complete the mandatory customer, EUC and contact fields first'
-                    : (ai.missing || []).length > 0
+                    : effectiveMissing.length > 0
                     ? 'Fill the missing information first'
                     : 'Resolve the low-confidence fields first'
                   : undefined}
@@ -1736,9 +1755,9 @@ function AiLeadDetail({ lead }) {
                   Blocked — {pendingLow.length} field{pendingLow.length > 1 ? 's' : ''} below the {med}% confidence threshold.
                 </p>
               )}
-              {lead.status === 'Qualified' && (ai.missing || []).length > 0 && (
+              {lead.status === 'Qualified' && effectiveMissing.length > 0 && (
                 <p className="ws-foot-note">
-                  Blocked — {ai.missing.length} missing item{ai.missing.length > 1 ? 's' : ''} still need to be filled.
+                  Blocked — {effectiveMissing.length} missing item{effectiveMissing.length > 1 ? 's' : ''} still need to be filled.
                 </p>
               )}
               {verificationBlocked && (
