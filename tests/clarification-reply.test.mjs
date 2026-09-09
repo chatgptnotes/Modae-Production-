@@ -16,5 +16,14 @@ test('clarification reply flow has one reply upload action and AI matching', () 
 test('AI endpoints expose clarification answer mapping', () => {
   assert.match(read('api/ai.js'), /clarification\.answer/)
   assert.match(read('api/ai.js'), /clarificationAnswerSchema/)
+  assert.match(read('api/ai.js'), /missing: \{ type: 'STRING' \}/)
+  assert.match(read('api/ai.js'), /Needs review/)
   assert.match(read('supabase/functions/ai/index.ts'), /'clarification\.answer'/)
+  assert.match(read('supabase/functions/ai/index.ts'), /missing: STR/)
+})
+
+test('partial customer answers remain reviewable and blocking', () => {
+  assert.match(read('src/store.jsx'), /status === 'Needs review'/)
+  assert.match(read('src/pages/Workbench.jsx'), /row\.status === 'Needs review'/)
+  assert.match(read('src/gates.js'), /'Needs review'/)
 })

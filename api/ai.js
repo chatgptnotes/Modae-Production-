@@ -102,8 +102,8 @@ const clarificationAnswerSchema = {
   type: 'OBJECT',
   properties: {
     rows: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
-      id: { type: 'STRING' }, response: { type: 'STRING' }, confidence: { type: 'INTEGER' }, evidence: { type: 'STRING' },
-    }, required: ['id', 'response', 'confidence', 'evidence'] } },
+      id: { type: 'STRING' }, status: { type: 'STRING' }, response: { type: 'STRING' }, missing: { type: 'STRING' }, confidence: { type: 'INTEGER' }, evidence: { type: 'STRING' },
+    }, required: ['id', 'status', 'response', 'missing', 'confidence', 'evidence'] } },
   },
   required: ['rows'],
 }
@@ -222,11 +222,18 @@ technical specifications.`
 function clarificationAnswerPrompt(p) {
   return `${HOUSE}
 
-Match a customer's reply to the open clarification questions for this opportunity.
-Return only questions directly answered by the reply. Preserve each question ID
-exactly. Do not infer, combine, or invent information; return an empty rows list
-when the reply does not answer a question. Evidence must identify the email body
-or attachment text supporting the answer.
+Check the customer's reply against EVERY open clarification question for this
+opportunity. Preserve each question ID exactly. Do not infer, combine, or invent
+information. Return one row for every open question, even when it is unanswered.
+Use status exactly as follows: Answered means the reply and/or an attached file
+fully answers the question; Needs review means it provides only part of the
+answer or refers to an attachment that is missing/unreadable; Unanswered means
+there is no useful answer. Put the useful customer text in response, list the
+specific missing details in missing, and cite the email body or attachment name
+in evidence. A partial BOQ without part numbers or without all requested lines
+must be Needs review, not Answered. A system-configuration question is not fully
+answered by only giving the application or RPM. “See attached BOM” answers a
+part-number question only when the BOM is actually present and readable.
 
 Opportunity: ${cap(p.oppName, 300)} · customer: ${cap(p.customer, 200)}
 From: ${cap(p.from, 300)}

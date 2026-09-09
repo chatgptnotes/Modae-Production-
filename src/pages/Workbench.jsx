@@ -771,7 +771,7 @@ const CLAR_SUGGESTIONS = {
   ],
 }
 
-const clarTone = s => (s === 'Answered' ? 'state-Accepted' : s === 'Sent' ? 'state-Review' : 'grey')
+const clarTone = s => (s === 'Answered' ? 'state-Accepted' : ['Sent', 'Needs review'].includes(s) ? 'state-Review' : 'grey')
 
 const deviationClarification = term => ({
   category: 'Commercial',
@@ -946,7 +946,7 @@ function ClarificationsTab({ opp }) {
       kind: 'clarification-response',
     })
     const byId = new Map(open.map(c => [c.id, c]))
-    const matches = (ai?.rows || []).filter(row => byId.has(row.id) && String(row.response || '').trim())
+    const matches = (ai?.rows || []).filter(row => byId.has(row.id) && ['Answered', 'Needs review'].includes(row.status) && (String(row.response || '').trim() || String(row.missing || '').trim()))
     for (const row of matches) {
       store.answerClarification(row.id, {
         response: String(row.response).trim(),
@@ -955,14 +955,18 @@ function ClarificationsTab({ opp }) {
         attachments: attachmentMeta,
         evidence: row.evidence,
         aiConfidence: row.confidence,
+        status: row.status,
+        missing: String(row.missing || '').trim(),
       })
     }
-    const remaining = Math.max(0, open.length - matches.length)
+    const answered = matches.filter(row => row.status === 'Answered').length
+    const needsReview = matches.filter(row => row.status === 'Needs review').length
+    const remaining = Math.max(0, open.length - answered - needsReview)
     setBusy('')
     setReplyOpen(false)
     setReplyFiles([])
     setReplyOk(matches.length
-      ? `AI checked the reply and matched ${matches.length} question${matches.length === 1 ? '' : 's'}. Customer reply saved${remaining ? `; ${remaining} remain open` : ''}.`
+      ? `AI checked the reply: ${answered} answered${needsReview ? `, ${needsReview} need review` : ''}${remaining ? `, ${remaining} unanswered` : ''}. Customer reply saved.`
       : ai
         ? 'AI checked the reply but found no answer for the open questions. Customer reply saved; use “Update information” to assign answers manually.'
         : `Customer reply saved, but AI could not check it (${aiResult?.error || 'AI connection unavailable'}). Use “Update information” to assign answers manually.`)
@@ -1019,7 +1023,7 @@ function ClarificationsTab({ opp }) {
                 <td>{c.id}</td>
                 <td>{c.category}</td>
                 <td>{c.gap}<div className="hint">{c.evidence}</div></td>
-                <td>{c.q}{c.response && <div className="okbox">Response: {c.response}<div className="hint">From {c.answerSource || c.audience || 'source'}{c.answeredAt ? ` · ${ddMmmYY(c.answeredAt)}` : ''}</div>{(c.attachments || []).map(f => <div key={f.name} className="hint"><Icon name="fileText" size={11} /> {f.name}</div>)}</div>}</td>
+                <td>{c.q}{(c.response || c.missing) && <div className={c.status === 'Needs review' ? 'warnbox' : 'okbox'}>{c.response && <>Response: {c.response}</>}{c.missing && <div className="hint"><b>Still needed:</b> {c.missing}</div>}<div className="hint">From {c.answerSource || c.audience || 'source'}{c.answeredAt ? ` · ${ddMmmYY(c.answeredAt)}` : ''}</div>{c.answerEvidence && <div className="hint">Evidence: {c.answerEvidence}</div>}{(c.attachments || []).map(f => <div key={f.name} className="hint"><Icon name="fileText" size={11} /> {f.name}</div>)}</div>}</td>
                 <td>{displayRole(c.owner)}</td>
                 <td>{c.audience}</td>
                 <td>{ddMmmYY(c.due)}</td>

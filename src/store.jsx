@@ -1000,7 +1000,7 @@ export function StoreProvider({ children }) {
       }, patch.status ? `Clarification ${patch.status.toLowerCase()}` : 'Clarification updated', id))
     },
 
-    answerClarification(id, { response, answerSource = '', answeredAt = '', attachments = [], evidence = '', aiConfidence = null }) {
+    answerClarification(id, { response, answerSource = '', answeredAt = '', attachments = [], evidence = '', aiConfidence = null, status = 'Answered', missing = '' }) {
       setState(s => withAudit({
         ...s,
         clarifications: s.clarifications.map(c => (c.id === id ? {
@@ -1011,10 +1011,11 @@ export function StoreProvider({ children }) {
            answeredBy: s.role,
            ...(evidence ? { answerEvidence: evidence } : {}),
            ...(aiConfidence !== null && aiConfidence !== undefined ? { aiConfidence } : {}),
+           ...(missing ? { missing } : { missing: '' }),
            attachments: [...(c.attachments || []), ...attachments],
-          status: 'Answered',
+          status: status === 'Needs review' ? 'Needs review' : 'Answered',
         } : c)),
-      }, 'Clarification answered', id, response))
+      }, status === 'Needs review' ? 'Clarification marked needs review' : 'Clarification answered', id, response))
     },
 
     // ---- Manufacturer / vendor quotes --------------------------------------

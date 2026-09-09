@@ -388,7 +388,7 @@ export function transitionBlockers(opp, target, proposal, state) {
   }
 
   const clarifications = (state.clarifications || []).filter(c => c.oppId === opp.id)
-  if (next >= MILESTONES.indexOf('Sourcing') && clarifications.some(c => ['Draft', 'Open', 'Sent'].includes(c.status))) {
+  if (next >= MILESTONES.indexOf('Sourcing') && clarifications.some(c => ['Draft', 'Open', 'Sent', 'Needs review'].includes(c.status))) {
     b.push({ key: 'clarifications', severity: 'block', text: `All customer clarifications must be resolved before moving to ${target}` })
   }
 
