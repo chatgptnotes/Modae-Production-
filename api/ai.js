@@ -88,6 +88,16 @@ const emailProposalSchema = {
   required: ['text'],
 }
 
+const clarificationSuggestSchema = {
+  type: 'OBJECT',
+  properties: {
+    rows: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+      category: { type: 'STRING' }, gap: { type: 'STRING' }, q: { type: 'STRING' }, evidence: { type: 'STRING' },
+    }, required: ['category', 'gap', 'q', 'evidence'] } },
+  },
+  required: ['rows'],
+}
+
 function leadPrompt(p) {
   return `${HOUSE}
 
@@ -171,6 +181,34 @@ REQUESTED LINES:
 ${cap((p.lines || []).map(l => `${l.id}: ${l.pn || l.custRef || 'No part number'} - ${l.desc || 'Item'} - Qty ${l.qty || 1}`).join('\n'), 12000) || 'No priced lines are available yet; return an overall indicative response with an empty prices list.'}`
 }
 
+function clarificationSuggestPrompt(p) {
+  return `${HOUSE}
+
+Propose only the clarification questions this opportunity still needs answered
+before a firm proposal can be issued. Return 0-6 distinct questions. Use the
+known opportunity, scope, BOQ and commercial deviations below; never ask for
+information already present. If a payment or delivery deviation is listed,
+ask the customer to confirm the exact offered term or delivery basis. Do not
+replace a known deviation with a generic question.
+
+Opportunity: ${cap(p.oppName, 300)}
+Customer: ${cap(p.sellTo, 200)} · route: ${cap(p.route, 40)} · segment: ${cap(p.segment, 80)}
+End user: ${cap(p.eucName, 200)} · location: ${cap(p.location, 200)}
+Scope / remarks:
+${cap(p.remarks, 4000)}
+BoQ lines:
+${cap((p.lines || []).map(l => `${l.pn || ''} ${l.desc || ''} × ${l.qty ?? ''}`).join('\n'), 6000) || '(none)'}
+Commercial deviations:
+${cap((p.deviations || []).map(d => `${d.term || 'Term'} — customer asks: ${d.customerAsk || 'not recorded'}; ModAE offers: ${d.ourResponse || 'not recorded'}`).join('\n'), 5000) || '(none)'}
+Questions already raised (do not repeat):
+${cap((p.existing || []).join('\n'), 3000) || '(none)'}
+
+Return category as one of Technical, Commercial, Site data, or Logistics.
+Each row must state the specific gap, its evidence source, and one precise
+customer-facing question. Do not invent prices, dates, quantities, terms, or
+technical specifications.`
+}
+
 function proposalEmailPrompt(p) {
   return `${HOUSE}
 
@@ -232,7 +270,7 @@ export default async function handler(req, res) {
   const task = String(input.task || '')
   const payload = input.payload || {}
   const model = /^gemini-[\w.-]+$/.test(String(input.model || '')) ? String(input.model) : DEFAULT_MODEL
-  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal'].includes(task)) {
+  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'clarification.suggest'].includes(task)) {
     return fail(res, 400, 'AI_BAD_REQUEST', `Unsupported task: ${task}`)
   }
 
@@ -240,15 +278,17 @@ export default async function handler(req, res) {
     : task === 'lead.fill' ? fillPrompt(payload)
       : task === 'vendor.quote' ? vendorQuotePrompt(payload)
         : task === 'email.proposal' ? proposalEmailPrompt(payload)
+          : task === 'clarification.suggest' ? clarificationSuggestPrompt(payload)
           : leadPrompt(payload)
   const requestBody = {
     contents: [{ parts: [{ text: prompt }, ...(task === 'lead.extract' ? inlineParts(payload) : [])] }],
-    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal'].includes(task)
+    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'clarification.suggest'].includes(task)
       ? {
           responseMimeType: 'application/json',
           responseSchema: task === 'lead.fill' ? fillSchema
             : task === 'vendor.quote' ? vendorQuoteSchema
               : task === 'email.proposal' ? emailProposalSchema
+                : task === 'clarification.suggest' ? clarificationSuggestSchema
                 : leadSchema,
         }
       : {},

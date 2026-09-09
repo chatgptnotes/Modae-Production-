@@ -47,12 +47,24 @@ export const approvalNotificationPath = approval => approval?.oppId
   ? `/opp/${approval.oppId}/approvals`
   : '/approvals'
 
+const approvalOwner = (approval, store) => {
+  if (approval?.oppId) return store.opportunities.find(o => o.id === approval.oppId)?.owner || approval.requestedBy
+  if (approval?.leadId) {
+    const lead = store.leads.find(l => l.id === approval.leadId)
+    return lead?.assignedOwner || lead?.suggestedOwner || approval.requestedBy
+  }
+  return approval?.requestedBy
+}
+
 function NotificationBell({ store, nav }) {
   const [open, setOpen] = useState(false)
   const role = store.role
   const notifications = [
     ...(store.approvals || []).filter(a => a.status === 'Pending' && ([...(a.needed || []), a.approver, a.requestedBy].filter(Boolean).includes(role))).map(a => ({
       id: `approval-${a.id}`, icon: 'checkCircle', title: 'Approval waiting', text: a.detail || a.type, to: approvalNotificationPath(a), date: a.ts,
+    })),
+    ...(store.approvals || []).filter(a => ['Approved', 'Approved with conditions', 'Returned', 'Rejected'].includes(a.status) && approvalOwner(a, store) === role).map(a => ({
+      id: `approval-result-${a.id}`, icon: 'checkCircle', title: `Approval ${a.status.toLowerCase()}`, text: a.detail || a.type, to: approvalNotificationPath(a), date: a.decisionTs || a.ts,
     })),
     ...(store.opportunities || []).filter(o => o.status === 'Open' && o.owner === role && o.lastUpdated && ((Date.now() - new Date(o.lastUpdated).getTime()) / 86400000) >= 7).map(o => ({
       id: `stale-${o.id}`, icon: 'clock', title: 'Follow-up overdue', text: `${o.id} has not been updated for 7 days`, to: `/opp/${o.id}`, date: o.lastUpdated,

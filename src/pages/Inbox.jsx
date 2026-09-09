@@ -174,9 +174,8 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
     if (subject?.trim()) fields.push({ group: 'RFQ', k: 'Subject', v: subject.trim(), conf: 55, ev: 'Email subject', note: 'Confirm the opportunity name and route.' })
     if (body?.trim()) fields.push({ group: 'RFQ', k: 'Email body', v: sliceAtWordBoundary(cleanDisplayValue(body), 2000), conf: 35, ev: 'Email body', note: 'Fallback preview; the complete source is retained separately. Structure the requested scope and quantities.' })
     if (attachmentText) fields.push({ group: 'RFQ', k: 'Attachment content', v: sliceAtWordBoundary(cleanDisplayValue(attachmentText), 4000), conf: 45, ev: 'Attached document content', note: 'Fallback preview; the complete source is retained separately. Confirm the scope, quantities and specifications.' })
-    const missing = ['Customer name', 'Opportunity scope', 'Required quantities and specifications']
+    const missing = ['Customer name', 'Required quantities and specifications']
     const lineItems = parseLeadLineItems(`${body || ''}\n${attachmentText}`)
-    if (attachmentText) missing.splice(missing.indexOf('Opportunity scope'), 1)
     if (attachmentHasSpecs) {
       const i = missing.indexOf('Required quantities and specifications')
       if (i >= 0) missing.splice(i, 1)
@@ -362,6 +361,14 @@ function LeadVerification({ lead, customerStatus, store }) {
         })}
       </div>
       {!leadVerificationComplete(lead, customerStatus, { config: store.config }) && <p className="lead-decision-note">Customer KYC is not complete — Opportunity creation is blocked.</p>}
+    </div>
+  )
+
+  if (customerStatus === 'Red') return (
+    <div className="lead-decision-card" style={{ marginTop: 12 }}>
+      <div className="lead-decision-head"><div><b>Red customer — payment confirmation</b><span>Payment confirmation is not required at Lead stage</span></div>
+        <span className="lead-decision-saved">Not required</span></div>
+      <div className="okbox">The Red-customer control is the joint LJS + AH approval shown above. Opportunity creation can continue once that approval and the remaining lead decisions are complete.</div>
     </div>
   )
 
@@ -619,11 +626,8 @@ const updateLeadField = (fields, key, value, group = 'RFQ') => {
 export function reconcileMissingWithDecisions(missing = [], decisions = {}, fields = [], lineItems = []) {
   return (missing || []).filter(label => {
     const text = String(label || '').toLowerCase()
+    if (text.includes('opportunity scope')) return false
     if (text.includes('customer name')) return !String(decisions.sellTo || '').trim()
-    if (text.includes('opportunity scope')) {
-      return !String(decisions.scope || '').trim()
-        && !fields.some(field => /scope|opp(ortunity)?s*(scope|description)/i.test(field.k) && String(field.v || '').trim())
-    }
     if (text.includes('quantit') || text.includes('specification')) {
       return !(lineItems || []).some(item => String(item.description || item.desc || '').trim() && Number(item.qty) > 0)
     }

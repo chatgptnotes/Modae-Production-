@@ -89,7 +89,9 @@ export default function Register() {
   // copy read no approvals, so it could never clear and an approved Red lead
   // could never be registered.
   const verificationBlockers = leadVerificationBlockers(lead, leadCustomerStatus, { redCleared, config: store.config })
-  const missingInfo = lead?.ai?.missing || []
+  // Opportunity scope is useful context but is not required to register a
+  // lead; the opportunity can be structured and scoped later in the workbench.
+  const missingInfo = (lead?.ai?.missing || []).filter(item => !/opportunity\s+scope/i.test(String(item)))
   const identity = {
     sellTo: identityValue(lead, fields, 'sellTo', /sell-to/i),
     eucName: identityValue(lead, fields, 'eucName', /euc\s*name/i),

@@ -34,3 +34,16 @@ test('mailbox bulk toolbar actions are wired', () => {
   assert.match(inbox, /store\.updateLeads\(selectedIds, \{ readAt:/)
   assert.match(fs.readFileSync(new URL('../src/store.jsx', import.meta.url), 'utf8'), /updateLeads\(ids, patch, detail = ''\)/)
 })
+
+test('opportunity scope is optional during lead qualification and registration', () => {
+  assert.match(inbox, /const missing = \['Customer name', 'Required quantities and specifications'\]/)
+  assert.match(inbox, /if \(text\.includes\('opportunity scope'\)\) return false/)
+  const register = fs.readFileSync(new URL('../src/pages/Register.jsx', import.meta.url), 'utf8')
+  assert.match(register, /missingInfo = .*filter\(item => !\/opportunity\\s\+scope\/i\.test/)
+})
+
+test('red leads explain why payment confirmation is not shown', () => {
+  assert.match(inbox, /Red customer — payment confirmation/)
+  assert.match(inbox, /Payment confirmation is not required at Lead stage/)
+  assert.match(inbox, /joint LJS \+ AH approval shown above/)
+})

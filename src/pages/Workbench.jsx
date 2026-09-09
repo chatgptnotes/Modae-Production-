@@ -773,6 +773,13 @@ const CLAR_SUGGESTIONS = {
 
 const clarTone = s => (s === 'Answered' ? 'state-Accepted' : s === 'Sent' ? 'state-Review' : 'grey')
 
+const deviationClarification = term => ({
+  category: 'Commercial',
+  gap: `${term.term || 'Commercial'} deviation requires customer confirmation`,
+  q: `Please confirm your acceptance of the proposed ${String(term.term || 'commercial').toLowerCase()} term: ${term.ourResponse || 'the term stated in our proposal'}.`,
+  evidence: 'Proposal deviations',
+})
+
 function ClarificationsTab({ opp }) {
   const store = useStore()
   const rows = store.clarifications.filter(c => c.oppId === opp.id)
@@ -792,16 +799,24 @@ function ClarificationsTab({ opp }) {
   const suggest = async () => {
     setBusy('suggest')
     const proposal = store.getProposal(opp.id)
+    const deviations = (proposal.terms || []).filter(t => t.status === 'Deviation')
+    const existingQuestions = rows.map(c => c.q)
     const ai = await runJson('clarification.suggest', {
       oppName: opp.oppName, sellTo: opp.sellTo, route: opp.route, segment: opp.segment,
       eucName: opp.eucName, location: opp.location, remarks: opp.remarks,
       lines: (proposal.lines || []).map(l => ({ pn: l.pn, desc: l.desc, qty: l.qty })),
-      existing: rows.map(c => c.q),
+      deviations: deviations.map(t => ({ term: t.term, customerAsk: t.customerAsk, ourResponse: t.ourResponse })),
+      existing: existingQuestions,
     }, { fallback: store.config?.aiModel?.provider === 'Built-in fallback' })
     setBusy('')
     const due = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
-    const suggestions = ai?.rows?.length ? ai.rows : (CLAR_SUGGESTIONS[opp.route] || CLAR_SUGGESTIONS.Project)
-    for (const s of suggestions) {
+    const targeted = deviations.map(deviationClarification)
+      .filter(row => !existingQuestions.some(q => q.toLowerCase() === row.q.toLowerCase()))
+    const aiRows = (ai?.rows || []).filter(row => !existingQuestions.some(q => q.toLowerCase() === String(row.q || '').toLowerCase()))
+    const fallbackRows = targeted.length ? targeted : (CLAR_SUGGESTIONS[opp.route] || CLAR_SUGGESTIONS.Project)
+    const suggestions = [...targeted, ...aiRows.filter(row => !targeted.some(item => item.q === row.q))]
+    const selected = (suggestions.length ? suggestions : fallbackRows).slice(0, 6)
+    for (const s of selected) {
       store.addClarification({ ...s, oppId: opp.id, owner: opp.owner, audience: 'Customer', due, status: 'Open' })
     }
   }

@@ -368,12 +368,16 @@ Scope / remarks:
 ${cap(p.remarks, 4000)}
 BoQ lines so far:
 ${cap((p.lines || []).map((l: any) => `${l.pn || ''} ${l.desc || ''} × ${l.qty ?? ''}`).join('\n'), 6000) || '(none priced yet)'}
+Commercial deviations:
+${cap((p.deviations || []).map((d: any) => `${d.term || 'Term'} — customer asks: ${d.customerAsk || 'not recorded'}; ModAE offers: ${d.ourResponse || 'not recorded'}`).join('\n'), 5000) || '(none)'}
 Questions already raised (do not repeat these):
 ${cap((p.existing || []).join('\n'), 3000) || '(none)'}
 
 category is one of: Technical, Commercial, Site data, Logistics.
 gap names what is missing; evidence names where that gap shows up; q is the
-question as it would be written to the customer.`,
+question as it would be written to the customer. Prioritize each listed
+commercial deviation and ask for confirmation of the exact proposed term. Do
+not ask generic questions when the information is already present.`,
   },
 
   // ---- Workbench: clarification email body
