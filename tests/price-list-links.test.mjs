@@ -7,8 +7,8 @@ const priceLists = fs.readFileSync('src/pages/PriceLists.jsx', 'utf8')
 
 test('Sourcing price-list sources deep-link to the exact part', () => {
   assert.match(spares, /navigate\(`\/pricelists\?list=\$\{encodeURIComponent\(list\)\}&part=\$\{encodeURIComponent\(part\)\}`\)/)
-  assert.match(spares, /line\.priceSource === PRICE_SOURCES\.LIST/)
-  assert.match(spares, /title="Open this part in the price list"/)
+  assert.match(spares, /source\.source === PRICE_SOURCES\.LIST/)
+  assert.match(spares, /Open \$\{source\.full\} in the price list/)
 })
 
 test('Price Lists selects and highlights a deep-linked part', () => {

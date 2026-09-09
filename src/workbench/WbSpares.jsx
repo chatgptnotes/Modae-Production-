@@ -6,7 +6,7 @@ import { canPriceProposal, unitCostINR, fmt } from '../utils.js'
 import { pricingThresholdExceptions } from '../gates.js'
 import { Chip, ConfChip, AiBadge, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
-import { PRICE_SOURCES, resolvePriceSource } from '../pricing.js'
+import { PRICE_SOURCES, formatPriceSource, resolvePriceSource } from '../pricing.js'
 
 const n = value => Number.isFinite(Number(value)) ? Number(value) : 0
 const money = value => `₹ ${fmt(n(value))}`
@@ -74,6 +74,7 @@ export default function WbSpares({ opp, openBuilder }) {
   const grossMarginPct = totals.revenue > 0 ? grossProfit / totals.revenue * 100 : 0
   const proposalOnlyMismatch = !lines.length && (proposal.bom || []).length > 0
   const expiredLines = lines.filter(l => l.priceState === 'Expired')
+  const needsPricingLines = lines.filter(l => l.priceState === 'Needs pricing')
   const pricingExceptions = pricingThresholdExceptions(opp, proposal, store)
   const clarifications = (store.clarifications || []).filter(c => c.oppId === opp.id && c.status === 'Answered')
 
@@ -103,10 +104,7 @@ export default function WbSpares({ opp, openBuilder }) {
     setShowAddPart(false)
   }
   const onNewKeyDown = event => { if (event.key === 'Enter') { event.preventDefault(); addManual() } }
-  const sourceLabel = line => {
-    const base = `${line.priceSourceName || line.priceList || 'Unpriced'}${line.priceSourceVersion ? ` ${line.priceSourceVersion}` : ''}`
-    return line.priceSource === PRICE_SOURCES.LIST ? `${base} (price list)` : base
-  }
+  const sourceDetails = line => formatPriceSource(line)
   const priceListNameFor = line => {
     const sourceName = String(line.priceSourceName || '').trim()
     const sourceLabel = String(line.priceList || '').trim()
@@ -181,7 +179,7 @@ export default function WbSpares({ opp, openBuilder }) {
       priceList: `${resolved.sourceName} ${resolved.sourceVersion}`.trim(),
       priceSource: resolved.source, priceSourceName: resolved.sourceName, priceSourceVersion: resolved.sourceVersion,
     } : null
-    store.updateSparesLine(line.id, { pn: alt.pn, desc: alt.desc, confirmed: true, ...(priced || {}), priceState: priced ? (alt.priceState || 'Current') : 'Expired' })
+    store.updateSparesLine(line.id, { pn: alt.pn, desc: alt.desc, confirmed: true, ...(priced || {}), priceState: priced ? (alt.priceState || 'Current') : 'Needs pricing' })
     setCompareFor(null)
     setCompareSearch('')
   }
@@ -191,6 +189,7 @@ export default function WbSpares({ opp, openBuilder }) {
     <div className="section-title">Spares workbench — part matching ({lines.length} line{lines.length === 1 ? '' : 's'})</div>
     {clarifications.length > 0 && <div className="okbox customer-information-banner sourcing-clarification-context"><b>Confirmed customer information</b><span className="hint"> These answers stay attached to the opportunity and should be checked while validating each line.</span>{clarifications.map(c => <div key={c.id} className="sourcing-clarification-row"><b>{c.category || 'Clarification'}:</b> {c.response}<span className="hint"> · {c.answerSource || 'Customer'}{c.answeredAt ? ` · ${c.answeredAt}` : ''}</span></div>)}</div>}
     {!!expiredLines.length && <div className="warnbox spares-price-warning"><b>{expiredLines.length} price source{expiredLines.length === 1 ? '' : 's'} expired.</b>{' '}Use <b>Compare</b> in the Actions column to select a current price-list part, or apply a current manufacturer quote only when the approved price list cannot be used.</div>}
+    {!!needsPricingLines.length && <div className="warnbox spares-price-warning"><b>{needsPricingLines.length} line{needsPricingLines.length === 1 ? '' : 's'} need pricing.</b>{' '}Use <b>Compare</b> to select a current price-list part, apply a manufacturer quote, or enter a manual price before continuing.</div>}
     {!!pricingExceptions.rows.length && <div className="warnbox" role="status"><b>Pricing approval required.</b>{' '}A discount above {pricingExceptions.discountPct}% or markup above {pricingExceptions.markupPct}% needs one approval from AH or LJS before Proposal.</div>}
     {proposalOnlyMismatch && <div className="warnbox sourcing-flow-warning"><b>Proposal data is not linked to Sourcing.</b> Existing proposal rows are not imported automatically. Add or import the real parts here before continuing to Proposal.</div>}
     <div className="sourcing-table-card">
@@ -200,7 +199,7 @@ export default function WbSpares({ opp, openBuilder }) {
         <tbody>
           {calculatedItems.map(item => { const line = item.sourceLine; const row = { ...item, discountPct: item.discountPercent, markupPct: item.markupPercent, listTotal: item.listTotal, lineTotal: item.lineTotal, cogs: item.lineTotalCogs }; const partDescription = `${line.pn || 'Manual part'}${line.desc ? ` — ${line.desc}` : ''}`; return <tr key={line.id} className={row.qty === 0 ? 'sourcing-zero-row' : ''}>
             <td className="sourcing-cell-part align-top p-2 overflow-hidden"><div className="sourcing-part-line"><div className="sourcing-part-copy"><span className="hint sourcing-part-ref truncate overflow-hidden text-ellipsis whitespace-nowrap">{line.custRef}</span><div className="sourcing-part-description line-clamp-2 text-xs font-medium text-gray-900 leading-snug" title={partDescription}>{partDescription}</div><small className="hint truncate overflow-hidden text-ellipsis whitespace-nowrap">{line.oem || '—'} · Lead: {line.leadTime || 'TBC'}</small></div>{comm && <button className="sourcing-remove-row" title="Remove row from active proposal" aria-label={`Remove ${line.pn || line.id}`} onClick={() => updateLine(line, 'qty', 0)}>×</button>}</div></td>
-            <td className="sourcing-cell-source align-top p-2 overflow-hidden"><div className="sourcing-source-stack">{line.priceSource === PRICE_SOURCES.LIST && priceListNameFor(line) ? <button type="button" className="sourcing-source-link truncate overflow-hidden text-ellipsis whitespace-nowrap" title="Open this part in the price list" onClick={() => openPriceList(line)}>{sourceLabel(line)}</button> : <span className="sourcing-source-name truncate overflow-hidden text-ellipsis whitespace-nowrap">{sourceLabel(line)}</span>}{line.priceSource === 'vendor-quote' && <Chip tone="state-Review">Vendor fallback</Chip>}{line.priceSource === 'manual' && <Chip tone="grey">Manual/override</Chip>}{line.priceState === 'Expired' ? <><Chip tone="state-Blocks">Expired</Chip><AiBadge label="pricing anomaly" /></> : <Chip tone="state-Accepted">Current</Chip>}</div></td>
+            <td className="sourcing-cell-source align-top p-2 overflow-hidden"><div className="sourcing-source-stack">{(() => { const source = sourceDetails(line); const sourcePayload = { ...source, pn: line.pn || line.custRef || line.id, priceState: line.priceState || 'Unstated', listPrice: line.listUnitPrice ?? line.listPrice, currency: line.currency || 'INR' }; const isCatalogued = source.source === PRICE_SOURCES.LIST && priceListNameFor(line); return <><div className="sourcing-source-primary">{isCatalogued ? <button type="button" className="sourcing-source-link sourcing-source-name" title={`Open ${source.full} in the price list`} aria-label={`Open ${source.full} in the price list`} onClick={() => openPriceList(line)}>{source.primary}</button> : <button type="button" className="sourcing-source-details-link sourcing-source-name" title={`View full source: ${source.full}`} aria-label={`View full source: ${source.full}`} onClick={() => setEvidence(sourcePayload)}>{source.primary}</button>}</div>{source.secondary && <span className="sourcing-source-meta" title={source.full}>{source.secondary}</span>}{line.priceSource === 'vendor-quote' && <Chip tone="state-Review">Vendor fallback</Chip>}{line.priceSource === 'manual' && <Chip tone="grey">Manual/override</Chip>}{line.priceState === 'Expired' ? <><Chip tone="state-Blocks">Expired</Chip><AiBadge label="pricing anomaly" /></> : line.priceState === 'Needs pricing' ? <Chip tone="state-Review">Needs pricing</Chip> : <Chip tone="state-Accepted">Current</Chip>}</> })()}</div></td>
             <td className="num"><EditableNumber value={row.qty} label={`Quantity for ${line.pn || line.id}`} disabled={!comm} step="1" onChange={value => updateLine(line, 'qty', Math.max(0, Math.round(value)))} /></td>
             <td className="num"><EditableNumber value={row.listUnitPrice} label={`List price for ${line.pn || line.id}`} disabled={!comm} onChange={value => updateLine(line, 'listUnitPrice', value)} /></td>
             <td className="num"><EditableNumber value={Math.round(row.discountPct)} label={`Discount for ${line.pn || line.id}`} disabled={!comm} step="1" onChange={value => updateLine(line, 'discountPct', Math.min(100, Math.max(0, Math.round(value))))} suffix="%" /></td>
@@ -266,7 +265,7 @@ export default function WbSpares({ opp, openBuilder }) {
         <div style={{ marginTop: 10, textAlign: 'right' }}><button onClick={close}>Close</button></div>
       </Modal>
     })()}
-    {evidence && <Modal title="Evidence — price source" onClose={() => setEvidence(null)}><p style={{ fontSize: 12.5 }}><b>{evidence.pn}</b> priced from <b>{evidence.priceList}</b> ({evidence.priceState}), {comm ? <span>{fmt(evidence.listPrice)} {evidence.currency} list. </span> : <span className="restricted"><Icon name="lock" size={11} /> list price restricted. </span>}Row-level evidence is simulated in this demo — the production system links the exact price-list row.</p><div style={{ textAlign: 'right' }}><button onClick={() => setEvidence(null)}>Close</button></div></Modal>}
+    {evidence && <Modal title="Evidence — price source" onClose={() => setEvidence(null)}><p style={{ fontSize: 12.5 }}><b>{evidence.pn}</b> uses <b>{evidence.full}</b>.</p><dl className="sourcing-source-evidence"><div><dt>Source type</dt><dd>{evidence.kind}</dd></div><div><dt>Price status</dt><dd>{evidence.priceState}</dd></div>{comm && evidence.listPrice != null && <div><dt>Unit price</dt><dd>{fmt(evidence.listPrice)} {evidence.currency}</dd></div>}{evidence.secondary && <div><dt>Source detail</dt><dd>{evidence.secondary}</dd></div>}</dl><p className="hint">Row-level evidence is simulated in this demo — the production system links the exact price-list row.</p><div style={{ textAlign: 'right' }}><button onClick={() => setEvidence(null)}>Close</button></div></Modal>}
   </div>
 }
 

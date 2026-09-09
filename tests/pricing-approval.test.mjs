@@ -50,3 +50,11 @@ test('Admin-configured pricing approvers are used by the blocker', () => {
   assert.deepEqual(pricing.needed, ['AN'])
   assert.equal(pricing.anyOf, false)
 })
+
+test('unpriced spares lines have a distinct pricing blocker', () => {
+  const blockers = readiness(opp, { bom: [] }, {
+    ...state,
+    sparesLines: [{ id: 'SL-UNPRICED', oppId: 'PRICE-1', pn: 'P-2', confirmed: true, priceState: 'Needs pricing' }],
+  })
+  assert.equal(blockers.find(item => item.key === 'sp-price-SL-UNPRICED')?.text, 'Pricing required — select a price-list part or apply an approved quote (P-2)')
+})

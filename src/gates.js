@@ -155,6 +155,8 @@ export function readiness(opp, proposal, state) {
     for (const l of (state.sparesLines || []).filter(x => x.oppId === opp.id && !isPlaceholderSparesLine(x))) {
       if (!l.confirmed) {
         b.push({ key: `sp-conf-${l.id}`, severity: 'block', text: `Unconfirmed part match — ${l.custRef || l.pn}` })
+      } else if (l.priceState === 'Needs pricing') {
+        b.push({ key: `sp-price-${l.id}`, severity: 'block', text: `Pricing required — select a price-list part or apply an approved quote (${l.pn || l.custRef})` })
       } else if (l.priceState === 'Expired') {
         b.push({ key: `sp-price-${l.id}`, severity: 'block', text: `Expired price source — request price update (${l.pn})` })
       }

@@ -57,7 +57,9 @@ export function buildLeadProposalData(lead, priceLists, vendorPrices = []) {
     priceList: match ? `${match.list || 'Price list'}${match.version ? ` ${match.version}` : ''}` : 'Ad-hoc',
     priceSource: match?.list === 'Vendor quote' ? 'vendor-quote' : match ? 'price-list' : 'manual',
     priceSourceName: match?.list === 'Vendor quote' ? (match.desc || 'Vendor reference') : match?.list || 'Manual entry',
-    priceState: match ? 'Current' : 'Expired',
+    // An unmatched line has never had a usable price source. Keep that
+    // distinct from an actual catalogue row whose validity has elapsed.
+    priceState: match ? 'Current' : 'Needs pricing',
     listPrice: match?.price || 0,
     currency: match?.currency || 'INR',
     evidence: extracted[i].evidence,
