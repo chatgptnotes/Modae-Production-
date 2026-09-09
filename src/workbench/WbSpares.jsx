@@ -63,13 +63,15 @@ export default function WbSpares({ opp, openBuilder }) {
     const lineTotalCogs = item.qty * item.baseCost
     return { ...item, listTotal, adjustedUnitPrice, lineTotal, lineTotalCogs, lineProfit: lineTotal - lineTotalCogs }
   }), [lineItems])
+  const pricedItems = calculatedItems.filter(item => item.qty > 0 && item.listUnitPrice > 0)
   const activeItems = calculatedItems.filter(item => item.qty > 0 && item.confirmed)
-  const totals = useMemo(() => activeItems.reduce((total, item) => ({
+  const pendingConfirmationCount = pricedItems.filter(item => !item.confirmed).length
+  const totals = useMemo(() => pricedItems.reduce((total, item) => ({
     revenue: total.revenue + item.lineTotal,
     cogs: total.cogs + item.lineTotalCogs,
     originalTotal: total.originalTotal + item.listTotal,
     quantity: total.quantity + item.qty,
-  }), { revenue: 0, cogs: 0, originalTotal: 0, quantity: 0 }), [activeItems])
+  }), { revenue: 0, cogs: 0, originalTotal: 0, quantity: 0 }), [pricedItems])
   const grossProfit = totals.revenue - totals.cogs
   const grossMarginPct = totals.revenue > 0 ? grossProfit / totals.revenue * 100 : 0
   const proposalOnlyMismatch = !lines.length && (proposal.bom || []).length > 0
@@ -230,6 +232,7 @@ export default function WbSpares({ opp, openBuilder }) {
           <div><span>Gross Profit</span><strong className="font-bold text-red-600">{money(grossProfit)}</strong></div>
           <div><span>Gross Margin</span><strong className={`inline-flex items-center px-2 py-0.5 rounded font-bold bg-red-100 text-red-700 text-xs ${grossMarginPct >= 0 ? 'is-positive' : ''}`}>{grossMarginPct.toFixed(1)}%</strong></div>
           <div className="sourcing-summary-validity"><span>Quote Validity</span><strong>{quoteValidityDays} days</strong></div>
+          {pendingConfirmationCount > 0 && <div className="sourcing-summary-note"><span>Preview includes {pendingConfirmationCount} priced line{pendingConfirmationCount === 1 ? '' : 's'} pending confirmation</span></div>}
         </div>
         <div className="sourcing-summary-actions ml-auto flex-shrink-0"><button className="primary sourcing-summary-action bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded text-xs transition-colors" disabled={!activeItems.length} title={!activeItems.length ? 'Add or confirm at least one sourcing line first' : ''} onClick={sendToProposal}><Icon name="arrowRight" size={13} /> Continue to proposal</button></div>
       </div>}

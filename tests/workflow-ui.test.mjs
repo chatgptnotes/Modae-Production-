@@ -78,7 +78,7 @@ test('spares confirmation workbench is reachable before Sourcing advances', () =
 test('sourcing prices are editable and sourcing edits are audited', () => {
   const spares = read('src/workbench/WbSpares.jsx')
   const store = read('src/store.jsx')
-  assert.match(spares, /aria-label=\{`List price for \$\{l\.pn \|\| l\.custRef \|\| l\.id\}`\}/,
+  assert.match(spares, /label=\{`List price for \$\{line\.pn \|\| line\.id\}`\}/,
     'authorized users need a row-level price editor')
   assert.match(spares, /priceList: 'Manual entry'/, 'manual prices must identify their source')
   assert.match(spares, /currency: 'INR'/, 'manual prices must be stored in INR')
@@ -99,6 +99,20 @@ test('confirmed spares sourcing replaces stale proposal rows instead of appendin
   assert.match(store, /proposals: \{ \.\.\.s\.proposals, \[oppId\]: \{ \.\.\.base, bom \} \}/)
   assert.doesNotMatch(store, /const mergedBom = \[\.\.\.bom, \.\.\.added\]/)
   assert.match(spares, /Proposal workbook BoM synchronized from the confirmed sourcing lines/)
+})
+
+test('spares financial preview totals include priced rows before confirmation', () => {
+  const spares = read('src/workbench/WbSpares.jsx')
+  assert.match(spares, /const pricedItems = calculatedItems\.filter\(item => item\.qty > 0 && item\.listUnitPrice > 0\)/,
+    'financial preview should include rows with quantity and a positive price')
+  assert.match(spares, /const activeItems = calculatedItems\.filter\(item => item\.qty > 0 && item\.confirmed\)/,
+    'proposal handoff should still be gated by confirmed rows')
+  assert.match(spares, /const totals = useMemo\(\(\) => pricedItems\.reduce/,
+    'summary totals should calculate from priced rows, not confirmed-only rows')
+  assert.match(spares, /disabled=\{!activeItems\.length\}/,
+    'continuing to the proposal should still require confirmed rows')
+  assert.match(spares, /Preview includes \{pendingConfirmationCount\} priced line/,
+    'users need to know the displayed totals are a preview when rows are pending confirmation')
 })
 
 test('opening a Spares proposal repairs stale lead rows from confirmed sourcing data', () => {
