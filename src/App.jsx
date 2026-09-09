@@ -159,9 +159,7 @@ const NAV = [
   { to: '/po', label: 'Purchase Orders', icon: 'clipboardCheck', page: 'po' },
   { to: '/folders', label: 'SharePoint folders', icon: 'folder', page: 'folders' },
   { to: '/pricelists', label: 'Price Lists', icon: 'tag', page: 'pricelists' },
-  { to: '/customers', label: 'Customers', icon: 'users', page: 'customers' },
   { to: '/admin', label: 'Admin', icon: 'gear', page: 'admin' },
-  { to: '/admin/workflow', label: 'Workflow settings', icon: 'list', page: 'admin' },
   { to: '/audit', label: 'Audit Trail', icon: 'list', page: 'audit' },
   { to: '/users', label: 'Users and roles', icon: 'shield', page: 'users' },
 ]

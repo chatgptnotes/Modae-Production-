@@ -3,6 +3,7 @@
 // as shown in the Aug 10 meeting screenshots).
 import { STATES, STATE_REGION } from './indiaLocations.js'
 import { DEFAULT_CUSTOMER_CLASSES, DEFAULT_DOC_CHECKLISTS } from './customerClasses.js'
+import { DEFAULT_CURRENCY_RATES } from './currency.js'
 
 // Fx-1..Fx-5 are the client's own reserved slots — they appear on Category,
 // Segment, Product and Solution in the Field List sheet, so a pipeline export
@@ -558,8 +559,8 @@ export const PERMS = {
   AH: ['home', 'mydashboard', 'tracker', 'my', 'approvals', 'folders', 'proposal', 'pricelists', 'dashboard', 'analytics',
     'customers', 'audit', 'aimap', 'po', 'launcher'],
   RS: SALES_PAGES, PP: SALES_PAGES, SS: SALES_PAGES, PJS: SALES_PAGES, RJS: SALES_PAGES, SR: SALES_PAGES,
-  AN: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'proposal', 'pricelists', 'approvals', 'folders', 'aimap', 'launcher'],
-  TECH: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'proposal', 'pricelists', 'approvals', 'aimap', 'launcher'],
+  AN: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'proposal', 'pricelists', 'analytics', 'approvals', 'folders', 'aimap', 'launcher'],
+  TECH: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'proposal', 'pricelists', 'analytics', 'approvals', 'aimap', 'launcher'],
   CUST: pages(['portal']),
 }
 
@@ -1160,6 +1161,7 @@ export const AI_PROVIDERS = {
 
 // Runtime configuration — every value editable on the Admin page.
 export const seedConfig = {
+  currencyRates: { ...DEFAULT_CURRENCY_RATES },
   // L-05-AI, Official Lead Management Workflow (22 Jul 2026) — six rules, kept
   // one-per-row so the Admin page reads like the drawing. The AI only suggests
   // from these; LJS or AH may override, and only with a reason.

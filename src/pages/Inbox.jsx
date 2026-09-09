@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useStore } from '../store.jsx'
+import { useStore, nextOppId } from '../store.jsx'
 import { ddMmmYY, ageDays, gmailComposeHref, displayRole } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { Chip, ConfChip, WarnBox, ErrBox, Modal } from '../ui.jsx'
-import { ROLES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, CUSTOMER_STATUSES, LEAD_SOURCES, ownerForOppType, routeForType } from '../seed.js'
+import { ROLES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, CUSTOMER_STATUSES, LEAD_SOURCES, ownerForOppType, routeForType, newProposal } from '../seed.js'
 import { isAdminRole, isApprover } from '../utils.js'
 import { aiEnabled, runTaskResult, runText } from '../ai.js'
 import { extractDocText } from '../docText.js'
@@ -28,6 +28,8 @@ import {
 import { leadVerificationComplete, verificationDeadline, verificationItem, redClearanceFor, isRedCleared } from '../leadVerification.js'
 import { checklistFor } from '../customerClasses.js'
 import { downloadKycTemplate } from '../kycTemplate.js'
+import { PROJECT_TYPES, oppTypesForProjectType, templatesForSelection, simulatedLead, simulatedCount, SIMULATED_CUSTOMER_SCENARIOS } from '../simulatedLeads.js'
+import { buildLeadProposalData } from '../leadBoq.js'
 // Common-mailbox lead inbox: AI parses each inquiry, a human decides whether it
 // becomes an opportunity (Qualify → registration / intake form) or is dropped.
 const PILL = { New: 'Blue', Qualified: 'Amber', Dropped: 'Red', Converted: 'Green' }
@@ -250,7 +252,10 @@ function LeadVerification({ lead, customerStatus, store }) {
   const [downloadedFor, setDownloadedFor] = useState('')
   const menuRef = useRef(null)
   const verification = lead.verification || {}
-  const editable = !['Converted', 'Dropped'].includes(lead.status)
+  // A converted lead can still be completing customer KYC. Keep the linked
+  // opportunity unchanged, but allow the source lead's document evidence to
+  // be uploaded, simulated, replaced, or cancelled. Dropped leads stay locked.
+  const editable = lead.status !== 'Dropped'
   const deadline = verificationDeadline(lead, customerStatus, store.config)
   // Was a hardcoded "within 1 week" on both cards, which ignored the
   // configured deadline entirely.
@@ -366,6 +371,9 @@ function LeadVerification({ lead, customerStatus, store }) {
       {verification.kycRequestStatus === 'cancelled' && <div className="lead-decision-note">This request is cancelled. Reopen it to upload or simulate the KYC documents again.</div>}
       {verification.kycRequestStatus !== 'cancelled' && !leadVerificationComplete(lead, customerStatus, { config: store.config }) && (
         <div className="lead-decision-note">Waiting for customer KYC documents. Nothing has been uploaded yet.</div>
+      )}
+      {lead.status === 'Converted' && (
+        <div className="lead-decision-note">This lead is already converted. Completing KYC here updates the lead record only; the linked opportunity remains unchanged.</div>
       )}
       <div style={{ display: 'grid', gap: 7 }}>
         {checklistFor(store.config, customerStatus).map(item => {
@@ -2091,6 +2099,13 @@ export default function Inbox() {
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [pasteOpen, setPasteOpen] = useState(false)
+  const [simulationOpen, setSimulationOpen] = useState(false)
+  const [simProjectType, setSimProjectType] = useState(PROJECT_TYPES[0])
+  const [simOppType, setSimOppType] = useState(() => oppTypesForProjectType(PROJECT_TYPES[0])[0] || PROJECT_TYPES[0])
+  const [simCategory, setSimCategory] = useState('')
+  const [simShape, setSimShape] = useState('')
+  const [simQuality, setSimQuality] = useState('')
+  const [simRegister, setSimRegister] = useState(true)
   // Sales owners see only their assigned leads by default; a "Show all" toggle
   // reveals the team's. Managers (LJS/AH) and admins always see everything.
   // The toggle lives in the store, not in component state: as component state a
@@ -2230,6 +2245,82 @@ export default function Inbox() {
     setSelectedIds(new Set())
     setDeleteConfirm(null)
   }
+  const simOppOptions = oppTypesForProjectType(simProjectType)
+  const activeSimOppType = simOppOptions.includes(simOppType) ? simOppType : (simOppOptions[0] || simProjectType)
+  const simShapeOptions = templatesForSelection(simProjectType, activeSimOppType)
+  const activeSimShape = simShapeOptions.some(t => t.key === simShape) ? simShape : ''
+
+  const createSimulatedLead = (status, options = {}) => {
+    const projectType = options.projectType || simProjectType
+    const oppType = options.oppType || activeSimOppType
+    const lead = simulatedLead(status, new Date(), {
+      existingLeads: store.leads,
+      config: store.config,
+      projectType,
+      oppType,
+      customerCategory: options.customerCategory || simCategory || null,
+      template: options.projectType ? null : (activeSimShape || null),
+      quality: options.quality !== undefined ? options.quality : (simQuality || null),
+    })
+    store.addLead(lead)
+    if (!seesAll && lead.suggestedOwner !== store.role) setShowAll(true)
+    if (!simRegister) {
+      setSimulationOpen(false)
+      nav('/inbox/' + lead.id)
+      return
+    }
+    const value = pattern => leadFieldValue(lead.ai?.fields, pattern)
+    const owner = lead.assignedOwner || lead.suggestedOwner || store.role
+    const sellTo = value(/sell-to customer|customer/i) || lead.sellTo || lead.sender || 'Simulated customer'
+    const category = value(/category/i) || 'EUC'
+    const location = value(/^location$/i) || lead.location || ''
+    const resolvedOppType = OPP_TYPES.includes(lead.oppType) ? lead.oppType : (oppType || lead.route || 'Project')
+    const product = value(/^product$/i) || 'Various'
+    const knownCustomer = store.customers.some(c => c.name.toLowerCase() === sellTo.toLowerCase())
+    const oppId = nextOppId(store.opportunities, owner)
+    const today = new Date().toISOString().slice(0, 10)
+    const maxSl = Math.max(0, ...store.opportunities.map(o => o.sl || 0))
+    if (!knownCustomer) store.addCustomer({ name: sellTo, category, status, kyc: status === 'Green' ? 'Verified' : 'Pending', payment: '—' })
+    const opp = {
+      sl: maxSl + 1, id: oppId, sourceLeadId: lead.id, sellTo, category, location,
+      customerStatus: status, eucName: value(/contact person/i) || sellTo, eucLocation: location,
+      oppName: lead.subject, owner, oppType: resolvedOppType, bu: value(/^bu/i) || 'Energy',
+      segment: value(/segment/i) || 'Others', product: [product], prob: '', valueK: 0, cogsK: 0,
+      rfqNumber: lead.ref || '', rfqDate: lead.ts?.slice(0, 10) || '', createDate: today,
+      proposalDate: '', orderDate: '', invoiceDate: '', status: 'Open', stage: 'Lead', closedReason: '',
+      contactPerson: value(/contact person/i) || lead.sender || '', contactPhone: '', contactEmail: lead.from || '',
+      lastUpdated: today, forecast: false, remarks: lead.body || '', nextActionOwner: '', simulated: true,
+    }
+    store.addOpportunity(opp)
+    if (routeForType(resolvedOppType) !== 'Service') {
+      const { extracted, workbenchRows, bom } = buildLeadProposalData(lead, store.priceLists, store.adhocParts)
+      store.addSparesLinesFromLead(oppId, workbenchRows)
+      const proposal = newProposal(oppId, opp, { validityDays: store.config?.proposalValidityDays })
+      store.saveProposal(oppId, {
+        ...proposal,
+        rfqNumber: lead.ref || '', subject: lead.subject || proposal.subject,
+        project: lead.subject || proposal.project, units: 1, bom, extractedItems: extracted,
+        ...(bom.length ? { leadImportId: lead.id } : {}),
+      })
+    }
+    store.updateLead(lead.id, { status: 'Converted', oppId })
+    setSimulationOpen(false)
+    nav('/inbox')
+  }
+
+  const createRandomSimulatedLead = () => {
+    const projectType = PROJECT_TYPES[Math.floor(Math.random() * PROJECT_TYPES.length)]
+    const oppTypes = oppTypesForProjectType(projectType)
+    const oppType = oppTypes[Math.floor(Math.random() * oppTypes.length)] || projectType
+    const status = SIMULATED_CUSTOMER_SCENARIOS[Math.floor(Math.random() * SIMULATED_CUSTOMER_SCENARIOS.length)].status
+    createSimulatedLead(status, { projectType, oppType, quality: Math.random() < 0.33 ? 'partial' : null })
+  }
+  const simulatedLeadCount = simulatedCount(store.leads, store.leadArchive)
+  const clearSimulated = () => {
+    if (!window.confirm(`Clear ${simulatedLeadCount} simulated lead${simulatedLeadCount === 1 ? '' : 's'}?\n\nOnly rows generated by this simulator go. Seeded and hand-entered leads stay, and a simulated lead already converted to an opportunity is kept.`)) return
+    store.clearSimulatedLeads()
+    setSimulationOpen(false)
+  }
   const tabCount = tab => rows.filter(l => tab === 'unread'
     ? l.status === 'New' && !l.readAt
     : tab === 'qualified' ? l.status === 'Qualified'
@@ -2257,6 +2348,7 @@ export default function Inbox() {
           <p className="hint">{showArchive ? 'Discarded lead archive' : 'Common sales mailbox · AI structures, humans decide'}</p>
         </div>
         <div className="mailbox-head-actions">
+          <button onClick={() => setSimulationOpen(true)}><Icon name="mail" size={13} /> Simulate incoming inquiry</button>
           <button className="primary" onClick={() => setPasteOpen(true)}><Icon name="bot" size={13} /> New enquiry</button>
           <button onClick={() => { setShowArchive(v => !v); setMailTab('primary'); setSelectedIds(new Set()) }}>
             <Icon name="folder" size={13} /> {showArchive ? 'Back to inbox' : `Archive (${(store.leadArchive || []).length})`}
@@ -2274,6 +2366,70 @@ export default function Inbox() {
         {!seesAll && <label className="mail-show-all"><input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)} /> Show all</label>}
       </div>
       {pasteOpen && <PasteLeadModal onClose={() => setPasteOpen(false)} />}
+      {simulationOpen && (
+        <Modal title="Simulate incoming inquiry" className="simulate-modal" onClose={() => setSimulationOpen(false)}>
+          <p className="hint">
+            Choose the project type first, then the opportunity type. Optionally pin an enquiry shape and extraction quality, then decide whether the inquiry registers an opportunity immediately or stops in the inbox as a New lead.
+          </p>
+          <div className="sim-controls">
+            <label className="afield">Project type
+              <select value={simProjectType} onChange={e => setSimProjectType(e.target.value)}>
+                {PROJECT_TYPES.map(type => <option key={type}>{type}</option>)}
+              </select>
+            </label>
+            <label className="afield">Opportunity type
+              <select value={activeSimOppType} onChange={e => setSimOppType(e.target.value)}>
+                {simOppOptions.map(type => <option key={type}>{type}</option>)}
+              </select>
+            </label>
+            <label className="afield">Customer category (test)
+              <select value={simCategory} onChange={e => setSimCategory(e.target.value)}>
+                <option value="">Use scenario category</option>
+                {CUSTOMER_CATEGORY_OPTIONS.map(category => <option key={category}>{category}</option>)}
+              </select>
+            </label>
+            <label className="afield wide">Enquiry shape
+              <select value={activeSimShape} onChange={e => setSimShape(e.target.value)}>
+                <option value="">Any shape (varied)</option>
+                {simShapeOptions.map(t => <option key={t.key} value={t.key}>{t.subject}</option>)}
+              </select>
+            </label>
+            <label className="afield">Extraction quality
+              <select value={simQuality} onChange={e => setSimQuality(e.target.value)}>
+                <option value="">Varied (weighted)</option>
+                <option value="clean">Complete extraction</option>
+                <option value="partial">Missing info - needs clarification</option>
+                <option value="duplicate">Duplicate - chaser on an existing enquiry</option>
+              </select>
+            </label>
+            <label className="afield">After generating
+              <select value={simRegister ? 'register' : 'inbox'} onChange={e => setSimRegister(e.target.value === 'register')}>
+                <option value="register">Register the opportunity immediately</option>
+                <option value="inbox">Stop at the inbox as a New lead</option>
+              </select>
+            </label>
+          </div>
+          <div className="sim-cards">
+            {SIMULATED_CUSTOMER_SCENARIOS.map(scenario => (
+              <button key={scenario.status} className="form-card" onClick={() => createSimulatedLead(scenario.status)}>
+                <b>{scenario.label}</b>
+                <span className="hint">{scenario.hint}</span>
+              </button>
+            ))}
+            <button className="form-card wide" onClick={createRandomSimulatedLead}>
+              <b>Random inquiry</b>
+              <span className="hint">Any customer class, any scope. Fill the inbox with a varied mix.</span>
+            </button>
+          </div>
+          {simulatedLeadCount > 0 && (
+            <div className="lead-decision-actions" style={{ marginTop: 12 }}>
+              <button onClick={clearSimulated}>
+                <Icon name="x" size={13} /> Clear {simulatedLeadCount} simulated lead{simulatedLeadCount === 1 ? '' : 's'}
+              </button>
+            </div>
+          )}
+        </Modal>
+      )}
 
       {deleteConfirm && (
         <Modal title="Delete selected lead" onClose={() => setDeleteConfirm(null)}>

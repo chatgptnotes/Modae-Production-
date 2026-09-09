@@ -14,6 +14,7 @@ import { parseProposalWorkbook, serializeProposalWorkbook, updateWorkbookCell } 
 import { DEFAULT_COMMON_MAILBOX } from '../leadClarification.js'
 import { DEFAULT_CUSTOMER_CLASSES } from '../customerClasses.js'
 import { parsePriceListFile } from '../priceListImport.js'
+import { normalizedCurrencyRates } from '../currency.js'
 
 // Admin — every runtime rule the app obeys, in one card grid. Data lives in
 // store.config; all changes are audited by the store mutators.
@@ -321,6 +322,7 @@ export default function Admin() {
   const [templatePreviewBusy, setTemplatePreviewBusy] = useState(false)
   const [templatePreviewError, setTemplatePreviewError] = useState('')
   const [templateDirty, setTemplateDirty] = useState(false)
+  const [currencyRateDraft, setCurrencyRateDraft] = useState({})
 
   // Route-level gate AFTER the hooks (an early return before them would change
   // the hook count when the persona flips while /admin is mounted). Approval
@@ -366,6 +368,8 @@ export default function Admin() {
 
   const proposalTemplates = uploads.proposalTemplates || []
   const kycTemplates = uploads.kycTemplates || {}
+  const currencyRates = normalizedCurrencyRates(config.currencyRates)
+  const currencies = [...new Set(['EUR', 'USD', ...Object.keys(currencyRates)].filter(currency => currency !== 'INR' && currency !== 'GBP'))]
   const uploadedTemplateFor = lane => proposalTemplates.find(item => item.lane === lane && item.status === 'Current')
   const templateInfo = lane => uploadedTemplateFor(lane) || TEMPLATE_LANES.find(item => item.key === lane)
 
@@ -484,7 +488,8 @@ export default function Admin() {
       )}
 
       <div className="admin-layout">
-        <div className="admin-masonry-grid">
+        <div className="admin-fixed-columns">
+          <div className="admin-column">
 
         {/* 1 — Users & roles */}
         <div className="admin-card">
@@ -528,6 +533,9 @@ export default function Admin() {
           ))}
           <p className="hint">Fallback owner used when no regional rule matches (e.g. Spares leads → PJS by default).</p>
         </div>
+
+          </div>
+          <div className="admin-column">
 
         {/* 2b — State → region mapping */}
         <div className="admin-card admin-state-map-card">
@@ -586,6 +594,27 @@ export default function Admin() {
           <p className="hint">Values above the discount or markup limits require one approval from the selected role(s). Existing value/margin routing remains unchanged.</p>
         </div>
 
+        <div className="admin-card">
+          <h3><Icon name="tag" size={14} /> Currency &amp; conversion rates</h3>
+          <p className="hint">INR is the reporting currency. Source price-list values remain in their original currency.</p>
+          {currencies.map(currency => (
+            <label key={currency} className="afield">1 {currency} = ₹
+              <input type="number" min="0.0001" step="0.0001" disabled={!canEdit}
+                value={currencyRateDraft[currency] ?? currencyRates[currency] ?? ''}
+                onChange={e => setCurrencyRateDraft({ ...currencyRateDraft, [currency]: e.target.value })} />
+              <button type="button" className="primary" disabled={!canEdit}
+                onClick={() => {
+                  const rate = currencyRateDraft[currency] ?? currencyRates[currency]
+                  store.updateCurrencyRate(currency, rate)
+                  setCurrencyRateDraft({ ...currencyRateDraft, [currency]: String(rate) })
+                }}>Save</button>
+            </label>
+          ))}
+        </div>
+
+          </div>
+          <div className="admin-column">
+
         {/* 5 — Customer-class rules & Amber fee */}
         <div className="admin-card">
           <h3><Icon name="flag" size={14} /> Customer-class rules &amp; Amber fee</h3>
@@ -636,6 +665,9 @@ export default function Admin() {
           </label>
         </div>
 
+          </div>
+          <div className="admin-column">
+
         {/* 6 — KYC checklist */}
         <div className="admin-card">
           <h3><Icon name="clipboardCheck" size={14} /> KYC checklist</h3>
@@ -680,6 +712,7 @@ export default function Admin() {
           <p className="hint">Rates are editable on the Price Lists page; registries here track which versions are live.</p>
         </div>
 
+          </div>
         </div>
 
         <div className="admin-wide-grid">

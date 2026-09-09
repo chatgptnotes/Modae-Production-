@@ -59,7 +59,10 @@ export function computeProposalTotals(proposal) {
     const adjusted = l.quoted !== '' && l.quoted != null ? sell : applyAdjustment(sell, proposal)
     value += adjusted * q
     listValue += sell * q
-    cogs += unitCostINR(l.listPrice || 0, costing, l.currency || 'EUR', isBnk) * q
+    const baseCost = l.baseCost == null
+      ? unitCostINR(l.listPrice || 0, costing, l.currency || 'EUR', isBnk)
+      : Math.max(0, Number(l.baseCost) || 0)
+    cogs += baseCost * q
   }
   const gmPct = value ? ((value - cogs) / value) * 100 : 0
   return { value, listValue, cogs, gmPct }

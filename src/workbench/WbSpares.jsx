@@ -6,7 +6,8 @@ import { canPriceProposal, unitCostINR, fmt } from '../utils.js'
 import { pricingThresholdExceptions } from '../gates.js'
 import { Chip, ConfChip, AiBadge, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
-import { PRICE_SOURCES, formatPriceSource, resolvePriceSource } from '../pricing.js'
+import { PRICE_SOURCES, formatPriceSource, resolvePriceSource, sparesLineFinancials } from '../pricing.js'
+import { convertCurrency, currencySymbol, normalizedCurrencyRates } from '../currency.js'
 
 const n = value => Number.isFinite(Number(value)) ? Number(value) : 0
 const money = value => `₹ ${fmt(n(value))}`
@@ -24,17 +25,23 @@ export default function WbSpares({ opp, openBuilder }) {
   const [showAddPart, setShowAddPart] = useState(false)
   const [newLine, setNewLine] = useState({ pn: '', desc: '', qty: '1', listPrice: '' })
   const quoteValidityDays = Math.max(1, n(store.config?.proposalValidityDays ?? 30))
+  const currencyRates = normalizedCurrencyRates(store.config?.currencyRates)
+  const displayCurrencies = ['INR', ...Object.keys(currencyRates).filter(currency => currency !== 'INR')]
+  const [displayCurrency, setDisplayCurrency] = useState('INR')
+  const costing = { ...defaultCosting, ...(proposal.costing || {}), currencyRates: normalizedCurrencyRates(proposal.costing?.currencyRates || currencyRates) }
+  const displayAmount = value => convertCurrency(value, 'INR', displayCurrency, costing.currencyRates)
+  const displayMoney = value => `${currencySymbol(displayCurrency)} ${fmt(n(displayAmount(value)))} `
 
-  const isBnk = line => String(line.priceList || '').startsWith('BNK')
-  const fallbackBaseCost = line => unitCostINR(n(line.listUnitPrice ?? line.listPrice), { ...defaultCosting, ...(proposal.costing || {}) }, line.currency || 'INR', isBnk(line))
   const values = line => {
-    const qty = Math.max(0, n(line.qty))
-    const listUnitPrice = n(line.listUnitPrice ?? line.listPrice)
-    const discountPct = Math.max(0, Math.min(100, n(line.discountPct)))
-    const markupPct = Math.max(0, n(line.markupPct))
-    const adjustedUnitPrice = listUnitPrice * (1 - discountPct / 100) * (1 + markupPct / 100)
-    const baseCost = line.baseCost == null ? fallbackBaseCost(line) : Math.max(0, n(line.baseCost))
-    return { qty, listUnitPrice, discountPct, markupPct, adjustedUnitPrice, baseCost, listTotal: listUnitPrice * qty, lineTotal: adjustedUnitPrice * qty, cogs: baseCost * qty }
+    const row = sparesLineFinancials(line, costing)
+    return {
+      ...row,
+      adjustedUnitPrice: row.adjustedUnitPriceINR,
+      baseCost: row.baseCostINR,
+      listTotal: row.listTotalINR,
+      lineTotal: row.lineTotalINR,
+      cogs: row.cogsINR,
+    }
   }
   // Adapt persisted sourcing rows to the calculation schema, then derive every
   // monetary value from the current inputs. Store updates trigger this memo to
@@ -50,18 +57,16 @@ export default function WbSpares({ opp, openBuilder }) {
       discountPercent: row.discountPct,
       markupPercent: row.markupPct,
       baseCost: row.baseCost,
+      listTotal: row.listTotal,
+      adjustedUnitPrice: row.adjustedUnitPrice,
+      lineTotal: row.lineTotal,
+      lineTotalCogs: row.cogs,
       confirmed: !!line.confirmed,
       sourceLine: line,
     }
   }), [lines, proposal])
   const calculatedItems = useMemo(() => lineItems.map(item => {
-    const listTotal = item.qty * item.listUnitPrice
-    const adjustedUnitPrice = item.listUnitPrice
-      * (1 - item.discountPercent / 100)
-      * (1 + item.markupPercent / 100)
-    const lineTotal = item.qty * adjustedUnitPrice
-    const lineTotalCogs = item.qty * item.baseCost
-    return { ...item, listTotal, adjustedUnitPrice, lineTotal, lineTotalCogs, lineProfit: lineTotal - lineTotalCogs }
+    return { ...item, lineProfit: item.lineTotal - item.lineTotalCogs }
   }), [lineItems])
   const pricedItems = calculatedItems.filter(item => item.qty > 0 && item.listUnitPrice > 0)
   const activeItems = calculatedItems.filter(item => item.qty > 0 && item.confirmed)
@@ -195,7 +200,7 @@ export default function WbSpares({ opp, openBuilder }) {
     {!!pricingExceptions.rows.length && <div className="warnbox" role="status"><b>Pricing approval required.</b>{' '}A discount above {pricingExceptions.discountPct}% or markup above {pricingExceptions.markupPct}% needs one approval from AH or LJS before Proposal.</div>}
     {proposalOnlyMismatch && <div className="warnbox sourcing-flow-warning"><b>Proposal data is not linked to Sourcing.</b> Existing proposal rows are not imported automatically. Add or import the real parts here before continuing to Proposal.</div>}
     <div className="sourcing-table-card">
-      <div className="sourcing-table-heading"><div><b>Source, adjust and validate each line here</b><span className="hint"> Price-list values are loaded first; vendor values are the fallback.</span></div><div className="sourcing-table-heading-actions">{comm && <button type="button" className="sourcing-add-part-link" aria-expanded={showAddPart} aria-controls="sourcing-manual-line" onClick={() => setShowAddPart(open => !open)}>{showAddPart ? 'Close manual line' : 'Add manual line'}</button>}{!comm && <span className="restricted"><Icon name="lock" size={12} /> Pricing restricted</span>}</div></div>
+      <div className="sourcing-table-heading"><div><b>Source, adjust and validate each line here</b><span className="hint"> Price-list values are loaded first; vendor values are the fallback.</span></div><div className="sourcing-table-heading-actions"><span className="sourcing-currency-indicator" title={`All displayed amounts are in ${displayCurrency}`}>Currency: {displayCurrency} ({currencySymbol(displayCurrency)})</span>{comm && <label className="sourcing-currency-view">View amounts in <select value={displayCurrency} onChange={e => setDisplayCurrency(e.target.value)}>{displayCurrencies.map(currency => <option key={currency}>{currency}</option>)}</select></label>}{comm && <button type="button" className="sourcing-add-part-link" aria-expanded={showAddPart} aria-controls="sourcing-manual-line" onClick={() => setShowAddPart(open => !open)}>{showAddPart ? 'Close manual line' : 'Add manual line'}</button>}{!comm && <span className="restricted"><Icon name="lock" size={12} /> Pricing restricted</span>}</div></div>
       <div className="sheet-wrap sourcing-sheet-wrap"><table className="sheet sourcing-sheet sourcing-sheet--fixed table-fixed w-full border-collapse">
         <thead><tr><th className="w-[30%]">Part / customer reference</th><th className="w-[9%]">Source</th><th className="w-[5%]">Qty</th><th className="w-[6%]">List unit</th><th className="w-[5%]">Discount %</th><th className="w-[5%]">Markup %</th><th className="w-[7%]">Adjusted U</th><th className="w-[7%]">Base cost</th><th className="w-[7%]">Original total</th><th className="w-[7%]">Quoted total</th><th className="w-[12%]">Actions</th></tr></thead>
         <tbody>
@@ -203,12 +208,12 @@ export default function WbSpares({ opp, openBuilder }) {
             <td className="sourcing-cell-part align-top p-2 overflow-hidden"><div className="sourcing-part-line"><div className="sourcing-part-copy"><span className="hint sourcing-part-ref truncate overflow-hidden text-ellipsis whitespace-nowrap">{line.custRef}</span><div className="sourcing-part-description line-clamp-2 text-xs font-medium text-gray-900 leading-snug" title={partDescription}>{partDescription}</div><small className="hint truncate overflow-hidden text-ellipsis whitespace-nowrap">{line.oem || '—'} · Lead: {line.leadTime || 'TBC'}</small></div>{comm && <button className="sourcing-remove-row" title="Remove row from active proposal" aria-label={`Remove ${line.pn || line.id}`} onClick={() => updateLine(line, 'qty', 0)}>×</button>}</div></td>
             <td className="sourcing-cell-source align-top p-2 overflow-hidden"><div className="sourcing-source-stack">{(() => { const source = sourceDetails(line); const sourcePayload = { ...source, pn: line.pn || line.custRef || line.id, priceState: line.priceState || 'Unstated', listPrice: line.listUnitPrice ?? line.listPrice, currency: line.currency || 'INR' }; const isCatalogued = source.source === PRICE_SOURCES.LIST && priceListNameFor(line); return <><div className="sourcing-source-primary">{isCatalogued ? <button type="button" className="sourcing-source-link sourcing-source-name" title={`Open ${source.full} in the price list`} aria-label={`Open ${source.full} in the price list`} onClick={() => openPriceList(line)}>{source.primary}</button> : <button type="button" className="sourcing-source-details-link sourcing-source-name" title={`View full source: ${source.full}`} aria-label={`View full source: ${source.full}`} onClick={() => setEvidence(sourcePayload)}>{source.primary}</button>}</div>{source.secondary && <span className="sourcing-source-meta" title={source.full}>{source.secondary}</span>}{line.priceSource === 'vendor-quote' && <Chip tone="state-Review">Vendor fallback</Chip>}{line.priceSource === 'manual' && <Chip tone="grey">Manual/override</Chip>}{line.priceState === 'Expired' ? <><Chip tone="state-Blocks">Expired</Chip><AiBadge label="pricing anomaly" /></> : line.priceState === 'Needs pricing' ? <Chip tone="state-Review">Needs pricing</Chip> : <Chip tone="state-Accepted">Current</Chip>}</> })()}</div></td>
             <td className="num"><EditableNumber value={row.qty} label={`Quantity for ${line.pn || line.id}`} disabled={!comm} step="1" onChange={value => updateLine(line, 'qty', Math.max(0, Math.round(value)))} /></td>
-            <td className="num"><EditableNumber value={row.listUnitPrice} label={`List price for ${line.pn || line.id}`} disabled={!comm} onChange={value => updateLine(line, 'listUnitPrice', value)} /></td>
+            <td className="num"><EditableNumber value={row.listUnitPrice} label={`List price for ${line.pn || line.id}`} disabled={!comm} onChange={value => updateLine(line, 'listUnitPrice', value)} /><small className="hint">{line.currency || 'INR'}</small></td>
             <td className="num"><EditableNumber value={Math.round(row.discountPct)} label={`Discount for ${line.pn || line.id}`} disabled={!comm} step="1" onChange={value => updateLine(line, 'discountPct', Math.min(100, Math.max(0, Math.round(value))))} suffix="%" /></td>
             <td className="num"><EditableNumber value={Math.round(row.markupPct)} label={`Markup for ${line.pn || line.id}`} disabled={!comm} step="1" onChange={value => updateLine(line, 'markupPct', Math.max(0, Math.round(value)))} suffix="%" /></td>
-            <td className="num">{comm ? money(row.adjustedUnitPrice) : <span className="restricted"><Icon name="lock" size={11} /></span>}</td>
-            <td className="num"><EditableNumber className={`sourcing-base-cost-input ${line.baseCost == null || n(line.baseCost) <= 0 || row.adjustedUnitPrice < row.baseCost ? 'is-warning' : ''}`} value={row.baseCost} label={`Base cost for ${line.pn || line.id}`} disabled={!comm} onChange={value => updateLine(line, 'baseCost', Math.max(0, value))} /></td>
-            <td className="num">{comm ? money(row.listTotal) : '—'}</td><td className="num"><b>{comm ? money(row.lineTotal) : '—'}</b></td>
+            <td className="num">{comm ? displayMoney(row.adjustedUnitPrice) : <span className="restricted"><Icon name="lock" size={11} /></span>}</td>
+            <td className="num"><EditableNumber className={`sourcing-base-cost-input ${line.baseCost == null || n(line.baseCost) <= 0 || row.adjustedUnitPrice < row.baseCost ? 'is-warning' : ''}`} value={displayAmount(row.baseCost)} label={`Base cost for ${line.pn || line.id}`} disabled={!comm} onChange={value => store.updateSparesLine(line.id, { baseCost: Math.max(0, convertCurrency(value, displayCurrency, 'INR', costing.currencyRates)) })} /></td>
+            <td className="num">{comm ? displayMoney(row.listTotal) : '—'}</td><td className="num"><b>{comm ? displayMoney(row.lineTotal) : '—'}</b></td>
             <td className="sourcing-cell-actions align-top p-2">{comm && <div className="sourcing-row-actions" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>{!line.confirmed && <button className="primary" onClick={() => store.updateSparesLine(line.id, { confirmed: true })}><Icon name="check" size={12} /> Confirm</button>}{line.confirmed && <Chip tone="state-Accepted">Confirmed</Chip>}<button onClick={() => { setCompareFor(line.id); setCompareSearch('') }}><Icon name="gitCompare" size={12} /> Compare</button></div>}</td>
           </tr> })}
           {comm && showAddPart && <tr id="sourcing-manual-line" className="sourcing-manual-row">
@@ -222,14 +227,14 @@ export default function WbSpares({ opp, openBuilder }) {
         </tbody>
         {comm && <tfoot className="sourcing-total-row"><tr>
           <td><b>Totals</b></td><td></td><td className="num"><b>{totals.quantity}</b></td><td></td><td></td><td></td><td></td><td></td>
-          <td className="num"><b>{money(totals.originalTotal)}</b></td><td className="num"><b>{money(totals.revenue)}</b></td><td></td>
+          <td className="num"><b>{displayMoney(totals.originalTotal)}</b></td><td className="num"><b>{displayMoney(totals.revenue)}</b></td><td></td>
         </tr></tfoot>}
       </table></div>
       {comm && <div className="sourcing-financial-summary-bar mt-3 flex flex-col sm:flex-row items-center justify-between bg-slate-50 border border-slate-200 rounded-lg p-3.5 shadow-sm" aria-label="BOQ financial totals" aria-live="polite">
         <div className="sourcing-financial-summary-metrics flex items-center space-x-6 text-xs">
-          <div><span>BOQ Revenue</span><strong className="font-semibold text-gray-900">{money(totals.revenue)}</strong></div>
-          <div><span>Projected COGS</span><strong className="font-semibold text-gray-700">{money(totals.cogs)}</strong></div>
-          <div><span>Gross Profit</span><strong className="font-bold text-red-600">{money(grossProfit)}</strong></div>
+          <div><span>BOQ Revenue</span><strong className="font-semibold text-gray-900">{displayMoney(totals.revenue)}</strong></div>
+          <div><span>Projected COGS</span><strong className="font-semibold text-gray-700">{displayMoney(totals.cogs)}</strong></div>
+          <div><span>Gross Profit</span><strong className="font-bold text-red-600">{displayMoney(grossProfit)}</strong></div>
           <div><span>Gross Margin</span><strong className={`inline-flex items-center px-2 py-0.5 rounded font-bold bg-red-100 text-red-700 text-xs ${grossMarginPct >= 0 ? 'is-positive' : ''}`}>{grossMarginPct.toFixed(1)}%</strong></div>
           <div className="sourcing-summary-validity"><span>Quote Validity</span><strong>{quoteValidityDays} days</strong></div>
           {pendingConfirmationCount > 0 && <div className="sourcing-summary-note"><span>Preview includes {pendingConfirmationCount} priced line{pendingConfirmationCount === 1 ? '' : 's'} pending confirmation</span></div>}

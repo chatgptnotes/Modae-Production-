@@ -9,6 +9,7 @@ import {
   ROLES, B_STEPS, defaultBStepOwners, DEFAULT_WORKFLOW,
 } from './seed.js'
 import { normalizePriceFields } from './pricing.js'
+import { DEFAULT_CURRENCY_RATES, normalizedCurrencyRates } from './currency.js'
 
 // The store's pure state layer, lifted out of store.jsx so it can be imported
 // and *run* by the tests — store.jsx is JSX and node --test cannot parse it,
@@ -70,6 +71,7 @@ export function migrate(s) {
   if (!Array.isArray(s.audit)) s.audit = []
   // ---- phase 2 slices ----
   if (!s.config) s.config = seedConfig
+  s.config.currencyRates = normalizedCurrencyRates(s.config.currencyRates || DEFAULT_CURRENCY_RATES)
   s.config.approvalThresholds = { ...seedConfig.approvalThresholds, ...(s.config.approvalThresholds || {}) }
   if (!Array.isArray(s.config.approvalThresholds.pricingApprovers) || !s.config.approvalThresholds.pricingApprovers.length) {
     s.config.approvalThresholds.pricingApprovers = [...seedConfig.approvalThresholds.pricingApprovers]

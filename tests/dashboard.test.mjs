@@ -52,6 +52,25 @@ test('every internal role can still open My Dashboard', () => {
   assert.ok(!PERMS.CUST.includes('mydashboard'))
 })
 
+test('every internal role can open detailed reporting', () => {
+  const source = read('src/pages/MyDashboard.jsx')
+  const overview = source.slice(source.indexOf('function AnalyticsOverview'))
+  assert.match(overview, /title="Detailed reporting"/)
+  assert.match(overview, /<Analytics embedded \/>/)
+  for (const role of Object.keys(ROLES).filter(r => r !== 'CUST')) {
+    assert.ok(PERMS[role]?.includes('analytics'), `${role} must reach detailed reporting`)
+  }
+  assert.ok(!PERMS.CUST.includes('analytics'))
+})
+
+test('win and loss reasons are visible in the shared dashboard overview', () => {
+  const source = read('src/pages/MyDashboard.jsx')
+  const overview = source.slice(source.indexOf('function AnalyticsOverview'))
+  assert.match(overview, /title="Win \/ loss reasons"/)
+  assert.match(overview, /o\.closedReason \|\| '—'/)
+  assert.match(overview, /nav\(`\/folders\/\$\{o\.id\}`\)/)
+})
+
 // --------------------------------------------------------------- sales maths
 test('a sales owner gets their own target and booked orders', () => {
   const rs = salesPerformance(store, 'RS')

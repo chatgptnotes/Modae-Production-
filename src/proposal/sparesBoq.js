@@ -1,7 +1,8 @@
 // Standard non-catalogue rows that belong to the customer-facing Spares firm
 // offer. They are kept on the proposal so the editor, preview and export share
 // one row set; sourcing remains authoritative for catalogue product rows.
-import { PRICE_SOURCES } from '../pricing.js'
+import { defaultCosting } from '../seed.js'
+import { PRICE_SOURCES, sparesLineFinancials } from '../pricing.js'
 
 export const SPARES_SUPPORT_ROWS = [
   { desc: 'Warranty Certificate', pn: 'NA', common: 1 },
@@ -30,37 +31,38 @@ export function catalogueDescriptionForLine(line, priceLists = {}) {
   return ''
 }
 
-export function sparesProposalBom(lines = [], priceLists = {}) {
-  return lines.filter(line => line?.confirmed && Number(line.qty) > 0 && !isPlaceholderSparesLine(line)).map(line => ({
-    itemCategory: 'Hardware',
-    pn: line.pn || '',
-    custRef: line.custRef || line.pn || line.desc || '',
-    desc: catalogueDescriptionForLine(line, priceLists) || line.desc || line.custRef || line.pn || '',
-    listPrice: Number(line.listPrice) || 0,
-    adders: [],
-    qtyPerUnit: 0,
-    common: Number(line.qty) || 0,
-    spares: 0,
-    quoted: (() => {
-      const list = Number(line.listUnitPrice ?? line.listPrice) || 0
-      const discount = Math.max(0, Math.min(100, Number(line.discountPct) || 0))
-      const markup = Math.max(0, Number(line.markupPct) || 0)
-      return list * (1 - discount / 100) * (1 + markup / 100)
-    })(),
-    uom: line.uom || 'EA',
-    list: String(line.priceList || '').startsWith('BNK') ? 'BNK' : 'Ad-hoc',
-    currency: line.currency || 'INR',
-    priceSource: line.priceSource || (String(line.priceList || '').startsWith('Ad-hoc') ? PRICE_SOURCES.MANUAL : PRICE_SOURCES.LIST),
-    priceSourceName: line.priceSourceName || line.priceList || '',
-    priceSourceVersion: line.priceSourceVersion || '',
-    priceSourceRef: line.priceSourceRef || line.quoteRef || '',
-    priceSourceDate: line.priceSourceDate || '',
-    listUnitPrice: Number(line.listUnitPrice ?? line.listPrice) || 0,
-    listTotalPrice: (Number(line.listUnitPrice ?? line.listPrice) || 0) * (Number(line.qty) || 0),
-    baseCost: line.baseCost == null ? undefined : Number(line.baseCost) || 0,
-    discountPct: Number(line.discountPct) || 0,
-    markupPct: Number(line.markupPct) || 0,
-  }))
+export function sparesProposalBom(lines = [], priceLists = {}, costing = defaultCosting) {
+  return lines
+    .filter(line => line?.confirmed && Number(line.qty) > 0 && !isPlaceholderSparesLine(line))
+    .map(line => {
+      const financials = sparesLineFinancials(line, costing)
+      return {
+        quoted: financials.adjustedUnitPriceINR,
+        listTotalPrice: financials.listTotalINR,
+        itemCategory: 'Hardware',
+        pn: line.pn || '',
+        custRef: line.custRef || line.pn || line.desc || '',
+        desc: catalogueDescriptionForLine(line, priceLists) || line.desc || line.custRef || line.pn || '',
+        listPrice: Number(line.listPrice) || 0,
+        adders: [],
+        qtyPerUnit: 0,
+        common: Number(line.qty) || 0,
+        spares: 0,
+        uom: line.uom || 'EA',
+        list: String(line.priceList || '').startsWith('BNK') ? 'BNK' : 'Ad-hoc',
+        currency: line.currency || 'INR',
+        priceSource: line.priceSource || (String(line.priceList || '').startsWith('Ad-hoc') ? PRICE_SOURCES.MANUAL : PRICE_SOURCES.LIST),
+        priceSourceName: line.priceSourceName || line.priceList || '',
+        priceSourceVersion: line.priceSourceVersion || '',
+        priceSourceRef: line.priceSourceRef || line.quoteRef || '',
+        priceSourceDate: line.priceSourceDate || '',
+        listUnitPrice: Number(line.listUnitPrice ?? line.listPrice) || 0,
+        listUnitPriceINR: financials.listUnitPriceINR,
+        baseCost: line.baseCost == null ? undefined : Number(line.baseCost) || 0,
+        discountPct: Number(line.discountPct) || 0,
+        markupPct: Number(line.markupPct) || 0,
+      }
+    })
 }
 
 export function withSparesSupportRows(bom = []) {

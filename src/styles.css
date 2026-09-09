@@ -772,6 +772,14 @@ select, input[type=text], input[type=number], input[type=date], input[type=tel],
 .sourcing-remove-row { flex: 0 0 auto; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; color: var(--text-secondary); background: transparent; font-size: 18px; line-height: 18px; }
 .sourcing-remove-row:hover { color: var(--accent, #e5382b); background: var(--surface-sunken); }
 .sourcing-sheet-wrap { overflow: hidden; }
+.sourcing-currency-view { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 12px; }
+.sourcing-currency-view select { min-width: 72px; }
+.price-list-rates-card { margin: 10px 0; padding: 12px 14px; border: 1px solid var(--line, #d8d8d8); border-top: 3px solid var(--accent, #e5382b); background: var(--surface, #fff); }
+.price-list-rates-card > div:first-child { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.price-list-rates-grid { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.price-list-rates-grid .afield { display: flex; align-items: center; gap: 5px; }
+.price-list-rates-grid input { width: 90px; }
+.price-list-rates-grid button { padding: 5px 9px; }
 .sourcing-total-row td { background: var(--ink, #242424); color: #fff; border-top: 2px solid var(--accent, #e5382b); padding-top: 9px; padding-bottom: 9px; }
 .sourcing-total-row .hint { color: #c7c7c7; margin-left: 6px; }
 .sourcing-sheet { width: 100%; table-layout: fixed; font-size: 12px; }
@@ -2488,6 +2496,8 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .admin-layout { display: grid; gap: 10px; }
 .admin-masonry-grid { column-count: 4; column-gap: 10px; }
 .admin-masonry-grid > .admin-card { width: 100%; margin: 0 0 10px; break-inside: avoid; }
+.admin-fixed-columns { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: start; gap: 10px; }
+.admin-column { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .admin-wide-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: start; gap: 10px; }
 .admin-wide-grid > .admin-card-wide { grid-column: span 2; }
 .admin-bottom-masonry { margin-top: 0; }
@@ -2567,18 +2577,21 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 @media (max-width: 1160px) {
   .admin-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .admin-masonry-grid { column-count: 3; }
+  .admin-fixed-columns { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .admin-wide-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .admin-wide-grid > .admin-card-wide { grid-column: span 2; }
 }
 @media (max-width: 900px) {
   .admin-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-masonry-grid { column-count: 2; }
+  .admin-fixed-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-wide-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-wide-grid > .admin-card-wide { grid-column: 1 / -1; }
 }
 @media (max-width: 760px) {
   .admin-grid { grid-template-columns: 1fr; }
   .admin-masonry-grid { column-count: 1; }
+  .admin-fixed-columns { grid-template-columns: 1fr; }
   .admin-wide-grid { grid-template-columns: 1fr; }
   .admin-card-wide { grid-column: 1 / -1; }
   .admin-kyc-template-list, .admin-template-list { grid-template-columns: 1fr; }
@@ -6834,4 +6847,63 @@ table.sheet.sourcing-sheet--fixed th {
 @media (max-width: 560px) {
   .sourcing-below-table-actions { justify-content: stretch; }
   .sourcing-below-table-actions button { width: 100%; }
+}
+
+/* Keep the sourcing grid readable at desktop widths. The earlier fixed
+   percentages are preserved, while this prevents narrow numeric columns from
+   turning their labels and values into stacked blocks. */
+.sourcing-sheet-wrap {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.sourcing-sheet--fixed {
+  min-width: 1180px;
+}
+.sourcing-sheet--fixed th {
+  white-space: nowrap !important;
+  overflow-wrap: normal;
+  word-break: normal;
+  line-height: 1.2;
+  vertical-align: middle;
+}
+.sourcing-sheet--fixed td.num {
+  vertical-align: middle;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.sourcing-sheet--fixed .sourcing-cell-part,
+.sourcing-sheet--fixed .sourcing-cell-source,
+.sourcing-sheet--fixed .sourcing-cell-actions {
+  vertical-align: middle;
+}
+.sourcing-sheet--fixed .sourcing-part-description {
+  display: block;
+  max-width: 100%;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+  max-height: 1.25em;
+  overflow: hidden;
+}
+.sourcing-sheet--fixed .sourcing-source-name {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  text-overflow: ellipsis;
+}
+.sourcing-sheet--fixed .sourcing-source-stack {
+  gap: 3px;
+}
+.sourcing-currency-indicator {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border-default);
+  border-radius: 5px;
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
 }

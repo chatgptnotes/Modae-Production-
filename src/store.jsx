@@ -13,7 +13,8 @@ import { leadConfig, routeOwner, expiredLeadDeadline, aiAuditDetail } from './le
 import { withoutSimulated, simulatedCount } from './simulatedLeads.js'
 import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLeadSlice, defaultViewMode } from './appState.js'
 import { unitCostINR, unitSellINR } from './utils.js'
-import { PRICE_SOURCES, normalizePriceFields } from './pricing.js'
+import { PRICE_SOURCES, normalizePriceFields, sparesLineFinancials } from './pricing.js'
+import { normalizedCurrencyRates } from './currency.js'
 import { syncProposalFromOpportunity } from './proposal/opportunitySync.js'
 import {
   isPlaceholderSparesLine,
@@ -1224,25 +1225,18 @@ export function StoreProvider({ children }) {
         if (!lines.length) return s
         const opp = s.opportunities.find(o => o.id === oppId)
         const base = s.proposals[oppId] || newProposal(oppId, opp, { validityDays: s.config?.proposalValidityDays })
-        const productBom = sparesProposalBom(lines, s.priceLists)
+        const costing = {
+          ...(base.costing || {}),
+          currencyRates: normalizedCurrencyRates(base.costing?.currencyRates || s.config?.currencyRates),
+        }
+        const productBom = sparesProposalBom(lines, s.priceLists, costing)
         const supportBom = withSparesSupportRows((base.bom || []).filter(isSparesSupportRow))
         const bom = [...productBom, ...supportBom]
-        const costing = base.costing || {}
         const pricedLines = lines.reduce((totals, line) => {
-          const listUnitPrice = Number(line.listUnitPrice ?? line.listPrice) || 0
-          const qty = Math.max(0, Number(line.qty) || 0)
-          const discountPct = Math.max(0, Math.min(100, Number(line.discountPct) || 0))
-          const markupPct = Math.max(0, Number(line.markupPct) || 0)
-          const adjustedUnitPrice = listUnitPrice
-            * (1 - discountPct / 100)
-            * (1 + markupPct / 100)
-          const bnk = String(line.priceList || '').startsWith('BNK')
-          const baseCost = line.baseCost == null
-            ? unitCostINR(listUnitPrice, costing, line.currency || 'EUR', bnk)
-            : Math.max(0, Number(line.baseCost) || 0)
+          const financials = sparesLineFinancials(line, costing)
           return {
-            value: totals.value + adjustedUnitPrice * qty,
-            cogs: totals.cogs + baseCost * qty,
+            value: totals.value + financials.lineTotalINR,
+            cogs: totals.cogs + financials.cogsINR,
           }
         }, { value: 0, cogs: 0 })
         return withAudit({
@@ -1252,7 +1246,7 @@ export function StoreProvider({ children }) {
             valueK: Math.round(pricedLines.value / 1000),
             cogsK: Math.round(pricedLines.cogs / 1000),
           } : item),
-          proposals: { ...s.proposals, [oppId]: { ...base, bom } },
+          proposals: { ...s.proposals, [oppId]: { ...base, costing, bom } },
         }, 'Lines sent to proposal', oppId, `${bom.length} line(s) synchronized`)
       })
     },
@@ -1449,6 +1443,19 @@ export function StoreProvider({ children }) {
           ...s,
           priceLists: { ...s.priceLists, [name]: { ...current, parts, currency: snapshot.currency, version, uploaded: snapshot.uploaded, versions: [...(current.versions || []), snapshot], activeVersionId: id } },
         }, 'Price list version saved', name, `${parts.length} parts · version ${version}`)
+      })
+    },
+    updateCurrencyRate(currency, value) {
+      setState(s => {
+        if (!ROLES[s.role]?.admin) return s
+        const code = String(currency || '').trim().toUpperCase()
+        const rate = Number(value)
+        if (!code || code === 'INR' || !Number.isFinite(rate) || rate <= 0) return s
+        const currencyRates = { ...(s.config?.currencyRates || {}), [code]: rate, INR: 1 }
+        return withAudit({
+          ...s,
+          config: { ...s.config, currencyRates },
+        }, 'Currency conversion rate updated', code, `1 ${code} = ₹${rate}`)
       })
     },
     restorePriceListVersion(name, versionId) {

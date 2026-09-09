@@ -43,9 +43,16 @@ function Card({ title, icon, tone = '', span = 6, children, action }) {
 
 function AnalyticsOverview({ store, role, nav }) {
   const snapshot = analyticsSnapshot(store, role)
+  const location = useLocation()
+  const [detailsOpen, setDetailsOpen] = useState(false)
   const metric = row => snapshot.comm ? fmtLakh(row.valueK) : row.count
   const max = Math.max(1, ...snapshot.funnel.map(row => snapshot.comm ? row.valueK : row.count))
   const scope = snapshot.owner ? `Your pipeline · ${snapshot.owner}` : 'Company pipeline'
+  const closed = store.opportunities
+    .filter(o => (!snapshot.owner || o.owner === snapshot.owner) && (o.stage === 'Won' || o.stage === 'Lost'))
+  React.useEffect(() => {
+    if (location.hash === '#detailed-analytics') setDetailsOpen(true)
+  }, [location.hash])
   return (
     <section className="home-analytics dashboard-analytics" aria-labelledby="dashboard-analytics-title">
       <div className="home-analytics-head">
@@ -86,6 +93,29 @@ function AnalyticsOverview({ store, role, nav }) {
         <button onClick={() => nav('/approvals')}><span className="home-alert-value">{snapshot.counts.forMe || snapshot.counts.myPending}</span><span>{snapshot.counts.forMe ? 'Awaiting your decision' : 'Your requests'}</span></button>
         <button onClick={() => nav('/my')}><span className="home-alert-value">{snapshot.counts.myStale}</span><span>Need an update</span></button>
       </div>
+      <Card title="Win / loss reasons" icon="checkCircle" tone="tone-green" span={12}>
+        {closed.length ? (
+          <div className="dashboard-win-loss-list" role="list" aria-label="Closed opportunities and reasons">
+            {closed.map(o => (
+              <div key={o.id} className="dashboard-win-loss-row" role="listitem">
+                <button className="oppid-link" onClick={() => nav(`/folders/${o.id}`)}>{o.id}</button>
+                <span className={`pill ${o.stage === 'Won' ? 'won' : 'lost'}`}>{o.stage}</span>
+                <span className="dashboard-win-loss-reason">{o.closedReason || '—'}</span>
+              </div>
+            ))}
+          </div>
+        ) : <p className="hint">No closed opportunities yet.</p>}
+      </Card>
+      <Card title="Detailed reporting" icon="chartLine" tone="tone-sky" span={12}>
+        <div className="dashboard-report-actions">
+          <button onClick={() => setDetailsOpen(value => !value)} aria-expanded={detailsOpen}>
+            {detailsOpen ? 'Hide detailed analytics' : 'Open detailed analytics'}
+            <span aria-hidden="true">{detailsOpen ? ' ↑' : ' ↓'}</span>
+          </button>
+        </div>
+        {!detailsOpen && <p className="hint">Use this view for filtered funnel analysis, win/loss detail, margins, and supporting records.</p>}
+      </Card>
+      {detailsOpen && <div id="detailed-analytics" className="dashboard-embedded-report"><Analytics embedded /></div>}
     </section>
   )
 }
@@ -407,11 +437,9 @@ export default function MyDashboard() {
 
 // ------------------------------------------------------------------- sales
 function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head }) {
-  const [detailsOpen, setDetailsOpen] = useState(false)
   const [forecastOpen, setForecastOpen] = useState(false)
   const location = useLocation()
   React.useEffect(() => {
-    if (location.hash === '#detailed-analytics') setDetailsOpen(true)
     if (location.hash === '#forecast-details') setForecastOpen(true)
   }, [location.hash])
   const perf = salesPerformance(store, role)
@@ -485,21 +513,16 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
           <div className="hint" style={{ marginTop: 8 }}>Your leads through to won business, with the conversion from each stage to the next.</div>
         </Card>
 
-        <Card title="Detailed reporting" icon="chartLine" tone="tone-sky" span={12}>
+        <Card title="Forecast reporting" icon="chartLine" tone="tone-sky" span={12}>
           <div className="dashboard-report-actions">
-            <button onClick={() => setDetailsOpen(value => !value)} aria-expanded={detailsOpen}>
-              {detailsOpen ? 'Hide detailed analytics' : 'Open detailed analytics'}
-              <span aria-hidden="true">{detailsOpen ? ' ↑' : ' ↓'}</span>
-            </button>
             <button onClick={() => setForecastOpen(value => !value)} aria-expanded={forecastOpen}>
               {forecastOpen ? 'Hide forecast pivot' : 'Open forecast by customer/month'}
               <span aria-hidden="true">{forecastOpen ? ' ↑' : ' ↓'}</span>
             </button>
           </div>
-          {!detailsOpen && !forecastOpen && <p className="hint">Use these views for filtered funnel analysis, win/loss detail, margins, or forecast by customer and month.</p>}
+          {!forecastOpen && <p className="hint">Review forecast by customer and month.</p>}
         </Card>
 
-        {detailsOpen && <div id="detailed-analytics" className="dashboard-embedded-report"><Analytics embedded /></div>}
         {forecastOpen && <div id="forecast-details" className="dashboard-embedded-report"><ForecastDashboard embedded /></div>}
 
         {/* The "Monthly bookings" sparkline that used to sit here plotted the

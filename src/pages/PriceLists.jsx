@@ -4,6 +4,7 @@ import { useStore } from '../store.jsx'
 import { fmt, exportCSV, canViewCommercial, isAdminRole } from '../utils.js'
 import { Modal } from '../ui.jsx'
 import { downloadPriceListTemplate, parsePriceListFile } from '../priceListImport.js'
+import { normalizedCurrencyRates } from '../currency.js'
 
 export default function PriceLists() {
   const store = useStore()
@@ -25,10 +26,13 @@ export default function PriceLists() {
   const [editOpen, setEditOpen] = useState(false)
   const [editRows, setEditRows] = useState([])
   const [editVersion, setEditVersion] = useState('')
+  const [rateDraft, setRateDraft] = useState({})
   const rowRefs = useRef({})
   const pl = store.priceLists[list]
   const selectedVersion = pl?.versions?.find(item => item.id === versionId)
   const displayList = selectedVersion || pl
+  const currencies = [...new Set(['EUR', 'USD', ...Object.values(store.priceLists || {}).map(item => item.currency), ...Object.keys(store.config?.currencyRates || {})].filter(currency => currency && currency !== 'GBP'))]
+  const currencyRates = normalizedCurrencyRates(store.config?.currencyRates)
   const requestedPartMatch = displayList?.parts.find(part => String(part.pn).trim().toUpperCase() === requestedPart.trim().toUpperCase())
   const requestedListAvailable = !requestedList || !!store.priceLists?.[requestedList]
 
@@ -129,6 +133,16 @@ export default function PriceLists() {
         </>}
       </div>
 
+      <div className="price-list-rates-card">
+        <div><b>Currency conversion rates</b><span className="hint"> Rates are INR per one unit of foreign currency. Source prices are not changed.</span></div>
+        <div className="price-list-rates-grid">
+          {currencies.filter(currency => currency !== 'INR').map(currency => <label key={currency} className="afield">1 {currency} = ₹
+            <input type="number" min="0.0001" step="0.0001" disabled={!canUpload} value={rateDraft[currency] ?? currencyRates[currency] ?? ''} onChange={e => setRateDraft({ ...rateDraft, [currency]: e.target.value })} />
+            <button type="button" className="primary" disabled={!canUpload} onClick={() => { const rate = rateDraft[currency] ?? currencyRates[currency]; store.updateCurrencyRate(currency, rate); setRateDraft({ ...rateDraft, [currency]: String(rate) }) }}>Save</button>
+          </label>)}
+        </div>
+      </div>
+
       <div className="toolbar price-list-version-bar">
         <label className="hint">View saved version</label>
         <select value={versionId || pl.activeVersionId || ''} onChange={e => setVersionId(e.target.value || null)}>
@@ -146,7 +160,7 @@ export default function PriceLists() {
           <p className="hint">Fill the template manually, then upload it here. This creates a new saved version; older versions remain available.</p>
           <div className="admin-field-grid">
             <label className="afield">Version<input value={uploadVersion} placeholder="e.g. 2026-Q3" onChange={e => setUploadVersion(e.target.value)} /></label>
-            <label className="afield">Currency<select value={uploadCurrency} onChange={e => setUploadCurrency(e.target.value)}><option>EUR</option><option>INR</option><option>USD</option><option>GBP</option></select></label>
+            <label className="afield">Currency<select value={uploadCurrency} onChange={e => setUploadCurrency(e.target.value)}><option>EUR</option><option>INR</option><option>USD</option></select></label>
           </div>
           <div className="admin-actions" style={{ marginTop: 12 }}>
             <input type="file" accept=".xlsx,.xls,.csv" onChange={e => e.target.files?.[0] && inspectUpload(e.target.files[0])} />

@@ -5,6 +5,11 @@
 // only; INR-quoted parts (ad-hoc/local) are already landed cost.
 export function effectiveRate(c, currency = 'EUR', applyBnkDisc = true) {
   if (currency === 'INR') return 1
+  const configuredRate = c?.currencyRates?.[String(currency).toUpperCase()]
+  if (Number(configuredRate) > 0) {
+    const disc = applyBnkDisc ? c.bnkDiscPct / 100 : 0
+    return Math.ceil(Number(configuredRate) * (1 + c.cdErvContPct / 100) * (1 - disc))
+  }
   // A cleared/legacy usdBase falls back to the default $ rate, never the € rate.
   const base = currency === 'USD' ? (c.usdBase > 0 ? c.usdBase : 90) : c.baseRate
   const disc = applyBnkDisc ? c.bnkDiscPct / 100 : 0

@@ -135,7 +135,9 @@ export function buildPricing(store, p) {
   }
   const isBnk = l => (lineSource(l)?.sourceName || l.list || 'BNK') === 'BNK'
   const lineCurrency = l => lineSource(l)?.currency || l.currency || 'EUR'
-  const lineCost = (l, c = p.costing) => unitCostINR(linePrice(l), c, lineCurrency(l), isBnk(l))
+  const lineCost = (l, c = p.costing) => l.baseCost == null
+    ? unitCostINR(linePrice(l), c, lineCurrency(l), isBnk(l))
+    : Math.max(0, Number(l.baseCost) || 0)
   const lineComputed = (l, c = p.costing) => applyAdjustment(
     unitSellINR(linePrice(l), c, lineCurrency(l), isBnk(l)), p)
   // Customer-facing (target) price — editable; defaults to the computed GM price.

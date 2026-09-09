@@ -1,6 +1,9 @@
 // Shared price-source and proposal-adjustment rules.
 // Approved price-list rows always win over vendor references and manual values.
 
+import { effectiveRate, unitCostINR } from './utils.js'
+import { defaultCosting } from './seed.js'
+
 export const PRICE_SOURCES = Object.freeze({
   LIST: 'price-list',
   VENDOR: 'vendor-quote',
@@ -112,6 +115,40 @@ export function adjustmentMultiplier({ discountPct = 0, markupPct = 0 } = {}) {
 
 export function applyAdjustment(value, pricing = {}) {
   return Number(value || 0) * adjustmentMultiplier(pricing)
+}
+
+// Sourcing rows may store a price in EUR/USD/INR, but all financial roll-ups
+// are reported in INR. Keep the source unit price intact for editing/evidence
+// and expose normalized values for previews, proposals, and margin gates.
+export function sparesLineFinancials(line = {}, costing = {}) {
+  const effectiveCosting = { ...defaultCosting, ...(costing || {}) }
+  const qty = Math.max(0, Number(line.qty) || 0)
+  const listUnitPrice = Math.max(0, Number(line.listUnitPrice ?? line.listPrice) || 0)
+  const currency = line.currency || 'INR'
+  const isBnk = String(line.priceList || '').startsWith('BNK')
+  const discountPct = Math.max(0, Math.min(100, Number(line.discountPct) || 0))
+  const markupPct = Math.max(0, Number(line.markupPct) || 0)
+  const sourceRate = effectiveRate(effectiveCosting, currency, false)
+  const listUnitPriceINR = listUnitPrice * sourceRate
+  const adjustedUnitPriceINR = listUnitPriceINR
+    * (1 - discountPct / 100)
+    * (1 + markupPct / 100)
+  const baseCostINR = line.baseCost == null
+    ? unitCostINR(listUnitPrice, effectiveCosting, currency, isBnk)
+    : Math.max(0, Number(line.baseCost) || 0)
+  return {
+    qty,
+    currency,
+    listUnitPrice,
+    listUnitPriceINR,
+    discountPct,
+    markupPct,
+    adjustedUnitPriceINR,
+    baseCostINR,
+    listTotalINR: listUnitPriceINR * qty,
+    lineTotalINR: adjustedUnitPriceINR * qty,
+    cogsINR: baseCostINR * qty,
+  }
 }
 
 export function normalizePriceFields(line = {}) {
