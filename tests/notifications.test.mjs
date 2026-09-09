@@ -4,9 +4,8 @@ import fs from 'node:fs'
 
 const app = fs.readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
 
-test('approval notifications route to the approvals list when no opportunity exists', () => {
-  assert.match(app, /export const approvalNotificationPath = approval => approval\?\.oppId/)
-  assert.match(app, /\? `\/opp\/\$\{approval\.oppId\}\/approvals`\s*:\s*'\/approvals'/)
+test('all approval notifications route to the central approvals list', () => {
+  assert.match(app, /export const approvalNotificationPath = \(\) => '\/approvals'/)
   assert.match(app, /to: approvalNotificationPath\(a\)/)
 })
 

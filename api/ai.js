@@ -108,6 +108,17 @@ const clarificationAnswerSchema = {
   required: ['rows'],
 }
 
+const conditionEvidenceSchema = {
+  type: 'OBJECT',
+  properties: {
+    assessment: { type: 'STRING', enum: ['Supports', 'Does not support', 'Inconclusive'] },
+    confidence: { type: 'INTEGER' },
+    evidence: { type: 'STRING' },
+    concerns: { type: 'STRING' },
+  },
+  required: ['assessment', 'confidence', 'evidence', 'concerns'],
+}
+
 function leadPrompt(p) {
   return `${HOUSE}
 
@@ -292,6 +303,20 @@ function inlineParts(payload) {
     : []
 }
 
+function conditionEvidencePrompt(p) {
+  return `${HOUSE}
+
+Inspect the supplied file as evidence for a human approval-condition review.
+Compare only what is visibly supported by the file with the condition and the
+person's incorporation note. Do not decide whether the condition is approved,
+do not invent unreadable details, and state when the image is unclear. Return
+Supports only when the image materially supports the note; otherwise use Does
+not support or Inconclusive. Keep evidence and concerns concise.
+
+CONDITION: ${cap(p.conditionText, 2000)}
+INCORPORATION NOTE: ${cap(p.incorporationNote, 2000)}`
+}
+
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*')
@@ -310,7 +335,7 @@ export default async function handler(req, res) {
   const task = String(input.task || '')
   const payload = input.payload || {}
   const model = /^gemini-[\w.-]+$/.test(String(input.model || '')) ? String(input.model) : DEFAULT_MODEL
-  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'clarification.suggest', 'clarification.answer'].includes(task)) {
+  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'clarification.suggest', 'clarification.answer', 'approval.condition-evidence'].includes(task)) {
     return fail(res, 400, 'AI_BAD_REQUEST', `Unsupported task: ${task}`)
   }
 
@@ -320,10 +345,11 @@ export default async function handler(req, res) {
         : task === 'email.proposal' ? proposalEmailPrompt(payload)
           : task === 'clarification.suggest' ? clarificationSuggestPrompt(payload)
             : task === 'clarification.answer' ? clarificationAnswerPrompt(payload)
+              : task === 'approval.condition-evidence' ? conditionEvidencePrompt(payload)
           : leadPrompt(payload)
   const requestBody = {
-    contents: [{ parts: [{ text: prompt }, ...(task === 'lead.extract' ? inlineParts(payload) : [])] }],
-    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'clarification.suggest', 'clarification.answer'].includes(task)
+    contents: [{ parts: [{ text: prompt }, ...(['lead.extract', 'approval.condition-evidence'].includes(task) ? inlineParts(payload) : [])] }],
+    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'clarification.suggest', 'clarification.answer', 'approval.condition-evidence'].includes(task)
       ? {
           responseMimeType: 'application/json',
           responseSchema: task === 'lead.fill' ? fillSchema
@@ -331,6 +357,7 @@ export default async function handler(req, res) {
               : task === 'email.proposal' ? emailProposalSchema
                 : task === 'clarification.suggest' ? clarificationSuggestSchema
                   : task === 'clarification.answer' ? clarificationAnswerSchema
+                  : task === 'approval.condition-evidence' ? conditionEvidenceSchema
                 : leadSchema,
         }
       : {},

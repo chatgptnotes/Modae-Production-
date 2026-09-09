@@ -92,6 +92,14 @@ const vendorQuoteSchema = {
   },
   required: ['manufacturer', 'quoteRef', 'leadTime', 'notes', 'prices'],
 }
+const conditionEvidenceSchema = {
+  type: 'OBJECT',
+  properties: {
+    assessment: { type: 'STRING', enum: ['Supports', 'Does not support', 'Inconclusive'] },
+    confidence: INT, evidence: STR, concerns: STR,
+  },
+  required: ['assessment', 'confidence', 'evidence', 'concerns'],
+}
 
 // ---------------------------------------------------------------------------
 type Task = {
@@ -187,6 +195,22 @@ PROPOSAL REVISION: ${cap(p.revision, 30)}
 SUBJECT: ${cap(p.subject, 500)}
 CUSTOMER REPLY:
 ${cap(p.body, 12000)}`,
+  },
+
+  'approval.condition-evidence': {
+    model: FLASH,
+    schema: conditionEvidenceSchema,
+    build: p => `${HOUSE}
+
+Inspect the supplied file as evidence for a human approval-condition review.
+Compare only what is visibly supported by the file with the condition and the
+person's incorporation note. Do not decide whether the condition is approved,
+do not invent unreadable details, and state when the image is unclear. Return
+Supports only when the image materially supports the note; otherwise use Does
+not support or Inconclusive. Keep evidence and concerns concise.
+
+CONDITION: ${cap(p.conditionText, 2000)}
+INCORPORATION NOTE: ${cap(p.incorporationNote, 2000)}`,
   },
 
   // ---- Workbench: proposal submission covering message

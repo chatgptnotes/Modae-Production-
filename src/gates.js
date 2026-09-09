@@ -73,12 +73,15 @@ export function pricingThresholdExceptions(opp, proposal, state = {}) {
   const discountPct = Number.isFinite(Number(thresholds.discountPct)) ? Number(thresholds.discountPct) : 5
   const markupPct = Number.isFinite(Number(thresholds.markupPct)) ? Number(thresholds.markupPct) : 10
   const rows = []
+  const seen = new Set()
   const add = (row, label) => {
     const discount = Number(row?.discountPct) || 0
     const markup = Number(row?.markupPct) || 0
-    if (discount > discountPct || markup > markupPct) rows.push({
-      label, discount, markup, discountPct, markupPct,
-    })
+    const key = `${label}|${discount}|${markup}|${discountPct}|${markupPct}`
+    if ((discount > discountPct || markup > markupPct) && !seen.has(key)) {
+      seen.add(key)
+      rows.push({ label, discount, markup, discountPct, markupPct })
+    }
   }
   add(proposal, 'Proposal pricing')
   ;(proposal?.bom || []).forEach((line, i) => add(line, line.pn || line.custRef || line.desc || `Line ${i + 1}`))
@@ -196,16 +199,10 @@ export function readiness(opp, proposal, state) {
     const approved = approval && ['Approved', 'Approved with conditions'].includes(approval.status)
     if (!approved) {
       const pending = approval?.status === 'Pending'
-      const details = pricing.rows.map(row => {
-        const changes = []
-        if (row.discount > row.discountPct) changes.push(`discount ${row.discount}% (limit ${row.discountPct}%)`)
-        if (row.markup > row.markupPct) changes.push(`markup ${row.markup}% (limit ${row.markupPct}%)`)
-        return `${row.label}: ${changes.join(' and ')}`
-      }).join('; ')
       const approvers = pricingApprovers(state)
       b.push({
         key: 'pricing-threshold', severity: pending ? 'wait' : 'block',
-        text: pending ? `Pricing threshold approval is awaiting ${approvers.join(' or ')} — ${details}` : `Pricing threshold approval required from ${approvers.join(' or ')} — ${details}`,
+        text: pending ? `Pricing threshold approval is awaiting ${approvers.join(' or ')}` : `Pricing threshold approval required from ${approvers.join(' or ')}`,
         approvalType: 'Pricing threshold exception', approver: approvers[0], needed: approvers, anyOf: approvers.length > 1,
         rev: String(proposal?.revision ?? ''), pricingRows: pricing.rows,
       })

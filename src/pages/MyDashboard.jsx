@@ -448,13 +448,6 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
         <Metric label="Run rate, annualised" value={fmtLakh(perf.runRate)} tone={perf.runRate >= perf.annual ? 'green' : 'amber'} />
       </div>
 
-      <div className="sales-kpi-strip">
-        <Metric label="Open value (₹)" value={money ? fmtLakh(openValue) : '—'} tone="sky" onClick={() => nav('/my')} />
-        <Metric label="Weighted forecast" value={money ? fmtLakh(weightedValue) : '—'} tone="teal" onClick={() => nav('/analytics')} />
-        <Metric label="Booked orders" value={money ? fmtLakh(perf.achieved) : '—'} tone="green" onClick={() => nav('/po')} />
-        <Metric label="Active customers" value={new Set([...open.map(o => o.sellTo), ...perf.orders.map(o => o.customer)]).size} tone="slate" onClick={() => nav('/customers')} />
-      </div>
-
       <div className="ana-grid">
         <Card title="Annual attainment" icon="target" tone="tone-green" span={4}>
           <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0 10px' }}>

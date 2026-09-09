@@ -4,7 +4,7 @@ import { useStore } from '../store.jsx'
 import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, REVISION_TYPES, DEFAULT_WORKFLOW } from '../seed.js'
 import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY, gmailComposeHref, displayRole, displayRoles, displayRoleLabel } from '../utils.js'
 import { readiness, isBlocked, nextActionWith, transitionBlockers } from '../gates.js'
-import { COMMERCIAL_RX } from './Approvals.jsx'
+import { COMMERCIAL_RX, ConditionCompletion } from './Approvals.jsx'
 import { Chip, ClassChip, AiBadge, WarnBox, ErrBox, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 import { productBrandProfiles } from '../branding/modae.js'
@@ -244,6 +244,7 @@ export default function Workbench() {
     needed: blocker.needed || [blocker.approver],
     anyOf: !!blocker.anyOf,
     detail: blocker.text,
+    pricingRows: blocker.pricingRows || undefined,
     ...approvalContextFor(blocker),
   })
   const requestException = blocker => {
@@ -333,6 +334,7 @@ export default function Workbench() {
                 return <div key={`${item.key}-${i}`} className={`workbench-blocker ${item.severity}`}>
                   <div className="transition-blocker-head"><b>{item.text}</b><span className="transition-owner">Owner: <strong>{blockerOwner(item)}</strong></span></div>
                   <span className="transition-explanation">{blockerExplanation(item)}</span>
+                  {item.key === 'pricing-threshold' && item.pricingRows?.length > 0 && <div className="transition-pricing-details">{item.pricingRows.map((row, rowIndex) => <div key={`${row.label}-${rowIndex}`}><b>{row.label}</b>{row.discount > row.discountPct && <span>Discount {row.discount}% (limit {row.discountPct}%)</span>}{row.markup > row.markupPct && <span>Markup {row.markup}% (limit {row.markupPct}%)</span>}</div>)}</div>}
                   {item.key === 'clarifications' && clarificationRows.length > 0 && <div className="transition-detail-list">{clarificationRows.map(row => <div key={row.id}><b>{row.id}</b> · {row.category} · {row.q} <em>{row.status}</em></div>)}</div>}
                   {item.key === 'dev' && deviationRows.length > 0 && <div className="transition-detail-list">{deviationRows.map((row, index) => <div key={`${row.term}-${index}`}><b>{row.term}</b><br />Customer requested: {row.customerAsk || 'Not recorded'}<br />ModAE offered: {row.ourResponse || 'Pending review'}</div>)}</div>}
                   {item.severity === 'wait' && <span>Waiting for the responsible approver.</span>}
@@ -1895,6 +1897,7 @@ function FollowUpPane({ opp, onRevision }) {
 function ApprovalsTab({ opp }) {
   const store = useStore()
   const rows = store.approvals.filter(a => a.oppId === opp.id)
+  const canCompleteCondition = a => store.role === opp.owner || store.role === a.requestedBy
   return (
     <div>
       {rows.map(a => (
@@ -1905,12 +1908,15 @@ function ApprovalsTab({ opp }) {
             <span className={`pill ${statusPill(a.status)}`}>{a.status}</span>
             <span className="hint" style={{ marginLeft: 'auto' }}>requested by {displayRole(a.requestedBy)} · {ddMmmYY((a.ts || '').slice(0, 10))}</span>
           </div>
-          {COMMERCIAL_RX.test(a.detail || '') && !canPriceProposal(store.role) ? (
+          {(COMMERCIAL_RX.test(a.detail || '') || (a.type === 'Pricing threshold exception' && a.pricingRows?.length > 0)) && !canPriceProposal(store.role) ? (
             <div className="restricted" style={{ fontSize: 12.5, margin: '6px 0' }}>
               <Icon name="lock" size={11} /> Commercial exception — trigger values (GM% / discount / value) visible to approvers and the opportunity owner only.
             </div>
           ) : (
-            <div style={{ fontSize: 12.5, margin: '6px 0' }}>{a.detail}</div>
+            <>
+              <div style={{ fontSize: 12.5, margin: '6px 0' }}>{a.detail}</div>
+              {a.type === 'Pricing threshold exception' && a.pricingRows?.length > 0 && <div className="approval-pricing-rows">{a.pricingRows.map((row, i) => <div className="approval-pricing-row" key={`${row.label}-${i}`}><b>{row.label}</b>{row.discount > row.discountPct && <span>Discount {row.discount}% <small>(limit {row.discountPct}%)</small></span>}{row.markup > row.markupPct && <span>Markup {row.markup}% <small>(limit {row.markupPct}%)</small></span>}</div>)}</div>}
+            </>
           )}
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {(a.needed || [a.approver].filter(Boolean)).map(r => {
@@ -1925,11 +1931,21 @@ function ApprovalsTab({ opp }) {
           {(a.conditions || []).length > 0 && (
             <div style={{ marginTop: 6 }}>
               {a.conditions.map((c, i) => (
-                <div key={i} className="hint">
-                  {c.incorporated ? 'Incorporated: ' : 'Condition open: '}{c.text}
+                <div key={i} className="approval-condition-row">
+                  <div className="approval-condition-text">{c.text}</div>
+                  <ConditionCompletion
+                    approval={a}
+                    index={i}
+                    condition={c}
+                    canComplete={canCompleteCondition(a)}
+                    onConfirm={store.confirmCondition}
+                  />
                 </div>
               ))}
             </div>
+          )}
+          {!canCompleteCondition(a) && (a.conditions || []).some(c => !c.incorporated) && (
+            <div className="hint" style={{ marginTop: 6 }}>The opportunity owner confirms incorporation of open conditions.</div>
           )}
         </div>
       ))}

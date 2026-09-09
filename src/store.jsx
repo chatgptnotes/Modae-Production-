@@ -780,11 +780,11 @@ export function StoreProvider({ children }) {
     },
 
     // Salesperson confirms an approval condition is incorporated in the proposal.
-    confirmCondition(approvalId, idx, note) {
+    confirmCondition(approvalId, idx, note, evidence = null) {
       setState(s => withAudit({
         ...s,
         approvals: s.approvals.map(a => a.id === approvalId
-          ? { ...a, conditions: a.conditions.map((c, i) => (i === idx ? { ...c, incorporated: true, note } : c)) }
+          ? { ...a, conditions: a.conditions.map((c, i) => (i === idx ? { ...c, incorporated: true, note, ...(evidence ? { evidence } : {}) } : c)) }
           : a),
       }, 'Condition confirmed', approvalId, note))
     },

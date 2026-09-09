@@ -40,12 +40,10 @@ function PageGate({ page, children }) {
   return children
 }
 
-// Some approvals are raised before an opportunity ID exists (for example a
-// red-customer clearance raised from the lead inbox). Those notifications must
-// open the approvals list rather than producing the invalid /opp/approvals URL.
-export const approvalNotificationPath = approval => approval?.oppId
-  ? `/opp/${approval.oppId}/approvals`
-  : '/approvals'
+// Approval notifications always open the central decision workspace. Some
+// approvals are raised before an opportunity ID exists, so routing through one
+// stable page also avoids invalid or overly-specific deep links.
+export const approvalNotificationPath = () => '/approvals'
 
 const approvalOwner = (approval, store) => {
   if (approval?.oppId) return store.opportunities.find(o => o.id === approval.oppId)?.owner || approval.requestedBy
@@ -59,6 +57,14 @@ const approvalOwner = (approval, store) => {
 function NotificationBell({ store, nav }) {
   const [open, setOpen] = useState(false)
   const role = store.role
+  const seenStorageKey = `wintrack-notifications-seen-${role}`
+  const [seenIds, setSeenIds] = useState(() => {
+    if (typeof window === 'undefined') return []
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(seenStorageKey) || '[]')
+      return Array.isArray(saved) ? saved : []
+    } catch { return [] }
+  })
   const notifications = [
     ...(store.approvals || []).filter(a => a.status === 'Pending' && ([...(a.needed || []), a.approver, a.requestedBy].filter(Boolean).includes(role))).map(a => ({
       id: `approval-${a.id}`, icon: 'checkCircle', title: 'Approval waiting', text: a.detail || a.type, to: approvalNotificationPath(a), date: a.ts,
@@ -70,19 +76,43 @@ function NotificationBell({ store, nav }) {
       id: `stale-${o.id}`, icon: 'clock', title: 'Follow-up overdue', text: `${o.id} has not been updated for 7 days`, to: `/opp/${o.id}`, date: o.lastUpdated,
     })),
   ]
+  const unseenNotifications = notifications.filter(item => !seenIds.includes(item.id))
+  const markSeen = items => {
+    const ids = items.map(item => item.id)
+    if (!ids.length) return
+    setSeenIds(previous => {
+      const next = [...new Set([...previous, ...ids])]
+      try { window.localStorage.setItem(seenStorageKey, JSON.stringify(next)) } catch { /* best effort */ }
+      return next
+    })
+  }
+  const toggleNotifications = () => {
+    setOpen(value => {
+      const next = !value
+      if (next) markSeen(notifications)
+      return next
+    })
+  }
   return (
     <div className="notification-wrap">
-      <button className="notification-button" type="button" aria-label={`Notifications${notifications.length ? ` (${notifications.length})` : ''}`} onClick={() => setOpen(value => !value)}>
-        <Icon name="bell" size={17} />
-        {notifications.length > 0 && <span className="notification-count">{notifications.length > 99 ? '99+' : notifications.length}</span>}
+      <button
+        className={`notification-button${open ? ' is-open' : ''}`}
+        type="button"
+        aria-label={`Notifications${unseenNotifications.length ? ` (${unseenNotifications.length} unseen)` : ''}`}
+        aria-expanded={open}
+        aria-controls="notification-popover"
+        onClick={toggleNotifications}
+      >
+        <Icon name="bell" size={24} />
+        {unseenNotifications.length > 0 && <span className="notification-count">{unseenNotifications.length > 99 ? '99+' : unseenNotifications.length}</span>}
       </button>
       {open && (
         <>
           <div className="notification-overlay" onClick={() => setOpen(false)} />
-          <div className="notification-popover" role="dialog" aria-label="Notifications">
-            <div className="notification-heading"><b>Notifications</b><span>{notifications.length}</span></div>
+          <div id="notification-popover" className="notification-popover" role="dialog" aria-label="Notifications">
+            <div className="notification-heading"><b>Notifications</b><span>{unseenNotifications.length ? `${unseenNotifications.length} unseen` : 'All seen'}</span></div>
             {notifications.length ? notifications.map(item => (
-              <button key={item.id} className="notification-item" type="button" onClick={() => { setOpen(false); nav(item.to) }}>
+              <button key={item.id} className="notification-item" type="button" onClick={() => { markSeen([item]); setOpen(false); nav(item.to) }}>
                 <Icon name={item.icon} size={15} />
                 <span><b>{item.title}</b><small>{item.text}</small></span>
               </button>
