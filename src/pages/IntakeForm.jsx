@@ -165,7 +165,7 @@ export default function IntakeForm({ destinationPicker = null }) {
     })
     // A lead qualified from the inbox converts only on actual submit.
     if (loc.state?.leadId) store.updateLead(loc.state.leadId, { status: 'Qualified', oppId: id })
-    alert(`Opportunity ${id} created.\n\n1) Row added to the Sales Pipeline sheet\n2) Folder ${id} created with Customer Specs / Partner Docs / Proposal`)
+    setAiNotice(`Opportunity ${id} created. A row was added to the Sales Pipeline sheet and its Customer Specs, Partner Docs and Proposal folders were created.`)
     nav(`/folders/${id}`)
   }
 

@@ -806,7 +806,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   )
   const exportExcel = () => downloadProposalXlsx({ p, opp, doc, priced, totalQty, lineQuoted, lineCost, linePrice, totals, route }).catch(error => {
     console.error('Proposal Excel export failed', error)
-    window.alert(`The proposal workbook could not be downloaded: ${error?.message || 'unknown export error'}`)
+    setReviewError(`The proposal workbook could not be downloaded: ${error?.message || 'unknown export error'}`)
   })
   const submitForApproval = () => {
     if (!reviewReady) {

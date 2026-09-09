@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useStore, nextOppId } from '../store.jsx'
+import { useStore } from '../store.jsx'
 import { ddMmmYY, ageDays, gmailComposeHref, displayRole } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { Chip, ConfChip, WarnBox, ErrBox, Modal } from '../ui.jsx'
-import { ROLES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, CUSTOMER_STATUSES, LEAD_SOURCES, ownerForOppType, routeForType, newProposal } from '../seed.js'
+import { ROLES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, CUSTOMER_STATUSES, LEAD_SOURCES, ownerForOppType, routeForType } from '../seed.js'
 import { isAdminRole, isApprover } from '../utils.js'
 import { aiEnabled, runTaskResult, runText } from '../ai.js'
 import { extractDocText } from '../docText.js'
@@ -19,10 +19,8 @@ import { leadWorkflow } from '../leadWorkflow.js'
 import { parseLeadLineItems } from '../tenderParse.js'
 import { deterministicLeadRoute, leadTextChunks, mergeLeadResults, cleanDisplayValue } from '../leadExtraction.js'
 import { scanAttachment, parsedToLeadFields, deterministicPromptContext, mergeDeterministicIntoAi } from '../docScan.js'
-import { buildLeadProposalData } from '../leadBoq.js'
 import { isFastTrackLead, routeOwner, supplyMissing } from '../leadRules.js'
 import { INDIA_LOCATION_GROUPS, indiaLocation, indiaRegionForLocation } from '../indiaLocations.js'
-import { PROJECT_TYPES, oppTypesForProjectType, templatesForSelection, simulatedLead, simulatedCount, SIMULATED_CUSTOMER_SCENARIOS } from '../simulatedLeads.js'
 import {
   QUOTE_FEE_DOCUMENTS, answeredPatch, clarificationItems, clarificationKindFor,
   clarificationSender, draftClarification, draftPatch, senderLabel, sentPatch,
@@ -316,7 +314,6 @@ function LeadVerification({ lead, customerStatus, store }) {
         {confirmed
           ? <div className="okbox">Customer paid the fee — confirmed at Lead stage ({verification.payment.mode === 'simulated' ? 'simulated' : 'recorded'}).</div>
           : editable && <div className="lead-decision-actions">
-            <button className="primary" onClick={() => confirmPayment('simulated')}>Already paid — simulate confirmation</button>
             <button onClick={() => confirmPayment('recorded')}>Record payment received</button>
           </div>}
         {!confirmed && <p className="lead-decision-note">Registration is blocked until payment is confirmed.</p>}
@@ -359,7 +356,6 @@ function LeadVerification({ lead, customerStatus, store }) {
                     <input type="file" disabled={busy === item} style={{ display: 'none' }}
                       onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) setPendingUpload({ item, file }) }} />
                   </label>
-                  <button disabled={busy === item} onClick={() => saveKyc(item, null, 'simulated')}>Already uploaded — simulate verification</button>
                 </>}
             </>}
           </div>
@@ -625,7 +621,8 @@ export function reconcileMissingWithDecisions(missing = [], decisions = {}, fiel
     const text = String(label || '').toLowerCase()
     if (text.includes('customer name')) return !String(decisions.sellTo || '').trim()
     if (text.includes('opportunity scope')) {
-      return !fields.some(field => /scope|opp(ortunity)?s*(scope|description)/i.test(field.k) && String(field.v || '').trim())
+      return !String(decisions.scope || '').trim()
+        && !fields.some(field => /scope|opp(ortunity)?s*(scope|description)/i.test(field.k) && String(field.v || '').trim())
     }
     if (text.includes('quantit') || text.includes('specification')) {
       return !(lineItems || []).some(item => String(item.description || item.desc || '').trim() && Number(item.qty) > 0)
@@ -715,7 +712,7 @@ function AiLeadDetail({ lead }) {
   const [fillFor, setFillFor] = useState(null)    // { item, val } — answering a missing item
   const [addOther, setAddOther] = useState(null)  // { k, v } — information nobody asked for yet
   const [reExtracting, setReExtracting] = useState(false)
-  const [simulating, setSimulating] = useState('')
+  const [reExtractConfirmOpen, setReExtractConfirmOpen] = useState(false)
   const [reErr, setReErr] = useState('')
   const [reNote, setReNote] = useState('')
   // The clarification mail the AI drafts and a human sends. `null` while there
@@ -744,6 +741,7 @@ function AiLeadDetail({ lead }) {
   const initialRegion = lead.region || indiaRegionForLocation(initialLocation, store.config) || initialLocation
   const initialDecisions = () => ({
     sellTo: lead.sellTo || leadFieldValue(ai.fields, /sell-to/i) || lead.parse?.sellTo || '',
+    scope: lead.opportunityScope || leadFieldValue(ai.fields, /opportunity\s*scope|scope|description/i) || '',
     location: initialLocation,
     region: initialRegion,
     eucName: lead.eucName || leadFieldValue(ai.fields, /euc\s*name/i) || lead.parse?.eucName || '',
@@ -800,8 +798,15 @@ function AiLeadDetail({ lead }) {
   }
 
   const reExtract = () => {
-    if (decided > 0 && !window.confirm(
-      `Re-run extraction? ${decided} field decision(s) on this lead will be replaced.`)) return
+    if (decided > 0) {
+      setReExtractConfirmOpen(true)
+      return
+    }
+    runExtraction({ source: lead, keepDecisions: false })
+  }
+
+  const confirmReExtract = () => {
+    setReExtractConfirmOpen(false)
     runExtraction({ source: lead, keepDecisions: false })
   }
 
@@ -872,39 +877,27 @@ function AiLeadDetail({ lead }) {
   // Supply a piece of information the AI could not find. The policy — what it
   // does to completeness and to the clarification deadline — is in leadRules.
   const addMissing = (label, value, key = null) => {
-    const patch = supplyMissing({ ...lead, ai }, label, value, key)
-    if (patch) store.updateLead(lead.id, patch, `Missing information supplied: ${String(label).trim()}`)
+    const text = String(label || '').toLowerCase()
+    const decisionKey = text.includes('customer name') ? 'sellTo'
+      : text.includes('opportunity scope') ? 'scope'
+      : null
+    const canonicalLabel = decisionKey === 'sellTo' ? 'Sell-to customer'
+      : decisionKey === 'scope' ? 'Opportunity scope' : label
+    const cleanValue = String(value || '').trim()
+    const patch = supplyMissing({ ...lead, ai }, canonicalLabel, cleanValue, key)
+    if (!patch) return
+    if (decisionKey) {
+      setDecisionDraft(previous => ({ ...previous, [decisionKey]: cleanValue }))
+      setDecisionSaved(false)
+      store.updateLead(lead.id, {
+        ...patch,
+        ...(decisionKey === 'sellTo' ? { sellTo: cleanValue } : { opportunityScope: cleanValue }),
+      }, `Missing information supplied: ${String(label).trim()}`)
+      return
+    }
+    store.updateLead(lead.id, patch, `Missing information supplied: ${String(label).trim()}`)
   }
 
-  // Temporary QA path: any missing item can be filled with a deterministic
-  // demo value. The action is deliberately labelled so it can be removed or
-  // permission-gated after testing without changing the manual path.
-  const simulateMissing = async label => {
-    setSimulating(label)
-    setReErr(''); setReNote('')
-    const result = await runTaskResult('lead.fill', {
-      missing: label,
-      from: lead.from || lead.sender || '',
-      subject: lead.subject || '',
-      body: lead.body || '',
-      fields: ai.fields || [],
-      attachments: lead.attachments || [],
-    }, { model: store.config?.aiModel?.model })
-    const value = String(result.data?.data?.value || '').trim()
-    if (value) {
-      addMissing(label, value, label)
-      store.recordAiAction(lead.id, {
-        provider: store.config?.aiModel?.provider,
-        model: result.data?.model || store.config?.aiModel?.model,
-        action: 'lead.fill',
-        result: { missing: label, value, rationale: result.data?.data?.rationale || '' },
-      })
-      setReNote('AI generated and saved the missing information.')
-    } else {
-      setReErr(result.error || 'AI could not generate this value. Please try again or use Add to enter it manually.')
-    }
-    setSimulating('')
-  }
 
   const saveEdit = () => {
     patchField(editFor.idx, {
@@ -1034,13 +1027,15 @@ function AiLeadDetail({ lead }) {
     const nextFields = updateLeadField(updateLeadField(updateLeadField(updateLeadField(identityFields,
       'Location', decisionDraft.location, 'Customer'), 'Opp Type', decisionDraft.oppType),
       'BU / Segment', `${decisionDraft.bu} / ${decisionDraft.segment}`), 'Product', decisionDraft.product)
-    const nextMissing = reconcileMissingWithDecisions(ai.missing, decisionDraft, nextFields, ai.lineItems)
+    const scopedFields = updateLeadField(nextFields, 'Opportunity scope', decisionDraft.scope, 'RFQ')
+    const nextMissing = reconcileMissingWithDecisions(ai.missing, decisionDraft, scopedFields, ai.lineItems)
     const changed = Object.keys(decisionDraft)
       .filter(key => previous[key] !== decisionDraft[key])
       .map(key => `${key}: ${previous[key] || '—'} → ${decisionDraft[key] || '—'}`)
     if (!changed.length) { setDecisionSaved(true); return }
     store.updateLead(lead.id, {
       sellTo: decisionDraft.sellTo.trim(),
+      opportunityScope: decisionDraft.scope.trim(),
       region: decisionDraft.region,
       location: decisionDraft.location,
       eucName: decisionDraft.eucName.trim(),
@@ -1060,7 +1055,7 @@ function AiLeadDetail({ lead }) {
         ? { ...(lead.verification || {}), requestedAt: lead.verification?.requestedAt || new Date().toISOString(), requestedFor: decisionDraft.customerStatus }
         : (lead.verification || {}),
       redFlag: decisionDraft.customerStatus === 'Red',
-      ai: { ...ai, route: routeForType(decisionDraft.oppType), fields: nextFields, missing: nextMissing },
+      ai: { ...ai, route: routeForType(decisionDraft.oppType), fields: scopedFields, missing: nextMissing },
     }, `Lead decisions saved — ${changed.join('; ')}`)
     setReassignTo(decisionDraft.owner)
     setDecisionSaved(true)
@@ -1344,12 +1339,6 @@ function AiLeadDetail({ lead }) {
                           <Icon name="plus" size={11} /> Add
                         </button>
                       )}
-                      {fillFor?.item !== m && (
-                        <button title="Ask AI to generate a realistic test value" disabled={simulating === m}
-                          onClick={() => simulateMissing(m)}>
-                          <Icon name="sparkles" size={11} /> {simulating === m ? 'Generating…' : 'Simulate'}
-                        </button>
-                      )}
                     </div>
                     {fillFor?.item === m && (
                       <div className="ws-missing-fill">
@@ -1543,6 +1532,10 @@ function AiLeadDetail({ lead }) {
               <label>Sell To Customer <span className="required-mark">*</span>
                 <input type="text" value={decisionDraft.sellTo} disabled={lead.status === 'Dropped'}
                   onChange={e => updateDecisionField('sellTo', e.target.value)} placeholder="Enter customer name" />
+              </label>
+              <label>Opportunity scope
+                <textarea rows={3} value={decisionDraft.scope} disabled={lead.status === 'Dropped'}
+                  onChange={e => updateDecisionField('scope', e.target.value)} placeholder="Enter requested scope or items" />
               </label>
               <label>EUC Name <span className="required-mark">*</span>
                 <input type="text" value={decisionDraft.eucName} disabled={lead.status === 'Dropped'}
@@ -1778,6 +1771,20 @@ function AiLeadDetail({ lead }) {
       {viewing && (
         <AttachmentViewer leadId={lead.id} attachment={viewing} onClose={() => setViewing(null)} />
       )}
+      {reExtractConfirmOpen && (
+        <Modal title="Re-run extraction" onClose={() => setReExtractConfirmOpen(false)}>
+          <p>
+            Re-running extraction will replace the <b>{decided}</b> saved field decision{decided === 1 ? '' : 's'} on this lead.
+          </p>
+          <p className="hint">
+            Continue only if the original email or its attachments have changed. You can cancel without changing anything.
+          </p>
+          <div className="form-actions">
+            <button type="button" onClick={() => setReExtractConfirmOpen(false)}>Cancel</button>
+            <button type="button" className="primary" onClick={confirmReExtract}>Continue and re-run</button>
+          </div>
+        </Modal>
+      )}
     </div>
     </>
   )
@@ -1942,13 +1949,6 @@ export default function Inbox() {
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [pasteOpen, setPasteOpen] = useState(false)
-  const [simulationOpen, setSimulationOpen] = useState(false)
-  const [simProjectType, setSimProjectType] = useState(PROJECT_TYPES[0])
-  const [simOppType, setSimOppType] = useState(() => oppTypesForProjectType(PROJECT_TYPES[0])[0] || PROJECT_TYPES[0])
-  const [simCategory, setSimCategory] = useState('') // temporary test override
-  const [simShape, setSimShape] = useState('')      // template key, '' = any shape
-  const [simQuality, setSimQuality] = useState('')  // '' = varied | clean | partial | duplicate
-  const [simRegister, setSimRegister] = useState(true)
   // Sales owners see only their assigned leads by default; a "Show all" toggle
   // reveals the team's. Managers (LJS/AH) and admins always see everything.
   // The toggle lives in the store, not in component state: as component state a
@@ -2088,92 +2088,6 @@ export default function Inbox() {
     setSelectedIds(new Set())
     setDeleteConfirm(null)
   }
-  const simOppOptions = oppTypesForProjectType(simProjectType)
-  const activeSimOppType = simOppOptions.includes(simOppType) ? simOppType : (simOppOptions[0] || simProjectType)
-  // The shape list follows the type selection; a shape left over from another
-  // selection silently reads as "Any shape" rather than pinning a wrong type.
-  const simShapeOptions = templatesForSelection(simProjectType, activeSimOppType)
-  const activeSimShape = simShapeOptions.some(t => t.key === simShape) ? simShape : ''
-
-  const createSimulatedLead = (status, options = {}) => {
-    const projectType = options.projectType || simProjectType
-    const oppType = options.oppType || activeSimOppType
-    const lead = simulatedLead(status, new Date(), {
-      existingLeads: store.leads,
-      config: store.config,
-      projectType,
-      oppType,
-      customerCategory: options.customerCategory || simCategory || null,
-      // A randomised call (Random inquiry) picks its own type, so the pinned
-      // shape from the dialog would not fit it.
-      template: options.projectType ? null : (activeSimShape || null),
-      quality: options.quality !== undefined ? options.quality : (simQuality || null),
-    })
-    store.addLead(lead)
-    // Owner comes from the L-05-AI region rules, so a generated lead can land
-    // with someone else. Without this the sales owner's filtered list would
-    // silently drop the row they just created.
-    if (!seesAll && lead.suggestedOwner !== store.role) setShowAll(true)
-    if (!simRegister) {
-      // Stop at the inbox: the class gates (KYC / fee / joint approval) are
-      // walked manually from the New lead itself.
-      setSimulationOpen(false)
-      nav('/inbox/' + lead.id)
-      return
-    }
-    const value = pattern => leadFieldValue(lead.ai?.fields, pattern)
-    const owner = lead.assignedOwner || lead.suggestedOwner || store.role
-    const sellTo = value(/sell-to customer|customer/i) || lead.sellTo || lead.sender || 'Simulated customer'
-    const category = value(/category/i) || 'EUC'
-    const location = value(/^location$/i) || lead.location || ''
-    const resolvedOppType = OPP_TYPES.includes(lead.oppType) ? lead.oppType : (oppType || lead.route || 'Project')
-    const product = value(/^product$/i) || 'Various'
-    const knownCustomer = store.customers.some(c => c.name.toLowerCase() === sellTo.toLowerCase())
-    const oppId = nextOppId(store.opportunities, owner)
-    const today = new Date().toISOString().slice(0, 10)
-    const maxSl = Math.max(0, ...store.opportunities.map(o => o.sl || 0))
-    if (!knownCustomer) store.addCustomer({ name: sellTo, category, status, kyc: status === 'Green' ? 'Verified' : 'Pending', payment: '—' })
-    const opp = {
-      sl: maxSl + 1, id: oppId, sourceLeadId: lead.id, sellTo, category, location,
-      customerStatus: status, eucName: value(/contact person/i) || sellTo, eucLocation: location,
-      oppName: lead.subject, owner, oppType: resolvedOppType, bu: value(/^bu/i) || 'Energy',
-      segment: value(/segment/i) || 'Others', product: [product], prob: '', valueK: 0, cogsK: 0,
-      rfqNumber: lead.ref || '', rfqDate: lead.ts?.slice(0, 10) || '', createDate: today,
-      proposalDate: '', orderDate: '', invoiceDate: '', status: 'Open', stage: 'Lead', closedReason: '',
-      contactPerson: value(/contact person/i) || lead.sender || '', contactPhone: '', contactEmail: lead.from || '',
-      lastUpdated: today, forecast: false, remarks: lead.body || '', nextActionOwner: '', simulated: true,
-    }
-    store.addOpportunity(opp)
-    if (routeForType(resolvedOppType) !== 'Service') {
-      const { extracted, workbenchRows, bom } = buildLeadProposalData(lead, store.priceLists, store.adhocParts)
-      store.addSparesLinesFromLead(oppId, workbenchRows)
-      const proposal = newProposal(oppId, opp, { validityDays: store.config?.proposalValidityDays })
-      store.saveProposal(oppId, {
-        ...proposal,
-        rfqNumber: lead.ref || '', subject: lead.subject || proposal.subject,
-        project: lead.subject || proposal.project, units: 1, bom, extractedItems: extracted,
-        ...(bom.length ? { leadImportId: lead.id } : {}),
-      })
-    }
-    store.updateLead(lead.id, { status: 'Converted', oppId })
-    setSimulationOpen(false)
-    nav('/inbox')
-  }
-  const createRandomSimulatedLead = () => {
-    const projectType = PROJECT_TYPES[Math.floor(Math.random() * PROJECT_TYPES.length)]
-    const oppTypes = oppTypesForProjectType(projectType)
-    const oppType = oppTypes[Math.floor(Math.random() * oppTypes.length)] || projectType
-    const status = SIMULATED_CUSTOMER_SCENARIOS[Math.floor(Math.random() * SIMULATED_CUSTOMER_SCENARIOS.length)].status
-    createSimulatedLead(status, { projectType, oppType, quality: Math.random() < 0.33 ? 'partial' : null })
-  }
-  const simulatedLeadCount = simulatedCount(store.leads, store.leadArchive)
-  const clearSimulated = () => {
-    if (!window.confirm(`Clear ${simulatedLeadCount} simulated lead${simulatedLeadCount === 1 ? '' : 's'}?\n\n`
-      + 'Only rows generated by this simulator go. Seeded and hand-entered leads stay, '
-      + 'and a simulated lead already converted to an opportunity is kept.')) return
-    store.clearSimulatedLeads()
-    setSimulationOpen(false)
-  }
   const tabCount = tab => rows.filter(l => tab === 'unread'
     ? l.status === 'New' && !l.readAt
     : tab === 'qualified' ? l.status === 'Qualified'
@@ -2201,7 +2115,6 @@ export default function Inbox() {
           <p className="hint">{showArchive ? 'Discarded lead archive' : 'Common sales mailbox · AI structures, humans decide'}</p>
         </div>
         <div className="mailbox-head-actions">
-          <button onClick={() => setSimulationOpen(true)}><Icon name="mail" size={13} /> Simulate incoming inquiry</button>
           <button className="primary" onClick={() => setPasteOpen(true)}><Icon name="bot" size={13} /> New enquiry</button>
           <button onClick={() => { setShowArchive(v => !v); setMailTab('primary'); setSelectedIds(new Set()) }}>
             <Icon name="folder" size={13} /> {showArchive ? 'Back to inbox' : `Archive (${(store.leadArchive || []).length})`}
@@ -2219,75 +2132,6 @@ export default function Inbox() {
         {!seesAll && <label className="mail-show-all"><input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)} /> Show all</label>}
       </div>
       {pasteOpen && <PasteLeadModal onClose={() => setPasteOpen(false)} />}
-      {simulationOpen && (
-        <Modal title="Simulate incoming inquiry" className="simulate-modal" onClose={() => setSimulationOpen(false)}>
-          <p className="hint">
-            Choose the project type first, then the opportunity type. Optionally pin an
-            enquiry shape and an extraction quality, and decide whether the inquiry
-            registers an opportunity immediately or stops in the inbox as a New lead.
-            Clicking a customer class below generates it.
-          </p>
-          <div className="sim-controls">
-            <label className="afield">Project type
-              <select value={simProjectType} onChange={e => setSimProjectType(e.target.value)}>
-                {PROJECT_TYPES.map(type => <option key={type}>{type}</option>)}
-              </select>
-            </label>
-            <label className="afield">Opportunity type
-              <select value={activeSimOppType} onChange={e => setSimOppType(e.target.value)}>
-                {simOppOptions.map(type => <option key={type}>{type}</option>)}
-              </select>
-            </label>
-            <label className="afield">Customer category (test)
-              <select value={simCategory} onChange={e => setSimCategory(e.target.value)}>
-                <option value="">Use scenario category</option>
-                {CUSTOMER_CATEGORY_OPTIONS.map(category => <option key={category}>{category}</option>)}
-              </select>
-            </label>
-            <label className="afield wide">Enquiry shape
-              <select value={activeSimShape} onChange={e => setSimShape(e.target.value)}>
-                <option value="">Any shape (varied)</option>
-                {simShapeOptions.map(t => <option key={t.key} value={t.key}>{t.subject}</option>)}
-              </select>
-            </label>
-            <label className="afield">Extraction quality
-              <select value={simQuality} onChange={e => setSimQuality(e.target.value)}>
-                <option value="">Varied (weighted)</option>
-                <option value="clean">Complete extraction</option>
-                <option value="partial">Missing info — needs clarification</option>
-                <option value="duplicate">Duplicate — chaser on an existing enquiry</option>
-              </select>
-            </label>
-            <label className="afield">After generating
-              <select value={simRegister ? 'register' : 'inbox'} onChange={e => setSimRegister(e.target.value === 'register')}>
-                <option value="register">Register the opportunity immediately</option>
-                <option value="inbox">Stop at the inbox as a New lead</option>
-              </select>
-            </label>
-          </div>
-          <div className="sim-cards">
-            {SIMULATED_CUSTOMER_SCENARIOS.map(scenario => (
-              <button key={scenario.status} className="form-card" onClick={() => createSimulatedLead(scenario.status)}>
-                <b>{scenario.label}</b>
-                <span className="hint">{scenario.hint}</span>
-              </button>
-            ))}
-            <button className="form-card wide" onClick={createRandomSimulatedLead}>
-              <b>Random inquiry</b>
-              <span className="hint">
-                Any customer class, any scope — fill the inbox with a varied mix
-              </span>
-            </button>
-          </div>
-          {simulatedLeadCount > 0 && (
-            <div className="lead-decision-actions" style={{ marginTop: 12 }}>
-              <button onClick={clearSimulated}>
-                <Icon name="x" size={13} /> Clear {simulatedLeadCount} simulated lead{simulatedLeadCount === 1 ? '' : 's'}
-              </button>
-            </div>
-          )}
-        </Modal>
-      )}
 
       {deleteConfirm && (
         <Modal title="Delete selected lead" onClose={() => setDeleteConfirm(null)}>

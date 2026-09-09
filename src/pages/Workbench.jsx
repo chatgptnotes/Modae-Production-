@@ -672,7 +672,6 @@ function CustomerKycTab({ opp }) {
               <b>Amber pre-quote fee:</b> ₹ {fmt(fee.amount)} — {opp.amberFeePaid ? 'received' : `pending (${fee.days}-day window)`}
               {!opp.amberFeePaid && (
                 <div style={{ marginTop: 6 }}>
-                  <button onClick={() => store.updateOpportunity(opp.id, { amberFeePaid: true })}>Simulate fee received</button>
                 </div>
               )}
             </div>
@@ -701,15 +700,7 @@ function CustomerKycTab({ opp }) {
           </>
         ) : <>
         <input ref={fileInput} type="file" style={{ display: 'none' }} onChange={onPick} />
-        {customer && (
-          <div className="toolbar" style={{ margin: '0 0 8px' }}>
-            <button className="primary" disabled={!canVerify || !!busy || items.every(k => k.state === 'Verified')}
-              title={canVerify ? 'Demo only - marks every checklist item verified' : 'Only AH verifies KYC'}
-              onClick={simulateAllKycDone}>
-              Simulate all KYC done
-            </button>
-          </div>
-        )}
+        {customer && !canVerify && <p className="hint">Only AH can verify these documents.</p>}
         {items.map(k => (
           <React.Fragment key={k.name}>
             <div className="check-row">
@@ -724,8 +715,6 @@ function CustomerKycTab({ opp }) {
                   title="Attach the actual document">
                   {busy === k.name ? 'Uploading…' : k.file ? 'Replace…' : 'Upload…'}
                 </button>
-                <button disabled={!customer || !!busy} onClick={() => setState(k.name, 'Uploaded')}
-                  title="Demo only — flips the state without a document">Simulate upload</button>
                 {k.state === 'Uploaded' && (
                   <>
                     <button className="primary" disabled={!canVerify} title={canVerify ? '' : 'Only AH verifies KYC'}
@@ -754,8 +743,7 @@ function CustomerKycTab({ opp }) {
         ))}
         {!items.some(k => k.file) && (
           <p className="hint" style={{ marginTop: 8 }}>
-            Upload attaches the real document (previewable, also filed under the opportunity's KYC folder);
-            Simulate upload only flips the state for a demo run.
+            Upload attaches the real document, makes it previewable, and files it under the opportunity's KYC folder.
           </p>
         )}
         </>}
@@ -922,7 +910,7 @@ function ClarificationsTab({ opp }) {
         </button>
         <span className="spacer" />
       </div>
-      {sentOk && <div className="okbox">Clarification email sent (simulated) — logged in Communications.</div>}
+      {sentOk && <div className="okbox">Clarification email sent and logged in Communications.</div>}
       <div className="sheet-wrap">
         <table className="sheet">
           <thead><tr><th>ID</th><th>Category</th><th>Gap / evidence</th><th>Question</th><th>Owner</th><th>Audience</th><th>Due</th><th>Status</th><th></th></tr></thead>
@@ -1248,14 +1236,10 @@ function SourcingTab({ opp, goTab }) {
           <button onClick={openRfq} disabled={opp.route === 'Spares'} title={opp.route === 'Spares' ? 'Manufacturer RFQ is not used for Spares' : 'Request an exceptional vendor price'}>
             <Icon name="mail" size={13} /> Request exceptional vendor price
           </button>
-          <button onClick={simulateVendorResponse} disabled={vendorSimBusy} title="Ask AI to create a test vendor response">
-            <Icon name="sparkles" size={13} /> {vendorSimBusy ? 'Generating…' : 'Simulate vendor response'}
-          </button>
           <button className="primary" onClick={() => goTab('proposal')}>
             <Icon name="arrowRight" size={13} /> Open proposal workbench
           </button>
         </div>
-        {vendorSimErr && <ErrBox>{vendorSimErr}</ErrBox>}
         <p className="hint">{opp.route === 'Spares'
           ? 'Manufacturer RFQ is disabled for Spares. Use the approved price list or raise a pricing exception.'
           : 'Approved price lists are used first. Request a vendor price only when a current approved source is unavailable.'}</p>
@@ -1679,7 +1663,7 @@ function FollowUpPane({ opp, onRevision }) {
           </button>
           <button onClick={() => setEscOpen(true)}><Icon name="sparkles" size={13} /> AI: escalation suggestion</button>
         </div>
-        {fuSent && <div className="okbox">Follow-up sent (simulated) — logged in Communications.</div>}
+        {fuSent && <div className="okbox">Follow-up logged in Communications.</div>}
         {escOpen && (
           <div className="okbox">
             Post-quotation intelligence: {age != null ? `submitted ${age} day(s) ago with no recorded customer response` : 'proposal not yet submitted'}.
@@ -1753,7 +1737,7 @@ function FollowUpPane({ opp, onRevision }) {
           <WarnBox>Human review required before sending.</WarnBox>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
             <button onClick={() => setFuOpen(false)}>Cancel</button>
-            <button className="primary" onClick={sendFu}><Icon name="send" size={13} /> Simulate send</button>
+            <button className="primary" onClick={sendFu}><Icon name="send" size={13} /> Log follow-up</button>
           </div>
         </Modal>
       )}
@@ -1971,12 +1955,6 @@ function FilesTab({ opp }) {
       ? <span className="pill Green">SP synced</span>
       : <span className="pill Blue">Local only</span>
 
-  const simulate = folder => store.addFile(opp.id, folder, {
-    name: `Simulated_${folder.replace(/[^A-Za-z]+/g, '_')}_${new Date().toISOString().slice(11, 19).replace(/:/g, '')}.pdf`,
-    date: new Date().toISOString().slice(0, 10),
-    size: '120 KB',
-  })
-
   return (
     <div>
       <div className="toolbar">
@@ -1995,9 +1973,6 @@ function FilesTab({ opp }) {
               </div>
             ))}
             {!files.length && <p className="hint">Empty.</p>}
-            <button style={{ marginTop: 6 }} onClick={() => simulate(folder)}>
-              <Icon name="upload" size={12} /> Simulate upload
-            </button>
           </div>
         ))}
       </div>

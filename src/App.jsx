@@ -30,7 +30,6 @@ import Login, { RequireAuth } from './pages/Login.jsx'
 import Register from './pages/Register.jsx'
 import Workbench from './pages/Workbench.jsx'
 import PurchaseOrders from './pages/PurchaseOrders.jsx'
-import Launcher from './pages/Launcher.jsx'
 import Portal from './pages/Portal.jsx'
 import Opportunities from './pages/Opportunities.jsx'
 import TabletApp from './tablet/TabletApp.jsx'
@@ -116,7 +115,6 @@ const NAV = [
   { to: '/admin/workflow', label: 'Workflow settings', icon: 'list', page: 'admin' },
   { to: '/audit', label: 'Audit Trail', icon: 'list', page: 'audit' },
   { to: '/users', label: 'Users and roles', icon: 'shield', page: 'users' },
-  { to: '/launcher', label: 'Demo launcher', icon: 'play', page: 'launcher', show: role => isAdminRole(role) },
 ]
 
 export default function App() {
@@ -205,7 +203,6 @@ export default function App() {
       <Route path="/aimap" element={<PageGate page="aimap"><AiMap /></PageGate>} />
       <Route path="/admin" element={<PageGate page="admin"><Admin /></PageGate>} />
       <Route path="/admin/workflow" element={<PageGate page="admin"><WorkflowAdmin /></PageGate>} />
-      <Route path="/launcher" element={<PageGate page="launcher"><Launcher /></PageGate>} />
       {PORTAL_ENABLED && <Route path="/portal" element={<PageGate page="portal"><Portal /></PageGate>} />}
       <Route path="/voice" element={<PageGate page="voice"><VoiceUpdate /></PageGate>} />
     </Routes>

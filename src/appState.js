@@ -199,9 +199,11 @@ export function migrate(s) {
   if (!s.auth) s.auth = { user: null }
   // Price lists added to the seed after a state was saved (e.g. Meggitt) land
   // by name — existing lists are the user's data and are never overwritten.
-  if (!s.priceLists) s.priceLists = seedPriceLists
-  for (const [name, pl] of Object.entries(seedPriceLists)) {
-    if (!s.priceLists[name]) s.priceLists = { ...s.priceLists, [name]: pl }
+  if (!s.priceLists) s.priceLists = demo ? seedPriceLists : {}
+  if (demo) {
+    for (const [name, pl] of Object.entries(seedPriceLists)) {
+      if (!s.priceLists[name]) s.priceLists = { ...s.priceLists, [name]: pl }
+    }
   }
   // Catalogue additions — new parts in a list that already exists, new
   // rate-sheet roles, new seed ad-hoc quotes — fold in by identity (part
@@ -215,7 +217,7 @@ export function migrate(s) {
   // reference data (nothing in the app mutates them), so an unconditional,
   // idempotent union is both safe and self-healing.
   const mergedLists = { ...s.priceLists }
-  for (const [name, pl] of Object.entries(seedPriceLists)) {
+  if (demo) for (const [name, pl] of Object.entries(seedPriceLists)) {
     const have = mergedLists[name]
     if (!have || !Array.isArray(have.parts)) continue
     const known = new Set(have.parts.map(p => p.pn))
@@ -239,11 +241,11 @@ export function migrate(s) {
     const activeVersionId = list.activeVersionId || versions[versions.length - 1].id
     return [name, { ...list, versions, activeVersionId }]
   }))
-  if (Array.isArray(s.rateSheet)) {
+  if (demo && Array.isArray(s.rateSheet)) {
     const roles = new Set(s.rateSheet.map(r => r.role))
     s.rateSheet = [...s.rateSheet, ...seedRateSheet.filter(r => !roles.has(r.role))]
   }
-  if (Array.isArray(s.adhocParts)) {
+  if (demo && Array.isArray(s.adhocParts)) {
     const akey = a => `${a.pn}|${a.date}`
     const known = new Set(s.adhocParts.map(akey))
     s.adhocParts = [...s.adhocParts, ...seedAdhocParts.filter(a => !known.has(akey(a)))]
@@ -337,12 +339,13 @@ export function emptyState(prev) {
     ...prev,
     demoData: false,
     opportunities: [], leads: [], leadArchive: [], leadDeadlines: [],
+    priceLists: {}, adhocParts: [],
     approvals: [], customers: [],
     sparesLines: [], sparesAlternatives: [], svcEstimates: [], clarifications: [], vendorQuotes: [],
     surveys: [], competitors: [],
     files: {}, proposals: {}, communications: {}, kyc: {},
     poCompare: {}, handover: {}, bSteps: {}, bStepOwners: {},
-    sales: emptySales(prev.sales),
+    sales: emptySales(prev.sales), rateSheet: [],
     // The one piece of demo data hiding inside config — the placeholder price
     // list Admin renders with a "DUMMY — replace with actual" chip.
     config: uploads

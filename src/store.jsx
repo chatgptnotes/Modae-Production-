@@ -43,7 +43,13 @@ export function snapshotProposal(p) {
 
 // The localStorage read is all that is left here; the decision itself lives in
 // appState.js so the tests can drive the boot path directly.
-const initialState = () => stateFromSaved(localStorage.getItem(KEY))
+const initialState = () => {
+  const saved = localStorage.getItem(KEY)
+  const state = stateFromSaved(saved)
+  // Production starts clean. Existing demo-mode snapshots are migrated once
+  // into an empty workspace; real records entered after that remain intact.
+  return state.demoData === true ? emptyState(state) : state
+}
 
 // Append-only event log, newest first. Every mutation gets its own entry: audit
 // history is business data and must not be compacted or capped away.
@@ -204,6 +210,18 @@ export function StoreProvider({ children }) {
       const s = stateRef.current
       const accepted = {}
       const serverSlices = syncedOf(res.slices)
+      // Existing deployments may still contain the old seeded dataset. Once
+      // this browser is in production mode, purge that server snapshot before
+      // accepting hydration so demo customers cannot reappear after refresh.
+      if (s.demoData === false && serverSlices.demoData === true) {
+        const clean = emptyState(s)
+        try { await datastore.resetAll(syncedOf(clean)) }
+        catch (e) { console.warn('Demo data purge could not be synced:', e?.message) }
+        hydratedRef.current = true
+        lastSavedRef.current = syncedOf(clean)
+        setState(clean)
+        return
+      }
       const nextBaseline = { ...(s.leadSyncBaseline || {}) }
       for (const [k, v] of Object.entries(serverSlices)) {
         if (k === 'leads' || k === 'leadArchive') {
@@ -1286,8 +1304,9 @@ export function StoreProvider({ children }) {
     replacePriceList(name, catalog, meta = {}) {
       setState(s => {
         if (!ROLES[s.role]?.admin) return s
-        const current = s.priceLists?.[name]
-        if (!current) return s
+        const current = s.priceLists?.[name] || {
+          version: 'Initial', currency: catalog.currency || meta.currency || 'INR', uploaded: '', parts: [], versions: [], activeVersionId: '',
+        }
         const requestedVersion = meta.version || `Revision ${current.versions?.length + 1 || 1}`
         const duplicateCount = (current.versions || []).filter(item => item.version === requestedVersion).length
         const version = duplicateCount ? `${requestedVersion} (${duplicateCount + 1})` : requestedVersion

@@ -4,7 +4,7 @@ import { useStore } from '../store.jsx'
 import { OWNERS, AI_PROVIDERS, MILESTONES } from '../seed.js'
 import { isAdminRole, canSeePage } from '../utils.js'
 import { Icon } from '../icons.jsx'
-import { Chip, WarnBox, DemoDataControls, Modal } from '../ui.jsx'
+import { Chip, WarnBox, Modal } from '../ui.jsx'
 import { saveAiKey, testConnection, usesVercelAi } from '../ai.js'
 import * as sp from '../sharepoint.js'
 import { uploadAdminTemplate } from '../filestore.js'
@@ -13,6 +13,7 @@ import WorkbookPreview from '../proposal/WorkbookPreview.jsx'
 import { parseProposalWorkbook, serializeProposalWorkbook, updateWorkbookCell } from '../proposal/workbook.js'
 import { DEFAULT_COMMON_MAILBOX } from '../leadClarification.js'
 import { DEFAULT_CUSTOMER_CLASSES } from '../customerClasses.js'
+import { parsePriceListFile } from '../priceListImport.js'
 
 // Admin — every runtime rule the app obeys, in one card grid. Data lives in
 // store.config; all changes are audited by the store mutators.
@@ -462,29 +463,6 @@ export default function Admin() {
         <button type="button" onClick={() => nav('/admin/workflow')}><Icon name="list" size={11} /> Configure workflow separately</button>
       </div>
 
-      <div className="admin-card demo-controls-card">
-        <h3><Icon name="shield" size={14} /> Demo data controls</h3>
-        {!demoUnlocked ? (
-          <form className="admin-actions" onSubmit={unlockDemoControls}>
-            <input
-              type="password"
-              value={demoPassword}
-              onChange={e => { setDemoPassword(e.target.value); setDemoPasswordError('') }}
-              placeholder="Admin password"
-              autoComplete="off"
-              aria-label="Demo data controls password"
-            />
-            <button className="primary" type="submit">Unlock controls</button>
-            {demoPasswordError && <span className="err-text" role="alert">{demoPasswordError}</span>}
-          </form>
-        ) : (
-          <div className="admin-actions">
-            <DemoDataControls size={12} />
-            <span className="hint">These actions affect demo records only; configuration and logins are retained.</span>
-          </div>
-        )}
-      </div>
-
       {!canEdit && (
         <div className="warn-box">Read-only — sign in as an administrator to change configuration</div>
       )}
@@ -688,7 +666,7 @@ export default function Admin() {
         {/* 8 — Document uploads */}
         <div className="admin-card admin-card-wide">
           <h3><Icon name="upload" size={14} /> Document uploads</h3>
-          <p className="hint">Metadata only in the demo — file contents are not stored.</p>
+          <p className="hint">Uploaded files are read and stored as usable catalogue or document data.</p>
 
           <div className="section-title" style={{ marginTop: 6 }}>Supplier price list</div>
           <div className="admin-actions">
@@ -697,13 +675,17 @@ export default function Admin() {
             <input type="text" value={plVersion} placeholder="Version (e.g. 2026-Q3)" disabled={!canEdit}
               onChange={e => setPlVersion(e.target.value)} />
             <FileButton primary label="Upload price list" disabled={!canEdit}
-              onFile={f => {
-                store.addUpload('priceLists', {
-                  supplier: supplier.trim() || 'Unspecified supplier',
-                  name: f.name, size: f.size,
-                  version: plVersion.trim() || '—', status: 'Current',
-                })
-                setSupplier(''); setPlVersion('')
+              onFile={async f => {
+                try {
+                  const listName = supplier.trim() || f.name.replace(/\.[^.]+$/, '')
+                  const catalog = await parsePriceListFile(await f.arrayBuffer(), 'INR')
+                  store.replacePriceList(listName, catalog, {
+                    filename: f.name, version: plVersion.trim() || '—', currency: catalog.currency || 'INR',
+                  })
+                  setSupplier(''); setPlVersion('')
+                } catch (error) {
+                  setTemplateError(`Price list could not be imported: ${error?.message || error}`)
+                }
               }} />
           </div>
 
