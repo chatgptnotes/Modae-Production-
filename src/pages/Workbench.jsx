@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, REVISION_TYPES, DEFAULT_WORKFLOW } from '../seed.js'
@@ -589,6 +589,24 @@ const kycTone = s => (s === 'Verified' ? 'state-Accepted' : s === 'Uploaded' ? '
 // document survives a reload and can be previewed with the same viewer.
 const kycBlobKey = customerName => 'kyc:' + customerName
 const KYC_TEXT_CAP = 8000
+const safeDownloadName = value => String(value || 'document').replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '')
+
+function downloadKycTemplate(customerName, oppId, itemName) {
+  const body = [
+    'ModAE India Pvt Ltd - Customer KYC document template', '',
+    `Customer: ${customerName || ''}`, `Opportunity: ${oppId || ''}`, `Document required: ${itemName || ''}`, '',
+    'Please complete or attach the requested document and upload it back against this KYC item.',
+    'Customer remarks:', '', '', 'Authorized signatory / stamp:', '',
+  ].join('\n')
+  const url = URL.createObjectURL(new Blob([body], { type: 'text/plain;charset=utf-8' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${safeDownloadName(customerName)}_${safeDownloadName(itemName)}_Template.txt`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  URL.revokeObjectURL(url)
+}
 
 function CustomerKycTab({ opp }) {
   const store = useStore()
@@ -607,6 +625,16 @@ function CustomerKycTab({ opp }) {
   const pending = useRef('')
   const [busy, setBusy] = useState('')
   const [viewing, setViewing] = useState(null)
+  const [menuFor, setMenuFor] = useState('')
+  const menuRef = useRef(null)
+
+  useEffect(() => {
+    const close = event => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) setMenuFor('')
+    }
+    document.addEventListener('click', close)
+    return () => document.removeEventListener('click', close)
+  }, [])
 
   const pick = itemName => { pending.current = itemName; fileInput.current?.click() }
 
@@ -712,10 +740,18 @@ function CustomerKycTab({ opp }) {
                 {/* Both paths stay on every row, Verified included — otherwise a
                     fully verified checklist offers no way to replace a document
                     or re-run the demo. */}
-                <button disabled={!customer || !!busy} onClick={() => pick(k.name)}
-                  title="Attach the actual document">
-                  {busy === k.name ? 'Uploading…' : k.file ? 'Replace…' : 'Upload…'}
-                </button>
+                <span className="kyc-upload-menu" ref={menuFor === k.name ? menuRef : null}>
+                  <button type="button" disabled={!customer || !!busy} onClick={event => { event.stopPropagation(); setMenuFor(menuFor === k.name ? '' : k.name) }}
+                    title="Download a template or attach the document">
+                    <Icon name="upload" size={12} /> {busy === k.name ? 'Uploading…' : k.file ? 'Replace…' : 'Upload…'}
+                  </button>
+                  {menuFor === k.name && customer && (
+                    <span className="kyc-upload-menu-list" role="menu">
+                      <button type="button" role="menuitem" onClick={() => { downloadKycTemplate(customer.name, opp.id, k.name); setMenuFor('') }}><Icon name="download" size={12} /> Download template</button>
+                      <button type="button" role="menuitem" onClick={() => { pick(k.name); setMenuFor('') }}><Icon name="upload" size={12} /> Upload document</button>
+                    </span>
+                  )}
+                </span>
                 {k.state === 'Uploaded' && (
                   <>
                     <button className="primary" disabled={!canVerify} title={canVerify ? '' : 'Only AH verifies KYC'}

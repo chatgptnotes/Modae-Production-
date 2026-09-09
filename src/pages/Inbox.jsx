@@ -2203,9 +2203,11 @@ export default function Inbox() {
               <div className="mail-date"><b>{ddMmmYY((l.ts || '').slice(0, 10))}</b><small>{receivedTime(l.ts)}</small></div>
               <div className="mail-sender" title={[l.source || l.channel || 'Common mailbox', l.sender || l.from].filter(Boolean).join(' — ')}><b>{l.source || l.channel || 'Common mailbox'}</b><small>{l.sender || l.from}</small></div>
               <div className="mail-content" title={l.subject}>
-                <div className="mail-subject-line"><b>{l.subject}</b>{l.ref && <span className="mail-ref"> · {l.ref}</span>}</div>
-                {l.status === 'Converted' && l.oppId && <button className="mail-opportunity-link" onClick={e => { e.stopPropagation(); nav('/opp/' + l.oppId) }} title="Open linked opportunity"><span className="pill Green">Opportunity</span> {l.oppId}</button>}
-                <small>{l.ai?.summary || l.body?.replace(/\s+/g, ' ').slice(0, 130) || 'No preview available'}</small>
+                <div className="mail-content-stack">
+                  <div className="mail-subject-line"><b>{l.subject}</b>{l.ref && <span className="mail-ref"> · {l.ref}</span>}</div>
+                  {l.status === 'Converted' && l.oppId && <button className="mail-opportunity-link" onClick={e => { e.stopPropagation(); nav('/opp/' + l.oppId) }} title="Open linked opportunity"><span className="pill Green">Opportunity</span> {l.oppId}</button>}
+                  <small>{l.ai?.summary || l.body?.replace(/\s+/g, ' ').slice(0, 130) || 'No preview available'}</small>
+                </div>
               </div>
               <div><Chip tone="grey">{route}</Chip></div>
               <div><Chip tone={l.urgency === 'Urgent' ? 'state-Rejected' : 'grey'}>{l.urgency || 'Normal'}</Chip></div>

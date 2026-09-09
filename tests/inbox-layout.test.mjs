@@ -35,13 +35,15 @@ test('mailbox bulk toolbar actions are wired', () => {
   assert.match(fs.readFileSync(new URL('../src/store.jsx', import.meta.url), 'utf8'), /updateLeads\(ids, patch, detail = ''\)/)
 })
 
-test('subject and preview use separate wrapped lines without changing the inbox grid', () => {
+test('subject and preview stay in a contained single-line inbox cell', () => {
   assert.match(inbox, /className="mail-subject-head"[^>]*>Subject \/ preview/)
   assert.match(inbox, /className="mail-subject-line"><b>\{l\.subject\}<\/b>/)
   assert.match(inbox, /<small>\{l\.ai\?\.summary \|\| l\.body\?\.replace/)
-  assert.match(css, /\.mail-subject-line \{[\s\S]*-webkit-line-clamp: 2;/)
-  assert.match(css, /\.mail-content small \{[\s\S]*-webkit-line-clamp: 2;/)
-  assert.match(css, /\.mail-column-head \.mail-subject-head \{[\s\S]*white-space: normal;/)
+  assert.match(inbox, /className="mail-content-stack"/)
+  assert.match(css, /\.mail-subject-line \{[\s\S]*text-overflow: ellipsis; white-space: nowrap;/)
+  assert.match(css, /\.mail-content small \{[\s\S]*text-overflow: ellipsis; white-space: nowrap;/)
+  assert.match(css, /\.mail-column-head \.mail-subject-head \{[\s\S]*white-space: nowrap;/)
+  assert.match(css, /minmax\(320px, 4fr\)/)
 })
 
 test('opportunity scope is optional during lead qualification and registration', () => {

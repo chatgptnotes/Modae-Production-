@@ -2092,14 +2092,14 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
   grid-template-columns:
     30px 28px 86px
     minmax(0, 1.35fr)
-    minmax(0, 4fr)
+    minmax(320px, 4fr)
     minmax(0, .85fr) minmax(0, .85fr)
     minmax(0, .9fr) minmax(0, .95fr)
     minmax(0, .8fr) minmax(0, 1fr)
     46px;
 }
 .mail-column-head { min-height: 34px; padding: 0 10px 0 8px; background: var(--palette-f58d7116); border-bottom: 1px solid var(--border-color); color: var(--text-muted); font-size: 10px; font-weight: 700; letter-spacing: .25px; text-transform: uppercase; }
-.mail-column-head .mail-subject-head { white-space: normal; line-height: 1.15; }
+.mail-column-head .mail-subject-head { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.15; }
 .mail-column-head span { overflow: hidden; padding-right: 8px; text-overflow: ellipsis; white-space: nowrap; }
 .mail-head-filter { width: 100%; min-width: 0; padding: 2px 3px; border: 0; border-radius: 3px; background: transparent; color: var(--text-muted); font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
 .mail-head-filter:hover, .mail-head-filter:focus { background: var(--primary-soft); color: var(--primary-deep); outline: none; }
@@ -2210,7 +2210,7 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
   .approval-search { flex-basis: 100%; }
   .approval-filters select, .approval-clear { flex: 1 1 0; min-width: 0; }
 }
-.mail-row { min-height: 58px; padding: 0 10px 0 8px; border-bottom: 1px solid var(--border-soft); cursor: pointer; color: var(--text-muted); transition: background .15s ease, box-shadow .15s ease; }
+.mail-row { height: 58px; min-height: 58px; max-height: 58px; padding: 0 10px 0 8px; border-bottom: 1px solid var(--border-soft); cursor: pointer; color: var(--text-muted); transition: background .15s ease, box-shadow .15s ease; }
 .mail-row:hover { background: var(--palette-3353bb00); box-shadow: inset 3px 0 0 var(--primary-accent); }
 .mail-row.selected { background: var(--primary-soft); }
 .mail-row.unread { color: var(--text-main); background: var(--palette-b315b730); }
@@ -2219,12 +2219,15 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .mail-star:hover { color: var(--palette-bcd85701); }
 .mail-star.starred { color: var(--palette-bcd85701); }
 .mail-star.starred svg { fill: currentColor; }
+.mail-row > div { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.2; }
 .mail-sender { overflow: hidden; padding-right: 12px; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .mail-sender b, .mail-sender small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mail-sender small, .mail-date small { margin-top: 3px; color: var(--text-subtle); font-size: 10.5px; }
-.mail-content { min-width: 0; overflow: hidden; padding-right: 12px; font-size: 12px; }
-.mail-subject-line { display: -webkit-box; overflow: hidden; color: var(--text-main); line-height: 1.25; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.mail-content small { display: -webkit-box; overflow: hidden; margin-top: 3px; color: var(--text-subtle); line-height: 1.25; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.mail-content { min-width: 0; overflow: hidden; padding-right: 12px; font-size: 12px; white-space: normal !important; }
+.mail-content-stack { display: flex; min-width: 0; max-width: 100%; flex-direction: column; justify-content: center; gap: 2px; overflow: hidden; }
+.mail-subject-line { display: block; overflow: hidden; color: var(--text-main); line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.mail-subject-line b, .mail-content small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mail-content small { display: block; margin-top: 3px; color: var(--text-subtle); line-height: 1.25; }
 .mail-ref { color: var(--primary-deep) !important; font-size: 10.5px; font-weight: 600; }
 .mail-opportunity-link { display: block; max-width: 100%; margin-top: 3px; padding: 0; overflow: hidden; border: 0; background: transparent; color: var(--primary-deep); font: inherit; font-size: 10.5px; font-weight: 700; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .mail-opportunity-link:hover { text-decoration: underline; }
@@ -2631,6 +2634,10 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 }
 .check-row { display: flex; align-items: center; gap: 8px; padding: 6px 4px; border-bottom: 1px solid var(--border-soft); font-size: 12.5px; }
 .check-row input[type=checkbox] { width: 17px; height: 17px; }
+.kyc-upload-menu { position: relative; display: inline-flex; }
+.kyc-upload-menu-list { position: absolute; top: calc(100% + 3px); right: 0; z-index: 12; display: grid; min-width: 175px; padding: 4px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--palette-4843938); box-shadow: 0 5px 16px rgba(0,0,0,.16); }
+.kyc-upload-menu-list button { display: flex; align-items: center; gap: 6px; width: 100%; padding: 7px 8px; border: 0; border-radius: 3px; background: transparent; color: var(--text-main); text-align: left; font-size: 11.5px; }
+.kyc-upload-menu-list button:hover { background: var(--primary-soft); color: var(--primary-deep); }
 .compare-alt-row { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--border-soft); font-size: 12.5px; }
 .compare-alt-info { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .compare-alt-header { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
@@ -4364,7 +4371,7 @@ table.sheet td .wrapcell:focus { outline: 2px solid var(--xl-green); background:
     grid-template-columns:
       30px 28px 86px
       minmax(0, 1.35fr)
-      minmax(0, 3.8fr)
+      minmax(260px, 3.8fr)
       minmax(0, .85fr) minmax(0, .85fr)
       minmax(0, .95fr)
       minmax(0, .8fr) minmax(0, 1fr);
@@ -4376,7 +4383,7 @@ table.sheet td .wrapcell:focus { outline: 2px solid var(--xl-green); background:
     grid-template-columns:
       30px 28px 86px
       minmax(0, 1.3fr)
-      minmax(0, 3.6fr)
+      minmax(220px, 3.6fr)
       minmax(0, .85fr) minmax(0, .85fr)
       minmax(0, .95fr)
       minmax(0, 1fr);
