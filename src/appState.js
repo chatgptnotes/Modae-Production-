@@ -124,6 +124,7 @@ export function migrate(s) {
   }))
   if (!s.config.uploads) s.config.uploads = seedConfig.uploads
   if (!Array.isArray(s.config.uploads.proposalTemplates)) s.config.uploads.proposalTemplates = seedConfig.uploads.proposalTemplates || []
+  if (!Array.isArray(s.config.uploads.datasheets)) s.config.uploads.datasheets = seedConfig.uploads.datasheets || []
   if (!s.config.aiModel) s.config.aiModel = seedConfig.aiModel
   // Gemini is wired for real now: drop the key fields saved state used to carry
   // (a key must never live in client state), and retire the placeholder model
@@ -221,6 +222,22 @@ export function migrate(s) {
     if (added.length) mergedLists[name] = { ...have, parts: [...have.parts, ...added] }
   }
   s.priceLists = mergedLists
+  // Version history was added after the original catalogue shape. Preserve
+  // existing lists by turning their current contents into an initial snapshot.
+  s.priceLists = Object.fromEntries(Object.entries(s.priceLists).map(([name, list]) => {
+    const versions = Array.isArray(list.versions) && list.versions.length
+      ? list.versions
+      : [{
+          id: `${name}-${list.version || 'initial'}`,
+          version: list.version || 'Initial',
+          currency: list.currency || 'INR',
+          uploaded: list.uploaded || '',
+          filename: '',
+          parts: list.parts || [],
+        }]
+    const activeVersionId = list.activeVersionId || versions[versions.length - 1].id
+    return [name, { ...list, versions, activeVersionId }]
+  }))
   if (Array.isArray(s.rateSheet)) {
     const roles = new Set(s.rateSheet.map(r => r.role))
     s.rateSheet = [...s.rateSheet, ...seedRateSheet.filter(r => !roles.has(r.role))]

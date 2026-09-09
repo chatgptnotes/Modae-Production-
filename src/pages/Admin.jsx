@@ -8,6 +8,7 @@ import { Chip, WarnBox, DemoDataControls, Modal } from '../ui.jsx'
 import { saveAiKey, testConnection, usesVercelAi } from '../ai.js'
 import * as sp from '../sharepoint.js'
 import { uploadAdminTemplate } from '../filestore.js'
+import { putFiles } from '../leadBlobs.js'
 import WorkbookPreview from '../proposal/WorkbookPreview.jsx'
 import { parseProposalWorkbook, serializeProposalWorkbook, updateWorkbookCell } from '../proposal/workbook.js'
 import { DEFAULT_COMMON_MAILBOX } from '../leadClarification.js'
@@ -735,6 +736,17 @@ export default function Admin() {
                 onFile={f => store.addUpload('customerClassification', { name: f.name, size: f.size })} />
             </div>
           )}
+
+          <div className="section-title" style={{ marginTop: 10 }}>Manufacturer datasheet library</div>
+          <p className="hint">Reusable datasheets available for selection when preparing a customer proposal.</p>
+          <div className="admin-actions admin-actions-end">
+            <FileButton primary label="Upload datasheet" disabled={!canEdit} accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+              onFile={async f => {
+                await putFiles('admin-datasheets', [f])
+                store.addUpload('datasheets', { name: f.name, type: f.type, size: f.size })
+              }} />
+          </div>
+          {(uploads.datasheets || []).map(file => <div key={file.name} className="arow"><span>{file.name}<br /><span className="hint">uploaded {file.uploaded}</span></span><Chip tone="state-Accepted">Available</Chip></div>)}
         </div>
 
         {/* 9 — Templates & reminders */}

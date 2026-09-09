@@ -19,6 +19,8 @@ import { generateProposalWorkbook } from '../proposal/templateExcelExport.js'
 import { parseProposalWorkbook as parseRenderedWorkbook } from '../proposal/workbook.js'
 import { routeForType } from '../seed.js'
 import { buildLeadProposalData } from '../leadBoq.js'
+import { putFiles } from '../leadBlobs.js'
+import { uploadOppFile } from '../filestore.js'
 import DetailTabs from '../DetailTabs.jsx'
 import { isSparesSupportRow, withSparesSupportRows } from '../proposal/sparesBoq.js'
 
@@ -32,6 +34,55 @@ const MEGGITT_ITEM_LIST_URL = new URL('../../branding/Further Inputs/Further Inp
 const PROJECT_PROPOSAL_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Big Project Opp/2608222RS  Project Rev-00.xlsx', import.meta.url).href
 const SPARES_PROPOSAL_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx', import.meta.url).href
 const SERVICE_PROPOSAL_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Big Service Opp-1 (Won) With SoW/Service Proposal 14Apr26 Rev-01.xlsx', import.meta.url).href
+
+function ProposalDatasheets({ opp, p, save, store }) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const files = p.proposalDatasheets || []
+  const library = store.config?.uploads?.datasheets || []
+  const addFromLibrary = event => {
+    const name = event.target.value
+    event.target.value = ''
+    if (!name || files.some(file => (typeof file === 'string' ? file : file.name) === name)) return
+    const source = library.find(file => file.name === name)
+    save({ ...p, proposalDatasheets: [...files, { ...source, source: 'Admin library' }] })
+  }
+  const upload = async event => {
+    const selected = [...(event.target.files || [])]
+    event.target.value = ''
+    if (!selected.length) return
+    setBusy(true); setError('')
+    try {
+      await putFiles(`proposal-${opp.id}`, selected)
+      const records = []
+      for (const file of selected) {
+        const uploaded = await uploadOppFile(opp, 'Proposal Datasheets', file)
+        records.push({ name: file.name, type: file.type, size: file.size, date: new Date().toISOString().slice(0, 10), ...uploaded })
+      }
+      const merged = [...files.filter(old => !records.some(next => next.name === (typeof old === 'string' ? old : old.name))), ...records]
+      save({ ...p, proposalDatasheets: merged })
+    } catch (e) { setError(e?.message || 'Datasheet upload failed') }
+    finally { setBusy(false) }
+  }
+  return (
+    <section className="form-card proposal-datasheets">
+      <div className="section-title">Datasheets</div>
+      <p className="hint">Add manufacturer datasheets that should travel with this customer proposal.</p>
+      <label className="btn-secondary proposal-upload-button">
+        <Icon name="upload" size={13} /> {busy ? 'Uploading…' : 'Add datasheet'}
+        <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" multiple disabled={busy} onChange={upload} />
+      </label>
+      {library.length > 0 && <label style={{ display: 'inline-flex', marginLeft: 8 }}>Add from Admin library
+        <select defaultValue="" onChange={addFromLibrary} style={{ marginLeft: 6 }}>
+          <option value="">Choose datasheet</option>
+          {library.map(file => <option key={file.name} value={file.name}>{file.name}</option>)}
+        </select>
+      </label>}
+      {error && <div className="errbox" style={{ marginTop: 8 }}>{error}</div>}
+      {files.length ? <div className="attachment-list">{files.map(file => <div key={typeof file === 'string' ? file : file.name} className="attach-row"><Icon name="fileText" size={13} /> {typeof file === 'string' ? file : file.name}</div>)}</div> : <p className="hint">No proposal-specific datasheets added.</p>}
+    </section>
+  )
+}
 
 const parseQuantityCell = value => {
   const match = String(value ?? '').match(/\d+(?:\.\d+)?/)
@@ -687,7 +738,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
       const revisionChanged = !!p.reviewNeedsRevision
       const nextRevision = revisionChanged ? String((Number(p.revision) || 0) + 1).padStart(2, '0') : p.revision
       const nextRevisionLog = revisionChanged ? [...(p.revisions || []), {
-        rev: `V${(p.revisions || []).filter(item => item.status === 'Revised').length + 2}`,
+        rev: `Rev-${nextRevision}`,
         when: new Date().toISOString().slice(0, 10), by: store.role,
         note: 'Proposal edited and revalidated', status: 'Revised', type: 'Other',
         snapshot: snapshotProposal(p),
@@ -851,7 +902,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
       <header className="proposal-workspace-header">
         <div className="proposal-workspace-title">
           <span className="eyebrow">Customer proposal</span>
-          <h3>{route} proposal <span className="proposal-meta-chip">Rev {p.revision || '00'}</span></h3>
+          <h3>{route} proposal <span className="proposal-meta-chip">Rev-{p.revision || '00'}</span></h3>
           <div className="proposal-header-meta" aria-label="Proposal setup">
             {!embedded && <Link className="btn proposal-folder-link" to={`/folders/${oppId}`}>Back to folder</Link>}
             <label className="proposal-type-control">Type
@@ -1076,8 +1127,11 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
       )}
 
       {tab === 'Document' && (
-        <DocEditor p={p} opp={opp} save={save} files={specFiles.map(f => f.name).filter(Boolean)}
-          totals={totals} priced={priced} />
+        <>
+          <DocEditor p={p} opp={opp} save={save} files={specFiles.map(f => f.name).filter(Boolean)}
+            totals={totals} priced={priced} />
+          <ProposalDatasheets opp={opp} p={p} save={save} store={store} />
+        </>
       )}
 
       {tab === 'Edit Sheet' && (
@@ -1279,7 +1333,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
         <Modal title={`Proposal preview — ${oppId}`} onClose={() => setPreviewOpen(false)} wide className="proposal-preview-modal">
           <div className="proposal-preview-toolbar">
             <span className="hint">
-              Customer-facing document · Rev {p.revision}
+              Customer-facing document · Rev-{p.revision}
               {comm ? ' · the ModAE costing block below is internal and editable' : ' · read-only preview'}
             </span>
             <div className="forms-actions">

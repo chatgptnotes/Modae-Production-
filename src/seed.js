@@ -1227,6 +1227,7 @@ export const seedConfig = {
     ],
     interchangeability: null,
     customerClassification: null,
+    datasheets: [],
     proposalTemplates: [],
   },
 }

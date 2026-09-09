@@ -1058,6 +1058,7 @@ function SourcingTab({ opp, goTab }) {
   ].join('\n')
 
   const openRfq = () => {
+    if (opp.route === 'Spares') return
     setRfqForm({
       manufacturer: '', to: '', cc: '',
       subject: `Manufacturer RFQ - ${opp.oppName} - ${opp.id}`,
@@ -1244,7 +1245,9 @@ function SourcingTab({ opp, goTab }) {
       <div className="ana-card c-6">
         <div className="ana-title">Vendor actions</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button onClick={openRfq}><Icon name="mail" size={13} /> Request exceptional vendor price</button>
+          <button onClick={openRfq} disabled={opp.route === 'Spares'} title={opp.route === 'Spares' ? 'Manufacturer RFQ is not used for Spares' : 'Request an exceptional vendor price'}>
+            <Icon name="mail" size={13} /> Request exceptional vendor price
+          </button>
           <button onClick={simulateVendorResponse} disabled={vendorSimBusy} title="Ask AI to create a test vendor response">
             <Icon name="sparkles" size={13} /> {vendorSimBusy ? 'Generating…' : 'Simulate vendor response'}
           </button>
@@ -1253,7 +1256,9 @@ function SourcingTab({ opp, goTab }) {
           </button>
         </div>
         {vendorSimErr && <ErrBox>{vendorSimErr}</ErrBox>}
-        <p className="hint">Approved price lists are used first. Request a vendor price only when a current approved source is unavailable.</p>
+        <p className="hint">{opp.route === 'Spares'
+          ? 'Manufacturer RFQ is disabled for Spares. Use the approved price list or raise a pricing exception.'
+          : 'Approved price lists are used first. Request a vendor price only when a current approved source is unavailable.'}</p>
       </div>
 
       <div className="ana-card c-12">
@@ -1391,7 +1396,7 @@ function PreviewPane({ opp, openBuilder, openEditSheet }) {
     <div className="proposal-preview-pane">
       <div className="proposal-preview-toolbar">
         <span className="hint">
-          Customer-facing document · Rev {p.revision} · Read-only preview
+          Customer-facing document · Rev-{p.revision} · Read-only preview
           {!priced && ' · prices hidden'}
         </span>
         <button className="linklike" onClick={openEditSheet}>

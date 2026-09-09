@@ -425,7 +425,12 @@ export function transitionBlockers(opp, target, proposal, state) {
     // §5A is drawn as "LJS OR AN" and §5B as "AH ONLY", so 5A names both roles
     // and marks itself `anyOf` — either technical approver alone clears it.
     const gates = [
-      { type: APPROVAL_5A, key: 'tech-approval', label: 'Technical approval (LJS or AN)', approver: 'LJS', needed: ['LJS', 'AN'], anyOf: true },
+      // Spares are priced from the approved catalogue and do not need the
+      // technical-review gate in phase one. Keep the gate for engineered
+      // Project and Services work.
+      ...(opp?.route === 'Spares' ? [] : [
+        { type: APPROVAL_5A, key: 'tech-approval', label: 'Technical approval (LJS or AN)', approver: 'LJS', needed: ['LJS', 'AN'], anyOf: true },
+      ]),
       { type: APPROVAL_5B, key: 'comm-approval', label: 'Commercial approval (AH)', approver: 'AH', needed: ['AH'] },
       // Final quote release is a joint commercial decision. Both named
       // approvers must sign off before the customer-facing proposal can go out.

@@ -670,6 +670,25 @@ table.sheet td.cell-sel { outline: 2px solid var(--xl-green); outline-offset: -2
 
 .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
 .toolbar .spacer { flex: 1; }
+.tracker-search { display: inline-flex; align-items: center; gap: 7px; min-width: min(360px, 100%); padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--palette-4843938); color: var(--text-muted); }
+.tracker-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; }
+.filter-search { width: calc(100% - 16px); margin: 5px 8px; padding: 6px 8px; border: 1px solid var(--border-color); border-radius: 4px; }
+.link-button { margin-left: 6px; padding: 0; border: 0; background: transparent; color: var(--primary-accent); text-decoration: underline; cursor: pointer; }
+.notification-wrap { position: fixed; top: 14px; right: 20px; z-index: 20; }
+.notification-button { position: relative; display: grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 1px solid var(--border-color); border-radius: 50%; background: var(--palette-4843938); color: var(--text-main); box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+.notification-count { position: absolute; top: -5px; right: -5px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--primary-accent); color: white; font-size: 10px; line-height: 17px; text-align: center; }
+.notification-overlay { position: fixed; inset: 0; z-index: -1; }
+.notification-popover { position: absolute; top: 44px; right: 0; width: min(360px, calc(100vw - 28px)); border: 1px solid var(--border-color); border-radius: 7px; background: var(--palette-4843938); box-shadow: 0 10px 30px rgba(0,0,0,.16); overflow: hidden; }
+.notification-heading { display: flex; justify-content: space-between; padding: 11px 13px; border-bottom: 1px solid var(--border-soft); }
+.notification-heading span { color: var(--text-muted); font-size: 12px; }
+.notification-item { display: flex; width: 100%; gap: 10px; padding: 11px 13px; border: 0; border-bottom: 1px solid var(--border-soft); background: transparent; color: var(--text-main); text-align: left; cursor: pointer; }
+.notification-item:hover { background: var(--header-fill); }
+.notification-item span { display: grid; gap: 3px; }
+.notification-item small { color: var(--text-muted); }
+.notification-empty { margin: 0; padding: 18px 13px; }
+.proposal-datasheets { margin-top: 12px; }
+.proposal-upload-button input { display: none; }
+.attachment-list { display: grid; gap: 4px; margin-top: 10px; }
 /* The website's buttons are 14px/700 with .3px tracking on a 6px radius. Those
    properties carry over; its 60px hero height does not — this is a dense
    enterprise UI, and the tablet rules below still set a 42px touch target. */

@@ -447,10 +447,7 @@ export function StoreProvider({ children }) {
           reviewIssues: [],
           reviewNeedsRevision: false,
           revisions: [...revisions, {
-            // The original dispatch is V1, so the first revision is V2. Count
-            // revisions only — `revisions` also carries the 'Submitted' entries
-            // the builder writes, which are not versions of the quote.
-            rev: `V${revisions.filter(r => r.status === 'Revised').length + 2}`,
+            rev: `Rev-${String((+p.revision || 0) + 1).padStart(2, '0')}`,
             when: new Date().toISOString().slice(0, 10),
             by: s.role, note: note || 'Revision opened', status: 'Revised', type: spec.id,
             snapshot: snapshotProposal(p),
@@ -1264,9 +1261,81 @@ export function StoreProvider({ children }) {
           ...s.config,
           uploads: kind === 'priceLists'
             ? { ...s.config.uploads, priceLists: [{ ...meta, uploaded: new Date().toISOString().slice(0, 10) }, ...s.config.uploads.priceLists] }
+            : kind === 'datasheets'
+              ? { ...s.config.uploads, datasheets: [{ ...meta, uploaded: new Date().toISOString().slice(0, 10) }, ...(s.config.uploads.datasheets || [])] }
             : { ...s.config.uploads, [kind]: { ...meta, uploaded: new Date().toISOString().slice(0, 10) } },
         },
       }, 'Admin document uploaded', kind, meta.name))
+    },
+    replacePriceList(name, catalog, meta = {}) {
+      setState(s => {
+        if (!ROLES[s.role]?.admin) return s
+        const current = s.priceLists?.[name]
+        if (!current) return s
+        const requestedVersion = meta.version || `Revision ${current.versions?.length + 1 || 1}`
+        const duplicateCount = (current.versions || []).filter(item => item.version === requestedVersion).length
+        const version = duplicateCount ? `${requestedVersion} (${duplicateCount + 1})` : requestedVersion
+        const id = `${name}-${Date.now()}`
+        const snapshot = {
+          id, version, currency: meta.currency || catalog.currency || current.currency,
+          uploaded: new Date().toISOString().slice(0, 10),
+          filename: meta.filename || '', parts: catalog.parts,
+        }
+        const nextList = {
+          ...current,
+          parts: catalog.parts,
+          currency: snapshot.currency, version: snapshot.version,
+          uploaded: snapshot.uploaded, versions: [...(current.versions || []), snapshot], activeVersionId: id,
+        }
+        const uploads = s.config?.uploads || {}
+        const priceUploads = uploads.priceLists || []
+        const history = priceUploads.map(item => item.supplier === name || item.list === name
+          ? { ...item, status: item.status === 'Current' ? 'Archived' : item.status }
+          : item)
+        return withAudit({
+          ...s,
+          priceLists: { ...s.priceLists, [name]: nextList },
+          config: {
+            ...s.config,
+            uploads: {
+              ...uploads,
+              priceLists: [{ supplier: name, list: name, name: meta.filename || `${name} price list`, version: nextList.version, status: 'Current', uploaded: nextList.uploaded }, ...history],
+            },
+          },
+        }, 'Price list replaced', name, `${catalog.parts.length} parts · version ${nextList.version}`)
+      })
+    },
+    savePriceListVersion(name, baseVersionId, parts, meta = {}) {
+      setState(s => {
+        if (!ROLES[s.role]?.admin) return s
+        const current = s.priceLists?.[name]
+        if (!current) return s
+        const requestedVersion = meta.version || `Revision ${(current.versions || []).length + 1}`
+        const duplicateCount = (current.versions || []).filter(item => item.version === requestedVersion).length
+        const version = duplicateCount ? `${requestedVersion} (${duplicateCount + 1})` : requestedVersion
+        const id = `${name}-${Date.now()}`
+        const snapshot = {
+          id, version, currency: meta.currency || current.currency,
+          uploaded: new Date().toISOString().slice(0, 10), filename: meta.filename || '',
+          basedOn: baseVersionId || current.activeVersionId || '', parts,
+        }
+        return withAudit({
+          ...s,
+          priceLists: { ...s.priceLists, [name]: { ...current, parts, currency: snapshot.currency, version, uploaded: snapshot.uploaded, versions: [...(current.versions || []), snapshot], activeVersionId: id } },
+        }, 'Price list version saved', name, `${parts.length} parts · version ${version}`)
+      })
+    },
+    restorePriceListVersion(name, versionId) {
+      setState(s => {
+        if (!ROLES[s.role]?.admin) return s
+        const current = s.priceLists?.[name]
+        const version = current?.versions?.find(item => item.id === versionId)
+        if (!current || !version) return s
+        return withAudit({
+          ...s,
+          priceLists: { ...s.priceLists, [name]: { ...current, parts: version.parts, currency: version.currency, version: version.version, uploaded: version.uploaded, activeVersionId: version.id } },
+        }, 'Price list version restored', name, version.version)
+      })
     },
     saveProposalTemplate(template) {
       setState(s => {

@@ -484,7 +484,9 @@ export const MODAE_ABOUT = {
 // before this module existed still renders a complete document.
 export function docModel(p, opp, ctx = {}) {
   const files = ctx.files || []
-  const attachments = p.attachments ?? [...DEFAULT_ATTACHMENTS, ...files]
+  const baseAttachments = p.attachments ?? [...DEFAULT_ATTACHMENTS, ...files]
+  const datasheets = (p.proposalDatasheets || []).map(file => typeof file === 'string' ? file : file.name).filter(Boolean)
+  const attachments = [...baseAttachments, ...datasheets.filter(name => !baseAttachments.includes(name))]
   const deviations = (p.terms || []).filter(t => t.status === 'Deviation').map(t => ({
     ...t,
     // Per-deviation reasoning: the stored override wins, else the standard

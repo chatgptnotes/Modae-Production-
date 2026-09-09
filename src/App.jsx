@@ -41,6 +41,41 @@ function PageGate({ page, children }) {
   return children
 }
 
+function NotificationBell({ store, nav }) {
+  const [open, setOpen] = useState(false)
+  const role = store.role
+  const notifications = [
+    ...(store.approvals || []).filter(a => a.status === 'Pending' && ([...(a.needed || []), a.approver, a.requestedBy].filter(Boolean).includes(role))).map(a => ({
+      id: `approval-${a.id}`, icon: 'checkCircle', title: 'Approval waiting', text: a.detail || a.type, to: `/opp/${a.oppId}/approvals`, date: a.ts,
+    })),
+    ...(store.opportunities || []).filter(o => o.status === 'Open' && o.owner === role && o.lastUpdated && ((Date.now() - new Date(o.lastUpdated).getTime()) / 86400000) >= 7).map(o => ({
+      id: `stale-${o.id}`, icon: 'clock', title: 'Follow-up overdue', text: `${o.id} has not been updated for 7 days`, to: `/opp/${o.id}`, date: o.lastUpdated,
+    })),
+  ]
+  return (
+    <div className="notification-wrap">
+      <button className="notification-button" type="button" aria-label={`Notifications${notifications.length ? ` (${notifications.length})` : ''}`} onClick={() => setOpen(value => !value)}>
+        <Icon name="bell" size={17} />
+        {notifications.length > 0 && <span className="notification-count">{notifications.length > 99 ? '99+' : notifications.length}</span>}
+      </button>
+      {open && (
+        <>
+          <div className="notification-overlay" onClick={() => setOpen(false)} />
+          <div className="notification-popover" role="dialog" aria-label="Notifications">
+            <div className="notification-heading"><b>Notifications</b><span>{notifications.length}</span></div>
+            {notifications.length ? notifications.map(item => (
+              <button key={item.id} className="notification-item" type="button" onClick={() => { setOpen(false); nav(item.to) }}>
+                <Icon name={item.icon} size={15} />
+                <span><b>{item.title}</b><small>{item.text}</small></span>
+              </button>
+            )) : <p className="hint notification-empty">You are all caught up.</p>}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // Landing for a session that is still on the customer persona/account after the
 // portal was parked (seed.js PORTAL_ENABLED). Internal staff can step back to a
 // workspace persona; a real customer account can only sign out.
@@ -222,6 +257,7 @@ export default function App() {
         <button className="shell-nav-burger" onClick={() => setNavOpen(true)} title="Menu" aria-label="Open navigation">
           <Icon name="menu" size={20} />
         </button>
+        <NotificationBell store={store} nav={nav} />
         {/* The shell is viewport-locked, so this is the app's single scroll
             region — pages that want their own internal scroller (the pipeline
             sheet, the mailbox list) size themselves to 100% of it. */}

@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { STAGES, CLOSE_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES } from '../seed.js'
 import { fmt, mmmYY, ddMmmYY, stageClass, productList, productLabel, sameCustomer, displayRole } from '../utils.js'
@@ -9,6 +9,7 @@ import { useDrawer } from '../drawer.jsx'
 import { nextActionWith } from '../gates.js'
 import { suggestProbability } from '../insights.js'
 import { Modal } from '../ui.jsx'
+import { Icon } from '../icons.jsx'
 
 const OPEN_STAGES = STAGES.filter(s => s !== 'Won' && s !== 'Lost')
 
@@ -156,6 +157,7 @@ function WrapInput({ value, onChange, title }) {
 
 export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const store = useStore()
+  const navigate = useNavigate()
   const fb = useFormulaBar()
   const drawer = useDrawer()
   const [sheet, setSheet] = useState('Opportunities') // Opportunities | Old Closed Opps
@@ -168,6 +170,8 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const [frozenIds, setFrozenIds] = useState(null)     // row ids captured when a filter was applied
   const [sort, setSort] = useState(null)               // { key, dir: 1 | -1 }
   const [openFilter, setOpenFilter] = useState(null)   // { key, x, y } of the open dropdown
+  const [filterSearch, setFilterSearch] = useState({})
+  const [searchTerm, setSearchTerm] = useState('')
   const [productPick, setProductPick] = useState(null) // { id, x, y } of the open product picker
   const [closePending, setClosePending] = useState(null) // { id, stage } awaiting a closed reason
   const [closeReason, setCloseReason] = useState('')
@@ -210,8 +214,13 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     (ownerFilter === 'All' || o.owner === ownerFilter) &&
     (sheet !== 'Old Closed Opps' || o.status === 'Closed'))
 
+  const normalizedSearch = searchTerm.trim().toLowerCase()
+  const searchableBase = normalizedSearch
+    ? base.filter(o => [o.id, o.sellTo, o.oppName].some(value => String(value || '').toLowerCase().includes(normalizedSearch)))
+    : base
+
   // Excel-Table behavior: each column's dropdown lists values filtered by the OTHER columns.
-  const rowsFilteredExcept = except => base.filter(o =>
+  const rowsFilteredExcept = except => searchableBase.filter(o =>
     Object.entries(filters).every(([k, set]) => k === except || !set || set.has(String(cellVal(o, k)))))
 
   // Like Excel, filters are applied ONCE (row ids frozen at apply time), not
@@ -221,7 +230,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     setFilters(nextFilters)
     const active = Object.values(nextFilters).some(Boolean)
     setFrozenIds(active
-      ? new Set(base.filter(o =>
+      ? new Set(searchableBase.filter(o =>
           Object.entries(nextFilters).every(([k, set]) => !set || set.has(String(cellVal(o, k))))).map(o => o.id))
       : null)
   }
@@ -243,7 +252,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const DATE_KEYS = ['createDate', 'proposalDate', 'orderDate', 'invoiceDate', 'lastUpdated']
   const sortVal = (o, key) => (DATE_KEYS.includes(key) ? (o[key] || '') : cellVal(o, key))
 
-  let rows = frozenIds ? base.filter(o => frozenIds.has(o.id)) : base
+  let rows = frozenIds ? searchableBase.filter(o => frozenIds.has(o.id)) : searchableBase
   if (sort) {
     const { key, dir } = sort
     rows = [...rows].sort((a, b) => {
@@ -384,6 +393,8 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
       : [...new Set(rowsForVals.map(o => String(cellVal(o, col.key))))]
           .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
     const active = filters[col.key]
+    const query = String(filterSearch[col.key] || '').trim().toLowerCase()
+    const visibleValues = query ? values.filter(v => v.toLowerCase().includes(query)) : values
     const isChecked = v => !active || active.has(v)
     const toggle = v => {
       const next = new Set(active || values)
@@ -399,10 +410,12 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
           <div className="fitem" onClick={() => { setSort({ key: col.key, dir: -1 }); setOpenFilter(null) }}>⇧ Sort Z to A</div>
           <div className="fitem" onClick={() => { setSort(null); applyFilters({ ...filters, [col.key]: undefined }); setOpenFilter(null) }}>✕ Clear filter &amp; sort</div>
           <hr />
+          <input className="filter-search" type="search" placeholder={`Search ${col.label}`} value={filterSearch[col.key] || ''}
+            onChange={e => setFilterSearch({ ...filterSearch, [col.key]: e.target.value })} />
           <label className="fitem">
             <input type="checkbox" checked={!active} onChange={() => applyFilters({ ...filters, [col.key]: undefined })} /> (Select All)
           </label>
-          {values.map(v => (
+          {visibleValues.map(v => (
             <label className="fitem" key={v || '(blank)'}>
               <input type="checkbox" checked={isChecked(v)} onChange={() => toggle(v)} /> {v === '' ? '(Blanks)' : v}
             </label>
@@ -427,6 +440,11 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
             {isSalesRep && <button type="button" onClick={() => setOwnerFilter(store.role)}>My Opportunities</button>}
           </>
         )}
+        <label className="tracker-search" aria-label="Search opportunities">
+          <Icon name="search" size={14} />
+          <input type="search" placeholder="Search opportunity ID, customer or name" value={searchTerm}
+            onChange={e => { setSearchTerm(e.target.value); setFrozenIds(null) }} />
+        </label>
         <button type="button" onClick={showLatestCreated}>Latest created</button>
         <span className="hint">Rows are never deleted — close them via Stage (Won/Lost) with a mandatory Closed Reason. Click ▼ on a header to sort/filter; click a cell to see its formula.</span>
         <span className="spacer" />
@@ -612,7 +630,13 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                     )
                   })()}
                 </td>
-                <td><Link to={`/proposal/${o.id}`}>Open ▸</Link></td>
+                <td>
+                  <Link to={`/proposal/${o.id}`}>Open ▸</Link>
+                  <button type="button" className="link-button" title="Create a new proposal revision"
+                    onClick={e => { e.stopPropagation(); store.reviseProposal(o.id, 'Revision opened from Opportunities list'); navigate(`/opp/${o.id}/proposal`) }}>
+                    Revise
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>

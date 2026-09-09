@@ -811,7 +811,7 @@ function TechDashboard({ store, nav, open, blocked, nextActions, head }) {
           {forReview.slice(0, 8).map(({ opp, p }) => (
             <button key={opp.id} className="dashboard-action" onClick={() => nav(`/proposal/${opp.id}`)}>
               <span><b>{opp.id}</b> — {opp.oppName}</span>
-              <span className="hint">{(p.bom || []).length} BoQ line(s) · Rev {p.revision} · {opp.route}</span>
+              <span className="hint">{(p.bom || []).length} BoQ line(s) · Rev-{p.revision} · {opp.route}</span>
             </button>
           ))}
           {!forReview.length && <p className="hint">No proposal has a BoQ to review yet.</p>}

@@ -1,11 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { fmt, exportCSV, canViewCommercial } from '../utils.js'
+import { fmt, exportCSV, canViewCommercial, isAdminRole } from '../utils.js'
+import { Modal } from '../ui.jsx'
+import { downloadPriceListTemplate, parsePriceListFile } from '../priceListImport.js'
 
 export default function PriceLists() {
   const store = useStore()
   const canEdit = canViewCommercial(store.role)
+  const canUpload = isAdminRole(store.role)
   const [searchParams, setSearchParams] = useSearchParams()
   const requestedList = searchParams.get('list') || ''
   const requestedPart = searchParams.get('part') || ''
@@ -13,9 +16,20 @@ export default function PriceLists() {
   const initialList = store.priceLists?.[requestedList] ? requestedList : firstList
   const [list, setList] = useState(initialList)
   const [highlightedPart, setHighlightedPart] = useState('')
+  const [uploadOpen, setUploadOpen] = useState(false)
+  const [uploadFile, setUploadFile] = useState(null)
+  const [uploadVersion, setUploadVersion] = useState('')
+  const [uploadCurrency, setUploadCurrency] = useState('')
+  const [uploadPreview, setUploadPreview] = useState(null)
+  const [versionId, setVersionId] = useState(null)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editRows, setEditRows] = useState([])
+  const [editVersion, setEditVersion] = useState('')
   const rowRefs = useRef({})
   const pl = store.priceLists[list]
-  const requestedPartMatch = pl?.parts.find(part => String(part.pn).trim().toUpperCase() === requestedPart.trim().toUpperCase())
+  const selectedVersion = pl?.versions?.find(item => item.id === versionId)
+  const displayList = selectedVersion || pl
+  const requestedPartMatch = displayList?.parts.find(part => String(part.pn).trim().toUpperCase() === requestedPart.trim().toUpperCase())
   const requestedListAvailable = !requestedList || !!store.priceLists?.[requestedList]
 
   useEffect(() => {
@@ -24,12 +38,12 @@ export default function PriceLists() {
 
   useEffect(() => {
     if (!requestedPart || !pl) return
-    const match = pl.parts.find(part => String(part.pn).trim().toUpperCase() === requestedPart.trim().toUpperCase())
+    const match = displayList.parts.find(part => String(part.pn).trim().toUpperCase() === requestedPart.trim().toUpperCase())
     setHighlightedPart(match?.pn || '')
     if (!match) return
     const timer = window.setTimeout(() => rowRefs.current[match.pn]?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 0)
     return () => window.clearTimeout(timer)
-  }, [list, pl, requestedPart])
+  }, [list, displayList, requestedPart])
 
   const addAdhoc = e => {
     e.preventDefault()
@@ -42,6 +56,49 @@ export default function PriceLists() {
     e.target.reset()
   }
 
+  const openUpload = () => {
+    setUploadFile(null); setUploadPreview(null); setUploadVersion(`${displayList?.version || 'Current'} revised`)
+    setUploadCurrency(displayList?.currency || 'EUR'); setUploadOpen(true)
+  }
+
+  const inspectUpload = async file => {
+    setUploadFile(file); setUploadPreview(null)
+    try {
+      const parsed = parsePriceListFile(await file.arrayBuffer(), uploadCurrency || displayList.currency)
+      setUploadPreview(parsed)
+    } catch (error) {
+      setUploadPreview({ parts: [], errors: [`The workbook could not be read: ${error.message || error}`] })
+    }
+  }
+
+  const confirmUpload = () => {
+    if (!uploadPreview || uploadPreview.errors.length || !uploadFile) return
+    store.replacePriceList(list, uploadPreview, { filename: uploadFile.name, version: uploadVersion.trim(), currency: uploadCurrency })
+    setVersionId(null)
+    setUploadOpen(false); setUploadFile(null); setUploadPreview(null)
+  }
+
+  const openEditor = () => {
+    setEditRows(JSON.parse(JSON.stringify(displayList.parts || [])))
+    setEditVersion(`${displayList.version || 'Current'} revised`)
+    setEditOpen(true)
+  }
+
+  const updateEditRow = (index, field, value) => setEditRows(rows => rows.map((row, i) => i === index ? { ...row, [field]: field === 'price' ? (value === '' ? '' : Number(value)) : value } : row))
+  const updateEditAdder = (index, value) => setEditRows(rows => rows.map((row, i) => i === index ? {
+    ...row,
+    adders: value.split(';').map(item => {
+      const [code = '', desc = '', price = ''] = item.split('|').map(x => x.trim())
+      return { code, desc, price: price === '' ? '' : Number(price) }
+    }).filter(item => item.code || item.desc || item.price !== ''),
+  } : row))
+  const adderText = row => (row.adders || []).map(adder => `${adder.code}|${adder.desc}|${adder.price}`).join('; ')
+  const saveEditedVersion = () => {
+    const parts = editRows.map(row => ({ ...row, price: Number(row.price) || 0, adders: (row.adders || []).map(a => ({ ...a, price: Number(a.price) || 0 })) }))
+    store.savePriceListVersion(list, versionId || pl.activeVersionId, parts, { version: editVersion.trim(), currency: displayList.currency })
+    setEditOpen(false); setVersionId(null)
+  }
+
   return (
     <div className="page">
       <h2>Price Lists</h2>
@@ -49,15 +106,68 @@ export default function PriceLists() {
         {Object.keys(store.priceLists).map(k => (
           <button key={k} className={list === k ? 'primary' : ''} onClick={() => {
             setList(k)
+            setVersionId(null)
             setHighlightedPart('')
             setSearchParams({ list: k })
           }}>{k}</button>
         ))}
-        <span className="hint">Version {pl.version} · uploaded {pl.uploaded} · {pl.currency}. Current approved pricing reference.</span>
+        <span className="hint">Current version {pl.version} · uploaded {pl.uploaded} · {pl.currency}. Current approved pricing reference.</span>
         <span className="spacer" />
-        <button onClick={() => exportCSV(`${list}_pricelist.csv`, ['Part Number','Description',`Price (${pl.currency})`,'Adders'], pl.parts.map(x => [x.pn, x.desc, x.price, x.adders.map(a => `${a.desc} +${a.price}`).join('; ')]))}>Extract to Excel</button>
-        {canEdit && <button onClick={() => alert('Upload new version (mock): in Phase 1 the admin uploads the yearly B&K / Metrics Excel here; the latest upload becomes current and older versions are kept.')}>Upload new version</button>}
+        <button onClick={() => exportCSV(`${list}_${displayList.version}_pricelist.csv`, ['Part Number','Description',`Price (${displayList.currency})`,'Adders'], displayList.parts.map(x => [x.pn, x.desc, x.price, x.adders.map(a => `${a.desc} +${a.price}`).join('; ')]))}>Extract to Excel</button>
+        {canEdit && <button onClick={() => downloadPriceListTemplate(list, displayList.currency)}>Download template</button>}
+        {canUpload && <>
+          <button onClick={openUpload}>Upload new version</button>
+        </>}
       </div>
+
+      <div className="toolbar price-list-version-bar">
+        <label className="hint">View saved version</label>
+        <select value={versionId || pl.activeVersionId || ''} onChange={e => setVersionId(e.target.value || null)}>
+          {(pl.versions || []).slice().reverse().map(version => <option key={version.id} value={version.id}>{version.version}{version.id === pl.activeVersionId ? ' · Current' : ''} · {version.uploaded || '—'}</option>)}
+        </select>
+        {canUpload && <>
+          <button onClick={openEditor}>Edit selected version</button>
+          {versionId && versionId !== pl.activeVersionId && <button onClick={() => { store.restorePriceListVersion(list, versionId); setVersionId(null) }}>Restore selected version</button>}
+        </>}
+        {selectedVersion && selectedVersion.id !== pl.activeVersionId && <span className="hint">Viewing an archived version. It is not used for new proposal pricing.</span>}
+      </div>
+
+      {uploadOpen && (
+        <Modal title={`Upload ${list} price list`} wide onClose={() => setUploadOpen(false)}>
+          <p className="hint">Fill the template manually, then upload it here. This creates a new saved version; older versions remain available.</p>
+          <div className="admin-field-grid">
+            <label className="afield">Version<input value={uploadVersion} placeholder="e.g. 2026-Q3" onChange={e => setUploadVersion(e.target.value)} /></label>
+            <label className="afield">Currency<select value={uploadCurrency} onChange={e => setUploadCurrency(e.target.value)}><option>EUR</option><option>INR</option><option>USD</option><option>GBP</option></select></label>
+          </div>
+          <div className="admin-actions" style={{ marginTop: 12 }}>
+            <input type="file" accept=".xlsx,.xls,.csv" onChange={e => e.target.files?.[0] && inspectUpload(e.target.files[0])} />
+            <button onClick={() => downloadPriceListTemplate(list, uploadCurrency)}>Download blank template</button>
+          </div>
+          {uploadFile && <div className="hint" style={{ marginTop: 8 }}>{uploadFile.name}</div>}
+          {uploadPreview && (
+            <div style={{ marginTop: 12 }}>
+              {uploadPreview.errors.length ? <div className="errbox"><b>Fix these errors before importing:</b><ul>{uploadPreview.errors.map((error, i) => <li key={i}>{error}</li>)}</ul></div> : <div className="okbox">Ready to import {uploadPreview.parts.length} part{uploadPreview.parts.length === 1 ? '' : 's'}.</div>}
+            </div>
+          )}
+          <div className="form-actions" style={{ marginTop: 16 }}><button onClick={() => setUploadOpen(false)}>Cancel</button><button className="primary" disabled={!uploadPreview || uploadPreview.errors.length > 0 || !uploadFile} onClick={confirmUpload}>Import and make current</button></div>
+        </Modal>
+      )}
+
+      {editOpen && (
+        <Modal title={`Edit ${list} version`} wide onClose={() => setEditOpen(false)}>
+          <p className="hint">Changes are saved as a new version. Use the Adders format <b>CODE|Description|Price</b>; separate multiple adders with semicolons.</p>
+          <label className="afield">New version name<input value={editVersion} onChange={e => setEditVersion(e.target.value)} /></label>
+          <div className="sheet-wrap" style={{ marginTop: 12, maxHeight: 420 }}><table className="sheet"><thead><tr><th>Part Number</th><th>Description</th><th>Price</th><th>Adders</th></tr></thead><tbody>
+            {editRows.map((row, index) => <tr key={index}>
+              <td><input value={row.pn} onChange={e => updateEditRow(index, 'pn', e.target.value)} /></td>
+              <td><input value={row.desc} onChange={e => updateEditRow(index, 'desc', e.target.value)} /></td>
+              <td><input type="number" value={row.price} onChange={e => updateEditRow(index, 'price', e.target.value)} /></td>
+              <td><input value={adderText(row)} placeholder="CODE|Description|Price" onChange={e => updateEditAdder(index, e.target.value)} /></td>
+            </tr>)}
+          </tbody></table></div>
+          <div className="form-actions" style={{ marginTop: 16 }}><button onClick={() => setEditOpen(false)}>Cancel</button><button className="primary" disabled={!editVersion.trim() || !editRows.length} onClick={saveEditedVersion}>Save as new version</button></div>
+        </Modal>
+      )}
 
       {requestedPart && (!requestedListAvailable || !requestedPartMatch) && (
         <div className="warnbox" role="status" style={{ maxWidth: 900, marginBottom: 10 }}>
@@ -69,9 +179,9 @@ export default function PriceLists() {
 
       <div className="sheet-wrap sheet-wrap-fill">
         <table className="sheet">
-          <thead><tr><th>Part Number</th><th>Description</th><th>Price ({pl.currency})</th><th>Configurable Adders</th></tr></thead>
+          <thead><tr><th>Part Number</th><th>Description</th><th>Price ({displayList.currency})</th><th>Configurable Adders</th></tr></thead>
           <tbody>
-            {pl.parts.map(x => (
+            {displayList.parts.map(x => (
               <tr key={x.pn} ref={row => { rowRefs.current[x.pn] = row }} className={highlightedPart === x.pn ? 'price-list-highlight' : undefined}>
                 <td>{x.pn}</td><td>{x.desc}</td>
                 <td className="num">{fmt(x.price)}</td>
