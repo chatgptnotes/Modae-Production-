@@ -657,6 +657,19 @@ export function StoreProvider({ children }) {
         return { ...audited, leadArchive: archived }
       })
     },
+    updateLeads(ids, patch, detail = '') {
+      const wanted = new Set(ids || [])
+      if (!wanted.size) return
+      setState(s => {
+        const changed = (s.leads || []).filter(lead => wanted.has(lead.id))
+        if (!changed.length) return s
+        const next = { ...s, leads: s.leads.map(lead => wanted.has(lead.id) ? { ...lead, ...patch } : lead) }
+        const auditKeys = Object.keys(patch).filter(k => !['readAt', 'starred'].includes(k))
+        return auditKeys.length
+          ? withAudit(next, 'Leads updated', `${changed.length} selected`, detail || auditKeys.join(', '))
+          : next
+      })
+    },
 
     // Permanent cleanup for an inbox lead. Registration/opportunity records
     // are protected here so deleting a mailbox row cannot orphan commercial

@@ -1920,6 +1920,8 @@ export default function Inbox() {
   const [ageF, setAgeF] = useState('')
   const [mailTab, setMailTab] = useState('primary')
   const [selectedIds, setSelectedIds] = useState(() => new Set())
+  const [bulkMenuOpen, setBulkMenuOpen] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [pasteOpen, setPasteOpen] = useState(false)
   const [simulationOpen, setSimulationOpen] = useState(false)
   const [simProjectType, setSimProjectType] = useState(PROJECT_TYPES[0])
@@ -2038,8 +2040,17 @@ export default function Inbox() {
     return next
   })
   const setReadForSelected = read => {
-    selectedIds.forEach(id => store.updateLead(id, { readAt: read ? new Date().toISOString() : null }))
+    store.updateLeads(selectedIds, { readAt: read ? new Date().toISOString() : null })
     setSelectedIds(new Set())
+    setBulkMenuOpen(false)
+  }
+  const selectAllVisible = () => {
+    setSelectedIds(new Set(mailboxRows.map(lead => lead.id)))
+    setBulkMenuOpen(false)
+  }
+  const clearSelection = () => {
+    setSelectedIds(new Set())
+    setBulkMenuOpen(false)
   }
   const deleteSelected = () => {
     const selected = listSource.filter(l => selectedIds.has(l.id))
@@ -2047,13 +2058,16 @@ export default function Inbox() {
     const deletable = selected.filter(l => !l.oppId)
     const protectedCount = selected.length - deletable.length
     if (!deletable.length) {
-      window.alert('These leads are linked to opportunities and cannot be deleted. Use the opportunity workflow instead.')
+      setDeleteConfirm({ deletable: [], protectedCount })
       return
     }
-    const suffix = protectedCount ? ` ${protectedCount} linked lead${protectedCount === 1 ? '' : 's'} will be kept.` : ''
-    if (!window.confirm(`Delete ${deletable.length} selected lead${deletable.length === 1 ? '' : 's'} permanently? Attachments and inbox history will also be removed.${suffix}`)) return
-    deletable.forEach(l => store.deleteLead(l.id))
+    setDeleteConfirm({ deletable, protectedCount })
+  }
+  const confirmDeleteSelected = () => {
+    if (!deleteConfirm?.deletable?.length) return
+    deleteConfirm.deletable.forEach(lead => store.deleteLead(lead.id))
     setSelectedIds(new Set())
+    setDeleteConfirm(null)
   }
   const simOppOptions = oppTypesForProjectType(simProjectType)
   const activeSimOppType = simOppOptions.includes(simOppType) ? simOppType : (simOppOptions[0] || simProjectType)
@@ -2256,18 +2270,41 @@ export default function Inbox() {
         </Modal>
       )}
 
+      {deleteConfirm && (
+        <Modal title="Delete selected lead" onClose={() => setDeleteConfirm(null)}>
+          {deleteConfirm.deletable.length ? <>
+            <p>Are you sure you want to permanently delete {deleteConfirm.deletable.length} selected lead{deleteConfirm.deletable.length === 1 ? '' : 's'}?</p>
+            <p className="hint">Attachments and inbox history will also be removed.</p>
+            {deleteConfirm.protectedCount > 0 && <div className="warnbox">{deleteConfirm.protectedCount} linked lead{deleteConfirm.protectedCount === 1 ? '' : 's'} will be kept because they already have opportunities.</div>}
+            <div className="form-actions"><button type="button" onClick={() => setDeleteConfirm(null)}>Cancel</button><button type="button" className="danger" onClick={confirmDeleteSelected}>Delete permanently</button></div>
+          </> : <>
+            <p>The selected lead{deleteConfirm.protectedCount === 1 ? '' : 's'} cannot be deleted because {deleteConfirm.protectedCount === 1 ? 'it is' : 'they are'} linked to an opportunity.</p>
+            <p className="hint">Use the opportunity workflow to manage linked records.</p>
+            <div className="form-actions"><button type="button" className="primary" onClick={() => setDeleteConfirm(null)}>Close</button></div>
+          </>}
+        </Modal>
+      )}
+
       <DetailTabs ariaLabel="Mailbox views" activeId={mailTab} items={mailTabItems} onChange={setMailTab} />
 
       <div className="mailbox-list">
         <div className="mail-list-toolbar">
           <label className="mail-check"><input type="checkbox" checked={mailboxRows.length > 0 && mailboxRows.every(l => selectedIds.has(l.id))} onChange={selectVisible} aria-label="Select visible messages" /></label>
-          <button className="mail-icon-btn" title="Refresh" onClick={() => window.location.reload()}><Icon name="refresh" size={15} /></button>
-          <button className="mail-icon-btn" title="More actions"><Icon name="list" size={15} /></button>
+          <button type="button" className="mail-icon-btn" title="Refresh inbox" aria-label="Refresh inbox" onClick={() => window.location.reload()}><Icon name="refresh" size={15} /></button>
+          <div className="mail-more-actions">
+            <button type="button" className="mail-icon-btn" title="More actions" aria-label="More actions" aria-expanded={bulkMenuOpen} onClick={() => setBulkMenuOpen(open => !open)}><Icon name="list" size={15} /></button>
+            {bulkMenuOpen && <div className="mail-action-menu" role="menu">
+              <button type="button" onClick={selectAllVisible}>Select all visible</button>
+              <button type="button" onClick={clearSelection}>Clear selection</button>
+              <button type="button" onClick={() => setReadForSelected(true)} disabled={!selectedIds.size}>Mark selected as read</button>
+              <button type="button" onClick={() => setReadForSelected(false)} disabled={!selectedIds.size}>Mark selected as unread</button>
+            </div>}
+          </div>
           {selectedIds.size > 0 && <span className="mail-selection-count">{selectedIds.size} selected</span>}
           {selectedIds.size > 0 && <>
-            <button className="mail-icon-btn" title="Mark as read" onClick={() => setReadForSelected(true)}><Icon name="mail" size={15} /></button>
-            <button className="mail-icon-btn" title="Mark as unread" onClick={() => setReadForSelected(false)}><Icon name="eye" size={15} /></button>
-            <button className="mail-icon-btn mail-delete-btn" title="Delete selected leads" onClick={deleteSelected}><Icon name="trash" size={15} /></button>
+            <button type="button" className="mail-icon-btn" title="Mark as read" aria-label="Mark as read" onClick={() => setReadForSelected(true)}><Icon name="mail" size={15} /></button>
+            <button type="button" className="mail-icon-btn" title="Mark as unread" aria-label="Mark as unread" onClick={() => setReadForSelected(false)}><Icon name="eye" size={15} /></button>
+            <button type="button" className="mail-icon-btn mail-delete-btn" title="Delete selected leads" aria-label="Delete selected leads" onClick={deleteSelected}><Icon name="trash" size={15} /></button>
           </>}
           {hiddenByOwner > 0 && (
             <button className="mail-hidden-note" onClick={() => setShowAll(true)}

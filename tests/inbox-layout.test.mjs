@@ -24,3 +24,13 @@ test('simulated inquiries return to the shared inbox after saving', () => {
   assert.match(inbox, /if \(!simRegister\) \{/)
   assert.match(inbox, /nav\('\/inbox\/' \+ lead\.id\)\r?\n\s+return/)
 })
+
+test('mailbox bulk toolbar actions are wired', () => {
+  assert.match(inbox, /const [bulkMenuOpen, setBulkMenuOpen]/)
+  assert.match(inbox, /Select all visible/)
+  assert.match(inbox, /Clear selection/)
+  assert.match(inbox, /Mark selected as read/)
+  assert.match(inbox, /Mark selected as unread/)
+  assert.match(inbox, /store\.updateLeads\(selectedIds, \{ readAt:/)
+  assert.match(fs.readFileSync(new URL('../src/store.jsx', import.meta.url), 'utf8'), /updateLeads\(ids, patch, detail = ''\)/)
+})
