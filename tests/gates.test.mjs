@@ -325,6 +325,14 @@ test('the transition dialog raises the §5 approvals directly', () => {
     'the exception route must no longer swallow every approval-backed blocker')
 })
 
+test('transition approval blockers explain why approval is requested', () => {
+  const wb = read('src/pages/Workbench.jsx')
+  assert.match(wb, /const approvalRequestReason = blocker =>/)
+  assert.match(wb, /key === 'comm-approval'/)
+  assert.match(wb, /key === 'release'/)
+  assert.match(wb, /Reason for request/)
+})
+
 // O14: approvalSet() was written for the diagram's "All Approvals Completed →
 // Quote Ready for Dispatch" box and had no caller, so the three gates were only
 // ever met one blocked transition at a time.

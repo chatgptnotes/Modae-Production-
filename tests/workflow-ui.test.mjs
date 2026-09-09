@@ -103,6 +103,11 @@ test('sourcing prices are editable and sourcing edits are audited', () => {
     'authorized users need a row-level price editor')
   assert.match(spares, /priceList: 'Manual entry'/, 'manual prices must identify their source')
   assert.match(spares, /currency: 'INR'/, 'manual prices must be stored in INR')
+  assert.match(spares, /patch\.addedByName = addedBy/, 'manual price overrides must record who entered them')
+  assert.match(spares, /patch\.addedAt = addedAt/, 'manual price overrides must record when they were entered')
+  assert.match(spares, /manualAttribution = line =>/, 'legacy manual rows must use audit attribution when available')
+  assert.match(spares, /entry\.action === 'Spares line updated'/, 'legacy attribution must inspect sourcing edits')
+  assert.match(spares, /evidence\.addedBy \|\| 'Existing manual entry'/, 'price evidence must show the recorded actor')
   assert.match(store, /withAudit\(next, 'Spares line updated', current\.oppId/,
     'sourcing row edits must be written to the audit trail')
   assert.match(store, /changed\.map\(key => `\$\{key\}:.*->/,

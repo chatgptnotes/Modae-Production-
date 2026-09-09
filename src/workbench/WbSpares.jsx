@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { isPlaceholderSparesLine, useStore } from '../store.jsx'
 import { defaultCosting } from '../seed.js'
-import { canPriceProposal, unitCostINR, fmt } from '../utils.js'
+import { canPriceProposal, unitCostINR, fmt, ddMmmYY } from '../utils.js'
 import { pricingThresholdExceptions } from '../gates.js'
 import { Chip, ConfChip, AiBadge, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
@@ -89,6 +89,8 @@ export default function WbSpares({ opp, openBuilder }) {
     if (!comm) return
     const patch = { [field]: value }
     if (field === 'listUnitPrice') {
+      const addedAt = new Date().toISOString()
+      const addedBy = store.auth?.user?.name || store.auth?.user?.email || store.role
       patch.listPrice = value
       // Manual values are entered in the INR-denominated table. Rebuild the
       // cost basis as INR too, rather than retaining the old EUR/USD/BNK cost
@@ -99,6 +101,10 @@ export default function WbSpares({ opp, openBuilder }) {
       patch.priceSourceName = 'Manual override'
       patch.priceList = 'Manual override'
       patch.priceState = 'Current'
+      patch.addedBy = addedBy
+      patch.addedByName = addedBy
+      patch.addedAt = addedAt
+      patch.priceSourceDate = addedAt.slice(0, 10)
     }
     store.updateSparesLine(line.id, patch)
   }
@@ -106,12 +112,22 @@ export default function WbSpares({ opp, openBuilder }) {
   const addManual = () => {
     if (!newLine.pn.trim() && !newLine.desc.trim()) return
     const price = Math.max(0, n(newLine.listPrice))
-    store.addSparesLine(opp.id, { origin: 'manual', custRef: newLine.pn.trim() || newLine.desc.trim(), pn: newLine.pn.trim(), desc: newLine.desc.trim(), qty: Math.max(0, n(newLine.qty)), confirmed: true, listPrice: price, listUnitPrice: price, baseCost: price, currency: 'INR', priceList: 'Manual entry', priceSource: 'manual', priceState: 'Current', oem: 'Manual', leadTime: 'TBC' })
+    const addedAt = new Date().toISOString()
+    const addedBy = store.auth?.user?.name || store.auth?.user?.email || store.role
+    store.addSparesLine(opp.id, { origin: 'manual', custRef: newLine.pn.trim() || newLine.desc.trim(), pn: newLine.pn.trim(), desc: newLine.desc.trim(), qty: Math.max(0, n(newLine.qty)), confirmed: true, listPrice: price, listUnitPrice: price, baseCost: price, currency: 'INR', priceList: 'Manual entry', priceSource: 'manual', priceState: 'Current', oem: 'Manual', leadTime: 'TBC', addedBy, addedByName: addedBy, addedAt })
     setNewLine({ pn: '', desc: '', qty: '1', listPrice: '' })
     setShowAddPart(false)
   }
   const onNewKeyDown = event => { if (event.key === 'Enter') { event.preventDefault(); addManual() } }
   const sourceDetails = line => formatPriceSource(line)
+  const manualAttribution = line => {
+    if (line.addedByName || line.addedBy || line.addedAt) return line
+    const audit = (store.audit || []).find(entry => entry.action === 'Spares line updated'
+      && entry.objectId === line.oppId
+      && String(entry.detail || '').includes(line.id)
+      && /listUnitPrice|listPrice/.test(entry.detail || ''))
+    return audit ? { addedBy: audit.role || '', addedAt: audit.ts || '' } : {}
+  }
   const priceListNameFor = line => {
     const sourceName = String(line.priceSourceName || '').trim()
     const sourceLabel = String(line.priceList || '').trim()
@@ -206,7 +222,7 @@ export default function WbSpares({ opp, openBuilder }) {
         <tbody>
           {calculatedItems.map(item => { const line = item.sourceLine; const row = { ...item, discountPct: item.discountPercent, markupPct: item.markupPercent, listTotal: item.listTotal, lineTotal: item.lineTotal, cogs: item.lineTotalCogs }; const partDescription = `${line.pn || 'Manual part'}${line.desc ? ` — ${line.desc}` : ''}`; return <tr key={line.id} className={row.qty === 0 ? 'sourcing-zero-row' : ''}>
             <td className="sourcing-cell-part align-top p-2 overflow-hidden"><div className="sourcing-part-line"><div className="sourcing-part-copy"><span className="hint sourcing-part-ref truncate overflow-hidden text-ellipsis whitespace-nowrap">{line.custRef}</span><div className="sourcing-part-description line-clamp-2 text-xs font-medium text-gray-900 leading-snug" title={partDescription}>{partDescription}</div><small className="hint truncate overflow-hidden text-ellipsis whitespace-nowrap">{line.oem || '—'} · Lead: {line.leadTime || 'TBC'}</small></div>{comm && <button className="sourcing-remove-row" title="Remove row from active proposal" aria-label={`Remove ${line.pn || line.id}`} onClick={() => updateLine(line, 'qty', 0)}>×</button>}</div></td>
-            <td className="sourcing-cell-source align-top p-2 overflow-hidden"><div className="sourcing-source-stack">{(() => { const source = sourceDetails(line); const sourcePayload = { ...source, pn: line.pn || line.custRef || line.id, priceState: line.priceState || 'Unstated', listPrice: line.listUnitPrice ?? line.listPrice, currency: line.currency || 'INR' }; const isCatalogued = source.source === PRICE_SOURCES.LIST && priceListNameFor(line); return <><div className="sourcing-source-primary">{isCatalogued ? <button type="button" className="sourcing-source-link sourcing-source-name" title={`Open ${source.full} in the price list`} aria-label={`Open ${source.full} in the price list`} onClick={() => openPriceList(line)}>{source.primary}</button> : <button type="button" className="sourcing-source-details-link sourcing-source-name" title={`View full source: ${source.full}`} aria-label={`View full source: ${source.full}`} onClick={() => setEvidence(sourcePayload)}>{source.primary}</button>}</div>{source.secondary && <span className="sourcing-source-meta" title={source.full}>{source.secondary}</span>}{line.priceSource === 'vendor-quote' && <Chip tone="state-Review">Vendor fallback</Chip>}{line.priceSource === 'manual' && <Chip tone="grey">Manual/override</Chip>}{line.priceState === 'Expired' ? <><Chip tone="state-Blocks">Expired</Chip><AiBadge label="pricing anomaly" /></> : line.priceState === 'Needs pricing' ? <Chip tone="state-Review">Needs pricing</Chip> : <Chip tone="state-Accepted">Current</Chip>}</> })()}</div></td>
+            <td className="sourcing-cell-source align-top p-2 overflow-hidden"><div className="sourcing-source-stack">{(() => { const source = sourceDetails(line); const attribution = manualAttribution(line); const sourcePayload = { ...source, pn: line.pn || line.custRef || line.id, priceState: line.priceState || 'Unstated', listPrice: line.listUnitPrice ?? line.listPrice, currency: line.currency || 'INR', addedBy: attribution.addedByName || attribution.addedBy || '', addedAt: attribution.addedAt || '' }; const isCatalogued = source.source === PRICE_SOURCES.LIST && priceListNameFor(line); return <><div className="sourcing-source-primary">{isCatalogued ? <button type="button" className="sourcing-source-link sourcing-source-name" title={`Open ${source.full} in the price list`} aria-label={`Open ${source.full} in the price list`} onClick={() => openPriceList(line)}>{source.primary}</button> : <button type="button" className="sourcing-source-details-link sourcing-source-name" title={`View full source: ${source.full}`} aria-label={`View full source: ${source.full}`} onClick={() => setEvidence(sourcePayload)}>{source.primary}</button>}</div>{source.secondary && <span className="sourcing-source-meta" title={source.full}>{source.secondary}</span>}{line.priceSource === 'vendor-quote' && <Chip tone="state-Review">Vendor fallback</Chip>}{line.priceSource === 'manual' && <Chip tone="grey">Manual/override</Chip>}{line.priceState === 'Expired' ? <><Chip tone="state-Blocks">Expired</Chip><AiBadge label="pricing anomaly" /></> : line.priceState === 'Needs pricing' ? <Chip tone="state-Review">Needs pricing</Chip> : <Chip tone="state-Accepted">Current</Chip>}</> })()}</div></td>
             <td className="num"><EditableNumber value={row.qty} label={`Quantity for ${line.pn || line.id}`} disabled={!comm} step="1" onChange={value => updateLine(line, 'qty', Math.max(0, Math.round(value)))} /></td>
             <td className="num"><EditableNumber value={row.listUnitPrice} label={`List price for ${line.pn || line.id}`} disabled={!comm} onChange={value => updateLine(line, 'listUnitPrice', value)} /><small className="hint">{line.currency || 'INR'}</small></td>
             <td className="num"><EditableNumber value={Math.round(row.discountPct)} label={`Discount for ${line.pn || line.id}`} disabled={!comm} step="1" onChange={value => updateLine(line, 'discountPct', Math.min(100, Math.max(0, Math.round(value))))} suffix="%" /></td>
@@ -273,7 +289,7 @@ export default function WbSpares({ opp, openBuilder }) {
         <div style={{ marginTop: 10, textAlign: 'right' }}><button onClick={close}>Close</button></div>
       </Modal>
     })()}
-    {evidence && <Modal title="Evidence — price source" onClose={() => setEvidence(null)}><p style={{ fontSize: 12.5 }}><b>{evidence.pn}</b> uses <b>{evidence.full}</b>.</p><dl className="sourcing-source-evidence"><div><dt>Source type</dt><dd>{evidence.kind}</dd></div><div><dt>Price status</dt><dd>{evidence.priceState}</dd></div>{comm && evidence.listPrice != null && <div><dt>Unit price</dt><dd>{fmt(evidence.listPrice)} {evidence.currency}</dd></div>}{evidence.secondary && <div><dt>Source detail</dt><dd>{evidence.secondary}</dd></div>}</dl><p className="hint">Row-level evidence is simulated in this demo — the production system links the exact price-list row.</p><div style={{ textAlign: 'right' }}><button onClick={() => setEvidence(null)}>Close</button></div></Modal>}
+    {evidence && <Modal title="Evidence — price source" onClose={() => setEvidence(null)}><p style={{ fontSize: 12.5 }}><b>{evidence.pn}</b> uses <b>{evidence.full}</b>.</p><dl className="sourcing-source-evidence"><div><dt>Source type</dt><dd>{evidence.kind}</dd></div><div><dt>Price status</dt><dd>{evidence.priceState}</dd></div>{comm && evidence.listPrice != null && <div><dt>Unit price</dt><dd>{fmt(evidence.listPrice)} {evidence.currency}</dd></div>}{evidence.secondary && <div><dt>Source detail</dt><dd>{evidence.secondary}</dd></div>}{evidence.source === PRICE_SOURCES.MANUAL && <div><dt>Added by</dt><dd>{evidence.addedBy || 'Existing manual entry'}</dd></div>}{evidence.source === PRICE_SOURCES.MANUAL && <div><dt>Added on</dt><dd>{evidence.addedAt ? ddMmmYY(evidence.addedAt.slice(0, 10)) : 'Not recorded'}</dd></div>}</dl><p className="hint">Row-level evidence is simulated in this demo — the production system links the exact price-list row.</p><div style={{ textAlign: 'right' }}><button onClick={() => setEvidence(null)}>Close</button></div></Modal>}
   </div>
 }
 

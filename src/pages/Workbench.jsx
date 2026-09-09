@@ -297,6 +297,17 @@ export default function Workbench() {
     if (blocker.key === 'pricing-threshold') return 'A discount or markup exceeds the Admin-configured limit. Request one approval from AH or LJS before continuing.'
     return 'Complete the requirement shown below before continuing.'
   }
+  const approvalRequestReason = blocker => {
+    if (blocker.key === 'comm-approval') {
+      return 'The proposal contains customer-requested commercial terms that differ from ModAE’s standard offer and need AH sign-off before dispatch.'
+    }
+    if (blocker.key === 'release') {
+      const revision = proposal?.revision ? ` revision ${proposal.revision}` : ''
+      return `The customer-facing quote${revision} is ready for final release and must be approved by LJS and AH before it can be sent.`
+    }
+    if (blocker.approvalType) return `This requirement needs ${blocker.approver || 'the assigned approver'} approval before the workflow can continue.`
+    return ''
+  }
 
   return (
     <div className="page">
@@ -335,6 +346,7 @@ export default function Workbench() {
                 return <div key={`${item.key}-${i}`} className={`workbench-blocker ${item.severity}`}>
                   <div className="transition-blocker-head"><b>{item.text}</b><span className="transition-owner">Owner: <strong>{blockerOwner(item)}</strong></span></div>
                   <span className="transition-explanation">{blockerExplanation(item)}</span>
+                  {item.approvalType && <div className="transition-request-reason"><b>Reason for request</b><span>{approvalRequestReason(item)}</span></div>}
                   {item.key === 'pricing-threshold' && item.pricingRows?.length > 0 && <div className="transition-pricing-details">{item.pricingRows.map((row, rowIndex) => <div key={`${row.label}-${rowIndex}`}><b>{row.label}</b>{row.discount > row.discountPct && <span>Discount {row.discount}% (limit {row.discountPct}%)</span>}{row.markup > row.markupPct && <span>Markup {row.markup}% (limit {row.markupPct}%)</span>}</div>)}</div>}
                   {item.key === 'clarifications' && clarificationRows.length > 0 && <div className="transition-detail-list">{clarificationRows.map(row => <div key={row.id}><b>{row.id}</b> · {row.category} · {row.q} <em>{row.status}</em></div>)}</div>}
                   {item.key === 'dev' && deviationRows.length > 0 && <div className="transition-detail-list">{deviationRows.map((row, index) => <div key={`${row.term}-${index}`}><b>{row.term}</b><br />Customer requested: {row.customerAsk || 'Not recorded'}<br />ModAE offered: {row.ourResponse || 'Pending review'}</div>)}</div>}
@@ -595,6 +607,14 @@ function CustomerKycTab({ opp }) {
   const store = useStore()
   const customer = store.customers.find(c => c.name === opp.sellTo)
   const canVerify = store.role === 'AH' || isAdminRole(store.role)
+  const detailSeed = {
+    billingAddress: opp.billingAddress ?? customer?.billingAddress ?? '',
+    shippingAddress: opp.shippingAddress ?? customer?.shippingAddress ?? '',
+    shippingPincode: opp.shippingPincode ?? customer?.shippingPincode ?? '',
+    gstin: opp.gstin ?? customer?.gstin ?? '',
+  }
+  const [details, setDetails] = useState(detailSeed)
+  const [detailSaved, setDetailSaved] = useState(false)
   const items = (customer && store.kyc[customer.name])
     || (store.config?.kycItems || []).map(n => ({ name: n, state: 'Missing', when: '' }))
   const fee = store.config?.amberFee || { amount: 25000, cur: 'INR', days: 7 }
@@ -610,6 +630,58 @@ function CustomerKycTab({ opp }) {
   const [viewing, setViewing] = useState(null)
   const [menuFor, setMenuFor] = useState('')
   const menuRef = useRef(null)
+
+  useEffect(() => {
+    setDetails({
+      billingAddress: opp.billingAddress ?? customer?.billingAddress ?? '',
+      shippingAddress: opp.shippingAddress ?? customer?.shippingAddress ?? '',
+      shippingPincode: opp.shippingPincode ?? customer?.shippingPincode ?? '',
+      gstin: opp.gstin ?? customer?.gstin ?? '',
+    })
+    setDetailSaved(false)
+  }, [opp.id, customer?.name])
+
+  const updateDetail = (key, value) => {
+    setDetails(previous => ({ ...previous, [key]: value }))
+    setDetailSaved(false)
+  }
+
+  const saveCustomerDetails = () => {
+    const patch = Object.fromEntries(Object.entries(details).map(([key, value]) => [key, String(value || '').trim()]))
+    store.updateOpportunity(opp.id, patch)
+    if (customer) {
+      if (isAdminRole(store.role)) {
+        store.updateCustomer(customer.name, patch, 'Opportunity customer details completed')
+      } else {
+        store.requestApproval({
+          type: 'Customer master change',
+          needed: ['AH'],
+          approver: 'AH',
+          customerName: customer.name,
+          patch,
+          detail: `${customer.name} — billing/shipping/GST details supplied from Opportunity ${opp.id}`,
+        })
+      }
+    }
+
+    // Resolve only the lead missing items that now have a value. Other open
+    // follow-up questions remain visible on the converted lead.
+    const lead = store.leads.find(item => item.oppId === opp.id)
+    if (lead?.ai?.missing?.length) {
+      const matches = item => {
+        const text = String(item || '').toLowerCase()
+        return (patch.billingAddress && /billing\s+address/.test(text))
+          || (patch.shippingAddress && /shipping\s+address/.test(text) && !/pincode|pin\s*code/.test(text))
+          || (patch.shippingPincode && /(shipping\s+)?pincode|pin\s*code/.test(text))
+          || (patch.gstin && /gstin|gst\s*(?:number|no\.?|details?)/.test(text))
+      }
+      const missing = lead.ai.missing.filter(item => !matches(item))
+      if (missing.length !== lead.ai.missing.length) {
+        store.updateLead(lead.id, { ai: { ...lead.ai, missing } }, 'Opportunity customer details supplied')
+      }
+    }
+    setDetailSaved(true)
+  }
 
   useEffect(() => {
     const close = event => {
@@ -665,6 +737,29 @@ function CustomerKycTab({ opp }) {
                 <tr><td>Payment record</td><td>{customer.payment}</td></tr>
               </tbody>
             </table>
+            <div className="section-title" style={{ marginTop: 14 }}>Customer commercial details</div>
+            <p className="hint" style={{ marginTop: 4 }}>
+              Optional at registration. Complete before the final quotation or invoice.
+            </p>
+            <div className="dgrid2" style={{ marginTop: 8 }}>
+              <label>Billing address
+                <textarea rows={2} value={details.billingAddress} onChange={e => updateDetail('billingAddress', e.target.value)} placeholder="Add billing address" />
+              </label>
+              <label>Shipping address
+                <textarea rows={2} value={details.shippingAddress} onChange={e => updateDetail('shippingAddress', e.target.value)} placeholder="Add shipping address" />
+              </label>
+              <label>Shipping pincode
+                <input value={details.shippingPincode} onChange={e => updateDetail('shippingPincode', e.target.value)} placeholder="e.g. 440001" inputMode="numeric" />
+              </label>
+              <label>GSTIN
+                <input value={details.gstin} onChange={e => updateDetail('gstin', e.target.value.toUpperCase())} placeholder="Add GSTIN" />
+              </label>
+            </div>
+            <div className="toolbar" style={{ marginTop: 8, marginBottom: 0 }}>
+              <button type="button" onClick={saveCustomerDetails} disabled={detailSaved}>Save customer details</button>
+              {detailSaved && <span className="lead-decision-saved">Saved just now</span>}
+            </div>
+            {!isAdminRole(store.role) && <p className="hint">Opportunity values save immediately. Updating the shared customer master requires AH approval.</p>}
           </>
         ) : (
           <p className="hint">{opp.sellTo} is not in the customer master yet — treated as a new (Blue) customer.</p>

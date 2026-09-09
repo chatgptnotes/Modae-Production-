@@ -58,6 +58,25 @@ test('AI missing information is optional for registration', () => {
   assert.match(inbox, /Optional information still missing/)
 })
 
+test('registration carries optional customer details into the opportunity', () => {
+  const register = fs.readFileSync(new URL('../src/pages/Register.jsx', import.meta.url), 'utf8')
+  assert.doesNotMatch(register, /missingInfo\.forEach\(item => blockers\.push/)
+  assert.match(register, /billingAddress: customer\?\.billingAddress/)
+  assert.match(register, /shippingPincode: customer\?\.shippingPincode/)
+  assert.match(register, /gstin: customer\?\.gstin/)
+  assert.match(register, /Follow-up information.*completed later in the Opportunity/s)
+})
+
+test('Opportunity Customer/KYC tab can complete optional customer details', () => {
+  const workbench = fs.readFileSync(new URL('../src/pages/Workbench.jsx', import.meta.url), 'utf8')
+  assert.match(workbench, /Customer commercial details/)
+  assert.match(workbench, /store\.updateOpportunity\(opp\.id, patch\)/)
+  assert.match(workbench, /type: 'Customer master change'/)
+  assert.match(workbench, /shippingAddress: opp\.shippingAddress/)
+  assert.match(workbench, /shippingPincode: opp\.shippingPincode/)
+  assert.match(workbench, /GSTIN/)
+})
+
 test('red leads explain why payment confirmation is not shown', () => {
   assert.match(inbox, /Red customer — payment confirmation/)
   assert.match(inbox, /Payment confirmation is not required at Lead stage/)

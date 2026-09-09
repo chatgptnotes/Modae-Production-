@@ -29,13 +29,13 @@
   --action-accent-ink: #c22a1b;
   --action-accent-soft: #fbe8e5;
   --action-accent-border: #efb9b2;
-  --status-success: #15803d;
+  --status-success: #2f7053;
   --status-success-soft: #ecfdf5;
-  --status-warning: #b45309;
+  --status-warning: #9a6a24;
   --status-warning-soft: #fffbeb;
-  --status-danger: #b91c1c;
+  --status-danger: #a34848;
   --status-danger-soft: #fff1f2;
-  --status-info: #1e40af;
+  --status-info: #315f91;
   --status-info-soft: #eff6ff;
   --focus-ring: #9e1f14;
   --shadow-color: rgba(40, 40, 40, .18);
@@ -916,19 +916,19 @@ table.sheet td input:focus, table.sheet td select:focus { outline: 2px solid var
 table.sheet td.oppid { font-weight: 600; }
 table.sheet tbody tr td.oppid.won  { background: var(--won-fill) !important; color: var(--won-text); }
 table.sheet tbody tr td.oppid.lost { background: var(--lost-fill) !important; color: var(--lost-text); }
-table.sheet tbody tr td.oppid.Green { background: var(--won-fill) !important; color: var(--won-text); }
-table.sheet tbody tr td.oppid.Amber { background: var(--amber-fill) !important; color: var(--amber-text); }
-table.sheet tbody tr td.oppid.Red   { background: var(--lost-fill) !important; color: var(--lost-text); }
-table.sheet tbody tr td.oppid.Blue  { background: var(--primary-soft) !important; color: var(--bg-sidebar); }
+table.sheet tbody tr td.oppid.Green { background: var(--status-success-soft) !important; color: var(--status-success); }
+table.sheet tbody tr td.oppid.Amber { background: var(--status-warning-soft) !important; color: var(--status-warning); }
+table.sheet tbody tr td.oppid.Red   { background: var(--status-danger-soft) !important; color: var(--status-danger); }
+table.sheet tbody tr td.oppid.Blue  { background: var(--status-info-soft) !important; color: var(--status-info); }
 table.sheet tbody tr td.oppid.Green a,
 table.sheet tbody tr td.oppid.Amber a,
 table.sheet tbody tr td.oppid.Red a,
 table.sheet tbody tr td.oppid.Blue a { color: inherit; }
 table.sheet td.cstat { text-align: center; font-weight: 600; }
-table.sheet td.cstat.Green { background: var(--won-fill) !important; color: var(--won-text); }
-table.sheet td.cstat.Amber { background: var(--amber-fill) !important; color: var(--amber-text); }
-table.sheet td.cstat.Red   { background: var(--lost-fill) !important; color: var(--lost-text); }
-table.sheet td.cstat.Blue  { background: var(--primary-soft) !important; color: var(--bg-sidebar); }
+table.sheet td.cstat.Green { background: var(--status-success-soft) !important; color: var(--status-success); }
+table.sheet td.cstat.Amber { background: var(--status-warning-soft) !important; color: var(--status-warning); }
+table.sheet td.cstat.Red   { background: var(--status-danger-soft) !important; color: var(--status-danger); }
+table.sheet td.cstat.Blue  { background: var(--status-info-soft) !important; color: var(--status-info); }
 table.sheet th.num { text-align: right; }
 table.sheet td.err { background: var(--lost-fill) !important; color: var(--lost-text); text-align: center; }
 table.sheet tfoot td { font-weight: 700; background: var(--primary-soft); }
@@ -951,10 +951,10 @@ table.sheet th.internal { background: var(--palette-c23d77f0); }
 table.sheet td.internal { background: var(--border-soft) !important; color: var(--text-muted); }
 
 .pill { display: inline-block; padding: 1px 8px; border-radius: 8px; font-size: 11px; font-weight: 600; }
-.pill.Green, .pill.won { background: var(--won-fill); color: var(--won-text); }
-.pill.Amber { background: var(--amber-fill); color: var(--amber-text); }
-.pill.Red, .pill.lost { background: var(--lost-fill); color: var(--lost-text); }
-.pill.Blue { background: var(--primary-soft); color: var(--bg-sidebar); }
+.pill.Green, .pill.won { background: var(--status-success-soft); color: var(--status-success); }
+.pill.Amber { background: var(--status-warning-soft); color: var(--status-warning); }
+.pill.Red, .pill.lost { background: var(--status-danger-soft); color: var(--status-danger); }
+.pill.Blue { background: var(--status-info-soft); color: var(--status-info); }
 
 /* Excel bottom sheet-tab strip (offset by the sidebar) */
 .sheet-tabs {

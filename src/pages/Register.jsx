@@ -111,6 +111,9 @@ export default function Register() {
   const verificationBlockers = leadVerificationBlockers(lead, leadCustomerStatus, { redCleared, config: store.config })
   // Opportunity scope is useful context but is not required to register a
   // lead; the opportunity can be structured and scoped later in the workbench.
+  // AI-missing fields are follow-up information, not registration gates. The
+  // salesperson can complete customer/commercial details from the Opportunity
+  // Customer/KYC tab after the permanent opportunity ID is created.
   const missingInfo = (lead?.ai?.missing || []).filter(item => !/opportunity\s+scope/i.test(String(item)))
   const missingIdentity = [
     ['sellTo', 'Sell To Customer'], ['eucName', 'EUC Name'], ['eucLocation', 'EUC Location'],
@@ -120,7 +123,6 @@ export default function Register() {
   const blockers = []
   if (lead.status !== 'Qualified') blockers.push('Lead is not Qualified yet — qualify it in the inbox first')
   pendingLow.forEach(f => blockers.push(`Low-confidence field unresolved: ${f.k} (${f.conf}%)`))
-  missingInfo.forEach(item => blockers.push(`Missing information: ${item}`))
   missingIdentity.forEach(item => blockers.push(`${item} is required before registration`))
   verificationBlockers.forEach(item => blockers.push(item))
   const blocked = blockers.length > 0
@@ -166,6 +168,12 @@ export default function Register() {
       createDate: today, proposalDate: '', orderDate: '', invoiceDate: '',
       status: 'Open', stage: 'Lead', milestone: 'Screening', closedReason: '',
       contactPerson, contactPhone,
+      // Commercial/customer master details may be completed after registration
+      // from the Opportunity Customer/KYC workspace.
+      billingAddress: customer?.billingAddress || lead.billingAddress || '',
+      shippingAddress: customer?.shippingAddress || lead.shippingAddress || '',
+      shippingPincode: customer?.shippingPincode || lead.shippingPincode || '',
+      gstin: customer?.gstin || lead.gstin || '',
       // The address the enquiry came from is the address the proposal goes back
       // to — carried here so Email Proposal resolves a recipient by itself.
       contactEmail: lead.from || '',
@@ -197,7 +205,11 @@ export default function Register() {
     // clearance and its conditions follow the opportunity into the workbench.
     store.linkLeadApprovals(lead.id, opp.id)
     if (!customer) {
-      store.addCustomer({ name: sellTo, category, status: leadCustomerStatus, kyc: 'Pending', payment: '—' })
+      store.addCustomer({
+        name: sellTo, category, status: leadCustomerStatus, kyc: 'Pending', payment: '—',
+        billingAddress: opp.billingAddress, shippingAddress: opp.shippingAddress,
+        shippingPincode: opp.shippingPincode, gstin: opp.gstin,
+      })
     }
     store.updateLead(lead.id, { status: 'Converted', oppId: opp.id })
 
@@ -305,6 +317,15 @@ export default function Register() {
           <p className="hint" style={{ marginTop: 6 }}>
             Proposal route: <b>{routeForType(oppType)}</b> — set from the opportunity type.
           </p>
+
+          {missingInfo.length > 0 && (
+            <div className="warnbox" style={{ marginTop: 8 }}>
+              <b>Follow-up information</b> — these details can be completed later in the Opportunity:
+              <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                {missingInfo.map((item, i) => <li key={i}>{item}</li>)}
+              </ul>
+            </div>
+          )}
 
           {blocked && (
             <ErrBox>
