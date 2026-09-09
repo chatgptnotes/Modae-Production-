@@ -40,12 +40,19 @@ function PageGate({ page, children }) {
   return children
 }
 
+// Some approvals are raised before an opportunity ID exists (for example a
+// red-customer clearance raised from the lead inbox). Those notifications must
+// open the approvals list rather than producing the invalid /opp/approvals URL.
+export const approvalNotificationPath = approval => approval?.oppId
+  ? `/opp/${approval.oppId}/approvals`
+  : '/approvals'
+
 function NotificationBell({ store, nav }) {
   const [open, setOpen] = useState(false)
   const role = store.role
   const notifications = [
     ...(store.approvals || []).filter(a => a.status === 'Pending' && ([...(a.needed || []), a.approver, a.requestedBy].filter(Boolean).includes(role))).map(a => ({
-      id: `approval-${a.id}`, icon: 'checkCircle', title: 'Approval waiting', text: a.detail || a.type, to: `/opp/${a.oppId}/approvals`, date: a.ts,
+      id: `approval-${a.id}`, icon: 'checkCircle', title: 'Approval waiting', text: a.detail || a.type, to: approvalNotificationPath(a), date: a.ts,
     })),
     ...(store.opportunities || []).filter(o => o.status === 'Open' && o.owner === role && o.lastUpdated && ((Date.now() - new Date(o.lastUpdated).getTime()) / 86400000) >= 7).map(o => ({
       id: `stale-${o.id}`, icon: 'clock', title: 'Follow-up overdue', text: `${o.id} has not been updated for 7 days`, to: `/opp/${o.id}`, date: o.lastUpdated,
