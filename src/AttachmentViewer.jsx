@@ -5,12 +5,85 @@
 // leads and pre-existing attachments have, and the modal says so plainly rather
 // than implying you are looking at the original.
 import { useEffect, useRef, useState } from 'react'
+import XLSX from 'xlsx-js-style'
 import { Modal } from './ui.jsx'
 import { Icon } from './icons.jsx'
 import { getFile } from './leadBlobs.js'
+import { extractDocxText } from './docText.js'
 
 const isImage = (name, type) => (type || '').startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(name)
 const isPdf = (name, type) => type === 'application/pdf' || /\.pdf$/i.test(name)
+const isSpreadsheet = (name, type) => /spreadsheet|excel|sheet/i.test(type || '') || /\.(xlsx?|xlsm|csv)$/i.test(name)
+const isDocx = (name, type) => /wordprocessingml\.document|msword/i.test(type || '') || /\.docx?$/i.test(name)
+const isText = (name, type) => (type || '').startsWith('text/') || /\.(txt|md|json|eml|log)$/i.test(name)
+
+function TextPreview({ text, label = 'Document text' }) {
+  return (
+    <div className="att-view-document">
+      <div className="att-view-document-label">{label}</div>
+      <pre className="att-view-text">{text}</pre>
+    </div>
+  )
+}
+
+function DocxPreview({ blob, fallback = '' }) {
+  const [text, setText] = useState(fallback)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let dead = false
+    if (!blob) return undefined
+    blob.arrayBuffer().then(buffer => extractDocxText(buffer)).then(value => {
+      if (!dead) setText(value)
+    }).catch(e => {
+      if (!dead) setError(e?.message || 'The Word document could not be read.')
+    })
+    return () => { dead = true }
+  }, [blob])
+
+  if (error && !text) return <p className="hint att-view-note"><Icon name="alert" size={12} /> {error}</p>
+  return <TextPreview text={text || 'This Word document has no readable text.'} label="Word document preview" />
+}
+
+function SpreadsheetPreview({ blob, fallback = '' }) {
+  const [workbook, setWorkbook] = useState(null)
+  const [activeSheet, setActiveSheet] = useState(0)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    let dead = false
+    if (!blob) return undefined
+    blob.arrayBuffer().then(buffer => {
+      const parsed = XLSX.read(buffer, { type: 'array', cellDates: true })
+      const sheets = parsed.SheetNames.map(name => ({
+        name,
+        rows: XLSX.utils.sheet_to_json(parsed.Sheets[name], { header: 1, defval: '' }),
+      }))
+      if (!dead) { setWorkbook({ sheets }); setActiveSheet(0) }
+    }).catch(e => {
+      if (!dead) setError(e?.message || 'The spreadsheet could not be read.')
+    })
+    return () => { dead = true }
+  }, [blob])
+
+  if (error && !fallback) return <p className="hint att-view-note"><Icon name="alert" size={12} /> {error}</p>
+  if (!workbook) return fallback ? <TextPreview text={fallback} label="Extracted spreadsheet text" /> : <p className="hint att-view-note">Loading spreadsheet…</p>
+  const sheet = workbook.sheets[activeSheet] || workbook.sheets[0]
+  const width = Math.max(1, ...sheet.rows.map(row => row.length))
+  return (
+    <div className="att-view-spreadsheet">
+      {workbook.sheets.length > 1 && <div className="att-view-sheet-tabs" role="tablist" aria-label="Spreadsheet sheets">
+        {workbook.sheets.map((item, index) => <button key={item.name} type="button" role="tab" aria-selected={activeSheet === index}
+          className={activeSheet === index ? 'active' : ''} onClick={() => setActiveSheet(index)}>{item.name}</button>)}
+      </div>}
+      <div className="att-view-table-wrap">
+        <table className="att-view-table"><tbody>
+          {sheet.rows.map((row, rowIndex) => <tr key={rowIndex}>{Array.from({ length: width }, (_, columnIndex) => <td key={columnIndex}>{String(row[columnIndex] ?? '')}</td>)}</tr>)}
+        </tbody></table>
+      </div>
+    </div>
+  )
+}
 
 // Renders the PDF itself, one page at a time, via the same lazy pdfjs path
 // tenderParse uses for text.
@@ -107,20 +180,21 @@ export default function AttachmentViewer({ leadId, attachment, onClose }) {
 
   const body = () => {
     if (loading) return <p className="hint att-view-note">Loading…</p>
-    if (blob && isPdf(attachment.name, blob.type)) return <PdfPreview blob={blob} />
-    if (blob && isImage(attachment.name, blob.type) && url) {
+    const type = attachment.type || attachment.mimeType || blob?.type || ''
+    if (blob && isPdf(attachment.name, type)) return <PdfPreview blob={blob} />
+    if (blob && isImage(attachment.name, type) && url) {
       return <div className="att-view-canvas"><img src={url} alt={attachment.name} /></div>
+    }
+    if (blob && isDocx(attachment.name, type)) return <DocxPreview blob={blob} fallback={attachment.text || ''} />
+    if (blob && isSpreadsheet(attachment.name, type)) return <SpreadsheetPreview blob={blob} fallback={attachment.text || ''} />
+    if (blob && isText(attachment.name, type)) {
+      return <TextFilePreview blob={blob} fallback={attachment.text || ''} />
     }
     if (attachment.text) {
       return (
         <>
-          <p className="hint att-view-note">
-            <Icon name="bot" size={12} />{' '}
-            {blob
-              ? 'No inline preview for this file type — this is the text extracted from it. Download to open the original.'
-              : 'No stored copy of this file — this is the text the extraction kept from it.'}
-          </p>
-          <pre className="att-view-text">{attachment.text}</pre>
+          <p className="hint att-view-note"><Icon name="bot" size={12} /> {blob ? 'Showing extracted text from this file.' : 'No stored copy — showing extracted text.'}</p>
+          <TextPreview text={attachment.text} />
         </>
       )
     }
@@ -146,4 +220,14 @@ export default function AttachmentViewer({ leadId, attachment, onClose }) {
       </div>
     </Modal>
   )
+}
+
+function TextFilePreview({ blob, fallback }) {
+  const [text, setText] = useState(fallback)
+  useEffect(() => {
+    let dead = false
+    blob.text().then(value => { if (!dead) setText(value) })
+    return () => { dead = true }
+  }, [blob])
+  return <TextPreview text={text} label="Text preview" />
 }

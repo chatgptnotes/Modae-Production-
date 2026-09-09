@@ -1229,6 +1229,7 @@ export const seedConfig = {
     customerClassification: null,
     datasheets: [],
     proposalTemplates: [],
+    kycTemplates: {},
   },
 }
 

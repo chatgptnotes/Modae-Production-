@@ -153,6 +153,7 @@ export function ConditionCompletion({ approval, index, condition, canComplete, o
           scanEvidence(file)
         }} />
         <button type="button" onClick={() => fileRef.current?.click()}><Icon name="upload" size={13} /> {evidenceFile ? evidenceFile.name : 'Add file'}</button>
+        {evidenceFile && !checking && <button type="button" onClick={() => { setEvidenceFile(null); setEvidenceResult(null); setError(''); if (fileRef.current) fileRef.current.value = '' }}>Cancel upload</button>}
         <button className="primary" type="submit" disabled={checking}><Icon name="clipboardCheck" size={13} /> {checking ? 'Checking evidence...' : 'Complete condition'}</button>
       </div>
       {checking && <div className="hint approval-evidence-status">Scanning evidence…</div>}

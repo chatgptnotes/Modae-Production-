@@ -54,6 +54,7 @@ export const verificationItem = (verification, item) =>
   verification?.kyc?.[item] || { state: 'Missing', mode: '', file: '', verifiedAt: '' }
 
 export function blueKycComplete(verification, config = null) {
+  if (verification?.kycRequestStatus === 'cancelled') return false
   const items = checklistFor(config, 'Blue')
   return items.every(item => verificationItem(verification, item).state === 'Verified')
 }
@@ -71,6 +72,7 @@ export function leadVerificationComplete(lead, customerStatus = lead?.customerSt
     case 'none': return true
     case 'documents': return checklistFor(config, customerStatus)
       .every(item => verificationItem(lead?.verification, item).state === 'Verified')
+      && lead?.verification?.kycRequestStatus !== 'cancelled'
     case 'fee': return amberPaymentComplete(lead?.verification)
     // Red used to return false here unconditionally, with no way to pass the
     // clearance in — so an approved Red lead could never be registered.

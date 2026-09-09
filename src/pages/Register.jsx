@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useStore, nextOppId } from '../store.jsx'
 import { OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, SUBFOLDERS, routeForType, ownerForOppType, newProposal } from '../seed.js'
@@ -51,8 +51,28 @@ export default function Register() {
   const [bu, setBu] = useState(guessFromList(buSegV, BUS) || 'Energy')
   const [segment, setSegment] = useState(guessFromList(buSegV, SEGMENTS) || 'Others')
   const [product, setProduct] = useState(guessFromList(allText, PRODUCTS) || 'Various')
+  const identitySeed = {
+    sellTo: identityValue(lead, fields, 'sellTo', /sell-to/i),
+    eucName: identityValue(lead, fields, 'eucName', /euc\s*name/i),
+    eucLocation: identityValue(lead, fields, 'eucLocation', /euc\s*location/i),
+    contactPerson: identityValue(lead, fields, 'contactPerson', /contact\s*person|contact/i),
+    contactPhone: identityValue(lead, fields, 'contactPhone', /contact\s*phone|phone/i),
+  }
+  const [identityDraft, setIdentityDraft] = useState(identitySeed)
+  const [identitySaved, setIdentitySaved] = useState(false)
   const [creating, setCreating] = useState(false)
   const [uploadWarn, setUploadWarn] = useState('')
+
+  useEffect(() => {
+    setIdentityDraft({
+      sellTo: identityValue(lead, lead?.ai?.fields || [], 'sellTo', /sell-to/i),
+      eucName: identityValue(lead, lead?.ai?.fields || [], 'eucName', /euc\s*name/i),
+      eucLocation: identityValue(lead, lead?.ai?.fields || [], 'eucLocation', /euc\s*location/i),
+      contactPerson: identityValue(lead, lead?.ai?.fields || [], 'contactPerson', /contact\s*person|contact/i),
+      contactPhone: identityValue(lead, lead?.ai?.fields || [], 'contactPhone', /contact\s*phone|phone/i),
+    })
+    setIdentitySaved(false)
+  }, [lead?.id])
 
   if (!lead) {
     return (
@@ -92,17 +112,10 @@ export default function Register() {
   // Opportunity scope is useful context but is not required to register a
   // lead; the opportunity can be structured and scoped later in the workbench.
   const missingInfo = (lead?.ai?.missing || []).filter(item => !/opportunity\s+scope/i.test(String(item)))
-  const identity = {
-    sellTo: identityValue(lead, fields, 'sellTo', /sell-to/i),
-    eucName: identityValue(lead, fields, 'eucName', /euc\s*name/i),
-    eucLocation: identityValue(lead, fields, 'eucLocation', /euc\s*location/i),
-    contactPerson: identityValue(lead, fields, 'contactPerson', /contact\s*person|contact/i),
-    contactPhone: identityValue(lead, fields, 'contactPhone', /contact\s*phone|phone/i),
-  }
   const missingIdentity = [
     ['sellTo', 'Sell To Customer'], ['eucName', 'EUC Name'], ['eucLocation', 'EUC Location'],
     ['contactPerson', 'Contact Person'], ['contactPhone', 'Contact Phone'],
-  ].filter(([key]) => !identity[key]).map(([, label]) => label)
+  ].filter(([key]) => !String(identityDraft[key] || '').trim()).map(([, label]) => label)
 
   const blockers = []
   if (lead.status !== 'Qualified') blockers.push('Lead is not Qualified yet — qualify it in the inbox first')
@@ -116,14 +129,27 @@ export default function Register() {
   const backend = activeBackend()
   const today = new Date().toISOString().slice(0, 10)
 
+  const updateIdentity = (key, value) => {
+    setIdentityDraft(previous => ({ ...previous, [key]: value }))
+    setIdentitySaved(false)
+  }
+
+  const saveIdentity = () => {
+    const patch = Object.fromEntries(Object.entries(identityDraft).map(([key, value]) => [key, String(value || '').trim()]))
+    store.updateLead(lead.id, patch, 'Registration identity details saved')
+    setIdentityDraft(patch)
+    setIdentitySaved(true)
+  }
+
   const create = async () => {
     if (missingIdentity.length) return
     setCreating(true)
-    const sellTo = identity.sellTo
-    const eucName = identity.eucName
-    const eucLocation = identity.eucLocation
-    const contactPerson = identity.contactPerson
-    const contactPhone = identity.contactPhone
+    const sellTo = String(identityDraft.sellTo || '').trim()
+    const eucName = String(identityDraft.eucName || '').trim()
+    const eucLocation = String(identityDraft.eucLocation || '').trim()
+    const contactPerson = String(identityDraft.contactPerson || '').trim()
+    const contactPhone = String(identityDraft.contactPhone || '').trim()
+    store.updateLead(lead.id, { sellTo, eucName, eucLocation, contactPerson, contactPhone }, 'Registration identity details saved')
     const catV = fieldVal(fields, /category/i)
     const category = guessFromList(catV, ['EUC', 'EPC', 'OEM', 'ACP', 'SI', 'RE/TR']) || '—'
     const location = fieldVal(fields, /location|region/i) || lead.location || lead.region || ''
@@ -217,6 +243,30 @@ export default function Register() {
             The opportunity ID is only generated once mandatory information and classification
             are resolved. It never changes, even after ownership transfer.
           </p>
+
+          <div className="section-title" style={{ marginTop: 12 }}>Mandatory identity details</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 6 }}>
+            <label className="afield">Sell To Customer <span className="required-mark">*</span>
+              <input value={identityDraft.sellTo} onChange={e => updateIdentity('sellTo', e.target.value)} placeholder="Enter customer name" />
+            </label>
+            <label className="afield">EUC Name <span className="required-mark">*</span>
+              <input value={identityDraft.eucName} onChange={e => updateIdentity('eucName', e.target.value)} placeholder="Enter end user/customer name" />
+            </label>
+            <label className="afield">EUC Location <span className="required-mark">*</span>
+              <input value={identityDraft.eucLocation} onChange={e => updateIdentity('eucLocation', e.target.value)} placeholder="Enter end user location" />
+            </label>
+            <label className="afield">Contact Person <span className="required-mark">*</span>
+              <input value={identityDraft.contactPerson} onChange={e => updateIdentity('contactPerson', e.target.value)} placeholder="Enter contact person" />
+            </label>
+            <label className="afield">Contact Phone <span className="required-mark">*</span>
+              <input type="tel" value={identityDraft.contactPhone} onChange={e => updateIdentity('contactPhone', e.target.value)} placeholder="Enter contact phone" />
+            </label>
+          </div>
+          {missingIdentity.length > 0 && <div className="warnbox" style={{ marginTop: 8 }}>Complete: {missingIdentity.join(', ')}.</div>}
+          <div className="toolbar" style={{ marginTop: 8, marginBottom: 0 }}>
+            <button type="button" onClick={saveIdentity} disabled={identitySaved}>Save details</button>
+            {identitySaved && <span className="lead-decision-saved">Saved just now</span>}
+          </div>
 
           <label className="afield" style={{ display: 'block', marginTop: 10 }}>
             Owner

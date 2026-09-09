@@ -65,19 +65,17 @@ export function deadlineForLead(lead, config = {}, now = new Date()) {
         verification.requires === 'fee' ? 'Amber processing fee not received' : 'KYC documents not received'))
     }
   }
-  if ((lead?.ai?.missing || []).length && !lead?.clarificationCompletedAt) {
-    rows.push(add(cfg.leadDeadlines.clarificationDays, 'clarification', 'Required clarification not received'))
-  }
+  // AI missing items are optional follow-up after opportunity creation. They
+  // must not create a deadline that looks like a registration prerequisite.
   return rows
 }
 
 // Supply a piece of information the AI could not find, by hand. Returns the
 // lead patch, or null when there is nothing usable to record.
 //
-// `ai.missing` is not cosmetic: it holds the L-07 AI validation step open
-// (leadWorkflow.aiComplete) and keeps a clarification deadline running
-// (deadlineForLead above). Answering an item is therefore what actually moves
-// the lead on — waiting for the customer to reply was previously the only way.
+// `ai.missing` is optional follow-up. Answering an item still records a human
+// decision and improves completeness, but waiting for it must not block the
+// lead from becoming an opportunity.
 //
 // The answer lands as an accepted field at full confidence because a human
 // typed it, and completeness rises by the share the answered item represented,

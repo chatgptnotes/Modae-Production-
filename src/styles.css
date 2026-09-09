@@ -1631,7 +1631,7 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
   padding-bottom: 10px; border-bottom: 1px solid var(--border-soft);
 }
 .proposal-preview-toolbar .forms-actions { margin: 0; }
-.admin-template-list { display: grid; gap: 8px; margin-top: 10px; }
+.admin-template-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; margin-top: 8px; }
 .admin-template-row { padding: 10px 0; border-top: 1px solid var(--grid-line); }
 .admin-template-meta { display: grid; gap: 3px; min-width: 0; }
 .admin-template-meta > span:not(.hint) { color: var(--text-main); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2225,13 +2225,14 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .mail-sender small, .mail-date small { margin-top: 3px; color: var(--text-subtle); font-size: 10.5px; }
 .mail-content { min-width: 0; overflow: hidden; padding-right: 12px; font-size: 12px; white-space: normal !important; }
 .mail-content-stack { display: flex; min-width: 0; max-width: 100%; flex-direction: column; justify-content: center; gap: 2px; overflow: hidden; }
-.mail-subject-line { display: block; overflow: hidden; color: var(--text-main); line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
-.mail-subject-line b, .mail-content small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mail-subject-line { display: flex; align-items: center; min-width: 0; gap: 6px; overflow: hidden; color: var(--text-main); line-height: 1.25; white-space: nowrap; }
+.mail-subject-line b { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mail-content small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mail-content small { display: block; margin-top: 3px; color: var(--text-subtle); line-height: 1.25; }
-.mail-ref { color: var(--primary-deep) !important; font-size: 10.5px; font-weight: 600; }
-.mail-opportunity-link { display: block; max-width: 100%; margin-top: 3px; padding: 0; overflow: hidden; border: 0; background: transparent; color: var(--primary-deep); font: inherit; font-size: 10.5px; font-weight: 700; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.mail-ref { flex: 0 0 auto; max-width: 25%; overflow: hidden; color: var(--primary-deep) !important; font-size: 10.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.mail-opportunity-link { display: inline-flex; align-items: center; flex: 0 0 auto; max-width: 44%; margin: 0; padding: 0; overflow: hidden; border: 0; background: transparent; color: var(--primary-deep); font: inherit; font-size: 10.5px; font-weight: 700; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .mail-opportunity-link:hover { text-decoration: underline; }
-.mail-opportunity-link .pill { margin-right: 4px; font-size: 9px; vertical-align: 1px; }
+.mail-opportunity-link .pill { flex: 0 0 auto; margin-right: 4px; font-size: 9px; vertical-align: 1px; }
 .communication-row { cursor: pointer; }
 .communication-row:hover, .communication-row:focus { background: var(--primary-soft); outline: none; }
 .communication-disclosure { border-bottom: 1px solid var(--border-soft); }
@@ -2482,26 +2483,36 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 /* Admin cards */
 /* One centred measure for the whole page, so the heading, toolbar, demo card
    and card grid all share the same left and right edges at every width. */
-.admin-page { max-width: 1300px; margin-inline: auto; }
-.admin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); align-items: start; gap: 12px; }
+.admin-page { max-width: 1400px; margin-inline: auto; }
+.admin-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: start; gap: 10px; }
+.admin-layout { display: grid; gap: 10px; }
+.admin-masonry-grid { column-count: 4; column-gap: 10px; }
+.admin-masonry-grid > .admin-card { width: 100%; margin: 0 0 10px; break-inside: avoid; }
+.admin-wide-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: start; gap: 10px; }
+.admin-wide-grid > .admin-card-wide { grid-column: span 2; }
+.admin-bottom-masonry { margin-top: 0; }
+.admin-bottom-wide-grid { margin-top: 0; }
 /* Cards are flex columns so a trailing action row can be pinned to the bottom.
    Switch align-items above to `stretch` if you want equal-height cards with
    their footers lined up; `start` keeps them content-height and avoids the
    dead space that stretching used to leave beside the tall cards. */
-.admin-card { display: flex; flex-direction: column; background: var(--palette-4843938); border: 1px solid var(--grid-line); border-top: 3px solid var(--xl-green); border-radius: 4px; padding: 12px 16px; min-width: 0; line-height: 1.45; }
+.admin-card { display: flex; flex-direction: column; background: var(--palette-4843938); border: 1px solid var(--grid-line); border-top: 2px solid var(--xl-green); border-radius: 6px; padding: 8px 10px; min-width: 0; line-height: 1.35; }
 /* Normalised text rhythm. These paragraphs used to rely on the default <p>
    margins collapsing into each other, which does not happen inside a flex
    column — without this the cards would grow noticeably taller. */
-.admin-card > p { margin: 7px 0 0; }
-.admin-card > p:first-of-type { margin-top: 4px; }
+.admin-card > p { margin: 4px 0 0; }
+.admin-card > p:first-of-type { margin-top: 2px; }
 .admin-card > .admin-actions:last-child { margin-top: auto; }
-.admin-card-wide { grid-column: 1 / -1; }
+.admin-card-wide { grid-column: span 2; }
+.admin-kyc-template-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; }
+.admin-kyc-template-list .arow { min-width: 0; }
 .demo-controls-card { margin-bottom: 12px; }
 /* A scrolling list inside a card, in place of a hardcoded inline height. */
 .admin-scroll-list { max-height: min(260px, 50vh); overflow-y: auto; }
-.admin-card h3 { margin: 0 0 8px; font-size: 13px; color: var(--xl-green-dark); display: flex; align-items: center; gap: 7px; }
+.admin-state-map-card .admin-scroll-list { max-height: 150px; }
+.admin-card h3 { margin: 0 0 4px; font-size: 12px; color: var(--xl-green-dark); display: flex; align-items: center; gap: 5px; }
 .admin-card h3 .h3-end { margin-left: auto; }
-.admin-card .arow { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 4px 0; border-bottom: 1px solid var(--palette-a7a9e790); font-size: 12.5px; min-width: 0; }
+.admin-card .arow { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 2px 0; border-bottom: 1px solid var(--palette-a7a9e790); font-size: 11.5px; min-width: 0; }
 .admin-card .arow:last-child { border-bottom: none; }
 /* One idiom for every settings row: the label flexes and truncates, a text input
    takes the slack, a select keeps its natural width instead of stretching. */
@@ -2513,9 +2524,12 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
    the labels rendered as "GRE…" — size it to the longest label and let it show. */
 .admin-card .arow .pill,
 .class-rule-head .pill { flex: 0 0 68px; text-align: center; overflow: visible; text-overflow: clip; }
-.admin-card label.afield { display: block; font-size: 11px; color: var(--text-muted); margin: 6px 0 2px; }
+.admin-card label.afield { display: block; font-size: 9px; color: var(--text-muted); margin: 4px 0 2px; }
 .admin-card input, .admin-card select { width: 100%; }
-.admin-field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 0 12px; }
+.admin-card input:not([type='checkbox']), .admin-card select { min-height: 28px; padding: 5px 7px; font-size: 12px; }
+.admin-card button { min-height: 27px; padding: 5px 8px; font-size: 11px; }
+.admin-page > h2 { margin-bottom: 4px; font-size: 22px; }
+.admin-field-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr)); gap: 0 10px; }
 /* Customer-class rules: one collapsed row per class, expanding in place. */
 .class-rule { border-bottom: 1px solid var(--palette-a7a9e790); }
 .class-rule:last-of-type { border-bottom: none; }
@@ -2526,7 +2540,7 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .class-rule-head:hover, .class-rule-head:focus-visible { color: var(--xl-green-dark); outline: 0; }
 .class-rule-summary { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .class-rule-body { padding: 2px 0 10px 8px; border-left: 2px solid var(--grid-line); margin-left: 4px; }
-.admin-actions { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.admin-actions { display: flex; align-items: center; gap: 4px; margin-top: 5px; flex-wrap: wrap; }
 .admin-actions input:not([type='checkbox']) { flex: 1; min-width: 140px; }
 /* Trailing action rows (Save configuration, Upload) sit against the right edge
    so they line up across cards; rows that pair an input with a button keep the
@@ -2550,8 +2564,24 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .workflow-add-form { align-items: center; }
 .workflow-add-form input { flex: 1; min-width: 180px; }
 .workflow-protected-note { display: flex; align-items: flex-start; gap: 7px; margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--grid-line); color: var(--text-muted); font-size: 11px; }
+@media (max-width: 1160px) {
+  .admin-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .admin-masonry-grid { column-count: 3; }
+  .admin-wide-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .admin-wide-grid > .admin-card-wide { grid-column: span 2; }
+}
+@media (max-width: 900px) {
+  .admin-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-masonry-grid { column-count: 2; }
+  .admin-wide-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-wide-grid > .admin-card-wide { grid-column: 1 / -1; }
+}
 @media (max-width: 760px) {
   .admin-grid { grid-template-columns: 1fr; }
+  .admin-masonry-grid { column-count: 1; }
+  .admin-wide-grid { grid-template-columns: 1fr; }
+  .admin-card-wide { grid-column: 1 / -1; }
+  .admin-kyc-template-list, .admin-template-list { grid-template-columns: 1fr; }
   .workflow-admin-head { display: block; }
   .workflow-admin-head .warn-box { margin-top: 10px; }
   .workflow-stage-row { grid-template-columns: 28px minmax(0, 1fr) auto; }
@@ -2638,6 +2668,20 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .kyc-upload-menu-list { position: absolute; top: calc(100% + 3px); right: 0; z-index: 12; display: grid; min-width: 175px; padding: 4px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--palette-4843938); box-shadow: 0 5px 16px rgba(0,0,0,.16); }
 .kyc-upload-menu-list button { display: flex; align-items: center; gap: 6px; width: 100%; padding: 7px 8px; border: 0; border-radius: 3px; background: transparent; color: var(--text-main); text-align: left; font-size: 11.5px; }
 .kyc-upload-menu-list button:hover { background: var(--primary-soft); color: var(--primary-deep); }
+.kyc-upload-menu-item { display: flex; align-items: center; gap: 6px; width: 100%; padding: 7px 8px; border-radius: 3px; color: var(--text-main); text-align: left; font-size: 11.5px; cursor: pointer; }
+.kyc-upload-menu-item:hover, .kyc-upload-menu-item:focus-visible { background: var(--primary-soft); color: var(--primary-deep); outline: 0; }
+.kyc-template-note { flex: 1 0 100%; margin-left: 21px; color: var(--text-muted); font-size: 10.5px; line-height: 1.3; }
+.lead-decision-head-actions { display: flex; align-items: center; gap: 8px; }
+.lead-decision-head-actions button { white-space: nowrap; }
+.att-view-document { min-height: 180px; padding: 14px 16px; background: #fff; border: 1px solid var(--border-color); border-radius: 5px; }
+.att-view-document-label { margin-bottom: 10px; color: var(--text-muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.att-view-spreadsheet { min-width: 0; }
+.att-view-sheet-tabs { display: flex; gap: 4px; overflow-x: auto; margin-bottom: 8px; }
+.att-view-sheet-tabs button { flex: 0 0 auto; border: 1px solid var(--border-color); border-radius: 4px; background: var(--palette-4843938); color: var(--text-main); padding: 6px 9px; font-size: 11px; }
+.att-view-sheet-tabs button.active { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-deep); font-weight: 700; }
+.att-view-table-wrap { max-height: 58vh; overflow: auto; border: 1px solid var(--border-color); background: #fff; }
+.att-view-table { min-width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.att-view-table td { min-width: 100px; padding: 7px 9px; border-right: 1px solid var(--border-color); border-bottom: 1px solid var(--border-color); vertical-align: top; white-space: pre-wrap; }
 .compare-alt-row { display: flex; align-items: center; gap: 12px; padding: 10px 4px; border-bottom: 1px solid var(--border-soft); font-size: 12.5px; }
 .compare-alt-info { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .compare-alt-header { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
@@ -2869,8 +2913,11 @@ button.install:hover { background: var(--primary-hover); }
 .lead-decision-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 9px; }
 .lead-decision-head > div { display: flex; flex-direction: column; gap: 2px; }
 .lead-decision-head b { font-size: 12px; color: var(--ws-text); }
-.lead-decision-head span:not(.lead-decision-saved) { font-size: 10.5px; color: var(--ws-text-3); }
+.lead-decision-head span:not(.lead-decision-saved):not(.lead-decision-unsaved):not(.lead-decision-saving) { font-size: 10.5px; color: var(--ws-text-3); }
 .lead-decision-saved { flex: 0 0 auto; color: var(--ws-emerald); background: var(--ws-emerald-soft); border: 1px solid var(--ws-emerald-line); border-radius: 999px; padding: 2px 7px; font-size: 10px; font-weight: 700; }
+.lead-decision-unsaved, .lead-decision-saving { flex: 0 0 auto; border-radius: 999px; padding: 2px 7px; font-size: 10px; font-weight: 700; }
+.lead-decision-unsaved { color: var(--ws-amber); background: var(--ws-amber-soft); border: 1px solid var(--ws-amber-line); }
+.lead-decision-saving { color: var(--ws-blue); background: var(--ws-blue-soft); border: 1px solid var(--ws-blue-line); }
 .lead-decision-grid { display: grid; grid-template-columns: 1fr 1fr; align-items: start; gap: 8px 12px; }
 .lead-decision-grid label { display: flex; flex-direction: column; gap: 3px; color: var(--ws-text-2); font-size: 10.5px; font-weight: 700; }
 .lead-decision-full { grid-column: 1 / -1; }

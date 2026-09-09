@@ -76,3 +76,11 @@ test('lead decisions collect the identity fields required for registration', () 
   assert.match(inbox, /Complete the mandatory fields before saving/)
   assert.match(inbox, /registrationBlocked = missingIdentity\.length > 0/)
 })
+
+test('lead decision drafts autosave without audit spam and explicit save remains audited', () => {
+  assert.match(inbox, /store\.updateLeadDraft\(lead\.id, patch\)/)
+  assert.match(inbox, /setTimeout\(\(\) => \{[\s\S]*persistDecisionDraft\(decisionDraftRef\.current\)/)
+  assert.match(inbox, /persistDecisionDraft\(decisionDraft, \{ audit: true \}\)/)
+  assert.match(inbox, /Unsaved changes/)
+  assert.match(inbox, /Saved just now/)
+})

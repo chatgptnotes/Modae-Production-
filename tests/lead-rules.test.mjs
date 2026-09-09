@@ -25,7 +25,7 @@ test('fast-track is configurable and limited to the configured class', () => {
 test('lead deadlines are generated from configurable rules', () => {
   const lead = { id: 'LD-1', ts: '2026-08-01T00:00:00.000Z', customerStatus: 'Blue', ai: { missing: ['GST'] } }
   const rows = deadlineForLead(lead, config)
-  assert.deepEqual(rows.map(r => r.type), ['kyc', 'clarification'])
+  assert.deepEqual(rows.map(r => r.type), ['kyc'])
   assert.equal(rows[0].dueAt, '2026-08-08T00:00:00.000Z')
   assert.equal(expiredLeadDeadline(lead, config, new Date('2026-08-09T00:00:00.000Z')).type, 'kyc')
 })
@@ -73,9 +73,9 @@ test('completeness climbs and the last outstanding item closes the lead at 100',
 })
 
 // The point of the whole feature.
-test('clearing the last item closes the clarification deadline', () => {
+test('AI missing information does not create a clarification deadline', () => {
   let lead = partial()
-  assert.ok(deadlineForLead(lead, config).some(r => r.type === 'clarification'))
+  assert.equal(deadlineForLead(lead, config).some(r => r.type === 'clarification'), false)
   for (const item of [...lead.ai.missing]) {
     lead = { ...lead, ...supplyMissing(lead, item, 'answered', item) }
   }

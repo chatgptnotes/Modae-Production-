@@ -27,6 +27,7 @@ import { putFiles } from '../leadBlobs.js'
 import { uploadOppFile, fmtSize } from '../filestore.js'
 import { isPlaceholderSparesLine, isSparesSupportRow, catalogueDescriptionForLine } from '../proposal/sparesBoq.js'
 import { recipientsValid } from '../emailValidation.js'
+import { downloadKycTemplate } from '../kycTemplate.js'
 
 const statusPill = s =>
   s === 'Approved' ? 'Green' : s === 'Rejected' ? 'Red' : s === 'Approved with conditions' ? 'Amber' : 'Blue'
@@ -589,24 +590,6 @@ const kycTone = s => (s === 'Verified' ? 'state-Accepted' : s === 'Uploaded' ? '
 // document survives a reload and can be previewed with the same viewer.
 const kycBlobKey = customerName => 'kyc:' + customerName
 const KYC_TEXT_CAP = 8000
-const safeDownloadName = value => String(value || 'document').replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '')
-
-function downloadKycTemplate(customerName, oppId, itemName) {
-  const body = [
-    'ModAE India Pvt Ltd - Customer KYC document template', '',
-    `Customer: ${customerName || ''}`, `Opportunity: ${oppId || ''}`, `Document required: ${itemName || ''}`, '',
-    'Please complete or attach the requested document and upload it back against this KYC item.',
-    'Customer remarks:', '', '', 'Authorized signatory / stamp:', '',
-  ].join('\n')
-  const url = URL.createObjectURL(new Blob([body], { type: 'text/plain;charset=utf-8' }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `${safeDownloadName(customerName)}_${safeDownloadName(itemName)}_Template.txt`
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  URL.revokeObjectURL(url)
-}
 
 function CustomerKycTab({ opp }) {
   const store = useStore()
@@ -615,7 +598,7 @@ function CustomerKycTab({ opp }) {
   const items = (customer && store.kyc[customer.name])
     || (store.config?.kycItems || []).map(n => ({ name: n, state: 'Missing', when: '' }))
   const fee = store.config?.amberFee || { amount: 25000, cur: 'INR', days: 7 }
-  const setState = (item, state, file) => customer && store.setKycState(customer.name, item, state, file)
+  const setState = (item, state, file, mode) => customer && store.setKycState(customer.name, item, state, file, mode)
   const simulateAllKycDone = () => {
     if (!customer || !canVerify || busy) return
     items.forEach(item => store.setKycState(customer.name, item.name, 'Verified'))
@@ -730,6 +713,9 @@ function CustomerKycTab({ opp }) {
         ) : <>
         <input ref={fileInput} type="file" style={{ display: 'none' }} onChange={onPick} />
         {customer && !canVerify && <p className="hint">Only AH can verify these documents.</p>}
+        {customer && canVerify && <button type="button" disabled={!canVerify || !!busy || items.every(k => k.state === 'Verified')} onClick={simulateAllKycDone}>
+          <Icon name="bot" size={12} /> Simulate all KYC done
+        </button>}
         {items.map(k => (
           <React.Fragment key={k.name}>
             <div className="check-row">
@@ -749,6 +735,7 @@ function CustomerKycTab({ opp }) {
                     <span className="kyc-upload-menu-list" role="menu">
                       <button type="button" role="menuitem" onClick={() => { downloadKycTemplate(customer.name, opp.id, k.name); setMenuFor('') }}><Icon name="download" size={12} /> Download template</button>
                       <button type="button" role="menuitem" onClick={() => { pick(k.name); setMenuFor('') }}><Icon name="upload" size={12} /> Upload document</button>
+                      <button type="button" role="menuitem" onClick={() => { setMenuFor(''); setState(k.name, 'Verified', undefined, 'simulated') }}><Icon name="bot" size={12} /> Simulate verification</button>
                     </span>
                   )}
                 </span>
@@ -1094,7 +1081,7 @@ function ClarificationsTab({ opp }) {
             <label className="afield">Attach email or supporting file
               <input type="file" multiple onChange={e => setReplyFiles(Array.from(e.target.files || []))} />
             </label>
-            {!!replyFiles.length && <div className="hint">{replyFiles.length} file(s) will be saved in Customer Specs and read by AI.</div>}
+            {!!replyFiles.length && <div className="hint">{replyFiles.length} file(s) will be saved in Customer Specs and read by AI. <button type="button" onClick={() => setReplyFiles([])}>Cancel upload</button></div>}
           </div>
           <div className="hint" style={{ marginTop: 8 }}>AI will answer only the open questions supported by this reply. Anything unanswered will remain open.</div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
@@ -1124,7 +1111,7 @@ function ClarificationsTab({ opp }) {
             <label className="afield">Files / mail evidence
               <input type="file" multiple onChange={e => setAnswerFiles(Array.from(e.target.files || []))} />
             </label>
-            {!!answerFiles.length && <div className="hint">{answerFiles.length} file(s) selected for Customer Specs.</div>}
+            {!!answerFiles.length && <div className="hint">{answerFiles.length} file(s) selected for Customer Specs. <button type="button" onClick={() => setAnswerFiles([])}>Cancel upload</button></div>}
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
             <button onClick={() => setAnswerFor(null)}>Cancel</button>
@@ -1495,7 +1482,7 @@ function SourcingTab({ opp, goTab }) {
             <label className="afield">Reply files / price sheet
               <input type="file" multiple onChange={e => setQuoteFiles(Array.from(e.target.files || []))} />
             </label>
-            {!!quoteFiles.length && <div className="hint">{quoteFiles.length} file(s) selected for Partner Docs.</div>}
+            {!!quoteFiles.length && <div className="hint">{quoteFiles.length} file(s) selected for Partner Docs. <button type="button" onClick={() => setQuoteFiles([])}>Cancel upload</button></div>}
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
             <button onClick={() => setQuoteFor(null)}>Cancel</button>

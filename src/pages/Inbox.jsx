@@ -10,7 +10,7 @@ import { isAdminRole, isApprover } from '../utils.js'
 import { aiEnabled, runTaskResult, runText } from '../ai.js'
 import { extractDocText } from '../docText.js'
 import { fmtSize } from '../filestore.js'
-import { hold, add as holdMore } from '../leadFiles.js'
+import { hold, add as holdMore, remove as removeHeldFile } from '../leadFiles.js'
 import { listFiles } from '../leadBlobs.js'
 import AttachmentViewer from '../AttachmentViewer.jsx'
 import DetailTabs from '../DetailTabs.jsx'
@@ -27,6 +27,7 @@ import {
 } from '../leadClarification.js'
 import { leadVerificationComplete, verificationDeadline, verificationItem, redClearanceFor, isRedCleared } from '../leadVerification.js'
 import { checklistFor } from '../customerClasses.js'
+import { downloadKycTemplate } from '../kycTemplate.js'
 // Common-mailbox lead inbox: AI parses each inquiry, a human decides whether it
 // becomes an opportunity (Qualify → registration / intake form) or is dropped.
 const PILL = { New: 'Blue', Qualified: 'Amber', Dropped: 'Red', Converted: 'Green' }
@@ -245,6 +246,9 @@ const AI_TOTAL_BYTES = 8 * 1024 * 1024
 function LeadVerification({ lead, customerStatus, store }) {
   const [busy, setBusy] = useState('')
   const [pendingUpload, setPendingUpload] = useState(null)
+  const [menuFor, setMenuFor] = useState('')
+  const [downloadedFor, setDownloadedFor] = useState('')
+  const menuRef = useRef(null)
   const verification = lead.verification || {}
   const editable = !['Converted', 'Dropped'].includes(lead.status)
   const deadline = verificationDeadline(lead, customerStatus, store.config)
@@ -258,12 +262,34 @@ function LeadVerification({ lead, customerStatus, store }) {
     ? deadline.expired ? 'Overdue' : `${deadline.remaining} day${deadline.remaining === 1 ? '' : 's'} remaining`
     : ''
 
+  const cancelPendingUpload = item => {
+    // Cancelling is deliberately local to the file picker. It must not cancel
+    // the customer's KYC request or alter any other checklist item.
+    if (pendingUpload?.item !== item) return
+    setPendingUpload(null)
+    setDownloadedFor('')
+  }
+
+  const cancelVerifiedFile = async (item, row) => {
+    if (!window.confirm(`Cancel the ${item} file only? Other KYC documents and the KYC request will remain unchanged.`)) return
+    if (row.file) await removeHeldFile(lead.id, row.file)
+    store.clearLeadKycItem(lead.id, item)
+  }
+
+  useEffect(() => {
+    const close = event => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) setMenuFor('')
+    }
+    document.addEventListener('click', close)
+    return () => document.removeEventListener('click', close)
+  }, [])
+
   const saveKyc = async (item, file, mode) => {
     setBusy(item)
     let fileMeta = {}
     if (file) {
       const rec = await readAttachment(file)
-      fileMeta = { file: rec.name, size: rec.size, pages: rec.pages || 0 }
+      fileMeta = { file: rec.name, size: rec.size, pages: rec.pages || 0, kycItem: item }
       holdMore(lead.id, [file])
       store.updateLead(lead.id, {
         attachments: [...(lead.attachments || []), fileMeta],
@@ -277,6 +303,7 @@ function LeadVerification({ lead, customerStatus, store }) {
     store.updateLead(lead.id, {
       verification: {
         ...verification,
+        kycRequestStatus: 'pending',
         kyc: nextKyc,
         kycVerifiedAt: complete ? (verification.kycVerifiedAt || new Date().toISOString()) : '',
       },
@@ -305,9 +332,9 @@ function LeadVerification({ lead, customerStatus, store }) {
       <div className="lead-decision-card" style={{ marginTop: 12 }}>
         <div className="lead-decision-head"><div><b>Amber customer — fee request</b><span>Customer pays the processing fee {windowLabel}</span></div>
           <span className={confirmed ? 'lead-decision-saved' : 'lead-decision-note'}>{confirmed ? 'Confirmed' : 'Pending'}</span></div>
-        <div className="verification-deadline">
-          <span><b>Request sent:</b> {dateLabel(deadline?.requestedAt)}</span>
-          <span><b>Due:</b> {dateLabel(deadline?.dueAt)}</span>
+      <div className="verification-deadline">
+          <span><b>Deadline started:</b> {dateLabel(deadline?.requestedAt)}</span>
+          <span><b>Documents due:</b> {dateLabel(deadline?.dueAt)}</span>
           <span className={deadline?.expired ? 'deadline-overdue' : ''}><b>{deadlineLabel}</b></span>
         </div>
         {confirmed
@@ -323,14 +350,23 @@ function LeadVerification({ lead, customerStatus, store }) {
   if (customerStatus === 'Blue') return (
     <div className="lead-decision-card" style={{ marginTop: 12 }}>
       <div className="lead-decision-head"><div><b>Blue customer — KYC request</b><span>Customer shares KYC documents {windowLabel}</span></div>
-        <span className={leadVerificationComplete(lead, customerStatus, { config: store.config }) ? 'lead-decision-saved' : 'lead-decision-note'}>
-          {leadVerificationComplete(lead, customerStatus, { config: store.config }) ? 'Verified' : 'Pending'}
-        </span></div>
+        <div className="lead-decision-head-actions">
+          <span className={verification.kycRequestStatus === 'cancelled' ? 'lead-decision-note' : leadVerificationComplete(lead, customerStatus, { config: store.config }) ? 'lead-decision-saved' : 'lead-decision-note'}>
+            {verification.kycRequestStatus === 'cancelled' ? 'Cancelled' : leadVerificationComplete(lead, customerStatus, { config: store.config }) ? 'Verified' : 'Pending'}
+          </span>
+          {editable && verification.kycRequestStatus === 'cancelled' && (
+            <button type="button" onClick={() => store.reopenLeadKyc(lead.id)}>Reopen KYC request</button>
+          )}
+        </div></div>
       <div className="verification-deadline">
-        <span><b>Request sent:</b> {dateLabel(deadline?.requestedAt)}</span>
-        <span><b>Due:</b> {dateLabel(deadline?.dueAt)}</span>
+        <span><b>Deadline started:</b> {dateLabel(deadline?.requestedAt)}</span>
+        <span><b>Documents due:</b> {dateLabel(deadline?.dueAt)}</span>
         <span className={deadline?.expired ? 'deadline-overdue' : ''}><b>{deadlineLabel}</b></span>
       </div>
+      {verification.kycRequestStatus === 'cancelled' && <div className="lead-decision-note">This request is cancelled. Reopen it to upload or simulate the KYC documents again.</div>}
+      {verification.kycRequestStatus !== 'cancelled' && !leadVerificationComplete(lead, customerStatus, { config: store.config }) && (
+        <div className="lead-decision-note">Waiting for customer KYC documents. Nothing has been uploaded yet.</div>
+      )}
       <div style={{ display: 'grid', gap: 7 }}>
         {checklistFor(store.config, customerStatus).map(item => {
           const row = verificationItem(verification, item)
@@ -338,7 +374,10 @@ function LeadVerification({ lead, customerStatus, store }) {
           return <div key={item} className="check-row">
             <Icon name={row.state === 'Verified' ? 'check' : 'fileText'} size={14} />
             <span style={{ flex: 1 }}>{item} — <b>{row.state === 'Verified' ? `Verified (${row.mode === 'simulated' ? 'simulated' : 'uploaded'})` : 'Missing'}</b></span>
-            {editable && row.state !== 'Verified' && <>
+            {editable && verification.kycRequestStatus !== 'cancelled' && (
+              row.state === 'Verified'
+                ? <button type="button" disabled={busy === item} onClick={() => cancelVerifiedFile(item, row)}>Cancel file</button>
+                : <>
               {pending
                 ? <>
                   <span className="hint" title={pendingUpload.file.name}>{pendingUpload.file.name}</span>
@@ -347,16 +386,38 @@ function LeadVerification({ lead, customerStatus, store }) {
                     setPendingUpload(null)
                     await saveKyc(item, file, 'uploaded')
                   }}>Confirm upload</button>
-                  <button disabled={busy === item} onClick={() => setPendingUpload(null)}>Cancel upload</button>
+                  <button disabled={busy === item} onClick={() => cancelPendingUpload(item)}>Cancel upload</button>
                 </>
-                : <>
-                  <label className="button" style={{ cursor: busy === item ? 'wait' : 'pointer' }}>
-                    Upload
-                    <input type="file" disabled={busy === item} style={{ display: 'none' }}
-                      onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; if (file) setPendingUpload({ item, file }) }} />
-                  </label>
-                </>}
-            </>}
+                : <span className="kyc-upload-menu" ref={menuFor === item ? menuRef : null}>
+                  <button type="button" disabled={busy === item} onClick={event => { event.stopPropagation(); setMenuFor(menuFor === item ? '' : item) }} title="Download a template or upload this document">
+                    <Icon name="upload" size={12} /> Upload
+                  </button>
+                  {menuFor === item && (
+                    <span className="kyc-upload-menu-list" role="menu">
+                      <button type="button" role="menuitem" onClick={event => {
+                        event.stopPropagation()
+                        downloadKycTemplate(
+                          lead.customerName || lead.sellTo || lead.from,
+                          lead.id,
+                          item,
+                          store.config?.uploads?.kycTemplates?.[item],
+                        )
+                        setDownloadedFor(item)
+                        setMenuFor('')
+                      }}><Icon name="download" size={12} /> Download template</button>
+                      <label role="menuitem" tabIndex={0} className="kyc-upload-menu-item"><Icon name="upload" size={12} /> Upload document
+                        <input type="file" disabled={busy === item} style={{ display: 'none' }}
+                          onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; setMenuFor(''); if (file) { setDownloadedFor(''); setPendingUpload({ item, file }) } }} />
+                      </label>
+                      <button type="button" role="menuitem" onClick={async () => { setMenuFor(''); await saveKyc(item, null, 'simulated') }}><Icon name="bot" size={12} /> Simulate verification</button>
+                    </span>
+                  )}
+                </span>}
+                </>
+            )}
+            {downloadedFor === item && row.state !== 'Verified' && (
+              <span className="kyc-template-note">Template downloaded — upload the completed form when ready.</span>
+            )}
           </div>
         })}
       </div>
@@ -762,7 +823,12 @@ function AiLeadDetail({ lead }) {
     product: leadFieldValue(ai.fields, /^product$/i) || 'Various',
   })
   const [decisionDraft, setDecisionDraft] = useState(initialDecisions)
+  const persistedDecisionRef = useRef(initialDecisions())
+  const decisionDraftRef = useRef(decisionDraft)
+  decisionDraftRef.current = decisionDraft
+  const decisionAuditPendingRef = useRef(false)
   const [decisionSaved, setDecisionSaved] = useState(false)
+  const [decisionAutosaving, setDecisionAutosaving] = useState(false)
   const [locationSearch, setLocationSearch] = useState('')
   const locationQuery = locationSearch.trim().toLowerCase()
   const filteredLocationGroups = locationQuery
@@ -927,7 +993,11 @@ function AiLeadDetail({ lead }) {
     .filter(([key]) => !String(decisionDraft[key] || '').trim())
     .map(([, label]) => label)
   const effectiveMissing = reconcileMissingWithDecisions(ai.missing, decisionDraft, ai.fields, ai.lineItems)
-  const registrationBlocked = missingIdentity.length > 0 || effectiveMissing.length > 0 || pendingLow.length > 0 || verificationBlocked
+  // AI clarification items are optional follow-up information. They remain
+  // visible below, but do not prevent opportunity registration; only the
+  // mandatory identity fields, low-confidence decisions, verification and
+  // approval gates block the next step.
+  const registrationBlocked = missingIdentity.length > 0 || pendingLow.length > 0 || verificationBlocked
   const canAct = !['Converted', 'Dropped'].includes(lead.status)
 
   // ---- Clarification mail: AI drafts, a human sends -----------------------
@@ -1006,6 +1076,105 @@ function AiLeadDetail({ lead }) {
     store.updateLead(lead.id, { suggestedOwner: reassignTo, assignedOwner: reassignTo, reassignedFrom: lead.suggestedOwner || '', reassignedAt: new Date().toISOString() }, `Owner reassigned to ${reassignTo}`)
   }
 
+  const buildDecisionPatch = draft => {
+    const identityFields = REQUIRED_IDENTITY_FIELDS.reduce((next, [key, label]) =>
+      updateLeadField(next, label, draft[key], 'Customer'), ai.fields)
+    const nextFields = updateLeadField(updateLeadField(updateLeadField(updateLeadField(identityFields,
+      'Location', draft.location, 'Customer'), 'Opp Type', draft.oppType),
+      'BU / Segment', `${draft.bu} / ${draft.segment}`), 'Product', draft.product)
+    const scopedFields = updateLeadField(nextFields, 'Opportunity scope', draft.scope, 'RFQ')
+    const nextMissing = reconcileMissingWithDecisions(ai.missing, draft, scopedFields, ai.lineItems)
+    const fastTrack = isFastTrackLead({ ...lead, customerStatus: draft.customerStatus }, store.config, customer)
+    const routedOwner = routeOwner(draft.region, store.config, draft.owner)
+    const isOverride = routedOwner && draft.owner !== routedOwner
+    return {
+      sellTo: String(draft.sellTo || '').trim(),
+      opportunityScope: String(draft.scope || '').trim(),
+      region: draft.region,
+      location: draft.location,
+      eucName: String(draft.eucName || '').trim(),
+      eucLocation: String(draft.eucLocation || '').trim(),
+      contactPerson: String(draft.contactPerson || '').trim(),
+      contactPhone: String(draft.contactPhone || '').trim(),
+      suggestedOwner: draft.owner,
+      assignedOwner: draft.owner,
+      ownerOverrideReason: isOverride ? (lead.ownerOverrideReason || '').trim() : '',
+      fastTrack,
+      fastTrackStartedAt: fastTrack ? (lead.fastTrackStartedAt || new Date().toISOString()) : lead.fastTrackStartedAt,
+      oppType: draft.oppType,
+      route: routeForType(draft.oppType),
+      customerStatus: draft.customerStatus,
+      customerClassifiedAt: lead.customerClassifiedAt || new Date().toISOString(),
+      verification: ['Blue', 'Amber'].includes(draft.customerStatus)
+        ? { ...(lead.verification || {}), requestedAt: lead.verification?.requestedAt || new Date().toISOString(), requestedFor: draft.customerStatus }
+        : (lead.verification || {}),
+      redFlag: draft.customerStatus === 'Red',
+      ai: { ...ai, route: routeForType(draft.oppType), fields: scopedFields, missing: nextMissing },
+    }
+  }
+
+  const persistDecisionDraft = (draft, { audit = false } = {}) => {
+    const previous = persistedDecisionRef.current
+    const changed = Object.keys(draft)
+      .filter(key => previous[key] !== draft[key])
+      .map(key => `${key}: ${previous[key] || '—'} → ${draft[key] || '—'}`)
+    const shouldAudit = audit && (changed.length || decisionAuditPendingRef.current)
+    if (!changed.length && !shouldAudit) {
+      setDecisionSaved(true)
+      return false
+    }
+    const patch = buildDecisionPatch(draft)
+    if (shouldAudit) {
+      store.updateLead(lead.id, patch, `Lead decisions saved${changed.length ? ` — ${changed.join('; ')}` : ''}`)
+      decisionAuditPendingRef.current = false
+    } else {
+      store.updateLeadDraft(lead.id, patch)
+      decisionAuditPendingRef.current = true
+    }
+    persistedDecisionRef.current = { ...draft }
+    setReassignTo(draft.owner)
+    setDecisionSaved(true)
+    return true
+  }
+
+  const decisionDraftKey = JSON.stringify(decisionDraft)
+  const decisionIsDirty = Object.keys(decisionDraft)
+    .some(key => persistedDecisionRef.current[key] !== decisionDraft[key])
+  const decisionDirtyRef = useRef(false)
+  decisionDirtyRef.current = decisionIsDirty
+
+  useEffect(() => {
+    const fresh = initialDecisions()
+    persistedDecisionRef.current = fresh
+    decisionDraftRef.current = fresh
+    setDecisionDraft(fresh)
+    setDecisionSaved(false)
+    setDecisionAutosaving(false)
+    setDecisionErr('')
+    // A lead id change means the detail screen is now showing a different
+    // record. The draft must never leak between records.
+  }, [lead.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!decisionIsDirty || lead.status === 'Dropped') return undefined
+    setDecisionSaved(false)
+    setDecisionAutosaving(true)
+    const timer = setTimeout(() => {
+      persistDecisionDraft(decisionDraftRef.current)
+      setDecisionAutosaving(false)
+    }, 800)
+    return () => clearTimeout(timer)
+  }, [decisionDraftKey, lead.id, decisionIsDirty, lead.status]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => () => {
+    // Navigation/unmount should not discard a draft that has not reached the
+    // debounce timer yet. This remains a silent draft write, so audit history
+    // still records only explicit completed saves.
+    if (decisionDirtyRef.current && lead.status !== 'Dropped') {
+      persistDecisionDraft(decisionDraftRef.current)
+    }
+  }, [lead.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const saveDecisions = () => {
     setDecisionErr('')
     const missingIdentity = REQUIRED_IDENTITY_FIELDS
@@ -1025,44 +1194,7 @@ function AiLeadDetail({ lead }) {
       setDecisionErr('An owner override reason is required.')
       return
     }
-    const previous = initialDecisions()
-    const identityFields = REQUIRED_IDENTITY_FIELDS.reduce((next, [key, label]) =>
-      updateLeadField(next, label, decisionDraft[key], 'Customer'), ai.fields)
-    const nextFields = updateLeadField(updateLeadField(updateLeadField(updateLeadField(identityFields,
-      'Location', decisionDraft.location, 'Customer'), 'Opp Type', decisionDraft.oppType),
-      'BU / Segment', `${decisionDraft.bu} / ${decisionDraft.segment}`), 'Product', decisionDraft.product)
-    const scopedFields = updateLeadField(nextFields, 'Opportunity scope', decisionDraft.scope, 'RFQ')
-    const nextMissing = reconcileMissingWithDecisions(ai.missing, decisionDraft, scopedFields, ai.lineItems)
-    const changed = Object.keys(decisionDraft)
-      .filter(key => previous[key] !== decisionDraft[key])
-      .map(key => `${key}: ${previous[key] || '—'} → ${decisionDraft[key] || '—'}`)
-    if (!changed.length) { setDecisionSaved(true); return }
-    store.updateLead(lead.id, {
-      sellTo: decisionDraft.sellTo.trim(),
-      opportunityScope: decisionDraft.scope.trim(),
-      region: decisionDraft.region,
-      location: decisionDraft.location,
-      eucName: decisionDraft.eucName.trim(),
-      eucLocation: decisionDraft.eucLocation.trim(),
-      contactPerson: decisionDraft.contactPerson.trim(),
-      contactPhone: decisionDraft.contactPhone.trim(),
-      suggestedOwner: decisionDraft.owner,
-      assignedOwner: decisionDraft.owner,
-      ownerOverrideReason: isOverride ? lead.ownerOverrideReason.trim() : '',
-      fastTrack: isFastTrackLead({ ...lead, customerStatus: decisionDraft.customerStatus }, store.config, customer),
-      fastTrackStartedAt: isFastTrackLead({ ...lead, customerStatus: decisionDraft.customerStatus }, store.config, customer) ? (lead.fastTrackStartedAt || new Date().toISOString()) : lead.fastTrackStartedAt,
-      oppType: decisionDraft.oppType,
-      route: routeForType(decisionDraft.oppType),
-      customerStatus: decisionDraft.customerStatus,
-      customerClassifiedAt: lead.customerClassifiedAt || new Date().toISOString(),
-      verification: ['Blue', 'Amber'].includes(decisionDraft.customerStatus)
-        ? { ...(lead.verification || {}), requestedAt: lead.verification?.requestedAt || new Date().toISOString(), requestedFor: decisionDraft.customerStatus }
-        : (lead.verification || {}),
-      redFlag: decisionDraft.customerStatus === 'Red',
-      ai: { ...ai, route: routeForType(decisionDraft.oppType), fields: scopedFields, missing: nextMissing },
-    }, `Lead decisions saved — ${changed.join('; ')}`)
-    setReassignTo(decisionDraft.owner)
-    setDecisionSaved(true)
+    persistDecisionDraft(decisionDraft, { audit: true })
   }
 
   const addResponseFiles = async picked => {
@@ -1504,7 +1636,9 @@ function AiLeadDetail({ lead }) {
                 <b>Lead decisions</b>
                 <span>Correct routing values before registration</span>
               </div>
-              {decisionSaved && <span className="lead-decision-saved">Saved</span>}
+              {decisionIsDirty && <span className="lead-decision-unsaved">Unsaved changes</span>}
+              {decisionAutosaving && <span className="lead-decision-saving">Saving…</span>}
+              {decisionSaved && !decisionIsDirty && !decisionAutosaving && <span className="lead-decision-saved">Saved just now</span>}
             </div>
             <div className="lead-decision-grid">
               <label className="lead-decision-full">City / location
@@ -1616,7 +1750,13 @@ function AiLeadDetail({ lead }) {
               <button className="primary" disabled={lead.status === 'Dropped'} onClick={saveDecisions}>
                 <Icon name="check" size={12} /> Save changes
               </button>
-              <button disabled={lead.status === 'Dropped'} onClick={() => { setDecisionDraft(initialDecisions()); setDecisionSaved(false) }}>Cancel</button>
+              <button disabled={lead.status === 'Dropped'} onClick={() => {
+                const saved = { ...persistedDecisionRef.current }
+                setDecisionDraft(saved)
+                decisionDraftRef.current = saved
+                setDecisionSaved(false)
+                setDecisionErr('')
+              }}>Cancel</button>
             </div>
             {lead.status === 'Converted' && <p className="lead-decision-note">This edits the lead record only. The linked opportunity is unchanged.</p>}
           </div>
@@ -1670,9 +1810,9 @@ function AiLeadDetail({ lead }) {
           )}
           {lead.status === 'Qualified' && effectiveMissing.length > 0 && (
             <WarnBox>
-              <b>Registration still blocked</b> until the missing information is filled in:
+              <b>Optional information still missing</b> — it can be completed after the opportunity is created:
               <ul>{effectiveMissing.map((item, i) => <li key={i}>{item}</li>)}</ul>
-              Use the Add button above to answer each item before continuing.
+              Use the Add button above to answer an item now, or continue to registration.
             </WarnBox>
           )}
         </div>
@@ -1740,8 +1880,6 @@ function AiLeadDetail({ lead }) {
                     ? `Complete ${previewCustomerStatus} customer verification first`
                     : missingIdentity.length > 0
                     ? 'Complete the mandatory customer, EUC and contact fields first'
-                    : effectiveMissing.length > 0
-                    ? 'Fill the missing information first'
                     : 'Resolve the low-confidence fields first'
                   : undefined}
                 onClick={() => nav('/register/' + lead.id)}>
@@ -1754,7 +1892,7 @@ function AiLeadDetail({ lead }) {
               )}
               {lead.status === 'Qualified' && effectiveMissing.length > 0 && (
                 <p className="ws-foot-note">
-                  Blocked — {effectiveMissing.length} missing item{effectiveMissing.length > 1 ? 's' : ''} still need to be filled.
+                  Optional follow-up: {effectiveMissing.length} missing item{effectiveMissing.length > 1 ? 's' : ''} can be completed after registration.
                 </p>
               )}
               {verificationBlocked && (
@@ -2204,8 +2342,10 @@ export default function Inbox() {
               <div className="mail-sender" title={[l.source || l.channel || 'Common mailbox', l.sender || l.from].filter(Boolean).join(' — ')}><b>{l.source || l.channel || 'Common mailbox'}</b><small>{l.sender || l.from}</small></div>
               <div className="mail-content" title={l.subject}>
                 <div className="mail-content-stack">
-                  <div className="mail-subject-line"><b>{l.subject}</b>{l.ref && <span className="mail-ref"> · {l.ref}</span>}</div>
-                  {l.status === 'Converted' && l.oppId && <button className="mail-opportunity-link" onClick={e => { e.stopPropagation(); nav('/opp/' + l.oppId) }} title="Open linked opportunity"><span className="pill Green">Opportunity</span> {l.oppId}</button>}
+                  <div className="mail-subject-line">
+                    {l.status === 'Converted' && l.oppId && <button className="mail-opportunity-link" onClick={e => { e.stopPropagation(); nav('/opp/' + l.oppId) }} title="Open linked opportunity"><span className="pill Green">Opportunity</span> {l.oppId}</button>}
+                    <b>{l.subject}</b>{l.ref && <span className="mail-ref"> · {l.ref}</span>}
+                  </div>
                   <small>{l.ai?.summary || l.body?.replace(/\s+/g, ' ').slice(0, 130) || 'No preview available'}</small>
                 </div>
               </div>

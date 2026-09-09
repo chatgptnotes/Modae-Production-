@@ -677,6 +677,17 @@ export function StoreProvider({ children }) {
         return { ...audited, leadArchive: archived }
       })
     },
+
+    // Draft edits are persisted without adding an audit entry for every
+    // keystroke. The explicit Save action still uses updateLead above so the
+    // completed decision is recorded in the audit trail.
+    updateLeadDraft(id, patch) {
+      setState(s => ({
+        ...s,
+        leads: s.leads.map(l => (l.id === id ? { ...l, ...patch } : l)),
+      }))
+    },
+
     updateLeads(ids, patch, detail = '') {
       const wanted = new Set(ids || [])
       if (!wanted.size) return
@@ -956,11 +967,72 @@ export function StoreProvider({ children }) {
     // `file` is optional: undefined leaves any attached document alone (the
     // simulate path), an object attaches one, null drops it (Reject). The bytes
     // themselves live in IndexedDB — this record is metadata only.
-    setKycState(customerName, itemName, state, file) {
+    cancelLeadKyc(leadId) {
+      setState(s => {
+        const lead = s.leads.find(l => l.id === leadId)
+        if (!lead) return s
+        const verification = lead.verification || {}
+        const kyc = Object.fromEntries(Object.entries(verification.kyc || {})
+          .map(([name, item]) => [name, { ...item, state: 'Missing', mode: '', verifiedAt: '' }]))
+        return withAudit({
+          ...s,
+          leads: s.leads.map(l => l.id === leadId ? {
+            ...l,
+            kycCompletedAt: null,
+            verification: { ...verification, kycRequestStatus: 'cancelled', kycVerifiedAt: '', kyc },
+          } : l),
+        }, 'KYC request cancelled', leadId)
+      })
+    },
+    reopenLeadKyc(leadId) {
+      setState(s => {
+        const lead = s.leads.find(l => l.id === leadId)
+        if (!lead) return s
+        const verification = lead.verification || {}
+        return withAudit({
+          ...s,
+          leads: s.leads.map(l => l.id === leadId ? {
+            ...l,
+            verification: { ...verification, kycRequestStatus: 'pending' },
+          } : l),
+        }, 'KYC request reopened', leadId)
+      })
+    },
+    clearLeadKycItem(leadId, itemName) {
+      setState(s => {
+        const lead = s.leads.find(l => l.id === leadId)
+        if (!lead || !itemName) return s
+        const verification = lead.verification || {}
+        const current = verification.kyc?.[itemName]
+        if (!current || current.state !== 'Verified') return s
+        const kyc = {
+          ...(verification.kyc || {}),
+          [itemName]: { ...current, state: 'Missing', mode: '', file: '', size: '', pages: 0, verifiedAt: '' },
+        }
+        const complete = Object.values(kyc).length > 0 && Object.values(kyc).every(item => item.state === 'Verified')
+        const attachments = (lead.attachments || []).filter(file => file.kycItem !== itemName)
+        const next = {
+          ...s,
+          leads: s.leads.map(l => l.id === leadId ? {
+            ...l,
+            attachments,
+            kycCompletedAt: complete ? (verification.kycVerifiedAt || l.kycCompletedAt || '') : '',
+            verification: {
+              ...verification,
+              kyc,
+              kycVerifiedAt: complete ? verification.kycVerifiedAt : '',
+              kycRequestStatus: 'pending',
+            },
+          } : l),
+        }
+        return withAudit(next, 'KYC document cancelled', leadId, itemName)
+      })
+    },
+    setKycState(customerName, itemName, state, file, mode = '') {
       setState(s => {
         const items = (s.kyc[customerName] || (s.config?.kycItems || []).map(n => ({ name: n, state: 'Missing', when: '' })))
           .map(k => (k.name === itemName
-            ? { ...k, state, when: new Date().toISOString().slice(0, 10), ...(file === undefined ? {} : { file: file || undefined }) }
+            ? { ...k, state, when: new Date().toISOString().slice(0, 10), ...(file === undefined ? {} : { file: file || undefined }), ...(mode ? { mode } : {}) }
             : k))
         const complete = items.length > 0 && items.every(k => k.state === 'Verified')
         const next = {
@@ -1303,6 +1375,22 @@ export function StoreProvider({ children }) {
             : { ...s.config.uploads, [kind]: { ...meta, uploaded: new Date().toISOString().slice(0, 10) } },
         },
       }, 'Admin document uploaded', kind, meta.name))
+    },
+    saveKycTemplate(itemName, meta) {
+      if (!itemName || !meta) return
+      setState(s => withAudit({
+        ...s,
+        config: {
+          ...s.config,
+          uploads: {
+            ...s.config.uploads,
+            kycTemplates: {
+              ...(s.config.uploads?.kycTemplates || {}),
+              [itemName]: { ...meta, uploaded: new Date().toISOString().slice(0, 10) },
+            },
+          },
+        },
+      }, 'KYC template updated', itemName, meta.name))
     },
     replacePriceList(name, catalog, meta = {}) {
       setState(s => {

@@ -365,8 +365,24 @@ export default function Admin() {
     store.updateConfig({ [listKey]: config[listKey].map((x, j) => (j === i ? { ...x, ...itemPatch } : x)) })
 
   const proposalTemplates = uploads.proposalTemplates || []
+  const kycTemplates = uploads.kycTemplates || {}
   const uploadedTemplateFor = lane => proposalTemplates.find(item => item.lane === lane && item.status === 'Current')
   const templateInfo = lane => uploadedTemplateFor(lane) || TEMPLATE_LANES.find(item => item.key === lane)
+
+  const kycTemplateLane = itemName => `kyc-${String(itemName || 'document').toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+
+  const uploadKycTemplate = async (itemName, file) => {
+    const lane = kycTemplateLane(itemName)
+    setTemplateError(''); setTemplateBusy(lane)
+    try {
+      const stored = await uploadAdminTemplate(lane, file)
+      store.saveKycTemplate(itemName, { name: file.name, type: file.type, size: file.size, ...stored })
+    } catch (error) {
+      setTemplateError(error?.message || 'KYC template upload failed')
+    } finally {
+      setTemplateBusy('')
+    }
+  }
 
   const openTemplate = async lane => {
     const info = templateInfo(lane)
@@ -467,7 +483,8 @@ export default function Admin() {
         <div className="warn-box">Read-only — sign in as an administrator to change configuration</div>
       )}
 
-      <div className="admin-grid">
+      <div className="admin-layout">
+        <div className="admin-masonry-grid">
 
         {/* 1 — Users & roles */}
         <div className="admin-card">
@@ -513,7 +530,7 @@ export default function Admin() {
         </div>
 
         {/* 2b — State → region mapping */}
-        <div className="admin-card">
+        <div className="admin-card admin-state-map-card">
           <h3><Icon name="target" size={14} /> State → region mapping</h3>
           <p className="hint">Which Ownership-rules region each Indian state/UT feeds into. Location text typed on lead intake is matched to a state, then routed here.</p>
           <div className="admin-scroll-list">
@@ -663,10 +680,28 @@ export default function Admin() {
           <p className="hint">Rates are editable on the Price Lists page; registries here track which versions are live.</p>
         </div>
 
+        </div>
+
+        <div className="admin-wide-grid">
+
         {/* 8 — Document uploads */}
-        <div className="admin-card admin-card-wide">
+        <div className="admin-card admin-card-wide admin-documents-card">
           <h3><Icon name="upload" size={14} /> Document uploads</h3>
           <p className="hint">Uploaded files are read and stored as usable catalogue or document data.</p>
+
+          <div className="section-title" style={{ marginTop: 6 }}>KYC document templates</div>
+          <p className="hint">Configure the template downloaded for each KYC checklist item. The bundled India KYC form is used until a replacement is uploaded.</p>
+          <div className="admin-kyc-template-list">
+            {(config.kycItems || []).map(item => {
+              const current = kycTemplates[item]
+              const lane = kycTemplateLane(item)
+              return <div key={item} className="arow">
+                <span><b>{item}</b><br /><span className="hint">{current ? `${current.name} · uploaded ${current.uploaded}` : 'Built-in default'}</span></span>
+                <FileButton primary label={current ? 'Replace' : 'Upload'} disabled={!canEdit || templateBusy === lane}
+                  onFile={file => uploadKycTemplate(item, file)} />
+              </div>
+            })}
+          </div>
 
           <div className="section-title" style={{ marginTop: 6 }}>Supplier price list</div>
           <div className="admin-actions">
@@ -773,6 +808,10 @@ export default function Admin() {
           ))}
         </div>
 
+        </div>
+
+        <div className="admin-masonry-grid admin-bottom-masonry">
+
         {/* 10 — Connector state */}
         <div className="admin-card">
           <h3><Icon name="globe" size={14} /> Connector state</h3>
@@ -793,6 +832,10 @@ export default function Admin() {
             </div>
           ))}
         </div>
+
+        </div>
+
+        <div className="admin-wide-grid admin-bottom-wide-grid">
 
         {/* 11 — SharePoint connector */}
         <SharePointCard canEdit={canEdit} />
@@ -861,6 +904,8 @@ export default function Admin() {
           <WarnBox>
             For Built-in fallback, no key is required. AI credentials are stored server-side and are never returned to this page.
           </WarnBox>
+        </div>
+
         </div>
 
       </div>

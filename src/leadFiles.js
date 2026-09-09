@@ -29,6 +29,13 @@ export function peek(leadId) {
   return held.get(leadId) || []
 }
 
+// Remove one held document without touching the lead's other attachments.
+export async function remove(leadId, name) {
+  if (!leadId || !name) return
+  held.set(leadId, (held.get(leadId) || []).filter(file => file.name !== name))
+  await blobs.deleteFile(leadId, name)
+}
+
 // Read once — the files are consumed by the upload at registration. Falls back
 // to IndexedDB when memory is empty, which is the post-reload case.
 export async function take(leadId) {

@@ -35,7 +35,10 @@ export function leadWorkflow(lead, { customerStatus = '', med = 75 } = {}) {
     || !!lead?.ai
   const hasOwner = !!(lead?.assignedOwner || lead?.suggestedOwner)
   const hasType = !!(lead?.route || lead?.parse?.oppType || lead?.ai?.route)
-  const aiComplete = fields.length > 0 && pendingLow === 0 && missing.length === 0
+  // Missing AI information is actionable follow-up, not a prerequisite for
+  // creating the opportunity. Low-confidence fields still require a human
+  // decision before the lead can advance.
+  const aiComplete = fields.length > 0 && pendingLow === 0
   const classified = !!(customerStatus || lead?.customerStatus || lead?.redFlag)
   const registered = !!lead?.oppId || lead?.status === 'Converted'
 
@@ -61,9 +64,7 @@ export function leadWorkflow(lead, { customerStatus = '', med = 75 } = {}) {
     ? 'Lead discarded'
     : pendingLow > 0
       ? `${pendingLow} AI field${pendingLow === 1 ? '' : 's'} need review`
-      : missing.length > 0
-        ? `${missing.length} clarification${missing.length === 1 ? '' : 's'} required`
-        : ''
+      : ''
 
   return {
     steps: LEAD_WORKFLOW_STEPS.map((step, index) => ({

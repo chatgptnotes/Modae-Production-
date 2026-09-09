@@ -99,6 +99,15 @@ export default function PriceLists() {
     setEditOpen(false); setVersionId(null)
   }
 
+  if (!pl) {
+    return (
+      <div className="page">
+        <h2>Price Lists</h2>
+        <p className="hint">No price lists have been set up yet.{canUpload ? ' Use Admin to add a supplier price list.' : ''}</p>
+      </div>
+    )
+  }
+
   return (
     <div className="page">
       <h2>Price Lists</h2>

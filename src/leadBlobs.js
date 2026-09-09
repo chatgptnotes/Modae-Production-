@@ -97,6 +97,13 @@ export function deleteLead(leadId) {
   })
 }
 
+export function deleteFile(leadId, name) {
+  if (!leadId || !name) return Promise.resolve()
+  return tx('readwrite', store => {
+    store.delete(keyOf(leadId, name))
+  })
+}
+
 export function clearAll() {
   return tx('readwrite', store => { store.clear() })
 }

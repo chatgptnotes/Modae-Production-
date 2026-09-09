@@ -37,7 +37,7 @@ test('mailbox bulk toolbar actions are wired', () => {
 
 test('subject and preview stay in a contained single-line inbox cell', () => {
   assert.match(inbox, /className="mail-subject-head"[^>]*>Subject \/ preview/)
-  assert.match(inbox, /className="mail-subject-line"><b>\{l\.subject\}<\/b>/)
+  assert.match(inbox, /className="mail-subject-line">[\s\S]*<b>\{l\.subject\}<\/b>/)
   assert.match(inbox, /<small>\{l\.ai\?\.summary \|\| l\.body\?\.replace/)
   assert.match(inbox, /className="mail-content-stack"/)
   assert.match(css, /\.mail-subject-line \{[\s\S]*text-overflow: ellipsis; white-space: nowrap;/)
@@ -51,6 +51,11 @@ test('opportunity scope is optional during lead qualification and registration',
   assert.match(inbox, /if \(text\.includes\('opportunity scope'\)\) return false/)
   const register = fs.readFileSync(new URL('../src/pages/Register.jsx', import.meta.url), 'utf8')
   assert.match(register, /missingInfo = .*filter\(item => !\/opportunity\\s\+scope\/i\.test/)
+})
+
+test('AI missing information is optional for registration', () => {
+  assert.match(inbox, /const registrationBlocked = missingIdentity\.length > 0 \|\| pendingLow\.length > 0 \|\| verificationBlocked/)
+  assert.match(inbox, /Optional information still missing/)
 })
 
 test('red leads explain why payment confirmation is not shown', () => {
