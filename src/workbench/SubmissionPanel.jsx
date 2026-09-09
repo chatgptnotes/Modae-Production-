@@ -7,7 +7,7 @@ import { Icon } from '../icons.jsx'
 import { docModel, docRoute, enclosuresFor } from '../proposalDoc.js'
 import { buildPricing } from '../proposal/docProps.js'
 import { blobAttachment, proposalWorkbookAttachment, proposalWorkbookPreview, enclosureAttachments } from '../proposal/emailAttachments.js'
-import { runText } from '../ai.js'
+import { formatEmailBody, runText } from '../ai.js'
 import WorkbookPreview from '../proposal/WorkbookPreview.jsx'
 import { EMAIL_RE, splitRecipients, recipientsValid } from '../emailValidation.js'
 
@@ -108,7 +108,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
         terms: p.terms || [],
       })
       if (!text?.trim()) throw new Error('AI message could not be created. Check the AI connection and try again.')
-      setEmailBody(text.trim())
+      setEmailBody(formatEmailBody(text))
     } catch (error) {
       setMessageError(error?.message || 'AI message could not be created')
     } finally {

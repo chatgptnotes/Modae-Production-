@@ -68,6 +68,23 @@ export const runJson = async (task, payload, opts) => (await runTask(task, paylo
 export const textFromTaskResult = result => result?.text ?? result?.data?.text ?? null
 export const runText = async (task, payload, opts) => textFromTaskResult(await runTask(task, payload, opts))
 
+// Gemini occasionally returns a valid email as one packed line. Keep the
+// composer plain-text, but make the draft readable before it reaches the user.
+export const formatEmailBody = value => {
+  let text = String(value ?? '')
+    .replace(/\r\n?/g, '\n')
+    .replace(/^```(?:text|plain)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim()
+  text = text
+    .replace(/,(?=[A-Z])/g, ',\n\n')
+    .replace(/([.!?])(?=[A-Z])/g, '$1\n\n')
+    .replace(/(Best regards,|Kind regards,|Regards,)\n\n/gi, '$1\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+  return text.trim()
+}
+
 // Admin "Test connection" — resolves to { ok, model, ms } either way.
 export async function testConnection(model) {
   const t0 = Date.now()

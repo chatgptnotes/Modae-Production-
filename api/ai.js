@@ -178,7 +178,22 @@ Draft a concise customer email for sending an approved Techno-Commercial
 Proposal. Use a polite Indian industrial B2B tone. Do not invent commercial
 terms, prices, delivery dates, attachments or commitments. Mention the proposal
 revision, opportunity reference and validity only if supplied. Return only the
-message body text, including greeting and sign-off.
+plain-text message body, including greeting and sign-off.
+
+Use this exact structure with a blank line between each paragraph:
+Dear [customer] Team,
+
+One short paragraph explaining that the approved proposal is attached, including
+the supplied opportunity reference and revision.
+
+One short paragraph mentioning the supplied validity and requesting the
+customer's review.
+
+Best regards,
+[sender name]
+
+Do not return Markdown, HTML, headings, bullet points, or a single continuous
+paragraph. Keep the spaces and line breaks in the structure above.
 
 OPPORTUNITY: ${cap(p.oppName, 300)} (${cap(p.oppId, 100)})
 CUSTOMER: ${cap(p.customer, 300)}

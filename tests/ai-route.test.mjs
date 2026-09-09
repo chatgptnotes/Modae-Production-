@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import handler from '../api/ai.js'
-import { textFromTaskResult } from '../src/ai.js'
+import { formatEmailBody, textFromTaskResult } from '../src/ai.js'
 
 const response = () => {
   const out = {}
@@ -65,4 +65,12 @@ test('text helper accepts proposal text returned inside task data', () => {
   assert.equal(textFromTaskResult({ data: { text: 'Dear Sir/Madam,' } }), 'Dear Sir/Madam,')
   assert.equal(textFromTaskResult({ text: 'top-level text' }), 'top-level text')
   assert.equal(textFromTaskResult({ data: {} }), null)
+})
+
+test('proposal email formatter restores professional paragraph spacing', () => {
+  assert.equal(
+    formatEmailBody('Dear NMCL Team,We are pleased to share the proposal.This proposal is valid for 30 days.Best regards,ModAE India Pvt Ltd'),
+    'Dear NMCL Team,\n\nWe are pleased to share the proposal.\n\nThis proposal is valid for 30 days.\n\nBest regards,\nModAE India Pvt Ltd',
+  )
+  assert.equal(formatEmailBody('```text\nDear Team,\n\nPlease review.\n\nBest regards,\nModAE\n```'), 'Dear Team,\n\nPlease review.\n\nBest regards,\nModAE')
 })

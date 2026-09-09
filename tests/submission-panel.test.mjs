@@ -58,7 +58,7 @@ test('sending still carries the proposal workbook and the governed enclosures', 
 test('proposal message can be created by AI and remains editable', () => {
   assert.match(submission, /runText\('email\.proposal'/)
   assert.match(submission, /AI: create message/)
-  assert.match(submission, /setEmailBody\(text\.trim\(\)\)/)
+  assert.match(submission, /setEmailBody\(formatEmailBody\(text\)\)/)
   assert.match(submission, /<textarea value=\{emailBody\}/)
   assert.match(aiApi, /'email\.proposal'/)
   assert.match(aiApi, /proposalEmailPrompt/)
