@@ -11,6 +11,10 @@ export const DEFAULT_FAST_TRACK = {
   customerStatus: 'Green',
 }
 
+// Only identity fields are required to mint an opportunity. Technical,
+// commercial and sourcing fields remain follow-up work after registration.
+export const isRegistrationCriticalField = key => /^(sell[-\s]?to customer|customer name|euc(?: name| location)?|end user(?: name| location)?|contact person|contact phone|phone)$/i.test(String(key || '').trim())
+
 export function leadConfig(config = {}) {
   return {
     ownershipRules: Array.isArray(config.ownershipRules) ? config.ownershipRules : [],

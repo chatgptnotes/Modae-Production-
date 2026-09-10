@@ -10,6 +10,7 @@ import { take } from '../leadFiles.js'
 import { leadVerificationBlockers, verificationSnapshot, redClearanceFor, isRedCleared } from '../leadVerification.js'
 import { buildLeadProposalData } from '../leadBoq.js'
 import { displayRole } from '../utils.js'
+import { isRegistrationCriticalField } from '../leadRules.js'
 
 // Registration — the moment a qualified lead becomes an opportunity and the
 // permanent opportunity ID is minted (YYMM + sequence + owner initials).
@@ -103,7 +104,8 @@ export default function Register() {
   const leadCustomerStatus = customerStatusForLead(lead, store.customers)
   const redApproval = redClearanceFor(store.approvals, lead.id, store.config)
   const redCleared = isRedCleared(redApproval, store.config)
-  const pendingLow = fields.filter(f => f.state === 'pending' && f.conf < med)
+  const pendingLow = fields.filter(f => f.state === 'pending' && f.conf < med && isRegistrationCriticalField(f.k))
+  const deferredLow = fields.filter(f => f.state === 'pending' && f.conf < med && !isRegistrationCriticalField(f.k))
   // Red clears on the joint approval now. The same blocker used to be raised
   // here *and* unconditionally inside leadVerificationBlockers; that second
   // copy read no approvals, so it could never clear and an approved Red lead
@@ -114,7 +116,10 @@ export default function Register() {
   // AI-missing fields are follow-up information, not registration gates. The
   // salesperson can complete customer/commercial details from the Opportunity
   // Customer/KYC tab after the permanent opportunity ID is created.
-  const missingInfo = (lead?.ai?.missing || []).filter(item => !/opportunity\s+scope/i.test(String(item)))
+  const missingInfo = [
+    ...(lead?.ai?.missing || []).filter(item => !/opportunity\s+scope/i.test(String(item))),
+    ...deferredLow.map(field => `Confirm ${field.k}`),
+  ]
   const missingIdentity = [
     ['sellTo', 'Sell To Customer'], ['eucName', 'EUC Name'], ['eucLocation', 'EUC Location'],
     ['contactPerson', 'Contact Person'], ['contactPhone', 'Contact Phone'],

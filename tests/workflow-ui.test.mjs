@@ -116,6 +116,12 @@ test('sourcing prices are editable and sourcing edits are audited', () => {
     'each imported sourcing row must receive a distinct id')
 })
 
+test('sourcing lets the opportunity owner complete customer references', () => {
+  const spares = read('src/workbench/WbSpares.jsx')
+  assert.match(spares, /Customer reference for \$\{line\.pn \|\| line\.id\}/)
+  assert.match(spares, /updateLine\(line, 'custRef'/)
+})
+
 test('confirmed spares sourcing replaces stale proposal rows instead of appending duplicates', () => {
   const store = read('src/store.jsx')
   const spares = read('src/workbench/WbSpares.jsx')

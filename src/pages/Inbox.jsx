@@ -19,7 +19,7 @@ import { leadWorkflow } from '../leadWorkflow.js'
 import { parseLeadLineItems } from '../tenderParse.js'
 import { deterministicLeadRoute, leadTextChunks, mergeLeadResults, cleanDisplayValue } from '../leadExtraction.js'
 import { scanAttachment, parsedToLeadFields, deterministicPromptContext, mergeDeterministicIntoAi } from '../docScan.js'
-import { isFastTrackLead, routeOwner, supplyMissing } from '../leadRules.js'
+import { isFastTrackLead, isRegistrationCriticalField, routeOwner, supplyMissing } from '../leadRules.js'
 import { INDIA_LOCATION_GROUPS, indiaLocation, indiaRegionForLocation } from '../indiaLocations.js'
 import {
   QUOTE_FEE_DOCUMENTS, answeredPatch, clarificationItems, clarificationKindFor,
@@ -944,6 +944,8 @@ function AiLeadDetail({ lead }) {
 
   const groups = [...new Set(ai.fields.map(f => f.group))]
   const pendingLow = ai.fields.filter(f => f.state === 'pending' && f.conf < med)
+  const registrationPendingLow = pendingLow.filter(f => isRegistrationCriticalField(f.k))
+  const deferredPendingLow = pendingLow.filter(f => !isRegistrationCriticalField(f.k))
 
   const patchField = (idx, patch) => {
     const field = ai.fields[idx]
@@ -1005,7 +1007,7 @@ function AiLeadDetail({ lead }) {
   // visible below, but do not prevent opportunity registration; only the
   // mandatory identity fields, low-confidence decisions, verification and
   // approval gates block the next step.
-  const registrationBlocked = missingIdentity.length > 0 || pendingLow.length > 0 || verificationBlocked
+  const registrationBlocked = missingIdentity.length > 0 || registrationPendingLow.length > 0 || verificationBlocked
   const canAct = !['Converted', 'Dropped'].includes(lead.status)
 
   // ---- Clarification mail: AI drafts, a human sends -----------------------
@@ -1808,12 +1810,18 @@ function AiLeadDetail({ lead }) {
             </div>
           )}
 
-          {lead.status === 'Qualified' && pendingLow.length > 0 && (
+          {lead.status === 'Qualified' && registrationPendingLow.length > 0 && (
             <WarnBox>
-              <b>Registration still blocked</b> by {pendingLow.length} low-confidence
-              field{pendingLow.length > 1 ? 's' : ''} awaiting a decision:
-              <ul>{pendingLow.map((f, i) => <li key={i}>{f.k} ({f.conf}% confidence)</li>)}</ul>
+              <b>Registration still blocked</b> by {registrationPendingLow.length} identity field{registrationPendingLow.length > 1 ? 's' : ''} awaiting a decision:
+              <ul>{registrationPendingLow.map((f, i) => <li key={i}>{f.k} ({f.conf}% confidence)</li>)}</ul>
               Each must be accepted, edited or rejected.
+            </WarnBox>
+          )}
+          {lead.status === 'Qualified' && deferredPendingLow.length > 0 && (
+            <WarnBox>
+              <b>Follow-up information</b> — these low-confidence sourcing or commercial fields can be completed after the opportunity is created:
+              <ul>{deferredPendingLow.map((f, i) => <li key={i}>{f.k} ({f.conf}% confidence)</li>)}</ul>
+              Continue to registration after the mandatory identity and verification checks are complete.
             </WarnBox>
           )}
           {lead.status === 'Qualified' && effectiveMissing.length > 0 && (
@@ -1893,9 +1901,9 @@ function AiLeadDetail({ lead }) {
                 onClick={() => nav('/register/' + lead.id)}>
                 Continue to registration <Icon name="arrowRight" size={14} />
               </button>
-              {pendingLow.length > 0 && (
+              {registrationPendingLow.length > 0 && (
                 <p className="ws-foot-note">
-                  Blocked — {pendingLow.length} field{pendingLow.length > 1 ? 's' : ''} below the {med}% confidence threshold.
+                  Blocked — {registrationPendingLow.length} identity field{registrationPendingLow.length > 1 ? 's' : ''} below the {med}% confidence threshold.
                 </p>
               )}
               {lead.status === 'Qualified' && effectiveMissing.length > 0 && (

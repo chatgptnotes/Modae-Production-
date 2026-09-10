@@ -50,12 +50,18 @@ test('opportunity scope is optional during lead qualification and registration',
   assert.match(inbox, /const missing = \['Customer name', 'Required quantities and specifications'\]/)
   assert.match(inbox, /if \(text\.includes\('opportunity scope'\)\) return false/)
   const register = fs.readFileSync(new URL('../src/pages/Register.jsx', import.meta.url), 'utf8')
-  assert.match(register, /missingInfo = .*filter\(item => !\/opportunity\\s\+scope\/i\.test/)
+    assert.match(register, /const missingInfo = \[/)
+    assert.match(register, /!\/opportunity\\s\+scope\/i\.test/)
 })
 
 test('AI missing information is optional for registration', () => {
-  assert.match(inbox, /const registrationBlocked = missingIdentity\.length > 0 \|\| pendingLow\.length > 0 \|\| verificationBlocked/)
+  assert.match(inbox, /const registrationBlocked = missingIdentity\.length > 0 \|\| registrationPendingLow\.length > 0 \|\| verificationBlocked/)
   assert.match(inbox, /Optional information still missing/)
+})
+
+test('non-identity low-confidence fields are deferred until the opportunity exists', () => {
+  assert.match(inbox, /const deferredPendingLow = pendingLow\.filter\(f => !isRegistrationCriticalField\(f\.k\)\)/)
+  assert.match(inbox, /Follow-up information.*low-confidence sourcing or commercial fields/s)
 })
 
 test('registration carries optional customer details into the opportunity', () => {
