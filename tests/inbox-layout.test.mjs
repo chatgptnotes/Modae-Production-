@@ -80,6 +80,14 @@ test('non-identity low-confidence fields are deferred until the opportunity exis
   assert.match(inbox, /Follow-up information.*low-confidence sourcing or commercial fields/s)
 })
 
+test('regional suggestion and assigned owner are kept separate', () => {
+  assert.match(inbox, /const regionalOwner = routeOwner\(initialRegion/)
+  assert.match(inbox, /owner: savedOverride \? lead\.assignedOwner : regionalOwner/)
+  assert.match(inbox, /suggestedOwner: routedOwner \|\| effectiveOwner/)
+  assert.match(inbox, /System suggested owner/)
+  assert.match(inbox, /Assigned owner/)
+})
+
 test('registration carries optional customer details into the opportunity', () => {
   const register = fs.readFileSync(new URL('../src/pages/Register.jsx', import.meta.url), 'utf8')
   assert.doesNotMatch(register, /missingInfo\.forEach\(item => blockers\.push/)

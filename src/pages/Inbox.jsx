@@ -30,6 +30,7 @@ import { checklistFor } from '../customerClasses.js'
 import { downloadKycTemplate } from '../kycTemplate.js'
 import { PROJECT_TYPES, oppTypesForProjectType, templatesForSelection, simulatedLead, simulatedCount, SIMULATED_CUSTOMER_SCENARIOS } from '../simulatedLeads.js'
 import { buildLeadProposalData } from '../leadBoq.js'
+import { leadFieldValue as mappedLeadFieldValue, splitBuSegment, leadIdentity } from '../leadFieldMapping.js'
 // Common-mailbox lead inbox: AI parses each inquiry, a human decides whether it
 // becomes an opportunity (Qualify → registration / intake form) or is dropped.
 const PILL = { New: 'Blue', Qualified: 'Amber', Dropped: 'Red', Converted: 'Green' }
@@ -653,7 +654,7 @@ const PARSE_FIELDS = [
 
 // Best-effort customer match against the master, off the AI sell-to field.
 export function matchCustomer(customers, lead) {
-  const sellTo = (lead.ai?.fields || []).find(f => /sell-to/i.test(f.k))?.v || lead.parse?.sellTo || ''
+  const sellTo = mappedLeadFieldValue(lead.ai?.fields || [], 'sellTo') || lead.parse?.sellTo || ''
   const s = sellTo.toLowerCase()
   return customers.find(c => {
     const n = c.name.toLowerCase()
@@ -820,26 +821,31 @@ function AiLeadDetail({ lead }) {
   const storedCustomerContact = internalSender
     ? explicitCustomerContact
     : lead.contactPerson || leadFieldValue(ai.fields, /contact\s*person|contact/i) || lead.parse?.contactPerson || ''
-  const initialLocation = lead.location || (lead.region && !indiaRegionForLocation(lead.region, store.config) ? lead.region : '') || leadFieldValue(ai.fields, /location|region/i)
+  const initialLocation = lead.location || (lead.region && !indiaRegionForLocation(lead.region, store.config) ? lead.region : '') || mappedLeadFieldValue(ai.fields, 'eucLocation')
   const initialRegion = lead.region || indiaRegionForLocation(initialLocation, store.config) || initialLocation
-  const initialDecisions = () => ({
-    sellTo: lead.sellTo || leadFieldValue(ai.fields, /sell-to/i) || lead.parse?.sellTo || '',
-    scope: lead.opportunityScope || leadFieldValue(ai.fields, /opportunity\s*scope|scope|description/i) || '',
+  const regionalOwner = routeOwner(initialRegion, store.config, lead.suggestedOwner || ownerForOppType(lead.route || 'Spares', store.config))
+  const savedOverride = lead.assignedOwner && lead.assignedOwner !== regionalOwner && (lead.ownerOverrideReason || '').trim()
+  const initialDecisions = () => {
+    const identity = leadIdentity(lead, ai.fields)
+    const buSegment = splitBuSegment(ai.fields)
+    return ({
+    sellTo: identity.sellTo,
+    scope: lead.opportunityScope || mappedLeadFieldValue(ai.fields, 'scope') || '',
     location: initialLocation,
     region: initialRegion,
-    eucName: lead.eucName || leadFieldValue(ai.fields, /euc\s*name/i) || lead.parse?.eucName || '',
-    eucLocation: lead.eucLocation || leadFieldValue(ai.fields, /euc\s*location/i) || lead.parse?.eucLocation || initialLocation,
-    contactPerson: storedCustomerContact,
-    contactPhone: lead.contactPhone || leadFieldValue(ai.fields, /contact\s*phone|phone/i) || lead.parse?.contactPhone || '',
-    owner: lead.assignedOwner || lead.suggestedOwner || routeOwner(initialRegion, store.config, OWNERS[0]),
+    eucName: identity.eucName,
+    eucLocation: identity.eucLocation || initialLocation,
+    contactPerson: identity.contactPerson || storedCustomerContact,
+    contactPhone: identity.contactPhone,
+    owner: savedOverride ? lead.assignedOwner : regionalOwner,
     oppType: OPP_TYPES.includes(lead.oppType)
       ? lead.oppType
-      : leadFieldValue(ai.fields, /opp type/i) || (lead.route === 'Service' ? 'Service' : lead.route === 'Project' ? 'Project' : 'Spares'),
+      : mappedLeadFieldValue(ai.fields, 'oppType') || (lead.route === 'Service' ? 'Service' : lead.route === 'Project' ? 'Project' : 'Spares'),
     customerStatus: lead.customerStatus || customerStatusForLead(lead, store.customers),
-    bu: leadFieldValue(ai.fields, /^bu$/i) || 'Energy',
-    segment: leadFieldValue(ai.fields, /segment/i) || 'Others',
-    product: leadFieldValue(ai.fields, /^product$/i) || 'Various',
-  })
+    bu: buSegment.bu || 'Energy',
+    segment: buSegment.segment || 'Others',
+    product: mappedLeadFieldValue(ai.fields, 'product') || 'Various',
+  })}
   const [decisionDraft, setDecisionDraft] = useState(initialDecisions)
   const persistedDecisionRef = useRef(initialDecisions())
   const decisionDraftRef = useRef(decisionDraft)
@@ -878,7 +884,7 @@ function AiLeadDetail({ lead }) {
     // Re-reading a document must not silently move the lead out of the
     // salesperson's inbox. Human assignment wins over a fresh AI suggestion;
     // an unassigned lead keeps its prior suggested owner until a user changes it.
-    next.suggestedOwner = source.assignedOwner || source.suggestedOwner || next.suggestedOwner
+    next.suggestedOwner = routeOwner(source.region || source.location, store.config, next.suggestedOwner || source.suggestedOwner)
     store.updateLead(lead.id, next, detail || '')
     store.recordAiAction(lead.id, { provider: store.config?.aiModel?.provider, model: store.config?.aiModel?.model, action: 'lead.re-extract', result: { completeness: next.completeness, missing: next.ai?.missing || [], route: next.route } })
     setReNote('Extraction updated.')
@@ -1001,8 +1007,8 @@ function AiLeadDetail({ lead }) {
     setRejFor(null)
   }
 
-  const rule = (store.config.ownershipRules || []).find(r => r.owner === lead.suggestedOwner)
-  const oppTypeRule = !rule && (store.config.ownerRules || []).find(r => r.oppType === decisionDraft.oppType && r.owner === lead.suggestedOwner)
+  const rule = (store.config.ownershipRules || []).find(r => r.owner === regionalOwner)
+  const oppTypeRule = !rule && (store.config.ownerRules || []).find(r => r.oppType === decisionDraft.oppType && r.owner === regionalOwner)
   const ownerRuleLabel = rule ? `${rule.region} rule`
     : oppTypeRule ? `${oppTypeRule.oppType} opportunity-type rule`
     : `${decisionDraft.oppType} opportunity-type rule`
@@ -1107,6 +1113,8 @@ function AiLeadDetail({ lead }) {
     const fastTrack = isFastTrackLead({ ...lead, customerStatus: draft.customerStatus }, store.config, customer)
     const routedOwner = routeOwner(draft.region, store.config, draft.owner)
     const isOverride = routedOwner && draft.owner !== routedOwner
+    const overrideReason = isOverride ? (lead.ownerOverrideReason || '').trim() : ''
+    const effectiveOwner = isOverride && !overrideReason ? routedOwner : draft.owner
     return {
       sellTo: String(draft.sellTo || '').trim(),
       opportunityScope: String(draft.scope || '').trim(),
@@ -1116,9 +1124,9 @@ function AiLeadDetail({ lead }) {
       eucLocation: String(draft.eucLocation || '').trim(),
       contactPerson: String(draft.contactPerson || '').trim(),
       contactPhone: String(draft.contactPhone || '').trim(),
-      suggestedOwner: draft.owner,
-      assignedOwner: draft.owner,
-      ownerOverrideReason: isOverride ? (lead.ownerOverrideReason || '').trim() : '',
+      suggestedOwner: routedOwner || effectiveOwner,
+      assignedOwner: effectiveOwner,
+      ownerOverrideReason: overrideReason,
       fastTrack,
       fastTrackStartedAt: fastTrack ? (lead.fastTrackStartedAt || new Date().toISOString()) : lead.fastTrackStartedAt,
       oppType: draft.oppType,
@@ -1643,10 +1651,17 @@ function AiLeadDetail({ lead }) {
             </span>
           </div>
           <div className="ws-kv">
-            <span className="ws-kv-k">Suggested owner</span>
+            <span className="ws-kv-k">System suggested owner</span>
             <span className="ws-kv-v">
-              {lead.suggestedOwner}
+              {regionalOwner}
               <span className="ws-kv-note">{ownerRuleLabel} · override needs LJS/AH + reason</span>
+            </span>
+          </div>
+          <div className="ws-kv">
+            <span className="ws-kv-k">Assigned owner</span>
+            <span className="ws-kv-v">
+              {decisionDraft.owner}
+              {decisionDraft.owner !== regionalOwner && <span className="ws-kv-note">Manual override</span>}
             </span>
           </div>
 
@@ -2288,13 +2303,15 @@ export default function Inbox() {
       return
     }
     const value = pattern => leadFieldValue(lead.ai?.fields, pattern)
+    const mapped = key => mappedLeadFieldValue(lead.ai?.fields, key)
+    const buSegment = splitBuSegment(lead.ai?.fields)
     const owner = lead.assignedOwner || lead.suggestedOwner || store.role
     const internalSender = isInternalSender(lead.from, store.config)
-    const sellTo = value(/sell-to customer|customer/i) || lead.sellTo || (internalSender ? 'Customer to confirm' : lead.sender) || 'Simulated customer'
-    const category = value(/category/i) || 'EUC'
+    const sellTo = mapped('sellTo') || lead.sellTo || (internalSender ? 'Customer to confirm' : lead.sender) || 'Simulated customer'
+    const category = mapped('category') || 'EUC'
     const location = value(/^location$/i) || lead.location || ''
     const resolvedOppType = OPP_TYPES.includes(lead.oppType) ? lead.oppType : (oppType || lead.route || 'Project')
-    const product = value(/^product$/i) || 'Various'
+    const product = mapped('product') || 'Various'
     const knownCustomer = store.customers.some(c => c.name.toLowerCase() === sellTo.toLowerCase())
     const oppId = nextOppId(store.opportunities, owner)
     const today = new Date().toISOString().slice(0, 10)
@@ -2302,12 +2319,12 @@ export default function Inbox() {
     if (!knownCustomer) store.addCustomer({ name: sellTo, category, status, kyc: status === 'Green' ? 'Verified' : 'Pending', payment: '—' })
     const opp = {
       sl: maxSl + 1, id: oppId, sourceLeadId: lead.id, sellTo, category, location,
-      customerStatus: status, eucName: value(/contact person/i) || sellTo, eucLocation: location,
-      oppName: lead.subject, owner, oppType: resolvedOppType, bu: value(/^bu/i) || 'Energy',
-      segment: value(/segment/i) || 'Others', product: [product], prob: '', valueK: 0, cogsK: 0,
+      customerStatus: status, eucName: mapped('eucName') || sellTo, eucLocation: mapped('eucLocation') || location,
+      oppName: mapped('oppName') || lead.subject, owner, oppType: resolvedOppType, bu: buSegment.bu || 'Energy',
+      segment: buSegment.segment || 'Others', product: [product], prob: '', valueK: 0, cogsK: 0,
       rfqNumber: lead.ref || '', rfqDate: lead.ts?.slice(0, 10) || '', createDate: today,
       proposalDate: '', orderDate: '', invoiceDate: '', status: 'Open', stage: 'Lead', closedReason: '',
-      contactPerson: value(/contact person/i) || '', contactPhone: '', contactEmail: lead.from || '',
+      contactPerson: mapped('contactPerson') || '', contactPhone: mapped('contactPhone') || '', contactEmail: lead.from || '',
       lastUpdated: today, forecast: false, remarks: lead.body || '', nextActionOwner: '', simulated: true,
     }
     store.addOpportunity(opp)

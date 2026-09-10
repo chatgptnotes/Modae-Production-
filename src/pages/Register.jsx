@@ -10,7 +10,8 @@ import { take } from '../leadFiles.js'
 import { leadVerificationBlockers, verificationSnapshot, redClearanceFor, isRedCleared } from '../leadVerification.js'
 import { buildLeadProposalData } from '../leadBoq.js'
 import { displayRole } from '../utils.js'
-import { isRegistrationCriticalField } from '../leadRules.js'
+import { isRegistrationCriticalField, routeOwner } from '../leadRules.js'
+import { leadFieldValue, splitBuSegment, leadIdentity } from '../leadFieldMapping.js'
 
 // Registration — the moment a qualified lead becomes an opportunity and the
 // permanent opportunity ID is minted (YYMM + sequence + owner initials).
@@ -42,23 +43,20 @@ export default function Register() {
   const oppTypeSeed = OPP_TYPES.includes(lead?.oppType)
     ? lead.oppType
     : (lead?.route === 'Service' ? 'Service' : lead?.route === 'Project' ? 'Project' : 'Spares')
-  const suggested = guessFromList(ownerFieldV, OWNERS) || lead?.suggestedOwner || ownerForOppType(oppTypeSeed, store.config)
+  const routingRegion = lead?.region || lead?.location || fieldVal(fields, /location|region/i)
+  const regionalOwner = routeOwner(routingRegion, store.config, '')
+  const suggested = regionalOwner || guessFromList(ownerFieldV, OWNERS) || lead?.suggestedOwner || ownerForOppType(oppTypeSeed, store.config)
   const typeV = fieldVal(fields, /opp type/i)
-  const buSegV = fieldVal(fields, /bu|segment/i)
+  const buSegment = splitBuSegment(fields)
   const allText = fields.map(f => f.v).join(' ') + ' ' + (lead?.subject || '')
 
   const [owner, setOwner] = useState(suggested)
+  const [ownerOverrideReason, setOwnerOverrideReason] = useState('')
   const [oppType, setOppType] = useState(guessFromList(typeV, OPP_TYPES) || oppTypeSeed)
-  const [bu, setBu] = useState(guessFromList(buSegV, BUS) || 'Energy')
-  const [segment, setSegment] = useState(guessFromList(buSegV, SEGMENTS) || 'Others')
-  const [product, setProduct] = useState(guessFromList(allText, PRODUCTS) || 'Various')
-  const identitySeed = {
-    sellTo: identityValue(lead, fields, 'sellTo', /sell-to/i),
-    eucName: identityValue(lead, fields, 'eucName', /euc\s*name/i),
-    eucLocation: identityValue(lead, fields, 'eucLocation', /euc\s*location/i),
-    contactPerson: identityValue(lead, fields, 'contactPerson', /contact\s*person|contact/i),
-    contactPhone: identityValue(lead, fields, 'contactPhone', /contact\s*phone|phone/i),
-  }
+  const [bu, setBu] = useState(buSegment.bu || 'Energy')
+  const [segment, setSegment] = useState(buSegment.segment || 'Others')
+  const [product, setProduct] = useState(leadFieldValue(fields, 'product') || guessFromList(allText, PRODUCTS) || 'Various')
+  const identitySeed = leadIdentity(lead, fields)
   const [identityDraft, setIdentityDraft] = useState(identitySeed)
   const [identitySaved, setIdentitySaved] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -66,11 +64,7 @@ export default function Register() {
 
   useEffect(() => {
     setIdentityDraft({
-      sellTo: identityValue(lead, lead?.ai?.fields || [], 'sellTo', /sell-to/i),
-      eucName: identityValue(lead, lead?.ai?.fields || [], 'eucName', /euc\s*name/i),
-      eucLocation: identityValue(lead, lead?.ai?.fields || [], 'eucLocation', /euc\s*location/i),
-      contactPerson: identityValue(lead, lead?.ai?.fields || [], 'contactPerson', /contact\s*person|contact/i),
-      contactPhone: identityValue(lead, lead?.ai?.fields || [], 'contactPhone', /contact\s*phone|phone/i),
+      ...leadIdentity(lead, lead?.ai?.fields || []),
     })
     setIdentitySaved(false)
   }, [lead?.id])
@@ -150,6 +144,9 @@ export default function Register() {
 
   const create = async () => {
     if (missingIdentity.length) return
+    const isOverride = regionalOwner && owner !== regionalOwner
+    if (isOverride && !['LJS', 'AH'].includes(store.role)) return
+    if (isOverride && !ownerOverrideReason.trim()) return
     setCreating(true)
     const sellTo = String(identityDraft.sellTo || '').trim()
     const eucName = String(identityDraft.eucName || '').trim()
@@ -169,6 +166,8 @@ export default function Register() {
       leadVerification: verificationSnapshot(lead, leadCustomerStatus, { approval: redApproval, config: store.config }),
       eucName, eucLocation,
       oppName: lead.subject, owner, oppType, bu, segment, product,
+      suggestedOwner: regionalOwner || owner,
+      ownerOverrideReason: isOverride ? ownerOverrideReason.trim() : '',
       prob: 'Low', valueK: 0, cogsK: 0,
       createDate: today, proposalDate: '', orderDate: '', invoiceDate: '',
       status: 'Open', stage: 'Lead', milestone: 'Screening', closedReason: '',
@@ -292,9 +291,15 @@ export default function Register() {
             </select>
           </label>
           <p className="hint">
-            Suggested: <b>{lead.suggestedOwner || suggested}</b> — regional ownership rule.
+            System suggested: <b>{regionalOwner || suggested}</b> — regional ownership rule.
             LJS/AH may override with a mandatory reason.
           </p>
+          {regionalOwner && owner !== regionalOwner && (
+            <label className="afield" style={{ display: 'block', marginTop: 6 }}>
+              Owner override reason
+              <textarea rows={2} value={ownerOverrideReason} onChange={e => setOwnerOverrideReason(e.target.value)} placeholder="Required for an LJS/AH override" />
+            </label>
+          )}
 
           <div className="section-title" style={{ marginTop: 12 }}>Pipeline metadata</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 6 }}>
