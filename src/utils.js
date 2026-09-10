@@ -135,6 +135,18 @@ export function fmt(n, digits = 0) {
   return Number(n).toLocaleString('en-IN', { maximumFractionDigits: digits })
 }
 
+// Opportunity values remain stored internally in ₹ thousands for compatibility
+// with the existing pipeline and proposal model. Opportunity screens use full ₹.
+export function fmtRupeesFromK(valueK) {
+  if (valueK === '' || valueK == null || isNaN(valueK)) return ''
+  return `₹${fmt(Number(valueK) * 1000)}`
+}
+
+export function rupeesToK(value) {
+  if (value === '' || value == null || isNaN(value)) return 0
+  return Number(value) / 1000
+}
+
 export function fmtLakh(valueK) {
   // valueK is ₹ thousands
   const l = valueK / 100

@@ -1,6 +1,6 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { CATEGORIES, CUSTOMER_STATUSES, OWNERS, OPP_TYPES, BUS, SEGMENTS, SOLUTIONS, PRODUCTS, PROB_LEVELS } from './seed.js'
-import { displayRole, productList } from './utils.js'
+import { displayRole, productList, rupeesToK } from './utils.js'
 
 const Field = ({ label, children }) => (
   <div className="opportunity-field"><label>{label}</label>{children}</div>
@@ -14,7 +14,7 @@ const fields = [
 
 const makeDraft = opp => ({
   owner: opp.owner || '', oppName: opp.oppName || '', sellTo: opp.sellTo || '',
-  rfqNumber: opp.rfqNumber || '', rfqDate: opp.rfqDate || '', valueK: opp.valueK ?? '',
+  rfqNumber: opp.rfqNumber || '', rfqDate: opp.rfqDate || '', valueK: opp.valueK == null ? '' : opp.valueK * 1000,
   category: opp.category || '', location: opp.location || '',
   customerStatus: opp.customerStatus || '', eucName: opp.eucName || '',
   eucLocation: opp.eucLocation || '', oppType: opp.oppType || '',
@@ -50,7 +50,7 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
   }
 
   const save = () => {
-    const patch = Object.fromEntries(fields.map(key => [key, draft[key]]))
+    const patch = Object.fromEntries(fields.map(key => [key, key === 'valueK' ? rupeesToK(draft[key]) : draft[key]]))
     store.updateOpportunity(opp.id, patch)
     setDirty(false)
   }
@@ -110,7 +110,7 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
         <Field label="Opp Type"><select value={draft.oppType} onChange={e => set('oppType', e.target.value)}>{OPP_TYPES.map(x => <option key={x}>{x}</option>)}</select></Field>
         <Field label="BU"><select value={draft.bu} onChange={e => set('bu', e.target.value)}>{BUS.map(x => <option key={x}>{x}</option>)}</select></Field>
         <Field label="Segment"><select value={draft.segment} onChange={e => set('segment', e.target.value)}>{SEGMENTS.map(x => <option key={x}>{x}</option>)}</select></Field>
-        <Field label="Estimated Value (₹ K)"><input type="number" min="0" step="1" value={draft.valueK} onChange={e => set('valueK', e.target.value === '' ? '' : Number(e.target.value))} /></Field>
+        <Field label="Estimated Value (₹)"><input type="number" min="0" step="1" value={draft.valueK} onChange={e => set('valueK', e.target.value === '' ? '' : Number(e.target.value))} /></Field>
         {/* On the client's Field List but not a Sales Pipeline column, so it is
             captured here rather than on the tracker sheet. */}
         <Field label="Solution"><select value={draft.solution} onChange={e => set('solution', e.target.value)}><option value="">—</option>{SOLUTIONS.map(x => <option key={x}>{x}</option>)}</select></Field>

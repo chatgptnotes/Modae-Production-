@@ -5,7 +5,7 @@ import {
   SUBFOLDERS, OWNERS, STAGES, CLOSE_REASONS,
   OPP_TYPES, CATEGORIES, BUS, SEGMENTS, SOLUTIONS,
 } from './seed.js'
-import { fmt, mmmYY, ddMmmYY, canViewCommercial, canPriceProposal, stageClass, productList } from './utils.js'
+import { fmt, fmtRupeesFromK, rupeesToK, mmmYY, ddMmmYY, canViewCommercial, canPriceProposal, stageClass, productList } from './utils.js'
 import { nextActionWith } from './gates.js'
 import * as filestore from './filestore.js'
 import { Icon } from './icons.jsx'
@@ -73,14 +73,14 @@ export default function OppPanel({ oppId }) {
   const showValue = canPriceProposal(store.role)
   const na = nextActionWith(opp, store.getProposal(oppId), store)
   const gmK = (opp.valueK || 0) - (opp.cogsK || 0)
-  const gmPct = opp.valueK ? Math.round((gmK / opp.valueK) * 100) + '%' : '#DIV/0!'
+  const gmPct = opp.valueK ? Math.round((gmK / opp.valueK) * 100) + '%' : '—'
 
   // Same write-through + coupling rules as the tracker grid (Tracker.jsx upd).
   const upd = field => e => {
     let value = e.target.type === 'checkbox' ? e.target.checked : e.target.value
     if (field === 'invoiceDate' && value && opp.orderDate && value <= opp.orderDate) return
     if (field === 'orderDate' && value && opp.invoiceDate && value >= opp.invoiceDate) return
-    if (field === 'valueK' || field === 'cogsK') value = e.target.value === '' ? 0 : +e.target.value
+    if (field === 'valueK' || field === 'cogsK') value = rupeesToK(e.target.value)
     const patch = { [field]: value }
     if (field === 'status' && value === 'Open') Object.assign(patch, { closedReason: '', stage: 'Firm Bid' })
     if (field === 'stage' && (value === 'Won' || value === 'Lost')) patch.status = 'Closed'
@@ -180,11 +180,11 @@ export default function OppPanel({ oppId }) {
               <div className="dgrid2">
                 <div><label>Revision</label><div className="ro">{proposal.revision} · {proposal.bidStage} · {proposal.bidType}</div></div>
                 <div><label>BoQ lines</label><div className="ro">{(proposal.bom || []).length}</div></div>
-                {showValue && <div><label>Value (₹)</label><div className="ro">₹ {fmt(opp.valueK)}</div></div>}
+                {showValue && <div><label>Value (₹)</label><div className="ro">{fmtRupeesFromK(opp.valueK)}</div></div>}
                 {comm ? (
                   <>
-                    <div><label>COGS (K₹)</label><div className="ro">₹ {fmt(opp.cogsK)}</div></div>
-                    <div><label>GM</label><div className="ro">₹ {fmt(gmK)} K · {gmPct}</div></div>
+                    <div><label>COGS (₹)</label><div className="ro">{fmtRupeesFromK(opp.cogsK)}</div></div>
+                    <div><label>GM</label><div className="ro">{fmtRupeesFromK(gmK)} · {gmPct}</div></div>
                   </>
                 ) : (
                   <div style={{ gridColumn: '1 / -1' }} className="restricted"><Icon name="lock" size={13} /> Cost and margin — approvers/admin only</div>
@@ -223,9 +223,9 @@ export default function OppPanel({ oppId }) {
           <div className="fgroup">Commercial</div>
           {showValue ? (
             <div className="dgrid2">
-              <Field label="Value (₹)"><input type="number" value={opp.valueK || ''} onChange={upd('valueK')} placeholder="-" /></Field>
-              {comm && <Field label="COGS (K₹)"><input type="number" value={opp.cogsK || ''} onChange={upd('cogsK')} placeholder="-" /></Field>}
-              {comm && <Field label="GM (K₹)"><div className="ro">{opp.valueK ? fmt(gmK) : '-'}</div></Field>}
+              <Field label="Value (₹)"><input type="number" min="0" value={opp.valueK ? opp.valueK * 1000 : ''} onChange={upd('valueK')} placeholder="-" /></Field>
+              {comm && <Field label="COGS (₹)"><input type="number" min="0" value={opp.cogsK ? opp.cogsK * 1000 : ''} onChange={upd('cogsK')} placeholder="-" /></Field>}
+              {comm && <Field label="GM (₹)"><div className="ro">{opp.valueK ? fmtRupeesFromK(gmK) : '-'}</div></Field>}
               {comm && <Field label="GM%"><div className="ro">{gmPct}</div></Field>}
               <Field label="Forecast">
                 <div><input type="checkbox" checked={!!opp.forecast} onChange={upd('forecast')} /> Include for roll-up</div>

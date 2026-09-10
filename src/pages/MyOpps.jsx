@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { OWNERS, ROLES } from '../seed.js'
-import { canPriceProposal, canViewCommercial, isSalesOwner, fmt, mmmYY, ddMmmYY, stageClass, productLabel, displayRole } from '../utils.js'
+import { canPriceProposal, canViewCommercial, isSalesOwner, fmtRupeesFromK, mmmYY, ddMmmYY, stageClass, productLabel, displayRole } from '../utils.js'
 import { nextActionWith } from '../gates.js'
 import { useDrawer } from '../drawer.jsx'
 import { Icon } from '../icons.jsx'
@@ -40,9 +40,9 @@ export default function MyOpps() {
     if (['cogsK', 'gmK', 'gmPct'].includes(key) && !canSeeCommercial) return <Icon name="lock" size={12} />
     if (key === 'id') return <b>{o.id}</b>
     if (key === 'product') return productLabel(o.product) || '—'
-    if (key === 'valueK') return o.valueK ? `₹ ${fmt(o.valueK)}` : '—'
-    if (key === 'cogsK') return o.cogsK ? `₹ ${fmt(o.cogsK)}` : '—'
-    if (key === 'gmK') return o.valueK ? `₹ ${fmt((o.valueK || 0) - (o.cogsK || 0))}` : '—'
+    if (key === 'valueK') return o.valueK ? fmtRupeesFromK(o.valueK) : '—'
+    if (key === 'cogsK') return o.cogsK ? fmtRupeesFromK(o.cogsK) : '—'
+    if (key === 'gmK') return o.valueK ? fmtRupeesFromK((o.valueK || 0) - (o.cogsK || 0)) : '—'
     if (key === 'gmPct') return o.valueK ? `${Math.round((((o.valueK || 0) - (o.cogsK || 0)) / o.valueK) * 100)}%` : '—'
     if (key === 'createDate' || key === 'proposalDate' || key === 'orderDate' || key === 'invoiceDate') return o[key] ? mmmYY(o[key]) : '—'
     if (key === 'lastUpdated') return ddMmmYY(o[key]) || '—'
@@ -116,7 +116,7 @@ export default function MyOpps() {
                   <td><span className={`pill ${stageClass(o)}`}>{o.stage}</span></td>
                   <td>{o.oppType || '—'}</td>
                   <td>{o.prob || '—'}</td>
-                  <td>{comm ? (o.valueK ? `₹ ${fmt(o.valueK)}` : '—') : ''}</td>
+                  <td>{comm ? (o.valueK ? fmtRupeesFromK(o.valueK) : '—') : ''}</td>
                   <td className={o.status === 'Open' && !o.orderDate ? 'need' : ''}
                     title={o.orderDate ? '' : 'No expected order date set'}>
                     {o.orderDate ? mmmYY(o.orderDate) : '— set —'}

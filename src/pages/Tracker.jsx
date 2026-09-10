@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { STAGES, CLOSE_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES } from '../seed.js'
-import { fmt, mmmYY, ddMmmYY, stageClass, productList, productLabel, sameCustomer, displayRole } from '../utils.js'
+import { fmt, fmtRupeesFromK, rupeesToK, mmmYY, ddMmmYY, stageClass, productList, productLabel, sameCustomer, displayRole } from '../utils.js'
 import { downloadTableXlsx } from '../proposal/excelExport.js'
 import { useFormulaBar } from '../formulabar.jsx'
 import { useDrawer } from '../drawer.jsx'
@@ -35,9 +35,9 @@ export const COLS = [
   { key: 'segment', letter: 'N', label: 'Segment', w: 5 },
   { key: 'product', letter: 'O', label: 'Product', w: 6 },
   { key: 'prob', letter: 'P', label: 'Prob (%)', w: 9, wAll: 7 },
-  { key: 'valueK', letter: 'Q', label: 'Value (K₹)*', num: true, w: 8 },
-  { key: 'cogsK', letter: 'R', label: 'COGS (K₹)*', num: true, w: 5 },
-  { key: 'gmK', letter: 'S', label: 'GM (K₹)', num: true, w: 4 },
+  { key: 'valueK', letter: 'Q', label: 'Value (₹)*', num: true, w: 8 },
+  { key: 'cogsK', letter: 'R', label: 'COGS (₹)*', num: true, w: 5 },
+  { key: 'gmK', letter: 'S', label: 'GM (₹)', num: true, w: 4 },
   { key: 'gmPct', letter: 'T', label: 'GM%', num: true, w: 3 },
   { key: 'createDate', letter: 'U', label: 'Create Date', w: 5, wAll: 7 },
   { key: 'proposalDate', letter: 'V', label: 'Proposal Date', w: 5, wAll: 7 },
@@ -193,9 +193,9 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     switch (key) {
       case 'customerStatus': return customerStatusFor(o)
       case 'gmK': return gmK(o)
-      case 'gmPct': return gmPct(o) || '#DIV/0!'
-      case 'valueK': return o.valueK || 0
-      case 'cogsK': return o.cogsK || 0
+      case 'gmPct': return gmPct(o) || '—'
+      case 'valueK': return (o.valueK || 0) * 1000
+      case 'cogsK': return (o.cogsK || 0) * 1000
       case 'createDate': case 'proposalDate': return mmmYY(o[key])
       case 'orderDate': case 'invoiceDate': return o[key] ? mmmYY(o[key]) : ''
       case 'lastUpdated': return ddMmmYY(o[key])
@@ -269,9 +269,9 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     const current = store.opportunities.find(o => o.id === id)
     if (field === 'invoiceDate' && value && current?.orderDate && value <= current.orderDate) return
     if (field === 'orderDate' && value && current?.invoiceDate && value >= current.invoiceDate) return
-    // Numeric columns must store numbers — a string "0" is truthy and breaks
-    // the GM% #DIV/0! branch (and the proposal-writeback equality guard).
-    if (field === 'valueK' || field === 'cogsK') value = e.target.value === '' ? 0 : +e.target.value
+    // Numeric columns must store numbers so margin calculations and proposal
+    // write-back comparisons remain stable.
+    if (field === 'valueK' || field === 'cogsK') value = rupeesToK(e.target.value)
     const patch = { [field]: value }
     // Reopening clears the closure fields; a Won/Lost stage must not survive.
     if (field === 'status' && value === 'Open') Object.assign(patch, { closedReason: '', stage: 'Firm Bid' })
@@ -324,8 +324,8 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     let kind = 'number'
     if (col.key === 'gmK') formula = `=Q${r}-R${r}`
     else if (col.key === 'gmPct') formula = `=S${r}/Q${r}`
-    else if (col.key === 'valueK') commit = v => store.updateOpportunity(o.id, { valueK: Math.round(v) })
-    else if (col.key === 'cogsK') commit = v => store.updateOpportunity(o.id, { cogsK: Math.round(v) })
+    else if (col.key === 'valueK') commit = v => store.updateOpportunity(o.id, { valueK: rupeesToK(v) })
+    else if (col.key === 'cogsK') commit = v => store.updateOpportunity(o.id, { cogsK: rupeesToK(v) })
     else if (TEXT_FIELDS.includes(col.key)) { formula = o[col.key] || ''; kind = 'text'; commit = v => store.updateOpportunity(o.id, { [col.key]: String(v) }) }
     fb.select({ ref: `${col.letter}${r}`, formula, commit, kind })
   }
@@ -342,7 +342,9 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
       switch (col.key) {
         case 'customerStatus': return customerStatusFor(o)
         case 'product': return productLabel(o.product)
-        case 'gmK': return gmK(o)
+        case 'valueK': return o.valueK ? o.valueK * 1000 : ''
+        case 'cogsK': return o.cogsK ? o.cogsK * 1000 : ''
+        case 'gmK': return o.valueK ? gmK(o) * 1000 : ''
         case 'gmPct': return gmPct(o) || ''
         case 'nextActionOwner': return o.nextActionOwner || nextActionWith(o, store.getProposal(o.id), store).owner || ''
         case 'forecast': return o.forecast ? 'Y' : 'N'
@@ -512,7 +514,9 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                 <td onClick={selectCell(o, COLS[3])} className={isSel(o, COLS[3]) ? 'cell-sel' : ''} title={o.location}><input type="text" value={o.location} onChange={upd(o.id, 'location')} /></td>
                 <td onClick={selectCell(o, COLS[4])} className={`cstat ${customerStatusFor(o)} ${isSel(o, COLS[4]) ? 'cell-sel' : ''}`}
                   title="Customer status is managed from the Customer master">
-                  {customerStatusFor(o)}
+                  <span className={`status-pill status-pill--${customerStatusFor(o).toLowerCase()}`}>
+                    {customerStatusFor(o)}
+                  </span>
                 </td>
                 <td onClick={selectCell(o, COLS[5])} className={isSel(o, COLS[5]) ? 'cell-sel' : ''} title={o.eucName}><input type="text" value={o.eucName} onChange={upd(o.id, 'eucName')} /></td>
                 <td onClick={selectCell(o, COLS[6])} className={isSel(o, COLS[6]) ? 'cell-sel' : ''} title={o.eucLocation}><input type="text" value={o.eucLocation} onChange={upd(o.id, 'eucLocation')} /></td>
@@ -562,12 +566,12 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                 </td>
                 {/* Value and COGS are open tracker inputs for every role. GM and
                     GM% remain derived from them and are therefore read only. */}
-                <td onClick={selectCell(o, COLS[14])} className={`num ${isSel(o, COLS[14]) ? 'cell-sel' : ''}`}><input type="number" value={o.valueK || ''} onChange={upd(o.id, 'valueK')} placeholder="-" /></td>
-                <td onClick={selectCell(o, COLS[15])} className={`num ${isSel(o, COLS[15]) ? 'cell-sel' : ''}`}><input type="number" value={o.cogsK || ''} onChange={upd(o.id, 'cogsK')} placeholder="-" /></td>
-                <td onClick={selectCell(o, COLS[16])} className={`num ${isSel(o, COLS[16]) ? 'cell-sel' : ''}`}>{o.valueK ? fmt(gmK(o)) : '-'}</td>
+                <td onClick={selectCell(o, COLS[14])} className={`num ${isSel(o, COLS[14]) ? 'cell-sel' : ''}`}><input type="number" min="0" value={o.valueK ? o.valueK * 1000 : ''} onChange={upd(o.id, 'valueK')} placeholder="-" /></td>
+                <td onClick={selectCell(o, COLS[15])} className={`num ${isSel(o, COLS[15]) ? 'cell-sel' : ''}`}><input type="number" min="0" value={o.cogsK ? o.cogsK * 1000 : ''} onChange={upd(o.id, 'cogsK')} placeholder="-" /></td>
+                <td onClick={selectCell(o, COLS[16])} className={`num ${isSel(o, COLS[16]) ? 'cell-sel' : ''}`}>{o.valueK ? fmtRupeesFromK(gmK(o)) : '-'}</td>
                 {gmPct(o)
                   ? <td onClick={selectCell(o, COLS[17])} className={`num ${isSel(o, COLS[17]) ? 'cell-sel' : ''}`}>{gmPct(o)}</td>
-                  : <td onClick={selectCell(o, COLS[17])} className={`err ${isSel(o, COLS[17]) ? 'cell-sel' : ''}`}>#DIV/0!</td>}
+                  : <td onClick={selectCell(o, COLS[17])} className={`${isSel(o, COLS[17]) ? 'cell-sel' : ''}`}>—</td>}
                 {/* Created and Proposal are system-stamped — read only, like Last Updated. */}
                 <td onClick={selectCell(o, COLS[18])} className={isSel(o, COLS[18]) ? 'cell-sel' : ''}>
                   <div className="ro" title="Stamped when the opportunity was created — read only">{mmmYY(o.createDate) || '—'}</div>
