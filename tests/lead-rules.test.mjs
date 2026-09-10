@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { deadlineForLead, expiredLeadDeadline, isFastTrackLead, routeOwner, supplyMissing } from '../src/leadRules.js'
+import { customerContactFromText, deadlineForLead, expiredLeadDeadline, hardenLeadExtraction, isFastTrackLead, isInternalSender, normalizeLeadContactFields, routeOwner, supplyMissing } from '../src/leadRules.js'
 
 const config = {
   ownershipRules: [
@@ -20,6 +20,27 @@ test('fast-track is configurable and limited to the configured class', () => {
   assert.equal(isFastTrackLead({ customerStatus: 'Green' }, config), true)
   assert.equal(isFastTrackLead({ customerStatus: 'Green' }, { ...config, fastTrack: { ...config.fastTrack, enabled: false } }), false)
   assert.equal(isFastTrackLead({ customerStatus: 'Amber' }, config), false)
+})
+
+test('internal ModAE senders are not treated as customer contacts', () => {
+  assert.equal(isInternalSender('sales@mod-ae.com', {}), true)
+  assert.equal(isInternalSender('buyer@ksb.example.com', {}), false)
+  assert.equal(customerContactFromText('Customer contact: Neha Kulkarni'), 'Neha Kulkarni')
+  const fields = [{ group: 'Customer', k: 'Contact person', v: 'Ruthvik Satish', conf: 100 }]
+  assert.deepEqual(normalizeLeadContactFields(fields, { from: 'sales@mod-ae.com', text: 'Please quote.\nRegards,\nRuthvik Satish' }), [])
+  assert.equal(normalizeLeadContactFields(fields, { from: 'sales@mod-ae.com', text: 'Customer contact: Neha Kulkarni' })[0].v, 'Neha Kulkarni')
+})
+
+test('lead extraction hardening does not invent quantities and flags missing evidence', () => {
+  const hardened = hardenLeadExtraction({
+    fields: [{ group: 'Customer', k: 'Sell-to customer', v: 'KSB Limited', conf: 98 }],
+    lineItems: [{ description: 'Proximity probe, 8 mm', qty: '', confidence: 90, evidence: '' }],
+    missing: [],
+  })
+  assert.equal(hardened.fields[0].conf, 50)
+  assert.equal(hardened.lineItems[0].qty, 0)
+  assert.equal(hardened.lineItems[0].confidence, 50)
+  assert.ok(hardened.missing.includes('Line 1: quantity'))
 })
 
 test('lead deadlines are generated from configurable rules', () => {

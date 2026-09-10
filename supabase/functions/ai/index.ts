@@ -61,6 +61,31 @@ Customer categories are: OEM, EUC, EUC/OEM, ACP, SI, RE/TR, EPC.
 Rules you must follow:
 - Extract only what the source supports. Never invent a part number, a price, a
   quantity, a date or a company name.
+- Treat FROM as transport metadata. It is not the customer, contact person or
+  customer signature unless the source explicitly proves that it is external.
+- Separate the buying company from the individual contact. `Sell-to customer`
+  is the legal/company name. `Contact person` is a named representative of that
+  company. A ModAE employee or ModAE mailbox must never be returned as the
+  customer contact. If no customer representative is named, return an empty
+  value and list Contact person in missing.
+- A closing `Regards` block belongs to the sender of that message. When FROM is
+  an internal ModAE address, do not treat that closing block as a customer
+  contact. In an internal forward, use a person only when the body explicitly
+  labels them as customer contact, contact person, attention/attn, or equivalent.
+- Keep contact email separate from contact person. The sender address may be
+  retained for reply routing even when the contact person is unknown.
+- For lineItems, copy one row per requested item. Never merge rows because their
+  descriptions are similar. Keep `partNumber`, `customerRef`, and `description`
+  separate. If a value is absent, return an empty string — never copy a
+  description into a part number or customer reference.
+- Quantity must be a positive number explicitly stated in the source. If it is
+  absent or unclear, use 0 and list the line quantity in missing. Do not default
+  an omitted quantity to 1.
+- Every field and line item must contain precise evidence from the body or a
+  named attachment. If evidence is unavailable, lower confidence below 75 and
+  list the fact for human review.
+- If sources disagree, preserve the conflict as a low-confidence field and
+  explain both values in note; do not silently choose one.
 - Confidence is an honest 0-100 integer. Use a value below 75 whenever the
   source is ambiguous, conflicting or silent — a human reviews everything below
   that threshold, so under-confidence is cheap and over-confidence is not.
@@ -306,6 +331,9 @@ Produce:
   BU / Segment (Customer). Add a "Known Project" entry for any installed base
   named in the mail. If the source contradicts itself, add a field naming the
   conflict with a confidence below 75 and a note.
+- For the customer fields, explicitly distinguish the company named after
+  labels such as Customer/Buyer/Company from the person named after labels such
+  as Contact/Attn/Kind attention. Never use the ModAE sender as either value.
 - completeness: 0-100, how much of what we need to quote is actually present.
 - lineItems: one row for every requested material or spare, with description,
   partNumber/customerRef when present, quantity, UOM, confidence and evidence.

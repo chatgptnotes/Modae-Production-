@@ -59,6 +59,17 @@ test('AI missing information is optional for registration', () => {
   assert.match(inbox, /Optional information still missing/)
 })
 
+test('internal senders cannot become customer contacts', () => {
+  assert.match(inbox, /normalizeLeadContactFields\(ai\.fields/)
+  assert.match(inbox, /contactPerson: value\(\/contact person\/i\) \|\| ''/)
+})
+
+test('lead extraction applies a final response hardening pass', () => {
+  assert.match(inbox, /const ai = hardenLeadExtraction\(aiRaw/)
+  const rules = fs.readFileSync(new URL('../src/leadRules.js', import.meta.url), 'utf8')
+  assert.match(rules, /const qty = Number\.isFinite\(rawQty\) && rawQty > 0 \? rawQty : 0/)
+})
+
 test('non-identity low-confidence fields are deferred until the opportunity exists', () => {
   assert.match(inbox, /const deferredPendingLow = pendingLow\.filter\(f => !isRegistrationCriticalField\(f\.k\)\)/)
   assert.match(inbox, /Follow-up information.*low-confidence sourcing or commercial fields/s)

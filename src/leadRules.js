@@ -15,6 +15,91 @@ export const DEFAULT_FAST_TRACK = {
 // commercial and sourcing fields remain follow-up work after registration.
 export const isRegistrationCriticalField = key => /^(sell[-\s]?to customer|customer name|euc(?: name| location)?|end user(?: name| location)?|contact person|contact phone|phone)$/i.test(String(key || '').trim())
 
+const emailAddress = value => String(value || '').trim().toLowerCase()
+const emailDomain = value => emailAddress(value).split('@')[1] || ''
+
+// The common mailbox and ModAE work addresses describe the internal sender,
+// not the customer representative. Keep this rule here so AI, fallback and
+// legacy lead paths all make the same distinction.
+export const isInternalSender = (email, config = {}) => {
+  const address = emailAddress(email)
+  if (!address) return false
+  const configured = [config.commonMailbox, config.gmailAccount, ...(config.internalEmails || [])]
+    .map(emailAddress).filter(Boolean)
+  if (configured.includes(address)) return true
+  const domains = new Set(['modae.demo', 'mod-ae.com', ...(config.internalDomains || []).map(x => String(x || '').trim().toLowerCase()).filter(Boolean)])
+  return domains.has(emailDomain(address))
+}
+
+// Only an explicit customer-contact label is strong enough to recover a named
+// person from an internal forward. Do not use a closing "Regards" signature:
+// on an outbound ModAE mail that signature belongs to ModAE.
+export const customerContactFromText = text => {
+  const match = String(text || '').match(/(?:customer\s+)?(?:contact\s+person|contact|attn\.?|kind\s+attention)\s*[:\-]\s*([A-Z][A-Za-z.'-]+(?:\s+[A-Z][A-Za-z.'-]+){1,3})/i)
+  return match ? match[1].trim() : ''
+}
+
+export const normalizeLeadContactFields = (fields, { from = '', text = '', config = {} } = {}) => {
+  const rows = Array.isArray(fields) ? fields : []
+  if (!isInternalSender(from, config)) return rows
+  const explicit = customerContactFromText(text)
+  if (!explicit) return rows.filter(field => !/contact\s+person/i.test(String(field?.k || '')))
+  const replacement = { group: 'Customer', k: 'Contact person', v: explicit, conf: 95, ev: 'Explicit customer contact in email body' }
+  const first = rows.findIndex(field => /contact\s+person/i.test(String(field?.k || '')))
+  if (first < 0) return [...rows, replacement]
+  return rows.map((field, index) => index === first ? { ...field, ...replacement } : field)
+}
+
+const boundedConfidence = (value, fallback = 0) => {
+  const n = Number(value)
+  return Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : fallback
+}
+
+// Final client-side contract for model output. The model may be wrong or may
+// omit evidence; neither case should silently become trusted lead data.
+export const hardenLeadExtraction = (ai, { from = '', text = '', config = {} } = {}) => {
+  if (!ai) return ai
+  const fields = normalizeLeadContactFields(ai.fields, { from, text, config })
+    .map(field => {
+      const value = String(field?.v ?? '').trim()
+      const evidence = String(field?.ev ?? '').trim()
+      const missingEvidence = !evidence
+      return {
+        ...field,
+        v: value,
+        ev: evidence || 'Evidence not supplied — verify against the original enquiry',
+        conf: missingEvidence ? Math.min(50, boundedConfidence(field?.conf)) : boundedConfidence(field?.conf),
+        note: missingEvidence
+          ? [field?.note, 'Human review required because the extraction has no evidence.'].filter(Boolean).join(' ')
+          : field?.note,
+      }
+    })
+    .filter(field => field.v)
+  const lineItems = (Array.isArray(ai.lineItems) ? ai.lineItems : []).map(item => {
+    const rawQty = Number(item?.qty)
+    const qty = Number.isFinite(rawQty) && rawQty > 0 ? rawQty : 0
+    const evidence = String(item?.evidence ?? '').trim()
+    return {
+      ...item,
+      description: String(item?.description || item?.desc || '').trim(),
+      partNumber: String(item?.partNumber || item?.pn || '').trim(),
+      customerRef: String(item?.customerRef || '').trim(),
+      qty,
+      uom: String(item?.uom || 'EA').trim() || 'EA',
+      confidence: evidence ? boundedConfidence(item?.confidence ?? item?.conf) : Math.min(50, boundedConfidence(item?.confidence ?? item?.conf)),
+      evidence: evidence || 'Evidence not supplied — verify against the original enquiry',
+    }
+  })
+  const missing = [...new Set([
+    ...(Array.isArray(ai.missing) ? ai.missing : []).map(item => String(item || '').trim()).filter(Boolean),
+    ...lineItems.flatMap((item, index) => [
+      !item.description && `Line ${index + 1}: description`,
+      item.qty <= 0 && `Line ${index + 1}: quantity`,
+    ].filter(Boolean)),
+  ])]
+  return { ...ai, fields, lineItems, missing }
+}
+
 export function leadConfig(config = {}) {
   return {
     ownershipRules: Array.isArray(config.ownershipRules) ? config.ownershipRules : [],

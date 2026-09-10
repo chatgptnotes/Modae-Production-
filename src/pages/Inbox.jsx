@@ -19,7 +19,7 @@ import { leadWorkflow } from '../leadWorkflow.js'
 import { parseLeadLineItems } from '../tenderParse.js'
 import { deterministicLeadRoute, leadTextChunks, mergeLeadResults, cleanDisplayValue } from '../leadExtraction.js'
 import { scanAttachment, parsedToLeadFields, deterministicPromptContext, mergeDeterministicIntoAi } from '../docScan.js'
-import { isFastTrackLead, isRegistrationCriticalField, routeOwner, supplyMissing } from '../leadRules.js'
+import { customerContactFromText, hardenLeadExtraction, isFastTrackLead, isInternalSender, isRegistrationCriticalField, normalizeLeadContactFields, routeOwner, supplyMissing } from '../leadRules.js'
 import { INDIA_LOCATION_GROUPS, indiaLocation, indiaRegionForLocation } from '../indiaLocations.js'
 import {
   QUOTE_FEE_DOCUMENTS, answeredPatch, clarificationItems, clarificationKindFor,
@@ -160,7 +160,9 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
   const baseAi = mergedResults || (deterministic.fields.length || deterministic.lineItems.length
     ? { summary: '', route: '', urgency: 'Normal', completeness: 0, suggestedOwner: '', fields: [], lineItems: [], missing: [], next: [] }
     : null)
-  const ai = mergeDeterministicIntoAi(baseAi, deterministic.fields, deterministic.lineItems)
+  const aiRaw = mergeDeterministicIntoAi(baseAi, deterministic.fields, deterministic.lineItems)
+  const sourceText = `${subject || ''}\n${body || ''}\n${attachmentText}`
+  const ai = hardenLeadExtraction(aiRaw, { from, text: sourceText, config: store.config })
   // The proxy is optional in demo/staging builds. Keep the intake usable when
   // it is absent or temporarily unavailable: preserve only facts present in
   // the pasted mail and leave the lead visibly pending human structure.
@@ -174,6 +176,8 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
         : 'Project'
     const fields = []
     if (from?.trim()) fields.push({ group: 'Customer', k: 'Sender', v: from.trim(), conf: 45, ev: 'From address', note: 'Confirm the customer and contact person.' })
+    const explicitContact = customerContactFromText(text)
+    if (explicitContact) fields.push({ group: 'Customer', k: 'Contact person', v: explicitContact, conf: 95, ev: 'Explicit customer contact in email body' })
     if (subject?.trim()) fields.push({ group: 'RFQ', k: 'Subject', v: subject.trim(), conf: 55, ev: 'Email subject', note: 'Confirm the opportunity name and route.' })
     if (body?.trim()) fields.push({ group: 'RFQ', k: 'Email body', v: sliceAtWordBoundary(cleanDisplayValue(body), 2000), conf: 35, ev: 'Email body', note: 'Fallback preview; the complete source is retained separately. Structure the requested scope and quantities.' })
     if (attachmentText) fields.push({ group: 'RFQ', k: 'Attachment content', v: sliceAtWordBoundary(cleanDisplayValue(attachmentText), 4000), conf: 45, ev: 'Attached document content', note: 'Fallback preview; the complete source is retained separately. Confirm the scope, quantities and specifications.' })
@@ -205,7 +209,7 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
   const owner = ROLES[ai.suggestedOwner]?.sales
     ? ai.suggestedOwner
     : ownerForOppType(resolvedRoute === 'Spares' ? 'Spares' : resolvedRoute === 'Service' ? 'Service' : 'Project', store.config)
-  const resolvedFields = ai.fields.map(f => {
+  const resolvedFields = normalizeLeadContactFields(ai.fields, { from, text: sourceText, config: store.config }).map(f => {
     if (!/^(opp type|opportunity type)$/i.test(f.k) || !sourceRoute) return f
     return {
       ...f, v: sourceRoute, conf: Math.max(Number(f.conf) || 0, 98),
@@ -810,6 +814,11 @@ function AiLeadDetail({ lead }) {
   const [reverting, setReverting] = useState(false)
   const [decisionErr, setDecisionErr] = useState('')
   const [reassignTo, setReassignTo] = useState(lead.suggestedOwner || OWNERS[0])
+  const internalSender = isInternalSender(lead.from, store.config)
+  const explicitCustomerContact = customerContactFromText(`${lead.subject || ''}\n${lead.body || ''}`)
+  const storedCustomerContact = internalSender
+    ? explicitCustomerContact
+    : lead.contactPerson || leadFieldValue(ai.fields, /contact\s*person|contact/i) || lead.parse?.contactPerson || ''
   const initialLocation = lead.location || (lead.region && !indiaRegionForLocation(lead.region, store.config) ? lead.region : '') || leadFieldValue(ai.fields, /location|region/i)
   const initialRegion = lead.region || indiaRegionForLocation(initialLocation, store.config) || initialLocation
   const initialDecisions = () => ({
@@ -819,7 +828,7 @@ function AiLeadDetail({ lead }) {
     region: initialRegion,
     eucName: lead.eucName || leadFieldValue(ai.fields, /euc\s*name/i) || lead.parse?.eucName || '',
     eucLocation: lead.eucLocation || leadFieldValue(ai.fields, /euc\s*location/i) || lead.parse?.eucLocation || initialLocation,
-    contactPerson: lead.contactPerson || leadFieldValue(ai.fields, /contact\s*person|contact/i) || lead.parse?.contactPerson || '',
+    contactPerson: storedCustomerContact,
     contactPhone: lead.contactPhone || leadFieldValue(ai.fields, /contact\s*phone|phone/i) || lead.parse?.contactPhone || '',
     owner: lead.assignedOwner || lead.suggestedOwner || routeOwner(initialRegion, store.config, OWNERS[0]),
     oppType: OPP_TYPES.includes(lead.oppType)
@@ -1035,8 +1044,8 @@ function AiLeadDetail({ lead }) {
         subject: lead.subject,
         body: lead.body,
         sellTo: customer?.name || leadFieldValue(ai.fields, /sell-to/i),
-        contactPerson: customer?.contactPerson || leadFieldValue(ai.fields, /contact/i),
-        salutation: customer?.contactPerson ? `Dear ${customer.contactPerson},` : 'Dear Sir,',
+        contactPerson: customer?.contactPerson || storedCustomerContact,
+        salutation: customer?.contactPerson ? `Dear ${customer.contactPerson},` : storedCustomerContact ? `Dear ${storedCustomerContact},` : 'Dear Sir,',
         feeText: `₹${Number(store.config?.amberFee?.amount ?? 25000).toLocaleString('en-IN')}`,
         senderBlock: [clarSender.rule === 'assigned-owner' ? clarSender.name : '', 'ModAE India Pvt Ltd']
           .filter(Boolean).join('\n'),
@@ -2279,7 +2288,8 @@ export default function Inbox() {
     }
     const value = pattern => leadFieldValue(lead.ai?.fields, pattern)
     const owner = lead.assignedOwner || lead.suggestedOwner || store.role
-    const sellTo = value(/sell-to customer|customer/i) || lead.sellTo || lead.sender || 'Simulated customer'
+    const internalSender = isInternalSender(lead.from, store.config)
+    const sellTo = value(/sell-to customer|customer/i) || lead.sellTo || (internalSender ? 'Customer to confirm' : lead.sender) || 'Simulated customer'
     const category = value(/category/i) || 'EUC'
     const location = value(/^location$/i) || lead.location || ''
     const resolvedOppType = OPP_TYPES.includes(lead.oppType) ? lead.oppType : (oppType || lead.route || 'Project')
@@ -2296,7 +2306,7 @@ export default function Inbox() {
       segment: value(/segment/i) || 'Others', product: [product], prob: '', valueK: 0, cogsK: 0,
       rfqNumber: lead.ref || '', rfqDate: lead.ts?.slice(0, 10) || '', createDate: today,
       proposalDate: '', orderDate: '', invoiceDate: '', status: 'Open', stage: 'Lead', closedReason: '',
-      contactPerson: value(/contact person/i) || lead.sender || '', contactPhone: '', contactEmail: lead.from || '',
+      contactPerson: value(/contact person/i) || '', contactPhone: '', contactEmail: lead.from || '',
       lastUpdated: today, forecast: false, remarks: lead.body || '', nextActionOwner: '', simulated: true,
     }
     store.addOpportunity(opp)
