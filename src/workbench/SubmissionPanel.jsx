@@ -72,7 +72,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
   const totals = computeTotals(p)
   const priced = p.bidType !== 'Unpriced (Technical)'
   const allChecked = checks.c1 && checks.c2 && checks.c3
-  const proposalValidated = p.reviewStatus === 'Validated' || !!release
+  const proposalValidated = p.reviewStatus === 'Validated' || !!release || p.reviewStatus === 'Override accepted'
   const fromValid = EMAIL_RE.test(emailFrom.trim())
   const toValid = recipientsValid(emailTo)
   const ccValid = splitRecipients(emailCc).length === 0 || recipientsValid(emailCc)

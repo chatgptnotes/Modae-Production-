@@ -146,6 +146,37 @@ const templateMappingSchema = {
   required: ['version', 'method', 'coverSheet', 'commercialSheet', 'fields', 'warnings'],
 }
 
+const proposalReviewSchema = {
+  type: 'OBJECT',
+  properties: {
+    findings: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+      severity: { type: 'STRING', enum: ['block', 'warning', 'info'] },
+      code: { type: 'STRING' }, text: { type: 'STRING' }, evidence: { type: 'STRING' },
+    }, required: ['severity', 'code', 'text', 'evidence'] } },
+  },
+  required: ['findings'],
+}
+
+function proposalReviewPrompt(p) {
+  return `${HOUSE}
+
+Review a manually reviewed proposal workbook against the opportunity and the
+proposal data. Find semantic inconsistencies only; arithmetic and required
+field checks are already supplied as LOCAL FINDINGS. Do not invent facts or
+change values. Use block only for a clear identity or scope contradiction,
+warning for a concern requiring human review, and info for a useful observation.
+Return concise findings with evidence from a sheet name and row when possible.
+
+OPPORTUNITY:
+${cap(JSON.stringify(p.opportunity || {}), 5000)}
+PROPOSAL:
+${cap(JSON.stringify(p.proposal || {}), 20000)}
+LOCAL FINDINGS:
+${cap(JSON.stringify(p.localIssues || []), 12000)}
+WORKBOOK:
+${cap(JSON.stringify(p.workbook || []), 60000)}`
+}
+
 function leadPrompt(p) {
   return `${HOUSE}
 
@@ -383,7 +414,7 @@ export default async function handler(req, res) {
   const task = String(input.task || '')
   const payload = input.payload || {}
   const model = /^gemini-[\w.-]+$/.test(String(input.model || '')) ? String(input.model) : DEFAULT_MODEL
-  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'clarification.suggest', 'clarification.answer', 'approval.condition-evidence', 'template.map'].includes(task)) {
+  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'clarification.suggest', 'clarification.answer', 'approval.condition-evidence', 'template.map', 'proposal.review'].includes(task)) {
     return fail(res, 400, 'AI_BAD_REQUEST', `Unsupported task: ${task}`)
   }
 
@@ -395,10 +426,11 @@ export default async function handler(req, res) {
               : task === 'clarification.answer' ? clarificationAnswerPrompt(payload)
                 : task === 'approval.condition-evidence' ? conditionEvidencePrompt(payload)
                   : task === 'template.map' ? templateMappingPrompt(payload)
-          : leadPrompt(payload)
+                    : task === 'proposal.review' ? proposalReviewPrompt(payload)
+                  : leadPrompt(payload)
   const requestBody = {
     contents: [{ parts: [{ text: prompt }, ...(['lead.extract', 'approval.condition-evidence'].includes(task) ? inlineParts(payload) : [])] }],
-    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'clarification.suggest', 'clarification.answer', 'approval.condition-evidence', 'template.map'].includes(task)
+    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'clarification.suggest', 'clarification.answer', 'approval.condition-evidence', 'template.map', 'proposal.review'].includes(task)
       ? {
           responseMimeType: 'application/json',
           responseSchema: task === 'lead.fill' ? fillSchema
@@ -408,6 +440,7 @@ export default async function handler(req, res) {
                   : task === 'clarification.answer' ? clarificationAnswerSchema
                   : task === 'approval.condition-evidence' ? conditionEvidenceSchema
                     : task === 'template.map' ? templateMappingSchema
+                      : task === 'proposal.review' ? proposalReviewSchema
                 : leadSchema,
         }
       : {},

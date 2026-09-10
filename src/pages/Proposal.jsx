@@ -23,6 +23,8 @@ import { putFiles } from '../leadBlobs.js'
 import { uploadOppFile } from '../filestore.js'
 import DetailTabs from '../DetailTabs.jsx'
 import { isSparesSupportRow, withSparesSupportRows } from '../proposal/sparesBoq.js'
+import { runTaskResult } from '../ai.js'
+import { importReviewedWorkbook, normalizeAiReview, reviewWorkbookPayload } from '../proposal/reviewWorkbook.js'
 
 const ROUTE_TABS = {
   Project: ['Cover Letter', 'Edit Sheet', 'Document', 'Signal List', 'Rack Layout', 'Priced BoQ'],
@@ -598,9 +600,9 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
     next = {
       ...next,
       pricedOnce: pRef.current.pricedOnce || next.bom.length > 0,
-      reviewStatus: next.reviewStatus === 'Validated' ? 'Needs review' : (next.reviewStatus || pRef.current.reviewStatus),
-      reviewIssues: next.reviewStatus === 'Validated' ? [] : (next.reviewIssues || pRef.current.reviewIssues || []),
-      reviewNeedsRevision: next.reviewStatus === 'Validated' ? true : (next.reviewNeedsRevision || pRef.current.reviewNeedsRevision || false),
+      reviewStatus: ['Validated', 'Override accepted'].includes(next.reviewStatus) ? 'Needs review' : (next.reviewStatus || pRef.current.reviewStatus),
+      reviewIssues: ['Validated', 'Override accepted'].includes(next.reviewStatus) ? [] : (next.reviewIssues || pRef.current.reviewIssues || []),
+      reviewNeedsRevision: ['Validated', 'Override accepted'].includes(next.reviewStatus) ? true : (next.reviewNeedsRevision || pRef.current.reviewNeedsRevision || false),
     }
     setP(next)
     store.saveProposal(oppId, next)
@@ -692,7 +694,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   const blocked = isBlocked(blockers)
   const submitted = comms.some(c => c.kind === 'submission' || c.kind === 'proposal-email')
   const reviewStatus = p.reviewStatus || 'Not reviewed'
-  const reviewReady = reviewStatus === 'Validated'
+  const reviewReady = reviewStatus === 'Validated' || reviewStatus === 'Override accepted'
   const approvalRequired = blockers.some(bl => bl.approvalType && bl.severity !== 'wait') || pendingForOpp.length > 0
   const readinessSummary = blocked
     ? `${blockers.length} readiness item${blockers.length === 1 ? '' : 's'} need attention`
@@ -733,40 +735,55 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   // Phase-one human-in-the-loop checkpoint. This is intentionally deterministic
   // in the local demo: production AI can replace the implementation while the
   // proposal state and UX remain the same.
-  const validateReviewedProposal = async () => {
+  const validateReviewedProposal = async (proposal = p, { automatic = false } = {}) => {
     setReviewBusy(true)
     setReviewMessage('')
     setReviewError('')
     try {
+      const review = proposal
       const issues = []
-      const revisionChanged = !!p.reviewNeedsRevision
-      const nextRevision = revisionChanged ? String((Number(p.revision) || 0) + 1).padStart(2, '0') : p.revision
-      const nextRevisionLog = revisionChanged ? [...(p.revisions || []), {
+      const revisionChanged = !!review.reviewNeedsRevision
+      const nextRevision = revisionChanged ? String((Number(review.revision) || 0) + 1).padStart(2, '0') : review.revision
+      const nextRevisionLog = revisionChanged ? [...(review.revisions || []), {
         rev: `Rev-${nextRevision}`,
         when: new Date().toISOString().slice(0, 10), by: store.role,
         note: 'Proposal edited and revalidated', status: 'Revised', type: 'Other',
-        snapshot: snapshotProposal(p),
-      }] : (p.revisions || [])
-      if (!p.bom?.length && route !== 'Services') issues.push({ severity: 'block', text: 'No proposal line items were found.' })
-      if (p.bom?.some(line => !String(line.pn || '').trim())) issues.push({ severity: 'warning', text: 'One or more line items are missing a model or part number.' })
-      if (p.bom?.some(line => Number(totalQty(line)) <= 0)) issues.push({ severity: 'block', text: 'Every proposal line must have a quantity greater than zero.' })
-      if (p.bom?.some(line => line.quoted !== '' && Number(line.quoted) < 0)) issues.push({ severity: 'block', text: 'Negative quoted prices are not allowed.' })
-      if (!p.terms?.length) issues.push({ severity: 'warning', text: 'Commercial terms have not been added yet.' })
-      if (p.reviewedUpload) issues.push({ severity: 'info', text: `Reviewed upload received: ${p.reviewedUpload.filename}` })
+        snapshot: snapshotProposal(review),
+      }] : (review.revisions || [])
+      if (!review.bom?.length && route !== 'Services') issues.push({ severity: 'block', text: 'No proposal line items were found.' })
+      if (review.bom?.some(line => !String(line.pn || '').trim())) issues.push({ severity: 'warning', text: 'One or more line items are missing a model or part number.' })
+      if (review.bom?.some(line => Number(totalQty(line)) <= 0)) issues.push({ severity: 'block', text: 'Every proposal line must have a quantity greater than zero.' })
+      if (review.bom?.some(line => line.quoted !== '' && Number(line.quoted) < 0)) issues.push({ severity: 'block', text: 'Negative quoted prices are not allowed.' })
+      if (!review.terms?.length) issues.push({ severity: 'warning', text: 'Commercial terms have not been added yet.' })
+      if (review.reviewedUpload) issues.push({ severity: 'info', text: `Reviewed upload received: ${review.reviewedUpload.filename}` })
+      if (review.reviewedUpload?.validationIssues?.length) issues.unshift(...review.reviewedUpload.validationIssues)
+
+      let aiIssues = []
+      if (review.reviewedUpload?.sheets?.length) {
+        const aiResult = await runTaskResult('proposal.review', reviewWorkbookPayload(review.reviewedUpload, review, opp, issues), { model: store.config?.aiModel?.model })
+        aiIssues = normalizeAiReview(aiResult.data?.data || aiResult.data)
+        if (!aiResult.data && aiResult.error) aiIssues.push({ severity: 'info', code: 'ai.unavailable', source: 'AI', text: `AI semantic review was unavailable: ${aiResult.error}. Local checks were still completed.` })
+      }
+      const allIssues = [...issues, ...aiIssues]
 
       const next = {
-        ...p,
+        ...review,
         revision: nextRevision,
         revisions: nextRevisionLog,
-        reviewStatus: issues.some(issue => issue.severity === 'block') ? 'Needs attention' : 'Validated',
-        reviewIssues: issues,
+        reviewStatus: allIssues.some(issue => issue.severity === 'block') ? 'Needs attention' : 'Validated',
+        reviewIssues: allIssues,
         reviewCompletedAt: new Date().toISOString(),
         reviewNeedsRevision: false,
+        reviewOverride: null,
       }
       setP(next)
       store.saveProposal(oppId, next)
       if (next.reviewStatus === 'Validated') {
-        setReviewMessage('Review complete. The proposal can now move to approval or customer send.')
+        setReviewMessage(allIssues.length === 0
+          ? 'Review complete — proposal is ready to proceed.'
+          : automatic
+            ? 'Workbook uploaded, imported, and validated. Review the findings before proceeding.'
+            : 'Review complete. The proposal can now move to approval or customer send.')
       } else {
         setReviewError('Review found blocking issues. Resolve them before continuing.')
       }
@@ -775,6 +792,20 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
     } finally {
       setReviewBusy(false)
     }
+  }
+
+  const continueAnyway = () => {
+    const findings = p.reviewIssues || []
+    const next = {
+      ...p,
+      reviewStatus: 'Override accepted',
+      reviewOverride: { accepted: true, by: store.role, at: new Date().toISOString(), findings },
+      reviewNeedsRevision: false,
+    }
+    setP(next)
+    store.saveProposal(oppId, next)
+    setReviewError('')
+    setReviewMessage('Validation findings were stored. You chose to continue anyway; this override was recorded in the audit trail.')
   }
 
   const uploadReviewedProposal = async event => {
@@ -787,17 +818,20 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
     }
     try {
       const parsed = parseProposalWorkbook(await file.arrayBuffer(), file.name)
+      const imported = importReviewedWorkbook(parsed, p, opp)
       const next = {
-        ...p,
-        reviewedUpload: { filename: file.name, size: file.size, uploadedAt: new Date().toISOString(), sheets: parsed.sheets },
+        ...imported.proposal,
+        reviewedUpload: { filename: file.name, size: file.size, uploadedAt: new Date().toISOString(), sheets: parsed.sheets, importedChanges: imported.changes, validationIssues: imported.issues, table: imported.table },
         reviewStatus: 'Ready for validation',
-        reviewIssues: [],
-        reviewNeedsRevision: reviewReady || !!p.reviewNeedsRevision,
+        reviewIssues: imported.issues,
+        reviewNeedsRevision: true,
+        reviewOverride: null,
       }
       setP(next)
       store.saveProposal(oppId, next)
       setReviewError('')
-      setReviewMessage(`${file.name} uploaded. Run validation to continue.`)
+      setReviewMessage(`${file.name} uploaded and imported. Validating…`)
+      await validateReviewedProposal(next, { automatic: true })
     } catch (error) {
       setReviewError(error?.message || 'The reviewed proposal could not be read')
     }
@@ -949,7 +983,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
       {validateChoice && (
         <Modal title="Validate review" onClose={() => setValidateChoice(false)}>
           <p className="hint">Validate the current AI-generated draft as-is, or upload a workbook that's already been reviewed outside the app.</p>
-          <div className="forms-actions">
+          <div className="forms-actions proposal-review-actions">
             <button className="primary" onClick={() => { setValidateChoice(false); validateReviewedProposal() }}>
               <Icon name="checkCircle" size={13} /> Continue with AI draft
             </button>
@@ -959,13 +993,16 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           </div>
         </Modal>
       )}
-      {(reviewError || reviewMessage || p.reviewIssues?.length > 0) && (
+      {(reviewError || reviewMessage || p.reviewIssues?.length > 0 || p.reviewCompletedAt) && (
         <section className="proposal-review-results" aria-live="polite">
           {reviewError && <div className="errbox">{reviewError}</div>}
           {reviewMessage && <div className="okbox">{reviewMessage}</div>}
-          {!!p.reviewIssues?.length && <div className="proposal-review-issues">
+          {p.reviewCompletedAt && <div className="proposal-review-issues">
             <strong>Validation findings</strong>
-            {p.reviewIssues.map((issue, index) => <div key={index} className={`proposal-review-issue ${issue.severity}`}>{issue.text}</div>)}
+            {!!p.reviewIssues?.length
+              ? p.reviewIssues.map((issue, index) => <div key={index} className={`proposal-review-issue ${issue.severity}`}>{issue.text}{issue.evidence ? ` — ${issue.evidence}` : ''}</div>)
+              : <div className="proposal-review-issue info">Review complete — proposal is ready to proceed.</div>}
+            {reviewStatus === 'Needs attention' && <button className="btn-secondary" onClick={() => { if (window.confirm('Continue despite these validation findings? This override will be stored in the audit trail.')) continueAnyway() }}>Continue anyway</button>}
           </div>}
         </section>
       )}
