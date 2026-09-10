@@ -61,6 +61,29 @@ test('AI route health check returns the configured model on success', async () =
   } finally { globalThis.fetch = oldFetch }
 })
 
+test('AI route reuses the Vercel proxy for template mapping', async () => {
+  const oldFetch = globalThis.fetch
+  let request
+  globalThis.fetch = async (_url, options) => {
+    request = JSON.parse(options.body)
+    return { ok: true, json: async () => ({
+      candidates: [{ content: { parts: [{ text: JSON.stringify({
+        version: 1, method: 'gemini', coverSheet: 'Cover', commercialSheet: 'Quote', fields: {}, warnings: [],
+      }) }] } }],
+    }) }
+  }
+  try {
+    await withEnv('server-side-only', async () => {
+      const res = response()
+      await handler({ method: 'POST', body: { task: 'template.map', model: 'gemini-2.5-flash', payload: { workbook: [], deterministic: {} } } }, res)
+      assert.equal(res.out.status, 200)
+      assert.equal(res.out.body.ok, true)
+      assert.equal(request.generationConfig.responseMimeType, 'application/json')
+      assert.equal(request.generationConfig.responseSchema.properties.coverSheet.type, 'STRING')
+    })
+  } finally { globalThis.fetch = oldFetch }
+})
+
 test('text helper accepts proposal text returned inside task data', () => {
   assert.equal(textFromTaskResult({ data: { text: 'Dear Sir/Madam,' } }), 'Dear Sir/Madam,')
   assert.equal(textFromTaskResult({ text: 'top-level text' }), 'top-level text')

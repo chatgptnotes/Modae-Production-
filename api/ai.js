@@ -119,6 +119,33 @@ const conditionEvidenceSchema = {
   required: ['assessment', 'confidence', 'evidence', 'concerns'],
 }
 
+const templateLocationSchema = {
+  type: 'OBJECT',
+  properties: { sheet: { type: 'STRING' }, row: { type: 'INTEGER' }, column: { type: 'INTEGER' }, label: { type: 'STRING' } },
+  required: ['sheet', 'row', 'column', 'label'],
+}
+
+const templateMappingSchema = {
+  type: 'OBJECT',
+  properties: {
+    version: { type: 'INTEGER' }, method: { type: 'STRING' }, coverSheet: { type: 'STRING' }, commercialSheet: { type: 'STRING' },
+    fields: { type: 'OBJECT', properties: {
+      customerName: templateLocationSchema, customerAddress: templateLocationSchema, location: templateLocationSchema,
+      contactPerson: templateLocationSchema, subject: templateLocationSchema, rfqNumber: templateLocationSchema,
+      project: templateLocationSchema, terms: templateLocationSchema,
+    } },
+    lineTable: { type: 'OBJECT', properties: {
+      sheet: { type: 'STRING' }, headerRow: { type: 'INTEGER' },
+      columns: { type: 'OBJECT', properties: {
+        partNumber: { type: 'INTEGER' }, description: { type: 'INTEGER' }, quantity: { type: 'INTEGER' },
+        unitPrice: { type: 'INTEGER' }, totalPrice: { type: 'INTEGER' },
+      } },
+    }, required: ['sheet', 'headerRow', 'columns'] },
+    warnings: { type: 'ARRAY', items: { type: 'STRING' } },
+  },
+  required: ['version', 'method', 'coverSheet', 'commercialSheet', 'fields', 'warnings'],
+}
+
 function leadPrompt(p) {
   return `${HOUSE}
 
@@ -317,6 +344,27 @@ CONDITION: ${cap(p.conditionText, 2000)}
 INCORPORATION NOTE: ${cap(p.incorporationNote, 2000)}`
 }
 
+function templateMappingPrompt(p) {
+  return `${HOUSE}
+
+You are mapping a customer-facing Excel proposal template to WinTrack fields.
+Use only the supplied workbook rows. Sheet, row and column indexes are zero-based.
+Detect meaning from labels even when sheet names and visual layout are different.
+For cover fields, return the semantic label cell; WinTrack writes the live value
+into the adjacent value cell. For line tables, return the header row and columns.
+Do not change the workbook design, logo, formatting, formulas or values.
+Return only mapping JSON. Do not invent sheets or fields. Add concise warnings
+for fields or tables that cannot be identified.
+
+WORKBOOK SUMMARY:
+${cap(JSON.stringify(p.workbook || []), 50000)}
+
+DETERMINISTIC STARTING MAPPING:
+${cap(JSON.stringify(p.deterministic || {}), 12000)}
+
+${cap(p.instructions, 1000)}`
+}
+
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*')
@@ -335,7 +383,7 @@ export default async function handler(req, res) {
   const task = String(input.task || '')
   const payload = input.payload || {}
   const model = /^gemini-[\w.-]+$/.test(String(input.model || '')) ? String(input.model) : DEFAULT_MODEL
-  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'clarification.suggest', 'clarification.answer', 'approval.condition-evidence'].includes(task)) {
+  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'clarification.suggest', 'clarification.answer', 'approval.condition-evidence', 'template.map'].includes(task)) {
     return fail(res, 400, 'AI_BAD_REQUEST', `Unsupported task: ${task}`)
   }
 
@@ -344,12 +392,13 @@ export default async function handler(req, res) {
       : task === 'vendor.quote' ? vendorQuotePrompt(payload)
         : task === 'email.proposal' ? proposalEmailPrompt(payload)
           : task === 'clarification.suggest' ? clarificationSuggestPrompt(payload)
-            : task === 'clarification.answer' ? clarificationAnswerPrompt(payload)
-              : task === 'approval.condition-evidence' ? conditionEvidencePrompt(payload)
+              : task === 'clarification.answer' ? clarificationAnswerPrompt(payload)
+                : task === 'approval.condition-evidence' ? conditionEvidencePrompt(payload)
+                  : task === 'template.map' ? templateMappingPrompt(payload)
           : leadPrompt(payload)
   const requestBody = {
     contents: [{ parts: [{ text: prompt }, ...(['lead.extract', 'approval.condition-evidence'].includes(task) ? inlineParts(payload) : [])] }],
-    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'clarification.suggest', 'clarification.answer', 'approval.condition-evidence'].includes(task)
+    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'clarification.suggest', 'clarification.answer', 'approval.condition-evidence', 'template.map'].includes(task)
       ? {
           responseMimeType: 'application/json',
           responseSchema: task === 'lead.fill' ? fillSchema
@@ -358,6 +407,7 @@ export default async function handler(req, res) {
                 : task === 'clarification.suggest' ? clarificationSuggestSchema
                   : task === 'clarification.answer' ? clarificationAnswerSchema
                   : task === 'approval.condition-evidence' ? conditionEvidenceSchema
+                    : task === 'template.map' ? templateMappingSchema
                 : leadSchema,
         }
       : {},

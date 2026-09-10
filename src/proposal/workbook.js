@@ -81,6 +81,11 @@ export function parseProposalWorkbook(buffer, filename) {
         : merges
       return {
         name,
+        // Mapping uses these offsets to translate the compact preview's
+        // coordinates back to the original worksheet coordinates used by
+        // ExcelJS. This keeps leading logo/header rows and columns intact.
+        sourceRowOffset: effectiveRange.s.r + leadingBlankRows,
+        sourceColumnOffset: effectiveRange.s.c,
         rows: visibleRows,
         styles: visibleStyles,
         kinds: visibleKinds,

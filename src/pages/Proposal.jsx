@@ -444,6 +444,8 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   const proposalTemplate = route === 'Project' ? p.projectProposalWorkbook
     : route === 'Spares' ? p.sparesProposalWorkbook
       : route === 'Services' ? p.serviceProposalWorkbook : null
+  const configuredProposalTemplate = (store.config?.uploads?.proposalTemplates || [])
+    .find(item => item.lane === (route === 'Services' ? 'Service' : route) && item.status === 'Current')
   const proposalTemplateSheets = proposalTemplate?.sheets || []
   const referencePartNumber = description => String(description || '').match(/[A-Z]{1,8}[A-Z0-9]*(?:[./-][A-Z0-9]+){2,}/i)?.[0] || ''
   const referenceBom = rows => rows.map(row => {
@@ -531,6 +533,8 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
       const bytes = await generateProposalWorkbook({
         templateBuffer: await response.arrayBuffer(),
         p, opp, doc, priced, totalQty, lineQuoted, lineCost, linePrice, totals, route,
+        mapping: configured?.mapping,
+        mappingWarnings: configured?.mappingWarnings,
         redactInternalCosting: false,
       })
       setRenderedTemplateWorkbook(parseRenderedWorkbook(bytes, configured?.name || proposalTemplate?.filename || `${oppId} Proposal.xlsx`))
@@ -804,7 +808,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
     ['Sl.', 'Item Category', 'Item/Scope Description', 'Proposed Model & Part Number', 'Customer Item Code', 'Adders', 'Qty/Unit', 'Common', 'Spares', 'Total Qty', 'UOM', 'Unit Price ₹', 'Total Price ₹', 'Unit Cost ₹', 'Total Cost ₹', `List Price`, 'Currency'],
     p.bom.map((l, i) => [i + 1, l.itemCategory, l.desc, l.pn, l.custRef, l.adders.join('+'), l.qtyPerUnit, l.common, l.spares, totalQty(l), l.uom, lineQuoted(l), lineQuoted(l) * totalQty(l), Math.round(lineCost(l)), Math.round(lineCost(l) * totalQty(l)), linePrice(l), l.currency])
   )
-  const exportExcel = () => downloadProposalXlsx({ p, opp, doc, priced, totalQty, lineQuoted, lineCost, linePrice, totals, route }).catch(error => {
+  const exportExcel = () => downloadProposalXlsx({ p, opp, doc, priced, totalQty, lineQuoted, lineCost, linePrice, totals, route, mapping: configuredProposalTemplate?.mapping, mappingWarnings: configuredProposalTemplate?.mappingWarnings }).catch(error => {
     console.error('Proposal Excel export failed', error)
     setReviewError(`The proposal workbook could not be downloaded: ${error?.message || 'unknown export error'}`)
   })
@@ -1437,6 +1441,9 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           </div>}
           {templateLoading && <div className="hint">Loading proposal workbook...</div>}
           {templateError && <div className="errbox" role="alert">{templateError}</div>}
+          {!!configuredProposalTemplate?.mappingWarnings?.length && <div className="warnbox">
+            Template mapping needs review: {configuredProposalTemplate.mappingWarnings.join('; ')}
+          </div>}
           {!!renderedTemplateWorkbook && <WorkbookPreview
             workbook={renderedTemplateWorkbook}
             editable={templatePreviewMode === 'draft'}

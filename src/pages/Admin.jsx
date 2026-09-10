@@ -11,6 +11,7 @@ import { uploadAdminTemplate } from '../filestore.js'
 import { putFiles } from '../leadBlobs.js'
 import WorkbookPreview from '../proposal/WorkbookPreview.jsx'
 import { parseProposalWorkbook, serializeProposalWorkbook, updateWorkbookCell } from '../proposal/workbook.js'
+import { analyzeProposalTemplate } from '../proposal/templateMapping.js'
 import { DEFAULT_COMMON_MAILBOX } from '../leadClarification.js'
 import { DEFAULT_CUSTOMER_CLASSES } from '../customerClasses.js'
 import { parsePriceListFile } from '../priceListImport.js'
@@ -45,6 +46,12 @@ const TEMPLATE_LANES = [
   { key: 'Service', label: 'Service proposal', url: new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Big Service Opp-1 (Won) With SoW/Service Proposal 14Apr26 Rev-01.xlsx', import.meta.url).href, filename: 'Service Proposal 14Apr26 Rev-01.xlsx' },
   { key: 'Spares', label: 'Spares firm offer', url: new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx', import.meta.url).href, filename: 'Spares Firm Offer Rev00 2May2026.xlsx' },
 ]
+const ADMIN_TABS = [
+  { id: 'overview', label: 'Overview', icon: 'cards' },
+  { id: 'workflow', label: 'Workflow & governance', icon: 'shield' },
+  { id: 'documents', label: 'Documents & templates', icon: 'upload' },
+  { id: 'integrations', label: 'Integrations & AI', icon: 'cloud' },
+]
 
 function NumField({ label, value, disabled, onChange }) {
   return (
@@ -57,13 +64,13 @@ function NumField({ label, value, disabled, onChange }) {
 
 // A real <input type="file"> behind a button — metadata only, contents are
 // never read or stored in the demo.
-function FileButton({ label, disabled, onFile, primary, accept }) {
+function FileButton({ label, disabled, onFile, variant = 'secondary', accept }) {
   const ref = useRef(null)
   return (
     <>
       <input ref={ref} type="file" accept={accept} style={{ display: 'none' }}
         onChange={e => { const f = e.target.files && e.target.files[0]; if (f) onFile(f); e.target.value = '' }} />
-      <button className={primary ? 'primary' : ''} disabled={disabled} onClick={() => ref.current && ref.current.click()}>
+      <button className={variant} disabled={disabled} onClick={() => ref.current && ref.current.click()}>
         <Icon name="upload" size={11} /> {label}
       </button>
     </>
@@ -318,11 +325,13 @@ export default function Admin() {
   const [demoPasswordError, setDemoPasswordError] = useState('')
   const [templateBusy, setTemplateBusy] = useState('')
   const [templateError, setTemplateError] = useState('')
+  const [templateAnalysis, setTemplateAnalysis] = useState(null)
   const [templatePreview, setTemplatePreview] = useState(null)
   const [templatePreviewBusy, setTemplatePreviewBusy] = useState(false)
   const [templatePreviewError, setTemplatePreviewError] = useState('')
   const [templateDirty, setTemplateDirty] = useState(false)
   const [currencyRateDraft, setCurrencyRateDraft] = useState({})
+  const [adminView, setAdminView] = useState('overview')
 
   // Route-level gate AFTER the hooks (an early return before them would change
   // the hook count when the persona flips while /admin is mounted). Approval
@@ -414,9 +423,15 @@ export default function Admin() {
     setTemplateError(''); setTemplateBusy(lane)
     try {
       const workbook = parseProposalWorkbook(await file.arrayBuffer(), file.name)
+      const analysis = await analyzeProposalTemplate(workbook, {
+        model: isCustomModel(model) ? customModel : model,
+        fallback: provider === FALLBACK_PROVIDER,
+      })
       const stored = await uploadAdminTemplate(lane, file)
-      store.saveProposalTemplate({ lane, name: file.name, size: file.size, ...stored })
-      setTemplatePreview({ lane, info: { lane, name: file.name, size: file.size, ...stored }, workbook })
+      const template = { lane, name: file.name, size: file.size, ...stored, mapping: analysis.mapping, mappingWarnings: analysis.warnings, mappingAi: analysis.ai }
+      store.saveProposalTemplate(template)
+      setTemplateAnalysis({ lane, ...analysis })
+      setTemplatePreview({ lane, info: template, workbook })
       setTemplateDirty(false)
     } catch (error) {
       setTemplateError(error?.message || 'Template upload failed')
@@ -437,9 +452,16 @@ export default function Admin() {
       const bytes = serializeProposalWorkbook(templatePreview.workbook)
       const name = templatePreview.info.name.replace(/\.(xlsx|xlsm)$/i, '') + '.xlsx'
       const file = new File([bytes], name, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      const workbook = parseProposalWorkbook(bytes, name)
+      const analysis = await analyzeProposalTemplate(workbook, {
+        model: isCustomModel(model) ? customModel : model,
+        fallback: provider === FALLBACK_PROVIDER,
+      })
       const stored = await uploadAdminTemplate(templatePreview.lane, file)
-      store.saveProposalTemplate({ lane: templatePreview.lane, name, size: file.size, ...stored })
-      setTemplatePreview(current => ({ ...current, info: { ...current.info, name, size: file.size, ...stored } }))
+      const template = { lane: templatePreview.lane, name, size: file.size, ...stored, mapping: analysis.mapping, mappingWarnings: analysis.warnings, mappingAi: analysis.ai }
+      store.saveProposalTemplate(template)
+      setTemplateAnalysis({ lane: templatePreview.lane, ...analysis })
+      setTemplatePreview(current => ({ ...current, info: template, workbook }))
       setTemplateDirty(false)
     } catch (error) {
       setTemplateError(error?.message || 'Template changes could not be saved')
@@ -462,6 +484,9 @@ export default function Admin() {
   const thresholds = config.approvalThresholds || {}
   const aiTh = config.aiThresholds || {}
   const amber = config.amberFee || {}
+  const healthyConnectors = (config.connectors || []).filter(item => item.state === 'Healthy' || item.state === 'Connected').length
+  const configuredTemplates = proposalTemplates.filter(item => item.status === 'Current').length
+  const aiStatus = provider === FALLBACK_PROVIDER ? 'Built-in fallback' : ai.configured ? 'Proxy configured' : 'Not configured'
 
   const unlockDemoControls = event => {
     event.preventDefault()
@@ -476,18 +501,68 @@ export default function Admin() {
 
   return (
     <div className="page admin-page">
-      <h2>Admin — configuration</h2>
-      <div className="toolbar">
-        <span className="hint">Configuration is separated from demo data. Changes update behaviour immediately and are audited.</span>
-        <span className="spacer" />
-        <button type="button" onClick={() => nav('/admin/workflow')}><Icon name="list" size={11} /> Configure workflow separately</button>
-      </div>
+      <header className="admin-page-head">
+        <div>
+          <p className="admin-eyebrow">Workspace settings</p>
+          <h2>Admin configuration</h2>
+          <p className="admin-page-lede">Manage the rules, documents, integrations, and automation that shape the sales workspace.</p>
+        </div>
+        <div className="admin-page-actions">
+          <button type="button" className="secondary" onClick={() => nav('/admin/workflow')}><Icon name="list" size={11} /> Configure workflow</button>
+        </div>
+      </header>
 
       {!canEdit && (
         <div className="warn-box">Read-only — sign in as an administrator to change configuration</div>
       )}
 
+      <div className="admin-status-strip" aria-label="Configuration overview">
+        <div className="admin-status-item"><span className="admin-status-label">AI model</span><b>{aiStatus}</b></div>
+        <div className="admin-status-item"><span className="admin-status-label">Reporting currency</span><b>INR</b><span className="hint">source lists keep their currency</span></div>
+        <div className="admin-status-item"><span className="admin-status-label">Active templates</span><b>{configuredTemplates || 'Built-in defaults'}</b><span className="hint">current proposal versions</span></div>
+        <div className="admin-status-item"><span className="admin-status-label">Connectors healthy</span><b>{healthyConnectors} / {(config.connectors || []).length}</b></div>
+      </div>
+
+      <nav className="admin-tabs" role="tablist" aria-label="Admin settings categories">
+        {ADMIN_TABS.map(tab => (
+          <button key={tab.id} type="button" role="tab" className={adminView === tab.id ? 'active' : ''}
+            aria-selected={adminView === tab.id} aria-controls={`admin-panel-${tab.id}`} id={`admin-tab-${tab.id}`}
+            onClick={() => setAdminView(tab.id)}>
+            <Icon name={tab.icon} size={13} /> {tab.label}
+          </button>
+        ))}
+      </nav>
+
       <div className="admin-layout">
+        <section id="admin-panel-overview" className={`admin-panel admin-overview-panel ${adminView === 'overview' ? 'is-active' : ''}`}
+          role="tabpanel" aria-labelledby="admin-tab-overview" hidden={adminView !== 'overview'}>
+          <div className="admin-section-heading">
+            <div><h3>Workspace overview</h3><p>Choose a category to update the settings behind your sales workspace.</p></div>
+          </div>
+          <div className="admin-category-grid">
+            <button type="button" className="admin-category-card" onClick={() => setAdminView('workflow')}>
+              <span className="admin-category-icon"><Icon name="shield" size={16} /></span>
+              <span><b>Workflow &amp; governance</b><small>Owners, approvals, customer rules, currencies, and intake controls.</small></span>
+              <span className="admin-category-link">Open settings →</span>
+            </button>
+            <button type="button" className="admin-category-card" onClick={() => setAdminView('documents')}>
+              <span className="admin-category-icon"><Icon name="upload" size={16} /></span>
+              <span><b>Documents &amp; templates</b><small>Upload KYC forms, price lists, datasheets, and proposal workbooks.</small></span>
+              <span className="admin-category-link">Open settings →</span>
+            </button>
+            <button type="button" className="admin-category-card" onClick={() => setAdminView('integrations')}>
+              <span className="admin-category-icon"><Icon name="cloud" size={16} /></span>
+              <span><b>Integrations &amp; AI</b><small>Monitor connectors and configure SharePoint and AI services.</small></span>
+              <span className="admin-category-link">Open settings →</span>
+            </button>
+          </div>
+        </section>
+
+        <section id="admin-panel-workflow" className={`admin-panel ${adminView === 'workflow' ? 'is-active' : ''}`}
+          role="tabpanel" aria-labelledby="admin-tab-workflow" hidden={adminView !== 'workflow'}>
+        <div className="admin-section-heading">
+          <div><h3>Workflow &amp; governance</h3><p>Ownership, approvals, customer rules, and intake controls.</p></div>
+        </div>
         <div className="admin-fixed-columns">
           <div className="admin-column">
 
@@ -714,7 +789,13 @@ export default function Admin() {
 
           </div>
         </div>
+        </section>
 
+        <section id="admin-panel-documents" className={`admin-panel ${adminView === 'documents' ? 'is-active' : ''}`}
+          role="tabpanel" aria-labelledby="admin-tab-documents" hidden={adminView !== 'documents'}>
+        <div className="admin-section-heading">
+          <div><h3>Documents &amp; templates</h3><p>Keep working files and proposal outputs current for the team.</p></div>
+        </div>
         <div className="admin-wide-grid">
 
         {/* 8 — Document uploads */}
@@ -730,7 +811,7 @@ export default function Admin() {
               const lane = kycTemplateLane(item)
               return <div key={item} className="arow">
                 <span><b>{item}</b><br /><span className="hint">{current ? `${current.name} · uploaded ${current.uploaded}` : 'Built-in default'}</span></span>
-                <FileButton primary label={current ? 'Replace' : 'Upload'} disabled={!canEdit || templateBusy === lane}
+                <FileButton variant="secondary" label={current ? 'Replace' : 'Upload'} disabled={!canEdit || templateBusy === lane}
                   onFile={file => uploadKycTemplate(item, file)} />
               </div>
             })}
@@ -742,7 +823,7 @@ export default function Admin() {
               onChange={e => setSupplier(e.target.value)} />
             <input type="text" value={plVersion} placeholder="Version (e.g. 2026-Q3)" disabled={!canEdit}
               onChange={e => setPlVersion(e.target.value)} />
-            <FileButton primary label="Upload price list" disabled={!canEdit}
+            <FileButton variant="secondary" label="Upload price list" disabled={!canEdit}
               onFile={async f => {
                 try {
                   const listName = supplier.trim() || f.name.replace(/\.[^.]+$/, '')
@@ -767,7 +848,7 @@ export default function Admin() {
             </div>
           ) : (
             <div className="admin-actions admin-actions-end">
-              <FileButton primary label="Upload matrix" disabled={!canEdit}
+              <FileButton variant="secondary" label="Upload matrix" disabled={!canEdit}
                 onFile={f => store.addUpload('interchangeability', { name: f.name, size: f.size })} />
             </div>
           )}
@@ -782,7 +863,7 @@ export default function Admin() {
             </div>
           ) : (
             <div className="admin-actions admin-actions-end">
-              <FileButton primary label="Upload classification" disabled={!canEdit}
+              <FileButton variant="secondary" label="Upload classification" disabled={!canEdit}
                 onFile={f => store.addUpload('customerClassification', { name: f.name, size: f.size })} />
             </div>
           )}
@@ -790,7 +871,7 @@ export default function Admin() {
           <div className="section-title" style={{ marginTop: 10 }}>Manufacturer datasheet library</div>
           <p className="hint">Reusable datasheets available for selection when preparing a customer proposal.</p>
           <div className="admin-actions admin-actions-end">
-            <FileButton primary label="Upload datasheet" disabled={!canEdit} accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+            <FileButton variant="secondary" label="Upload datasheet" disabled={!canEdit} accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
               onFile={async f => {
                 await putFiles('admin-datasheets', [f])
                 store.addUpload('datasheets', { name: f.name, type: f.type, size: f.size })
@@ -804,6 +885,10 @@ export default function Admin() {
           <h3><Icon name="fileText" size={14} /> Proposal templates &amp; reminder rules</h3>
           <p className="hint">Current Excel templates are stored in Supabase. Replacements become active immediately and prior versions remain available below.</p>
           {templateError && <div className="errbox" role="alert">{templateError}</div>}
+          {templateAnalysis && <div className={templateAnalysis.ai?.ok ? 'okbox' : 'warnbox'}>
+            {templateAnalysis.ai?.ok ? `Gemini mapped this template${templateAnalysis.ai.model ? ` using ${templateAnalysis.ai.model}` : ''}.` : 'Gemini was unavailable; deterministic label mapping was used.'}
+            {!!templateAnalysis.warnings?.length && <div className="hint">{templateAnalysis.warnings.length} mapping warning{templateAnalysis.warnings.length === 1 ? '' : 's'} — review the preview before using this template.</div>}
+          </div>}
           <div className="admin-template-list">
             {TEMPLATE_LANES.map(lane => {
               const current = templateInfo(lane.key)
@@ -814,12 +899,13 @@ export default function Admin() {
                   <b>{lane.label}</b>
                   <span>{current.name || current.filename}</span>
                   <span className="hint">{uploaded ? `uploaded ${uploaded.uploaded || 'recently'} · Supabase` : 'Built-in default · upload a replacement to activate'}</span>
+                  {uploaded?.mapping && <span className="hint">{uploaded.mappingWarnings?.length ? 'Analyzed · review warnings' : 'Analyzed · ready for proposal generation'}</span>}
                 </div>
                 <div className="admin-template-actions">
-                  <button type="button" onClick={() => openTemplate(lane.key)} disabled={templateBusy === lane.key || templatePreviewBusy}>
+                  <button type="button" className="secondary" onClick={() => openTemplate(lane.key)} disabled={templateBusy === lane.key || templatePreviewBusy}>
                     <Icon name="eye" size={11} /> View current
                   </button>
-                  <FileButton label={uploaded ? 'Replace' : 'Upload'} primary disabled={!canEdit || templateBusy === lane.key}
+                  <FileButton variant="secondary" label={uploaded ? 'Replace' : 'Upload'} disabled={!canEdit || templateBusy === lane.key}
                     accept=".xlsx,.xlsm" onFile={file => uploadTemplate(lane.key, file)} />
                 </div>
                 {!!history.length && <details className="admin-template-history">
@@ -842,8 +928,14 @@ export default function Admin() {
         </div>
 
         </div>
+        </section>
 
-        <div className="admin-masonry-grid admin-bottom-masonry">
+        <section id="admin-panel-integrations" className={`admin-panel ${adminView === 'integrations' ? 'is-active' : ''}`}
+          role="tabpanel" aria-labelledby="admin-tab-integrations" hidden={adminView !== 'integrations'}>
+        <div className="admin-section-heading">
+          <div><h3>Integrations &amp; automation</h3><p>Monitor connected systems and configure the services behind the workspace.</p></div>
+        </div>
+        <div className="admin-bottom-grid">
 
         {/* 10 — Connector state */}
         <div className="admin-card">
@@ -940,6 +1032,7 @@ export default function Admin() {
         </div>
 
         </div>
+        </section>
 
       </div>
 

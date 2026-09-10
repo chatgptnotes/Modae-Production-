@@ -187,35 +187,66 @@ function sanitizeWorkbook(workbook) {
   }
 }
 
-function setCoverSheet(workbook, worksheet, { p, opp, doc, route }) {
+function setCoverSheet(workbook, worksheet, { p, opp, doc, route, mapping }) {
   setPrintLayout(worksheet, 'portrait')
+  const mapped = mapping?.fields || {}
+  const mappedMode = mapping?.method?.startsWith('gemini')
+  const mappedCell = key => {
+    const location = mapped[key]
+    if (!location || location.sheet !== worksheet.name || !Number.isInteger(location.row) || !Number.isInteger(location.column)) return null
+    // Gemini maps the semantic label; the customer value belongs in the cell
+    // immediately to its right, preserving the label and workbook design.
+    return worksheet.getCell(location.row + 1, location.column + 2)
+  }
+  const writeField = (key, value, fallbackRange, fallbackCell) => {
+    const target = mappedCell(key)
+    if (target) {
+      setValue(target, value || '', { alignment: { vertical: 'middle', wrapText: true } })
+      styleNarrative(target)
+      return target
+    }
+    if (mappedMode) return null
+    if (fallbackRange) setCoverRow(worksheet, fallbackRange, value || '')
+    return fallbackCell ? worksheet.getCell(fallbackCell) : null
+  }
   // A1:B3 is the reference logo area. Do not write a title into A3: that
   // merged region is occupied by the logo in Excel and caused cover overlap.
-  setValue(worksheet.getCell('B5'), excelDate(p.revisionDate), { alignment: { vertical: 'middle' } })
-  worksheet.getCell('B5').numFmt = 'd-mmm-yyyy'
-  setValue(worksheet.getCell('C6'), p.ourRef || opp.id)
-  setValue(worksheet.getCell('C7'), p.bidStage)
-  setValue(worksheet.getCell('C8'), p.bidType)
-  setValue(worksheet.getCell('C9'), p.revision)
+  if (!mappedMode) {
+    setValue(worksheet.getCell('B5'), excelDate(p.revisionDate), { alignment: { vertical: 'middle' } })
+    worksheet.getCell('B5').numFmt = 'd-mmm-yyyy'
+    setValue(worksheet.getCell('C6'), p.ourRef || opp.id)
+    setValue(worksheet.getCell('C7'), p.bidStage)
+    setValue(worksheet.getCell('C8'), p.bidType)
+    setValue(worksheet.getCell('C9'), p.revision)
+  }
   const customerName = customerSafe(p.addressee) || (customerSafe(opp.sellTo) && `M/s. ${customerSafe(opp.sellTo)}`)
   const subject = customerSafe(p.subject) || customerSafe(opp.oppName) || `${route || 'Techno-Commercial'} Proposal`
-  setCoverRow(worksheet, 'B11:Q11', customerName || '')
-  setCoverRow(worksheet, 'B12:Q12', opp.eucLocation || opp.location || '')
-  setCoverRow(worksheet, 'B13:Q13', opp.customerAddress || '')
-  setCoverRow(worksheet, 'B14:Q14', opp.customerCity || '')
-  setCoverRow(worksheet, 'C16:Q16', customerSafe(p.kindAttn) || customerSafe(opp.contactPerson))
-  setCoverRow(worksheet, 'C18:Q18', [p.rfqNumber && `RFQ ${p.rfqNumber}`, subject].filter(Boolean).join(' - '))
-  setCoverRow(worksheet, 'C20:Q20', customerSafe(p.project))
-  setCoverRow(worksheet, 'B22:Q22', doc.letterSalutation || 'Dear Sir,')
-  setCoverRow(worksheet, 'B24:Q24', doc.letterBody || '')
-  setCoverRow(worksheet, 'B26:Q26', [
-    doc.letterClose || 'Best Regards',
-    doc.preparedBy?.name,
-    doc.preparedBy?.title,
-    doc.preparedBy?.division,
-    'ModAE India Private Limited',
-    MODAE_PHONE_EMAIL,
-  ].filter(Boolean).join('\n'))
+  const coverTargets = [
+    ['customerName', customerName, 'B11:Q11', 'B11'],
+    ['location', opp.eucLocation || opp.location || '', 'B12:Q12', 'B12'],
+    ['customerAddress', opp.customerAddress || '', 'B13:Q13', 'B13'],
+    ['contactPerson', customerSafe(p.kindAttn) || customerSafe(opp.contactPerson), 'C16:Q16', 'C16'],
+    ['subject', [p.rfqNumber && `RFQ ${p.rfqNumber}`, subject].filter(Boolean).join(' - '), 'C18:Q18', 'C18'],
+    ['rfqNumber', p.rfqNumber || opp.id, null, null],
+    ['project', customerSafe(p.project), 'C20:Q20', 'C20'],
+  ]
+  const writtenTargets = coverTargets.map(([key, value, range, cell]) => writeField(key, value, range, cell)).filter(Boolean)
+  if (mappedMode && writtenTargets.length === 0) {
+    // A mapping without cover fields is still usable; leave the uploaded
+    // cover content intact rather than forcing the legacy cell coordinates.
+  }
+  if (!mappedMode) {
+    setCoverRow(worksheet, 'B22:Q22', doc.letterSalutation || 'Dear Sir,')
+    setCoverRow(worksheet, 'B24:Q24', doc.letterBody || '')
+    setCoverRow(worksheet, 'B26:Q26', [
+      doc.letterClose || 'Best Regards',
+      doc.preparedBy?.name,
+      doc.preparedBy?.title,
+      doc.preparedBy?.division,
+      'ModAE India Private Limited',
+      MODAE_PHONE_EMAIL,
+    ].filter(Boolean).join('\n'))
+  }
 
   for (const ref of ['B11', 'B12', 'B13', 'B14', 'C16', 'B22', 'B24', 'B26', 'C18', 'C20']) styleNarrative(worksheet.getCell(ref))
   setWrappedHeight(worksheet, 11, [{ value: worksheet.getCell('B11').value, width: rangeWidth(worksheet, 2, 17) }])
@@ -496,6 +527,47 @@ function setCommercialSheet(workbook, worksheet, args) {
   if (redactInternalCosting) stripInternalCosting(worksheet)
 }
 
+// Uploaded workbooks can use different sheet names, header rows and column
+// order. When Gemini has identified a line table, write only into those mapped
+// cells and leave the workbook's own layout, logo, formulas and surrounding
+// content untouched.
+function setMappedCommercialSheet(worksheet, args) {
+  const { p, totalQty, lineQuoted, mapping } = args
+  const table = mapping?.lineTable
+  const columns = table?.columns || {}
+  if (!table || !Number.isInteger(table.headerRow) || !Number.isInteger(columns.description) || !Number.isInteger(columns.quantity)) return false
+  setPrintLayout(worksheet, 'landscape')
+  const lines = (p.bom || []).filter(line => !isSparesSupportRow(line))
+  const firstRow = table.headerRow + 2
+  const cell = (row, key) => Number.isInteger(columns[key]) ? worksheet.getCell(row, columns[key] + 1) : null
+  lines.forEach((line, index) => {
+    const row = firstRow + index
+    const qty = number(totalQty(line))
+    const unit = number(lineQuoted(line))
+    const values = {
+      partNumber: line.pn || line.custRef || '',
+      description: line.desc || line.itemCategory || '',
+      quantity: qty,
+      unitPrice: unit,
+      totalPrice: unit * qty,
+    }
+    for (const [key, value] of Object.entries(values)) {
+      const target = cell(row, key)
+      if (target) {
+        setValue(target, value, { alignment: { vertical: 'top', wrapText: true } })
+        if (['unitPrice', 'totalPrice'].includes(key)) target.numFmt = '#,##0.00'
+      }
+    }
+  })
+  const totalRow = firstRow + lines.length
+  const total = lines.reduce((sum, line) => sum + number(lineQuoted(line)) * number(totalQty(line)), 0)
+  const totalCell = cell(totalRow, 'totalPrice')
+  if (totalCell) setValue(totalCell, total, { font: { bold: true }, alignment: { horizontal: 'right' } })
+  const descriptionCell = cell(totalRow, 'description')
+  if (descriptionCell) setValue(descriptionCell, 'Total', { font: { bold: true } })
+  return true
+}
+
 async function readBuffer(input) {
   if (input instanceof Uint8Array || input instanceof ArrayBuffer || (typeof Buffer !== 'undefined' && Buffer.isBuffer(input))) return input
   if (typeof input === 'string') return (await fetch(input)).arrayBuffer()
@@ -517,13 +589,15 @@ export async function generateProposalWorkbook(args) {
   applyDocumentFont(workbook)
   const logo = await fetchOptionalLogo(args.logoBuffer)
   const byName = name => workbook.worksheets.find(sheet => sheet.name.trim() === name)
-  const cover = byName('Cover Letter') || workbook.worksheets[0]
-  const commercial = byName(args.route === 'Services' ? 'Proposal' : 'Firm Rev-00') || workbook.worksheets[1]
+  const cover = byName(args.mapping?.coverSheet) || byName('Cover Letter') || workbook.worksheets[0]
+  const commercial = byName(args.mapping?.commercialSheet) || byName(args.route === 'Services' ? 'Proposal' : 'Firm Rev-00') || workbook.worksheets[1] || cover
   if (!cover || !commercial) throw new Error('Proposal template must contain a cover and commercial worksheet')
   ensureLogo(workbook, cover, logo, 18)
   ensureLogo(workbook, commercial, logo, 24)
   setCoverSheet(workbook, cover, args)
-  setCommercialSheet(workbook, commercial, args)
+  const mappedCommercial = args.mapping?.method?.startsWith('gemini') && args.mapping?.lineTable?.sheet === commercial.name
+  if (mappedCommercial && !setMappedCommercialSheet(commercial, args)) setCommercialSheet(workbook, commercial, args)
+  else if (!mappedCommercial) setCommercialSheet(workbook, commercial, args)
   return new Uint8Array(await workbook.xlsx.writeBuffer())
 }
 
