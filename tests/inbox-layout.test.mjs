@@ -70,6 +70,11 @@ test('lead extraction applies a final response hardening pass', () => {
   assert.match(rules, /const qty = Number\.isFinite\(rawQty\) && rawQty > 0 \? rawQty : 0/)
 })
 
+test('customer requests are displayed separately from accepted facts', () => {
+  assert.match(inbox, /f\.factType === 'customer_request'/)
+  assert.match(inbox, />Customer request<\/Chip>/)
+})
+
 test('non-identity low-confidence fields are deferred until the opportunity exists', () => {
   assert.match(inbox, /const deferredPendingLow = pendingLow\.filter\(f => !isRegistrationCriticalField\(f\.k\)\)/)
   assert.match(inbox, /Follow-up information.*low-confidence sourcing or commercial fields/s)

@@ -723,6 +723,7 @@ const mergeDecidedFields = (previous, fresh) => {
 }
 
 const fieldChip = (f, med) => {
+  if (f.factType === 'customer_request') return <Chip tone="state-Review">Customer request</Chip>
   if (f.state === 'accepted') return <Chip tone="state-Accepted">Accepted</Chip>
   if (f.state === 'rejected') return <Chip tone="state-Rejected">Rejected</Chip>
   return f.conf >= med

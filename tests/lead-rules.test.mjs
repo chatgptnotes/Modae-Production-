@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { customerContactFromText, deadlineForLead, expiredLeadDeadline, hardenLeadExtraction, isFastTrackLead, isInternalSender, normalizeLeadContactFields, routeOwner, supplyMissing } from '../src/leadRules.js'
+import { customerCompanyFromText, customerContactFromText, deadlineForLead, expiredLeadDeadline, hardenLeadExtraction, isFastTrackLead, isInternalSender, normalizeLeadContactFields, routeOwner, supplyMissing } from '../src/leadRules.js'
 
 const config = {
   ownershipRules: [
@@ -41,6 +41,17 @@ test('lead extraction hardening does not invent quantities and flags missing evi
   assert.equal(hardened.lineItems[0].qty, 0)
   assert.equal(hardened.lineItems[0].confidence, 50)
   assert.ok(hardened.missing.includes('Line 1: quantity'))
+})
+
+test('customer requests are follow-up items and explicit company labels fill sell-to', () => {
+  assert.equal(customerCompanyFromText('Customer: KSB Limited'), 'KSB Limited')
+  const hardened = hardenLeadExtraction({
+    fields: [{ group: 'Commercial', k: 'Taxes', v: 'Requested by customer', conf: 100, ev: 'Email body' }],
+    lineItems: [], missing: [],
+  }, { text: 'Customer: KSB Limited\nPlease include taxes and freight.' })
+  assert.equal(hardened.fields.find(f => f.k === 'Sell-to customer').v, 'KSB Limited')
+  assert.equal(hardened.fields.find(f => f.k === 'Taxes').factType, 'customer_request')
+  assert.ok(hardened.missing.includes('Tax rate or tax treatment'))
 })
 
 test('lead deadlines are generated from configurable rules', () => {

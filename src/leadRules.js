@@ -39,6 +39,11 @@ export const customerContactFromText = text => {
   return match ? match[1].trim() : ''
 }
 
+export const customerCompanyFromText = text => {
+  const match = String(text || '').match(/(?:sell[-\s]?to\s+customer|customer|buyer|company)\s*[:\-]\s*([^\n,;]+)/i)
+  return match ? match[1].trim().replace(/[.]+$/, '') : ''
+}
+
 export const normalizeLeadContactFields = (fields, { from = '', text = '', config = {} } = {}) => {
   const rows = Array.isArray(fields) ? fields : []
   if (!isInternalSender(from, config)) return rows
@@ -59,19 +64,30 @@ const boundedConfidence = (value, fallback = 0) => {
 // omit evidence; neither case should silently become trusted lead data.
 export const hardenLeadExtraction = (ai, { from = '', text = '', config = {} } = {}) => {
   if (!ai) return ai
-  const fields = normalizeLeadContactFields(ai.fields, { from, text, config })
+  const sourceCompany = customerCompanyFromText(text)
+  const normalized = normalizeLeadContactFields(ai.fields, { from, text, config })
+  const hasCompany = normalized.some(field => /sell[-\s]?to\s+customer|customer name/i.test(String(field?.k || '')))
+  const fields = (sourceCompany && !hasCompany
+    ? [...normalized, { group: 'Customer', k: 'Sell-to customer', v: sourceCompany, conf: 98, ev: 'Explicit Customer label in email body' }]
+    : normalized)
     .map(field => {
       const value = String(field?.v ?? '').trim()
       const evidence = String(field?.ev ?? '').trim()
       const missingEvidence = !evidence
+      const customerRequest = /^requested by customer$/i.test(value)
       return {
         ...field,
         v: value,
+        factType: customerRequest ? 'customer_request' : (field?.factType || 'fact'),
         ev: evidence || 'Evidence not supplied — verify against the original enquiry',
-        conf: missingEvidence ? Math.min(50, boundedConfidence(field?.conf)) : boundedConfidence(field?.conf),
+        conf: customerRequest || missingEvidence
+          ? Math.min(50, boundedConfidence(field?.conf))
+          : boundedConfidence(field?.conf),
         note: missingEvidence
           ? [field?.note, 'Human review required because the extraction has no evidence.'].filter(Boolean).join(' ')
-          : field?.note,
+          : customerRequest
+            ? [field?.note, 'This records a customer request; the actual value is still missing.'].filter(Boolean).join(' ')
+            : field?.note,
       }
     })
     .filter(field => field.v)
@@ -90,8 +106,18 @@ export const hardenLeadExtraction = (ai, { from = '', text = '', config = {} } =
       evidence: evidence || 'Evidence not supplied — verify against the original enquiry',
     }
   })
+  const requestMissing = fields.flatMap(field => {
+    if (field.factType !== 'customer_request') return []
+    const key = String(field.k || '').toLowerCase()
+    if (key.includes('tax')) return ['Tax rate or tax treatment']
+    if (key.includes('freight')) return ['Freight amount or delivery terms']
+    if (key.includes('delivery') || key.includes('schedule')) return ['Delivery lead time or date']
+    if (key.includes('price')) return ['Price basis']
+    return []
+  })
   const missing = [...new Set([
     ...(Array.isArray(ai.missing) ? ai.missing : []).map(item => String(item || '').trim()).filter(Boolean),
+    ...requestMissing,
     ...lineItems.flatMap((item, index) => [
       !item.description && `Line ${index + 1}: description`,
       item.qty <= 0 && `Line ${index + 1}: quantity`,
