@@ -17,10 +17,10 @@ import ForecastDashboard from './Dashboard.jsx'
 
 const roleLabel = role => displayRoleLabel(role) || role
 
-function Metric({ label, value, hint, tone = '', onClick }) {
+function Metric({ label, value, hint, tone = '', onClick, variant = '' }) {
   const El = onClick ? 'button' : 'div'
   return (
-    <El className={`stat-card-v2 tone-${tone}${onClick ? ' clickable' : ''}`} onClick={onClick}>
+    <El className={`stat-card-v2 tone-${tone}${onClick ? ' clickable' : ''}${variant ? ` ${variant}` : ''}`} onClick={onClick}>
       <span className="sc-value">{value}</span>
       <span className="sc-label">{label}</span>
       {hint && <span className="hint">{hint}</span>}
@@ -469,11 +469,11 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
       {head}
 
       <div className="stat-cards">
-        <Metric label="Annual target" value={fmtLakh(perf.annual)} tone="slate" />
+        <Metric label="Annual target" value={fmtLakh(perf.annual)} tone="slate" variant="dashboard-top-kpi" />
         <Metric label="Achieved to date" value={fmtLakh(perf.achieved)} tone={variance >= 0 ? 'green' : 'amber'}
-          hint={`${variance >= 0 ? '+' : ''}${fmtLakh(variance)} vs pace`} />
-        <Metric label="Gap to target" value={fmtLakh(perf.gap)} tone="sky" />
-        <Metric label="Run rate, annualised" value={fmtLakh(perf.runRate)} tone={perf.runRate >= perf.annual ? 'green' : 'amber'} />
+          hint={`${variance >= 0 ? '+' : ''}${fmtLakh(variance)} vs pace`} variant="dashboard-top-kpi" />
+        <Metric label="Gap to target" value={fmtLakh(perf.gap)} tone="sky" variant="dashboard-top-kpi" />
+        <Metric label="Run rate, annualised" value={fmtLakh(perf.runRate)} tone={perf.runRate >= perf.annual ? 'green' : 'amber'} variant="dashboard-top-kpi" />
       </div>
 
       <div className="ana-grid">

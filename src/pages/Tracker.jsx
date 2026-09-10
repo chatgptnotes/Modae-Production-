@@ -175,6 +175,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const [productPick, setProductPick] = useState(null) // { id, x, y } of the open product picker
   const [closePending, setClosePending] = useState(null) // { id, stage } awaiting a closed reason
   const [closeReason, setCloseReason] = useState('')
+  const [closeReasonNote, setCloseReasonNote] = useState('')
   const sheetWrapRef = useRef(null)
   const lastSheetScrollLeft = useRef(0)
   const horizontalGestureNudged = useRef(false)
@@ -274,10 +275,12 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     if (field === 'valueK' || field === 'cogsK') value = rupeesToK(e.target.value)
     const patch = { [field]: value }
     // Reopening clears the closure fields; a Won/Lost stage must not survive.
-    if (field === 'status' && value === 'Open') Object.assign(patch, { closedReason: '', stage: 'Firm Bid' })
+    if (field === 'status' && value === 'Open') Object.assign(patch, { closedReason: '', closedReasonNote: '', stage: 'Firm Bid' })
+    if (field === 'closedReason' && value !== 'Others') patch.closedReasonNote = ''
     if (field === 'stage' && (value === 'Won' || value === 'Lost')) {
       setClosePending({ id, stage: value })
       setCloseReason('')
+      setCloseReasonNote('')
       return
     }
     store.updateOpportunity(id, patch)
@@ -286,14 +289,17 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const cancelClose = () => {
     setClosePending(null)
     setCloseReason('')
+    setCloseReasonNote('')
   }
 
   const confirmClose = () => {
-    if (!closePending || !closeReason) return
+    const note = closeReasonNote.trim()
+    if (!closePending || !closeReason || (closeReason === 'Others' && !note)) return
     store.updateOpportunity(closePending.id, {
       stage: closePending.stage,
       status: 'Closed',
       closedReason: closeReason,
+      closedReasonNote: closeReason === 'Others' ? note : '',
     })
     cancelClose()
   }
@@ -603,7 +609,8 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                   className={`${o.status === 'Closed' && !o.closedReason ? 'err' : ''} ${isSel(o, COLS[24]) ? 'cell-sel' : ''}`}
                   title={o.status === 'Closed' && !o.closedReason ? 'Closed Reason is mandatory — pick a justification' : ''}>
                   {o.status === 'Closed' ? (
-                    <select value={o.closedReason} onChange={upd(o.id, 'closedReason')}>
+                    <select value={o.closedReason} onChange={upd(o.id, 'closedReason')}
+                      title={o.closedReason === 'Others' && o.closedReasonNote ? `Others — ${o.closedReasonNote}` : ''}>
                       <option value="">— required —</option>
                       {CLOSE_REASONS.map(r => <option key={r}>{r}</option>)}
                     </select>
@@ -675,14 +682,30 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
           <select
             id="tracker-close-reason"
             value={closeReason}
-            onChange={e => setCloseReason(e.target.value)}
+            onChange={e => {
+              setCloseReason(e.target.value)
+              if (e.target.value !== 'Others') setCloseReasonNote('')
+            }}
             autoFocus
           >
             <option value="">— select a reason —</option>
             {CLOSE_REASONS.map(reason => <option key={reason} value={reason}>{reason}</option>)}
           </select>
+          {closeReason === 'Others' && (
+            <label className="tracker-close-reason-note" htmlFor="tracker-close-reason-note">
+              Additional explanation
+              <textarea
+                id="tracker-close-reason-note"
+                value={closeReasonNote}
+                onChange={e => setCloseReasonNote(e.target.value)}
+                maxLength={240}
+                placeholder="Enter the reason"
+                rows={3}
+              />
+            </label>
+          )}
           <div className="forms-actions">
-            <button className="primary" disabled={!closeReason} onClick={confirmClose}>Confirm</button>
+            <button className="primary" disabled={!closeReason || (closeReason === 'Others' && !closeReasonNote.trim())} onClick={confirmClose}>Confirm</button>
             <button onClick={cancelClose}>Cancel</button>
           </div>
         </Modal>
