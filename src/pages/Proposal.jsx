@@ -970,6 +970,16 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
         </div>
       </header>
 
+      <input
+        className="visually-hidden"
+        type="file"
+        accept=".xlsx,.xls"
+        ref={uploadInputRef}
+        onChange={uploadReviewedProposal}
+        tabIndex={-1}
+        aria-hidden="true"
+      />
+
       <section className="proposal-review-strip" aria-label="Human review checkpoint">
         <div>
           <strong>Review the AI draft before approval</strong>
