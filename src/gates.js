@@ -300,14 +300,36 @@ export function oppBlockers(opp, proposal, approvals, config = null) {
 
 export const isBlocked = blockers => blockers.some(x => x.severity === 'block' || x.severity === 'wait')
 
-// The three §5 approvals — technical, commercial and margin — each cover the
-// exact proposal revision they were raised against. The official workflow makes
-// re-approval mandatory on every revision, so a revised quote falls back to
-// unapproved here rather than carrying the old decision forward. Approvals
-// written before `rev` existed are treated as covering the current revision.
+// The three §5 approvals — technical, commercial and margin — cover the
+// proposal revision they were raised against. Commercial-deviation approvals
+// are the exception: they can carry forward when the current proposal still
+// has the same approved deviation terms. Approvals written before `rev`
+// existed are treated as covering the current revision.
 export const APPROVAL_5A = 'Technical approval'
 export const APPROVAL_5B = 'Commercial approval'
 export const APPROVAL_5C = 'Final quote release'
+const COMMERCIAL_DEVIATION = 'Commercial deviation'
+
+const deviationTermKey = value => {
+  const text = String(value || '').toLowerCase()
+  if (/payment|credit|advance/.test(text)) return 'payment'
+  if (/delivery|lead\s*time|schedule/.test(text)) return 'delivery'
+  if (/warranty|guarantee|defect/.test(text)) return 'warranty'
+  return ''
+}
+
+const commercialApprovalCoversProposal = (approval, proposal) => {
+  const currentTerms = (proposal?.terms || [])
+    .filter(term => term.status === 'Deviation')
+    .map(term => deviationTermKey(term.term))
+    .filter(Boolean)
+  if (!currentTerms.length) return true
+  const approvedTerms = (approval.deviationDetails || [])
+    .map(term => deviationTermKey(term.term))
+    .filter(Boolean)
+  if (!approvedTerms.length) return false
+  return currentTerms.every(term => approvedTerms.includes(term))
+}
 
 // The §5 blocker keys, which a milestone exception must never clear.
 // A milestone exception may never waive these. The §5 approvals were always
@@ -319,8 +341,11 @@ export const NO_EXCEPTION = noExceptionKeys()
 export function approvalForRev(type, proposal, approvals, oppId) {
   const rev = String(proposal?.revision ?? '')
   const mine = (approvals || []).filter(a =>
-    a.oppId === oppId && a.type === type
-    && (a.rev == null || String(a.rev) === rev))
+    a.oppId === oppId
+    && (a.type === type || (type === APPROVAL_5B && a.type === COMMERCIAL_DEVIATION))
+    && (type === APPROVAL_5B
+      ? (a.rev == null || commercialApprovalCoversProposal(a, proposal))
+      : (a.rev == null || String(a.rev) === rev)))
   return {
     pending: mine.find(a => a.status === 'Pending') || null,
     approved: mine.find(a => ['Approved', 'Approved with conditions'].includes(a.status)) || null,

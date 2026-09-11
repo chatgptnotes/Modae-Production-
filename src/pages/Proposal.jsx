@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import XLSX from 'xlsx-js-style'
 import { useParams, Link } from 'react-router-dom'
 import { useStore, sparesProposalBom, snapshotProposal } from '../store.jsx'
-import { effectiveRate, fmt, exportCSV, canPriceProposal, clampCosting, clampQty, MAX_GM_PCT } from '../utils.js'
+import { effectiveRate, fmt, exportCSV, canPriceProposal, clampCosting, clampQty, MAX_GM_PCT, displayRole } from '../utils.js'
 import { useFormulaBar } from '../formulabar.jsx'
 import { Icon, ModaeImageLogo } from '../icons.jsx'
 import { Modal } from '../ui.jsx'
@@ -36,6 +36,56 @@ const MEGGITT_ITEM_LIST_URL = new URL('../../branding/Further Inputs/Further Inp
 const PROJECT_PROPOSAL_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Big Project Opp/2608222RS  Project Rev-00.xlsx', import.meta.url).href
 const SPARES_PROPOSAL_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx', import.meta.url).href
 const SERVICE_PROPOSAL_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Big Service Opp-1 (Won) With SoW/Service Proposal 14Apr26 Rev-01.xlsx', import.meta.url).href
+
+const approvalTermKey = value => {
+  const text = String(value || '').toLowerCase()
+  if (/payment|credit|advance/.test(text)) return 'payment'
+  if (/delivery|lead\s*time|schedule/.test(text)) return 'delivery'
+  if (/warranty|guarantee|defect/.test(text)) return 'warranty'
+  return ''
+}
+const approvalTermMatches = (term, value) => {
+  const text = String(value || '').toLowerCase()
+  if (term === 'payment') return /payment|credit|advance/.test(text)
+  if (term === 'delivery') return /delivery|lead\s*time|schedule/.test(text)
+  if (term === 'warranty') return /warranty|guarantee|defect/.test(text)
+  return false
+}
+
+const approvalDate = ts => {
+  const date = new Date(ts || '')
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+const approvedDeviationFor = (issue, approvals, oppId, revision) => {
+  const findingKey = approvalTermKey(`${issue?.code || ''} ${issue?.text || ''}`)
+  if (!findingKey) return null
+  return (approvals || []).find(approval => {
+    if (approval.oppId !== oppId || approval.type !== 'Commercial deviation') return false
+    if (!['Approved', 'Approved with conditions'].includes(approval.status)) return false
+    if (approval.rev != null && String(approval.rev) !== String(revision ?? '')) return false
+    const approvedSources = [
+      ...(approval.deviationDetails || []).map(deviation => deviation.term),
+      approval.detail,
+      approval.blockingReason,
+    ]
+    return approvedSources.some(source => approvalTermMatches(findingKey, source))
+  }) || null
+}
+
+const rememberApprovedFindings = (issues, approvals, oppId, revision) => issues.map(issue => {
+  const approval = approvedDeviationFor(issue, approvals, oppId, revision)
+  if (!approval) return issue
+  return {
+    ...issue,
+    severity: 'info',
+    approval: {
+      status: approval.status,
+      approver: displayRole(approval.approver),
+      date: approvalDate(approval.decisionTs),
+    },
+  }
+})
 
 function ProposalDatasheets({ opp, p, save, store }) {
   const [busy, setBusy] = useState(false)
@@ -764,7 +814,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
         aiIssues = normalizeAiReview(aiResult.data?.data || aiResult.data)
         if (!aiResult.data && aiResult.error) aiIssues.push({ severity: 'info', code: 'ai.unavailable', source: 'AI', text: `AI semantic review was unavailable: ${aiResult.error}. Local checks were still completed.` })
       }
-      const allIssues = [...issues, ...aiIssues]
+      const allIssues = rememberApprovedFindings([...issues, ...aiIssues], store.approvals, oppId, nextRevision)
 
       const next = {
         ...review,
@@ -1006,7 +1056,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           {p.reviewCompletedAt && <div className="proposal-review-issues">
             <strong>Validation findings</strong>
             {!!p.reviewIssues?.length
-              ? p.reviewIssues.map((issue, index) => <div key={index} className={`proposal-review-issue ${issue.severity}`}>{issue.text}{issue.evidence ? ` — ${issue.evidence}` : ''}</div>)
+              ? p.reviewIssues.map((issue, index) => <div key={index} className={`proposal-review-issue ${issue.severity}`}>{issue.text}{issue.evidence ? ` — ${issue.evidence}` : ''}{issue.approval && <span className="proposal-review-approval">Already approved{issue.approval.approver ? ` by ${issue.approval.approver}` : ''}{issue.approval.date ? ` on ${issue.approval.date}` : ''}</span>}</div>)
               : <div className="proposal-review-issue info">Review complete — proposal is ready to proceed.</div>}
             {reviewStatus === 'Needs attention' && <button className="btn-secondary" onClick={() => { if (window.confirm('Continue despite these validation findings? This override will be stored in the audit trail.')) continueAnyway() }}>Continue anyway</button>}
           </div>}

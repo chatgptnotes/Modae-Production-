@@ -2193,9 +2193,10 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .approval-card { border: 1px solid var(--border-soft); border-radius: 7px; background: var(--palette-4843938); box-shadow: 0 2px 7px var(--palette-8061284c); padding: 14px 16px; }
 .approvals-page .approval-card {
   width: 100%;
-  max-width: none;
+  max-width: 1100px;
   box-sizing: border-box;
   padding: 10px 12px;
+  row-gap: 12px;
 }
 .approvals-page .approval-opportunity-context { margin-block: 6px; padding: 8px 10px; }
 .approvals-page .approval-context-summary { margin: 4px 0 6px; line-height: 1.3; }
@@ -2283,6 +2284,7 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 @media (max-width: 700px) {
   .approval-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .approval-summary-three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .approvals-page .approval-card { max-width: none; }
   .approval-meta { grid-template-columns: 1fr; gap: 10px; }
   .approval-card-top .hint { width: 100%; margin-left: 0; }
   .approval-card-top-redesigned { flex-direction: column; gap: 8px; }

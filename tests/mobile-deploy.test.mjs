@@ -97,8 +97,18 @@ test('approval decisions require an explicit choice before showing notes', () =>
   assert.match(approvals, /A note is required for every decision/)
 })
 
+test('proposal review remembers matching approved deviations', () => {
+  const proposal = read('src/pages/Proposal.jsx')
+  assert.match(proposal, /const approvalTermMatches = \(term, value\) =>/)
+  assert.match(proposal, /approval\.type !== 'Commercial deviation'/)
+  assert.match(proposal, /rememberApprovedFindings\(\[\.\.\.issues, \.\.\.aiIssues\]/)
+  assert.match(proposal, /severity: 'info'/)
+  assert.match(proposal, /Already approved/)
+  assert.match(proposal, /displayRole\(approval\.approver\)/)
+})
+
 test('approval cards fill the approvals workspace and stay compact', () => {
-  assert.match(css, /\.approvals-page \.approval-card \{[\s\S]*width: 100%;[\s\S]*max-width: none;[\s\S]*box-sizing: border-box;/)
+  assert.match(css, /\.approvals-page \.approval-card \{[\s\S]*width: 100%;[\s\S]*max-width: 1100px;[\s\S]*box-sizing: border-box;[\s\S]*row-gap: 12px;/)
   assert.match(css, /\.approvals-page \.approval-opportunity-context \{ margin-block: 6px; padding: 8px 10px; \}/)
   assert.match(css, /\.approvals-page \.approval-context-deviations > div \{ gap: 6px; padding-top: 3px; \}/)
   assert.match(css, /\.approvals-page \.approval-meta \{ margin-top: 8px; padding-top: 6px; \}/)

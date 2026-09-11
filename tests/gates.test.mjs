@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 import { ROLES, PERMS, PORTAL_ENABLED, selectableRoles } from '../src/seed.js'
 import { canViewCommercial, canPriceProposal, isSalesOwner } from '../src/utils.js'
-import { transitionBlockers, releaseState, readiness, commercialGate } from '../src/gates.js'
+import { transitionBlockers, releaseState, readiness, commercialGate, approvalForRev } from '../src/gates.js'
 import { contextForType, routeForType, CONTEXTS, OPP_TYPES } from '../src/seed.js'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
@@ -128,6 +128,27 @@ test('a release approval covers only the revision it approved', () => {
     'approvals never cross opportunities')
   assert.ok(releaseState({ revision: '03' }, [{ ...approvals[0], rev: undefined }], 'OP-1').release,
     'approvals recorded before `rev` existed stay valid')
+})
+
+test('a commercial deviation approval carries forward when the same terms remain', () => {
+  const proposal = {
+    revision: '01',
+    terms: [
+      { term: 'Payment', status: 'Deviation' },
+      { term: 'Delivery', status: 'Deviation' },
+    ],
+  }
+  const approval = {
+    id: 'AP-1', oppId: 'OP-1', type: 'Commercial deviation', rev: '00', status: 'Approved',
+    deviationDetails: [{ term: 'Payment' }, { term: 'Delivery' }],
+  }
+  assert.ok(approvalForRev('Commercial approval', proposal, [approval], 'OP-1').approved,
+    'the existing commercial deviation approval should satisfy the renamed gate')
+  assert.equal(approvalForRev('Commercial approval', {
+    ...proposal,
+    terms: [...proposal.terms, { term: 'Warranty', status: 'Deviation' }],
+  }, [approval], 'OP-1').approved, null,
+  'a new deviation must require a new approval')
 })
 
 test('final quote release requires both AH and LJS', () => {
