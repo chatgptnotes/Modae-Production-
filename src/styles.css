@@ -1890,6 +1890,11 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
    windows clipped them (e.g. the Validate review popup). Re-assert the cap
    after it so no dialog can ever exceed the viewport. */
 .modal { max-width: 92vw; }
+.proposal-remove-line-modal {
+  width: min(440px, calc(100vw - 32px));
+  max-width: min(440px, calc(100vw - 32px));
+  padding: 14px 16px;
+}
 
 /* Slide-in record-detail drawer */
 tr.rowclick { cursor: pointer; }
@@ -5772,12 +5777,16 @@ body {
 .proposal-review-strip > div { display: grid; gap: 3px; }
 .proposal-review-strip strong { color: var(--text-main); font-size: 13px; }
 .proposal-review-strip span { color: var(--text-muted); font-size: 12px; }
+.proposal-review-strip-warning { border-left-color: var(--palette-9c482213); background: var(--palette-f07f705); }
+.proposal-review-strip-success { border-left-color: var(--palette-1fb54521); background: var(--palette-8765e122); }
+.proposal-review-strip-override { border-left-color: var(--palette-bcd85701); background: var(--palette-95bf2caf); }
 .proposal-review-results { display: grid; gap: 8px; margin: -3px 0 12px; }
 .proposal-review-issues { display: grid; gap: 5px; padding: 10px 12px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--palette-4843938); font-size: 12px; }
 .proposal-review-issue { padding: 6px 8px; border-radius: 5px; background: var(--palette-f58d7116); color: var(--text-muted); }
 .proposal-review-issue.block { background: var(--palette-f07f705); color: var(--palette-8784f8b3); }
 .proposal-review-issue.warning { background: var(--palette-95bf2caf); color: var(--palette-3f67030b); }
 .proposal-review-issue.info { background: var(--palette-8765e122); color: var(--palette-de19fed9); }
+.proposal-review-approval { display: inline-flex; margin-left: 8px; padding: 2px 6px; border: 1px solid var(--palette-1fb54521); border-radius: 4px; color: var(--status-good); background: var(--palette-4843938); font-size: 10.5px; font-weight: 700; }
 .proposal-sheet-editor .form-card { border: 1px solid var(--border-soft); border-radius: 6px; box-shadow: none; padding: 16px; }
 .proposal-sheet-editor .section-title { margin-bottom: 12px; }
 .proposal-edit-grid {
@@ -6333,13 +6342,13 @@ body {
 .proposal-edit-grid-spares .boq-col-total-qty { width: 10%; }
 .proposal-edit-grid-spares .boq-col-unit-price { width: 14%; }
 .proposal-edit-grid-spares .boq-col-total-price { width: 14%; }
-.proposal-edit-grid-spares .boq-col-action { width: 8%; }
+.proposal-edit-grid-spares .boq-col-action { width: 38px; }
 .proposal-edit-grid-services .boq-col-si { width: 6%; }
 .proposal-edit-grid-services .boq-col-description { width: 45%; }
 .proposal-edit-grid-services .boq-col-total-qty { width: 14%; }
 .proposal-edit-grid-services .boq-col-unit-price { width: 16%; }
 .proposal-edit-grid-services .boq-col-total-price { width: 16%; }
-.proposal-edit-grid-services .boq-col-action { width: 10%; }
+.proposal-edit-grid-services .boq-col-action { width: 38px; }
 
 @media (max-width: 760px) {
   .proposal-edit-wrap { overflow-x: visible; }

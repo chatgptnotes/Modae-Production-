@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react'
 import { fmt } from '../utils.js'
 import { nextCell } from './sheetNav.js'
 import InputsWorkbook from './InputsWorkbook.jsx'
+import { Modal } from '../ui.jsx'
 
 // The sheet is deliberately built from native inputs: browser copy/paste and
 // keyboard focus are enough here, and keep the proposal model as the only data
@@ -22,6 +23,7 @@ export default function ProposalSheetEditor({
   // Edit Sheet is the single entry point from the proposal navigation. Start on
   // BOQ so extracted buyer parts are immediately visible without another tab row.
   const [sheet, setSheet] = useState('BOQ')
+  const [removeConfirm, setRemoveConfirm] = useState(null)
   const sheetRef = useRef(null)
   const focusCell = (row, col) => sheetRef.current?.querySelector(`[data-sheet-cell="${row}:${col}"]`)?.focus()
   const keyNav = (e, row, col, rows, cols) => {
@@ -151,7 +153,7 @@ export default function ProposalSheetEditor({
                   </td>
                   {priced && <><td className="num"><input type="number" min="0" {...inputProps(i, 2, e => { paste(i, 2, e); keyNav(e, i, 2, p.bom.length, 4) })} value={l.quoted || ''} placeholder={fmt(Math.round(lineComputed(l)))} onChange={updLine(i, 'quoted', false)} /></td>
                     <td className="num">₹ {fmt(lineQuoted(l) * quantity)}</td></>}
-                  <td><button type="button" onClick={removeLine(i)} title="Remove line"><span className="proposal-row-control">Remove</span></button></td>
+                  <td><button type="button" className="proposal-row-minus" onClick={() => setRemoveConfirm({ index: i, description: l.desc || l.pn || 'this line' })} title={`Remove line ${i + 1}`} aria-label={`Remove line ${i + 1}`}>−</button></td>
                 </tr>
               }
               return <tr key={i}>
@@ -179,6 +181,16 @@ export default function ProposalSheetEditor({
           </table>
         </div>
         <button onClick={addLine}>+ Add line</button>
+        {removeConfirm && <Modal className="proposal-remove-line-modal" title="Remove proposal line?" onClose={() => setRemoveConfirm(null)}>
+          <p>Remove line {removeConfirm.index + 1}: <b>{removeConfirm.description}</b>?</p>
+          <div className="forms-actions" style={{ justifyContent: 'flex-end' }}>
+            <button type="button" onClick={() => setRemoveConfirm(null)}>Cancel</button>
+            <button type="button" className="danger" onClick={() => {
+              if (p.bom[removeConfirm.index]) removeLine(removeConfirm.index)()
+              setRemoveConfirm(null)
+            }}>Delete line</button>
+          </div>
+        </Modal>}
         <div className="costing-note">Internal cost and margin calculations remain protected; {priced ? 'the customer-facing quoted price is editable.' : 'pricing is restricted for this role.'}</div>
       </section>}
 
