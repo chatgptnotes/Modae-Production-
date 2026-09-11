@@ -12,7 +12,7 @@ import {
 import { leadConfig, routeOwner, expiredLeadDeadline, aiAuditDetail } from './leadRules.js'
 import { withoutSimulated, simulatedCount } from './simulatedLeads.js'
 import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLeadSlice, defaultViewMode } from './appState.js'
-import { unitCostINR, unitSellINR } from './utils.js'
+import { unitCostINR, unitSellINR, setRoleNameConfig } from './utils.js'
 import { PRICE_SOURCES, normalizePriceFields, sparesLineFinancials } from './pricing.js'
 import { normalizedCurrencyRates } from './currency.js'
 import { syncProposalFromOpportunity } from './proposal/opportunitySync.js'
@@ -131,6 +131,7 @@ function applyApprovalEffects(s, appr) {
 
 export function StoreProvider({ children }) {
   const [state, setState] = useState(initialState)
+  setRoleNameConfig(state.config)
   // Ref mirror so read APIs (getProposal) see same-tick mutations, not the render closure.
   const stateRef = useRef(state)
   stateRef.current = state
@@ -1349,6 +1350,19 @@ export function StoreProvider({ children }) {
         const nextConfig = { ...s.config, ...patch }
         return withAudit({ ...s, config: nextConfig }, 'Config updated', 'admin',
           JSON.stringify({ fields: Object.keys(patch), before: Object.fromEntries(Object.keys(patch).map(k => [k, s.config?.[k]])), after: patch }))
+      })
+    },
+    updateRoleNames(roleNames) {
+      setState(s => {
+        if (!ROLES[s.role]?.admin) return s
+        const defaults = Object.fromEntries(Object.entries(ROLES).map(([id, role]) => [id, role.name]))
+        const nextNames = { ...defaults, ...(roleNames || {}) }
+        const changed = Object.keys(defaults).filter(id => nextNames[id] !== (s.config?.roleNames?.[id] || defaults[id]))
+        if (!changed.length) return s
+        const detail = JSON.stringify({ changed: Object.fromEntries(changed.map(id => [id, {
+          from: s.config?.roleNames?.[id] || defaults[id], to: nextNames[id],
+        }])) })
+        return withAudit({ ...s, config: { ...s.config, roleNames: nextNames } }, 'Role names changed', 'roleNames', detail)
       })
     },
     saveAiModel(aiModel) {

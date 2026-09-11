@@ -79,7 +79,7 @@ export default function Home() {
   return (
     <div className="page home-page">
       <div className="home-head">
-        <h2>Home — {displayRole(role) || ROLES[role]?.name}</h2>
+        <h2>Home — {displayRole(role)}</h2>
         <BrandMark />
       </div>
 

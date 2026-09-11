@@ -962,7 +962,7 @@ function ClarificationsTab({ opp }) {
       ...(qs ? ['', 'Specific clarifications:', qs] : []),
       '',
       'Best regards,',
-      `${ROLES[opp.owner]?.name || opp.owner}`,
+      `${displayRole(opp.owner)}`,
       MODAE_COMPANY.name,
     ].join('\n')
   }
@@ -972,7 +972,7 @@ function ClarificationsTab({ opp }) {
     const text = await runText('email.clarification', {
       oppName: opp.oppName, sellTo: opp.sellTo, contactPerson: opp.contactPerson,
       route: opp.route, questions: open.map(c => c.q),
-      senderName: ROLES[opp.owner]?.name || opp.owner,
+      senderName: displayRole(opp.owner),
     })
     setBusy('')
     const customer = (store.customers || []).find(c => c.id === opp.sellTo || c.name === opp.sellTo)
@@ -1292,7 +1292,7 @@ function SourcingTab({ opp, goTab }) {
     'Kindly include validity, lead time, warranty, freight basis and applicable taxes.',
     '',
     'Best regards,',
-    `${ROLES[opp.owner]?.name || opp.owner}`,
+    `${displayRole(opp.owner)}`,
     MODAE_COMPANY.name,
   ].join('\n')
 
@@ -1340,7 +1340,7 @@ function SourcingTab({ opp, goTab }) {
     })
     store.addCommunication(opp.id, {
       dir: 'In', from: 'simulated-manufacturer@example.com', fromName: result.manufacturer,
-      to: ROLES[opp.owner]?.name || opp.owner, subject: `Indicative quote ${result.quoteRef} - ${opp.oppName}`,
+      to: displayRole(opp.owner), subject: `Indicative quote ${result.quoteRef} - ${opp.oppName}`,
       body: result.notes, kind: 'vendor-response', simulated: true,
     })
     store.recordAiAction(opp.id, {
@@ -1757,7 +1757,7 @@ function FollowUpPane({ opp, onRevision }) {
     `The offer remains valid ${left != null && left > 0 ? `for ${left} more day(s)` : `for ${validityDays} days from submission`}.`,
     '',
     'Best regards,',
-    `${ROLES[opp.owner]?.name || opp.owner}`,
+    `${displayRole(opp.owner)}`,
   ].join('\n')
 
   const openFu = async () => {
@@ -1767,7 +1767,7 @@ function FollowUpPane({ opp, onRevision }) {
       quoteRef: opp.id, sentOn: opp.proposalDate, ageDays: age,
       validity: left != null && left > 0 ? `${left} of ${validityDays} days remaining` : `${validityDays} days from submission`,
       history: (store.communications?.[opp.id] || []).map(c => `${c.ts?.slice(0, 10)} ${c.kind} → ${c.to}: ${c.subject}`),
-      senderName: ROLES[opp.owner]?.name || opp.owner,
+      senderName: displayRole(opp.owner),
     })
     setFuBusy(false)
     setFuDraft(text?.trim() || templateFu())
@@ -2099,7 +2099,7 @@ function communicationRecipient(entry, opp, customer, vendorQuotes, mailbox) {
 function communicationSender(entry, opp, lead) {
   const raw = cleanAddress(entry.from)
   if (entry.dir === 'In') return { name: entry.fromName || lead?.sender || raw || 'Customer', email: raw && raw !== (entry.fromName || lead?.sender) ? raw : '' }
-  return { name: entry.fromName || ROLES[opp.owner]?.name || opp.owner || 'ModAE Sales Desk', email: raw }
+  return { name: entry.fromName || displayRole(opp.owner) || 'ModAE Sales Desk', email: raw }
 }
 
 const formatKind = kind => ({
@@ -2129,7 +2129,7 @@ function LegacyCommsTab({ opp }) {
     .filter(q => q.simulated && !recordedVendorResponses.has(q.subject))
     .map(q => ({
       id: `vendor-response-${q.id}`, ts: q.receivedAt || q.sentAt, dir: 'In',
-      from: q.email, fromName: q.manufacturer, to: ROLES[opp.owner]?.name || opp.owner,
+      from: q.email, fromName: q.manufacturer, to: displayRole(opp.owner),
       subject: q.subject || `Vendor response - ${q.manufacturer}`, body: q.body || q.notes,
       kind: 'vendor-response', simulated: true, attachmentNames: q.attachmentNames || [],
     }))

@@ -2,7 +2,7 @@ import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES } from '../seed.js'
-import { canViewCommercial, fmtLakh, ddMmmYY } from '../utils.js'
+import { canViewCommercial, fmtLakh, ddMmmYY, displayRole, displayRoleLabel } from '../utils.js'
 import { buildTabletTiles, TABLET_SECTIONS, tabletRoleGroup } from './tabletTiles.js'
 import { counts, pipelineSeries, winRate, turnaround } from '../kpi.js'
 import { Sparkline, DonutGauge, ArcGauge, TrendPill } from '../dashviz.jsx'
@@ -124,8 +124,8 @@ export default function TabletHome() {
     <div className="tablet-dash">
       <div className="dash-greet">
         <div>
-          <h2>Good day, {ROLES[role]?.name}</h2>
-          <p>{ddMmmYY(today)} · {ROLES[role]?.label}</p>
+          <h2>Good day, {displayRole(role)}</h2>
+          <p>{ddMmmYY(today)} · {displayRoleLabel(role)}</p>
         </div>
       </div>
 

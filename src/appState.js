@@ -118,6 +118,7 @@ export function migrate(s) {
   s.config.documentChecklists = { ...seedConfig.documentChecklists, ...(s.config.documentChecklists || {}) }
   if (!Array.isArray(s.config.stateRegions)) s.config.stateRegions = seedConfig.stateRegions
   if (!Array.isArray(s.config.ownerRules)) s.config.ownerRules = seedConfig.ownerRules
+  s.config.roleNames = { ...seedConfig.roleNames, ...(s.config.roleNames || {}) }
   if (!Array.isArray(s.config.workflow) || !s.config.workflow.length) s.config.workflow = DEFAULT_WORKFLOW.map(x => ({ ...x }))
   s.config.workflow = s.config.workflow.map((stage, i) => ({
     ...DEFAULT_WORKFLOW[i], ...stage,

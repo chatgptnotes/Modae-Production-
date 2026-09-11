@@ -41,7 +41,7 @@ export default function PoHandover({ opp }) {
   const approveDeviation = i => {
     const reason = (reasons[i] || '').trim()
     if (!reason) return
-    store.resolvePoLine(opp.id, i, `Deviation approved by ${role}: ${reason}`)
+    store.resolvePoLine(opp.id, i, `Deviation approved by ${displayRole(role)}: ${reason}`)
     setReasons({ ...reasons, [i]: '' })
   }
 
@@ -51,7 +51,7 @@ export default function PoHandover({ opp }) {
     return (
       <button className={done ? '' : 'primary'} disabled={!enabled}
         title={done ? `Accepted ${new Date(done).toLocaleString()}`
-          : role !== r ? `Switch persona to ${r}` : !allResolved ? 'Resolve all review / blocking lines first' : ''}
+          : role !== r ? `Switch persona to ${displayRole(r)}` : !allResolved ? 'Resolve all review / blocking lines first' : ''}
         onClick={() => store.acceptPO(opp.id)}>
         {done ? <><Icon name="check" size={12} /> {r} accepted</> : `Accept as ${r}`}
       </button>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS, DEMO_PASSWORD, PORTAL_ENABLED } from '../seed.js'
 import { WarnBox } from '../ui.jsx'
+import { displayRole, displayRoleLabel } from '../utils.js'
 import { Icon, ModaeImageLogo, MicrosoftLogo } from '../icons.jsx'
 import { InstallBanner } from '../install.jsx'
 import BrandWatermark from '../branding/BrandWatermark.jsx'
@@ -35,7 +36,7 @@ export default function Login() {
     if (!res.ok) setErr(res.err)
     else nav('/my-dashboard', { replace: true })
   }
-  const shortLabel = u => (ROLES[u.role]?.label || u.role).split('—')[0].trim()
+  const shortLabel = u => displayRole(u.role)
 
   const submitSignIn = e => {
     e.preventDefault()
@@ -104,7 +105,7 @@ export default function Login() {
               value={pw} onChange={e => setPw(e.target.value)} placeholder="At least 8 characters" />
             <label htmlFor="rg-role">Requested role</label>
             <select id="rg-role" value={role} onChange={e => setRole(e.target.value)}>
-              {REG_ROLES.map(r => <option key={r} value={r}>{ROLES[r]?.label || r}</option>)}
+              {REG_ROLES.map(r => <option key={r} value={r}>{displayRoleLabel(r)}</option>)}
             </select>
             <div className="login-actions">
               <button className="primary" type="submit">Request access</button>

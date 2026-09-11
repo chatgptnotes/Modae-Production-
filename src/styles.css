@@ -1574,6 +1574,18 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .user-email-editor-row input { width: 100%; min-width: 0; box-sizing: border-box; }
 .user-row-editor-actions { flex-wrap: wrap; }
 .user-row-editor-actions .err-text { flex-basis: 100%; margin-top: 2px; white-space: nowrap; }
+.users-tabs { display: flex; align-items: center; gap: 4px; margin: 20px 0 14px; border-bottom: 1px solid var(--border-default); }
+.users-tabs button { padding: 10px 14px; border: 0; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; background: transparent; color: var(--text-secondary); font-weight: 700; }
+.users-tabs button:hover { background: var(--surface-raised); color: var(--text-primary); filter: none; }
+.users-tabs button.active { border-bottom-color: var(--action-accent); color: var(--action-accent-ink); }
+.users-tab-panel { min-width: 0; }
+.users-role-names-panel { max-width: 720px; padding: 18px; border: 1px solid var(--border-default); border-radius: 10px; background: var(--surface-raised); }
+.users-role-names-panel .section-title { margin-top: 0; }
+.users-role-name-list { display: grid; gap: 8px; margin-top: 14px; }
+.users-role-name-row { display: grid; grid-template-columns: 46px minmax(0, 1fr); align-items: center; gap: 8px; }
+.users-role-name-row input { width: 100%; min-width: 0; box-sizing: border-box; }
+.users-role-name-row .role-id { color: var(--text-secondary); font-size: 11px; font-weight: 800; letter-spacing: .06em; }
+.users-role-name-actions { justify-content: flex-end; margin-top: 16px; }
 .modal {
   /* Centered dialog. It used to sit at a fixed top: 90px — pinned over the
      sticky workspace header and floating high on tall screens — and had no

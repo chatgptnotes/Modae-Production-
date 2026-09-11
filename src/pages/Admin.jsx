@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { OWNERS, AI_PROVIDERS, MILESTONES } from '../seed.js'
-import { isAdminRole, canSeePage } from '../utils.js'
+import { isAdminRole, canSeePage, displayRoleLabel } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { Chip, WarnBox, Modal } from '../ui.jsx'
 import { saveAiKey, testConnection, usesVercelAi } from '../ai.js'
@@ -265,7 +265,7 @@ function ClassRuleRow({ cls, rule, canEdit, open, onToggle, checklistNames, onPa
                             : current.filter(item => item !== role)
                           if (next.length) onPatchGate({ approvers: next })
                         }} />
-                      {role}
+                      {displayRoleLabel(role)}
                     </label>
                   })}
                 </div>
@@ -661,7 +661,7 @@ export default function Admin() {
                       const next = e.target.checked ? [...new Set([...current, role])] : current.filter(item => item !== role)
                       if (next.length) store.updateConfig({ approvalThresholds: { ...thresholds, pricingApprovers: next } })
                     }} />
-                  {role}
+                  {displayRoleLabel(role)}
                 </label>
               })}
             </div>

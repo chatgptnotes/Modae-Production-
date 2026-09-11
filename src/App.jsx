@@ -176,7 +176,7 @@ export default function App() {
   const custAccount = store.auth?.user?.role === 'CUST'
   const role = store.role
   const signedInName = store.auth?.user
-    ? store.auth.user.name === (ROLES[store.auth.user.role]?.name || '')
+    ? store.auth.user.name === displayRole(store.auth.user.role)
       ? displayRole(store.auth.user.role)
       : store.auth.user.name
     : ''

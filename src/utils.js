@@ -64,6 +64,11 @@ export function stageClass(o) {
 
 import { ROLES, PERMS } from './seed.js'
 
+// The provider refreshes this reference whenever persisted config changes. The
+// optional config argument keeps the resolver useful in pure/test contexts.
+let activeRoleNames = {}
+export const setRoleNameConfig = config => { activeRoleNames = config?.roleNames || {} }
+
 // Commercial visibility (Value/COGS/GM, forecast, pricing) follows the active
 // persona, per the wireframe's "Restricted — commercial data" rule.
 export const canViewCommercial = role => !!ROLES[role]?.commercial
@@ -88,23 +93,22 @@ export const productList = v => (Array.isArray(v)
 export const productLabel = v => productList(v).join(', ')
 // LJS (strategic) and AH (commercial & ops) decide gates; admins can see the queue.
 export const isApprover = role => role === 'LJS' || role === 'AH' || isAdminRole(role)
-export const displayRole = role => {
+export const displayRole = (role, config) => {
   if (!role) return ''
-  if (role === 'RS') return 'Ruthvik Satish'
-  return ROLES[role]?.name || role
+  return config?.roleNames?.[role] || activeRoleNames[role] || ROLES[role]?.name || role
 }
-export const displayRoleLabel = role => {
+export const displayRoleLabel = (role, config) => {
   if (!role) return ''
   const suffix = String(ROLES[role]?.label || '')
     .split('—')
     .slice(1)
     .join('—')
     .trim()
-  const name = displayRole(role)
+  const name = displayRole(role, config)
   return suffix ? `${name} - ${suffix}` : name
 }
-export const displayRoles = (roles, separator = ' + ') =>
-  (roles || []).map(displayRole).filter(Boolean).join(separator)
+export const displayRoles = (roles, separator = ' + ', config) =>
+  (roles || []).map(role => displayRole(role, config)).filter(Boolean).join(separator)
 // Page-level permission from the PERMS matrix (unknown role sees nothing).
 export const canSeePage = (role, page) => (PERMS[role] || []).includes(page)
 

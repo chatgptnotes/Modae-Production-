@@ -1161,6 +1161,8 @@ export const AI_PROVIDERS = {
 
 // Runtime configuration — every value editable on the Admin page.
 export const seedConfig = {
+  // Display labels are configurable; role IDs remain canonical in all records.
+  roleNames: Object.fromEntries(Object.entries(ROLES).map(([id, role]) => [id, role.name])),
   currencyRates: { ...DEFAULT_CURRENCY_RATES },
   // L-05-AI, Official Lead Management Workflow (22 Jul 2026) — six rules, kept
   // one-per-row so the Admin page reads like the drawing. The AI only suggests

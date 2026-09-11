@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES } from '../seed.js'
 import { Icon } from '../icons.jsx'
+import { displayRole } from '../utils.js'
 
 // Guided demo launcher — each scenario switches to the right persona and jumps
 // straight to the screen where that story starts.
@@ -53,7 +54,7 @@ export default function Launcher() {
             <span className="tile-icon"><Icon name={s.icon} size={26} /></span>
             <span className="tile-label">{s.n}. {s.label}</span>
             <span className="tile-hint">{s.hint}</span>
-            <span className="tile-hint">Persona: <b>{s.persona}</b> — {ROLES[s.persona]?.name}</span>
+            <span className="tile-hint">Persona: <b>{s.persona}</b> — {displayRole(s.persona)}</span>
             <div style={{ marginTop: 'auto', paddingTop: 6 }}>
               <button disabled={!demo} onClick={e => { e.stopPropagation(); start(s) }}>Start scenario</button>
             </div>

@@ -10,7 +10,7 @@ import { blobAttachment, proposalWorkbookAttachment, proposalWorkbookPreview, en
 import { formatEmailBody, runText } from '../ai.js'
 import WorkbookPreview from '../proposal/WorkbookPreview.jsx'
 import { EMAIL_RE, splitRecipients, recipientsValid } from '../emailValidation.js'
-import { gmailComposeHref } from '../utils.js'
+import { gmailComposeHref, displayRole } from '../utils.js'
 
 // Customer send — only unlocked by an approved 'Final quote release'
 // and a three-point human-in-the-loop checklist. To, CC, Subject, the covering
@@ -108,7 +108,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
         revision: p.revision,
         validity: `${p.validityDays || opp.validityDays || 30} days from submission`,
         route,
-        senderName: ROLES[store.role]?.name || store.role,
+        senderName: displayRole(store.role),
         terms: p.terms || [],
       })
       if (!text?.trim()) throw new Error('AI message could not be created. Check the AI connection and try again.')
@@ -276,7 +276,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
       {[
         ['c1', 'Customer-facing prices and validity verified'],
         ['c2', 'No restricted commercial data in the document'],
-        ['c3', `Named reviewer: ${ROLES[store.role]?.name || store.role}`],
+        ['c3', `Named reviewer: ${displayRole(store.role)}`],
       ].map(([k, label]) => (
         <div key={k} className="check-row">
           <input type="checkbox" checked={checks[k]}

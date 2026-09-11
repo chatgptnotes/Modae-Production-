@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { DEMO_PASSWORD, PORTAL_ENABLED, selectableRoles } from '../seed.js'
+import { DEMO_PASSWORD, PORTAL_ENABLED, selectableRoles, ROLES } from '../seed.js'
 import { ddMmmYY, isAdminRole, displayRoleLabel } from '../utils.js'
 import { Icon } from '../icons.jsx'
 
@@ -18,6 +18,10 @@ export default function Users() {
   const [editingUserId, setEditingUserId] = useState(null)
   const [userDraft, setUserDraft] = useState(null)
   const [userErr, setUserErr] = useState('')
+  const [roleNameDraft, setRoleNameDraft] = useState(() => ({ ...(store.config?.roleNames || {}) }))
+  const [roleNameError, setRoleNameError] = useState('')
+  const [roleNameSaved, setRoleNameSaved] = useState(false)
+  const [usersView, setUsersView] = useState('accounts')
 
   // Route-level gate: the account roster (names, emails, roles) is restricted
   // directory data — non-admins get a restricted block, not a read-only view.
@@ -109,6 +113,28 @@ export default function Users() {
     setModal(false)
   }
 
+  const saveRoleNames = event => {
+    event.preventDefault()
+    const invalid = Object.entries(ROLES).find(([id]) => !String(roleNameDraft[id] || '').trim())
+    if (invalid) {
+      setRoleNameError(`${invalid[0]} needs a display name.`)
+      setRoleNameSaved(false)
+      return
+    }
+    store.updateRoleNames(Object.fromEntries(Object.keys(ROLES).map(id => [id, String(roleNameDraft[id]).trim()])))
+    setRoleNameError('')
+    setRoleNameSaved(true)
+    setTimeout(() => setRoleNameSaved(false), 2500)
+  }
+
+  const resetRoleNames = () => {
+    const defaults = Object.fromEntries(Object.entries(ROLES).map(([id, role]) => [id, role.name]))
+    setRoleNameDraft(defaults)
+    setRoleNameError('')
+    setRoleNameSaved(false)
+    store.updateRoleNames(defaults)
+  }
+
   return (
     <div className="page">
       <h2>User management</h2>
@@ -118,6 +144,17 @@ export default function Users() {
         {canManage && <button className="primary" onClick={() => { setErr(''); setModal(true) }}><Icon name="plus" size={13} /> Register user</button>}
       </div>
 
+      <nav className="users-tabs" role="tablist" aria-label="User management sections">
+        <button id="users-tab-accounts" type="button" role="tab" aria-selected={usersView === 'accounts'}
+          aria-controls="users-panel-accounts" className={usersView === 'accounts' ? 'active' : ''}
+          onClick={() => setUsersView('accounts')}>Accounts</button>
+        <button id="users-tab-role-names" type="button" role="tab" aria-selected={usersView === 'roleNames'}
+          aria-controls="users-panel-role-names" className={usersView === 'roleNames' ? 'active' : ''}
+          onClick={() => setUsersView('roleNames')}>Role names</button>
+      </nav>
+
+      <section id="users-panel-accounts" className="users-tab-panel" role="tabpanel"
+        aria-labelledby="users-tab-accounts" hidden={usersView !== 'accounts'}>
       {canManage && pending.length > 0 && (
         <>
           <div className="section-title">Awaiting approval ({pending.length})</div>
@@ -139,7 +176,6 @@ export default function Users() {
           </div>
         </>
       )}
-
       <div className="section-title">Accounts ({store.users.length})</div>
       <div className="sheet-wrap sheet-wrap-fill">
         <table className="sheet">
@@ -206,6 +242,31 @@ export default function Users() {
           </tbody>
         </table>
       </div>
+      </section>
+
+      <section id="users-panel-role-names" className="users-tab-panel" role="tabpanel"
+        aria-labelledby="users-tab-role-names" hidden={usersView !== 'roleNames'}>
+      <form className="users-role-names-panel" onSubmit={saveRoleNames}>
+        <div className="section-title">Role names</div>
+        <p className="hint">Change the global display names while stable role IDs continue to power permissions and historical records.</p>
+        <div className="users-role-name-list">
+          {Object.entries(ROLES).map(([id, roleDef]) => (
+            <label className="users-role-name-row" key={id}>
+              <span className="role-id">{id}</span>
+              <input type="text" value={roleNameDraft[id] ?? roleDef.name}
+                onChange={e => { setRoleNameDraft(d => ({ ...d, [id]: e.target.value })); setRoleNameError(''); setRoleNameSaved(false) }}
+                aria-label={`Display name for ${id}`} />
+            </label>
+          ))}
+        </div>
+        {roleNameError && <div className="err-text" role="alert">{roleNameError}</div>}
+        {roleNameSaved && <div className="hint" role="status">Role names saved.</div>}
+        <div className="forms-actions users-role-name-actions">
+          <button type="button" onClick={resetRoleNames}>Reset to defaults</button>
+          <button type="submit" className="primary">Save names</button>
+        </div>
+      </form>
+      </section>
 
       {modal && (
         <>

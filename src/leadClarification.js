@@ -1,4 +1,5 @@
 import { MODAE_BRAND } from './branding/modae.js'
+import { displayRole } from './utils.js'
 
 // Lead-stage outbound mail: the clarification request, and the Amber pre-quote
 // processing fee request.
@@ -72,7 +73,7 @@ export function clarificationSender(lead, users = [], config = {}) {
 }
 
 export const senderLabel = sender => (sender.rule === 'assigned-owner'
-  ? `${sender.name} (${sender.role}) — lead is assigned`
+  ? `${sender.name} (${displayRole(sender.role)}) — lead is assigned`
   : 'Common mailbox — lead is not assigned yet')
 
 // ------------------------------------------------------------- what to draft

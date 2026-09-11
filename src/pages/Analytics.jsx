@@ -399,7 +399,7 @@ export default function Analytics({ embedded = false }) {
             <label className="ana-field">
               <span>Owner</span>
               <span className="af-locked" title="Sales owners see their own records only — approvers and admins can switch owner">
-                <Icon name="lock" size={11} /> {lockedOwner} — {ROLES[lockedOwner]?.name}
+                <Icon name="lock" size={11} /> {lockedOwner} — {displayRole(lockedOwner)}
               </span>
             </label>
           ) : (

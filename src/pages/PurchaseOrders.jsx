@@ -48,7 +48,7 @@ export default function PurchaseOrders() {
 
       {needsMe.length > 0 && (
         <WarnBox>
-          {needsMe.length} PO{needsMe.length > 1 ? 's' : ''} waiting on your acceptance as {role} — joint LJS + AH sign-off required.
+          {needsMe.length} PO{needsMe.length > 1 ? 's' : ''} waiting on your acceptance as {displayRole(role)} — joint LJS + AH sign-off required.
         </WarnBox>
       )}
 
