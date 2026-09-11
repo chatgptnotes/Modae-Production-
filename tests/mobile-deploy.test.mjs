@@ -66,13 +66,42 @@ test('approval cards show request time and highlight new pending requests', () =
   assert.match(approvals, /const stamp = ts =>/)
   assert.match(approvals, /toLocaleTimeString\('en-IN'/)
   assert.match(approvals, /requested \{stamp\(a\.ts\)\}/)
-  assert.match(approvals, /requested by \{a\.requestedBy\} · \{stamp\(a\.ts\)\}/)
+  assert.match(approvals, /raised by \{displayRole\(a\.requestedBy\)\} on \{shortDate\(a\.ts\)\}/)
   assert.match(approvals, /const NEW_APPROVAL_MS = 48 \* 60 \* 60 \* 1000/)
   assert.match(approvals, /approval-card-new/)
   assert.match(approvals, /approval-new-pill/)
   assert.match(css, /\.approval-card-new/)
   assert.match(css, /@keyframes approval-new-pulse/)
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/)
+})
+
+test('approval queue copy explains the decision required', () => {
+  const approvals = read('src/pages/Approvals.jsx')
+  assert.match(approvals, /\{forMe\.length\} approvals waiting on you/)
+  assert.match(approvals, /Oldest has been waiting since \$\{shortDate\(oldestForMe\.ts\)\}/)
+  assert.doesNotMatch(approvals, /ACTION REQUIRED.*Needs your decision/)
+  assert.match(approvals, /What you're approving/)
+  assert.match(approvals, /Customer asked/)
+  assert.match(approvals, /ModAE standard/)
+  assert.match(approvals, /You are the only approver/)
+  assert.match(approvals, /approval-card-top-redesigned/)
+  assert.match(approvals, /approval-wait-chip/)
+  assert.doesNotMatch(approvals, /<span className="pill Blue">Pending<\/span>/)
+})
+
+test('approval decisions require an explicit choice before showing notes', () => {
+  const approvals = read('src/pages/Approvals.jsx')
+  assert.match(approvals, /const \[d, setD\] = useState\(''\)/)
+  assert.match(approvals, /if \(!d\) \{ setErr\('Choose a decision before continuing\.'/)
+  assert.match(approvals, /\{d && <textarea/)
+  assert.match(approvals, /A note is required for every decision/)
+})
+
+test('approval cards fill the approvals workspace and stay compact', () => {
+  assert.match(css, /\.approvals-page \.approval-card \{[\s\S]*width: 100%;[\s\S]*max-width: none;[\s\S]*box-sizing: border-box;/)
+  assert.match(css, /\.approvals-page \.approval-opportunity-context \{ margin-block: 6px; padding: 8px 10px; \}/)
+  assert.match(css, /\.approvals-page \.approval-context-deviations > div \{ gap: 6px; padding-top: 3px; \}/)
+  assert.match(css, /\.approvals-page \.approval-meta \{ margin-top: 8px; padding-top: 6px; \}/)
 })
 
 test('ModAE branding is centralized without changing tablet tile ownership', () => {

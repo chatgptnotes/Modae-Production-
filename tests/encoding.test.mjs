@@ -42,6 +42,6 @@ test('approval requests persist context for the Approvals page', () => {
   assert.match(workbench, /opportunitySummary/)
   assert.match(workbench, /opportunitySnapshot/)
   assert.match(workbench, /deviationDetails/)
-  assert.match(approvals, /Why this is blocked/)
+  assert.match(approvals, /What you're approving/)
   assert.match(approvals, /Opportunity summary/)
 })

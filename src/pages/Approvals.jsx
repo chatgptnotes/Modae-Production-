@@ -5,7 +5,7 @@ import { ROLES } from '../seed.js'
 import { isApprover, canViewCommercial, ddMmmYY, displayRole, displayRoles } from '../utils.js'
 import { useDrawer } from '../drawer.jsx'
 import { Icon } from '../icons.jsx'
-import { Chip, AiBadge } from '../ui.jsx'
+import { AiBadge } from '../ui.jsx'
 import { runTaskResult } from '../ai.js'
 import { putFiles } from '../leadBlobs.js'
 
@@ -26,6 +26,21 @@ const stamp = ts => {
   const t = time(ts)
   return t ? `${d} at ${t}` : d
 }
+const shortDate = ts => {
+  const d = new Date(ts || '')
+  if (Number.isNaN(d.getTime())) return ''
+  return `${d.getDate()} ${d.toLocaleDateString('en-IN', { month: 'short' })}`
+}
+const waitingLabel = ts => {
+  const started = Date.parse(ts || '')
+  if (!Number.isFinite(started)) return 'Waiting'
+  const days = Math.max(0, Math.floor((Date.now() - started) / 86400000))
+  return days === 0 ? 'Waiting today' : `Waiting ${days} day${days === 1 ? '' : 's'}`
+}
+const approvalTitle = opp => String(opp?.oppName || 'Approval request')
+  .replace(/\s*[–-]\s*/g, ' — ')
+  .replace(/^Spare Parts RFQ/i, 'Spare parts RFQ')
+  .replace(/Vibration Monitoring System/i, 'vibration monitoring system')
 const pillFor = s =>
   s === 'Approved' ? 'Green'
     : s === 'Rejected' ? 'Red'
@@ -166,13 +181,14 @@ export function ConditionCompletion({ approval, index, condition, canComplete, o
 
 // Inline decision form shown on a pending card when the acting role can decide.
 function DecisionForm({ a, role, onDecide }) {
-  const [d, setD] = useState('Approved')
+  const [d, setD] = useState('')
   const [comment, setComment] = useState('')
   const [conds, setConds] = useState('')
   const [err, setErr] = useState('')
 
   const submit = e => {
     e.preventDefault()
+    if (!d) { setErr('Choose a decision before continuing.'); return }
     if (!comment.trim()) { setErr('A note is required for every decision.'); return }
     const lines = conds.split('\n').map(l => l.trim()).filter(Boolean)
     if (d === 'Approved with conditions' && !lines.length) {
@@ -185,9 +201,7 @@ function DecisionForm({ a, role, onDecide }) {
 
   return (
     <form onSubmit={submit} className="approval-decision-form">
-      <div className="approval-decision-title">
-        Your decision as {displayRole(role)}
-      </div>
+      <div className="approval-decision-title">Record your decision</div>
       <div className="approval-decision-options">
         {DECISIONS.map(v => (
           <label key={v}>
@@ -196,11 +210,11 @@ function DecisionForm({ a, role, onDecide }) {
           </label>
         ))}
       </div>
-      <textarea
-        rows={2} value={comment} onChange={e => setComment(e.target.value)}
-        placeholder="Decision note (required)"
-        className="approval-decision-input"
-      />
+      {d && <textarea
+          rows={2} value={comment} onChange={e => setComment(e.target.value)}
+          placeholder="Decision note (required)"
+          className="approval-decision-input"
+        />}
       {d === 'Approved with conditions' && (
         <textarea
           rows={2} value={conds} onChange={e => setConds(e.target.value)}
@@ -210,7 +224,7 @@ function DecisionForm({ a, role, onDecide }) {
       )}
       {err && <div className="errbox approval-decision-error">{err}</div>}
       <div className="approval-decision-submit">
-        <button className="primary" type="submit"><Icon name="clipboardCheck" size={13} /> Record decision</button>
+        <button className="primary" type="submit"><Icon name="clipboardCheck" size={13} /> Submit</button>
       </div>
     </form>
   )
@@ -261,18 +275,18 @@ export default function Approvals() {
       </div>)}
     </div>
   )
-  const Detail = ({ a }) => <>
-    <OpportunityContext a={a} />
-    {(a.type === 'Pricing threshold exception' && a.pricingRows?.length && comm)
-      ? <><div style={{ fontSize: 12.5 }}>{a.detail}</div><PricingRows rows={a.pricingRows} /></>
-      : (COMMERCIAL_RX.test(a.detail || '') && !comm)
-    ? (
-      <div className="restricted" style={{ fontSize: 12.5 }}>
-        <Icon name="lock" size={11} /> Commercial exception — trigger values (GM% / discount / value) visible to LJS / AH only.
-      </div>
-    )
-    : <div style={{ fontSize: 12.5 }}>{a.detail}</div>}
-  </>
+  const Detail = ({ a }) => {
+    const hasContext = Boolean(a.oppId || a.opportunitySummary || a.blockingReason)
+    const showStandaloneDetail = !hasContext || a.type !== 'Commercial deviation'
+    return <>
+      <OpportunityContext a={a} />
+      {showStandaloneDetail && (a.type === 'Pricing threshold exception' && a.pricingRows?.length && comm
+        ? <><div style={{ fontSize: 12.5 }}>{a.detail}</div><PricingRows rows={a.pricingRows} /></>
+        : COMMERCIAL_RX.test(a.detail || '') && !comm
+          ? <div className="restricted" style={{ fontSize: 12.5 }}><Icon name="lock" size={11} /> Commercial exception — trigger values (GM% / discount / value) visible to LJS / AH only.</div>
+          : <div style={{ fontSize: 12.5 }}>{a.detail}</div>)}
+    </>
+  }
 
   const OpportunityContext = ({ a }) => {
     if (!a.oppId && !a.opportunitySummary && !a.blockingReason) return null
@@ -298,10 +312,11 @@ export default function Approvals() {
           {(snapshot.product || opp?.product) && <span><b>Product</b>{snapshot.product || (Array.isArray(opp.product) ? opp.product.join(', ') : opp.product)}</span>}
           {comm && snapshot.valueK != null && <span><b>Value</b>₹{snapshot.valueK}K</span>}
         </div>
-        <div className="approval-context-reason"><b>Why this is blocked</b><span>{reason}</span></div>
+        <div className="approval-context-reason"><b>What you're approving</b><span>{reason}</span></div>
         {deviations.length > 0 && (
           <div className="approval-context-deviations">
-            {deviations.map((d, i) => <div key={`${d.term}-${i}`}><b>{d.term}</b><span>Customer requested: {d.customerAsk}</span><span>ModAE offered: {d.ourResponse}</span></div>)}
+            <div className="approval-context-deviation-head"><span></span><b>Customer asked</b><b>ModAE standard</b></div>
+            {deviations.map((d, i) => <div key={`${d.term}-${i}`}><b>{d.term}</b><span>{d.customerAsk}</span><span>{d.ourResponse}</span></div>)}
           </div>
         )}
       </div>
@@ -315,16 +330,19 @@ export default function Approvals() {
 
   // On an `anyOf` gate the named roles are alternatives, not a quorum. Joint
   // gates deliberately omit this marker and display both outstanding roles.
-  const RoleChips = ({ a }) => (
-    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6, alignItems: 'center' }}>
-      {neededOf(a).map(r => {
-        const d = (a.decisions || {})[r]?.d
-        return <Chip key={r} tone={chipTone(d)}>{displayRole(r)} {d || 'pending'}</Chip>
-      })}
-      {a.anyOf && neededOf(a).length > 1
-        && <span className="hint" style={{ fontSize: 11.5 }}>either one decides</span>}
-    </div>
-  )
+  const RoleChips = ({ a }) => {
+    const needed = neededOf(a)
+    const others = needed.filter(r => r !== role)
+    const approved = others.filter(r => (a.decisions || {})[r]?.d === 'Approved')
+    if (needed.includes(role)) {
+      return <div className="approval-approver-summary">
+        {others.length === 0
+          ? 'You are the only approver'
+          : `You + ${others.length} other${others.length === 1 ? '' : 's'}${approved.length ? ` — ${displayRoles(approved)} approved` : ` — awaiting ${displayRoles(others)}`}`}
+      </div>
+    }
+    return <div className="approval-approver-summary">Approval chain — {displayRoles(needed)}</div>
+  }
 
   const QuickLinks = ({ a }) => (
     <div className="approval-links">
@@ -384,18 +402,24 @@ export default function Approvals() {
   const decided = store.approvals
     .filter(a => a.status !== 'Pending' && matches(a))
     .sort((a, b) => (b.decisionTs || '').localeCompare(a.decisionTs || ''))
+  const oldestForMe = [...forMe].sort((a, b) => (a.ts || '').localeCompare(b.ts || ''))[0]
 
   const PendingCard = ({ a }) => {
     const remaining = neededOf(a).filter(r => !(a.decisions || {})[r])
     const myDecision = (a.decisions || {})[role]
+    const opp = store.opportunities.find(o => o.id === a.oppId)
     return (
       <div className={cardClass(a, 'form-card approval-pending-card')}>
-        <div className="approval-card-top">
-          <b>{a.id}</b>
-          <span className="pill Blue">Pending</span>
-          <NewMarker a={a} />
-          <span className="approval-type">{a.type}</span>
-          <span className="hint">requested by {displayRole(a.requestedBy)} · {stamp(a.ts)}</span>
+        <div className="approval-card-top approval-card-top-redesigned">
+          <div className="approval-card-identity">
+            <b>{approvalTitle(opp)}</b>
+            <span>{opp?.sellTo || a.customerName || 'Customer not recorded'} · {opp?.valueK != null ? `₹${opp.valueK}K` : 'Value not recorded'} · {a.id}</span>
+          </div>
+          <div className="approval-card-status">
+            <NewMarker a={a} />
+            <span className="approval-wait-chip">{waitingLabel(a.ts)}</span>
+            <span className="hint">raised by {displayRole(a.requestedBy)} on {shortDate(a.ts)}</span>
+          </div>
         </div>
         <div className="approval-ref"><RefLink a={a} /></div>
         <Detail a={a} />
@@ -421,7 +445,7 @@ export default function Approvals() {
   return (
     <div className="page approvals-page">
       <div className="approval-head"><div><div className="approval-eyebrow">DECISION WORKSPACE</div><h2><Icon name="checkCircle" size={18} /> Approvals — {displayRole(role)}</h2><p className="hint">Resolve requests, inspect linked records, and keep the pipeline moving.</p></div></div>
-      <div className="approval-summary"><div className="approval-summary-card summary-pending"><b>{forMe.length}</b><span>Needs your decision</span></div><div className="approval-summary-card summary-waiting"><b>{others.length}</b><span>Awaiting others</span></div><div className="approval-summary-card summary-conditions"><b>{condOpen.length}</b><span>Open conditions</span></div><div className="approval-summary-card summary-decided"><b>{decided.length}</b><span>Decided</span></div></div>
+      <div className="approval-summary"><div className="approval-summary-card summary-pending"><b>{forMe.length}</b><span>Needs your decision</span></div><div className="approval-summary-card summary-waiting"><b>{others.length}</b><span>Awaiting others</span></div><div className="approval-summary-card summary-conditions"><b>{condOpen.length}</b><span>Open conditions</span></div><div className="approval-summary-card summary-decided"><b>{decided.length}</b><span>Approved requests</span></div></div>
       <FilterBar />
       <div className="approval-explainer"><span className="hint">
           Commercial deviations and credit-term clearances routed to LJS / AH. Joint gates resolve once every
@@ -429,7 +453,12 @@ export default function Approvals() {
           condition is confirmed incorporated.
         </span></div>
 
-      <div className="approval-section-heading approval-section-primary"><div><span className="approval-section-kicker">ACTION REQUIRED</span><h3>Needs your decision <span>{forMe.length}</span></h3></div><span className="hint">Review and record a decision</span></div>
+      <div className="approval-section-heading approval-section-primary">
+        <div>
+          <h3>{forMe.length} approvals waiting on you</h3>
+          <p className="approval-section-subtitle">{oldestForMe ? `Oldest has been waiting since ${shortDate(oldestForMe.ts)}. Review each one and record a decision.` : 'Nothing is waiting on you right now.'}</p>
+        </div>
+      </div>
       {forMe.map(a => <PendingCard key={a.id} a={a} />)}
       {!forMe.length && <p className="hint">Nothing pending for you — all clear.</p>}
 
@@ -446,7 +475,7 @@ export default function Approvals() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <b>{a.id}</b>
             <span className="pill Amber">Approved with conditions</span>
-            <span className="hint" style={{ marginLeft: 'auto' }}>decided {stamp(a.decisionTs)}</span>
+            <span className="hint" style={{ marginLeft: 'auto' }}>Approved {stamp(a.decisionTs)}</span>
           </div>
            <div style={{ margin: '6px 0' }}><RefLink a={a} /></div>
            <OpportunityContext a={a} />
@@ -473,14 +502,14 @@ export default function Approvals() {
       ))}
       {!condOpen.length && <p className="hint">No open conditions — everything decided is fully incorporated.</p>}
 
-      <div className="approval-section-heading"><div><span className="approval-section-kicker">HISTORY</span><h3>Decided <span>{decided.length}</span></h3></div></div>
+      <div className="approval-section-heading"><div><span className="approval-section-kicker">HISTORY</span><h3>Approved requests <span>{decided.length}</span></h3></div></div>
       {decided.map(a => (
         <div key={a.id} className="form-card approval-card" style={{ marginBottom: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <b>{a.id}</b>
             <span className={`pill ${pillFor(a.status)}`}>{a.status}</span>
             <span style={{ fontSize: 12.5 }}>{a.type}</span>
-            <span className="hint" style={{ marginLeft: 'auto' }}>decided {stamp(a.decisionTs)}</span>
+            <span className="hint" style={{ marginLeft: 'auto' }}>Approved {stamp(a.decisionTs)}</span>
           </div>
            <div style={{ margin: '6px 0' }}><RefLink a={a} /></div>
            <OpportunityContext a={a} />

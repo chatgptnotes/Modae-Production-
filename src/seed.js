@@ -520,7 +520,7 @@ export const ROLES = {
   SUPER: { name: 'System Owner', label: 'Super Admin — Platform Owner', commercial: true, admin: true },
   ADMIN: { name: 'Admin', label: 'Admin — System Administrator', commercial: true, admin: true },
   LJS: { name: 'L. J. Swaminathan', label: 'LJS — Strategic Approver', commercial: true },
-  AH: { name: 'A. Hameed', label: 'AH — Commercial & Ops Approver', commercial: true },
+  AH: { name: 'Ashwath Hegde', label: 'AH — Commercial & Ops Approver', commercial: true },
   RS: { name: 'R. Sundaram', label: 'RS — Sales Owner', commercial: false, sales: true },
   PP: { name: 'P. Prakash', label: 'PP — Sales Owner', commercial: false, sales: true },
   SS: { name: 'S. Service Owner', label: 'SS — Service Sales Owner', commercial: false, sales: true },
@@ -688,7 +688,7 @@ export const DEMO_PASSWORD = 'Demo@1234'
 export const seedUsers = [
   { id: 'U-001', name: 'System Owner', email: 'admin@modae.demo', role: 'SUPER', status: 'Active', created: '2026-04-01', pw: DEMO_PASSWORD },
   { id: 'U-002', name: 'L. J. Swaminathan', email: 'ljs@modae.demo', role: 'LJS', status: 'Active', created: '2026-04-01', pw: DEMO_PASSWORD },
-  { id: 'U-003', name: 'A. Hameed', email: 'ah@modae.demo', role: 'AH', status: 'Active', created: '2026-04-01', pw: DEMO_PASSWORD },
+  { id: 'U-003', name: 'Ashwath Hegde', email: 'ah@modae.demo', role: 'AH', status: 'Active', created: '2026-04-01', pw: DEMO_PASSWORD },
   { id: 'U-004', name: 'R. Sundaram', email: 'rs@modae.demo', role: 'RS', status: 'Active', created: '2026-04-15', pw: DEMO_PASSWORD },
   { id: 'U-005', name: 'P. Prakash', email: 'pp@modae.demo', role: 'PP', status: 'Active', created: '2026-04-15', pw: DEMO_PASSWORD },
   { id: 'U-009', name: 'S. Service Owner', email: 'ss@modae.demo', role: 'SS', status: 'Active', created: '2026-08-17', pw: DEMO_PASSWORD },
