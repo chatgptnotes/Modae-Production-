@@ -1,19 +1,15 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from './store.jsx'
 import {
-  SUBFOLDERS, OWNERS, STAGES, CLOSE_REASONS,
-  OPP_TYPES, CATEGORIES, BUS, SEGMENTS, SOLUTIONS,
+  SUBFOLDERS,
 } from './seed.js'
-import { fmt, fmtRupeesFromK, rupeesToK, mmmYY, ddMmmYY, canViewCommercial, canPriceProposal, stageClass, productList } from './utils.js'
+import { fmt, fmtRupeesFromK, mmmYY, ddMmmYY, canViewCommercial, canPriceProposal, productList } from './utils.js'
 import { nextActionWith } from './gates.js'
-import * as filestore from './filestore.js'
 import { Icon } from './icons.jsx'
 import { Chip, ClassChip } from './ui.jsx'
-import OpportunityDetailsEditor from './OpportunityDetailsEditor.jsx'
+import { OpportunityDetailsView } from './OpportunityDetailsEditor.jsx'
 import DetailTabs from './DetailTabs.jsx'
-
-const OPEN_STAGES = STAGES.filter(s => s !== 'Won' && s !== 'Lost')
 
 // The record form is a tab of its own rather than a footer under every folder:
 // three of the four folders are usually empty, so a shared footer left every
@@ -56,12 +52,6 @@ export default function OppPanel({ oppId }) {
   const [tab, setTab] = useState(DETAILS_TAB)
   useEffect(() => { setTab(DETAILS_TAB) }, [oppId])
 
-  const fileInput = useRef(null)
-  const [busy, setBusy] = useState(false)
-  const [cloudErr, setCloudErr] = useState('')
-  const [lossPending, setLossPending] = useState(false)
-  const [lossReason, setLossReason] = useState('')
-
   if (!opp) return <div className="drawer-body"><p className="hint">This opportunity no longer exists.</p></div>
 
   // A custom subfolder can be deleted (on the Folders page) while its tab is active.
@@ -74,48 +64,6 @@ export default function OppPanel({ oppId }) {
   const na = nextActionWith(opp, store.getProposal(oppId), store)
   const gmK = (opp.valueK || 0) - (opp.cogsK || 0)
   const gmPct = opp.valueK ? Math.round((gmK / opp.valueK) * 100) + '%' : '—'
-
-  // Same write-through + coupling rules as the tracker grid (Tracker.jsx upd).
-  const upd = field => e => {
-    let value = e.target.type === 'checkbox' ? e.target.checked : e.target.value
-    if (field === 'invoiceDate' && value && opp.orderDate && value <= opp.orderDate) return
-    if (field === 'orderDate' && value && opp.invoiceDate && value >= opp.invoiceDate) return
-    if (field === 'valueK' || field === 'cogsK') value = rupeesToK(e.target.value)
-    const patch = { [field]: value }
-    if (field === 'status' && value === 'Open') Object.assign(patch, { closedReason: '', stage: 'Firm Bid' })
-    if (field === 'stage' && (value === 'Won' || value === 'Lost')) patch.status = 'Closed'
-    // Diagram 02 §7 — "Capture Loss Reason & Close Opportunity". Losing is a
-    // decision, not a field edit: closeLost refuses without a reason, so the
-    // stage change is held open here until one is picked.
-    if (patch.stage === 'Lost' && !opp.closedReason) { setLossPending(true); return }
-    if (patch.stage === 'Lost') { store.closeLost(oppId, opp.closedReason); return }
-    store.updateOpportunity(oppId, patch)
-  }
-
-  // Same bucket keys as the Folders page, so both surfaces list the same objects.
-  // The filestore facade picks the backend (SharePoint → Supabase → mock).
-  const onUpload = async e => {
-    const picked = [...e.target.files]
-    e.target.value = ''
-    setCloudErr(''); setBusy(true)
-    for (const f of picked) {
-      try {
-        const rec = await filestore.uploadOppFile(opp, activeTab, f)
-        store.addFile(oppId, activeTab, rec)
-      } catch (ex) {
-        setCloudErr(ex.message)
-      }
-    }
-    setBusy(false)
-  }
-
-  const addMockFile = () => {
-    const name = prompt('File name to upload (mock):', 'Customer_Spec.pdf')
-    if (!name) return
-    store.addFile(oppId, activeTab, {
-      name, date: new Date().toISOString().slice(0, 10), size: `${Math.ceil(Math.random() * 900) + 90} KB`,
-    })
-  }
 
   const tabFiles = files[activeTab] || []
   const proposal = activeTab === 'Proposal' ? store.getProposal(oppId) : null
@@ -130,18 +78,6 @@ export default function OppPanel({ oppId }) {
           <div className="drawer-files-bar">
             <span className="hint">{oppId} › {activeTab}</span>
             <SyncPill sync={(store.spSync || {})[oppId]} />
-            <span style={{ flex: 1 }} />
-            {cloudErr && <span className="hint" style={{ color: 'var(--lost-text)' }}>{cloudErr}</span>}
-            {filestore.activeBackend() !== 'mock' ? (
-              <>
-                <input ref={fileInput} type="file" multiple style={{ display: 'none' }} onChange={onUpload} />
-                <button onClick={() => fileInput.current.click()} disabled={busy}>
-                  <Icon name="upload" size={13} /> {busy ? 'Uploading…' : 'Upload'}
-                </button>
-              </>
-            ) : (
-              <button onClick={addMockFile}><Icon name="upload" size={13} /> Upload (mock)</button>
-            )}
           </div>
           <table className="sheet">
             <thead><tr><th>Name</th><th>Date</th><th>Size</th></tr></thead>
@@ -212,24 +148,22 @@ export default function OppPanel({ oppId }) {
 
       {/* Each folder answers a different question, so each carries its own
           context below the file list. A custom subfolder gets the list only. */}
-      {activeTab === 'Customer Specs' && <SpecsPanel opp={opp} store={store} upd={upd} />}
-      {activeTab === 'Partner Docs' && <PartnerPanel opp={opp} store={store} nav={nav} upd={upd} />}
+      {activeTab === 'Customer Specs' && <SpecsPanel opp={opp} store={store} />}
+      {activeTab === 'Partner Docs' && <PartnerPanel opp={opp} store={store} nav={nav} />}
       {activeTab === 'KYC' && <KycPanel opp={opp} store={store} nav={nav} />}
 
       {isDetails && (
         <div className="drawer-form">
-          <OpportunityDetailsEditor opp={opp} store={store} />
+          <OpportunityDetailsView opp={opp} />
 
           <div className="fgroup">Commercial</div>
           {showValue ? (
             <div className="dgrid2">
-              <Field label="Value (₹)"><input type="number" min="0" value={opp.valueK ? opp.valueK * 1000 : ''} onChange={upd('valueK')} placeholder="-" /></Field>
-              {comm && <Field label="COGS (₹)"><input type="number" min="0" value={opp.cogsK ? opp.cogsK * 1000 : ''} onChange={upd('cogsK')} placeholder="-" /></Field>}
+              <Field label="Value (₹)"><div className="ro">{opp.valueK ? fmtRupeesFromK(opp.valueK) : '—'}</div></Field>
+              {comm && <Field label="COGS (₹)"><div className="ro">{opp.cogsK ? fmtRupeesFromK(opp.cogsK) : '—'}</div></Field>}
               {comm && <Field label="GM (₹)"><div className="ro">{opp.valueK ? fmtRupeesFromK(gmK) : '-'}</div></Field>}
               {comm && <Field label="GM%"><div className="ro">{gmPct}</div></Field>}
-              <Field label="Forecast">
-                <div><input type="checkbox" checked={!!opp.forecast} onChange={upd('forecast')} /> Include for roll-up</div>
-              </Field>
+              <Field label="Forecast"><div className="ro">{opp.forecast ? 'Included for roll-up' : 'Not included'}</div></Field>
               {!comm && <div style={{ gridColumn: '1 / -1' }} className="restricted"><Icon name="lock" size={13} /> Cost and margin — approvers/admin only</div>}
             </div>
           ) : (
@@ -240,66 +174,21 @@ export default function OppPanel({ oppId }) {
           <div className="dgrid2">
             <Field label="Create Date"><div className="ro">{mmmYY(opp.createDate)}</div></Field>
             <Field label="Proposal Date"><div className="ro">{mmmYY(opp.proposalDate) || '—'}</div></Field>
-            <Field label="Expected Order Date *"><input type="date" value={opp.orderDate} max={opp.invoiceDate ? new Date(new Date(`${opp.invoiceDate}T00:00:00`).getTime() - 86400000).toISOString().slice(0, 10) : undefined} onChange={upd('orderDate')} /></Field>
-            <Field label="Expected Ship Date *"><input type="date" value={opp.invoiceDate} min={opp.orderDate ? new Date(new Date(`${opp.orderDate}T00:00:00`).getTime() + 86400000).toISOString().slice(0, 10) : undefined} onChange={upd('invoiceDate')} /></Field>
-            {/* Where the next action sits — derived from the live blockers unless
-                someone has named an owner themselves. */}
-            <Field label="Next Action Pending">
-              <select value={opp.nextActionOwner || ''} onChange={upd('nextActionOwner')} title={na.text}>
-                <option value="">{na.owner ? `${na.owner} (auto)` : '— none —'}</option>
-                {OWNERS.map(x => <option key={x}>{x}</option>)}
-              </select>
-            </Field>
+            <Field label="Expected Order Date *"><div className="ro">{opp.orderDate || '—'}</div></Field>
+            <Field label="Expected Ship Date *"><div className="ro">{opp.invoiceDate || '—'}</div></Field>
+            <Field label="Next Action Pending"><div className="ro">{opp.nextActionOwner || na.owner || '— none —'}</div></Field>
             <Field label="Last Updated"><div className="ro">{ddMmmYY(opp.lastUpdated)}</div></Field>
           </div>
 
           <div className="fgroup">Status &amp; Stage</div>
           <div className="dgrid2">
-            <Field label="Status">
-              <select value={opp.status} onChange={upd('status')}>
-                <option>Open</option><option>On Hold</option><option>Closed</option>
-              </select>
-            </Field>
-            <Field label="Stage">
-              <select value={opp.stage} onChange={upd('stage')}>
-                {(opp.status === 'Closed' ? STAGES : OPEN_STAGES.concat(['Won', 'Lost'])).map(s => <option key={s}>{s}</option>)}
-              </select>
-            </Field>
-            {/* Always rendered — the drawer mirrors every sheet column, so an open
-                opp shows the field disabled rather than dropping it entirely. */}
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label>Closed Reason {opp.status === 'Closed' && !opp.closedReason && <span className="err-text">— required</span>}</label>
-              {lossPending && (
-                <div className="errbox">
-                  A loss reason is required before this opportunity can be closed as Lost.
-                  <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                    <select value={lossReason} style={{ flex: 1 }} onChange={e => setLossReason(e.target.value)}>
-                      <option value="">— select a reason —</option>
-                      {CLOSE_REASONS.map(r => <option key={r}>{r}</option>)}
-                    </select>
-                    <button className="primary" disabled={!lossReason}
-                      onClick={() => { store.closeLost(oppId, lossReason); setLossPending(false); setLossReason('') }}>
-                      Close as lost
-                    </button>
-                    <button onClick={() => { setLossPending(false); setLossReason('') }}>Cancel</button>
-                  </div>
-                </div>
-              )}
-              <select value={opp.closedReason} onChange={upd('closedReason')} disabled={opp.status !== 'Closed'}>
-                <option value="">{opp.status === 'Closed' ? '— required —' : '—'}</option>
-                {CLOSE_REASONS.map(r => <option key={r}>{r}</option>)}
-              </select>
-            </div>
+            <Field label="Status"><div className="ro">{opp.status || '—'}</div></Field>
+            <Field label="Stage"><div className="ro">{opp.stage || '—'}</div></Field>
+            <Field label="Closed Reason"><div className="ro">{opp.closedReason || '—'}</div></Field>
           </div>
 
           <div className="fgroup">Remarks</div>
-          <textarea rows={3} value={opp.remarks} onChange={upd('remarks')} />
-          <p className="hint">
-            <span className={`pill ${stageClass(opp) === 'won' ? 'won' : stageClass(opp) === 'lost' ? 'lost' : 'Blue'}`}>
-              {opp.status === 'Closed' ? opp.stage : `${opp.status} — ${opp.stage}`}
-            </span>{' '}
-            Last updated {ddMmmYY(opp.lastUpdated)} · edits save instantly to the sheet.
-          </p>
+          <div className="ro drawer-read-only-remarks">{opp.remarks || '—'}</div>
         </div>
       )}
     </div>
@@ -307,40 +196,9 @@ export default function OppPanel({ oppId }) {
 }
 
 // ---------------------------------------------------------------------------
-// Editable rows for the drawer's two-column meta tables. These panels used to
-// print the same values read-only, which meant a correction found while reading
-// the requirement had to be made somewhere else — the tracker grid or the
-// Details tab — and then found again here. They write through the same `upd`
-// the Details tab and the tracker sheet use, so every surface stays in step.
-const MetaSelect = ({ label, value, options, onChange }) => (
-  <tr>
-    <td>{label}</td>
-    <td>
-      <select value={value || ''} onChange={onChange}>
-        <option value="">—</option>
-        {options.map(o => <option key={o}>{o}</option>)}
-      </select>
-    </td>
-  </tr>
-)
-
-// Two fields the read-only table used to join with a separator (name · place).
-const MetaPair = ({ label, a, b }) => (
-  <tr>
-    <td>{label}</td>
-    <td>
-      <div className="drawer-meta-pair">
-        <input value={a.value || ''} onChange={a.onChange} placeholder={a.placeholder} />
-        <input value={b.value || ''} onChange={b.onChange} placeholder={b.placeholder} />
-      </div>
-    </td>
-  </tr>
-)
-
 // ---------------------------------------------------------------------------
-// Customer Specs — what the customer actually asked for. The condensed twin of
-// the workbench Requirement tab (pages/Workbench.jsx RequirementTab).
-function SpecsPanel({ opp, store, upd }) {
+// Customer Specs — read-only context; corrections happen in the workbench.
+function SpecsPanel({ opp, store }) {
   const lead = (store.leads || []).find(l => l.oppId === opp.id)
   return (
     <section className="drawer-panel">
@@ -359,22 +217,11 @@ function SpecsPanel({ opp, store, upd }) {
         <p className="drawer-panel-lead">{opp.remarks || 'No linked lead email — requirement captured at intake.'}</p>
       )}
       <table className="cost-table drawer-meta"><tbody>
-        <MetaSelect label="Opp Type" value={opp.oppType} options={OPP_TYPES} onChange={upd('oppType')} />
-        {/* Route is derived from the type (seed.routeForType) and recomputed on
-            every load, so it is shown rather than offered — typing into it would
-            silently revert on the next reload. */}
-        <tr>
-          <td>Route</td>
-          <td>{opp.route || '—'} <span className="hint">· follows the Opp Type</span></td>
-        </tr>
-        <MetaPair label="End user"
-          a={{ value: opp.eucName, onChange: upd('eucName'), placeholder: 'End user' }}
-          b={{ value: opp.eucLocation, onChange: upd('eucLocation'), placeholder: 'Location' }} />
-        <MetaPair label="Contact"
-          a={{ value: opp.contactPerson, onChange: upd('contactPerson'), placeholder: 'Name' }}
-          b={{ value: opp.contactPhone, onChange: upd('contactPhone'), placeholder: 'Phone' }} />
+        <tr><td>Opp Type</td><td>{opp.oppType || '—'}</td></tr>
+        <tr><td>Route</td><td>{opp.route || '—'}</td></tr>
+        <tr><td>End user</td><td>{[opp.eucName, opp.eucLocation].filter(Boolean).join(' · ') || '—'}</td></tr>
+        <tr><td>Contact</td><td>{[opp.contactPerson, opp.contactPhone].filter(Boolean).join(' · ') || '—'}</td></tr>
       </tbody></table>
-      <p className="hint">Edits save instantly to the sheet.</p>
     </section>
   )
 }
@@ -385,23 +232,19 @@ function SpecsPanel({ opp, store, upd }) {
 const apprTone = s =>
   !s ? 'grey' : s === 'Approved' ? 'state-Accepted' : s === 'Rejected' ? 'state-Rejected' : 'state-Review'
 
-function PartnerPanel({ opp, store, nav, upd }) {
+function PartnerPanel({ opp, store, nav }) {
   const products = productList(opp.product)
   const approvals = (store.approvals || []).filter(a => a.oppId === opp.id)
   return (
     <section className="drawer-panel">
       <div className="fgroup">OEM &amp; partner context</div>
       <table className="cost-table drawer-meta"><tbody>
-        <MetaSelect label="Category" value={opp.category} options={CATEGORIES} onChange={upd('category')} />
-        <tr>
-          <td>Route</td>
-          <td>{opp.route || '—'} <span className="hint">· follows the Opp Type</span></td>
-        </tr>
-        <MetaSelect label="BU" value={opp.bu} options={BUS} onChange={upd('bu')} />
-        <MetaSelect label="Segment" value={opp.segment} options={SEGMENTS} onChange={upd('segment')} />
-        <MetaSelect label="Solution" value={opp.solution} options={SOLUTIONS} onChange={upd('solution')} />
+        <tr><td>Category</td><td>{opp.category || '—'}</td></tr>
+        <tr><td>Route</td><td>{opp.route || '—'}</td></tr>
+        <tr><td>BU</td><td>{opp.bu || '—'}</td></tr>
+        <tr><td>Segment</td><td>{opp.segment || '—'}</td></tr>
+        <tr><td>Solution</td><td>{opp.solution || '—'}</td></tr>
       </tbody></table>
-      <p className="hint">Edits save instantly to the sheet.</p>
       <div className="chip-group drawer-panel-chips">
         {products.length
           ? products.map(p => <Chip key={p} tone="grey">{p}</Chip>)
@@ -474,9 +317,9 @@ function KycPanel({ opp, store, nav }) {
 
       <div className="fgroup">{verifiedAtLead ? 'Lead-stage verification' : 'KYC checklist'}</div>
       {verifiedAtLead ? (
-        <div className="okbox">
-          {opp.leadVerification.type === 'KYC' ? 'KYC verified at Lead stage.' : 'Verification confirmed at Lead stage.'}
-          {' '}This Opportunity uses the Lead-stage confirmation.
+        <div className="check-row">
+          <span>{opp.leadVerification.type === 'KYC' ? 'KYC' : 'Verification'}</span>
+          <Chip tone="state-Accepted">Verified</Chip>
         </div>
       ) : items.map(k => (
         <div className="check-row" key={k.name}>

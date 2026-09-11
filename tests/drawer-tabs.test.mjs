@@ -20,15 +20,15 @@ const css = read('src/styles.css')
 
 test('the drawer leads with a Details tab, ahead of the folders', () => {
   assert.match(drawer, /const DETAILS_TAB = 'Details'/)
-  assert.match(drawer, /const tabNames = \[DETAILS_TAB, \.\.\.subNames\]/,
+  assert.match(drawer, /const tabItems = \[/,
     'the tab strip must be Details plus the opportunity subfolders')
   // Opening a different opportunity must land on Details, not on whichever
   // folder happened to be selected for the previous one.
   assert.match(drawer, /useState\(DETAILS_TAB\)/)
   assert.match(drawer, /useEffect\(\(\) => \{ setTab\(DETAILS_TAB\) \}, \[oppId\]\)/)
   // A subfolder deleted on the Folders page must not leave a dead tab active.
-  assert.match(drawer, /tabNames\.includes\(tab\) \? tab : DETAILS_TAB/)
-  assert.match(drawer, /\{tabNames\.map\(sf =>/, 'the tab strip renders tabNames, not subNames')
+  assert.match(drawer, /tabItems\.some\(item => item\.show !== false && item\.id === tab\) \? tab : DETAILS_TAB/)
+  assert.match(drawer, /items=\{tabItems\}/, 'the tab strip renders tabItems, not subNames')
 })
 
 test('the record form belongs to Details, and the file list to the folders', () => {
@@ -39,7 +39,7 @@ test('the record form belongs to Details, and the file list to the folders', () 
     'the file list must render only on a folder tab')
   // The regression this replaces: an unconditional editor under every tab.
   const gate = drawer.indexOf('{isDetails && (')
-  const editor = drawer.indexOf('<OpportunityDetailsEditor')
+  const editor = drawer.indexOf('<OpportunityDetailsView')
   assert.ok(gate !== -1 && editor > gate,
     'the editor must sit inside the isDetails branch, not above it')
 })
@@ -63,24 +63,17 @@ test('every seeded folder tab has content of its own', () => {
   }
 })
 
-test('the folder panels edit fields but never take the gated decisions', () => {
-  // Correcting a field is ordinary editing and belongs wherever you notice the
-  // mistake — the panels do it through the parent's `upd`, the same
-  // write-through the Details tab and the tracker grid use.
-  //
-  // Verifying KYC and deciding approvals are different: they are role-gated
-  // decisions and stay in the workbench, where the AH gate and the document
-  // viewer live. That is what this list protects — not field editing.
+test('the folder panels are read-only and never take gated decisions', () => {
+  // The drawer is a viewing surface. Corrections belong in the opportunity
+  // workbench; role-gated KYC and approval decisions stay there as well.
   const panelSource = drawer.slice(drawer.indexOf('function SpecsPanel('))
   for (const write of ['setKycState', 'decideApproval', 'addFile']) {
     assert.doesNotMatch(panelSource, new RegExp(`store\\.${write}\\(`),
       `the drawer panels must not call store.${write}`)
   }
-  // Field edits go through the injected helper, so the coupling rules in
-  // OppPanel.upd (loss reason, date ordering) apply here too rather than being
-  // bypassed by a direct store call.
+  // Drawer panels must not write through the store or receive an edit helper.
   assert.doesNotMatch(panelSource, /store\.updateOpportunity\(/,
-    'panels must use the injected upd, not call the store directly')
+    'panels must not update opportunities directly')
   // Each panel instead routes to the workbench tab that owns the action.
   assert.match(panelSource, /\/opp\/\$\{opp\.id\}\/approvals/)
   assert.match(panelSource, /\/opp\/\$\{opp\.id\}\/customer/)
@@ -92,26 +85,43 @@ test('the panel styling is scoped to the narrow drawer', () => {
   assert.match(css, /\.drawer-panel \.check-row \{ flex-wrap: wrap; \}/)
 })
 
-// ---- the folder panels edit, they do not just print -----------------------
-// Customer Specs and Partner Docs printed their context as a read-only table,
-// so a correction spotted while reading the requirement had to be made on the
-// Details tab or the tracker grid and then found again here.
+test('the selected detail tab has a distinct accent state', () => {
+  assert.match(css, /\.detail-tabs button\.active \{[^}]*background: var\(--action-accent\)/s)
+  assert.match(css, /\.detail-tabs button\.active \{[^}]*color: var\(--text-on-accent\)/s)
+  assert.match(css, /\.detail-tabs button\.active \{[^}]*border-bottom: 3px solid var\(--action-accent\)/s)
+  assert.match(css, /\.detail-tabs-more-trigger\.active \{[^}]*background: var\(--action-accent\)/s)
+  assert.match(css, /\.detail-tabs-more-trigger\.active \{[^}]*color: var\(--text-on-accent\)/s)
+})
 
-test('the Customer Specs context is editable', () => {
-  assert.match(drawer, /function SpecsPanel\(\{ opp, store, upd \}\)/,
-    'SpecsPanel needs the same write-through helper the Details tab uses')
-  assert.match(drawer, /<SpecsPanel opp=\{opp\} store=\{store\} upd=\{upd\} \/>/)
-  for (const field of ['oppType', 'eucName', 'eucLocation', 'contactPerson', 'contactPhone']) {
-    assert.ok(drawer.includes(`upd('${field}')`), `${field} must be editable somewhere in the drawer`)
+test('all tab families use the same visible current-page treatment', () => {
+  for (const selector of [
+    '.sheet-tabs .tab.active', '.opportunities-tabs button.active',
+    '.users-tabs button.active', '.workbook-switcher button.active',
+    '.workbook-tabs button.active', '.workbook-preview-mode-tabs button.active',
+    '.drawer-tabs .dtab.active', '.mail-tabs button.active',
+    '.wb-tabs .wtab.active', '.wb-sub button.active',
+    '.att-view-sheet-tabs button.active', '.admin-tabs button.active',
+    '.proposal-artifact-tabs button.active',
+  ]) {
+    assert.match(css, new RegExp(selector.replaceAll('.', '\\.') + '[\\s\\S]*?background: var\\(--action-accent\\)'),
+      `${selector} must have the shared accent background`)
+    assert.match(css, new RegExp(selector.replaceAll('.', '\\.') + '[\\s\\S]*?color: var\\(--text-on-accent\\)'),
+      `${selector} must have contrasting active text`)
   }
 })
 
-test('the Partner Docs context is editable', () => {
-  assert.match(drawer, /function PartnerPanel\(\{ opp, store, nav, upd \}\)/)
-  assert.match(drawer, /<PartnerPanel opp=\{opp\} store=\{store\} nav=\{nav\} upd=\{upd\} \/>/)
-  for (const field of ['category', 'bu', 'segment', 'solution']) {
-    assert.ok(drawer.includes(`upd('${field}')`), `${field} must be editable`)
-  }
+// ---- the folder panels print context; editing belongs to the workbench ------
+
+test('the Customer Specs context is read-only', () => {
+  assert.match(drawer, /function SpecsPanel\(\{ opp, store \}\)/)
+  assert.match(drawer, /<SpecsPanel opp=\{opp\} store=\{store\} \/>/)
+  assert.doesNotMatch(drawer, /upd\('(oppType|eucName|eucLocation|contactPerson|contactPhone)'\)/)
+})
+
+test('the Partner Docs context is read-only', () => {
+  assert.match(drawer, /function PartnerPanel\(\{ opp, store, nav \}\)/)
+  assert.match(drawer, /<PartnerPanel opp=\{opp\} store=\{store\} nav=\{nav\} \/>/)
+  assert.doesNotMatch(drawer, /upd\('(category|bu|segment|solution)'\)/)
 })
 
 // Route and context are recomputed from oppType on every load (appState.migrate),
@@ -119,13 +129,19 @@ test('the Partner Docs context is editable', () => {
 test('route is shown as derived rather than offered as a field', () => {
   assert.doesNotMatch(drawer, /upd\('route'\)/, 'route must never be directly editable')
   assert.doesNotMatch(drawer, /upd\('context'\)/, 'context must never be directly editable')
-  assert.match(drawer, /follows the Opp Type/, 'and the panel must say why it is read-only')
+  assert.doesNotMatch(drawer, /follows the Opp Type/)
 })
 
-test('the editable meta tables are styled to fit their controls', () => {
+test('the drawer metadata remains readable without edit controls', () => {
   assert.match(drawer, /className="cost-table drawer-meta"/)
-  assert.match(css, /\.drawer-panel \.drawer-meta input,\s*\.drawer-panel \.drawer-meta select \{[^}]*width: 100%/)
-  // A <td> cannot be a flex container without breaking the table's column
-  // sizing, so the paired inputs are wrapped.
-  assert.match(drawer, /<td>\s*<div className="drawer-meta-pair">/)
+  assert.doesNotMatch(drawer, /className="drawer-meta-pair"/)
+  assert.match(css, /\.drawer-panel \.drawer-meta td:first-child/)
+})
+
+test('the opportunity preview drawer has no upload controls', () => {
+  assert.doesNotMatch(drawer, /filestore\.activeBackend\(\)/)
+  assert.doesNotMatch(drawer, /uploadOppFile/)
+  assert.doesNotMatch(drawer, /Upload \(mock\)/)
+  assert.doesNotMatch(drawer, /fileInput/)
+  assert.doesNotMatch(drawer, /Uploading…/)
 })

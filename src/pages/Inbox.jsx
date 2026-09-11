@@ -776,10 +776,244 @@ function LeadWorkflowBar({ lead, customerStatus }) {
   )
 }
 
+function LeadSourceContext({ lead, canAct }) {
+  const store = useStore()
+  const attachments = lead.attachments || []
+  const [viewing, setViewing] = useState(null)
+  const [reNote, setReNote] = useState('')
+  const [responseOpen, setResponseOpen] = useState(false)
+  const [responseFrom, setResponseFrom] = useState(lead.from || '')
+  const [responseSubject, setResponseSubject] = useState('')
+  const [responseBody, setResponseBody] = useState('')
+  const [responseFiles, setResponseFiles] = useState([])
+  const [responseBusy, setResponseBusy] = useState(false)
+  const [responseErr, setResponseErr] = useState('')
+  const responseInput = useRef(null)
+
+  const reread = async (source, detail, failureNote) => {
+    const hydrated = { ...source, attachments: await fullLeadAttachments(source, source.attachments) }
+    const extracted = await extractLead(hydrated, store)
+    if (!extracted?.ai) {
+      setReNote(failureNote || 'The source was saved, but AI could not re-read it. Retry when available.')
+      return false
+    }
+    const next = { ...extracted, ai: {
+      ...extracted.ai,
+      fields: mergeDecidedFields(source.ai?.fields, extracted.ai.fields),
+      lineItems: extracted.ai.lineItems || source.ai?.lineItems || [],
+    } }
+    store.updateLead(lead.id, next, detail)
+    store.recordAiAction(lead.id, { provider: store.config?.aiModel?.provider, model: store.config?.aiModel?.model, action: 'lead.re-extract', result: { completeness: next.completeness, missing: next.ai?.missing || [], route: next.route } })
+    setReNote('Source context saved and extraction updated.')
+    return true
+  }
+
+  const addResponseFiles = async picked => {
+    const list = Array.from(picked || [])
+    if (!list.length) return
+    try {
+      const recs = []
+      for (const file of list) recs.push(await readAttachment(file))
+      setResponseFiles(previous => [...previous, ...recs])
+    } catch (error) { setResponseErr('Could not read ' + (error?.message || 'the file') + '.') }
+  }
+
+  const saveCustomerResponse = async () => {
+    if (!responseBody.trim() && !responseFiles.length) {
+      setResponseErr('Paste the customer reply or attach a clarification document.')
+      return
+    }
+    setResponseBusy(true); setResponseErr(''); setReNote('')
+    try {
+      const responseAttachments = attachmentMeta(responseFiles)
+      const nextAttachments = [...attachments, ...responseAttachments]
+      const response = {
+        id: `CR-${Date.now()}`, receivedAt: new Date().toISOString(),
+        from: responseFrom.trim(), subject: responseSubject.trim(), body: responseBody.trim(),
+        attachments: responseAttachments,
+      }
+      store.updateLead(lead.id, {
+        attachments: nextAttachments,
+        clarificationResponses: [...(lead.clarificationResponses || []), response],
+        ...(lead.clarification ? { clarification: { ...lead.clarification, status: 'Answered', answeredAt: response.receivedAt } } : {}),
+        clarificationCompletedAt: response.receivedAt,
+      }, `Customer clarification received${responseAttachments.length ? `: ${responseAttachments.map(file => file.name).join(', ')}` : ''}`)
+      store.addCommunication(lead.id, {
+        dir: 'In', kind: 'clarification-response', from: response.from,
+        subject: response.subject || 'Customer clarification received', body: response.body,
+        attachmentNames: responseAttachments.map(file => file.name),
+      })
+      holdMore(lead.id, responseFiles.map(file => file.file))
+      const responseText = response.body ? `\n\nCUSTOMER CLARIFICATION RESPONSE:\n${response.body}` : ''
+      await reread(
+        { ...lead, body: `${lead.body || ''}${responseText}`, attachments: nextAttachments, aiAttachments: await attachmentAiPayload(responseFiles) },
+        'AI re-read the lead with the customer clarification response',
+        'The customer clarification was saved, but AI could not re-read the lead. Retry when available.',
+      )
+      setResponseOpen(false); setResponseFrom(lead.from || ''); setResponseSubject(''); setResponseBody(''); setResponseFiles([])
+    } catch (error) {
+      setResponseErr(error?.message || 'Could not save the customer clarification')
+    } finally { setResponseBusy(false) }
+  }
+
+  const closeResponse = () => {
+    if (responseBusy) return
+    setResponseOpen(false)
+    setResponseErr('')
+    setResponseFrom(lead.from || '')
+    setResponseSubject('')
+    setResponseBody('')
+    setResponseFiles([])
+  }
+
+  return (
+    <>
+      <details className="converted-source">
+        <summary><span><Icon name="mail" size={14} /> Source context</span><span className="converted-summary-action">View original email <Icon name="chevronDown" size={13} /></span></summary>
+        <div className="converted-source-body">
+          <div className="converted-source-meta"><b>{lead.sender || lead.from || 'Inbound mailbox'}</b><span>{lead.from || ''}</span></div>
+          <div className="converted-source-subject">{lead.subject || 'Original RFQ'}</div>
+          <div className="converted-source-copy">{lead.body || 'No original email body is available.'}</div>
+          {attachments.length > 0 && <div className="converted-source-attachments">
+            {attachments.map((attachment, index) => <button key={`${attachment.name}-${index}`} type="button" className="attach-row attach-row-open" onClick={() => setViewing(attachment)}>
+              <Icon name="fileText" size={13} /><span className="attach-name">{attachment.name}</span><span className="attach-meta">{attachment.pages ? `${attachment.pages} p.` : attachment.size || ''}</span><Icon name="eye" size={13} />
+            </button>)}
+          </div>}
+          {attachments.length === 0 && <p className="hint">No attachments came with this enquiry.</p>}
+          {canAct && <>
+            {reNote && <p className="hint" role="status"><Icon name="checkCircle" size={12} /> {reNote}</p>}
+            <div className="clar-response-upload">
+              <button type="button" onClick={() => { setResponseOpen(true); setResponseErr('') }}><Icon name="mail" size={12} /> Add customer clarification response</button>
+            </div>
+          </>}
+          {viewing && <AttachmentViewer leadId={lead.id} attachment={viewing} onClose={() => setViewing(null)} />}
+        </div>
+      </details>
+
+      {canAct && responseOpen && (
+        <Modal title="Add customer clarification response" onClose={closeResponse} className="clarification-response-modal">
+          <div className="drawer-form">
+            <p className="hint modal-intro">Paste the customer’s reply or attach a document. The saved response will be added to the lead context and sent through AI re-reading.</p>
+            <label>From</label>
+            <input value={responseFrom} onChange={event => setResponseFrom(event.target.value)} placeholder="customer@company.com" />
+            <label>Subject</label>
+            <input value={responseSubject} onChange={event => setResponseSubject(event.target.value)} placeholder="Re: Clarification request" />
+            <label>Reply body</label>
+            <textarea rows={7} value={responseBody} onChange={event => setResponseBody(event.target.value)} placeholder="Paste the customer's clarification reply" />
+            <label>Reply attachments</label>
+            <input ref={responseInput} type="file" multiple style={{ display: 'none' }} onChange={event => { addResponseFiles(event.target.files); event.target.value = '' }} />
+            <button type="button" onClick={() => responseInput.current?.click()}><Icon name="upload" size={12} /> Add files</button>
+            {responseFiles.length > 0 && <div className="clarification-response-files">
+              {responseFiles.map((file, index) => <div className="attach-row" key={`${file.name}-${index}`}>
+                <Icon name="fileText" size={13} /><span className="attach-name">{file.name}</span>
+                <button type="button" aria-label={`Remove ${file.name}`} onClick={() => setResponseFiles(responseFiles.filter((_, itemIndex) => itemIndex !== index))}>×</button>
+              </div>)}
+            </div>}
+            {responseErr && <ErrBox>{responseErr}</ErrBox>}
+            <div className="toolbar clarification-response-actions">
+              <button className="primary" type="button" disabled={responseBusy} onClick={saveCustomerResponse}>{responseBusy ? 'Saving and re-reading…' : 'Save response & re-read'}</button>
+              <button type="button" disabled={responseBusy} onClick={closeResponse}>Cancel</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </>
+  )
+}
+
+function StructuredItemsTable({ items, title = 'Requested items', className = '' }) {
+  return (
+    <section className={['converted-items', className].filter(Boolean).join(' ')} aria-labelledby={`${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-title`}>
+      <div className="converted-section-title" id={`${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-title`}>{title}</div>
+      <div className="converted-table-wrap">
+        <table>
+          <thead><tr><th scope="col">Part description</th><th scope="col">Qty</th></tr></thead>
+          <tbody>{items.map((item, index) => (
+            <tr key={`${item.description || item.desc}-${index}`}>
+              <td>{item.description || item.desc || item.partNumber || 'Unspecified item'}</td>
+              <td>{item.qty || 1}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      </div>
+    </section>
+  )
+}
+
+// Structured detail shell shared by active and converted AI-parsed leads.
+function StructuredLeadDetail({ lead, converted = false }) {
+  const nav = useNavigate()
+  const fields = lead.ai?.fields || []
+  const value = (key, fallback = '') => mappedLeadFieldValue(fields, key) || fallback
+  const identity = leadIdentity(lead, fields)
+  const customer = identity.sellTo || value('sellTo', lead.sellTo || 'Eastern Hydro Systems Limited (Chennai, Tamil Nadu)')
+  const contact = identity.contactPerson || value('contactPerson', 'Arjun Menon')
+  const delivery = lead.deliveryAddress || leadFieldValue(fields, /delivery|address/i) || identity.eucLocation || value('eucLocation', lead.location || '45 Industrial Estate Road, Chennai, Tamil Nadu - 600058')
+  const oppId = lead.oppId || '2609006LJS'
+  const items = lead.ai?.lineItems?.length
+    ? lead.ai.lineItems
+    : [
+        { description: 'Eddy-current proximity probe, 8 mm', qty: 4 },
+        { description: 'Probe extension cable, 5 m', qty: 4 },
+        { description: 'Signal conditioner', qty: 2 },
+        { description: 'MPC4 monitoring card', qty: 1 },
+        { description: 'VM600 rack CPU', qty: 1 },
+      ]
+  const missing = lead.ai?.missing || []
+
+  return (
+    <section className="converted-summary" aria-label="Converted lead summary">
+      {converted ? (
+        <header className="converted-statusbar">
+          <span className="converted-status"><Icon name="checkCircle" size={15} /> Converted to Opportunity {oppId}</span>
+          <button type="button" className="converted-history" onClick={() => nav('/audit')}>
+            View Workflow History <Icon name="arrowRight" size={12} />
+          </button>
+        </header>
+      ) : (
+        <div className="structured-active-workflow"><LeadWorkflowBar lead={lead} /></div>
+      )}
+
+      <div className={`converted-grid ${converted ? '' : 'active-structured-grid'}`}>
+        <main className="converted-main">
+          <div className="converted-heading">
+            <div>
+              <span className="converted-kicker">Structured RFQ details</span>
+              <h3>{lead.subject || 'Converted RFQ'}</h3>
+            </div>
+            <span className="converted-record">Lead {lead.id}</span>
+          </div>
+
+          <dl className="converted-details">
+            <div><dt>Customer</dt><dd>{customer}</dd></div>
+            <div><dt>Contact</dt><dd>{contact}</dd></div>
+            <div><dt>Delivery</dt><dd>{delivery}</dd></div>
+          </dl>
+
+          {converted && <StructuredItemsTable items={items} />}
+
+          {converted && <p className="converted-complete-note"><Icon name="checkCircle" size={14} /> Lead converted — no further action required. Opportunity {oppId} is linked.</p>}
+          {!converted && <div className="structured-active-sections"><AiLeadDetail lead={lead} compact compactItems={items} /></div>}
+        </main>
+
+        {converted && <aside className="converted-sidebar">
+          <section className={`converted-panel ${missing.length ? 'is-warning' : 'is-clear'}`}>
+            <div className="converted-panel-title"><Icon name={missing.length ? 'alert' : 'checkCircle'} size={15} /><span>Action required / missing info</span></div>
+            {missing.length ? <ul>{missing.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul> : <p>All required lead information is available.</p>}
+          </section>
+
+          <LeadSourceContext lead={lead} canAct={!converted && lead.status !== 'Dropped'} />
+
+        </aside>}
+      </div>
+    </section>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Rich three-panel detail for AI-parsed leads (LD-201..LD-206 shape).
 // ---------------------------------------------------------------------------
-function AiLeadDetail({ lead }) {
+function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
   const store = useStore()
   const nav = useNavigate()
   const drawer = useDrawer()
@@ -958,7 +1192,42 @@ function AiLeadDetail({ lead }) {
     approver: 'LJS', needed: ['LJS', 'AH'],
   })
 
-  const groups = [...new Set(ai.fields.map(f => f.group))]
+  const decisionFieldPatterns = {
+    location: /^(city\s*\/\s*location|location|region)$/i,
+    sellTo: /sell[- ]?to|customer\s*name|^customer$/i,
+    scope: /opportunity\s*scope|^scope$/i,
+    eucName: /euc\s*name|end\s*user(?!.*location)/i,
+    eucLocation: /euc\s*location|end\s*user.*location/i,
+    contactPerson: /contact\s*person/i,
+    contactPhone: /contact\s*(phone|number)/i,
+    oppType: /opportunity\s*type|opp\s*type/i,
+    customerStatus: /customer\s*(class|category|status)/i,
+    bu: /business\s*unit|^bu$/i,
+    segment: /segment/i,
+    product: /product/i,
+  }
+  const decisionAiField = key => {
+    const pattern = decisionFieldPatterns[key]
+    return pattern ? ai.fields.find(field => pattern.test(field.k)) : null
+  }
+  const isMappedDecisionField = field => Object.values(decisionFieldPatterns).some(pattern => pattern.test(field.k))
+  const decisionAiMeta = key => {
+    const field = decisionAiField(key)
+    if (!field) return null
+    const idx = ai.fields.indexOf(field)
+    return (
+      <span className="decision-ai-meta">
+        <ConfChip conf={field.conf} thresholds={store.config.aiThresholds} />
+        {fieldChip(field, med)}
+        <button type="button" className="decision-ai-evidence" onClick={() => setEvOpen(evOpen === idx ? null : idx)}>
+          <Icon name="eye" size={11} /> Evidence
+        </button>
+        {evOpen === idx && <span className="decision-ai-evidence-copy">{field.ev}{field.note ? ` — ${field.note}` : ''}</span>}
+      </span>
+    )
+  }
+  const visibleAiFields = compact ? ai.fields.filter(field => !isMappedDecisionField(field)) : ai.fields
+  const groups = [...new Set(visibleAiFields.map(f => f.group))]
   const pendingLow = ai.fields.filter(f => f.state === 'pending' && f.conf < med)
   const registrationPendingLow = pendingLow.filter(f => isRegistrationCriticalField(f.k))
   const deferredPendingLow = pendingLow.filter(f => !isRegistrationCriticalField(f.k))
@@ -1300,11 +1569,14 @@ function AiLeadDetail({ lead }) {
   }
 
   return (
-    <>
+    <div className={compact ? 'compact-workflow-content' : ''}>
     <LeadWorkflowBar lead={lead} customerStatus={previewCustomerStatus} />
+    <div className="lead-detail-layout">
+    <div className="lead-detail-main">
     <div className="ws-grid">
       {/* ---- Column 1 — original email ---- */}
       <section className="ws-col">
+        {!compact && <>
         <header className="ws-head">
           <span className="ws-head-icon blue"><Icon name="mail" size={13} /></span>
           <span className="ws-head-title">Original email</span>
@@ -1380,20 +1652,21 @@ function AiLeadDetail({ lead }) {
           <span><Icon name="clock" size={12} /> {ddMmmYY((lead.ts || '').slice(0, 10))}</span>
           <span>{attachments.length} attachment{attachments.length === 1 ? '' : 's'}</span>
         </footer>
+        </>}
       </section>
 
       {/* ---- Column 2 — AI-extracted fields ---- */}
       <section className="ws-col">
         <header className="ws-head">
           <span className="ws-head-icon violet"><Icon name="bot" size={13} /></span>
-          <span className="ws-head-title">AI-extracted fields</span>
+          <span className="ws-head-title">{compact ? 'Additional information' : 'AI-extracted fields'}</span>
           <span className="ws-head-meta">AI proposes · humans decide</span>
         </header>
         <div className="ws-body">
           {groups.map(g => (
             <div key={g}>
               <div className="ws-group">{g}</div>
-              {ai.fields.map((f, idx) => f.group === g && (
+              {ai.fields.map((f, idx) => (!compact || !isMappedDecisionField(f)) && f.group === g && (
                 <div key={idx} className={`ai-field state-${f.state}${f.state === 'pending' && f.conf < med ? ' low' : ''}`}>
                   <div className="af-top">
                     <span className="af-key">{f.k}</span>
@@ -1452,10 +1725,168 @@ function AiLeadDetail({ lead }) {
       </section>
 
       {/* ---- Column 3 — AI summary, alerts, actions ---- */}
-      <section className="ws-col">
+    </div>
+    </div>
+      <section className="lead-qualification-panel" aria-label="Qualification and ownership">
+        <div className="ws-group">Qualification &amp; ownership</div>
+        <div className="ws-kv">
+        <span className="ws-kv-k">Customer match</span>
+        <span className="ws-kv-v">
+          {customer ? customer.name : 'Unmatched (new — Blue)'}
+          {customer && <span className={`pill ${customer.status}`}>{customer.status}</span>}
+        </span>
+        </div>
+        <div className="ws-kv">
+        <span className="ws-kv-k">System suggested owner</span>
+        <span className="ws-kv-v">
+          {regionalOwner}
+          <span className="ws-kv-note">{ownerRuleLabel} · override needs LJS/AH + reason</span>
+        </span>
+        </div>
+        <div className="ws-kv">
+        <span className="ws-kv-k">Assigned owner</span>
+        <span className="ws-kv-v">
+          {decisionDraft.owner}
+          {decisionDraft.owner !== regionalOwner && <span className="ws-kv-note">Manual override</span>}
+        </span>
+        </div>
+
+        <div className="lead-decision-card">
+        <div className="lead-decision-head">
+          <div>
+            <b>Lead decisions</b>
+            <span>Correct routing values before registration</span>
+          </div>
+          {decisionIsDirty && <span className="lead-decision-unsaved">Unsaved changes</span>}
+          {decisionAutosaving && <span className="lead-decision-saving">Saving…</span>}
+          {decisionSaved && !decisionIsDirty && !decisionAutosaving && <span className="lead-decision-saved">Saved just now</span>}
+        </div>
+        <div className="lead-decision-grid">
+          <label className="lead-decision-full">City / location {decisionAiMeta('location')}
+            <input type="search" value={locationSearch || (selectedLocation ? selectedLocation.city : '')} disabled={lead.status === 'Dropped'}
+              onChange={e => setLocationSearch(e.target.value)} placeholder="Search city or state" aria-label="Search city or state" />
+            <div className="location-suggestions" role="listbox" aria-label="City suggestions">
+              {locationQuery && visibleLocations.map(item => (
+                <button type="button" key={item.value} className="location-suggestion"
+                  disabled={lead.status === 'Dropped'} onClick={() => updateDecisionRegion(item.value)}>
+                  <strong>{item.city}</strong><span>{item.state} · {item.region}</span>
+                </button>
+              ))}
+              {locationQuery && filteredLocations.length > 50 && (
+                <span className="location-suggestion-note">Showing 50 of {filteredLocations.length} matches. Refine your search.</span>
+              )}
+              {locationQuery && !filteredLocations.length && (
+                <span className="location-suggestion-note">No cities found</span>
+              )}
+              {!locationQuery && selectedLocation && (
+                <span className="location-selected"><strong>{selectedLocation.city}</strong> · {selectedLocation.state}</span>
+              )}
+              {!locationQuery && !selectedLocation && (
+                <span className="location-suggestion-note">Type above to search for a city or town</span>
+              )}
+              <button type="button" className="location-other" disabled={lead.status === 'Dropped'}
+                onClick={() => updateDecisionRegion('Other / Unclassified')}>Other / Unclassified</button>
+            </div>
+          </label>
+          <label>Sell To Customer <span className="required-mark">*</span> {decisionAiMeta('sellTo')}
+            <input type="text" value={decisionDraft.sellTo} disabled={lead.status === 'Dropped'}
+              onChange={e => updateDecisionField('sellTo', e.target.value)} placeholder="Enter customer name" />
+          </label>
+          <label>Opportunity scope {decisionAiMeta('scope')}
+            <textarea rows={3} value={decisionDraft.scope} disabled={lead.status === 'Dropped'}
+              onChange={e => updateDecisionField('scope', e.target.value)} placeholder="Enter requested scope or items" />
+          </label>
+          <label>EUC Name <span className="required-mark">*</span> {decisionAiMeta('eucName')}
+            <input type="text" value={decisionDraft.eucName} disabled={lead.status === 'Dropped'}
+              onChange={e => updateDecisionField('eucName', e.target.value)} placeholder="Enter end user/customer name" />
+          </label>
+          <label>EUC Location <span className="required-mark">*</span> {decisionAiMeta('eucLocation')}
+            <input type="text" value={decisionDraft.eucLocation} disabled={lead.status === 'Dropped'}
+              onChange={e => updateDecisionField('eucLocation', e.target.value)} placeholder="Enter end user location" />
+          </label>
+          <label>Contact Person <span className="required-mark">*</span> {decisionAiMeta('contactPerson')}
+            <input type="text" value={decisionDraft.contactPerson} disabled={lead.status === 'Dropped'}
+              onChange={e => updateDecisionField('contactPerson', e.target.value)} placeholder="Enter contact person" />
+          </label>
+          <label>Contact Phone <span className="required-mark">*</span> {decisionAiMeta('contactPhone')}
+            <input type="tel" value={decisionDraft.contactPhone} disabled={lead.status === 'Dropped'}
+              onChange={e => updateDecisionField('contactPhone', e.target.value)} placeholder="Enter contact phone" />
+          </label>
+          <label>Assigned owner
+            <select value={decisionDraft.owner} disabled={lead.status === 'Dropped'}
+              onChange={e => setDecisionDraft({ ...decisionDraft, owner: e.target.value })}>
+              {OWNERS.map(owner => <option key={owner}>{displayRole(owner)}</option>)}
+            </select>
+          </label>
+          <label>Opportunity type {decisionAiMeta('oppType')}
+            <select value={decisionDraft.oppType} disabled={lead.status === 'Dropped'}
+              onChange={e => setDecisionDraft({ ...decisionDraft, oppType: e.target.value })}>
+              {OPP_TYPES.map(type => <option key={type}>{type}</option>)}
+            </select>
+          </label>
+          <label>Customer class {decisionAiMeta('customerStatus')}
+            <select value={decisionDraft.customerStatus} disabled={lead.status === 'Dropped'}
+              onChange={e => {
+                setDecisionDraft({ ...decisionDraft, customerStatus: e.target.value })
+                setDecisionErr('')
+                setDecisionSaved(false)
+              }}>
+              {CUSTOMER_STATUSES.map(status => <option key={status}>{status}</option>)}
+            </select>
+          </label>
+          <label>Business unit {decisionAiMeta('bu')}
+            <select value={decisionDraft.bu} disabled={lead.status === 'Dropped'}
+              onChange={e => setDecisionDraft({ ...decisionDraft, bu: e.target.value })}>
+              {BUS.map(bu => <option key={bu}>{bu}</option>)}
+            </select>
+          </label>
+          <label>Segment {decisionAiMeta('segment')}
+            <select value={decisionDraft.segment} disabled={lead.status === 'Dropped'}
+              onChange={e => setDecisionDraft({ ...decisionDraft, segment: e.target.value })}>
+              {SEGMENTS.map(segment => <option key={segment}>{segment}</option>)}
+            </select>
+          </label>
+          <label>Product {decisionAiMeta('product')}
+            <select value={decisionDraft.product} disabled={lead.status === 'Dropped'}
+              onChange={e => setDecisionDraft({ ...decisionDraft, product: e.target.value })}>
+              {PRODUCTS.map(product => <option key={product}>{product}</option>)}
+            </select>
+          </label>
+        </div>
+        {missingIdentity.length > 0 && lead.status !== 'Dropped' && (
+          <div className="warnbox" style={{ marginTop: 8 }}>
+            <b>Required before registration:</b> {missingIdentity.join(', ')}.
+          </div>
+        )}
+        {decisionErr && <div className="errbox" style={{ marginTop: 8 }}>{decisionErr}</div>}
+        {decisionDraft.owner !== routeOwner(decisionDraft.region, store.config, decisionDraft.owner) && (
+          <label className="afield" style={{ display: 'block', marginTop: 8 }}>Owner override reason
+            <textarea rows={2} value={lead.ownerOverrideReason || ''} disabled={!['LJS', 'AH'].includes(store.role)}
+              onChange={e => store.updateLead(lead.id, { ownerOverrideReason: e.target.value }, 'Owner override reason updated')}
+              placeholder="Required for an LJS/AH owner override" />
+          </label>
+        )}
+        {isFastTrackLead(previewLead, store.config, customer) && <div className="okbox" style={{ marginTop: 8 }}>Fast-track enabled for this Green customer.</div>}
+        <div className="lead-decision-actions">
+          <button className="primary" disabled={lead.status === 'Dropped'} onClick={saveDecisions}>
+            <Icon name="check" size={12} /> Save changes
+          </button>
+          <button disabled={lead.status === 'Dropped'} onClick={() => {
+            const saved = { ...persistedDecisionRef.current }
+            setDecisionDraft(saved)
+            decisionDraftRef.current = saved
+            setDecisionSaved(false)
+            setDecisionErr('')
+          }}>Cancel</button>
+        </div>
+        {lead.status === 'Converted' && <p className="lead-decision-note">This edits the lead record only. The linked opportunity is unchanged.</p>}
+        </div>
+      </section>
+
+      <aside className={`ws-col lead-action-sidebar ${compact ? 'compact-action-col' : ''}`} aria-label="Lead AI summary and actions">
         <header className="ws-head">
           <span className="ws-head-icon emerald"><Icon name="sparkles" size={13} /></span>
-          <span className="ws-head-title">AI summary &amp; actions</span>
+          <span className="ws-head-title">{compact ? 'Lead decisions & actions' : 'AI summary & actions'}</span>
           {aiEnabled() && canAct && (
             <button className="ws-head-meta" onClick={reExtract} disabled={reExtracting}
               title="Re-read the original email with the configured model">
@@ -1464,6 +1895,9 @@ function AiLeadDetail({ lead }) {
           )}
         </header>
         <div className="ws-body">
+          <details className="compact-rail-section compact-summary-rail" open>
+            <summary><span><Icon name="sparkles" size={13} /> AI summary</span><Icon name="chevronDown" size={13} /></summary>
+            <div className="compact-rail-body">
           <p className="ws-summary">{ai.summary}</p>
           {ai.scan && (
             <>
@@ -1486,12 +1920,16 @@ function AiLeadDetail({ lead }) {
           )}
           {reErr && <ErrBox>{reErr}</ErrBox>}
           {reNote && !reErr && <p className="hint"><Icon name="checkCircle" size={12} /> {reNote}</p>}
+            </div>
+          </details>
 
           {/* Each outstanding item is answerable on the spot. Waiting on the
               customer is one way to close a clarification; typing in what you
               already know is the other, and it was the one with no button. */}
           {effectiveMissing.length > 0 && (
-            <WarnBox>
+            <details className="compact-rail-section compact-missing-rail" open={compact ? effectiveMissing.length > 0 : true}>
+              <summary><span><Icon name="alert" size={13} /> Missing information</span><Icon name="chevronDown" size={13} /></summary>
+              <div className="compact-rail-body"><WarnBox>
               <b>Missing information</b>
               <ul className="ws-missing">
                 {effectiveMissing.map((m, i) => (
@@ -1522,7 +1960,8 @@ function AiLeadDetail({ lead }) {
                   </li>
                 ))}
               </ul>
-            </WarnBox>
+              </WarnBox></div>
+            </details>
           )}
 
           {/* Outside the warning box, so it stays reachable on a lead the AI
@@ -1555,7 +1994,9 @@ function AiLeadDetail({ lead }) {
               "Send" opens a compose window that still has to be submitted by
               hand, and only that click marks the record Sent. */}
           {(canDraftClar || clarRecord) && (
-            <div className="clar-mail">
+            <details className="compact-rail-section compact-clarification-rail" open={!compact}>
+              <summary><span><Icon name="mail" size={13} /> Clarification request</span><Icon name="chevronDown" size={13} /></summary>
+              <div className="compact-rail-body"><div className="clar-mail">
               <div className="clar-mail-head">
                 <b>{clarKind === 'quote-fee' ? 'Pre-quote fee request' : 'Clarification request'}</b>
                 {clarRecord?.status === 'Sent' && <span className="lead-decision-saved">Sent {ddMmmYY(clarRecord.sentAt)}</span>}
@@ -1612,7 +2053,8 @@ function AiLeadDetail({ lead }) {
                   </div>
                 </div>
               )}
-            </div>
+              </div></div>
+            </details>
           )}
 
           {/* Computed against the live inbox, not read from a seeded list —
@@ -1642,30 +2084,31 @@ function AiLeadDetail({ lead }) {
             </WarnBox>
           )}
 
-          <div className="ws-group">Qualification &amp; ownership</div>
-          <div className="ws-kv">
+          <section className={`lead-nested-qualification ${compact ? 'compact-decision-section' : ''}`}>
+            <div className="ws-group">Qualification &amp; ownership</div>
+            <div className="ws-kv">
             <span className="ws-kv-k">Customer match</span>
             <span className="ws-kv-v">
               {customer ? customer.name : 'Unmatched (new — Blue)'}
               {customer && <span className={`pill ${customer.status}`}>{customer.status}</span>}
             </span>
-          </div>
-          <div className="ws-kv">
+            </div>
+            <div className="ws-kv">
             <span className="ws-kv-k">System suggested owner</span>
             <span className="ws-kv-v">
               {regionalOwner}
               <span className="ws-kv-note">{ownerRuleLabel} · override needs LJS/AH + reason</span>
             </span>
-          </div>
-          <div className="ws-kv">
+            </div>
+            <div className="ws-kv">
             <span className="ws-kv-k">Assigned owner</span>
             <span className="ws-kv-v">
               {decisionDraft.owner}
               {decisionDraft.owner !== regionalOwner && <span className="ws-kv-note">Manual override</span>}
             </span>
-          </div>
+            </div>
 
-          <div className="lead-decision-card">
+            <div className="lead-decision-card">
             <div className="lead-decision-head">
               <div>
                 <b>Lead decisions</b>
@@ -1676,7 +2119,7 @@ function AiLeadDetail({ lead }) {
               {decisionSaved && !decisionIsDirty && !decisionAutosaving && <span className="lead-decision-saved">Saved just now</span>}
             </div>
             <div className="lead-decision-grid">
-              <label className="lead-decision-full">City / location
+              <label className="lead-decision-full">City / location {decisionAiMeta('location')}
                 <input type="search" value={locationSearch || (selectedLocation ? selectedLocation.city : '')} disabled={lead.status === 'Dropped'}
                   onChange={e => setLocationSearch(e.target.value)} placeholder="Search city or state" aria-label="Search city or state" />
                 <div className="location-suggestions" role="listbox" aria-label="City suggestions">
@@ -1702,27 +2145,27 @@ function AiLeadDetail({ lead }) {
                     onClick={() => updateDecisionRegion('Other / Unclassified')}>Other / Unclassified</button>
                 </div>
               </label>
-              <label>Sell To Customer <span className="required-mark">*</span>
+              <label>Sell To Customer <span className="required-mark">*</span> {decisionAiMeta('sellTo')}
                 <input type="text" value={decisionDraft.sellTo} disabled={lead.status === 'Dropped'}
                   onChange={e => updateDecisionField('sellTo', e.target.value)} placeholder="Enter customer name" />
               </label>
-              <label>Opportunity scope
+              <label>Opportunity scope {decisionAiMeta('scope')}
                 <textarea rows={3} value={decisionDraft.scope} disabled={lead.status === 'Dropped'}
                   onChange={e => updateDecisionField('scope', e.target.value)} placeholder="Enter requested scope or items" />
               </label>
-              <label>EUC Name <span className="required-mark">*</span>
+              <label>EUC Name <span className="required-mark">*</span> {decisionAiMeta('eucName')}
                 <input type="text" value={decisionDraft.eucName} disabled={lead.status === 'Dropped'}
                   onChange={e => updateDecisionField('eucName', e.target.value)} placeholder="Enter end user/customer name" />
               </label>
-              <label>EUC Location <span className="required-mark">*</span>
+              <label>EUC Location <span className="required-mark">*</span> {decisionAiMeta('eucLocation')}
                 <input type="text" value={decisionDraft.eucLocation} disabled={lead.status === 'Dropped'}
                   onChange={e => updateDecisionField('eucLocation', e.target.value)} placeholder="Enter end user location" />
               </label>
-              <label>Contact Person <span className="required-mark">*</span>
+              <label>Contact Person <span className="required-mark">*</span> {decisionAiMeta('contactPerson')}
                 <input type="text" value={decisionDraft.contactPerson} disabled={lead.status === 'Dropped'}
                   onChange={e => updateDecisionField('contactPerson', e.target.value)} placeholder="Enter contact person" />
               </label>
-              <label>Contact Phone <span className="required-mark">*</span>
+              <label>Contact Phone <span className="required-mark">*</span> {decisionAiMeta('contactPhone')}
                 <input type="tel" value={decisionDraft.contactPhone} disabled={lead.status === 'Dropped'}
                   onChange={e => updateDecisionField('contactPhone', e.target.value)} placeholder="Enter contact phone" />
               </label>
@@ -1732,13 +2175,13 @@ function AiLeadDetail({ lead }) {
                   {OWNERS.map(owner => <option key={owner}>{displayRole(owner)}</option>)}
                 </select>
               </label>
-              <label>Opportunity type
+              <label>Opportunity type {decisionAiMeta('oppType')}
                 <select value={decisionDraft.oppType} disabled={lead.status === 'Dropped'}
                   onChange={e => setDecisionDraft({ ...decisionDraft, oppType: e.target.value })}>
                   {OPP_TYPES.map(type => <option key={type}>{type}</option>)}
                 </select>
               </label>
-              <label>Customer class
+              <label>Customer class {decisionAiMeta('customerStatus')}
                 <select value={decisionDraft.customerStatus} disabled={lead.status === 'Dropped'}
                   onChange={e => {
                     setDecisionDraft({ ...decisionDraft, customerStatus: e.target.value })
@@ -1748,19 +2191,19 @@ function AiLeadDetail({ lead }) {
                   {CUSTOMER_STATUSES.map(status => <option key={status}>{status}</option>)}
                 </select>
               </label>
-              <label>Business unit
+              <label>Business unit {decisionAiMeta('bu')}
                 <select value={decisionDraft.bu} disabled={lead.status === 'Dropped'}
                   onChange={e => setDecisionDraft({ ...decisionDraft, bu: e.target.value })}>
                   {BUS.map(bu => <option key={bu}>{bu}</option>)}
                 </select>
               </label>
-              <label>Segment
+              <label>Segment {decisionAiMeta('segment')}
                 <select value={decisionDraft.segment} disabled={lead.status === 'Dropped'}
                   onChange={e => setDecisionDraft({ ...decisionDraft, segment: e.target.value })}>
                   {SEGMENTS.map(segment => <option key={segment}>{segment}</option>)}
                 </select>
               </label>
-              <label>Product
+              <label>Product {decisionAiMeta('product')}
                 <select value={decisionDraft.product} disabled={lead.status === 'Dropped'}
                   onChange={e => setDecisionDraft({ ...decisionDraft, product: e.target.value })}>
                   {PRODUCTS.map(product => <option key={product}>{product}</option>)}
@@ -1794,12 +2237,15 @@ function AiLeadDetail({ lead }) {
               }}>Cancel</button>
             </div>
             {lead.status === 'Converted' && <p className="lead-decision-note">This edits the lead record only. The linked opportunity is unchanged.</p>}
-          </div>
+            </div>
+          </section>
+
+          {compact && <StructuredItemsTable items={compactItems} title="Spares" className="compact-spares" />}
 
           {ai.next?.length > 0 && (
             <>
-              <div className="ws-group">Suggested next actions</div>
-              <ul className="ws-next">{ai.next.map((n, i) => <li key={i}>{n}</li>)}</ul>
+              <div className="ws-group suggested-next-actions">Suggested next actions</div>
+              <ul className="ws-next suggested-next-actions-list">{ai.next.map((n, i) => <li key={i}>{n}</li>)}</ul>
             </>
           )}
 
@@ -1821,7 +2267,10 @@ function AiLeadDetail({ lead }) {
             </div>
           )}
 
-          <LeadVerification lead={lead} customerStatus={previewCustomerStatus} store={store} />
+          <details className="compact-rail-section compact-verification-rail" open={!compact}>
+            <summary><span><Icon name={previewCustomerStatus === 'Blue' ? 'fileText' : 'checkCircle'} size={13} /> {previewCustomerStatus === 'Blue' ? 'Blue customer — KYC request' : 'Verification'}</span><Icon name="chevronDown" size={13} /></summary>
+            <div className="compact-rail-body"><LeadVerification lead={lead} customerStatus={previewCustomerStatus} store={store} /></div>
+          </details>
 
           {lead.status === 'Converted' && (
             <div className="okbox">
@@ -1856,6 +2305,9 @@ function AiLeadDetail({ lead }) {
               Use the Add button above to answer an item now, or continue to registration.
             </WarnBox>
           )}
+          {compact && <div className="compact-source-rail">
+            <LeadSourceContext lead={lead} canAct={canAct && lead.status !== 'Dropped'} />
+          </div>}
         </div>
 
         <footer className="ws-foot">
@@ -1949,7 +2401,7 @@ function AiLeadDetail({ lead }) {
             </p>
           )}
         </footer>
-      </section>
+      </aside>
 
       {viewing && (
         <AttachmentViewer leadId={lead.id} attachment={viewing} onClose={() => setViewing(null)} />
@@ -1969,7 +2421,7 @@ function AiLeadDetail({ lead }) {
         </Modal>
       )}
     </div>
-    </>
+    </div>
   )
 }
 
@@ -2162,7 +2614,7 @@ export default function Inbox() {
   if (sel) {
     const age = ageDays((sel.ts || '').slice(0, 10))
     return (
-      <div className="lead-workspace">
+    <div className="lead-workspace">
         <div className="ws-topbar">
           <button className="ws-back" onClick={() => nav('/inbox')}>
             <Icon name="inbox" size={13} /> Back to inbox
@@ -2180,7 +2632,7 @@ export default function Inbox() {
           <span className={`pill ${PILL[sel.status] || 'Blue'}`}>{sel.status}</span>
       </div>
         {sel.ai
-          ? <AiLeadDetail lead={sel} />
+          ? <StructuredLeadDetail lead={sel} converted={sel.status === 'Converted'} />
           : <><LeadWorkflowBar lead={sel} /><div className="ws-grid single"><section className="ws-col"><div className="ws-body">
               <LegacyLeadDetail lead={sel} />
             </div></section></div></>}

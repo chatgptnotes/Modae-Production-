@@ -766,7 +766,7 @@ function CustomerKycTab({ opp }) {
         )}
         {opp.customerStatus === 'Blue' && (
           opp.leadVerification?.status === 'Verified'
-            ? <div className="okbox">KYC verified at Lead stage — no second verification is required in the Opportunity.</div>
+            ? null
             : <WarnBox>Blue class: AH clearance required before proposal release.</WarnBox>
         )}
         {opp.customerStatus === 'Red' && (
@@ -795,8 +795,8 @@ function CustomerKycTab({ opp }) {
         {opp.leadVerification ? (
           <>
             <div className="okbox">
-              {opp.leadVerification.type === 'KYC' ? 'KYC verified at Lead stage.' : opp.leadVerification.type === 'Payment' ? 'Payment confirmed at Lead stage.' : 'Verification was not required.'}
-              {' '}This Opportunity uses the Lead-stage confirmation.
+              <b>{opp.leadVerification.type === 'KYC' ? 'KYC' : opp.leadVerification.type === 'Payment' ? 'Payment' : 'Verification'}</b>
+              {' '}<Chip tone="state-Accepted">Verified</Chip>
             </div>
             {opp.leadVerification.type === 'KYC' && Object.entries(opp.leadVerification.items || {}).map(([name, item]) => (
               <div className="check-row" key={name}>

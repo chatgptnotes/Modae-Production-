@@ -6,6 +6,12 @@ const Field = ({ label, children }) => (
   <div className="opportunity-field"><label>{label}</label>{children}</div>
 )
 
+const ReadOnlyField = ({ label, value, wide = false }) => (
+  <Field label={label}>
+    <div className={`read-only-field ${wide ? 'read-only-field-wide' : ''}`}>{value || '—'}</div>
+  </Field>
+)
+
 const fields = [
   'owner', 'oppName', 'rfqNumber', 'rfqDate', 'valueK', 'sellTo', 'category', 'location', 'customerStatus',
   'eucName', 'eucLocation', 'oppType', 'bu', 'segment', 'solution', 'product', 'prob',
@@ -22,6 +28,56 @@ const makeDraft = opp => ({
   product: productList(opp.product), prob: opp.prob || '',
   contactPerson: opp.contactPerson || '', contactPhone: opp.contactPhone || '',
 })
+
+export function OpportunityDetailsView({ opp, className = '' }) {
+  const product = productList(opp.product)
+  return (
+    <section className={`opportunity-details-editor opportunity-details-view ${className}`}>
+      <div className="opportunity-details-heading">
+        <div className="workbench-section-title">Opportunity details</div>
+      </div>
+
+      <div className="opportunity-details-group">Identity</div>
+      <div className="dgrid2 opportunity-details-grid">
+        <ReadOnlyField label="Opp ID" value={`${opp.id} (Sl ${opp.sl})`} />
+        <ReadOnlyField label="Owner" value={displayRole(opp.owner)} />
+        <ReadOnlyField label="RFQ Number" value={opp.rfqNumber} />
+        <ReadOnlyField label="RFQ Date" value={opp.rfqDate} />
+        <div className="opportunity-details-wide">
+          <label>Opportunity Name/Description</label>
+          <div className="read-only-field">{opp.oppName || '—'}</div>
+        </div>
+      </div>
+
+      <div className="opportunity-details-group">Customer</div>
+      <div className="dgrid2 opportunity-details-grid">
+        <ReadOnlyField label="Sell To Customer" value={opp.sellTo} />
+        <ReadOnlyField label="Category" value={opp.category} />
+        <ReadOnlyField label="Location" value={opp.location} />
+        <ReadOnlyField label="Customer Status" value={opp.customerStatus} />
+        <ReadOnlyField label="EUC Name" value={opp.eucName} />
+        <ReadOnlyField label="EUC Location" value={opp.eucLocation} />
+      </div>
+
+      <div className="opportunity-details-group">Classification</div>
+      <div className="dgrid2 opportunity-details-grid">
+        <ReadOnlyField label="Opp Type" value={opp.oppType} />
+        <ReadOnlyField label="BU" value={opp.bu} />
+        <ReadOnlyField label="Segment" value={opp.segment} />
+        <ReadOnlyField label="Estimated Value (₹)" value={opp.valueK == null ? '—' : `₹ ${Number(opp.valueK * 1000).toLocaleString('en-IN')}`} />
+        <ReadOnlyField label="Solution" value={opp.solution} />
+        <ReadOnlyField label="Probability" value={opp.prob} />
+        <ReadOnlyField label="Product" value={product.length ? product.join(', ') : 'No products selected'} />
+      </div>
+
+      <div className="opportunity-details-group">Contact</div>
+      <div className="dgrid2 opportunity-details-grid">
+        <ReadOnlyField label="Contact Person" value={opp.contactPerson} />
+        <ReadOnlyField label="Contact Phone" value={opp.contactPhone} />
+      </div>
+    </section>
+  )
+}
 
 const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ opp, store, className = '' }, ref) {
   const [draft, setDraft] = useState(() => makeDraft(opp))
@@ -78,7 +134,6 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
       <div className="opportunity-details-heading">
         <div>
           <div className="workbench-section-title">Opportunity details</div>
-          <span className="hint" title="Saved changes also update the next proposal workbook draft.">Changes save to this opportunity</span>
         </div>
         {dirty && <span className="opportunity-details-dirty">Unsaved changes</span>}
       </div>
