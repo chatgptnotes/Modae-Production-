@@ -9,7 +9,7 @@ import { defaultCosting } from '../src/seed.js'
 
 const input = {
   p: {
-    revision: '00', revisionDate: '2026-08-21', ourRef: '2608227RS', bidStage: 'Binding', bidType: 'Priced',
+    revision: '00', revisionDate: '2026-08-21', ourRef: '2608227RS', bidStage: 'Biding', bidType: 'Priced',
     addressee: 'M/s. Customer', kindAttn: 'Buyer', subject: 'VMS spares', project: 'Retrofit',
     bom: [{ desc: 'Probe', pn: 'P-1', qtyPerUnit: 2, common: 1, spares: 0, uom: 'EA' }],
   },
@@ -90,7 +90,7 @@ test('exact proposal export preserves template artwork, merges and print layout'
     templateBuffer,
     logoBuffer,
     route: 'Spares',
-    p: { revision: '00', revisionDate: '2026-08-21', ourRef: '2608227RS', bidStage: 'Binding', bidType: 'Priced', addressee: 'M/s Customer', kindAttn: 'Buyer', subject: 'VMS spares', project: 'Retrofit', bom: [{ desc: 'Probe', pn: 'P-1', qtyPerUnit: 2, common: 1, spares: 0, uom: 'EA' }] },
+    p: { revision: '00', revisionDate: '2026-08-21', ourRef: '2608227RS', bidStage: 'Biding', bidType: 'Priced', addressee: 'M/s Customer', kindAttn: 'Buyer', subject: 'VMS spares', project: 'Retrofit', bom: [{ desc: 'Probe', pn: 'P-1', qtyPerUnit: 2, common: 1, spares: 0, uom: 'EA' }] },
     opp: { id: '2608227RS', sellTo: 'Customer' },
     doc: { letterSalutation: 'Dear Sir', letterBody: 'Offer body', letterClose: 'Best Regards', preparedBy: {}, docTerms: [{ label: 'Validity', text: '30 days' }] },
     totalQty: line => line.qtyPerUnit + line.common + line.spares,

@@ -1104,7 +1104,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           <div className="cover-meta">
             <div><b>Date:</b> <span className="cover-field"><input type="date" value={p.revisionDate} onChange={set('revisionDate')} /></span></div>
             <div><b>Our Ref:</b> {p.ourRef}</div>
-            <div><b>Bid Stage:</b> <select value={p.bidStage} onChange={set('bidStage')}><option>Binding</option><option>Budgetary</option></select></div>
+            <div><b>Bid Stage:</b> <select value={p.bidStage} onChange={set('bidStage')}><option>Biding</option><option>Budgetary</option></select></div>
             <div><b>Bid Type:</b> <select value={p.bidType} onChange={set('bidType')}><option>Priced</option><option>Unpriced (Technical)</option></select></div>
             <div><b>Revision:</b> <select value={p.revision} onChange={set('revision')}>{['00','01','02','03','04'].map(r => <option key={r}>{r}</option>)}</select></div>
           </div>

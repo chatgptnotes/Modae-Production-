@@ -1106,7 +1106,7 @@ export function newProposal(oppId, opp, options = {}) {
     artifactSheets,
     templateSource: route === 'Project' ? 'Project proposal workbook' : route === 'Service' ? 'Service proposal and SOW' : 'Spares firm offer and comparison',
     ourRef: oppId,
-    bidStage: 'Binding',
+    bidStage: 'Biding',
     bidType: 'Priced',
     revision: '00',
     revisionDate: opp?.rfqDate || new Date().toISOString().slice(0, 10),
