@@ -297,7 +297,7 @@ function RouteTemplateTab({ route, tab, p, doc, priced, lineQuoted }) {
 // prints. `normalize` keeps its old name here to leave the call sites alone.
 const normalize = normalizeProposal
 
-// Combines "Preview proposal" and "Preview template" into one toolbar dropdown,
+// Combines PDF and Excel previews into one toolbar dropdown,
 // following the same open/close + click-outside pattern as DetailTabs' overflow menu.
 function PreviewMenu({ onPreviewProposal, onPreviewTemplate }) {
   const [open, setOpen] = useState(false)
@@ -319,8 +319,8 @@ function PreviewMenu({ onPreviewProposal, onPreviewTemplate }) {
       </button>
       {open && (
         <div className="proposal-toolbar-menu-list" role="menu">
-          <button type="button" role="menuitem" onClick={() => { setOpen(false); onPreviewProposal() }}>Preview proposal</button>
-          {onPreviewTemplate && <button type="button" role="menuitem" onClick={() => { setOpen(false); onPreviewTemplate() }}>Preview template</button>}
+          <button type="button" role="menuitem" onClick={() => { setOpen(false); onPreviewProposal() }}>Preview PDF</button>
+          {onPreviewTemplate && <button type="button" role="menuitem" onClick={() => { setOpen(false); onPreviewTemplate() }}>Preview Excel</button>}
         </div>
       )}
     </div>
@@ -957,10 +957,6 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
           <button className="btn-secondary" onClick={exportExcel} title="Download Draft">
             <Icon name="download" size={13} /> Draft
           </button>
-          <label className="btn-secondary proposal-upload-button" title="Upload reviewed XLSX">
-            <Icon name="upload" size={13} /> Upload
-            <input type="file" accept=".xlsx,.xls" ref={uploadInputRef} onChange={uploadReviewedProposal} />
-          </label>
           <PreviewMenu
             onPreviewProposal={() => setPreviewOpen(true)}
             onPreviewTemplate={['Project', 'Spares', 'Services'].includes(route) ? openTemplatePreview : null}
