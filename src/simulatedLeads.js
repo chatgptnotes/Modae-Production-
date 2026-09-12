@@ -285,6 +285,8 @@ function pickQuality(rng) {
   return 'clean'
 }
 
+import { toISTISOString } from './utils.js'
+
 const fieldValue = (fields, re) => (fields || []).find(f => re.test(String(f.k || '')))?.v || ''
 
 // One simulated inbound enquiry.
@@ -312,7 +314,7 @@ export function simulatedLead(customerStatus = 'Green', now = new Date(), option
   const scenario = SIMULATED_CUSTOMER_SCENARIOS.find(item => item.status === customerStatus)
     || SIMULATED_CUSTOMER_SCENARIOS[0]
   const status = scenario.status
-  const ts = new Date(now).toISOString()
+  const ts = toISTISOString(now)
   const requestedProjectType = PROJECT_TYPES.includes(projectType) ? projectType : ''
   const requestedOppType = OPP_TYPES.includes(oppType) ? oppType : ''
   const constrainedProjectType = requestedProjectType || (requestedOppType ? routeForType(requestedOppType) : '')

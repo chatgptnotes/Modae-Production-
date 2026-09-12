@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, REVISION_TYPES, DEFAULT_WORKFLOW } from '../seed.js'
-import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY, gmailComposeHref, displayRole, displayRoles, displayRoleLabel } from '../utils.js'
+import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY, gmailComposeHref, displayRole, displayRoles, displayRoleLabel, formatISTDateTime } from '../utils.js'
 import { readiness, isBlocked, nextActionWith, transitionBlockers } from '../gates.js'
 import { COMMERCIAL_RX, ConditionCompletion } from './Approvals.jsx'
 import { Chip, ClassChip, AiBadge, WarnBox, ErrBox, Modal } from '../ui.jsx'
@@ -1744,7 +1744,7 @@ function FollowUpPane({ opp, onRevision }) {
               <Icon name="mail" size={13} />
               <span className="communication-summary-copy">
                 <b>{c.subject}</b>
-                <span className="hint">{formatKind(c.kind)} · {c.ts ? new Date(c.ts).toLocaleString() : '—'}</span>
+                <span className="hint">{formatKind(c.kind)} · {c.ts ? formatISTDateTime(c.ts) : '—'}</span>
               </span>
               {c.status && <Chip tone={c.status === 'sent' ? 'Green' : 'Amber'}>{formatCommunicationStatus(c.status)}</Chip>}
             </summary>
@@ -2095,7 +2095,7 @@ function LegacyCommsTab({ opp }) {
         {rows.map((c, i) => (
           <div key={i} className="check-row">
             <Icon name="mail" size={13} />
-            <span><b>{c.subject}</b><div className="hint">to {c.to} · {new Date(c.ts).toLocaleString()}</div></span>
+            <span><b>{c.subject}</b><div className="hint">to {c.to} · {formatISTDateTime(c.ts)}</div></span>
             <Chip tone="grey">{c.kind}</Chip>
           </div>
         ))}
@@ -2139,7 +2139,7 @@ function CommsTab({ opp }) {
               <Icon name="mail" size={13} />
               <span>
                 <b>{c.subject}</b>
-                <div className="hint"><CommsName value={sender.name} email={sender.email} /> → <CommsName value={recipient.name} email={recipient.email} /> · {new Date(c.ts).toLocaleString()}</div>
+                <div className="hint"><CommsName value={sender.name} email={sender.email} /> → <CommsName value={recipient.name} email={recipient.email} /> · {formatISTDateTime(c.ts)}</div>
               </span>
               <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center', marginLeft: 'auto' }}>
                 <Chip tone={c.dir === 'In' ? 'Blue' : 'grey'}>{formatKind(c.kind)}</Chip>
@@ -2164,7 +2164,7 @@ function CommsTab({ opp }) {
                 <div><b>From</b><span><CommsName value={sender.name} email={sender.email} /></span></div>
                 <div><b>To</b><span><CommsName value={recipient.name} email={recipient.email} /></span></div>
                 {c.cc && <div><b>CC</b><span>{c.cc}</span></div>}
-                <div><b>Date</b><span>{c.ts ? new Date(c.ts).toLocaleString() : '—'}</span></div>
+                <div><b>Date</b><span>{c.ts ? formatISTDateTime(c.ts) : '—'}</span></div>
                 <div><b>Type</b><span>{formatKind(c.kind)}</span></div>
                 {c.status && <div><b>Status</b><span>{formatCommunicationStatus(c.status)}</span></div>}
               </div>
@@ -2224,7 +2224,7 @@ function AuditTab({ opp }) {
         <tbody>
           {rows.map((e, i) => (
             <tr key={i}>
-              <td style={{ whiteSpace: 'nowrap' }}>{new Date(e.ts).toLocaleString()}</td>
+              <td style={{ whiteSpace: 'nowrap' }}>{formatISTDateTime(e.ts)}</td>
               <td>{displayRole(e.role)}</td>
               <td><b>{e.action}</b></td>
               <td>{e.objectId}</td>

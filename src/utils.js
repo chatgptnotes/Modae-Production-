@@ -139,6 +139,52 @@ export function fmt(n, digits = 0) {
   return Number(n).toLocaleString('en-IN', { maximumFractionDigits: digits })
 }
 
+// The business mailbox operates on India Standard Time for every user. Keep
+// persisted event stamps explicit so a Dubai (or any other) browser cannot
+// silently change what operators see.
+export const BUSINESS_TIME_ZONE = 'Asia/Kolkata'
+
+export function nowIST() {
+  return toISTISOString(new Date())
+}
+
+export function toISTISOString(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const shifted = new Date(date.getTime() + 330 * 60 * 1000)
+  return shifted.toISOString().replace('Z', '+05:30')
+}
+
+export function todayIST() {
+  return nowIST().slice(0, 10)
+}
+
+export function formatISTTime(value, options = {}) {
+  const date = new Date(value || '')
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleTimeString('en-IN', {
+    timeZone: BUSINESS_TIME_ZONE,
+    hour: 'numeric', minute: '2-digit',
+    ...options,
+  })
+}
+
+export function formatISTDate(value, options = {}) {
+  const date = new Date(value || '')
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleDateString('en-IN', {
+    timeZone: BUSINESS_TIME_ZONE,
+    day: '2-digit', month: 'short', year: 'numeric',
+    ...options,
+  })
+}
+
+export function formatISTDateTime(value) {
+  const date = new Date(value || '')
+  if (Number.isNaN(date.getTime())) return ''
+  return `${formatISTDate(date)} ${formatISTTime(date)}`
+}
+
 // Opportunity values remain stored internally in ₹ thousands for compatibility
 // with the existing pipeline and proposal model. Opportunity screens use full ₹.
 export function fmtRupeesFromK(valueK) {

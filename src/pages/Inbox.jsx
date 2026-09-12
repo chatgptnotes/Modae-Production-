@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useStore, nextOppId } from '../store.jsx'
-import { ddMmmYY, ageDays, gmailComposeHref, displayRole } from '../utils.js'
+import { ddMmmYY, ageDays, gmailComposeHref, displayRole, formatISTTime, formatISTDate, nowIST } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { Chip, ConfChip, WarnBox, ErrBox, Modal } from '../ui.jsx'
@@ -42,7 +42,7 @@ const DROP_REASONS = ['Outside business scope', 'Window shopping / budgetary onl
 
 const receivedTime = ts => {
   if (!ts) return '—'
-  return new Date(ts).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' })
+  return formatISTTime(ts) || '—'
 }
 
 // Disqualifying and reverting both need a written reason. Biji, 13 Aug: "there
@@ -278,7 +278,7 @@ function LeadVerification({ lead, customerStatus, store }) {
   // configured deadline entirely.
   const windowLabel = deadline?.days ? `within ${deadline.days} day${deadline.days === 1 ? '' : 's'}` : 'on request'
   const dateLabel = value => value
-    ? new Date(value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+    ? (formatISTDate(value) || '—')
     : '—'
   const deadlineLabel = deadline
     ? deadline.expired ? 'Overdue' : `${deadline.remaining} day${deadline.remaining === 1 ? '' : 's'} remaining`
@@ -318,7 +318,7 @@ function LeadVerification({ lead, customerStatus, store }) {
       }, `KYC document attached: ${item}`)
     }
     const itemRecord = {
-      state: 'Verified', mode, verifiedAt: new Date().toISOString(), ...fileMeta,
+      state: 'Verified', mode, verifiedAt: nowIST(), ...fileMeta,
     }
     const nextKyc = { ...(verification.kyc || {}), [item]: itemRecord }
     const complete = checklistFor(store.config, customerStatus).every(name => nextKyc[name]?.state === 'Verified')
@@ -327,15 +327,15 @@ function LeadVerification({ lead, customerStatus, store }) {
         ...verification,
         kycRequestStatus: 'pending',
         kyc: nextKyc,
-        kycVerifiedAt: complete ? (verification.kycVerifiedAt || new Date().toISOString()) : '',
+        kycVerifiedAt: complete ? (verification.kycVerifiedAt || nowIST()) : '',
       },
-      ...(complete ? { kycCompletedAt: verification.kycVerifiedAt || new Date().toISOString() } : {}),
+      ...(complete ? { kycCompletedAt: verification.kycVerifiedAt || nowIST() } : {}),
     }, `${item} ${mode === 'simulated' ? 'marked verified (simulated)' : 'verified'}`)
     setBusy('')
   }
 
   const confirmPayment = mode => {
-    const now = new Date().toISOString()
+    const now = nowIST()
     store.updateLead(lead.id, {
       verification: { ...verification, payment: { state: 'Confirmed', mode, confirmedAt: now } },
       amberFeePaid: true,
@@ -559,7 +559,7 @@ function PasteLeadModal({ onClose }) {
   // Both add paths record the same attachments; only the blobs held for the
   // registration upload are keyed by the new lead id.
   const newLead = id => ({
-    id, ts: new Date().toISOString(), channel: 'Email', source,
+    id, ts: nowIST(), channel: 'Email', source,
     // Every lead reaches the AI through the common mailbox — the drawing calls
     // it the single source of truth — so L-04 is satisfied by construction here
     // rather than by pattern-matching the source string.
@@ -840,7 +840,7 @@ function LeadSourceContext({ lead, canAct }) {
       const responseAttachments = attachmentMeta(responseFiles)
       const nextAttachments = [...attachments, ...responseAttachments]
       const response = {
-        id: `CR-${Date.now()}`, receivedAt: new Date().toISOString(),
+        id: `CR-${Date.now()}`, receivedAt: nowIST(),
         from: responseFrom.trim(), subject: responseSubject.trim(), body: responseBody.trim(),
         attachments: responseAttachments,
       }
@@ -1535,7 +1535,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
       setDecisionErr('An owner override reason is required.')
       return
     }
-    store.updateLead(lead.id, { suggestedOwner: reassignTo, assignedOwner: reassignTo, reassignedFrom: lead.suggestedOwner || '', reassignedAt: new Date().toISOString() }, `Owner reassigned to ${reassignTo}`)
+    store.updateLead(lead.id, { suggestedOwner: reassignTo, assignedOwner: reassignTo, reassignedFrom: lead.suggestedOwner || '', reassignedAt: nowIST() }, `Owner reassigned to ${reassignTo}`)
     setReassignOpen(false)
   }
 
@@ -1565,13 +1565,13 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
       assignedOwner: effectiveOwner,
       ownerOverrideReason: overrideReason,
       fastTrack,
-      fastTrackStartedAt: fastTrack ? (lead.fastTrackStartedAt || new Date().toISOString()) : lead.fastTrackStartedAt,
+      fastTrackStartedAt: fastTrack ? (lead.fastTrackStartedAt || nowIST()) : lead.fastTrackStartedAt,
       oppType: draft.oppType,
       route: routeForType(draft.oppType),
       customerStatus: draft.customerStatus,
-      customerClassifiedAt: lead.customerClassifiedAt || new Date().toISOString(),
+      customerClassifiedAt: lead.customerClassifiedAt || nowIST(),
       verification: ['Blue', 'Amber'].includes(draft.customerStatus)
-        ? { ...(lead.verification || {}), requestedAt: lead.verification?.requestedAt || new Date().toISOString(), requestedFor: draft.customerStatus }
+        ? { ...(lead.verification || {}), requestedAt: lead.verification?.requestedAt || nowIST(), requestedFor: draft.customerStatus }
         : (lead.verification || {}),
       redFlag: draft.customerStatus === 'Red',
       ai: { ...ai, route: routeForType(draft.oppType), fields: scopedFields, missing: nextMissing },
@@ -1683,7 +1683,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
       const nextAttachments = [...attachments, ...responseAttachments]
       const names = responseAttachments.map(file => file.name).join(', ')
       const response = {
-        id: `CR-${Date.now()}`, receivedAt: new Date().toISOString(),
+        id: `CR-${Date.now()}`, receivedAt: nowIST(),
         from: responseFrom.trim(), subject: responseSubject.trim(), body: responseBody.trim(),
         attachments: responseAttachments,
       }
@@ -2477,7 +2477,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
                       customerStatus: previewCustomerStatus,
                       redFlag: previewCustomerStatus === 'Red',
                       fastTrack: true,
-                      fastTrackStartedAt: lead.fastTrackStartedAt || new Date().toISOString(),
+                      fastTrackStartedAt: lead.fastTrackStartedAt || nowIST(),
                     }, 'Green customer fast-track started')
                     nav('/register/' + lead.id)
                   }}>
@@ -2593,7 +2593,7 @@ function LegacyLeadDetail({ lead }) {
   const p = lead.parse || {}
   const reassign = () => store.updateLead(lead.id, {
     suggestedOwner: reassignTo, assignedOwner: reassignTo,
-    reassignedFrom: lead.suggestedOwner || '', reassignedAt: new Date().toISOString(),
+    reassignedFrom: lead.suggestedOwner || '', reassignedAt: nowIST(),
   })
 
   // The lead stays 'New' until the intake form is actually submitted —
@@ -2772,7 +2772,7 @@ export default function Inbox() {
   // salesperson makes a decision.
   useEffect(() => {
     if (sel?.status === 'New' && !sel.readAt) {
-      store.updateLead(sel.id, { readAt: new Date().toISOString() })
+      store.updateLead(sel.id, { readAt: nowIST() })
     }
   }, [sel?.id]) // eslint-disable-line react-hooks/exhaustive-deps
   if (sel) {
@@ -2865,7 +2865,7 @@ export default function Inbox() {
     return next
   })
   const setReadForSelected = read => {
-    store.updateLeads(selectedIds, { readAt: read ? new Date().toISOString() : null })
+    store.updateLeads(selectedIds, { readAt: read ? nowIST() : null })
     setSelectedIds(new Set())
     setBulkMenuOpen(false)
   }
@@ -2930,7 +2930,7 @@ export default function Inbox() {
     const product = mapped('product') || 'Various'
     const knownCustomer = store.customers.some(c => c.name.toLowerCase() === sellTo.toLowerCase())
     const oppId = nextOppId(store.opportunities, owner)
-    const today = new Date().toISOString().slice(0, 10)
+    const today = nowIST().slice(0, 10)
     const maxSl = Math.max(0, ...store.opportunities.map(o => o.sl || 0))
     if (!knownCustomer) store.addCustomer({ name: sellTo, category, status, kyc: status === 'Green' ? 'Verified' : 'Pending', payment: '—' })
     const opp = {

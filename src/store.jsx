@@ -12,7 +12,7 @@ import {
 import { leadConfig, routeOwner, expiredLeadDeadline, aiAuditDetail } from './leadRules.js'
 import { withoutSimulated, simulatedCount } from './simulatedLeads.js'
 import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLeadSlice, defaultViewMode } from './appState.js'
-import { unitCostINR, unitSellINR, setRoleNameConfig } from './utils.js'
+import { unitCostINR, unitSellINR, setRoleNameConfig, nowIST, toISTISOString } from './utils.js'
 import { PRICE_SOURCES, normalizePriceFields, sparesLineFinancials } from './pricing.js'
 import { normalizedCurrencyRates } from './currency.js'
 import { syncProposalFromOpportunity } from './proposal/opportunitySync.js'
@@ -57,7 +57,7 @@ const initialState = () => {
 function withAudit(s, action, objectId, detail = '') {
   const entry = {
     id: `AUD-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-    ts: new Date().toISOString(), role: s.role, action,
+    ts: nowIST(), role: s.role, action,
     objectId: String(objectId ?? ''), detail: String(detail ?? ''),
   }
   const prev = s.audit || []
@@ -648,7 +648,7 @@ export function StoreProvider({ children }) {
     // ---- Lead inbox -------------------------------------------------------
     addLead(lead) {
       setState(s => withAudit(
-        { ...s, leads: [{ ...lead }, ...s.leads] },
+        { ...s, leads: [{ ...lead, ts: toISTISOString(lead.ts || new Date()) }, ...s.leads] },
         'Lead received', lead.id, lead.subject))
     },
 
@@ -672,7 +672,7 @@ export function StoreProvider({ children }) {
         const archived = patch.status === 'Dropped' && updated
           ? (next.leadArchive || []).some(x => x.id === id)
             ? next.leadArchive
-            : [{ ...updated, archivedAt: new Date().toISOString(), archiveReason: updated.droppedReason || detail }, ...(next.leadArchive || [])]
+            : [{ ...updated, archivedAt: nowIST(), archiveReason: updated.droppedReason || detail }, ...(next.leadArchive || [])]
           : next.leadArchive || []
         const audited = withAudit(next, patch.status ? `Lead ${patch.status.toLowerCase()}` : 'Lead updated', id,
           detail || patch.droppedReason || patch.oppId || auditKeys.join(', '))
@@ -735,8 +735,8 @@ export function StoreProvider({ children }) {
           if (next.leadDeadlines.some(d => d.key === deadlineKey && d.status === 'Expired')) continue
           const updated = { ...lead, status: 'Dropped', droppedReason: `${expired.reason} after ${cfg.leadDeadlines[`${expired.type}Days`] || 7} days`, expiredDeadline: expired.type }
           next.leads = next.leads.map(item => item.id === lead.id ? updated : item)
-          next.leadArchive = [{ ...updated, archivedAt: new Date(now).toISOString(), archiveReason: updated.droppedReason }, ...next.leadArchive]
-          next.leadDeadlines = [...next.leadDeadlines, { key: deadlineKey, leadId: lead.id, type: expired.type, dueAt: expired.dueAt, status: 'Expired', expiredAt: new Date(now).toISOString() }]
+          next.leadArchive = [{ ...updated, archivedAt: toISTISOString(now), archiveReason: updated.droppedReason }, ...next.leadArchive]
+          next.leadDeadlines = [...next.leadDeadlines, { key: deadlineKey, leadId: lead.id, type: expired.type, dueAt: expired.dueAt, status: 'Expired', expiredAt: toISTISOString(now) }]
           rows.push(lead.id)
         }
         return rows.length ? withAudit(next, 'Lead deadlines processed', rows.join(','), `${rows.length} lead(s) discarded`) : s
@@ -760,7 +760,7 @@ export function StoreProvider({ children }) {
         {
           ...s,
           leads: s.leads.map(l => (l.id === id
-            ? { ...l, status: 'New', oppId: null, droppedReason: '', revertedAt: new Date().toISOString(), revertReason: reason }
+            ? { ...l, status: 'New', oppId: null, droppedReason: '', revertedAt: nowIST(), revertReason: reason }
             : l)),
         },
         'Lead reverted to inbox', id, [lead?.oppId && `removed ${lead.oppId}`, reason].filter(Boolean).join(' — ')))

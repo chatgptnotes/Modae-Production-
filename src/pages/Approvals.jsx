@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES } from '../seed.js'
-import { isApprover, canViewCommercial, ddMmmYY, displayRole, displayRoles } from '../utils.js'
+import { isApprover, canViewCommercial, ddMmmYY, displayRole, displayRoles, formatISTTime } from '../utils.js'
 import { useDrawer } from '../drawer.jsx'
 import { Icon } from '../icons.jsx'
 import { AiBadge } from '../ui.jsx'
@@ -13,13 +13,7 @@ const NEW_APPROVAL_MS = 48 * 60 * 60 * 1000
 // Approval ts/decisionTs are full ISO stamps; ddMmmYY wants YYYY-MM-DD.
 const day = ts => ddMmmYY((ts || '').slice(0, 10))
 const time = ts => {
-  const d = new Date(ts || '')
-  if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleTimeString('en-IN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  })
+  return formatISTTime(ts, { hour: '2-digit', hourCycle: 'h23' })
 }
 const stamp = ts => {
   const d = day(ts)
@@ -29,7 +23,7 @@ const stamp = ts => {
 const shortDate = ts => {
   const d = new Date(ts || '')
   if (Number.isNaN(d.getTime())) return ''
-  return `${d.getDate()} ${d.toLocaleDateString('en-IN', { month: 'short' })}`
+  return d.toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata', day: 'numeric', month: 'short' })
 }
 const waitingLabel = ts => {
   const started = Date.parse(ts || '')

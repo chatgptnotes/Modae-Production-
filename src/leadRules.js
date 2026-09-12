@@ -163,7 +163,7 @@ export function deadlineForLead(lead, config = {}, now = new Date()) {
   const base = new Date(lead?.verification?.requestedAt || lead?.customerClassifiedAt || lead?.deadlineStartedAt || lead?.ts || now).getTime()
   const add = (days, type, reason) => ({
     type, reason,
-    dueAt: new Date(base + Number(days || 0) * 86400000).toISOString(),
+    dueAt: toISTISOString(new Date(base + Number(days || 0) * 86400000)),
   })
   const rows = []
   // The class's own deadline, in the class's own terms. This used to read
@@ -228,3 +228,4 @@ export function expiredLeadDeadline(lead, config = {}, now = new Date()) {
 export function aiAuditDetail({ provider = '', model = '', action = '', result = {} } = {}) {
   return JSON.stringify({ provider, model, action, result })
 }
+import { toISTISOString } from './utils.js'

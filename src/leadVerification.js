@@ -44,10 +44,10 @@ export function verificationDeadline(lead, customerStatus, config = {}, now = ne
   // Green needs nothing, and Red's clearance is an approval rather than a
   // countdown the salesperson is chasing — both resolve to no deadline.
   if (!rule?.verification?.required || !days) return null
-  const requestedAt = lead?.verification?.requestedAt || lead?.customerClassifiedAt || lead?.ts || now.toISOString()
+  const requestedAt = lead?.verification?.requestedAt || lead?.customerClassifiedAt || lead?.ts || toISTISOString(now)
   const dueAt = new Date(new Date(requestedAt).getTime() + days * 86400000)
   const remaining = Math.ceil((dueAt.getTime() - new Date(now).getTime()) / 86400000)
-  return { requestedAt, dueAt: dueAt.toISOString(), days, remaining, expired: remaining < 0 }
+  return { requestedAt, dueAt: toISTISOString(dueAt), days, remaining, expired: remaining < 0 }
 }
 
 export const verificationItem = (verification, item) =>
@@ -130,3 +130,4 @@ export function verificationSnapshot(lead, customerStatus = lead?.customerStatus
   }
   return { status: 'Not required', type: 'None', customerStatus, verifiedAt: '' }
 }
+import { toISTISOString } from './utils.js'

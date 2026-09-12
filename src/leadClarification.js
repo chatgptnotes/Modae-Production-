@@ -224,7 +224,7 @@ export function draftPatch(draft, { now = new Date() } = {}) {
     clarification: {
       status: 'Draft',
       kind: draft.kind,
-      draftedAt: new Date(now).toISOString(),
+      draftedAt: toISTISOString(now),
       draftedBy: draft.draftedBy,
       from: draft.from,
       fromRule: draft.fromRule,
@@ -244,7 +244,7 @@ export function sentPatch(record, { sentBy = '', now = new Date() } = {}) {
     clarification: {
       ...(record || {}),
       status: 'Sent',
-      sentAt: new Date(now).toISOString(),
+      sentAt: toISTISOString(now),
       sentBy,
     },
   }
@@ -253,9 +253,10 @@ export function sentPatch(record, { sentBy = '', now = new Date() } = {}) {
 // The customer answered — close the clarification so processLeadDeadlines stops
 // counting down towards an automatic drop.
 export function answeredPatch(record, { now = new Date() } = {}) {
-  const at = new Date(now).toISOString()
+  const at = toISTISOString(now)
   return {
     clarification: { ...(record || {}), status: 'Answered', answeredAt: at },
     clarificationCompletedAt: at,
   }
 }
+import { toISTISOString } from './utils.js'
