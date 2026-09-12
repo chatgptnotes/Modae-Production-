@@ -535,11 +535,13 @@ function CustomerKycTab({ opp }) {
   const [detailSaved, setDetailSaved] = useState(false)
   const items = (customer && store.kyc[customer.name])
     || (store.config?.kycItems || []).map(n => ({ name: n, state: 'Missing', when: '' }))
+  const leadKycVerified = opp.leadVerification?.status === 'Verified'
+  const displayedKycStatus = leadKycVerified ? 'Valid' : (customer?.kyc || '—')
   const fee = store.config?.amberFee || { amount: 25000, cur: 'INR', days: 7 }
   const setState = (item, state, file, mode) => customer && store.setKycState(customer.name, item, state, file, mode)
   const simulateAllKycDone = () => {
     if (!customer || !canVerify || busy) return
-    items.forEach(item => store.setKycState(customer.name, item.name, 'Verified'))
+    items.forEach(item => store.setKycState(customer.name, item.name, 'Verified', undefined, 'simulated'))
   }
 
   const fileInput = useRef(null)
@@ -651,7 +653,7 @@ function CustomerKycTab({ opp }) {
             <table className="cost-table" style={{ width: '100%' }}>
               <tbody>
                 <tr><td>Category</td><td>{customer.category}</td></tr>
-                <tr><td>KYC status</td><td>{customer.kyc}</td></tr>
+                <tr><td>KYC status</td><td>{displayedKycStatus}</td></tr>
                 <tr><td>Payment record</td><td>{customer.payment}</td></tr>
               </tbody>
             </table>

@@ -116,6 +116,15 @@ test('lead extraction is carried into the opportunity record and details view', 
   assert.match(details, /Requested items/)
 })
 
+test('customer KYC display honors verified lead-stage data and simulated mode', () => {
+  const workbench = fs.readFileSync(new URL('../src/pages/Workbench.jsx', import.meta.url), 'utf8')
+  const register = fs.readFileSync(new URL('../src/pages/Register.jsx', import.meta.url), 'utf8')
+  assert.match(workbench, /const leadKycVerified = opp\.leadVerification\?\.status === 'Verified'/)
+  assert.match(workbench, /const displayedKycStatus = leadKycVerified \? 'Valid'/)
+  assert.match(workbench, /'Verified', undefined, 'simulated'/)
+  assert.match(register, /kyc: leadVerification\.status === 'Verified' \? 'Valid' : 'Pending'/)
+})
+
 test('Opportunity Customer/KYC tab can complete optional customer details', () => {
   const workbench = fs.readFileSync(new URL('../src/pages/Workbench.jsx', import.meta.url), 'utf8')
   assert.match(workbench, /Customer commercial details/)

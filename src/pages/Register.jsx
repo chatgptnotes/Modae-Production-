@@ -175,13 +175,14 @@ export default function Register() {
     ).trim()
     const scope = String(lead.opportunityScope || leadFieldValue(fields, 'scope') || '').trim()
     const { extracted } = buildLeadProposalData(lead, store.priceLists, store.adhocParts)
+    const leadVerification = verificationSnapshot(lead, leadCustomerStatus, { approval: redApproval, config: store.config })
     const opp = {
       id: previewId,
       sourceLeadId: lead.id,
       sl: Math.max(0, ...store.opportunities.map(o => o.sl || 0)) + 1,
       sellTo, category, location,
       customerStatus: leadCustomerStatus,
-      leadVerification: verificationSnapshot(lead, leadCustomerStatus, { approval: redApproval, config: store.config }),
+      leadVerification,
       eucName, eucLocation,
       oppName: lead.subject, opportunityScope: scope, owner, oppType, bu, segment, product,
       suggestedOwner: regionalOwner || owner,
@@ -231,7 +232,7 @@ export default function Register() {
     store.linkLeadApprovals(lead.id, opp.id)
     if (!customer) {
       store.addCustomer({
-        name: sellTo, category, status: leadCustomerStatus, kyc: 'Pending', payment: '—',
+        name: sellTo, category, status: leadCustomerStatus, kyc: leadVerification.status === 'Verified' ? 'Valid' : 'Pending', payment: '—',
         billingAddress: opp.billingAddress, shippingAddress: opp.shippingAddress,
         shippingPincode: opp.shippingPincode, gstin: opp.gstin,
       })
