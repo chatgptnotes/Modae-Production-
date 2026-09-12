@@ -210,14 +210,26 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
   const owner = ROLES[ai.suggestedOwner]?.sales
     ? ai.suggestedOwner
     : ownerForOppType(resolvedRoute === 'Spares' ? 'Spares' : resolvedRoute === 'Service' ? 'Service' : 'Project', store.config)
+  let oppTypeFieldMatched = false
   const resolvedFields = normalizeLeadContactFields(ai.fields, { from, text: sourceText, config: store.config }).map(f => {
     if (!/^(opp type|opportunity type)$/i.test(f.k) || !sourceRoute) return f
+    oppTypeFieldMatched = true
     return {
       ...f, v: sourceRoute, conf: Math.max(Number(f.conf) || 0, 98),
       ev: `${f.ev || 'Email or attachment'}; deterministic physical-scope check`,
       note: [f.note, `Resolved as ${sourceRoute} from the source scope.`].filter(Boolean).join(' '),
     }
   })
+  // The AI extraction doesn't always emit an "Opp type" field, but a confident
+  // deterministic route is still a real decision — without this, "Opportunity
+  // type" on the lead decision form never got a confidence chip or evidence.
+  if (sourceRoute && !oppTypeFieldMatched) {
+    resolvedFields.push({
+      group: 'RFQ', k: 'Opp type', v: sourceRoute, conf: 98,
+      ev: 'Deterministic physical-scope check',
+      note: `Resolved as ${sourceRoute} from the source scope.`,
+    })
+  }
   return {
     route: resolvedRoute,
     urgency: ai.urgency || 'Normal',
@@ -389,21 +401,21 @@ function LeadVerification({ lead, customerStatus, store }) {
             <span style={{ flex: 1 }}>{item} — <b>{row.state === 'Verified' ? `Verified (${row.mode === 'simulated' ? 'simulated' : 'uploaded'})` : 'Missing'}</b></span>
             {editable && verification.kycRequestStatus !== 'cancelled' && (
               row.state === 'Verified'
-                ? <button type="button" disabled={busy === item} onClick={() => cancelVerifiedFile(item, row)}>Cancel file</button>
+                ? <button type="button" className="icon-action" aria-label={`Remove ${item}`} title={`Remove ${item}`} disabled={busy === item} onClick={() => cancelVerifiedFile(item, row)}><Icon name="x" size={14} /></button>
                 : <>
               {pending
                 ? <>
                   <span className="hint" title={pendingUpload.file.name}>{pendingUpload.file.name}</span>
-                  <button className="primary" disabled={busy === item} onClick={async () => {
+                  <button type="button" className="primary icon-action" aria-label={`Confirm upload for ${item}`} title={`Confirm upload for ${item}`} disabled={busy === item} onClick={async () => {
                     const file = pendingUpload.file
                     setPendingUpload(null)
                     await saveKyc(item, file, 'uploaded')
-                  }}>Confirm upload</button>
-                  <button disabled={busy === item} onClick={() => cancelPendingUpload(item)}>Cancel upload</button>
+                  }}><Icon name="check" size={14} /></button>
+                  <button type="button" className="icon-action" aria-label={`Cancel upload for ${item}`} title={`Cancel upload for ${item}`} disabled={busy === item} onClick={() => cancelPendingUpload(item)}><Icon name="x" size={14} /></button>
                 </>
                 : <span className="kyc-upload-menu" ref={menuFor === item ? menuRef : null}>
-                  <button type="button" disabled={busy === item} onClick={event => { event.stopPropagation(); setMenuFor(menuFor === item ? '' : item) }} title="Download a template or upload this document">
-                    <Icon name="upload" size={12} /> Upload
+                  <button type="button" className="icon-action" aria-label={`Upload ${item}`} disabled={busy === item} onClick={event => { event.stopPropagation(); setMenuFor(menuFor === item ? '' : item) }} title={`Upload or replace ${item}`}>
+                    <Icon name="upload" size={14} />
                   </button>
                   {menuFor === item && (
                     <span className="kyc-upload-menu-list" role="menu">
@@ -725,11 +737,11 @@ const mergeDecidedFields = (previous, fresh) => {
 
 const fieldChip = (f, med) => {
   if (f.factType === 'customer_request') return <Chip tone="state-Review">Customer request</Chip>
-  if (f.state === 'accepted') return <Chip tone="state-Accepted">Accepted</Chip>
-  if (f.state === 'rejected') return <Chip tone="state-Rejected">Rejected</Chip>
+  if (f.state === 'accepted') return <span className="decision-status-icon accepted" role="status" aria-label="Accepted" title="Accepted"><Icon name="check" size={11} /></span>
+  if (f.state === 'rejected') return <span className="decision-status-icon rejected" role="status" aria-label="Rejected" title="Rejected"><Icon name="x" size={11} /></span>
   return f.conf >= med
-    ? <Chip tone="state-Review">Review required</Chip>
-    : <Chip tone="state-Blocks">Blocks stage</Chip>
+    ? <span className="decision-status-icon review" role="status" aria-label="Review required" title="Review required"><Icon name="alert" size={11} /></span>
+    : <span className="decision-status-icon blocked" role="status" aria-label="Blocks stage" title="Blocks stage"><Icon name="alert" size={11} /></span>
 }
 
 function LeadWorkflowBar({ lead, customerStatus }) {
@@ -868,8 +880,8 @@ function LeadSourceContext({ lead, canAct }) {
 
   return (
     <>
-      <details className="converted-source">
-        <summary><span><Icon name="mail" size={14} /> Source context</span><span className="converted-summary-action">View original email <Icon name="chevronDown" size={13} /></span></summary>
+      <details className="converted-source" name="lead-rail-accordion" open>
+        <summary><span><Icon name="mail" size={14} /> Original email</span><span className="converted-summary-action">Expand source <Icon name="chevronDown" size={13} /></span></summary>
         <div className="converted-source-body">
           <div className="converted-source-meta"><b>{lead.sender || lead.from || 'Inbound mailbox'}</b><span>{lead.from || ''}</span></div>
           <div className="converted-source-subject">{lead.subject || 'Original RFQ'}</div>
@@ -1023,7 +1035,6 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
   const [editFor, setEditFor] = useState(null)    // { idx, val, note }
   const [rejFor, setRejFor] = useState(null)      // { idx, note }
   const [fillFor, setFillFor] = useState(null)    // { item, val } — answering a missing item
-  const [addOther, setAddOther] = useState(null)  // { k, v } — information nobody asked for yet
   const [reExtracting, setReExtracting] = useState(false)
   const [reExtractConfirmOpen, setReExtractConfirmOpen] = useState(false)
   const [reErr, setReErr] = useState('')
@@ -1098,6 +1109,13 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
   const filteredLocations = filteredLocationGroups.flatMap(group => group.locations)
   const visibleLocations = filteredLocations.slice(0, 50)
   const selectedLocation = indiaLocation(decisionDraft.location)
+  const [eucLocationSearch, setEucLocationSearch] = useState(() => initialDecisions().eucLocation || '')
+  const eucLocationQuery = eucLocationSearch.trim().toLowerCase()
+  const eucLocationMatches = eucLocationQuery
+    ? INDIA_LOCATION_GROUPS.flatMap(group => group.locations)
+      .filter(item => `${item.city} ${item.state}`.toLowerCase().includes(eucLocationQuery))
+      .slice(0, 50)
+    : []
 
   // Re-read the mail (plus whatever documents are now on the lead).
   // `keepDecisions` is the automatic path taken after a document is added: the
@@ -1211,22 +1229,55 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
     return pattern ? ai.fields.find(field => pattern.test(field.k)) : null
   }
   const isMappedDecisionField = field => Object.values(decisionFieldPatterns).some(pattern => pattern.test(field.k))
-  const decisionAiMeta = key => {
+  const decisionAiStatus = key => {
+    const field = decisionAiField(key)
+    return field ? fieldChip(field, med) : null
+  }
+  const decisionAiMeta = (key, includeStatus = true) => {
     const field = decisionAiField(key)
     if (!field) return null
     const idx = ai.fields.indexOf(field)
     return (
       <span className="decision-ai-meta">
         <ConfChip conf={field.conf} thresholds={store.config.aiThresholds} />
-        {fieldChip(field, med)}
-        <button type="button" className="decision-ai-evidence" onClick={() => setEvOpen(evOpen === idx ? null : idx)}>
-          <Icon name="eye" size={11} /> Evidence
-        </button>
-        {evOpen === idx && <span className="decision-ai-evidence-copy">{field.ev}{field.note ? ` — ${field.note}` : ''}</span>}
+        {includeStatus && fieldChip(field, med)}
+        <span className="decision-ai-evidence-wrap">
+          <button type="button" className="decision-ai-evidence" aria-label={`View evidence for ${field.k}`} title="View evidence" onClick={() => setEvOpen(evOpen === idx ? null : idx)}>
+            <Icon name="eye" size={13} />
+          </button>
+          {evOpen === idx && <span className="decision-ai-evidence-copy" role="dialog" aria-label={`Evidence for ${field.k}`}>{field.ev}{field.note ? ` — ${field.note}` : ''}</span>}
+        </span>
+        {canAct && field.state === 'pending' && (
+          <span className="decision-ai-actions" aria-label={`${field.k} decision actions`}>
+            <button type="button" className="icon-action act-accept" aria-label={`Accept ${field.k}`} title={`Accept ${field.k}`} onClick={() => patchField(idx, { state: 'accepted' })}>
+              <Icon name="check" size={12} />
+            </button>
+            <button type="button" className="icon-action" aria-label={`Edit ${field.k}`} title={`Edit ${field.k}`} onClick={() => { setRejFor(null); setEditFor({ idx, val: field.v, note: '' }) }}>
+              <Icon name="edit" size={12} />
+            </button>
+          </span>
+        )}
+        {editFor?.idx === idx && (
+          <span className="decision-ai-inline-edit">
+            <input value={editFor.val} aria-label={`Edit ${field.k}`} onChange={e => setEditFor({ ...editFor, val: e.target.value })} />
+            <input placeholder="Edit note" aria-label={`Edit note for ${field.k}`} value={editFor.note} onChange={e => setEditFor({ ...editFor, note: e.target.value })} />
+            <button type="button" className="icon-action act-accept" aria-label="Save field edit" title="Save field edit" onClick={saveEdit}><Icon name="check" size={12} /></button>
+            <button type="button" className="icon-action" aria-label="Cancel field edit" title="Cancel field edit" onClick={() => setEditFor(null)}><Icon name="x" size={12} /></button>
+          </span>
+        )}
+        {rejFor?.idx === idx && (
+          <span className="decision-ai-inline-edit">
+            <input placeholder="Rejection note required" aria-label={`Rejection note for ${field.k}`} value={rejFor.note} onChange={e => setRejFor({ ...rejFor, note: e.target.value })} />
+            <button type="button" className="icon-action act-reject" aria-label="Save rejection" title="Save rejection" disabled={!rejFor.note.trim()} onClick={saveReject}><Icon name="check" size={12} /></button>
+            <button type="button" className="icon-action" aria-label="Cancel rejection" title="Cancel rejection" onClick={() => setRejFor(null)}><Icon name="x" size={12} /></button>
+          </span>
+        )}
       </span>
     )
   }
-  const visibleAiFields = compact ? ai.fields.filter(field => !isMappedDecisionField(field)) : ai.fields
+  // Compact mode uses this as the single Lead decisions section, so required
+  // identity/routing fields stay visible beside their direct AI controls.
+  const visibleAiFields = ai.fields
   const groups = [...new Set(visibleAiFields.map(f => f.group))]
   const pendingLow = ai.fields.filter(f => f.state === 'pending' && f.conf < med)
   const registrationPendingLow = pendingLow.filter(f => isRegistrationCriticalField(f.k))
@@ -1234,9 +1285,15 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
 
   const patchField = (idx, patch) => {
     const field = ai.fields[idx]
+    const decisionKey = Object.entries(decisionFieldPatterns)
+      .find(([, pattern]) => pattern.test(field?.k || ''))?.[0]
     store.updateLead(lead.id, {
       ai: { ...ai, fields: ai.fields.map((f, i) => (i === idx ? { ...f, ...patch } : f)) },
     }, `AI field "${field?.k || 'unknown'}" updated`)
+    if (decisionKey && patch.v !== undefined) {
+      setDecisionDraft(previous => ({ ...previous, [decisionKey]: patch.v }))
+      setDecisionSaved(false)
+    }
   }
 
   // Supply a piece of information the AI could not find. The policy — what it
@@ -1263,7 +1320,6 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
     store.updateLead(lead.id, patch, `Missing information supplied: ${String(label).trim()}`)
   }
 
-
   const saveEdit = () => {
     patchField(editFor.idx, {
       v: editFor.val, note: editFor.note || 'Edited by user',
@@ -1288,12 +1344,58 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
     .filter(([key]) => !String(decisionDraft[key] || '').trim())
     .map(([, label]) => label)
   const effectiveMissing = reconcileMissingWithDecisions(ai.missing, decisionDraft, ai.fields, ai.lineItems)
+  // The compact rail is for additional AI follow-up only. Registration-critical
+  // fields already have a single source of truth in the Lead decisions form and
+  // its required-before-registration warning, so do not repeat them here.
+  const reviewMissing = effectiveMissing.filter(item => {
+    const text = String(item || '').toLowerCase()
+    return !isRegistrationCriticalField(item)
+      && !/sell[-\s]?to\s+customer|customer\s+name|euc|end\s+user|contact\s+person|contact\s+(?:phone|number)|phone\s+number/i.test(text)
+  })
+  const displayedMissing = compact ? reviewMissing : effectiveMissing
   // AI clarification items are optional follow-up information. They remain
   // visible below, but do not prevent opportunity registration; only the
   // mandatory identity fields, low-confidence decisions, verification and
   // approval gates block the next step.
   const registrationBlocked = missingIdentity.length > 0 || registrationPendingLow.length > 0 || verificationBlocked
   const canAct = !['Converted', 'Dropped'].includes(lead.status)
+
+  const missingInformationPanel = displayedMissing.length > 0 && (
+    <details className="compact-rail-section compact-missing-rail" open>
+      <summary><span><Icon name="alert" size={13} /> Missing information</span><Icon name="chevronDown" size={13} /></summary>
+      <div className="compact-rail-body">
+        <ul className="ws-missing compact-missing-list">
+          {displayedMissing.map((m, i) => (
+            <li key={i}>
+              <div className="ws-missing-row">
+                <span>{m}</span>
+                {canAct && fillFor?.item !== m && (
+                  <button onClick={() => setFillFor({ item: m, val: '' })}>
+                    <Icon name="plus" size={11} /> Add
+                  </button>
+                )}
+              </div>
+              {fillFor?.item === m && (
+                <div className="ws-missing-fill">
+                  <input autoFocus value={fillFor.val} placeholder="Type what you know"
+                    onChange={e => setFillFor({ ...fillFor, val: e.target.value })}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && fillFor.val.trim()) { addMissing(m, fillFor.val, m); setFillFor(null) }
+                      if (e.key === 'Escape') setFillFor(null)
+                    }} />
+                  <button className="act-accept" disabled={!fillFor.val.trim()}
+                    onClick={() => { addMissing(m, fillFor.val, m); setFillFor(null) }}>
+                    <Icon name="check" size={11} /> Save
+                  </button>
+                  <button onClick={() => setFillFor(null)}>Cancel</button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      </div>
+    </details>
+  )
 
   // ---- Clarification mail: AI drafts, a human sends -----------------------
   // 20 Aug review: the original flow auto-sent these, which risks putting wrong
@@ -1568,6 +1670,17 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
     setDecisionSaved(false)
   }
 
+  const updateEucLocation = (value) => {
+    setEucLocationSearch(value)
+    updateDecisionField('eucLocation', value)
+  }
+
+  const selectEucLocation = (item) => {
+    const value = `${item.city}, ${item.state}`
+    setEucLocationSearch(value)
+    updateDecisionField('eucLocation', value)
+  }
+
   return (
     <div className={compact ? 'compact-workflow-content' : ''}>
     <LeadWorkflowBar lead={lead} customerStatus={previewCustomerStatus} />
@@ -1659,7 +1772,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
       <section className="ws-col">
         <header className="ws-head">
           <span className="ws-head-icon violet"><Icon name="bot" size={13} /></span>
-          <span className="ws-head-title">{compact ? 'Additional information' : 'AI-extracted fields'}</span>
+          <span className="ws-head-title">{compact ? 'Lead decisions' : 'AI-extracted fields'}</span>
           <span className="ws-head-meta">AI proposes · humans decide</span>
         </header>
         <div className="ws-body">
@@ -1681,8 +1794,8 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
                         <input placeholder="Edit note (why the value changed)" value={editFor.note}
                           onChange={e => setEditFor({ ...editFor, note: e.target.value })} />
                         <div className="af-edit-actions">
-                          <button className="primary" onClick={saveEdit}>Save</button>
-                          <button onClick={() => setEditFor(null)}>Cancel</button>
+                          <button className="primary icon-action" type="button" aria-label="Save field edit" title="Save field edit" onClick={saveEdit}><Icon name="check" size={14} /></button>
+                          <button className="icon-action" type="button" aria-label="Cancel field edit" title="Cancel field edit" onClick={() => setEditFor(null)}><Icon name="x" size={14} /></button>
                         </div>
                       </div>
                     : <div className="af-val">{f.v}</div>}
@@ -1696,18 +1809,18 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
                     <div className="af-reject">
                       <input placeholder="Rejection note (required)" value={rejFor.note}
                         onChange={e => setRejFor({ ...rejFor, note: e.target.value })} />
-                      <button className="primary" disabled={!rejFor.note.trim()} onClick={saveReject}>Reject</button>
-                      <button onClick={() => setRejFor(null)}>Cancel</button>
+                      <button className="primary icon-action" type="button" aria-label="Save rejection" title="Save rejection" disabled={!rejFor.note.trim()} onClick={saveReject}><Icon name="check" size={14} /></button>
+                      <button className="icon-action" type="button" aria-label="Cancel rejection" title="Cancel rejection" onClick={() => setRejFor(null)}><Icon name="x" size={14} /></button>
                     </div>
                   )}
                   {f.state === 'pending' && canAct && editFor?.idx !== idx && rejFor?.idx !== idx && (
                     <div className="af-actions">
-                      <button className="act-accept" onClick={() => patchField(idx, { state: 'accepted' })}>
-                        <Icon name="check" size={11} /> Accept
+                      <button className="act-accept icon-action" aria-label={`Accept ${f.k}`} title={`Accept ${f.k}`} onClick={() => patchField(idx, { state: 'accepted' })}>
+                        <Icon name="check" size={14} />
                       </button>
-                      <button onClick={() => { setRejFor(null); setEditFor({ idx, val: f.v, note: '' }) }}>Edit</button>
-                      <button className="act-reject" onClick={() => { setEditFor(null); setRejFor({ idx, note: '' }) }}>
-                        <Icon name="x" size={11} /> Reject
+                      <button className="icon-action" aria-label={`Edit ${f.k}`} title={`Edit ${f.k}`} onClick={() => { setRejFor(null); setEditFor({ idx, val: f.v, note: '' }) }}><Icon name="edit" size={14} /></button>
+                      <button className="act-reject icon-action" aria-label={`Reject ${f.k}`} title={`Reject ${f.k}`} onClick={() => { setEditFor(null); setRejFor({ idx, note: '' }) }}>
+                        <Icon name="x" size={14} />
                       </button>
                     </div>
                   )}
@@ -1727,8 +1840,8 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
       {/* ---- Column 3 — AI summary, alerts, actions ---- */}
     </div>
     </div>
-      <section className="lead-qualification-panel" aria-label="Qualification and ownership">
-        <div className="ws-group">Qualification &amp; ownership</div>
+      <section className={`lead-qualification-panel${compact ? ' compact-routing-panel' : ''}`} aria-label={compact ? 'Lead decisions' : 'Qualification and ownership'}>
+        <div className="ws-group">{compact ? 'Lead decisions' : 'Qualification &amp; ownership'}</div>
         <div className="ws-kv">
         <span className="ws-kv-k">Customer match</span>
         <span className="ws-kv-v">
@@ -1762,95 +1875,107 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
           {decisionSaved && !decisionIsDirty && !decisionAutosaving && <span className="lead-decision-saved">Saved just now</span>}
         </div>
         <div className="lead-decision-grid">
-          <label className="lead-decision-full">City / location {decisionAiMeta('location')}
-            <input type="search" value={locationSearch || (selectedLocation ? selectedLocation.city : '')} disabled={lead.status === 'Dropped'}
-              onChange={e => setLocationSearch(e.target.value)} placeholder="Search city or state" aria-label="Search city or state" />
-            <div className="location-suggestions" role="listbox" aria-label="City suggestions">
-              {locationQuery && visibleLocations.map(item => (
-                <button type="button" key={item.value} className="location-suggestion"
-                  disabled={lead.status === 'Dropped'} onClick={() => updateDecisionRegion(item.value)}>
-                  <strong>{item.city}</strong><span>{item.state} · {item.region}</span>
-                </button>
-              ))}
-              {locationQuery && filteredLocations.length > 50 && (
-                <span className="location-suggestion-note">Showing 50 of {filteredLocations.length} matches. Refine your search.</span>
-              )}
-              {locationQuery && !filteredLocations.length && (
-                <span className="location-suggestion-note">No cities found</span>
-              )}
-              {!locationQuery && selectedLocation && (
-                <span className="location-selected"><strong>{selectedLocation.city}</strong> · {selectedLocation.state}</span>
-              )}
-              {!locationQuery && !selectedLocation && (
-                <span className="location-suggestion-note">Type above to search for a city or town</span>
-              )}
-              <button type="button" className="location-other" disabled={lead.status === 'Dropped'}
-                onClick={() => updateDecisionRegion('Other / Unclassified')}>Other / Unclassified</button>
+          <details className="lead-routing-optional lead-decision-full">
+            <summary>Optional routing city / region</summary>
+            <label>City / location {decisionAiMeta('location')}
+              <input type="search" value={locationSearch || (selectedLocation ? selectedLocation.city : '')} disabled={lead.status === 'Dropped'}
+                onChange={e => setLocationSearch(e.target.value)} placeholder="Search city or state" aria-label="Search city or state" />
+              <div className="location-suggestions" role="listbox" aria-label="City suggestions">
+                {locationQuery && visibleLocations.map(item => (
+                  <button type="button" key={item.value} className="location-suggestion"
+                    disabled={lead.status === 'Dropped'} onClick={() => updateDecisionRegion(item.value)}>
+                    <strong>{item.city}</strong><span>{item.state} · {item.region}</span>
+                  </button>
+                ))}
+                {locationQuery && filteredLocations.length > 50 && (
+                  <span className="location-suggestion-note">Showing 50 of {filteredLocations.length} matches. Refine your search.</span>
+                )}
+                {locationQuery && !filteredLocations.length && (
+                  <span className="location-suggestion-note">No cities found</span>
+                )}
+                {!locationQuery && selectedLocation && (
+                  <span className="location-selected"><strong>{selectedLocation.city}</strong> · {selectedLocation.state}</span>
+                )}
+                {!locationQuery && !selectedLocation && (
+                  <span className="location-suggestion-note">Type above to search for a city or town</span>
+                )}
+                <button type="button" className="location-other" disabled={lead.status === 'Dropped'}
+                  onClick={() => updateDecisionRegion('Other / Unclassified')}>Other / Unclassified</button>
+              </div>
+            </label>
+          </details>
+          <div className="lead-decision-subsection">Customer and contact</div>
+            <label><span className="decision-field-heading">Sell To Customer <span className="required-mark">*</span> {decisionAiMeta('sellTo', false)}</span>
+            <div className="decision-value-row"><input type="text" value={decisionDraft.sellTo} disabled={lead.status === 'Dropped'}
+              onChange={e => updateDecisionField('sellTo', e.target.value)} placeholder="Enter customer name" />{decisionAiStatus('sellTo')}</div>
+            </label>
+          <label><span className="decision-field-heading">Opportunity scope {decisionAiMeta('scope', false)}</span>
+            <div className="decision-value-row"><textarea rows={3} value={decisionDraft.scope} disabled={lead.status === 'Dropped'}
+              onChange={e => updateDecisionField('scope', e.target.value)} placeholder="Enter requested scope or items" />{decisionAiStatus('scope')}</div>
+            </label>
+          <label><span className="decision-field-heading">EUC Name <span className="required-mark">*</span> {decisionAiMeta('eucName', false)}</span>
+            <div className="decision-value-row"><input type="text" value={decisionDraft.eucName} disabled={lead.status === 'Dropped'}
+              onChange={e => updateDecisionField('eucName', e.target.value)} placeholder="Enter end user/customer name" />{decisionAiStatus('eucName')}</div>
+            </label>
+          <label><span className="decision-field-heading">EUC Location <span className="required-mark">*</span> {decisionAiMeta('eucLocation', false)}</span>
+            <div className="euc-location-search">
+              <div className="decision-value-row"><input type="search" value={eucLocationSearch} disabled={lead.status === 'Dropped'}
+                onChange={e => updateEucLocation(e.target.value)} placeholder="Search city or state" aria-label="Search EUC city or state" />{decisionAiStatus('eucLocation')}</div>
+              {eucLocationQuery && <div className="location-suggestions euc-location-suggestions" role="listbox" aria-label="EUC location suggestions">
+                {eucLocationMatches.map(item => <button type="button" key={item.value} className="location-suggestion" disabled={lead.status === 'Dropped'}
+                  onClick={() => selectEucLocation(item)}><strong>{item.city}</strong><span>{item.state}</span></button>)}
+                {!eucLocationMatches.length && <span className="location-suggestion-note">No cities found — you can continue with a custom location.</span>}
+              </div>}
             </div>
           </label>
-          <label>Sell To Customer <span className="required-mark">*</span> {decisionAiMeta('sellTo')}
-            <input type="text" value={decisionDraft.sellTo} disabled={lead.status === 'Dropped'}
-              onChange={e => updateDecisionField('sellTo', e.target.value)} placeholder="Enter customer name" />
+          <label><span className="decision-field-heading">Contact Person <span className="required-mark">*</span> {decisionAiMeta('contactPerson', false)}</span>
+            <div className="decision-value-row"><input type="text" value={decisionDraft.contactPerson} disabled={lead.status === 'Dropped'}
+              onChange={e => updateDecisionField('contactPerson', e.target.value)} placeholder="Enter contact person" />{decisionAiStatus('contactPerson')}</div>
+            </label>
+          <label><span className="decision-field-heading">Contact Phone <span className="required-mark">*</span> {decisionAiMeta('contactPhone', false)}</span>
+            <div className="decision-value-row"><input type="tel" value={decisionDraft.contactPhone} disabled={lead.status === 'Dropped'}
+              onChange={e => updateDecisionField('contactPhone', e.target.value)} placeholder="Enter contact phone" />{decisionAiStatus('contactPhone')}</div>
           </label>
-          <label>Opportunity scope {decisionAiMeta('scope')}
-            <textarea rows={3} value={decisionDraft.scope} disabled={lead.status === 'Dropped'}
-              onChange={e => updateDecisionField('scope', e.target.value)} placeholder="Enter requested scope or items" />
-          </label>
-          <label>EUC Name <span className="required-mark">*</span> {decisionAiMeta('eucName')}
-            <input type="text" value={decisionDraft.eucName} disabled={lead.status === 'Dropped'}
-              onChange={e => updateDecisionField('eucName', e.target.value)} placeholder="Enter end user/customer name" />
-          </label>
-          <label>EUC Location <span className="required-mark">*</span> {decisionAiMeta('eucLocation')}
-            <input type="text" value={decisionDraft.eucLocation} disabled={lead.status === 'Dropped'}
-              onChange={e => updateDecisionField('eucLocation', e.target.value)} placeholder="Enter end user location" />
-          </label>
-          <label>Contact Person <span className="required-mark">*</span> {decisionAiMeta('contactPerson')}
-            <input type="text" value={decisionDraft.contactPerson} disabled={lead.status === 'Dropped'}
-              onChange={e => updateDecisionField('contactPerson', e.target.value)} placeholder="Enter contact person" />
-          </label>
-          <label>Contact Phone <span className="required-mark">*</span> {decisionAiMeta('contactPhone')}
-            <input type="tel" value={decisionDraft.contactPhone} disabled={lead.status === 'Dropped'}
-              onChange={e => updateDecisionField('contactPhone', e.target.value)} placeholder="Enter contact phone" />
-          </label>
-          <label>Assigned owner
+          <div className="lead-decision-subsection">Routing and ownership</div>
+          <label><span className="decision-field-heading">Assigned owner</span>
             <select value={decisionDraft.owner} disabled={lead.status === 'Dropped'}
               onChange={e => setDecisionDraft({ ...decisionDraft, owner: e.target.value })}>
               {OWNERS.map(owner => <option key={owner}>{displayRole(owner)}</option>)}
             </select>
           </label>
-          <label>Opportunity type {decisionAiMeta('oppType')}
-            <select value={decisionDraft.oppType} disabled={lead.status === 'Dropped'}
+          <label><span className="decision-field-heading">Opportunity type {decisionAiMeta('oppType', false)}</span>
+            <div className="decision-value-row"><select value={decisionDraft.oppType} disabled={lead.status === 'Dropped'}
               onChange={e => setDecisionDraft({ ...decisionDraft, oppType: e.target.value })}>
               {OPP_TYPES.map(type => <option key={type}>{type}</option>)}
-            </select>
+            </select>{decisionAiStatus('oppType')}</div>
           </label>
-          <label>Customer class {decisionAiMeta('customerStatus')}
-            <select value={decisionDraft.customerStatus} disabled={lead.status === 'Dropped'}
+          <label><span className="decision-field-heading">Customer class {decisionAiMeta('customerStatus', false)}</span>
+            <div className="decision-value-row"><select value={decisionDraft.customerStatus} disabled={lead.status === 'Dropped'}
               onChange={e => {
                 setDecisionDraft({ ...decisionDraft, customerStatus: e.target.value })
                 setDecisionErr('')
                 setDecisionSaved(false)
               }}>
               {CUSTOMER_STATUSES.map(status => <option key={status}>{status}</option>)}
-            </select>
+            </select>{decisionAiStatus('customerStatus')}</div>
           </label>
-          <label>Business unit {decisionAiMeta('bu')}
-            <select value={decisionDraft.bu} disabled={lead.status === 'Dropped'}
+          <label><span className="decision-field-heading">Business unit {decisionAiMeta('bu', false)}</span>
+            <div className="decision-value-row"><select value={decisionDraft.bu} disabled={lead.status === 'Dropped'}
               onChange={e => setDecisionDraft({ ...decisionDraft, bu: e.target.value })}>
               {BUS.map(bu => <option key={bu}>{bu}</option>)}
-            </select>
+            </select>{decisionAiStatus('bu')}</div>
           </label>
-          <label>Segment {decisionAiMeta('segment')}
-            <select value={decisionDraft.segment} disabled={lead.status === 'Dropped'}
+          <label><span className="decision-field-heading">Segment {decisionAiMeta('segment', false)}</span>
+            <div className="decision-value-row"><select value={decisionDraft.segment} disabled={lead.status === 'Dropped'}
               onChange={e => setDecisionDraft({ ...decisionDraft, segment: e.target.value })}>
               {SEGMENTS.map(segment => <option key={segment}>{segment}</option>)}
-            </select>
+            </select>{decisionAiStatus('segment')}</div>
           </label>
-          <label>Product {decisionAiMeta('product')}
-            <select value={decisionDraft.product} disabled={lead.status === 'Dropped'}
+          <label><span className="decision-field-heading">Product {decisionAiMeta('product', false)}</span>
+            <div className="decision-value-row"><select value={decisionDraft.product} disabled={lead.status === 'Dropped'}
               onChange={e => setDecisionDraft({ ...decisionDraft, product: e.target.value })}>
               {PRODUCTS.map(product => <option key={product}>{product}</option>)}
-            </select>
+            </select>{decisionAiStatus('product')}</div>
           </label>
         </div>
         {missingIdentity.length > 0 && lead.status !== 'Dropped' && (
@@ -1867,6 +1992,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
           </label>
         )}
         {isFastTrackLead(previewLead, store.config, customer) && <div className="okbox" style={{ marginTop: 8 }}>Fast-track enabled for this Green customer.</div>}
+        {compact && missingInformationPanel}
         <div className="lead-decision-actions">
           <button className="primary" disabled={lead.status === 'Dropped'} onClick={saveDecisions}>
             <Icon name="check" size={12} /> Save changes
@@ -1883,10 +2009,10 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
         </div>
       </section>
 
-      <aside className={`ws-col lead-action-sidebar ${compact ? 'compact-action-col' : ''}`} aria-label="Lead AI summary and actions">
+      <aside className={`ws-col lead-action-sidebar ${compact ? 'compact-action-col' : ''}`} aria-label={compact ? 'Review summary' : 'Lead AI summary and actions'}>
         <header className="ws-head">
           <span className="ws-head-icon emerald"><Icon name="sparkles" size={13} /></span>
-          <span className="ws-head-title">{compact ? 'Lead decisions & actions' : 'AI summary & actions'}</span>
+          <span className="ws-head-title">{compact ? 'Review summary' : 'AI summary & actions'}</span>
           {aiEnabled() && canAct && (
             <button className="ws-head-meta" onClick={reExtract} disabled={reExtracting}
               title="Re-read the original email with the configured model">
@@ -1926,69 +2052,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
           {/* Each outstanding item is answerable on the spot. Waiting on the
               customer is one way to close a clarification; typing in what you
               already know is the other, and it was the one with no button. */}
-          {effectiveMissing.length > 0 && (
-            <details className="compact-rail-section compact-missing-rail" open={compact ? effectiveMissing.length > 0 : true}>
-              <summary><span><Icon name="alert" size={13} /> Missing information</span><Icon name="chevronDown" size={13} /></summary>
-              <div className="compact-rail-body"><WarnBox>
-              <b>Missing information</b>
-              <ul className="ws-missing">
-                {effectiveMissing.map((m, i) => (
-                  <li key={i}>
-                    <div className="ws-missing-row">
-                      <span>{m}</span>
-                      {canAct && fillFor?.item !== m && (
-                        <button onClick={() => { setAddOther(null); setFillFor({ item: m, val: '' }) }}>
-                          <Icon name="plus" size={11} /> Add
-                        </button>
-                      )}
-                    </div>
-                    {fillFor?.item === m && (
-                      <div className="ws-missing-fill">
-                        <input autoFocus value={fillFor.val} placeholder="Type what you know"
-                          onChange={e => setFillFor({ ...fillFor, val: e.target.value })}
-                          onKeyDown={e => {
-                            if (e.key === 'Enter' && fillFor.val.trim()) { addMissing(m, fillFor.val, m); setFillFor(null) }
-                            if (e.key === 'Escape') setFillFor(null)
-                          }} />
-                        <button className="act-accept" disabled={!fillFor.val.trim()}
-                          onClick={() => { addMissing(m, fillFor.val, m); setFillFor(null) }}>
-                          <Icon name="check" size={11} /> Save
-                        </button>
-                        <button onClick={() => setFillFor(null)}>Cancel</button>
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-              </WarnBox></div>
-            </details>
-          )}
-
-          {/* Outside the warning box, so it stays reachable on a lead the AI
-              read cleanly — the enquiry can still be short something nobody
-              thought to flag. */}
-          {canAct && !addOther && (
-            <button className="ws-missing-other" onClick={() => { setFillFor(null); setAddOther({ k: '', v: '' }) }}>
-              <Icon name="plus" size={11} /> Add other information
-            </button>
-          )}
-          {addOther && (
-            <div className="ws-missing-fill ws-missing-other-fill">
-              <input autoFocus value={addOther.k} placeholder="What is it (e.g. Delivery address)"
-                onChange={e => setAddOther({ ...addOther, k: e.target.value })} />
-              <input value={addOther.v} placeholder="Value"
-                onChange={e => setAddOther({ ...addOther, v: e.target.value })}
-                onKeyDown={e => {
-                  if (e.key === 'Enter' && addOther.k.trim() && addOther.v.trim()) { addMissing(addOther.k, addOther.v); setAddOther(null) }
-                  if (e.key === 'Escape') setAddOther(null)
-                }} />
-              <button className="act-accept" disabled={!addOther.k.trim() || !addOther.v.trim()}
-                onClick={() => { addMissing(addOther.k, addOther.v); setAddOther(null) }}>
-                <Icon name="check" size={11} /> Save
-              </button>
-              <button onClick={() => setAddOther(null)}>Cancel</button>
-            </div>
-          )}
+          {!compact && missingInformationPanel}
 
           {/* AI drafts, a human sends. Nothing here dispatches on its own —
               "Send" opens a compose window that still has to be submitted by
@@ -2158,8 +2222,15 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
                   onChange={e => updateDecisionField('eucName', e.target.value)} placeholder="Enter end user/customer name" />
               </label>
               <label>EUC Location <span className="required-mark">*</span> {decisionAiMeta('eucLocation')}
-                <input type="text" value={decisionDraft.eucLocation} disabled={lead.status === 'Dropped'}
-                  onChange={e => updateDecisionField('eucLocation', e.target.value)} placeholder="Enter end user location" />
+                <div className="euc-location-search">
+                  <input type="search" value={eucLocationSearch} disabled={lead.status === 'Dropped'}
+                    onChange={e => updateEucLocation(e.target.value)} placeholder="Search city or state" aria-label="Search EUC city or state" />
+                  {eucLocationQuery && <div className="location-suggestions euc-location-suggestions" role="listbox" aria-label="EUC location suggestions">
+                    {eucLocationMatches.map(item => <button type="button" key={item.value} className="location-suggestion" disabled={lead.status === 'Dropped'}
+                      onClick={() => selectEucLocation(item)}><strong>{item.city}</strong><span>{item.state}</span></button>)}
+                    {!eucLocationMatches.length && <span className="location-suggestion-note">No cities found — you can continue with a custom location.</span>}
+                  </div>}
+                </div>
               </label>
               <label>Contact Person <span className="required-mark">*</span> {decisionAiMeta('contactPerson')}
                 <input type="text" value={decisionDraft.contactPerson} disabled={lead.status === 'Dropped'}
@@ -2169,7 +2240,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
                 <input type="tel" value={decisionDraft.contactPhone} disabled={lead.status === 'Dropped'}
                   onChange={e => updateDecisionField('contactPhone', e.target.value)} placeholder="Enter contact phone" />
               </label>
-              <label>Assigned owner
+              <label><span className="decision-field-heading">Assigned owner</span>
                 <select value={decisionDraft.owner} disabled={lead.status === 'Dropped'}
                   onChange={e => setDecisionDraft({ ...decisionDraft, owner: e.target.value })}>
                   {OWNERS.map(owner => <option key={owner}>{displayRole(owner)}</option>)}
@@ -2267,8 +2338,8 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
             </div>
           )}
 
-          <details className="compact-rail-section compact-verification-rail" open={!compact}>
-            <summary><span><Icon name={previewCustomerStatus === 'Blue' ? 'fileText' : 'checkCircle'} size={13} /> {previewCustomerStatus === 'Blue' ? 'Blue customer — KYC request' : 'Verification'}</span><Icon name="chevronDown" size={13} /></summary>
+          <details className="compact-rail-section compact-verification-rail" name="lead-rail-accordion" open={!compact}>
+            <summary><span><Icon name={previewCustomerStatus === 'Blue' ? 'fileText' : 'checkCircle'} size={13} /> KYC documents</span><Icon name="chevronDown" size={13} /></summary>
             <div className="compact-rail-body"><LeadVerification lead={lead} customerStatus={previewCustomerStatus} store={store} /></div>
           </details>
 
@@ -2296,13 +2367,6 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
               <b>Follow-up information</b> — these low-confidence sourcing or commercial fields can be completed after the opportunity is created:
               <ul>{deferredPendingLow.map((f, i) => <li key={i}>{f.k} ({f.conf}% confidence)</li>)}</ul>
               Continue to registration after the mandatory identity and verification checks are complete.
-            </WarnBox>
-          )}
-          {lead.status === 'Qualified' && effectiveMissing.length > 0 && (
-            <WarnBox>
-              <b>Optional information still missing</b> — it can be completed after the opportunity is created:
-              <ul>{effectiveMissing.map((item, i) => <li key={i}>{item}</li>)}</ul>
-              Use the Add button above to answer an item now, or continue to registration.
             </WarnBox>
           )}
           {compact && <div className="compact-source-rail">
@@ -2354,8 +2418,8 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
                 setDropping(false)
               }} />
           )}
-          {/* Revert works after registration too — that is the case it is for. */}
-          {(lead.status === 'Qualified' || lead.status === 'Converted') && !reverting && (
+          {/* Revert only applies once an opportunity actually exists to undo. */}
+          {lead.status === 'Converted' && !reverting && (
             <button style={{ marginTop: 8 }} onClick={() => setReverting(true)}>
               <Icon name="refresh" size={13} /> Revert to Lead
             </button>
@@ -2378,21 +2442,23 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
                 onClick={() => nav('/register/' + lead.id)}>
                 Continue to registration <Icon name="arrowRight" size={14} />
               </button>
-              {registrationPendingLow.length > 0 && (
-                <p className="ws-foot-note">
-                  Blocked — {registrationPendingLow.length} identity field{registrationPendingLow.length > 1 ? 's' : ''} below the {med}% confidence threshold.
-                </p>
-              )}
-              {lead.status === 'Qualified' && effectiveMissing.length > 0 && (
-                <p className="ws-foot-note">
-                  Optional follow-up: {effectiveMissing.length} missing item{effectiveMissing.length > 1 ? 's' : ''} can be completed after registration.
-                </p>
-              )}
-              {verificationBlocked && (
-                <p className="ws-foot-note">
-                  Blocked — {previewCustomerStatus} customer verification is not complete.
-                </p>
-              )}
+              <div className="ws-foot-notes">
+                {registrationPendingLow.length > 0 && (
+                  <p className="ws-foot-note">
+                    Blocked — {registrationPendingLow.length} identity field{registrationPendingLow.length > 1 ? 's' : ''} below the {med}% confidence threshold.
+                  </p>
+                )}
+                {lead.status === 'Qualified' && effectiveMissing.length > 0 && (
+                  <p className="ws-foot-note">
+                    Optional follow-up: {effectiveMissing.length} missing item{effectiveMissing.length > 1 ? 's' : ''} can be completed after registration.
+                  </p>
+                )}
+                {verificationBlocked && (
+                  <p className="ws-foot-note">
+                    Blocked — {previewCustomerStatus} customer verification is not complete.
+                  </p>
+                )}
+              </div>
             </>
           )}
           {!canAct && (
@@ -2540,7 +2606,7 @@ function LegacyLeadDetail({ lead }) {
             setDropping(false)
           }} />
       )}
-      {(lead.status === 'Qualified' || lead.status === 'Converted') && !reverting && (
+      {lead.status === 'Converted' && !reverting && (
         <div className="toolbar" style={{ marginTop: 10, marginBottom: 0 }}>
           <button onClick={() => setReverting(true)}><Icon name="refresh" size={13} /> Revert to Lead</button>
         </div>

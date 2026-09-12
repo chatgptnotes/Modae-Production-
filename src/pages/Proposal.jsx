@@ -745,6 +745,13 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   const submitted = comms.some(c => c.kind === 'submission' || c.kind === 'proposal-email')
   const reviewStatus = p.reviewStatus || 'Not reviewed'
   const reviewReady = reviewStatus === 'Validated' || reviewStatus === 'Override accepted'
+  const reviewBanner = reviewStatus === 'Needs attention'
+    ? { tone: 'warning', title: 'Validation needs attention', text: 'Fix the issues listed below before requesting approval.' }
+    : reviewStatus === 'Validated'
+      ? { tone: 'success', title: 'Review complete', text: 'This proposal is ready for approval.' }
+      : reviewStatus === 'Override accepted'
+        ? { tone: 'override', title: 'Review override accepted', text: 'The findings were saved and the proposal can continue through approval.' }
+        : { tone: 'neutral', title: 'Review the AI draft before approval', text: 'Edit inline, download and revise externally, or upload the reviewed workbook, then use Validate review above.' }
   const approvalRequired = blockers.some(bl => bl.approvalType && bl.severity !== 'wait') || pendingForOpp.length > 0
   const readinessSummary = blocked
     ? `${blockers.length} readiness item${blockers.length === 1 ? '' : 's'} need attention`
@@ -1030,10 +1037,10 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
         aria-hidden="true"
       />
 
-      <section className="proposal-review-strip" aria-label="Human review checkpoint">
+      <section className={`proposal-review-strip proposal-review-strip-${reviewBanner.tone}`} aria-label="Human review checkpoint">
         <div>
-          <strong>Review the AI draft before approval</strong>
-          <span>Edit inline, download and revise externally, or upload the reviewed workbook, then use Validate review above.</span>
+          <strong>{reviewBanner.title}</strong>
+          <span>{reviewBanner.text}</span>
         </div>
       </section>
       {validateChoice && (

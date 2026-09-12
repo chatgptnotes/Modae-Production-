@@ -33,11 +33,15 @@ test('both lead panels use the same reason capture', () => {
 
 // "By mistake I qualify — I should take it back to the lead list… then I can
 // again qualify, disqualify or reassign." The old button was gated on
-// !lead.oppId, so it vanished exactly when it was needed.
-test('revert works after an opportunity has been created', () => {
+// !lead.oppId, so it vanished exactly when it was needed. Revert only makes
+// sense once there is an opportunity to undo, though, so it now shows for
+// Converted leads only — not merely Qualified ones with no opportunity yet.
+test('revert only appears once an opportunity actually exists', () => {
   assert.doesNotMatch(inbox, /lead\.status === 'Qualified' && !lead\.oppId/,
-    'revert must not be hidden once an opportunity exists')
-  assert.match(inbox, /\(lead\.status === 'Qualified' \|\| lead\.status === 'Converted'\)/)
+    'revert must not be hidden by a stale !oppId check')
+  assert.doesNotMatch(inbox, /\(lead\.status === 'Qualified' \|\| lead\.status === 'Converted'\)/,
+    'revert must not show for a merely Qualified lead with no opportunity yet')
+  assert.match(inbox, /lead\.status === 'Converted' && !reverting/)
   assert.match(inbox, /store\.revertLead\(lead\.id, note\)/)
 })
 

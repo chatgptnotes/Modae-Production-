@@ -1075,21 +1075,33 @@ export function StoreProvider({ children }) {
     },
 
     answerClarification(id, { response, answerSource = '', answeredAt = '', attachments = [], evidence = '', aiConfidence = null, status = 'Answered', missing = '' }) {
-      setState(s => withAudit({
-        ...s,
-        clarifications: s.clarifications.map(c => (c.id === id ? {
-          ...c,
-           response,
-           answerSource,
-           answeredAt: answeredAt || new Date().toISOString().slice(0, 10),
-           answeredBy: s.role,
-           ...(evidence ? { answerEvidence: evidence } : {}),
-           ...(aiConfidence !== null && aiConfidence !== undefined ? { aiConfidence } : {}),
-           ...(missing ? { missing } : { missing: '' }),
-           attachments: [...(c.attachments || []), ...attachments],
-          status: status === 'Needs review' ? 'Needs review' : 'Answered',
-        } : c)),
-      }, status === 'Needs review' ? 'Clarification marked needs review' : 'Clarification answered', id, response))
+      setState(s => {
+        const target = s.clarifications.find(c => c.id === id)
+        const resolvedStatus = status === 'Needs review' ? 'Needs review' : 'Answered'
+        // A clarification can be tagged with the Opportunity Details field it
+        // answers (see the "Updates field" picker in ClarificationsTab). Once
+        // it resolves to Answered with real text, apply that answer straight
+        // to the opportunity — that field is otherwise locked after Intake.
+        const fieldPatch = target?.field && resolvedStatus === 'Answered' && response.trim()
+          ? { opportunities: s.opportunities.map(o => (o.id === target.oppId ? { ...o, [target.field]: response.trim() } : o)) }
+          : {}
+        return withAudit({
+          ...s,
+          clarifications: s.clarifications.map(c => (c.id === id ? {
+            ...c,
+             response,
+             answerSource,
+             answeredAt: answeredAt || new Date().toISOString().slice(0, 10),
+             answeredBy: s.role,
+             ...(evidence ? { answerEvidence: evidence } : {}),
+             ...(aiConfidence !== null && aiConfidence !== undefined ? { aiConfidence } : {}),
+             ...(missing ? { missing } : { missing: '' }),
+             attachments: [...(c.attachments || []), ...attachments],
+            status: resolvedStatus,
+          } : c)),
+          ...fieldPatch,
+        }, resolvedStatus === 'Needs review' ? 'Clarification marked needs review' : 'Clarification answered', id, response)
+      })
     },
 
     // ---- Manufacturer / vendor quotes --------------------------------------

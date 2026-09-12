@@ -107,6 +107,18 @@ test('proposal review remembers matching approved deviations', () => {
   assert.match(proposal, /displayRole\(approval\.approver\)/)
 })
 
+test('proposal review banner reflects the validation state', () => {
+  const proposal = read('src/pages/Proposal.jsx')
+  const css = read('src/styles.css')
+  assert.match(proposal, /const reviewBanner = reviewStatus === 'Needs attention'/)
+  assert.match(proposal, /Validation needs attention/)
+  assert.match(proposal, /Review complete/)
+  assert.match(proposal, /Review override accepted/)
+  assert.match(proposal, /proposal-review-strip-\$\{reviewBanner\.tone\}/)
+  assert.match(css, /\.proposal-review-strip-warning/)
+  assert.match(css, /\.proposal-review-strip-success/)
+})
+
 test('approval cards fill the approvals workspace and stay compact', () => {
   assert.match(css, /\.approvals-page \.approval-card \{[\s\S]*width: 100%;[\s\S]*max-width: 1100px;[\s\S]*box-sizing: border-box;[\s\S]*row-gap: 12px;/)
   assert.match(css, /\.approvals-page \.approval-opportunity-context \{ margin-block: 6px; padding: 8px 10px; \}/)

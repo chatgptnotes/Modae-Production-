@@ -20,7 +20,7 @@ import PropBuilder from '../workbench/PropBuilder.jsx'
 import Proposal from './Proposal.jsx'
 import SubmissionPanel from '../workbench/SubmissionPanel.jsx'
 import PoHandover from '../workbench/PoHandover.jsx'
-import OpportunityDetailsEditor from '../OpportunityDetailsEditor.jsx'
+import OpportunityDetailsEditor, { OpportunityDetailsView } from '../OpportunityDetailsEditor.jsx'
 import AttachmentViewer from '../AttachmentViewer.jsx'
 import { extractDocText } from '../docText.js'
 import { putFiles } from '../leadBlobs.js'
@@ -375,7 +375,7 @@ export default function Workbench() {
         </Modal>
       )}
       <div className="wb-body">
-        {viewTab === 'overview' && <OverviewTab opp={opp} goTab={goTab} detailsRef={detailsRef} />}
+        {viewTab === 'overview' && <OverviewTab opp={opp} detailsRef={detailsRef} />}
         {viewTab === 'requirement' && <RequirementTab opp={opp} />}
         {viewTab === 'customer' && <CustomerKycTab opp={opp} />}
         {viewTab === 'clarifications' && <ClarificationsTab opp={opp} />}
@@ -394,27 +394,12 @@ export default function Workbench() {
 }
 
 // ---------------------------------------------------------------------------
-function OverviewTab({ opp, goTab, detailsRef }) {
+function OverviewTab({ opp, detailsRef }) {
   const store = useStore()
-  const nav = useNavigate()
-  const [action, setAction] = useState(null)
-  const [actionText, setActionText] = useState('')
-  const [owner, setOwner] = useState(opp.owner)
   const p = store.getProposal(opp.id)
   const blockers = readiness(opp, p, store)
   const blocked = isBlocked(blockers)
-  const firstBlock = blockers.find(b => b.severity === 'block')
-  const approvals = (store.approvals || []).filter(a => a.oppId === opp.id)
-  const pendingApprovals = approvals.filter(a => a.status === 'Pending')
-  const customer = store.customers.find(c => c.name === opp.sellTo)
-  const kycItems = customer ? ((store.kyc || {})[customer.name] || []) : []
-  const verifiedKyc = kycItems.filter(k => k.state === 'Verified').length
-  const audit = (store.audit || []).filter(e => (e.objectId || '').includes(opp.id)).slice(0, 3)
   const brandedProducts = productBrandProfiles(opp.product)
-
-  const nextAction = firstBlock
-    ? `Resolve blocker: ${firstBlock.text}`
-    : NEXT_ACTION[opp.milestone] || 'Progress the opportunity'
 
   const comm = canPriceProposal(store.role)
   const summary = [
@@ -431,49 +416,12 @@ function OverviewTab({ opp, goTab, detailsRef }) {
     ['Age', `${ageDays(opp.createDate) ?? '—'} days`],
   ]
 
-  const saveAction = () => {
-    if (action === 'call') {
-      store.addCommunication(opp.id, {
-        to: opp.contactPerson || opp.sellTo,
-        subject: `Call recorded — ${opp.oppName}`,
-        kind: 'call', note: actionText.trim(),
-      })
-    } else if (action === 'owner' && owner) {
-      store.updateOpportunity(opp.id, { owner })
-    }
-    setAction(null)
-    setActionText('')
-  }
-
-  const openAction = name => { setAction(name); setActionText(''); setOwner(opp.owner) }
-
   return (
     <div className="workbench-overview">
-      <OpportunityDetailsEditor ref={detailsRef} opp={opp} store={store} className="workbench-details-editor" />
+      {opp.milestone === 'Intake'
+        ? <OpportunityDetailsEditor ref={detailsRef} opp={opp} store={store} className="workbench-details-editor" />
+        : <OpportunityDetailsView opp={opp} className="workbench-details-editor" />}
       <div className="workbench-overview-grid">
-        <section className="workbench-panel next-action-panel">
-          <div className="workbench-section-title">Next best action</div>
-          <strong>{nextAction.text || NEXT_ACTION[opp.milestone] || 'Progress the opportunity'}</strong>
-          <p className="hint">Due {ddMmmYY(opp.orderDate || opp.lastUpdated) || '—'}</p>
-          <div className="workbench-actions">
-            <button onClick={() => goTab('clarifications')}><Icon name="mail" size={13} /> Create clarification</button>
-            <button className="primary" onClick={() => nav(`/proposal/${opp.id}`)}><Icon name="fileSheet" size={13} /> Open workbench</button>
-            <button onClick={() => goTab('approvals')}><Icon name="checkCircle" size={13} /> Request approval</button>
-            <button onClick={() => openAction('call')}><Icon name="phone" size={13} /> Record call</button>
-            <button onClick={() => openAction('owner')}><Icon name="users" size={13} /> Change owner</button>
-          </div>
-        </section>
-
-        <section className="workbench-panel blocker-panel">
-          <div className="workbench-section-title">Risks &amp; blockers</div>
-          {blockers.length ? blockers.map(bl => (
-            <div key={bl.key} className={`workbench-blocker ${bl.severity}`}>
-              <b>{bl.text}</b>
-              <span>{bl.approvalType ? `Fix: request ${bl.approver} approval` : 'Fix: resolve in the relevant workbench tab'}</span>
-            </div>
-          )) : <div className="workbench-empty"><Icon name="checkCircle" size={15} /> No active blockers.</div>}
-        </section>
-
         <section className="workbench-panel">
           <div className="workbench-section-title">AI summary <AiBadge /></div>
           <p className="workbench-summary">{summary}</p>
@@ -499,40 +447,10 @@ function OverviewTab({ opp, goTab, detailsRef }) {
         )}
 
         <section className="workbench-panel">
-          <div className="workbench-section-title">KYC snapshot</div>
-          <div className="workbench-kpi"><b>{kycItems.length ? `${verifiedKyc}/${kycItems.length}` : customer ? '0/0' : '—'}</b><span>{customer ? 'verified' : 'Customer not in master'}</span></div>
-          <Chip tone={customer && kycItems.length > 0 && verifiedKyc === kycItems.length ? 'state-Accepted' : 'state-Review'}>{customer && kycItems.length > 0 && verifiedKyc === kycItems.length ? 'Complete' : 'Review required'}</Chip>
-          <button onClick={() => goTab('customer')}>Open Customer/KYC</button>
-        </section>
-
-        <section className="workbench-panel">
-          <div className="workbench-section-title">Pending approvals</div>
-          {pendingApprovals.length ? pendingApprovals.slice(0, 3).map(a => <div className="workbench-list-row" key={a.id}><b>{a.type}</b><Chip tone="state-Review">{a.status}</Chip></div>) : <p className="hint">None pending.</p>}
-          <button onClick={() => goTab('approvals')}>Open approvals</button>
-        </section>
-
-        <section className="workbench-panel">
           <div className="workbench-section-title">Key dates</div>
           <table className="cost-table" style={{ width: '100%' }}><tbody>{dates.map(([k, v]) => <tr key={k}><td>{k}</td><td className="num">{v}</td></tr>)}</tbody></table>
         </section>
-
-        <section className="workbench-panel workbench-timeline-panel">
-          <div className="workbench-section-title">Timeline &amp; audit summary</div>
-          {audit.length ? audit.map((e, i) => <div className="workbench-timeline-row" key={`${e.ts}-${i}`}><span className="timeline-dot" /><span><b>{ddMmmYY((e.ts || '').slice(0, 10))} {displayRole(e.role)}</b><br />{e.action}</span></div>) : <p className="hint">No audit events for this opportunity yet.</p>}
-          <button onClick={() => goTab('audit')}>Full audit</button>
-        </section>
       </div>
-
-      {action && (
-        <Modal title={action === 'call' ? 'Record customer call' : 'Change opportunity owner'} onClose={() => setAction(null)}>
-          {action === 'owner' ? (
-            <label>New owner<select value={owner} onChange={e => setOwner(e.target.value)}>{OWNERS.map(r => <option key={r} value={r}>{displayRoleLabel(r)}</option>)}</select></label>
-          ) : (
-            <label>Details<textarea rows={4} value={actionText} onChange={e => setActionText(e.target.value)} placeholder="Summarise the call and next commitment." /></label>
-          )}
-          <div className="forms-actions"><button className="primary" disabled={action !== 'owner' && !actionText.trim()} onClick={saveAction}>Save</button><button onClick={() => setAction(null)}>Cancel</button></div>
-        </Modal>
-      )}
     </div>
   )
 }
@@ -874,6 +792,28 @@ function CustomerKycTab({ opp }) {
   )
 }
 
+// Opportunity Details fields a clarification can be linked to — restricted to
+// plain string fields a free-text answer can be written into directly. owner
+// (a role key), valueK (numeric, stored in thousands), product (multi-select)
+// and rfqDate (date input) need type-specific handling this doesn't cover.
+const OPP_FIELD_OPTIONS = [
+  ['', '— none —'],
+  ['oppName', 'Opportunity Name/Description'],
+  ['rfqNumber', 'RFQ Number'],
+  ['sellTo', 'Sell To Customer'],
+  ['category', 'Category'],
+  ['location', 'Location'],
+  ['customerStatus', 'Customer Status'],
+  ['eucName', 'EUC Name'],
+  ['eucLocation', 'EUC Location'],
+  ['oppType', 'Opp Type'],
+  ['bu', 'BU'],
+  ['segment', 'Segment'],
+  ['solution', 'Solution'],
+  ['contactPerson', 'Contact Person'],
+  ['contactPhone', 'Contact Phone'],
+]
+
 // ---------------------------------------------------------------------------
 const CLAR_SUGGESTIONS = {
   Spares: [
@@ -1135,7 +1075,7 @@ function ClarificationsTab({ opp }) {
       {replyOk && <div className="okbox">{replyOk}</div>}
       <div className="sheet-wrap">
         <table className="sheet">
-          <thead><tr><th>ID</th><th>Category</th><th>Gap / evidence</th><th>Question</th><th>Owner</th><th>Audience</th><th>Due</th><th>Status</th><th></th></tr></thead>
+          <thead><tr><th>ID</th><th>Category</th><th>Gap / evidence</th><th>Question</th><th>Owner</th><th>Audience</th><th>Due</th><th>Status</th><th>Updates field</th><th></th></tr></thead>
           <tbody>
             {rows.map(c => (
               <tr key={c.id}>
@@ -1148,11 +1088,18 @@ function ClarificationsTab({ opp }) {
                 <td>{ddMmmYY(c.due)}</td>
                 <td><Chip tone={clarTone(c.status)}>{c.status}</Chip></td>
                 <td>
+                  <select value={c.field || ''} disabled={c.status === 'Answered'}
+                    title="Once answered, apply this response straight to that Opportunity Details field"
+                    onChange={e => store.updateClarification(c.id, { field: e.target.value })}>
+                    {OPP_FIELD_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+                  </select>
+                </td>
+                <td>
                   <button onClick={() => openAnswer(c)}>{c.status === 'Answered' ? 'Edit information' : 'Update information'}</button>
                 </td>
               </tr>
             ))}
-            {!rows.length && <tr><td colSpan={9} className="hint">No clarifications yet — let the AI suggest questions from detected gaps.</td></tr>}
+            {!rows.length && <tr><td colSpan={10} className="hint">No clarifications yet — let the AI suggest questions from detected gaps.</td></tr>}
           </tbody>
         </table>
       </div>
