@@ -846,6 +846,17 @@ select, input[type=text], input[type=number], input[type=date], input[type=tel],
   .sourcing-actions button { padding: 3px 4px; }
 }
 .proposal-boq-sheet-wrap { overflow-x: auto; }
+/* Imported supplier catalogues carry descriptions of several hundred characters.
+   table.sheet cells are nowrap by default, so one long row stretched the table
+   past the container and pushed Price and Configurable Adders off the right
+   edge — they read as missing. Let those two columns wrap and cap their width;
+   part number and price stay on one line. */
+.price-list-sheet table.sheet td { vertical-align: top; }
+.price-list-sheet table.sheet td.pl-desc,
+.price-list-sheet table.sheet td.pl-adders { white-space: normal; overflow-wrap: anywhere; }
+.price-list-sheet table.sheet td.pl-desc { max-width: 520px; }
+.price-list-sheet table.sheet td.pl-adders { max-width: 360px; color: var(--text-muted); }
+
 .proposal-boq-sheet-wrap table.sheet { width: 100%; min-width: 0; table-layout: fixed; }
 .proposal-boq-sheet-wrap table.sheet th,
 .proposal-boq-sheet-wrap table.sheet td { white-space: normal; overflow-wrap: anywhere; vertical-align: top; }

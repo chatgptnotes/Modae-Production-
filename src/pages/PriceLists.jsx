@@ -246,17 +246,29 @@ export default function PriceLists() {
             : `${displayList.parts.length} parts`}
         </span>
       </div>
-      <div className="sheet-wrap sheet-wrap-fill">
+      <div className="sheet-wrap sheet-wrap-fill price-list-sheet">
         <table className="sheet">
           <thead><tr><th>Part Number</th><th>Description</th><th>Price ({displayList.currency})</th><th>Configurable Adders</th></tr></thead>
           <tbody>
-            {visibleParts.map(x => (
-              <tr key={x.pn} ref={row => { rowRefs.current[x.pn] = row }} className={highlightedPart === x.pn ? 'price-list-highlight' : undefined}>
-                <td>{x.pn}</td><td>{x.desc}</td>
-                <td className="num">{fmt(x.price)}</td>
-                <td>{x.adders.length ? x.adders.map(a => `${a.desc} (+${a.price})`).join(' · ') : '—'}</td>
-              </tr>
-            ))}
+            {visibleParts.map(x => {
+              // Supplier catalogues carry long text — descriptions of several
+              // hundred characters and parts with a dozen options. Summarise the
+              // options so the row stays readable and the price column stays on
+              // screen; the full list is on the cell's tooltip.
+              const adders = x.adders.map(a => `${a.desc} (+${a.price})`)
+              return (
+                <tr key={x.pn} ref={row => { rowRefs.current[x.pn] = row }} className={highlightedPart === x.pn ? 'price-list-highlight' : undefined}>
+                  <td>{x.pn}</td>
+                  <td className="pl-desc">{x.desc}</td>
+                  <td className="num">{fmt(x.price)}</td>
+                  <td className="pl-adders" title={adders.join('\n')}>
+                    {adders.length
+                      ? <>{adders.slice(0, 2).join(' · ')}{adders.length > 2 ? ` · +${adders.length - 2} more` : ''}</>
+                      : '—'}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
