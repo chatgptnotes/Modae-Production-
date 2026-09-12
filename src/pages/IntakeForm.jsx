@@ -141,6 +141,14 @@ export default function IntakeForm({ destinationPicker = null }) {
     const today = new Date().toISOString().slice(0, 10)
     const id = nextOppId(store.opportunities, f.owner)
     const maxSl = Math.max(0, ...store.opportunities.map(o => o.sl || 0))
+    const extractedFields = [...aiFilledFields]
+      .filter(key => f[key] !== undefined && f[key] !== '')
+      .map(key => ({
+        key,
+        value: Array.isArray(f[key]) ? f[key].join(', ') : String(f[key]),
+        source: 'Document extraction',
+      }))
+    const requestedItems = aiResults?.lineItems || aiResults?.items || aiResults?.localDraft?.items || []
     // Two things happen on submit: the tracker row is added AND the
     // opportunity folder is created (same as the current manual process).
     const sellTo = f.sellTo.trim()
@@ -158,6 +166,7 @@ export default function IntakeForm({ destinationPicker = null }) {
       prob: '',
       valueK: +f.valueK || 0, cogsK: 0,
       rfqNumber: f.rfqNumber || '', rfqDate: f.rfqDate || '',
+      extractedFields, requestedItems,
       createDate: today, proposalDate: '', orderDate: '', invoiceDate: '',
       status: 'Open', stage: 'Lead', closedReason: '',
       contactPerson: f.contactPerson, contactPhone: f.contactPhone, contactEmail: f.contactEmail || '',

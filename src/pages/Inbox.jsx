@@ -2926,6 +2926,20 @@ export default function Inbox() {
     const sellTo = mapped('sellTo') || lead.sellTo || (internalSender ? 'Customer to confirm' : lead.sender) || 'Simulated customer'
     const category = mapped('category') || 'EUC'
     const location = value(/^location$/i) || lead.location || ''
+    const rfqNumber = lead.ref || lead.rfqNumber || value(/(?:rfq|tender|enquiry)\s*(?:number|no\.?|reference|ref)/i) || ''
+    const rfqDate = lead.rfqDate || value(/(?:rfq|tender|enquiry)\s*date/i) || ''
+    const opportunityScope = lead.opportunityScope || mapped('scope') || ''
+    const extractedFields = (lead.ai?.fields || [])
+      .filter(field => field?.state === 'accepted' && String(field.v ?? '').trim())
+      .map(field => ({ key: field.k, value: String(field.v).trim(), confidence: field.conf, evidence: field.ev || '', note: field.note || '' }))
+    const requestedItems = (lead.ai?.lineItems || lead.ai?.items || [])
+      .map(item => ({
+        description: item.description || item.desc || item.partNumber || item.pn || '',
+        partNumber: item.partNumber || item.pn || '',
+        qty: Number(item.qty) || 1,
+        uom: item.uom || 'EA',
+      }))
+      .filter(item => item.description || item.partNumber)
     const resolvedOppType = OPP_TYPES.includes(lead.oppType) ? lead.oppType : (oppType || lead.route || 'Project')
     const product = mapped('product') || 'Various'
     const knownCustomer = store.customers.some(c => c.name.toLowerCase() === sellTo.toLowerCase())
@@ -2936,9 +2950,9 @@ export default function Inbox() {
     const opp = {
       sl: maxSl + 1, id: oppId, sourceLeadId: lead.id, sellTo, category, location,
       customerStatus: status, eucName: mapped('eucName') || sellTo, eucLocation: mapped('eucLocation') || location,
-      oppName: mapped('oppName') || lead.subject, owner, oppType: resolvedOppType, bu: buSegment.bu || 'Energy',
+      oppName: mapped('oppName') || lead.subject, opportunityScope, owner, oppType: resolvedOppType, bu: buSegment.bu || 'Energy',
       segment: buSegment.segment || 'Others', product: [product], prob: '', valueK: 0, cogsK: 0,
-      rfqNumber: lead.ref || '', rfqDate: lead.ts?.slice(0, 10) || '', createDate: today,
+      rfqNumber, rfqDate: rfqDate || lead.ts?.slice(0, 10) || '', extractedFields, requestedItems, createDate: today,
       proposalDate: '', orderDate: '', invoiceDate: '', status: 'Open', stage: 'Lead', closedReason: '',
       contactPerson: mapped('contactPerson') || '', contactPhone: mapped('contactPhone') || '', contactEmail: lead.from || '',
       lastUpdated: today, forecast: false, remarks: lead.body || '', nextActionOwner: '', simulated: true,

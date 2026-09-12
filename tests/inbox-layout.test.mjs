@@ -101,6 +101,21 @@ test('registration carries optional customer details into the opportunity', () =
   assert.match(register, /Follow-up information.*completed later in the Opportunity/s)
 })
 
+test('lead extraction is carried into the opportunity record and details view', () => {
+  const register = fs.readFileSync(new URL('../src/pages/Register.jsx', import.meta.url), 'utf8')
+  const details = fs.readFileSync(new URL('../src/OpportunityDetailsEditor.jsx', import.meta.url), 'utf8')
+  assert.match(register, /const rfqNumber = String\(/)
+  assert.match(register, /const rfqDate = String\(/)
+  assert.match(register, /opportunityScope: scope/)
+  assert.match(register, /extractedFields: acceptedLeadFields\(fields\)/)
+  assert.match(register, /requestedItems: extracted/)
+  assert.match(register, /rfqNumber,/)
+  assert.match(details, /label="RFQ Number" value=\{opp\.rfqNumber\}/)
+  assert.match(details, /<label>Opportunity Scope<\/label>/)
+  assert.match(details, /Accepted extracted lead data/)
+  assert.match(details, /Requested items/)
+})
+
 test('Opportunity Customer/KYC tab can complete optional customer details', () => {
   const workbench = fs.readFileSync(new URL('../src/pages/Workbench.jsx', import.meta.url), 'utf8')
   assert.match(workbench, /Customer commercial details/)

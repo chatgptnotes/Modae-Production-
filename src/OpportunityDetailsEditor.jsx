@@ -13,13 +13,13 @@ const ReadOnlyField = ({ label, value, wide = false }) => (
 )
 
 const fields = [
-  'owner', 'oppName', 'rfqNumber', 'rfqDate', 'valueK', 'sellTo', 'category', 'location', 'customerStatus',
+  'owner', 'oppName', 'opportunityScope', 'rfqNumber', 'rfqDate', 'valueK', 'sellTo', 'category', 'location', 'customerStatus',
   'eucName', 'eucLocation', 'oppType', 'bu', 'segment', 'solution', 'product', 'prob',
   'contactPerson', 'contactPhone',
 ]
 
 const makeDraft = opp => ({
-  owner: opp.owner || '', oppName: opp.oppName || '', sellTo: opp.sellTo || '',
+  owner: opp.owner || '', oppName: opp.oppName || '', opportunityScope: opp.opportunityScope || '', sellTo: opp.sellTo || '',
   rfqNumber: opp.rfqNumber || '', rfqDate: opp.rfqDate || '', valueK: opp.valueK == null ? '' : opp.valueK * 1000,
   category: opp.category || '', location: opp.location || '',
   customerStatus: opp.customerStatus || '', eucName: opp.eucName || '',
@@ -46,6 +46,10 @@ export function OpportunityDetailsView({ opp, className = '' }) {
         <div className="opportunity-details-wide">
           <label>Opportunity Name/Description</label>
           <div className="read-only-field">{opp.oppName || '—'}</div>
+        </div>
+        <div className="opportunity-details-wide">
+          <label>Opportunity Scope</label>
+          <div className="read-only-field">{opp.opportunityScope || '—'}</div>
         </div>
       </div>
 
@@ -75,6 +79,34 @@ export function OpportunityDetailsView({ opp, className = '' }) {
         <ReadOnlyField label="Contact Person" value={opp.contactPerson} />
         <ReadOnlyField label="Contact Phone" value={opp.contactPhone} />
       </div>
+
+      {Array.isArray(opp.extractedFields) && opp.extractedFields.length > 0 && (
+        <>
+          <div className="opportunity-details-group">Accepted extracted lead data</div>
+          <div className="opportunity-extracted-fields">
+            {opp.extractedFields.map((field, index) => (
+              <div className="opportunity-extracted-row" key={`${field.key}-${index}`}>
+                <span>{field.key}</span>
+                <b>{field.value}</b>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {Array.isArray(opp.requestedItems) && opp.requestedItems.length > 0 && (
+        <>
+          <div className="opportunity-details-group">Requested items</div>
+          <div className="opportunity-requested-items">
+            {opp.requestedItems.map((item, index) => (
+              <div className="opportunity-requested-row" key={`${item.description || item.partNumber || 'item'}-${index}`}>
+                <span>{item.description || item.partNumber || 'Unspecified item'}</span>
+                <b>{item.qty || 1} {item.uom || 'EA'}</b>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
     </section>
   )
 }
@@ -147,6 +179,10 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
         <div style={{ gridColumn: '1 / -1' }}>
           <label>Opportunity Name/Description</label>
           <input className="editable-field" type="text" value={draft.oppName} onChange={e => set('oppName', e.target.value)} />
+        </div>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <label>Opportunity Scope</label>
+          <textarea className="editable-field" rows={2} value={draft.opportunityScope} onChange={e => set('opportunityScope', e.target.value)} />
         </div>
       </div>
 

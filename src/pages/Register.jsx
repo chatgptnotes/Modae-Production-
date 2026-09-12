@@ -22,6 +22,16 @@ const fieldVal = (fields, re) => {
   return f ? f.v : ''
 }
 
+const acceptedLeadFields = fields => (fields || [])
+  .filter(field => field?.state === 'accepted' && String(field.v ?? '').trim())
+  .map(field => ({
+    key: field.k,
+    value: String(field.v).trim(),
+    confidence: field.conf,
+    evidence: field.ev || '',
+    note: field.note || '',
+  }))
+
 const guessFromList = (text, list) =>
   list.find(x => text.toLowerCase().includes(x.toLowerCase())) || ''
 
@@ -157,6 +167,14 @@ export default function Register() {
     const catV = fieldVal(fields, /category/i)
     const category = guessFromList(catV, ['EUC', 'EPC', 'OEM', 'ACP', 'SI', 'RE/TR']) || '—'
     const location = fieldVal(fields, /location|region/i) || lead.location || lead.region || ''
+    const rfqNumber = String(
+      lead.ref || lead.rfqNumber || fieldVal(fields, /(?:rfq|tender|enquiry)\s*(?:number|no\.?|reference|ref)/i) || '',
+    ).trim()
+    const rfqDate = String(
+      lead.rfqDate || fieldVal(fields, /(?:rfq|tender|enquiry)\s*date/i) || '',
+    ).trim()
+    const scope = String(lead.opportunityScope || leadFieldValue(fields, 'scope') || '').trim()
+    const { extracted } = buildLeadProposalData(lead, store.priceLists, store.adhocParts)
     const opp = {
       id: previewId,
       sourceLeadId: lead.id,
@@ -165,10 +183,13 @@ export default function Register() {
       customerStatus: leadCustomerStatus,
       leadVerification: verificationSnapshot(lead, leadCustomerStatus, { approval: redApproval, config: store.config }),
       eucName, eucLocation,
-      oppName: lead.subject, owner, oppType, bu, segment, product,
+      oppName: lead.subject, opportunityScope: scope, owner, oppType, bu, segment, product,
       suggestedOwner: regionalOwner || owner,
       ownerOverrideReason: isOverride ? ownerOverrideReason.trim() : '',
       prob: 'Low', valueK: 0, cogsK: 0,
+      rfqNumber, rfqDate,
+      extractedFields: acceptedLeadFields(fields),
+      requestedItems: extracted,
       createDate: today, proposalDate: '', orderDate: '', invoiceDate: '',
       status: 'Open', stage: 'Lead', milestone: 'Screening', closedReason: '',
       contactPerson, contactPhone,
@@ -192,7 +213,7 @@ export default function Register() {
       const proposal = newProposal(opp.id, opp, { validityDays: store.config?.proposalValidityDays })
       store.saveProposal(opp.id, {
         ...proposal,
-        rfqNumber: lead.ref || '',
+        rfqNumber,
         subject: lead.subject || proposal.subject,
         project: lead.subject || proposal.project,
         kindAttn: contactPerson || proposal.kindAttn,
