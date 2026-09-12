@@ -952,6 +952,66 @@ function StructuredItemsTable({ items, title = 'Requested items', className = ''
   )
 }
 
+function ReadOnlyDecisionForm({ lead }) {
+  const fields = lead.ai?.fields || []
+  const identity = leadIdentity(lead, fields)
+  const value = (key, fallback = '') => mappedLeadFieldValue(fields, key) || fallback
+  const customer = identity.sellTo || value('sellTo', lead.sellTo || '—')
+  const scope = value('scope', lead.ai?.summary || '—')
+  const eucName = identity.eucName || value('eucName', '—')
+  const eucLocation = identity.eucLocation || value('eucLocation', lead.location || '—')
+  const contact = identity.contactPerson || value('contactPerson', '—')
+  const phone = identity.contactPhone || value('contactPhone', '—')
+  const owner = value('owner', lead.owner || '—')
+  const oppType = value('oppType', lead.route || '—')
+  const customerClass = value('customerStatus', lead.customerStatus || '—')
+  const businessUnit = value('bu', '—')
+  const segment = value('segment', '—')
+  const product = value('product', '—')
+  const confidenceFor = key => {
+    const field = fields.find(item => item.k === key || item.key === key)
+    return Number.isFinite(Number(field?.conf)) ? `${Math.round(Number(field.conf))}%` : ''
+  }
+
+  const Field = ({ label, fieldKey, children, multiline = false }) => (
+    <div className="readonly-decision-field">
+      <div className="readonly-decision-label">
+        <span>{label}</span>
+        {confidenceFor(fieldKey) && <span className="readonly-decision-confidence">{confidenceFor(fieldKey)}</span>}
+        <Icon name="eye" size={13} />
+      </div>
+      <div className={`readonly-decision-value${multiline ? ' is-multiline' : ''}`}>
+        <span>{children || '—'}</span>
+        <Icon name="check" size={13} />
+      </div>
+    </div>
+  )
+
+  return (
+    <section className="readonly-decision-card" aria-label="Lead decisions read-only">
+      <div className="lead-decision-head">
+        <div><b>Lead decisions</b><span>Read-only after conversion</span></div>
+      </div>
+      <div className="readonly-decision-grid">
+        <div className="lead-decision-subsection">Customer and contact</div>
+        <Field label="Sell to customer" fieldKey="sellTo">{customer}</Field>
+        <Field label="Opportunity scope" fieldKey="scope" multiline>{scope}</Field>
+        <Field label="EUC name" fieldKey="eucName">{eucName}</Field>
+        <Field label="EUC location" fieldKey="eucLocation">{eucLocation}</Field>
+        <Field label="Contact person" fieldKey="contactPerson">{contact}</Field>
+        <Field label="Contact phone" fieldKey="contactPhone">{phone}</Field>
+        <div className="lead-decision-subsection">Routing and ownership</div>
+        <Field label="Assigned owner" fieldKey="owner">{owner}</Field>
+        <Field label="Opportunity type" fieldKey="oppType">{oppType}</Field>
+        <Field label="Customer class" fieldKey="customerStatus">{customerClass}</Field>
+        <Field label="Business unit" fieldKey="bu">{businessUnit}</Field>
+        <Field label="Segment" fieldKey="segment">{segment}</Field>
+        <Field label="Product" fieldKey="product">{product}</Field>
+      </div>
+    </section>
+  )
+}
+
 // Structured detail shell shared by active and converted AI-parsed leads.
 function StructuredLeadDetail({ lead, converted = false }) {
   const nav = useNavigate()
@@ -988,20 +1048,23 @@ function StructuredLeadDetail({ lead, converted = false }) {
 
       <div className={`converted-grid ${converted ? '' : 'active-structured-grid'}`}>
         <main className="converted-main">
-          <div className="converted-heading">
-            <div>
-              <span className="converted-kicker">Structured RFQ details</span>
-              <h3>{lead.subject || 'Converted RFQ'}</h3>
+          <div className="structured-rfq-header">
+            <div className="converted-heading">
+              <div>
+                <span className="converted-kicker">Structured RFQ details</span>
+                <h3>{lead.subject || 'Converted RFQ'}</h3>
+              </div>
+              <span className="converted-record">Lead {lead.id}</span>
             </div>
-            <span className="converted-record">Lead {lead.id}</span>
+
+            <dl className="converted-details">
+              <div><dt>Customer</dt><dd>{customer}</dd></div>
+              <div><dt>Contact</dt><dd>{contact}</dd></div>
+              <div><dt>Delivery</dt><dd>{delivery}</dd></div>
+            </dl>
           </div>
 
-          <dl className="converted-details">
-            <div><dt>Customer</dt><dd>{customer}</dd></div>
-            <div><dt>Contact</dt><dd>{contact}</dd></div>
-            <div><dt>Delivery</dt><dd>{delivery}</dd></div>
-          </dl>
-
+          {converted && <ReadOnlyDecisionForm lead={lead} />}
           {converted && <StructuredItemsTable items={items} />}
 
           {converted && <p className="converted-complete-note"><Icon name="checkCircle" size={14} /> Lead converted — no further action required. Opportunity {oppId} is linked.</p>}
@@ -1010,7 +1073,7 @@ function StructuredLeadDetail({ lead, converted = false }) {
 
         {converted && <aside className="converted-sidebar">
           <section className={`converted-panel ${missing.length ? 'is-warning' : 'is-clear'}`}>
-            <div className="converted-panel-title"><Icon name={missing.length ? 'alert' : 'checkCircle'} size={15} /><span>Action required / missing info</span></div>
+            <div className="converted-panel-title"><Icon name={missing.length ? 'alert' : 'checkCircle'} size={15} /><span>Missing information</span></div>
             {missing.length ? <ul>{missing.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul> : <p>All required lead information is available.</p>}
           </section>
 
@@ -1061,6 +1124,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
   const [reverting, setReverting] = useState(false)
   const [decisionErr, setDecisionErr] = useState('')
   const [reassignTo, setReassignTo] = useState(lead.suggestedOwner || OWNERS[0])
+  const [reassignOpen, setReassignOpen] = useState(false)
   const internalSender = isInternalSender(lead.from, store.config)
   const explicitCustomerContact = customerContactFromText(`${lead.subject || ''}\n${lead.body || ''}`)
   const storedCustomerContact = internalSender
@@ -1110,6 +1174,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
   const visibleLocations = filteredLocations.slice(0, 50)
   const selectedLocation = indiaLocation(decisionDraft.location)
   const [eucLocationSearch, setEucLocationSearch] = useState(() => initialDecisions().eucLocation || '')
+  const [eucLocationOpen, setEucLocationOpen] = useState(false)
   const eucLocationQuery = eucLocationSearch.trim().toLowerCase()
   const eucLocationMatches = eucLocationQuery
     ? INDIA_LOCATION_GROUPS.flatMap(group => group.locations)
@@ -1471,6 +1536,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
       return
     }
     store.updateLead(lead.id, { suggestedOwner: reassignTo, assignedOwner: reassignTo, reassignedFrom: lead.suggestedOwner || '', reassignedAt: new Date().toISOString() }, `Owner reassigned to ${reassignTo}`)
+    setReassignOpen(false)
   }
 
   const buildDecisionPatch = draft => {
@@ -1678,11 +1744,24 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
   const selectEucLocation = (item) => {
     const value = `${item.city}, ${item.state}`
     setEucLocationSearch(value)
+    setEucLocationOpen(false)
     updateDecisionField('eucLocation', value)
   }
 
   return (
     <div className={compact ? 'compact-workflow-content' : ''}>
+    {reassignOpen && <Modal title="Reassign lead" onClose={() => setReassignOpen(false)} className="reassign-modal">
+      <p className="modal-intro">Choose the salesperson who should own this lead.</p>
+      <label className="reassign-modal-field">Assigned owner
+        <select value={reassignTo} onChange={e => setReassignTo(e.target.value)}>
+          {OWNERS.map(owner => <option key={owner}>{displayRole(owner)}</option>)}
+        </select>
+      </label>
+      <div className="reassign-modal-actions">
+        <button type="button" onClick={() => setReassignOpen(false)}>Cancel</button>
+        <button type="button" className="primary" onClick={reassign}><Icon name="check" size={13} /> Confirm reassignment</button>
+      </div>
+    </Modal>}
     <LeadWorkflowBar lead={lead} customerStatus={previewCustomerStatus} />
     <div className="lead-detail-layout">
     <div className="lead-detail-main">
@@ -1910,7 +1989,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
               onChange={e => updateDecisionField('sellTo', e.target.value)} placeholder="Enter customer name" />{decisionAiStatus('sellTo')}</div>
             </label>
           <label><span className="decision-field-heading">Opportunity scope {decisionAiMeta('scope', false)}</span>
-            <div className="decision-value-row"><textarea rows={3} value={decisionDraft.scope} disabled={lead.status === 'Dropped'}
+            <div className="decision-value-row"><textarea rows={5} value={decisionDraft.scope} disabled={lead.status === 'Dropped'}
               onChange={e => updateDecisionField('scope', e.target.value)} placeholder="Enter requested scope or items" />{decisionAiStatus('scope')}</div>
             </label>
           <label><span className="decision-field-heading">EUC Name <span className="required-mark">*</span> {decisionAiMeta('eucName', false)}</span>
@@ -1920,8 +1999,8 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
           <label><span className="decision-field-heading">EUC Location <span className="required-mark">*</span> {decisionAiMeta('eucLocation', false)}</span>
             <div className="euc-location-search">
               <div className="decision-value-row"><input type="search" value={eucLocationSearch} disabled={lead.status === 'Dropped'}
-                onChange={e => updateEucLocation(e.target.value)} placeholder="Search city or state" aria-label="Search EUC city or state" />{decisionAiStatus('eucLocation')}</div>
-              {eucLocationQuery && <div className="location-suggestions euc-location-suggestions" role="listbox" aria-label="EUC location suggestions">
+                onFocus={() => setEucLocationOpen(true)} onChange={e => { setEucLocationOpen(true); updateEucLocation(e.target.value) }} placeholder="Search city or state" aria-label="Search EUC city or state" />{decisionAiStatus('eucLocation')}</div>
+              {eucLocationOpen && eucLocationQuery && <div className="location-suggestions euc-location-suggestions" role="listbox" aria-label="EUC location suggestions">
                 {eucLocationMatches.map(item => <button type="button" key={item.value} className="location-suggestion" disabled={lead.status === 'Dropped'}
                   onClick={() => selectEucLocation(item)}><strong>{item.city}</strong><span>{item.state}</span></button>)}
                 {!eucLocationMatches.length && <span className="location-suggestion-note">No cities found — you can continue with a custom location.</span>}
@@ -1993,7 +2072,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
         )}
         {isFastTrackLead(previewLead, store.config, customer) && <div className="okbox" style={{ marginTop: 8 }}>Fast-track enabled for this Green customer.</div>}
         {compact && missingInformationPanel}
-        <div className="lead-decision-actions">
+        {!compact && <div className="lead-decision-actions">
           <button className="primary" disabled={lead.status === 'Dropped'} onClick={saveDecisions}>
             <Icon name="check" size={12} /> Save changes
           </button>
@@ -2004,25 +2083,37 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
             setDecisionSaved(false)
             setDecisionErr('')
           }}>Cancel</button>
-        </div>
+        </div>}
         {lead.status === 'Converted' && <p className="lead-decision-note">This edits the lead record only. The linked opportunity is unchanged.</p>}
         </div>
       </section>
 
       <aside className={`ws-col lead-action-sidebar ${compact ? 'compact-action-col' : ''}`} aria-label={compact ? 'Review summary' : 'Lead AI summary and actions'}>
-        <header className="ws-head">
-          <span className="ws-head-icon emerald"><Icon name="sparkles" size={13} /></span>
-          <span className="ws-head-title">{compact ? 'Review summary' : 'AI summary & actions'}</span>
-          {aiEnabled() && canAct && (
-            <button className="ws-head-meta" onClick={reExtract} disabled={reExtracting}
-              title="Re-read the original email with the configured model">
-              <Icon name="refresh" size={12} /> {reExtracting ? 'Extracting…' : 'Re-run'}
-            </button>
-          )}
-        </header>
+        {!compact && (
+          <header className="ws-head">
+            <span className="ws-head-icon emerald"><Icon name="sparkles" size={13} /></span>
+            <span className="ws-head-title">AI summary & actions</span>
+            {aiEnabled() && canAct && (
+              <button className="ws-head-meta" onClick={reExtract} disabled={reExtracting}
+                title="Re-read the original email with the configured model">
+                <Icon name="refresh" size={12} /> {reExtracting ? 'Extracting…' : 'Re-run'}
+              </button>
+            )}
+          </header>
+        )}
         <div className="ws-body">
           <details className="compact-rail-section compact-summary-rail" open>
-            <summary><span><Icon name="sparkles" size={13} /> AI summary</span><Icon name="chevronDown" size={13} /></summary>
+            <summary>
+              <span><Icon name="sparkles" size={13} /> AI summary</span>
+              {compact && aiEnabled() && canAct && (
+                <button type="button" className="ws-head-meta" disabled={reExtracting}
+                  onClick={e => { e.preventDefault(); e.stopPropagation(); reExtract() }}
+                  title="Re-read the original email with the configured model">
+                  <Icon name="refresh" size={12} /> {reExtracting ? 'Extracting…' : 'Re-run'}
+                </button>
+              )}
+              <Icon name="chevronDown" size={13} />
+            </summary>
             <div className="compact-rail-body">
           <p className="ws-summary">{ai.summary}</p>
           {ai.scan && (
@@ -2214,7 +2305,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
                   onChange={e => updateDecisionField('sellTo', e.target.value)} placeholder="Enter customer name" />
               </label>
               <label>Opportunity scope {decisionAiMeta('scope')}
-                <textarea rows={3} value={decisionDraft.scope} disabled={lead.status === 'Dropped'}
+                <textarea rows={5} value={decisionDraft.scope} disabled={lead.status === 'Dropped'}
                   onChange={e => updateDecisionField('scope', e.target.value)} placeholder="Enter requested scope or items" />
               </label>
               <label>EUC Name <span className="required-mark">*</span> {decisionAiMeta('eucName')}
@@ -2224,8 +2315,8 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
               <label>EUC Location <span className="required-mark">*</span> {decisionAiMeta('eucLocation')}
                 <div className="euc-location-search">
                   <input type="search" value={eucLocationSearch} disabled={lead.status === 'Dropped'}
-                    onChange={e => updateEucLocation(e.target.value)} placeholder="Search city or state" aria-label="Search EUC city or state" />
-                  {eucLocationQuery && <div className="location-suggestions euc-location-suggestions" role="listbox" aria-label="EUC location suggestions">
+                    onFocus={() => setEucLocationOpen(true)} onChange={e => { setEucLocationOpen(true); updateEucLocation(e.target.value) }} placeholder="Search city or state" aria-label="Search EUC city or state" />
+                  {eucLocationOpen && eucLocationQuery && <div className="location-suggestions euc-location-suggestions" role="listbox" aria-label="EUC location suggestions">
                     {eucLocationMatches.map(item => <button type="button" key={item.value} className="location-suggestion" disabled={lead.status === 'Dropped'}
                       onClick={() => selectEucLocation(item)}><strong>{item.city}</strong><span>{item.state}</span></button>)}
                     {!eucLocationMatches.length && <span className="location-suggestion-note">No cities found — you can continue with a custom location.</span>}
@@ -2404,10 +2495,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
           {canAct && !dropping && (
             <div className="toolbar" style={{ margin: '8px 0 0' }}>
               <button onClick={() => setDropping(true)}><Icon name="x" size={13} /> Disqualify</button>
-              <select value={reassignTo} onChange={e => setReassignTo(e.target.value)} title="Assign lead to another salesperson">
-                {OWNERS.map(owner => <option key={owner}>{displayRole(owner)}</option>)}
-              </select>
-              <button onClick={reassign}>Reassign</button>
+              <button className="secondary-action" onClick={() => setReassignOpen(true)}><Icon name="users" size={13} /> Reassign</button>
             </div>
           )}
           {canAct && dropping && (
@@ -2450,7 +2538,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
                 )}
                 {lead.status === 'Qualified' && effectiveMissing.length > 0 && (
                   <p className="ws-foot-note">
-                    Optional follow-up: {effectiveMissing.length} missing item{effectiveMissing.length > 1 ? 's' : ''} can be completed after registration.
+                    <b>Optional follow-up:</b> {effectiveMissing.length} missing item{effectiveMissing.length > 1 ? 's' : ''} can be completed after registration.
                   </p>
                 )}
                 {verificationBlocked && (
@@ -2501,6 +2589,7 @@ function LegacyLeadDetail({ lead }) {
   const [dropping, setDropping] = useState(false)
   const [reverting, setReverting] = useState(false)
   const [reassignTo, setReassignTo] = useState(lead.suggestedOwner || OWNERS[0])
+  const [reassignOpen, setReassignOpen] = useState(false)
   const p = lead.parse || {}
   const reassign = () => store.updateLead(lead.id, {
     suggestedOwner: reassignTo, assignedOwner: reassignTo,
@@ -2618,12 +2707,21 @@ function LegacyLeadDetail({ lead }) {
       )}
       {lead.status !== 'Dropped' && lead.status !== 'Converted' && (
         <div className="toolbar" style={{ marginTop: 8, marginBottom: 0 }}>
+          <button className="secondary-action" onClick={() => setReassignOpen(true)}><Icon name="users" size={13} /> Reassign</button>
+        </div>
+      )}
+      {reassignOpen && <Modal title="Reassign lead" onClose={() => setReassignOpen(false)} className="reassign-modal">
+        <p className="modal-intro">Choose the salesperson who should own this lead.</p>
+        <label className="reassign-modal-field">Assigned owner
           <select value={reassignTo} onChange={e => setReassignTo(e.target.value)}>
             {OWNERS.map(owner => <option key={owner}>{displayRole(owner)}</option>)}
           </select>
-          <button onClick={reassign}>Reassign</button>
+        </label>
+        <div className="reassign-modal-actions">
+          <button type="button" onClick={() => setReassignOpen(false)}>Cancel</button>
+          <button type="button" className="primary" onClick={() => { reassign(); setReassignOpen(false) }}><Icon name="check" size={13} /> Confirm reassignment</button>
         </div>
-      )}
+      </Modal>}
     </div>
   )
 }

@@ -3118,9 +3118,24 @@ button.install:hover { background: var(--primary-hover); }
 .location-other:hover, .location-other:focus-visible { border-color: var(--ws-primary); color: var(--ws-primary); outline: 0; }
 .euc-location-search { position: relative; min-width: 0; }
 .euc-location-suggestions { position: absolute; z-index: 30; top: calc(100% + 4px); left: 0; right: 0; max-height: 170px; box-shadow: 0 8px 18px rgba(28, 43, 66, .14); }
-.euc-location-suggestions .location-suggestion { min-height: 0; }
+.euc-location-suggestions .location-suggestion { min-height: 32px; height: auto; line-height: 1.2; }
+.euc-location-suggestions .location-suggestion strong,
+.euc-location-suggestions .location-suggestion span { display: block; line-height: 1.2; }
 .lead-decision-actions { display: flex; gap: 7px; margin-top: 10px; }
 .lead-decision-actions button { min-height: 0; padding: 6px 9px; font-size: 11px; }
+/* Despite the name, --ws-blue/--ws-blue-soft/--ws-blue-line resolve to the
+   app's orange primary accent, not blue — that made this "secondary" Reassign
+   button look like a second, competing primary action right next to the real
+   primary "Continue to registration" button. Use genuinely neutral tokens
+   instead, matching the plain Disqualify button beside it. */
+.secondary-action { background: var(--ws-surface) !important; border: 1px solid var(--ws-border-strong) !important; color: var(--ws-text) !important; }
+.secondary-action:hover:not(:disabled) { background: var(--ws-surface-2) !important; border-color: var(--ws-text-3) !important; }
+.reassign-modal { width: min(420px, calc(100vw - 32px)); max-width: min(420px, calc(100vw - 32px)); }
+.reassign-modal-field { display: grid; gap: 5px; color: var(--ws-text-2); font-size: 12px; font-weight: 700; }
+.reassign-modal-field select { width: 100%; min-height: 36px; padding: 7px 9px; border: 1px solid var(--ws-border-strong); border-radius: 7px; background: var(--ws-surface); color: var(--ws-text); font: inherit; }
+.reassign-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.reassign-modal-actions button { display: inline-flex; align-items: center; gap: 6px; }
+.ws-follow-up-note { color: var(--ws-text-2); }
 .structured-active-sections .compact-routing-panel .lead-decision-grid > label {
   font-weight: 800;
   letter-spacing: .035em;
@@ -3283,6 +3298,13 @@ button.install:hover { background: var(--primary-hover); }
 .ws-missing-fill input { flex: 1; min-width: 130px; font-size: 12px; }
 .compact-missing-list { margin-top: 0; }
 .compact-missing-rail .compact-rail-body > .compact-missing-list:first-child { margin-bottom: 0; }
+.lead-workspace .compact-missing-rail { width: 100%; min-width: 0; }
+.lead-workspace .compact-missing-rail > summary { min-height: 36px; padding: 8px 10px; }
+.lead-workspace .compact-missing-rail > .compact-rail-body { padding: 8px 10px 10px; }
+.lead-workspace .compact-missing-rail .compact-missing-list { width: 100%; padding-left: 18px; }
+.lead-workspace .compact-missing-rail .ws-missing-row { min-height: 30px; align-items: center; }
+.lead-workspace .compact-missing-rail .ws-missing-row > span { min-width: 0; overflow-wrap: anywhere; }
+.lead-workspace .compact-missing-rail .ws-missing-row > button { margin-left: auto; }
 .compact-missing-rail .compact-missing-list > li > .ws-missing-row > span {
   font-weight: 700;
 }
@@ -3460,6 +3482,30 @@ button.install:hover { background: var(--primary-hover); }
 .lead-workspace .converted-details dd {
   font-weight: 600;
 }
+.lead-workspace .structured-rfq-header {
+  min-width: 0;
+  margin-bottom: 16px;
+  padding: 14px 16px 0;
+  border: 1px solid var(--ws-border);
+  border-radius: 9px;
+  background: var(--ws-surface);
+  box-shadow: 0 2px 8px rgba(28, 43, 66, .05);
+}
+.lead-workspace .structured-rfq-header .converted-heading {
+  padding-bottom: 12px;
+}
+.lead-workspace .structured-rfq-header .converted-details {
+  padding: 12px 0 14px;
+  border-bottom: 0;
+}
+.lead-workspace:has(.active-structured-grid) .structured-rfq-header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+.lead-workspace:has(.active-structured-grid) .structured-rfq-header .converted-heading {
+  position: static;
+}
 .converted-items { padding-top: 16px; }
 .converted-table-wrap { overflow-x: auto; margin-top: 8px; }
 .converted-items table { width: 100%; border-collapse: collapse; color: var(--ws-text); font-size: 12.5px; }
@@ -3468,6 +3514,66 @@ button.install:hover { background: var(--primary-hover); }
 .converted-items td { padding: 10px; border-bottom: 1px solid var(--ws-border); }
 .converted-items tbody tr:last-child td { border-bottom: 0; }
 .converted-complete-note { display: flex; align-items: center; gap: 7px; margin: 16px 0 0; padding-top: 13px; border-top: 1px solid var(--ws-border); color: var(--ws-emerald); font-size: 11.5px; line-height: 1.4; }
+.readonly-decision-card {
+  margin-top: 16px;
+  padding: 14px 15px 16px;
+  border: 1px solid var(--ws-border);
+  border-radius: 10px;
+  background: var(--ws-surface);
+}
+.readonly-decision-card .lead-decision-head { margin-bottom: 14px; }
+.readonly-decision-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+}
+.readonly-decision-grid .lead-decision-subsection { grid-column: 1 / -1; margin-top: 2px; }
+.readonly-decision-field { min-width: 0; }
+.readonly-decision-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 20px;
+  color: var(--ws-text-2);
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.readonly-decision-label > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.readonly-decision-label > svg { flex: 0 0 auto; color: var(--ws-text-3); }
+.readonly-decision-confidence {
+  margin-left: auto;
+  padding: 3px 7px;
+  border: 1px solid var(--ws-emerald-line);
+  border-radius: 999px;
+  color: var(--ws-emerald);
+  background: var(--ws-emerald-soft);
+  font-size: 11px;
+  letter-spacing: 0;
+}
+.readonly-decision-value {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 38px;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--ws-border);
+  border-radius: 7px;
+  color: var(--ws-text-2);
+  background: var(--ws-surface-2);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.readonly-decision-value > span { min-width: 0; overflow-wrap: anywhere; }
+.readonly-decision-value > svg { flex: 0 0 auto; color: var(--ws-emerald); }
+.readonly-decision-value.is-multiline { align-items: flex-start; min-height: 58px; }
+@media (max-width: 820px) {
+  .readonly-decision-grid { grid-template-columns: 1fr; }
+  .readonly-decision-grid .lead-decision-subsection { grid-column: auto; }
+}
 .converted-sidebar { display: grid; gap: 12px; min-width: 0; }
 .converted-panel { padding: 14px 15px; }
 .converted-panel.is-warning { background: var(--ws-amber-soft); border-color: var(--ws-amber-line); }
@@ -3502,6 +3608,72 @@ button.install:hover { background: var(--primary-hover); }
 .converted-source .drawer-form input,
 .converted-source .drawer-form textarea { box-sizing: border-box; }
 .converted-source .hint[role="alert"], .converted-source .hint[role="status"] { display: flex; align-items: flex-start; gap: 5px; margin: 8px 0 0; }
+
+/* Converted leads use the same readable 3:2 workspace geometry as active
+   leads, while remaining a read-only handoff record. */
+@media (min-width: 821px) {
+  .lead-workspace .converted-grid:not(.active-structured-grid) {
+    grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr);
+    align-items: start;
+    gap: 16px;
+  }
+
+  .lead-workspace .converted-grid:not(.active-structured-grid) .converted-main,
+  .lead-workspace .converted-grid:not(.active-structured-grid) .converted-sidebar {
+    min-width: 0;
+  }
+
+  .lead-workspace .converted-grid:not(.active-structured-grid) .structured-rfq-header {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .lead-workspace .converted-grid:not(.active-structured-grid) .converted-details {
+    align-items: start;
+  }
+
+  .lead-workspace .converted-grid:not(.active-structured-grid) .converted-details dd {
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .lead-workspace .converted-grid:not(.active-structured-grid) .converted-panel,
+  .lead-workspace .converted-grid:not(.active-structured-grid) .converted-source {
+    width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+@media (max-width: 820px) {
+  .lead-workspace .converted-grid:not(.active-structured-grid) {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Converted/read-only detail: keep the shell locked and let each content
+   column scroll inside the available viewport. This prevents the lower
+   decision fields from being trapped beneath the browser viewport. */
+@media (min-width: 821px) {
+  .lead-workspace:not(:has(.active-structured-grid)) .converted-summary {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .lead-workspace:not(:has(.active-structured-grid)) .converted-grid {
+    flex: 1 1 auto;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .lead-workspace:not(:has(.active-structured-grid)) .converted-main,
+  .lead-workspace:not(:has(.active-structured-grid)) .converted-sidebar {
+    min-height: 0;
+    max-height: 100%;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+}
 .clarification-response-modal { width: min(560px, 92vw); padding: 18px 20px 16px; }
 .clarification-response-modal .section-title { margin: 0 0 10px; color: var(--ws-text); font-size: 15px; }
 .clarification-response-modal .drawer-form { padding: 0; }
@@ -3543,6 +3715,33 @@ button.install:hover { background: var(--primary-hover); }
 /* Tablet mode: bigger chrome above/below, touch-sized controls stay */
 .tablet-mode .lead-workspace { --ws-chrome: 112px; }
 .tablet-mode .lead-workspace .ws-action { min-height: 46px; }
+
+/* Converted/read-only leads use the app's main scroll region. Do not trap
+   their longer decision record inside a fixed-height inner column. */
+@media (min-width: 821px) {
+  .lead-workspace:not(:has(.active-structured-grid)) {
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-gutter: stable;
+  }
+
+  .lead-workspace:not(:has(.active-structured-grid)) > .converted-summary,
+  .lead-workspace:not(:has(.active-structured-grid)) .converted-grid,
+  .lead-workspace:not(:has(.active-structured-grid)) .converted-main,
+  .lead-workspace:not(:has(.active-structured-grid)) .converted-sidebar {
+    height: auto;
+    min-height: 0;
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+
+  .lead-workspace:not(:has(.active-structured-grid)) .converted-main,
+  .lead-workspace:not(:has(.active-structured-grid)) .converted-sidebar {
+    max-height: none;
+  }
+}
 
 @media print {
   .lead-workspace { height: auto; background: var(--palette-4843938); padding: 0; }
@@ -8673,14 +8872,19 @@ button:not(.primary):not(.danger):not(.dark):not(.ghost),
   }
 }
 
-/* Compact approval actions belong to the right rail. Keep the primary,
-   disqualify, owner and reassignment controls on one compact action line. */
+/* Compact approval actions belong to the right rail. Buttons share one row
+   when they fit (e.g. Qualify lead + Disqualify + Reassign); a row that
+   doesn't fit — a long button like "Continue to registration" alongside the
+   toolbar — wraps onto its own line instead of clipping. Follow-up notes
+   always get their own full-width line under the buttons, in normal flow
+   (they used to be position:absolute and spill past the bottom of the
+   sidebar instead of sitting under the buttons). */
 @media (min-width: 821px) {
   .structured-active-sections .compact-action-col > .ws-foot {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 6px;
-    flex-wrap: nowrap;
     padding: 10px;
   }
 
@@ -8688,50 +8892,49 @@ button:not(.primary):not(.danger):not(.dark):not(.ghost),
   .structured-active-sections .compact-action-col > .ws-foot > .toolbar,
   .structured-active-sections .compact-action-col > .ws-foot > .toolbar > select,
   .structured-active-sections .compact-action-col > .ws-foot > .toolbar > button {
-    min-width: 0;
     margin: 0;
   }
 
   .structured-active-sections .compact-action-col > .ws-foot > .ws-action {
+    flex: 1 1 auto;
     width: auto;
-    flex: 1.25 1 0;
     white-space: nowrap;
     padding-inline: 8px;
     font-size: 11px;
   }
 
   .structured-active-sections .compact-action-col > .ws-foot > .toolbar {
-    display: contents;
+    display: flex;
+    flex: 1 1 auto;
+    gap: 6px;
   }
 
   .structured-active-sections .compact-action-col > .ws-foot > .toolbar > button,
   .structured-active-sections .compact-action-col > .ws-foot > .toolbar > select {
-    flex: 1 1 0;
+    flex: 1 1 auto;
     width: auto;
     white-space: nowrap;
     padding-inline: 7px;
     font-size: 11px;
   }
 
+  /* Several notes can be true at once (blocked + optional follow-up, say) —
+     stack them in normal flow under the buttons instead of each one claiming
+     the same absolute spot and rendering on top of the others / past the
+     bottom edge of the sidebar. */
   .structured-active-sections .compact-action-col > .ws-foot > .ws-foot-note,
   .structured-active-sections .compact-action-col > .ws-foot > .ws-foot-notes {
-    position: absolute;
-    inset: auto 10px 0;
-    transform: translateY(100%);
-  }
-
-  /* Several notes can be true at once (blocked + optional follow-up, say) —
-     stack them in normal flow inside the wrapper instead of letting each one
-     claim the same absolute spot and render on top of the others. */
-  .structured-active-sections .compact-action-col > .ws-foot > .ws-foot-notes .ws-foot-note {
+    flex-basis: 100%;
     position: static;
     transform: none;
+    margin: 0;
   }
 }
 
 /* Keep the fixed navigation rail and the page column on the same width
    contract. Several older desktop rules used 216/68px while the current rail
    is 252/76px, which let the expanded rail cover the page's left edge. */
+
 @media (min-width: 1025px) {
   .shell {
     --shell-nav-w: 252px;
@@ -8895,4 +9098,14 @@ button:not(.primary):not(.danger):not(.dark):not(.ghost),
 .lead-workspace .decision-ai-inline-edit > button.icon-action:focus-visible {
   outline: 2px solid var(--ws-blue-line);
   outline-offset: 2px;
+}
+
+/* Status marks are signs beside the value, not badges or controls. */
+.lead-workspace .decision-status-icon {
+  width: 18px;
+  height: 18px;
+  flex-basis: 18px;
+  border: 0 !important;
+  border-radius: 0;
+  background: transparent !important;
 }
