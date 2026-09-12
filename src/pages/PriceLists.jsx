@@ -27,6 +27,7 @@ export default function PriceLists() {
   const [editRows, setEditRows] = useState([])
   const [editVersion, setEditVersion] = useState('')
   const [rateDraft, setRateDraft] = useState({})
+  const [partQuery, setPartQuery] = useState('')
   const rowRefs = useRef({})
   const pl = store.priceLists[list]
   const selectedVersion = pl?.versions?.find(item => item.id === versionId)
@@ -34,6 +35,9 @@ export default function PriceLists() {
   const currencies = [...new Set(['EUR', 'USD', ...Object.values(store.priceLists || {}).map(item => item.currency), ...Object.keys(store.config?.currencyRates || {})].filter(currency => currency && currency !== 'GBP'))]
   const currencyRates = normalizedCurrencyRates(store.config?.currencyRates)
   const requestedPartMatch = displayList?.parts.find(part => String(part.pn).trim().toUpperCase() === requestedPart.trim().toUpperCase())
+  const partFilter = partQuery.trim().toLowerCase()
+  const visibleParts = !partFilter ? (displayList?.parts || []) : (displayList?.parts || []).filter(part =>
+    String(part.pn).toLowerCase().includes(partFilter) || String(part.desc || '').toLowerCase().includes(partFilter))
   const requestedListAvailable = !requestedList || !!store.priceLists?.[requestedList]
 
   useEffect(() => {
@@ -157,7 +161,7 @@ export default function PriceLists() {
 
       {uploadOpen && (
         <Modal title={`Upload ${list} price list`} wide onClose={() => setUploadOpen(false)}>
-          <p className="hint">Fill the template manually, then upload it here. This creates a new saved version; older versions remain available.</p>
+          <p className="hint">Upload the filled template, or the supplier's own price file — every sheet is read and as much as possible is extracted. This creates a new saved version; older versions remain available.</p>
           <div className="admin-field-grid">
             <label className="afield">Version<input value={uploadVersion} placeholder="e.g. 2026-Q3" onChange={e => setUploadVersion(e.target.value)} /></label>
             <label className="afield">Currency<select value={uploadCurrency} onChange={e => setUploadCurrency(e.target.value)}><option>EUR</option><option>INR</option><option>USD</option></select></label>
@@ -169,10 +173,40 @@ export default function PriceLists() {
           {uploadFile && <div className="hint" style={{ marginTop: 8 }}>{uploadFile.name}</div>}
           {uploadPreview && (
             <div style={{ marginTop: 12 }}>
-              {uploadPreview.errors.length ? <div className="errbox"><b>Fix these errors before importing:</b><ul>{uploadPreview.errors.map((error, i) => <li key={i}>{error}</li>)}</ul></div> : <div className="okbox">Ready to import {uploadPreview.parts.length} part{uploadPreview.parts.length === 1 ? '' : 's'}.</div>}
+              {uploadPreview.errors.length > 0 && (
+                <div className="errbox"><b>Fix these errors before importing:</b><ul>{uploadPreview.errors.map((error, i) => <li key={i}>{error}</li>)}</ul></div>
+              )}
+              {uploadPreview.parts.length > 0 && (
+                <div className="okbox">
+                  Ready to import <b>{uploadPreview.parts.length}</b> part{uploadPreview.parts.length === 1 ? '' : 's'}
+                  {uploadPreview.report?.adders ? <> and <b>{uploadPreview.report.adders}</b> configurable adder{uploadPreview.report.adders === 1 ? '' : 's'}</> : null}
+                  {uploadPreview.currency ? <> in {uploadPreview.currency}</> : null}.
+                </div>
+              )}
+              {/* What came from where, so a partial read is visible rather than silent. */}
+              {uploadPreview.report?.sheets?.length > 1 && (
+                <div className="sheet-wrap" style={{ marginTop: 8 }}>
+                  <table className="sheet">
+                    <thead><tr><th>Sheet</th><th>Parts</th><th>Adders</th><th>Rows skipped</th></tr></thead>
+                    <tbody>
+                      {uploadPreview.report.sheets.map(sheet => (
+                        <tr key={sheet.name}>
+                          <td>{sheet.name}</td><td className="num">{sheet.parts}</td>
+                          <td className="num">{sheet.adders}</td><td className="num">{sheet.skipped}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {uploadPreview.warnings?.length > 0 && (
+                <div className="warnbox" style={{ marginTop: 8 }}>
+                  <ul>{uploadPreview.warnings.map((warning, i) => <li key={i}>{warning}</li>)}</ul>
+                </div>
+              )}
             </div>
           )}
-          <div className="form-actions" style={{ marginTop: 16 }}><button onClick={() => setUploadOpen(false)}>Cancel</button><button className="primary" disabled={!uploadPreview || uploadPreview.errors.length > 0 || !uploadFile} onClick={confirmUpload}>Import and make current</button></div>
+          <div className="form-actions" style={{ marginTop: 16 }}><button onClick={() => setUploadOpen(false)}>Cancel</button><button className="primary" disabled={!uploadPreview || uploadPreview.errors.length > 0 || !uploadPreview.parts.length || !uploadFile} onClick={confirmUpload}>Import and make current</button></div>
         </Modal>
       )}
 
@@ -200,11 +234,23 @@ export default function PriceLists() {
         </div>
       )}
 
+      {/* The imported supplier catalogues run to well over a thousand rows, so
+          the list needs a way in other than the ?part= deep link. */}
+      <div className="toolbar" style={{ marginBottom: 6 }}>
+        <input type="search" value={partQuery} onChange={e => setPartQuery(e.target.value)}
+          placeholder="Search part number or description" aria-label="Search this price list"
+          style={{ minWidth: 280 }} />
+        <span className="hint">
+          {partQuery.trim()
+            ? `Showing ${visibleParts.length} of ${displayList.parts.length} parts`
+            : `${displayList.parts.length} parts`}
+        </span>
+      </div>
       <div className="sheet-wrap sheet-wrap-fill">
         <table className="sheet">
           <thead><tr><th>Part Number</th><th>Description</th><th>Price ({displayList.currency})</th><th>Configurable Adders</th></tr></thead>
           <tbody>
-            {displayList.parts.map(x => (
+            {visibleParts.map(x => (
               <tr key={x.pn} ref={row => { rowRefs.current[x.pn] = row }} className={highlightedPart === x.pn ? 'price-list-highlight' : undefined}>
                 <td>{x.pn}</td><td>{x.desc}</td>
                 <td className="num">{fmt(x.price)}</td>

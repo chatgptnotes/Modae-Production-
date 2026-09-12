@@ -46,6 +46,78 @@ test('invalid rows are reported without producing valid adders', () => {
   assert.equal(result.parts[0].adders.length, 0)
 })
 
+// A manufacturer's own price file looks nothing like the template, and an
+// upload has to read as much of it as it can rather than refusing it.
+const supplierBuffer = sheets => {
+  const workbook = XLSX.utils.book_new()
+  for (const [name, rows] of Object.entries(sheets)) {
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(rows), name)
+  }
+  return XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
+}
+
+test('a supplier workbook is read even though it is not the template', () => {
+  const result = parsePriceListFile(supplierBuffer({
+    // Empty column A, header on row 1, German and English descriptions, and a
+    // price column named after the list edition rather than "Price".
+    Active: [
+      ['', 'Code', 'Produktbezeichnung', 'Product', 'ISP110 2026 EUR'],
+      ['', '', 'Cables', 'Cables', ''],
+      ['', 'AC-1112', 'Signalleitung', 'Signal cable 4 x 0.5 mm²', 120],
+      ['', 'AC-113', 'Signalleitung PVC', 'Signal cable PVC jacket', 95],
+    ],
+    // A second tab, and a price written once for a block of order codes.
+    Sensors: [
+      ['', 'Code', 'Mat-No.', 'Product', 'ISP110'],
+      ['', '', '', '', 'EUR'],
+      ['', '', '', 'Price Category A', ''],
+      ['', 'IN-081/1', 'C104558.001', 'Sensor, full length thread', 300],
+      ['', 'IN-081/3', 'C104558.001', 'Sensor, reverse mount', ''],
+    ],
+  }), 'EUR')
+
+  assert.deepEqual(result.errors, [])
+  assert.equal(result.currency, 'EUR')
+  const byPn = Object.fromEntries(result.parts.map(part => [part.pn, part]))
+  assert.equal(byPn['AC-1112'].desc, 'Signal cable 4 x 0.5 mm²', 'prefers the English column')
+  assert.equal(byPn['AC-1112'].price, 120)
+  assert.equal(byPn['IN-081/3'].price, 300, 'a merged block price carries down')
+  assert.ok(!result.parts.some(part => part.desc === 'Cables'), 'section headings are not products')
+  assert.equal(result.report.sheets.length, 2)
+  assert.ok(result.parts.every(part => part.pn.trim() === part.pn && Number.isFinite(part.price)))
+})
+
+test('a configurator sheet becomes one part per model with its options as adders', () => {
+  const result = parsePriceListFile(supplierBuffer({
+    Sheet1: [
+      ['', 'Prefix', '', '', 'Description'],
+      ['', '', 'MODEL OPTIONS', '', ''],
+      ['PROD CATEGORY', 'PREFIX', 'MODEL', 'A', 'B', 'DESCRIPTION', 'List'],
+      ['Switch', 'SW', '440', '', '', '440A-B Electronic Switch', 500],
+      ['Switch', 'SW', '440', 'DR', '', 'A: Dual Trip Output', 40],
+      ['Switch', 'SW', '440', '', '-2', 'B: 4-20 mA output', 25],
+      ['Seismic', 'ST', '162VTS', '', '', 'Vibration transmitter', 700],
+    ],
+  }), 'USD')
+
+  assert.deepEqual(result.errors, [])
+  const switchPart = result.parts.find(part => part.pn === 'SW440')
+  assert.ok(switchPart, 'part number joins the prefix and model columns')
+  assert.equal(switchPart.price, 500)
+  assert.deepEqual(switchPart.adders.map(adder => adder.code), ['DR', '-2'])
+  assert.equal(switchPart.adders[0].price, 40)
+  assert.ok(result.parts.some(part => part.pn === 'ST162VTS'))
+  assert.equal(result.parts.length, 2, 'option rows do not become separate parts')
+})
+
+test('an unreadable workbook reports an error instead of importing blank rows', () => {
+  const result = parsePriceListFile(supplierBuffer({
+    Notes: [['Supplier price file'], ['Contact sales for pricing']],
+  }), 'EUR')
+  assert.equal(result.parts.length, 0)
+  assert.ok(result.errors.length, 'nothing usable is an error, so the import stays blocked')
+})
+
 test('existing catalogues migrate to a preserved initial version', () => {
   const state = migrate(JSON.parse(JSON.stringify(seedState())))
   const list = state.priceLists.BNK

@@ -154,6 +154,9 @@ export default function WbSpares({ opp, openBuilder }) {
   const familyOf = pn => String(pn || '').split(/[./]/)[0]
   const allPriceListParts = () => Object.entries(store.priceLists || {})
     .flatMap(([name, pl]) => (pl.parts || []).map(part => ({ ...part, list: name, version: pl.version, currency: pl.currency })))
+  // Lists are quoted in their own currency (BNK in EUR, Metrics in USD), so the
+  // suggestion has to name it rather than assume rupees.
+  const listPriceLabel = part => `${part.list} ${part.version} price list · ${part.currency || ''} ${fmt(part.price)}`.replace(/\s+/g, ' ')
   const searchPriceListParts = (line, query) => {
     const q = String(query || '').trim().toLowerCase()
     if (!q) return []
@@ -162,7 +165,7 @@ export default function WbSpares({ opp, openBuilder }) {
       .slice(0, 20)
       .map(part => ({
         forPn: line.pn, pn: part.pn, desc: part.desc, conf: null,
-        note: `${part.list} ${part.version} price list · ₹${fmt(part.price)}`,
+        note: listPriceLabel(part),
         priceState: 'Current',
       }))
   }
@@ -172,14 +175,14 @@ export default function WbSpares({ opp, openBuilder }) {
     const family = familyOf(line.pn)
     const toAlt = (part, conf, note) => ({
       forPn: line.pn, pn: part.pn, desc: part.desc, conf,
-      note: note || `${part.list} ${part.version} price list · ₹${fmt(part.price)}`,
+      note: note || listPriceLabel(part),
       priceState: 'Current',
     })
     const results = []
     // Exact part-number match — same part sitting in the current price list,
     // offered so a manually-priced line can be refreshed to the list price.
     const exact = allParts.find(part => part.pn === line.pn)
-    if (exact) results.push(toAlt(exact, 100, `Same part in ${exact.list} ${exact.version} — refresh to list price ₹${fmt(exact.price)}`))
+    if (exact) results.push(toAlt(exact, 100, `Same part in ${exact.list} ${exact.version} — refresh to list price ${exact.currency || ''} ${fmt(exact.price)}`.replace(/\s+/g, ' ')))
     // Description overlap — catches genuine substitutes with different part numbers.
     allParts.filter(part => part.pn !== line.pn).forEach(part => {
       const partWords = wordsOf(part.desc)

@@ -828,9 +828,17 @@ export default function Admin() {
                 try {
                   const listName = supplier.trim() || f.name.replace(/\.[^.]+$/, '')
                   const catalog = await parsePriceListFile(await f.arrayBuffer(), 'INR')
+                  // Never import an empty or unreadable file as a live price list.
+                  if (!catalog.parts.length) {
+                    setTemplateError(catalog.errors[0] || 'No parts could be read from that file.')
+                    return
+                  }
                   store.replacePriceList(listName, catalog, {
                     filename: f.name, version: plVersion.trim() || '—', currency: catalog.currency || 'INR',
                   })
+                  setTemplateError(catalog.warnings?.length
+                    ? `Imported ${catalog.parts.length} parts into ${listName}. ${catalog.warnings.join(' ')}`
+                    : '')
                   setSupplier(''); setPlVersion('')
                 } catch (error) {
                   setTemplateError(`Price list could not be imported: ${error?.message || error}`)

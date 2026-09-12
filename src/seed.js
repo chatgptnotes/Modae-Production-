@@ -4,6 +4,8 @@
 import { STATES, STATE_REGION } from './indiaLocations.js'
 import { DEFAULT_CUSTOMER_CLASSES, DEFAULT_DOC_CHECKLISTS } from './customerClasses.js'
 import { DEFAULT_CURRENCY_RATES } from './currency.js'
+import { BNK_IMPORTED_PARTS } from './priceListData/bnk.js'
+import { METRIX_IMPORTED_PARTS } from './priceListData/metrix.js'
 
 // Fx-1..Fx-5 are the client's own reserved slots — they appear on Category,
 // Segment, Product and Solution in the Field List sheet, so a pipeline export
@@ -726,10 +728,24 @@ export const seedFiles = {
 export const seedCatalogRev = 2
 
 // B&K (BNK) price list — base parts plus configurable adders (EUR).
+// Catalogue rows converted from the supplier workbooks by
+// scripts/convert-price-lists.mjs. They are appended to the hand-written rows
+// below, never replacing them: the curated part numbers are referenced by the
+// interchangeability matrix and the simulated leads.
+const withImported = (curated, imported) => {
+  const seen = new Set(curated.map(part => String(part.pn).trim().toUpperCase()))
+  return [...curated, ...imported.filter(part => {
+    const key = String(part.pn).trim().toUpperCase()
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })]
+}
+
 export const seedPriceLists = {
   BNK: {
     currency: 'EUR', version: '2026-01', uploaded: '2026-01-05',
-    parts: [
+    parts: withImported([
       { pn: 'RK16-BASE', desc: '16-slot base rack chassis', price: 2000, adders: [
         { code: 'CE', desc: 'CE mark', price: 110 },
         { code: 'FMK', desc: 'Flush mount kit', price: 65 },
@@ -814,14 +830,14 @@ export const seedPriceLists = {
       { pn: 'AC-3101/1', price: 245, adders: [],
         desc: 'Sensor Holder, With Adjustment Spindle Uncut, Without Sensor Thread, FKM O-ring',
         keywords: ['sensor holder', 'adjustment spindle', 'spindle uncut', 'without sensor thread'] },
-    ],
+    ], BNK_IMPORTED_PARTS),
   },
   // Metrix Instrument Co. machinery-protection range (USD list, ex-Houston).
   // ⚠ PLACEHOLDER PRICES — demo data only; confirm against the current
   // Metrix distributor price file before quoting.
   Metrics: {
     currency: 'USD', version: '2026-03', uploaded: '2026-03-12',
-    parts: [
+    parts: withImported([
       { pn: 'MX-2110', price: 640, adders: [
         { code: 'API', desc: 'API 670 certification pack', price: 95 },
       ],
@@ -853,7 +869,7 @@ export const seedPriceLists = {
         keywords: ['junction box'] },
       { pn: 'MX-CAL-CERT', price: 120, adders: [], desc: 'NIST-traceable calibration certificate (per channel)',
         keywords: ['calibration', 'certificate', 'nist'] },
-    ],
+    ], METRIX_IMPORTED_PARTS),
   },
   // Meggitt Sensing Systems (Vibro-Meter + Wilcoxon) — the retrofit spares most
   // state-utility tenders ask for against an installed Meggitt system.
