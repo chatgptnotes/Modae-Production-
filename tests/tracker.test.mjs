@@ -57,14 +57,11 @@ test('Value and COGS are editable for every tracker user while GM stays derived'
   assert.doesNotMatch(tracker, /name="lock"/)
 })
 
-test('Latest created selects all owners, clears filters, and sorts by createDate descending', () => {
-  assert.match(tracker, /const showLatestCreated = \(\) => \{/)
-  assert.match(tracker, /setOwnerFilter\('All'\)/)
-  assert.match(tracker, /setSort\(\{ key: 'createDate', dir: -1 \}\)/)
-  assert.match(tracker, /setFilters\(\{\}\)/)
-  assert.match(tracker, /setFrozenIds\(null\)/)
-  assert.match(tracker, /setOpenFilter\(null\)/)
-  assert.match(tracker, />Latest created<\/button>/)
+test('tracker offers all, mine, and specific-owner filtering', () => {
+  assert.match(tracker, /const owners = \[\.\.\.\(isSalesRep \? \['Mine'\] : \[\]\), 'All'/)
+  assert.match(tracker, /ownerFilter === 'Mine' \? o\.owner === store\.role/)
+  assert.match(tracker, /My Opportunities/)
+  assert.match(tracker, /All Opportunities/)
   assert.match(tracker, /sortVal = \(o, key\) => \(DATE_KEYS\.includes\(key\) \? \(o\[key\] \|\| ''\)/)
 })
 

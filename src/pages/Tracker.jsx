@@ -9,7 +9,7 @@ import { useDrawer } from '../drawer.jsx'
 import { nextActionWith } from '../gates.js'
 import { suggestProbability } from '../insights.js'
 import { Modal } from '../ui.jsx'
-import { Icon } from '../icons.jsx'
+import { Icon, ModaeImageLogo } from '../icons.jsx'
 
 const OPEN_STAGES = STAGES.filter(s => s !== 'Won' && s !== 'Lost')
 
@@ -164,7 +164,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
 
   const isSalesRep = OWNERS.includes(store.role)
   const isManager = ROLES[store.role]?.admin || ROLES[store.role]?.commercial
-  const [ownerFilter, setOwnerFilter] = useState(() => initialOwnerFilter || (isSalesRep && !isManager ? store.role : 'All'))
+  const [ownerFilter, setOwnerFilter] = useState(() => initialOwnerFilter || (isSalesRep && !isManager ? 'Mine' : 'All'))
 
   const [filters, setFilters] = useState({})           // col key -> Set of allowed display values
   const [frozenIds, setFrozenIds] = useState(null)     // row ids captured when a filter was applied
@@ -210,9 +210,9 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   }
 
   const all = [...store.opportunities].sort((a, b) => a.sl - b.sl)
-  const owners = ['All', ...new Set(all.map(o => o.owner))]
+  const owners = [...(isSalesRep ? ['Mine'] : []), 'All', ...new Set(all.map(o => o.owner))]
   const base = all.filter(o =>
-    (ownerFilter === 'All' || o.owner === ownerFilter) &&
+    (ownerFilter === 'Mine' ? o.owner === store.role : ownerFilter === 'All' || o.owner === ownerFilter) &&
     (sheet !== 'Old Closed Opps' || o.status === 'Closed'))
 
   const normalizedSearch = searchTerm.trim().toLowerCase()
@@ -359,14 +359,6 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     })])
   )
 
-  const showLatestCreated = () => {
-    setOwnerFilter('All')
-    setSort({ key: 'createDate', dir: -1 })
-    setFilters({})
-    setFrozenIds(null)
-    setOpenFilter(null)
-  }
-
   // Plain render function (not a component type) so the open dropdown's DOM is
   // diffed in place — checkbox focus and scroll position survive toggles.
   // Checkbox picker for the multi-value Product cell. Reuses the filter
@@ -437,24 +429,27 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     <div className="page tracker-page">
       <h2>Opportunities {sheet === 'Old Closed Opps' && '— Old Closed Opps'}</h2>
       <div className="toolbar">
-        {isSalesRep && ownerFilter === store.role ? (
-          <button type="button" onClick={() => setOwnerFilter('All')}>Show All Opportunities</button>
-        ) : (
-          <>
-            <label className="owner-view-label" htmlFor="opportunities-owner-filter">View opportunities for:</label>
-            <select id="opportunities-owner-filter" value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)}>
-              {owners.map(p => <option key={p} value={p}>{p === 'All' ? 'All Opportunities' : displayRole(p)}</option>)}
-            </select>
-            {isSalesRep && <button type="button" onClick={() => setOwnerFilter(store.role)}>My Opportunities</button>}
-          </>
-        )}
+        <select id="opportunities-owner-filter" aria-label="Opportunity owner" value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)}>
+          {owners.map(p => <option key={p} value={p}>
+            {p === 'All' ? 'All Opportunities' : p === 'Mine' ? 'My Opportunities' : displayRole(p)}
+          </option>)}
+        </select>
         <label className="tracker-search" aria-label="Search opportunities">
           <Icon name="search" size={14} />
           <input type="search" placeholder="Search opportunity ID, customer or name" value={searchTerm}
             onChange={e => { setSearchTerm(e.target.value); setFrozenIds(null) }} />
         </label>
-        <button type="button" onClick={showLatestCreated}>Latest created</button>
-        <span className="hint">Rows are never deleted — close them via Stage (Won/Lost) with a mandatory Closed Reason. Click ▼ on a header to sort/filter; click a cell to see its formula.</span>
+        {isSalesRep && (
+          <label className="mail-show-all tracker-show-all" title="Show all opportunities">
+            <input
+              type="checkbox"
+              aria-label="Show all opportunities"
+              checked={ownerFilter === 'All'}
+              onChange={e => setOwnerFilter(e.target.checked ? 'All' : 'Mine')}
+            />
+            Show all
+          </label>
+        )}
         <span className="spacer" />
         {colView === 'key' && (
           <span className="pill Blue" title="Total value of the rows shown">₹ {fmt(totals.v)}K</span>
@@ -466,9 +461,20 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
           {colView === 'key' ? `All ${COLS.length} columns` : 'Key columns'}
         </button>
         <button onClick={exportRows} title="Export all columns for the rows shown">Extract to Excel</button>
-        {onCreateOpportunity
-          ? <button className="primary" onClick={onCreateOpportunity}>Create Opportunity</button>
-          : <Link className="btn primary" to="/new">Create Opportunity</Link>}
+        {onCreateOpportunity ? (
+          <button
+            className="tracker-create-logo"
+            onClick={onCreateOpportunity}
+            aria-label="Create opportunity"
+            title="Create opportunity"
+          >
+            <ModaeImageLogo height={30} />
+          </button>
+        ) : (
+          <Link className="tracker-create-logo" to="/new" aria-label="Create opportunity" title="Create opportunity">
+            <ModaeImageLogo height={30} />
+          </Link>
+        )}
       </div>
 
       <div ref={sheetWrapRef} className="sheet-wrap fill" onScroll={handleSheetScroll}>
