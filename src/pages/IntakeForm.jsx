@@ -42,24 +42,53 @@ function Select({ field, options, placeholder }) {
   )
 }
 
+function ProductDropdown({ options }) {
+  const { selectedProducts, setF, aiMissing } = React.useContext(FormCtx)
+  const selectedLabel = selectedProducts.length === 0
+    ? 'Select products'
+    : selectedProducts.length === 1
+      ? selectedProducts[0]
+      : `${selectedProducts.length} products selected`
+  return (
+    <details className={`product-dropdown${aiMissing?.has('product') ? ' not-extracted' : ''}`}>
+      <summary aria-label="Select products">{selectedLabel}</summary>
+      <div className="product-dropdown-menu" role="group" aria-label="Products">
+        {options.map(option => {
+          const checked = selectedProducts.includes(option)
+          return (
+            <label key={option} className={checked ? 'selected' : ''}>
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={e => setF(prev => ({
+                  ...prev,
+                  product: e.target.checked
+                    ? [...selectedProducts, option]
+                    : selectedProducts.filter(product => product !== option),
+                }))}
+              />
+              <span>{option}</span>
+            </label>
+          )
+        })}
+      </div>
+    </details>
+  )
+}
+
 // Pill/bubble selection for Classification fields. Product is multi-select
 // (several products can sit on one opportunity); business unit and segment stay
 // single-select, per the 13 Aug review.
 function Pills({ field, options }) {
-  const { f, set, selectedProducts, setF, aiMissing } = React.useContext(FormCtx)
-  const isProduct = field === 'product'
+  const { f, set, aiMissing } = React.useContext(FormCtx)
+  if (field === 'product') return <ProductDropdown options={options} />
   return (
-    <div className={'pill-group' + (isProduct ? ' product-options' : '') + (aiMissing?.has(field) ? ' not-extracted' : '')}>
+    <div className={'pill-group' + (aiMissing?.has(field) ? ' not-extracted' : '')}>
       {options.map(o => {
-        const on = isProduct ? selectedProducts.includes(o) : f[field] === o
+        const on = f[field] === o
         return (
           <label key={o} className={`pill-opt ${on ? 'on' : ''}`}>
-            <input type={isProduct ? 'checkbox' : 'radio'} name={field} value={o} checked={on}
-              onChange={isProduct
-                ? e => setF(prev => ({ ...prev, product: e.target.checked
-                    ? [...selectedProducts, o]
-                    : selectedProducts.filter(x => x !== o) }))
-                : set(field)} />
+            <input type="radio" name={field} value={o} checked={on} onChange={set(field)} />
             {o}
           </label>
         )
@@ -603,7 +632,6 @@ export default function IntakeForm({ destinationPicker = null }) {
                 {aiFilledFields.has('product') && <span className="ai-badge">AI</span>}
               </div>
               <Pills field="product" options={PRODUCTS} />
-              <div className="hint" style={{ marginTop: 4 }}>Select all products included in this inquiry.</div>
             </div>
 
             {/* Progress indicator */}

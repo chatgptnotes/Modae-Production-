@@ -111,9 +111,17 @@ function OpportunityProgress({ activeStep, completedThrough, onStep, onNext, ste
           <strong>Opportunity progress</strong>
         </div>
         <div className="progress-controls" aria-label="Navigate workflow views">
-          <button type="button" disabled={activeIndex <= 0} onClick={() => onStep(steps[activeIndex - 1].slug)}>Previous</button>
+          <button type="button" className="progress-arrow" disabled={activeIndex <= 0}
+            aria-label="Previous workflow step" title="Previous workflow step"
+            onClick={() => onStep(steps[activeIndex - 1].slug)}>
+            <Icon name="chevronLeft" size={17} />
+          </button>
           <span>{steps[activeIndex]?.label}</span>
-          <button type="button" disabled={activeIndex < 0 || activeIndex >= steps.length - 1} onClick={() => onNext(steps[activeIndex + 1].slug)}>Next</button>
+          <button type="button" className="progress-arrow" disabled={activeIndex < 0 || activeIndex >= steps.length - 1}
+            aria-label="Next workflow step" title="Next workflow step"
+            onClick={() => onNext(steps[activeIndex + 1].slug)}>
+            <Icon name="chevronRight" size={17} />
+          </button>
         </div>
       </div>
       <div className="progress-steps">
@@ -183,7 +191,10 @@ export default function Workbench() {
       setTransition({ kind: 'backward', target: milestone, reason: '' })
       return false
     }
-    const blockersForMove = transitionBlockers(opp, milestone, proposal, store)
+    // Read the latest proposal from the store. Sourcing synchronizes its BoM
+    // immediately before asking to advance, so this must not use the render's
+    // older proposal snapshot when evaluating the transition gate.
+    const blockersForMove = transitionBlockers(opp, milestone, store.getProposal(opp.id), store)
     if (blockersForMove.length) {
       setTransition({ kind: 'blocked', target: milestone, blockers: blockersForMove })
       return false
@@ -379,7 +390,10 @@ export default function Workbench() {
         {viewTab === 'requirement' && <RequirementTab opp={opp} />}
         {viewTab === 'customer' && <CustomerKycTab opp={opp} />}
         {viewTab === 'clarifications' && <ClarificationsTab opp={opp} />}
-        {viewTab === 'sourcing' && <SourcingTab opp={opp} goTab={goTab} />}
+        {viewTab === 'sourcing' && <SourcingTab opp={opp} goTab={goTab} onContinueToProposal={() => {
+          const proposalStep = workflowSteps.find(step => step.milestone === 'Proposal')
+          if (proposalStep) advanceStep(proposalStep.slug)
+        }} />}
         {viewTab === 'proposal' && <ProposalTab opp={opp} goTab={goTab} />}
         {viewTab === 'approval' && <ApprovalsTab opp={opp} />}
         {viewTab === 'followup' && <FollowUpTab opp={opp} goTab={goTab} />}
@@ -1195,7 +1209,7 @@ function ClarificationsTab({ opp }) {
 }
 
 // ---------------------------------------------------------------------------
-function SourcingTab({ opp, goTab }) {
+function SourcingTab({ opp, goTab, onContinueToProposal }) {
   const store = useStore()
   const proposal = store.getProposal(opp.id)
   const sourcingLines = store.sparesLines.filter(l => l.oppId === opp.id && !isPlaceholderSparesLine(l))
@@ -1408,7 +1422,7 @@ function SourcingTab({ opp, goTab }) {
     <div className="ana-grid">
       {opp.route === 'Spares' && (
         <div className="ana-card c-12 sourcing-spares-workbench">
-          <WbSpares opp={opp} openBuilder={() => goTab('proposal')} />
+          <WbSpares opp={opp} openBuilder={() => goTab('proposal')} onContinue={onContinueToProposal} />
         </div>
       )}
       {superseded && (

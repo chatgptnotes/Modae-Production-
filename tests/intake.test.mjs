@@ -47,9 +47,12 @@ test('every AI-filled field is added to the badge set individually', () => {
 })
 
 // Products are multi-select; business unit and segment stay single-select.
-test('product pills are checkboxes while other classification pills are radios', () => {
-  assert.match(source, /const isProduct = field === 'product'/)
-  assert.match(source, /type=\{isProduct \? 'checkbox' : 'radio'\}/)
+test('products use a compact checkbox dropdown while other classification pills are radios', () => {
+  assert.match(source, /function ProductDropdown\(/)
+  assert.match(source, /className={`product-dropdown/)
+  assert.match(source, /type="checkbox"/)
+  assert.match(source, /if \(field === 'product'\) return <ProductDropdown options=\{options\} \/>/)
+  assert.match(source, /type="radio" name=\{field\}/)
 })
 
 // The intake form stored `selectedProducts.join(', ')`, so the tracker's and
