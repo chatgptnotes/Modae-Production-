@@ -2506,7 +2506,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
             </button>
           )}
           {canAct && !dropping && (
-            <div className="toolbar" style={{ margin: '8px 0 0' }}>
+            <div className="toolbar">
               <button className="lead-footer-button" onClick={() => setDropping(true)}><Icon name="x" size={13} /> Disqualify</button>
               <button className="secondary-action lead-footer-button" onClick={() => setReassignOpen(true)}><Icon name="users" size={13} /> Reassign</button>
             </div>

@@ -2149,22 +2149,19 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 /* Gmail-inspired mailbox list — the lead remains a workflow record, but the
    inbox itself reads like mail: search first, tabs second, messages in rows. */
 .mailbox-page { padding-top: 18px; }
-.mailbox-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+/* padding-right clears the notification bell, which is position:fixed at
+   right:24px and 42px wide, so it reserves no space of its own and would
+   otherwise sit on top of the last action button. */
+.mailbox-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; padding-right: 52px; }
 .mailbox-head h2 { display: flex; align-items: center; gap: 7px; margin-bottom: 3px; }
 .mailbox-head p { margin: 0; }
-.mailbox-head-actions { display: flex; gap: 8px; align-items: center; }
+.mailbox-head-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; align-items: center; }
 .mail-search-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
 .mail-search { display: flex; align-items: center; gap: 7px; width: min(520px, 100%); padding: 6px 10px; background: var(--palette-4843938); border: 1px solid var(--border-color); border-radius: 5px; color: var(--text-muted); }
 .mail-search:focus-within { border-color: var(--primary-accent); box-shadow: 0 0 0 2px var(--primary-soft); }
 .mail-search input { flex: 1; min-width: 0; padding: 0; border: 0; outline: 0; font-size: 13px; background: transparent; }
 .mail-search-row select { padding: 7px 9px; border-radius: 5px; }
 .mail-show-all { display: inline-flex; align-items: center; gap: 5px; color: var(--text-muted); white-space: nowrap; }
-.mail-tabs { display: flex; align-items: stretch; gap: 0; border-bottom: 1px solid var(--border-color); background: var(--palette-4843938); }
-.mail-tabs button { display: inline-flex; align-items: center; gap: 7px; min-width: 120px; padding: 11px 16px; border: 0; border-bottom: 3px solid transparent; border-radius: 0; color: var(--text-muted); background: transparent; font-weight: 600; }
-.mail-tabs button:hover { color: var(--primary-deep); background: var(--primary-soft); filter: none; }
-.mail-tabs button.active { color: var(--primary-deep); border-bottom-color: var(--primary-accent); background: var(--palette-4843938); }
-.mail-tabs button b { min-width: 18px; padding: 1px 5px; border-radius: 10px; background: var(--border-soft); color: var(--text-muted); font-size: 10px; }
-.mail-tabs button.active b { background: var(--primary-soft); color: var(--primary-deep); }
 .mailbox-list { container-type: inline-size; overflow-x: auto; background: var(--palette-4843938); border: 1px solid var(--border-color); border-top: 0; box-shadow: 0 2px 8px var(--palette-9c5f15c9); }
 .mail-list-toolbar { display: flex; align-items: center; gap: 5px; min-height: 44px; padding: 5px 10px; border-bottom: 1px solid var(--border-soft); color: var(--text-muted); }
 .mail-check { display: inline-flex; align-items: center; justify-content: center; width: 30px; flex: 0 0 30px; cursor: pointer; }
@@ -2422,7 +2419,6 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
   .mailbox-head-actions { margin-top: 10px; }
   .mail-search-row { flex-wrap: wrap; }
   .mail-search { width: 100%; }
-  .mail-tabs button { min-width: 0; flex: 1; justify-content: center; padding-left: 8px; padding-right: 8px; }
 }
 
 /* Print: only the customer-facing proposal document leaves the building */
@@ -3229,6 +3225,10 @@ button.install:hover { background: var(--primary-hover); }
 .ws-body::-webkit-scrollbar-thumb { background: var(--ws-border-strong); border-radius: 999px; border: 3px solid var(--ws-surface); }
 .ws-body::-webkit-scrollbar-thumb:hover { background: var(--palette-fb89ec09); }
 .ws-foot { flex-shrink: 0; padding: 12px 16px; border-top: 1px solid var(--ws-border); background: var(--ws-surface-2); }
+/* Stacked footer: the action row needs its own top offset. Where the footer
+   becomes a flex row (>=821px) that offset is removed and `gap` spaces it
+   instead — otherwise the row hangs below the primary button's centre line. */
+.ws-foot > .toolbar { margin: 8px 0 0; }
 .ws-foot-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 11.5px; color: var(--ws-text-3); }
 .ws-foot-meta span { display: inline-flex; align-items: center; gap: 5px; }
 .ws-foot-note { margin: 7px 0 0; font-size: 11.5px; color: var(--ws-amber); text-align: center; }
@@ -3638,7 +3638,10 @@ button.install:hover { background: var(--primary-hover); }
 .converted-source-meta { display: flex; flex-direction: column; gap: 2px; color: var(--ws-text); font-size: 12px; }
 .converted-source-meta span { color: var(--ws-text-3); font-size: 11px; }
 .converted-source-subject { margin-top: 10px; color: var(--ws-text); font-size: 12.5px; font-weight: 700; line-height: 1.4; }
-.converted-source-copy { max-height: 220px; overflow-y: auto; margin-top: 9px; color: var(--ws-text-2); font-size: 12px; line-height: 1.6; white-space: pre-wrap; }
+/* 220px / 20px line box = exactly 11 lines. Keep these two in step: a cap that
+   is not a whole multiple of the line box slices the last line through the
+   middle of the glyphs. */
+.converted-source-copy { max-height: 220px; overflow-y: auto; margin-top: 9px; color: var(--ws-text-2); font-size: 12px; line-height: 20px; white-space: pre-wrap; }
 .converted-source-attachments { display: grid; gap: 6px; margin-top: 12px; }
 .converted-source .attach-row { min-width: 0; margin: 0; }
 .converted-source .attach-row-open {
@@ -5026,7 +5029,7 @@ table.sheet td .wrapcell:focus { outline: 2px solid var(--xl-green); background:
 }
 .mailbox-page > .mailbox-head,
 .mailbox-page > .mail-search-row,
-.mailbox-page > .mail-tabs,
+.mailbox-page > .detail-tabs,
 .mailbox-page > .hint { flex: 0 0 auto; }
 .mailbox-list {
   flex: 1 1 auto; min-height: 0;
@@ -8720,13 +8723,6 @@ button:not(.primary):not(.danger):not(.dark):not(.ghost),
     flex: 0 0 auto;
   }
 
-  .lead-workspace:has(.active-structured-grid) .converted-heading {
-    position: sticky;
-    top: 0;
-    z-index: 3;
-    background: var(--palette-7e6529f6);
-  }
-
   .lead-workspace:has(.active-structured-grid) .converted-details {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -8892,9 +8888,12 @@ button:not(.primary):not(.danger):not(.dark):not(.ghost),
   display: none;
 }
 
+/* The sibling .ws-body scrolls behind a 10px scrollbar, so its content edge sits
+   10px further in than a plain 10px padding would put it. Match that here or the
+   cards above and the buttons below stop sharing a right edge. */
 .structured-active-sections .compact-workflow-content .compact-action-col > .ws-foot {
   position: static;
-  padding: 10px;
+  padding: 10px 20px 10px 10px;
   border-top: 1px solid var(--ws-border);
 }
 
@@ -9094,7 +9093,7 @@ button:not(.primary):not(.danger):not(.dark):not(.ghost),
     align-items: center;
     flex-wrap: wrap;
     gap: 6px;
-    padding: 10px;
+    padding: 10px 20px 10px 10px;
   }
 
   .structured-active-sections .compact-action-col > .ws-foot > .ws-action,
