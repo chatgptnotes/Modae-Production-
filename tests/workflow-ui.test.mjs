@@ -96,6 +96,26 @@ test('spares confirmation workbench is reachable before Sourcing advances', () =
   assert.match(styles, /\.sourcing-spares-workbench \.sheet th:last-child/, 'the recovery Actions column must stay visible on wide sheets')
 })
 
+test('sourcing row actions stay compact and accessible', () => {
+  const spares = read('src/workbench/WbSpares.jsx')
+  const styles = read('src/styles.css')
+  assert.match(spares, /className="sourcing-row-actions"/, 'row actions should use the shared compact action group')
+  assert.match(spares, /className="sourcing-remove-row sourcing-row-action"/, 'remove should remain an icon action')
+  assert.match(spares, /title="Confirm sourcing line" aria-label=/, 'confirm should retain an accessible name')
+  assert.match(spares, />OK<\/button>/, 'confirm should use the compact OK control')
+  assert.match(spares, /title="Sourcing line confirmed">OK<\/Chip>/, 'confirmed rows should use a compact OK badge')
+  assert.match(spares, /title="Compare sourcing alternatives" aria-label=/, 'compare should retain an accessible name')
+  assert.match(spares, /className="sourcing-row-action sourcing-row-action--compare"/, 'compare should use the compact action styling')
+  assert.match(spares, /<Icon name="gitCompare" size=\{14\} \/>/, 'compare should use the compare icon')
+  assert.doesNotMatch(spares, /sourcing-row-action--compare[^}]+> Compare<\/button>/, 'compare should not render a visible text label')
+  assert.doesNotMatch(spares, /sourcing-row-actions" style=\{\{ display: 'flex', flexDirection: 'column'/,
+    'row actions must not force a tall vertical stack')
+  assert.match(styles, /\.sourcing-row-actions \{ display: flex; align-items: center;[^}]*flex-wrap: wrap;/,
+    'row actions should wrap only when the available table width requires it')
+  assert.match(styles, /\.sourcing-row-actions \.sourcing-row-action \{ min-height: 28px;/,
+    'row actions should use compact control sizing')
+})
+
 test('sourcing prices are editable and sourcing edits are audited', () => {
   const spares = read('src/workbench/WbSpares.jsx')
   const store = read('src/store.jsx')

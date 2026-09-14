@@ -2492,10 +2492,23 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
               {qualifyBlocked && <p className="ws-foot-note">Blocked — Red continuation approval required first.</p>}
             </>
           )}
+          {lead.status === 'Qualified' && (
+            <button className="primary ws-action registration-action lead-footer-button" disabled={registrationBlocked}
+              title={registrationBlocked
+                ? verificationBlocked
+                  ? `Complete ${previewCustomerStatus} customer verification first`
+                  : missingIdentity.length > 0
+                  ? 'Complete the mandatory customer, EUC and contact fields first'
+                  : 'Resolve the low-confidence fields first'
+                : undefined}
+              onClick={() => nav('/register/' + lead.id)}>
+              Continue to registration <Icon name="arrowRight" size={14} />
+            </button>
+          )}
           {canAct && !dropping && (
             <div className="toolbar" style={{ margin: '8px 0 0' }}>
-              <button onClick={() => setDropping(true)}><Icon name="x" size={13} /> Disqualify</button>
-              <button className="secondary-action" onClick={() => setReassignOpen(true)}><Icon name="users" size={13} /> Reassign</button>
+              <button className="lead-footer-button" onClick={() => setDropping(true)}><Icon name="x" size={13} /> Disqualify</button>
+              <button className="secondary-action lead-footer-button" onClick={() => setReassignOpen(true)}><Icon name="users" size={13} /> Reassign</button>
             </div>
           )}
           {canAct && dropping && (
@@ -2519,17 +2532,6 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
           )}
           {lead.status === 'Qualified' && (
             <>
-              <button className="primary ws-action" disabled={registrationBlocked}
-                title={registrationBlocked
-                  ? verificationBlocked
-                    ? `Complete ${previewCustomerStatus} customer verification first`
-                    : missingIdentity.length > 0
-                    ? 'Complete the mandatory customer, EUC and contact fields first'
-                    : 'Resolve the low-confidence fields first'
-                  : undefined}
-                onClick={() => nav('/register/' + lead.id)}>
-                Continue to registration <Icon name="arrowRight" size={14} />
-              </button>
               <div className="ws-foot-notes">
                 {registrationPendingLow.length > 0 && (
                   <p className="ws-foot-note">

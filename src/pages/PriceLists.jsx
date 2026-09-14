@@ -36,8 +36,9 @@ export default function PriceLists() {
   const currencyRates = normalizedCurrencyRates(store.config?.currencyRates)
   const requestedPartMatch = displayList?.parts.find(part => String(part.pn).trim().toUpperCase() === requestedPart.trim().toUpperCase())
   const partFilter = partQuery.trim().toLowerCase()
-  const visibleParts = !partFilter ? (displayList?.parts || []) : (displayList?.parts || []).filter(part =>
-    String(part.pn).toLowerCase().includes(partFilter) || String(part.desc || '').toLowerCase().includes(partFilter))
+  const numberedParts = (displayList?.parts || []).map((part, index) => ({ ...part, srNo: index + 1 }))
+  const visibleParts = !partFilter ? numberedParts : numberedParts.filter(part =>
+    String(part.srNo).includes(partFilter) || String(part.pn).toLowerCase().includes(partFilter) || String(part.desc || '').toLowerCase().includes(partFilter))
   const requestedListAvailable = !requestedList || !!store.priceLists?.[requestedList]
 
   useEffect(() => {
@@ -248,7 +249,7 @@ export default function PriceLists() {
       </div>
       <div className="sheet-wrap sheet-wrap-fill price-list-sheet">
         <table className="sheet">
-          <thead><tr><th>Part Number</th><th>Description</th><th>Price ({displayList.currency})</th><th>Configurable Adders</th></tr></thead>
+          <thead><tr><th className="pl-sr-no">Sr. No.</th><th>Part Number</th><th>Description</th><th>Price ({displayList.currency})</th><th>Configurable Adders</th></tr></thead>
           <tbody>
             {visibleParts.map(x => {
               // Supplier catalogues carry long text — descriptions of several
@@ -258,6 +259,7 @@ export default function PriceLists() {
               const adders = x.adders.map(a => `${a.desc} (+${a.price})`)
               return (
                 <tr key={x.pn} ref={row => { rowRefs.current[x.pn] = row }} className={highlightedPart === x.pn ? 'price-list-highlight' : undefined}>
+                  <td className="pl-sr-no">{x.srNo}</td>
                   <td>{x.pn}</td>
                   <td className="pl-desc">{x.desc}</td>
                   <td className="num">{fmt(x.price)}</td>

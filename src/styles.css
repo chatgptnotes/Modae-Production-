@@ -790,12 +790,17 @@ select, input[type=text], input[type=number], input[type=date], input[type=tel],
 .sourcing-add-part-link:focus-visible { outline: 2px solid var(--primary-accent); outline-offset: 3px; }
 .sourcing-part-line { display: flex; align-items: flex-start; gap: 6px; min-width: 0; }
 .sourcing-part-copy { min-width: 0; flex: 1; }
-.sourcing-row-actions { display: inline-flex; align-items: center; gap: 3px; flex: 0 0 auto; }
+.sourcing-row-actions { display: flex; align-items: center; justify-content: flex-end; gap: 4px; flex: 0 0 auto; min-width: 0; flex-wrap: wrap; }
 .sourcing-edit-row { padding: 2px 5px; border: 1px solid var(--border-default); border-radius: 4px; background: var(--surface-default); color: var(--text-secondary); font-size: 10px; font-weight: 700; }
 .sourcing-edit-row:hover { color: var(--action-accent-ink); border-color: var(--action-accent); }
 .sourcing-read-value { display: inline-block; min-width: 18px; line-height: 22px; }
 .sourcing-remove-row { flex: 0 0 auto; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; color: var(--text-secondary); background: transparent; font-size: 18px; line-height: 18px; }
 .sourcing-remove-row:hover { color: var(--accent, #e5382b); background: var(--surface-sunken); }
+.sourcing-row-actions .sourcing-row-action { min-height: 28px; height: 28px; padding: 3px 7px; font-size: 11px; line-height: 1; white-space: nowrap; }
+.sourcing-row-actions .sourcing-remove-row { width: 24px; padding: 0; }
+.sourcing-row-actions .sourcing-row-action--confirm { min-width: 30px; padding-inline: 6px; }
+.sourcing-row-actions .sourcing-row-action--compare { width: 28px; padding-inline: 0; }
+.sourcing-row-actions .chip { min-width: 30px; min-height: 22px; padding: 3px 6px; font-size: 10px; text-align: center; white-space: nowrap; }
 .sourcing-sheet-wrap { overflow: hidden; }
 .sourcing-currency-view { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 12px; }
 .sourcing-currency-view select { min-width: 72px; }
@@ -856,6 +861,8 @@ select, input[type=text], input[type=number], input[type=date], input[type=tel],
 .price-list-sheet table.sheet td.pl-adders { white-space: normal; overflow-wrap: anywhere; }
 .price-list-sheet table.sheet td.pl-desc { max-width: 520px; }
 .price-list-sheet table.sheet td.pl-adders { max-width: 360px; color: var(--text-muted); }
+.price-list-sheet table.sheet th.pl-sr-no,
+.price-list-sheet table.sheet td.pl-sr-no { width: 72px; min-width: 72px; text-align: center; white-space: nowrap; }
 
 .proposal-boq-sheet-wrap table.sheet { width: 100%; min-width: 0; table-layout: fixed; }
 .proposal-boq-sheet-wrap table.sheet th,
@@ -2158,7 +2165,7 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .mail-tabs button.active { color: var(--primary-deep); border-bottom-color: var(--primary-accent); background: var(--palette-4843938); }
 .mail-tabs button b { min-width: 18px; padding: 1px 5px; border-radius: 10px; background: var(--border-soft); color: var(--text-muted); font-size: 10px; }
 .mail-tabs button.active b { background: var(--primary-soft); color: var(--primary-deep); }
-.mailbox-list { overflow-x: auto; background: var(--palette-4843938); border: 1px solid var(--border-color); border-top: 0; box-shadow: 0 2px 8px var(--palette-9c5f15c9); }
+.mailbox-list { container-type: inline-size; overflow-x: auto; background: var(--palette-4843938); border: 1px solid var(--border-color); border-top: 0; box-shadow: 0 2px 8px var(--palette-9c5f15c9); }
 .mail-list-toolbar { display: flex; align-items: center; gap: 5px; min-height: 44px; padding: 5px 10px; border-bottom: 1px solid var(--border-soft); color: var(--text-muted); }
 .mail-check { display: inline-flex; align-items: center; justify-content: center; width: 30px; flex: 0 0 30px; cursor: pointer; }
 .mail-check input, .mail-show-all input { accent-color: var(--primary-accent); }
@@ -2396,7 +2403,7 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .mail-empty b { color: var(--text-main); }
 .mail-empty svg { color: var(--text-subtle); }
 
-@media (max-width: 900px) {
+@container (max-width: 900px) {
   /* Keep the useful nine columns after the 1400/1180 rules hide duplicate
      risk, age, and owner. The old twelve-track override made rows misalign
      at tablet widths and squeezed the Received date/time out of view. */
@@ -5034,8 +5041,11 @@ table.sheet td .wrapcell:focus { outline: 2px solid var(--xl-green); background:
 /* Below these widths the thin columns stop being readable. Drop them rather
    than reintroducing a horizontal scrollbar — least-informative first: age,
    then duplicate risk, then the suggested owner. Both the header spans and the
-   row cells are addressed by position, since the chip cells carry no class. */
-@media (max-width: 1400px) {
+   row cells are addressed by position, since the chip cells carry no class.
+   These measure the table's own box (via container queries on .mailbox-list),
+   not the viewport — the sidebar eats 200-250px that a @media viewport check
+   can't see, which used to let columns get squeezed before these ever fired. */
+@container (max-width: 1400px) {
   .mail-column-head > :nth-child(8), .mail-row > :nth-child(8),
   .mail-column-head > :nth-child(12), .mail-row > :nth-child(12) { display: none; }
   .mail-column-head, .mail-row {
@@ -5048,7 +5058,7 @@ table.sheet td .wrapcell:focus { outline: 2px solid var(--xl-green); background:
       minmax(0, .8fr) minmax(0, 1fr);
   }
 }
-@media (max-width: 1180px) {
+@container (max-width: 1180px) {
   .mail-column-head > :nth-child(10), .mail-row > :nth-child(10) { display: none; }
   .mail-column-head, .mail-row {
     grid-template-columns:
@@ -5182,8 +5192,8 @@ table.sheet td .wrapcell:focus { outline: 2px solid var(--xl-green); background:
   white-space: nowrap;
   border: 0;
 }
-.sourcing-spares-workbench .sheet th:last-child,
-.sourcing-spares-workbench .sheet td:last-child {
+.sourcing-workbench .sheet th:last-child,
+.sourcing-workbench .sheet td:last-child {
   position: sticky;
   right: 0;
   z-index: 2;
@@ -5191,15 +5201,15 @@ table.sheet td .wrapcell:focus { outline: 2px solid var(--xl-green); background:
   box-shadow: -6px 0 8px var(--palette-ad782897);
 }
 
-.sourcing-spares-workbench .sheet th:last-child {
+.sourcing-workbench .sheet th:last-child {
   background: var(--ink, var(--palette-4b941c4a));
 }
 
-.sourcing-spares-workbench .sheet td:last-child {
+.sourcing-workbench .sheet td:last-child {
   background: var(--paper, var(--palette-4843938));
 }
 
-.sourcing-spares-workbench .sheet tbody tr:nth-child(even) td:last-child {
+.sourcing-workbench .sheet tbody tr:nth-child(even) td:last-child {
   background: var(--surface, var(--palette-4194e46b));
 }
 
@@ -7206,26 +7216,26 @@ button.install, .btn.install,
 /* Sourcing table layout: fixed bounds keep the price fields and action group
    from stealing width from the part description on long rows. */
 .sourcing-sheet--fixed {
-  table-layout: auto;
-  width: max-content;
-  min-width: 100%;
+  table-layout: fixed;
+  width: 100%;
+  min-width: 0;
   border-collapse: collapse;
 }
-.sourcing-sheet--fixed th:nth-child(1) { min-width: 280px; }
-.sourcing-sheet--fixed th:nth-child(2) { min-width: 160px; }
-.sourcing-sheet--fixed th:nth-child(3) { min-width: 74px; }
-.sourcing-sheet--fixed th:nth-child(4) { min-width: 105px; }
+.sourcing-sheet--fixed th:nth-child(1) { min-width: 220px; }
+.sourcing-sheet--fixed th:nth-child(2) { min-width: 100px; }
+.sourcing-sheet--fixed th:nth-child(3) { min-width: 55px; }
+.sourcing-sheet--fixed th:nth-child(4) { min-width: 78px; }
 .sourcing-sheet--fixed th:nth-child(5),
-.sourcing-sheet--fixed th:nth-child(6) { min-width: 110px; }
-.sourcing-sheet--fixed th:nth-child(7) { min-width: 120px; }
-.sourcing-sheet--fixed th:nth-child(8) { min-width: 130px; }
+.sourcing-sheet--fixed th:nth-child(6) { min-width: 88px; }
+.sourcing-sheet--fixed th:nth-child(7) { min-width: 105px; }
+.sourcing-sheet--fixed th:nth-child(8) { min-width: 100px; }
 .sourcing-sheet--fixed th:nth-child(9),
-.sourcing-sheet--fixed th:nth-child(10) { min-width: 135px; }
-.sourcing-sheet--fixed th:nth-child(11) { min-width: 150px; }
+.sourcing-sheet--fixed th:nth-child(10) { min-width: 110px; }
+.sourcing-sheet--fixed th:nth-child(11) { min-width: 108px; }
 .sourcing-sheet--fixed th,
 .sourcing-sheet--fixed td {
   vertical-align: top;
-  padding: 8px 10px;
+  padding: 6px 7px;
 }
 /* Override the generic sheet `white-space: nowrap` rule so the intentionally
    narrow percentage columns remain readable instead of clipping their labels. */
@@ -7513,13 +7523,28 @@ table.sheet.sourcing-sheet--fixed th {
 .sourcing-sheet-wrap {
   overflow-x: auto;
   overflow-y: hidden;
+  max-width: 100%;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
 }
+.sourcing-sheet-wrap::-webkit-scrollbar { height: 0; }
+.sourcing-horizontal-scrollbar {
+  width: 100%;
+  height: 16px;
+  margin: 0 1px 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  border-top: 1px solid var(--grid-line);
+  scrollbar-width: thin;
+}
+.sourcing-horizontal-scrollbar > div { height: 1px; }
 .sourcing-sheet--fixed {
   width: max-content;
-  min-width: 100%;
+  min-width: 1500px;
+  max-width: none;
 }
 .sourcing-sheet--fixed th {
-  white-space: nowrap !important;
+  white-space: normal !important;
   overflow-wrap: normal;
   word-break: normal;
   line-height: 1.2;
@@ -7536,6 +7561,8 @@ table.sheet.sourcing-sheet--fixed th {
 .sourcing-sheet--fixed .sourcing-cell-actions {
   vertical-align: middle;
 }
+.sourcing-sheet--fixed .sourcing-cell-actions { min-width: 0; padding: 6px 8px; }
+.sourcing-sheet--fixed .sourcing-cell-actions .sourcing-row-actions { justify-content: flex-end; flex-wrap: nowrap; }
 .sourcing-sheet--fixed .sourcing-part-description {
   display: block;
   max-width: 100%;
@@ -7568,9 +7595,13 @@ table.sheet.sourcing-sheet--fixed th {
 .sourcing-sheet--fixed th {
   font-weight: 800;
 }
-.sourcing-spares-workbench .sheet.sourcing-sheet--fixed th:last-child {
+.sourcing-workbench .sheet.sourcing-sheet--fixed th:last-child {
   background: #fff;
   color: var(--text-primary);
+  text-align: right;
+  width: 150px;
+  min-width: 150px;
+  max-width: 150px;
 }
 .sourcing-sheet--fixed .sourcing-cell-part .sourcing-customer-ref {
   color: var(--text-primary);
@@ -7583,13 +7614,17 @@ table.sheet.sourcing-sheet--fixed th {
   line-height: 1.3;
 }
 .sourcing-sheet--fixed .sourcing-source-name {
-  white-space: nowrap;
-  overflow-wrap: normal;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-overflow: clip;
 }
 .sourcing-sheet--fixed .sourcing-source-stack {
   gap: 3px;
 }
+.sourcing-price-preview { min-width: min(420px, 80vw); }
+.sourcing-price-preview-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.sourcing-price-preview-description { margin: 10px 0 0; color: var(--text-primary); font-size: 13px; line-height: 1.4; }
+.sourcing-price-preview-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
 .sourcing-sheet--fixed td.num {
   overflow: hidden;
   white-space: nowrap;
@@ -7607,6 +7642,10 @@ table.sheet.sourcing-sheet--fixed th {
   width: auto;
   min-width: 3ch;
   max-width: none;
+}
+@media (max-width: 900px) {
+  .sourcing-row-actions { gap: 3px; }
+  .sourcing-row-actions .sourcing-row-action { padding-inline: 6px; }
 }
 .sourcing-currency-indicator {
   display: inline-flex;
@@ -7862,10 +7901,78 @@ table.sheet th {
   border-color: #CBD5E1;
 }
 
-.sourcing-spares-workbench table.sheet.sourcing-sheet--fixed th {
+.sourcing-workbench table.sheet.sourcing-sheet--fixed th {
   color: var(--text-primary);
   font-weight: 800 !important;
 }
+
+/* Keep the per-line decision controls visible while the wide grid moves. */
+.sourcing-workbench .sheet.sourcing-sheet--fixed th:last-child,
+.sourcing-workbench .sheet.sourcing-sheet--fixed td:last-child {
+  position: sticky;
+  right: 0;
+  box-shadow: -1px 0 0 var(--grid-line), -10px 0 16px rgba(15, 23, 42, .06);
+}
+.sourcing-workbench .sheet.sourcing-sheet--fixed th:last-child {
+  z-index: 5;
+}
+.sourcing-workbench .sheet.sourcing-sheet--fixed td:last-child {
+  z-index: 3;
+  background: #fff;
+}
+.sourcing-workbench .sheet.sourcing-sheet--fixed tbody tr:nth-child(even) td:last-child { background: #fff; }
+.sourcing-workbench .sheet.sourcing-sheet--fixed tbody tr:hover td:last-child { background: #fff7ed; }
+.sourcing-workbench .sheet.sourcing-sheet--fixed tbody tr.sourcing-zero-row td:last-child { background: #f8fafc; }
+.sourcing-workbench .sheet.sourcing-sheet--fixed tfoot td:last-child { background: var(--surface-sunken); }
+.sourcing-workbench .sourcing-cell-actions .sourcing-row-actions {
+  min-width: 116px;
+  align-items: stretch;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  gap: 5px;
+}
+.sourcing-workbench .sourcing-cell-actions .sourcing-row-action,
+.sourcing-workbench .sourcing-cell-actions .chip {
+  width: 100%;
+  justify-content: center;
+}
+.sourcing-workbench .sourcing-cell-actions .sourcing-row-action--confirm,
+.sourcing-workbench .sourcing-cell-actions .sourcing-row-action--compare { min-width: 116px; }
+.sourcing-workbench .sourcing-cell-actions .chip { min-width: 116px; }
+.sourcing-workbench .sourcing-cell-part .sourcing-remove-row { margin-top: 2px; }
+
+.sourcing-horizontal-scrollbar {
+  height: 18px;
+  margin: 0 0 8px;
+  padding: 2px 0;
+  background: #f8fafc;
+  border-top: 1px solid var(--grid-line);
+  border-bottom: 1px solid var(--grid-line);
+}
+.sourcing-horizontal-scrollbar > div { height: 1px; }
+
+.sourcing-price-preview-modal {
+  width: min(780px, 92vw);
+}
+.sourcing-price-preview-modal .section-title { margin-bottom: 10px; }
+.sourcing-price-preview { min-width: 0; }
+.sourcing-price-preview-heading { align-items: flex-start; }
+.sourcing-price-preview-published { margin: 5px 0 10px; color: var(--text-secondary); font-size: 11px; }
+.sourcing-price-preview-table-wrap { overflow-x: auto; border: 1px solid var(--grid-line); }
+.sourcing-price-preview-table { width: 100%; min-width: 650px; table-layout: fixed; border-collapse: collapse; font-size: 12px; }
+.sourcing-price-preview-table th,
+.sourcing-price-preview-table td { padding: 8px 9px; border-bottom: 1px solid var(--grid-line); text-align: left; vertical-align: top; }
+.sourcing-price-preview-table th { background: #f8fafc; color: var(--text-secondary); font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.sourcing-price-preview-table th:nth-child(1) { width: 58px; }
+.sourcing-price-preview-table th:nth-child(2) { width: 21%; }
+.sourcing-price-preview-table th:nth-child(3) { width: 31%; }
+.sourcing-price-preview-table th:nth-child(4) { width: 14%; }
+.sourcing-price-preview-table th:nth-child(5) { width: 23%; }
+.sourcing-price-preview-table th.pl-sr-no,
+.sourcing-price-preview-table td.pl-sr-no { width: 58px; min-width: 58px; text-align: center; white-space: nowrap; }
+.sourcing-price-preview-table td { color: var(--text-primary); overflow-wrap: anywhere; }
+.sourcing-price-preview-table td.num { text-align: right; white-space: nowrap; }
+.sourcing-price-preview-actions { display: flex; justify-content: flex-end; margin-top: 14px; }
 
 table.sheet th.rowhead,
 table.sheet th.internal {
@@ -9003,21 +9110,47 @@ button:not(.primary):not(.danger):not(.dark):not(.ghost),
     white-space: nowrap;
     padding-inline: 8px;
     font-size: 11px;
+    align-self: stretch;
   }
+
+  .structured-active-sections .compact-action-col > .ws-foot > .lead-footer-button {
+    height: 38px;
+    min-height: 38px;
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  .structured-active-sections .compact-action-col > .ws-foot > .registration-action { order: 1; }
 
   .structured-active-sections .compact-action-col > .ws-foot > .toolbar {
     display: flex;
     flex: 1 1 auto;
+    align-items: stretch;
     gap: 6px;
+    order: 2;
   }
 
   .structured-active-sections .compact-action-col > .ws-foot > .toolbar > button,
   .structured-active-sections .compact-action-col > .ws-foot > .toolbar > select {
     flex: 1 1 auto;
     width: auto;
+    height: 38px;
+    min-height: 38px;
     white-space: nowrap;
     padding-inline: 7px;
     font-size: 11px;
+  }
+
+  .structured-active-sections .compact-action-col > .ws-foot > .ws-action,
+  .structured-active-sections .compact-action-col > .ws-foot > .toolbar > button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-block: 0;
   }
 
   /* Several notes can be true at once (blocked + optional follow-up, say) —
@@ -9027,9 +9160,44 @@ button:not(.primary):not(.danger):not(.dark):not(.ghost),
   .structured-active-sections .compact-action-col > .ws-foot > .ws-foot-note,
   .structured-active-sections .compact-action-col > .ws-foot > .ws-foot-notes {
     flex-basis: 100%;
+    order: 3;
     position: static;
     transform: none;
     margin: 0;
+  }
+
+  /* Qualified leads keep the primary action first, but its longer label needs
+     more room than the compact secondary controls. */
+  .structured-active-sections .compact-action-col > .ws-foot:has(> .registration-action) {
+    display: flex;
+    align-items: stretch;
+  }
+  .structured-active-sections .compact-action-col > .ws-foot:has(> .registration-action) > .registration-action {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 150px;
+    height: 38px;
+    min-height: 38px;
+    margin: 0;
+    overflow: visible;
+    text-overflow: clip;
+  }
+  .structured-active-sections .compact-action-col > .ws-foot:has(> .registration-action) > .toolbar {
+    display: flex;
+    flex: 0 1 auto;
+    align-items: stretch;
+    gap: 6px;
+  }
+  .structured-active-sections .compact-action-col > .ws-foot:has(> .registration-action) > .toolbar > button {
+    flex: 0 0 auto;
+    width: auto;
+    height: 38px;
+    min-height: 38px;
+    margin: 0;
+    white-space: nowrap;
+  }
+  .structured-active-sections .compact-action-col > .ws-foot:has(> .registration-action) > .toolbar > button:first-child {
+    order: 1;
   }
 }
 

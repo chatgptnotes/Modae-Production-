@@ -7,7 +7,7 @@ const inbox = fs.readFileSync(new URL('../src/pages/Inbox.jsx', import.meta.url)
 
 test('inbox keeps received date and time visible in the narrow grid', () => {
   assert.match(css, /\.mail-date b, \.mail-date small \{ display: block; white-space: nowrap; \}/)
-  const narrowStart = css.indexOf('@media (max-width: 900px)', css.indexOf('.mail-date'))
+  const narrowStart = css.indexOf('@container (max-width: 900px)', css.indexOf('.mail-date'))
   const narrow = css.slice(narrowStart, css.indexOf('\n@media', narrowStart + 1))
   assert.match(narrow, /26px 24px 78px[\s\S]*?minmax\(0, \.9fr\);/)
   assert.doesNotMatch(narrow, /42px;/)
@@ -189,6 +189,34 @@ test('compact lead review uses one decision form and a bounded review rail', () 
   assert.match(css, /compact-workflow-content \.compact-routing-panel \{[\s\S]*?grid-column: 1;/)
   assert.match(css, /compact-workflow-content \.compact-action-col \{[\s\S]*?grid-column: 2;[\s\S]*?overflow: hidden;/)
   assert.match(css, /compact-action-col > \.ws-body \{[\s\S]*?max-height: calc\(100dvh - 150px\);/)
+  assert.match(css, /compact-action-col > \.ws-foot > \.ws-action \{[\s\S]*?align-self: stretch;/,
+    'the primary footer action should align with the secondary actions')
+  assert.match(css, /compact-action-col > \.ws-foot > \.toolbar \{[\s\S]*?align-items: stretch;/,
+    'the secondary action group should share the footer alignment')
+  assert.match(inbox, /className="primary ws-action registration-action(?: lead-footer-button)?"/,
+    'the registration action should have an explicit placement hook')
+  assert.match(inbox, /className="primary ws-action registration-action lead-footer-button"/,
+    'the registration action should use the shared footer button sizing')
+  assert.match(inbox, /className="lead-footer-button" onClick=\{\(\) => setDropping\(true\)\}/,
+    'Disqualify should use the shared footer button sizing')
+  assert.match(inbox, /className="secondary-action lead-footer-button" onClick=\{\(\) => setReassignOpen\(true\)\}/,
+    'Reassign should use the shared footer button sizing')
+  assert.match(css, /compact-action-col > \.ws-foot > \.registration-action \{ order: 1; \}/,
+    'Continue to registration should appear before secondary actions')
+  assert.match(css, /compact-action-col > \.ws-foot > \.toolbar \{[\s\S]*?order: 2;/,
+    'Disqualify and Reassign should follow Continue to registration')
+  assert.match(css, /compact-action-col > \.ws-foot:has\(> \.registration-action\) \{[\s\S]*?display: flex;/,
+    'qualified footer actions should use a flexible row')
+  assert.match(css, /ws-foot:has\(> \.registration-action\) > \.registration-action \{[\s\S]*?flex: 1 1 0;[\s\S]*?min-width: 150px;/,
+    'the primary registration action should receive the extra label space')
+  assert.match(css, /ws-foot:has\(> \.registration-action\) > \.toolbar \{[\s\S]*?flex: 0 1 auto;/,
+    'secondary actions should keep content-appropriate widths')
+  assert.match(css, /ws-foot:has\(> \.registration-action\) > \.toolbar > button \{[\s\S]*?height: 38px;[\s\S]*?min-height: 38px;/,
+    'all footer buttons should retain the same height')
+  assert.match(css, /compact-action-col > \.ws-foot > \.toolbar > button,[\s\S]*?height: 38px;[\s\S]*?min-height: 38px;/,
+    'footer buttons should share a stable height')
+  assert.match(css, /compact-action-col > \.ws-foot > \.lead-footer-button \{[\s\S]*?height: 38px;[\s\S]*?min-height: 38px;/,
+    'all lead footer buttons should share one explicit height rule')
   assert.match(inbox, /<div className="lead-decision-subsection">Customer and contact<\/div>/)
   assert.match(inbox, /<div className="lead-decision-subsection">Routing and ownership<\/div>/)
   assert.match(inbox, /aria-label="Search EUC city or state"/)

@@ -39,14 +39,15 @@ test('legacy price fields gain source and list-total fields', () => {
 
 test('source display identifies price-list provenance', () => {
   const source = formatPriceSource({ priceSource: 'price-list', priceSourceName: 'Meggitt', priceSourceVersion: '2026-Q2', priceSourceRef: 'VM600-MPC4' })
-  assert.equal(source.primary, 'Meggitt')
-  assert.equal(source.secondary, '2026-Q2 · Part VM600-MPC4')
-  assert.equal(source.full, 'Price list · Meggitt · Version 2026-Q2 · Reference VM600-MPC4')
+  assert.equal(source.primary, 'Approved price list')
+  assert.equal(source.secondary, 'Meggitt · 2026-Q2 · Part VM600-MPC4')
+  assert.equal(source.full, 'Approved price list · Meggitt · Version 2026-Q2 · Reference VM600-MPC4')
 })
 
 test('source display keeps vendor and manual origins explicit', () => {
-  assert.equal(formatPriceSource({ priceSource: 'vendor-quote', priceSourceName: 'Meggitt', priceSourceRef: 'Q-42', priceSourceDate: '2026-08-12' }).full, 'Vendor quote · Meggitt · Reference Q-42 · Date 2026-08-12')
-  assert.equal(formatPriceSource({ priceSource: 'manual', priceList: 'Manual entry' }).primary, 'Manual entry')
+  assert.equal(formatPriceSource({ priceSource: 'vendor-quote', priceSourceName: 'Meggitt', priceSourceRef: 'Q-42', priceSourceDate: '2026-08-12' }).full, 'Supplier quotation · Meggitt · Reference Q-42 · Date 12-Aug-26')
+  assert.equal(formatPriceSource({ priceSource: 'manual', priceList: 'Manual entry', addedAt: '2026-09-14T10:00:00.000Z' }).primary, 'Manual pricing')
+  assert.equal(formatPriceSource({ priceSource: 'manual', priceList: 'Manual entry', addedAt: '2026-09-14T10:00:00.000Z' }).secondary, '14-Sep-26')
 })
 
 test('unmatched lead lines need pricing instead of appearing expired', () => {

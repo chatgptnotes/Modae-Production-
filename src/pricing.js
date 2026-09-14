@@ -1,7 +1,7 @@
 // Shared price-source and proposal-adjustment rules.
 // Approved price-list rows always win over vendor references and manual values.
 
-import { effectiveRate, unitCostINR } from './utils.js'
+import { ddMmmYY, effectiveRate, unitCostINR } from './utils.js'
 import { defaultCosting } from './seed.js'
 
 export const PRICE_SOURCES = Object.freeze({
@@ -24,21 +24,20 @@ export function formatPriceSource(line = {}) {
   const name = String(line.priceSourceName || line.priceList || '').trim()
   const version = String(line.priceSourceVersion || '').trim()
   const ref = String(line.priceSourceRef || line.quoteRef || '').trim()
-  const date = String(line.priceSourceDate || '').trim()
+  const rawDate = String(line.priceSourceDate || line.addedAt || '').trim().slice(0, 10)
+  const date = rawDate ? ddMmmYY(rawDate) : ''
   const kind = source === PRICE_SOURCES.LIST
-    ? 'Price list'
+    ? 'Approved price list'
     : source === PRICE_SOURCES.VENDOR
-      ? 'Vendor quote'
-      : 'Manual entry'
-  const primary = source === PRICE_SOURCES.MANUAL
-    ? (name === 'Manual override' ? 'Manual override' : 'Manual entry')
-    : (name || kind)
+      ? 'Supplier quotation'
+      : 'Manual pricing'
+  const primary = kind
   const secondary = source === PRICE_SOURCES.LIST
-    ? [version, ref && `Part ${ref}`].filter(Boolean).join(' · ')
+    ? [name, version, ref && `Part ${ref}`].filter(Boolean).join(' · ')
     : source === PRICE_SOURCES.VENDOR
-      ? [ref && `Quote ${ref}`, date].filter(Boolean).join(' · ')
+      ? [name, ref && `Quote ${ref}`, date].filter(Boolean).join(' · ')
       : [ref && `Ref ${ref}`, date].filter(Boolean).join(' · ')
-  const full = [kind, primary !== kind ? primary : '', version && `Version ${version}`, ref && `Reference ${ref}`, date && `Date ${date}`]
+  const full = [kind, name && name !== kind ? name : '', version && `Version ${version}`, ref && `Reference ${ref}`, date && `Date ${date}`]
     .filter(Boolean).join(' · ')
   return { source, kind, primary, secondary, full: full || 'No pricing source' }
 }
