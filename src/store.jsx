@@ -786,7 +786,9 @@ export function StoreProvider({ children }) {
       setState(s => withAudit({
         ...s,
         approvals: s.approvals.map(a => a.id === id
-          ? { ...a, status, decisionNote, decisionTs: new Date().toISOString(),
+          // decidedBy so the outcome can be reported back to whoever decided it;
+          // the joint path below records the same thing as keys of `decisions`.
+          ? { ...a, status, decisionNote, decidedBy: s.role, decisionTs: new Date().toISOString(),
               conditions: status === 'Approved with conditions'
                 ? conditions.map(c => (typeof c === 'string' ? { text: c, incorporated: false, note: '' } : c))
                 : a.conditions }

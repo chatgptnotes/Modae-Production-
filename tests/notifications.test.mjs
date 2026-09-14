@@ -10,7 +10,12 @@ test('all approval notifications route to the central approvals list', () => {
 })
 
 test('approved approval requests notify the person who raised them', () => {
-  assert.match(app, /\['Approved', 'Approved with conditions', 'Returned', 'Rejected'\]\.includes\(a\.status\) && approvalOwner\(a, store\) === role/)
+  // The audience is the record's owner plus whoever decided it or was asked to —
+  // an approver must hear the outcome of their own decision, which owner-only
+  // filtering never told them.
+  assert.match(app, /\['Approved', 'Approved with conditions', 'Returned', 'Rejected'\]\.includes\(a\.status\) && approvalAudience\(a, store\)\.includes\(role\)/)
+  assert.match(app, /const approvalAudience = \(approval, store\) => \[[\s\S]*?approvalOwner\(approval, store\)/)
+  assert.match(app, /const approvalAudience = \(approval, store\) => \[[\s\S]*?approval\.decidedBy/)
   assert.match(app, /const approvalOwner = \(approval, store\) =>/)
   assert.match(app, /lead\?\.assignedOwner \|\| lead\?\.suggestedOwner \|\| approval\.requestedBy/)
   assert.match(app, /title: `Approval \$\{a\.status\.toLowerCase\(\)\}`/)

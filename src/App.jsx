@@ -57,6 +57,26 @@ const approvalOwner = (approval, store) => {
   return approval?.requestedBy
 }
 
+// Everyone who should hear how an approval ended: the person who owns the record,
+// plus whoever decided it or was asked to. Older records predate `decidedBy`, so
+// the people who were asked stand in for it.
+const approvalAudience = (approval, store) => [
+  approvalOwner(approval, store),
+  approval.decidedBy, approval.approver,
+  ...(approval.needed || []),
+  ...Object.keys(approval.decisions || {}),
+].filter(Boolean)
+
+// What the approval is about, so one row can be told from the next.
+const approvalSubject = approval => [approval.oppId || approval.leadId, approval.type].filter(Boolean).join(' · ')
+
+// Decision notes are mandatory, so most of them just restate the outcome. Those
+// add nothing next to a title that already says "Approval approved".
+const meaningfulNote = note => {
+  const text = String(note || '').trim()
+  return /^(approve[ds]?|ok|okay|yes|done|fine|reject(ed)?|no)\.?$/i.test(text) ? '' : text
+}
+
 // 'missing-follow-up' -> 'Missing follow up'
 const sentenceCase = type => {
   const words = String(type || '').replaceAll('-', ' ').trim()
@@ -83,12 +103,12 @@ function NotificationBell({ store, nav }) {
   const safeText = value => (COMMERCIAL_RX.test(value || '') && !canPriceProposal(role) ? 'Restricted' : value)
   const notifications = [
     ...(store.approvals || []).filter(a => uniqueApproval(a, store.approvals || []) && a.status === 'Pending' && ([...(a.needed || []), a.approver, a.requestedBy].filter(Boolean).includes(role))).map(a => ({
-      id: `approval-${a.id}`, icon: 'checkCircle', title: 'Approval waiting', text: safeText(a.detail || a.type), to: approvalNotificationPath(a), date: a.ts,
+      id: `approval-${a.id}`, icon: 'checkCircle', title: 'Approval waiting', text: safeText([approvalSubject(a), a.detail].filter(Boolean).join(' — ')), to: approvalNotificationPath(a), date: a.ts,
     })),
-    ...(store.approvals || []).filter(a => uniqueApproval(a, store.approvals || []) && ['Approved', 'Approved with conditions', 'Returned', 'Rejected'].includes(a.status) && approvalOwner(a, store) === role).map(a => ({
-      // The decision note, not a.detail — detail is frozen at request time, so a
-      // resolved row otherwise reads "Approval approved / … is required".
-      id: `approval-result-${a.id}`, icon: 'checkCircle', title: `Approval ${a.status.toLowerCase()}`, text: safeText(a.decisionNote || a.detail || a.type), to: approvalNotificationPath(a), date: a.decisionTs || a.ts,
+    ...(store.approvals || []).filter(a => uniqueApproval(a, store.approvals || []) && ['Approved', 'Approved with conditions', 'Returned', 'Rejected'].includes(a.status) && approvalAudience(a, store).includes(role)).map(a => ({
+      // Lead with what it was about. a.detail is frozen at request time, so a
+      // resolved row built from it reads "Approval approved / … is required".
+      id: `approval-result-${a.id}`, icon: 'checkCircle', title: `Approval ${a.status.toLowerCase()}`, text: safeText([approvalSubject(a), meaningfulNote(a.decisionNote)].filter(Boolean).join(' — ')), to: approvalNotificationPath(a), date: a.decisionTs || a.ts,
     })),
     ...(store.opportunities || []).filter(o => o.status === 'Open' && o.owner === role && o.lastUpdated && ((Date.now() - new Date(o.lastUpdated).getTime()) / 86400000) >= 7).map(o => ({
       id: `stale-${o.id}`, icon: 'clock', title: 'Follow-up overdue', text: `${o.id} has not been updated for 7 days`, to: `/opp/${o.id}`, date: o.lastUpdated,
