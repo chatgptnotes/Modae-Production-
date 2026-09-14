@@ -79,6 +79,7 @@ function ProductDropdown({ options }) {
 // Pill/bubble selection for Classification fields. Product is multi-select
 // (several products can sit on one opportunity); business unit and segment stay
 // single-select, per the 13 Aug review.
+// The control policy is: product 'checkbox' : 'radio' for the other pills.
 function Pills({ field, options }) {
   const { f, set, aiMissing } = React.useContext(FormCtx)
   if (field === 'product') return <ProductDropdown options={options} />

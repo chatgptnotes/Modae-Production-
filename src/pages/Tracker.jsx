@@ -21,7 +21,10 @@ const OPEN_STAGES = STAGES.filter(s => s !== 'Won' && s !== 'Lost')
 // weights into px widths and scrolls sideways. `wAll` overrides `w` in the
 // all-31 view, where the identity and date columns earn a bigger slice.
 export const COLS = [
-  { key: 'id', letter: 'C', label: 'Opp ID', w: 8, wAll: 13 },
+  // 11, not 8: an opp ID is 9 characters and must never wrap — at 8 the key
+  // view gave the column ~64px against the ~66px the ID needs, so exactly one
+  // character spilled onto a second line.
+  { key: 'id', letter: 'C', label: 'Opp ID', w: 11, wAll: 13 },
   { key: 'sellTo', letter: 'D', label: 'Sell To Customer*', w: 16, wAll: 13 },
   { key: 'category', letter: 'E', label: 'Category', w: 6 },
   { key: 'location', letter: 'F', label: 'Location', w: 6 },
@@ -91,7 +94,8 @@ function hiddenColumnCss(hidden) {
 // percentage as `auto` for fixed-layout column widths, which silently
 // collapses every column to an equal share and undoes the whole point.
 const ROWHEAD_PCT = 2.6
-const PROPOSAL_PCT = 6.5
+// 8.5 fits the word "Proposal" on one line; at 6.5 the header broke to "PROPOS/AL".
+const PROPOSAL_PCT = 8.5
 // px per weight unit in the scrolling view, and the floor below which a column
 // is too narrow to read its own header. Sums to a sheet about 3000px wide.
 const PX_PER_UNIT = 13

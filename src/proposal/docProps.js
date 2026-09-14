@@ -65,7 +65,12 @@ export function normalizeProposal(pr, opp) {
     markupPct: Number(pr.markupPct) || 0,
     pricingHistory: pr.pricingHistory || [],
     approvedPricing: pr.approvedPricing || null,
-    costing: { ...defaultCosting, ...pr.costing },
+    costing: { ...defaultCosting, currencyRates: pr.costing?.currencyRates, ...pr.costing },
+    sourceCurrency: pr.sourceCurrency || 'INR',
+    sourceRate: Number(pr.sourceRate) || 1,
+    sourceRateDate: pr.sourceRateDate || pr.revisionDate || '',
+    clauseIds: Array.isArray(pr.clauseIds) ? pr.clauseIds : [],
+    clauses: Array.isArray(pr.clauses) ? pr.clauses : [],
     // `section`, `compliance` and `workflowStatus` are the sample compliance
     // table's own columns. `status` is left exactly as stored — gates.js reads
     // it to raise deviation approvals, so it is not ours to reinterpret.

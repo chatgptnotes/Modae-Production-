@@ -54,10 +54,11 @@
   --focus-ring: #C2410C;
   --shadow-color: rgba(40, 40, 40, .18);
   /* Brand source aliases retained for tooling and downstream integrations. */
-  --primary-accent: var(--action-primary);
-  --primary-fill: var(--action-primary);
-  --primary-ink: var(--action-primary-hover);
-  --primary-soft: var(--action-primary-soft);
+  --primary-accent: #ed3f2f;
+  --primary-fill: #c7291b;
+  --primary-ink: #9e1f14;
+  --primary-soft: #fdedeb;
+  --status-bad: #c93838;
   --bg-sidebar: #1E293B;
   --bg-app: #F8FAFC;
   --card-bg: #ffffff;
@@ -619,7 +620,7 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }
 .main-col { flex: 1; min-width: 0; width: calc(100% - 216px); margin-left: 216px; display: flex; flex-direction: column; transition: margin-left .2s ease, width .2s ease; }
 .main-col { position: relative; }
 .shell-nav-burger { display: none; }
-.sidebar-mode-switch { display: flex; align-items: center; gap: 7px; width: 100%; text-align: left; }
+.sidebar-mode-switch { display: flex; align-items: center; justify-content: flex-start; gap: 7px; width: 100%; text-align: left; }
 .topbar {
   display: flex; align-items: center; gap: 10px; background: var(--palette-4843938);
   position: sticky; top: 0; z-index: 40; border-bottom: 1px solid var(--grid-line); padding: 8px 14px; min-height: 40px;
@@ -648,7 +649,7 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }
   .sidebar-compact .side-foot label { display: none; }
   .sidebar-compact .brand .modae-logo { display: block; width: 36px; overflow: hidden; }
   .sidebar-compact .modae-official-logo { width: 36px; max-width: 36px; height: auto; }
-  .sidebar-compact .sidebar-toggle { position: absolute; right: 4px; top: 18px; width: 22px; height: 24px; margin: 0; }
+  .sidebar-compact .sidebar-toggle { position: absolute; right: 4px; top: 18px; width: 22px; height: 24px; min-height: 0; margin: 0; }
   .sidebar-compact .side-item { justify-content: center; padding-left: 0; padding-right: 0; }
   .sidebar-compact .side-item .ic { opacity: 1; }
   .sidebar-compact .side-badge { position: absolute; top: 5px; right: 7px; min-width: 14px; padding: 1px 4px; font-size: 9px; }
@@ -692,8 +693,13 @@ table.sheet td.cell-sel { outline: 2px solid var(--xl-green); outline-offset: -2
 .tracker-create-logo .modae-image-logo { max-width: 92px; }
 .filter-search { width: calc(100% - 16px); margin: 5px 8px; padding: 6px 8px; border: 1px solid var(--border-color); border-radius: 4px; }
 .link-button { margin-left: 6px; padding: 0; border: 0; background: transparent; color: var(--primary-accent); text-decoration: underline; cursor: pointer; }
-.notification-wrap { position: fixed; top: 14px; right: max(24px, env(safe-area-inset-right)); z-index: 20; display: flex; align-items: center; }
-.notification-button { position: relative; display: grid; place-items: center; width: 42px; height: 42px; padding: 0; border: 1px solid #E5E7EB; border-radius: 50%; background: #F3F4F6; color: #1F2937; cursor: pointer; box-shadow: 0 1px 3px rgba(15,23,42,.14); transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease, color .16s ease, transform .16s ease; }
+/* The bell is position:fixed, so it reserves no space and will sit on top of
+   whatever a page puts in its top-right corner. Page headers clear it with
+   --bell-clearance rather than a copied constant, so resizing the bell here
+   moves every header that avoids it. */
+:root { --bell-size: 42px; --bell-inset: 24px; --bell-clearance: calc(var(--bell-size) + 10px); }
+.notification-wrap { position: fixed; top: 14px; right: max(var(--bell-inset), env(safe-area-inset-right)); z-index: 20; display: flex; align-items: center; }
+.notification-button { position: relative; display: grid; place-items: center; width: var(--bell-size); height: var(--bell-size); padding: 0; border: 1px solid #E5E7EB; border-radius: 50%; background: #F3F4F6; color: #1F2937; cursor: pointer; box-shadow: 0 1px 3px rgba(15,23,42,.14); transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease, color .16s ease, transform .16s ease; }
 .notification-button:hover, .notification-button.is-open { border-color: #D1D5DB; background: #E5E7EB; color: #111827; box-shadow: 0 4px 10px rgba(15,23,42,.18); transform: scale(1.05); }
 .notification-button:focus-visible { outline: 2px solid #6B7280; outline-offset: 3px; }
 .notification-count { position: absolute; top: -4px; right: -4px; display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 5px; border: 0; border-radius: 999px; background: #DC2626; color: #FFF; font-size: 11px; font-weight: 800; line-height: 1; text-align: center; box-shadow: 0 0 0 2px #FFF; }
@@ -701,17 +707,25 @@ table.sheet td.cell-sel { outline: 2px solid var(--xl-green); outline-offset: -2
 .notification-popover { position: absolute; top: 52px; right: 0; width: min(400px, calc(100vw - 28px)); max-height: min(520px, calc(100vh - 78px)); border: 1px solid var(--border-color); border-radius: 9px; background: var(--palette-4843938); box-shadow: 0 10px 30px rgba(0,0,0,.16); overflow-y: auto; overflow-x: hidden; }
 .notification-heading { display: flex; justify-content: space-between; padding: 11px 13px; border-bottom: 1px solid var(--border-soft); }
 .notification-heading span { color: var(--text-muted); font-size: 12px; }
-.notification-item { display: flex; align-items: flex-start; width: 100%; gap: 10px; padding: 11px 13px; border: 0; border-bottom: 1px solid var(--border-soft); background: transparent; color: var(--text-main); text-align: left; cursor: pointer; }
+/* justify-content is restated on every full-width button that reads as a list
+   row: the base button rule centres its content, which is right for a toolbar
+   button and wrong for a row of text. */
+.notification-item { display: flex; align-items: flex-start; justify-content: flex-start; width: 100%; gap: 10px; padding: 11px 13px; border: 0; border-bottom: 1px solid var(--border-soft); background: transparent; color: var(--text-main); text-align: left; cursor: pointer; }
 .notification-item:hover { background: var(--header-fill); }
+/* New since the panel was last opened — the dot is the only thing that says so,
+   since everything is marked seen on close. */
+.notification-item.unseen { background: var(--primary-soft); }
+.notification-item.unseen > .ic { color: var(--primary-accent); }
+.notification-date { flex: 0 0 auto; align-self: flex-start; color: var(--text-subtle); font-size: 10.5px; white-space: nowrap; }
 .notification-item > .ic { flex: 0 0 auto; margin-top: 2px; }
-.notification-item span { display: grid; min-width: 0; gap: 3px; }
+.notification-item span { display: grid; flex: 1; min-width: 0; gap: 3px; }
 .notification-item b, .notification-item small { overflow-wrap: anywhere; white-space: normal; }
 .notification-item b { line-height: 1.25; }
 .notification-item small { color: var(--text-muted); line-height: 1.35; }
 .notification-empty { margin: 0; padding: 18px 13px; }
 @media (max-width: 560px) {
-  .notification-wrap { top: 10px; right: max(16px, env(safe-area-inset-right)); }
-  .notification-button { width: 42px; height: 42px; }
+  :root { --bell-inset: 16px; }
+  .notification-wrap { top: 10px; }
   .notification-popover { top: 50px; right: -2px; width: min(400px, calc(100vw - 24px)); max-height: calc(100vh - 68px); }
 }
 .proposal-datasheets { margin-top: 12px; }
@@ -720,11 +734,16 @@ table.sheet td.cell-sel { outline: 2px solid var(--xl-green); outline-offset: -2
 /* The website's buttons are 14px/700 with .3px tracking on a 6px radius. Those
    properties carry over; its 60px hero height does not — this is a dense
    enterprise UI, and the tablet rules below still set a 42px touch target. */
+/* Most buttons in this app are an icon next to a label, so the base lays them
+   out as a centred flex row with a real gap. Relying on the literal space in the
+   JSX gave a different spacing to every button, and any rule that flipped a
+   button to flex without restating `gap` collapsed the two together entirely. */
 button, .btn {
   background: var(--action-secondary-bg); border: 1px solid var(--action-secondary-border); border-radius: var(--r-ctl);
   padding: 4px 12px; font-size: 12.5px; cursor: pointer;
   font-family: var(--font-body); font-weight: 500; letter-spacing: .3px;
-  color: var(--action-secondary-text); text-decoration: none; display: inline-block;
+  color: var(--action-secondary-text); text-decoration: none;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   transition: background-color .15s linear, border-color .15s linear, color .15s linear;
 }
 button.primary, .btn.primary {
@@ -985,9 +1004,9 @@ table.sheet tfoot td { font-weight: 700; background: var(--primary-soft); }
 .opportunity-list th:nth-child(7), .opportunity-list td:nth-child(7) { width: 100px; }
 .opportunity-list th:nth-child(8), .opportunity-list td:nth-child(8) { width: 208px; }
 .opportunity-list th:nth-child(9), .opportunity-list td:nth-child(9) { width: 190px; }
-.opportunity-list td { overflow: hidden; text-overflow: ellipsis; }
+.opportunity-list td { overflow-wrap: break-word; }
 .opportunity-list .opportunity-cell { display: flex; align-items: center; min-width: 0; gap: 6px; }
-.opportunity-list .opportunity-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.opportunity-list .opportunity-name { min-width: 0; overflow-wrap: break-word; }
 .opportunity-list .opportunity-cell .pill { flex: 0 0 auto; margin-left: 0 !important; }
 /* Internal costing block on the Priced BoQ — grey like the real sheet's hidden area */
 table.sheet th.internal { background: var(--palette-c23d77f0); }
@@ -1561,7 +1580,7 @@ a.oppid-link:hover { text-decoration: underline; }
 .ana-table tbody tr:last-child { border-bottom: none; }
 .ana-table tbody tr:hover { background: var(--primary-soft); }
 .ana-table td {
-  padding: 5px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 5px 6px; overflow-wrap: break-word;
 }
 .ana-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
 .ana-table td.muted { color: var(--text-muted); }
@@ -1674,7 +1693,9 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 }
 .sim-controls select:focus { outline: 2px solid var(--primary-border); border-color: var(--primary-accent); }
 .sim-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.sim-cards .form-card { text-align: left; cursor: pointer; }
+/* A card-shaped picker: its <b> and .hint stack. The base button rule would lay
+   them out as a centred row. */
+.sim-cards .form-card { display: flex; flex-direction: column; align-items: flex-start; text-align: left; cursor: pointer; }
 .sim-cards .form-card b { font-size: 12.5px; color: var(--text-main); }
 .sim-cards .form-card.wide { grid-column: 1 / -1; }
 .sim-cards .form-card .hint { display: block; margin-top: 3px; }
@@ -1856,7 +1877,7 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .part-picker > label input { min-width: min(520px, 100%); }
 .part-picker-results { position: absolute; z-index: 20; top: 100%; left: 0; right: 0; max-height: 360px; overflow-y: auto; background: var(--card-bg); border: 1px solid var(--border-color); box-shadow: 0 8px 20px var(--palette-e28dc92d); }
 .part-picker-group-label { padding: 7px 10px 4px; color: var(--text-muted); font-size: 11px; font-weight: 700; background: var(--surface); }
-.part-picker-results button { display: grid; gap: 2px; width: 100%; padding: 7px 10px; text-align: left; border: 0; border-bottom: 1px solid var(--border-color); border-radius: 0; background: transparent; }
+.part-picker-results button { display: grid; justify-content: start; gap: 2px; width: 100%; padding: 7px 10px; text-align: left; border: 0; border-bottom: 1px solid var(--border-color); border-radius: 0; background: transparent; }
 .part-picker-results button span { color: var(--text-muted); font-size: 11px; }
 .part-picker-results button.active, .part-picker-results button:hover:not(:disabled) { background: var(--primary-soft); }
 .part-picker-results button:disabled { opacity: .55; cursor: not-allowed; }
@@ -2149,10 +2170,7 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 /* Gmail-inspired mailbox list — the lead remains a workflow record, but the
    inbox itself reads like mail: search first, tabs second, messages in rows. */
 .mailbox-page { padding-top: 18px; }
-/* padding-right clears the notification bell, which is position:fixed at
-   right:24px and 42px wide, so it reserves no space of its own and would
-   otherwise sit on top of the last action button. */
-.mailbox-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; padding-right: 52px; }
+.mailbox-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; padding-right: var(--bell-clearance); }
 .mailbox-head h2 { display: flex; align-items: center; gap: 7px; margin-bottom: 3px; }
 .mailbox-head p { margin: 0; }
 .mailbox-head-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; align-items: center; }
@@ -2166,7 +2184,9 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .mail-list-toolbar { display: flex; align-items: center; gap: 5px; min-height: 44px; padding: 5px 10px; border-bottom: 1px solid var(--border-soft); color: var(--text-muted); }
 .mail-check { display: inline-flex; align-items: center; justify-content: center; width: 30px; flex: 0 0 30px; cursor: pointer; }
 .mail-check input, .mail-show-all input { accent-color: var(--primary-accent); }
-.mail-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; background: transparent; color: var(--text-muted); border-radius: 50%; }
+/* min-height:0 releases the base button's 40px floor, which would otherwise beat
+   the 30px height and render this circle as an oval. */
+.mail-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; min-height: 0; padding: 0; border: 0; background: transparent; color: var(--text-muted); border-radius: 50%; }
 .mail-icon-btn:hover, .mail-star:hover { color: var(--primary-deep); background: var(--primary-soft); filter: none; }
 .mail-icon-btn.mail-delete-btn:hover { color: var(--palette-bbf39d23); background: var(--palette-cb21daf); }
 .mail-selection-count { margin-left: 8px; font-size: 12px; color: var(--primary-deep); font-weight: 600; }
@@ -2345,7 +2365,9 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
   .approval-search { flex-basis: 100%; }
   .approval-filters select, .approval-clear { flex: 1 1 0; min-width: 0; }
 }
-.mail-row { height: 58px; min-height: 58px; max-height: 58px; padding: 0 10px 0 8px; border-bottom: 1px solid var(--border-soft); cursor: pointer; color: var(--text-muted); transition: background .15s ease, box-shadow .15s ease; }
+/* 58px is a floor, not a cap: a subject or sender address that needs two lines
+   gets them rather than being cut off mid-word. */
+.mail-row { min-height: 58px; padding: 8px 10px 8px 8px; border-bottom: 1px solid var(--border-soft); cursor: pointer; color: var(--text-muted); transition: background .15s ease, box-shadow .15s ease; }
 .mail-row:hover { background: var(--palette-3353bb00); box-shadow: inset 3px 0 0 var(--primary-accent); }
 .mail-row.selected { background: var(--primary-soft); }
 .mail-row.unread { color: var(--text-main); background: var(--palette-b315b730); }
@@ -2354,15 +2376,15 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .mail-star:hover { color: var(--palette-bcd85701); }
 .mail-star.starred { color: var(--palette-bcd85701); }
 .mail-star.starred svg { fill: currentColor; }
-.mail-row > div { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.2; }
-.mail-sender { overflow: hidden; padding-right: 12px; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
-.mail-sender b, .mail-sender small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mail-row > div { min-width: 0; overflow-wrap: break-word; line-height: 1.2; }
+.mail-sender { min-width: 0; padding-right: 12px; overflow-wrap: break-word; font-size: 12px; }
+.mail-sender b, .mail-sender small { display: block; min-width: 0; overflow-wrap: break-word; }
 .mail-sender small, .mail-date small { margin-top: 3px; color: var(--text-subtle); font-size: 10.5px; }
-.mail-content { min-width: 0; overflow: hidden; padding-right: 12px; font-size: 12px; white-space: normal !important; }
-.mail-content-stack { display: flex; min-width: 0; max-width: 100%; flex-direction: column; justify-content: center; gap: 2px; overflow: hidden; }
-.mail-subject-line { display: flex; align-items: center; min-width: 0; gap: 6px; overflow: hidden; color: var(--text-main); line-height: 1.25; white-space: nowrap; }
-.mail-subject-line b { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mail-content small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mail-content { min-width: 0; padding-right: 12px; font-size: 12px; white-space: normal !important; }
+.mail-content-stack { display: flex; min-width: 0; max-width: 100%; flex-direction: column; justify-content: center; gap: 2px; }
+.mail-subject-line { display: flex; align-items: center; flex-wrap: wrap; min-width: 0; gap: 6px; color: var(--text-main); line-height: 1.25; }
+.mail-subject-line b { min-width: 0; flex: 1 1 auto; overflow-wrap: break-word; }
+.mail-content small { display: block; overflow-wrap: break-word; }
 .mail-content small { display: block; margin-top: 3px; color: var(--text-subtle); line-height: 1.25; }
 .mail-ref { flex: 0 0 auto; max-width: 25%; overflow: hidden; color: var(--primary-deep) !important; font-size: 10.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .mail-opportunity-link { display: inline-flex; align-items: center; flex: 0 0 auto; max-width: 44%; margin: 0; padding: 0; overflow: hidden; border: 0; background: transparent; color: var(--primary-deep); font: inherit; font-size: 10.5px; font-weight: 700; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
@@ -2460,7 +2482,10 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 /* Tablet (iPad-class) — the drawer becomes the primary editing surface */
 @media (max-width: 1024px) {
   body { font-size: 15px; }
-  button, .btn { min-height: 42px; padding: 9px 14px; font-size: 14px; }
+  /* Only font-size survives here: the min-height and padding this rule used to
+     carry were silently beaten by the later base blocks, which sit further down
+     the file at equal specificity. `.tablet-mode` still sets the larger box. */
+  button, .btn { font-size: 14px; }
   select, input[type=text], input[type=number], input[type=date], input[type=tel], textarea {
     min-height: 42px; font-size: 16px; /* 16px stops iOS focus-zoom */
   }
@@ -2618,11 +2643,15 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 /* One centred measure for the whole page, so the heading, toolbar, demo card
    and card grid all share the same left and right edges at every width. */
 .admin-page { max-width: 1400px; margin-inline: auto; }
+@media (min-width: 1500px) {
+  .admin-page { max-width: 1600px; }
+}
 .admin-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: start; gap: 10px; }
 .admin-layout { display: grid; gap: 10px; }
 .admin-masonry-grid { column-count: 4; column-gap: 10px; }
 .admin-masonry-grid > .admin-card { width: 100%; margin: 0 0 10px; break-inside: avoid; }
 .admin-fixed-columns { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: start; gap: 10px; }
+.admin-clause-library { margin-bottom: 10px; }
 .admin-column { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
 .admin-wide-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: start; gap: 10px; }
 .admin-wide-grid > .admin-card-wide { grid-column: span 2; }
@@ -2672,7 +2701,7 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 /* white-space:normal is load-bearing — the UA stylesheet sets buttons to
    nowrap, which overrides the wrapping on the summary and pushes the whole
    card (and with it the grid and the page) wider than its container. */
-.class-rule-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 0; border: 0; background: transparent; box-shadow: none; color: var(--text-muted); font-size: 12.5px; text-align: left; white-space: normal; cursor: pointer; }
+.class-rule-head { display: flex; align-items: center; justify-content: flex-start; gap: 8px; width: 100%; padding: 6px 0; border: 0; background: transparent; box-shadow: none; color: var(--text-muted); font-size: 12.5px; text-align: left; white-space: normal; cursor: pointer; }
 .class-rule-head:hover, .class-rule-head:focus-visible { color: var(--xl-green-dark); outline: 0; }
 .class-rule-summary { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .class-rule-body { padding: 2px 0 10px 8px; border-left: 2px solid var(--grid-line); margin-left: 4px; }
@@ -2805,10 +2834,14 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .check-row input[type=checkbox] { width: 17px; height: 17px; }
 .kyc-upload-menu { position: relative; display: inline-flex; }
 .kyc-upload-menu-list { position: absolute; top: calc(100% + 3px); right: 0; z-index: 12; display: grid; min-width: 175px; padding: 4px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--palette-4843938); box-shadow: 0 5px 16px rgba(0,0,0,.16); }
-.kyc-upload-menu-list button { display: flex; align-items: center; gap: 6px; width: 100%; padding: 7px 8px; border: 0; border-radius: 3px; background: transparent; color: var(--text-main); text-align: left; font-size: 11.5px; }
+.kyc-upload-menu-list button { display: flex; align-items: center; justify-content: flex-start; gap: 6px; width: 100%; padding: 7px 8px; border: 0; border-radius: 3px; background: transparent; color: var(--text-main); text-align: left; font-size: 11.5px; }
 .kyc-upload-menu-list button:hover { background: var(--primary-soft); color: var(--primary-deep); }
 .kyc-upload-menu-item { display: flex; align-items: center; gap: 6px; width: 100%; padding: 7px 8px; border-radius: 3px; color: var(--text-main); text-align: left; font-size: 11.5px; cursor: pointer; }
 .kyc-upload-menu-item:hover, .kyc-upload-menu-item:focus-visible { background: var(--primary-soft); color: var(--primary-deep); outline: 0; }
+.kyc-identity-value { display: block; width: min(220px, 100%); margin-top: 5px; padding: 4px 7px; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; }
+.admin-card-row { display: grid; grid-template-columns: minmax(100px, 1fr) auto auto minmax(180px, 1.5fr); gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border-soft); }
+.admin-card-row:last-of-type { border-bottom: 0; }
+@media (max-width: 720px) { .admin-card-row { grid-template-columns: 1fr 1fr; } .admin-card-row > input { grid-column: 1 / -1; } }
 .kyc-template-note { flex: 1 0 100%; margin-left: 21px; color: var(--text-muted); font-size: 10.5px; line-height: 1.3; }
 .lead-decision-head-actions { display: flex; align-items: center; gap: 8px; }
 .lead-decision-head-actions button { white-space: nowrap; }
@@ -2986,6 +3019,10 @@ button.install:hover { background: var(--primary-hover); }
   --ws-bg: var(--bg-app);
   --ws-surface: var(--palette-7e6529f6);
   --ws-surface-2: var(--palette-f58d7116);
+  /* .ws-body scrolls behind a classic (space-taking) scrollbar; its non-scrolling
+     siblings add this to their right padding so every panel in the rail keeps a
+     common content edge. Change the width here and both sides follow. */
+  --ws-scrollbar-w: 10px;
   --ws-border: var(--border-soft);
   --ws-border-strong: var(--border-color);
   --ws-text: var(--text-main);
@@ -3220,7 +3257,7 @@ button.install:hover { background: var(--primary-hover); }
 .ws-head-title { font-size: 13px; font-weight: 700; color: var(--ws-text); letter-spacing: -.005em; }
 .ws-head-meta { margin-left: auto; font-size: 11px; color: var(--ws-text-3); white-space: nowrap; }
 .ws-body { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px; scrollbar-width: thin; scrollbar-color: var(--ws-border-strong) transparent; }
-.ws-body::-webkit-scrollbar { width: 10px; }
+.ws-body::-webkit-scrollbar { width: var(--ws-scrollbar-w, 10px); }
 .ws-body::-webkit-scrollbar-track { background: transparent; }
 .ws-body::-webkit-scrollbar-thumb { background: var(--ws-border-strong); border-radius: 999px; border: 3px solid var(--ws-surface); }
 .ws-body::-webkit-scrollbar-thumb:hover { background: var(--palette-fb89ec09); }
@@ -3615,6 +3652,33 @@ button.install:hover { background: var(--primary-hover); }
 .readonly-decision-value > span { min-width: 0; overflow-wrap: anywhere; }
 .readonly-decision-value > svg { flex: 0 0 auto; color: var(--ws-emerald); }
 .readonly-decision-value.is-multiline { align-items: flex-start; min-height: 58px; }
+.boq-preview-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ws-blue, var(--action-accent-ink));
+  font: inherit;
+  font-weight: 700;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.boq-preview-link:hover { color: var(--action-accent); }
+.boq-preview-link:focus-visible { outline: 2px solid var(--action-accent); outline-offset: 2px; border-radius: 2px; }
+.boq-preview-link:disabled { color: var(--ws-text-3); cursor: default; text-decoration: none; }
+.lead-boq-preview-modal { width: min(760px, 92vw); }
+.lead-boq-preview-meta { margin: 0 0 12px; color: var(--ws-text-2); font-size: 12px; }
+.lead-boq-preview-table-wrap { overflow-x: auto; border: 1px solid var(--ws-border, var(--grid-line)); }
+.lead-boq-preview-table { width: 100%; min-width: 620px; border-collapse: collapse; table-layout: fixed; font-size: 12px; }
+.lead-boq-preview-table th,
+.lead-boq-preview-table td { padding: 8px 9px; border-bottom: 1px solid var(--ws-border, var(--grid-line)); text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.lead-boq-preview-table th { background: var(--ws-surface-2, #f8fafc); color: var(--ws-text-3, var(--text-secondary)); font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.lead-boq-preview-table th:nth-child(1), .lead-boq-preview-table td:nth-child(1) { width: 62px; text-align: center; }
+.lead-boq-preview-table th:nth-child(2) { width: 38%; }
+.lead-boq-preview-table th:nth-child(3) { width: 24%; }
+.lead-boq-preview-table th:nth-child(4), .lead-boq-preview-table th:nth-child(5) { width: 72px; }
+.lead-boq-preview-actions { justify-content: flex-end; margin-top: 14px; }
 @media (max-width: 820px) {
   .readonly-decision-grid { grid-template-columns: 1fr; }
   .readonly-decision-grid .lead-decision-subsection { grid-column: auto; }
@@ -3638,14 +3702,14 @@ button.install:hover { background: var(--primary-hover); }
 .converted-source-meta { display: flex; flex-direction: column; gap: 2px; color: var(--ws-text); font-size: 12px; }
 .converted-source-meta span { color: var(--ws-text-3); font-size: 11px; }
 .converted-source-subject { margin-top: 10px; color: var(--ws-text); font-size: 12.5px; font-weight: 700; line-height: 1.4; }
-/* 220px / 20px line box = exactly 11 lines. Keep these two in step: a cap that
-   is not a whole multiple of the line box slices the last line through the
-   middle of the glyphs. */
-.converted-source-copy { max-height: 220px; overflow-y: auto; margin-top: 9px; color: var(--ws-text-2); font-size: 12px; line-height: 20px; white-space: pre-wrap; }
+/* The cap is expressed in whole lines. Stating it as a raw px height is what
+   sliced the last line through the middle of its glyphs — derive it instead so
+   the two can never fall out of step. */
+.converted-source-copy { --line-h: 20px; --lines: 11; max-height: calc(var(--line-h) * var(--lines)); overflow-y: auto; margin-top: 9px; color: var(--ws-text-2); font-size: 12px; line-height: var(--line-h); white-space: pre-wrap; }
 .converted-source-attachments { display: grid; gap: 6px; margin-top: 12px; }
 .converted-source .attach-row { min-width: 0; margin: 0; }
 .converted-source .attach-row-open {
-  width: 100%; border: 1px solid var(--ws-border); border-radius: 8px; background: var(--ws-surface);
+  width: 100%; justify-content: flex-start; border: 1px solid var(--ws-border); border-radius: 8px; background: var(--ws-surface);
   color: var(--ws-text-2); cursor: pointer; text-align: left;
 }
 .converted-source .attach-row-open:hover { border-color: var(--ws-blue-line); background: var(--ws-blue-soft); }
@@ -4047,10 +4111,12 @@ button.install:hover { background: var(--primary-hover); }
 .home-forecast-split b, .home-forecast-split span { display: block; }
 .home-forecast-split b { font-size: 15px; font-variant-numeric: tabular-nums; }
 .home-forecast-split span { margin-top: 2px; color: var(--text-subtle); font-size: 10px; }
-.home-forecast-action { width: 100%; text-align: left; }
+/* space-between replaces the child span's float:right, which is inert now that
+   the base button rule makes this a flex container. */
+.home-forecast-action { display: flex; align-items: center; justify-content: space-between; width: 100%; text-align: left; }
 .home-forecast-action span { float: right; font-size: 15px; line-height: 12px; }
 .home-alert-rail { display: flex; align-items: center; gap: 5px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border-soft); }
-.home-alert-rail button { display: inline-flex; align-items: baseline; gap: 6px; padding: 4px 8px; border: 0; background: transparent; color: var(--text-muted); cursor: pointer; font-size: 10.5px; text-align: left; }
+.home-alert-rail button { display: inline-flex; align-items: baseline; justify-content: flex-start; gap: 6px; padding: 4px 8px; border: 0; background: transparent; color: var(--text-muted); cursor: pointer; font-size: 10.5px; text-align: left; }
 .home-alert-rail button:hover { color: var(--primary-hover); filter: none; }
 .home-alert-value { color: var(--text-main); font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .home-alert-copy { margin-left: auto; color: var(--text-subtle); font-size: 10.5px; text-align: right; }
@@ -4470,6 +4536,7 @@ button.linklike:hover { text-decoration: underline; }
    inline controls but opens the .filter-pop checkbox list instead of a select. */
 .cell-pick {
   width: 100%; min-height: 22px; padding: 1px 4px; text-align: left;
+  justify-content: flex-start;
   background: transparent; border: 1px solid transparent; border-radius: 2px;
   font: inherit; color: inherit; cursor: pointer; white-space: nowrap;
   overflow: hidden; text-overflow: ellipsis;
@@ -4547,7 +4614,7 @@ button.linklike:hover { text-decoration: underline; }
 .dashboard-table-scroll { overflow-x: auto; }
 .dashboard-table { width: 100%; min-width: 860px; border-collapse: collapse; font-size: 11.5px; table-layout: fixed; }
 .dashboard-table th { padding: 5px 6px; color: var(--text-subtle); border-bottom: 1px solid var(--border-color); text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
-.dashboard-table td { padding: 7px 6px; border-bottom: 1px solid var(--border-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-table td { padding: 7px 6px; border-bottom: 1px solid var(--border-soft); overflow-wrap: break-word; }
 .dashboard-table tbody tr { cursor: pointer; }
 .dashboard-table tbody tr:hover { background: var(--primary-soft); }
 .dashboard-table th:nth-child(1) { width: 95px; }
@@ -4740,6 +4807,7 @@ html, body { overflow-x: hidden; max-width: 100%; }
   justify-content: center;
   width: 20px;
   height: 20px;
+  min-height: 0;
   border: 1px solid currentColor;
   border-radius: 50%;
   font-size: 16px;
@@ -4886,7 +4954,7 @@ html, body { overflow-x: hidden; max-width: 100%; }
 
 /* ---- lead attachments: view & add ---- */
 .lead-workspace .attach-row.attach-row-open {
-  width: 100%; text-align: left; font-family: inherit; border-radius: 9px;
+  width: 100%; justify-content: flex-start; text-align: left; font-family: inherit; border-radius: 9px;
   background: var(--ws-surface); color: inherit;
 }
 .lead-workspace .attach-row.attach-row-open:focus-visible {
@@ -4984,8 +5052,22 @@ html, body { overflow-x: hidden; max-width: 100%; }
    Headers wrap on the same terms; the caret floats right (above) so a wrapped
    label never swallows the sort/filter control. */
 .tracker-page table.sheet.cols-key { table-layout: fixed; }
+/* break-word, not anywhere: free text wraps at spaces and a single token is
+   kept whole rather than chopped — `anywhere` was splitting opportunity IDs
+   as "2609003R / S". */
 .tracker-page .sheet.cols-key th, .tracker-page .sheet.cols-key td {
-  white-space: normal; overflow-wrap: anywhere; vertical-align: middle;
+  white-space: normal; overflow-wrap: break-word; vertical-align: middle;
+}
+/* Opp ID and Proposal hold one indivisible token each. Wrapping those reads as
+   corrupt data, so they stay on one line and fall back to an ellipsis (and the
+   hover title) if their column is ever too narrow. Column widths come from
+   columnWidthCss() in pages/Tracker.jsx — under table-layout:fixed a min-width
+   here would be ignored, so the width itself is set there. */
+.tracker-page .sheet.cols-key thead tr > :nth-child(2),
+.tracker-page .sheet.cols-key tbody tr > :nth-child(2),
+.tracker-page .sheet.cols-key thead tr > :last-child,
+.tracker-page .sheet.cols-key tbody tr > :last-child {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
 /* The wrapping free-text cells (WrapInput in pages/Tracker.jsx). Height is set
@@ -6646,8 +6728,7 @@ body {
   padding: 4px 6px;
   font-size: 10px;
   line-height: 1.15;
-  height: 38px;
-  max-height: 38px;
+  min-height: 38px;
   white-space: nowrap;
   overflow-wrap: normal;
   word-break: normal;
@@ -6862,15 +6943,16 @@ body {
 
 button, .btn { min-height: 40px; }
 
+/* Emphasis variants share the default button's box and differ only in colour and
+   weight. Giving them their own taller, rounder box left a visible step wherever
+   a primary sits beside a plain button, which is most toolbars in the app. */
 button.primary, .btn.primary,
 button.dark, .btn.dark,
 button.danger, .btn.danger,
 button.install, .btn.install,
 .proposal-action-toolbar > button,
 .proposal-action-toolbar > .btn {
-  min-height: 46px;
-  padding: 10px 18px;
-  border-radius: 10px;
+  padding-inline: 18px;
 }
 
 .sidebar-toggle, .nav-burger, .drawer-x, .ib-close {
@@ -8888,12 +8970,11 @@ button:not(.primary):not(.danger):not(.dark):not(.ghost),
   display: none;
 }
 
-/* The sibling .ws-body scrolls behind a 10px scrollbar, so its content edge sits
-   10px further in than a plain 10px padding would put it. Match that here or the
-   cards above and the buttons below stop sharing a right edge. */
+/* Right padding matches the scrollbar the sibling .ws-body scrolls behind, so
+   the cards above and the buttons below share one content edge. */
 .structured-active-sections .compact-workflow-content .compact-action-col > .ws-foot {
   position: static;
-  padding: 10px 20px 10px 10px;
+  padding: 10px calc(10px + var(--ws-scrollbar-w, 10px)) 10px 10px;
   border-top: 1px solid var(--ws-border);
 }
 
@@ -8946,6 +9027,7 @@ button:not(.primary):not(.danger):not(.dark):not(.ghost),
 .lead-workspace .decision-ai-actions .icon-action {
   width: 22px;
   height: 22px;
+  min-height: 0;
   padding: 0;
   flex: 0 0 22px;
 }
@@ -9093,7 +9175,7 @@ button:not(.primary):not(.danger):not(.dark):not(.ghost),
     align-items: center;
     flex-wrap: wrap;
     gap: 6px;
-    padding: 10px 20px 10px 10px;
+    padding: 10px calc(10px + var(--ws-scrollbar-w, 10px)) 10px 10px;
   }
 
   .structured-active-sections .compact-action-col > .ws-foot > .ws-action,
@@ -9149,6 +9231,7 @@ button:not(.primary):not(.danger):not(.dark):not(.ghost),
     display: inline-flex;
     align-items: center;
     justify-content: center;
+    gap: 6px;
     margin-block: 0;
   }
 
@@ -9377,4 +9460,24 @@ button:not(.primary):not(.danger):not(.dark):not(.ghost),
   border: 0 !important;
   border-radius: 0;
   background: transparent !important;
+}
+
+/* Admin clause rows have three independent controls. A flex row allowed the
+   title and text editor to collapse to a few characters in the narrow admin
+   columns; keep the editors readable and let the row grow vertically. */
+.clause-library-row {
+  display: grid !important;
+  width: 100%;
+  grid-template-columns: minmax(96px, 0.7fr) minmax(0, 1fr) 58px;
+  align-items: start;
+  gap: 8px;
+  overflow: visible;
+}
+.clause-library-row input,
+.clause-library-row textarea { min-width: 0; width: 100%; max-width: 100%; box-sizing: border-box; }
+.clause-library-row button { min-width: 0; padding-left: 2px; padding-right: 2px; white-space: nowrap; font-size: 10px; }
+.clause-library-row textarea { resize: vertical; }
+@media (max-width: 720px) {
+  .clause-library-row { grid-template-columns: 1fr auto; }
+  .clause-library-row textarea { grid-column: 1 / -1; grid-row: 2; }
 }

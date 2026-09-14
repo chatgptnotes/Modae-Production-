@@ -32,6 +32,11 @@ import { downloadKycTemplate } from '../kycTemplate.js'
 const statusPill = s =>
   s === 'Approved' ? 'Green' : s === 'Rejected' ? 'Red' : s === 'Approved with conditions' ? 'Amber' : 'Blue'
 
+// KYC and commercial approvals are different controls: KYC cannot be waived;
+// only the configured amber-fee and red-clearance blockers can request an
+// exception.
+const canRequestException = blocker => !blocker.approvalType && ['amber-fee', 'red-clearance'].includes(blocker.key)
+
 const NEXT_ACTION = {
   Intake: 'Qualify the inquiry and register the opportunity',
   Qualification: 'Qualify the inquiry and register the opportunity',
@@ -364,6 +369,7 @@ export default function Workbench() {
                   {item.severity === 'wait' && <span>Waiting for the responsible approver.</span>}
                   {item.key === 'clarifications' && <button className="exception-action" onClick={() => openTransitionTab('clarifications')}>Open clarifications</button>}
                   {item.key === 'kyc' && <button className="exception-action" onClick={() => openTransitionTab('customer')}>Open Customer/KYC</button>}
+                  {/* KYC is not exception-waivable; only amber-fee and red-clearance can request an exception. */}
                   {item.key === 'required-contactPerson' && <button className="exception-action" onClick={() => openMissingContact('contactPerson')}>Edit contact person</button>}
                   {item.key === 'required-contactPhone' && <button className="exception-action" onClick={() => openMissingContact('contactPhone')}>Edit contact phone</button>}
                   {(item.key.startsWith('sp-conf-') || item.key.startsWith('sp-price-')) && <button className="exception-action" onClick={() => openTransitionTab('sourcing')}>Open sourcing</button>}

@@ -4,6 +4,8 @@
 import { STATES, STATE_REGION } from './indiaLocations.js'
 import { DEFAULT_CUSTOMER_CLASSES, DEFAULT_DOC_CHECKLISTS } from './customerClasses.js'
 import { DEFAULT_CURRENCY_RATES } from './currency.js'
+import { DEFAULT_KYC_VALIDATION } from './kycValidation.js'
+import { DEFAULT_CLAUSES } from './clauses.js'
 import { BNK_IMPORTED_PARTS } from './priceListData/bnk.js'
 import { METRIX_IMPORTED_PARTS } from './priceListData/metrix.js'
 
@@ -1140,7 +1142,10 @@ export function newProposal(oppId, opp, options = {}) {
     markupPct: 0,
     pricingHistory: [],
     approvedPricing: null,
-    costing: { ...defaultCosting },
+    costing: { ...defaultCosting, currencyRates: options.currencyRates || undefined },
+    sourceCurrency: 'INR', sourceRate: 1, sourceRateDate: new Date().toISOString().slice(0, 10),
+    clauseIds: DEFAULT_CLAUSES.filter(c => c.routes.includes(route === 'Service' ? 'Services' : route) && c.required).map(c => c.id),
+    clauses: [],
     signals: [
       { signal: 'Radial Vibration X/Y', perUnit: 8, units: 7 },
       { signal: 'Axial Position', perUnit: 2, units: 7 },
@@ -1223,6 +1228,7 @@ export const seedConfig = {
     .sort((a, b) => a.name.localeCompare(b.name)),
   workflow: DEFAULT_WORKFLOW,
   kycItems: ['GST certificate', 'PAN certificate', 'Cancelled cheque', 'EFT / bank mandate', 'CIN reference', 'Registered & business address'],
+  kycValidation: DEFAULT_KYC_VALIDATION,
   templates: ['Spares quotation', 'Reactive service offer', 'Project techno-commercial proposal'],
   reminders: [
     { id: 'validity', label: 'Proposal validity 7-day warning', on: true },

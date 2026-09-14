@@ -1,12 +1,15 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Routes, Route, NavLink, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from './store.jsx'
 import { PORTAL_ENABLED, ROLES } from './seed.js'
-import { isAdminRole, isSalesOwner, canSeePage, displayRole } from './utils.js'
+import { isAdminRole, isSalesOwner, canSeePage, displayRole, canPriceProposal, ddMmmYY } from './utils.js'
 import { DrawerHost } from './drawer.jsx'
 import { Icon, ModaeLogo } from './icons.jsx'
+import { DemoDataControls } from './ui.jsx'
 import { counts } from './kpi.js'
 import BrandWatermark from './branding/BrandWatermark.jsx'
+import { startAutoTitle } from './autoTitle.js'
+import { computeAlerts } from './monitoring.js'
 import Tracker from './pages/Tracker.jsx'
 import IntakeForm from './pages/IntakeForm.jsx'
 import Folders from './pages/Folders.jsx'
@@ -20,7 +23,7 @@ import Users from './pages/Users.jsx'
 import TenderIntake from './pages/TenderIntake.jsx'
 import MyOpps from './pages/MyOpps.jsx'
 import Inbox from './pages/Inbox.jsx'
-import Approvals from './pages/Approvals.jsx'
+import Approvals, { COMMERCIAL_RX } from './pages/Approvals.jsx'
 import Audit from './pages/Audit.jsx'
 import VoiceUpdate from './pages/VoiceUpdate.jsx'
 import AiMap from './pages/AiMap.jsx'
@@ -54,6 +57,16 @@ const approvalOwner = (approval, store) => {
   return approval?.requestedBy
 }
 
+// 'missing-follow-up' -> 'Missing follow up'
+const sentenceCase = type => {
+  const words = String(type || '').replaceAll('-', ' ').trim()
+  return words ? words[0].toUpperCase() + words.slice(1) : ''
+}
+
+const uniqueApproval = (approval, all) => all.findIndex(item =>
+  item.oppId === approval.oppId && item.type === approval.type && item.status === approval.status
+  && (item.requestedBy || item.approver) === (approval.requestedBy || approval.approver)) === all.indexOf(approval)
+
 function NotificationBell({ store, nav }) {
   const [open, setOpen] = useState(false)
   const role = store.role
@@ -65,33 +78,50 @@ function NotificationBell({ store, nav }) {
       return Array.isArray(saved) ? saved : []
     } catch { return [] }
   })
+  // detail can quote pricing. The approvals page hides that from roles that may
+  // not see commercial figures; a notification must not be the way around it.
+  const safeText = value => (COMMERCIAL_RX.test(value || '') && !canPriceProposal(role) ? 'Restricted' : value)
   const notifications = [
-    ...(store.approvals || []).filter(a => a.status === 'Pending' && ([...(a.needed || []), a.approver, a.requestedBy].filter(Boolean).includes(role))).map(a => ({
-      id: `approval-${a.id}`, icon: 'checkCircle', title: 'Approval waiting', text: a.detail || a.type, to: approvalNotificationPath(a), date: a.ts,
+    ...(store.approvals || []).filter(a => uniqueApproval(a, store.approvals || []) && a.status === 'Pending' && ([...(a.needed || []), a.approver, a.requestedBy].filter(Boolean).includes(role))).map(a => ({
+      id: `approval-${a.id}`, icon: 'checkCircle', title: 'Approval waiting', text: safeText(a.detail || a.type), to: approvalNotificationPath(a), date: a.ts,
     })),
-    ...(store.approvals || []).filter(a => ['Approved', 'Approved with conditions', 'Returned', 'Rejected'].includes(a.status) && approvalOwner(a, store) === role).map(a => ({
-      id: `approval-result-${a.id}`, icon: 'checkCircle', title: `Approval ${a.status.toLowerCase()}`, text: a.detail || a.type, to: approvalNotificationPath(a), date: a.decisionTs || a.ts,
+    ...(store.approvals || []).filter(a => uniqueApproval(a, store.approvals || []) && ['Approved', 'Approved with conditions', 'Returned', 'Rejected'].includes(a.status) && approvalOwner(a, store) === role).map(a => ({
+      // The decision note, not a.detail — detail is frozen at request time, so a
+      // resolved row otherwise reads "Approval approved / … is required".
+      id: `approval-result-${a.id}`, icon: 'checkCircle', title: `Approval ${a.status.toLowerCase()}`, text: safeText(a.decisionNote || a.detail || a.type), to: approvalNotificationPath(a), date: a.decisionTs || a.ts,
     })),
     ...(store.opportunities || []).filter(o => o.status === 'Open' && o.owner === role && o.lastUpdated && ((Date.now() - new Date(o.lastUpdated).getTime()) / 86400000) >= 7).map(o => ({
       id: `stale-${o.id}`, icon: 'clock', title: 'Follow-up overdue', text: `${o.id} has not been updated for 7 days`, to: `/opp/${o.id}`, date: o.lastUpdated,
     })),
-  ]
+    // stale-opportunity and pending-approval both restate a source above.
+    ...computeAlerts(store).filter(alert => !['stale-opportunity', 'pending-approval'].includes(alert.type)).map(alert => ({
+      id: alert.id, icon: 'alert', title: sentenceCase(alert.type), text: alert.message, to: `/opp/${alert.objectId}`, date: alert.createdAt,
+    })),
+  ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
   const unseenNotifications = notifications.filter(item => !seenIds.includes(item.id))
   const markSeen = items => {
     const ids = items.map(item => item.id)
     if (!ids.length) return
     setSeenIds(previous => {
-      const next = [...new Set([...previous, ...ids])]
+      // Only keep ids that still correspond to a live notification, otherwise
+      // this list grows for the lifetime of the browser profile.
+      const live = new Set(notifications.map(item => item.id))
+      const next = [...new Set([...previous, ...ids])].filter(id => live.has(id))
       try { window.localStorage.setItem(seenStorageKey, JSON.stringify(next)) } catch { /* best effort */ }
       return next
     })
   }
+  // What was new at the moment the panel opened. Marking seen on open instead
+  // meant the header always said "All seen" and nothing was ever highlighted.
+  const [unseenOnOpen, setUnseenOnOpen] = useState([])
+  const closeNotifications = () => {
+    setOpen(false)
+    markSeen(notifications)
+  }
   const toggleNotifications = () => {
-    setOpen(value => {
-      const next = !value
-      if (next) markSeen(notifications)
-      return next
-    })
+    if (open) { closeNotifications(); return }
+    setUnseenOnOpen(unseenNotifications.map(item => item.id))
+    setOpen(true)
   }
   return (
     <div className="notification-wrap">
@@ -108,13 +138,14 @@ function NotificationBell({ store, nav }) {
       </button>
       {open && (
         <>
-          <div className="notification-overlay" onClick={() => setOpen(false)} />
+          <div className="notification-overlay" onClick={closeNotifications} />
           <div id="notification-popover" className="notification-popover" role="dialog" aria-label="Notifications">
-            <div className="notification-heading"><b>Notifications</b><span>{unseenNotifications.length ? `${unseenNotifications.length} unseen` : 'All seen'}</span></div>
+            <div className="notification-heading"><b>Notifications</b><span>{unseenOnOpen.length ? `${unseenOnOpen.length} new` : 'All seen'}</span></div>
             {notifications.length ? notifications.map(item => (
-              <button key={item.id} className="notification-item" type="button" onClick={() => { markSeen([item]); setOpen(false); nav(item.to) }}>
+              <button key={item.id} className={`notification-item${unseenOnOpen.includes(item.id) ? ' unseen' : ''}`} type="button" onClick={() => { markSeen([item]); setOpen(false); nav(item.to) }}>
                 <Icon name={item.icon} size={15} />
                 <span><b>{item.title}</b><small>{item.text}</small></span>
+                {item.date && <time className="notification-date">{ddMmmYY(String(item.date).slice(0, 10))}</time>}
               </button>
             )) : <p className="hint notification-empty">You are all caught up.</p>}
           </div>
@@ -168,6 +199,7 @@ export default function App() {
   const store = useStore()
   const nav = useNavigate()
   const loc = useLocation()
+  const mainRef = useRef(null)
   const [navOpen, setNavOpen] = useState(false)
   const [sidebarCompact, setSidebarCompact] = useState(() => {
     try { return window.localStorage.getItem('modae_sidebar_compact') === '1' } catch { return false }
@@ -186,6 +218,8 @@ export default function App() {
 
   // Off-canvas nav closes on navigation in the responsive desktop shell.
   useEffect(() => { setNavOpen(false) }, [loc.pathname])
+
+  useEffect(() => startAutoTitle(mainRef.current), [])
 
   // Follow the viewport until the user picks a mode themselves — a tablet turned
   // to landscape, or a browser window dragged wider, should land in the right
@@ -286,6 +320,7 @@ export default function App() {
           })}
         </nav>
         <div className="side-foot">
+          <DemoDataControls className="reset" label={x => <span className="side-label">{x}</span>} />
           <button className="reset sidebar-mode-switch" onClick={() => { store.setViewMode('tablet'); nav('/home') }}>
             <Icon name="tablet" size={14} /> <span className="side-label">Switch to tablet view</span>
           </button>
@@ -305,7 +340,7 @@ export default function App() {
         {/* The shell is viewport-locked, so this is the app's single scroll
             region — pages that want their own internal scroller (the pipeline
             sheet, the mailbox list) size themselves to 100% of it. */}
-        <main id="main-content" className="main-scroll">{routes}</main>
+        <main id="main-content" className="main-scroll" ref={mainRef}>{routes}</main>
       </div>
       <DrawerHost />
     </div>

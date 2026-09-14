@@ -10,6 +10,7 @@ import {
 } from './seed.js'
 import { normalizePriceFields } from './pricing.js'
 import { DEFAULT_CURRENCY_RATES, normalizedCurrencyRates } from './currency.js'
+import { DEFAULT_CLAUSES } from './clauses.js'
 
 // The store's pure state layer, lifted out of store.jsx so it can be imported
 // and *run* by the tests — store.jsx is JSX and node --test cannot parse it,
@@ -116,6 +117,10 @@ export function migrate(s) {
     }
   }
   s.config.documentChecklists = { ...seedConfig.documentChecklists, ...(s.config.documentChecklists || {}) }
+  s.config.clauses = Array.isArray(s.config.clauses) ? s.config.clauses : DEFAULT_CLAUSES.map(clause => ({ ...clause }))
+  s.config.kycValidation = Object.fromEntries(Object.entries(seedConfig.kycValidation || {}).map(([key, rule]) => [
+    key, { ...rule, ...(s.config.kycValidation?.[key] || {}) },
+  ]))
   if (!Array.isArray(s.config.stateRegions)) s.config.stateRegions = seedConfig.stateRegions
   if (!Array.isArray(s.config.ownerRules)) s.config.ownerRules = seedConfig.ownerRules
   s.config.roleNames = { ...seedConfig.roleNames, ...(s.config.roleNames || {}) }
@@ -343,13 +348,16 @@ export function emptyState(prev) {
     ...prev,
     demoData: false,
     opportunities: [], leads: [], leadArchive: [], leadDeadlines: [],
-    priceLists: {}, adhocParts: [],
+    // Keep reference catalogues after a business-data wipe. They are Admin
+    // configuration, not demo transactions, and are required to price the
+    // first real opportunity entered after the wipe.
+    priceLists: prev.priceLists || {}, adhocParts: prev.adhocParts || [],
     approvals: [], customers: [],
     sparesLines: [], sparesAlternatives: [], svcEstimates: [], clarifications: [], vendorQuotes: [],
     surveys: [], competitors: [],
     files: {}, proposals: {}, communications: {}, kyc: {},
     poCompare: {}, handover: {}, bSteps: {}, bStepOwners: {},
-    sales: emptySales(prev.sales), rateSheet: [],
+    sales: emptySales(prev.sales), rateSheet: prev.rateSheet || [],
     // The one piece of demo data hiding inside config — the placeholder price
     // list Admin renders with a "DUMMY — replace with actual" chip.
     config: uploads

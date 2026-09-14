@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES } from '../seed.js'
 import { Icon } from '../icons.jsx'
+import { DemoDataControls } from '../ui.jsx'
 import { displayRole } from '../utils.js'
 
 // Guided demo launcher — each scenario switches to the right persona and jumps
@@ -36,6 +37,7 @@ export default function Launcher() {
   return (
     <div className="page">
         <h2>Demo launcher</h2>
+      <div className="admin-actions"><DemoDataControls /></div>
       <div className="hint" style={{ marginBottom: 14, maxWidth: 640 }}>
         Guided demo scenarios — each starts at the right screen with the right persona.
         Every value on screen is fictional demo content.

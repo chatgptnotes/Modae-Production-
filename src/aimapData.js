@@ -29,7 +29,7 @@ export const AI_MAP = [
   {
     group: 'Proposal creation intelligence',
     items: [
-      { t: 'Knowledge-base lookup / fuzzy part matching', phase: 1, kind: 'preview', d: 'Matches RFQ line items to the price list using fuzzy and semantic matching, with a confidence score per line.', to: '/opp/2607217RS/proposal' },
+      { t: 'Knowledge-base lookup / fuzzy part matching', phase: 1, kind: 'rule', d: 'Matches RFQ line items to the price list using normalized part, description, reference and brand evidence, with human confirmation.', to: '/opp/2607217RS/proposal' },
       { t: 'Equivalent-product suggestion', phase: 1, kind: 'rule', d: 'Suggests a compatible alternative when an exact part is superseded or unavailable.', to: '/opp/2607217RS/proposal' },
       { t: 'Auto-fill of quotation / proposal template', phase: 1, kind: 'rule', d: 'Populates the proposal document from structured opportunity data.', to: '/opp/2607217RS/proposal' },
       { t: 'Pricing-anomaly detection', phase: 1, kind: 'rule', d: 'Flags expired price-list sources and out-of-band pricing before a proposal goes out.', to: '/opp/2607217RS/proposal' },
@@ -37,8 +37,8 @@ export const AI_MAP = [
       { t: 'Revision history & comparison', phase: 1, kind: 'rule', d: 'Tracks and compares quote revisions side by side.', to: '/opp/2607217RS/proposal' },
       { t: 'Commercial-terms recommendation', phase: 1, kind: 'rule', d: 'Suggests payment, delivery and validity terms from customer class and route, for one-click insertion.', to: '/opp/2607217RS/proposal' },
       { t: 'RFP / SOW scope parsing', phase: 2, kind: 'ai', d: 'Parse a full RFP or Scope-of-Work document into structured, confidence-scored requirements, reviewed the same way as lead intake.', to: '/tender' },
-      { t: 'Multi-currency conversion', phase: 2, kind: 'preview', d: 'Convert the proposal total using a configurable hedge rate for international tenders.', to: '/opp/2608222RS/proposal' },
-      { t: 'T&C clause library generator', phase: 2, kind: 'preview', d: 'Assemble full legal terms from a maintained clause library by opportunity type and jurisdiction.', to: '/opp/2607217RS/proposal' },
+      { t: 'Multi-currency conversion', phase: 2, kind: 'rule', d: 'Convert proposal totals using the Admin-configured rate while preserving source values and rate date.', to: '/opp/2608222RS/proposal' },
+      { t: 'T&C clause library generator', phase: 2, kind: 'rule', d: 'Assemble terms from the Admin-managed clause library by opportunity type and jurisdiction.', to: '/opp/2607217RS/proposal' },
     ],
   },
   {

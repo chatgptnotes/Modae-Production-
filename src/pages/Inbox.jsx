@@ -27,6 +27,7 @@ import {
 } from '../leadClarification.js'
 import { leadVerificationComplete, verificationDeadline, verificationItem, redClearanceFor, isRedCleared } from '../leadVerification.js'
 import { checklistFor } from '../customerClasses.js'
+import { kycIdentityKey, validateKycValue } from '../kycValidation.js'
 import { downloadKycTemplate } from '../kycTemplate.js'
 import { PROJECT_TYPES, oppTypesForProjectType, templatesForSelection, simulatedLead, simulatedCount, SIMULATED_CUSTOMER_SCENARIOS } from '../simulatedLeads.js'
 import { buildLeadProposalData } from '../leadBoq.js'
@@ -267,8 +268,15 @@ function LeadVerification({ lead, customerStatus, store }) {
   const [pendingUpload, setPendingUpload] = useState(null)
   const [menuFor, setMenuFor] = useState('')
   const [downloadedFor, setDownloadedFor] = useState('')
+  const [kycValues, setKycValues] = useState({})
+  const [kycError, setKycError] = useState('')
   const menuRef = useRef(null)
   const verification = lead.verification || {}
+  useEffect(() => {
+    const values = {}
+    for (const item of checklistFor(store.config, customerStatus)) values[item] = verificationItem(verification, item).value || ''
+    setKycValues(values)
+  }, [lead.id, customerStatus])
   // A converted lead can still be completing customer KYC. Keep the linked
   // opportunity unchanged, but allow the source lead's document evidence to
   // be uploaded, simulated, replaced, or cancelled. Dropped leads stay locked.
@@ -307,6 +315,9 @@ function LeadVerification({ lead, customerStatus, store }) {
   }, [])
 
   const saveKyc = async (item, file, mode) => {
+    const identity = validateKycValue(item, kycValues[item], store.config)
+    if (!identity.ok) { setKycError(identity.message); return }
+    setKycError('')
     setBusy(item)
     let fileMeta = {}
     if (file) {
@@ -318,7 +329,7 @@ function LeadVerification({ lead, customerStatus, store }) {
       }, `KYC document attached: ${item}`)
     }
     const itemRecord = {
-      state: 'Verified', mode, verifiedAt: nowIST(), ...fileMeta,
+      state: 'Verified', mode, verifiedAt: nowIST(), ...(identity.key ? { value: identity.value } : {}), ...fileMeta,
     }
     const nextKyc = { ...(verification.kyc || {}), [item]: itemRecord }
     const complete = checklistFor(store.config, customerStatus).every(name => nextKyc[name]?.state === 'Verified')
@@ -398,7 +409,10 @@ function LeadVerification({ lead, customerStatus, store }) {
           const pending = pendingUpload?.item === item
           return <div key={item} className="check-row">
             <Icon name={row.state === 'Verified' ? 'check' : 'fileText'} size={14} />
-            <span style={{ flex: 1 }}>{item} — <b>{row.state === 'Verified' ? `Verified (${row.mode === 'simulated' ? 'simulated' : 'uploaded'})` : 'Missing'}</b></span>
+            <span style={{ flex: 1 }}>{item} — <b>{row.state === 'Verified' ? `Verified (${row.mode === 'simulated' ? 'simulated' : 'uploaded'})` : 'Missing'}</b>
+              {kycIdentityKey(item) && <input className="kyc-identity-value" value={kycValues[item] || ''} disabled={!editable || row.state === 'Verified'} placeholder={`Enter ${kycIdentityKey(item)}`} aria-label={`${item} value`}
+                onChange={e => setKycValues(values => ({ ...values, [item]: e.target.value.toUpperCase() }))} />}
+            </span>
             {editable && verification.kycRequestStatus !== 'cancelled' && (
               row.state === 'Verified'
                 ? <button type="button" className="icon-action" aria-label={`Remove ${item}`} title={`Remove ${item}`} disabled={busy === item} onClick={() => cancelVerifiedFile(item, row)}><Icon name="x" size={14} /></button>
@@ -446,6 +460,7 @@ function LeadVerification({ lead, customerStatus, store }) {
           </div>
         })}
       </div>
+      {kycError && <div className="errbox" role="alert">{kycError}</div>}
       {!leadVerificationComplete(lead, customerStatus, { config: store.config }) && <p className="lead-decision-note">Customer KYC is not complete — Opportunity creation is blocked.</p>}
     </div>
   )
@@ -952,7 +967,8 @@ function StructuredItemsTable({ items, title = 'Requested items', className = ''
   )
 }
 
-function ReadOnlyDecisionForm({ lead }) {
+function ReadOnlyDecisionForm({ lead, items = [] }) {
+  const [boqOpen, setBoqOpen] = useState(false)
   const fields = lead.ai?.fields || []
   const identity = leadIdentity(lead, fields)
   const value = (key, fallback = '') => mappedLeadFieldValue(fields, key) || fallback
@@ -967,7 +983,7 @@ function ReadOnlyDecisionForm({ lead }) {
   const customerClass = value('customerStatus', lead.customerStatus || '—')
   const businessUnit = value('bu', '—')
   const segment = value('segment', '—')
-  const product = value('product', '—')
+  const boqItems = Array.isArray(items) ? items : []
   const confidenceFor = key => {
     const field = fields.find(item => item.k === key || item.key === key)
     return Number.isFinite(Number(field?.conf)) ? `${Math.round(Number(field.conf))}%` : ''
@@ -1006,8 +1022,28 @@ function ReadOnlyDecisionForm({ lead }) {
         <Field label="Customer class" fieldKey="customerStatus">{customerClass}</Field>
         <Field label="Business unit" fieldKey="bu">{businessUnit}</Field>
         <Field label="Segment" fieldKey="segment">{segment}</Field>
-        <Field label="Product" fieldKey="product">{product}</Field>
+        <Field label="BOQ" fieldKey="boq">
+          <button type="button" className="boq-preview-link" onClick={() => setBoqOpen(true)} disabled={!boqItems.length}>
+            {boqItems.length ? `View BOQ · ${boqItems.length} line${boqItems.length === 1 ? '' : 's'}` : 'No BOQ lines available'}
+          </button>
+        </Field>
       </div>
+      {boqOpen && <Modal title="BOQ preview" className="lead-boq-preview-modal" onClose={() => setBoqOpen(false)}>
+        <p className="lead-boq-preview-meta">Extracted bill of quantities for <b>{lead.subject || 'this enquiry'}</b>.</p>
+        <div className="lead-boq-preview-table-wrap">
+          <table className="lead-boq-preview-table">
+            <thead><tr><th>Sr. No.</th><th>Part / description</th><th>Part number</th><th>Qty</th><th>UOM</th></tr></thead>
+            <tbody>{boqItems.map((item, index) => <tr key={`${item.partNumber || item.pn || item.description || 'line'}-${index}`}>
+              <td className="num">{index + 1}</td>
+              <td>{item.description || item.desc || '—'}</td>
+              <td>{item.partNumber || item.pn || '—'}</td>
+              <td className="num">{item.qty ?? item.quantity ?? '—'}</td>
+              <td>{item.uom || item.unit || 'EA'}</td>
+            </tr>)}</tbody>
+          </table>
+        </div>
+        <div className="form-actions lead-boq-preview-actions"><button onClick={() => setBoqOpen(false)}>Close</button></div>
+      </Modal>}
     </section>
   )
 }
@@ -1064,7 +1100,7 @@ function StructuredLeadDetail({ lead, converted = false }) {
             </dl>
           </div>
 
-          {converted && <ReadOnlyDecisionForm lead={lead} />}
+          {converted && <ReadOnlyDecisionForm lead={lead} items={items} />}
           {converted && <StructuredItemsTable items={items} />}
 
           {converted && <p className="converted-complete-note"><Icon name="checkCircle" size={14} /> Lead converted — no further action required. Opportunity {oppId} is linked.</p>}

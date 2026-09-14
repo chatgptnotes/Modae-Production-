@@ -116,6 +116,19 @@ test('lead extraction is carried into the opportunity record and details view', 
   assert.match(details, /Requested items/)
 })
 
+test('converted lead decisions expose the extracted BOQ as a quick preview', () => {
+  assert.match(inbox, /<ReadOnlyDecisionForm lead=\{lead\} items=\{items\} \/>/)
+  assert.match(inbox, /<Field label="BOQ" fieldKey="boq">/)
+  assert.match(inbox, /className="boq-preview-link"[^>]*onClick=\{\(\) => setBoqOpen\(true\)\}/)
+  assert.match(inbox, /View BOQ · \$\{boqItems\.length\} line/)
+  assert.match(inbox, /className="lead-boq-preview-modal"/)
+  assert.match(inbox, /<th>Sr\. No\.<\/th><th>Part \/ description<\/th><th>Part number<\/th><th>Qty<\/th><th>UOM<\/th>/)
+  assert.match(inbox, /boqItems\.map\(\(item, index\)/)
+  assert.doesNotMatch(inbox, /<Field label="Product" fieldKey="product">\{product\}<\/Field>/)
+  assert.match(css, /\.boq-preview-link \{[\s\S]*text-decoration: underline;/)
+  assert.match(css, /\.lead-boq-preview-table \{[\s\S]*table-layout: fixed;/)
+})
+
 test('customer KYC display honors verified lead-stage data and simulated mode', () => {
   const workbench = fs.readFileSync(new URL('../src/pages/Workbench.jsx', import.meta.url), 'utf8')
   const register = fs.readFileSync(new URL('../src/pages/Register.jsx', import.meta.url), 'utf8')

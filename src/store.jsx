@@ -38,7 +38,9 @@ export function snapshotProposal(p) {
     approvedPricing: p.approvedPricing,
     revisionDate: p.revisionDate, validityDays: p.validityDays,
     addressee: p.addressee, kindAttn: p.kindAttn, subject: p.subject,
-    bidStage: p.bidStage, bidType: p.bidType,
+    bidStage: p.bidStage, bidType: p.bidType, sourceCurrency: p.sourceCurrency,
+    sourceRate: p.sourceRate, sourceRateDate: p.sourceRateDate, clauseIds: p.clauseIds,
+    clauses: p.clauses,
   }))
 }
 
@@ -441,7 +443,7 @@ export function StoreProvider({ children }) {
       const s = stateRef.current
       if (s.proposals[oppId]) return s.proposals[oppId]
       const opp = s.opportunities.find(o => o.id === oppId)
-      return newProposal(oppId, opp, { validityDays: s.config?.proposalValidityDays })
+      return newProposal(oppId, opp, { validityDays: s.config?.proposalValidityDays, currencyRates: s.config?.currencyRates })
     },
 
     saveProposal(oppId, proposal) {
@@ -1363,6 +1365,18 @@ export function StoreProvider({ children }) {
         return withAudit({ ...s, config: nextConfig }, 'Config updated', 'admin',
           JSON.stringify({ fields: Object.keys(patch), before: Object.fromEntries(Object.keys(patch).map(k => [k, s.config?.[k]])), after: patch }))
       })
+    },
+    saveClause(clause) {
+      if (!clause?.id || !ROLES[stateRef.current.role]?.admin) return
+      setState(s => withAudit({ ...s, config: { ...s.config, clauses: [...(s.config.clauses || []), clause] } }, 'T&C clause added', clause.id, clause.label))
+    },
+    updateClause(id, patch) {
+      if (!id || !ROLES[stateRef.current.role]?.admin) return
+      setState(s => withAudit({ ...s, config: { ...s.config, clauses: (s.config.clauses || []).map(c => c.id === id ? { ...c, ...patch } : c) } }, 'T&C clause updated', id, patch.label || patch.text || ''))
+    },
+    removeClause(id) {
+      if (!id || !ROLES[stateRef.current.role]?.admin) return
+      setState(s => withAudit({ ...s, config: { ...s.config, clauses: (s.config.clauses || []).filter(c => c.id !== id) } }, 'T&C clause removed', id, ''))
     },
     updateRoleNames(roleNames) {
       setState(s => {

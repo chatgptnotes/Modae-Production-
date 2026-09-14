@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import XLSX from 'xlsx-js-style'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useStore, sparesProposalBom, snapshotProposal } from '../store.jsx'
 import { effectiveRate, fmt, exportCSV, canPriceProposal, clampCosting, clampQty, MAX_GM_PCT, displayRole } from '../utils.js'
 import { useFormulaBar } from '../formulabar.jsx'
@@ -25,6 +25,8 @@ import DetailTabs from '../DetailTabs.jsx'
 import { isSparesSupportRow, withSparesSupportRows } from '../proposal/sparesBoq.js'
 import { runTaskResult } from '../ai.js'
 import { importReviewedWorkbook, normalizeAiReview, reviewWorkbookPayload } from '../proposal/reviewWorkbook.js'
+import { clausesFor, clauseWarnings } from '../clauses.js'
+import { fromInr } from '../currency.js'
 
 const ROUTE_TABS = {
   Project: ['Cover Letter', 'Edit Sheet', 'Document', 'Signal List', 'Rack Layout', 'Priced BoQ'],
@@ -384,6 +386,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   const { oppId: routeOppId } = useParams()
   const oppId = oppIdProp || routeOppId
   const store = useStore()
+  const nav = useNavigate()
   const fb = useFormulaBar()
   const opp = store.opportunities.find(o => o.id === oppId)
   const [tab, setTab] = useState(initialTab)
@@ -730,6 +733,18 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
 
   const updTerm = (i, k) => e => save({ ...p, terms: p.terms.map((t, j) => (j === i ? { ...t, [k]: e.target.value } : t)) })
   const addTerm = () => save({ ...p, terms: [...p.terms, { term: '', customerAsk: '', ourResponse: '', status: 'Comply' }] })
+  const routeScope = opp.international || opp.location === 'International' ? 'international' : 'domestic'
+  const availableClauses = clausesFor(store.config?.clauses, route === 'Service' ? 'Services' : route, routeScope)
+  const selectedClauses = (p.clauseIds || []).map(id => availableClauses.find(clause => clause.id === id)).filter(Boolean)
+  const toggleClause = id => save({ ...p, clauseIds: (p.clauseIds || []).includes(id) ? p.clauseIds.filter(item => item !== id) : [...(p.clauseIds || []), id] })
+  const editClause = (id, text) => save({ ...p, clauses: [...(p.clauses || []).filter(clause => clause.id !== id), { id, label: availableClauses.find(clause => clause.id === id)?.label || id, text }] })
+  const moveClause = (id, delta) => {
+    const ids = [...(p.clauseIds || [])]
+    const from = ids.indexOf(id); const to = from + delta
+    if (from < 0 || to < 0 || to >= ids.length) return
+    ;[ids[from], ids[to]] = [ids[to], ids[from]]
+    save({ ...p, clauseIds: ids })
+  }
   const addLine = () => save({ ...p, bom: [...p.bom, {
     itemCategory: '', desc: '', pn: '', custRef: '', listPrice: 0, adders: [],
     qtyPerUnit: 0, common: 1, spares: 0, quoted: '', uom: 'EA',
@@ -1010,7 +1025,8 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
             {pendingForOpp.length > 0 && <span className="pill Amber">{pendingForOpp.length} approval{pendingForOpp.length > 1 ? 's' : ''} pending</span>}
           </div>
         </div>
-        <div className="proposal-toolbar" aria-label="Proposal actions">
+        <div className="toolbar proposal-action-toolbar" aria-label="Proposal actions">
+          <button className="primary" type="button" onClick={() => nav(`/opp/${oppId}`)}><Icon name="mail" size={13} /> Email proposal</button>
           <button className="btn-secondary" onClick={exportExcel} title="Download Draft">
             <Icon name="download" size={13} /> Draft
           </button>
@@ -1176,6 +1192,12 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
             <div>Kind Attn: <span className="cover-field"><input value={p.kindAttn} onChange={set('kindAttn')} /></span></div>
             <div>Mobile: {p.attnPhone}</div>
           </div>
+          <div className="cover-meta proposal-currency-meta" aria-label="Proposal currency conversion">
+            <div><b>Source currency:</b> <select value={p.sourceCurrency || 'INR'} onChange={e => save({ ...p, sourceCurrency: e.target.value, sourceRate: store.config?.currencyRates?.[e.target.value] || 1, sourceRateDate: new Date().toISOString().slice(0, 10) })}><option>INR</option><option>EUR</option><option>USD</option><option>GBP</option></select></div>
+            <div>Original value: {p.sourceCurrency || 'INR'} {fmt(fromInr(totals.target, p.sourceCurrency || 'INR', store.config?.currencyRates))} (preserved)</div>
+            <div>INR conversion: ₹ {fmt(totals.target)}</div>
+            <div>Admin rate: ₹ {fmt(Number(p.sourceRate) || 1)} / {p.sourceCurrency || 'INR'} · rate date {p.sourceRateDate || '—'}</div>
+          </div>
           <div className="cover-meta">
             <div><b>Subject:</b> RFQ # <span className="cover-field"><input value={p.rfqNumber} onChange={set('rfqNumber')} placeholder="RFQ number & date" style={{ minWidth: 180 }} /></span></div>
             <div style={{ marginLeft: 62 }}>{p.subject}</div>
@@ -1209,6 +1231,21 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
             </tbody>
           </table>
           <button onClick={addTerm} className="no-print">+ Add term</button>
+          <section className="form-card proposal-clause-library" aria-label="Terms and conditions clause library">
+            <div className="section-title">Terms &amp; conditions clauses</div>
+            <p className="hint">Select and order the clauses that will be printed. Required or changed clauses are shown before submission.</p>
+            {availableClauses.map(clause => {
+              const selected = (p.clauseIds || []).includes(clause.id)
+              const saved = (p.clauses || []).find(item => item.id === clause.id)
+              return <div key={clause.id} className="check-row">
+                <input type="checkbox" checked={selected} onChange={() => toggleClause(clause.id)} />
+                <span style={{ flex: 1 }}><b>{clause.label}</b>{clause.required && <small className="hint"> · required</small>}
+                  {selected && <textarea value={saved?.text || clause.text} onChange={e => editClause(clause.id, e.target.value)} rows={2} style={{ display: 'block', width: '100%', marginTop: 4 }} />}</span>
+                {selected && <span><button type="button" className="proposal-row-minus" title="Move clause up" onClick={() => moveClause(clause.id, -1)}>↑</button><button type="button" className="proposal-row-minus" title="Move clause down" onClick={() => moveClause(clause.id, 1)}>↓</button><button type="button" className="proposal-row-minus" title="Remove clause" onClick={() => toggleClause(clause.id)}>−</button></span>}
+              </div>
+            })}
+            {(() => { const warnings = clauseWarnings(p, store.config?.clauses, route === 'Service' ? 'Services' : route, routeScope); return (warnings.missing.length || warnings.changed.length) ? <div className="warnbox">Before submission: {warnings.missing.length ? `${warnings.missing.length} required clause(s) missing` : ''}{warnings.changed.length ? `${warnings.missing.length ? '; ' : ''}${warnings.changed.length} clause(s) changed in Admin` : ''}.</div> : null })()}
+          </section>
           <div className="costing-note">
             Every deviation from the customer's preferred commercial terms is called out here — deviations need approval before submission.
           </div>

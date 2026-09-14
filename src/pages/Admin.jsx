@@ -4,7 +4,7 @@ import { useStore } from '../store.jsx'
 import { OWNERS, AI_PROVIDERS, MILESTONES } from '../seed.js'
 import { isAdminRole, canSeePage, displayRoleLabel } from '../utils.js'
 import { Icon } from '../icons.jsx'
-import { Chip, WarnBox, Modal } from '../ui.jsx'
+import { Chip, WarnBox, Modal, DemoDataControls } from '../ui.jsx'
 import { saveAiKey, testConnection, usesVercelAi } from '../ai.js'
 import * as sp from '../sharepoint.js'
 import { uploadAdminTemplate } from '../filestore.js'
@@ -16,6 +16,8 @@ import { DEFAULT_COMMON_MAILBOX } from '../leadClarification.js'
 import { DEFAULT_CUSTOMER_CLASSES } from '../customerClasses.js'
 import { parsePriceListFile } from '../priceListImport.js'
 import { normalizedCurrencyRates } from '../currency.js'
+import { kycValidationConfig } from '../kycValidation.js'
+import { DEFAULT_CLAUSES } from '../clauses.js'
 
 // Admin — every runtime rule the app obeys, in one card grid. Data lives in
 // store.config; all changes are audited by the store mutators.
@@ -483,6 +485,7 @@ export default function Admin() {
 
   const thresholds = config.approvalThresholds || {}
   const aiTh = config.aiThresholds || {}
+  const kycValidation = kycValidationConfig(config)
   const amber = config.amberFee || {}
   const healthyConnectors = (config.connectors || []).filter(item => item.state === 'Healthy' || item.state === 'Connected').length
   const configuredTemplates = proposalTemplates.filter(item => item.status === 'Current').length
@@ -508,6 +511,7 @@ export default function Admin() {
           <p className="admin-page-lede">Manage the rules, documents, integrations, and automation that shape the sales workspace.</p>
         </div>
         <div className="admin-page-actions">
+          <DemoDataControls className="secondary" />
           <button type="button" className="secondary" onClick={() => nav('/admin/workflow')}><Icon name="list" size={11} /> Configure workflow</button>
         </div>
       </header>
@@ -562,6 +566,15 @@ export default function Admin() {
           role="tabpanel" aria-labelledby="admin-tab-workflow" hidden={adminView !== 'workflow'}>
         <div className="admin-section-heading">
           <div><h3>Workflow &amp; governance</h3><p>Ownership, approvals, customer rules, and intake controls.</p></div>
+        </div>
+        <div className="admin-card admin-clause-library" id="admin-clauses">
+          <h3><Icon name="fileText" size={14} /> Terms &amp; conditions clause library</h3>
+          <p className="hint">Maintain reusable clauses. Changes are versioned through the normal audit log.</p>
+          {(config.clauses || DEFAULT_CLAUSES).map(clause => <div className="admin-card-row clause-library-row" key={clause.id}>
+            <input aria-label={`${clause.id} clause title`} value={clause.label} disabled={!canEdit} onChange={e => store.updateClause(clause.id, { label: e.target.value })} />
+            <textarea aria-label={`${clause.id} clause text`} value={clause.text} disabled={!canEdit} onChange={e => store.updateClause(clause.id, { text: e.target.value })} rows={2} />
+            <button type="button" className="secondary" disabled={!canEdit} onClick={() => store.removeClause(clause.id)}>Remove</button>
+          </div>)}
         </div>
         <div className="admin-fixed-columns">
           <div className="admin-column">
@@ -768,6 +781,23 @@ export default function Admin() {
               }}><Icon name="plus" size={11} /> Add</button>
             </div>
           )}
+        </div>
+
+        <div className="admin-card">
+          <h3><Icon name="shield" size={14} /> KYC number validation</h3>
+          <p className="hint">Choose which GST, PAN, and CIN numbers are checked during KYC. The pattern uses a regular expression.</p>
+          {Object.entries(kycValidation).map(([key, rule]) => (
+            <div key={key} className="admin-card-row">
+              <div><b>{key}</b><div className="hint">{rule.label}</div></div>
+              <label className="check-row"><input type="checkbox" checked={rule.enabled !== false} disabled={!canEdit}
+                onChange={e => store.updateConfig({ kycValidation: { ...kycValidation, [key]: { ...rule, enabled: e.target.checked } } })} /> Validate</label>
+              <label className="check-row"><input type="checkbox" checked={!!rule.required} disabled={!canEdit || rule.enabled === false}
+                onChange={e => store.updateConfig({ kycValidation: { ...kycValidation, [key]: { ...rule, required: e.target.checked } } })} /> Required</label>
+              <input type="text" value={rule.pattern || ''} disabled={!canEdit || rule.enabled === false} aria-label={`${key} validation pattern`}
+                onChange={e => store.updateConfig({ kycValidation: { ...kycValidation, [key]: { ...rule, pattern: e.target.value } } })} />
+            </div>
+          ))}
+          <p className="hint">Changing these settings affects new KYC checks; previously verified documents remain recorded.</p>
         </div>
 
         {/* 7 — Price-list & rate registries */}

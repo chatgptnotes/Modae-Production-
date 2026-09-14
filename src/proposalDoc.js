@@ -483,6 +483,12 @@ export const MODAE_ABOUT = {
 // auto-drafted text stays live as the BoQ changes and every proposal saved
 // before this module existed still renders a complete document.
 export function docModel(p, opp, ctx = {}) {
+  const configuredClauses = ctx.config?.clauses || []
+  const selectedClauses = (p.clauseIds || []).map(id => {
+    const library = configuredClauses.find(clause => clause.id === id)
+    const edited = (p.clauses || []).find(clause => clause.id === id)
+    return library || edited ? { ...(library || {}), ...(edited || {}), id } : null
+  }).filter(Boolean)
   const files = ctx.files || []
   const baseAttachments = p.attachments ?? [...DEFAULT_ATTACHMENTS, ...files]
   const datasheets = (p.proposalDatasheets || []).map(file => typeof file === 'string' ? file : file.name).filter(Boolean)
@@ -517,7 +523,9 @@ export function docModel(p, opp, ctx = {}) {
     deviations,
     offerTerms: p.offerTerms ?? recommendTerms(opp || {}, ctx.config),
     // The numbered T&C block the samples print under the pricing sheet.
-    docTerms: p.docTerms ?? defaultDocTerms(p, opp),
+    docTerms: selectedClauses.length
+      ? selectedClauses.map(clause => ({ label: clause.label || clause.id, text: clause.text || '' }))
+      : p.docTerms ?? defaultDocTerms(p, opp),
     docTermsHeading: p.docTermsHeading ?? docTermsHeading(p, opp),
     // --- annexe content ---
     // The compliance grid projected into the sample's seven columns. `status`

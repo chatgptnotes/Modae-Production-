@@ -164,12 +164,15 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
       const id = 'CM-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8)
       store.addCommunication(opp.id, {
         id,
+        direction: 'outbound',
+        from: emailFrom,
         to: emailTo,
         cc: emailCc,
         subject: emailSubject,
         body: emailBody,
         kind: 'submission',
         status: 'draft',
+        attachments,
         attachmentNames: [
           ...(attachProposal ? [`${opp.id}_Proposal_Rev_${p.revision}.xlsx`] : []),
           ...enclosuresFor(route).map(a => a.filename),
