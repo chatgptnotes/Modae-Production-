@@ -463,6 +463,7 @@ export function simulatedLead(customerStatus = 'Green', now = new Date(), option
     // these before AI fields, so re-reading a simulated mail cannot replace
     // the site with a line item or leave the registration gate empty.
     sellTo,
+    category: customer.category,
     eucName: sellTo,
     eucLocation: customer.location,
     location: customer.location,

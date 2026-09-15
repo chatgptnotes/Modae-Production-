@@ -176,8 +176,8 @@ export default function Register() {
     const contactPhone = String(identityDraft.contactPhone || '').trim()
     store.updateLead(lead.id, { sellTo, eucName, eucLocation, contactPerson, contactPhone }, 'Registration identity details saved')
     const catV = fieldVal(fields, /category/i)
-    const category = guessFromList(catV, ['EUC', 'EPC', 'OEM', 'ACP', 'SI', 'RE/TR']) || '—'
-    const location = fieldVal(fields, /location|region/i) || lead.location || lead.region || ''
+    const category = guessFromList(catV, ['EUC', 'EPC', 'OEM', 'ACP', 'SI', 'RE/TR']) || lead.category || customer?.category || '—'
+    const location = identityDraft.eucLocation || fieldVal(fields, /euc\s+location|site\s+location|location/i) || lead.location || lead.region || ''
     const rfqNumber = String(
       lead.ref || lead.rfqNumber || fieldVal(fields, /(?:rfq|tender|enquiry)\s*(?:number|no\.?|reference|ref)/i) || '',
     ).trim()

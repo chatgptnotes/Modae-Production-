@@ -49,15 +49,21 @@ function createOpportunityFromLeadPage({ store, lead, fields, decision, customer
   const owner = decision.owner
   const id = nextOppId(store.opportunities, owner)
   const { extracted, workbenchRows, bom } = buildLeadProposalData(lead, store.priceLists, store.adhocParts)
-  const category = fields.find(f => /category/i.test(f.k))?.v || '—'
+  const identity = leadIdentity(lead, fields)
+  const sellTo = decision.sellTo || identity.sellTo || customer?.name || '—'
+  const eucName = decision.eucName || identity.eucName || sellTo
+  const eucLocation = decision.eucLocation || identity.eucLocation || lead.location || lead.region || ''
+  const contactPerson = decision.contactPerson || identity.contactPerson || customer?.contactPerson || ''
+  const contactPhone = decision.contactPhone || identity.contactPhone || customer?.contactPhone || ''
+  const category = fields.find(f => /category/i.test(f.k))?.v || lead.category || customer?.category || '—'
   const acceptedFields = fields.filter(f => f.state === 'accepted' && String(f.v || '').trim())
     .map(f => ({ key: f.k, value: String(f.v).trim(), confidence: f.conf, evidence: f.ev || '', note: f.note || '' }))
   const opp = {
     id, sourceLeadId: lead.id,
     sl: Math.max(0, ...store.opportunities.map(o => o.sl || 0)) + 1,
-    sellTo: decision.sellTo, category, location: decision.location,
+    sellTo, category, location: decision.location || eucLocation,
     customerStatus, leadVerification: verificationSnapshot(lead, customerStatus, { config: store.config }),
-    eucName: decision.eucName, eucLocation: decision.eucLocation,
+    eucName, eucLocation,
     oppName: lead.subject, opportunityScope: decision.scope,
     owner, oppType: decision.oppType, bu: decision.bu, segment: decision.segment, product: decision.product,
     suggestedOwner: regionalOwner || owner, ownerOverrideReason: lead.ownerOverrideReason || '',
@@ -65,7 +71,7 @@ function createOpportunityFromLeadPage({ store, lead, fields, decision, customer
     extractedFields: acceptedFields, requestedItems: extracted,
     createDate: today, proposalDate: '', orderDate: '', invoiceDate: '',
     status: 'Open', stage: 'Lead', milestone: 'Screening', closedReason: '',
-    contactPerson: decision.contactPerson, contactPhone: decision.contactPhone,
+    contactPerson, contactPhone,
     contactEmail: lead.from || '', lastUpdated: today, forecast: false,
     remarks: 'Registered from lead ' + lead.id, route: routeForType(decision.oppType),
   }
@@ -78,7 +84,7 @@ function createOpportunityFromLeadPage({ store, lead, fields, decision, customer
       units: 1, ...(bom.length ? { leadImportId: lead.id } : {}), bom, extractedItems: extracted })
   }
   store.linkLeadApprovals(lead.id, id)
-  if (!customer) store.addCustomer({ name: decision.sellTo, category, status: customerStatus, kyc: 'Pending', payment: '—' })
+  if (!customer) store.addCustomer({ name: sellTo, category, status: customerStatus, kyc: 'Pending', payment: '—' })
   store.updateLead(lead.id, { ...decision, status: 'Converted', oppId: id }, 'Opportunity created from lead')
   return id
 }
