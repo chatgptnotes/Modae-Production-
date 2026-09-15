@@ -116,6 +116,24 @@ test('sourcing row actions stay compact and accessible', () => {
     'row actions should use compact control sizing')
 })
 
+test('sourcing alternatives explain AI suggestions and zero-value confirmation is blocked', () => {
+  const spares = read('src/workbench/WbSpares.jsx')
+  assert.match(spares, /AiBadge label="AI suggested"/)
+  assert.match(spares, /Why AI suggested this:/)
+  assert.match(spares, /suggestedBy: 'AI'/)
+  assert.match(spares, /isConfirmableSparesLine\(line\)/)
+  assert.match(spares, /Enter a positive list price/)
+})
+
+test('invalid sourcing rows show a disabled pricing state instead of an action', () => {
+  const spares = read('src/workbench/WbSpares.jsx')
+  const styles = read('src/styles.css')
+  assert.match(spares, /const confirmable = isConfirmableSparesLine\(line\)/)
+  assert.match(spares, /const invalidState = row\.qty <= 0 \? 'Cannot confirm' : 'Needs pricing'/)
+  assert.match(spares, /sourcing-row-action--disabled.*disabled/)
+  assert.match(styles, /\.sourcing-row-action--disabled[\s\S]*pointer-events: none/)
+})
+
 test('sourcing prices are editable and sourcing edits are audited', () => {
   const spares = read('src/workbench/WbSpares.jsx')
   const store = read('src/store.jsx')
@@ -161,10 +179,10 @@ test('spares financial preview totals include priced rows before confirmation', 
     'proposal handoff should still be gated by confirmed rows')
   assert.match(spares, /const totals = useMemo\(\(\) => pricedItems\.reduce/,
     'summary totals should calculate from priced rows, not confirmed-only rows')
-  assert.match(spares, /disabled=\{!activeItems\.length\}/,
+  assert.match(spares, /disabled=\{!canContinueToProposal\}/,
     'continuing to the proposal should still require confirmed rows')
-  assert.match(spares, /Preview includes \{pendingConfirmationCount\} priced line/,
-    'users need to know the displayed totals are a preview when rows are pending confirmation')
+  assert.doesNotMatch(spares, /Preview includes \{pendingConfirmationCount\} priced line/,
+    'the financial summary should not display the pending-confirmation preview note')
 })
 
 test('opening a Spares proposal repairs stale lead rows from confirmed sourcing data', () => {

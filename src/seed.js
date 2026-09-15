@@ -1104,7 +1104,7 @@ export const seedApprovals = [
 export const defaultCosting = {
   baseRate: 112.0,      // Euro-₹ Base (spot + ₹1 buffer, rounded up)
   usdBase: 90.0,        // USD-₹ Base — imports come in both € and $
-  cdErvContPct: 16.0,   // CD+ERV+Cont. (8.5% customs + 2.5% freight + 5% contingency)
+  cdErvContPct: 16.0,   // Legacy alias retained for older proposal snapshots
   bnkDiscPct: 50.0,     // B&K Disc% (applies to the B&K list only)
   inputGMPct: 35.0,     // Input GM%
   financeCostK: 0,      // Finance Cost (K₹) — deducted before Net GM, as on the real sheet
@@ -1142,7 +1142,7 @@ export function newProposal(oppId, opp, options = {}) {
     markupPct: 0,
     pricingHistory: [],
     approvedPricing: null,
-    costing: { ...defaultCosting, currencyRates: options.currencyRates || undefined },
+    costing: { ...defaultCosting, ...(options.costingDefaults || {}), currencyRates: options.currencyRates || undefined },
     sourceCurrency: 'INR', sourceRate: 1, sourceRateDate: new Date().toISOString().slice(0, 10),
     clauseIds: DEFAULT_CLAUSES.filter(c => c.routes.includes(route === 'Service' ? 'Services' : route) && c.required).map(c => c.id),
     clauses: [],
@@ -1185,6 +1185,7 @@ export const seedConfig = {
   // Display labels are configurable; role IDs remain canonical in all records.
   roleNames: Object.fromEntries(Object.entries(ROLES).map(([id, role]) => [id, role.name])),
   currencyRates: { ...DEFAULT_CURRENCY_RATES },
+  costingDefaults: { customsDutyPct: 8.5, ervPct: 2.5, handlingPct: 5, cdErvHandlingMinPct: 15, cdErvHandlingMaxPct: 20 },
   // L-05-AI, Official Lead Management Workflow (22 Jul 2026) — six rules, kept
   // one-per-row so the Admin page reads like the drawing. The AI only suggests
   // from these; LJS or AH may override, and only with a reason.

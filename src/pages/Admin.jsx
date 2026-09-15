@@ -700,6 +700,21 @@ export default function Admin() {
           ))}
         </div>
 
+        <div className="admin-card">
+          <h3><Icon name="gear" size={14} /> Imported costing defaults</h3>
+          <p className="hint">These defaults are copied into new proposals. Sourcing can override them for an individual proposal.</p>
+          <NumField label="Default Customs Duty (%)" value={config.costingDefaults?.customsDutyPct ?? 8.5} disabled={!canEdit}
+            onChange={v => store.updateConfig({ costingDefaults: { ...(config.costingDefaults || {}), customsDutyPct: v } })} />
+          <NumField label="Default ERV (%)" value={config.costingDefaults?.ervPct ?? 2.5} disabled={!canEdit}
+            onChange={v => store.updateConfig({ costingDefaults: { ...(config.costingDefaults || {}), ervPct: v } })} />
+          <NumField label="Default Handling (%)" value={config.costingDefaults?.handlingPct ?? 5} disabled={!canEdit}
+            onChange={v => store.updateConfig({ costingDefaults: { ...(config.costingDefaults || {}), handlingPct: v } })} />
+          <NumField label="Guided range minimum (%)" value={config.costingDefaults?.cdErvHandlingMinPct ?? 15} disabled={!canEdit}
+            onChange={v => store.updateConfig({ costingDefaults: { ...(config.costingDefaults || {}), cdErvHandlingMinPct: v } })} />
+          <NumField label="Guided range maximum (%)" value={config.costingDefaults?.cdErvHandlingMaxPct ?? 20} disabled={!canEdit}
+            onChange={v => store.updateConfig({ costingDefaults: { ...(config.costingDefaults || {}), cdErvHandlingMaxPct: v } })} />
+        </div>
+
           </div>
           <div className="admin-column">
 

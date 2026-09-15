@@ -75,6 +75,12 @@ test('approval cards show request time and highlight new pending requests', () =
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/)
 })
 
+test('approval opportunity facts stay aligned on one desktop row', () => {
+  const css = read('src/styles.css')
+  assert.match(css, /\.approval-context-facts \{ display: flex; align-items: baseline;[\s\S]*flex-wrap: nowrap;/)
+  assert.match(css, /\.approval-context-facts span \{ display: inline-flex; align-items: baseline;[\s\S]*white-space: nowrap;/)
+})
+
 test('approval queue copy explains the decision required', () => {
   const approvals = read('src/pages/Approvals.jsx')
   assert.match(approvals, /\{forMe\.length\} approvals waiting on you/)

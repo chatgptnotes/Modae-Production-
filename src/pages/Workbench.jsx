@@ -1079,15 +1079,15 @@ function ClarificationsTab({ opp }) {
 
   return (
     <div>
-      <div className="toolbar">
-        <button onClick={suggest} disabled={!!busy}>
+      <div className="toolbar clarification-actions">
+        <button className="clarification-action" onClick={suggest} disabled={!!busy}>
           <Icon name="sparkles" size={13} /> {busy === 'suggest' ? 'Thinking…' : 'AI: suggest questions'}
         </button>
-        <button onClick={openDraft} disabled={!open.length || !!busy}
+        <button className="clarification-action" onClick={openDraft} disabled={!open.length || !!busy}
           title={open.length ? '' : 'No open questions to draft from'}>
           <Icon name="mail" size={13} /> {busy === 'draft' ? 'Drafting…' : 'AI: draft email'}
         </button>
-        <button onClick={openCustomerReply} disabled={!open.length || !!busy}
+        <button className="clarification-action" onClick={openCustomerReply} disabled={!open.length || !!busy}
           title={open.length ? 'Paste one customer reply and attach supporting files' : 'No open questions'}>
           <Icon name="upload" size={13} /> Update information
         </button>
@@ -1451,10 +1451,10 @@ function SourcingTab({ opp, goTab, onContinueToProposal }) {
         ))}
       </div>
       <div className="ana-card c-6">
-        <div className="ana-title">Vendor actions</div>
+        <div className="ana-title">Vendor actions (Coming soon)</div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button onClick={openRfq} disabled={opp.route === 'Spares'} title={opp.route === 'Spares' ? 'Manufacturer RFQ is not used for Spares' : 'Request an exceptional vendor price'}>
-            <Icon name="mail" size={13} /> Request exceptional vendor price
+            <Icon name="mail" size={13} /> Request exceptional vendor price (Coming soon)
           </button>
           <button className="primary" onClick={() => goTab('proposal')}>
             <Icon name="arrowRight" size={13} /> Open proposal workbench
@@ -1466,7 +1466,7 @@ function SourcingTab({ opp, goTab, onContinueToProposal }) {
       </div>
 
       <div className="ana-card c-12">
-        <div className="ana-title">Manufacturer quotes</div>
+        <div className="ana-title">Manufacturer quotes (Coming soon)</div>
         {quotes.map(q => (
           <div key={q.id} className="check-row" style={{ alignItems: 'flex-start' }}>
             <Icon name="mail" size={13} />

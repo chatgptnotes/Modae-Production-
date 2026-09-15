@@ -267,7 +267,8 @@ function setCoverSheet(workbook, worksheet, { p, opp, doc, route, mapping }) {
 const MODAE_PHONE_EMAIL = '+91 973 15 77 199 · ceo@mod-ae.com'
 
 // The costing keys the app actually stores are baseRate/bnkDiscPct/
-// cdErvContPct (see clampCosting in utils.js); Eff. Rate is derived, never
+// cdErvHandlingPct (with cdErvContPct retained as a legacy fallback);
+// Eff. Rate is derived, never
 // stored. This used to read euroBase/discount/cdErv/effectiveRate — keys that
 // exist nowhere — so every export silently shipped the hardcoded defaults
 // instead of the proposal's real factors.
@@ -281,7 +282,7 @@ function setSummaryCard(worksheet, p, totals, financeCost = 0) {
     ['J2', 'Imported Items Pricing & Costing Factors'],
     ['J3', 'Euro-₹ Base'], ['K3', number(costing.baseRate || 112)],
     ['J4', 'B&K Disc%'], ['K4', number(costing.bnkDiscPct ?? 35) / 100],
-    ['J5', 'CD+ Handl+ERV'], ['K5', number(costing.cdErvContPct ?? 15) / 100],
+    ['J5', 'CD+ Handl+ERV'], ['K5', number((costing.customsDutyPct ?? 8.5) + (costing.ervPct ?? 2.5) + (costing.handlingPct ?? 5)) / 100],
     ['J6', 'Eff. Rate-€'], ['K6', number(costing.baseRate ? effectiveRate(costing) : 84.4675)],
     // M4:M6 are blank in the template — the roll-up the app already computes.
     ...(totals ? [

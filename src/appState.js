@@ -73,6 +73,7 @@ export function migrate(s) {
   // ---- phase 2 slices ----
   if (!s.config) s.config = seedConfig
   s.config.currencyRates = normalizedCurrencyRates(s.config.currencyRates || DEFAULT_CURRENCY_RATES)
+  s.config.costingDefaults = { ...seedConfig.costingDefaults, ...(s.config.costingDefaults || {}) }
   s.config.approvalThresholds = { ...seedConfig.approvalThresholds, ...(s.config.approvalThresholds || {}) }
   if (!Array.isArray(s.config.approvalThresholds.pricingApprovers) || !s.config.approvalThresholds.pricingApprovers.length) {
     s.config.approvalThresholds.pricingApprovers = [...seedConfig.approvalThresholds.pricingApprovers]

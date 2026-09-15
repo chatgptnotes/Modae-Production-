@@ -150,13 +150,21 @@ export function sparesLineFinancials(line = {}, costing = {}) {
   }
 }
 
+// A sourcing line is confirmable only when it has a positive quantity and
+// positive list/unit price. Keep this shared by UI and persistence paths.
+export function isConfirmableSparesLine(line = {}) {
+  const qty = Number(line.qty) || 0
+  const listUnitPrice = Number(line.listUnitPrice ?? line.listPrice) || 0
+  return qty > 0 && listUnitPrice > 0
+}
+
 export function normalizePriceFields(line = {}) {
   const source = line.priceSource || (
     String(line.priceList || '').startsWith('Ad-hoc') || line.priceList === 'Manual entry'
       ? PRICE_SOURCES.MANUAL : PRICE_SOURCES.LIST)
   const listUnitPrice = Number(line.listUnitPrice ?? line.listPrice) || 0
   const legacyUnpriced = line.priceState === 'Expired' && source === PRICE_SOURCES.MANUAL && listUnitPrice <= 0
-  return {
+  const normalized = {
     ...line,
     priceSource: source,
     priceSourceName: line.priceSourceName || line.priceList || '',
@@ -170,5 +178,9 @@ export function normalizePriceFields(line = {}) {
     approvedTotalPrice: Number(line.approvedTotalPrice) || 0,
     quotedUnitPrice: line.quotedUnitPrice ?? line.quoted ?? '',
     quotedTotalPrice: Number(line.quotedTotalPrice) || 0,
+  }
+  return {
+    ...normalized,
+    confirmed: Boolean(normalized.confirmed) && isConfirmableSparesLine(normalized),
   }
 }

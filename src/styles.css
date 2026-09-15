@@ -792,6 +792,68 @@ select, input[type=text], input[type=number], input[type=date], input[type=tel],
 .sourcing-table-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; border-top: 3px solid var(--accent, #e5382b); }
 .sourcing-table-heading .hint { margin-left: 8px; }
 .sourcing-table-heading-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.sourcing-costing-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 9px 12px;
+  border-top: 1px solid var(--grid-line);
+  border-bottom: 1px solid var(--grid-line);
+  background: var(--surface-sunken, #f8fafc);
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.sourcing-costing-controls > b { color: var(--text-primary); }
+.sourcing-costing-controls label { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.sourcing-costing-controls input { width: 78px; text-align: right; }
+.sourcing-costing-warning { margin: 0; padding: 3px 7px; font-size: 11px; }
+.clarification-actions .clarification-action {
+  border-color: var(--action-accent-border);
+  background: var(--action-accent-soft);
+  color: var(--action-accent-ink);
+}
+.clarification-actions .clarification-action:hover:not(:disabled),
+.clarification-actions .clarification-action:focus-visible {
+  border-color: var(--action-accent);
+  background: var(--action-accent-soft);
+  color: var(--action-accent-ink);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--action-accent) 16%, transparent);
+}
+.clarification-actions .clarification-action:disabled { opacity: .58; }
+.sourcing-clarification-context > summary {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  list-style: none;
+}
+.sourcing-clarification-context > summary::-webkit-details-marker { display: none; }
+.sourcing-clarification-context > summary::after {
+  content: '−';
+  margin-left: auto;
+  color: var(--action-accent-ink);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+}
+.sourcing-clarification-context:not([open]) > summary::after { content: '+'; }
+.sourcing-clarification-context > summary:focus-visible {
+  outline: 2px solid var(--action-accent);
+  outline-offset: 3px;
+}
+.sourcing-clarification-content { margin-top: 8px; }
+.page .clarification-actions button.clarification-action {
+  background-color: var(--color-primary-soft) !important;
+  border-color: var(--action-accent-border) !important;
+  color: var(--action-accent-ink) !important;
+}
+.page .clarification-actions button.clarification-action:hover:not(:disabled),
+.page .clarification-actions button.clarification-action:focus-visible {
+  background-color: var(--color-primary-soft) !important;
+  border-color: var(--color-primary) !important;
+  color: var(--color-primary-active) !important;
+}
 .sourcing-add-part-button { padding: 5px 9px; font-size: 12px; font-weight: 700; white-space: nowrap; }
 .sourcing-add-part-link {
   padding: 2px 0;
@@ -819,6 +881,18 @@ select, input[type=text], input[type=number], input[type=date], input[type=tel],
 .sourcing-row-actions .sourcing-remove-row { width: 24px; padding: 0; }
 .sourcing-row-actions .sourcing-row-action--confirm { min-width: 30px; padding-inline: 6px; }
 .sourcing-row-actions .sourcing-row-action--compare { width: 28px; padding-inline: 0; }
+.sourcing-row-actions .sourcing-row-action--disabled,
+.sourcing-row-actions .sourcing-row-action--disabled:hover,
+.sourcing-row-actions .sourcing-row-action--disabled:focus-visible {
+  cursor: not-allowed;
+  pointer-events: none;
+  border-color: var(--border-soft, #d0d5dd);
+  background: var(--surface-sunken, #f2f4f7);
+  color: var(--text-tertiary, #98a2b3);
+  box-shadow: none;
+  filter: none;
+  opacity: .72;
+}
 .sourcing-row-actions .chip { min-width: 30px; min-height: 22px; padding: 3px 6px; font-size: 10px; text-align: center; white-space: nowrap; }
 .sourcing-sheet-wrap { overflow: hidden; }
 .sourcing-currency-view { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); font-size: 12px; }
@@ -2293,8 +2367,8 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .approval-context-head { display: flex; align-items: center; gap: 7px; }
 .approval-context-label { color: var(--text-subtle); font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; }
 .approval-context-summary { margin: 5px 0 8px; font-size: 12.5px; line-height: 1.45; }
-.approval-context-facts { display: flex; gap: 8px 18px; flex-wrap: wrap; }
-.approval-context-facts span { display: flex; gap: 5px; font-size: 11.5px; color: var(--text-muted); }
+.approval-context-facts { display: flex; align-items: baseline; gap: 8px 18px; flex-wrap: nowrap; overflow-x: auto; }
+.approval-context-facts span { display: inline-flex; align-items: baseline; gap: 5px; flex: 0 0 auto; white-space: nowrap; font-size: 11.5px; color: var(--text-muted); }
 .approval-context-facts b { color: var(--text-subtle); font-size: 10px; text-transform: uppercase; }
 .approval-context-reason { display: flex; gap: 7px; margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--border-soft); font-size: 12px; line-height: 1.4; }
 .approval-context-reason b { color: var(--text-main); white-space: nowrap; }
@@ -2357,6 +2431,7 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
   .approval-card-top-redesigned { flex-direction: column; gap: 8px; }
   .approval-card-status { justify-content: flex-start; margin-left: 0; }
   .approval-card-status .hint { width: auto; }
+  .approval-context-facts { flex-wrap: wrap; overflow-x: visible; }
   .approval-context-deviations > div { grid-template-columns: 1fr; gap: 2px; }
   .approval-context-deviations .approval-context-deviation-head { display: none; }
   .approval-condition-controls { align-items: stretch; flex-direction: column; }
@@ -2858,6 +2933,8 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .compare-alt-info { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .compare-alt-header { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .compare-alt-desc { color: var(--muted, #667085); line-height: 1.4; }
+.compare-alt-reason { color: var(--text-main); line-height: 1.4; }
+.compare-alt-reason b { color: var(--text-main); }
 .compare-alt-action { flex: 0 0 auto; align-self: center; }
 .kyc-file { display: flex; align-items: center; gap: 8px; padding: 0 4px 6px; border-bottom: 1px solid var(--border-soft); }
 .kyc-file-open {
@@ -7157,14 +7234,47 @@ button.install, .btn.install,
   color: var(--text-primary);
   box-shadow: none;
 }
+.page .progress-controls button.progress-arrow {
+  border-color: var(--action-accent);
+  background: var(--action-accent);
+  color: var(--text-on-accent);
+  box-shadow: 0 2px 5px color-mix(in srgb, var(--action-accent) 24%, transparent);
+}
 .page .progress-controls button:hover:not(:disabled) {
   border-color: var(--text-secondary);
   background: var(--surface-raised);
   color: var(--text-primary);
   filter: none;
 }
+.page .progress-controls button.progress-arrow:hover:not(:disabled) {
+  border-color: var(--action-accent-hover);
+  background: var(--action-accent-hover);
+  color: var(--text-on-accent);
+}
 .page .progress-controls button:active:not(:disabled) { transform: translateY(1px); }
 .page .progress-controls button:disabled { color: var(--text-tertiary); opacity: .55; }
+.page .progress-controls button.progress-arrow:not(:disabled) {
+  background-color: var(--primary-accent);
+  border-color: var(--primary-accent);
+  color: var(--text-on-accent);
+}
+.page .progress-controls button.progress-arrow:hover:not(:disabled) {
+  background-color: var(--primary-hover);
+  border-color: var(--primary-hover);
+  color: var(--text-on-accent);
+}
+.page .progress-controls button.progress-arrow:not(:disabled),
+.page .progress-controls button.progress-arrow:not(:disabled):focus-visible {
+  background-color: var(--color-primary-soft) !important;
+  border-color: var(--action-accent-border) !important;
+  color: var(--action-accent-ink) !important;
+}
+.page .progress-controls button.progress-arrow:hover:not(:disabled),
+.page .progress-controls button.progress-arrow:not(:disabled):focus-visible:hover {
+  background-color: var(--color-primary-soft) !important;
+  border-color: var(--color-primary) !important;
+  color: var(--color-primary-active) !important;
+}
 
 .page .progress-step.current,
 .page .progress-step.current:hover { background: var(--surface-inverse); color: var(--text-on-inverse); }

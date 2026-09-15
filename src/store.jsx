@@ -13,7 +13,7 @@ import { leadConfig, routeOwner, expiredLeadDeadline, aiAuditDetail } from './le
 import { withoutSimulated, simulatedCount } from './simulatedLeads.js'
 import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLeadSlice, defaultViewMode } from './appState.js'
 import { unitCostINR, unitSellINR, setRoleNameConfig, nowIST, toISTISOString } from './utils.js'
-import { PRICE_SOURCES, normalizePriceFields, sparesLineFinancials } from './pricing.js'
+import { PRICE_SOURCES, isConfirmableSparesLine, normalizePriceFields, sparesLineFinancials } from './pricing.js'
 import { normalizedCurrencyRates } from './currency.js'
 import { syncProposalFromOpportunity } from './proposal/opportunitySync.js'
 import {
@@ -443,13 +443,29 @@ export function StoreProvider({ children }) {
       const s = stateRef.current
       if (s.proposals[oppId]) return s.proposals[oppId]
       const opp = s.opportunities.find(o => o.id === oppId)
-      return newProposal(oppId, opp, { validityDays: s.config?.proposalValidityDays, currencyRates: s.config?.currencyRates })
+      return newProposal(oppId, opp, { validityDays: s.config?.proposalValidityDays, currencyRates: s.config?.currencyRates, costingDefaults: s.config?.costingDefaults })
     },
 
     saveProposal(oppId, proposal) {
       setState(s => withAudit(
         { ...s, proposals: { ...s.proposals, [oppId]: proposal } },
         'Proposal saved', oppId, `Rev ${proposal.revision}`))
+    },
+
+    updateProposalCosting(oppId, patch) {
+      setState(s => {
+        const opp = s.opportunities.find(item => item.id === oppId)
+        const current = s.proposals[oppId] || newProposal(oppId, opp, {
+          validityDays: s.config?.proposalValidityDays,
+          currencyRates: s.config?.currencyRates,
+          costingDefaults: s.config?.costingDefaults,
+        })
+        const costing = { ...(current.costing || {}), ...patch }
+        return withAudit({
+          ...s,
+          proposals: { ...s.proposals, [oppId]: { ...current, costing } },
+        }, 'Proposal costing updated', oppId, JSON.stringify(patch))
+      })
     },
 
     // Opening a revision on a released quote (diagram 02 §7). The bumped
@@ -1143,32 +1159,43 @@ export function StoreProvider({ children }) {
     applyVendorQuoteToLine(id, lineId, price) {
       setState(s => {
         const quote = (s.vendorQuotes || []).find(q => q.id === id)
-        const label = `Manufacturer quote - ${price.manufacturer || quote?.manufacturer || 'Vendor'}`
+        const currentLine = s.sparesLines.find(l => l.id === lineId)
+        const quotePrice = price?.unitPrice
+        const hasReplacementPrice = quotePrice !== '' && quotePrice != null && Number.isFinite(Number(quotePrice))
+        const unitPrice = hasReplacementPrice
+          ? Number(quotePrice)
+          : Number(currentLine?.listUnitPrice ?? currentLine?.listPrice) || 0
+        const hasPositiveQuotePrice = hasReplacementPrice && unitPrice > 0
+        const label = `Manufacturer quote - ${price?.manufacturer || quote?.manufacturer || 'Vendor'}`
         return withAudit({
           ...s,
           vendorQuotes: (s.vendorQuotes || []).map(q => (q.id === id ? {
             ...q,
             status: 'Applied',
             receivedAt: q.receivedAt || new Date().toISOString().slice(0, 10),
-            prices: [{ lineId, ...price, appliedAt: new Date().toISOString() }, ...(q.prices || [])],
+            prices: [{ lineId, ...(price || {}), appliedAt: new Date().toISOString() }, ...(q.prices || [])],
           } : q)),
           sparesLines: s.sparesLines.map(l => (l.id === lineId ? {
             ...l,
-            listPrice: price.unitPrice === '' || price.unitPrice == null ? (l.listPrice || 0) : Number(price.unitPrice),
-            currency: price.currency || l.currency || 'INR',
-            leadTime: price.leadTime || l.leadTime || 'TBC',
+            listPrice: unitPrice,
+            currency: price?.currency || l.currency || 'INR',
+            leadTime: price?.leadTime || l.leadTime || 'TBC',
             priceList: label,
             priceSource: PRICE_SOURCES.VENDOR,
-            priceSourceName: price.manufacturer || quote?.manufacturer || 'Vendor',
-            priceSourceRef: price.quoteRef || quote?.quoteRef || quote?.id || '',
+            priceSourceName: price?.manufacturer || quote?.manufacturer || 'Vendor',
+            priceSourceRef: price?.quoteRef || quote?.quoteRef || quote?.id || '',
             priceSourceDate: new Date().toISOString().slice(0, 10),
-            listUnitPrice: price.unitPrice === '' || price.unitPrice == null ? (l.listPrice || 0) : Number(price.unitPrice),
-            priceState: 'Current',
-            oem: price.manufacturer || quote?.manufacturer || l.oem,
-            quoteRef: price.quoteRef || quote?.subject || quote?.id,
-            confirmed: true,
-          } : l)),
-        }, 'Vendor quote applied', id, `${lineId} ${price.unitPrice || ''} ${price.currency || ''}`)
+            listUnitPrice: unitPrice,
+            priceState: hasPositiveQuotePrice ? 'Current' : 'Needs pricing',
+            oem: price?.manufacturer || quote?.manufacturer || l.oem,
+            quoteRef: price?.quoteRef || quote?.subject || quote?.id,
+            confirmed: false,
+          } : l)).map(line => {
+            if (line.id !== lineId) return line
+            const normalized = normalizePriceFields(line)
+            return { ...normalized, confirmed: hasPositiveQuotePrice && isConfirmableSparesLine(normalized) }
+          }),
+        }, 'Vendor quote applied', id, `${lineId} ${price?.unitPrice || ''} ${price?.currency || ''}`)
       })
     },
 
@@ -1177,10 +1204,11 @@ export function StoreProvider({ children }) {
       setState(s => {
         const current = s.sparesLines.find(l => l.id === id)
         if (!current) return s
-        const changed = Object.keys(patch || {}).filter(key => patch[key] !== current[key])
+        const updated = normalizePriceFields({ ...current, ...(patch || {}) })
+        const changed = Object.keys(updated).filter(key => updated[key] !== current[key])
         if (!changed.length) return s
-        const detail = changed.map(key => `${key}: ${String(current[key] ?? '')} -> ${String(patch[key] ?? '')}`).join('; ')
-        const next = { ...s, sparesLines: s.sparesLines.map(l => (l.id === id ? { ...l, ...patch } : l)) }
+        const detail = changed.map(key => `${key}: ${String(current[key] ?? '')} -> ${String(updated[key] ?? '')}`).join('; ')
+        const next = { ...s, sparesLines: s.sparesLines.map(l => (l.id === id ? updated : l)) }
         return withAudit(next, 'Spares line updated', current.oppId, `${id} — ${detail}`)
       })
     },
@@ -1229,7 +1257,7 @@ export function StoreProvider({ children }) {
       setState(s => withAudit({
         ...s,
         sparesLines: s.sparesLines.map(l => (l.id === id
-          ? { ...l, priceList: 'BNK 2026-Q2', priceState: 'Current', listPrice: Math.round(l.listPrice * 1.04), listUnitPrice: Math.round((l.listUnitPrice ?? l.listPrice) * 1.04), priceSource: PRICE_SOURCES.LIST, priceSourceName: 'BNK', priceSourceVersion: '2026-Q2' }
+          ? normalizePriceFields({ ...l, priceList: 'BNK 2026-Q2', priceState: 'Current', listPrice: Math.round(l.listPrice * 1.04), listUnitPrice: Math.round((l.listUnitPrice ?? l.listPrice) * 1.04), priceSource: PRICE_SOURCES.LIST, priceSourceName: 'BNK', priceSourceVersion: '2026-Q2' })
           : l)),
       }, 'Price source refreshed', id, 'BNK 2026-Q2 (+4% list)'))
     },
@@ -1241,7 +1269,11 @@ export function StoreProvider({ children }) {
         const lines = s.sparesLines.filter(l => l.oppId === oppId && l.confirmed && !isPlaceholderSparesLine(l))
         if (!lines.length) return s
         const opp = s.opportunities.find(o => o.id === oppId)
-        const base = s.proposals[oppId] || newProposal(oppId, opp, { validityDays: s.config?.proposalValidityDays })
+        const base = s.proposals[oppId] || newProposal(oppId, opp, {
+          validityDays: s.config?.proposalValidityDays,
+          currencyRates: s.config?.currencyRates,
+          costingDefaults: s.config?.costingDefaults,
+        })
         const costing = {
           ...(base.costing || {}),
           currencyRates: normalizedCurrencyRates(base.costing?.currencyRates || s.config?.currencyRates),

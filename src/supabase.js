@@ -14,7 +14,17 @@ const anonKey = (env.VITE_SUPABASE_ANON_KEY || '').trim()
 function makeClient() {
   if (!/^https?:\/\/.+/i.test(url) || !anonKey) return null
   try {
-    return createClient(url, anonKey)
+    // This app has its own role/login layer and uses Supabase only as a
+    // shared-data and storage backend. Do not persist or reuse a browser
+    // Supabase session: a stale token can override the valid anon key and make
+    // every hydration request fail with "Invalid API key".
+    return createClient(url, anonKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    })
   } catch (e) {
     console.warn('Supabase disabled — invalid configuration:', e?.message)
     return null

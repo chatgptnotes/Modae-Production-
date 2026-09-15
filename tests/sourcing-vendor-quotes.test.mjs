@@ -33,6 +33,13 @@ test('manufacturer RFQs are repeatable and can feed spares pricing', () => {
   assert.match(store, /priceState: 'Current'/, 'applying a quote must clear stale price status')
 })
 
+test('vendor quote application cannot confirm an unpriced sourcing line', () => {
+  assert.match(store, /const hasPositiveQuotePrice = hasReplacementPrice && unitPrice > 0/)
+  assert.match(store, /priceState: hasPositiveQuotePrice \? 'Current' : 'Needs pricing'/)
+  assert.match(store, /confirmed: hasPositiveQuotePrice && isConfirmableSparesLine\(normalized\)/)
+  assert.match(store, /const unitPrice = hasReplacementPrice[\s\S]*currentLine\?\.listUnitPrice/)
+})
+
 test('Sourcing can generate and save an AI vendor response simulation', () => {
   assert.match(workbench, /runJson\('vendor\.quote'/, 'Sourcing must call the vendor quote AI task')
   assert.match(workbench, /Simulate vendor response/, 'Sourcing must expose the simulation action')

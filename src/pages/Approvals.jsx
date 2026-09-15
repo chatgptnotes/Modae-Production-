@@ -303,7 +303,7 @@ export default function Approvals() {
           <span><b>Customer</b>{snapshot.customer || opp?.sellTo || 'Not recorded'}</span>
           <span><b>Route</b>{snapshot.route || opp?.route || 'Not recorded'}</span>
           <span><b>Milestone</b>{snapshot.milestone || opp?.milestone || opp?.stage || 'Not recorded'}</span>
-          {(snapshot.product || opp?.product) && <span><b>Product</b>{snapshot.product || (Array.isArray(opp.product) ? opp.product.join(', ') : opp.product)}</span>}
+          {(snapshot.product || opp?.product) && <span><b>BOQ</b>{snapshot.product || (Array.isArray(opp.product) ? opp.product.join(', ') : opp.product)}</span>}
           {comm && snapshot.valueK != null && <span><b>Value</b>₹{snapshot.valueK}K</span>}
         </div>
         <div className="approval-context-reason"><b>What you're approving</b><span>{reason}</span></div>

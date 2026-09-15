@@ -45,3 +45,9 @@ test('approval requests persist context for the Approvals page', () => {
   assert.match(approvals, /What you're approving/)
   assert.match(approvals, /Opportunity summary/)
 })
+
+test('approval opportunity metadata labels the product context as BOQ', () => {
+  const approvals = fs.readFileSync(path.join(root, 'src/pages/Approvals.jsx'), 'utf8')
+  assert.match(approvals, /<b>BOQ<\/b>\{snapshot\.product \|\|/)
+  assert.doesNotMatch(approvals, /<b>Product<\/b>\{snapshot\.product \|\|/)
+})

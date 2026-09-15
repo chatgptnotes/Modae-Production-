@@ -1,10 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { applyAdjustment, formatPriceSource, resolvePriceSource, normalizePriceFields, sparesLineFinancials } from '../src/pricing.js'
+import { applyAdjustment, formatPriceSource, resolvePriceSource, normalizePriceFields, isConfirmableSparesLine, sparesLineFinancials } from '../src/pricing.js'
 import { buildLeadProposalData } from '../src/leadBoq.js'
 import { sparesProposalBom } from '../src/proposal/sparesBoq.js'
 import { computeProposalTotals } from '../src/gates.js'
 import { convertCurrency, normalizedCurrencyRates } from '../src/currency.js'
+import { effectiveRate } from '../src/utils.js'
 
 const lists = {
   'BNK': { version: '2026-01', currency: 'EUR', uploaded: '2026-01-02', parts: [{ pn: 'P-1', price: 100, adders: [] }] },
@@ -63,6 +64,15 @@ test('legacy zero-price manual rows are repaired during normalization', () => {
   assert.equal(expired.priceState, 'Expired')
 })
 
+test('sourcing confirmation requires positive quantity and price', () => {
+  assert.equal(isConfirmableSparesLine({ qty: 1, listUnitPrice: 10 }), true)
+  assert.equal(isConfirmableSparesLine({ qty: 0, listUnitPrice: 10 }), false)
+  assert.equal(isConfirmableSparesLine({ qty: 1, listUnitPrice: 0 }), false)
+  assert.equal(isConfirmableSparesLine({ qty: 1, listPrice: 0 }), false)
+  assert.equal(normalizePriceFields({ qty: 1, listPrice: 0, confirmed: true }).confirmed, false)
+  assert.equal(normalizePriceFields({ qty: 0, listPrice: 10, confirmed: true }).confirmed, false)
+})
+
 test('spares rollups normalize source currency to INR before margin math', () => {
   const financials = sparesLineFinancials({
     qty: 2,
@@ -110,4 +120,11 @@ test('display currency conversion uses the configured INR bridge', () => {
   assert.equal(convertCurrency(100, 'EUR', 'INR', rates), 10000)
   assert.equal(convertCurrency(10000, 'INR', 'USD', rates), 125)
   assert.equal(convertCurrency(100, 'EUR', 'USD', rates), 125)
+})
+
+test('combined CD, ERV and handling factor applies independently to EUR and USD', () => {
+  const costing = { currencyRates: { EUR: 100, USD: 80 }, customsDutyPct: 10, ervPct: 5, handlingPct: 5, bnkDiscPct: 0 }
+  assert.equal(effectiveRate(costing, 'EUR', false), 120)
+  assert.equal(effectiveRate(costing, 'USD', false), 96)
+  assert.equal(effectiveRate(costing, 'INR', false), 1)
 })
