@@ -3,6 +3,10 @@
 
 const API = 'https://generativelanguage.googleapis.com/v1beta/models'
 const DEFAULT_MODEL = 'gemini-2.5-flash'
+const MODEL_ALIASES = {
+  'gemini-pro': DEFAULT_MODEL,
+  'gemini-pro-latest': DEFAULT_MODEL,
+}
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -413,7 +417,10 @@ export default async function handler(req, res) {
   catch { return fail(res, 400, 'AI_BAD_REQUEST', 'Malformed request body') }
   const task = String(input.task || '')
   const payload = input.payload || {}
-  const model = /^gemini-[\w.-]+$/.test(String(input.model || '')) ? String(input.model) : DEFAULT_MODEL
+  const requestedModel = String(input.model || '')
+  const model = /^gemini-[\w.-]+$/.test(requestedModel)
+    ? (MODEL_ALIASES[requestedModel] || requestedModel)
+    : DEFAULT_MODEL
   if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'clarification.suggest', 'clarification.answer', 'approval.condition-evidence', 'template.map', 'proposal.review'].includes(task)) {
     return fail(res, 400, 'AI_BAD_REQUEST', `Unsupported task: ${task}`)
   }

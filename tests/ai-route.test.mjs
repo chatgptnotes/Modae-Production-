@@ -61,6 +61,24 @@ test('AI route health check returns the configured model on success', async () =
   } finally { globalThis.fetch = oldFetch }
 })
 
+test('AI route maps the retired Gemini Pro alias to the supported Flash model', async () => {
+  const oldFetch = globalThis.fetch
+  let requestedUrl = ''
+  globalThis.fetch = async url => {
+    requestedUrl = String(url)
+    return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'ok' }] } }] }) }
+  }
+  try {
+    await withEnv('server-side-only', async () => {
+      const res = response()
+      await handler({ method: 'POST', body: { task: 'health', model: 'gemini-pro-latest' } }, res)
+      assert.equal(res.out.status, 200)
+      assert.equal(res.out.body.model, 'gemini-2.5-flash')
+      assert.match(requestedUrl, /gemini-2\.5-flash:generateContent/)
+    })
+  } finally { globalThis.fetch = oldFetch }
+})
+
 test('AI route reuses the Vercel proxy for template mapping', async () => {
   const oldFetch = globalThis.fetch
   let request
