@@ -311,7 +311,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
 
   return <div className="sourcing-workbench">
     <div className="section-title">Spares workbench — part matching ({lines.length} line{lines.length === 1 ? '' : 's'})</div>
-    {clarifications.length > 0 && <details className="okbox customer-information-banner sourcing-clarification-context" open>
+    {clarifications.length > 0 && <details className="okbox customer-information-banner sourcing-clarification-context">
       <summary><b>Confirmed customer information</b><span className="hint"> These answers stay attached to the opportunity and should be checked while validating each line.</span></summary>
       <div className="sourcing-clarification-content">{clarifications.map(c => <div key={c.id} className="sourcing-clarification-row"><b>{c.category || 'Clarification'}:</b> {c.response}<span className="hint"> · {c.answerSource || 'Customer'}{c.answeredAt ? ` · ${c.answeredAt}` : ''}</span></div>)}</div>
     </details>}
