@@ -28,6 +28,7 @@ import { uploadOppFile, fmtSize } from '../filestore.js'
 import { isPlaceholderSparesLine, isSparesSupportRow, catalogueDescriptionForLine } from '../proposal/sparesBoq.js'
 import { recipientsValid } from '../emailValidation.js'
 import { downloadKycTemplate } from '../kycTemplate.js'
+import { leadIdentity, leadFieldValue } from '../leadFieldMapping.js'
 
 const statusPill = s =>
   s === 'Approved' ? 'Green' : s === 'Rejected' ? 'Red' : s === 'Approved with conditions' ? 'Amber' : 'Blue'
@@ -549,6 +550,10 @@ const KYC_TEXT_CAP = 8000
 function CustomerKycTab({ opp }) {
   const store = useStore()
   const customer = store.customers.find(c => c.name === opp.sellTo)
+  const sourceLead = store.leads.find(lead => lead.id === opp.sourceLeadId)
+  const sourceIdentity = sourceLead ? leadIdentity(sourceLead, sourceLead.ai?.fields || []) : {}
+  const sourceCategory = sourceLead?.category || leadFieldValue(sourceLead?.ai?.fields || [], 'category') || ''
+  const displayedCategory = (customer?.category && customer.category !== '—') ? customer.category : (opp.category || sourceCategory || '—')
   const canVerify = store.role === 'AH' || isAdminRole(store.role)
   const detailSeed = {
     billingAddress: opp.billingAddress ?? customer?.billingAddress ?? '',
@@ -677,11 +682,20 @@ function CustomerKycTab({ opp }) {
             <p style={{ fontSize: 13 }}><b>{customer.name}</b> <ClassChip cls={customer.status} /></p>
             <table className="cost-table" style={{ width: '100%' }}>
               <tbody>
-                <tr><td>Category</td><td>{customer.category}</td></tr>
+                <tr><td>Category</td><td>{displayedCategory}</td></tr>
                 <tr><td>KYC status</td><td>{displayedKycStatus}</td></tr>
                 <tr><td>Payment record</td><td>{customer.payment}</td></tr>
               </tbody>
             </table>
+            {(sourceIdentity.eucName || sourceIdentity.eucLocation || sourceIdentity.contactPerson || sourceIdentity.contactPhone) && (
+              <table className="cost-table" style={{ width: '100%', marginTop: 10 }}>
+                <tbody>
+                  <tr><td>EUC / site</td><td>{opp.eucName || sourceIdentity.eucName || '—'}</td></tr>
+                  <tr><td>EUC location</td><td>{opp.eucLocation || sourceIdentity.eucLocation || opp.location || '—'}</td></tr>
+                  <tr><td>Lead contact</td><td>{opp.contactPerson || sourceIdentity.contactPerson || '—'}{(opp.contactPhone || sourceIdentity.contactPhone) && ` · ${opp.contactPhone || sourceIdentity.contactPhone}`}</td></tr>
+                </tbody>
+              </table>
+            )}
             <div className="section-title" style={{ marginTop: 14 }}>Customer commercial details</div>
             <p className="hint" style={{ marginTop: 4 }}>
               Optional at registration. Complete before the final quotation or invoice.
