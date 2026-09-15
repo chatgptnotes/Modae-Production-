@@ -402,6 +402,23 @@ function LeadVerification({ lead, customerStatus, store }) {
     setBusy('')
   }
 
+  const simulateAllKyc = () => {
+    const verifiedAt = nowIST()
+    const items = checklistFor(store.config, customerStatus)
+    const kyc = Object.fromEntries(items.map(item => {
+      const value = simulatedKycValue(item)
+      return [item, {
+        state: 'Verified', mode: 'simulated', verifiedAt,
+        ...(value ? { value } : {}),
+      }]
+    }))
+    setKycValues(values => Object.fromEntries(items.map(item => [item, simulatedKycValue(item) || values[item] || ''])))
+    store.updateLead(lead.id, {
+      verification: { ...verification, kycRequestStatus: 'pending', kyc, kycVerifiedAt: verifiedAt },
+      kycCompletedAt: verifiedAt,
+    }, 'All KYC documents marked verified (simulated)')
+  }
+
   const confirmPayment = mode => {
     const now = nowIST()
     store.updateLead(lead.id, {
@@ -444,6 +461,9 @@ function LeadVerification({ lead, customerStatus, store }) {
           <span className={verification.kycRequestStatus === 'cancelled' ? 'lead-decision-note' : leadVerificationComplete(lead, customerStatus, { config: store.config }) ? 'lead-decision-saved' : 'lead-decision-note'}>
             {verification.kycRequestStatus === 'cancelled' ? 'Cancelled' : leadVerificationComplete(lead, customerStatus, { config: store.config }) ? 'Verified' : 'Pending'}
           </span>
+          {editable && verification.kycRequestStatus !== 'cancelled' && !leadVerificationComplete(lead, customerStatus, { config: store.config }) && (
+            <button type="button" onClick={simulateAllKyc}>Simulate all KYC done</button>
+          )}
           {editable && verification.kycRequestStatus === 'cancelled' && (
             <button type="button" onClick={() => store.reopenLeadKyc(lead.id)}>Reopen KYC request</button>
           )}
