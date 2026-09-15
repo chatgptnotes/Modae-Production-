@@ -210,7 +210,12 @@ export default function Workbench() {
   const advanceStep = slug => {
     const step = workflowBySlug[slug]
     if (!step) return
-    if (moveMilestone(step.milestone)) selectStep(slug)
+    // Viewing the next workbench page is safe even when its lifecycle
+    // transition is blocked. Keep the persisted milestone and its approval
+    // gate unchanged, but do not force the user to stay on the current page
+    // while they review or prepare the next step.
+    selectStep(slug)
+    moveMilestone(step.milestone)
   }
   const exceptionApprovalFor = blocker => (store.approvals || []).find(a =>
     a.type === 'Milestone exception' && a.oppId === opp.id
