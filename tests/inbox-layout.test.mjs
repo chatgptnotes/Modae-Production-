@@ -140,7 +140,8 @@ test('customer KYC display honors verified lead-stage data and simulated mode', 
   assert.match(workbench, /const leadKycVerified = opp\.leadVerification\?\.status === 'Verified'/)
   assert.match(workbench, /const displayedKycStatus = leadKycVerified \? 'Valid'/)
   assert.match(workbench, /'Verified', undefined, 'simulated'/)
-  assert.match(workbench, /item\.value && <span className="hint"[^>]*>ID: \{item\.value\}<\/span>/)
+  assert.match(workbench, /item\.value \|\| .*verificationItem\(sourceLead\.verification, name\)\.value/)
+  assert.match(workbench, /ID: \{item\.value \|\| verificationItem\(sourceLead\.verification, name\)\.value\}/)
   assert.match(register, /kyc: leadVerification\.status === 'Verified' \? 'Valid' : 'Pending'/)
 })
 

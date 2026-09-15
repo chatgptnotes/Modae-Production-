@@ -558,7 +558,7 @@ const KYC_TEXT_CAP = 8000
 function CustomerKycTab({ opp }) {
   const store = useStore()
   const customer = store.customers.find(c => c.name === opp.sellTo)
-  const sourceLead = store.leads.find(lead => lead.id === opp.sourceLeadId)
+  const sourceLead = [...(store.leads || []), ...(store.leadArchive || [])].find(lead => lead.id === opp.sourceLeadId)
   const sourceIdentity = sourceLead ? leadIdentity(sourceLead, sourceLead.ai?.fields || []) : {}
   const sourceField = pattern => sourceLead?.ai?.fields?.find(field => pattern.test(String(field.k || '')))?.v || ''
   const sourceCategory = sourceLead?.category || leadFieldValue(sourceLead?.ai?.fields || [], 'category') || ''
@@ -776,7 +776,11 @@ function CustomerKycTab({ opp }) {
                 <Icon name="check" size={14} />
                 <span style={{ flex: 1 }}>
                   {name}
-                  {item.value && <span className="hint" style={{ marginLeft: 8 }}>ID: {item.value}</span>}
+                  {(item.value || (sourceLead && verificationItem(sourceLead.verification, name).value)) && (
+                    <span className="hint" style={{ marginLeft: 8 }}>
+                      ID: {item.value || verificationItem(sourceLead.verification, name).value}
+                    </span>
+                  )}
                 </span>
                 <Chip tone="state-Accepted">{item.mode === 'simulated' ? 'Verified (simulated)' : 'Verified (uploaded)'}</Chip>
               </div>

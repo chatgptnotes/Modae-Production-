@@ -219,30 +219,40 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
   if (!ai?.fields?.length) {
     const text = `${subject || ''}\n${body || ''}\n${attachmentText}`
     const lower = text.toLowerCase()
-    const route = /spare|sensor|probe|cable|replacement|part number/.test(lower)
-      ? 'Spares'
-      : /service|repair|maintenance|amc|troubleshoot/.test(lower)
+    // Service enquiries can mention the equipment being serviced (for
+    // example, probes and cables). Prefer explicit service intent and the
+    // deterministic scorer before the old keyword-only spares fallback.
+    const route = deterministicLeadRoute(body, attachments) || (
+      /service|repair|maintenance|amc|troubleshoot|calibration|commissioning|site\s+survey/.test(lower)
         ? 'Service'
-        : 'Project'
+        : /spare|sensor|probe|cable|replacement|part number/.test(lower)
+          ? 'Spares'
+          : 'Project'
+    )
     const fields = []
     const labeled = labels => {
-      const match = text.match(new RegExp(`(?:${labels})\\s*[:\\-]\\s*([^\\n,;]+)`, 'i'))
+      const match = text.match(new RegExp(`(?:${labels})\\s*[:\\-]\\s*([^\\n;]+)`, 'i'))
       return match ? match[1].trim() : ''
     }
     const customerName = customerCompanyFromText(text)
     const eucName = labeled('end\\s+user|euc(?:\\s+name)?|plant(?:\\s+name)?') || customerName
     const eucLocation = labeled('delivery\\s+(?:location|address)|euc\\s+location|plant\\s+location|location|deliver(?:y|ed)\\s+to')
     const phone = customerPhoneFromText(text)
+    const contactPerson = customerContactFromText(text)
+    const scopeValue = cleanDisplayValue(body)
+      .replace(/^dear[^\n]*\n+/i, '')
+      .replace(/^\s*(?:customer|euc\s+name|euc\s+location|contact\s+person|contact\s+phone)\s*:[^\n]*\n?/gim, '')
+      .replace(/\n\s*(?:regards|best regards|kind regards),[\s\S]*$/i, '')
+      .trim() || cleanDisplayValue(body)
     if (customerName) fields.push({ group: 'Customer', k: 'Sell-to customer', v: customerName, conf: 98, ev: 'Explicit customer/company label in email body' })
     if (eucName) fields.push({ group: 'Customer', k: 'EUC Name', v: eucName, conf: 96, ev: 'Explicit end-user or customer identity in email body' })
     if (eucLocation) fields.push({ group: 'Customer', k: 'EUC Location', v: eucLocation, conf: 96, ev: 'Delivery/location detail in email body' })
     if (from?.trim()) fields.push({ group: 'Customer', k: 'Sender', v: from.trim(), conf: 45, ev: 'From address', note: 'Confirm the customer and contact person.' })
-    const explicitContact = customerContactFromText(text)
-    if (explicitContact) fields.push({ group: 'Customer', k: 'Contact person', v: explicitContact, conf: 95, ev: 'Explicit customer contact in email body' })
+    if (contactPerson) fields.push({ group: 'Customer', k: 'Contact person', v: contactPerson, conf: 95, ev: 'Explicit customer contact in email body' })
     if (phone) fields.push({ group: 'Customer', k: 'Contact phone', v: phone, conf: 98, ev: 'Explicit phone number in email body' })
     if (subject?.trim()) fields.push({ group: 'RFQ', k: 'Subject', v: subject.trim(), conf: 55, ev: 'Email subject', note: 'Confirm the opportunity name and route.' })
     if (body?.trim()) fields.push({ group: 'RFQ', k: 'Email body', v: sliceAtWordBoundary(cleanDisplayValue(body), 2000), conf: 35, ev: 'Email body', note: 'Fallback preview; the complete source is retained separately. Structure the requested scope and quantities.' })
-    if (body?.trim()) fields.push({ group: 'RFQ', k: 'Opportunity scope', v: sliceAtWordBoundary(cleanDisplayValue(body), 1200), conf: 90, ev: 'Customer request in email body' })
+    if (body?.trim()) fields.push({ group: 'RFQ', k: 'Opportunity scope', v: sliceAtWordBoundary(scopeValue, 1200), conf: 90, ev: 'Customer request in email body' })
     if (attachmentText) fields.push({ group: 'RFQ', k: 'Attachment content', v: sliceAtWordBoundary(cleanDisplayValue(attachmentText), 4000), conf: 45, ev: 'Attached document content', note: 'Fallback preview; the complete source is retained separately. Confirm the scope, quantities and specifications.' })
     const missing = ['Customer name', 'Required quantities and specifications']
     const lineItems = parseLeadLineItems(`${body || ''}\n${attachmentText}`)
@@ -253,6 +263,16 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
     }
     return {
       route,
+      // Keep the normalized identity at the lead level as well as in the
+      // review fields. This makes the header and decision form agree even
+      // when the AI service is unavailable.
+      sellTo: customerName,
+      eucName,
+      eucLocation,
+      contactPerson,
+      contactPhone: phone,
+      opportunityScope: body?.trim() ? scopeValue : '',
+      oppType: route,
       urgency: 'Normal',
       completeness: fields.length ? 20 : 0,
       suggestedOwner: ownerForOppType(route === 'Spares' ? 'Spares' : route === 'Service' ? 'Service' : 'Project', store.config),
@@ -1258,6 +1278,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
   const initialDecisions = () => {
     const identity = leadIdentity(lead, ai.fields)
     const buSegment = splitBuSegment(ai.fields)
+    const sourcePhone = customerPhoneFromText(`${lead.subject || ''}\n${lead.body || ''}`)
     return ({
     sellTo: identity.sellTo,
     scope: lead.opportunityScope || mappedLeadFieldValue(ai.fields, 'scope') || '',
@@ -1266,7 +1287,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
     eucName: identity.eucName,
     eucLocation: identity.eucLocation || initialLocation,
     contactPerson: identity.contactPerson || storedCustomerContact,
-    contactPhone: identity.contactPhone,
+    contactPhone: identity.contactPhone || sourcePhone,
     owner: savedOverride ? lead.assignedOwner : regionalOwner,
     oppType: OPP_TYPES.includes(lead.oppType)
       ? lead.oppType
