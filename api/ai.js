@@ -2,7 +2,7 @@
 // GEMINI_API_KEY is read only on the server. Never expose it through VITE_.
 
 const API = 'https://generativelanguage.googleapis.com/v1beta/models'
-const DEFAULT_MODEL = 'gemini-2.5-flash'
+const DEFAULT_MODEL = 'gemini-3.6-flash'
 const MODEL_ALIASES = {
   'gemini-pro': DEFAULT_MODEL,
   'gemini-pro-latest': DEFAULT_MODEL,

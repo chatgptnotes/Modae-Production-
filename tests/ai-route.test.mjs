@@ -73,8 +73,8 @@ test('AI route maps the retired Gemini Pro alias to the supported Flash model', 
       const res = response()
       await handler({ method: 'POST', body: { task: 'health', model: 'gemini-pro-latest' } }, res)
       assert.equal(res.out.status, 200)
-      assert.equal(res.out.body.model, 'gemini-2.5-flash')
-      assert.match(requestedUrl, /gemini-2\.5-flash:generateContent/)
+      assert.equal(res.out.body.model, 'gemini-3.6-flash')
+      assert.match(requestedUrl, /gemini-3\.6-flash:generateContent/)
     })
   } finally { globalThis.fetch = oldFetch }
 })

@@ -308,7 +308,7 @@ export default function Admin() {
 
   // AI model card — local draft, committed via saveAiModel.
   const [provider, setProvider] = useState(ai.provider || 'Google')
-  const [model, setModel] = useState(ai.model || 'gemini-2.5-flash')
+  const [model, setModel] = useState(ai.model || 'gemini-3.6-flash')
   const [customModel, setCustomModel] = useState(ai.customModel || '')
   const [endpoint, setEndpoint] = useState(ai.endpoint || '')
   const [apiKey, setApiKey] = useState('')
