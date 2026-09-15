@@ -502,7 +502,7 @@ function RequirementTab({ opp }) {
 
   return (
     <div className="ana-grid">
-      {opp.context === 'Brownfield' && <div className="ana-card c-12">
+      {(opp.context === 'Brownfield' || opp.route === 'Spares') && <div className="ana-card c-12">
         <BSteps opp={opp} />
       </div>}
       {opp.context === 'Service' && <div className="ana-card c-12 service-flow-summary">
@@ -773,7 +773,11 @@ function CustomerKycTab({ opp }) {
             </div>
             {opp.leadVerification.type === 'KYC' && Object.entries(opp.leadVerification.items || {}).map(([name, item]) => (
               <div className="check-row" key={name}>
-                <Icon name="check" size={14} /> <span style={{ flex: 1 }}>{name}</span>
+                <Icon name="check" size={14} />
+                <span style={{ flex: 1 }}>
+                  {name}
+                  {item.value && <span className="hint" style={{ marginLeft: 8 }}>ID: {item.value}</span>}
+                </span>
                 <Chip tone="state-Accepted">{item.mode === 'simulated' ? 'Verified (simulated)' : 'Verified (uploaded)'}</Chip>
               </div>
             ))}
@@ -1457,11 +1461,16 @@ function SourcingTab({ opp, goTab, onContinueToProposal }) {
     ? [...new Map(lines.map(l => [l.priceList, l.priceState])).entries()].map(([name, state]) => ({ name, state }))
     : Object.entries(store.priceLists).map(([name, pl]) => ({ name: `${name} ${pl.version}`, state: 'Current' }))
 
+  if (opp.route === 'Service') {
+    return <div className="ana-grid service-sourcing-workbench">
+      <div className="ana-card c-12">
+        <WbService opp={opp} openBuilder={() => goTab('proposal')} />
+      </div>
+    </div>
+  }
+
   return (
     <div className="ana-grid">
-      {opp.route === 'Service' && <div className="ana-card c-12 service-sourcing-workbench">
-        <WbService opp={opp} openBuilder={() => goTab('proposal')} />
-      </div>}
       {opp.route === 'Spares' && (
         <div className="ana-card c-12 sourcing-spares-workbench">
           <WbSpares opp={opp} openBuilder={() => goTab('proposal')} onContinue={onContinueToProposal} />
