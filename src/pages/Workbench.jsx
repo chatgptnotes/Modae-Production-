@@ -14,6 +14,7 @@ import { clarificationSender } from '../leadClarification.js'
 import WbSpares from '../workbench/WbSpares.jsx'
 import WbService from '../workbench/WbService.jsx'
 import WbProject from '../workbench/WbProject.jsx'
+import BSteps from '../workbench/BSteps.jsx'
 import PropBuilder from '../workbench/PropBuilder.jsx'
 // The same component the standalone /proposal/:oppId route renders — both write
 // through store.saveProposal, so the two views are never out of step.
@@ -501,6 +502,13 @@ function RequirementTab({ opp }) {
 
   return (
     <div className="ana-grid">
+      {opp.context === 'Brownfield' && <div className="ana-card c-12">
+        <BSteps opp={opp} />
+      </div>}
+      {opp.context === 'Service' && <div className="ana-card c-12 service-flow-summary">
+        <div className="ana-title">Service opportunity flow</div>
+        <p className="hint">Scope review → survey decision → survey report and Statement of Work (when required) → service pricing → proposal → approval.</p>
+      </div>}
       <div className="ana-card c-6">
         <div className="ana-title">Source requirement</div>
         {lead ? (
@@ -552,14 +560,20 @@ function CustomerKycTab({ opp }) {
   const customer = store.customers.find(c => c.name === opp.sellTo)
   const sourceLead = store.leads.find(lead => lead.id === opp.sourceLeadId)
   const sourceIdentity = sourceLead ? leadIdentity(sourceLead, sourceLead.ai?.fields || []) : {}
+  const sourceField = pattern => sourceLead?.ai?.fields?.find(field => pattern.test(String(field.k || '')))?.v || ''
   const sourceCategory = sourceLead?.category || leadFieldValue(sourceLead?.ai?.fields || [], 'category') || ''
+  const sourcePayment = sourceLead?.paymentTerms || sourceField(/payment\s*terms?|payment\s*conditions?/i)
+  const sourceBilling = sourceLead?.billingAddress || sourceField(/billing\s*address/i)
+  const sourceShipping = sourceLead?.shippingAddress || sourceLead?.deliveryAddress || sourceField(/shipping\s*address|delivery\s*address/i)
+  const sourcePincode = sourceLead?.shippingPincode || sourceField(/shipping\s*p(?:in|ostal)\s*code|pincode/i)
+  const sourceGstin = sourceLead?.gstin || sourceField(/gstin|gst\s*(?:number|no\.?)/i)
   const displayedCategory = (customer?.category && customer.category !== '—') ? customer.category : (opp.category || sourceCategory || '—')
   const canVerify = store.role === 'AH' || isAdminRole(store.role)
   const detailSeed = {
-    billingAddress: opp.billingAddress ?? customer?.billingAddress ?? '',
-    shippingAddress: opp.shippingAddress ?? customer?.shippingAddress ?? '',
-    shippingPincode: opp.shippingPincode ?? customer?.shippingPincode ?? '',
-    gstin: opp.gstin ?? customer?.gstin ?? '',
+    billingAddress: opp.billingAddress ?? sourceBilling ?? customer?.billingAddress ?? '',
+    shippingAddress: opp.shippingAddress ?? sourceShipping ?? customer?.shippingAddress ?? '',
+    shippingPincode: opp.shippingPincode ?? sourcePincode ?? customer?.shippingPincode ?? '',
+    gstin: opp.gstin ?? sourceGstin ?? customer?.gstin ?? '',
   }
   const [details, setDetails] = useState(detailSeed)
   const [detailSaved, setDetailSaved] = useState(false)
@@ -583,13 +597,13 @@ function CustomerKycTab({ opp }) {
 
   useEffect(() => {
     setDetails({
-      billingAddress: opp.billingAddress ?? customer?.billingAddress ?? '',
-      shippingAddress: opp.shippingAddress ?? customer?.shippingAddress ?? '',
-      shippingPincode: opp.shippingPincode ?? customer?.shippingPincode ?? '',
-      gstin: opp.gstin ?? customer?.gstin ?? '',
+      billingAddress: opp.billingAddress ?? sourceBilling ?? customer?.billingAddress ?? '',
+      shippingAddress: opp.shippingAddress ?? sourceShipping ?? customer?.shippingAddress ?? '',
+      shippingPincode: opp.shippingPincode ?? sourcePincode ?? customer?.shippingPincode ?? '',
+      gstin: opp.gstin ?? sourceGstin ?? customer?.gstin ?? '',
     })
     setDetailSaved(false)
-  }, [opp.id, customer?.name])
+  }, [opp.id, customer?.name, sourceBilling, sourceShipping, sourcePincode, sourceGstin])
 
   const updateDetail = (key, value) => {
     setDetails(previous => ({ ...previous, [key]: value }))
@@ -684,7 +698,7 @@ function CustomerKycTab({ opp }) {
               <tbody>
                 <tr><td>Category</td><td>{displayedCategory}</td></tr>
                 <tr><td>KYC status</td><td>{displayedKycStatus}</td></tr>
-                <tr><td>Payment record</td><td>{customer.payment}</td></tr>
+                <tr><td>Payment record</td><td>{customer.payment || sourcePayment || '—'}</td></tr>
               </tbody>
             </table>
             {(sourceIdentity.eucName || sourceIdentity.eucLocation || sourceIdentity.contactPerson || sourceIdentity.contactPhone) && (
@@ -1445,6 +1459,9 @@ function SourcingTab({ opp, goTab, onContinueToProposal }) {
 
   return (
     <div className="ana-grid">
+      {opp.route === 'Service' && <div className="ana-card c-12 service-sourcing-workbench">
+        <WbService opp={opp} openBuilder={() => goTab('proposal')} />
+      </div>}
       {opp.route === 'Spares' && (
         <div className="ana-card c-12 sourcing-spares-workbench">
           <WbSpares opp={opp} openBuilder={() => goTab('proposal')} onContinue={onContinueToProposal} />
