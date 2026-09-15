@@ -27,7 +27,7 @@ import {
 } from '../leadClarification.js'
 import { leadVerificationComplete, verificationDeadline, verificationItem, verificationSnapshot, redClearanceFor, isRedCleared } from '../leadVerification.js'
 import { checklistFor } from '../customerClasses.js'
-import { kycIdentityKey, validateKycValue } from '../kycValidation.js'
+import { kycIdentityKey, simulatedKycValue, validateKycValue } from '../kycValidation.js'
 import { downloadKycTemplate } from '../kycTemplate.js'
 import { PROJECT_TYPES, oppTypesForProjectType, templatesForSelection, simulatedLead, simulatedCount, SIMULATED_CUSTOMER_SCENARIOS } from '../simulatedLeads.js'
 import { buildLeadProposalData } from '../leadBoq.js'
@@ -370,7 +370,9 @@ function LeadVerification({ lead, customerStatus, store }) {
   }, [])
 
   const saveKyc = async (item, file, mode) => {
-    const identity = validateKycValue(item, kycValues[item], store.config)
+    const value = mode === 'simulated' ? simulatedKycValue(item) : kycValues[item]
+    if (mode === 'simulated' && value) setKycValues(values => ({ ...values, [item]: value }))
+    const identity = validateKycValue(item, value, store.config)
     if (!identity.ok) { setKycError(identity.message); return }
     setKycError('')
     setBusy(item)

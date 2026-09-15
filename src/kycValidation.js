@@ -22,6 +22,18 @@ export const kycIdentityKey = item => {
   return ''
 }
 
+// Values used only by the lead-screen "Simulate verification" action. They
+// satisfy the configured Indian formats without pretending to be a customer's
+// actual tax identity. Uploaded/recorded verification never uses these.
+export const simulatedKycValue = item => {
+  switch (kycIdentityKey(item)) {
+    case 'GST': return '27ABCDE1234F1Z5'
+    case 'PAN': return 'ABCDE1234F'
+    case 'CIN': return 'L12345MH2020PLC123456'
+    default: return ''
+  }
+}
+
 export function validateKycValue(item, value, config = {}) {
   const key = kycIdentityKey(item)
   if (!key) return { ok: true, key: '' }

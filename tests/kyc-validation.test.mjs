@@ -4,6 +4,7 @@ import {
   DEFAULT_KYC_VALIDATION,
   kycIdentityKey,
   kycValidationConfig,
+  simulatedKycValue,
   validateKycValue,
 } from '../src/kycValidation.js'
 
@@ -21,6 +22,13 @@ test('invalid required identity values are rejected with an explanation', () => 
   assert.equal(gst.ok, false)
   assert.match(gst.message, /valid/i)
   assert.equal(validateKycValue('PAN certificate', '').ok, false)
+})
+
+test('simulated KYC verification supplies valid demo identifiers', () => {
+  assert.equal(validateKycValue('GST certificate', simulatedKycValue('GST certificate')).ok, true)
+  assert.equal(validateKycValue('PAN certificate', simulatedKycValue('PAN certificate')).ok, true)
+  assert.equal(validateKycValue('CIN reference', simulatedKycValue('CIN reference')).ok, true)
+  assert.equal(simulatedKycValue('Cancelled cheque'), '')
 })
 
 test('Admin configuration can disable or make a rule optional', () => {
