@@ -19,7 +19,7 @@ import { leadWorkflow } from '../leadWorkflow.js'
 import { parseLeadLineItems } from '../tenderParse.js'
 import { deterministicLeadRoute, leadTextChunks, mergeLeadResults, cleanDisplayValue } from '../leadExtraction.js'
 import { scanAttachment, parsedToLeadFields, deterministicPromptContext, mergeDeterministicIntoAi } from '../docScan.js'
-import { customerContactFromText, hardenLeadExtraction, isFastTrackLead, isInternalSender, isRegistrationCriticalField, normalizeLeadContactFields, routeOwner, supplyMissing } from '../leadRules.js'
+import { customerContactFromText, customerCompanyFromText, customerPhoneFromText, hardenLeadExtraction, isFastTrackLead, isInternalSender, isRegistrationCriticalField, normalizeLeadContactFields, routeOwner, supplyMissing } from '../leadRules.js'
 import { INDIA_LOCATION_GROUPS, indiaLocation, indiaRegionForLocation } from '../indiaLocations.js'
 import {
   QUOTE_FEE_DOCUMENTS, answeredPatch, clarificationItems, clarificationKindFor,
@@ -219,11 +219,24 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
         ? 'Service'
         : 'Project'
     const fields = []
+    const labeled = labels => {
+      const match = text.match(new RegExp(`(?:${labels})\\s*[:\\-]\\s*([^\\n,;]+)`, 'i'))
+      return match ? match[1].trim() : ''
+    }
+    const customerName = customerCompanyFromText(text)
+    const eucName = labeled('end\\s+user|euc(?:\\s+name)?|plant(?:\\s+name)?') || customerName
+    const eucLocation = labeled('delivery\\s+(?:location|address)|euc\\s+location|plant\\s+location|location|deliver(?:y|ed)\\s+to')
+    const phone = customerPhoneFromText(text)
+    if (customerName) fields.push({ group: 'Customer', k: 'Sell-to customer', v: customerName, conf: 98, ev: 'Explicit customer/company label in email body' })
+    if (eucName) fields.push({ group: 'Customer', k: 'EUC Name', v: eucName, conf: 96, ev: 'Explicit end-user or customer identity in email body' })
+    if (eucLocation) fields.push({ group: 'Customer', k: 'EUC Location', v: eucLocation, conf: 96, ev: 'Delivery/location detail in email body' })
     if (from?.trim()) fields.push({ group: 'Customer', k: 'Sender', v: from.trim(), conf: 45, ev: 'From address', note: 'Confirm the customer and contact person.' })
     const explicitContact = customerContactFromText(text)
     if (explicitContact) fields.push({ group: 'Customer', k: 'Contact person', v: explicitContact, conf: 95, ev: 'Explicit customer contact in email body' })
+    if (phone) fields.push({ group: 'Customer', k: 'Contact phone', v: phone, conf: 98, ev: 'Explicit phone number in email body' })
     if (subject?.trim()) fields.push({ group: 'RFQ', k: 'Subject', v: subject.trim(), conf: 55, ev: 'Email subject', note: 'Confirm the opportunity name and route.' })
     if (body?.trim()) fields.push({ group: 'RFQ', k: 'Email body', v: sliceAtWordBoundary(cleanDisplayValue(body), 2000), conf: 35, ev: 'Email body', note: 'Fallback preview; the complete source is retained separately. Structure the requested scope and quantities.' })
+    if (body?.trim()) fields.push({ group: 'RFQ', k: 'Opportunity scope', v: sliceAtWordBoundary(cleanDisplayValue(body), 1200), conf: 90, ev: 'Customer request in email body' })
     if (attachmentText) fields.push({ group: 'RFQ', k: 'Attachment content', v: sliceAtWordBoundary(cleanDisplayValue(attachmentText), 4000), conf: 45, ev: 'Attached document content', note: 'Fallback preview; the complete source is retained separately. Confirm the scope, quantities and specifications.' })
     const missing = ['Customer name', 'Required quantities and specifications']
     const lineItems = parseLeadLineItems(`${body || ''}\n${attachmentText}`)

@@ -12,7 +12,14 @@
 
 const API = 'https://generativelanguage.googleapis.com/v1beta/models'
 const FLASH = 'gemini-2.5-flash'   // fast path: drafting, suggestions
-const PRO = 'gemini-pro-latest'    // hard extraction: leads, tender specs
+// `gemini-pro-latest` is no longer a callable model ID. Keep hard extraction
+// on the current Flash model until a supported Pro model is configured.
+const PRO = FLASH                     // hard extraction: leads, tender specs
+
+const MODEL_ALIASES: Record<string, string> = {
+  'gemini-pro': FLASH,
+  'gemini-pro-latest': FLASH,
+}
 
 const ENV_KEY = Deno.env.get('GEMINI_API_KEY') ?? ''
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
@@ -615,7 +622,10 @@ Deno.serve(async req => {
 
   // The Admin page can pin a model; anything unrecognised falls back to the
   // task's own default rather than trusting client input into the URL.
-  const model = /^gemini-[\w.-]+$/.test(String(body.model ?? '')) ? String(body.model) : task.model
+  const requestedModel = String(body.model ?? '')
+  const model = /^gemini-[\w.-]+$/.test(requestedModel)
+    ? (MODEL_ALIASES[requestedModel] || requestedModel)
+    : task.model
 
   const payload = body.payload ?? {}
   const inlineParts = Array.isArray(payload.aiAttachments)
