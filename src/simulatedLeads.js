@@ -34,24 +34,24 @@ export const oppTypesForProjectType = projectType =>
 // real owner from it instead of the generator hard-coding one.
 export const SIMULATED_CUSTOMERS = {
   Green: [
-    { name: 'Andritz Hydro Demo', contact: 'R. Venkatesh — Plant Maintenance Head', email: 'r.venkatesh', domain: 'andritz-demo.example.in', location: 'Faridabad, Haryana', region: 'North & West India', category: 'OEM' },
-    { name: 'NHPC Salal Demo', contact: 'Manish Thakur — Sr. Manager (C&I)', email: 'manish.thakur', domain: 'nhpc-salal-demo.example.in', location: 'Reasi, Jammu & Kashmir', region: 'North & West India', category: 'EUC' },
-    { name: 'Tata Steel Kalinganagar Demo', contact: 'S. Mohapatra — Reliability Engineer', email: 's.mohapatra', domain: 'tsk-demo.example.in', location: 'Jajpur, Odisha', region: 'South & East India', category: 'EUC' },
+    { name: 'Andritz Hydro Demo', contact: 'R. Venkatesh — Plant Maintenance Head', email: 'r.venkatesh', domain: 'andritz-demo.example.in', location: 'Faridabad, Haryana', region: 'North & West India', category: 'OEM', phone: '+91 90000 12345' },
+    { name: 'NHPC Salal Demo', contact: 'Manish Thakur — Sr. Manager (C&I)', email: 'manish.thakur', domain: 'nhpc-salal-demo.example.in', location: 'Reasi, Jammu & Kashmir', region: 'North & West India', category: 'EUC', phone: '+91 90000 12346' },
+    { name: 'Tata Steel Kalinganagar Demo', contact: 'S. Mohapatra — Reliability Engineer', email: 's.mohapatra', domain: 'tsk-demo.example.in', location: 'Jajpur, Odisha', region: 'South & East India', category: 'EUC', phone: '+91 90000 12347' },
   ],
   Blue: [
-    { name: 'Adani Power Godda Demo', contact: 'Vikas Ranjan — Instrumentation Lead', email: 'vikas.ranjan', domain: 'apgodda-demo.example.in', location: 'Godda, Jharkhand', region: 'South & East India', category: 'EUC' },
-    { name: 'JSW Hydro Karcham Demo', contact: 'Deepak Negi — Manager (Electrical)', email: 'deepak.negi', domain: 'jswhydro-demo.example.in', location: 'Kinnaur, Himachal Pradesh', region: 'North & West India', category: 'EUC' },
-    { name: 'BGR Energy Systems Demo', contact: 'Supply Chain — Projects Desk', email: 'scm.projects', domain: 'bgr-demo.example.in', location: 'Chennai, Tamil Nadu', region: 'South & East India', category: 'EPC' },
+    { name: 'Adani Power Godda Demo', contact: 'Vikas Ranjan — Instrumentation Lead', email: 'vikas.ranjan', domain: 'apgodda-demo.example.in', location: 'Godda, Jharkhand', region: 'South & East India', category: 'EUC', phone: '+91 90000 12348' },
+    { name: 'JSW Hydro Karcham Demo', contact: 'Deepak Negi — Manager (Electrical)', email: 'deepak.negi', domain: 'jswhydro-demo.example.in', location: 'Kinnaur, Himachal Pradesh', region: 'North & West India', category: 'EUC', phone: '+91 90000 12349' },
+    { name: 'BGR Energy Systems Demo', contact: 'Supply Chain — Projects Desk', email: 'scm.projects', domain: 'bgr-demo.example.in', location: 'Chennai, Tamil Nadu', region: 'South & East India', category: 'EPC', phone: '+91 90000 12350' },
   ],
   Amber: [
-    { name: 'Meenakshi Energy Demo', contact: 'G. Sudhakar — Maintenance Manager', email: 'g.sudhakar', domain: 'meenakshi-demo.example.in', location: 'Nellore, Andhra Pradesh', region: 'South & East India', category: 'EUC' },
-    { name: 'KSK Mahanadi Demo', contact: 'Anil Sahu — C&I Engineer', email: 'anil.sahu', domain: 'kskm-demo.example.in', location: 'Janjgir-Champa, Chhattisgarh', region: 'South & East India', category: 'EUC' },
-    { name: 'Shriram EPC Demo', contact: 'Purchase Cell — Rotating Equipment', email: 'purchase.rotating', domain: 'shriram-epc-demo.example.in', location: 'Pune, Maharashtra', region: 'North & West India', category: 'EPC' },
+    { name: 'Meenakshi Energy Demo', contact: 'G. Sudhakar — Maintenance Manager', email: 'g.sudhakar', domain: 'meenakshi-demo.example.in', location: 'Nellore, Andhra Pradesh', region: 'South & East India', category: 'EUC', phone: '+91 90000 12351' },
+    { name: 'KSK Mahanadi Demo', contact: 'Anil Sahu — C&I Engineer', email: 'anil.sahu', domain: 'kskm-demo.example.in', location: 'Janjgir-Champa, Chhattisgarh', region: 'South & East India', category: 'EUC', phone: '+91 90000 12352' },
+    { name: 'Shriram EPC Demo', contact: 'Purchase Cell — Rotating Equipment', email: 'purchase.rotating', domain: 'shriram-epc-demo.example.in', location: 'Pune, Maharashtra', region: 'North & West India', category: 'EPC', phone: '+91 90000 12353' },
   ],
   Red: [
-    { name: 'CAPSA Trading FZE Demo', contact: 'Omar Haddad — Procurement', email: 'omar.haddad', domain: 'capsa-demo.example.ae', location: 'Dubai, UAE', region: 'International opportunities', category: 'Trader' },
-    { name: 'Realix Instruments Demo', contact: 'N. Pillai — Sales Desk', email: 'n.pillai', domain: 'realix-demo.example.ae', location: 'Sharjah, UAE', region: 'International opportunities', category: 'Trader' },
-    { name: 'Gulf Rotating Equipment Demo', contact: 'Faisal Rahman — Buyer', email: 'faisal.rahman', domain: 'gre-demo.example.qa', location: 'Doha, Qatar', region: 'International opportunities', category: 'Trader' },
+    { name: 'CAPSA Trading FZE Demo', contact: 'Omar Haddad — Procurement', email: 'omar.haddad', domain: 'capsa-demo.example.ae', location: 'Dubai, UAE', region: 'International opportunities', category: 'Trader', phone: '+971 50 900 1234' },
+    { name: 'Realix Instruments Demo', contact: 'N. Pillai — Sales Desk', email: 'n.pillai', domain: 'realix-demo.example.ae', location: 'Sharjah, UAE', region: 'International opportunities', category: 'Trader', phone: '+971 50 900 1235' },
+    { name: 'Gulf Rotating Equipment Demo', contact: 'Faisal Rahman — Buyer', email: 'faisal.rahman', domain: 'gre-demo.example.qa', location: 'Doha, Qatar', region: 'International opportunities', category: 'Trader', phone: '+974 3000 1236' },
   ],
 }
 
@@ -396,9 +396,14 @@ export function simulatedLead(customerStatus = 'Green', now = new Date(), option
 
   const baseFields = [
     { group: 'Customer', k: 'Sell-to customer', v: sellTo, conf: 97, ev: 'Sender domain + signature block' },
+    // These are profile facts, not AI guesses. Keeping them explicit prevents
+    // a requested part (for example, "2 MPC4 monitoring cards") from being
+    // mistaken for the EUC/site during simulated extraction.
+    { group: 'Customer', k: 'EUC Name', v: sellTo, conf: 99, ev: 'Simulated customer profile' },
     { group: 'Customer', k: 'Category', v: customer.category, conf: 93, ev: 'Account type on record' },
-    { group: 'Customer', k: 'Location', v: customer.location, conf: 96, ev: 'Email signature' },
+    { group: 'Customer', k: 'EUC Location', v: customer.location, conf: 99, ev: 'Simulated customer profile' },
     { group: 'Customer', k: 'Contact person', v: contact, conf: 95, ev: 'Email signature' },
+    { group: 'Customer', k: 'Contact phone', v: customer.phone, conf: 99, ev: 'Simulated customer profile' },
     ...(chased ? [
       { group: 'RFQ', k: 'Buyer reference', v: ref, conf: 99, ev: 'Quoted in the first line' },
       { group: 'RFQ', k: 'Opp type', v: route, conf: 95, ev: 'Refers to the earlier item list' },
@@ -454,6 +459,16 @@ export function simulatedLead(customerStatus = 'Green', now = new Date(), option
     // the simulated classes arrive through the enquiry channels.
     source: status === 'Green' ? 'Existing Green customer' : template.source,
     from, sender, subject, ref, body,
+    // Identity fields are authoritative simulation inputs. Consumers check
+    // these before AI fields, so re-reading a simulated mail cannot replace
+    // the site with a line item or leave the registration gate empty.
+    sellTo,
+    eucName: sellTo,
+    eucLocation: customer.location,
+    location: customer.location,
+    contactPerson: contact,
+    contactPhone: customer.phone,
+    contactEmail: from,
     attachments: chased ? (chased.attachments || []) : (template.attachments || []),
     status: 'New', customerStatus: status, customerClassifiedAt: ts,
     // Classes whose evidence lives on the lead get a verification record;

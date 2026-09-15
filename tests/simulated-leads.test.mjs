@@ -5,6 +5,7 @@ import {
   oppTypesForProjectType, templatesForSelection, simulatedLead, withoutSimulated, simulatedCount,
 } from '../src/simulatedLeads.js'
 import { deadlineForLead } from '../src/leadRules.js'
+import { leadIdentity } from '../src/leadFieldMapping.js'
 import { findDuplicates } from '../src/insights.js'
 import { seedConfig, seedAiLeads, OPP_TYPES, routeForType } from '../src/seed.js'
 
@@ -29,6 +30,19 @@ test('Blue and Amber simulations start their customer requests immediately', () 
   assert.equal(simulatedLead('Amber', WHEN).verification.requestedAt, WHEN)
   assert.deepEqual(simulatedLead('Green', WHEN).verification, {})
   assert.equal(simulatedLead('Red', WHEN).redFlag, true)
+})
+
+test('simulated leads preserve customer identity separately from requested parts', () => {
+  const lead = simulatedLead('Blue', WHEN, { variant: 0, quality: 'clean' })
+  const identity = leadIdentity(lead, lead.ai.fields)
+  assert.equal(identity.sellTo, 'Adani Power Godda Demo')
+  assert.equal(identity.eucName, 'Adani Power Godda Demo')
+  assert.equal(identity.eucLocation, 'Godda, Jharkhand')
+  assert.equal(identity.contactPerson, 'Vikas Ranjan — Instrumentation Lead')
+  assert.equal(identity.contactPhone, '+91 90000 12348')
+  assert.equal(lead.ai.fields.find(field => field.k === 'EUC Name').v, identity.eucName)
+  assert.equal(lead.ai.fields.find(field => field.k === 'EUC Location').v, identity.eucLocation)
+  assert.ok(!/MPC4|probe|cable/i.test(identity.eucName))
 })
 
 test('project type narrows the opportunity type choices', () => {
