@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, REVISION_TYPES, DEFAULT_WORKFLOW } from '../seed.js'
 import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY, gmailComposeHref, displayRole, displayRoles, displayRoleLabel, formatISTDateTime } from '../utils.js'
-import { readiness, isBlocked, nextActionWith, transitionBlockers } from '../gates.js'
+import { pricingThresholdExceptions, readiness, isBlocked, nextActionWith, transitionBlockers } from '../gates.js'
 import { COMMERCIAL_RX, ConditionCompletion } from './Approvals.jsx'
 import { Chip, ClassChip, AiBadge, WarnBox, ErrBox, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
@@ -1984,6 +1984,11 @@ function FollowUpPane({ opp, onRevision }) {
 function ApprovalsTab({ opp }) {
   const store = useStore()
   const rows = store.approvals.filter(a => a.oppId === opp.id)
+  const pricingRowsFor = a => {
+    if (a.type !== 'Pricing threshold exception') return a.pricingRows || []
+    const current = pricingThresholdExceptions(opp, store.getProposal(opp.id), store).rows
+    return current.length ? current : (a.pricingRows || [])
+  }
   const canCompleteCondition = a => store.role === opp.owner || store.role === a.requestedBy
   return (
     <div>
@@ -2002,7 +2007,7 @@ function ApprovalsTab({ opp }) {
           ) : (
             <>
               <div style={{ fontSize: 12.5, margin: '6px 0' }}>{a.detail}</div>
-              {a.type === 'Pricing threshold exception' && a.pricingRows?.length > 0 && <div className="approval-pricing-rows">{a.pricingRows.map((row, i) => <div className="approval-pricing-row" key={`${row.label}-${i}`}><b>{row.label}</b>{row.discount > row.discountPct && <span>Discount {row.discount}% <small>(limit {row.discountPct}%)</small></span>}{row.markup > row.markupPct && <span>Markup {row.markup}% <small>(limit {row.markupPct}%)</small></span>}</div>)}</div>}
+              {a.type === 'Pricing threshold exception' && pricingRowsFor(a).length > 0 && <div className="approval-pricing-rows">{pricingRowsFor(a).map((row, i) => <div className="approval-pricing-row" key={`${row.label}-${i}`}><b>{row.label}</b>{row.discount > row.discountPct && <span>Discount {row.discount}% <small>(limit {row.discountPct}%)</small></span>}{row.markup > row.markupPct && <span>Markup {row.markup}% <small>(limit {row.markupPct}%)</small></span>}</div>)}</div>}
             </>
           )}
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>

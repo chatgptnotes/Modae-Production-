@@ -8,7 +8,7 @@
 
 import { unitCostINR, unitSellINR } from './utils.js'
 import { defaultCosting, MILESTONES } from './seed.js'
-import { applyAdjustment } from './pricing.js'
+import { applyAdjustment, normalizeMarkupPct } from './pricing.js'
 import { isPlaceholderSparesLine } from './proposal/sparesBoq.js'
 import { classRule, classOrder, noExceptionKeys } from './customerClasses.js'
 
@@ -79,7 +79,7 @@ export function pricingThresholdExceptions(opp, proposal, state = {}) {
   const seen = new Set()
   const add = (row, label) => {
     const discount = Number(row?.discountPct) || 0
-    const markup = Number(row?.markupPct) || 0
+    const markup = normalizeMarkupPct(row?.markupPct)
     const key = `${label}|${discount}|${markup}|${discountPct}|${markupPct}`
     if ((discount > discountPct || markup > markupPct) && !seen.has(key)) {
       seen.add(key)
@@ -89,7 +89,7 @@ export function pricingThresholdExceptions(opp, proposal, state = {}) {
   add(proposal, 'Proposal pricing')
   ;(proposal?.bom || []).forEach((line, i) => add(line, line.pn || line.custRef || line.desc || `Line ${i + 1}`))
   if (opp?.route === 'Spares') {
-    ;(state.sparesLines || []).filter(line => line.oppId === opp.id && !isPlaceholderSparesLine(line))
+    ;(state.sparesLines || []).filter(line => line.oppId === opp.id && !line.removedFromSourcing && (line.qty == null || Number(line.qty) > 0) && !isPlaceholderSparesLine(line))
       .forEach(line => add(line, line.pn || line.custRef || line.desc || line.id))
   }
   return { discountPct, markupPct, rows }
@@ -103,7 +103,7 @@ function pricingApprovers(state) {
 
 function pricingApprovalFor(opp, proposal, approvals) {
   const rev = String(proposal?.revision ?? '')
-  return (approvals || []).find(a => a.oppId === opp.id && a.type === 'Pricing threshold exception'
+  return (approvals || []).find(a => a.status !== 'Cancelled' && a.oppId === opp.id && a.type === 'Pricing threshold exception'
     && (a.rev == null || String(a.rev) === rev))
 }
 
@@ -158,7 +158,7 @@ export function readiness(opp, proposal, state) {
   }
 
   if (opp.route === 'Spares') {
-    for (const l of (state.sparesLines || []).filter(x => x.oppId === opp.id && !isPlaceholderSparesLine(x))) {
+    for (const l of (state.sparesLines || []).filter(x => x.oppId === opp.id && !x.removedFromSourcing && (x.qty == null || Number(x.qty) > 0) && !isPlaceholderSparesLine(x))) {
       if (!l.confirmed) {
         b.push({ key: `sp-conf-${l.id}`, severity: 'block', text: `Unconfirmed part match — ${l.custRef || l.pn}` })
       } else if (l.priceState === 'Needs pricing') {

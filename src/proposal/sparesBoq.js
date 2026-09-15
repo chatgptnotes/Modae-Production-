@@ -33,7 +33,7 @@ export function catalogueDescriptionForLine(line, priceLists = {}) {
 
 export function sparesProposalBom(lines = [], priceLists = {}, costing = defaultCosting) {
   return lines
-    .filter(line => line?.confirmed && Number(line.qty) > 0 && !isPlaceholderSparesLine(line))
+    .filter(line => line?.confirmed && !line.removedFromSourcing && Number(line.qty) > 0 && !isPlaceholderSparesLine(line))
     .map(line => {
       const financials = sparesLineFinancials(line, costing)
       return {

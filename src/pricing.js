@@ -10,6 +10,9 @@ export const PRICE_SOURCES = Object.freeze({
   MANUAL: 'manual',
 })
 
+export const MAX_MARKUP_PCT = 100
+export const normalizeMarkupPct = value => Math.max(0, Math.min(MAX_MARKUP_PCT, Number(value) || 0))
+
 // Converts the persisted source fields into a consistent human-readable
 // representation for sourcing tables and evidence views. Older rows may only
 // have `priceList`, so every field deliberately has a safe fallback.
@@ -108,7 +111,7 @@ export function resolvePriceSource(line, priceLists = {}, adhocParts = [], vendo
 
 export function adjustmentMultiplier({ discountPct = 0, markupPct = 0 } = {}) {
   const discount = Math.max(0, Math.min(100, Number(discountPct) || 0))
-  const markup = Math.max(0, Number(markupPct) || 0)
+  const markup = normalizeMarkupPct(markupPct)
   return discount > 0 ? (1 - discount / 100) : (1 + markup / 100)
 }
 
@@ -126,7 +129,7 @@ export function sparesLineFinancials(line = {}, costing = {}) {
   const currency = line.currency || 'INR'
   const isBnk = String(line.priceList || '').startsWith('BNK')
   const discountPct = Math.max(0, Math.min(100, Number(line.discountPct) || 0))
-  const markupPct = Math.max(0, Number(line.markupPct) || 0)
+  const markupPct = normalizeMarkupPct(line.markupPct)
   const sourceRate = effectiveRate(effectiveCosting, currency, false)
   const listUnitPriceINR = listUnitPrice * sourceRate
   const adjustedUnitPriceINR = listUnitPriceINR
@@ -172,6 +175,7 @@ export function normalizePriceFields(line = {}) {
     priceSourceRef: line.priceSourceRef || line.quoteRef || '',
     priceSourceDate: line.priceSourceDate || '',
     priceState: legacyUnpriced ? 'Needs pricing' : (line.priceState || 'Current'),
+    markupPct: normalizeMarkupPct(line.markupPct),
     listUnitPrice,
     listTotalPrice: Number(line.listTotalPrice) || (Number(line.listPrice) || 0) * (Number(line.qty) || 0),
     approvedUnitPrice: Number(line.approvedUnitPrice) || 0,

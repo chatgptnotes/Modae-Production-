@@ -808,6 +808,36 @@ select, input[type=text], input[type=number], input[type=date], input[type=tel],
 .sourcing-costing-controls label { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .sourcing-costing-controls input { width: 78px; text-align: right; }
 .sourcing-costing-warning { margin: 0; padding: 3px 7px; font-size: 11px; }
+.sourcing-pricing-approval { margin: 8px 0; padding: 10px 12px; border-radius: 4px; }
+.sourcing-pricing-approval.okbox { border-left: 4px solid var(--status-success); }
+.sourcing-pricing-approval.errbox { border-left: 4px solid var(--status-danger); }
+.sourcing-pricing-approval.warnbox { border-left: 4px solid var(--amber-text); }
+.sourcing-pricing-approval-header { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.sourcing-pricing-approval-header > div:first-child { min-width: 0; display: flex; align-items: baseline; gap: 8px; }
+.sourcing-pricing-approval-header > div:first-child > b { flex: 0 0 auto; }
+.sourcing-pricing-approval-header > div:first-child > .hint { min-width: 0; }
+.sourcing-approval-status { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; white-space: nowrap; }
+.sourcing-approval-copy { margin-top: 5px; font-size: 12px; }
+.sourcing-approval-reason { margin-top: 7px; font-size: 12px; }
+.sourcing-approval-reason-rows { display: grid; gap: 3px; margin-top: 4px; padding-left: 12px; }
+.sourcing-approval-reason-rows > div { display: grid; grid-template-columns: minmax(220px, 1fr) auto; align-items: baseline; gap: 12px; }
+.sourcing-approval-reason-rows span { color: inherit; }
+.sourcing-approval-reason-rows small { opacity: .8; }
+@media (max-width: 700px) {
+  .sourcing-pricing-approval-header { align-items: flex-start; }
+  .sourcing-pricing-approval-header > div:first-child { display: block; }
+  .sourcing-pricing-approval-header > div:first-child > .hint { display: block; margin-top: 3px; }
+  .sourcing-approval-reason-rows > div { grid-template-columns: 1fr; gap: 2px; }
+}
+.sourcing-approval-action { display: inline-flex; align-items: center; gap: 5px; margin-top: 8px; border: 1px solid var(--action-accent-border); border-radius: 4px; padding: 6px 10px; background: var(--action-accent-soft); color: var(--action-accent-ink); font-size: 12px; font-weight: 700; cursor: pointer; }
+.sourcing-approval-action:hover { background: var(--action-accent); color: var(--text-on-accent, #fff); }
+.sourcing-approval-form { margin-top: 9px; padding-top: 9px; border-top: 1px solid color-mix(in srgb, currentColor 18%, transparent); }
+.sourcing-approval-form label { display: block; font-size: 11px; font-weight: 700; }
+.sourcing-approval-form textarea { display: block; width: 100%; max-width: 620px; margin-top: 4px; padding: 6px 8px; border: 1px solid var(--border-default); border-radius: 4px; background: var(--surface); color: var(--text-primary); font: inherit; font-weight: 400; resize: vertical; }
+.sourcing-approval-decision-row { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+.sourcing-approval-decision-row select, .sourcing-approval-decision-row input { min-height: 31px; padding: 5px 7px; border: 1px solid var(--border-default); border-radius: 4px; background: var(--surface); color: var(--text-primary); font-size: 12px; }
+.sourcing-approval-decision-row input { min-width: 220px; }
+.sourcing-approval-error { margin-top: 6px; color: var(--status-danger); font-size: 11px; font-weight: 700; }
 .clarification-actions .clarification-action {
   border-color: var(--action-accent-border);
   background: var(--action-accent-soft);
@@ -917,6 +947,21 @@ select, input[type=text], input[type=number], input[type=date], input[type=tel],
 .sourcing-sheet td { overflow-wrap: anywhere; }
 .sourcing-sheet input { box-sizing: border-box; max-width: 100%; min-width: 0; }
 .sourcing-number { width: 76px; padding: 4px 5px; font-size: 12px; }
+.sourcing-edit-input {
+  min-width: 4ch;
+  min-height: 24px;
+  padding-inline: 4px;
+  border-color: var(--border-default);
+  background: var(--surface-default);
+  color: var(--text-primary);
+  caret-color: var(--text-primary);
+  -webkit-text-fill-color: var(--text-primary);
+}
+.sourcing-edit-input:focus {
+  border-color: var(--focus-ring);
+  outline: 2px solid color-mix(in srgb, var(--focus-ring) 18%, transparent);
+  outline-offset: 1px;
+}
 .sourcing-qty { width: 52px; }
 .sourcing-edit-number { display: inline-flex; align-items: center; gap: 2px; }
 .sourcing-edit-number small { color: var(--text-muted); }
@@ -8104,16 +8149,16 @@ table.sheet th {
 /* Keep the per-line decision controls visible while the wide grid moves. */
 .sourcing-workbench .sheet.sourcing-sheet--fixed th:last-child,
 .sourcing-workbench .sheet.sourcing-sheet--fixed td:last-child {
-  position: sticky;
-  right: 0;
-  box-shadow: -1px 0 0 var(--grid-line), -10px 0 16px rgba(15, 23, 42, .06);
+  position: static;
+  right: auto;
+  box-shadow: none;
 }
 .sourcing-workbench .sheet.sourcing-sheet--fixed th:last-child {
-  z-index: 5;
+  z-index: auto;
 }
 .sourcing-workbench .sheet.sourcing-sheet--fixed td:last-child {
-  z-index: 3;
-  background: #fff;
+  z-index: auto;
+  background: inherit;
 }
 .sourcing-workbench .sheet.sourcing-sheet--fixed tbody tr:nth-child(even) td:last-child { background: #fff; }
 .sourcing-workbench .sheet.sourcing-sheet--fixed tbody tr:hover td:last-child { background: #fff7ed; }
@@ -8122,6 +8167,7 @@ table.sheet th {
 .sourcing-workbench .sourcing-cell-actions .sourcing-row-actions {
   min-width: 116px;
   align-items: stretch;
+  margin-left: auto;
   flex-direction: column;
   flex-wrap: nowrap;
   gap: 5px;
@@ -8134,7 +8180,56 @@ table.sheet th {
 .sourcing-workbench .sourcing-cell-actions .sourcing-row-action--confirm,
 .sourcing-workbench .sourcing-cell-actions .sourcing-row-action--compare { min-width: 116px; }
 .sourcing-workbench .sourcing-cell-actions .chip { min-width: 116px; }
+.sourcing-workbench .sourcing-cell-actions { text-align: right; }
+.sourcing-workbench .sheet.sourcing-sheet--fixed th:last-child { text-align: right; }
+.sourcing-workbench .sheet.sourcing-sheet--fixed th:nth-child(3),
+.sourcing-workbench .sheet.sourcing-sheet--fixed th:nth-child(4),
+.sourcing-workbench .sheet.sourcing-sheet--fixed th:nth-child(5),
+.sourcing-workbench .sheet.sourcing-sheet--fixed th:nth-child(6),
+.sourcing-workbench .sheet.sourcing-sheet--fixed th:nth-child(7),
+.sourcing-workbench .sheet.sourcing-sheet--fixed th:nth-child(8),
+.sourcing-workbench .sheet.sourcing-sheet--fixed th:nth-child(9),
+.sourcing-workbench .sheet.sourcing-sheet--fixed th:nth-child(10),
+.sourcing-workbench .sheet.sourcing-sheet--fixed td.num {
+  text-align: right;
+}
 .sourcing-workbench .sourcing-cell-part .sourcing-remove-row { margin-top: 2px; }
+.sourcing-workbench .sourcing-cell-part .sourcing-remove-row {
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  min-height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-secondary);
+}
+.sourcing-workbench .sourcing-cell-part .sourcing-remove-row:hover {
+  background: var(--surface-sunken);
+  color: var(--accent, #e5382b);
+}
+.sourcing-restore-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 20px;
+  min-width: 20px;
+  height: 20px;
+  min-height: 20px;
+  padding: 0;
+  border: 1px solid var(--action-accent-border);
+  border-radius: 50%;
+  background: var(--action-accent-soft);
+  color: #c2410c;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+.sourcing-restore-row:hover { background: var(--action-accent); color: var(--text-on-accent, #fff); }
 
 .sourcing-horizontal-scrollbar {
   height: 18px;

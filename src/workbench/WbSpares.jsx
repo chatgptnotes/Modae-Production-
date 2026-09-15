@@ -5,11 +5,65 @@ import { canPriceProposal, unitCostINR, fmt, ddMmmYY } from '../utils.js'
 import { pricingThresholdExceptions } from '../gates.js'
 import { Chip, ConfChip, AiBadge, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
-import { PRICE_SOURCES, formatPriceSource, isConfirmableSparesLine, resolvePriceSource, sparesLineFinancials } from '../pricing.js'
+import { PRICE_SOURCES, formatPriceSource, isConfirmableSparesLine, normalizeMarkupPct, resolvePriceSource, sparesLineFinancials } from '../pricing.js'
 import { convertCurrency, currencySymbol, normalizedCurrencyRates } from '../currency.js'
 
 const n = value => Number.isFinite(Number(value)) ? Number(value) : 0
 const money = value => `₹ ${fmt(n(value))}`
+
+function PricingApprovalCard({ approval, approvers, role, canRequest, onRequest, onDecide, pricingRows }) {
+  const [decision, setDecision] = useState('Approved')
+  const [note, setNote] = useState('')
+  const [condition, setCondition] = useState('')
+  const [error, setError] = useState('')
+  const needed = approval?.needed?.length ? approval.needed : [approval?.approver].filter(Boolean)
+  const myDecision = approval && (approval.decisions || {})[role]
+  const canDecide = approval?.status === 'Pending' && needed.includes(role) && !myDecision
+  const status = approval?.status || 'Required'
+  const statusClass = status === 'Approved' || status === 'Approved with conditions' ? 'okbox' : status === 'Rejected' ? 'errbox' : 'warnbox'
+
+  const submitDecision = event => {
+    event.preventDefault()
+    if (!note.trim()) {
+      setError('Add a decision note before submitting.')
+      return
+    }
+    if (decision === 'Approved with conditions' && !condition.trim()) {
+      setError('Add at least one condition, or choose Approve.')
+      return
+    }
+    setError('')
+    onDecide({ d: decision, comment: note.trim(), conditions: decision === 'Approved with conditions' ? [condition.trim()] : [] })
+    setNote('')
+    setCondition('')
+  }
+
+  return <div className={`sourcing-pricing-approval ${statusClass}`} role="status">
+    <div className="sourcing-pricing-approval-header">
+      <div><b>Pricing approval</b><span className="hint"> Approval from either {approvers.join(' or ')} is required before proposal.</span></div>
+      <span className="sourcing-approval-status">{status === 'Required' ? 'Required' : status}</span>
+    </div>
+    {!approval && <div className="sourcing-approval-copy">The pricing threshold exception must be reviewed before this opportunity can continue.</div>}
+    {approval && <div className="sourcing-approval-copy">Requested by <b>{approval.requestedBy || 'user'}</b>{approval.ts ? ` · ${ddMmmYY(approval.ts.slice(0, 10))}` : ''}{approval.status === 'Pending' && !myDecision ? ` · awaiting ${needed.filter(r => !(approval.decisions || {})[r]).join(' or ')}` : ''}</div>}
+    {!!pricingRows?.length && <div className="sourcing-approval-reason"><b>Reason:</b> pricing exceeds the configured approval threshold.
+      <div className="sourcing-approval-reason-rows">{pricingRows.map((row, index) => <div key={`${row.label}-${index}`}><b>{row.label}</b>{row.discount > row.discountPct && <span>Discount {row.discount}% <small>(limit {row.discountPct}%)</small></span>}{row.markup > row.markupPct && <span>Markup {row.markup}% <small>(limit {row.markupPct}%)</small></span>}</div>)}</div>
+    </div>}
+    {approval?.status === 'Rejected' && approval.decisionNote && <div className="sourcing-approval-copy">Decision note: {approval.decisionNote}</div>}
+    {approval && myDecision && <div className="sourcing-approval-copy">Your decision: <b>{myDecision.d}</b>{myDecision.c ? ` — ${myDecision.c}` : ''}</div>}
+    {canRequest && <button type="button" className="sourcing-approval-action" onClick={onRequest}><Icon name="clipboardCheck" size={13} /> Request approval</button>}
+    {canDecide && <form className="sourcing-approval-form" onSubmit={submitDecision}>
+      <label>Decision note <textarea value={note} onChange={event => setNote(event.target.value)} placeholder="Explain the pricing decision" rows="2" /></label>
+      <div className="sourcing-approval-decision-row">
+        <select value={decision} onChange={event => setDecision(event.target.value)} aria-label="Pricing approval decision">
+          <option>Approved</option><option>Approved with conditions</option><option>Rejected</option>
+        </select>
+        {decision === 'Approved with conditions' && <input value={condition} onChange={event => setCondition(event.target.value)} placeholder="Condition" aria-label="Approval condition" />}
+        <button type="submit" className="sourcing-approval-action"><Icon name="check" size={13} /> Submit decision</button>
+      </div>
+      {error && <div className="sourcing-approval-error">{error}</div>}
+    </form>}
+  </div>
+}
 
 export default function WbSpares({ opp, openBuilder, onContinue }) {
   const store = useStore()
@@ -65,6 +119,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
       ...row,
       adjustedUnitPrice: row.adjustedUnitPriceINR,
       baseCost: row.baseCostINR,
+      listUnitPriceINR: row.listUnitPriceINR,
       listTotal: row.listTotalINR,
       lineTotal: row.lineTotalINR,
       cogs: row.cogsINR,
@@ -81,6 +136,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
       description: line.desc || '',
       qty: row.qty,
       listUnitPrice: row.listUnitPrice,
+      listUnitPriceINR: row.listUnitPriceINR,
       discountPercent: row.discountPct,
       markupPercent: row.markupPct,
       baseCost: row.baseCost,
@@ -98,7 +154,15 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
   const pricedItems = calculatedItems.filter(item => item.qty > 0 && item.listUnitPrice > 0)
   const activeItems = calculatedItems.filter(item => item.qty > 0 && item.confirmed)
   const pendingConfirmationCount = pricedItems.filter(item => !item.confirmed).length
-  const canContinueToProposal = pricedItems.length > 0 && pendingConfirmationCount === 0 && activeItems.length > 0
+  const pricingExceptions = pricingThresholdExceptions(opp, proposal, store)
+  const pricingApprovers = store.config?.approvalThresholds?.pricingApprovers?.filter(Boolean)?.length
+    ? store.config.approvalThresholds.pricingApprovers.filter(Boolean)
+    : ['AH', 'LJS']
+  const pricingApproval = pricingExceptions.rows.length
+    ? (store.approvals || []).find(a => a.status !== 'Cancelled' && a.oppId === opp.id && a.type === 'Pricing threshold exception' && (a.rev == null || String(a.rev) === String(proposal?.revision ?? '')))
+    : null
+  const pricingApprovalClear = !pricingExceptions.rows.length || ['Approved', 'Approved with conditions'].includes(pricingApproval?.status)
+  const canContinueToProposal = pricedItems.length > 0 && pendingConfirmationCount === 0 && activeItems.length > 0 && pricingApprovalClear
   useEffect(() => {
     const wrap = sourcingSheetWrapRef.current
     const scrollbar = sourcingScrollbarRef.current
@@ -147,8 +211,45 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
   const proposalOnlyMismatch = !lines.length && (proposal.bom || []).length > 0
   const expiredLines = lines.filter(l => l.priceState === 'Expired')
   const needsPricingLines = lines.filter(l => l.priceState === 'Needs pricing')
-  const pricingExceptions = pricingThresholdExceptions(opp, proposal, store)
   const clarifications = (store.clarifications || []).filter(c => c.oppId === opp.id && c.status === 'Answered')
+
+  const requestPricingApproval = () => store.requestApproval({
+    oppId: opp.id,
+    type: 'Pricing threshold exception',
+    rev: String(proposal?.revision ?? ''),
+    approver: pricingApprovers[0],
+    needed: pricingApprovers,
+    anyOf: pricingApprovers.length > 1,
+    detail: `Pricing threshold exception: discount above ${pricingExceptions.discountPct}% or markup above ${pricingExceptions.markupPct}%`,
+    pricingRows: pricingExceptions.rows,
+  })
+  const removeLine = line => {
+    const removedLine = { ...line, qty: 0, removedFromSourcing: true, confirmed: false }
+    const remainingPricing = pricingThresholdExceptions(opp, proposal, {
+      ...store,
+      sparesLines: store.sparesLines.map(item => item.id === line.id ? removedLine : item),
+    })
+    store.updateSparesLine(line.id, {
+      qty: 0,
+      removedQty: Math.max(1, n(line.qty)),
+      removedFromSourcing: true,
+      confirmed: false,
+    })
+    if (!remainingPricing.rows.length && pricingApproval?.status === 'Pending') {
+      store.cancelApproval(pricingApproval.id, 'Cancelled automatically: the pricing-exception line was removed from Sourcing.')
+    }
+  }
+  const restoreLine = line => store.updateSparesLine(line.id, {
+    qty: Math.max(1, n(line.removedQty)),
+    removedFromSourcing: false,
+    confirmed: false,
+    markupPct: normalizeMarkupPct(line.markupPct),
+  })
+  const continueTitle = !canContinueToProposal
+    ? (pricingExceptions.rows.length && !pricingApprovalClear
+      ? (pricingApproval?.status === 'Pending' ? `Awaiting pricing approval from ${pricingApprovers.join(' or ')}` : `Request pricing approval from ${pricingApprovers.join(' or ')}`)
+      : pendingConfirmationCount ? `Confirm ${pendingConfirmationCount} remaining priced line${pendingConfirmationCount === 1 ? '' : 's'} first` : 'Add and price at least one sourcing line first')
+    : ''
 
   const updateLine = (line, field, value) => {
     if (!comm) return
@@ -317,7 +418,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     </details>}
     {!!expiredLines.length && <div className="warnbox spares-price-warning"><b>{expiredLines.length} price source{expiredLines.length === 1 ? '' : 's'} expired.</b>{' '}Use <b>Compare</b> in the Actions column to select a current price-list part, or apply a current manufacturer quote only when the approved price list cannot be used.</div>}
     {!!needsPricingLines.length && <div className="warnbox spares-price-warning"><b>{needsPricingLines.length} line{needsPricingLines.length === 1 ? '' : 's'} need pricing.</b>{' '}Use <b>Compare</b> to select a current price-list part, apply a manufacturer quote, or enter a manual price before continuing.</div>}
-    {!!pricingExceptions.rows.length && <div className="warnbox" role="status"><b>Pricing approval required.</b>{' '}A discount above {pricingExceptions.discountPct}% or markup above {pricingExceptions.markupPct}% needs one approval from AH or LJS before Proposal.</div>}
+    {!!pricingExceptions.rows.length && <PricingApprovalCard approval={pricingApproval} approvers={pricingApprovers} role={store.role} pricingRows={pricingExceptions.rows} canRequest={(comm || pricingApprovers.includes(store.role)) && (!pricingApproval || pricingApproval.status === 'Rejected')} onRequest={requestPricingApproval} onDecide={decision => pricingApproval && store.recordDecision(pricingApproval.id, decision)} />}
     {proposalOnlyMismatch && <div className="warnbox sourcing-flow-warning"><b>Proposal data is not linked to Sourcing.</b> Existing proposal rows are not imported automatically. Add or import the real parts here before continuing to Proposal.</div>}
     <div className="sourcing-table-card">
       <div className="sourcing-table-heading"><div><b>Source, adjust and validate each line here</b><span className="hint"> Price-list values are loaded first; vendor values are the fallback.</span></div><div className="sourcing-table-heading-actions"><span className="sourcing-currency-indicator" title={`All displayed amounts are in ${displayCurrency}`}>Currency: {displayCurrency} ({currencySymbol(displayCurrency)})</span>{comm && <label className="sourcing-currency-view">View amounts in <select value={displayCurrency} onChange={e => setDisplayCurrency(e.target.value)}>{displayCurrencies.map(currency => <option key={currency}>{currency}</option>)}</select></label>}{comm && <button type="button" className="sourcing-add-part-link" aria-expanded={showAddPart} aria-controls="sourcing-manual-line" onClick={() => setShowAddPart(open => !open)}>{showAddPart ? 'Close manual line' : 'Add manual line'}</button>}{!comm && <span className="restricted"><Icon name="lock" size={12} /> Pricing restricted</span>}</div></div>
@@ -331,15 +432,15 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
         <span className={handlingOutOfRange ? 'warnbox sourcing-costing-warning' : 'hint'}>{handlingOutOfRange ? `Combined total ${importFactorPct.toFixed(1)}% — recommended range is ${handlingMin}–${handlingMax}%` : `Combined: ${importFactorPct.toFixed(1)}% · Admin guide: ${handlingMin}–${handlingMax}%`}</span>
       </div>}
       <div ref={sourcingSheetWrapRef} className="sheet-wrap sourcing-sheet-wrap"><table id="sourcing-spares-grid" className="sheet sourcing-sheet sourcing-sheet--fixed table-fixed w-full border-collapse">
-        <thead><tr><th className="w-[20%]">Part / customer reference</th><th className="w-[10%]">Source</th><th className="w-[5%]">Qty</th><th className="w-[7%]">List unit</th><th className="w-[6%]">Discount %</th><th className="w-[6%]">Markup %</th><th className="w-[10%]">Adjusted Unit Price</th><th className="w-[10%]">Base cost</th><th className="w-[9%]">Original total</th><th className="w-[9%]">Quoted total</th><th className="w-[8%]">Actions</th></tr></thead>
+        <thead><tr><th className="w-[20%]">Part</th><th className="w-[10%]">Source</th><th className="w-[5%]">Qty</th><th className="w-[7%]">List unit</th><th className="w-[6%]">Discount %</th><th className="w-[6%]">Markup %</th><th className="w-[10%]">Adjusted Unit Price</th><th className="w-[10%]">Base cost</th><th className="w-[9%]">Original total</th><th className="w-[9%]">Quoted total</th><th className="w-[8%]">Actions</th></tr></thead>
         <tbody>
-          {calculatedItems.map(item => { const line = item.sourceLine; const row = { ...item, discountPct: item.discountPercent, markupPct: item.markupPercent, listTotal: item.listTotal, lineTotal: item.lineTotal, cogs: item.lineTotalCogs }; const confirmable = isConfirmableSparesLine(line); const invalidState = row.qty <= 0 ? 'Cannot confirm' : 'Needs pricing'; const partDescription = `${line.pn || 'Manual part'}${line.desc ? ` — ${line.desc}` : ''}`; return <tr key={line.id} className={row.qty === 0 ? 'sourcing-zero-row' : ''}>
-            <td className="sourcing-cell-part align-top p-2 overflow-hidden"><div className="sourcing-part-line">{comm && <button type="button" className="sourcing-remove-row" title="Remove row from active proposal" aria-label={`Remove ${line.pn || line.id}`} onClick={() => updateLine(line, 'qty', 0)}><Icon name="x" size={14} /></button>}<div className="sourcing-part-copy"><input className="sourcing-customer-ref" aria-label={`Customer reference for ${line.pn || line.id}`} value={line.custRef || ''} disabled={!comm} onChange={e => updateLine(line, 'custRef', e.target.value)} placeholder="Customer reference" /><div className="sourcing-part-description line-clamp-2 text-xs font-medium text-gray-900 leading-snug" title={partDescription}>{partDescription}</div><small className="hint truncate overflow-hidden text-ellipsis whitespace-nowrap">{line.oem || '—'} · Lead: {line.leadTime || 'TBC'}</small></div></div></td>
+          {calculatedItems.map(item => { const line = item.sourceLine; const row = { ...item, discountPct: item.discountPercent, markupPct: item.markupPercent, listTotal: item.listTotal, lineTotal: item.lineTotal, cogs: item.lineTotalCogs }; const confirmable = isConfirmableSparesLine(line); const invalidState = row.qty <= 0 ? 'Cannot confirm' : 'Needs pricing'; const partDescription = `${line.pn || 'Manual part'}${line.desc ? ` — ${line.desc}` : ''}`; const removed = !!line.removedFromSourcing; return <tr key={line.id} className={row.qty === 0 ? 'sourcing-zero-row' : ''}>
+            <td className="sourcing-cell-part align-top p-2 overflow-hidden"><div className="sourcing-part-line">{comm && (removed ? <button type="button" className="sourcing-restore-row" title="Restore row to active proposal" aria-label={`Restore ${line.pn || line.id}`} onClick={() => restoreLine(line)}>✓</button> : <button type="button" className="sourcing-remove-row sourcing-row-action" title="Remove row from active proposal" aria-label={`Remove ${line.pn || line.id}`} onClick={() => removeLine(line)}><Icon name="x" size={14} /></button>)}<div className="sourcing-part-copy"><div className="sourcing-part-description line-clamp-2 text-xs font-medium text-gray-900 leading-snug" title={partDescription}>{partDescription}</div><small className="hint truncate overflow-hidden text-ellipsis whitespace-nowrap">{line.oem || '—'} · Lead: {line.leadTime || 'TBC'}</small></div></div></td>
             <td className="sourcing-cell-source align-top p-2 overflow-hidden"><div className="sourcing-source-stack">{(() => { const source = sourceDetails(line); const attribution = manualAttribution(line); const sourcePayload = { ...source, pn: line.pn || line.custRef || line.id, priceState: line.priceState || 'Unstated', listPrice: line.listUnitPrice ?? line.listPrice, currency: line.currency || 'INR', addedBy: attribution.addedByName || attribution.addedBy || '', addedAt: attribution.addedAt || '' }; const isCatalogued = source.source === PRICE_SOURCES.LIST && priceListNameFor(line); return <><div className="sourcing-source-primary">{isCatalogued ? <button type="button" className="sourcing-source-link sourcing-source-name" title={`Open ${source.full} in the price list`} aria-label={`Open ${source.full} in the price list`} onClick={() => openPriceList(line)}>{source.primary}</button> : <button type="button" className="sourcing-source-details-link sourcing-source-name" title={`View full source: ${source.full}`} aria-label={`View full source: ${source.full}`} onClick={() => setEvidence(sourcePayload)}>{source.primary}</button>}</div>{source.secondary && <span className="sourcing-source-meta" title={source.full}>{source.secondary}</span>}{line.priceState === 'Expired' ? <><Chip tone="state-Blocks">Expired</Chip><AiBadge label="pricing anomaly" /></> : line.priceState === 'Needs pricing' ? <Chip tone="state-Review">Needs pricing</Chip> : source.source !== PRICE_SOURCES.MANUAL ? <Chip tone="state-Accepted">Current</Chip> : null}</> })()}</div></td>
             <td className="num"><EditableNumber value={row.qty} label={`Quantity for ${line.pn || line.id}`} disabled={!comm} step="1" onChange={value => updateLine(line, 'qty', Math.max(0, Math.round(value)))} /></td>
-            <td className="num"><EditableNumber value={row.listUnitPrice} label={`List price for ${line.pn || line.id}`} disabled={!comm} onChange={value => updateLine(line, 'listUnitPrice', value)} /><small className="hint">{line.currency || 'INR'}</small></td>
+            <td className="num"><EditableNumber value={Math.round(displayAmount(row.listUnitPriceINR))} label={`List price for ${line.pn || line.id} in ${displayCurrency}`} disabled={!comm} onChange={value => updateLine(line, 'listUnitPrice', convertCurrency(value, displayCurrency, 'INR', costing.currencyRates))} /><small className="hint">{displayCurrency}{line.currency && line.currency !== displayCurrency ? ` · source ${line.currency}` : ''}</small></td>
             <td className="num"><EditableNumber value={Math.round(row.discountPct)} label={`Discount for ${line.pn || line.id}`} disabled={!comm} step="1" onChange={value => updateLine(line, 'discountPct', Math.min(100, Math.max(0, Math.round(value))))} suffix="%" /></td>
-            <td className="num"><EditableNumber value={Math.round(row.markupPct)} label={`Markup for ${line.pn || line.id}`} disabled={!comm} step="1" onChange={value => updateLine(line, 'markupPct', Math.max(0, Math.round(value)))} suffix="%" /></td>
+            <td className="num"><EditableNumber value={Math.round(row.markupPct)} label={`Markup for ${line.pn || line.id}`} disabled={!comm} step="1" onChange={value => updateLine(line, 'markupPct', normalizeMarkupPct(Math.round(value)))} suffix="%" /></td>
             <td className="num">{comm ? displayMoney(row.adjustedUnitPrice) : <span className="restricted"><Icon name="lock" size={11} /></span>}</td>
             <td className="num"><EditableNumber className={`sourcing-base-cost-input ${line.baseCost == null || n(line.baseCost) <= 0 || row.adjustedUnitPrice < row.baseCost ? 'is-warning' : ''}`} value={Math.round(displayAmount(row.baseCost))} label={`Base cost for ${line.pn || line.id}`} disabled={!comm} onChange={value => store.updateSparesLine(line.id, { baseCost: Math.max(0, convertCurrency(value, displayCurrency, 'INR', costing.currencyRates)) })} /></td>
             <td className="num">{comm ? displayMoney(row.listTotal) : '—'}</td><td className="num"><b>{comm ? displayMoney(row.lineTotal) : '—'}</b></td>
@@ -368,7 +469,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
           <div><span>Gross Margin</span><strong className={`inline-flex items-center px-2 py-0.5 rounded font-bold bg-red-100 text-red-700 text-xs ${grossMarginPct >= 0 ? 'is-positive' : ''}`}>{grossMarginPct.toFixed(1)}%</strong></div>
           <div className="sourcing-summary-validity"><span>Quote Validity</span><strong>{quoteValidityDays} days</strong></div>
         </div>
-        <div className="sourcing-summary-actions ml-auto flex-shrink-0"><button className="primary sourcing-summary-action bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded text-xs transition-colors" disabled={!canContinueToProposal} title={!canContinueToProposal ? (pendingConfirmationCount ? `Confirm ${pendingConfirmationCount} remaining priced line${pendingConfirmationCount === 1 ? '' : 's'} first` : 'Add and price at least one sourcing line first') : ''} onClick={sendToProposal}><Icon name="arrowRight" size={13} /> Continue to proposal</button></div>
+        <div className="sourcing-summary-actions ml-auto flex-shrink-0"><button className="primary sourcing-summary-action bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded text-xs transition-colors" disabled={!canContinueToProposal} title={continueTitle} onClick={sendToProposal}><Icon name="arrowRight" size={13} /> Continue to proposal</button></div>
       </div>}
       {!comm && <div className="restricted sourcing-restricted-footer"><Icon name="lock" size={12} /> Totals and margin are restricted — sales owners, approvers and admin only</div>}
       {sent && <div className="okbox">Proposal workbook BoM synchronized from the confirmed sourcing lines. <a style={{ cursor: 'pointer' }} onClick={openBuilder}>Open the proposal builder</a></div>}
@@ -426,5 +527,5 @@ function EditableNumber({ value, label, disabled, onChange, suffix = '', classNa
   }
   const cancel = () => { setDraft(String(value ?? 0)); setEditing(false) }
 
-  return <span className={`sourcing-edit-number ${className}`.trim()}>{editing ? <input className="sourcing-number w-full max-w-[60px] px-1 py-0.5 text-xs text-right" style={{ width: `${Math.max(3, String(draft ?? '').length + 1)}ch`, maxWidth: 'none' }} aria-label={label} type="number" min="0" step={step} value={draft} autoFocus onFocus={event => { if (n(value) === 0) event.currentTarget.select() }} onChange={event => setDraft(step === '1' ? event.target.value.replace(/\D/g, '') : event.target.value)} onBlur={commit} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commit() } if (event.key === 'Escape') { event.preventDefault(); cancel() } }} /> : <button type="button" className="sourcing-read-value" aria-label={`${label}; click to edit`} disabled={disabled} onClick={begin}>{value}</button>}{suffix && <small>{suffix}</small>}</span>
+  return <span className={`sourcing-edit-number ${className}`.trim()}>{editing ? <input className="sourcing-number sourcing-edit-input w-full max-w-[60px] px-1 py-0.5 text-xs text-right" style={{ width: `${Math.max(3, String(draft ?? '').length + 1)}ch`, maxWidth: 'none' }} aria-label={label} type="text" inputMode={step === '1' ? 'numeric' : 'decimal'} value={draft} autoFocus onFocus={event => { if (n(value) === 0) event.currentTarget.select() }} onChange={event => setDraft(step === '1' ? event.target.value.replace(/\D/g, '') : event.target.value)} onBlur={commit} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commit() } if (event.key === 'Escape') { event.preventDefault(); cancel() } }} /> : <button type="button" className="sourcing-read-value" aria-label={`${label}; click to edit`} disabled={disabled} onClick={begin}>{value}</button>}{suffix && <small>{suffix}</small>}</span>
 }

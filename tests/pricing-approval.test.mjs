@@ -31,6 +31,15 @@ test('pricing thresholds flag proposal and sourcing line exceptions', () => {
   assert.equal(blockers.find(item => item.key === 'pricing-threshold')?.anyOf, true)
 })
 
+test('removed sourcing lines do not create pricing or confirmation blockers', () => {
+  const proposal = { revision: '01', bom: [] }
+  const removedLine = { id: 'SL-REMOVED', oppId: 'PRICE-1', pn: 'P-REMOVED', qty: 0, removedFromSourcing: true, markupPct: 50, confirmed: false }
+  const result = pricingThresholdExceptions(opp, proposal, { ...state, sparesLines: [removedLine] })
+  const blockers = readiness(opp, proposal, { ...state, sparesLines: [removedLine] })
+  assert.equal(result.rows.length, 0)
+  assert.equal(blockers.some(item => item.key === 'pricing-threshold' || item.key === 'sp-conf-SL-REMOVED'), false)
+})
+
 test('an approved pricing exception clears the blocker for its revision', () => {
   const proposal = { revision: '02', discountPct: 8, bom: [] }
   const blockers = readiness(opp, proposal, {

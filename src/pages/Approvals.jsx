@@ -8,6 +8,7 @@ import { Icon } from '../icons.jsx'
 import { AiBadge } from '../ui.jsx'
 import { runTaskResult } from '../ai.js'
 import { putFiles } from '../leadBlobs.js'
+import { pricingThresholdExceptions } from '../gates.js'
 
 const NEW_APPROVAL_MS = 48 * 60 * 60 * 1000
 // Approval ts/decisionTs are full ISO stamps; ddMmmYY wants YYYY-MM-DD.
@@ -238,6 +239,12 @@ export default function Approvals() {
   const canDecide = a => neededOf(a).includes(role)
 
   const oppName = id => (store.opportunities.find(o => o.id === id) || {}).oppName || ''
+  const pricingRowsFor = a => {
+    if (a.type !== 'Pricing threshold exception' || !a.oppId) return a.pricingRows || []
+    const opp = store.opportunities.find(item => item.id === a.oppId)
+    const current = pricingThresholdExceptions(opp, store.getProposal(a.oppId), store).rows
+    return current.length ? current : (a.pricingRows || [])
+  }
   const OppLink = ({ id }) => (
     <a onClick={() => drawer.open({ type: 'opp', id })} style={{ cursor: 'pointer' }}>
       <b>{id}</b>{oppName(id) && <span> — {oppName(id)}</span>}
@@ -275,7 +282,7 @@ export default function Approvals() {
     return <>
       <OpportunityContext a={a} />
       {showStandaloneDetail && (a.type === 'Pricing threshold exception' && a.pricingRows?.length && comm
-        ? <><div style={{ fontSize: 12.5 }}>{a.detail}</div><PricingRows rows={a.pricingRows} /></>
+        ? <><div style={{ fontSize: 12.5 }}>{a.detail}</div><PricingRows rows={pricingRowsFor(a)} /></>
         : COMMERCIAL_RX.test(a.detail || '') && !comm
           ? <div className="restricted" style={{ fontSize: 12.5 }}><Icon name="lock" size={11} /> Commercial exception — trigger values (GM% / discount / value) visible to LJS / AH only.</div>
           : <div style={{ fontSize: 12.5 }}>{a.detail}</div>)}

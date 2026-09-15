@@ -798,6 +798,20 @@ export function StoreProvider({ children }) {
       })
     },
 
+    cancelApproval(id, reason = '') {
+      setState(s => {
+        const approval = s.approvals.find(a => a.id === id)
+        if (!approval || approval.status !== 'Pending') return s
+        const next = {
+          ...s,
+          approvals: s.approvals.map(a => (a.id === id
+            ? { ...a, status: 'Cancelled', cancelledBy: s.role, cancelledAt: new Date().toISOString(), decisionNote: reason || a.decisionNote }
+            : a)),
+        }
+        return withAudit(next, 'Approval cancelled', id, reason || 'No longer required')
+      })
+    },
+
     decideApproval(id, { status, conditions = [], decisionNote = '' }) {
       setState(s => withAudit({
         ...s,
@@ -1266,7 +1280,7 @@ export function StoreProvider({ children }) {
     // extraction rows must not remain alongside the confirmed matches.
     sendLinesToProposal(oppId) {
       setState(s => {
-        const lines = s.sparesLines.filter(l => l.oppId === oppId && l.confirmed && !isPlaceholderSparesLine(l))
+        const lines = s.sparesLines.filter(l => l.oppId === oppId && l.confirmed && !l.removedFromSourcing && Number(l.qty) > 0 && !isPlaceholderSparesLine(l))
         if (!lines.length) return s
         const opp = s.opportunities.find(o => o.id === oppId)
         const base = s.proposals[oppId] || newProposal(oppId, opp, {

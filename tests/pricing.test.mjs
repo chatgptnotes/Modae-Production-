@@ -31,6 +31,11 @@ test('discount and markup are mutually exclusive adjustments', () => {
   assert.equal(applyAdjustment(100, { discountPct: 5, markupPct: 20 }), 95)
 })
 
+test('markup is capped at 100% so an accidental value cannot inflate a quote', () => {
+  assert.equal(applyAdjustment(100, { markupPct: 622323 }), 200)
+  assert.equal(normalizePriceFields({ markupPct: 622323 }).markupPct, 100)
+})
+
 test('legacy price fields gain source and list-total fields', () => {
   const line = normalizePriceFields({ pn: 'P-1', priceList: 'BNK 2026-01', listPrice: 100, qty: 2 })
   assert.equal(line.priceSource, 'price-list')
@@ -120,6 +125,14 @@ test('display currency conversion uses the configured INR bridge', () => {
   assert.equal(convertCurrency(100, 'EUR', 'INR', rates), 10000)
   assert.equal(convertCurrency(10000, 'INR', 'USD', rates), 125)
   assert.equal(convertCurrency(100, 'EUR', 'USD', rates), 125)
+})
+
+test('source list unit can be displayed and edited through the selected currency', () => {
+  const rates = normalizedCurrencyRates({ EUR: 100, USD: 80 })
+  const sourcePrice = 100
+  const displayedUsd = convertCurrency(convertCurrency(sourcePrice, 'EUR', 'INR', rates), 'INR', 'USD', rates)
+  assert.equal(displayedUsd, 125)
+  assert.equal(convertCurrency(displayedUsd, 'USD', 'INR', rates), 10000)
 })
 
 test('combined CD, ERV and handling factor applies independently to EUR and USD', () => {

@@ -137,9 +137,11 @@ test('invalid sourcing rows show a disabled pricing state instead of an action',
 test('sourcing prices are editable and sourcing edits are audited', () => {
   const spares = read('src/workbench/WbSpares.jsx')
   const store = read('src/store.jsx')
-  assert.match(spares, /label=\{`List price for \$\{line\.pn \|\| line\.id\}`\}/,
+  assert.match(spares, /label=\{`List price for \$\{line\.pn \|\| line\.id\} in \$\{displayCurrency\}`\}/,
     'authorized users need a row-level price editor')
-  assert.match(spares, /priceList: 'Manual entry'/, 'manual prices must identify their source')
+  assert.match(spares, /type="text" inputMode=\{step === '1' \? 'numeric' : 'decimal'\}/,
+    'numeric sourcing edits must remain visible while typing without a native spinner')
+  assert.match(spares, /priceList: 'Manual pricing'/, 'manual prices must identify their source')
   assert.match(spares, /currency: 'INR'/, 'manual prices must be stored in INR')
   assert.match(spares, /patch\.addedByName = addedBy/, 'manual price overrides must record who entered them')
   assert.match(spares, /patch\.addedAt = addedAt/, 'manual price overrides must record when they were entered')
