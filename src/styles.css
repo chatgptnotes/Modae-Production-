@@ -2341,15 +2341,17 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
    1fr floors at min-content, which is what forced the 1230px min-width and the
    horizontal scrollbar. */
 .mail-column-head, .mail-row {
-  display: grid; align-items: center;
-  grid-template-columns:
+  --mail-grid-template:
     30px 28px 86px
-    minmax(0, 1.35fr)
+    minmax(180px, 1.35fr)
     minmax(320px, 4fr)
-    minmax(0, .85fr) minmax(0, .85fr)
-    minmax(0, .9fr) minmax(0, .95fr)
-    minmax(0, .8fr) minmax(0, 1fr)
+    minmax(105px, .85fr) minmax(95px, .85fr)
+    minmax(110px, .9fr) minmax(120px, .95fr)
+    minmax(130px, .8fr) minmax(100px, 1fr)
     46px;
+  display: grid; align-items: center;
+  grid-template-columns: var(--mail-grid-template);
+  min-width: 1350px;
 }
 .mail-column-head { min-height: 34px; padding: 0 10px 0 8px; background: var(--palette-f58d7116); border-bottom: 1px solid var(--border-color); color: var(--text-muted); font-size: 10px; font-weight: 700; letter-spacing: .25px; text-transform: uppercase; }
 .mail-column-head .mail-subject-head { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.15; }
@@ -2554,20 +2556,6 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .mail-empty b { color: var(--text-main); }
 .mail-empty svg { color: var(--text-subtle); }
 
-@container (max-width: 900px) {
-  /* Keep the useful nine columns after the 1400/1180 rules hide duplicate
-     risk, age, and owner. The old twelve-track override made rows misalign
-     at tablet widths and squeezed the Received date/time out of view. */
-  .mail-column-head, .mail-row {
-    grid-template-columns:
-      26px 24px 78px
-      minmax(0, 1.15fr)
-      minmax(0, 3.5fr)
-      minmax(0, .75fr) minmax(0, .75fr)
-      minmax(0, .85fr)
-      minmax(0, .9fr);
-  }
-}
 @media (max-width: 640px) {
   .mailbox-head { display: block; }
   .mailbox-head-actions { margin-top: 10px; }
@@ -5249,46 +5237,17 @@ table.sheet td .wrapcell:focus { outline: 2px solid var(--xl-green); background:
 .mailbox-page > .hint { flex: 0 0 auto; }
 .mailbox-list {
   flex: 1 1 auto; min-height: 0;
-  overflow-y: auto; overflow-x: hidden;
+  overflow-x: auto; overflow-y: auto;
 }
 /* 44px is .mail-list-toolbar's min-height — the two stack as one sticky head. */
-.mail-list-toolbar { position: sticky; top: 0; z-index: 3; background: var(--palette-4843938); }
+.mail-list-toolbar { position: sticky; top: 0; z-index: 3; min-width: 1350px; background: var(--palette-4843938); }
 .mail-column-head { position: sticky; top: 44px; z-index: 2; }
 .mail-row > div, .mail-row > .pill { min-width: 0; }
 .mail-row .chip, .mail-row .pill { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* Below these widths the thin columns stop being readable. Drop them rather
-   than reintroducing a horizontal scrollbar — least-informative first: age,
-   then duplicate risk, then the suggested owner. Both the header spans and the
-   row cells are addressed by position, since the chip cells carry no class.
-   These measure the table's own box (via container queries on .mailbox-list),
-   not the viewport — the sidebar eats 200-250px that a @media viewport check
-   can't see, which used to let columns get squeezed before these ever fired. */
-@container (max-width: 1400px) {
-  .mail-column-head > :nth-child(8), .mail-row > :nth-child(8),
-  .mail-column-head > :nth-child(12), .mail-row > :nth-child(12) { display: none; }
-  .mail-column-head, .mail-row {
-    grid-template-columns:
-      30px 28px 86px
-      minmax(0, 1.35fr)
-      minmax(260px, 3.8fr)
-      minmax(0, .85fr) minmax(0, .85fr)
-      minmax(0, .95fr)
-      minmax(0, .8fr) minmax(0, 1fr);
-  }
-}
-@container (max-width: 1180px) {
-  .mail-column-head > :nth-child(10), .mail-row > :nth-child(10) { display: none; }
-  .mail-column-head, .mail-row {
-    grid-template-columns:
-      30px 28px 86px
-      minmax(0, 1.3fr)
-      minmax(220px, 3.6fr)
-      minmax(0, .85fr) minmax(0, .85fr)
-      minmax(0, .95fr)
-      minmax(0, 1fr);
-  }
-}
+/* The complete grid remains available at every container width. The list is
+   the horizontal and vertical scroll region, so the toolbar and sticky header
+   travel with the same scrollable content as the rows. */
 
 /* The numbered Terms & Conditions block the sample proposals print under the
    pricing sheet. Numbered prose, not a table — the samples are emphatic. */
@@ -6380,6 +6339,28 @@ body {
 .proposal-review-issue.block { background: var(--palette-f07f705); color: var(--palette-8784f8b3); }
 .proposal-review-issue.warning { background: var(--palette-95bf2caf); color: var(--palette-3f67030b); }
 .proposal-review-issue.info { background: var(--palette-8765e122); color: var(--palette-de19fed9); }
+.proposal-review-issue-head { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.proposal-review-issue-head strong { color: inherit; font-size: 12px; }
+.proposal-review-severity, .proposal-review-source {
+  display: inline-flex; align-items: center; min-height: 18px; padding: 2px 6px;
+  border: 1px solid currentColor; border-radius: 999px; font-size: 9px;
+  font-weight: 800; letter-spacing: .35px; text-transform: uppercase;
+}
+.proposal-review-source { opacity: .75; font-weight: 700; }
+.proposal-review-issue-text { margin: 4px 0 0; line-height: 1.4; }
+.proposal-review-evidence {
+  display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 6px; align-items: start;
+  margin-top: 6px; padding-top: 5px; border-top: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  font-size: 10.5px;
+}
+.proposal-review-evidence > span { font-weight: 800; text-transform: uppercase; letter-spacing: .35px; opacity: .8; }
+.proposal-review-evidence code { font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; opacity: .9; }
+.proposal-review-memory-summary { padding: 7px 9px; border: 1px solid var(--palette-1fb54521); border-radius: 5px; background: var(--palette-8765e122); color: var(--palette-de19fed9); line-height: 1.4; }
+.proposal-review-history { border: 1px solid var(--border-soft); border-radius: 5px; background: var(--palette-f58d7116); }
+.proposal-review-history summary { padding: 7px 9px; cursor: pointer; color: var(--text-muted); font-size: 11px; font-weight: 700; }
+.proposal-review-history[open] summary { border-bottom: 1px solid var(--border-soft); }
+.proposal-review-history .proposal-review-issue { margin: 5px; }
+.proposal-review-issues.is-overridden > strong { color: var(--status-good); }
 .proposal-review-approval { display: inline-flex; margin-left: 8px; padding: 2px 6px; border: 1px solid var(--palette-1fb54521); border-radius: 4px; color: var(--status-good); background: var(--palette-4843938); font-size: 10.5px; font-weight: 700; }
 .proposal-sheet-editor .form-card { border: 1px solid var(--border-soft); border-radius: 6px; box-shadow: none; padding: 16px; }
 .proposal-sheet-editor .section-title { margin-bottom: 12px; }
@@ -6818,16 +6799,39 @@ body {
 .proposal-edit-grid .boq-col-uom { width: 54px; }
 .proposal-edit-grid .boq-col-unit-price { width: 92px; }
 .proposal-edit-grid .boq-col-total-price { width: 105px; }
-.proposal-edit-grid .boq-col-action { width: 48px; }
+.proposal-edit-grid .boq-col-action { width: 72px; min-width: 72px; }
 .proposal-edit-grid th,
 .proposal-edit-grid td {
   box-sizing: border-box;
   overflow-wrap: anywhere;
   vertical-align: middle;
 }
+.proposal-edit-grid .boq-action-cell {
+  min-width: 72px;
+  overflow: visible;
+  text-align: center;
+  white-space: nowrap;
+}
+.proposal-edit-grid .boq-action-cell > button,
+.proposal-edit-grid .boq-action-cell > .proposal-row-control { margin-inline: auto; }
+.proposal-edit-grid .boq-action-cell > .proposal-row-control { display: inline-flex; align-items: center; justify-content: center; min-height: 32px; }
+/* Read-only editors hide mutating buttons elsewhere, but the BOQ action cell
+   must still explain that row actions exist and are unavailable. */
+.proposal-sheet-editor-readonly .proposal-edit-grid .boq-action-cell > button {
+  visibility: visible;
+  pointer-events: none;
+}
 .proposal-edit-grid th { white-space: normal; line-height: 1.2; }
 .proposal-edit-grid td input,
 .proposal-edit-grid td textarea { width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; }
+.proposal-edit-grid .proposal-cell-text {
+  display: block;
+  width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.35;
+}
 .proposal-edit-grid td textarea {
   min-height: 58px;
   max-height: 150px;
@@ -6863,11 +6867,11 @@ body {
   font-size: 10px;
   line-height: 1.15;
   min-height: 38px;
-  white-space: nowrap;
-  overflow-wrap: normal;
-  word-break: normal;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
   hyphens: none;
-  text-overflow: ellipsis;
+  text-overflow: clip;
   vertical-align: middle;
 }
 .proposal-edit-grid thead,
@@ -6929,19 +6933,87 @@ body {
    Services are intentionally compact; Projects retain their full workbook
    detail but collapse into labelled records on narrow screens. */
 .proposal-edit-wrap { overflow-x: visible; }
+/* Spares and Services use a compact customer-facing shape. The shared
+   editor textarea rule is sized for the denser Project workbook and leaves a
+   large empty block in short rows. Keep a two-line editing target here, while
+   allowing rows to grow when descriptions or part hints wrap. */
+.proposal-edit-grid-spares tbody td,
+.proposal-edit-grid-services tbody td { padding-block: 6px; }
+.proposal-edit-grid-spares tbody td:nth-child(2),
+.proposal-edit-grid-spares tbody td:nth-child(3),
+.proposal-edit-grid-services tbody td:nth-child(2) { vertical-align: middle; }
+.proposal-edit-grid-spares tbody td:nth-child(2),
+.proposal-edit-grid-spares tbody td:nth-child(3),
+.proposal-edit-grid-services tbody td:nth-child(2) { text-align: left; }
+.proposal-edit-grid-spares tbody td:nth-child(5),
+.proposal-edit-grid-services tbody td:nth-child(5),
+.proposal-edit-grid-project.is-priced tbody td:nth-child(10) { text-align: left; }
+.proposal-edit-grid-spares tbody td:nth-child(6),
+.proposal-edit-grid-services tbody td:nth-child(6),
+.proposal-edit-grid-project.is-priced tbody td:nth-child(11) {
+  text-align: left;
+  white-space: nowrap;
+}
+.proposal-edit-grid-spares,
+.proposal-edit-grid-services {
+  table-layout: auto;
+}
+.proposal-edit-grid-spares tbody td,
+.proposal-edit-grid-services tbody td { text-align: left; }
+.proposal-edit-grid-spares tbody td.rowhead,
+.proposal-edit-grid-services tbody td.rowhead,
+.proposal-edit-grid-spares tbody td.boq-action-cell,
+.proposal-edit-grid-services tbody td.boq-action-cell { text-align: center; }
+.proposal-edit-grid-spares .boq-col-si,
+.proposal-edit-grid-services .boq-col-si { width: auto; min-width: 50px; }
+.proposal-edit-grid-spares .boq-col-description,
+.proposal-edit-grid-services .boq-col-description { width: auto; min-width: 220px; }
+.proposal-edit-grid-spares .boq-col-part { width: auto; min-width: 200px; }
+.proposal-edit-grid-services .boq-col-total-qty { width: auto; min-width: 90px; }
+.proposal-edit-grid-spares .boq-col-unit-price,
+.proposal-edit-grid-spares .boq-col-total-price,
+.proposal-edit-grid-services .boq-col-unit-price,
+.proposal-edit-grid-services .boq-col-total-price {
+  width: auto;
+  min-width: 112px;
+}
+.proposal-edit-grid-spares tbody textarea,
+.proposal-edit-grid-services tbody textarea {
+  height: 42px;
+  min-height: 42px;
+  max-height: 120px;
+}
 .proposal-edit-grid-spares .boq-col-si { width: 5%; }
-.proposal-edit-grid-spares .boq-col-description { width: 32%; }
-.proposal-edit-grid-spares .boq-col-part { width: 22%; }
-.proposal-edit-grid-spares .boq-col-total-qty { width: 10%; }
-.proposal-edit-grid-spares .boq-col-unit-price { width: 14%; }
-.proposal-edit-grid-spares .boq-col-total-price { width: 14%; }
-.proposal-edit-grid-spares .boq-col-action { width: 38px; }
+.proposal-edit-grid-spares .boq-col-description { width: 29%; }
+.proposal-edit-grid-spares .boq-col-part { width: 21%; }
+.proposal-edit-grid-spares .boq-col-total-qty { width: 9%; }
+.proposal-edit-grid-spares .boq-col-unit-price { width: 13%; }
+.proposal-edit-grid-spares .boq-col-total-price { width: 15%; }
+.proposal-edit-grid-spares .boq-col-action { width: 72px; min-width: 72px; }
 .proposal-edit-grid-services .boq-col-si { width: 6%; }
-.proposal-edit-grid-services .boq-col-description { width: 45%; }
+.proposal-edit-grid-services .boq-col-description { width: 40%; }
 .proposal-edit-grid-services .boq-col-total-qty { width: 14%; }
-.proposal-edit-grid-services .boq-col-unit-price { width: 16%; }
-.proposal-edit-grid-services .boq-col-total-price { width: 16%; }
-.proposal-edit-grid-services .boq-col-action { width: 38px; }
+.proposal-edit-grid-services .boq-col-unit-price { width: 15%; }
+.proposal-edit-grid-services .boq-col-total-price { width: 17%; }
+.proposal-edit-grid-services .boq-col-action { width: 72px; min-width: 72px; }
+.proposal-edit-grid-project.is-priced .boq-col-si { width: 4%; }
+.proposal-edit-grid-project.is-priced .boq-col-category { width: 9%; }
+.proposal-edit-grid-project.is-priced .boq-col-description { width: 22%; }
+.proposal-edit-grid-project.is-priced .boq-col-part { width: 15%; }
+.proposal-edit-grid-project.is-priced .boq-col-qty { width: 5%; }
+.proposal-edit-grid-project.is-priced .boq-col-total-qty { width: 7%; }
+.proposal-edit-grid-project.is-priced .boq-col-uom { width: 5%; }
+.proposal-edit-grid-project.is-priced .boq-col-unit-price { width: 8%; }
+.proposal-edit-grid-project.is-priced .boq-col-total-price { width: 7%; }
+.proposal-edit-grid-project.is-priced .boq-col-action { width: 72px; min-width: 72px; }
+.proposal-edit-grid-project.is-unpriced .boq-col-si { width: 5%; }
+.proposal-edit-grid-project.is-unpriced .boq-col-category { width: 11%; }
+.proposal-edit-grid-project.is-unpriced .boq-col-description { width: 25%; }
+.proposal-edit-grid-project.is-unpriced .boq-col-part { width: 18%; }
+.proposal-edit-grid-project.is-unpriced .boq-col-qty { width: 6%; }
+.proposal-edit-grid-project.is-unpriced .boq-col-uom { width: 6%; }
+.proposal-edit-grid-project.is-unpriced .boq-col-total-qty { width: 10%; }
+.proposal-edit-grid-project.is-unpriced .boq-col-action { width: 72px; min-width: 72px; }
 
 @media (max-width: 760px) {
   .proposal-edit-wrap { overflow-x: visible; }
@@ -8183,6 +8255,39 @@ table.sheet th {
   flex-direction: column;
   flex-wrap: nowrap;
   gap: 5px;
+}
+
+/* Let every sourcing column follow its header/content instead of distributing
+   the grid into arbitrary percentage widths. The wrapper remains horizontally
+   scrollable when a real long part description needs more room. */
+.sourcing-workbench .sheet.sourcing-sheet--fixed {
+  table-layout: auto;
+  width: 100%;
+  min-width: 0;
+}
+.sourcing-workbench .sheet.sourcing-sheet--fixed th,
+.sourcing-workbench .sheet.sourcing-sheet--fixed td {
+  width: auto !important;
+  min-width: 0;
+}
+.sourcing-workbench .sheet.sourcing-sheet--fixed th {
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+}
+.sourcing-workbench .sheet.sourcing-sheet--fixed th:first-child,
+.sourcing-workbench .sheet.sourcing-sheet--fixed td:first-child {
+  min-width: 220px;
+  max-width: 420px;
+}
+.sourcing-workbench .sheet.sourcing-sheet--fixed th:nth-child(2),
+.sourcing-workbench .sheet.sourcing-sheet--fixed td:nth-child(2) {
+  min-width: 120px;
+  max-width: 260px;
+}
+.sourcing-workbench .sheet.sourcing-sheet--fixed th:last-child,
+.sourcing-workbench .sheet.sourcing-sheet--fixed td:last-child {
+  min-width: 150px;
+  max-width: 150px;
 }
 .sourcing-workbench .sourcing-cell-actions .sourcing-row-action,
 .sourcing-workbench .sourcing-cell-actions .chip {

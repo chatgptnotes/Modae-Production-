@@ -35,3 +35,13 @@ test('structured AI line items take precedence over unrelated lead prose', () =>
   assert.equal(items[0].qty, 2)
   assert.equal(items[0].partNumber, 'IN081-3-110-50')
 })
+
+test('duplicate structured line items collapse and combine quantities', () => {
+  const items = lineItemsFromLead({
+    ai: { lineItems: [
+      { description: 'MPC4 monitoring card', partNumber: 'MPC4', qty: 1 },
+      { description: 'MPC4 monitoring card', partNumber: 'MPC4', qty: 2 },
+    ] },
+  })
+  assert.deepEqual(items.map(item => [item.partNumber, item.qty]), [['MPC4', 3]])
+})

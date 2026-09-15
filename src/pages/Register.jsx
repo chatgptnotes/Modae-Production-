@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useStore, nextOppId } from '../store.jsx'
 import { OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, SUBFOLDERS, routeForType, ownerForOppType, newProposal } from '../seed.js'
@@ -71,6 +71,8 @@ export default function Register() {
   const [identitySaved, setIdentitySaved] = useState(false)
   const [creating, setCreating] = useState(false)
   const [uploadWarn, setUploadWarn] = useState('')
+  const createRef = useRef(null)
+  const autoCreateStarted = useRef(false)
 
   useEffect(() => {
     setIdentityDraft({
@@ -78,6 +80,15 @@ export default function Register() {
     })
     setIdentitySaved(false)
   }, [lead?.id])
+
+  // Qualified leads enter the opportunity flow directly. The form remains a
+  // fallback for leads that still have a mandatory field or approval gate.
+  useEffect(() => {
+    if (lead?.status !== 'Qualified' || autoCreateStarted.current) return undefined
+    autoCreateStarted.current = true
+    const timer = setTimeout(() => createRef.current?.(), 0)
+    return () => clearTimeout(timer)
+  }, [lead?.id, lead?.status])
 
   if (!lead) {
     return (
@@ -153,7 +164,7 @@ export default function Register() {
   }
 
   const create = async () => {
-    if (missingIdentity.length) return
+    if (blocked || missingIdentity.length || creating) return
     const isOverride = regionalOwner && owner !== regionalOwner
     if (isOverride && !['LJS', 'AH'].includes(store.role)) return
     if (isOverride && !ownerOverrideReason.trim()) return
@@ -258,6 +269,8 @@ export default function Register() {
     }
     nav('/opp/' + opp.id)
   }
+
+  createRef.current = create
 
   return (
     <div className="page">

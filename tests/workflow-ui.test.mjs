@@ -120,7 +120,7 @@ test('sourcing alternatives explain AI suggestions and zero-value confirmation i
   const spares = read('src/workbench/WbSpares.jsx')
   assert.match(spares, /AiBadge label="AI suggested"/)
   assert.match(spares, /Why AI suggested this:/)
-  assert.match(spares, /suggestedBy: 'AI'/)
+  assert.match(spares, /a\.suggestedBy === 'AI'/, 'only records with explicit AI provenance should receive the AI badge')
   assert.match(spares, /isConfirmableSparesLine\(line\)/)
   assert.match(spares, /Enter a positive list price/)
 })

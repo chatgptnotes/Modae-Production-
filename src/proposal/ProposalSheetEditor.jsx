@@ -109,7 +109,7 @@ export default function ProposalSheetEditor({
         <div className="section-title">Bill of quantities</div>
         <p className="hint proposal-boq-edit-note">Edit the existing rows directly. Use copy/paste or the keyboard to update the white cells.</p>
         <div className="sheet-wrap proposal-edit-wrap">
-           <table className={`sheet proposal-edit-grid ${isSpares ? 'proposal-edit-grid-spares' : isServices ? 'proposal-edit-grid-services' : 'proposal-edit-grid-project'}`}>
+           <table className={`sheet proposal-edit-grid ${isSpares ? 'proposal-edit-grid-spares' : isServices ? 'proposal-edit-grid-services' : 'proposal-edit-grid-project'} ${priced ? 'is-priced' : 'is-unpriced'}`}>
              {isSpares || isServices ? (
                <colgroup>
                  <col className="boq-col-si" /><col className="boq-col-description" />
@@ -127,22 +127,27 @@ export default function ProposalSheetEditor({
              <thead><tr>
               {isSpares || isServices ? (
                 <><th>Sl.</th><th>{isServices ? 'Scope / activity' : 'Item Description'}</th>{isSpares && <th>Proposed Model/Part No.</th>}<th>{isServices ? 'Days / hours' : 'Qty'}</th>
-                  {priced && <><th>{isServices ? 'Rate ₹' : 'Unit Price ₹'}</th><th>Total Price ₹</th></>}<th>Actions</th></>
+                  {priced && <><th>{isServices ? 'Rate ₹' : 'Unit Price ₹'}</th><th>Total Price ₹</th></>}<th className="boq-action-head">Actions</th></>
               ) : (
                 <><th>Sl.</th><th>Item category</th><th>Description</th><th>Model / part number</th>
                   <th>Qty/unit</th><th>Common</th><th>Spares</th><th>Total qty</th><th>UOM</th>
-                  {priced && <><th>Unit price ₹</th><th>Total price ₹</th></>}<th /></>
+                  {priced && <><th>Unit price ₹</th><th>Total price ₹</th></>}<th className="boq-action-head">Actions</th></>
               )}
             </tr></thead>
             <tbody>{p.bom.map((l, i) => {
-              const editable = ['itemCategory', 'desc', 'qtyPerUnit', 'common', 'spares', 'quoted']
+              const editableFields = ['itemCategory', 'desc', 'qtyPerUnit', 'common', 'spares', 'quoted']
               if (isSpares || isServices) {
                 const quantity = totalQty(l)
+                const visiblePartNumber = l.sparesSupport && /^na$/i.test(String(l.pn || '')) ? '' : (l.pn || '')
                 return <tr key={i}>
                   <td className="rowhead">{i + 1}</td>
-                  <td><textarea rows={2} className="proposal-description-editor" {...inputProps(i, 0, e => { paste(i, 0, e); keyNav(e, i, 0, p.bom.length, 4) })} value={l.desc || ''} onChange={updLine(i, 'desc', false)} /></td>
+                  <td>{editable
+                    ? <textarea rows={2} className="proposal-description-editor" {...inputProps(i, 0, e => { paste(i, 0, e); keyNav(e, i, 0, p.bom.length, 4) })} value={l.desc || ''} onChange={updLine(i, 'desc', false)} />
+                    : <div className="proposal-cell-text">{l.desc || '—'}</div>}</td>
                   {isSpares && <td>
-                    <textarea rows={2} className="proposal-pn-editor" value={l.pn || ''} onChange={updLine(i, 'pn', false)} />
+                    {editable
+                      ? <textarea rows={2} className="proposal-pn-editor" value={visiblePartNumber} onChange={updLine(i, 'pn', false)} />
+                      : <div className="proposal-cell-text">{visiblePartNumber || '—'}</div>}
                     {l.custRef && l.custRef.trim().toLowerCase() !== (l.pn || '').trim().toLowerCase() && <div className="hint">{l.custRef}</div>}
                   </td>}
                   <td className="num">
@@ -152,9 +157,11 @@ export default function ProposalSheetEditor({
                         save({ ...p, bom: p.bom.map((line, j) => j === i ? { ...line, qtyPerUnit: 0, common: nextQuantity, spares: 0 } : line) })
                       }} />
                   </td>
-                  {priced && <><td className="num"><input type="number" min="0" {...inputProps(i, 2, e => { paste(i, 2, e); keyNav(e, i, 2, p.bom.length, 4) })} value={l.quoted || ''} placeholder={fmt(Math.round(lineComputed(l)))} onChange={updLine(i, 'quoted', false)} /></td>
+                  {priced && <><td className="num">{editable
+                    ? <input type="number" min="0" {...inputProps(i, 2, e => { paste(i, 2, e); keyNav(e, i, 2, p.bom.length, 4) })} value={l.quoted || ''} placeholder={fmt(Math.round(lineComputed(l)))} onChange={updLine(i, 'quoted', false)} />
+                    : <>₹ {fmt(lineQuoted(l))}</>}</td>
                     <td className="num">₹ {fmt(lineQuoted(l) * quantity)}</td></>}
-                  <td><button type="button" className="proposal-row-minus" onClick={() => setRemoveConfirm({ index: i, description: l.desc || l.pn || 'this line' })} title={`Remove line ${i + 1}`} aria-label={`Remove line ${i + 1}`}>−</button></td>
+                  <td className="boq-action-cell"><button type="button" className="proposal-row-minus" onClick={() => setRemoveConfirm({ index: i, description: l.desc || l.pn || 'this line' })} title={`Remove line ${i + 1}`} aria-label={`Remove line ${i + 1}`}>−</button></td>
                 </tr>
               }
               return <tr key={i}>
@@ -162,7 +169,7 @@ export default function ProposalSheetEditor({
                 <td><input {...inputProps(i, 0, e => { paste(i, 0, e); keyNav(e, i, 0, p.bom.length, 6) })} value={l.itemCategory || ''} onChange={updLine(i, 'itemCategory', false)} /></td>
                 <td><textarea rows={2} className="proposal-description-editor" {...inputProps(i, 1, e => { paste(i, 1, e); keyNav(e, i, 1, p.bom.length, 6) })} value={l.desc || ''} onChange={updLine(i, 'desc', false)} /></td>
                 <td>{l.pn || '—'}{l.custRef && l.custRef.trim().toLowerCase() !== (l.pn || '').trim().toLowerCase() && <div className="hint">{l.custRef}</div>}</td>
-                {editable.slice(2, 5).map((key, j) => <td className="num" key={key}>
+                {editableFields.slice(2, 5).map((key, j) => <td className="num" key={key}>
                   {key === 'qtyPerUnit'
                     ? <div className="quantity-stepper">
                         <button type="button" onClick={adjustLineQty(i, -1)} title="Decrease quantity" aria-label={`Decrease quantity for line ${i + 1}`}>−</button>
@@ -173,9 +180,11 @@ export default function ProposalSheetEditor({
                 </td>)}
                 <td className="num"><b>{totalQty(l)}</b></td>
                 <td>{l.uom || '—'}</td>
-                {priced && <><td className="num"><input type="number" min="0" {...inputProps(i, 5, e => { paste(i, 5, e); keyNav(e, i, 5, p.bom.length, 6) })} value={l.quoted || ''} placeholder={fmt(Math.round(lineComputed(l)))} onChange={updLine(i, 'quoted', false)} /></td>
+                {priced && <><td className="num">{editable
+                  ? <input type="number" min="0" {...inputProps(i, 5, e => { paste(i, 5, e); keyNav(e, i, 5, p.bom.length, 6) })} value={l.quoted || ''} placeholder={fmt(Math.round(lineComputed(l)))} onChange={updLine(i, 'quoted', false)} />
+                  : <>₹ {fmt(lineQuoted(l))}</>}</td>
                 <td className="num">₹ {fmt(lineQuoted(l) * totalQty(l))}</td></>}
-                <td><span className="proposal-row-control" title="Adjust quantity with the stepper">Qty</span></td>
+                <td className="boq-action-cell"><span className="proposal-row-control" title="Adjust quantity with the stepper">Qty</span></td>
               </tr>
             })}</tbody>
             {priced && <tfoot><tr><td colSpan={isSpares ? 5 : isServices ? 4 : 10}>{isSpares ? `Total For ${p.subject || opp?.oppName || 'Proposal'}` : 'Totals'}</td><td className="num">₹ {fmt(totals.target)}</td><td /></tr></tfoot>}

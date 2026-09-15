@@ -17,7 +17,8 @@ export const isPlaceholderSparesLine = line => {
   return values.some(value => /^item[-\s]?\d+$/i.test(value))
 }
 
-const supportKey = line => `${String(line?.pn || '').trim().toLowerCase()}|${String(line?.desc || '').trim().toLowerCase()}`
+const supportPartKey = value => /^na$/i.test(String(value || '').trim()) ? '' : String(value || '').trim().toLowerCase()
+const supportKey = line => `${supportPartKey(line?.pn)}|${String(line?.desc || '').trim().toLowerCase()}`
 
 const partKey = value => String(value || '').trim().toLowerCase()
 

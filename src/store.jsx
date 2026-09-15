@@ -15,10 +15,12 @@ import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLea
 import { unitCostINR, unitSellINR, setRoleNameConfig, nowIST, toISTISOString } from './utils.js'
 import { PRICE_SOURCES, isConfirmableSparesLine, normalizePriceFields, sparesLineFinancials } from './pricing.js'
 import { normalizedCurrencyRates } from './currency.js'
+import { approvalMemoryKey } from './approvalMemory.js'
 import { syncProposalFromOpportunity } from './proposal/opportunitySync.js'
 import {
   isPlaceholderSparesLine,
   isSparesSupportRow,
+  SPARES_SUPPORT_ROWS,
   sparesProposalBom,
   withSparesSupportRows,
 } from './proposal/sparesBoq.js'
@@ -787,10 +789,16 @@ export function StoreProvider({ children }) {
     // ---- Approvals --------------------------------------------------------
     requestApproval(req) {
       setState(s => {
+        const memoryKey = approvalMemoryKey(req)
+        const alreadyRemembered = s.approvals.find(existing => existing.oppId === req.oppId
+          && existing.type === req.type
+          && ['Pending', 'Approved', 'Approved with conditions'].includes(existing.status)
+          && (existing.approvalKey || approvalMemoryKey(existing)) === memoryKey)
+        if (alreadyRemembered) return s
         const id = mintId('AP', s.approvals, 100)
         const appr = {
           id, status: 'Pending', conditions: [], decisionTs: '', decisionNote: '',
-          ts: new Date().toISOString(), requestedBy: s.role, ...req,
+          ts: new Date().toISOString(), requestedBy: s.role, ...req, approvalKey: memoryKey,
         }
         return withAudit(
           { ...s, approvals: [appr, ...s.approvals] },
@@ -1238,6 +1246,69 @@ export function StoreProvider({ children }) {
         }, 'Manual part added', oppId, line.pn || line.desc)
       })
     },
+    ensureSparesSupportLines(oppId) {
+      setState(s => {
+        const existing = s.sparesLines.filter(line => line.oppId === oppId && isSparesSupportRow(line))
+        const supportKey = row => `${/^na$/i.test(String(row.pn || '').trim()) ? '' : String(row.pn || '').trim().toLowerCase()}|${String(row.desc || '').trim().toLowerCase()}`
+        const existingKeys = new Set(existing.map(supportKey))
+        const proposalSupport = (s.proposals[oppId]?.bom || []).filter(isSparesSupportRow)
+        const additions = SPARES_SUPPORT_ROWS.filter(row => !existingKeys.has(supportKey(row))).map(row => {
+          const proposalRow = proposalSupport.find(line => supportKey(line) === supportKey(row))
+          const price = Number(proposalRow?.quoted) || 0
+          return normalizePriceFields({
+            id: mintId('SL', [...s.sparesLines, ...existing]),
+            oppId,
+            match: 'Support item',
+            conf: 100,
+            confirmed: price > 0,
+            origin: 'proposal-support',
+            sparesSupport: true,
+            pn: row.pn,
+            desc: row.desc,
+            custRef: row.pn,
+            qty: 1,
+            listPrice: price,
+            listUnitPrice: price,
+            baseCost: price,
+            currency: 'INR',
+            priceList: 'Support pricing',
+            priceSource: PRICE_SOURCES.MANUAL,
+            priceSourceName: 'Support pricing',
+            priceState: price > 0 ? 'Current' : 'Needs pricing',
+          })
+        })
+        if (!additions.length) return s
+        return withAudit({ ...s, sparesLines: [...s.sparesLines, ...additions] }, 'Spares support lines added', oppId, `${additions.length} support line(s)`)
+      })
+    },
+    dedupeSparesLines(oppId) {
+      setState(s => {
+        const byKey = new Map()
+        const order = []
+        let duplicateCount = 0
+        s.sparesLines.filter(line => line.oppId === oppId).forEach(line => {
+          const identity = line.sparesSupport
+            ? `support:${String(line.desc || '').trim().toLowerCase()}`
+            : String(line.pn || '').trim()
+              ? `pn:${String(line.pn).trim().toLowerCase()}`
+              : `desc:${String(line.desc || '').trim().toLowerCase()}`
+          const current = byKey.get(identity)
+          if (!current) {
+            byKey.set(identity, line)
+            order.push(identity)
+            return
+          }
+          duplicateCount += 1
+          const currentPrice = Number(current.listUnitPrice ?? current.listPrice) || 0
+          const nextPrice = Number(line.listUnitPrice ?? line.listPrice) || 0
+          const winner = line.confirmed && !current.confirmed || nextPrice > currentPrice ? line : current
+          byKey.set(identity, { ...winner, qty: Math.max(Number(current.qty) || 0, Number(line.qty) || 0) })
+        })
+        if (!duplicateCount) return s
+        const nextLines = s.sparesLines.filter(line => line.oppId !== oppId)
+        return withAudit({ ...s, sparesLines: [...nextLines, ...order.map(identity => byKey.get(identity))] }, 'Duplicate spares lines removed', oppId, `${duplicateCount} duplicate line(s)`)
+      })
+    },
     addSparesLinesFromLead(oppId, rows) {
       setState(s => {
         const existing = s.sparesLines.filter(l => l.oppId === oppId)
@@ -1281,7 +1352,8 @@ export function StoreProvider({ children }) {
     sendLinesToProposal(oppId) {
       setState(s => {
         const lines = s.sparesLines.filter(l => l.oppId === oppId && l.confirmed && !l.removedFromSourcing && Number(l.qty) > 0 && !isPlaceholderSparesLine(l))
-        if (!lines.length) return s
+        const supportLines = s.sparesLines.filter(l => l.oppId === oppId && isSparesSupportRow(l) && !l.removedFromSourcing)
+        if (!lines.length && !supportLines.length) return s
         const opp = s.opportunities.find(o => o.id === oppId)
         const base = s.proposals[oppId] || newProposal(oppId, opp, {
           validityDays: s.config?.proposalValidityDays,
@@ -1292,9 +1364,16 @@ export function StoreProvider({ children }) {
           ...(base.costing || {}),
           currencyRates: normalizedCurrencyRates(base.costing?.currencyRates || s.config?.currencyRates),
         }
-        const productBom = sparesProposalBom(lines, s.priceLists, costing)
+        const productBom = sparesProposalBom(lines.filter(line => !isSparesSupportRow(line)), s.priceLists, costing)
         const supportBom = withSparesSupportRows((base.bom || []).filter(isSparesSupportRow))
-        const bom = [...productBom, ...supportBom]
+        const syncedSupportBom = withSparesSupportRows([
+          ...supportBom,
+          ...supportLines.map(line => ({
+            ...line,
+            quoted: Number(line.listUnitPrice ?? line.listPrice) > 0 ? Number(line.listUnitPrice ?? line.listPrice) : '',
+          })),
+        ])
+        const bom = [...productBom, ...syncedSupportBom]
         const pricedLines = lines.reduce((totals, line) => {
           const financials = sparesLineFinancials(line, costing)
           return {

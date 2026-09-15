@@ -27,6 +27,7 @@ import { runTaskResult } from '../ai.js'
 import { importReviewedWorkbook, normalizeAiReview, reviewWorkbookPayload } from '../proposal/reviewWorkbook.js'
 import { clausesFor, clauseWarnings } from '../clauses.js'
 import { fromInr } from '../currency.js'
+import { reviewFindingKey } from '../approvalMemory.js'
 
 const ROUTE_TABS = {
   Project: ['Cover Letter', 'Edit Sheet', 'Document', 'Signal List', 'Rack Layout', 'Priced BoQ'],
@@ -88,6 +89,44 @@ const rememberApprovedFindings = (issues, approvals, oppId, revision) => issues.
     },
   }
 })
+
+const rememberOverriddenFindings = (issues, override) => issues.map(issue => {
+  if (!override?.accepted) return issue
+  const key = reviewFindingKey(issue)
+  const remembered = (override.findings || []).find(saved => saved.findingKey === key || reviewFindingKey(saved) === key)
+  if (!remembered) return issue
+  return {
+    ...issue,
+    originalSeverity: issue.severity,
+    severity: 'info',
+    overridden: true,
+    findingKey: key,
+  }
+})
+
+const reviewFindingTitle = issue => {
+  const code = String(issue?.code || '')
+  if (code === 'line.unmatched') return 'Workbook line needs review'
+  if (code === 'line.part') return 'Part number is missing'
+  if (code === 'line.quantity') return 'Quantity is invalid'
+  if (code === 'line.price') return 'Quoted price is invalid'
+  if (code === 'line.total') return 'Line total does not reconcile'
+  if (/contradict/i.test(issue?.text)) return 'Commercial term mismatch'
+  if (/upload received/i.test(issue?.text)) return 'Reviewed workbook received'
+  if (issue?.source === 'AI') return 'AI review finding'
+  return 'Review finding'
+}
+
+const reviewSeverityLabel = severity => ({ block: 'Blocking', warning: 'Needs review', info: 'Information' }[severity] || 'Needs review')
+
+function ReviewIssue({ issue, overridden = false }) {
+  return <div className={`proposal-review-issue ${overridden ? 'info' : issue.severity}`}>
+    <div className="proposal-review-issue-head"><span className="proposal-review-severity">{overridden ? 'Overridden' : reviewSeverityLabel(issue.severity)}</span><strong>{reviewFindingTitle(issue)}</strong>{issue.source === 'AI' && <span className="proposal-review-source">AI review</span>}</div>
+    <p className="proposal-review-issue-text">{issue.text}</p>
+    {issue.evidence && <div className="proposal-review-evidence"><span>Evidence</span><code>{issue.evidence}</code></div>}
+    {issue.approval && <span className="proposal-review-approval">Already approved{issue.approval.approver ? ` by ${issue.approval.approver}` : ''}{issue.approval.date ? ` on ${issue.approval.date}` : ''}</span>}
+  </div>
+}
 
 function ProposalDatasheets({ opp, p, save, store }) {
   const [busy, setBusy] = useState(false)
@@ -762,6 +801,10 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   const submitted = comms.some(c => c.kind === 'submission' || c.kind === 'proposal-email')
   const reviewStatus = p.reviewStatus || 'Not reviewed'
   const reviewReady = reviewStatus === 'Validated' || reviewStatus === 'Override accepted'
+  const overrideAccepted = reviewStatus === 'Override accepted' && p.reviewOverride?.accepted
+  const displayReviewIssues = (p.reviewIssues || []).map(issue => overrideAccepted
+    ? { ...issue, severity: 'info', overridden: true }
+    : issue)
   const reviewBanner = reviewStatus === 'Needs attention'
     ? { tone: 'warning', title: 'Validation needs attention', text: 'Fix the issues listed below before requesting approval.' }
     : reviewStatus === 'Validated'
@@ -838,17 +881,24 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
         aiIssues = normalizeAiReview(aiResult.data?.data || aiResult.data)
         if (!aiResult.data && aiResult.error) aiIssues.push({ severity: 'info', code: 'ai.unavailable', source: 'AI', text: `AI semantic review was unavailable: ${aiResult.error}. Local checks were still completed.` })
       }
-      const allIssues = rememberApprovedFindings([...issues, ...aiIssues], store.approvals, oppId, nextRevision)
+      const allIssues = rememberOverriddenFindings(
+        rememberApprovedFindings([...issues, ...aiIssues], store.approvals, oppId, nextRevision),
+        review.reviewOverride,
+      )
+      const hasActiveBlock = allIssues.some(issue => issue.severity === 'block')
+      const hasRememberedOverride = allIssues.some(issue => issue.overridden)
 
       const next = {
         ...review,
         revision: nextRevision,
         revisions: nextRevisionLog,
-        reviewStatus: allIssues.some(issue => issue.severity === 'block') ? 'Needs attention' : 'Validated',
+        reviewStatus: hasActiveBlock ? 'Needs attention' : hasRememberedOverride ? 'Override accepted' : 'Validated',
         reviewIssues: allIssues,
         reviewCompletedAt: new Date().toISOString(),
         reviewNeedsRevision: false,
-        reviewOverride: null,
+        reviewOverride: hasRememberedOverride
+          ? { ...review.reviewOverride, findings: allIssues.filter(issue => issue.overridden) }
+          : null,
       }
       setP(next)
       store.saveProposal(oppId, next)
@@ -870,10 +920,18 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
 
   const continueAnyway = () => {
     const findings = p.reviewIssues || []
+    const overriddenFindings = findings.map(issue => ({
+      ...issue,
+      originalSeverity: issue.originalSeverity || issue.severity,
+      severity: 'info',
+      overridden: true,
+      findingKey: issue.findingKey || reviewFindingKey(issue),
+    }))
     const next = {
       ...p,
       reviewStatus: 'Override accepted',
-      reviewOverride: { accepted: true, by: store.role, at: new Date().toISOString(), findings },
+      reviewOverride: { accepted: true, by: store.role, at: new Date().toISOString(), findings: overriddenFindings },
+      reviewIssues: overriddenFindings,
       reviewNeedsRevision: false,
     }
     setP(next)
@@ -1080,10 +1138,13 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
         <section className="proposal-review-results" aria-live="polite">
           {reviewError && <div className="errbox">{reviewError}</div>}
           {reviewMessage && <div className="okbox">{reviewMessage}</div>}
-          {p.reviewCompletedAt && <div className="proposal-review-issues">
-            <strong>Validation findings</strong>
-            {!!p.reviewIssues?.length
-              ? p.reviewIssues.map((issue, index) => <div key={index} className={`proposal-review-issue ${issue.severity}`}>{issue.text}{issue.evidence ? ` — ${issue.evidence}` : ''}{issue.approval && <span className="proposal-review-approval">Already approved{issue.approval.approver ? ` by ${issue.approval.approver}` : ''}{issue.approval.date ? ` on ${issue.approval.date}` : ''}</span>}</div>)
+          {p.reviewCompletedAt && <div className={`proposal-review-issues ${overrideAccepted ? 'is-overridden' : ''}`}>
+            <strong>{overrideAccepted ? 'Previously reviewed findings' : 'Validation findings'}</strong>
+            {overrideAccepted && <div className="proposal-review-memory-summary">{displayReviewIssues.length} finding{displayReviewIssues.length === 1 ? '' : 's'} overridden by {displayRole(p.reviewOverride.by)}{p.reviewOverride.at ? ` on ${approvalDate(p.reviewOverride.at)}` : ''}. These findings are retained for audit and no longer block this proposal.</div>}
+            {!!displayReviewIssues.length
+              ? overrideAccepted
+                ? <details className="proposal-review-history"><summary>Show finding details</summary>{displayReviewIssues.map((issue, index) => <ReviewIssue key={index} issue={issue} overridden />)}</details>
+                : displayReviewIssues.map((issue, index) => <ReviewIssue key={index} issue={issue} />)
               : <div className="proposal-review-issue info">Review complete — proposal is ready to proceed.</div>}
             {reviewStatus === 'Needs attention' && <button className="btn-secondary" onClick={() => { if (window.confirm('Continue despite these validation findings? This override will be stored in the audit trail.')) continueAnyway() }}>Continue anyway</button>}
           </div>}

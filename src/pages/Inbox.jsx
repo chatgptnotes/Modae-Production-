@@ -25,7 +25,7 @@ import {
   QUOTE_FEE_DOCUMENTS, answeredPatch, clarificationItems, clarificationKindFor,
   clarificationSender, draftClarification, draftPatch, senderLabel, sentPatch,
 } from '../leadClarification.js'
-import { leadVerificationComplete, verificationDeadline, verificationItem, redClearanceFor, isRedCleared } from '../leadVerification.js'
+import { leadVerificationComplete, verificationDeadline, verificationItem, verificationSnapshot, redClearanceFor, isRedCleared } from '../leadVerification.js'
 import { checklistFor } from '../customerClasses.js'
 import { kycIdentityKey, validateKycValue } from '../kycValidation.js'
 import { downloadKycTemplate } from '../kycTemplate.js'
@@ -40,6 +40,48 @@ const ROUTE_OPTIONS = ['Project', 'Spares', 'Service']
 const CUSTOMER_CATEGORY_OPTIONS = ['OEM', 'EUC', 'EUC/OEM', 'ACP', 'SI', 'RE/TR', 'EPC', 'Trader']
 const DROP_REASONS = ['Outside business scope', 'Window shopping / budgetary only',
   'Duplicate inquiry', 'No response from customer', 'Other']
+
+// A qualified lead can be converted from its own decision page. Keep this
+// small, synchronous path here so the user does not have to pass through a
+// second registration screen just to create the opportunity.
+function createOpportunityFromLeadPage({ store, lead, fields, decision, customer, customerStatus, regionalOwner }) {
+  const today = new Date().toISOString().slice(0, 10)
+  const owner = decision.owner
+  const id = nextOppId(store.opportunities, owner)
+  const { extracted, workbenchRows, bom } = buildLeadProposalData(lead, store.priceLists, store.adhocParts)
+  const category = fields.find(f => /category/i.test(f.k))?.v || '—'
+  const acceptedFields = fields.filter(f => f.state === 'accepted' && String(f.v || '').trim())
+    .map(f => ({ key: f.k, value: String(f.v).trim(), confidence: f.conf, evidence: f.ev || '', note: f.note || '' }))
+  const opp = {
+    id, sourceLeadId: lead.id,
+    sl: Math.max(0, ...store.opportunities.map(o => o.sl || 0)) + 1,
+    sellTo: decision.sellTo, category, location: decision.location,
+    customerStatus, leadVerification: verificationSnapshot(lead, customerStatus, { config: store.config }),
+    eucName: decision.eucName, eucLocation: decision.eucLocation,
+    oppName: lead.subject, opportunityScope: decision.scope,
+    owner, oppType: decision.oppType, bu: decision.bu, segment: decision.segment, product: decision.product,
+    suggestedOwner: regionalOwner || owner, ownerOverrideReason: lead.ownerOverrideReason || '',
+    prob: 'Low', valueK: 0, cogsK: 0, rfqNumber: lead.ref || lead.rfqNumber || '', rfqDate: lead.rfqDate || '',
+    extractedFields: acceptedFields, requestedItems: extracted,
+    createDate: today, proposalDate: '', orderDate: '', invoiceDate: '',
+    status: 'Open', stage: 'Lead', milestone: 'Screening', closedReason: '',
+    contactPerson: decision.contactPerson, contactPhone: decision.contactPhone,
+    contactEmail: lead.from || '', lastUpdated: today, forecast: false,
+    remarks: 'Registered from lead ' + lead.id, route: routeForType(decision.oppType),
+  }
+  store.addOpportunity(opp)
+  if (routeForType(decision.oppType) !== 'Service') {
+    store.addSparesLinesFromLead(id, workbenchRows)
+    const proposal = newProposal(id, opp, { validityDays: store.config?.proposalValidityDays })
+    store.saveProposal(id, { ...proposal, rfqNumber: opp.rfqNumber, subject: lead.subject || proposal.subject,
+      project: lead.subject || proposal.project, kindAttn: decision.contactPerson || proposal.kindAttn,
+      units: 1, ...(bom.length ? { leadImportId: lead.id } : {}), bom, extractedItems: extracted })
+  }
+  store.linkLeadApprovals(lead.id, id)
+  if (!customer) store.addCustomer({ name: decision.sellTo, category, status: customerStatus, kyc: 'Pending', payment: '—' })
+  store.updateLead(lead.id, { ...decision, status: 'Converted', oppId: id }, 'Opportunity created from lead')
+  return id
+}
 
 const receivedTime = ts => {
   if (!ts) return '—'
@@ -1159,6 +1201,8 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
   const [dropping, setDropping] = useState(false)
   const [reverting, setReverting] = useState(false)
   const [decisionErr, setDecisionErr] = useState('')
+  const [directCreateBusy, setDirectCreateBusy] = useState(false)
+  const [directCreatedId, setDirectCreatedId] = useState('')
   const [reassignTo, setReassignTo] = useState(lead.suggestedOwner || OWNERS[0])
   const [reassignOpen, setReassignOpen] = useState(false)
   const internalSender = isInternalSender(lead.from, store.config)
@@ -1460,6 +1504,22 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
   // approval gates block the next step.
   const registrationBlocked = missingIdentity.length > 0 || registrationPendingLow.length > 0 || verificationBlocked
   const canAct = !['Converted', 'Dropped'].includes(lead.status)
+
+  const createDirectly = () => {
+    if (registrationBlocked || directCreateBusy || lead.status !== 'Qualified') return
+    setDirectCreateBusy(true)
+    try {
+      const id = createOpportunityFromLeadPage({
+        store, lead, fields: ai.fields, decision: decisionDraft,
+        customer, customerStatus: previewCustomerStatus, regionalOwner,
+      })
+      setDirectCreatedId(id)
+    } catch (error) {
+      setDecisionErr(error?.message || 'Opportunity could not be created. Please try again.')
+    } finally {
+      setDirectCreateBusy(false)
+    }
+  }
 
   const missingInformationPanel = displayedMissing.length > 0 && (
     <details className="compact-rail-section compact-missing-rail" open>
@@ -1786,6 +1846,9 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
 
   return (
     <div className={compact ? 'compact-workflow-content' : ''}>
+    {directCreatedId && <div className="okbox lead-created-inline">
+      Opportunity <b>{directCreatedId}</b> created successfully. This lead is now converted.
+    </div>}
     {reassignOpen && <Modal title="Reassign lead" onClose={() => setReassignOpen(false)} className="reassign-modal">
       <p className="modal-intro">Choose the salesperson who should own this lead.</p>
       <label className="reassign-modal-field">Assigned owner
@@ -2493,7 +2556,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
             <WarnBox>
               <b>Follow-up information</b> — these low-confidence sourcing or commercial fields can be completed after the opportunity is created:
               <ul>{deferredPendingLow.map((f, i) => <li key={i}>{f.k} ({f.conf}% confidence)</li>)}</ul>
-              Continue to registration after the mandatory identity and verification checks are complete.
+              Create the opportunity after the mandatory identity and verification checks are complete.
             </WarnBox>
           )}
           {compact && <div className="compact-source-rail">
@@ -2529,7 +2592,8 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
             </>
           )}
           {lead.status === 'Qualified' && (
-            <button className="primary ws-action registration-action lead-footer-button" disabled={registrationBlocked}
+            <>
+            <button className="primary ws-action registration-action lead-footer-button" disabled={registrationBlocked || directCreateBusy || Boolean(directCreatedId)}
               title={registrationBlocked
                 ? verificationBlocked
                   ? `Complete ${previewCustomerStatus} customer verification first`
@@ -2537,9 +2601,10 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
                   ? 'Complete the mandatory customer, EUC and contact fields first'
                   : 'Resolve the low-confidence fields first'
                 : undefined}
-              onClick={() => nav('/register/' + lead.id)}>
-              Continue to registration <Icon name="arrowRight" size={14} />
+              onClick={createDirectly}>
+              {directCreateBusy ? 'Creating…' : directCreatedId ? 'Opportunity created' : 'Create opportunity'} {!directCreatedId && <Icon name="check" size={14} />}
             </button>
+            </>
           )}
           {canAct && !dropping && (
             <div className="toolbar">

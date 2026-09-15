@@ -5,12 +5,17 @@ import fs from 'node:fs'
 const css = fs.readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
 const inbox = fs.readFileSync(new URL('../src/pages/Inbox.jsx', import.meta.url), 'utf8')
 
-test('inbox keeps received date and time visible in the narrow grid', () => {
+test('inbox keeps every column visible and scrolls the complete grid narrowly', () => {
   assert.match(css, /\.mail-date b, \.mail-date small \{ display: block; white-space: nowrap; \}/)
-  const narrowStart = css.indexOf('@container (max-width: 900px)', css.indexOf('.mail-date'))
-  const narrow = css.slice(narrowStart, css.indexOf('\n@media', narrowStart + 1))
-  assert.match(narrow, /26px 24px 78px[\s\S]*?minmax\(0, \.9fr\);/)
-  assert.doesNotMatch(narrow, /42px;/)
+  assert.match(css, /--mail-grid-template:[\s\S]*minmax\(180px, 1\.35fr\)[\s\S]*minmax\(320px, 4fr\)/)
+  assert.match(css, /grid-template-columns: var\(--mail-grid-template\);[\s\S]*min-width: 1350px;/)
+  assert.match(css, /\.mailbox-list \{[\s\S]*overflow-x: auto; overflow-y: auto;/)
+  assert.match(css, /\.mail-list-toolbar \{[\s\S]*min-width: 1350px;/)
+  assert.doesNotMatch(css, /@container \(max-width: (900|1180|1400)px\)/)
+  assert.doesNotMatch(css, /\.mail-column-head > :nth-child\((8|10|12)\), \.mail-row > :nth-child\(/)
+  for (const label of ['Received', 'Source / sender', 'Subject / preview', 'AI route', 'Urgency', 'Dup. risk', 'Completeness', 'Sugg. owner', 'Status', 'Age']) {
+    assert.match(inbox, new RegExp(label.replace(/[/.]/g, '\\$&')))
+  }
 })
 
 test('simulated inquiries return to the shared inbox after saving', () => {
@@ -215,9 +220,9 @@ test('compact lead review uses one decision form and a bounded review rail', () 
   assert.match(inbox, /className="secondary-action lead-footer-button" onClick=\{\(\) => setReassignOpen\(true\)\}/,
     'Reassign should use the shared footer button sizing')
   assert.match(css, /compact-action-col > \.ws-foot > \.registration-action \{ order: 1; \}/,
-    'Continue to registration should appear before secondary actions')
+    'Create opportunity should appear before secondary actions')
   assert.match(css, /compact-action-col > \.ws-foot > \.toolbar \{[\s\S]*?order: 2;/,
-    'Disqualify and Reassign should follow Continue to registration')
+    'Disqualify and Reassign should follow Create opportunity')
   assert.match(css, /compact-action-col > \.ws-foot:has\(> \.registration-action\) \{[\s\S]*?display: flex;/,
     'qualified footer actions should use a flexible row')
   assert.match(css, /ws-foot:has\(> \.registration-action\) > \.registration-action \{[\s\S]*?flex: 1 1 0;[\s\S]*?min-width: 150px;/,

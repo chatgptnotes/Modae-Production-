@@ -38,6 +38,25 @@ test('proposal drawers use compact expanded surfaces', () => {
   assert.match(styles, /\.proposal-context-drawer \.ai-notice,[\s\S]*padding: 5px 8px;/)
 })
 
+test('proposal BOQ columns fit the table and keep Actions controls visible', () => {
+  const proposal = read('src/proposal/ProposalSheetEditor.jsx')
+  const styles = read('src/styles.css')
+
+  assert.match(proposal, /proposal-edit-grid \$\{isSpares \? 'proposal-edit-grid-spares'/)
+  assert.match(proposal, /className="boq-action-head">Actions<\/th>/)
+  assert.match(proposal, /className="boq-action-cell"><button type="button" className="proposal-row-minus"/)
+  assert.match(proposal, /className="boq-action-cell"><span className="proposal-row-control"/)
+  assert.match(styles, /\.proposal-edit-grid \.boq-col-action \{ width: 72px; min-width: 72px; \}/)
+  assert.match(styles, /\.proposal-edit-grid-spares \.boq-col-action \{ width: 72px; min-width: 72px; \}/)
+  assert.match(styles, /\.proposal-edit-grid-services \.boq-col-action \{ width: 72px; min-width: 72px; \}/)
+  assert.match(styles, /\.proposal-edit-grid-project\.is-priced \.boq-col-action \{ width: 72px; min-width: 72px; \}/)
+  assert.match(styles, /\.proposal-edit-grid-project\.is-unpriced \.boq-col-action \{ width: 72px; min-width: 72px; \}/)
+  assert.match(styles, /\.proposal-edit-grid \.boq-action-cell \{[\s\S]*overflow: visible;[\s\S]*text-align: center;/)
+  assert.match(styles, /\.proposal-edit-grid \.boq-action-cell > button,[\s\S]*margin-inline: auto;/)
+  assert.match(styles, /\.proposal-sheet-editor-readonly \.proposal-edit-grid \.boq-action-cell > button \{[\s\S]*visibility: visible;[\s\S]*pointer-events: none;/)
+  assert.match(styles, /\.proposal-edit-grid th \{[\s\S]*white-space: normal;[\s\S]*overflow-wrap: anywhere;/)
+})
+
 test('Spares proposals carry the standard support rows without export duplication', () => {
   const store = read('src/store.jsx')
   const props = read('src/proposal/docProps.js')

@@ -12,9 +12,25 @@ const normalizeItem = item => ({
   evidence: item.evidence || item.ev || 'Linked lead',
 })
 
+// AI and deterministic extraction can surface the same requested part more
+// than once (for example from both a table and the email body). Keep one
+// sourcing row per part/description and combine its requested quantity.
+const consolidateItems = items => {
+  const merged = new Map()
+  items.map(normalizeItem).filter(item => item.description || item.partNumber).forEach(item => {
+    const key = item.partNumber.trim()
+      ? `pn:${item.partNumber.trim().toUpperCase()}`
+      : `desc:${item.description.trim().toLowerCase()}`
+    const existing = merged.get(key)
+    if (existing) existing.qty += item.qty
+    else merged.set(key, { ...item })
+  })
+  return [...merged.values()]
+}
+
 export function lineItemsFromLead(lead) {
   if (Array.isArray(lead?.ai?.lineItems) && lead.ai.lineItems.length) {
-    return lead.ai.lineItems.map(normalizeItem).filter(item => item.description || item.partNumber)
+    return consolidateItems(lead.ai.lineItems)
   }
 
   const sources = [
@@ -22,13 +38,7 @@ export function lineItemsFromLead(lead) {
     ...(lead?.attachments || []).map(a => a.text || ''),
     ...(lead?.ai?.fields || []).filter(f => relevantField.test(f.k || '')).map(f => f.v || ''),
   ].filter(Boolean)
-  const seen = new Set()
-  return sources.flatMap(parseLeadLineItems).map(normalizeItem).filter(item => {
-    const key = `${item.partNumber.toUpperCase()}|${item.description.toLowerCase()}|${item.qty}`
-    if (seen.has(key)) return false
-    seen.add(key)
-    return item.description || item.partNumber
-  })
+  return consolidateItems(sources.flatMap(parseLeadLineItems))
 }
 
 export function buildLeadProposalData(lead, priceLists, vendorPrices = []) {
