@@ -1,8 +1,6 @@
-import { supabase } from './supabase.js'
-
-// Gemini access for the app, via the `ai` Supabase Edge Function (see
-// supabase/functions/ai/index.ts). The key never reaches the browser: we post a
-// task name and a payload, the function owns the prompt and the schema.
+// Gemini access for the app, via the server-side Vercel `/api/ai` function. The
+// key never reaches the browser: we post a task name and payload, while the
+// function owns the prompt, schema and credential.
 //
 // Mirrors the filestore/datastore facade — every call returns null when the AI
 // is unavailable (no Supabase, no key, timeout, bad JSON) so each call site can
@@ -11,42 +9,35 @@ import { supabase } from './supabase.js'
 //   const ai = await runTask('lead.extract', payload)
 //   const result = ai ?? deterministicParse(...)
 
-// Local development: point at a function served outside Supabase, e.g.
-//   deno run --allow-net --allow-env supabase/functions/ai/index.ts
-//   VITE_AI_FUNCTION_URL=http://localhost:8000 npm run dev
-// Production builds default to the same-origin Vercel route; local builds can
-// point at a separately served function. Guarded like supabase.js because
-// `import.meta.env` is Vite-only.
-const AI_URL = ((import.meta.env || {}).VITE_AI_FUNCTION_URL || '').trim()
-  || ((import.meta.env || {}).PROD ? '/api/ai' : '')
+// Keep an explicit URL override for local development, but default every
+// environment to the same-origin Vercel function. Never add a browser-side
+// Gemini key.
+const AI_URL = ((import.meta.env || {}).VITE_AI_FUNCTION_URL || '').trim() || '/api/ai'
 const DEV_ADMIN_URL = ((import.meta.env || {}).VITE_AI_ADMIN_FUNCTION_URL || '').trim()
 export const usesVercelAi = () => AI_URL === '/api/ai'
 
-export const aiEnabled = () => !!supabase || !!AI_URL
+export const aiEnabled = () => !!AI_URL
 
 const DEFAULT_TIMEOUT = 45000
 
 // → { data } | { text } from the function, or null. Never throws.
 export async function runTaskResult(task, payload = {}, { timeoutMs = DEFAULT_TIMEOUT, model, fallback = false } = {}) {
   if (fallback) return { data: null, errorCode: 'AI_FALLBACK_ENABLED', error: 'Built-in fallback is selected' }
-  if (!supabase && !AI_URL) return { data: null, errorCode: 'AI_ENDPOINT_MISSING', error: 'No AI endpoint is configured' }
   const ctl = new AbortController()
   const timer = setTimeout(() => ctl.abort(), timeoutMs)
   try {
     const body = { task, payload, model }
-    const { data, error, errorCode } = AI_URL
-      ? await fetch(AI_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
-          signal: ctl.signal,
-        }).then(async response => {
-          const data = await response.json().catch(() => ({}))
-          return response.ok
-            ? { data, error: null }
-            : { data, error: new Error(data?.error || `AI proxy returned HTTP ${response.status}`), errorCode: data?.errorCode || 'AI_PROXY_ERROR' }
-        })
-      : await supabase.functions.invoke('ai', { body, signal: ctl.signal })
+    const { data, error, errorCode } = await fetch(AI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: ctl.signal,
+    }).then(async response => {
+      const data = await response.json().catch(() => ({}))
+      return response.ok
+        ? { data, error: null }
+        : { data, error: new Error(data?.error || `AI proxy returned HTTP ${response.status}`), errorCode: data?.errorCode || 'AI_PROXY_ERROR' }
+    })
     if (error) return { data: null, errorCode: errorCode || 'AI_PROXY_ERROR', error: error.message }
     if (!data?.ok) return { data: null, errorCode: data?.errorCode || 'AI_TASK_FAILED', error: data?.error || 'AI task failed' }
     return { data, errorCode: '', error: '' }
@@ -108,11 +99,5 @@ export async function saveAiKey(apiKey, role = '') {
     if (!res.ok || !data?.ok) throw new Error(data?.error || 'AI credential setup failed')
     return data
   }
-  if (!supabase) throw new Error('Supabase is not configured')
-  const { data, error } = await supabase.functions.invoke('ai-admin', {
-    body, headers: { 'x-wintrack-role': role },
-  })
-  if (error) throw error
-  if (!data?.ok) throw new Error(data?.error || 'AI credential setup failed')
-  return data
+  throw new Error('AI credentials are managed in the Vercel environment')
 }

@@ -1034,8 +1034,8 @@ export default function Admin() {
           </h3>
           <p className="hint">
             Chooses which model powers lead extraction, tender parsing, clarification suggestions and
-            email drafting. Calls go through the <code>ai</code> Supabase Edge Function — the API key
-            lives in that function's secrets and never reaches this browser.
+            email drafting. Calls go through the server-side Vercel <code>/api/ai</code> proxy — the API
+            key lives in Vercel's environment and never reaches this browser.
             {ai.updatedBy ? <> Active: <b>{ai.provider} — {isCustomModel(ai.model) ? (ai.customModel || '(model id not set)') : ai.model}</b> · set by {ai.updatedBy} on {ai.updatedOn}</> : null}
           </p>
           <div className="admin-field-grid">
