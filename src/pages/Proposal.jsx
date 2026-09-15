@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import XLSX from 'xlsx-js-style'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useStore, sparesProposalBom, snapshotProposal } from '../store.jsx'
-import { effectiveRate, fmt, exportCSV, canPriceProposal, clampCosting, clampQty, MAX_GM_PCT, displayRole } from '../utils.js'
+import { effectiveRate, fmt, exportCSV, canPriceProposal, isAdminRole, clampCosting, clampQty, MAX_GM_PCT, displayRole } from '../utils.js'
 import { useFormulaBar } from '../formulabar.jsx'
 import { Icon, ModaeImageLogo } from '../icons.jsx'
 import { Modal } from '../ui.jsx'
@@ -389,6 +389,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   const nav = useNavigate()
   const fb = useFormulaBar()
   const opp = store.opportunities.find(o => o.id === oppId)
+  const canEditProposal = !!opp && (opp.owner === store.role || isAdminRole(store.role))
   const [tab, setTab] = useState(initialTab)
   const [workbook, setWorkbook] = useState('proposal')
   const [printing, setPrinting] = useState(false)
@@ -645,6 +646,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   const rack = rackLayout(totalSignals)
 
   const save = next => {
+    if (!canEditProposal) return
     const isSparesProposal = next.proposalType === 'Spares' || next.route === 'Spares' || opp?.route === 'Spares'
     if (isSparesProposal) next = { ...next, bom: withSparesSupportRows(next.bom) }
     // Once a BoQ has ever been priced, keep syncing even down to 0 — an emptied
@@ -1278,7 +1280,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
       )}
 
       {tab === 'Edit Sheet' && (
-          <ProposalSheetEditor p={p} opp={opp} doc={doc} save={save} totals={totals} units={units} priced={priced} workbook={workbook} setWorkbook={setWorkbook}
+          <ProposalSheetEditor p={p} opp={opp} doc={doc} save={save} editable={canEditProposal} totals={totals} units={units} priced={priced} workbook={workbook} setWorkbook={setWorkbook}
           totalQty={totalQty} lineComputed={lineComputed} lineQuoted={lineQuoted} lineCost={lineCost}
           linePrice={linePrice} updLine={updLine} removeLine={removeLine} adjustLineQty={adjustLineQty}
           updTerm={updTerm} addTerm={addTerm} removeTerm={removeTerm} addLine={addLine} pasteBoq={pasteBoq} store={store}

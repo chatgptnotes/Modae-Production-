@@ -820,14 +820,15 @@ select, input[type=text], input[type=number], input[type=date], input[type=tel],
 .sourcing-approval-copy { margin-top: 5px; font-size: 12px; }
 .sourcing-approval-reason { margin-top: 7px; font-size: 12px; }
 .sourcing-approval-reason-rows { display: grid; gap: 3px; margin-top: 4px; padding-left: 12px; }
-.sourcing-approval-reason-rows > div { display: grid; grid-template-columns: minmax(220px, 1fr) auto; align-items: baseline; gap: 12px; }
+.sourcing-approval-reason-rows > div { display: block; line-height: 1.4; }
+.sourcing-approval-reason-rows > div > span { margin-left: 8px; }
 .sourcing-approval-reason-rows span { color: inherit; }
 .sourcing-approval-reason-rows small { opacity: .8; }
 @media (max-width: 700px) {
   .sourcing-pricing-approval-header { align-items: flex-start; }
   .sourcing-pricing-approval-header > div:first-child { display: block; }
   .sourcing-pricing-approval-header > div:first-child > .hint { display: block; margin-top: 3px; }
-  .sourcing-approval-reason-rows > div { grid-template-columns: 1fr; gap: 2px; }
+  .sourcing-approval-reason-rows > div > span { display: inline; margin-left: 6px; }
 }
 .sourcing-approval-action { display: inline-flex; align-items: center; gap: 5px; margin-top: 8px; border: 1px solid var(--action-accent-border); border-radius: 4px; padding: 6px 10px; background: var(--action-accent-soft); color: var(--action-accent-ink); font-size: 12px; font-weight: 700; cursor: pointer; }
 .sourcing-approval-action:hover { background: var(--action-accent); color: var(--text-on-accent, #fff); }
@@ -1973,6 +1974,17 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .proposal-sheet-field { display: grid; gap: 4px; font-size: 12px; color: var(--text-muted); font-weight: 600; }
 .proposal-sheet-editor .form-card { margin-bottom: 12px; }
 .proposal-sheet-editor textarea { display: block; width: 100%; margin-top: 5px; font: inherit; padding: 6px 8px; border: 1px solid var(--border-color); resize: vertical; }
+.proposal-sheet-editor-readonly input,
+.proposal-sheet-editor-readonly textarea,
+.proposal-sheet-editor-readonly select {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-primary);
+  cursor: default;
+}
+.proposal-sheet-editor-readonly button { visibility: hidden; pointer-events: none; }
+.proposal-sheet-editor-readonly .proposal-sheet-head { border-bottom-color: transparent; }
 .proposal-edit-grid input { min-width: 100px; }
 .proposal-edit-grid td:nth-child(3) input,
 .proposal-edit-grid td:nth-child(3) textarea { min-width: 220px; }

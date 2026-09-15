@@ -13,7 +13,7 @@ const inputProps = (row, col, onKeyDown) => ({
 })
 
 export default function ProposalSheetEditor({
-  p, opp, doc, save, totals, units, totalQty, lineComputed, lineQuoted, priced,
+  p, opp, doc, save, editable = true, totals, units, totalQty, lineComputed, lineQuoted, priced,
    lineCost, linePrice, updLine, removeLine, adjustLineQty, updTerm, addTerm, removeTerm, addLine, pasteBoq, store, workbook = 'proposal', setWorkbook,
 }) {
   const [localWorkbook, setLocalWorkbook] = useState('proposal')
@@ -64,10 +64,11 @@ export default function ProposalSheetEditor({
 
   const show = name => sheet === name
   return (
-    <div className="proposal-sheet-editor" ref={sheetRef}>
+    <div className={`proposal-sheet-editor ${editable ? '' : 'proposal-sheet-editor-readonly'}`} ref={sheetRef}>
       <div className="proposal-sheet-head">
-        <div><p className="hint">Edit white cells. Calculated totals stay locked and update the Preview automatically.</p></div>
+        <div><p className="hint">{editable ? 'Edit white cells. Calculated totals stay locked and update the Preview automatically.' : 'Read-only view. Only the opportunity owner or an administrator can edit this proposal.'}</p></div>
       </div>
+      <fieldset disabled={!editable}>
 
       {show('Cover') && <section className="form-card wide">
         <div className="section-title">Proposal header</div>
@@ -191,7 +192,7 @@ export default function ProposalSheetEditor({
             }}>Delete line</button>
           </div>
         </Modal>}
-        <div className="costing-note">Internal cost and margin calculations remain protected; {priced ? 'the customer-facing quoted price is editable.' : 'pricing is restricted for this role.'}</div>
+        <div className="costing-note">Internal cost and margin calculations remain protected; {editable && priced ? 'the customer-facing quoted price is editable.' : 'proposal editing is restricted for this role.'}</div>
       </section>}
 
       {show('Document') && <section className="form-card wide">
@@ -199,6 +200,7 @@ export default function ProposalSheetEditor({
         <label>Executive summary<textarea rows={5} value={p.execSummary ?? doc.execSummary ?? ''} onChange={e => save({ ...p, execSummary: e.target.value })} /></label>
         <label>Commercial note<textarea rows={3} value={p.commercialNote ?? doc.commercialNote ?? ''} onChange={e => save({ ...p, commercialNote: e.target.value })} /></label>
       </section>}
+      </fieldset>
     </div>
   )
 }
