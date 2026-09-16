@@ -1595,6 +1595,7 @@ button.secondary:hover, .btn.secondary:hover {
 .ana-grid { display: grid; grid-template-columns: repeat(12, 1fr); align-items: start; gap: 12px; }
 .follow-up-grid { align-items: stretch; gap: 12px; }
 .follow-up-panel { display: flex; min-width: 0; flex-direction: column; }
+.follow-up-communications-panel { display: none; }
 .follow-up-panel > .form-card { flex: 1; }
 .follow-up-control-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .follow-up-control-row input, .follow-up-control-row select { min-width: 0; }

@@ -93,6 +93,13 @@ test('matching customer terms automatically requests one internal AH approval', 
   assert.doesNotMatch(decisionHandler, /requestCommercialApproval\(nextTerms\)[\s\S]*Counter-offer with ModAE standard terms/)
 })
 
+test('transition modal shows pending approvals without approval-navigation shortcuts', () => {
+  const transition = workbench.slice(workbench.indexOf('Cannot move from'), workbench.indexOf('Backward movement is allowed'))
+  assert.doesNotMatch(transition, /Open approval/)
+  assert.match(transition, /is pending with/)
+  assert.match(transition, /Exception approval <b>\{exception\.id\}<\/b> is pending\./)
+})
+
 test('communications tabs stack the full-width submission form above the full-width log', () => {
   const legacyStart = workbench.indexOf('function LegacyCommsTab')
   const legacyEnd = workbench.indexOf('// ---------------------------------------------------------------------------', legacyStart + 1)

@@ -41,6 +41,7 @@ const ROUTE_OPTIONS = ['Project', 'Spares', 'Service']
 const CUSTOMER_CATEGORY_OPTIONS = ['OEM', 'EUC', 'EUC/OEM', 'ACP', 'SI', 'RE/TR', 'EPC', 'Trader']
 const DROP_REASONS = ['Outside business scope', 'Window shopping / budgetary only',
   'Duplicate inquiry', 'No response from customer', 'Other']
+export const isUnavailableAiSummary = lead => /^AI extraction was unavailable\b/i.test(String(lead?.ai?.summary || '').trim())
 
 // A qualified lead can be converted from its own decision page. Keep this
 // small, synchronous path here so the user does not have to pass through a
@@ -2913,6 +2914,8 @@ export default function Inbox() {
   const [mailTab, setMailTab] = useState('primary')
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false)
+  const [repairingAi, setRepairingAi] = useState(false)
+  const [repairAiNote, setRepairAiNote] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [pasteOpen, setPasteOpen] = useState(false)
   const [simulationOpen, setSimulationOpen] = useState(false)
@@ -3017,6 +3020,7 @@ export default function Inbox() {
 
   const rows = listSource.filter(l => ownerVisible(l) && matchesFilters(l))
   const mailboxRows = rows.filter(matchesTab)
+  const staleAiLeads = (store.leads || []).filter(isUnavailableAiSummary)
   // Rows this tab would show if they were yours. Surfaced rather than dropped.
   const hiddenByOwner = listSource.filter(l => !ownerVisible(l) && matchesFilters(l) && matchesTab(l)).length
   const toggleSelected = id => setSelectedIds(prev => {
@@ -3042,6 +3046,43 @@ export default function Inbox() {
   const clearSelection = () => {
     setSelectedIds(new Set())
     setBulkMenuOpen(false)
+  }
+  const repairStaleAi = async () => {
+    if (repairingAi || !staleAiLeads.length) return
+    setRepairingAi(true); setRepairAiNote('')
+    let repaired = 0
+    let failed = 0
+    for (const source of staleAiLeads) {
+      try {
+        const hydrated = { ...source, attachments: await fullLeadAttachments(source, source.attachments) }
+        const extracted = await extractLead(hydrated, store)
+        if (!extracted?.ai?.summary || isUnavailableAiSummary(extracted)) {
+          failed += 1
+          continue
+        }
+        const ai = {
+          ...source.ai,
+          ...extracted.ai,
+          fields: mergeDecidedFields(source.ai?.fields, extracted.ai.fields || []),
+          lineItems: extracted.ai.lineItems || source.ai?.lineItems || [],
+        }
+        store.updateLead(source.id, {
+          ai,
+          completeness: extracted.completeness ?? source.completeness,
+        }, 'Repaired stale AI extraction summary')
+        store.recordAiAction(source.id, {
+          provider: store.config?.aiModel?.provider,
+          model: store.config?.aiModel?.model,
+          action: 'lead.re-extract-stale-summary',
+          result: { completeness: extracted.completeness, missing: ai.missing || [], route: extracted.route },
+        })
+        repaired += 1
+      } catch {
+        failed += 1
+      }
+    }
+    setRepairingAi(false)
+    setRepairAiNote(`${repaired} stale AI summary${repaired === 1 ? '' : 'ies'} repaired${failed ? `; ${failed} could not be re-extracted` : ''}.`)
   }
   const deleteSelected = () => {
     const selected = listSource.filter(l => selectedIds.has(l.id))
@@ -3305,6 +3346,13 @@ export default function Inbox() {
               <Icon name="eye" size={12} /> {hiddenByOwner} more assigned to others — show
             </button>
           )}
+          {staleAiLeads.length > 0 && (
+            <button type="button" className="mail-repair-ai" onClick={repairStaleAi} disabled={repairingAi}
+              title="Re-run Gemini only for leads carrying the saved unavailable-extraction message">
+              <Icon name="bot" size={12} /> {repairingAi ? 'Repairing AI summaries…' : `Repair ${staleAiLeads.length} stale AI summar${staleAiLeads.length === 1 ? 'y' : 'ies'}`}
+            </button>
+          )}
+          {repairAiNote && <span className="mail-repair-ai-note" role="status">{repairAiNote}</span>}
           <span className="mail-list-count">{mailboxRows.length ? `1–${mailboxRows.length} of ${mailboxRows.length}` : '0 messages'}</span>
         </div>
         <div className="mail-column-head">

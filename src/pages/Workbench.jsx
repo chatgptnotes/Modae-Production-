@@ -2211,7 +2211,7 @@ function FollowUpPane({ opp, onRevision }) {
 
   return (
     <div className="ana-grid follow-up-grid">
-      <div className="ana-card c-6 follow-up-panel">
+      <div className="ana-card c-6 follow-up-panel follow-up-communications-panel">
         {(p.terms || []).some(term => term.decision === 'Counter-offer with ModAE standard terms') && <section className="form-card commercial-followup-panel" aria-label="Commercial confirmations">
           <div className="section-title">Commercial Confirmation Required</div>
           <p className="hint">Record the customer's response to each ModAE counter-offer. This does not change the internal approval decision.</p>

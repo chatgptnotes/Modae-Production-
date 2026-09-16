@@ -40,6 +40,15 @@ test('mailbox bulk toolbar actions are wired', () => {
   assert.match(fs.readFileSync(new URL('../src/store.jsx', import.meta.url), 'utf8'), /updateLeads\(ids, patch, detail = ''\)/)
 })
 
+test('stale unavailable AI summaries have a targeted repair path', () => {
+  assert.match(inbox, /isUnavailableAiSummary = lead => \/\^AI extraction was unavailable/)
+  assert.match(inbox, /const staleAiLeads = \(store\.leads \|\| \[\]\)\.filter\(isUnavailableAiSummary\)/)
+  assert.match(inbox, /const repairStaleAi = async \(\) =>/)
+  assert.match(inbox, /action: 'lead\.re-extract-stale-summary'/)
+  assert.match(inbox, /Repaired stale AI extraction summary/)
+  assert.match(inbox, /Repair \$\{staleAiLeads\.length\} stale AI summar/)
+})
+
 test('subject and preview stay in a contained two-line inbox cell', () => {
   assert.match(inbox, /className="mail-subject-head"[^>]*>Subject \/ preview/)
   assert.match(inbox, /className="mail-subject-meta">[\s\S]*className="mail-subject-title">\{l\.subject\}/)
