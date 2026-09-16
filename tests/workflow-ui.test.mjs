@@ -10,7 +10,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { readiness, transitionBlockers } from '../src/gates.js'
-import { REVISION_TYPES, routeForType, contextForType } from '../src/seed.js'
+import { REVISION_TYPES, routeForType, contextForType, canSignBStep } from '../src/seed.js'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
@@ -37,11 +37,10 @@ test('Brownfield milestone movement is not blocked by B-step sign-off', () => {
   assert.equal(blockers.some(b => b.key === 'b-steps'), false)
 })
 
-test('Brownfield sign-off UI is no longer reachable', () => {
+test('Spares skips the Brownfield sign-off UI', () => {
   const workbench = read('src/pages/Workbench.jsx')
-  assert.doesNotMatch(workbench, /BSteps/)
-  assert.doesNotMatch(workbench, /B-05 Proposal sign-off/)
-  assert.doesNotMatch(workbench, /sourcing sign-off - B-01 to B-04/)
+  assert.match(workbench, /opp\.context === 'Brownfield' && opp\.oppType !== 'Spares'/)
+  assert.match(workbench, /<BSteps opp=\{opp\}/)
   const builder = read('src/workbench/PropBuilder.jsx')
   assert.doesNotMatch(builder, /b-steps|openSteps|B-01.*B-05/)
 })
@@ -54,6 +53,23 @@ test('legacy Brownfield records remain loadable without active sign-off behavior
   assert.match(store, /assignBStep\(/)
   assert.match(store, /signBStep\(/)
   assert.doesNotMatch(store, /delete steps\[spec\.step\]/)
+})
+
+test('Brownfield sign-off belongs to the opportunity salesperson or LJS', () => {
+  assert.equal(canSignBStep('RS', brownfieldOpp), true)
+  assert.equal(canSignBStep('LJS', brownfieldOpp), true)
+  for (const role of ['AH', 'TECH', 'PP', 'SUPER', 'ADMIN']) {
+    assert.equal(canSignBStep(role, brownfieldOpp), false, `${role} must not sign for RS`)
+  }
+  assert.equal(canSignBStep('LJS', { ...brownfieldOpp, owner: 'LJS' }), true)
+})
+
+test('Brownfield sign-off UI identifies the opportunity salesperson, not step owners', () => {
+  const panel = read('src/workbench/BSteps.jsx')
+  assert.match(panel, /canSignBStep\(store\.role, opp\)/)
+  assert.match(panel, /Assigned salesperson: \{displayRole\(opp\.owner\)\}/)
+  assert.doesNotMatch(panel, /Responsible person/)
+  assert.doesNotMatch(panel, /assignBStep\(/)
 })
 
 test('revision categories no longer route to Brownfield sign-off steps', () => {

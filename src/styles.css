@@ -603,6 +603,8 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }
 /* On the dark sidebar the tile would vanish into the background — lift it */
 .sidenav .modae-mark rect, .tablet-bar .modae-mark rect { fill: var(--palette-c6206cbf); }
 .side-nav { flex: 1; overflow-y: auto; padding: 8px 0; }
+.side-nav-group + .side-nav-group { margin-top: 10px; }
+.side-nav-heading { padding: 5px 16px 3px; color: var(--palette-1fb54521); font-size: 10px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; }
 .side-item {
   position: relative;
   display: flex; align-items: center; gap: 10px;
@@ -852,6 +854,35 @@ select, input[type=text], input[type=number], input[type=date], input[type=tel],
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--action-accent) 16%, transparent);
 }
 .clarification-actions .clarification-action:disabled { opacity: .58; }
+.spares-merged-workflow { display: grid; gap: 16px; }
+.clarification-status { display: grid; gap: 10px; margin: 10px 0 12px; padding: 12px 14px; border: 1px solid var(--grid-line); border-left: 4px solid var(--action-accent); border-radius: 8px; background: var(--surface-soft); color: var(--text-primary); font-size: 12px; }
+.clarification-status.is-blocked { border-left-color: var(--status-warning); }
+.clarification-status.is-clear { border-left-color: var(--status-success); }
+.clarification-status > div:first-child { line-height: 1.45; }
+.clarification-status > div:first-child span { margin-left: 5px; color: var(--text-secondary); }
+.clarification-counts { display: flex; flex-wrap: wrap; gap: 7px; }
+.clarification-counts span { padding: 4px 8px; border: 1px solid var(--grid-line); border-radius: 999px; background: var(--surface); color: var(--text-secondary); font-size: 11px; }
+.clarification-counts b { color: var(--text-primary); }
+.clarification-cards { display: grid; gap: 10px; }
+.clarification-card { display: grid; gap: 9px; padding: 13px 14px; border: 1px solid var(--grid-line); border-radius: 8px; background: var(--surface); }
+.clarification-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.clarification-card-category { margin-left: 8px; color: var(--text-secondary); font-size: 11px; }
+.clarification-card-question { color: var(--text-primary); font-size: 13px; font-weight: 650; line-height: 1.45; }
+.clarification-card-meta { display: flex; flex-wrap: wrap; gap: 5px 16px; color: var(--text-secondary); font-size: 11px; line-height: 1.4; }
+.clarification-card-actions { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding-top: 8px; border-top: 1px solid var(--grid-line); }
+.clarification-card-actions label { display: grid; gap: 4px; color: var(--text-secondary); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.clarification-card-actions select { min-width: 190px; max-width: 100%; padding: 5px 7px; font-size: 12px; text-transform: none; letter-spacing: normal; }
+.clarification-card-actions button { white-space: nowrap; }
+.clarification-empty { padding: 18px; border: 1px dashed var(--grid-line); border-radius: 8px; color: var(--text-secondary); text-align: center; }
+.ai-field-suggestion { display: grid; gap: 5px; padding: 9px 10px; border: 1px solid var(--action-accent-border); border-radius: 7px; background: var(--action-accent-soft); color: var(--text-primary); font-size: 12px; line-height: 1.4; }
+.ai-field-suggestion > div:first-child span { font-weight: 700; }
+.ai-field-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 3px; }
+.ai-field-actions button { padding: 5px 8px; font-size: 11px; }
+@media (max-width: 620px) {
+  .clarification-card-actions { align-items: stretch; flex-direction: column; }
+  .clarification-card-actions select { width: 100%; min-width: 0; }
+  .clarification-card-actions button { width: 100%; }
+}
 .sourcing-clarification-context > summary {
   display: flex;
   align-items: center;
@@ -1590,6 +1621,17 @@ button.secondary:hover, .btn.secondary:hover {
 .oppid-link { font-weight: 700; color: var(--primary-ink); text-decoration: none; }
 a.oppid-link:hover { text-decoration: underline; }
 
+.opportunity-coming-soon { display: flex; align-items: flex-start; justify-content: center; padding-top: 64px; }
+.opportunity-coming-soon-card { width: min(680px, 100%); padding: 28px; background: var(--surface-raised); border: 1px solid var(--border-subtle); border-radius: 14px; box-shadow: 0 12px 28px rgba(15, 23, 42, .08); }
+.opportunity-coming-soon-kicker { color: var(--primary-accent); font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.opportunity-coming-soon-card h1 { margin: 8px 0 10px; }
+.opportunity-coming-soon-message { max-width: 58ch; color: var(--text-muted); line-height: 1.55; }
+.opportunity-coming-soon-details { margin: 22px 0; border-top: 1px solid var(--border-subtle); }
+.opportunity-coming-soon-row { display: grid; grid-template-columns: 155px 1fr; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--border-subtle); }
+.opportunity-coming-soon-row > span { color: var(--text-muted); }
+.opportunity-coming-soon-row strong { overflow-wrap: anywhere; }
+@media (max-width: 600px) { .opportunity-coming-soon { padding-top: 24px; } .opportunity-coming-soon-card { padding: 20px; } .opportunity-coming-soon-row { grid-template-columns: 1fr; gap: 3px; } }
+
 /* =========================================================================
    Analytics page — modern card chrome.
    Everything here is scoped to .ana-page because .ana-card / .ana-title /
@@ -2171,6 +2213,7 @@ tr.rowclick { cursor: pointer; }
 .opportunity-details-grid > div > label { margin-bottom: 1px; font-size: 10.5px; line-height: 1.15; }
 .opportunity-details-grid input[type=text], .opportunity-details-grid input[type=tel], .opportunity-details-grid select { min-height: 22px; padding: 2px 5px; font-size: 11.5px; }
 .opportunity-details-grid .ro { min-height: 22px; padding: 2px 5px; font-size: 11.5px; }
+.read-only-field-multiline { min-height: 58px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.45; }
 .opportunity-details-dirty { flex: none; color: var(--warn-text); font-size: 11px; font-weight: 700; }
 .opportunity-details-actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--grid-line); }
 .opportunity-details-actions button { padding: 3px 9px; font-size: 11.5px; }
@@ -5992,14 +6035,14 @@ body {
 .progress-kicker { display: block; margin-bottom: 4px; color: var(--text-secondary); font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; }
 .progress-head strong { color: var(--text-primary); font-size: 17px; letter-spacing: -.02em; }
 .progress-controls { display: flex; align-items: center; gap: 8px; }
-.progress-controls span { min-width: 106px; color: var(--text-primary); font-size: 12px; font-weight: 700; text-align: center; }
+.progress-controls span { min-width: 106px; max-width: 180px; color: var(--text-primary); font-size: 12px; font-weight: 700; line-height: 1.25; text-align: center; }
 .progress-controls button { min-height: 36px; padding: 7px 12px; border-radius: 8px; }
-.progress-steps { display: grid; grid-template-columns: repeat(10, minmax(64px, 1fr)); margin-top: 22px; overflow-x: auto; }
+.progress-steps { display: grid; grid-template-columns: repeat(var(--progress-step-count, 10), minmax(64px, 1fr)); margin-top: 22px; overflow-x: auto; }
 .progress-step { position: relative; display: flex; min-width: 76px; min-height: 76px; padding: 8px 8px 13px; flex-direction: column; align-items: center; justify-content: flex-start; gap: 8px; border: 0; border-radius: 8px 8px 0 0; background: transparent; color: var(--text-secondary); cursor: pointer; transition: transform .18s ease, background-color .18s ease, color .18s ease; }
 .progress-step::after { content: ''; position: absolute; top: 19px; left: calc(50% + 18px); width: calc(100% - 36px); height: 2px; background: var(--border-default); }
 .progress-step:last-child::after { display: none; }
 .progress-node { z-index: 1; display: grid; place-items: center; width: 38px; height: 38px; border: 2px solid var(--border-default); border-radius: 50%; background: var(--card-bg); color: var(--text-secondary); font-size: 10px; font-weight: 800; }
-.progress-label { max-width: 100%; overflow: hidden; color: var(--text-secondary); font-size: 11px; font-weight: 600; line-height: 1.2; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.progress-label { max-width: 100%; min-height: 28px; overflow: visible; color: var(--text-secondary); font-size: 11px; font-weight: 600; line-height: 1.2; text-align: center; white-space: normal; overflow-wrap: anywhere; }
 .progress-step.done .progress-node { border-color: var(--action-accent); background: var(--action-accent); color: var(--text-on-accent); }
 .progress-step.done::after { background: var(--action-accent); }
 .progress-step.current { background: var(--action-accent-soft); }
@@ -6025,7 +6068,7 @@ body {
 .read-only-field { display: flex; align-items: center; height: 40px; min-height: 40px; padding: 9px 10px; border: 1px solid var(--border-subtle); border-radius: 7px; background: var(--surface-raised); color: var(--text-primary); font-size: 12px; font-weight: 700; }
 .read-only-field span { margin-left: 5px; color: var(--text-secondary); font-size: 10px; font-weight: 500; }
 .opportunity-details-actions { margin-top: 22px; padding-top: 16px; }
-@media (max-width: 900px) { .opportunity-details-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .progress-steps { grid-template-columns: repeat(10, 86px); } }
+@media (max-width: 900px) { .opportunity-details-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .progress-steps { grid-template-columns: repeat(var(--progress-step-count, 10), 86px); } }
 @media (max-width: 620px) { .opp-summary-title h1 { flex-wrap: wrap; font-size: 26px; } .progress-head { align-items: flex-start; flex-direction: column; } .progress-controls { width: 100%; justify-content: space-between; } .opportunity-progress { padding-inline: 14px; } .opportunity-details-grid { grid-template-columns: 1fr; } }
 
 /* Targeted overview polish: the summary reads as a metadata strip, while the
@@ -6043,7 +6086,7 @@ body {
 .summary-header-action { min-height: 38px; margin-left: auto; padding: 8px 13px; border-color: var(--action-accent); border-radius: 8px; background: var(--action-accent); color: var(--text-on-accent); font-size: 11.5px; font-weight: 800; white-space: nowrap; }
 .summary-header-action:hover { background: var(--action-accent-hover); border-color: var(--action-accent-hover); filter: none; }
 .summary-header-action:active { transform: translateY(1px); }
-.progress-steps { grid-template-columns: repeat(10, minmax(82px, 1fr)); padding-bottom: 4px; }
+.progress-steps { grid-template-columns: repeat(var(--progress-step-count, 10), minmax(82px, 1fr)); padding-bottom: 4px; }
 .progress-step { min-height: 86px; padding-inline: 10px; }
 .progress-node { width: var(--progress-node-size); height: var(--progress-node-size); }
 .progress-step::after { top: 20px; left: calc(50% + 20px); width: calc(100% - 40px); }

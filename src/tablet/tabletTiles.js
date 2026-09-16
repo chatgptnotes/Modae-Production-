@@ -31,9 +31,9 @@ export function buildTabletTiles(store) {
 
 export const TABLET_SECTIONS = {
   sales: [
-    { title: 'Sales operations', kpis: ['command', 'turnaround'], keys: ['mydashboard', 'opportunities', 'inbox', 'status', 'voice'] },
-    { title: 'Pipeline & proposals', kpis: ['pipeline', 'winrate'], keys: ['opportunities', 'approvals', 'po', 'folders'] },
-    { title: 'Intelligence', kpis: [], keys: ['aimap', 'customers', 'launcher'] },
+    { title: 'Sales operations', kpis: ['command', 'turnaround'], keys: ['mydashboard', 'opportunities', 'inbox', 'status'] },
+    { title: 'Pipeline & proposals', kpis: ['pipeline', 'winrate'], keys: ['opportunities', 'approvals', 'po', 'folders', 'customers', 'pricelists'] },
+    { title: 'More tools', kpis: [], keys: ['voice', 'aimap', 'launcher'] },
   ],
   approver: [
     { title: 'Decisions & gates', kpis: ['command'], keys: ['mydashboard', 'opportunities', 'approvals', 'po', 'inbox'] },

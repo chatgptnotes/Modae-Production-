@@ -2,7 +2,7 @@ import React, { useRef, useState } from 'react'
 import { useStore } from '../store.jsx'
 import { ROLES } from '../seed.js'
 import { ErrBox, Modal } from '../ui.jsx'
-import { releaseState } from '../gates.js'
+import { releaseState, serviceApprovalSet } from '../gates.js'
 import { Icon } from '../icons.jsx'
 import { docModel, docRoute, enclosuresFor } from '../proposalDoc.js'
 import { buildPricing } from '../proposal/docProps.js'
@@ -46,7 +46,9 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
 
   // Scoped to the proposal's current revision — a quote revised after release
   // locks submission again until the revision is approved.
-  const { release } = releaseState(p, store.approvals, opp.id)
+  const serviceRelease = opp.route === 'Service' ? serviceApprovalSet(store.approvals, opp.id)[0].approved : null
+  const { release: genericRelease } = releaseState(p, store.approvals, opp.id)
+  const release = opp.route === 'Service' ? serviceRelease : genericRelease
   const pendingConds = store.approvals
     .filter(a => a.oppId === opp.id && a.status === 'Approved with conditions')
     .flatMap(a => (a.conditions || []).filter(c => !c.incorporated)
@@ -61,7 +63,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
       <div className="form-card">
           <div className="section-title">Customer submission (simulated)</div>
         <p className="hint">
-          Release approval pending — submission opens once a 'Final quote release' is approved.
+          {opp.route === 'Service' ? 'Service Review pending — submission opens once AH + LJS approve the offer.' : "Release approval pending — submission opens once a 'Final quote release' is approved."}
           Prepare the proposal in the builder and submit it for approval first.
         </p>
       </div>
@@ -185,6 +187,11 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
       store.updateOpportunity(opp.id, {
         milestone: 'Follow-up',
         proposalDate: new Date().toISOString().slice(0, 10),
+      })
+      if (opp.route === 'Service') store.updateServiceFlow(opp.id, {
+        offerSent: true,
+        offerSentOn: new Date().toISOString().slice(0, 10),
+        offerRecipient: emailTo,
       })
       setSentNow(true)
       onSubmitted?.()

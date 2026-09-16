@@ -34,6 +34,8 @@ import { verificationItem } from '../leadVerification.js'
 import OpportunityComingSoon from '../workbench/OpportunityComingSoon.jsx'
 import ServiceDecisionPanel from '../workbench/ServiceDecisionPanel.jsx'
 import ServiceExecutionPanel from '../workbench/ServiceExecutionPanel.jsx'
+import ServiceReportPanel from '../workbench/ServiceReportPanel.jsx'
+import ServiceInvoicePanel from '../workbench/ServiceInvoicePanel.jsx'
 import { isDeliveryBasisClarification, isLegacyCommercialClarification, sourceContainsDeliveryRequirement } from '../commercialTerms.js'
 
 const statusPill = s =>
@@ -105,10 +107,13 @@ const SERVICE_WORKFLOW_STEPS = [
   { slug: 'service-intake', label: 'Service Intake', milestone: 'Intake', tab: 'overview', servicePhase: 0 },
   { slug: 'service-capture', label: 'Capture Enquiry', milestone: 'Qualification', tab: 'requirement', servicePhase: 1 },
   { slug: 'service-scope', label: 'Scope & Survey', milestone: 'Screening', tab: 'sourcing', servicePhase: 2 },
-  { slug: 'service-offer', label: 'Choose Offer', milestone: 'Proposal', tab: 'proposal', servicePhase: 3 },
+  { slug: 'service-offer', label: 'Prepare Offer', milestone: 'Proposal', tab: 'proposal', servicePhase: 3 },
   { slug: 'service-review', label: 'Internal Review', milestone: 'Approval', tab: 'approval', servicePhase: 4 },
-  { slug: 'service-decision', label: 'Customer Decision', milestone: 'Submitted', tab: 'service-decision', servicePhase: 5 },
-  { slug: 'service-execution', label: 'Execute & Invoice', milestone: 'Follow-up', tab: 'service-execution', servicePhase: 6 },
+  { slug: 'service-send', label: 'Send Offer', milestone: 'Submitted', tab: 'comms', servicePhase: 5 },
+  { slug: 'service-decision', label: 'Customer Decision', milestone: 'Submitted', tab: 'service-decision', servicePhase: 6 },
+  { slug: 'service-execution', label: 'Execute Service', milestone: 'Follow-up', tab: 'service-execution', servicePhase: 7 },
+  { slug: 'service-report', label: 'Service Report', milestone: 'Follow-up', tab: 'service-report', servicePhase: 8 },
+  { slug: 'service-invoice', label: 'Invoice', milestone: 'Follow-up', tab: 'service-invoice', servicePhase: 9 },
 ]
 const workflowStepsFor = (config, route) => {
   if (route === 'Spares') return SPARES_WORKFLOW_STEPS
@@ -211,13 +216,30 @@ export default function Workbench() {
     (step.milestones || [step.milestone]).includes(effectiveMilestone))?.slug || 'intake'
   const activeStepConfig = workflowBySlug[activeStep]
   const viewTab = requestedWorkflowStep ? activeStepConfig.tab : (legacyStep ? activeStepConfig.tab : tab)
-  const serviceMilestonePhase = { Intake: 0, Qualification: 1, Screening: 2, Sourcing: 2, Proposal: 3, Approval: 4, Submitted: 5, 'Follow-up': 6 }
+  const serviceMilestonePhase = { Intake: 0, Qualification: 1, Screening: 2, Sourcing: 2, Proposal: 3, Approval: 4, Submitted: 5, 'Follow-up': 7 }
   const persistedStepIndex = opp.route === 'Service'
     ? (Number.isInteger(opp.servicePhase) ? opp.servicePhase : (serviceMilestonePhase[effectiveMilestone] ?? 0))
     : workflowSteps.findIndex(step => (step.milestones || [step.milestone]).includes(effectiveMilestone))
   const selectStep = step => {
     if (!workflowBySlug[step]) return
     nav(`/opp/${opp.id}?step=${encodeURIComponent(step)}`)
+  }
+  const servicePhaseBlockers = step => {
+    if (opp.route !== 'Service' || step.servicePhase == null || step.servicePhase <= persistedStepIndex) return []
+    const est = (store.svcEstimates || []).find(e => e.oppId === opp.id) || {}
+    const survey = (store.surveys || []).find(v => v.oppId === opp.id)
+    const review = (store.approvals || []).find(a => a.oppId === opp.id && a.type === 'Service offer review' && ['Approved', 'Approved with conditions'].includes(a.status))
+    const communication = (store.communications?.[opp.id] || []).find(c => c.kind === 'submission' && c.status === 'sent')
+    const blockers = []
+    if (step.servicePhase >= 2 && !est.scopeConfirmed) blockers.push({ key: 'service-scope', severity: 'block', text: 'Confirm the Service scope and offer path' })
+    if (step.servicePhase >= 3 && (!est.travelConfirmed || (est.surveyRequired && !survey?.sow))) blockers.push({ key: 'service-evidence', severity: 'block', text: est.surveyRequired ? 'Complete travel confirmation, survey report, and SoW before preparing the offer' : 'Confirm the manual travel estimate before preparing the offer' })
+    if (step.servicePhase >= 4 && !(est.offerPrepared || est.serviceLineAdded)) blockers.push({ key: 'service-offer', severity: 'block', text: 'Prepare the Standard Rate Sheet or Customized Proposal first' })
+    if (step.servicePhase >= 5 && !review) blockers.push({ key: 'service-review', severity: 'block', text: 'Complete the combined AH + LJS Service Review first' })
+    if (step.servicePhase >= 6 && !communication) blockers.push({ key: 'service-send', severity: 'block', text: 'Send the approved offer to the customer first' })
+    if (step.servicePhase >= 7 && est.customerDecision !== 'Accepted') blockers.push({ key: 'service-decision', severity: 'block', text: 'Record customer acceptance before scheduling service execution' })
+    if (step.servicePhase >= 8 && (!est.engineer || !est.executionDate || !(Number(est.actualEngineerDays) > 0))) blockers.push({ key: 'service-execution', severity: 'block', text: 'Assign an engineer, schedule the service, and record actual engineer days' })
+    if (step.servicePhase >= 9 && !est.serviceReport) blockers.push({ key: 'service-report', severity: 'block', text: 'Submit the service report before invoicing' })
+    return blockers
   }
   const proposal = store.getProposal(opp.id)
   const sourceLead = [...(store.leads || []), ...(store.leadArchive || [])].find(lead => lead.id === opp.sourceLeadId || lead.oppId === opp.id)
@@ -256,6 +278,13 @@ export default function Workbench() {
     // transition is blocked. Keep the persisted milestone and its approval
     // gate unchanged, but do not force the user to stay on the current page
     // while they review or prepare the next step.
+    if (opp.route === 'Service') {
+      const serviceBlockers = servicePhaseBlockers(step)
+      if (serviceBlockers.length) {
+        setTransition({ kind: 'blocked', target: step.label, blockers: serviceBlockers })
+        return
+      }
+    }
     selectStep(slug)
     const moved = moveMilestone(step.milestone, step.tab)
     if (opp.route === 'Service' && moved) store.updateServiceFlow(opp.id, { servicePhase: step.servicePhase })
@@ -458,6 +487,8 @@ export default function Workbench() {
         {viewTab === 'followup' && <FollowUpTab opp={opp} goTab={goTab} />}
         {viewTab === 'service-decision' && <ServiceDecisionPanel opp={opp} />}
         {viewTab === 'service-execution' && <ServiceExecutionPanel opp={opp} />}
+        {viewTab === 'service-report' && <ServiceReportPanel opp={opp} />}
+        {viewTab === 'service-invoice' && <ServiceInvoicePanel opp={opp} />}
         {!activeStepConfig && viewTab === 'approvals' && <ApprovalsTab opp={opp} />}
         {viewTab === 'comms' && <CommsTab opp={opp} />}
         {!activeStepConfig && viewTab === 'po' && <PoHandover opp={opp} />}

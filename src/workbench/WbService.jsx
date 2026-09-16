@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
 import { canPriceProposal, fmt } from '../utils.js'
-import { Chip } from '../ui.jsx'
+import { Chip, AiBadge } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 import SurveyPanel from './SurveyPanel.jsx'
 
@@ -16,6 +16,17 @@ const NUM_FIELDS = [
   ['otHours', 'Overtime hours'], ['weekendDays', 'Weekend days'], ['standbyDays', 'Standby days'],
 ]
 
+const serviceText = opp => [
+  opp?.oppName, opp?.remarks, opp?.solution, opp?.product,
+].flat().filter(Boolean).join(' ').toLowerCase()
+
+const suggestedOfferFor = opp => {
+  const text = serviceText(opp)
+  return /amc|annual|complex|diagnostic|long[- ]duration|negotiat|statement of work|sow|boq|survey/.test(text)
+    ? 'Customized Proposal'
+    : 'Standard Rate Sheet'
+}
+
 // Reactive-service workbench: rate-sheet driven cost build-up with the manual
 // travel-estimate confirmation gate.
 export default function WbService({ opp, openBuilder }) {
@@ -25,8 +36,11 @@ export default function WbService({ opp, openBuilder }) {
   const sheet = est.sheet === 'International' ? 'International' : 'India'
   const rs = store.rateSheets[sheet]
   const r = rs.rates
+  const suggestedOffer = est.aiOfferMode || suggestedOfferFor(opp)
+  const offerMode = est.offerMode || suggestedOffer
+  const scopeConfirmed = !!est.scopeConfirmed
+  const reviewApproval = (store.approvals || []).find(a => a.oppId === opp.id && a.type === 'Service offer review' && ['Pending', 'Approved', 'Approved with conditions'].includes(a.status))
   const [sent, setSent] = useState(false)
-  const [requested, setRequested] = useState(false)
 
   const upd = patch => store.updateSvcEstimate(opp.id, patch)
 
@@ -49,15 +63,21 @@ export default function WbService({ opp, openBuilder }) {
   const total = subtotal + gst
   const money = v => (sheet === 'India' ? `₹ ${fmt(v)}K` : `$ ${fmt(v)}`)
 
-  const requestResources = () => {
+  const confirmScope = () => {
+    store.updateServiceFlow(opp.id, { aiOfferMode: suggestedOffer, offerMode, scopeConfirmed: true })
+  }
+
+  const requestServiceReview = () => {
+    if (!scopeConfirmed || !est.travelConfirmed || (est.surveyRequired && !((store.surveys || []).find(v => v.oppId === opp.id)?.sow))) return
     store.requestApproval({
-      oppId: opp.id, type: 'Resource feasibility', approver: 'AH', needed: ['AH'],
-      detail: `${opp.oppName} — ${est.workDays || 0} work days + ${est.travelDays || 0} travel days on the ${sheet} rate sheet; engineer ${est.engineer || 'TBC'}.`,
+      oppId: opp.id, type: 'Service offer review', approver: 'AH', needed: ['AH', 'LJS'], anyOf: false,
+      detail: `${offerMode} — ${opp.oppName}; ${est.workDays || 0} work days + ${est.travelDays || 0} travel days; engineer ${est.engineer || 'TBC'}.`,
     })
-    setRequested(true)
+    store.updateServiceFlow(opp.id, { reviewRequested: true })
   }
 
   const sendToProposal = () => {
+    if (est.serviceLineAdded) return
     const p = store.getProposal(opp.id)
     const listPrice = sheet === 'India' ? Math.round(total * 1000) : Math.round(total)
     store.saveProposal(opp.id, {
@@ -69,11 +89,34 @@ export default function WbService({ opp, openBuilder }) {
         list: 'Ad-hoc', currency: rs.currency,
       }],
     })
+    store.updateServiceFlow(opp.id, { serviceLineAdded: true, offerPrepared: true, offerPreparedOn: new Date().toISOString().slice(0, 10) })
     setSent(true)
   }
 
   return (
     <div className="ana-grid">
+      <div className="ana-card c-12 service-flow-summary">
+        <div className="ana-title">Simplified Service flow</div>
+        <div className="check-row" style={{ flexWrap: 'wrap' }}>
+          {['1 AI identifies', '2 Confirm scope', '3 One internal review', '4 Customer decision'].map((step, i) => (
+            <Chip key={step} tone={i === 0 || (i === 1 && scopeConfirmed) || (i === 2 && reviewApproval?.status === 'Approved') || (i === 3 && est.customerDecision) ? 'state-Accepted' : 'grey'}>{step}</Chip>
+          ))}
+        </div>
+        <p className="hint">AI suggests the offer type. You confirm it once, request one combined review, then record the customer's decision without restarting the workflow.</p>
+      </div>
+      <div className="ana-card c-6">
+        <div className="ana-title">AI service identification <AiBadge label="AI suggestion" /></div>
+        <p style={{ fontSize: 12.5 }}>AI identified this opportunity as <b>Service</b>.</p>
+        <label style={{ fontSize: 12, display: 'block' }}>
+          Suggested offer path
+          <select value={offerMode} style={{ width: '100%' }} onChange={e => upd({ offerMode: e.target.value })}>
+            <option>Standard Rate Sheet</option>
+            <option>Customized Proposal</option>
+          </select>
+        </label>
+        <p className="hint">AI suggestion: {suggestedOffer}. Change it only if the scope requires another path.</p>
+        <button className="primary" disabled={scopeConfirmed} onClick={confirmScope}>{scopeConfirmed ? 'Scope confirmed' : 'Confirm scope and offer path'}</button>
+      </div>
       {/* Diagram 02 §4 decides the lane before anything is priced: a standard
           service comes off the rate sheet, a survey-led one off the SoW. */}
       <SurveyPanel opp={opp} est={est} />
@@ -121,11 +164,12 @@ export default function WbService({ opp, openBuilder }) {
             : <Chip tone="state-Blocks">Blocks readiness</Chip>}
         </div>
         <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button onClick={requestResources}>
-            <Icon name="users" size={13} /> Request AH approval for resources
+          <button className="primary" disabled={!scopeConfirmed || !est.travelConfirmed || (est.surveyRequired && !((store.surveys || []).find(v => v.oppId === opp.id)?.sow)) || !!reviewApproval} onClick={requestServiceReview}>
+            <Icon name="users" size={13} /> {reviewApproval ? 'Service review submitted' : 'Request one Service Review'}
           </button>
         </div>
-        {requested && <div className="okbox">Resource feasibility request sent to AH — track it on the Approvals tab.</div>}
+        {!scopeConfirmed && <p className="hint">Confirm the AI suggestion and scope above first.</p>}
+        {reviewApproval && <div className={reviewApproval.status === 'Approved' ? 'okbox' : 'warnbox'}>One combined Service Review: {reviewApproval.status}. Track the decision on Approvals.</div>}
       </div>
 
       <div className="ana-card c-6">
@@ -145,10 +189,10 @@ export default function WbService({ opp, openBuilder }) {
           <div className="restricted"><Icon name="lock" size={12} /> Cost build-up and rates restricted — sales owners, approvers and admin only</div>
         )}
         <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button className="primary" onClick={sendToProposal}>
+          <button className="primary" disabled={!scopeConfirmed || !reviewApproval || reviewApproval.status !== 'Approved' || est.serviceLineAdded} onClick={sendToProposal}>
             <Icon name="arrowRight" size={13} /> Send scope to proposal
           </button>
-          <span className="hint">Adds one service line to the workbook BoM.</span>
+          <span className="hint">{est.serviceLineAdded ? 'Service line already added to the proposal.' : 'Adds one service line to the workbook BoM after the single review is approved.'}</span>
         </div>
         {sent && (
           <div className="okbox">

@@ -12,6 +12,15 @@ const ReadOnlyField = ({ label, value, wide = false }) => (
   </Field>
 )
 
+// Older leads stored the complete inbound email in Opportunity Scope. Keep
+// those records readable while new records store the cleaned service/request
+// scope at creation time.
+const displayOpportunityScope = value => String(value || '')
+  .replace(/^dear[^\n]*\n+/i, '')
+  .replace(/^\s*(?:customer|euc\s+name|euc\s+location|contact\s+person|contact\s+phone)\s*:[^\n]*\n?/gim, '')
+  .replace(/\n\s*(?:regards|best regards|kind regards),[\s\S]*$/i, '')
+  .trim()
+
 const fields = [
   'owner', 'oppName', 'opportunityScope', 'rfqNumber', 'rfqDate', 'valueK', 'sellTo', 'category', 'location', 'customerStatus',
   'eucName', 'eucLocation', 'oppType', 'bu', 'segment', 'solution', 'product', 'prob',
@@ -49,7 +58,7 @@ export function OpportunityDetailsView({ opp, className = '' }) {
         </div>
         <div className="opportunity-details-wide">
           <label>Opportunity Scope</label>
-          <div className="read-only-field">{opp.opportunityScope || '—'}</div>
+          <div className="read-only-field read-only-field-multiline">{displayOpportunityScope(opp.opportunityScope) || '—'}</div>
         </div>
       </div>
 

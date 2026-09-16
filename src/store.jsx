@@ -8,6 +8,7 @@ import {
   buildPoCompare, buildHandover, milestoneForStage, routeForType,
   contextForType, B_STEPS, REVISION_TYPES,
   ROLES, SUBFOLDERS, newProposal, PORTAL_ENABLED, defaultBStepOwners,
+  canSignBStep,
 } from './seed.js'
 import { leadConfig, routeOwner, expiredLeadDeadline, aiAuditDetail } from './leadRules.js'
 import { withoutSimulated, simulatedCount } from './simulatedLeads.js'
@@ -26,6 +27,11 @@ import {
 } from './proposal/sparesBoq.js'
 
 const StoreCtx = createContext(null)
+const CLARIFICATION_FIELD_KEYS = new Set([
+  'oppName', 'rfqNumber', 'sellTo', 'category', 'location', 'customerStatus',
+  'eucName', 'eucLocation', 'oppType', 'bu', 'segment', 'solution',
+  'contactPerson', 'contactPhone',
+])
 
 export { isPlaceholderSparesLine, sparesProposalBom }
 
@@ -530,8 +536,7 @@ export function StoreProvider({ children }) {
       const current = stateRef.current
       const opp = current.opportunities.find(item => item.id === oppId)
       if (!opp || opp.context !== 'Brownfield') return
-      const owners = { ...defaultBStepOwners(opp), ...(current.bStepOwners[oppId] || {}) }
-      if (current.role !== owners[stepId] && !ROLES[current.role]?.admin) return
+      if (!canSignBStep(current.role, opp)) return
       const index = B_STEPS.findIndex(item => item.id === stepId)
       const signed = current.bSteps[oppId] || {}
       if (index > 0 && signed[B_STEPS[index - 1].id]?.state !== 'Signed') return
@@ -541,7 +546,7 @@ export function StoreProvider({ children }) {
           ...s.bSteps,
           [oppId]: {
             ...(s.bSteps[oppId] || {}),
-            [stepId]: { state: 'Signed', by: s.role, assignedTo: owners[stepId], at: new Date().toISOString(), note },
+            [stepId]: { state: 'Signed', by: s.role, assignedTo: opp.owner, at: new Date().toISOString(), note },
           },
         },
       }, 'Workflow step signed off', oppId, `${stepId} ${step.label}${note ? ` — ${note}` : ''}`))
@@ -550,8 +555,7 @@ export function StoreProvider({ children }) {
     unsignBStep(oppId, stepId, reason = '') {
       setState(s => {
         const opp = s.opportunities.find(item => item.id === oppId)
-        const owners = opp ? { ...defaultBStepOwners(opp), ...(s.bStepOwners[oppId] || {}) } : {}
-        if (!opp || (s.role !== owners[stepId] && !ROLES[s.role]?.admin)) return s
+        if (!opp || !canSignBStep(s.role, opp)) return s
         const steps = { ...(s.bSteps[oppId] || {}) }
         delete steps[stepId]
         return withAudit({ ...s, bSteps: { ...s.bSteps, [oppId]: steps } },
@@ -1116,6 +1120,60 @@ export function StoreProvider({ children }) {
       }, patch.status ? `Clarification ${patch.status.toLowerCase()}` : 'Clarification updated', id))
     },
 
+    stageClarificationAnswer(id, { response, answerSource = '', answeredAt = '', attachments = [], evidence = '', aiConfidence = null, status = 'Needs review', missing = '', fieldSuggestion = null }) {
+      setState(s => withAudit({
+        ...s,
+        clarifications: s.clarifications.map(c => (c.id === id ? {
+          ...c,
+          response,
+          answerSource,
+          answeredAt: answeredAt || new Date().toISOString().slice(0, 10),
+          answeredBy: s.role,
+          ...(evidence ? { answerEvidence: evidence } : {}),
+          ...(aiConfidence !== null && aiConfidence !== undefined ? { aiConfidence } : {}),
+          ...(fieldSuggestion ? { aiFieldSuggestion: fieldSuggestion } : {}),
+          ...(missing ? { missing } : { missing: '' }),
+          attachments: [...(c.attachments || []), ...attachments],
+          status: status === 'Answered' && !fieldSuggestion ? 'Answered' : 'Needs review',
+        } : c)),
+      }, 'Clarification answer staged for salesperson review', id, response))
+    },
+
+    confirmClarificationField(id, { field, value }) {
+      if (!CLARIFICATION_FIELD_KEYS.has(field) || !String(value || '').trim()) return false
+      setState(s => {
+        const target = s.clarifications.find(c => c.id === id)
+        if (!target) return s
+        const nextValue = String(value).trim()
+        return withAudit({
+          ...s,
+          opportunities: s.opportunities.map(o => (o.id === target.oppId ? { ...o, [field]: nextValue } : o)),
+          clarifications: s.clarifications.map(c => (c.id === id ? {
+            ...c,
+            field,
+            fieldValue: nextValue,
+            fieldConfirmedBy: s.role,
+            fieldConfirmedAt: new Date().toISOString(),
+            status: 'Answered',
+            aiFieldSuggestion: null,
+            missing: '',
+          } : c)),
+        }, 'AI clarification field update confirmed', id, `${field} = ${nextValue}`)
+      })
+      return true
+    },
+
+    rejectClarificationField(id) {
+      setState(s => withAudit({
+        ...s,
+        clarifications: s.clarifications.map(c => (c.id === id ? {
+          ...c,
+          status: c.response?.trim() ? 'Answered' : 'Needs review',
+          aiFieldSuggestion: null,
+        } : c)),
+      }, 'AI clarification field update rejected', id))
+    },
+
     answerClarification(id, { response, answerSource = '', answeredAt = '', attachments = [], evidence = '', aiConfidence = null, status = 'Answered', missing = '' }) {
       setState(s => {
         const target = s.clarifications.find(c => c.id === id)
@@ -1403,6 +1461,18 @@ export function StoreProvider({ children }) {
             ? s.svcEstimates.map(e => (e.oppId === oppId ? { ...e, ...patch } : e))
             : [...s.svcEstimates, { oppId, sheet: 'India', workDays: 1, travelDays: 1, dailyHours: 8, otHours: 0, weekendDays: 0, standbyDays: 0, engineer: '', mobilisation: '', toolsCerts: '', travelConfirmed: false, ...patch }],
         }
+      })
+    },
+    updateServiceFlow(oppId, patch) {
+      setState(s => {
+        const current = s.svcEstimates.find(e => e.oppId === oppId) || { oppId }
+        const nextEstimate = { ...current, ...patch }
+        return withAudit({
+          ...s,
+          svcEstimates: s.svcEstimates.some(e => e.oppId === oppId)
+            ? s.svcEstimates.map(e => (e.oppId === oppId ? nextEstimate : e))
+            : [...s.svcEstimates, nextEstimate],
+        }, 'Service flow updated', oppId, Object.keys(patch).join(', '))
       })
     },
 

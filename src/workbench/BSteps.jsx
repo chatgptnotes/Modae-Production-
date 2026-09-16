@@ -1,19 +1,15 @@
 import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
-import { B_STEPS as ALL_B_STEPS, ROLES, defaultBStepOwners } from '../seed.js'
-import { isAdminRole, displayRole } from '../utils.js'
+import { B_STEPS as ALL_B_STEPS, canSignBStep } from '../seed.js'
+import { displayRole } from '../utils.js'
 import { Chip } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 
-// Brownfield B-01..B-05 are sequential approvals with configurable ownership.
-// LJS/AH/admin assign the responsible internal user; only that user (or an
-// admin acting for them) can sign or reopen the step.
+// Brownfield B-01..B-05 are sequential sign-offs owned by the opportunity's
+// assigned salesperson. LJS is the explicit strategic exception.
 export default function BSteps({ opp, steps = ALL_B_STEPS, title = 'Brownfield workflow - B-01 to B-05' }) {
   const store = useStore()
   const signed = (store.bSteps || {})[opp.id] || {}
-  const assignments = { ...defaultBStepOwners(opp), ...((store.bStepOwners || {})[opp.id] || {}) }
-  const canAssign = store.role === 'LJS' || store.role === 'AH' || isAdminRole(store.role)
-  const assignableRoles = Object.entries(ROLES).filter(([, role]) => !role.external)
   const [notes, setNotes] = useState({})
   const [reopening, setReopening] = useState({})
 
@@ -40,14 +36,9 @@ export default function BSteps({ opp, steps = ALL_B_STEPS, title = 'Brownfield w
           {title} <Chip tone={done === steps.length ? 'state-Accepted' : 'grey'}>{done} of {steps.length} signed</Chip>
         </div>
         <p className="hint">
-          Each activity is assigned to a responsible person and must be signed in order before the proposal
-          can go for approval. Revisions reopen the step that owns the change.
+          The assigned salesperson, or LJS, must sign each activity in order before the proposal can go
+          for approval. Revisions reopen the step that owns the change.
         </p>
-        {!canAssign && (
-          <div className="warnbox">
-            Read-only assignments - LJS, AH, or an administrator must assign the responsible person.
-          </div>
-        )}
       </div>
 
       {steps.map(step => {
@@ -55,13 +46,12 @@ export default function BSteps({ opp, steps = ALL_B_STEPS, title = 'Brownfield w
         const ok = rec?.state === 'Signed'
         const isNext = step.id === nextUp
         const waiting = !ok && !isNext
-        const assignedTo = assignments[step.id]
-        const mayAct = store.role === assignedTo || isAdminRole(store.role)
+        const mayAct = canSignBStep(store.role, opp)
         return (
           <div key={step.id} className={'ana-card c-6' + (isNext ? ' b-step-current' : '')}>
             <div className="ana-title">
               {step.id} - {step.label}
-              <span className="hint">Owner: {displayRole(assignedTo)}</span>
+              <span className="hint">Assigned salesperson: {displayRole(opp.owner)}</span>
               {ok
                 ? <Chip tone="state-Accepted">Signed</Chip>
                 : isNext ? <Chip tone="state-Review">Next</Chip> : <Chip tone="grey">Waiting</Chip>}
@@ -103,16 +93,7 @@ export default function BSteps({ opp, steps = ALL_B_STEPS, title = 'Brownfield w
                 </button>
               </div>
             ) : (
-              <p className="hint">Awaiting sign-off from {displayRole(assignedTo)}.</p>
-            )}
-
-            {canAssign && (
-              <label className="hint" style={{ display: 'block', marginTop: 8 }}>
-                Responsible person{' '}
-                <select value={assignedTo} onChange={event => store.assignBStep(opp.id, step.id, event.target.value)}>
-                  {assignableRoles.map(([id]) => <option key={id} value={id}>{displayRole(id)}</option>)}
-                </select>
-              </label>
+              <p className="hint">Awaiting sign-off from {displayRole(opp.owner)} or LJS.</p>
             )}
           </div>
         )

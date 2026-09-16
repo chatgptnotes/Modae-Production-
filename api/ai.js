@@ -107,7 +107,8 @@ const clarificationAnswerSchema = {
   properties: {
     rows: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
       id: { type: 'STRING' }, status: { type: 'STRING' }, response: { type: 'STRING' }, missing: { type: 'STRING' }, confidence: { type: 'INTEGER' }, evidence: { type: 'STRING' },
-    }, required: ['id', 'status', 'response', 'missing', 'confidence', 'evidence'] } },
+      fieldKey: { type: 'STRING' }, fieldValue: { type: 'STRING' }, fieldEvidence: { type: 'STRING' },
+    }, required: ['id', 'status', 'response', 'missing', 'confidence', 'evidence', 'fieldKey', 'fieldValue', 'fieldEvidence'] } },
   },
   required: ['rows'],
 }
@@ -285,6 +286,8 @@ Commercial deviations:
 ${cap((p.deviations || []).map(d => `${d.term || 'Term'} — customer asks: ${d.customerAsk || 'not recorded'}; ModAE offers: ${d.ourResponse || 'not recorded'}`).join('\n'), 5000) || '(none)'}
 Questions already raised (do not repeat):
 ${cap((p.existing || []).join('\n'), 3000) || '(none)'}
+CURRENT OPPORTUNITY FIELDS (already known; do not ask for these again):
+${cap(JSON.stringify(p.currentFields || {}), 6000)}
 
 Return category as one of Technical, Commercial, Site data, or Logistics.
 Each row must state the specific gap, its evidence source, and one precise
@@ -308,6 +311,13 @@ must be Needs review, not Answered. A system-configuration question is not fully
 answered by only giving the application or RPM. “See attached BOM” answers a
 part-number question only when the BOM is actually present and readable.
 
+For a fully answered question, map the answer to at most one Opportunity field
+only when the reply explicitly supplies that field. Use only one of the allowed
+field keys supplied below. Return empty fieldKey, fieldValue and fieldEvidence
+when no safe mapping exists. Never map a technical part number or price into a
+general Opportunity field. fieldValue must be the exact supported value. The
+salesperson will review and confirm the mapping.
+
 Opportunity: ${cap(p.oppName, 300)} · customer: ${cap(p.customer, 200)}
 From: ${cap(p.from, 300)}
 Subject: ${cap(p.subject, 300)}
@@ -319,7 +329,12 @@ ATTACHMENTS:
 ${cap((p.attachments || []).map(a => `--- ${a.name} ---\n${a.text || '(no text extracted)'}`).join('\n\n'), 60000) || '(none)'}
 
 OPEN QUESTIONS:
-${cap((p.questions || []).map(q => `${q.id}: ${q.question} [${q.category || ''}]`).join('\n'), 12000) || '(none)'}`
+${cap((p.questions || []).map(q => `${q.id}: ${q.question} [${q.category || ''}]`).join('\n'), 12000) || '(none)'}
+
+ALLOWED OPPORTUNITY FIELDS:
+${cap((p.fieldOptions || []).map(f => `${f.key}: ${f.label}`).join('\n'), 4000) || '(none)'}
+CURRENT OPPORTUNITY VALUES:
+${cap(JSON.stringify(p.currentFields || {}), 6000)}`
 }
 
 function proposalEmailPrompt(p) {

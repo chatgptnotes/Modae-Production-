@@ -139,6 +139,7 @@ test('customer KYC display honors verified lead-stage data and simulated mode', 
   const register = fs.readFileSync(new URL('../src/pages/Register.jsx', import.meta.url), 'utf8')
   assert.match(workbench, /const leadKycVerified = opp\.leadVerification\?\.status === 'Verified'/)
   assert.match(workbench, /const displayedKycStatus = leadKycVerified \? 'Valid'/)
+  assert.match(workbench, /import \{ verificationItem \} from '\.\.\/leadVerification\.js'/)
   assert.match(workbench, /'Verified', undefined, 'simulated'/)
   assert.match(workbench, /item\.value \|\| .*verificationItem\(sourceLead\.verification, name\)\.value/)
   assert.match(workbench, /ID: \{item\.value \|\| verificationItem\(sourceLead\.verification, name\)\.value\}/)

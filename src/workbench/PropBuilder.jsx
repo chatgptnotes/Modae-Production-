@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useStore, snapshotProposal } from '../store.jsx'
 import { canPriceProposal, fmt, ddMmmYY, displayRole, displayRoles } from '../utils.js'
-import { readiness, isBlocked, commercialGate, releaseState, approvalSet } from '../gates.js'
+import { readiness, isBlocked, commercialGate, releaseState, approvalSet, serviceApprovalSet } from '../gates.js'
 import { REVISION_TYPES } from '../seed.js'
 import { Chip, AiBadge, Phase2Badge, ErrBox, WarnBox, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
@@ -35,13 +35,18 @@ export default function PropBuilder({ opp, onRevision }) {
   const revisions = p.revisions || []
   // Scoped to the current revision: a revised quote is no longer released,
   // so 'Submit for approval' re-opens rather than staying permanently locked.
-  const { pending: pendingRelease, release } = releaseState(p, store.approvals, opp.id)
+  const serviceReview = opp.route === 'Service' ? serviceApprovalSet(store.approvals, opp.id)[0] : null
+  const { pending: pendingRelease, release } = opp.route === 'Service'
+    ? { pending: serviceReview?.pending, release: serviceReview?.approved }
+    : releaseState(p, store.approvals, opp.id)
   const released = !!release
   // Diagram 02 §5 — technical, commercial and margin are drawn as one
   // checkpoint feeding "All Approvals Completed → Quote Ready for Dispatch",
   // so they are shown together rather than discovered one blocker at a time.
   // Each covers the current revision only.
-  const gates5 = approvalSet(p, store.approvals, opp.id)
+  const gates5 = opp.route === 'Service'
+    ? serviceApprovalSet(store.approvals, opp.id)
+    : approvalSet(p, store.approvals, opp.id)
   const allApproved = gates5.every(g => !!g.approved)
 
   // Content sections come from the workbook; the rest are auto-drafted by
@@ -91,6 +96,7 @@ export default function PropBuilder({ opp, onRevision }) {
   }
 
   const submitForApproval = () => {
+    if (opp.route === 'Service') return
     const today = new Date().toISOString().slice(0, 10)
     // The approval is stamped with the revision it approves, so a later
     // revision cannot inherit it.

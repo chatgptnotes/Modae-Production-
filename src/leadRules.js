@@ -35,7 +35,7 @@ export const isInternalSender = (email, config = {}) => {
 // person from an internal forward. Do not use a closing "Regards" signature:
 // on an outbound ModAE mail that signature belongs to ModAE.
 export const customerContactFromText = text => {
-  const match = String(text || '').match(/(?:customer\s+)?(?:contact\s+person|contact|attn\.?|kind\s+attention)\s*[:\-]\s*([^\n,;]+?)(?=\s+(?:phone|mobile|telephone)\s*[:\-]|$)/i)
+  const match = String(text || '').match(/(?:customer\s+)?(?:contact\s+person|contact|attn\.?|kind\s+attention)\s*[:\-]\s*([^\n;]+?)(?=\s+(?:contact\s+)?(?:phone|mobile|telephone)\s*[:\-]|$)/i)
   return match ? match[1].trim() : ''
 }
 

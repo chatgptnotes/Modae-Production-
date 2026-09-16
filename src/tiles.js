@@ -1,4 +1,4 @@
-import { isAdminRole, isSalesOwner, canSeePage } from './utils.js'
+import { isAdminRole, isSalesOwner, canSeePage, canViewCommercial } from './utils.js'
 import { counts } from './kpi.js'
 
 // Full-site tile registry. Tablet mode has its own registry under src/tablet so
@@ -13,6 +13,7 @@ export function buildTiles(store) {
   const role = store.role
   const admin = isAdminRole(role)
   const approver = role === 'LJS' || role === 'AH' || admin
+  const comm = canViewCommercial(role)
 
   // One source of truth for every badge in the app (src/kpi.js).
   const c = counts(store, role)
@@ -38,7 +39,7 @@ export function buildTiles(store) {
 
 // Desktop Home groups the tool wall into labelled columns.
 export const HOME_GROUPS = [
-  { title: 'Sales & opportunities', keys: ['mydashboard', 'opportunities', 'status', 'voice', 'approvals'] },
-  { title: 'Document flow', keys: ['inbox', 'folders', 'po'] },
-  { title: 'Insights & AI', keys: ['aimap', 'customers', 'pricelists', 'users', 'admin', 'audit', 'launcher'] },
+  { title: 'Sales & opportunities', keys: ['mydashboard', 'opportunities', 'status', 'approvals'] },
+  { title: 'Document flow', keys: ['inbox', 'folders', 'po', 'customers', 'pricelists'] },
+  { title: 'More tools', keys: ['voice', 'aimap', 'users', 'admin', 'audit', 'launcher'] },
 ]

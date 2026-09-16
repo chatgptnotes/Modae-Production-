@@ -203,16 +203,17 @@ function PortalParked() {
 // Left-sidebar navigation. `page` is the PERMS matrix key — visibility follows
 // the acting role's permission set (seed.js PERMS).
 const NAV = [
-  { to: '/my-dashboard', label: 'My Dashboard', icon: 'chartBar', page: 'mydashboard' },
-  { to: '/inbox', label: 'Lead inbox', icon: 'inbox', page: 'inbox', badge: c => c.newLeads, badgeHint: 'new leads requiring qualification' },
-  { to: '/opportunities', label: 'Opportunities', icon: 'cards', page: 'tracker' },
-  { to: '/approvals', label: 'Approvals', icon: 'checkCircle', page: 'approvals', badge: c => c.forMe + c.myPending, badgeHint: 'gates waiting on you, plus your own requests' },
-  { to: '/po', label: 'Purchase Orders', icon: 'clipboardCheck', page: 'po' },
-  { to: '/folders', label: 'SharePoint folders', icon: 'folder', page: 'folders' },
-  { to: '/pricelists', label: 'Price Lists', icon: 'tag', page: 'pricelists' },
-  { to: '/admin', label: 'Admin', icon: 'gear', page: 'admin' },
-  { to: '/audit', label: 'Audit Trail', icon: 'list', page: 'audit' },
-  { to: '/users', label: 'Users and roles', icon: 'shield', page: 'users' },
+  { section: 'Workspace', to: '/my-dashboard', label: 'My Dashboard', icon: 'chartBar', page: 'mydashboard' },
+  { section: 'Workspace', to: '/inbox', label: 'Lead inbox', icon: 'inbox', page: 'inbox', badge: c => c.newLeads, badgeHint: 'new leads requiring qualification' },
+  { section: 'Workspace', to: '/opportunities', label: 'Opportunities', icon: 'cards', page: 'tracker' },
+  { section: 'Workspace', to: '/approvals', label: 'Approvals', icon: 'checkCircle', page: 'approvals', badge: c => c.forMe + c.myPending, badgeHint: 'gates waiting on you, plus your own requests' },
+  { section: 'Workspace', to: '/po', label: 'Purchase Orders', icon: 'clipboardCheck', page: 'po' },
+  { section: 'Workspace', to: '/folders', label: 'Documents', icon: 'folder', page: 'folders' },
+  { section: 'Workspace', to: '/customers', label: 'Customers', icon: 'users', page: 'customers' },
+  { section: 'Workspace', to: '/pricelists', label: 'Price Lists', icon: 'tag', page: 'pricelists' },
+  { section: 'Admin & more', to: '/admin', label: 'Admin', icon: 'gear', page: 'admin' },
+  { section: 'Admin & more', to: '/audit', label: 'Audit Trail', icon: 'list', page: 'audit' },
+  { section: 'Admin & more', to: '/users', label: 'Users and roles', icon: 'shield', page: 'users' },
 ]
 
 export default function App() {
@@ -326,17 +327,24 @@ export default function App() {
           </button>
         </div>
         <nav className="side-nav" aria-label="Workspace navigation">
-          {items.map(t => {
-            // Same badges the tablet bar carries — the desktop sidebar had none,
-            // so an approver saw no sign that a gate was waiting on them.
-            const badge = t.badge ? t.badge(c) : 0
-            return (
-              <NavLink key={t.to} to={t.to} end={t.to === '/'}
-                className={({ isActive }) => `side-item ${isActive ? 'active' : ''}`} title={sidebarCompact ? t.label : undefined}>
-                <Icon name={t.icon} size={17} /> <span className="side-label">{t.label}</span>
-                {badge > 0 && <span className="side-badge" title={t.badgeHint}>{badge}</span>}
-              </NavLink>
-            )
+          {['Workspace', 'Admin & more'].map(section => {
+            const sectionItems = items.filter(t => t.section === section)
+            if (!sectionItems.length) return null
+            return <div className="side-nav-group" key={section}>
+              <div className="side-nav-heading">{section}</div>
+              {sectionItems.map(t => {
+                // Same badges the tablet bar carries — the desktop sidebar had none,
+                // so an approver saw no sign that a gate was waiting on them.
+                const badge = t.badge ? t.badge(c) : 0
+                return (
+                  <NavLink key={t.to} to={t.to} end={t.to === '/'}
+                    className={({ isActive }) => `side-item ${isActive ? 'active' : ''}`} title={sidebarCompact ? t.label : undefined}>
+                    <Icon name={t.icon} size={17} /> <span className="side-label">{t.label}</span>
+                    {badge > 0 && <span className="side-badge" title={t.badgeHint}>{badge}</span>}
+                  </NavLink>
+                )
+              })}
+            </div>
           })}
         </nav>
         <div className="side-foot">

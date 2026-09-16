@@ -597,16 +597,17 @@ export function milestoneForStage(stage, status) {
   }
 }
 
-// Route (workbench flavour) from the opp type. Diagram 02 §3 is headed
-// "Retrofit / Spares - Main Flow", so Retrofit shares the Brownfield
-// BoQ-shaped workbench rather than inheriting the heavy project one; the
-// handover report's Stage 7 agrees (a Brownfield proposal is cover letter +
-// BoQ pricing only).
+// Route (workbench flavour) from the opp type. Only Spares and Service have
+// active workflows today; Retrofit retains its historical Spares route for
+// saved-record compatibility while its own workflow is parked separately.
 export function routeForType(oppType) {
   if (oppType === 'Spares' || oppType === 'Retrofit') return 'Spares'
   if (oppType === 'Service') return 'Service'
   return 'Project'
 }
+
+export const ACTIVE_WORKFLOW_TYPES = ['Spares', 'Service']
+export const isWorkflowAvailable = oppType => ACTIVE_WORKFLOW_TYPES.includes(oppType)
 
 // Diagram 02 §1 forks the lifecycle at "Opportunity Type Identified". This is
 // a separate axis from routeForType: `context` decides which lane the
@@ -639,8 +640,8 @@ export const B_STEPS = [
     points: ['Cover letter', 'BoQ / price summary', 'Commercial terms', 'Compliance / SoW (if any)'] },
 ]
 
-// Default responsibility for the Brownfield chain. These are only starting
-// assignments: LJS/AH/admin can change them per opportunity before sign-off.
+// Legacy per-step responsibility data retained for migration and old records.
+// Current sign-off authority is the opportunity owner plus LJS.
 export function defaultBStepOwners(opp = {}) {
   return {
     'B-01': opp.owner || 'RS',
@@ -649,6 +650,13 @@ export function defaultBStepOwners(opp = {}) {
     'B-04': 'LJS',
     'B-05': opp.owner || 'RS',
   }
+}
+
+// Brownfield sign-off authority belongs to the opportunity's assigned
+// salesperson, with LJS as the explicit strategic exception. Legacy
+// bStepOwners records remain readable, but do not grant signing authority.
+export function canSignBStep(role, opp = {}) {
+  return !!role && (role === opp.owner || role === 'LJS')
 }
 
 // Diagram 02 §7 — "Identify Type of Revision" routes the rework back to the
@@ -1153,8 +1161,8 @@ export function newProposal(oppId, opp, options = {}) {
       { signal: 'Keyphasor', perUnit: 1, units: 7 },
     ],
     terms: [
-      { term: 'Payment', customerAsk: '90 days credit', ourResponse: '30 days from invoice', status: 'Deviation' },
-      { term: 'Delivery', customerAsk: '8 weeks', ourResponse: '10–12 weeks ex-works', status: 'Deviation' },
+      { term: 'Payment', customerAsk: '90 days credit', standardTerm: '30 days from invoice', proposedTerm: '30 days from invoice', ourResponse: '30 days from invoice', decision: 'Undecided', customerConfirmationStatus: 'Not required', status: 'Deviation' },
+      { term: 'Delivery', customerAsk: '8 weeks', standardTerm: '10–12 weeks ex-works', proposedTerm: '10–12 weeks ex-works', ourResponse: '10–12 weeks ex-works', decision: 'Undecided', customerConfirmationStatus: 'Not required', status: 'Deviation' },
       { term: 'Warranty', customerAsk: '18 months', ourResponse: '18 months from supply', status: 'Comply' },
     ],
   }
