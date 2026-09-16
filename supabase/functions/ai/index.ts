@@ -124,6 +124,18 @@ const vendorQuoteSchema = {
   },
   required: ['manufacturer', 'quoteRef', 'leadTime', 'notes', 'prices'],
 }
+
+const sparesMatchSchema = {
+  type: 'OBJECT',
+  properties: {
+    matches: arrOf({
+      type: 'OBJECT',
+      properties: { partNumber: STR, confidence: INT, reason: STR },
+      required: ['partNumber', 'confidence', 'reason'],
+    }),
+  },
+  required: ['matches'],
+}
 const conditionEvidenceSchema = {
   type: 'OBJECT',
   properties: {
@@ -442,6 +454,28 @@ gap names what is missing; evidence names where that gap shows up; q is the
 question as it would be written to the customer. Prioritize each listed
 commercial deviation and ask for confirmation of the exact proposed term. Do
 not ask generic questions when the information is already present.`,
+  },
+
+  // ---- Workbench: rank approved catalogue matches for one sourcing line
+  'spares.match': {
+    model: FLASH,
+    schema: sparesMatchSchema,
+    build: p => `${HOUSE}
+
+Rank the approved price-list candidates for this sourcing line. Return only
+candidates from the supplied list; never invent, complete, or alter a part
+number. A candidate must be technically plausible from the line description,
+customer reference and part-number evidence. Use confidence below 75 when the
+description is generic or the match is uncertain. Return at most 6 candidates,
+best first, with a concise reason naming the matching evidence. An AI suggestion
+is not a confirmation. Return an empty matches array when no candidate is
+reasonably supported.
+
+CURRENT SOURCING LINE:
+${cap(JSON.stringify(p.line || {}), 3000)}
+
+APPROVED PRICE-LIST CANDIDATES:
+${cap((p.candidates || []).map((c: any) => `${c.partNumber} | ${c.description} | ${c.list} ${c.version || ''}`).join('\n'), 30000) || '(none)'}`,
   },
 
   // ---- Workbench: match one customer reply to open clarification questions

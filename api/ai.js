@@ -102,6 +102,16 @@ const clarificationSuggestSchema = {
   required: ['rows'],
 }
 
+const sparesMatchSchema = {
+  type: 'OBJECT',
+  properties: {
+    matches: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+      partNumber: { type: 'STRING' }, confidence: { type: 'INTEGER' }, reason: { type: 'STRING' },
+    }, required: ['partNumber', 'confidence', 'reason'] } },
+  },
+  required: ['matches'],
+}
+
 const clarificationAnswerSchema = {
   type: 'OBJECT',
   properties: {
@@ -296,6 +306,25 @@ customer-facing question. Do not invent prices, dates, quantities, terms, or
 technical specifications.`
 }
 
+function sparesMatchPrompt(p) {
+  return `${HOUSE}
+
+Rank the approved price-list candidates for this sourcing line. Return only candidates
+from the supplied list; never invent, complete, or alter a part number. A candidate
+must be technically plausible from the line description, customer reference and
+part-number evidence. Use confidence below 75 when the description is generic or
+the match is uncertain. Return at most 6 candidates, best first, with a concise
+reason that names the matching evidence. An AI suggestion is not a confirmation.
+
+CURRENT SOURCING LINE:
+${cap(JSON.stringify(p.line || {}), 3000)}
+
+APPROVED PRICE-LIST CANDIDATES:
+${cap((p.candidates || []).map(c => `${c.partNumber} | ${c.description} | ${c.list} ${c.version || ''}`).join('\\n'), 30000) || '(none)'}
+
+Return an empty matches array when no candidate is reasonably supported.`
+}
+
 function clarificationAnswerPrompt(p) {
   return `${HOUSE}
 
@@ -439,15 +468,16 @@ export default async function handler(req, res) {
   const model = /^gemini-[\w.-]+$/.test(requestedModel)
     ? (MODEL_ALIASES[requestedModel] || requestedModel)
     : DEFAULT_MODEL
-  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'clarification.suggest', 'clarification.answer', 'approval.condition-evidence', 'template.map', 'proposal.review'].includes(task)) {
+  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'template.map', 'proposal.review'].includes(task)) {
     return fail(res, 400, 'AI_BAD_REQUEST', `Unsupported task: ${task}`)
   }
 
   const prompt = task === 'health' ? 'Reply with the single word: ok'
     : task === 'lead.fill' ? fillPrompt(payload)
       : task === 'vendor.quote' ? vendorQuotePrompt(payload)
-        : task === 'email.proposal' ? proposalEmailPrompt(payload)
-          : task === 'clarification.suggest' ? clarificationSuggestPrompt(payload)
+          : task === 'email.proposal' ? proposalEmailPrompt(payload)
+            : task === 'clarification.suggest' ? clarificationSuggestPrompt(payload)
+              : task === 'spares.match' ? sparesMatchPrompt(payload)
               : task === 'clarification.answer' ? clarificationAnswerPrompt(payload)
                 : task === 'approval.condition-evidence' ? conditionEvidencePrompt(payload)
                   : task === 'template.map' ? templateMappingPrompt(payload)
@@ -455,13 +485,14 @@ export default async function handler(req, res) {
                   : leadPrompt(payload)
   const requestBody = {
     contents: [{ parts: [{ text: prompt }, ...(['lead.extract', 'approval.condition-evidence'].includes(task) ? inlineParts(payload) : [])] }],
-    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'clarification.suggest', 'clarification.answer', 'approval.condition-evidence', 'template.map', 'proposal.review'].includes(task)
+    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'template.map', 'proposal.review'].includes(task)
       ? {
           responseMimeType: 'application/json',
           responseSchema: task === 'lead.fill' ? fillSchema
             : task === 'vendor.quote' ? vendorQuoteSchema
               : task === 'email.proposal' ? emailProposalSchema
                 : task === 'clarification.suggest' ? clarificationSuggestSchema
+                  : task === 'spares.match' ? sparesMatchSchema
                   : task === 'clarification.answer' ? clarificationAnswerSchema
                   : task === 'approval.condition-evidence' ? conditionEvidenceSchema
                     : task === 'template.map' ? templateMappingSchema

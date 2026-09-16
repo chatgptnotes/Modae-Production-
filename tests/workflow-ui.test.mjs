@@ -141,6 +141,21 @@ test('sourcing alternatives explain AI suggestions and zero-value confirmation i
   assert.match(spares, /Enter a positive list price/)
 })
 
+test('Compare loads AI-ranked candidates without auto-applying them', () => {
+  const spares = read('src/workbench/WbSpares.jsx')
+  const api = read('api/ai.js')
+  const edge = read('supabase/functions/ai/index.ts')
+  assert.match(spares, /runJson\('spares\.match'/)
+  assert.match(spares, /onClick=\{\(\) => openCompare\(line\)\}/)
+  assert.match(spares, /suggestedBy: 'AI'/)
+  assert.match(spares, /const part = byPartNumber\.get/)
+  assert.match(spares, /onClick=\{\(\) => useAlternative\(line, a\)\}/)
+  assert.match(api, /'spares\.match'/)
+  assert.match(api, /function sparesMatchPrompt/)
+  assert.match(edge, /'spares\.match': \{/)
+  assert.match(edge, /never invent, complete, or alter a part/)
+})
+
 test('invalid sourcing rows show a disabled pricing state instead of an action', () => {
   const spares = read('src/workbench/WbSpares.jsx')
   const styles = read('src/styles.css')

@@ -8,6 +8,7 @@ import { Icon } from '../icons.jsx'
 import { PRICE_SOURCES, formatPriceSource, isConfirmableSparesLine, normalizeMarkupPct, resolvePriceSource, sparesLineFinancials } from '../pricing.js'
 import { convertCurrency, currencySymbol, normalizedCurrencyRates } from '../currency.js'
 import { descriptionMatch, familyOf } from './sparesMatching.js'
+import { runTaskResult } from '../ai.js'
 
 const n = value => Number.isFinite(Number(value)) ? Number(value) : 0
 const money = value => `₹ ${fmt(n(value))}`
@@ -73,6 +74,9 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
   const proposal = store.getProposal(opp.id)
   const [compareFor, setCompareFor] = useState(null)
   const [compareSearch, setCompareSearch] = useState('')
+  const [aiSuggestions, setAiSuggestions] = useState([])
+  const [compareAiBusy, setCompareAiBusy] = useState(false)
+  const [compareAiError, setCompareAiError] = useState('')
   const [evidence, setEvidence] = useState(null)
   const [pricePreview, setPricePreview] = useState(null)
   const [sent, setSent] = useState(false)
@@ -81,6 +85,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
   const sourcingSheetWrapRef = useRef(null)
   const sourcingScrollbarRef = useRef(null)
   const sourcingScrollbarContentRef = useRef(null)
+  const compareRequestRef = useRef(0)
   useEffect(() => {
     store.dedupeSparesLines?.(opp.id)
     store.ensureSparesSupportLines?.(opp.id)
@@ -390,6 +395,52 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     const seen = new Set()
     return results.filter(a => (seen.has(a.pn) ? false : (seen.add(a.pn), true))).slice(0, 6)
   }
+  const loadAiSuggestions = async line => {
+    const requestId = ++compareRequestRef.current
+    setCompareAiBusy(true)
+    setCompareAiError('')
+    setAiSuggestions([])
+    const allParts = allPriceListParts()
+    const preferred = priceListAlternatives(line)
+      .map(alternative => allParts.find(part => part.pn === alternative.pn))
+      .filter(Boolean)
+    const candidates = [...preferred, ...allParts.filter(part => !preferred.some(item => item.pn === part.pn))].slice(0, 160)
+    try {
+      const aiResult = await runTaskResult('spares.match', {
+        line: { pn: line.pn || '', customerReference: line.custRef || '', description: line.desc || '', quantity: line.qty || 0 },
+        candidates: candidates.map(part => ({ partNumber: part.pn, description: part.desc, list: part.list, version: part.version })),
+      }, { fallback: store.config?.aiModel?.provider === 'Built-in fallback' })
+      const result = aiResult?.data
+      if (!result) {
+        setCompareAiError(aiResult?.error || 'AI suggestions are unavailable in this environment. Search the approved price lists manually.')
+        return
+      }
+      const byPartNumber = new Map(candidates.map(part => [String(part.pn || '').trim().toUpperCase(), part]))
+      const seen = new Set()
+      const matches = (Array.isArray(result?.matches) ? result.matches : [])
+        .map(match => {
+          const part = byPartNumber.get(String(match.partNumber || '').trim().toUpperCase())
+          if (!part || seen.has(part.pn)) return null
+          seen.add(part.pn)
+          return {
+            forPn: line.pn, pn: part.pn, desc: part.desc,
+            conf: Math.max(0, Math.min(100, Number(match.confidence) || 0)),
+            reason: String(match.reason || 'AI identified a possible catalogue match.'),
+            note: listPriceLabel(part), priceState: 'Current', suggestedBy: 'AI',
+          }
+        }).filter(Boolean).slice(0, 6)
+      if (requestId === compareRequestRef.current) setAiSuggestions(matches)
+    } catch (error) {
+      if (requestId === compareRequestRef.current) setCompareAiError(`AI suggestions unavailable: ${error?.message || String(error)}`)
+    } finally {
+      if (requestId === compareRequestRef.current) setCompareAiBusy(false)
+    }
+  }
+  const openCompare = line => {
+    setCompareFor(line.id)
+    setCompareSearch('')
+    loadAiSuggestions(line)
+  }
   const useAlternative = (line, alt) => {
     const resolved = resolvePriceSource({ pn: alt.pn }, store.priceLists, [], store.vendorQuotes)
     const priced = resolved && resolved.price > 0 ? {
@@ -443,7 +494,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
             <td className="num">{comm ? displayMoney(row.adjustedUnitPrice) : <span className="restricted"><Icon name="lock" size={11} /></span>}</td>
             <td className="num"><EditableNumber className={`sourcing-base-cost-input ${line.baseCost == null || n(line.baseCost) <= 0 || row.adjustedUnitPrice < row.baseCost ? 'is-warning' : ''}`} value={Math.round(displayAmount(row.baseCost))} label={`Base cost for ${line.pn || line.id}`} disabled={!comm} onChange={value => store.updateSparesLine(line.id, { baseCost: Math.max(0, convertCurrency(value, displayCurrency, 'INR', costing.currencyRates)) })} /></td>
             <td className="num">{comm ? displayMoney(row.listTotal) : '—'}</td><td className="num"><b>{comm ? displayMoney(row.lineTotal) : '—'}</b></td>
-            <td className="sourcing-cell-actions align-top p-2">{comm && <div className="sourcing-row-actions">{line.confirmed && confirmable ? <Chip tone="state-Accepted" title="Sourcing line confirmed"><Icon name="check" size={11} /> CONFIRMED</Chip> : confirmable ? <button type="button" className="primary sourcing-row-action sourcing-row-action--confirm" title="Confirm sourcing line" aria-label={`Confirm ${line.pn || line.id}`} onClick={() => store.updateSparesLine(line.id, { confirmed: true })}><Icon name="check" size={12} /> Confirm</button> : <button type="button" className="sourcing-row-action sourcing-row-action--confirm sourcing-row-action--disabled" disabled title={`${invalidState}: enter a positive ${row.qty <= 0 ? 'quantity' : 'list price'}`} aria-label={`${invalidState} for ${line.pn || line.id}`}><Icon name="lock" size={12} /> {invalidState}</button>}<button type="button" className="sourcing-row-action sourcing-row-action--compare" title="Compare sourcing alternatives" aria-label={`Compare alternatives for ${line.pn || line.id}`} onClick={() => { setCompareFor(line.id); setCompareSearch('') }}><Icon name="gitCompare" size={14} /> Compare</button></div>}</td>
+            <td className="sourcing-cell-actions align-top p-2">{comm && <div className="sourcing-row-actions">{line.confirmed && confirmable ? <Chip tone="state-Accepted" title="Sourcing line confirmed"><Icon name="check" size={11} /> CONFIRMED</Chip> : confirmable ? <button type="button" className="primary sourcing-row-action sourcing-row-action--confirm" title="Confirm sourcing line" aria-label={`Confirm ${line.pn || line.id}`} onClick={() => store.updateSparesLine(line.id, { confirmed: true })}><Icon name="check" size={12} /> Confirm</button> : <button type="button" className="sourcing-row-action sourcing-row-action--confirm sourcing-row-action--disabled" disabled title={`${invalidState}: enter a positive ${row.qty <= 0 ? 'quantity' : 'list price'}`} aria-label={`${invalidState} for ${line.pn || line.id}`}><Icon name="lock" size={12} /> {invalidState}</button>}<button type="button" className="sourcing-row-action sourcing-row-action--compare" title="Compare sourcing alternatives" aria-label={`Compare alternatives for ${line.pn || line.id}`} onClick={() => openCompare(line)}><Icon name="gitCompare" size={14} /> Compare</button></div>}</td>
           </tr> })}
           {comm && showAddPart && <tr id="sourcing-manual-line" className="sourcing-manual-row">
             <td><input aria-label="Manual part number" placeholder="Part number" value={newLine.pn} onKeyDown={onNewKeyDown} onChange={e => setNewLine({ ...newLine, pn: e.target.value })} /></td>
@@ -476,11 +527,11 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     {compareFor && (() => {
       const line = lines.find(x => x.id === compareFor)
       if (!line) return null
-      const close = () => { setCompareFor(null); setCompareSearch('') }
+      const close = () => { setCompareFor(null); setCompareSearch(''); setAiSuggestions([]); setCompareAiError('') }
       const searchResults = searchPriceListParts(line, compareSearch)
       const curated = store.sparesAlternatives.filter(a => a.forPn === line.pn)
       const fromPriceLists = priceListAlternatives(line).filter(a => !curated.some(c => c.pn === a.pn))
-      const suggested = [...curated, ...fromPriceLists]
+      const suggested = [...aiSuggestions, ...curated, ...fromPriceLists].filter((item, index, all) => all.findIndex(other => other.pn === item.pn) === index)
       const renderAlt = a => { const src = altSourceInfo(a); const isAiSuggested = a.suggestedBy === 'AI'; const reason = a.reason || a.note || 'Configured interchangeability evidence.'; return <div key={a.pn} className="compare-alt-row">
         <div className="compare-alt-info">
           <div className="compare-alt-header">
@@ -498,9 +549,11 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
       </div> }
       return <Modal title={`Compare / select alternative — ${line.pn}`} onClose={close} wide>
         <input type="text" placeholder="Search all price lists by part number or description…" value={compareSearch} onChange={e => setCompareSearch(e.target.value)} style={{ width: '100%', marginBottom: 10, padding: '6px 8px' }} autoFocus />
+        {compareAiBusy && !compareSearch.trim() && <div className="hint compare-ai-status">AI is checking the approved price lists for likely matches…</div>}
+        {compareAiError && !compareSearch.trim() && <div className="hint compare-ai-status">{compareAiError} Use the search box below to find and confirm a catalogue part.</div>}
         {compareSearch.trim()
           ? <>{searchResults.map(renderAlt)}{!searchResults.length && <p className="hint">No price-list parts match "{compareSearch}".</p>}</>
-          : <>{suggested.map(renderAlt)}{!suggested.length && <p className="hint">No catalogued alternatives or similar price-list parts found for this part — search above, confirm the match, or add a manual line.</p>}</>}
+          : <>{aiSuggestions.length > 0 && <div className="compare-ai-heading">AI-ranked suggestions</div>}{suggested.map(renderAlt)}{!suggested.length && !compareAiBusy && <p className="hint">No catalogued alternatives or similar price-list parts found for this part — search above, confirm the match, or add a manual line.</p>}</>}
         <div style={{ marginTop: 10, textAlign: 'right' }}><button onClick={close}>Close</button></div>
       </Modal>
     })()}
