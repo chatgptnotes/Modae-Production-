@@ -36,7 +36,7 @@ import ServiceDecisionPanel from '../workbench/ServiceDecisionPanel.jsx'
 import ServiceExecutionPanel from '../workbench/ServiceExecutionPanel.jsx'
 import ServiceReportPanel from '../workbench/ServiceReportPanel.jsx'
 import ServiceInvoicePanel from '../workbench/ServiceInvoicePanel.jsx'
-import { isCommercialConfirmationRow, isDeliveryBasisClarification, isLegacyCommercialClarification, sourceContainsDeliveryRequirement } from '../commercialTerms.js'
+import { COMMERCIAL_DECISIONS, CUSTOMER_CONFIRMATION_STATUSES, isCommercialConfirmationRow, isDeliveryBasisClarification, isLegacyCommercialClarification, needsCommercialApproval, normalizeCommercialTerm, sourceContainsDeliveryRequirement } from '../commercialTerms.js'
 
 const statusPill = s =>
   s === 'Approved' ? 'Green' : s === 'Rejected' ? 'Red' : s === 'Approved with conditions' ? 'Amber' : 'Blue'
@@ -566,9 +566,62 @@ function SparesIntakeTab({ opp, detailsRef }) {
   return <RegistrationTab opp={opp} detailsRef={detailsRef} spares />
 }
 
+function CommercialDecisionPanel({ opp }) {
+  const store = useStore()
+  const proposal = store.getProposal(opp.id)
+  const deviations = (proposal.terms || []).filter(term => term.status === 'Deviation')
+  if (!deviations.length) return null
+
+  const saveTerms = terms => store.saveProposal(opp.id, { ...proposal, terms })
+  const setDecision = (index, decision) => saveTerms((proposal.terms || []).map((term, termIndex) => termIndex === index
+    ? normalizeCommercialTerm({
+      ...term,
+      decision,
+      ourResponse: decision === 'Offer customer request' ? term.customerAsk : (term.proposedTerm || term.standardTerm || term.ourResponse),
+      customerConfirmationStatus: decision === 'Counter' ? 'Awaiting reply' : 'Not required',
+    })
+    : term))
+  const setConfirmation = (index, status) => saveTerms((proposal.terms || []).map((term, termIndex) => termIndex === index
+    ? normalizeCommercialTerm({ ...term, customerConfirmationStatus: status })
+    : term))
+  const setProposedTerm = (index, value) => saveTerms((proposal.terms || []).map((term, termIndex) => termIndex === index
+    ? normalizeCommercialTerm({ ...term, proposedTerm: value, ourResponse: value })
+    : term))
+
+  return (
+    <section className="workbench-panel commercial-decision-panel" aria-label="Commercial decisions">
+      <div className="workbench-section-title">Commercial decision required</div>
+      <p className="hint">Decide how ModAE will respond to each customer commercial request before moving to Sourcing.</p>
+      <div className="commercial-decision-list">
+        {deviations.map(term => {
+          const index = proposal.terms.indexOf(term)
+          return <div className="route-template-row" key={`commercial-decision-${index}`}>
+            <b>{term.term || `Term ${index + 1}`}</b>
+            <span>Customer requested: {term.customerAsk || 'Not recorded'} · ModAE standard: {term.standardTerm || term.ourResponse || 'Not recorded'}</span>
+            <label>Decision <select value={term.decision || 'Undecided'} onChange={e => setDecision(index, e.target.value)}>
+              {COMMERCIAL_DECISIONS.map(option => <option key={option}>{option}</option>)}
+            </select></label>
+            {term.decision === 'Counter' && <>
+              <label>Counter offer <input value={term.proposedTerm || term.ourResponse || ''} onChange={e => setProposedTerm(index, e.target.value)} /></label>
+              <label>Customer response <select value={term.customerConfirmationStatus || 'Awaiting reply'} onChange={e => setConfirmation(index, e.target.value)}>
+                {CUSTOMER_CONFIRMATION_STATUSES.filter(status => status !== 'Not required').map(status => <option key={status}>{status}</option>)}
+              </select></label>
+              <span className="hint">Customer confirmation will be tracked in Follow-up.</span>
+            </>}
+            {term.decision === 'Offer customer request' && <span className="hint">Internal Commercial Approval Required — request approval before quotation submission.</span>}
+            {(!term.decision || term.decision === 'Undecided') && <span className="err">Choose Offer customer request or Counter.</span>}
+          </div>
+        })}
+      </div>
+      {deviations.some(needsCommercialApproval) && <div className="warnbox">One or more requested terms need internal approval before the quotation can be submitted.</div>}
+    </section>
+  )
+}
+
 function SparesRequirementTab({ opp, sourceText = '' }) {
   return (
     <div className="spares-merged-workflow">
+      <CommercialDecisionPanel opp={opp} />
       <div className="workbench-panel">
         <div className="workbench-section-title">Clarifications first</div>
         <p className="hint">Resolve missing customer information before sourcing. Answered questions are retained as audit evidence.</p>

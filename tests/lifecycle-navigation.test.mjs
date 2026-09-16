@@ -63,6 +63,15 @@ test('Spares requirement validation leads with actionable clarifications', () =>
   assert.match(workbench, /clarification-cards/)
 })
 
+test('commercial decisions appear before sourcing, not inside the proposal editor', () => {
+  const proposal = fs.readFileSync(path.join(root, 'src/pages/Proposal.jsx'), 'utf8')
+  const decision = workbench.indexOf('Commercial decision required')
+  const clarifications = workbench.indexOf('Clarifications first')
+  assert.ok(decision >= 0 && decision < clarifications, 'commercial decisions should lead Requirement Validation')
+  assert.match(workbench, /<CommercialDecisionPanel opp=\{opp\} \/>/)
+  assert.doesNotMatch(proposal, /Commercial decision and confirmation/)
+})
+
 test('progress stepper grid follows visible workflow step count', () => {
   const styles = fs.readFileSync(path.join(root, 'src/styles.css'), 'utf8')
   assert.match(styles, /grid-template-columns: repeat\(var\(--progress-step-count, 10\), minmax\(64px, 1fr\)\)/)

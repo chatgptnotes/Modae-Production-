@@ -29,7 +29,7 @@ import { clausesFor, clauseWarnings } from '../clauses.js'
 import { fromInr } from '../currency.js'
 import { reviewFindingKey } from '../approvalMemory.js'
 import OpportunityComingSoon from '../workbench/OpportunityComingSoon.jsx'
-import { COMMERCIAL_DECISIONS, CUSTOMER_CONFIRMATION_STATUSES, needsCommercialApproval, normalizeCommercialTerm } from '../commercialTerms.js'
+import { normalizeCommercialTerm } from '../commercialTerms.js'
 
 const ROUTE_TABS = {
   Project: ['Cover Letter', 'Edit Sheet', 'Document', 'Signal List', 'Rack Layout', 'Priced BoQ'],
@@ -791,15 +791,6 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   }
 
   const updTerm = (i, k) => e => save({ ...p, terms: p.terms.map((t, j) => (j === i ? normalizeCommercialTerm({ ...t, [k]: e.target.value }) : t)) })
-  const setCommercialDecision = (i, decision) => {
-    const terms = p.terms.map((term, j) => j === i ? normalizeCommercialTerm({
-      ...term, decision,
-      ourResponse: decision === 'Offer customer request' ? term.customerAsk : (term.proposedTerm || term.standardTerm || term.ourResponse),
-      customerConfirmationStatus: decision === 'Counter' ? 'Awaiting reply' : 'Not required',
-    }) : term)
-    save({ ...p, terms })
-  }
-  const setCustomerConfirmation = (i, status) => save({ ...p, terms: p.terms.map((term, j) => j === i ? normalizeCommercialTerm({ ...term, customerConfirmationStatus: status }) : term) })
   const addTerm = () => save({ ...p, terms: [...p.terms, { term: '', customerAsk: '', ourResponse: '', status: 'Comply', decision: 'Compliant', customerConfirmationStatus: 'Not required' }] })
   const routeScope = opp.international || opp.location === 'International' ? 'international' : 'domestic'
   const availableClauses = clausesFor(store.config?.clauses, route === 'Service' ? 'Services' : route, routeScope)
@@ -1325,26 +1316,6 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
             </tbody>
           </table>
           <button onClick={addTerm} className="no-print">+ Add term</button>
-          {p.terms.some(t => t.status === 'Deviation') && <section className="form-card commercial-decision-panel" aria-label="Commercial decisions">
-            <div className="section-title">Commercial decision and confirmation</div>
-            <p className="hint">Customer requests are recorded here. Choose whether ModAE will offer the request or counter with the proposed ModAE term.</p>
-            {p.terms.map((t, i) => t.status !== 'Deviation' ? null : <div className="route-template-row" key={`decision-${i}`}>
-              <b>{t.term || `Term ${i + 1}`}</b>
-              <span>Customer requested: {t.customerAsk || 'Not recorded'} · ModAE standard: {t.standardTerm || 'Not recorded'}</span>
-              <label>Decision <select value={t.decision || 'Undecided'} onChange={e => setCommercialDecision(i, e.target.value)}>
-                {COMMERCIAL_DECISIONS.map(option => <option key={option}>{option}</option>)}
-              </select></label>
-              {t.decision === 'Counter' && <>
-                <label>Proposed counter <input value={t.proposedTerm || t.ourResponse || ''} onChange={updTerm(i, 'proposedTerm')} /></label>
-                <label>Customer confirmation <select value={t.customerConfirmationStatus || 'Awaiting reply'} onChange={e => setCustomerConfirmation(i, e.target.value)}>
-                  {CUSTOMER_CONFIRMATION_STATUSES.filter(status => status !== 'Not required').map(status => <option key={status}>{status}</option>)}
-                </select></label>
-                <span className="hint">Commercial Confirmation Required — customer response is tracked in Follow-up.</span>
-              </>}
-              {t.decision === 'Offer customer request' && <span className="hint">Internal Commercial Approval Required — {needsCommercialApproval(t) ? 'request approval before dispatch.' : ''}</span>}
-              {t.decision === 'Undecided' && <span className="err">Select a commercial decision before approval.</span>}
-            </div>)}
-          </section>}
           <section className="form-card proposal-clause-library" aria-label="Terms and conditions clause library">
             <div className="section-title">Terms &amp; conditions clauses</div>
             <p className="hint">Select and order the clauses that will be printed. Required or changed clauses are shown before submission.</p>
