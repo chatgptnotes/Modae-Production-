@@ -4,7 +4,7 @@ import {
   normalizeCommercialTerm, needsCommercialApproval, needsCommercialDecision,
   isCounterAwaitingCustomer, commercialApprovalDetails,
   isLegacyCommercialClarification, isCommercialConfirmationRow,
-  isDeliveryBasisClarification, sourceContainsDeliveryRequirement,
+  isDeliveryBasisClarification, sourceContainsDeliveryRequirement, commercialTermsFromLead,
 } from '../src/commercialTerms.js'
 import { oppBlockers } from '../src/gates.js'
 
@@ -49,4 +49,15 @@ test('offering the requested exception creates approval context', () => {
   assert.deepEqual(commercialApprovalDetails([term]), [{
     term: 'Payment', customerAsk: '90 days credit', ourResponse: '90 days credit', standardTerm: '30 days from invoice',
   }])
+})
+
+test('lead extraction becomes proposal terms with evidence', () => {
+  const terms = commercialTermsFromLead({ ai: { fields: [
+    { group: 'Commercial', k: 'Payment Terms', v: '90 days credit', conf: 96, ev: 'Customer email' },
+  ] } })
+  assert.equal(terms.length, 1)
+  assert.equal(terms[0].term, 'Payment')
+  assert.equal(terms[0].status, 'Deviation')
+  assert.equal(terms[0].decision, 'Undecided')
+  assert.equal(terms[0].evidence, 'Customer email')
 })

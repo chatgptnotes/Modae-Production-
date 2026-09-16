@@ -55,3 +55,49 @@ export const commercialApprovalDetails = terms => (terms || [])
     ourResponse: term.decision === 'Offer customer request' ? term.customerAsk : (term.proposedTerm || term.ourResponse || term.customerAsk),
     standardTerm: term.standardTerm,
   }))
+
+const LEAD_STANDARD_TERMS = {
+  payment: { standard: 'Advance / 30 days from invoice preferred', judge: value => (/after|receipt of material|installation|commissioning/i.test(value) || Number(value.match(/(\d+)\s*days?/i)?.[1] || 0) > 30) ? 'Deviation' : 'Comply', response: '30 days from invoice' },
+  delivery: { standard: '10–12 weeks ex-works for imported sensor items', judge: value => Number(value.match(/(\d+)\s*weeks?/i)?.[1] || 0) > 0 && Number(value.match(/(\d+)\s*weeks?/i)?.[1] || 0) < 10 ? 'Deviation' : 'Comply', response: '10–12 weeks ex-works' },
+  warranty: { standard: '18 months from supply / 12 months from installation', judge: value => Number(value.match(/(\d+)\s*months?/i)?.[1] || 0) > 18 ? 'Deviation' : 'Comply', response: '18 months from supply' },
+  freight: { standard: 'Freight-paid delivery to the named consignee', judge: () => 'Comply', response: 'Freight-paid delivery to the named consignee' },
+  validity: { standard: '30 days from proposal date', judge: value => Number(value.match(/(\d+)\s*days?/i)?.[1] || 0) < 30 ? 'Deviation' : 'Comply', response: '30 days from proposal date' },
+}
+const standardFor = key => LEAD_STANDARD_TERMS[key]
+const termKeyFor = value => {
+  const text = String(value || '')
+  if (/payment|credit|invoice/i.test(text)) return 'payment'
+  if (/delivery|lead\s*time|dispatch/i.test(text)) return 'delivery'
+  if (/warranty|guarantee|defect/i.test(text)) return 'warranty'
+  if (/freight|incoterm|shipping/i.test(text)) return 'freight'
+  if (/validity|offer\s+valid/i.test(text)) return 'validity'
+  return ''
+}
+
+// Lead extraction stores customer-supported values in AI fields. Convert only
+// those fields into proposal terms; never fill an absent customer request from
+// ModAE defaults or demo data.
+export const commercialTermsFromLead = lead => {
+  const fields = [...(lead?.ai?.fields || []), ...(lead?.commercialTerms || [])]
+  const seen = new Set()
+  return fields.flatMap(field => {
+    const key = field.key || termKeyFor(field.k || field.term || field.label)
+    const value = String(field.value || field.v || field.customerAsk || '').trim()
+    const rule = standardFor(key)
+    if (!key || !value || !rule || seen.has(key)) return []
+    seen.add(key)
+    const status = rule.judge(value)
+    return [{
+      key,
+      term: key === 'payment' ? 'Payment' : key === 'delivery' ? 'Delivery' : rule.label,
+      customerAsk: value,
+      standardTerm: rule.standard,
+      proposedTerm: rule.response,
+      ourResponse: rule.response,
+      status,
+      decision: status === 'Deviation' ? 'Undecided' : 'Compliant',
+      customerConfirmationStatus: 'Not required',
+      evidence: field.evidence || field.ev || field.source || 'Customer lead',
+    }]
+  })
+}

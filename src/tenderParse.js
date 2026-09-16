@@ -374,9 +374,11 @@ export function parseTender(fullText, struct = null) {
     compliance.push({
       key: std.key, label: std.label,
       customerAsk: firstSentence(src),
+      standardTerm: std.standard,
       ourResponse: verdict.ourResponse,
       status: verdict.status,
       needsReview: !!verdict.needsReview,
+      evidence: src,
       clauseRef: clause ? `Clause ${clause.n}` : 'Tender notes',
     })
   }
@@ -531,7 +533,11 @@ export function buildProposal(oppId, opp, parse, matched) {
     })),
     terms: parse.compliance.map(c => ({
       key: c.key, clauseRef: c.clauseRef,
-      term: c.label, customerAsk: c.customerAsk, ourResponse: c.ourResponse, status: c.status,
+      term: c.key === 'payment' ? 'Payment' : c.key === 'delivery' ? 'Delivery' : c.label,
+      customerAsk: c.customerAsk, standardTerm: c.standardTerm,
+      proposedTerm: c.ourResponse, ourResponse: c.ourResponse, status: c.status,
+      decision: c.status === 'Deviation' ? 'Undecided' : 'Compliant',
+      customerConfirmationStatus: 'Not required', evidence: c.evidence,
     })),
   }
 }

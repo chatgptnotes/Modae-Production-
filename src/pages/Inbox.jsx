@@ -28,6 +28,7 @@ import {
 import { leadVerificationComplete, verificationDeadline, verificationItem, verificationSnapshot, redClearanceFor, isRedCleared } from '../leadVerification.js'
 import { checklistFor } from '../customerClasses.js'
 import { kycIdentityKey, simulatedKycValue, validateKycValue } from '../kycValidation.js'
+import { commercialTermsFromLead } from '../commercialTerms.js'
 import { downloadKycTemplate } from '../kycTemplate.js'
 import { PROJECT_TYPES, oppTypesForProjectType, templatesForSelection, simulatedLead, simulatedCount, SIMULATED_CUSTOMER_SCENARIOS } from '../simulatedLeads.js'
 import { buildLeadProposalData } from '../leadBoq.js'
@@ -81,7 +82,8 @@ function createOpportunityFromLeadPage({ store, lead, fields, decision, customer
     const proposal = newProposal(id, opp, { validityDays: store.config?.proposalValidityDays })
     store.saveProposal(id, { ...proposal, rfqNumber: opp.rfqNumber, subject: lead.subject || proposal.subject,
       project: lead.subject || proposal.project, kindAttn: decision.contactPerson || proposal.kindAttn,
-      units: 1, ...(bom.length ? { leadImportId: lead.id } : {}), bom, extractedItems: extracted })
+      units: 1, terms: commercialTermsFromLead(lead),
+      ...(bom.length ? { leadImportId: lead.id } : {}), bom, extractedItems: extracted })
   }
   store.linkLeadApprovals(lead.id, id)
   if (!customer) store.addCustomer({ name: sellTo, category, status: customerStatus, kyc: 'Pending', payment: '—' })
