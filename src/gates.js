@@ -11,6 +11,7 @@ import { defaultCosting, MILESTONES } from './seed.js'
 import { applyAdjustment, normalizeMarkupPct } from './pricing.js'
 import { isPlaceholderSparesLine } from './proposal/sparesBoq.js'
 import { classRule, classOrder, noExceptionKeys } from './customerClasses.js'
+import { needsCommercialApproval, needsCommercialDecision, commercialApprovalDetails, isLegacyCommercialClarification } from './commercialTerms.js'
 
 // A lead-stage verification snapshot of the shape this class records satisfies
 // the opportunity-stage gate — the salesperson is not asked to verify twice.
@@ -186,6 +187,14 @@ export function readiness(opp, proposal, state) {
         b.push({ key: 'survey-sow', severity: 'block', text: 'Statement of Work must be written up from the survey report' })
       }
     }
+    const serviceReview = (state.approvals || []).find(a => a.oppId === opp.id && a.type === 'Service offer review' && a.status !== 'Cancelled')
+    if (!serviceReview || !['Approved', 'Approved with conditions'].includes(serviceReview.status)) {
+      b.push({
+        key: 'service-review', severity: serviceReview?.status === 'Pending' ? 'wait' : 'block',
+        text: serviceReview?.status === 'Pending' ? 'Service offer review is awaiting AH + LJS' : 'One Service offer review is required before the proposal can proceed',
+        approvalType: 'Service offer review', approver: 'AH', needed: ['AH', 'LJS'], anyOf: false,
+      })
+    }
   }
 
 
@@ -264,7 +273,11 @@ export function oppBlockers(opp, proposal, approvals, config = null) {
     }
   }
 
-  const devs = (proposal?.terms || []).filter(t => t.status === 'Deviation')
+  const devs = (proposal?.terms || []).filter(needsCommercialApproval)
+  const undecided = (proposal?.terms || []).filter(needsCommercialDecision)
+  if (undecided.length) {
+    b.push({ key: 'commercial-decision', severity: 'block', text: `Choose Offer customer request or Counter for ${undecided.map(d => d.term).join(', ')} before approval.` })
+  }
   if (devs.length && !hasApproved('Commercial deviation')) {
     if (hasOpen('Commercial deviation')) {
       b.push({ key: 'dev-wait', severity: 'wait', text: 'Commercial-deviation approval awaiting AH decision.' })
@@ -272,7 +285,7 @@ export function oppBlockers(opp, proposal, approvals, config = null) {
       b.push({
         key: 'dev', severity: 'block',
         text: `${devs.length} commercial deviation${devs.length > 1 ? 's' : ''} (${devs.map(d => d.term).join(', ')}) need${devs.length > 1 ? '' : 's'} approval before submission.`,
-        approvalType: 'Commercial deviation', approver: 'AH',
+        approvalType: 'Commercial deviation', approver: 'AH', deviationDetails: commercialApprovalDetails(proposal?.terms),
       })
     }
   }
@@ -366,6 +379,15 @@ export function approvalSet(proposal, approvals, oppId) {
   }))
 }
 
+export function serviceApprovalSet(approvals, oppId) {
+  const mine = (approvals || []).filter(a => a.oppId === oppId && a.type === 'Service offer review')
+  return [{
+    type: 'Service offer review',
+    pending: mine.find(a => a.status === 'Pending') || null,
+    approved: mine.find(a => ['Approved', 'Approved with conditions'].includes(a.status)) || null,
+  }]
+}
+
 // Forward lifecycle movement is deliberately stricter than proposal
 // readiness. This is the single gate used by the opportunity stepper so a
 // user cannot jump over the lead-management requirements in the official
@@ -412,7 +434,7 @@ export function transitionBlockers(opp, target, proposal, state) {
     }
   }
 
-  const clarifications = (state.clarifications || []).filter(c => c.oppId === opp.id)
+  const clarifications = (state.clarifications || []).filter(c => c.oppId === opp.id && !isLegacyCommercialClarification(c))
   if (next >= MILESTONES.indexOf('Sourcing') && clarifications.some(c => ['Draft', 'Open', 'Sent', 'Needs review'].includes(c.status))) {
     b.push({ key: 'clarifications', severity: 'block', text: `All customer clarifications must be resolved before moving to ${target}` })
   }
@@ -451,7 +473,9 @@ export function transitionBlockers(opp, target, proposal, state) {
   if (next >= MILESTONES.indexOf('Submitted')) {
     // §5A is drawn as "LJS OR AN" and §5B as "AH ONLY", so 5A names both roles
     // and marks itself `anyOf` — either technical approver alone clears it.
-    const gates = [
+    const gates = opp?.route === 'Service' ? [
+      { type: 'Service offer review', key: 'service-review', label: 'Service offer review', approver: 'AH', needed: ['AH', 'LJS'] },
+    ] : [
       // Spares are priced from the approved catalogue and do not need the
       // technical-review gate in phase one. Keep the gate for engineered
       // Project and Services work.

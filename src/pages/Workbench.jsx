@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, REVISION_TYPES, DEFAULT_WORKFLOW } from '../seed.js'
+import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, REVISION_TYPES, DEFAULT_WORKFLOW, isWorkflowAvailable } from '../seed.js'
 import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY, gmailComposeHref, displayRole, displayRoles, displayRoleLabel, formatISTDateTime } from '../utils.js'
 import { pricingThresholdExceptions, readiness, isBlocked, nextActionWith, transitionBlockers } from '../gates.js'
 import { COMMERCIAL_RX, ConditionCompletion } from './Approvals.jsx'
@@ -30,6 +30,11 @@ import { isPlaceholderSparesLine, isSparesSupportRow, catalogueDescriptionForLin
 import { recipientsValid } from '../emailValidation.js'
 import { downloadKycTemplate } from '../kycTemplate.js'
 import { leadIdentity, leadFieldValue } from '../leadFieldMapping.js'
+import { verificationItem } from '../leadVerification.js'
+import OpportunityComingSoon from '../workbench/OpportunityComingSoon.jsx'
+import ServiceDecisionPanel from '../workbench/ServiceDecisionPanel.jsx'
+import ServiceExecutionPanel from '../workbench/ServiceExecutionPanel.jsx'
+import { isDeliveryBasisClarification, isLegacyCommercialClarification, sourceContainsDeliveryRequirement } from '../commercialTerms.js'
 
 const statusPill = s =>
   s === 'Approved' ? 'Green' : s === 'Rejected' ? 'Red' : s === 'Approved with conditions' ? 'Amber' : 'Blue'
@@ -59,12 +64,12 @@ const LIFECYCLE_TABS = {
   Intake: 'overview',
   Qualification: 'requirement',
   'Customer/KYC': 'customer',
-  Registration: 'customer',
+  Registration: 'registration',
   Screening: 'requirement',
   Clarification: 'clarifications',
   Sourcing: 'sourcing',
   Proposal: 'proposal',
-  Approval: 'approvals',
+  Approval: 'approval',
   'PO Validation': 'po',
   Handover: 'po',
   Submitted: 'overview',
@@ -75,7 +80,7 @@ const WORKFLOW_STEPS = [
   { slug: 'intake', label: 'Intake', tab: 'overview' },
   { slug: 'qualification', label: 'Qualification', tab: 'requirement' },
   { slug: 'customer-kyc', label: 'Customer/KYC', tab: 'customer' },
-  { slug: 'registration', label: 'Registration', tab: 'customer' },
+  { slug: 'registration', label: 'Registration', tab: 'registration' },
   { slug: 'screening', label: 'Screening', tab: 'requirement' },
   { slug: 'clarification', label: 'Clarification', tab: 'clarifications' },
   { slug: 'sourcing', label: 'Sourcing', tab: 'sourcing' },
@@ -86,7 +91,28 @@ const WORKFLOW_STEPS = [
 
 const WORKFLOW_STEP_BY_SLUG = Object.fromEntries(WORKFLOW_STEPS.map(step => [step.slug, step]))
 const WORKFLOW_STEP_BY_TAB = Object.fromEntries(WORKFLOW_STEPS.map(step => [step.tab, step.slug]))
-const workflowStepsFor = config => {
+const SPARES_WORKFLOW_STEPS = [
+  { slug: 'intake', label: 'Opportunity Intake', milestone: 'Intake', milestones: ['Intake', 'Registration'], tabs: ['overview', 'registration'], tab: 'overview' },
+  { slug: 'customer-kyc', label: 'Customer Verification', milestone: 'Customer/KYC', milestones: ['Customer/KYC'], tab: 'customer' },
+  { slug: 'requirement-validation', label: 'Requirement Validation', milestone: 'Screening', milestones: ['Screening', 'Clarification', 'Qualification'], tabs: ['requirement', 'clarifications'], tab: 'requirement-validation' },
+  { slug: 'sourcing', label: 'Spares Sourcing', milestone: 'Sourcing', tab: 'sourcing' },
+  { slug: 'proposal', label: 'Quotation Preparation', milestone: 'Proposal', tab: 'proposal' },
+  { slug: 'approval', label: 'Approval', milestone: 'Approval', tab: 'approval' },
+  { slug: 'submitted', label: 'Quotation Submission', milestone: 'Submitted', tab: 'comms' },
+  { slug: 'follow-up', label: 'Follow-up & Closure', milestone: 'Follow-up', tab: 'followup' },
+]
+const SERVICE_WORKFLOW_STEPS = [
+  { slug: 'service-intake', label: 'Service Intake', milestone: 'Intake', tab: 'overview', servicePhase: 0 },
+  { slug: 'service-capture', label: 'Capture Enquiry', milestone: 'Qualification', tab: 'requirement', servicePhase: 1 },
+  { slug: 'service-scope', label: 'Scope & Survey', milestone: 'Screening', tab: 'sourcing', servicePhase: 2 },
+  { slug: 'service-offer', label: 'Choose Offer', milestone: 'Proposal', tab: 'proposal', servicePhase: 3 },
+  { slug: 'service-review', label: 'Internal Review', milestone: 'Approval', tab: 'approval', servicePhase: 4 },
+  { slug: 'service-decision', label: 'Customer Decision', milestone: 'Submitted', tab: 'service-decision', servicePhase: 5 },
+  { slug: 'service-execution', label: 'Execute & Invoice', milestone: 'Follow-up', tab: 'service-execution', servicePhase: 6 },
+]
+const workflowStepsFor = (config, route) => {
+  if (route === 'Spares') return SPARES_WORKFLOW_STEPS
+  if (route === 'Service') return SERVICE_WORKFLOW_STEPS
   const configured = Array.isArray(config?.workflow) && config.workflow.length
     ? [...config.workflow].sort((a, b) => a.order - b.order)
     : DEFAULT_WORKFLOW
@@ -131,7 +157,7 @@ function OpportunityProgress({ activeStep, completedThrough, onStep, onNext, ste
           </button>
         </div>
       </div>
-      <div className="progress-steps">
+      <div className="progress-steps" style={{ '--progress-step-count': steps.length }}>
         <span className="progress-track" aria-hidden="true" />
         {steps.map((step, index) => (
           <button key={step.slug} type="button"
@@ -167,24 +193,38 @@ export default function Workbench() {
     )
   }
 
+  if (!isWorkflowAvailable(opp.oppType)) return <OpportunityComingSoon opp={opp} />
+
   const goTab = k => nav(`/opp/${opp.id}/${k}`)
-  const workflowSteps = workflowStepsFor(store.config)
+  const workflowSteps = workflowStepsFor(store.config, opp.route)
   const workflowBySlug = Object.fromEntries(workflowSteps.map(step => [step.slug, step]))
-  const workflowByTab = Object.fromEntries(workflowSteps.map(step => [step.tab, step.slug]))
-  const legacyStep = tab === 'overview' ? null : workflowByTab[tab] || WORKFLOW_STEP_BY_TAB[tab]
+  const workflowStepForTab = currentTab => workflowSteps.find(step =>
+    [step.tab, ...(step.tabs || [])].includes(currentTab))
+  const legacyStep = tab === 'overview' && opp.route !== 'Spares'
+    ? null
+    : workflowStepForTab(tab)?.slug || WORKFLOW_STEP_BY_TAB[tab]
   const requestedStep = searchParams.get('step')
-  const activeStep = workflowBySlug[requestedStep] ? requestedStep : legacyStep || workflowSteps.find(step => step.milestone === opp.milestone)?.slug || 'intake'
+  const effectiveMilestone = opp.route === 'Spares' && opp.milestone === 'Qualification' ? 'Screening' : opp.milestone
+  const requestedWorkflowStep = workflowBySlug[requestedStep]
+    || workflowSteps.find(step => (step.milestones || [step.milestone]).includes(requestedStep))
+  const activeStep = requestedWorkflowStep?.slug || legacyStep || workflowSteps.find(step =>
+    (step.milestones || [step.milestone]).includes(effectiveMilestone))?.slug || 'intake'
   const activeStepConfig = workflowBySlug[activeStep]
-  const viewTab = workflowBySlug[requestedStep] ? activeStepConfig.tab : tab
-  const persistedStepIndex = workflowSteps.findIndex(step => step.milestone === opp.milestone)
+  const viewTab = requestedWorkflowStep ? activeStepConfig.tab : (legacyStep ? activeStepConfig.tab : tab)
+  const serviceMilestonePhase = { Intake: 0, Qualification: 1, Screening: 2, Sourcing: 2, Proposal: 3, Approval: 4, Submitted: 5, 'Follow-up': 6 }
+  const persistedStepIndex = opp.route === 'Service'
+    ? (Number.isInteger(opp.servicePhase) ? opp.servicePhase : (serviceMilestonePhase[effectiveMilestone] ?? 0))
+    : workflowSteps.findIndex(step => (step.milestones || [step.milestone]).includes(effectiveMilestone))
   const selectStep = step => {
     if (!workflowBySlug[step]) return
     nav(`/opp/${opp.id}?step=${encodeURIComponent(step)}`)
   }
   const proposal = store.getProposal(opp.id)
-  const moveToMilestone = (milestone, reason = '') => {
+  const sourceLead = [...(store.leads || []), ...(store.leadArchive || [])].find(lead => lead.id === opp.sourceLeadId || lead.oppId === opp.id)
+  const sourceText = [sourceLead?.subject, sourceLead?.body, opp.remarks, opp.oppName].filter(Boolean).join(' ')
+  const moveToMilestone = (milestone, reason = '', tabOverride = '') => {
     store.setMilestone(opp.id, milestone, reason)
-    goTab(LIFECYCLE_TABS[milestone] || 'overview')
+    goTab(tabOverride || LIFECYCLE_TABS[milestone] || 'overview')
   }
   const blockers = readiness(opp, proposal, store)
   const nextAction = nextActionWith(opp, proposal, store)
@@ -192,7 +232,7 @@ export default function Workbench() {
   const due = opp.orderDate || opp.proposalDate || opp.lastUpdated
   const isOverdue = !!due && new Date(`${due}T23:59:59`) < new Date()
   const milestoneIndex = MILESTONES.indexOf(opp.milestone)
-  const moveMilestone = milestone => {
+  const moveMilestone = (milestone, tabOverride = '') => {
     if (milestone === opp.milestone) return true
     if (MILESTONES.indexOf(milestone) < milestoneIndex) {
       setTransition({ kind: 'backward', target: milestone, reason: '' })
@@ -206,7 +246,7 @@ export default function Workbench() {
       setTransition({ kind: 'blocked', target: milestone, blockers: blockersForMove })
       return false
     }
-    moveToMilestone(milestone)
+    moveToMilestone(milestone, '', tabOverride)
     return true
   }
   const advanceStep = slug => {
@@ -217,7 +257,8 @@ export default function Workbench() {
     // gate unchanged, but do not force the user to stay on the current page
     // while they review or prepare the next step.
     selectStep(slug)
-    moveMilestone(step.milestone)
+    const moved = moveMilestone(step.milestone, step.tab)
+    if (opp.route === 'Service' && moved) store.updateServiceFlow(opp.id, { servicePhase: step.servicePhase })
   }
   const exceptionApprovalFor = blocker => (store.approvals || []).find(a =>
     a.type === 'Milestone exception' && a.oppId === opp.id
@@ -298,7 +339,9 @@ export default function Workbench() {
     if (tab !== 'overview') nav(`/opp/${opp.id}/overview`)
     window.setTimeout(() => detailsRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), tab === 'overview' ? 0 : 120)
   }
-  const clarificationRows = (store.clarifications || []).filter(c => c.oppId === opp.id && ['Draft', 'Open', 'Sent'].includes(c.status))
+  const clarificationRows = (store.clarifications || []).filter(c => c.oppId === opp.id && ['Draft', 'Open', 'Sent'].includes(c.status)
+    && !isLegacyCommercialClarification(c)
+    && !(sourceContainsDeliveryRequirement(sourceText) && isDeliveryBasisClarification(c)))
   const deviationRows = (proposal?.terms || []).filter(t => t.status === 'Deviation')
   // `anyOf` blockers (§5A "LJS OR AN") name two approvers but need only one, so
   // the owner line must not read as a joint requirement.
@@ -399,10 +442,13 @@ export default function Workbench() {
         </Modal>
       )}
       <div className="wb-body">
-        {viewTab === 'overview' && <OverviewTab opp={opp} detailsRef={detailsRef} />}
+        {viewTab === 'overview' && opp.route === 'Spares' && <SparesIntakeTab opp={opp} detailsRef={detailsRef} />}
+        {viewTab === 'overview' && opp.route !== 'Spares' && <OverviewTab opp={opp} detailsRef={detailsRef} />}
         {viewTab === 'requirement' && <RequirementTab opp={opp} />}
+        {viewTab === 'requirement-validation' && <SparesRequirementTab opp={opp} sourceText={sourceText} />}
         {viewTab === 'customer' && <CustomerKycTab opp={opp} />}
-        {viewTab === 'clarifications' && <ClarificationsTab opp={opp} />}
+        {viewTab === 'registration' && <RegistrationTab opp={opp} goTab={goTab} />}
+        {viewTab === 'clarifications' && <ClarificationsTab opp={opp} sourceText={sourceText} />}
         {viewTab === 'sourcing' && <SourcingTab opp={opp} goTab={goTab} onContinueToProposal={() => {
           const proposalStep = workflowSteps.find(step => step.milestone === 'Proposal')
           if (proposalStep) advanceStep(proposalStep.slug)
@@ -410,8 +456,10 @@ export default function Workbench() {
         {viewTab === 'proposal' && <ProposalTab opp={opp} goTab={goTab} />}
         {viewTab === 'approval' && <ApprovalsTab opp={opp} />}
         {viewTab === 'followup' && <FollowUpTab opp={opp} goTab={goTab} />}
+        {viewTab === 'service-decision' && <ServiceDecisionPanel opp={opp} />}
+        {viewTab === 'service-execution' && <ServiceExecutionPanel opp={opp} />}
         {!activeStepConfig && viewTab === 'approvals' && <ApprovalsTab opp={opp} />}
-        {!activeStepConfig && viewTab === 'comms' && <CommsTab opp={opp} />}
+        {viewTab === 'comms' && <CommsTab opp={opp} />}
         {!activeStepConfig && viewTab === 'po' && <PoHandover opp={opp} />}
         {!activeStepConfig && viewTab === 'files' && <FilesTab opp={opp} />}
         {!activeStepConfig && viewTab === 'audit' && <AuditTab opp={opp} />}
@@ -483,6 +531,59 @@ function OverviewTab({ opp, detailsRef }) {
 }
 
 // ---------------------------------------------------------------------------
+function SparesIntakeTab({ opp, detailsRef }) {
+  return <RegistrationTab opp={opp} detailsRef={detailsRef} spares />
+}
+
+function SparesRequirementTab({ opp, sourceText = '' }) {
+  return (
+    <div className="spares-merged-workflow">
+      <div className="workbench-panel">
+        <div className="workbench-section-title">Clarifications first</div>
+        <p className="hint">Resolve missing customer information before sourcing. Answered questions are retained as audit evidence.</p>
+        <ClarificationsTab opp={opp} sourceText={sourceText} compact />
+      </div>
+      <div className="workbench-panel">
+        <div className="workbench-section-title">Requirement review</div>
+        <p className="hint">Use this reference to confirm the requested parts, quantities, specifications, compatibility, and delivery requirements.</p>
+        <RequirementTab opp={opp} />
+      </div>
+    </div>
+  )
+}
+
+function RegistrationTab({ opp, goTab, detailsRef, spares = false }) {
+  const store = useStore()
+  const proposal = store.getProposal(opp.id)
+  const blockers = transitionBlockers(opp, 'Registration', proposal, store)
+  const blocking = blockers.filter(item => item.severity !== 'info')
+
+  return (
+    <div className="ana-grid registration-workbench">
+      <div className="ana-card c-12">
+        <div className="ana-title">{spares ? 'Opportunity intake' : 'Registration'}</div>
+        <p className="hint">{spares
+          ? 'Capture the opportunity owner, customer, equipment, scope, enquiry, and registration details in one place.'
+          : 'Complete the opportunity identity, customer classification and contact details before the opportunity enters Screening.'}</p>
+        {blocking.length ? (
+          <div className="warnbox">
+            <b>{blocking.length} registration requirement{blocking.length === 1 ? '' : 's'} outstanding.</b>
+            <div className="transition-detail-list">
+              {blocking.map(item => <div key={item.key}><b>{item.text}</b>{item.key === 'kyc' && <button className="inline-action" onClick={() => goTab('customer')}>Open Customer/KYC</button>}</div>)}
+            </div>
+          </div>
+        ) : (
+          <div className="okbox"><b>Registration is complete.</b> The opportunity can continue to Screening when the workflow gate is advanced.</div>
+        )}
+      </div>
+      <div className="ana-card c-12">
+        <OpportunityDetailsEditor ref={detailsRef} opp={opp} store={store} className="workbench-details-editor" />
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
 function RequirementTab({ opp }) {
   const store = useStore()
   const lead = store.leads.find(l => l.oppId === opp.id)
@@ -502,12 +603,12 @@ function RequirementTab({ opp }) {
 
   return (
     <div className="ana-grid">
-      {(opp.context === 'Brownfield' || opp.route === 'Spares') && <div className="ana-card c-12">
+      {opp.context === 'Brownfield' && opp.oppType !== 'Spares' && <div className="ana-card c-12">
         <BSteps opp={opp} />
       </div>}
       {opp.context === 'Service' && <div className="ana-card c-12 service-flow-summary">
         <div className="ana-title">Service opportunity flow</div>
-        <p className="hint">Scope review → survey decision → survey report and Statement of Work (when required) → service pricing → proposal → approval.</p>
+        <p className="hint">Service intake → capture enquiry → confirm scope and survey → choose rate sheet or proposal → one Service Review → customer decision → execute and invoice.</p>
       </div>}
       <div className="ana-card c-6">
         <div className="ana-title">Source requirement</div>
@@ -876,6 +977,16 @@ const OPP_FIELD_OPTIONS = [
   ['contactPerson', 'Contact Person'],
   ['contactPhone', 'Contact Phone'],
 ]
+const opportunityFieldLabel = key => OPP_FIELD_OPTIONS.find(([field]) => field === key)?.[1] || key
+
+function AiFieldSuggestion({ suggestion, onConfirm, onReject }) {
+  if (!suggestion?.key || !suggestion.value) return null
+  return <div className="ai-field-suggestion">
+    <div><b>AI suggests updating {opportunityFieldLabel(suggestion.key)}</b> to <span>{suggestion.value}</span></div>
+    <div className="hint">Confidence {suggestion.confidence ?? '—'}% · Evidence: {suggestion.evidence || 'Customer reply'}</div>
+    <div className="ai-field-actions"><button className="primary" onClick={onConfirm}>Confirm update</button><button onClick={onReject}>Reject suggestion</button></div>
+  </div>
+}
 
 // ---------------------------------------------------------------------------
 const CLAR_SUGGESTIONS = {
@@ -895,19 +1006,23 @@ const CLAR_SUGGESTIONS = {
 
 const clarTone = s => (s === 'Answered' ? 'state-Accepted' : ['Sent', 'Needs review'].includes(s) ? 'state-Review' : 'grey')
 
-const deviationClarification = term => ({
-  category: 'Commercial',
-  gap: `${term.term || 'Commercial'} deviation requires customer confirmation`,
-  q: `Please confirm your acceptance of the proposed ${String(term.term || 'commercial').toLowerCase()} term: ${term.ourResponse || 'the term stated in our proposal'}.`,
-  evidence: 'Proposal deviations',
-})
-
-function ClarificationsTab({ opp }) {
+function ClarificationsTab({ opp, sourceText = '', compact = false }) {
   const store = useStore()
-  const rows = store.clarifications.filter(c => c.oppId === opp.id)
+  // Legacy commercial rows remain in state for audit history, but they are not
+  // customer clarifications and must not appear in this workflow or its counts.
+  const rows = store.clarifications.filter(c => c.oppId === opp.id
+    && !isLegacyCommercialClarification(c)
+    && !(sourceContainsDeliveryRequirement(sourceText) && isDeliveryBasisClarification(c)))
+    // Keep repeated imports/audit events, but show one actionable card per
+    // question in the active workflow.
+    .filter((row, index, all) => all.findIndex(candidate =>
+      candidate.category === row.category && candidate.gap === row.gap && candidate.q === row.q) === index)
   // Sent questions are still waiting for the customer's reply. Only answered
   // questions should be excluded from the single-reply update flow.
   const open = rows.filter(c => c.status !== 'Answered')
+  const awaitingReply = rows.filter(c => c.status === 'Sent').length
+  const needsReview = rows.filter(c => c.status === 'Needs review').length
+  const answered = rows.filter(c => c.status === 'Answered').length
   const [draftOpen, setDraftOpen] = useState(false)
   const [draft, setDraft] = useState(null)
   const [sentOk, setSentOk] = useState(false)
@@ -936,14 +1051,19 @@ function ClarificationsTab({ opp }) {
       lines: (proposal.lines || []).map(l => ({ pn: l.pn, desc: l.desc, qty: l.qty })),
       deviations: deviations.map(t => ({ term: t.term, customerAsk: t.customerAsk, ourResponse: t.ourResponse })),
       existing: existingQuestions,
+      currentFields: { oppName: opp.oppName, rfqNumber: opp.rfqNumber, sellTo: opp.sellTo, category: opp.category, location: opp.location, eucName: opp.eucName, eucLocation: opp.eucLocation, contactPerson: opp.contactPerson, contactPhone: opp.contactPhone },
     }, { fallback: store.config?.aiModel?.provider === 'Built-in fallback' })
     setBusy('')
     const due = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
-    const targeted = deviations.map(deviationClarification)
-      .filter(row => !existingQuestions.some(q => q.toLowerCase() === row.q.toLowerCase()))
-    const aiRows = (ai?.rows || []).filter(row => !existingQuestions.some(q => q.toLowerCase() === String(row.q || '').toLowerCase()))
-    const fallbackRows = targeted.length ? targeted : (CLAR_SUGGESTIONS[opp.route] || CLAR_SUGGESTIONS.Project)
-    const suggestions = [...targeted, ...aiRows.filter(row => !targeted.some(item => item.q === row.q))]
+    const aiRows = (ai?.rows || []).filter(row => !existingQuestions.some(q => q.toLowerCase() === String(row.q || '').toLowerCase())
+      && !(sourceContainsDeliveryRequirement(sourceText) && isDeliveryBasisClarification(row)))
+    // Commercial deviations are decisions for Sales/Approval, never generated
+    // customer questions. Route templates may still ask for genuinely missing
+    // delivery/site data, which is a different fact than negotiating a known
+    // delivery term.
+    const fallbackRows = (CLAR_SUGGESTIONS[opp.route] || CLAR_SUGGESTIONS.Project)
+      .filter(row => !(sourceContainsDeliveryRequirement(sourceText) && isDeliveryBasisClarification(row)))
+    const suggestions = aiRows
     const selected = (suggestions.length ? suggestions : fallbackRows).slice(0, 6)
     for (const s of selected) {
       store.addClarification({ ...s, oppId: opp.id, owner: opp.owner, audience: 'Customer', due, status: 'Open' })
@@ -1026,6 +1146,13 @@ function ClarificationsTab({ opp }) {
     setReplyOpen(true)
   }
 
+  const confirmAiField = clarification => {
+    const suggestion = clarification.aiFieldSuggestion
+    store.confirmClarificationField(clarification.id, { field: suggestion?.key, value: suggestion?.value })
+  }
+
+  const rejectAiField = clarification => store.rejectClarificationField(clarification.id)
+
   const saveCustomerReply = async () => {
     if (!replyForm.body.trim() && !replyFiles.length) {
       setReplyErr('Paste the customer reply or attach the email/file first.')
@@ -1056,6 +1183,8 @@ function ClarificationsTab({ opp }) {
       body: replyForm.body,
       attachments,
       questions: open.map(c => ({ id: c.id, question: c.q, category: c.category, gap: c.gap })),
+      fieldOptions: OPP_FIELD_OPTIONS.filter(([key]) => key).map(([key, label]) => ({ key, label })),
+      currentFields: Object.fromEntries(OPP_FIELD_OPTIONS.filter(([key]) => key).map(([key]) => [key, opp[key] || ''])),
     }, { fallback: store.config?.aiModel?.provider === 'Built-in fallback' })
     // runTaskResult returns the transport envelope; the matcher rows are in
     // its nested data payload (the same shape consumed by runJson).
@@ -1070,25 +1199,42 @@ function ClarificationsTab({ opp }) {
     const byId = new Map(open.map(c => [c.id, c]))
     const matches = (ai?.rows || []).filter(row => byId.has(row.id) && ['Answered', 'Needs review'].includes(row.status) && (String(row.response || '').trim() || String(row.missing || '').trim()))
     for (const row of matches) {
-      store.answerClarification(row.id, {
-        response: String(row.response).trim(),
-        answerSource: 'Customer',
-        answeredAt: replyForm.receivedAt,
-        attachments: attachmentMeta,
-        evidence: row.evidence,
-        aiConfidence: row.confidence,
-        status: row.status,
-        missing: String(row.missing || '').trim(),
-      })
+      const fieldKey = OPP_FIELD_OPTIONS.some(([key]) => key === row.fieldKey) ? row.fieldKey : ''
+      const fieldValue = String(row.fieldValue || '').trim()
+      if (row.status === 'Answered' && fieldKey && fieldValue) {
+        store.stageClarificationAnswer(row.id, {
+          response: String(row.response).trim(),
+          answerSource: 'Customer',
+          answeredAt: replyForm.receivedAt,
+          attachments: attachmentMeta,
+          evidence: row.evidence,
+          aiConfidence: row.confidence,
+          status: row.status,
+          missing: String(row.missing || '').trim(),
+          fieldSuggestion: { key: fieldKey, value: fieldValue, evidence: String(row.fieldEvidence || row.evidence || '').trim(), confidence: row.confidence },
+        })
+      } else {
+        store.answerClarification(row.id, {
+          response: String(row.response).trim(),
+          answerSource: 'Customer',
+          answeredAt: replyForm.receivedAt,
+          attachments: attachmentMeta,
+          evidence: row.evidence,
+          aiConfidence: row.confidence,
+          status: row.status,
+          missing: String(row.missing || '').trim(),
+        })
+      }
     }
     const answered = matches.filter(row => row.status === 'Answered').length
     const needsReview = matches.filter(row => row.status === 'Needs review').length
+    const fieldSuggestions = matches.filter(row => row.status === 'Answered' && OPP_FIELD_OPTIONS.some(([key]) => key === row.fieldKey) && String(row.fieldValue || '').trim()).length
     const remaining = Math.max(0, open.length - answered - needsReview)
     setBusy('')
     setReplyOpen(false)
     setReplyFiles([])
     setReplyOk(matches.length
-      ? `AI checked the reply: ${answered} answered${needsReview ? `, ${needsReview} need review` : ''}${remaining ? `, ${remaining} unanswered` : ''}. Customer reply saved.`
+      ? `AI checked the reply: ${answered} answered${fieldSuggestions ? `, ${fieldSuggestions} need field confirmation` : ''}${needsReview ? `, ${needsReview} need review` : ''}${remaining ? `, ${remaining} unanswered` : ''}. Customer reply saved.`
       : ai
         ? 'AI checked the reply but found no answer for the open questions. Customer reply saved; use “Update information” to assign answers manually.'
         : `Customer reply saved, but AI could not check it (${aiResult?.error || 'AI connection unavailable'}). Use “Update information” to assign answers manually.`)
@@ -1136,7 +1282,32 @@ function ClarificationsTab({ opp }) {
       </div>
       {sentOk && <div className="okbox">Clarification email sent and logged in Communications.</div>}
       {replyOk && <div className="okbox">{replyOk}</div>}
-      <div className="sheet-wrap">
+      {compact && <div className={`clarification-status ${open.length ? 'is-blocked' : 'is-clear'}`} role="status">
+        <div><b>{open.length ? 'Sourcing is blocked' : 'Ready for sourcing'}</b><span>{open.length ? ' Answer every customer clarification before moving to Spares Sourcing.' : ' All customer clarifications are resolved.'}</span></div>
+        <div className="clarification-counts" aria-label="Clarification status summary">
+          <span><b>{rows.length}</b> total</span><span><b>{open.length}</b> open</span><span><b>{awaitingReply}</b> awaiting reply</span><span><b>{needsReview}</b> needs review</span><span><b>{answered}</b> answered</span>
+        </div>
+      </div>}
+      {compact && <div className="clarification-cards">
+        {rows.map(c => (
+          <article className="clarification-card" key={c.id}>
+            <div className="clarification-card-head">
+              <div><b>{c.id}</b><span className="clarification-card-category">{c.category}</span></div>
+              <Chip tone={clarTone(c.status)}>{c.status}</Chip>
+            </div>
+            <div className="clarification-card-question">{c.q}</div>
+            <div className="clarification-card-meta"><span><b>Gap:</b> {c.gap}</span><span><b>Evidence:</b> {c.evidence || '—'}</span><span><b>Owner:</b> {displayRole(c.owner)}</span><span><b>Due:</b> {ddMmmYY(c.due) || '—'}</span></div>
+            {(c.response || c.missing) && <div className={c.status === 'Needs review' ? 'warnbox' : 'okbox'}>{c.response && <>Response: {c.response}</>}{c.missing && <div className="hint"><b>Still needed:</b> {c.missing}</div>}<div className="hint">From {c.answerSource || c.audience || 'source'}{c.answeredAt ? ` · ${ddMmmYY(c.answeredAt)}` : ''}</div>{c.answerEvidence && <div className="hint">Evidence: {c.answerEvidence}</div>}{(c.attachments || []).map(f => <div key={f.name} className="hint"><Icon name="fileText" size={11} /> {f.name}</div>)}</div>}
+            <AiFieldSuggestion suggestion={c.aiFieldSuggestion} onConfirm={() => confirmAiField(c)} onReject={() => rejectAiField(c)} />
+            <div className="clarification-card-actions">
+              <label>Updates field<select value={c.field || ''} disabled={c.status === 'Answered'} title="Once answered, apply this response straight to that Opportunity Details field" onChange={e => store.updateClarification(c.id, { field: e.target.value })}>{OPP_FIELD_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+              <button onClick={() => openAnswer(c)}>{c.status === 'Answered' ? 'Edit information' : 'Update information'}</button>
+            </div>
+          </article>
+        ))}
+        {!rows.length && <div className="clarification-empty">No clarifications yet. Use “AI: suggest questions” to identify missing customer information.</div>}
+      </div>}
+      {!compact && <div className="sheet-wrap">
         <table className="sheet">
           <thead><tr><th>ID</th><th>Category</th><th>Gap / evidence</th><th>Question</th><th>Owner</th><th>Audience</th><th>Due</th><th>Status</th><th>Updates field</th><th></th></tr></thead>
           <tbody>
@@ -1145,7 +1316,7 @@ function ClarificationsTab({ opp }) {
                 <td>{c.id}</td>
                 <td>{c.category}</td>
                 <td>{c.gap}<div className="hint">{c.evidence}</div></td>
-                <td>{c.q}{(c.response || c.missing) && <div className={c.status === 'Needs review' ? 'warnbox' : 'okbox'}>{c.response && <>Response: {c.response}</>}{c.missing && <div className="hint"><b>Still needed:</b> {c.missing}</div>}<div className="hint">From {c.answerSource || c.audience || 'source'}{c.answeredAt ? ` · ${ddMmmYY(c.answeredAt)}` : ''}</div>{c.answerEvidence && <div className="hint">Evidence: {c.answerEvidence}</div>}{(c.attachments || []).map(f => <div key={f.name} className="hint"><Icon name="fileText" size={11} /> {f.name}</div>)}</div>}</td>
+                <td>{c.q}{(c.response || c.missing) && <div className={c.status === 'Needs review' ? 'warnbox' : 'okbox'}>{c.response && <>Response: {c.response}</>}{c.missing && <div className="hint"><b>Still needed:</b> {c.missing}</div>}<div className="hint">From {c.answerSource || c.audience || 'source'}{c.answeredAt ? ` · ${ddMmmYY(c.answeredAt)}` : ''}</div>{c.answerEvidence && <div className="hint">Evidence: {c.answerEvidence}</div>}{(c.attachments || []).map(f => <div key={f.name} className="hint"><Icon name="fileText" size={11} /> {f.name}</div>)}</div>}<AiFieldSuggestion suggestion={c.aiFieldSuggestion} onConfirm={() => confirmAiField(c)} onReject={() => rejectAiField(c)} /></td>
                 <td>{displayRole(c.owner)}</td>
                 <td>{c.audience}</td>
                 <td>{ddMmmYY(c.due)}</td>
@@ -1165,7 +1336,7 @@ function ClarificationsTab({ opp }) {
             {!rows.length && <tr><td colSpan={10} className="hint">No clarifications yet — let the AI suggest questions from detected gaps.</td></tr>}
           </tbody>
         </table>
-      </div>
+      </div>}
 
       {replyOpen && (
         <Modal title="Add customer reply" onClose={() => setReplyOpen(false)} wide>
@@ -1612,7 +1783,7 @@ function FollowUpTab({ opp, goTab }) {
 }
 
 function ProposalTab({ opp, goTab }) {
-  const [sub, setSub] = useState('edit-sheet')
+  const [sub, setSub] = useState(opp.route === 'Service' ? 'workbench' : 'edit-sheet')
   const openBuilder = () => setSub('builder')
   // Diagram 02 §3 is the Brownfield lane only — Greenfield runs Phase-1
   // activities and Service runs the §4 survey path instead.
@@ -1750,6 +1921,12 @@ function FollowUpPane({ opp, onRevision }) {
   const [compName, setCompName] = useState('')
   const [compNote, setCompNote] = useState('')
 
+  const updateCommercialConfirmation = (index, status) => {
+    const current = store.getProposal(opp.id)
+    const terms = (current.terms || []).map((term, i) => i === index ? { ...term, customerConfirmationStatus: status } : term)
+    store.saveProposal(opp.id, { ...current, terms })
+  }
+
   const competitors = (store.competitors || []).filter(c => c.oppId === opp.id)
   const validityDays = opp.validityDays || 30
   const age = opp.proposalDate ? ageDays(opp.proposalDate) : null
@@ -1809,6 +1986,17 @@ function FollowUpPane({ opp, onRevision }) {
       </div>
       <div className="ana-card c-6 follow-up-panel">
         <div className="ana-title">Customer communications</div>
+        {(p.terms || []).some(term => term.decision === 'Counter') && <section className="form-card commercial-followup-panel" aria-label="Commercial confirmations">
+          <div className="section-title">Commercial Confirmation Required</div>
+          <p className="hint">Record the customer's response to each ModAE counter-offer. This does not change the internal approval decision.</p>
+          {(p.terms || []).map((term, index) => term.decision !== 'Counter' ? null : <div className="route-template-row" key={`commercial-followup-${index}`}>
+            <b>{term.term}</b>
+            <span>Customer asked: {term.customerAsk || '—'} · ModAE counter: {term.proposedTerm || term.ourResponse || '—'}</span>
+            <select aria-label={`${term.term} customer confirmation`} value={term.customerConfirmationStatus || 'Awaiting reply'} onChange={e => updateCommercialConfirmation(index, e.target.value)}>
+              {['Awaiting reply', 'Accepted', 'Rejected', 'Countered'].map(status => <option key={status}>{status}</option>)}
+            </select>
+          </div>)}
+        </section>}
         {commsRows.map((c, i) => (
           <details key={c.id || `${c.ts}-${i}`} className="communication-disclosure">
             <summary className="communication-summary">

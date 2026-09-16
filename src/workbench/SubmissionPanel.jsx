@@ -11,6 +11,7 @@ import { formatEmailBody, runText } from '../ai.js'
 import WorkbookPreview from '../proposal/WorkbookPreview.jsx'
 import { EMAIL_RE, splitRecipients, recipientsValid } from '../emailValidation.js'
 import { gmailComposeHref, displayRole } from '../utils.js'
+import { isCounterAwaitingCustomer } from '../commercialTerms.js'
 
 // Customer send — only unlocked by an approved 'Final quote release'
 // and a three-point human-in-the-loop checklist. To, CC, Subject, the covering
@@ -50,6 +51,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
     .filter(a => a.oppId === opp.id && a.status === 'Approved with conditions')
     .flatMap(a => (a.conditions || []).filter(c => !c.incorporated)
       .map(c => ({ ...c, approver: a.approver, type: a.type })))
+  const pendingCommercialConfirmations = (p.terms || []).filter(isCounterAwaitingCustomer)
   const submission = (store.communications[opp.id] || []).find(c => c.kind === 'submission')
   const alreadySent = submission?.status === 'sent'
   const draftOpened = sentNow || submission?.status === 'draft'
@@ -273,6 +275,15 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
           the proposal cannot go to the customer until every one is accounted for in the builder.
           {pendingConds.map((c, i) => <div key={i} style={{ marginTop: 4 }}>"{c.text}" — set by {c.approver}</div>)}
         </ErrBox>
+      )}
+
+      {pendingCommercialConfirmations.length > 0 && (
+        <div className="warnbox" role="status">
+          {pendingCommercialConfirmations.length} commercial counter-offer{pendingCommercialConfirmations.length === 1 ? '' : 's'} awaiting customer confirmation:
+          {pendingCommercialConfirmations.map(term => <div key={term.term} style={{ marginTop: 4 }}>
+            {term.term}: ModAE proposes “{term.proposedTerm || term.ourResponse}” against the customer request “{term.customerAsk}”. The quotation may be prepared, but Follow-up must record the customer response.
+          </div>)}
+        </div>
       )}
 
       <div className="section-title" style={{ marginTop: 10 }}>Review required before sending</div>

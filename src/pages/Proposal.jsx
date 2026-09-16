@@ -17,7 +17,7 @@ import { downloadProposalXlsx } from '../proposal/excelExport.js'
 import WorkbookPreview from '../proposal/WorkbookPreview.jsx'
 import { generateProposalWorkbook } from '../proposal/templateExcelExport.js'
 import { parseProposalWorkbook as parseRenderedWorkbook } from '../proposal/workbook.js'
-import { routeForType } from '../seed.js'
+import { isWorkflowAvailable, routeForType } from '../seed.js'
 import { buildLeadProposalData } from '../leadBoq.js'
 import { putFiles } from '../leadBlobs.js'
 import { uploadOppFile } from '../filestore.js'
@@ -28,6 +28,8 @@ import { importReviewedWorkbook, normalizeAiReview, reviewWorkbookPayload } from
 import { clausesFor, clauseWarnings } from '../clauses.js'
 import { fromInr } from '../currency.js'
 import { reviewFindingKey } from '../approvalMemory.js'
+import OpportunityComingSoon from '../workbench/OpportunityComingSoon.jsx'
+import { COMMERCIAL_DECISIONS, CUSTOMER_CONFIRMATION_STATUSES, needsCommercialApproval, normalizeCommercialTerm } from '../commercialTerms.js'
 
 const ROUTE_TABS = {
   Project: ['Cover Letter', 'Edit Sheet', 'Document', 'Signal List', 'Rack Layout', 'Priced BoQ'],
@@ -350,9 +352,8 @@ function RouteTemplateTab({ route, tab, p, doc, priced, lineQuoted }) {
   if (tab === 'Clarifications') {
     return <div className="form-card route-template-panel">
       <div className="section-title">Clarifications</div>
-      <p className="hint">Spares template: customer references and unresolved commercial or technical questions.</p>
-      {(p.terms || []).map((term, i) => <div className="route-template-row" key={i}><b>{term.term || `Clarification ${i + 1}`}</b><span>{term.customerAsk || 'No customer requirement recorded'} → {term.ourResponse || 'Response pending'}</span></div>)}
-      {!p.terms?.length && <div className="hint">No clarifications captured yet.</div>}
+      <p className="hint">Only missing technical, equipment, quantity, delivery, or contact information belongs here. Commercial requests and counter-offers are managed in Commercial decision and Follow-up.</p>
+      <div className="route-template-row"><b>No commercial clarification</b><span>Customer requests already known in the quotation are not repeated as questions.</span></div>
     </div>
   }
 
@@ -421,13 +422,25 @@ function PreviewMenu({ onPreviewProposal, onPreviewTemplate }) {
 // Rendered two ways: as the standalone /proposal/:oppId page, and embedded in the
 // opportunity workspace (Proposal tab → Builder). Embedded mode drops the page
 // chrome — title, back link, duplicated blocker list — and unpins the sheet tabs.
-export default function Proposal({ oppId: oppIdProp, embedded = false, initialTab = 'Edit Sheet' }) {
+// Keep the Greenfield gate in a wrapper so the editor's hook order never changes
+// when navigation switches between opportunity types.
+export default function Proposal(props) {
+  const { oppId: oppIdProp } = props
+  const { oppId: routeOppId } = useParams()
+  const store = useStore()
+  const opp = store.opportunities.find(o => o.id === (oppIdProp || routeOppId))
+  if (opp && !isWorkflowAvailable(opp.oppType)) return <OpportunityComingSoon opp={opp} />
+  return <ProposalEditor {...props} />
+}
+
+function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit Sheet' }) {
   const { oppId: routeOppId } = useParams()
   const oppId = oppIdProp || routeOppId
   const store = useStore()
   const nav = useNavigate()
   const fb = useFormulaBar()
   const opp = store.opportunities.find(o => o.id === oppId)
+  const isComingSoon = !!opp && !isWorkflowAvailable(opp.oppType)
   const canEditProposal = !!opp && (opp.owner === store.role || isAdminRole(store.role))
   const [tab, setTab] = useState(initialTab)
   const [workbook, setWorkbook] = useState('proposal')
@@ -468,6 +481,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   // their BoQ once from the linked lead so existing work does not stay on the
   // generic starter rows. New registrations carry leadImportId themselves.
   useEffect(() => {
+    if (isComingSoon) return
     // Spares must always enter Proposal through the Sourcing workbench. Do not
     // manufacture sourcing rows from a saved/demo Proposal BoQ when this page
     // is opened; real Spares creation paths write sparesLines first.
@@ -480,12 +494,13 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
     store.addSparesLinesFromLead(oppId, workbenchRows)
     store.saveProposal(oppId, next)
     setP(normalize(next, opp))
-  }, [oppId, opp?.sourceLeadId, opp?.remarks, linkedLead?.id, linkedLead?.oppId, store.proposals?.[oppId]?.leadImportId, store.proposals?.[oppId]?.bom?.length]) // eslint-disable-line
+  }, [oppId, opp?.sourceLeadId, opp?.remarks, linkedLead?.id, linkedLead?.oppId, store.proposals?.[oppId]?.leadImportId, store.proposals?.[oppId]?.bom?.length, isComingSoon]) // eslint-disable-line
 
   // A saved Spares proposal may predate the sourcing-to-proposal sync and still
   // contain unrelated lead-extracted rows. Repair that state on load so the
   // screen immediately reflects the confirmed sourcing dataset.
   useEffect(() => {
+    if (isComingSoon) return
     if (!opp || routeForType(opp.oppType) !== 'Spares') return
     const confirmed = (store.sparesLines || []).filter(line => line.oppId === oppId && line.confirmed)
     if (!confirmed.length) return
@@ -502,7 +517,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
     const next = { ...current, bom: nextBom }
     store.sendLinesToProposal(oppId)
     setP(normalize(next, opp))
-  }, [oppId, opp?.oppType, store.sparesLines, store.proposals?.[oppId]?.bom]) // eslint-disable-line
+  }, [oppId, opp?.oppType, store.sparesLines, store.proposals?.[oppId]?.bom, isComingSoon]) // eslint-disable-line
 
   // Print-all: render the full customer document (cover + terms + BoQ) first,
   // then open the dialog; afterprint restores the tabbed view.
@@ -523,6 +538,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   }, [printing, embedded])
 
   if (!opp) return <div className="page"><h2>Unknown opportunity</h2><Link to="/">Back to tracker</Link></div>
+  if (isComingSoon) return <OpportunityComingSoon opp={opp} />
 
   const comm = canPriceProposal(store.role)
   const pendingForOpp = (store.approvals || []).filter(a => a.oppId === oppId && a.status === 'Pending')
@@ -555,6 +571,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
   })
 
   useEffect(() => {
+    if (isComingSoon) return
     if (!opp || docRoute(p, opp) !== 'Spares' || p.referenceWorkbook) return
     let cancelled = false
     setReferenceLoading(true)
@@ -572,13 +589,14 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
       .catch(error => { if (!cancelled) setReferenceError(error?.message || 'Reference workbook could not be loaded') })
       .finally(() => { if (!cancelled) setReferenceLoading(false) })
     return () => { cancelled = true }
-  }, [oppId, opp?.oppType, p.proposalType, p.referenceWorkbook]) // eslint-disable-line
+  }, [oppId, opp?.oppType, p.proposalType, p.referenceWorkbook, isComingSoon]) // eslint-disable-line
 
   // The supplied proposal templates are editable reference workbooks. They are
   // deliberately stored separately from the BoQ: the Spares item list remains
   // the source of quoted lines, while these sheets preserve the customer-facing
   // layout (cover, firm offer, SOW, issues, and so on).
   useEffect(() => {
+    if (isComingSoon) return
     if (!opp || !['Project', 'Spares', 'Services'].includes(route) || proposalTemplate) return
     let cancelled = false
     const isSpares = route === 'Spares'
@@ -602,7 +620,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
       .catch(error => { if (!cancelled) setTemplateError(error?.message || 'Proposal template could not be loaded') })
       .finally(() => { if (!cancelled) setTemplateLoading(false) })
     return () => { cancelled = true }
-  }, [oppId, opp?.oppType, p.proposalType, route, proposalTemplate, store.config?.uploads?.proposalTemplates]) // eslint-disable-line
+  }, [oppId, opp?.oppType, p.proposalType, route, proposalTemplate, store.config?.uploads?.proposalTemplates, isComingSoon]) // eslint-disable-line
 
   const updateReferenceRow = (index, key, value) => {
     const rows = referenceRows.map((row, i) => {
@@ -772,8 +790,17 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
     save({ ...pRef.current, bom })
   }
 
-  const updTerm = (i, k) => e => save({ ...p, terms: p.terms.map((t, j) => (j === i ? { ...t, [k]: e.target.value } : t)) })
-  const addTerm = () => save({ ...p, terms: [...p.terms, { term: '', customerAsk: '', ourResponse: '', status: 'Comply' }] })
+  const updTerm = (i, k) => e => save({ ...p, terms: p.terms.map((t, j) => (j === i ? normalizeCommercialTerm({ ...t, [k]: e.target.value }) : t)) })
+  const setCommercialDecision = (i, decision) => {
+    const terms = p.terms.map((term, j) => j === i ? normalizeCommercialTerm({
+      ...term, decision,
+      ourResponse: decision === 'Offer customer request' ? term.customerAsk : (term.proposedTerm || term.standardTerm || term.ourResponse),
+      customerConfirmationStatus: decision === 'Counter' ? 'Awaiting reply' : 'Not required',
+    }) : term)
+    save({ ...p, terms })
+  }
+  const setCustomerConfirmation = (i, status) => save({ ...p, terms: p.terms.map((term, j) => j === i ? normalizeCommercialTerm({ ...term, customerConfirmationStatus: status }) : term) })
+  const addTerm = () => save({ ...p, terms: [...p.terms, { term: '', customerAsk: '', ourResponse: '', status: 'Comply', decision: 'Compliant', customerConfirmationStatus: 'Not required' }] })
   const routeScope = opp.international || opp.location === 'International' ? 'international' : 'domestic'
   const availableClauses = clausesFor(store.config?.clauses, route === 'Service' ? 'Services' : route, routeScope)
   const selectedClauses = (p.clauseIds || []).map(id => availableClauses.find(clause => clause.id === id)).filter(Boolean)
@@ -829,6 +856,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
     oppId, type: bl.approvalType, approver: bl.approver, rev: bl.rev || String(p.revision ?? ''), detail: bl.text,
     ...(bl.needed ? { needed: bl.needed } : {}),
     ...(bl.anyOf ? { anyOf: bl.anyOf } : {}),
+    ...(bl.deviationDetails ? { deviationDetails: bl.deviationDetails } : {}),
   })
   const confirmCond = bl => () => {
     setConditionTarget(bl)
@@ -989,6 +1017,7 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
       oppId, type: bl.approvalType, approver: bl.approver, rev: bl.rev || String(p.revision ?? ''), detail: bl.text,
       ...(bl.needed ? { needed: bl.needed } : {}),
       ...(bl.anyOf ? { anyOf: bl.anyOf } : {}),
+      ...(bl.deviationDetails ? { deviationDetails: bl.deviationDetails } : {}),
     }))
     setReadinessOpen(true)
   }
@@ -1296,6 +1325,26 @@ export default function Proposal({ oppId: oppIdProp, embedded = false, initialTa
             </tbody>
           </table>
           <button onClick={addTerm} className="no-print">+ Add term</button>
+          {p.terms.some(t => t.status === 'Deviation') && <section className="form-card commercial-decision-panel" aria-label="Commercial decisions">
+            <div className="section-title">Commercial decision and confirmation</div>
+            <p className="hint">Customer requests are recorded here. Choose whether ModAE will offer the request or counter with the proposed ModAE term.</p>
+            {p.terms.map((t, i) => t.status !== 'Deviation' ? null : <div className="route-template-row" key={`decision-${i}`}>
+              <b>{t.term || `Term ${i + 1}`}</b>
+              <span>Customer requested: {t.customerAsk || 'Not recorded'} · ModAE standard: {t.standardTerm || 'Not recorded'}</span>
+              <label>Decision <select value={t.decision || 'Undecided'} onChange={e => setCommercialDecision(i, e.target.value)}>
+                {COMMERCIAL_DECISIONS.map(option => <option key={option}>{option}</option>)}
+              </select></label>
+              {t.decision === 'Counter' && <>
+                <label>Proposed counter <input value={t.proposedTerm || t.ourResponse || ''} onChange={updTerm(i, 'proposedTerm')} /></label>
+                <label>Customer confirmation <select value={t.customerConfirmationStatus || 'Awaiting reply'} onChange={e => setCustomerConfirmation(i, e.target.value)}>
+                  {CUSTOMER_CONFIRMATION_STATUSES.filter(status => status !== 'Not required').map(status => <option key={status}>{status}</option>)}
+                </select></label>
+                <span className="hint">Commercial Confirmation Required — customer response is tracked in Follow-up.</span>
+              </>}
+              {t.decision === 'Offer customer request' && <span className="hint">Internal Commercial Approval Required — {needsCommercialApproval(t) ? 'request approval before dispatch.' : ''}</span>}
+              {t.decision === 'Undecided' && <span className="err">Select a commercial decision before approval.</span>}
+            </div>)}
+          </section>}
           <section className="form-card proposal-clause-library" aria-label="Terms and conditions clause library">
             <div className="section-title">Terms &amp; conditions clauses</div>
             <p className="hint">Select and order the clauses that will be printed. Required or changed clauses are shown before submission.</p>

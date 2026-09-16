@@ -13,6 +13,7 @@ import { docModel, docRoute } from '../proposalDoc.js'
 import { signalsFromBom, signalsAreEmpty } from '../rack.js'
 import { applyAdjustment, normalizePriceFields, resolvePriceSource } from '../pricing.js'
 import { withSparesSupportRows } from './sparesBoq.js'
+import { normalizeCommercialTerm } from '../commercialTerms.js'
 
 // Qty/Unit × units + Common + Spares — the BoQ quantity rule, in one place so
 // the signal-list derivation reads the same totals the sheet shows.
@@ -78,7 +79,7 @@ export function normalizeProposal(pr, opp) {
       key: '', clauseRef: '', section: '',
       compliance: t.status === 'Deviation' ? 'Deviate' : 'Comply',
       workflowStatus: 'Open',
-      ...t,
+      ...normalizeCommercialTerm(t),
     })),
     // One priced group unless the proposal says otherwise — the samples'
     // `Item-10`. A line whose group has been deleted still prints, under the
