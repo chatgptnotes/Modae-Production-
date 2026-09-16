@@ -42,14 +42,16 @@ export { isPlaceholderSparesLine, sparesProposalBom }
 // can't mutate an already-logged revision's snapshot.
 export function snapshotProposal(p) {
   return JSON.parse(JSON.stringify({
-    bom: p.bom, terms: p.terms, signals: p.signals, costing: p.costing,
+    revision: p.revision, bom: p.bom, terms: p.terms, signals: p.signals, costing: p.costing,
     pricingMode: p.pricingMode, discountPct: p.discountPct, markupPct: p.markupPct,
     approvedPricing: p.approvedPricing,
     revisionDate: p.revisionDate, validityDays: p.validityDays,
     addressee: p.addressee, kindAttn: p.kindAttn, subject: p.subject,
     bidStage: p.bidStage, bidType: p.bidType, sourceCurrency: p.sourceCurrency,
     sourceRate: p.sourceRate, sourceRateDate: p.sourceRateDate, clauseIds: p.clauseIds,
-    clauses: p.clauses,
+    clauses: p.clauses, docTerms: p.docTerms, docTermsHeading: p.docTermsHeading,
+    letterSalutation: p.letterSalutation, letterBody: p.letterBody, letterClose: p.letterClose,
+    ourRef: p.ourRef,
   }))
 }
 

@@ -43,9 +43,9 @@ test('the email dialog resolves a recipient without typing', () => {
 // The preview was four lines of text claiming to be the proposal. The
 // salesperson has to see the actual document before it goes out.
 test('preview renders the real document, not a text stub', () => {
-  assert.match(submission, /proposalWorkbookPreview/)
-  assert.match(submission, /<WorkbookPreview workbook=\{previewWorkbook\}/,
-    'the email flow must preview the real workbook')
+  assert.doesNotMatch(submission, /proposalWorkbookPreview/)
+  assert.match(submission, /<PrintDoc p=\{p\} opp=\{opp\}/,
+    'the email flow must preview the current ModAE document')
   assert.match(submission, /proposalWorkbookAttachment/)
   assert.doesNotMatch(submission, /Attached: \{opp\.id\}_Proposal_Rev_/)
 })

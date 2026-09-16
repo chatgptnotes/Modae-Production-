@@ -10,6 +10,7 @@ const SERVICES_TEMPLATE_URL = new URL('../../branding/Further Inputs/Further Inp
 const LOGO_URL = new URL('../../branding/mod-ae/assets/modae-official-logo.png', import.meta.url).href
 
 const clean = value => value == null ? '' : String(value)
+const round2 = value => Math.round((Number(value) || 0) * 100) / 100
 
 // Lead intake stores 'Unknown sender' / '(no subject)' as placeholders when an
 // enquiry arrives without them (Inbox.jsx), and those strings travel into
@@ -464,6 +465,9 @@ function setCommercialSheet(workbook, worksheet, args) {
       worksheet.getCell(`F${row}`).numFmt = proposalFormat
       worksheet.getCell(`G${row}`).numFmt = proposalFormat
     }
+    // The reference workbook's support rows carried their old source-sheet
+    // numbers (6, 7, 8). A generated draft must continue the live BoQ sequence.
+    setValue(worksheet.getCell(`B${row}`), lines.length + index + 1, { alignment: { horizontal: 'center', vertical: 'top', wrapText: true } })
   })
 
   const footer = totalRow
@@ -480,10 +484,10 @@ function setCommercialSheet(workbook, worksheet, args) {
         const row = firstRow + index
         const qty = totalQty(line)
         const unit = column === 'G' || column === 'K' ? number(lineQuoted(line)) : column === 'M' ? (lineCost ? number(lineCost(line)) : 0) : (linePrice ? number(linePrice(line)) : 0)
-        return sum + unit * number(qty)
+        return sum + round2(unit * number(qty))
       }, 0) + proposalSupportRows.reduce((sum, line, index) => {
         const row = firstRow + lines.length + index
-        return sum + number(line.quoted === '' || line.quoted == null ? 0 : lineQuoted(line)) * number(totalQty(line))
+        return sum + round2(number(line.quoted === '' || line.quoted == null ? 0 : lineQuoted(line)) * number(totalQty(line)))
       }, 0)
       cell.value = { formula: `SUM(${column}${firstRow}:${column}${footer - 1})`, result }
     }

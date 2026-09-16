@@ -1,25 +1,24 @@
 import React, { useRef, useState } from 'react'
 import { useStore } from '../store.jsx'
-import { ROLES } from '../seed.js'
 import { ErrBox, Modal } from '../ui.jsx'
 import { releaseState, serviceApprovalSet } from '../gates.js'
 import { Icon } from '../icons.jsx'
 import { docModel, docRoute, enclosuresFor } from '../proposalDoc.js'
 import { buildPricing } from '../proposal/docProps.js'
-import { blobAttachment, proposalWorkbookAttachment, proposalWorkbookPreview, enclosureAttachments } from '../proposal/emailAttachments.js'
+import { blobAttachment, proposalWorkbookAttachment, enclosureAttachments } from '../proposal/emailAttachments.js'
 import { formatEmailBody, runText } from '../ai.js'
-import WorkbookPreview from '../proposal/WorkbookPreview.jsx'
+import PrintDoc from '../proposal/PrintDoc.jsx'
 import { EMAIL_RE, splitRecipients, recipientsValid } from '../emailValidation.js'
 import { gmailComposeHref, displayRole } from '../utils.js'
 import { isCounterAwaitingCustomer } from '../commercialTerms.js'
+import { snapshotProposal } from '../store.jsx'
 
-// Customer send — only unlocked by an approved 'Final quote release'
-// and a three-point human-in-the-loop checklist. To, CC, Subject, the covering
-// message and the attachment list are all editable before the quote goes out.
+// Customer send is unlocked only by an approved release for the current
+// revision. To, CC, Subject, the covering message and the attachment list stay
+// editable before Gmail opens a draft.
 export default function SubmissionPanel({ opp, onSubmitted }) {
   const store = useStore()
   const p = store.getProposal(opp.id)
-  const [checks, setChecks] = useState({ c1: false, c2: false, c3: false })
   const [sentNow, setSentNow] = useState(false)
   const [communicationId, setCommunicationId] = useState('')
   const [sending, setSending] = useState(false)
@@ -30,9 +29,6 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
   const [messageBusy, setMessageBusy] = useState(false)
   const [messageError, setMessageError] = useState('')
   const [previewOpen, setPreviewOpen] = useState(false)
-  const [previewWorkbook, setPreviewWorkbook] = useState(null)
-  const [previewLoading, setPreviewLoading] = useState(false)
-  const [previewError, setPreviewError] = useState('')
   const fileInputRef = useRef(null)
   const emailToRef = useRef(null)
   const customer = (store.customers || []).find(c => c.id === opp.sellTo || c.name === opp.sellTo)
@@ -76,12 +72,11 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
   const { totalQty, lineQuoted, lineCost, linePrice, computeTotals } = buildPricing(store, p)
   const totals = computeTotals(p)
   const priced = p.bidType !== 'Unpriced (Technical)'
-  const allChecked = checks.c1 && checks.c2 && checks.c3
   const proposalValidated = p.reviewStatus === 'Validated' || !!release || p.reviewStatus === 'Override accepted'
   const fromValid = EMAIL_RE.test(emailFrom.trim())
   const toValid = recipientsValid(emailTo)
   const ccValid = splitRecipients(emailCc).length === 0 || recipientsValid(emailCc)
-  const canSend = allChecked && !pendingConds.length && (!attachProposal || proposalValidated) && fromValid && toValid && ccValid && Boolean(emailSubject.trim()) && Boolean(emailBody.trim()) && !readingFiles
+  const canSend = !pendingConds.length && (!attachProposal || proposalValidated) && fromValid && toValid && ccValid && Boolean(emailSubject.trim()) && Boolean(emailBody.trim()) && !readingFiles
 
   const removeExtraFile = filename => setExtraFiles(files => files.filter(f => f.filename !== filename))
 
@@ -125,19 +120,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
     }
   }
 
-  const openProposalPreview = async () => {
-    setPreviewOpen(true)
-    setPreviewLoading(true)
-    setPreviewError('')
-    try {
-      const workbook = await proposalWorkbookPreview({ p, opp, doc, priced, totalQty, lineQuoted, lineCost, linePrice, totals, route })
-      setPreviewWorkbook(workbook)
-    } catch (error) {
-      setPreviewError(error?.message || 'Proposal workbook could not be previewed')
-    } finally {
-      setPreviewLoading(false)
-    }
-  }
+  const openProposalPreview = () => setPreviewOpen(true)
 
   const downloadAttachment = attachment => {
     const binary = atob(attachment.contentBase64)
@@ -177,6 +160,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
         body: emailBody,
         kind: 'submission',
         status: 'draft',
+        proposalSnapshot: snapshotProposal(p),
         attachments,
         attachmentNames: [
           ...(attachProposal ? [`${opp.id}_Proposal_Rev_${p.revision}.xlsx`] : []),
@@ -222,7 +206,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
     ['Subject', <input type="text" value={emailSubject} onChange={e => setEmailSubject(e.target.value)} placeholder="Proposal subject" style={{ width: '100%' }} />],
     ['Attachments', <>
       <span>{attachmentNames.join(' · ')}</span>
-      <button type="button" onClick={openProposalPreview} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 8 }} title="View the customer-facing proposal workbook">
+      <button type="button" onClick={openProposalPreview} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 8 }} title="View the current ModAE customer proposal">
         <Icon name="fileSheet" size={13} /> View proposal
       </button>
     </>],
@@ -299,18 +283,9 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
         </div>
       )}
 
-      <div className="section-title" style={{ marginTop: 10 }}>Review required before sending</div>
-      {[
-        ['c1', 'Customer-facing prices and validity verified'],
-        ['c2', 'No restricted commercial data in the document'],
-        ['c3', `Named reviewer: ${displayRole(store.role)}`],
-      ].map(([k, label]) => (
-        <div key={k} className="check-row">
-          <input type="checkbox" checked={checks[k]}
-            onChange={e => setChecks({ ...checks, [k]: e.target.checked })} />
-          <span>{label}</span>
-        </div>
-      ))}
+      <div className="okbox" style={{ marginTop: 10 }}>
+        Current proposal revision is approved for customer submission.
+      </div>
 
       <div style={{ marginTop: 10 }}>
         {sendError && <ErrBox>{sendError}</ErrBox>}
@@ -318,7 +293,6 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
           title={pendingConds.length ? 'Confirm all approval conditions first'
             : attachProposal && !proposalValidated ? 'Validate the proposal before attaching it'
             : !fromValid ? 'Enter a valid sender email in the From field'
-            : !allChecked ? 'Complete the human-review checklist'
             : !toValid ? 'Enter a valid recipient email in the To field'
             : !ccValid ? 'The CC address is not valid'
             : !emailSubject.trim() ? 'Enter a subject'
@@ -342,9 +316,12 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
       {previewOpen && (
         <Modal onClose={() => setPreviewOpen(false)} wide className="proposal-preview-modal">
           <div className="proposal-preview-toolbar">
+            <span className="hint">Current ModAE customer proposal · read-only</span>
             <button type="button" onClick={() => setPreviewOpen(false)}>Close</button>
           </div>
-          <WorkbookPreview workbook={previewWorkbook} loading={previewLoading} error={previewError} />
+          <div className="proposal-preview-scroll">
+            <PrintDoc p={p} opp={opp} doc={doc} priced={priced} totals={totals} lineQuoted={lineQuoted} />
+          </div>
         </Modal>
       )}
     </div>

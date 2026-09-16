@@ -62,6 +62,22 @@ const approvalDate = ts => {
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+const readinessSummaryFor = ({ blockers = [], pendingForOpp = [], submitted = false } = {}) => {
+  if (blockers.length) {
+    const visible = blockers.slice(0, 3).map(item => item.text).filter(Boolean)
+    const extra = blockers.length > visible.length ? `; +${blockers.length - visible.length} more` : ''
+    const approvals = pendingForOpp.length
+      ? `; ${pendingForOpp.length} approval${pendingForOpp.length === 1 ? '' : 's'} pending`
+      : ''
+    return `${blockers.length} item${blockers.length === 1 ? '' : 's'} need attention: ${visible.join('; ')}${extra}${approvals}`
+  }
+  if (pendingForOpp.length) {
+    const types = pendingForOpp.map(item => item.type).filter(Boolean).slice(0, 3).join('; ')
+    return `${pendingForOpp.length} approval${pendingForOpp.length === 1 ? '' : 's'} pending${types ? `: ${types}` : ''}`
+  }
+  return submitted ? 'Submitted to customer' : 'Ready — no blockers'
+}
+
 const approvedDeviationFor = (issue, approvals, oppId, revision) => {
   const findingKey = approvalTermKey(`${issue?.code || ''} ${issue?.text || ''}`)
   if (!findingKey) return null
@@ -407,7 +423,8 @@ function RouteTemplateTab({ route, tab, p, doc, priced, lineQuoted }) {
 // prints. `normalize` keeps its old name here to leave the call sites alone.
 const normalize = normalizeProposal
 
-// Combines PDF and Excel previews into one toolbar dropdown,
+// Combines the current ModAE customer preview and the legacy workbook draft
+// into one toolbar dropdown. The workbook is never the customer document.
 // following the same open/close + click-outside pattern as DetailTabs' overflow menu.
 function PreviewMenu({ onPreviewProposal, onPreviewTemplate }) {
   const [open, setOpen] = useState(false)
@@ -430,7 +447,7 @@ function PreviewMenu({ onPreviewProposal, onPreviewTemplate }) {
       {open && (
         <div className="proposal-toolbar-menu-list" role="menu">
           <button type="button" role="menuitem" onClick={() => { setOpen(false); onPreviewProposal() }}>Preview PDF</button>
-          {onPreviewTemplate && <button type="button" role="menuitem" onClick={() => { setOpen(false); onPreviewTemplate() }}>Preview Excel</button>}
+          {onPreviewTemplate && <button type="button" role="menuitem" onClick={() => { setOpen(false); onPreviewTemplate() }}>Draft workbook (reference)</button>}
         </div>
       )}
     </div>
@@ -870,13 +887,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
         ? { tone: 'override', title: 'Review override accepted', text: 'The findings were saved and the proposal can continue through approval.' }
         : { tone: 'neutral', title: 'Review the AI draft before approval', text: 'Edit inline, download and revise externally, or upload the reviewed workbook, then use Validate review above.' }
   const approvalRequired = blockers.some(bl => bl.approvalType && bl.severity !== 'wait') || pendingForOpp.length > 0
-  const readinessSummary = blocked
-    ? `${blockers.length} readiness item${blockers.length === 1 ? '' : 's'} need attention`
-    : pendingForOpp.length > 0
-      ? `${pendingForOpp.length} approval${pendingForOpp.length === 1 ? '' : 's'} pending`
-      : submitted
-        ? 'Submitted to customer'
-        : 'Ready — no blockers'
+  const readinessSummary = readinessSummaryFor({ blockers, pendingForOpp, submitted })
 
   // Forward `needed` and `anyOf`. Dropping them let recordDecision fall back to
   // [approver], so a joint LJS+AH gate raised from this page — the Red customer
@@ -1220,7 +1231,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
         <details className="proposal-alert-drawer" open={readinessOpen || blocked || pendingForOpp.length > 0} onToggle={e => setReadinessOpen(e.currentTarget.open)}>
           <summary>
             <span className={`proposal-alert-indicator ${blocked ? 'blocked' : 'ready'}`} />
-            <span className="proposal-alert-summary">{readinessSummary}</span>
+            <span className="proposal-alert-summary" title={readinessSummary}>{readinessSummary}</span>
             {submitted && <span className="pill won">Submitted</span>}
             <span className="proposal-alert-toggle">Readiness &amp; approval</span>
           </summary>
@@ -1692,12 +1703,11 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       {templatePreviewOpen && (
         <Modal title={`${route === 'Project' ? 'Project Proposal' : route === 'Spares' ? 'Spares Firm Offer' : 'Service Proposal'} - ${oppId}`} onClose={() => setTemplatePreviewOpen(false)} wide className="proposal-preview-modal">
           <div className="proposal-preview-toolbar">
-            <span className="hint">Live Excel workbook - narrative text is editable; prices, costs, quantities, formulas and totals are locked</span>
+            <span className="hint">Draft/reference workbook only — customer documents use the current ModAE preview</span>
             <button onClick={() => setTemplatePreviewOpen(false)}>Close</button>
           </div>
-          {!!renderedTemplateWorkbook && <div className="workbook-preview-mode-tabs" role="tablist" aria-label="Proposal workbook view">
-            <button type="button" className={templatePreviewMode === 'draft' ? 'active' : ''} onClick={() => setTemplatePreviewMode('draft')}>Draft · text editable</button>
-            <button type="button" className={templatePreviewMode === 'customer' ? 'active' : ''} onClick={() => setTemplatePreviewMode('customer')}>Customer Preview · read-only</button>
+          {!!renderedTemplateWorkbook && <div className="workbook-preview-mode-tabs" role="status" aria-label="Proposal workbook view">
+            <span className="active">Draft/reference workbook · text editable</span>
           </div>}
           {templateLoading && <div className="hint">Loading proposal workbook...</div>}
           {templateError && <div className="errbox" role="alert">{templateError}</div>}

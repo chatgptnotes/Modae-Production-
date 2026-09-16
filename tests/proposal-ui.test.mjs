@@ -24,10 +24,12 @@ test('proposal review and context panels use distinct, descriptive labels', () =
 test('proposal readiness drawer exposes a useful collapsed summary', () => {
   const proposal = read('src/pages/Proposal.jsx')
 
-  assert.match(proposal, /const readinessSummary = blocked/)
+  assert.match(proposal, /const readinessSummaryFor = \(\{ blockers = \[\], pendingForOpp = \[\], submitted = false \}/)
+  assert.match(proposal, /item\$\{blockers\.length === 1 \? '' : 's'\} need attention: \$\{visible\.join\('; '\)\}/)
+  assert.match(proposal, /const readinessSummary = readinessSummaryFor\(\{ blockers, pendingForOpp, submitted \}\)/)
   assert.match(proposal, /'Ready — no blockers'/)
   assert.match(proposal, /'Submitted to customer'/)
-  assert.match(proposal, /<span className="proposal-alert-summary">\{readinessSummary\}<\/span>/)
+  assert.match(proposal, /<span className="proposal-alert-summary" title=\{readinessSummary\}>\{readinessSummary\}<\/span>/)
 })
 
 test('proposal drawers use compact expanded surfaces', () => {
@@ -62,6 +64,26 @@ test('Spares proposals carry the standard support rows without export duplicatio
   assert.match(props, /route === 'Spares' \? withSparesSupportRows\(bom\)/)
   assert.match(store, /const supportBom = withSparesSupportRows\(\(base\.bom \|\| \[\]\)\.filter\(isSparesSupportRow\)\)/)
   assert.match(exporter, /p\.bom \|\| \[\]\)\.filter\(line => !isSparesSupportRow\(line\)/)
+})
+
+test('customer preview is clearly separated from the legacy workbook draft', () => {
+  const proposal = read('src/pages/Proposal.jsx')
+  assert.match(proposal, /Draft workbook \(reference\)/)
+  assert.match(proposal, /customer documents use the current ModAE preview/)
+  assert.doesNotMatch(proposal, />Customer Preview · read-only</)
+})
+
+test('submitted proposal communications capture the approved proposal snapshot', () => {
+  const submission = read('src/workbench/SubmissionPanel.jsx')
+  const store = read('src/store.jsx')
+  assert.match(submission, /proposalSnapshot: snapshotProposal\(p\)/)
+  assert.match(store, /revision: p\.revision, bom: p\.bom/)
+})
+
+test('generated support rows continue the live BOQ numbering', () => {
+  const exporter = read('src/proposal/templateExcelExport.js')
+  assert.match(exporter, /lines\.length \+ index \+ 1/)
+  assert.match(exporter, /const round2 = value/)
 })
 
 test('saved Spares proposal repair compares the full product and support BoQ', () => {

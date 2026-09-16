@@ -77,11 +77,20 @@ test('proposal attachment is opt-in and requires validated review', () => {
   assert.match(submission, /\.\.\.\(attachProposal \? \[/)
 })
 
+test('approved releases replace redundant self-attestation checks before Gmail opens', () => {
+  assert.match(submission, /const canSend = !pendingConds\.length/)
+  assert.match(submission, /Current proposal revision is approved for customer submission\./)
+  assert.doesNotMatch(submission, /Customer-facing prices and validity verified/)
+  assert.doesNotMatch(submission, /No restricted commercial data in the document/)
+  assert.doesNotMatch(submission, /Named reviewer:/)
+  assert.doesNotMatch(submission, /Complete the human-review checklist/)
+})
+
 test('submission panel provides a direct proposal view', () => {
   assert.match(submission, /openProposalPreview/)
-  assert.match(submission, /<WorkbookPreview workbook=\{previewWorkbook\}/)
+  assert.match(submission, /<PrintDoc p=\{p\} opp=\{opp\}/)
   assert.match(submission, /proposal-preview-modal/)
-  assert.match(submission, /proposalWorkbookPreview/)
+  assert.doesNotMatch(submission, /proposalWorkbookPreview/)
   assert.match(read('src/proposal/emailAttachments.js'), /parseProposalWorkbook/)
   assert.match(submission, /proposal-preview-modal/)
   assert.match(submission, /View proposal/)
