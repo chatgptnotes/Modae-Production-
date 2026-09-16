@@ -11,7 +11,8 @@ import { defaultCosting, MILESTONES } from './seed.js'
 import { applyAdjustment, normalizeMarkupPct } from './pricing.js'
 import { isPlaceholderSparesLine } from './proposal/sparesBoq.js'
 import { classRule, classOrder, noExceptionKeys } from './customerClasses.js'
-import { needsCommercialApproval, needsCommercialDecision, commercialApprovalDetails, isLegacyCommercialClarification, isCommercialConfirmationRow } from './commercialTerms.js'
+import { needsCommercialApproval, needsCommercialDecision, commercialApprovalDetails, isLegacyCommercialClarification, isCommercialConfirmationRow, isDeliveryBasisClarification, sourceContainsDeliveryRequirement } from './commercialTerms.js'
+import { clarificationTopic } from './leadClarification.js'
 
 // A customer answer is complete when it contains a response and does not
 // leave an explicit missing-information note. AI field mapping review is an
@@ -22,6 +23,32 @@ export const isClarificationResolved = clarification => {
   if (clarification.status === 'Answered') return true
   return !!String(clarification.response || '').trim()
     && !String(clarification.missing || '').trim()
+}
+
+// A clarification topic can reach state through more than one import or AI
+// suggestion. One customer response resolves that fact; duplicate records stay
+// in the audit trail but must not leave a hidden open copy blocking Proposal.
+export function actionableClarifications(opp, state = {}) {
+  if (!opp) return []
+  const sourceLead = [...(state.leads || []), ...(state.leadArchive || [])]
+    .find(lead => lead.id === opp.sourceLeadId || lead.oppId === opp.id)
+  const sourceText = [sourceLead?.subject, sourceLead?.body, opp.remarks, opp.oppName]
+    .filter(Boolean).join(' ')
+  const byTopic = new Map()
+  for (const clarification of state.clarifications || []) {
+    if (clarification.oppId !== opp.id
+      || isLegacyCommercialClarification(clarification)
+      || isCommercialConfirmationRow(clarification)
+      || (sourceContainsDeliveryRequirement(sourceText) && isDeliveryBasisClarification(clarification))) continue
+    const topic = clarificationTopic(clarification.q) || `record:${clarification.id}`
+    const current = byTopic.get(topic)
+    // Prefer a completed record for the topic. This makes the displayed
+    // clarification and the transition gate agree even with legacy duplicates.
+    if (!current || (!isClarificationResolved(current) && isClarificationResolved(clarification))) {
+      byTopic.set(topic, clarification)
+    }
+  }
+  return [...byTopic.values()]
 }
 
 // A lead-stage verification snapshot of the shape this class records satisfies
@@ -172,11 +199,8 @@ export function readiness(opp, proposal, state) {
   // Proposal transition and readiness must agree about customer clarifications.
   // Keep unanswered, sent, and review-needed questions visible as blockers so
   // the green readiness summary cannot contradict the transition dialog.
-  const openClarifications = (state.clarifications || []).filter(c =>
-    c.oppId === opp.id
-    && !isLegacyCommercialClarification(c)
-    && !isCommercialConfirmationRow(c)
-    && !isClarificationResolved(c))
+  const openClarifications = actionableClarifications(opp, state)
+    .filter(c => !isClarificationResolved(c))
   if (openClarifications.length) {
     b.push({
       key: 'clarifications', severity: 'block',
@@ -460,7 +484,7 @@ export function transitionBlockers(opp, target, proposal, state) {
     }
   }
 
-  const clarifications = (state.clarifications || []).filter(c => c.oppId === opp.id && !isLegacyCommercialClarification(c) && !isCommercialConfirmationRow(c))
+  const clarifications = actionableClarifications(opp, state)
   if (next >= MILESTONES.indexOf('Sourcing') && clarifications.some(c => !isClarificationResolved(c))) {
     b.push({ key: 'clarifications', severity: 'block', text: `All customer clarifications must be resolved before moving to ${target}` })
   }

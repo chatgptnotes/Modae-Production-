@@ -1,0 +1,51 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+
+import { actionableClarifications, readiness, transitionBlockers } from '../src/gates.js'
+
+const opp = {
+  id: 'CLAR-1', sellTo: 'ACME', oppName: 'VM600 supply', owner: 'PJS',
+  customerStatus: 'Green', route: 'Spares', oppType: 'Spares', milestone: 'Sourcing',
+  eucName: 'ACME Plant', eucLocation: 'Chennai', contactPerson: 'Alex', contactPhone: '+91 98765 43210',
+}
+const proposal = { bom: [], terms: [], revision: '00' }
+const technicalQuestion = 'Please confirm nameplate part numbers, quantities and any legacy references for each line item.'
+
+test('one completed duplicate clarification resolves the topic for Proposal gates', () => {
+  const state = {
+    approvals: [],
+    clarifications: [
+      { id: 'CL-1', oppId: opp.id, category: 'Technical', q: technicalQuestion, status: 'Open' },
+      { id: 'CL-2', oppId: opp.id, category: 'Technical', q: technicalQuestion, status: 'Answered', response: 'VM600 IOC4T, two units.' },
+    ],
+  }
+  const topics = actionableClarifications(opp, state)
+  assert.equal(topics.length, 1)
+  assert.equal(topics[0].id, 'CL-2')
+  assert.equal(readiness(opp, proposal, state).some(blocker => blocker.key === 'clarifications'), false)
+  assert.equal(transitionBlockers(opp, 'Proposal', proposal, state).some(blocker => blocker.key === 'clarifications'), false)
+})
+
+test('a different unanswered clarification still blocks Proposal', () => {
+  const state = {
+    approvals: [],
+    clarifications: [
+      { id: 'CL-1', oppId: opp.id, category: 'Technical', q: technicalQuestion, status: 'Answered', response: 'VM600 IOC4T, two units.' },
+      { id: 'CL-3', oppId: opp.id, category: 'Site data', q: 'Please provide the machine tag and existing sensor configuration.', status: 'Open' },
+    ],
+  }
+  assert.equal(transitionBlockers(opp, 'Proposal', proposal, state).some(blocker => blocker.key === 'clarifications'), true)
+})
+
+test('a redundant delivery clarification does not block when the RFQ states delivery', () => {
+  const state = {
+    approvals: [],
+    clarifications: [{
+      id: 'CL-4', oppId: opp.id, category: 'Commercial', status: 'Open',
+      q: 'Confirm the required delivery period and destination (ex-works or door delivery).',
+    }],
+  }
+  const deliveryOpp = { ...opp, remarks: 'Delivery to Chennai is required within 12 weeks.' }
+  assert.equal(actionableClarifications(deliveryOpp, state).length, 0)
+  assert.equal(transitionBlockers(deliveryOpp, 'Proposal', proposal, state).some(blocker => blocker.key === 'clarifications'), false)
+})

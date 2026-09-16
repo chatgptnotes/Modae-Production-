@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, REVISION_TYPES, DEFAULT_WORKFLOW, isWorkflowAvailable } from '../seed.js'
 import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY, gmailComposeHref, displayRole, displayRoles, displayRoleLabel, formatISTDateTime } from '../utils.js'
-import { pricingThresholdExceptions, readiness, isBlocked, nextActionWith, transitionBlockers, isClarificationResolved } from '../gates.js'
+import { pricingThresholdExceptions, readiness, isBlocked, nextActionWith, transitionBlockers, isClarificationResolved, actionableClarifications } from '../gates.js'
 import { COMMERCIAL_RX, ConditionCompletion } from './Approvals.jsx'
 import { Chip, ClassChip, AiBadge, WarnBox, ErrBox, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
@@ -417,9 +417,8 @@ export default function Workbench() {
     if (tab !== 'overview') nav(`/opp/${opp.id}/overview`)
     window.setTimeout(() => detailsRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), tab === 'overview' ? 0 : 120)
   }
-  const clarificationRows = (store.clarifications || []).filter(c => c.oppId === opp.id && !isClarificationResolved(c)
-    && !isLegacyCommercialClarification(c)
-    && !(sourceContainsDeliveryRequirement(sourceText) && isDeliveryBasisClarification(c)))
+  const clarificationRows = actionableClarifications(opp, store)
+    .filter(c => !isClarificationResolved(c))
   const deviationRows = (proposal?.terms || []).filter(t => t.status === 'Deviation')
   // `anyOf` blockers (§5A "LJS OR AN") name two approvers but need only one, so
   // the owner line must not read as a joint requirement.
@@ -1171,14 +1170,10 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
   const store = useStore()
   // Legacy commercial rows remain in state for audit history, but they are not
   // customer clarifications and must not appear in this workflow or its counts.
-  const rows = store.clarifications.filter(c => c.oppId === opp.id
-    && !isLegacyCommercialClarification(c)
-    && !isCommercialConfirmationRow(c)
-    && !(sourceContainsDeliveryRequirement(sourceText) && isDeliveryBasisClarification(c)))
-    // Keep repeated imports/audit events, but show one actionable card per
-    // question in the active workflow.
-    .filter((row, index, all) => all.findIndex(candidate =>
-      candidate.category === row.category && candidate.gap === row.gap && candidate.q === row.q) === index)
+  // The same topic-level list drives the cards and lifecycle gates. Repeated
+  // imports remain auditable in state, but one completed answer clears the
+  // shared customer fact instead of leaving a hidden duplicate open.
+  const rows = actionableClarifications(opp, store)
   // Sent questions are still waiting for the customer's reply. Only answered
   // questions should be excluded from the single-reply update flow.
   const open = rows.filter(c => !isClarificationResolved(c))
