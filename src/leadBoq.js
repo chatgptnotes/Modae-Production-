@@ -53,27 +53,33 @@ export function buildLeadProposalData(lead, priceLists, vendorPrices = []) {
     description: item.description,
     pn: item.partNumber,
     qty: item.qty,
-  })), allParts).map(({ item, match }, i) => ({
-    origin: 'customer',
-    custRef: extracted[i].customerRef || item.pn || item.description,
-    pn: match?.pn || item.pn || '',
-    desc: match?.desc || item.description,
-    qty: item.qty,
-    uom: extracted[i].uom || 'EA',
-    oem: match ? 'B&K' : 'TBD',
-    match: match ? (match.tier === 1 ? 'Exact' : `Suggested · tier ${match.tier}`) : 'Unmatched',
-    conf: match ? (match.tier === 1 ? 100 : Math.max(60, extracted[i].confidence)) : extracted[i].confidence,
-    confirmed: !!match && match.tier === 1,
-    priceList: match ? `${match.list || 'Price list'}${match.version ? ` ${match.version}` : ''}` : 'Ad-hoc',
-    priceSource: match?.list === 'Vendor quote' ? 'vendor-quote' : match ? 'price-list' : 'manual',
-    priceSourceName: match?.list === 'Vendor quote' ? (match.desc || 'Vendor reference') : match?.list || 'Manual entry',
-    // An unmatched line has never had a usable price source. Keep that
-    // distinct from an actual catalogue row whose validity has elapsed.
-    priceState: match ? 'Current' : 'Needs pricing',
-    listPrice: match?.price || 0,
-    currency: match?.currency || 'INR',
-    evidence: extracted[i].evidence,
-  }))
+  })), allParts).map(({ item, match }, i) => {
+    // A description-only match is a useful catalogue suggestion, but it is
+    // not evidence that the customer requested that exact catalogue part.
+    // Do not import its price into Sourcing until a salesperson confirms it.
+    const pricedMatch = match && match.tier < 4 ? match : null
+    return {
+      origin: 'customer',
+      custRef: extracted[i].customerRef || item.pn || item.description,
+      pn: pricedMatch?.pn || item.pn || '',
+      desc: pricedMatch?.desc || item.description,
+      qty: item.qty,
+      uom: extracted[i].uom || 'EA',
+      oem: pricedMatch ? 'B&K' : 'TBD',
+      match: pricedMatch ? (pricedMatch.tier === 1 ? 'Exact' : `Suggested · tier ${pricedMatch.tier}`) : (match ? 'Suggested · compare' : 'Unmatched'),
+      conf: pricedMatch ? (pricedMatch.tier === 1 ? 100 : Math.max(60, extracted[i].confidence)) : extracted[i].confidence,
+      confirmed: false,
+      priceList: pricedMatch ? `${pricedMatch.list || 'Price list'}${pricedMatch.version ? ` ${pricedMatch.version}` : ''}` : 'Ad-hoc',
+      priceSource: pricedMatch?.list === 'Vendor quote' ? 'vendor-quote' : pricedMatch ? 'price-list' : 'manual',
+      priceSourceName: pricedMatch?.list === 'Vendor quote' ? (pricedMatch.desc || 'Vendor reference') : pricedMatch?.list || 'Manual entry',
+      // An unmatched line has never had a usable price source. Keep that
+      // distinct from an actual catalogue row whose validity has elapsed.
+      priceState: pricedMatch ? 'Current' : 'Needs pricing',
+      listPrice: pricedMatch?.price || 0,
+      currency: pricedMatch?.currency || 'INR',
+      evidence: extracted[i].evidence,
+    }
+  })
   const bom = workbenchRows.map(row => ({
     itemCategory: 'Hardware', pn: row.pn, custRef: row.custRef,
     desc: row.desc, uom: row.uom, listPrice: row.listPrice,

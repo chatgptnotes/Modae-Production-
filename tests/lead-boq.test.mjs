@@ -45,3 +45,15 @@ test('duplicate structured line items collapse and combine quantities', () => {
   })
   assert.deepEqual(items.map(item => [item.partNumber, item.qty]), [['MPC4', 3]])
 })
+
+test('description-only catalogue suggestions do not import a price automatically', () => {
+  const { workbenchRows } = buildLeadProposalData({
+    ai: { lineItems: [{ description: 'VM600 rack backplane connectors', qty: 2 }] },
+  }, seedPriceLists)
+  assert.equal(workbenchRows.length, 1)
+  assert.equal(workbenchRows[0].pn, '')
+  assert.equal(workbenchRows[0].listPrice, 0)
+  assert.equal(workbenchRows[0].priceState, 'Needs pricing')
+  assert.equal(workbenchRows[0].confirmed, false)
+  assert.equal(workbenchRows[0].match, 'Suggested · compare')
+})
