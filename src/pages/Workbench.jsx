@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, REVISION_TYPES, DEFAULT_WORKFLOW, isWorkflowAvailable } from '../seed.js'
 import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY, gmailComposeHref, displayRole, displayRoles, displayRoleLabel, formatISTDateTime } from '../utils.js'
-import { pricingThresholdExceptions, readiness, isBlocked, nextActionWith, transitionBlockers } from '../gates.js'
+import { pricingThresholdExceptions, readiness, isBlocked, nextActionWith, transitionBlockers, isClarificationResolved } from '../gates.js'
 import { COMMERCIAL_RX, ConditionCompletion } from './Approvals.jsx'
 import { Chip, ClassChip, AiBadge, WarnBox, ErrBox, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
@@ -128,6 +128,8 @@ const workflowStepsFor = (config, route) => {
     tab: step.tab || WORKFLOW_STEPS.find(item => item.label === step.milestone)?.tab || 'overview',
   }))
 }
+const hasPendingApproval = (approvals, oppId) => (approvals || []).some(approval =>
+  approval.oppId === oppId && approval.status === 'Pending')
 const REMOVED_WORKFLOW_MILESTONES = new Set(['Submitted', 'PO Validation', 'Handover'])
 const milestoneSlug = milestone => {
   if (REMOVED_WORKFLOW_MILESTONES.has(milestone)) return 'follow-up'
@@ -201,25 +203,52 @@ export default function Workbench() {
   if (!isWorkflowAvailable(opp.oppType)) return <OpportunityComingSoon opp={opp} />
 
   const goTab = k => nav(`/opp/${opp.id}/${k}`)
-  const workflowSteps = workflowStepsFor(store.config, opp.route)
+  const allWorkflowSteps = workflowStepsFor(store.config, opp.route)
+  // Approval is an exception-driven stage. Keep it out of an opportunity's
+  // rail until an approval request is actually pending, while leaving the
+  // central Approvals page available for the rest of the workspace.
+  const approvalPending = hasPendingApproval(store.approvals, opp.id)
+  const workflowSteps = allWorkflowSteps.filter(step =>
+    step.milestone !== 'Approval' || approvalPending)
+  const allWorkflowBySlug = Object.fromEntries(allWorkflowSteps.map(step => [step.slug, step]))
   const workflowBySlug = Object.fromEntries(workflowSteps.map(step => [step.slug, step]))
   const workflowStepForTab = currentTab => workflowSteps.find(step =>
     [step.tab, ...(step.tabs || [])].includes(currentTab))
   const legacyStep = tab === 'overview' && opp.route !== 'Spares'
     ? null
-    : workflowStepForTab(tab)?.slug || WORKFLOW_STEP_BY_TAB[tab]
+    : workflowStepForTab(tab)?.slug || (workflowBySlug[WORKFLOW_STEP_BY_TAB[tab]] ? WORKFLOW_STEP_BY_TAB[tab] : null)
   const requestedStep = searchParams.get('step')
   const effectiveMilestone = opp.route === 'Spares' && opp.milestone === 'Qualification' ? 'Screening' : opp.milestone
   const requestedWorkflowStep = workflowBySlug[requestedStep]
     || workflowSteps.find(step => (step.milestones || [step.milestone]).includes(requestedStep))
-  const activeStep = requestedWorkflowStep?.slug || legacyStep || workflowSteps.find(step =>
-    (step.milestones || [step.milestone]).includes(effectiveMilestone))?.slug || 'intake'
+  const persistedWorkflowStep = allWorkflowSteps.find(step =>
+    (step.milestones || [step.milestone]).includes(effectiveMilestone))
+  const fallbackStep = workflowBySlug[persistedWorkflowStep?.slug]
+    || workflowSteps[Math.max(0, allWorkflowSteps.indexOf(persistedWorkflowStep) - 1)]
+    || workflowSteps[0]
+  const activeStep = requestedWorkflowStep?.slug
+    || (requestedStep && allWorkflowBySlug[requestedStep] ? fallbackStep?.slug : null)
+    || legacyStep
+    || fallbackStep?.slug
+    || 'intake'
   const activeStepConfig = workflowBySlug[activeStep]
-  const viewTab = requestedWorkflowStep ? activeStepConfig.tab : (legacyStep ? activeStepConfig.tab : tab)
+  const hiddenApprovalTab = tab === 'approval' && !workflowSteps.some(step => step.tab === 'approval')
+  const viewTab = requestedWorkflowStep
+    ? activeStepConfig.tab
+    : (legacyStep ? activeStepConfig.tab : (hiddenApprovalTab ? activeStepConfig.tab : tab))
   const serviceMilestonePhase = { Intake: 0, Qualification: 1, Screening: 2, Sourcing: 2, Proposal: 3, Approval: 4, Submitted: 5, 'Follow-up': 7 }
-  const persistedStepIndex = opp.route === 'Service'
+  const persistedServicePhase = opp.route === 'Service'
     ? (Number.isInteger(opp.servicePhase) ? opp.servicePhase : (serviceMilestonePhase[effectiveMilestone] ?? 0))
-    : workflowSteps.findIndex(step => (step.milestones || [step.milestone]).includes(effectiveMilestone))
+    : null
+  const persistedStepIndex = opp.route === 'Service'
+    ? workflowSteps.filter(step => step.servicePhase != null && step.servicePhase < persistedServicePhase).length
+    : Math.max(0, workflowSteps.findIndex(step => (step.milestones || [step.milestone]).includes(effectiveMilestone)))
+  const hiddenApprovalRequested = requestedStep && allWorkflowBySlug[requestedStep] && !workflowBySlug[requestedStep]
+  useEffect(() => {
+    if (hiddenApprovalRequested && fallbackStep?.slug) {
+      nav(`/opp/${opp.id}?step=${encodeURIComponent(fallbackStep.slug)}`, { replace: true })
+    }
+  }, [hiddenApprovalRequested, fallbackStep?.slug, nav, opp.id])
   const selectStep = step => {
     if (!workflowBySlug[step]) return
     nav(`/opp/${opp.id}?step=${encodeURIComponent(step)}`)
@@ -299,6 +328,26 @@ export default function Workbench() {
   const canRequestApproval = blocker => !!blocker.approvalType
   const canRequestException = blocker => !blocker.approvalType
     && ['amber-fee', 'red-clearance'].includes(blocker.key)
+  // The transition dialog stores the blocker snapshot from the click that
+  // opened it. Clarification answers and approval decisions can change the
+  // underlying store while the dialog is still open, so keep it synchronized
+  // and close it once its target is no longer blocked.
+  useEffect(() => {
+    if (!transition || transition.kind !== 'blocked') return
+    const currentBlockers = transitionBlockers(opp, transition.target, store.getProposal(opp.id), store)
+    const signature = blockers => JSON.stringify(blockers.map(item => ({
+      key: item.key, severity: item.severity, text: item.text, approvalType: item.approvalType,
+    })))
+    if (!currentBlockers.length) {
+      setTransition(null)
+      return
+    }
+    if (signature(currentBlockers) !== signature(transition.blockers || [])) {
+      setTransition(previous => previous && previous.kind === 'blocked'
+        ? { ...previous, blockers: currentBlockers }
+        : previous)
+    }
+  }, [transition?.kind, transition?.target, transition?.blockers, opp.id, opp.milestone, store.clarifications, store.approvals, store.proposals])
   const approvalRequestFor = blocker => (store.approvals || []).find(a =>
     a.oppId === opp.id && a.type === blocker.approvalType && a.status === 'Pending')
   const approvalContextFor = blocker => {
@@ -368,7 +417,7 @@ export default function Workbench() {
     if (tab !== 'overview') nav(`/opp/${opp.id}/overview`)
     window.setTimeout(() => detailsRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), tab === 'overview' ? 0 : 120)
   }
-  const clarificationRows = (store.clarifications || []).filter(c => c.oppId === opp.id && ['Draft', 'Open', 'Sent'].includes(c.status)
+  const clarificationRows = (store.clarifications || []).filter(c => c.oppId === opp.id && !isClarificationResolved(c)
     && !isLegacyCommercialClarification(c)
     && !(sourceContainsDeliveryRequirement(sourceText) && isDeliveryBasisClarification(c)))
   const deviationRows = (proposal?.terms || []).filter(t => t.status === 'Deviation')
@@ -459,7 +508,7 @@ export default function Workbench() {
                   {requestable && exception?.status === 'Rejected' && <span>Exception <b>{exception.id}</b> was rejected; resolve the requirement or request a new review.</span>}
                 </div>
               })}</div>
-              <div className="forms-actions"><button className="primary" onClick={() => setTransition(null)}>Close</button><button onClick={() => openTransitionTab('approvals')}>Open approvals</button></div>
+              <div className="forms-actions"><button className="primary" onClick={() => setTransition(null)}>Close</button></div>
             </>
           ) : (
             <>
@@ -1116,6 +1165,7 @@ const CLAR_SUGGESTIONS = {
 }
 
 const clarTone = s => (s === 'Answered' ? 'state-Accepted' : ['Sent', 'Needs review'].includes(s) ? 'state-Review' : 'grey')
+const clarificationStatus = clarification => isClarificationResolved(clarification) ? 'Answered' : clarification.status
 
 function ClarificationsTab({ opp, sourceText = '', compact = false }) {
   const store = useStore()
@@ -1131,10 +1181,10 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
       candidate.category === row.category && candidate.gap === row.gap && candidate.q === row.q) === index)
   // Sent questions are still waiting for the customer's reply. Only answered
   // questions should be excluded from the single-reply update flow.
-  const open = rows.filter(c => c.status !== 'Answered')
-  const awaitingReply = rows.filter(c => c.status === 'Sent').length
-  const needsReview = rows.filter(c => c.status === 'Needs review').length
-  const answered = rows.filter(c => c.status === 'Answered').length
+  const open = rows.filter(c => !isClarificationResolved(c))
+  const awaitingReply = rows.filter(c => !isClarificationResolved(c) && c.status === 'Sent').length
+  const needsReview = rows.filter(c => !isClarificationResolved(c) && c.status === 'Needs review').length
+  const answered = rows.filter(c => isClarificationResolved(c)).length
   const [draftOpen, setDraftOpen] = useState(false)
   const [draft, setDraft] = useState(null)
   const [sentOk, setSentOk] = useState(false)
@@ -1478,15 +1528,15 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
           <article className="clarification-card" key={c.id}>
             <div className="clarification-card-head">
               <div className="clarification-card-label"><b>{c.category}</b><span>Clarification {index + 1}</span></div>
-              <Chip tone={clarTone(c.status)}>{c.status}</Chip>
+              <Chip tone={clarTone(clarificationStatus(c))}>{clarificationStatus(c)}</Chip>
             </div>
             <div className="clarification-card-question">{c.q}</div>
             <div className="clarification-card-meta"><span><b>Gap:</b> {c.gap}</span><span><b>Evidence:</b> {c.evidence || '—'}</span><span><b>Owner:</b> {displayRole(c.owner)}</span><span><b>Due:</b> {ddMmmYY(c.due) || '—'}</span></div>
-            {(c.response || c.missing) && <div className={c.status === 'Needs review' ? 'warnbox' : 'okbox'}>{c.response && <>Response: {c.response}</>}{c.missing && <div className="hint"><b>Still needed:</b> {c.missing}</div>}<div className="hint">From {c.answerSource || c.audience || 'source'}{c.answeredAt ? ` · ${ddMmmYY(c.answeredAt)}` : ''}</div>{c.answerEvidence && <div className="hint">Evidence: {c.answerEvidence}</div>}{(c.attachments || []).map(f => <div key={f.name} className="hint"><Icon name="fileText" size={11} /> {f.name}</div>)}</div>}
+            {(c.response || c.missing) && <div className={`clarification-answer-box ${clarificationStatus(c) === 'Needs review' ? 'needs-review' : 'answered'}`}>{c.response && <>Response: {c.response}</>}{c.missing && <div className="hint"><b>Still needed:</b> {c.missing}</div>}<div className="hint">From {c.answerSource || c.audience || 'source'}{c.answeredAt ? ` · ${ddMmmYY(c.answeredAt)}` : ''}</div>{c.answerEvidence && <div className="hint">Evidence: {c.answerEvidence}</div>}{(c.attachments || []).map(f => <div key={f.name} className="hint"><Icon name="fileText" size={11} /> {f.name}</div>)}</div>}
             <AiFieldSuggestion suggestion={c.aiFieldSuggestion} onConfirm={() => confirmAiField(c)} onReject={() => rejectAiField(c)} />
             <div className="clarification-card-actions">
-              <label>Updates field<select value={c.field || ''} disabled={c.status === 'Answered'} title="Once answered, apply this response straight to that Opportunity Details field" onChange={e => store.updateClarification(c.id, { field: e.target.value })}>{OPP_FIELD_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
-              <button onClick={() => openAnswer(c)}>{c.status === 'Answered' ? 'Edit information' : 'Update information'}</button>
+              <label>Updates field<select value={c.field || ''} disabled={isClarificationResolved(c)} title="Once answered, apply this response straight to that Opportunity Details field" onChange={e => store.updateClarification(c.id, { field: e.target.value })}>{OPP_FIELD_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+              <button onClick={() => openAnswer(c)}>{isClarificationResolved(c) ? 'Edit information' : 'Update information'}</button>
             </div>
           </article>
         ))}
@@ -1501,13 +1551,13 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
                 <td>{c.id}</td>
                 <td>{c.category}</td>
                 <td>{c.gap}<div className="hint">{c.evidence}</div></td>
-                <td>{c.q}{(c.response || c.missing) && <div className={c.status === 'Needs review' ? 'warnbox' : 'okbox'}>{c.response && <>Response: {c.response}</>}{c.missing && <div className="hint"><b>Still needed:</b> {c.missing}</div>}<div className="hint">From {c.answerSource || c.audience || 'source'}{c.answeredAt ? ` · ${ddMmmYY(c.answeredAt)}` : ''}</div>{c.answerEvidence && <div className="hint">Evidence: {c.answerEvidence}</div>}{(c.attachments || []).map(f => <div key={f.name} className="hint"><Icon name="fileText" size={11} /> {f.name}</div>)}</div>}<AiFieldSuggestion suggestion={c.aiFieldSuggestion} onConfirm={() => confirmAiField(c)} onReject={() => rejectAiField(c)} /></td>
+                <td>{c.q}{(c.response || c.missing) && <div className={`clarification-answer-box ${clarificationStatus(c) === 'Needs review' ? 'needs-review' : 'answered'}`}>{c.response && <>Response: {c.response}</>}{c.missing && <div className="hint"><b>Still needed:</b> {c.missing}</div>}<div className="hint">From {c.answerSource || c.audience || 'source'}{c.answeredAt ? ` · ${ddMmmYY(c.answeredAt)}` : ''}</div>{c.answerEvidence && <div className="hint">Evidence: {c.answerEvidence}</div>}{(c.attachments || []).map(f => <div key={f.name} className="hint"><Icon name="fileText" size={11} /> {f.name}</div>)}</div>}<AiFieldSuggestion suggestion={c.aiFieldSuggestion} onConfirm={() => confirmAiField(c)} onReject={() => rejectAiField(c)} /></td>
                 <td>{displayRole(c.owner)}</td>
                 <td>{c.audience}</td>
                 <td>{ddMmmYY(c.due)}</td>
-                <td><Chip tone={clarTone(c.status)}>{c.status}</Chip></td>
+                <td><Chip tone={clarTone(clarificationStatus(c))}>{clarificationStatus(c)}</Chip></td>
                 <td>
-                  <select value={c.field || ''} disabled={c.status === 'Answered'}
+                  <select value={c.field || ''} disabled={isClarificationResolved(c)}
                     title="Once answered, apply this response straight to that Opportunity Details field"
                     onChange={e => store.updateClarification(c.id, { field: e.target.value })}>
                     {OPP_FIELD_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}

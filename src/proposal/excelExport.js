@@ -2,6 +2,7 @@ import XLSX from 'xlsx-js-style'
 import { MODAE_COMPANY } from '../proposalDoc.js'
 import { MODAE_DOCUMENT_STANDARDS } from '../branding/modae.js'
 import { generateProposalWorkbook, customerSafe } from './templateExcelExport.js'
+import { currencySymbol } from '../currency.js'
 
 const routeSheetName = (route, revision) => route === 'Services'
   ? `BoQ & Price-${revision}`
@@ -12,6 +13,7 @@ const routeSheetName = (route, revision) => route === 'Services'
 const clean = value => value == null ? '' : value
 
 export function proposalWorkbookRows({ p, opp, doc, priced, totalQty, lineQuoted, route }) {
+  const symbol = currencySymbol(p.sourceCurrency || 'INR')
   const cover = [
     ['', MODAE_COMPANY.tagline],
     ['', MODAE_COMPANY.name],
@@ -42,7 +44,7 @@ export function proposalWorkbookRows({ p, opp, doc, priced, totalQty, lineQuoted
   ]
 
   const priceHeader = route === 'Spares' ? ['Sl.', 'Item Description', 'Proposed Model/Part No.', 'Qty'] : ['Sl.', 'Item Description', 'Model / Part Number', 'Total Qty', 'UOM']
-  if (priced) priceHeader.push('Unit Price ₹', 'Total Price ₹')
+  if (priced) priceHeader.push(`Unit Price ${symbol}`, `Total Price ${symbol}`)
   const rows = (p.bom || []).map((line, i) => {
     const qty = totalQty(line)
     const row = route === 'Spares' ? [i + 1, line.desc || line.itemCategory || '', line.pn || '', qty] : [i + 1, line.desc || line.itemCategory || '', line.pn || '', qty, line.uom || '']
@@ -150,8 +152,9 @@ export function proposalWorkbookBase64(args) {
 // covering letter and optional documents can still be shared explicitly, but
 // no standard terms or internal workbook sheets are sent without a choice.
 export function buildPricedBoqWorkbook({ p, opp, priced, totalQty, lineQuoted, route }) {
+  const symbol = currencySymbol(p.sourceCurrency || 'INR')
   const headers = route === 'Spares' ? ['Sl.', 'Item Description', 'Proposed Model/Part No.', 'Qty'] : ['Sl.', 'Item Description', 'Model / Part Number', 'Total Qty', 'UOM']
-  if (priced) headers.push('Unit Price ₹', 'Total Price ₹')
+  if (priced) headers.push(`Unit Price ${symbol}`, `Total Price ${symbol}`)
   const rows = (p.bom || []).map((line, i) => {
     const qty = totalQty(line)
     const row = route === 'Spares' ? [i + 1, line.desc || line.itemCategory || '', line.pn || '', qty] : [i + 1, line.desc || line.itemCategory || '', line.pn || '', qty, line.uom || '']

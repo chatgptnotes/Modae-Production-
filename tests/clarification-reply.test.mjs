@@ -18,6 +18,14 @@ test('clarification reply flow has one reply upload action and AI matching', () 
   assert.match(source, /store\.addCommunication\(opp\.id/)
 })
 
+test('answered clarification responses use the green success treatment', () => {
+  const source = read('src/pages/Workbench.jsx')
+  const styles = read('src/styles.css')
+  assert.match(source, /clarification-answer-box \$\{c\.status === 'Needs review' \? 'needs-review' : 'answered'\}/)
+  assert.match(styles, /\.clarification-answer-box\.answered[\s\S]*var\(--status-success-soft\)/)
+  assert.match(styles, /\.clarification-answer-box\.needs-review[\s\S]*var\(--status-warning-soft\)/)
+})
+
 test('AI endpoints expose clarification answer mapping', () => {
   assert.match(read('api/ai.js'), /clarification\.answer/)
   assert.match(read('api/ai.js'), /clarificationAnswerSchema/)

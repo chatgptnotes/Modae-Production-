@@ -5,6 +5,7 @@ import fs from 'node:fs'
 import { migrate, seedState, emptyState } from '../src/appState.js'
 
 const workbench = fs.readFileSync('src/pages/Workbench.jsx', 'utf8')
+const sparesWorkbench = fs.readFileSync('src/workbench/WbSpares.jsx', 'utf8')
 const store = fs.readFileSync('src/store.jsx', 'utf8')
 const api = fs.readFileSync('api/ai.js', 'utf8')
 const edgeAi = fs.readFileSync('supabase/functions/ai/index.ts', 'utf8')
@@ -20,6 +21,42 @@ test('clarifications require an answer capture before becoming answered', () => 
     'a clarification must not be blindly marked answered without the response')
   assert.match(workbench, /Files \/ mail evidence/, 'answer evidence upload must be offered')
   assert.match(store, /answerClarification\(id, \{ response, answerSource/, 'store must own answer persistence')
+})
+
+test('List Unit keeps only the plain editable amount', () => {
+  assert.doesNotMatch(sparesWorkbench, /sourcing-unit-price|sourcing-unit-symbol|sourcing-unit-meta/)
+  assert.doesNotMatch(sparesWorkbench, /Source: \{line\.currency\}/)
+})
+
+test('sourcing uses one native horizontal scroll container', () => {
+  assert.match(sparesWorkbench, /className="sheet-wrap sourcing-sheet-wrap"/)
+  assert.doesNotMatch(sparesWorkbench, /sourcing-horizontal-scrollbar|sourcingScrollbarRef|sourcingScrollbarContentRef/)
+})
+
+test('sourcing table reserves bottom space for the native horizontal scrollbar', () => {
+  const styles = fs.readFileSync('src/styles.css', 'utf8')
+  assert.match(styles, /\.sourcing-sheet-wrap \{[\s\S]*box-sizing: border-box;[\s\S]*padding-bottom: 14px;/)
+})
+
+test('valid manual sourcing lines are confirmed when added', () => {
+  assert.match(sparesWorkbench, /const quantity = Math\.max\(0, n\(newLine\.qty\)\)/)
+  assert.match(sparesWorkbench, /confirmed: quantity > 0 && price > 0/)
+  assert.match(sparesWorkbench, /priceState: price > 0 \? 'Current' : 'Needs pricing'/)
+})
+
+test('editing a row with manual pricing confirms it when the amount is valid', () => {
+  assert.match(sparesWorkbench, /patch\.confirmed = isConfirmableSparesLine\(\{ \.\.\.line, \.\.\.patch \}\)/)
+})
+
+test('removed sourcing rows keep normal text contrast', () => {
+  const styles = fs.readFileSync('src/styles.css', 'utf8')
+  assert.match(styles, /\.sourcing-zero-row \{ opacity: 1; \}/)
+})
+
+test('automatic support rows receive distinct ids so one row edit cannot rename the others', () => {
+  assert.match(store, /SPARES_SUPPORT_ROWS\.filter\(row => !existingKeys\.has\(supportKey\(row\)\)\)\.reduce\(/)
+  assert.match(store, /mintId\('SL', \[\.\.\.s\.sparesLines, \.\.\.added\]\)/)
+  assert.match(store, /sparesLines: s\.sparesLines\.map\(l => \(l\.id === id \? updated : l\)\)/)
 })
 
 test('manufacturer RFQs are repeatable and can feed spares pricing', () => {

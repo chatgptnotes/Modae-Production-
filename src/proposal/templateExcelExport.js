@@ -2,6 +2,7 @@ import ExcelJS from 'exceljs'
 import { MODAE_DOCUMENT_STANDARDS } from '../branding/modae.js'
 import { effectiveRate } from '../utils.js'
 import { isSparesSupportRow } from './sparesBoq.js'
+import { currencySymbol } from '../currency.js'
 
 const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 const SPARES_TEMPLATE_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx', import.meta.url).href
@@ -30,6 +31,7 @@ const border = { style: 'thin', color: { argb: 'FFD9D9D9' } }
 const allBorders = { top: border, left: border, bottom: border, right: border }
 const rupeeFormat = '₹#,##0.00'
 const euroFormat = '€#,##0.00'
+const customerFormat = symbol => `${symbol}#,##0.00`
 
 const columnWidth = (worksheet, column) => worksheet.getColumn(column).width || 10
 
@@ -344,6 +346,8 @@ function stripInternalCosting(worksheet) {
 
 function setCommercialSheet(workbook, worksheet, args) {
   const { p, opp, doc, totalQty, lineQuoted, lineCost, linePrice, totals, route, redactInternalCosting } = args
+  const proposalSymbol = currencySymbol(p.sourceCurrency || 'INR')
+  const proposalFormat = customerFormat(proposalSymbol)
   setPrintLayout(worksheet, 'landscape')
   setSummaryCard(worksheet, p, totals, (p.costing?.financeCostK || 0) * 1000)
   // B8/C8 were never written, so every proposal shipped the source template's
@@ -390,7 +394,7 @@ function setCommercialSheet(workbook, worksheet, args) {
   const totalRow = firstRow + lines.length + templateSupportRows.length
   if (totalRow > originalTotalRow) worksheet.spliceRows(originalTotalRow, 0, ...Array.from({ length: totalRow - originalTotalRow }, () => []))
 
-  const headers = [['B9', 'Sl. No.'], ['C9', 'Item Description'], ['D9', 'Proposed Model / Part No.'], ['E9', 'Qty'], ['F9', 'Unit Price (₹)'], ['G9', 'Total Price (₹)'], ['J9', 'Unit Price (₹)'], ['K9', 'Total Price (₹)'], ['L9', 'Unit Cost (₹)'], ['M9', 'Total Cost (₹)'], ['N9', 'Unit Cost (€)'], ['O9', 'Total Cost (€)']]
+  const headers = [['B9', 'Sl. No.'], ['C9', 'Item Description'], ['D9', 'Proposed Model / Part No.'], ['E9', 'Qty'], ['F9', `Unit Price (${proposalSymbol})`], ['G9', `Total Price (${proposalSymbol})`], ['J9', 'Unit Price (₹)'], ['K9', 'Total Price (₹)'], ['L9', 'Unit Cost (₹)'], ['M9', 'Total Cost (₹)'], ['N9', 'Unit Cost (€)'], ['O9', 'Total Cost (€)']]
   for (const [ref, value] of headers) {
     setValue(worksheet.getCell(ref), value, {
       font: { name: 'Candara', size: MODAE_DOCUMENT_STANDARDS.headingSizePt, bold: true, color: { argb: 'FF222222' } },
@@ -429,7 +433,8 @@ function setCommercialSheet(workbook, worksheet, args) {
       { value: line.desc || line.itemCategory || templateProduct?.description || '', width: columnWidth(worksheet, 3) },
       { value: line.pn || line.custRef || '', width: columnWidth(worksheet, 4) },
     ], { min: 30, max: 120, lineHeight: 15 })
-    for (const column of ['F', 'G', 'J', 'K', 'L', 'M']) worksheet.getCell(`${column}${row}`).numFmt = rupeeFormat
+    for (const column of ['F', 'G']) worksheet.getCell(`${column}${row}`).numFmt = proposalFormat
+    for (const column of ['J', 'K', 'L', 'M']) worksheet.getCell(`${column}${row}`).numFmt = rupeeFormat
     for (const column of ['N', 'O']) worksheet.getCell(`${column}${row}`).numFmt = euroFormat
     worksheet.getCell(`E${row}`).numFmt = '#,##0'
   })
@@ -456,8 +461,8 @@ function setCommercialSheet(workbook, worksheet, args) {
       setValue(worksheet.getCell(`F${row}`), proposalRow.quoted === '' || proposalRow.quoted == null ? null : unitPrice, { alignment: { horizontal: 'right', vertical: 'top' } })
       setValue(worksheet.getCell(`G${row}`), { formula: `F${row}*E${row}`, result: unitPrice * qty }, { alignment: { horizontal: 'right', vertical: 'top' } })
       worksheet.getCell(`E${row}`).numFmt = '#,##0'
-      worksheet.getCell(`F${row}`).numFmt = rupeeFormat
-      worksheet.getCell(`G${row}`).numFmt = rupeeFormat
+      worksheet.getCell(`F${row}`).numFmt = proposalFormat
+      worksheet.getCell(`G${row}`).numFmt = proposalFormat
     }
   })
 
@@ -469,7 +474,7 @@ function setCommercialSheet(workbook, worksheet, args) {
     const cell = worksheet.getCell(`${column}${footer}`)
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDE9D9' } }
     cell.border = allBorders
-    cell.numFmt = ['N', 'O'].includes(column) ? euroFormat : rupeeFormat
+    cell.numFmt = ['F', 'G'].includes(column) ? proposalFormat : ['N', 'O'].includes(column) ? euroFormat : rupeeFormat
     if (['G', 'K', 'M', 'O'].includes(column)) {
       const result = lines.reduce((sum, line, index) => {
         const row = firstRow + index

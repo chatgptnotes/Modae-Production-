@@ -79,6 +79,11 @@ test('the folder panels are read-only and never take gated decisions', () => {
   assert.match(panelSource, /\/opp\/\$\{opp\.id\}\/customer/)
 })
 
+test('the opportunity drawer reflects verified lead-stage KYC', () => {
+  assert.match(drawer, /const displayedKycStatus = verifiedAtLead \? 'Valid' : \(customer\?\.kyc \|\| '—'\)/)
+  assert.match(drawer, /<tr><td>KYC status<\/td><td>\{displayedKycStatus\}<\/td><\/tr>/)
+})
+
 test('the panel styling is scoped to the narrow drawer', () => {
   assert.match(css, /^\.drawer-panel \{/m)
   // .check-row is a no-wrap flex line sized for the full-width workbench.
@@ -133,6 +138,7 @@ test('route is shown as derived rather than offered as a field', () => {
 })
 
 test('the drawer metadata remains readable without edit controls', () => {
+  assert.doesNotMatch(drawer, /Open approvals/, 'approval navigation belongs to the workbench, not the read-only drawer')
   assert.match(drawer, /className="cost-table drawer-meta"/)
   assert.doesNotMatch(drawer, /className="drawer-meta-pair"/)
   assert.match(css, /\.drawer-panel \.drawer-meta td:first-child/)

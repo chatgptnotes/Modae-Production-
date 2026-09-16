@@ -188,6 +188,7 @@ export function normalizePriceFields(line = {}) {
       ? PRICE_SOURCES.MANUAL : PRICE_SOURCES.LIST)
   const listUnitPrice = Number(line.listUnitPrice ?? line.listPrice) || 0
   const legacyUnpriced = line.priceState === 'Expired' && source === PRICE_SOURCES.MANUAL && listUnitPrice <= 0
+  const manualPrice = line.priceList === 'Manual pricing' || line.priceSourceName === 'Manual pricing'
   const normalized = {
     ...line,
     priceSource: source,
@@ -206,6 +207,7 @@ export function normalizePriceFields(line = {}) {
   }
   return {
     ...normalized,
-    confirmed: Boolean(normalized.confirmed) && isConfirmableSparesLine(normalized),
+    confirmed: (Boolean(normalized.confirmed) || manualPrice && isConfirmableSparesLine(normalized))
+      && isConfirmableSparesLine(normalized),
   }
 }

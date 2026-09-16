@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import XLSX from 'xlsx-js-style'
-import { useParams, Link, useNavigate } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import { useStore, sparesProposalBom, snapshotProposal } from '../store.jsx'
 import { effectiveRate, fmt, exportCSV, canPriceProposal, isAdminRole, clampCosting, clampQty, MAX_GM_PCT, displayRole } from '../utils.js'
 import { useFormulaBar } from '../formulabar.jsx'
@@ -26,7 +26,7 @@ import { isSparesSupportRow, withSparesSupportRows } from '../proposal/sparesBoq
 import { runTaskResult } from '../ai.js'
 import { importReviewedWorkbook, normalizeAiReview, reviewWorkbookPayload } from '../proposal/reviewWorkbook.js'
 import { clausesFor, clauseWarnings } from '../clauses.js'
-import { fromInr } from '../currency.js'
+import { fromInr, toInr, currencySymbol } from '../currency.js'
 import { reviewFindingKey } from '../approvalMemory.js'
 import OpportunityComingSoon from '../workbench/OpportunityComingSoon.jsx'
 import { normalizeCommercialTerm } from '../commercialTerms.js'
@@ -372,8 +372,8 @@ function RouteTemplateTab({ route, tab, p, doc, priced, lineQuoted }) {
     return <div className="form-card route-template-panel">
       <div className="section-title">{title}</div>
       <p className="hint">{route === 'Services' ? 'Service template: priced activities, man-days, mobilisation, and payment milestones.' : 'Spares template: offered parts, quantities, unit prices, and total prices.'}</p>
-      <table className="sheet"><thead><tr><th>#</th><th>Item / scope description</th><th>Proposed model / part no.</th><th>Qty</th>{priced && <th>Unit price (₹)</th>}</tr></thead><tbody>
-        {rows.map(row => <tr key={row.index}><td>{row.index}</td><td>{row.desc || row.itemCategory || '—'}</td><td>{row.pn || '—'}</td><td className="num">{row.qty}</td>{priced && <td className="num">₹ {fmt(lineQuoted(row))}</td>}</tr>)}
+      <table className="sheet"><thead><tr><th>#</th><th>Item / scope description</th><th>Proposed model / part no.</th><th>Qty</th>{priced && <th>{`Unit price (${proposalSymbol})`}</th>}</tr></thead><tbody>
+        {rows.map(row => <tr key={row.index}><td>{row.index}</td><td>{row.desc || row.itemCategory || '—'}</td><td>{row.pn || '—'}</td><td className="num">{row.qty}</td>{priced && <td className="num">{proposalSymbol} {fmt(lineQuoted(row))}</td>}</tr>)}
         {!rows.length && <tr><td colSpan={priced ? 5 : 4} className="hint">No line items captured yet.</td></tr>}
       </tbody></table>
     </div>
@@ -437,7 +437,6 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   const { oppId: routeOppId } = useParams()
   const oppId = oppIdProp || routeOppId
   const store = useStore()
-  const nav = useNavigate()
   const fb = useFormulaBar()
   const opp = store.opportunities.find(o => o.id === oppId)
   const isComingSoon = !!opp && !isWorkflowAvailable(opp.oppType)
@@ -549,6 +548,9 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   const {
     allParts, totalQty, linePrice, lineCost, lineComputed, lineQuoted, computeTotals,
   } = buildPricing(store, p)
+  const proposalCurrency = p.sourceCurrency || 'INR'
+  const proposalSymbol = currencySymbol(proposalCurrency)
+  const proposalRate = store.config?.currencyRates
 
   const route = docRoute(p, opp)
   const referenceRows = p.referenceWorkbook?.rows || []
@@ -745,7 +747,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     kind,
   })
 
-  // Unit Price ₹ stays a string field — blank means "use the computed price" —
+  // Unit Price stays a string field — blank means "use the computed price" —
   // so it can't go through clampQty; it only rejects negatives.
   const clampQuoted = s => {
     const t = String(s)
@@ -755,9 +757,11 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     return n < 0 ? '0' : t
   }
   const updLine = (i, k, numeric = true) => e => {
-    if (k === 'quoted') return
-    const v = k === 'quoted' ? clampQuoted(e.target.value)
+    const raw = k === 'quoted' ? clampQuoted(e.target.value)
       : numeric ? clampQty(e.target.value) : e.target.value
+    const v = k === 'quoted' && raw !== ''
+      ? String(Math.round(Number(raw) * (Number(proposalRate?.[proposalCurrency]) || 1)))
+      : raw
     save({ ...p, bom: p.bom.map((l, j) => (j === i ? { ...l, [k]: v } : l)) })
   }
   const pasteBoq = (startRow, startCol, values) => {
@@ -768,7 +772,10 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       const i = startRow + r
       const key = keys[startCol + c]
       if (!bom[i] || !key) return
-      bom[i][key] = key === 'quoted' ? clampQuoted(value)
+      bom[i][key] = key === 'quoted' ? (() => {
+        const quoted = clampQuoted(value)
+        return quoted === '' ? '' : String(Math.round(toInr(quoted, proposalCurrency, proposalRate)))
+      })()
         : ['itemCategory', 'desc'].includes(key) ? value : clampQty(value)
     }))
     save({ ...current, bom })
@@ -990,7 +997,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
 
   const exportBoQ = () => exportCSV(
     `${oppId}_Priced_BoQ.csv`,
-    ['Sl.', 'Item Category', 'Item/Scope Description', 'Proposed Model & Part Number', 'Customer Item Code', 'Adders', 'Qty/Unit', 'Common', 'Spares', 'Total Qty', 'UOM', 'Unit Price ₹', 'Total Price ₹', 'Unit Cost ₹', 'Total Cost ₹', `List Price`, 'Currency'],
+    ['Sl.', 'Item Category', 'Item/Scope Description', 'Proposed Model & Part Number', 'Customer Item Code', 'Adders', 'Qty/Unit', 'Common', 'Spares', 'Total Qty', 'UOM', `Unit Price ${proposalSymbol}`, `Total Price ${proposalSymbol}`, 'Unit Cost ₹', 'Total Cost ₹', `List Price`, 'Currency'],
     p.bom.map((l, i) => [i + 1, l.itemCategory, l.desc, l.pn, l.custRef, l.adders.join('+'), l.qtyPerUnit, l.common, l.spares, totalQty(l), l.uom, lineQuoted(l), lineQuoted(l) * totalQty(l), Math.round(lineCost(l)), Math.round(lineCost(l) * totalQty(l)), linePrice(l), l.currency])
   )
   const exportExcel = () => downloadProposalXlsx({ p, opp, doc, priced, totalQty, lineQuoted, lineCost, linePrice, totals, route, mapping: configuredProposalTemplate?.mapping, mappingWarnings: configuredProposalTemplate?.mappingWarnings }).catch(error => {
@@ -1108,7 +1115,6 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
           </div>
         </div>
         <div className="toolbar proposal-action-toolbar" aria-label="Proposal actions">
-          <button className="primary" type="button" onClick={() => nav(`/opp/${oppId}`)}><Icon name="mail" size={13} /> Email proposal</button>
           <button className="btn-secondary" onClick={exportExcel} title="Download Draft">
             <Icon name="download" size={13} /> Draft
           </button>
@@ -1278,8 +1284,8 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
             <div>Mobile: {p.attnPhone}</div>
           </div>
           <div className="cover-meta proposal-currency-meta" aria-label="Proposal currency conversion">
-            <div><b>Source currency:</b> <select value={p.sourceCurrency || 'INR'} onChange={e => save({ ...p, sourceCurrency: e.target.value, sourceRate: store.config?.currencyRates?.[e.target.value] || 1, sourceRateDate: new Date().toISOString().slice(0, 10) })}><option>INR</option><option>EUR</option><option>USD</option><option>GBP</option></select></div>
-            <div>Original value: {p.sourceCurrency || 'INR'} {fmt(fromInr(totals.target, p.sourceCurrency || 'INR', store.config?.currencyRates))} (preserved)</div>
+            <div><b>Proposal currency:</b> <select value={p.sourceCurrency || 'INR'} onChange={e => save({ ...p, sourceCurrency: e.target.value, sourceRate: store.config?.currencyRates?.[e.target.value] || 1, sourceRateDate: new Date().toISOString().slice(0, 10) })}><option>INR</option><option>EUR</option><option>USD</option><option>GBP</option></select></div>
+            <div>Customer value: {proposalSymbol} {fmt(fromInr(totals.target, proposalCurrency, proposalRate))}</div>
             <div>INR conversion: ₹ {fmt(totals.target)}</div>
             <div>Admin rate: ₹ {fmt(Number(p.sourceRate) || 1)} / {p.sourceCurrency || 'INR'} · rate date {p.sourceRateDate || '—'}</div>
           </div>
@@ -1484,7 +1490,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
                 <tr>
                   <th>Sl.</th><th>Item category</th><th>Description</th><th>Model / part number</th><th>Add-ons</th>
                   <th>Qty / unit</th><th>Common</th><th>Spares</th><th>Total quantity</th><th>UOM</th>
-                  <th>Unit Price ₹</th><th>Total Price ₹</th>
+                  <th>{`Unit Price ${proposalSymbol}`}</th><th>{`Total Price ${proposalSymbol}`}</th>
                   <th className="internal">Unit Cost ₹</th><th className="internal">Total Cost ₹</th><th className="internal">Computed ₹</th><th className="internal">List Price</th><th></th>
                 </tr>
               </thead>
@@ -1525,7 +1531,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
                       <td className="num"><b>{q}</b></td>
                       <td>{l.uom}</td>
                       <td className="num"><input type="number" min="0" value={l.quoted} onChange={updLine(i, 'quoted', false)} placeholder={fmt(Math.round(lineComputed(l)))} style={{ width: 90, textAlign: 'right' }} title="Customer-facing (target) price — blank = computed price" /></td>
-                      <td className="num">₹ {fmt(lineQuoted(l) * q)}</td>
+                      <td className="num">{proposalSymbol} {fmt(lineQuoted(l) * q)}</td>
                       <td className="num internal">₹ {fmt(lineCost(l))}</td>
                       <td className="num internal">₹ {fmt(lineCost(l) * q)}</td>
                       <td className="num internal">₹ {fmt(Math.round(lineComputed(l)))}</td>
@@ -1541,7 +1547,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
                   <tr>
                     <td colSpan={10}>Totals</td>
                     <td></td>
-                    <td className="num">₹ {fmt(totals.target)}</td>
+                    <td className="num">{proposalSymbol} {fmt(p.bom.reduce((sum, line) => sum + lineQuoted(line) * totalQty(line), 0))}</td>
                     <td className="internal"></td>
                     <td className="num internal">₹ {fmt(totals.cost)}</td>
                     <td className="internal" colSpan={2}></td>
@@ -1582,7 +1588,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
                     <thead>
                       <tr>
                         <th>Sl.</th><th>Item</th><th className="num">Total Qty</th>
-                        <th className="num">Quoted ₹</th>
+                        <th className="num">{`Quoted ${proposalSymbol}`}</th>
                         <th className="num internal">Unit Cost ₹</th><th className="num internal">Total Cost ₹</th>
                         <th className="num internal">Computed ₹</th><th className="num internal">List Price</th>
                       </tr>
@@ -1609,7 +1615,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
                       <tfoot>
                         <tr>
                           <td colSpan={3}>Totals</td>
-                          <td className="num">₹ {fmt(totals.target)}</td>
+                          <td className="num">{proposalSymbol} {fmt(p.bom.reduce((sum, line) => sum + lineQuoted(line) * totalQty(line), 0))}</td>
                           <td className="internal"></td>
                           <td className="num internal">₹ {fmt(totals.cost)}</td>
                           <td className="internal" colSpan={2}></td>

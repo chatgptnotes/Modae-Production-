@@ -187,6 +187,37 @@ test('sourcing prices are editable and sourcing edits are audited', () => {
     'each imported sourcing row must receive a distinct id')
 })
 
+test('manual sourcing lines are entered through a popup form', () => {
+  const spares = read('src/workbench/WbSpares.jsx')
+  const styles = read('src/styles.css')
+  assert.match(spares, /onClick=\{openManualLine\}/)
+  assert.match(spares, /<Modal title="Add manual part"/)
+  assert.match(spares, /className="sourcing-manual-form" onSubmit=/)
+  assert.match(spares, /aria-label="Manual part number"/)
+  assert.match(spares, /aria-label="Manual description"/)
+  assert.match(spares, /aria-label="Manual list price"/)
+  assert.match(spares, /type="button" onClick=\{\(\) => \{ setShowAddPart\(false\)/)
+  assert.match(spares, />Done<\/button>/, 'the multi-entry modal needs an explicit finish action')
+  const addManualBody = spares.slice(spares.indexOf('const addManual'), spares.indexOf('const openManualLine'))
+  assert.doesNotMatch(addManualBody, /setShowAddPart\(false\)/, 'adding a valid line must not close the modal')
+  assert.doesNotMatch(spares, /sourcing-manual-row/)
+  assert.match(styles, /\.sourcing-manual-modal/)
+})
+
+test('sourcing separates part identity and keeps support charges last', () => {
+  const spares = read('src/workbench/WbSpares.jsx')
+  const styles = read('src/styles.css')
+  assert.match(spares, /<th>Part number \/ customer reference<\/th><th>Description<\/th><th>Source<\/th>/)
+  assert.match(spares, /const orderedLineItems = useMemo\(\(\) => \[\.\.\.lineItems\]\.sort\(/)
+  assert.match(spares, /Number\(!!a\.sourceLine\.sparesSupport\) - Number\(!!b\.sourceLine\.sparesSupport\)/)
+  assert.match(spares, /const sourcingPartReference = line =>/)
+  assert.match(spares, /const partReference = sourcingPartReference\(line\)/)
+  assert.match(spares, /className="sourcing-cell-part-number/)
+  assert.match(spares, /className="sourcing-cell-description/)
+  assert.match(styles, /table-layout: auto/)
+  assert.match(styles, /th:nth-child\(12\)/)
+})
+
 test('sourcing lets the opportunity owner complete customer references', () => {
   const spares = read('src/workbench/WbSpares.jsx')
   assert.match(spares, /Customer reference for \$\{line\.pn \|\| line\.id\}/)

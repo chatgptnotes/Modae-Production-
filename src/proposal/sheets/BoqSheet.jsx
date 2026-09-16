@@ -1,6 +1,7 @@
 import React from 'react'
 import { fmt } from '../../utils.js'
 import { BOQ_COLUMNS, boqGroups, amountInWords } from '../../proposalDoc.js'
+import { currencySymbol } from '../../currency.js'
 
 // The pricing sheet, in the shape the client's own proposals use: one or more
 // `Item-10` / `Item-20` groups, each with its own column header, its own
@@ -25,12 +26,12 @@ const runs = (rows, key) => {
   return out
 }
 
-const cellValue = (col, r) => {
+const cellValue = (col, r, symbol) => {
   switch (col.key) {
     case 'sl': return r.sl
     case 'qty': return r.qty
-    case 'unit': return `₹ ${fmt(r.unit)}`
-    case 'total': return `₹ ${fmt(r.total)}`
+    case 'unit': return `${symbol} ${fmt(r.unit)}`
+    case 'total': return `${symbol} ${fmt(r.total)}`
     case 'qtyPerUnit': return r.line.qtyPerUnit || 0
     case 'common': return r.line.common || 0
     case 'spares': return r.line.spares || 0
@@ -39,6 +40,7 @@ const cellValue = (col, r) => {
 }
 
 export default function BoqSheet({ p, doc, priced, variant, lineQuoted }) {
+  const symbol = currencySymbol(p.sourceCurrency || 'INR')
   const cols = (BOQ_COLUMNS[variant] || BOQ_COLUMNS.firm).filter(c => priced || !c.priced)
   const groups = boqGroups(p, { lineQuoted, units: p.units })
   const grand = groups.reduce((s, g) => s + g.total, 0)
@@ -64,7 +66,7 @@ export default function BoqSheet({ p, doc, priced, variant, lineQuoted }) {
                       }
                       return (
                         <td key={c.key} className={c.cls || (c.num ? 'num' : '')}>
-                          {cellValue(c, r)}
+                          {cellValue(c, r, symbol)}
                         </td>
                       )
                     })}
@@ -76,7 +78,7 @@ export default function BoqSheet({ p, doc, priced, variant, lineQuoted }) {
                 {priced && (
                   <tr className="doc-total-for">
                     <td colSpan={cols.length - 1}>Total For {g.title}</td>
-                    <td className="num">₹ {fmt(g.total)}</td>
+                    <td className="num">{symbol} {fmt(g.total)}</td>
                   </tr>
                 )}
               </tbody>
@@ -89,7 +91,7 @@ export default function BoqSheet({ p, doc, priced, variant, lineQuoted }) {
       })}
 
       {priced && groups.length > 1 && (
-        <p className="doc-subtotal">Total ex-works, ₹ {fmt(grand)} — {amountInWords(grand)}</p>
+        <p className="doc-subtotal">Total ex-works, {symbol} {fmt(grand)} — {amountInWords(grand)}</p>
       )}
       {priced && groups.length === 1 && (
         <p className="doc-subtotal">{amountInWords(grand)}</p>

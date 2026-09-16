@@ -1,6 +1,7 @@
 import React from 'react'
 import { useEffect, useState } from 'react'
 import { fmt } from '../utils.js'
+import { fromInr, currencySymbol } from '../currency.js'
 import { Icon } from '../icons.jsx'
 import { useStore } from '../store.jsx'
 import {
@@ -136,6 +137,9 @@ export default function DocEditor({ p, opp, save, files, totals, priced }) {
   ]
 
   const gst = Math.round(totals.target * (doc.gstPct / 100))
+  const proposalSymbol = currencySymbol(p.sourceCurrency || 'INR')
+  const customerTotal = fromInr(totals.target, p.sourceCurrency || 'INR', p.costing?.currencyRates)
+  const customerGst = fromInr(gst, p.sourceCurrency || 'INR', p.costing?.currencyRates)
   const annexes = (docLayout(p, opp).annexes || [])
     .map(key => ({ key, label: ANNEXE_LABELS[key] || key }))
 
@@ -245,7 +249,7 @@ export default function DocEditor({ p, opp, save, files, totals, priced }) {
       <Section title="3 · Bill of quantities">
         <p className="hint">
           {(p.bom || []).length} line{(p.bom || []).length === 1 ? '' : 's'}, {(p.bom || []).reduce((s, l) => s + lineQty(l, p.units), 0)} nos total
-          {priced ? ` — ₹ ${fmt(totals.target)}` : ' — prices withheld (unpriced technical bid)'}. Edit on the Priced BoQ tab.
+          {priced ? ` — ${proposalSymbol} ${fmt(customerTotal)}` : ' — prices withheld (unpriced technical bid)'}. Edit on the Priced BoQ tab.
         </p>
       </Section>
 
@@ -257,7 +261,7 @@ export default function DocEditor({ p, opp, save, files, totals, priced }) {
           </div>
           <div>
             <label>Shown as</label>
-            <div style={{ paddingTop: 6 }}>{priced ? `₹ ${fmt(gst)} extra at actuals` : <span className="hint">not shown on an unpriced bid</span>}</div>
+            <div style={{ paddingTop: 6 }}>{priced ? `${proposalSymbol} ${fmt(customerGst)} extra at actuals` : <span className="hint">not shown on an unpriced bid</span>}</div>
           </div>
         </div>
         <div className="section-title">

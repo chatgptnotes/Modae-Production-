@@ -272,9 +272,6 @@ function PartnerPanel({ opp, store, nav }) {
           </tbody>
         </table>
       ) : <p className="hint">No partner or deviation approvals raised for this opportunity.</p>}
-      <div className="drawer-panel-actions">
-        <button onClick={() => nav(`/opp/${opp.id}/approvals`)}>Open approvals</button>
-      </div>
     </section>
   )
 }
@@ -290,6 +287,7 @@ function KycPanel({ opp, store, nav }) {
   const items = (customer && store.kyc[customer.name])
     || (store.config?.kycItems || []).map(n => ({ name: n, state: 'Missing', when: '' }))
   const verifiedAtLead = opp.leadVerification?.status === 'Verified'
+  const displayedKycStatus = verifiedAtLead ? 'Valid' : (customer?.kyc || '—')
   return (
     <section className="drawer-panel">
       <div className="fgroup">Customer</div>
@@ -298,7 +296,7 @@ function KycPanel({ opp, store, nav }) {
           <p className="drawer-panel-lead"><b>{customer.name}</b> <ClassChip cls={customer.status} /></p>
           <table className="cost-table"><tbody>
             <tr><td>Category</td><td>{customer.category}</td></tr>
-            <tr><td>KYC status</td><td>{customer.kyc}</td></tr>
+            <tr><td>KYC status</td><td>{displayedKycStatus}</td></tr>
             <tr><td>Payment record</td><td>{customer.payment}</td></tr>
           </tbody></table>
         </>

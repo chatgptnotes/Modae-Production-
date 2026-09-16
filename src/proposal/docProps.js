@@ -14,6 +14,7 @@ import { signalsFromBom, signalsAreEmpty } from '../rack.js'
 import { applyAdjustment, normalizePriceFields, resolvePriceSource } from '../pricing.js'
 import { withSparesSupportRows } from './sparesBoq.js'
 import { normalizeCommercialTerm } from '../commercialTerms.js'
+import { fromInr, currencySymbol } from '../currency.js'
 
 // Qty/Unit × units + Common + Spares — the BoQ quantity rule, in one place so
 // the signal-list derivation reads the same totals the sheet shows.
@@ -147,7 +148,9 @@ export function buildPricing(store, p) {
   const lineComputed = (l, c = p.costing) => applyAdjustment(
     unitSellINR(linePrice(l), c, lineCurrency(l), isBnk(l)), p)
   // Customer-facing (target) price — editable; defaults to the computed GM price.
-  const lineQuoted = (l, c = p.costing) => (l.quoted !== '' && l.quoted != null ? +l.quoted : Math.round(lineComputed(l, c)))
+  const lineQuotedInr = (l, c = p.costing) => (l.quoted !== '' && l.quoted != null ? +l.quoted : Math.round(lineComputed(l, c)))
+  // `quoted` is stored in INR. Convert only at the customer-facing boundary.
+  const lineQuoted = (l, c = p.costing) => fromInr(lineQuotedInr(l, c), p.sourceCurrency || 'INR', c?.currencyRates)
 
   const computeTotals = pr => pr.bom.reduce((t, l) => {
     const q = totalQty(l, pr.units || 7)
@@ -155,11 +158,11 @@ export function buildPricing(store, p) {
     return {
       cost: t.cost + lineCost(l, pr.costing) * q,
       listValue: t.listValue + base * q,
-      target: t.target + lineQuoted(l, pr.costing) * q,
+      target: t.target + lineQuotedInr(l, pr.costing) * q,
     }
   }, { cost: 0, listValue: 0, target: 0 })
 
-  return { allParts, totalQty, linePrice, lineSource, lineCurrency, isBnk, lineCost, lineComputed, lineQuoted, computeTotals }
+  return { allParts, totalQty, linePrice, lineSource, lineCurrency, isBnk, lineCost, lineComputed, lineQuotedInr, lineQuoted, computeTotals, currencySymbol }
 }
 
 // The six props PrintDoc wants, read-only, straight off the store. Returns null

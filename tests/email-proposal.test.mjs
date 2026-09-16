@@ -34,35 +34,27 @@ test('the enquiry sender is carried onto the opportunity', () => {
 })
 
 test('the email dialog resolves a recipient without typing', () => {
-  assert.match(proposal, /setEmailTo\(opp\.contactEmail \|\| customer\?\.email \|\| ''\)/)
+  assert.match(submission, /useState\(opp\.contactEmail \|\| customer\?\.email \|\| ''\)/)
   // Subject is auto-built, and CC exists.
-  assert.match(proposal, /setEmailSubject\(`\$\{oppId\} — Techno-Commercial Proposal/)
-  assert.match(proposal, /value=\{emailCc\}/)
+  assert.match(submission, /useState\(`Proposal — \$\{opp\.oppName\} \(\$\{opp\.id\} Rev \$\{p\.revision\}\)`\)/)
+  assert.match(submission, /value=\{emailCc\}/)
 })
 
 // The preview was four lines of text claiming to be the proposal. The
 // salesperson has to see the actual document before it goes out.
 test('preview renders the real document, not a text stub', () => {
-  assert.match(proposal, /\{emailPreview && \(/)
-  assert.match(proposal, /<div className="email-preview-doc">\s*<PrintDoc/,
-    'the preview must render PrintDoc')
-  assert.doesNotMatch(proposal, /<p>Attached: \{oppId\}_Proposal_Rev_/,
-    'the old text stub must be gone')
-  assert.match(proposal, /fetch\('\/api\/send-proposal-email'/)
-  assert.match(proposal, /attachments: \[/)
-  assert.match(proposal, /pricedBoqAttachment/)
-  assert.match(proposal, /emailAttachments/)
+  assert.match(submission, /proposalWorkbookPreview/)
+  assert.match(submission, /<WorkbookPreview workbook=\{previewWorkbook\}/,
+    'the email flow must preview the real workbook')
+  assert.match(submission, /proposalWorkbookAttachment/)
+  assert.doesNotMatch(submission, /Attached: \{opp\.id\}_Proposal_Rev_/)
 })
 
 test('the email sends the BoQ by default and permits selected extra files', () => {
-  assert.match(proposal, /Send with \$\{1 \+ emailAttachments\.length\} attachment/)
-  assert.match(proposal, /Additional attachments \(optional\)/)
-  assert.match(proposal, /Up to four extra PDF or XLSX files/)
-  assert.match(proposal, /pricedBoqAttachment/)
-  assert.doesNotMatch(proposal, /enclosureAttachments\(route\)/)
-  assert.doesNotMatch(proposal, /Proposal PDF attachment \*/)
-  assert.match(proposal, /Save proposal PDF/, 'the user must be able to produce the PDF here')
-  assert.doesNotMatch(proposal, /!proposalPdf/, 'sending must not depend on a manually selected PDF')
+  assert.match(submission, /const \[attachProposal, setAttachProposal\] = useState\(true\)/)
+  assert.match(submission, /proposalWorkbookAttachment\(/)
+  assert.match(submission, /const \[extraFiles, setExtraFiles\] = useState\(\[\]\)/)
+  assert.match(submission, /Attach files/)
 })
 
 // Biji, 20 Aug review: the Services Rate Schedule goes with every services
@@ -91,15 +83,16 @@ test('service proposals carry the rate schedule, others do not', async () => {
 })
 
 test('the sent email is logged against the opportunity', () => {
-  assert.match(proposal, /kind: 'proposal-email'/)
-  assert.match(proposal, /attachmentNames:/)
+  assert.match(submission, /kind: 'submission'/)
+  assert.match(submission, /attachmentNames:/)
 })
 
-test('Email proposal is the first proposal action', () => {
-  const toolbarStart = proposal.indexOf('<div className="toolbar proposal-action-toolbar">')
-  const toolbar = proposal.slice(toolbarStart, proposal.indexOf('</div>', toolbarStart))
-  assert.ok(toolbar.indexOf('Email proposal') < toolbar.indexOf('Download Excel'))
-  assert.ok(toolbar.indexOf('Email proposal') < toolbar.indexOf('Preview proposal'))
+test('Email proposal is available from Quotation Submission, not Proposal', () => {
+  assert.doesNotMatch(proposal, /Email proposal/)
+  assert.match(submission, /<span>Customer email submission<\/span>/)
+  assert.match(submission, /<Icon name="mail" size=\{13\} \/> Email proposal/)
+  assert.match(submission, /emailToRef\.current\?\.focus\(\)/)
+  assert.ok(submission.indexOf('Email proposal') > submission.indexOf('if (!release)'))
 })
 
 test('proposal workspace labels distinct navigation and preview controls', () => {

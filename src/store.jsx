@@ -1322,11 +1322,14 @@ export function StoreProvider({ children }) {
         const supportKey = row => `${/^na$/i.test(String(row.pn || '').trim()) ? '' : String(row.pn || '').trim().toLowerCase()}|${String(row.desc || '').trim().toLowerCase()}`
         const existingKeys = new Set(existing.map(supportKey))
         const proposalSupport = (s.proposals[oppId]?.bom || []).filter(isSparesSupportRow)
-        const additions = SPARES_SUPPORT_ROWS.filter(row => !existingKeys.has(supportKey(row))).map(row => {
+        const additions = SPARES_SUPPORT_ROWS.filter(row => !existingKeys.has(supportKey(row))).reduce((added, row) => {
           const proposalRow = proposalSupport.find(line => supportKey(line) === supportKey(row))
           const price = Number(proposalRow?.quoted) || 0
-          return normalizePriceFields({
-            id: mintId('SL', [...s.sparesLines, ...existing]),
+          added.push(normalizePriceFields({
+            // Include rows already added in this batch. Calling mintId with
+            // only the original collection gave every support row the same
+            // id, so editing/removing one row changed all of them together.
+            id: mintId('SL', [...s.sparesLines, ...added]),
             oppId,
             match: 'Support item',
             conf: 100,
@@ -1345,8 +1348,9 @@ export function StoreProvider({ children }) {
             priceSource: PRICE_SOURCES.MANUAL,
             priceSourceName: 'Support pricing',
             priceState: price > 0 ? 'Current' : 'Needs pricing',
-          })
-        })
+          }))
+          return added
+        }, [])
         if (!additions.length) return s
         return withAudit({ ...s, sparesLines: [...s.sparesLines, ...additions] }, 'Spares support lines added', oppId, `${additions.length} support line(s)`)
       })

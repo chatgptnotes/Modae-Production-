@@ -78,6 +78,12 @@ test('sourcing confirmation requires positive quantity and price', () => {
   assert.equal(normalizePriceFields({ qty: 0, listPrice: 10, confirmed: true }).confirmed, false)
 })
 
+test('positive manual pricing confirms the row while non-manual pricing remains explicit', () => {
+  assert.equal(normalizePriceFields({ qty: 1, listPrice: 32, priceList: 'Manual pricing', confirmed: false }).confirmed, true)
+  assert.equal(normalizePriceFields({ qty: 1, listPrice: 32, priceList: 'BNK 2026-Q2', confirmed: false }).confirmed, false)
+  assert.equal(normalizePriceFields({ qty: 1, listPrice: 0, priceList: 'Manual pricing', confirmed: false }).confirmed, false)
+})
+
 test('spares rollups normalize source currency to INR before margin math', () => {
   const financials = sparesLineFinancials({
     qty: 2,

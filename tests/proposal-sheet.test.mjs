@@ -16,10 +16,11 @@ test('proposal sheet moves between cells with spreadsheet keys', () => {
   assert.equal(nextCell(1, 1, 'Escape', 4, 6), null)
 })
 
-test('BOQ descriptions use a wrapped editor that cannot overflow neighboring cells', () => {
+test('read-only BOQ descriptions wrap without overflowing neighboring cells', () => {
   const source = read('src/proposal/ProposalSheetEditor.jsx')
   const css = read('src/styles.css')
-  assert.match(source, /<textarea rows=\{2\} className="proposal-description-editor"/)
+  assert.match(source, /className="proposal-cell-text"/)
+  assert.doesNotMatch(source, /proposal-description-editor/)
   assert.match(css, /\.proposal-edit-grid \.proposal-description-editor[\s\S]*height: 42px/)
   assert.match(css, /\.proposal-edit-grid \.proposal-description-editor[\s\S]*overflow-wrap: anywhere/)
   assert.match(css, /\.proposal-edit-grid td textarea[\s\S]*overflow: auto/)

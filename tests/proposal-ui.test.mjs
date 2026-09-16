@@ -38,22 +38,15 @@ test('proposal drawers use compact expanded surfaces', () => {
   assert.match(styles, /\.proposal-context-drawer \.ai-notice,[\s\S]*padding: 5px 8px;/)
 })
 
-test('proposal BOQ columns fit the table and keep Actions controls visible', () => {
+test('proposal BOQ is a read-only table without row editing controls', () => {
   const proposal = read('src/proposal/ProposalSheetEditor.jsx')
   const styles = read('src/styles.css')
+  const boq = proposal.slice(proposal.indexOf("{show('BOQ')"), proposal.indexOf("{show('Document')"))
 
-  assert.match(proposal, /proposal-edit-grid \$\{isSpares \? 'proposal-edit-grid-spares'/)
-  assert.match(proposal, /className="boq-action-head">Actions<\/th>/)
-  assert.match(proposal, /className="boq-action-cell"><button type="button" className="proposal-row-minus"/)
-  assert.match(proposal, /className="boq-action-cell"><span className="proposal-row-control"/)
-  assert.match(styles, /\.proposal-edit-grid \.boq-col-action \{ width: 72px; min-width: 72px; \}/)
-  assert.match(styles, /\.proposal-edit-grid-spares \.boq-col-action \{ width: 72px; min-width: 72px; \}/)
-  assert.match(styles, /\.proposal-edit-grid-services \.boq-col-action \{ width: 72px; min-width: 72px; \}/)
-  assert.match(styles, /\.proposal-edit-grid-project\.is-priced \.boq-col-action \{ width: 72px; min-width: 72px; \}/)
-  assert.match(styles, /\.proposal-edit-grid-project\.is-unpriced \.boq-col-action \{ width: 72px; min-width: 72px; \}/)
-  assert.match(styles, /\.proposal-edit-grid \.boq-action-cell \{[\s\S]*overflow: visible;[\s\S]*text-align: center;/)
-  assert.match(styles, /\.proposal-edit-grid \.boq-action-cell > button,[\s\S]*margin-inline: auto;/)
-  assert.match(styles, /\.proposal-sheet-editor-readonly \.proposal-edit-grid \.boq-action-cell > button \{[\s\S]*visibility: visible;[\s\S]*pointer-events: none;/)
+  assert.match(boq, /proposal-edit-grid \$\{isSpares \? 'proposal-edit-grid-spares'/)
+  assert.match(boq, /<table aria-readonly="true" className=/)
+  assert.doesNotMatch(boq, /boq-action-head|boq-action-cell|\+ Add line|proposal-row-minus/)
+  assert.match(boq, /Read-only reference\. Quantities, descriptions, and prices are maintained in the sourcing workflow\./)
   assert.match(styles, /\.proposal-edit-grid th \{[\s\S]*white-space: normal;[\s\S]*overflow-wrap: anywhere;/)
 })
 

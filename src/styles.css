@@ -872,6 +872,9 @@ select, input[type=text], input[type=number], input[type=date], input[type=tel],
 .clarification-status.is-clear { border-left-color: var(--status-success); }
 .clarification-status > div:first-child { line-height: 1.45; }
 .clarification-status > div:first-child span { margin-left: 5px; color: var(--text-secondary); }
+.clarification-answer-box { padding: 8px 12px; border: 1px solid var(--grid-line); border-left: 4px solid; border-radius: 3px; margin: 8px 0; font-size: 12.5px; }
+.clarification-answer-box.answered { background: var(--status-success-soft); border-left-color: var(--status-success); color: var(--status-success); }
+.clarification-answer-box.needs-review { background: var(--status-warning-soft); border-left-color: var(--status-warning); color: var(--status-warning); }
 .clarification-counts { display: flex; flex-wrap: wrap; gap: 7px; }
 .clarification-counts span { padding: 4px 8px; border: 1px solid var(--grid-line); border-radius: 999px; background: var(--surface); color: var(--text-secondary); font-size: 11px; }
 .clarification-counts b { color: var(--text-primary); }
@@ -1024,7 +1027,7 @@ select, input[type=text], input[type=number], input[type=date], input[type=tel],
 .sourcing-sheet tfoot .hint { color: #c7c7c7; margin-left: 6px; }
 .sourcing-footer-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .sourcing-footer-actions button { white-space: nowrap; }
-.sourcing-zero-row { opacity: .55; }
+.sourcing-zero-row { opacity: 1; }
 .sourcing-restricted-footer { padding: 10px 12px; }
 @media (max-width: 1200px) {
   .sourcing-sheet { font-size: 11px; }
@@ -7636,17 +7639,18 @@ button.install, .btn.install,
   min-width: 0;
   border-collapse: collapse;
 }
-.sourcing-sheet--fixed th:nth-child(1) { min-width: 220px; }
-.sourcing-sheet--fixed th:nth-child(2) { min-width: 100px; }
-.sourcing-sheet--fixed th:nth-child(3) { min-width: 55px; }
-.sourcing-sheet--fixed th:nth-child(4) { min-width: 78px; }
-.sourcing-sheet--fixed th:nth-child(5),
-.sourcing-sheet--fixed th:nth-child(6) { min-width: 88px; }
-.sourcing-sheet--fixed th:nth-child(7) { min-width: 105px; }
-.sourcing-sheet--fixed th:nth-child(8) { min-width: 100px; }
-.sourcing-sheet--fixed th:nth-child(9),
-.sourcing-sheet--fixed th:nth-child(10) { min-width: 110px; }
-.sourcing-sheet--fixed th:nth-child(11) { min-width: 108px; }
+.sourcing-sheet--fixed th:nth-child(1) { min-width: 150px; }
+.sourcing-sheet--fixed th:nth-child(2) { min-width: 260px; }
+.sourcing-sheet--fixed th:nth-child(3) { min-width: 150px; }
+.sourcing-sheet--fixed th:nth-child(4) { min-width: 55px; }
+.sourcing-sheet--fixed th:nth-child(5) { min-width: 78px; }
+.sourcing-sheet--fixed th:nth-child(6),
+.sourcing-sheet--fixed th:nth-child(7) { min-width: 88px; }
+.sourcing-sheet--fixed th:nth-child(8) { min-width: 105px; }
+.sourcing-sheet--fixed th:nth-child(9) { min-width: 100px; }
+.sourcing-sheet--fixed th:nth-child(10),
+.sourcing-sheet--fixed th:nth-child(11) { min-width: 110px; }
+.sourcing-sheet--fixed th:nth-child(12) { min-width: 108px; }
 .sourcing-sheet--fixed th,
 .sourcing-sheet--fixed td {
   vertical-align: top;
@@ -7695,6 +7699,8 @@ table.sheet.sourcing-sheet--fixed th {
   border-top: 1px solid var(--border-default);
 }
 .sourcing-sheet--fixed .sourcing-cell-part,
+.sourcing-sheet--fixed .sourcing-cell-part-number,
+.sourcing-sheet--fixed .sourcing-cell-description,
 .sourcing-sheet--fixed .sourcing-cell-source { min-width: 0; }
 .sourcing-part-ref,
 .sourcing-part-description,
@@ -7831,6 +7837,14 @@ table.sheet.sourcing-sheet--fixed th {
 .sourcing-manual-row .sourcing-qty { width: 100%; }
 .sourcing-manual-row .sourcing-helper-text { color: var(--text-secondary); font-size: 11px; font-weight: 600; }
 .sourcing-manual-add { min-height: 36px; padding-inline: 10px; white-space: nowrap; }
+.sourcing-manual-modal { max-width: 560px; }
+.sourcing-manual-form { display: grid; gap: 14px; }
+.sourcing-manual-form > label, .sourcing-manual-form-grid > label { display: grid; gap: 5px; color: var(--text-primary); font-size: 12px; font-weight: 700; }
+.sourcing-manual-form input, .sourcing-manual-form textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--border, #cbd5e1); border-radius: 7px; padding: 9px 10px; background: var(--surface, #fff); color: var(--text-primary); font: inherit; }
+.sourcing-manual-form textarea { resize: vertical; min-height: 76px; }
+.sourcing-manual-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.sourcing-manual-form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+@media (max-width: 560px) { .sourcing-manual-form-grid { grid-template-columns: 1fr; } }
 .sourcing-financial-summary-bar {
   display: flex;
   min-width: 0;
@@ -7937,22 +7951,18 @@ table.sheet.sourcing-sheet--fixed th {
    turning their labels and values into stacked blocks. */
 .sourcing-sheet-wrap {
   overflow-x: auto;
-  overflow-y: hidden;
+  overflow-y: auto;
+  max-height: min(68dvh, 720px);
   max-width: 100%;
+  /* Reserve space for the native horizontal scrollbar so it cannot cover
+     the final table row when the grid also has a vertical scrollbar. */
+  box-sizing: border-box;
+  padding-bottom: 14px;
   overscroll-behavior-x: contain;
-  scrollbar-width: none;
+  overscroll-behavior-y: contain;
+  scrollbar-width: auto;
 }
-.sourcing-sheet-wrap::-webkit-scrollbar { height: 0; }
-.sourcing-horizontal-scrollbar {
-  width: 100%;
-  height: 16px;
-  margin: 0 1px 4px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  border-top: 1px solid var(--grid-line);
-  scrollbar-width: thin;
-}
-.sourcing-horizontal-scrollbar > div { height: 1px; }
+.sourcing-sheet-wrap::-webkit-scrollbar:horizontal { height: 0; }
 .sourcing-sheet--fixed {
   width: max-content;
   min-width: 1500px;
@@ -8321,24 +8331,56 @@ table.sheet th {
   font-weight: 800 !important;
 }
 
-/* Keep the per-line decision controls visible while the wide grid moves. */
+/* Keep the table header and per-line decision controls visible while the wide
+   grid moves. The right edge is the stable action surface; the other columns
+   remain horizontally scrollable. */
 .sourcing-workbench .sheet.sourcing-sheet--fixed th:last-child,
 .sourcing-workbench .sheet.sourcing-sheet--fixed td:last-child {
-  position: static;
-  right: auto;
-  box-shadow: none;
+  position: sticky;
+  right: 0;
+  border-left: 2px solid var(--grid-line);
+  box-shadow: -6px 0 10px rgba(15, 23, 42, .08);
 }
 .sourcing-workbench .sheet.sourcing-sheet--fixed th:last-child {
-  z-index: auto;
+  z-index: 4;
+  background: var(--hdr-navy);
 }
 .sourcing-workbench .sheet.sourcing-sheet--fixed td:last-child {
-  z-index: auto;
-  background: inherit;
+  z-index: 2;
+  background: var(--palette-4843938);
 }
-.sourcing-workbench .sheet.sourcing-sheet--fixed tbody tr:nth-child(even) td:last-child { background: #fff; }
-.sourcing-workbench .sheet.sourcing-sheet--fixed tbody tr:hover td:last-child { background: #fff7ed; }
-.sourcing-workbench .sheet.sourcing-sheet--fixed tbody tr.sourcing-zero-row td:last-child { background: #f8fafc; }
+.sourcing-workbench .sheet.sourcing-sheet--fixed tbody tr:nth-child(even) td:last-child { background: var(--palette-2e00a314); }
+.sourcing-workbench .sheet.sourcing-sheet--fixed tbody tr:hover td:last-child { background: var(--select-fill); }
+.sourcing-workbench .sheet.sourcing-sheet--fixed tbody tr.sourcing-zero-row td:last-child { background: var(--bg-app); }
 .sourcing-workbench .sheet.sourcing-sheet--fixed tfoot td:last-child { background: var(--surface-sunken); }
+
+/* Keep the part identity visible while the pricing columns move. The corner
+   header sits above both sticky edges when the table is scrolled diagonally. */
+.sourcing-workbench .sheet.sourcing-sheet--fixed th:first-child,
+.sourcing-workbench .sheet.sourcing-sheet--fixed td:first-child {
+  position: sticky;
+  left: 0;
+  border-right: 2px solid var(--grid-line);
+  box-shadow: 6px 0 10px rgba(15, 23, 42, .08);
+}
+.sourcing-workbench .sheet.sourcing-sheet--fixed th:first-child {
+  z-index: 5;
+  background: var(--hdr-navy);
+}
+.sourcing-workbench .sheet.sourcing-sheet--fixed td:first-child {
+  z-index: 3;
+  background: var(--palette-4843938);
+}
+.sourcing-workbench .sheet.sourcing-sheet--fixed tbody tr:nth-child(even) td:first-child { background: var(--palette-2e00a314); }
+.sourcing-workbench .sheet.sourcing-sheet--fixed tbody tr:hover td:first-child { background: var(--select-fill); }
+.sourcing-workbench .sheet.sourcing-sheet--fixed tbody tr.sourcing-zero-row td:first-child { background: var(--bg-app); }
+.sourcing-workbench .sheet.sourcing-sheet--fixed tfoot td:first-child { background: var(--surface-sunken); }
+/* The pinned Part identity column stays neutral while the editable pricing
+   cells retain their row striping and hover state. */
+.sourcing-workbench .sheet.sourcing-sheet--fixed tbody td:first-child {
+  background: var(--palette-4843938) !important;
+}
+
 .sourcing-workbench .sourcing-cell-actions .sourcing-row-actions {
   min-width: 116px;
   align-items: stretch;
@@ -8348,35 +8390,71 @@ table.sheet th {
   gap: 5px;
 }
 
-/* Let every sourcing column follow its header/content instead of distributing
-   the grid into arbitrary percentage widths. The wrapper remains horizontally
-   scrollable when a real long part description needs more room. */
+/* Keep the sourcing grid readable instead of compressing eleven columns into
+   the viewport. The wrapper owns horizontal scrolling; the table keeps stable
+   spreadsheet-like column widths. */
 .sourcing-workbench .sheet.sourcing-sheet--fixed {
-  table-layout: auto;
-  width: 100%;
-  min-width: 0;
+  table-layout: fixed;
+  width: max-content;
+  min-width: 1500px;
+  max-width: none;
 }
 .sourcing-workbench .sheet.sourcing-sheet--fixed th,
 .sourcing-workbench .sheet.sourcing-sheet--fixed td {
-  width: auto !important;
   min-width: 0;
 }
+.sourcing-workbench .sheet.sourcing-sheet--fixed {
+  table-layout: auto;
+}
 .sourcing-workbench .sheet.sourcing-sheet--fixed th {
-  white-space: normal !important;
-  overflow-wrap: anywhere;
+  white-space: nowrap !important;
+  overflow-wrap: normal;
+  word-break: normal;
+  min-height: 42px;
+  padding-top: 11px;
+  padding-bottom: 11px;
+  font-size: 12px;
+  font-weight: 800 !important;
+  line-height: 1.25;
+  letter-spacing: .02em;
 }
 .sourcing-workbench .sheet.sourcing-sheet--fixed th:first-child,
 .sourcing-workbench .sheet.sourcing-sheet--fixed td:first-child {
+  width: auto !important;
   min-width: 220px;
-  max-width: 420px;
+  max-width: 360px;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
 }
 .sourcing-workbench .sheet.sourcing-sheet--fixed th:nth-child(2),
 .sourcing-workbench .sheet.sourcing-sheet--fixed td:nth-child(2) {
-  min-width: 120px;
+  width: auto !important;
+  min-width: 150px;
   max-width: 260px;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
 }
+.sourcing-workbench .sheet.sourcing-sheet--fixed th:nth-child(3),
+.sourcing-workbench .sheet.sourcing-sheet--fixed td:nth-child(3) { width: 150px !important; min-width: 150px; }
+.sourcing-workbench .sheet.sourcing-sheet--fixed th:nth-child(4),
+.sourcing-workbench .sheet.sourcing-sheet--fixed td:nth-child(4) { width: 72px !important; min-width: 72px; }
+.sourcing-workbench .sheet.sourcing-sheet--fixed th:nth-child(5),
+.sourcing-workbench .sheet.sourcing-sheet--fixed td:nth-child(5),
+.sourcing-workbench .sheet.sourcing-sheet--fixed th:nth-child(6),
+.sourcing-workbench .sheet.sourcing-sheet--fixed td:nth-child(6) { width: 105px !important; min-width: 105px; }
+.sourcing-workbench .sheet.sourcing-sheet--fixed th:nth-child(7),
+.sourcing-workbench .sheet.sourcing-sheet--fixed td:nth-child(7),
+.sourcing-workbench .sheet.sourcing-sheet--fixed th:nth-child(8),
+.sourcing-workbench .sheet.sourcing-sheet--fixed td:nth-child(8),
+.sourcing-workbench .sheet.sourcing-sheet--fixed th:nth-child(9),
+.sourcing-workbench .sheet.sourcing-sheet--fixed td:nth-child(9),
+.sourcing-workbench .sheet.sourcing-sheet--fixed th:nth-child(10),
+.sourcing-workbench .sheet.sourcing-sheet--fixed td:nth-child(10),
+.sourcing-workbench .sheet.sourcing-sheet--fixed th:nth-child(11),
+.sourcing-workbench .sheet.sourcing-sheet--fixed td:nth-child(11) { width: 135px !important; min-width: 135px; }
 .sourcing-workbench .sheet.sourcing-sheet--fixed th:last-child,
 .sourcing-workbench .sheet.sourcing-sheet--fixed td:last-child {
+  width: 150px !important;
   min-width: 150px;
   max-width: 150px;
 }
@@ -8390,7 +8468,6 @@ table.sheet th {
 .sourcing-workbench .sourcing-cell-actions .chip { min-width: 116px; }
 .sourcing-workbench .sourcing-cell-actions { text-align: right; }
 .sourcing-workbench .sheet.sourcing-sheet--fixed th:last-child { text-align: right; }
-.sourcing-workbench .sheet.sourcing-sheet--fixed th:nth-child(3),
 .sourcing-workbench .sheet.sourcing-sheet--fixed th:nth-child(4),
 .sourcing-workbench .sheet.sourcing-sheet--fixed th:nth-child(5),
 .sourcing-workbench .sheet.sourcing-sheet--fixed th:nth-child(6),
@@ -8398,8 +8475,34 @@ table.sheet th {
 .sourcing-workbench .sheet.sourcing-sheet--fixed th:nth-child(8),
 .sourcing-workbench .sheet.sourcing-sheet--fixed th:nth-child(9),
 .sourcing-workbench .sheet.sourcing-sheet--fixed th:nth-child(10),
+.sourcing-workbench .sheet.sourcing-sheet--fixed th:nth-child(11),
 .sourcing-workbench .sheet.sourcing-sheet--fixed td.num {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
   text-align: right;
+}
+.sourcing-workbench .sheet.sourcing-sheet--fixed .sourcing-part-description {
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+.sourcing-workbench .sheet.sourcing-sheet--fixed .sourcing-source-name {
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+/* The sourcing header remains pinned to the table scroll region on a clean
+   white surface, including both frozen edge cells. */
+.sourcing-workbench .sheet.sourcing-sheet--fixed thead th {
+  position: sticky;
+  top: 0;
+  background: var(--palette-4843938) !important;
+  color: var(--text-primary) !important;
+}
+.sourcing-workbench .sheet.sourcing-sheet--fixed thead th:first-child {
+  background: var(--palette-4843938) !important;
+}
+.sourcing-workbench .sheet.sourcing-sheet--fixed thead th:last-child {
+  background: var(--palette-4843938) !important;
 }
 .sourcing-workbench .sourcing-cell-part .sourcing-remove-row { margin-top: 2px; }
 .sourcing-workbench .sourcing-cell-part .sourcing-remove-row {
@@ -8438,16 +8541,6 @@ table.sheet th {
   cursor: pointer;
 }
 .sourcing-restore-row:hover { background: var(--action-accent); color: var(--text-on-accent, #fff); }
-
-.sourcing-horizontal-scrollbar {
-  height: 18px;
-  margin: 0 0 8px;
-  padding: 2px 0;
-  background: #f8fafc;
-  border-top: 1px solid var(--grid-line);
-  border-bottom: 1px solid var(--grid-line);
-}
-.sourcing-horizontal-scrollbar > div { height: 1px; }
 
 .sourcing-price-preview-modal {
   width: min(780px, 92vw);

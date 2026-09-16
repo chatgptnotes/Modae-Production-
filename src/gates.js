@@ -13,6 +13,17 @@ import { isPlaceholderSparesLine } from './proposal/sparesBoq.js'
 import { classRule, classOrder, noExceptionKeys } from './customerClasses.js'
 import { needsCommercialApproval, needsCommercialDecision, commercialApprovalDetails, isLegacyCommercialClarification, isCommercialConfirmationRow } from './commercialTerms.js'
 
+// A customer answer is complete when it contains a response and does not
+// leave an explicit missing-information note. AI field mapping review is an
+// internal follow-up and must not keep a complete customer answer from moving
+// the opportunity forward.
+export const isClarificationResolved = clarification => {
+  if (!clarification) return false
+  if (clarification.status === 'Answered') return true
+  return !!String(clarification.response || '').trim()
+    && !String(clarification.missing || '').trim()
+}
+
 // A lead-stage verification snapshot of the shape this class records satisfies
 // the opportunity-stage gate — the salesperson is not asked to verify twice.
 const isLeadVerified = (opp, rule) =>
@@ -156,6 +167,21 @@ export function readiness(opp, proposal, state) {
     if (!overridden && !gateSatisfied(opp, state, rule, classGate)) {
       b.push({ ...classGate.readiness })
     }
+  }
+
+  // Proposal transition and readiness must agree about customer clarifications.
+  // Keep unanswered, sent, and review-needed questions visible as blockers so
+  // the green readiness summary cannot contradict the transition dialog.
+  const openClarifications = (state.clarifications || []).filter(c =>
+    c.oppId === opp.id
+    && !isLegacyCommercialClarification(c)
+    && !isCommercialConfirmationRow(c)
+    && !isClarificationResolved(c))
+  if (openClarifications.length) {
+    b.push({
+      key: 'clarifications', severity: 'block',
+      text: 'All customer clarifications must be resolved before moving to Proposal',
+    })
   }
 
   if (opp.route === 'Spares') {
@@ -435,7 +461,7 @@ export function transitionBlockers(opp, target, proposal, state) {
   }
 
   const clarifications = (state.clarifications || []).filter(c => c.oppId === opp.id && !isLegacyCommercialClarification(c) && !isCommercialConfirmationRow(c))
-  if (next >= MILESTONES.indexOf('Sourcing') && clarifications.some(c => ['Draft', 'Open', 'Sent', 'Needs review'].includes(c.status))) {
+  if (next >= MILESTONES.indexOf('Sourcing') && clarifications.some(c => !isClarificationResolved(c))) {
     b.push({ key: 'clarifications', severity: 'block', text: `All customer clarifications must be resolved before moving to ${target}` })
   }
 

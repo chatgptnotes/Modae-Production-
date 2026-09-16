@@ -121,6 +121,17 @@ test('progress stepper grid follows visible workflow step count', () => {
   assert.match(styles, /grid-template-columns: repeat\(var\(--progress-step-count, 10\), minmax\(82px, 1fr\)\)/)
 })
 
+test('approval is shown in an opportunity rail only while its request is pending', () => {
+  assert.match(workbench, /const hasPendingApproval = \(approvals, oppId\) => \(approvals \|\| \[\]\)\.some\(/)
+  assert.match(workbench, /approval\.oppId === oppId && approval\.status === 'Pending'/)
+  assert.match(workbench, /const allWorkflowSteps = workflowStepsFor\(store\.config, opp\.route\)/)
+  assert.match(workbench, /step\.milestone !== 'Approval' \|\| approvalPending/)
+  assert.match(workbench, /hiddenApprovalRequested/)
+  assert.match(workbench, /replace: true/)
+  assert.match(workbench, /workflowBySlug\[WORKFLOW_STEP_BY_TAB\[tab\]\] \? WORKFLOW_STEP_BY_TAB\[tab\] : null/)
+  assert.match(workbench, /const hiddenApprovalTab = tab === 'approval'/)
+})
+
 test('the compact lifecycle stepper exposes every displayed stage as selectable', () => {
   const ui = fs.readFileSync(path.join(root, 'src/ui.jsx'), 'utf8')
   assert.match(ui, /aria-label="Opportunity lifecycle"/)

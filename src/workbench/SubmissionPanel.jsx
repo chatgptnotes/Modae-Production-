@@ -34,6 +34,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState('')
   const fileInputRef = useRef(null)
+  const emailToRef = useRef(null)
   const customer = (store.customers || []).find(c => c.id === opp.sellTo || c.name === opp.sellTo)
   // Mail fields prefill from the opportunity but stay editable — the
   // salesperson can correct a wrong address or subject before it goes out.
@@ -216,7 +217,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
   ]
   const rows = [
     ['From', <input type="email" value={emailFrom} onChange={e => setEmailFrom(e.target.value)} placeholder="sales@company.com" style={{ width: '100%' }} />],
-    ['To', <input type="text" value={emailTo} onChange={e => setEmailTo(e.target.value)} placeholder="customer@company.com, second@company.com" style={{ width: '100%' }} />],
+    ['To', <input ref={emailToRef} id="customer-email-to" type="text" value={emailTo} onChange={e => setEmailTo(e.target.value)} placeholder="customer@company.com, second@company.com" style={{ width: '100%' }} />],
     ['CC', <input type="text" value={emailCc} onChange={e => setEmailCc(e.target.value)} placeholder="name@company.com" style={{ width: '100%' }} />],
     ['Subject', <input type="text" value={emailSubject} onChange={e => setEmailSubject(e.target.value)} placeholder="Proposal subject" style={{ width: '100%' }} />],
     ['Attachments', <>
@@ -229,7 +230,12 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
 
   return (
     <div className="form-card">
-        <div className="section-title">Customer email submission</div>
+      <div className="section-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+        <span>Customer email submission</span>
+        <button type="button" className="primary" onClick={() => emailToRef.current?.focus()}>
+          <Icon name="mail" size={13} /> Email proposal
+        </button>
+      </div>
       <table className="cost-table" style={{ width: '100%' }}>
         <tbody>
           {rows.map(([k, v]) => <tr key={k}><td style={{ width: 90 }}><b>{k}</b></td><td>{v}</td></tr>)}
