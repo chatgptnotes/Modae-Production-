@@ -15,7 +15,14 @@ export const isCounterAwaitingCustomer = term => isCommercialDeviation(term)
 // Rows created by the old implementation are retained for audit, but must not
 // continue to behave as customer clarifications or block the sourcing gate.
 export const isLegacyCommercialClarification = row => row?.category === 'Commercial'
-  && /deviation requires customer confirmation/i.test(String(row.gap || ''))
+  && (/deviation requires customer confirmation/i.test(String(row.gap || ''))
+    || /commercial deviations?/i.test(String(row.evidence || ''))
+    || /(?:offered|proposed).*(?:acceptable|acceptance).*(?:requested|customer)/i.test(String(row.q || '')))
+
+// Negotiation rows may be labelled Logistics instead of Commercial, but they
+// are still confirmation records rather than missing-information questions.
+export const isCommercialConfirmationRow = row => /commercial deviations?/i.test(String(row.evidence || ''))
+  || /(?:payment|delivery).*(?:offered|proposed).*(?:acceptable|acceptance).*(?:requested|customer)/i.test(String(row.q || ''))
 
 export const isDeliveryBasisClarification = row => row?.category === 'Commercial'
   && /delivery basis missing|delivery period and destination/i.test(`${row.gap || ''} ${row.q || ''}`)

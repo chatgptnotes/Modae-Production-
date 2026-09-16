@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import {
   normalizeCommercialTerm, needsCommercialApproval, needsCommercialDecision,
   isCounterAwaitingCustomer, commercialApprovalDetails,
-  isLegacyCommercialClarification,
+  isLegacyCommercialClarification, isCommercialConfirmationRow,
   isDeliveryBasisClarification, sourceContainsDeliveryRequirement,
 } from '../src/commercialTerms.js'
 import { oppBlockers } from '../src/gates.js'
@@ -33,6 +33,7 @@ test('a rejected or changed counter returns to the salesperson for a new decisio
 
 test('legacy commercial clarification rows are excluded without deleting audit data', () => {
   assert.equal(isLegacyCommercialClarification({ category: 'Commercial', gap: 'Payment deviation requires customer confirmation' }), true)
+  assert.equal(isCommercialConfirmationRow({ category: 'Logistics', evidence: 'Commercial deviations: Delivery', q: "Please confirm if ModAE's offered delivery timeline is acceptable against your requested requirement" }), true)
   assert.equal(isLegacyCommercialClarification({ category: 'Technical', gap: 'Signal list mismatch' }), false)
 })
 

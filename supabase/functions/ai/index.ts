@@ -427,6 +427,9 @@ Scope / remarks:
 ${cap(p.remarks, 4000)}
 BoQ lines so far:
 ${cap((p.lines || []).map((l: any) => `${l.pn || ''} ${l.desc || ''} × ${l.qty ?? ''}`).join('\n'), 6000) || '(none priced yet)'}
+Commercial deviations are handled by Sales decision, internal Approval, and a
+separate Commercial Confirmation workflow. Never generate a customer
+clarification for a listed commercial deviation.
 Commercial deviations:
 ${cap((p.deviations || []).map((d: any) => `${d.term || 'Term'} — customer asks: ${d.customerAsk || 'not recorded'}; ModAE offers: ${d.ourResponse || 'not recorded'}`).join('\n'), 5000) || '(none)'}
 Questions already raised (do not repeat these):

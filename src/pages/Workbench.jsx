@@ -36,7 +36,7 @@ import ServiceDecisionPanel from '../workbench/ServiceDecisionPanel.jsx'
 import ServiceExecutionPanel from '../workbench/ServiceExecutionPanel.jsx'
 import ServiceReportPanel from '../workbench/ServiceReportPanel.jsx'
 import ServiceInvoicePanel from '../workbench/ServiceInvoicePanel.jsx'
-import { isDeliveryBasisClarification, isLegacyCommercialClarification, sourceContainsDeliveryRequirement } from '../commercialTerms.js'
+import { isCommercialConfirmationRow, isDeliveryBasisClarification, isLegacyCommercialClarification, sourceContainsDeliveryRequirement } from '../commercialTerms.js'
 
 const statusPill = s =>
   s === 'Approved' ? 'Green' : s === 'Rejected' ? 'Red' : s === 'Approved with conditions' ? 'Amber' : 'Blue'
@@ -1043,6 +1043,7 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
   // customer clarifications and must not appear in this workflow or its counts.
   const rows = store.clarifications.filter(c => c.oppId === opp.id
     && !isLegacyCommercialClarification(c)
+    && !isCommercialConfirmationRow(c)
     && !(sourceContainsDeliveryRequirement(sourceText) && isDeliveryBasisClarification(c)))
     // Keep repeated imports/audit events, but show one actionable card per
     // question in the active workflow.
@@ -1086,7 +1087,8 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
     }, { fallback: store.config?.aiModel?.provider === 'Built-in fallback' })
     setBusy('')
     const due = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
-    const aiRows = (ai?.rows || []).filter(row => !existingQuestions.some(q => q.toLowerCase() === String(row.q || '').toLowerCase())
+    const aiRows = (ai?.rows || []).filter(row => !isCommercialConfirmationRow(row)
+      && !existingQuestions.some(q => q.toLowerCase() === String(row.q || '').toLowerCase())
       && !(sourceContainsDeliveryRequirement(sourceText) && isDeliveryBasisClarification(row)))
     // Commercial deviations are decisions for Sales/Approval, never generated
     // customer questions. Route templates may still ask for genuinely missing

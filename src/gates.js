@@ -11,7 +11,7 @@ import { defaultCosting, MILESTONES } from './seed.js'
 import { applyAdjustment, normalizeMarkupPct } from './pricing.js'
 import { isPlaceholderSparesLine } from './proposal/sparesBoq.js'
 import { classRule, classOrder, noExceptionKeys } from './customerClasses.js'
-import { needsCommercialApproval, needsCommercialDecision, commercialApprovalDetails, isLegacyCommercialClarification } from './commercialTerms.js'
+import { needsCommercialApproval, needsCommercialDecision, commercialApprovalDetails, isLegacyCommercialClarification, isCommercialConfirmationRow } from './commercialTerms.js'
 
 // A lead-stage verification snapshot of the shape this class records satisfies
 // the opportunity-stage gate — the salesperson is not asked to verify twice.
@@ -434,7 +434,7 @@ export function transitionBlockers(opp, target, proposal, state) {
     }
   }
 
-  const clarifications = (state.clarifications || []).filter(c => c.oppId === opp.id && !isLegacyCommercialClarification(c))
+  const clarifications = (state.clarifications || []).filter(c => c.oppId === opp.id && !isLegacyCommercialClarification(c) && !isCommercialConfirmationRow(c))
   if (next >= MILESTONES.indexOf('Sourcing') && clarifications.some(c => ['Draft', 'Open', 'Sent', 'Needs review'].includes(c.status))) {
     b.push({ key: 'clarifications', severity: 'block', text: `All customer clarifications must be resolved before moving to ${target}` })
   }

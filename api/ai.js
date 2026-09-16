@@ -270,10 +270,11 @@ function clarificationSuggestPrompt(p) {
 
 Propose only the clarification questions this opportunity still needs answered
 before a firm proposal can be issued. Return 0-6 distinct questions. Use the
-known opportunity, scope, BOQ and commercial deviations below; never ask for
-information already present. If a payment or delivery deviation is listed,
-ask the customer to confirm the exact offered term or delivery basis. Do not
-replace a known deviation with a generic question.
+known opportunity, scope and BOQ; never ask for information already present.
+Commercial deviations are handled by Sales decision, internal Approval, and a
+separate Commercial Confirmation workflow. Never generate a customer
+clarification for payment, delivery, warranty, freight, validity, or any other
+commercial deviation.
 
 Opportunity: ${cap(p.oppName, 300)}
 Customer: ${cap(p.sellTo, 200)} · route: ${cap(p.route, 40)} · segment: ${cap(p.segment, 80)}
