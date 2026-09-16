@@ -1,15 +1,15 @@
 // Commercial negotiation is a three-party lifecycle, not a clarification:
 // customer request -> ModAE decision -> customer response.
-export const COMMERCIAL_DECISIONS = ['Undecided', 'Offer customer request', 'Counter']
+export const COMMERCIAL_DECISIONS = ['Decision pending', 'Match customer terms', 'Counter-offer with ModAE standard terms']
 export const CUSTOMER_CONFIRMATION_STATUSES = ['Not required', 'Awaiting reply', 'Accepted', 'Rejected', 'Countered']
 
 export const isCommercialDeviation = term => term?.status === 'Deviation'
 export const needsCommercialDecision = term => isCommercialDeviation(term)
   && (!COMMERCIAL_DECISIONS.slice(1).includes(term.decision)
-    || (term.decision === 'Counter' && ['Rejected', 'Countered'].includes(term.customerConfirmationStatus)))
-export const needsCommercialApproval = term => isCommercialDeviation(term) && term.decision === 'Offer customer request'
+    || (term.decision === 'Counter-offer with ModAE standard terms' && ['Rejected', 'Countered'].includes(term.customerConfirmationStatus)))
+export const needsCommercialApproval = term => isCommercialDeviation(term) && term.decision === 'Match customer terms'
 export const isCounterAwaitingCustomer = term => isCommercialDeviation(term)
-  && term.decision === 'Counter'
+  && term.decision === 'Counter-offer with ModAE standard terms'
   && (term.customerConfirmationStatus || 'Awaiting reply') === 'Awaiting reply'
 
 // Rows created by the old implementation are retained for audit, but must not
@@ -35,15 +35,16 @@ export function normalizeCommercialTerm(term) {
     decision: term?.decision || 'Compliant',
     customerConfirmationStatus: 'Not required',
   }
-  const decision = COMMERCIAL_DECISIONS.includes(term.decision) ? term.decision : 'Undecided'
+  const legacy = { Undecided: 'Decision pending', 'Offer customer request': 'Match customer terms', Counter: 'Counter-offer with ModAE standard terms' }
+  const decision = COMMERCIAL_DECISIONS.includes(term.decision) ? term.decision : (legacy[term.decision] || 'Decision pending')
   return {
     ...term,
     decision,
     standardTerm: term.standardTerm || term.ourResponse || '',
     proposedTerm: term.proposedTerm || term.ourResponse || '',
-    customerConfirmationStatus: decision === 'Counter'
+    customerConfirmationStatus: decision === 'Counter-offer with ModAE standard terms'
       ? (term.customerConfirmationStatus || 'Awaiting reply')
-      : decision === 'Offer customer request' ? 'Not required' : (term.customerConfirmationStatus || 'Not required'),
+      : decision === 'Match customer terms' ? 'Not required' : (term.customerConfirmationStatus || 'Not required'),
   }
 }
 
@@ -52,7 +53,7 @@ export const commercialApprovalDetails = terms => (terms || [])
   .map(term => ({
     term: term.term,
     customerAsk: term.customerAsk,
-    ourResponse: term.decision === 'Offer customer request' ? term.customerAsk : (term.proposedTerm || term.ourResponse || term.customerAsk),
+    ourResponse: term.decision === 'Match customer terms' ? term.customerAsk : (term.proposedTerm || term.ourResponse || term.customerAsk),
     standardTerm: term.standardTerm,
   }))
 
@@ -95,7 +96,7 @@ export const commercialTermsFromLead = lead => {
       proposedTerm: rule.response,
       ourResponse: rule.response,
       status,
-      decision: status === 'Deviation' ? 'Undecided' : 'Compliant',
+      decision: status === 'Deviation' ? 'Decision pending' : 'Compliant',
       customerConfirmationStatus: 'Not required',
       evidence: field.evidence || field.ev || field.source || 'Customer lead',
     }]

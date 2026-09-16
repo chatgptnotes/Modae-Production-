@@ -18,7 +18,7 @@ test('a deviation requires a salesperson decision, not a clarification', () => {
 })
 
 test('counter-offer bypasses internal deviation approval and awaits the customer', () => {
-  const term = normalizeCommercialTerm({ ...base, decision: 'Counter' })
+  const term = normalizeCommercialTerm({ ...base, decision: 'Counter-offer with ModAE standard terms' })
   assert.equal(needsCommercialDecision(term), false)
   assert.equal(needsCommercialApproval(term), false)
   assert.equal(isCounterAwaitingCustomer(term), true)
@@ -26,7 +26,7 @@ test('counter-offer bypasses internal deviation approval and awaits the customer
 
 test('a rejected or changed counter returns to the salesperson for a new decision', () => {
   for (const status of ['Rejected', 'Countered']) {
-    const term = normalizeCommercialTerm({ ...base, decision: 'Counter', customerConfirmationStatus: status })
+    const term = normalizeCommercialTerm({ ...base, decision: 'Counter-offer with ModAE standard terms', customerConfirmationStatus: status })
     assert.equal(needsCommercialDecision(term), true, status)
   }
 })
@@ -44,7 +44,7 @@ test('known delivery requirements do not generate a duplicate delivery clarifica
 })
 
 test('offering the requested exception creates approval context', () => {
-  const term = normalizeCommercialTerm({ ...base, decision: 'Offer customer request' })
+  const term = normalizeCommercialTerm({ ...base, decision: 'Match customer terms' })
   assert.equal(needsCommercialApproval(term), true)
   assert.deepEqual(commercialApprovalDetails([term]), [{
     term: 'Payment', customerAsk: '90 days credit', ourResponse: '90 days credit', standardTerm: '30 days from invoice',
@@ -58,6 +58,6 @@ test('lead extraction becomes proposal terms with evidence', () => {
   assert.equal(terms.length, 1)
   assert.equal(terms[0].term, 'Payment')
   assert.equal(terms[0].status, 'Deviation')
-  assert.equal(terms[0].decision, 'Undecided')
+  assert.equal(terms[0].decision, 'Decision pending')
   assert.equal(terms[0].evidence, 'Customer email')
 })

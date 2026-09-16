@@ -577,8 +577,8 @@ function CommercialDecisionPanel({ opp }) {
     ? normalizeCommercialTerm({
       ...term,
       decision,
-      ourResponse: decision === 'Offer customer request' ? term.customerAsk : (term.proposedTerm || term.standardTerm || term.ourResponse),
-      customerConfirmationStatus: decision === 'Counter' ? 'Awaiting reply' : 'Not required',
+      ourResponse: decision === 'Match customer terms' ? term.customerAsk : (term.proposedTerm || term.standardTerm || term.ourResponse),
+      customerConfirmationStatus: decision === 'Counter-offer with ModAE standard terms' ? 'Awaiting reply' : 'Not required',
     })
     : term))
   const setConfirmation = (index, status) => saveTerms((proposal.terms || []).map((term, termIndex) => termIndex === index
@@ -598,18 +598,18 @@ function CommercialDecisionPanel({ opp }) {
           return <div className="route-template-row" key={`commercial-decision-${index}`}>
             <b>{term.term || `Term ${index + 1}`}</b>
             <span>Customer requested: {term.customerAsk || 'Not recorded'} · ModAE standard: {term.standardTerm || term.ourResponse || 'Not recorded'}</span>
-            <label>Decision <select value={term.decision || 'Undecided'} onChange={e => setDecision(index, e.target.value)}>
+            <label>Decision <select value={term.decision || 'Decision pending'} onChange={e => setDecision(index, e.target.value)}>
               {COMMERCIAL_DECISIONS.map(option => <option key={option}>{option}</option>)}
             </select></label>
-            {term.decision === 'Counter' && <>
+            {term.decision === 'Counter-offer with ModAE standard terms' && <>
               <label>Counter offer <input value={term.proposedTerm || term.ourResponse || ''} onChange={e => setProposedTerm(index, e.target.value)} /></label>
               <label>Customer response <select value={term.customerConfirmationStatus || 'Awaiting reply'} onChange={e => setConfirmation(index, e.target.value)}>
                 {CUSTOMER_CONFIRMATION_STATUSES.filter(status => status !== 'Not required').map(status => <option key={status}>{status}</option>)}
               </select></label>
               <span className="hint">Customer confirmation will be tracked in Follow-up.</span>
             </>}
-            {term.decision === 'Offer customer request' && <span className="hint">Internal Commercial Approval Required — request approval before quotation submission.</span>}
-            {(!term.decision || term.decision === 'Undecided') && <span className="err">Choose Offer customer request or Counter.</span>}
+            {term.decision === 'Match customer terms' && <span className="hint">Internal Commercial Approval Required — request approval before quotation submission.</span>}
+            {(!term.decision || term.decision === 'Decision pending') && <span className="err">Choose Match customer terms or Counter-offer with ModAE standard terms.</span>}
           </div>
         })}
       </div>
@@ -2072,10 +2072,10 @@ function FollowUpPane({ opp, onRevision }) {
       </div>
       <div className="ana-card c-6 follow-up-panel">
         <div className="ana-title">Customer communications</div>
-        {(p.terms || []).some(term => term.decision === 'Counter') && <section className="form-card commercial-followup-panel" aria-label="Commercial confirmations">
+        {(p.terms || []).some(term => term.decision === 'Counter-offer with ModAE standard terms') && <section className="form-card commercial-followup-panel" aria-label="Commercial confirmations">
           <div className="section-title">Commercial Confirmation Required</div>
           <p className="hint">Record the customer's response to each ModAE counter-offer. This does not change the internal approval decision.</p>
-          {(p.terms || []).map((term, index) => term.decision !== 'Counter' ? null : <div className="route-template-row" key={`commercial-followup-${index}`}>
+          {(p.terms || []).map((term, index) => term.decision !== 'Counter-offer with ModAE standard terms' ? null : <div className="route-template-row" key={`commercial-followup-${index}`}>
             <b>{term.term}</b>
             <span>Customer asked: {term.customerAsk || '—'} · ModAE counter: {term.proposedTerm || term.ourResponse || '—'}</span>
             <select aria-label={`${term.term} customer confirmation`} value={term.customerConfirmationStatus || 'Awaiting reply'} onChange={e => updateCommercialConfirmation(index, e.target.value)}>

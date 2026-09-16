@@ -1161,8 +1161,8 @@ export function newProposal(oppId, opp, options = {}) {
       { signal: 'Keyphasor', perUnit: 1, units: 7 },
     ],
     terms: [
-      { term: 'Payment', customerAsk: '90 days credit', standardTerm: '30 days from invoice', proposedTerm: '30 days from invoice', ourResponse: '30 days from invoice', decision: 'Undecided', customerConfirmationStatus: 'Not required', status: 'Deviation' },
-      { term: 'Delivery', customerAsk: '8 weeks', standardTerm: '10–12 weeks ex-works', proposedTerm: '10–12 weeks ex-works', ourResponse: '10–12 weeks ex-works', decision: 'Undecided', customerConfirmationStatus: 'Not required', status: 'Deviation' },
+      { term: 'Payment', customerAsk: '90 days credit', standardTerm: '30 days from invoice', proposedTerm: '30 days from invoice', ourResponse: '30 days from invoice', decision: 'Decision pending', customerConfirmationStatus: 'Not required', status: 'Deviation' },
+      { term: 'Delivery', customerAsk: '8 weeks', standardTerm: '10–12 weeks ex-works', proposedTerm: '10–12 weeks ex-works', ourResponse: '10–12 weeks ex-works', decision: 'Decision pending', customerConfirmationStatus: 'Not required', status: 'Deviation' },
       { term: 'Warranty', customerAsk: '18 months', ourResponse: '18 months from supply', status: 'Comply' },
     ],
   }

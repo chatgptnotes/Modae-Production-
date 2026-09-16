@@ -276,7 +276,7 @@ export function oppBlockers(opp, proposal, approvals, config = null) {
   const devs = (proposal?.terms || []).filter(needsCommercialApproval)
   const undecided = (proposal?.terms || []).filter(needsCommercialDecision)
   if (undecided.length) {
-    b.push({ key: 'commercial-decision', severity: 'block', text: `Choose Offer customer request or Counter for ${undecided.map(d => d.term).join(', ')} before approval.` })
+    b.push({ key: 'commercial-decision', severity: 'block', text: `Choose Match customer terms or Counter-offer with ModAE standard terms for ${undecided.map(d => d.term).join(', ')} before approval.` })
   }
   if (devs.length && !hasApproved('Commercial deviation')) {
     if (hasOpen('Commercial deviation')) {

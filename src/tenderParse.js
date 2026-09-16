@@ -536,7 +536,7 @@ export function buildProposal(oppId, opp, parse, matched) {
       term: c.key === 'payment' ? 'Payment' : c.key === 'delivery' ? 'Delivery' : c.label,
       customerAsk: c.customerAsk, standardTerm: c.standardTerm,
       proposedTerm: c.ourResponse, ourResponse: c.ourResponse, status: c.status,
-      decision: c.status === 'Deviation' ? 'Undecided' : 'Compliant',
+      decision: c.status === 'Deviation' ? 'Decision pending' : 'Compliant',
       customerConfirmationStatus: 'Not required', evidence: c.evidence,
     })),
   }
