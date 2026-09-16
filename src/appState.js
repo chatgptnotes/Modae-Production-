@@ -23,6 +23,69 @@ import { DEFAULT_CLAUSES } from './clauses.js'
 // hold the old 14-row dataset and would never show it.
 export const KEY = 'wintrack-modae-v4'
 
+// Before description-only catalogue suggestions were made review-only, a
+// tier-4 suggestion could be persisted as a priced sourcing line. Repair only
+// those old, still-unconfirmed rows; a human-confirmed suggestion is an
+// intentional commercial decision and must not be rewritten.
+const repairLegacyDescriptionMatches = s => {
+  const legacy = new Map()
+  const customerDescription = line => {
+    const ref = String(line.custRef || '').trim()
+    return /^\d+(?:\.\d+)?$/.test(ref) ? `Customer-requested item ${ref}` : (ref || line.desc)
+  }
+  const repairedLines = (s.sparesLines || []).map(line => {
+    const isLegacySuggestion = !line.confirmed && /^suggested\s*[·.]?\s*tier\s*4$/i.test(String(line.match || '').trim())
+    const isPreviouslyRepairedSuggestion = !line.confirmed
+      && !line.pn
+      && line.priceState === 'Needs pricing'
+      && /^suggested\s*[·.]?\s*compare$/i.test(String(line.match || '').trim())
+      && String(line.custRef || '').trim()
+      && String(line.desc || '').trim()
+      && String(line.custRef).trim() !== String(line.desc).trim()
+    const isNumberedUnconfirmedLine = !line.confirmed
+      && !line.pn
+      && line.priceState === 'Needs pricing'
+      && /^\d+(?:\.\d+)?$/.test(String(line.desc || '').trim())
+    if (!isLegacySuggestion && !isPreviouslyRepairedSuggestion && !isNumberedUnconfirmedLine) return line
+    legacy.set(`${line.oppId}|${String(line.pn || '').trim().toUpperCase()}|${String(line.custRef || '').trim().toLowerCase()}`, line)
+    return normalizePriceFields({
+      ...line,
+      pn: '',
+      desc: customerDescription(line),
+      match: 'Suggested · compare',
+      oem: 'TBD',
+      confirmed: false,
+      priceList: 'Ad-hoc',
+      priceSource: 'manual',
+      priceSourceName: 'Manual entry',
+      priceSourceSuggested: false,
+      priceSourceSuggestedPart: '',
+      priceSourceSuggestedDescription: '',
+      priceSourceSuggestedList: '',
+      priceSourceSuggestedVersion: '',
+      priceSourceVersion: '',
+      priceSourceRef: '',
+      priceSourceDate: '',
+      priceState: 'Needs pricing',
+      listPrice: 0,
+      listUnitPrice: 0,
+      baseCost: 0,
+    })
+  })
+  if (!legacy.size) return s
+  const proposals = { ...(s.proposals || {}) }
+  for (const [oppId, proposal] of Object.entries(proposals)) {
+    const repaired = [...legacy.values()].filter(line => line.oppId === oppId)
+    if (!repaired.length || !proposal?.bom?.length) continue
+    const oldKeys = new Set(repaired.map(line => `${String(line.pn || '').trim().toUpperCase()}|${String(line.custRef || '').trim().toLowerCase()}`))
+    proposals[oppId] = {
+      ...proposal,
+      bom: proposal.bom.filter(row => !oldKeys.has(`${String(row.pn || '').trim().toUpperCase()}|${String(row.custRef || '').trim().toLowerCase()}`)),
+    }
+  }
+  return { ...s, sparesLines: repairedLines, proposals }
+}
+
 // Exported: store.syncViewMode() calls this on resize. It used to live in
 // store.jsx and was left behind as a bare identifier when this module was
 // extracted — which crashed StoreProvider on boot without failing either the
@@ -171,6 +234,7 @@ export function migrate(s) {
       return normalizePriceFields({ ...line, id })
     })
   }
+  Object.assign(s, repairLegacyDescriptionMatches(s))
   if (!Array.isArray(s.sparesAlternatives)) s.sparesAlternatives = demo ? seedSparesAlternatives : []
   if (!s.rateSheets) s.rateSheets = seedRateSheets
   if (!Array.isArray(s.svcEstimates)) s.svcEstimates = demo ? seedSvcEstimates : []

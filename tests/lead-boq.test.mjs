@@ -15,7 +15,7 @@ test('numbered email items retain their complete descriptions and quantities', (
   ])
 })
 
-test('compact part-number lists become separate BoQ rows', () => {
+test('compact partial part references become separate reviewable BoQ rows', () => {
   const lead = {
     body: '',
     ai: { fields: [{ k: 'Line items', v: 'DS1001 ×10, DS1003 ×10, EC100 ×15' }] },
@@ -23,7 +23,9 @@ test('compact part-number lists become separate BoQ rows', () => {
   const { extracted, bom } = buildLeadProposalData(lead, seedPriceLists)
   assert.equal(extracted.length, 3)
   assert.deepEqual(bom.map(row => row.common), [10, 10, 15])
-  assert.ok(bom.every(row => row.pn && row.listPrice > 0))
+  assert.deepEqual(bom.map(row => row.pn), ['DS1001', 'DS1003', 'EC100'])
+  assert.ok(bom.every(row => row.listPrice === 0))
+  assert.ok(bom.every(row => row.common > 0))
 })
 
 test('structured AI line items take precedence over unrelated lead prose', () => {
@@ -56,4 +58,14 @@ test('description-only catalogue suggestions do not import a price automatically
   assert.equal(workbenchRows[0].priceState, 'Needs pricing')
   assert.equal(workbenchRows[0].confirmed, false)
   assert.equal(workbenchRows[0].match, 'Suggested · compare')
+})
+
+test('exact customer part numbers still import current catalogue pricing', () => {
+  const { workbenchRows } = buildLeadProposalData({
+    ai: { lineItems: [{ description: 'MPC4 monitoring card', partNumber: 'VM600-MPC4', qty: 2 }] },
+  }, seedPriceLists)
+  assert.equal(workbenchRows[0].pn, 'VM600-MPC4')
+  assert.ok(workbenchRows[0].listPrice > 0)
+  assert.equal(workbenchRows[0].priceSource, 'price-list')
+  assert.equal(workbenchRows[0].confirmed, true)
 })

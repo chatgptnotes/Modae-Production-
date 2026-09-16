@@ -22,15 +22,24 @@ import { displayRole } from './utils.js'
 
 export const DEFAULT_COMMON_MAILBOX = 'sales@modae.demo'
 
-// The five questions the real clarification mail asks when an enquiry is thin.
-// Used when the AI is unavailable, and appended to whatever the AI found so a
-// draft is never shorter than the manual one.
+// The complete question set required to validate a technical RFQ and prepare a
+// quotation. Used when the AI is unavailable, and appended to whatever the AI
+// found so a draft is never shorter than the manual one.
 export const STANDARD_CLARIFICATIONS = [
-  'End user name',
-  'Plant / project name & location',
-  'Application / machine details (e.g. pump, motor, fan, compressor, blower)',
+  'Exact manufacturer part numbers, rack configuration, and quantities for every requested item',
+  'Please confirm whether the IOC4T is required as an MPC4 add-on or as a separate card',
+  'Please confirm whether the rack request is for a complete ABE042 rack or only backplane/connectors',
+  'Probe specifications: series, thread size, tip diameter, unthreaded length, integral cable length, and connector/configuration',
+  'Extension-cable length, connector type, and compatibility with the installed probes',
+  'Signal-conditioner model and sensor interface requirements',
+  'Preferred rack power-supply voltage: 85–264 VAC or 24 VDC',
+  'End-user legal name',
+  'Plant / project name and complete delivery/site address with city and country',
+  'Application, machine type, machine tags, and existing sensor configuration',
   'Machine operating speed (RPM), if available',
-  'Any additional application-specific information that helps us recommend the most suitable solution',
+  'Required delivery date or project deadline',
+  'RFQ, datasheets, drawings, BOM, and installation documents, if available',
+  'Any additional application-specific information needed to recommend the suitable solution',
 ]
 
 // The pre-quote fee mail's document list.
@@ -137,16 +146,24 @@ export function clarificationBody(lead, { customer = null, sender, items = [], a
   ].join('\n')
 }
 
-// What each standard question is really asking, so "Operating speed (RPM)"
-// from the extraction and "Machine operating speed (RPM), if available" from
-// the template are recognised as the same request. Index-aligned with
+// What each standard question is really asking, so AI wording and template
+// wording are recognised as the same request. Index-aligned with
 // STANDARD_CLARIFICATIONS — keep them in step.
 const STANDARD_MATCHERS = [
+  /part number|part no|bom|bill of quantit|rack configuration|quantit|requested item/i,
+  /ioc4t|mpc4 add[- ]?on|separate card/i,
+  /abe042|complete rack|backplane|connector/i,
+  /probe|thread|tip diameter|unthreaded|integral cable|sensor series/i,
+  /extension cable|cable length|connector type/i,
+  /signal conditioner|sensor interface/i,
+  /power supply|voltage|vac|vdc/i,
   /end[\s-]?user/i,
-  /plant|project|location|site\b/i,
-  /application|machine|pump|motor|fan\b|compressor|blower|equipment/i,
+  /plant|project|address|city|country|location|site\b/i,
+  /application|machine|machine tag|sensor configuration|pump|motor|fan\b|compressor|blower|equipment/i,
   /speed|rpm/i,
-  /additional|any other|further detail/i,
+  /deadline|delivery date|on[- ]site date|timeline/i,
+  /attachment|datasheet|drawing|bom|installation document|rfq/i,
+  /additional|any other|further detail|application-specific/i,
 ]
 
 // The AI's missing list first, in the order it found them, then any of the
@@ -155,6 +172,16 @@ export function clarificationItems(lead, extra = []) {
   const found = [...(lead?.ai?.missing || []), ...extra].map(clean).filter(Boolean)
   const covered = i => found.some(f => STANDARD_MATCHERS[i].test(f))
   return [...found, ...STANDARD_CLARIFICATIONS.filter((_, i) => !covered(i))]
+}
+
+// Stable topic identity prevents an AI rephrasing from creating a second
+// clarification for the same missing fact. Unknown custom questions use their
+// normalized words so exact duplicates are still collapsed.
+export function clarificationTopic(question = '') {
+  const text = clean(question)
+  const standardIndex = STANDARD_MATCHERS.findIndex(matcher => matcher.test(text))
+  if (standardIndex >= 0) return `standard:${standardIndex}`
+  return `custom:${text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()}`
 }
 
 // Amber: KYC documents plus the pre-quote processing fee.

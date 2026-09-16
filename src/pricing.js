@@ -17,6 +17,27 @@ export const normalizeMarkupPct = value => Math.max(0, Math.min(MAX_MARKUP_PCT, 
 // representation for sourcing tables and evidence views. Older rows may only
 // have `priceList`, so every field deliberately has a safe fallback.
 export function formatPriceSource(line = {}) {
+  if (line.priceSourceSuggested) {
+    const name = String(line.priceSourceSuggestedList || line.priceSourceName || 'Price list').trim()
+    const version = String(line.priceSourceSuggestedVersion || '').trim()
+    const ref = String(line.priceSourceSuggestedPart || '').trim()
+    return {
+      source: PRICE_SOURCES.MANUAL,
+      kind: 'Suggested price-list match',
+      primary: 'Suggested price list',
+      secondary: [name, version, ref && `Part ${ref}`].filter(Boolean).join(' · '),
+      full: ['Suggested price-list match', name, version && `Version ${version}`, ref && `Part ${ref}`].filter(Boolean).join(' · '),
+    }
+  }
+  if (line.origin === 'customer' && !line.pn && line.priceState === 'Needs pricing') {
+    return {
+      source: PRICE_SOURCES.MANUAL,
+      kind: 'Customer request',
+      primary: 'Customer request',
+      secondary: 'Requested BOM · no price selected',
+      full: 'Customer request · Requested BOM · no price selected',
+    }
+  }
   const hasSource = [line.priceSource, line.priceSourceName, line.priceList, line.priceSourceRef, line.quoteRef]
     .some(value => String(value || '').trim())
   if (!hasSource) return { source: '', kind: 'No pricing source', primary: 'No pricing source', secondary: '', full: 'No pricing source' }

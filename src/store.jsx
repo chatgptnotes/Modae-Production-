@@ -15,6 +15,7 @@ import { withoutSimulated, simulatedCount } from './simulatedLeads.js'
 import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLeadSlice, defaultViewMode } from './appState.js'
 import { unitCostINR, unitSellINR, setRoleNameConfig, nowIST, toISTISOString } from './utils.js'
 import { PRICE_SOURCES, isConfirmableSparesLine, normalizePriceFields, sparesLineFinancials } from './pricing.js'
+import { clarificationTopic } from './leadClarification.js'
 import { normalizedCurrencyRates } from './currency.js'
 import { approvalMemoryKey } from './approvalMemory.js'
 import { syncProposalFromOpportunity } from './proposal/opportunitySync.js'
@@ -1115,6 +1116,8 @@ export function StoreProvider({ children }) {
     // ---- Clarifications ----------------------------------------------------
     addClarification(row) {
       setState(s => {
+        const topic = clarificationTopic(row.q)
+        if (!topic || s.clarifications.some(existing => existing.oppId === row.oppId && clarificationTopic(existing.q) === topic)) return s
         const id = mintId('CL', s.clarifications)
         return withAudit({
           ...s,

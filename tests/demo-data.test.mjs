@@ -96,6 +96,34 @@ test('a reload does not put the demo records back', () => {
   assert.deepEqual(rebooted.kyc, {})
 })
 
+test('migration repairs old unconfirmed description-only catalogue matches', () => {
+  const state = seedState()
+  state.demoData = false
+  state.sparesLines = [
+    { id: 'SL-legacy', oppId: 'OPP-1', origin: 'customer', custRef: 'VM600 rack backplane connectors', pn: 'VM600-ABE042', desc: 'VM600 ABE042 rack', match: 'Suggested · tier 4', confirmed: false, priceList: 'BNK', priceSource: 'price-list', priceState: 'Current', listPrice: 2650, listUnitPrice: 2650, baseCost: 2650 },
+    { id: 'SL-exact', oppId: 'OPP-1', origin: 'customer', custRef: 'MPC4', pn: 'VM600-MPC4', desc: 'MPC4', qty: 1, match: 'Exact', confirmed: true, priceList: 'BNK', priceSource: 'price-list', priceState: 'Current', listPrice: 100, listUnitPrice: 100 },
+    { id: 'SL-human', oppId: 'OPP-1', origin: 'customer', custRef: 'legacy confirmed', pn: 'VM600-ABE042', desc: 'VM600 ABE042 rack', qty: 1, match: 'Suggested · tier 4', confirmed: true, priceList: 'BNK', priceSource: 'price-list', priceState: 'Current', listPrice: 2650, listUnitPrice: 2650 },
+  ]
+  state.proposals = { 'OPP-1': { bom: [
+    { pn: 'VM600-ABE042', custRef: 'VM600 rack backplane connectors', listPrice: 2650 },
+    { pn: 'VM600-MPC4', custRef: 'MPC4', listPrice: 100 },
+  ] } }
+  const migrated = migrate(state)
+  const legacy = migrated.sparesLines.find(line => line.id === 'SL-legacy')
+  assert.equal(legacy.pn, '')
+  assert.equal(legacy.desc, 'VM600 rack backplane connectors')
+  const numberedLegacy = migrate({ ...state, sparesLines: [{ ...state.sparesLines[0], custRef: '9', desc: 'VM600 ABE042 rack' }] }).sparesLines[0]
+  assert.equal(numberedLegacy.desc, 'Customer-requested item 9')
+  assert.equal(legacy.listPrice, 0)
+  assert.equal(legacy.priceState, 'Needs pricing')
+  assert.equal(legacy.confirmed, false)
+  assert.equal(migrated.sparesLines.find(line => line.id === 'SL-exact').pn, 'VM600-MPC4')
+  assert.equal(migrated.sparesLines.find(line => line.id === 'SL-human').pn, 'VM600-ABE042')
+  assert.deepEqual(migrated.proposals['OPP-1'].bom.map(line => line.pn), ['VM600-MPC4'])
+  const rebooted = migrate(migrated)
+  assert.deepEqual(rebooted, migrated)
+})
+
 // A record created after the wipe has to survive the same reload — an empty app
 // that quietly drops the first real enquiry would be worse than the demo data.
 test('records created after the wipe survive a reload', () => {

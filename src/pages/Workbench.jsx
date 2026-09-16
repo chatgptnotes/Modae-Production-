@@ -10,7 +10,7 @@ import { Icon } from '../icons.jsx'
 import { productBrandProfiles } from '../branding/modae.js'
 import { MODAE_COMPANY } from '../proposalDoc.js'
 import { runJson, runTaskResult, runText } from '../ai.js'
-import { clarificationSender } from '../leadClarification.js'
+import { clarificationSender, clarificationTopic } from '../leadClarification.js'
 import WbSpares from '../workbench/WbSpares.jsx'
 import WbService from '../workbench/WbService.jsx'
 import WbProject from '../workbench/WbProject.jsx'
@@ -1164,7 +1164,8 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
     try {
       const proposal = store.getProposal(opp.id)
       const deviations = (proposal.terms || []).filter(t => t.status === 'Deviation')
-      const existingQuestions = rows.map(c => c.q)
+      const existingQuestions = rows.map(c => ({ question: c.q, status: c.status, missing: c.missing || '' }))
+      const existingTopics = new Set(rows.map(c => clarificationTopic(c.q)))
       const ai = await runJson('clarification.suggest', {
         oppName: opp.oppName, sellTo: opp.sellTo, route: opp.route, segment: opp.segment,
         eucName: opp.eucName, location: opp.location, remarks: opp.remarks,
@@ -1174,8 +1175,9 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
         currentFields: { oppName: opp.oppName, rfqNumber: opp.rfqNumber, sellTo: opp.sellTo, category: opp.category, location: opp.location, eucName: opp.eucName, eucLocation: opp.eucLocation, contactPerson: opp.contactPerson, contactPhone: opp.contactPhone },
       }, { fallback: store.config?.aiModel?.provider === 'Built-in fallback' })
       const due = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+      const isNewTopic = row => row?.q && !existingTopics.has(clarificationTopic(row.q))
       const aiRows = (ai?.rows || []).filter(row => !isCommercialConfirmationRow(row)
-        && !existingQuestions.some(q => q.toLowerCase() === String(row.q || '').toLowerCase())
+        && isNewTopic(row)
         && !(sourceContainsDeliveryRequirement(sourceText) && isDeliveryBasisClarification(row)))
       // Commercial deviations are decisions for Sales/Approval, never generated
       // customer questions. Route templates may still ask for genuinely missing
@@ -1183,10 +1185,11 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
       // delivery term.
       const fallbackRows = (CLAR_SUGGESTIONS[opp.route] || CLAR_SUGGESTIONS.Project)
         .filter(row => !(sourceContainsDeliveryRequirement(sourceText) && isDeliveryBasisClarification(row)))
-      const selected = (aiRows.length ? aiRows : fallbackRows).slice(0, 6)
+      const selected = (aiRows.length ? aiRows : fallbackRows).filter(isNewTopic).slice(0, 6)
       for (const s of selected) {
         store.addClarification({ ...s, oppId: opp.id, owner: opp.owner, audience: 'Customer', due, status: 'Open' })
       }
+      store.updateOpportunity(opp.id, { autoClarificationSuggestedAt: new Date().toISOString() })
     } catch (error) {
       setSuggestErr(`Could not generate clarification questions: ${error?.message || String(error)}`)
     } finally {
@@ -1201,10 +1204,13 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
   })
 
   useEffect(() => {
-    if (!autoSuggestSignature || busy || autoSuggestRef.current === autoSuggestSignature) return
+    // Automatic discovery is an onboarding action, not a poll. Once an
+    // opportunity has clarifications (or the first attempt was recorded),
+    // revisiting this page must not call the AI again.
+    if (!autoSuggestSignature || rows.length || opp.autoClarificationSuggestedAt || busy || autoSuggestRef.current === autoSuggestSignature) return
     autoSuggestRef.current = autoSuggestSignature
     suggest()
-  }, [autoSuggestSignature, busy]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [autoSuggestSignature, busy, rows.length, opp.autoClarificationSuggestedAt]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveManualQuestion = event => {
     event.preventDefault()
@@ -1215,7 +1221,7 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
       setManualErr('Add a category, gap and customer question before saving.')
       return
     }
-    if (rows.some(row => row.q.trim().toLowerCase() === q.toLowerCase())) {
+    if (rows.some(row => clarificationTopic(row.q) === clarificationTopic(q))) {
       setManualErr('This question is already listed for the opportunity.')
       return
     }

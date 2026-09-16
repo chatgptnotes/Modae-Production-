@@ -12,6 +12,7 @@ import {
   clarificationItems,
   clarificationKindFor,
   clarificationSender,
+  clarificationTopic,
   draftClarification,
   draftPatch,
   senderLabel,
@@ -84,6 +85,26 @@ test('the standard questions top up a thin extraction without duplicating it', (
   const sparse = clarificationItems({ ai: { missing: ['Delivery schedule'] } })
   assert.equal(sparse[0], 'Delivery schedule')
   for (const q of STANDARD_CLARIFICATIONS) assert.ok(sparse.includes(q), `must still ask: ${q}`)
+})
+
+test('a VM600 RFQ receives the complete technical and commercial clarification set', () => {
+  const items = clarificationItems({ ai: { missing: [
+    'Detailed BOQ with exact part numbers and rack configuration',
+    'Machine tag details and existing sensor configuration',
+  ] } })
+  for (const topic of [
+    /part numbers/i, /IOC4T/, /ABE042/, /probe specifications/i,
+    /extension-cable/i, /signal-conditioner/i, /power-supply/i,
+    /end-user/i, /delivery\/site address/i, /machine operating speed/i,
+    /delivery date/i, /RFQ, datasheets/i,
+  ]) assert.ok(items.some(item => topic.test(item)), `missing clarification topic: ${topic}`)
+  assert.equal(items.filter(item => /sensor configuration/i.test(item)).length, 1)
+})
+
+test('clarification topics remain stable when AI rephrases the question', () => {
+  assert.equal(clarificationTopic('Please provide the exact part numbers and quantities in the BOM'), clarificationTopic('Which manufacturer part numbers and quantities are required?'))
+  assert.equal(clarificationTopic('What voltage should the rack power supply use?'), clarificationTopic('Please confirm whether the power supply is 24 VDC or 85–264 VAC'))
+  assert.notEqual(clarificationTopic('What is the machine operating speed?'), clarificationTopic('Please share the complete delivery address'))
 })
 
 test('an Amber lead gets the pre-quote fee mail instead', () => {

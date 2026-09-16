@@ -66,6 +66,8 @@ test('Spares requirement validation leads with actionable clarifications', () =>
 test('clarifications auto-suggest on source changes and allow required manual questions', () => {
   assert.match(workbench, /const autoSuggestSignature = JSON\.stringify\(/)
   assert.match(workbench, /autoSuggestRef\.current === autoSuggestSignature/)
+  assert.match(workbench, /rows\.length \|\| opp\.autoClarificationSuggestedAt/)
+  assert.match(workbench, /autoClarificationSuggestedAt: new Date\(\)\.toISOString\(\)/)
   assert.match(workbench, /suggest\(\)/)
   assert.match(workbench, /Add question manually/)
   assert.match(workbench, /const saveManualQuestion = event =>/)
