@@ -2127,6 +2127,7 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .form-card { background: var(--palette-4843938); border: 1px solid var(--grid-line); padding: 18px 22px; max-width: 760px; }
 /* Cards holding a full grid: fill the content area instead of the 760px form column */
 .form-card.wide { max-width: none; }
+.submission-message-draft { display: block; min-height: 180px; line-height: 1.55; }
 /* Modals also carry .form-card, whose max-width above (same specificity, later
    source order) was winning the cascade over every earlier modal rule — it
    knocked out the 92vw viewport cap, so dialogs could not shrink and narrow

@@ -2580,10 +2580,10 @@ function LegacyCommsTab({ opp }) {
   }[kind] || kind || 'Communication')
   return (
     <div className="ana-grid">
-      <div className="ana-card c-6">
+      <div className="ana-card c-12">
         <SubmissionPanel opp={opp} />
       </div>
-      <div className="ana-card c-6">
+      <div className="ana-card c-12">
         <div className="ana-title">Communication log</div>
         {rows.map((c, i) => (
           <div key={i} className="check-row">
@@ -2617,10 +2617,10 @@ function CommsTab({ opp }) {
     .sort((a, b) => new Date(b.ts || 0) - new Date(a.ts || 0))
   return (
     <div className="ana-grid">
-      <div className="ana-card c-6">
+      <div className="ana-card c-12">
         <SubmissionPanel opp={opp} />
       </div>
-      <div className="ana-card c-6">
+      <div className="ana-card c-12">
         <div className="ana-title">Communication log</div>
         {rows.map((c, i) => {
           const sender = communicationSender(c, opp, lead)

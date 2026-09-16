@@ -22,7 +22,7 @@ test('the customer submission panel exposes editable To, CC, Subject and message
   assert.match(submission, /onChange=\{e => setEmailTo\(e\.target\.value\)\}/)
   assert.match(submission, /onChange=\{e => setEmailCc\(e\.target\.value\)\}/)
   assert.match(submission, /onChange=\{e => setEmailSubject\(e\.target\.value\)\}/)
-  assert.match(submission, /<textarea value=\{emailBody\}/)
+  assert.match(submission, /<textarea className="submission-message-draft" value=\{emailBody\}/)
   // Defaults still prefill from the opportunity so typing is usually unnecessary.
   assert.match(submission, /opp\.contactEmail \|\| customer\?\.email \|\| ''/)
   assert.match(submission, /Proposal — \$\{opp\.oppName\} \(\$\{opp\.id\} Rev \$\{p\.revision\}\)/)
@@ -61,12 +61,18 @@ test('sending opens Gmail with the proposal and governed enclosure list', () => 
 
 test('proposal message can be created by AI and remains editable', () => {
   assert.match(submission, /runText\('email\.proposal'/)
-  assert.match(submission, /AI: create message/)
+  assert.match(submission, /AI: improve draft/)
+  assert.match(submission, /A ready-to-edit draft is filled in automatically\./)
   assert.match(submission, /setEmailBody\(formatEmailBody\(text\)\)/)
-  assert.match(submission, /<textarea value=\{emailBody\}/)
+  assert.match(submission, /className="submission-message-draft" value=\{emailBody\}.*rows=\{9\}/)
   assert.match(aiApi, /'email\.proposal'/)
   assert.match(aiApi, /proposalEmailPrompt/)
   assert.match(aiApi, /emailProposalSchema/)
+})
+
+test('the automatic message draft stays comfortably readable', () => {
+  const css = read('src/styles.css')
+  assert.match(css, /\.submission-message-draft \{[\s\S]*min-height: 180px;/)
 })
 
 test('proposal attachment is opt-in and requires validated review', () => {
@@ -84,6 +90,10 @@ test('approved releases replace redundant self-attestation checks before Gmail o
   assert.doesNotMatch(submission, /No restricted commercial data in the document/)
   assert.doesNotMatch(submission, /Named reviewer:/)
   assert.doesNotMatch(submission, /Complete the human-review checklist/)
+})
+
+test('customer submission uses the available communications-card width', () => {
+  assert.equal((submission.match(/className="form-card wide"/g) || []).length, 2)
 })
 
 test('submission panel provides a direct proposal view', () => {

@@ -57,7 +57,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
 
   if (!release) {
     return (
-      <div className="form-card">
+      <div className="form-card wide">
           <div className="section-title">Customer submission (simulated)</div>
         <p className="hint">
           {opp.route === 'Service' ? 'Service Review pending — submission opens once AH + LJS approve the offer.' : "Release approval pending — submission opens once a 'Final quote release' is approved."}
@@ -213,7 +213,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
   ]
 
   return (
-    <div className="form-card">
+    <div className="form-card wide">
       <div className="section-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
         <span>Customer email submission</span>
         <button type="button" className="primary" onClick={() => emailToRef.current?.focus()}>
@@ -226,14 +226,14 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
         </tbody>
       </table>
 
-      <label className="afield" style={{ display: 'block', marginTop: 8 }}>Message</label>
+      <label className="afield" style={{ display: 'block', marginTop: 8 }}>Message draft</label>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '4px 0' }}>
         <button type="button" onClick={createMessage} disabled={messageBusy}>
-          <Icon name="sparkles" size={13} /> {messageBusy ? 'Creating message…' : 'AI: create message'}
+          <Icon name="sparkles" size={13} /> {messageBusy ? 'Improving message…' : 'AI: improve draft'}
         </button>
-        <span className="hint">Creates a draft in the editable message box.</span>
+        <span className="hint">A ready-to-edit draft is filled in automatically. Use AI only to rewrite it.</span>
       </div>
-      <textarea value={emailBody} onChange={e => setEmailBody(e.target.value)} rows={5}
+      <textarea className="submission-message-draft" value={emailBody} onChange={e => setEmailBody(e.target.value)} rows={9}
         style={{ width: '100%', resize: 'vertical' }} />
       {messageError && <ErrBox>{messageError}</ErrBox>}
 

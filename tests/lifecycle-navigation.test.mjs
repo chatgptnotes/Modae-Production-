@@ -93,6 +93,20 @@ test('matching customer terms automatically requests one internal AH approval', 
   assert.doesNotMatch(decisionHandler, /requestCommercialApproval\(nextTerms\)[\s\S]*Counter-offer with ModAE standard terms/)
 })
 
+test('communications tabs stack the full-width submission form above the full-width log', () => {
+  const legacyStart = workbench.indexOf('function LegacyCommsTab')
+  const legacyEnd = workbench.indexOf('// ---------------------------------------------------------------------------', legacyStart + 1)
+  const legacy = workbench.slice(legacyStart, legacyEnd)
+  const commsStart = workbench.indexOf('function CommsTab')
+  const commsEnd = workbench.indexOf('// ---------------------------------------------------------------------------', commsStart + 1)
+  const comms = workbench.slice(commsStart, commsEnd)
+
+  assert.ok(legacy.indexOf('<SubmissionPanel opp={opp} />') < legacy.indexOf('Communication log'))
+  assert.ok(comms.indexOf('<SubmissionPanel opp={opp} />') < comms.indexOf('Communication log'))
+  assert.match(legacy, /<div className="ana-card c-12">\s*<SubmissionPanel opp=\{opp\} \/>\s*<\/div>\s*<div className="ana-card c-12">\s*<div className="ana-title">Communication log<\/div>/s)
+  assert.match(comms, /<div className="ana-card c-12">\s*<SubmissionPanel opp=\{opp\} \/>\s*<\/div>\s*<div className="ana-card c-12">\s*<div className="ana-title">Communication log<\/div>/s)
+})
+
 test('commercial decisions appear before sourcing, not inside the proposal editor', () => {
   const proposal = fs.readFileSync(path.join(root, 'src/pages/Proposal.jsx'), 'utf8')
   const decision = workbench.indexOf('Commercial decision required')
