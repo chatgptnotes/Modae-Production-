@@ -36,7 +36,7 @@ import ServiceDecisionPanel from '../workbench/ServiceDecisionPanel.jsx'
 import ServiceExecutionPanel from '../workbench/ServiceExecutionPanel.jsx'
 import ServiceReportPanel from '../workbench/ServiceReportPanel.jsx'
 import ServiceInvoicePanel from '../workbench/ServiceInvoicePanel.jsx'
-import { COMMERCIAL_DECISIONS, CUSTOMER_CONFIRMATION_STATUSES, isCommercialConfirmationRow, isDeliveryBasisClarification, isLegacyCommercialClarification, needsCommercialApproval, normalizeCommercialTerm, sourceContainsDeliveryRequirement } from '../commercialTerms.js'
+import { COMMERCIAL_DECISIONS, CUSTOMER_CONFIRMATION_STATUSES, commercialApprovalDetails, isCommercialConfirmationRow, isDeliveryBasisClarification, isLegacyCommercialClarification, needsCommercialApproval, normalizeCommercialTerm, sourceContainsDeliveryRequirement } from '../commercialTerms.js'
 
 const statusPill = s =>
   s === 'Approved' ? 'Green' : s === 'Rejected' ? 'Red' : s === 'Approved with conditions' ? 'Amber' : 'Blue'
@@ -569,18 +569,50 @@ function SparesIntakeTab({ opp, detailsRef }) {
 function CommercialDecisionPanel({ opp }) {
   const store = useStore()
   const proposal = store.getProposal(opp.id)
+  const [approvalNotice, setApprovalNotice] = useState('')
   const deviations = (proposal.terms || []).filter(term => term.status === 'Deviation')
   if (!deviations.length) return null
 
   const saveTerms = terms => store.saveProposal(opp.id, { ...proposal, terms })
-  const setDecision = (index, decision) => saveTerms((proposal.terms || []).map((term, termIndex) => termIndex === index
-    ? normalizeCommercialTerm({
-      ...term,
-      decision,
-      ourResponse: decision === 'Match customer terms' ? term.customerAsk : (term.proposedTerm || term.standardTerm || term.ourResponse),
-      customerConfirmationStatus: decision === 'Counter-offer with ModAE standard terms' ? 'Awaiting reply' : 'Not required',
+  const requestCommercialApproval = terms => {
+    const deviationDetails = commercialApprovalDetails(terms)
+    if (!deviationDetails.length) return
+    const lead = (store.leads || []).find(item => item.oppId === opp.id)
+    const aiSummary = lead?.ai?.summary?.trim() || ''
+    const opportunitySummary = aiSummary || `${opp.oppName || 'This opportunity'} is a ${opp.route || 'sales'} opportunity for ${opp.sellTo || 'the customer'}${opp.product ? ` covering ${Array.isArray(opp.product) ? opp.product.join(', ') : opp.product}` : ''}.`
+    store.requestApproval({
+      oppId: opp.id,
+      type: 'Commercial deviation',
+      rev: String(proposal?.revision ?? ''),
+      approver: 'AH',
+      needed: ['AH'],
+      anyOf: false,
+      detail: 'Customer-requested commercial terms matched. AH approval is required before quotation submission.',
+      blockingReason: 'The proposal matches one or more customer-requested commercial terms that differ from ModAE standard terms and require AH approval.',
+      opportunitySummary,
+      summarySource: aiSummary ? 'ai' : 'opportunity',
+      opportunitySnapshot: {
+        name: opp.oppName || '', customer: opp.sellTo || '', route: opp.route || '',
+        product: Array.isArray(opp.product) ? opp.product.join(', ') : (opp.product || ''),
+        milestone: opp.milestone || opp.stage || '',
+      },
+      deviationDetails,
+      refreshPendingContext: true,
     })
-    : term))
+    setApprovalNotice('AH approval was requested automatically and is now in the internal Approvals queue.')
+  }
+  const setDecision = (index, decision) => {
+    const nextTerms = (proposal.terms || []).map((term, termIndex) => termIndex === index
+      ? normalizeCommercialTerm({
+        ...term,
+        decision,
+        ourResponse: decision === 'Match customer terms' ? term.customerAsk : (term.proposedTerm || term.standardTerm || term.ourResponse),
+        customerConfirmationStatus: decision === 'Counter-offer with ModAE standard terms' ? 'Awaiting reply' : 'Not required',
+      })
+      : term)
+    saveTerms(nextTerms)
+    if (decision === 'Match customer terms') requestCommercialApproval(nextTerms)
+  }
   const setConfirmation = (index, status) => saveTerms((proposal.terms || []).map((term, termIndex) => termIndex === index
     ? normalizeCommercialTerm({ ...term, customerConfirmationStatus: status })
     : term))
@@ -592,24 +624,29 @@ function CommercialDecisionPanel({ opp }) {
     <section className="workbench-panel commercial-decision-panel" aria-label="Commercial decisions">
       <div className="workbench-section-title">Commercial decision required</div>
       <p className="hint">Decide how ModAE will respond to each customer commercial request before moving to Sourcing.</p>
+      {approvalNotice && <div className="okbox commercial-approval-notice">{approvalNotice}</div>}
       <div className="commercial-decision-list">
         {deviations.map(term => {
           const index = proposal.terms.indexOf(term)
-          return <div className="route-template-row" key={`commercial-decision-${index}`}>
-            <b>{term.term || `Term ${index + 1}`}</b>
-            <span>Customer requested: {term.customerAsk || 'Not recorded'} · ModAE standard: {term.standardTerm || term.ourResponse || 'Not recorded'}</span>
-            <label>Decision <select value={term.decision || 'Decision pending'} onChange={e => setDecision(index, e.target.value)}>
+          return <div className="route-template-row commercial-decision-row" key={`commercial-decision-${index}`}>
+            <b className="commercial-decision-term">{term.term || `Term ${index + 1}`}</b>
+            <div className="commercial-decision-request">
+              <div><b>Customer requested:</b><span>{term.customerAsk || 'Not recorded'}</span></div>
+              <div><b>ModAE standard:</b><span>{term.standardTerm || term.ourResponse || 'Not recorded'}</span></div>
+            </div>
+            <label className="commercial-decision-choice">Decision <select value={term.decision || 'Decision pending'} onChange={e => setDecision(index, e.target.value)}>
               {COMMERCIAL_DECISIONS.map(option => <option key={option}>{option}</option>)}
-            </select></label>
-            {term.decision === 'Counter-offer with ModAE standard terms' && <>
+            </select>
+              {term.decision === 'Match customer terms' && <span className="hint">AH approval requested automatically — quotation submission remains blocked until approval.</span>}
+              {(!term.decision || term.decision === 'Decision pending') && <span className="err">Choose Match customer terms or Counter-offer with ModAE standard terms.</span>}
+            </label>
+            {term.decision === 'Counter-offer with ModAE standard terms' && <div className="commercial-decision-followup">
               <label>Counter offer <input value={term.proposedTerm || term.ourResponse || ''} onChange={e => setProposedTerm(index, e.target.value)} /></label>
               <label>Customer response <select value={term.customerConfirmationStatus || 'Awaiting reply'} onChange={e => setConfirmation(index, e.target.value)}>
                 {CUSTOMER_CONFIRMATION_STATUSES.filter(status => status !== 'Not required').map(status => <option key={status}>{status}</option>)}
               </select></label>
               <span className="hint">Customer confirmation will be tracked in Follow-up.</span>
-            </>}
-            {term.decision === 'Match customer terms' && <span className="hint">Internal Commercial Approval Required — request approval before quotation submission.</span>}
-            {(!term.decision || term.decision === 'Decision pending') && <span className="err">Choose Match customer terms or Counter-offer with ModAE standard terms.</span>}
+            </div>}
           </div>
         })}
       </div>
@@ -628,7 +665,7 @@ function SparesRequirementTab({ opp, sourceText = '' }) {
         <ClarificationsTab opp={opp} sourceText={sourceText} compact />
       </div>
       <div className="workbench-panel">
-        <div className="workbench-section-title">Requirement review</div>
+        <div className="workbench-section-title">Source &amp; opportunity details</div>
         <p className="hint">Use this reference to confirm the requested parts, quantities, specifications, compatibility, and delivery requirements.</p>
         <RequirementTab opp={opp} />
       </div>
@@ -671,18 +708,16 @@ function RegistrationTab({ opp, goTab, detailsRef, spares = false }) {
 function RequirementTab({ opp }) {
   const store = useStore()
   const lead = store.leads.find(l => l.oppId === opp.id)
-  const upd = k => e => store.updateOpportunity(opp.id, { [k]: e.target.value })
-
-  const editable = [
-    ['stage', 'Stage', STAGES], ['prob', 'Probability', PROB_LEVELS], ['bu', 'BU', BUS],
-    ['segment', 'Segment', SEGMENTS], ['product', 'Product', PRODUCTS],
-  ]
   const readonly = [
     ['Opportunity ID', opp.id], ['Sell-to', opp.sellTo], ['Category', opp.category],
     ['End user', `${opp.eucName || '—'} · ${opp.eucLocation || '—'}`],
     ['Route', opp.route], ['Lane', `${opp.context || '—'} world`],
     ['Owner', displayRoleLabel(opp.owner)],
     ['Contact', `${opp.contactPerson || '—'} ${opp.contactPhone || ''}`],
+    ['Stage', opp.stage || '—'], ['Probability', opp.prob || '—'],
+    ['BU', opp.bu || '—'], ['Segment', opp.segment || '—'],
+    ['Product', Array.isArray(opp.product) ? opp.product.join(', ') || '—' : opp.product || '—'],
+    ['Additional customer information', opp.additionalCustomerInformation || '—'],
   ]
 
   return (
@@ -712,19 +747,10 @@ function RequirementTab({ opp }) {
       </div>
       <div className="ana-card c-6">
         <div className="ana-title">Pipeline metadata</div>
+        <p className="hint metadata-reference-note">Reference only. Update pipeline fields in Opportunity details; workflow progress advances through gated actions.</p>
         <table className="cost-table" style={{ width: '100%' }}>
           <tbody>
             {readonly.map(([k, v]) => <tr key={k}><td>{k}</td><td>{v}</td></tr>)}
-            {editable.map(([k, label, opts]) => (
-              <tr key={k}>
-                <td>{label}</td>
-                <td>
-                  <select value={opp[k] || ''} onChange={upd(k)}>
-                    {opts.map(o => <option key={o}>{o}</option>)}
-                  </select>
-                </td>
-              </tr>
-            ))}
           </tbody>
         </table>
       </div>
@@ -1060,6 +1086,7 @@ const OPP_FIELD_OPTIONS = [
   ['solution', 'Solution'],
   ['contactPerson', 'Contact Person'],
   ['contactPhone', 'Contact Phone'],
+  ['additionalCustomerInformation', 'Additional customer information'],
 ]
 const opportunityFieldLabel = key => OPP_FIELD_OPTIONS.find(([field]) => field === key)?.[1] || key
 
@@ -1113,6 +1140,12 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
   const [sentOk, setSentOk] = useState(false)
   const [sendErr, setSendErr] = useState('')
   const [busy, setBusy] = useState('') // '' | 'suggest' | 'draft'
+  const [suggestErr, setSuggestErr] = useState('')
+  const [manualOpen, setManualOpen] = useState(false)
+  const [manualForm, setManualForm] = useState({ category: 'Technical', gap: '', q: '' })
+  const [manualErr, setManualErr] = useState('')
+  const [manualOk, setManualOk] = useState('')
+  const autoSuggestRef = useRef('')
   const [answerFor, setAnswerFor] = useState(null)
   const [answerForm, setAnswerForm] = useState({ response: '', answerSource: 'Customer', receivedAt: '' })
   const [answerFiles, setAnswerFiles] = useState([])
@@ -1127,33 +1160,73 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
   // fallback whenever the AI is unavailable (see src/ai.js).
   const suggest = async () => {
     setBusy('suggest')
-    const proposal = store.getProposal(opp.id)
-    const deviations = (proposal.terms || []).filter(t => t.status === 'Deviation')
-    const existingQuestions = rows.map(c => c.q)
-    const ai = await runJson('clarification.suggest', {
-      oppName: opp.oppName, sellTo: opp.sellTo, route: opp.route, segment: opp.segment,
-      eucName: opp.eucName, location: opp.location, remarks: opp.remarks,
-      lines: (proposal.lines || []).map(l => ({ pn: l.pn, desc: l.desc, qty: l.qty })),
-      deviations: deviations.map(t => ({ term: t.term, customerAsk: t.customerAsk, ourResponse: t.ourResponse })),
-      existing: existingQuestions,
-      currentFields: { oppName: opp.oppName, rfqNumber: opp.rfqNumber, sellTo: opp.sellTo, category: opp.category, location: opp.location, eucName: opp.eucName, eucLocation: opp.eucLocation, contactPerson: opp.contactPerson, contactPhone: opp.contactPhone },
-    }, { fallback: store.config?.aiModel?.provider === 'Built-in fallback' })
-    setBusy('')
-    const due = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
-    const aiRows = (ai?.rows || []).filter(row => !isCommercialConfirmationRow(row)
-      && !existingQuestions.some(q => q.toLowerCase() === String(row.q || '').toLowerCase())
-      && !(sourceContainsDeliveryRequirement(sourceText) && isDeliveryBasisClarification(row)))
-    // Commercial deviations are decisions for Sales/Approval, never generated
-    // customer questions. Route templates may still ask for genuinely missing
-    // delivery/site data, which is a different fact than negotiating a known
-    // delivery term.
-    const fallbackRows = (CLAR_SUGGESTIONS[opp.route] || CLAR_SUGGESTIONS.Project)
-      .filter(row => !(sourceContainsDeliveryRequirement(sourceText) && isDeliveryBasisClarification(row)))
-    const suggestions = aiRows
-    const selected = (suggestions.length ? suggestions : fallbackRows).slice(0, 6)
-    for (const s of selected) {
-      store.addClarification({ ...s, oppId: opp.id, owner: opp.owner, audience: 'Customer', due, status: 'Open' })
+    setSuggestErr('')
+    try {
+      const proposal = store.getProposal(opp.id)
+      const deviations = (proposal.terms || []).filter(t => t.status === 'Deviation')
+      const existingQuestions = rows.map(c => c.q)
+      const ai = await runJson('clarification.suggest', {
+        oppName: opp.oppName, sellTo: opp.sellTo, route: opp.route, segment: opp.segment,
+        eucName: opp.eucName, location: opp.location, remarks: opp.remarks,
+        lines: (proposal.lines || []).map(l => ({ pn: l.pn, desc: l.desc, qty: l.qty })),
+        deviations: deviations.map(t => ({ term: t.term, customerAsk: t.customerAsk, ourResponse: t.ourResponse })),
+        existing: existingQuestions,
+        currentFields: { oppName: opp.oppName, rfqNumber: opp.rfqNumber, sellTo: opp.sellTo, category: opp.category, location: opp.location, eucName: opp.eucName, eucLocation: opp.eucLocation, contactPerson: opp.contactPerson, contactPhone: opp.contactPhone },
+      }, { fallback: store.config?.aiModel?.provider === 'Built-in fallback' })
+      const due = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+      const aiRows = (ai?.rows || []).filter(row => !isCommercialConfirmationRow(row)
+        && !existingQuestions.some(q => q.toLowerCase() === String(row.q || '').toLowerCase())
+        && !(sourceContainsDeliveryRequirement(sourceText) && isDeliveryBasisClarification(row)))
+      // Commercial deviations are decisions for Sales/Approval, never generated
+      // customer questions. Route templates may still ask for genuinely missing
+      // delivery/site data, which is a different fact than negotiating a known
+      // delivery term.
+      const fallbackRows = (CLAR_SUGGESTIONS[opp.route] || CLAR_SUGGESTIONS.Project)
+        .filter(row => !(sourceContainsDeliveryRequirement(sourceText) && isDeliveryBasisClarification(row)))
+      const selected = (aiRows.length ? aiRows : fallbackRows).slice(0, 6)
+      for (const s of selected) {
+        store.addClarification({ ...s, oppId: opp.id, owner: opp.owner, audience: 'Customer', due, status: 'Open' })
+      }
+    } catch (error) {
+      setSuggestErr(`Could not generate clarification questions: ${error?.message || String(error)}`)
+    } finally {
+      setBusy('')
     }
+  }
+
+  const autoSuggestSignature = JSON.stringify({
+    opp: [opp.id, opp.oppName, opp.sellTo, opp.route, opp.segment, opp.eucName, opp.location, opp.remarks, opp.rfqNumber, opp.category, opp.eucLocation, opp.contactPerson, opp.contactPhone],
+    sourceText,
+    proposal: store.getProposal(opp.id),
+  })
+
+  useEffect(() => {
+    if (!autoSuggestSignature || busy || autoSuggestRef.current === autoSuggestSignature) return
+    autoSuggestRef.current = autoSuggestSignature
+    suggest()
+  }, [autoSuggestSignature, busy]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const saveManualQuestion = event => {
+    event.preventDefault()
+    const category = manualForm.category.trim()
+    const gap = manualForm.gap.trim()
+    const q = manualForm.q.trim()
+    if (!category || !gap || !q) {
+      setManualErr('Add a category, gap and customer question before saving.')
+      return
+    }
+    if (rows.some(row => row.q.trim().toLowerCase() === q.toLowerCase())) {
+      setManualErr('This question is already listed for the opportunity.')
+      return
+    }
+    store.addClarification({
+      category, gap, q, evidence: 'Manual entry', oppId: opp.id, owner: opp.owner,
+      audience: 'Customer', due: new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10), status: 'Open',
+    })
+    setManualForm({ category: 'Technical', gap: '', q: '' })
+    setManualErr('')
+    setManualOpen(false)
+    setManualOk('Manual clarification added and sourcing remains blocked until it is answered.')
   }
 
   // Deterministic template — also the fallback when Gemini can't be reached.
@@ -1356,6 +1429,9 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
         <button className="clarification-action" onClick={suggest} disabled={!!busy}>
           <Icon name="sparkles" size={13} /> {busy === 'suggest' ? 'Thinking…' : 'AI: suggest questions'}
         </button>
+        <button className="clarification-action" onClick={() => { setManualOpen(open => !open); setManualErr(''); setManualOk('') }} disabled={!!busy}>
+          <Icon name="plus" size={13} /> Add question manually
+        </button>
         <button className="clarification-action" onClick={openDraft} disabled={!open.length || !!busy}
           title={open.length ? '' : 'No open questions to draft from'}>
           <Icon name="mail" size={13} /> {busy === 'draft' ? 'Drafting…' : 'AI: draft email'}
@@ -1366,6 +1442,23 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
         </button>
         <span className="spacer" />
       </div>
+      {busy === 'suggest' && <div className="hint clarification-auto-status" role="status">Checking the enquiry and proposal for missing customer information…</div>}
+      {suggestErr && <div className="errbox">{suggestErr}</div>}
+      {manualOk && <div className="okbox">{manualOk}</div>}
+      {manualOpen && <form className="clarification-manual-form" onSubmit={saveManualQuestion}>
+        <div className="section-title">Add a required customer question</div>
+        <p className="hint">Use this when the automatic suggestions miss a customer-specific gap. It will block sourcing until answered.</p>
+        <div className="clarification-manual-fields">
+          <label>Category<input value={manualForm.category} onChange={e => setManualForm(form => ({ ...form, category: e.target.value }))} placeholder="Technical" /></label>
+          <label>Gap<input value={manualForm.gap} onChange={e => setManualForm(form => ({ ...form, gap: e.target.value }))} placeholder="What information is missing?" /></label>
+          <label className="clarification-manual-question">Customer question<textarea rows={2} value={manualForm.q} onChange={e => setManualForm(form => ({ ...form, q: e.target.value }))} placeholder="Write the exact question to send to the customer" /></label>
+        </div>
+        {manualErr && <div className="errbox">{manualErr}</div>}
+        <div className="toolbar clarification-manual-actions">
+          <button className="primary" type="submit">Save required question</button>
+          <button type="button" onClick={() => setManualOpen(false)}>Cancel</button>
+        </div>
+      </form>}
       {sentOk && <div className="okbox">Clarification email sent and logged in Communications.</div>}
       {replyOk && <div className="okbox">{replyOk}</div>}
       {compact && <div className={`clarification-status ${open.length ? 'is-blocked' : 'is-clear'}`} role="status">
@@ -1375,10 +1468,10 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
         </div>
       </div>}
       {compact && <div className="clarification-cards">
-        {rows.map(c => (
+        {rows.map((c, index) => (
           <article className="clarification-card" key={c.id}>
             <div className="clarification-card-head">
-              <div><b>{c.id}</b><span className="clarification-card-category">{c.category}</span></div>
+              <div className="clarification-card-label"><b>{c.category}</b><span>Clarification {index + 1}</span></div>
               <Chip tone={clarTone(c.status)}>{c.status}</Chip>
             </div>
             <div className="clarification-card-question">{c.q}</div>

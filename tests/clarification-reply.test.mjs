@@ -13,6 +13,7 @@ test('clarification reply flow has one reply upload action and AI matching', () 
   assert.match(source, /store\.stageClarificationAnswer\(row\.id/)
   assert.match(source, /store\.confirmClarificationField/)
   assert.match(source, /AI suggests updating/)
+  assert.match(source, /\['additionalCustomerInformation', 'Additional customer information'\]/)
   assert.match(source, /currentFields: \{ oppName: opp\.oppName/)
   assert.match(source, /store\.addCommunication\(opp\.id/)
 })
@@ -28,6 +29,8 @@ test('AI endpoints expose clarification answer mapping', () => {
   assert.match(read('supabase/functions/ai/index.ts'), /'clarification\.answer'/)
   assert.match(read('supabase/functions/ai/index.ts'), /missing: STR/)
   assert.match(read('supabase/functions/ai/index.ts'), /fieldKey: STR/)
+  assert.match(read('api/ai.js'), /additionalCustomerInformation only for explicit/)
+  assert.match(read('supabase/functions/ai/index.ts'), /additionalCustomerInformation only for explicit/)
 })
 
 test('partial customer answers remain reviewable and blocking', () => {

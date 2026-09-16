@@ -56,11 +56,39 @@ test('Spares workflow has eight grouped industry-standard stages', () => {
 
 test('Spares requirement validation leads with actionable clarifications', () => {
   const clarifications = workbench.indexOf('<div className="workbench-section-title">Clarifications first</div>')
-  const review = workbench.indexOf('<div className="workbench-section-title">Requirement review</div>')
+  const review = workbench.indexOf('<div className="workbench-section-title">Source &amp; opportunity details</div>')
   assert.ok(clarifications >= 0 && clarifications < review, 'Clarifications should appear before requirement review')
   assert.match(workbench, /<ClarificationsTab opp=\{opp\} sourceText=\{sourceText\} compact \/>/)
   assert.match(workbench, /Sourcing is blocked/)
   assert.match(workbench, /clarification-cards/)
+})
+
+test('clarifications auto-suggest on source changes and allow required manual questions', () => {
+  assert.match(workbench, /const autoSuggestSignature = JSON\.stringify\(/)
+  assert.match(workbench, /autoSuggestRef\.current === autoSuggestSignature/)
+  assert.match(workbench, /suggest\(\)/)
+  assert.match(workbench, /Add question manually/)
+  assert.match(workbench, /const saveManualQuestion = event =>/)
+  assert.match(workbench, /evidence: 'Manual entry'/)
+  assert.match(workbench, /status: 'Open'/)
+  assert.match(workbench, /It will block sourcing until answered/)
+})
+
+test('commercial decision terms use separate readable labels and values', () => {
+  assert.match(workbench, /commercial-decision-request[\s\S]*<b>Customer requested:<\/b><span>/)
+  assert.match(workbench, /commercial-decision-request[\s\S]*<b>ModAE standard:<\/b><span>/)
+})
+
+test('matching customer terms automatically requests one internal AH approval', () => {
+  const panel = workbench.slice(workbench.indexOf('function CommercialDecisionPanel'))
+  const decisionHandler = panel.slice(panel.indexOf('const setDecision'), panel.indexOf('const setConfirmation'))
+  assert.match(decisionHandler, /if \(decision === 'Match customer terms'\) requestCommercialApproval\(nextTerms\)/)
+  assert.match(panel, /type: 'Commercial deviation'/)
+  assert.match(panel, /approver: 'AH'/)
+  assert.match(panel, /deviationDetails/)
+  assert.match(panel, /refreshPendingContext: true/)
+  assert.match(panel, /AH approval was requested automatically/)
+  assert.doesNotMatch(decisionHandler, /requestCommercialApproval\(nextTerms\)[\s\S]*Counter-offer with ModAE standard terms/)
 })
 
 test('commercial decisions appear before sourcing, not inside the proposal editor', () => {
@@ -70,6 +98,18 @@ test('commercial decisions appear before sourcing, not inside the proposal edito
   assert.ok(decision >= 0 && decision < clarifications, 'commercial decisions should lead Requirement Validation')
   assert.match(workbench, /<CommercialDecisionPanel opp=\{opp\} \/>/)
   assert.doesNotMatch(proposal, /Commercial decision and confirmation/)
+})
+
+test('source and opportunity details keeps pipeline metadata as a live read-only reference', () => {
+  const start = workbench.indexOf('function RequirementTab({ opp })')
+  const end = workbench.indexOf('// ---------------------------------------------------------------------------', start + 1)
+  const requirement = workbench.slice(start, end)
+  assert.match(requirement, /Reference only\. Update pipeline fields in Opportunity details/)
+  assert.match(requirement, /\['Stage', opp\.stage \|\| '—'\]/)
+  assert.match(requirement, /\['Probability', opp\.prob \|\| '—'\]/)
+  assert.match(requirement, /\['Product', Array\.isArray\(opp\.product\)/)
+  assert.doesNotMatch(requirement, /const editable =/)
+  assert.doesNotMatch(requirement, /onChange=\{upd\(k\)\}/)
 })
 
 test('progress stepper grid follows visible workflow step count', () => {

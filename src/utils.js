@@ -95,6 +95,12 @@ export const productList = v => (Array.isArray(v)
   ? v.filter(Boolean)
   : String(v || '').split(',').map(s => s.trim()).filter(Boolean))
 export const productLabel = v => productList(v).join(', ')
+// Solution is multi-value in the opportunity editor. Keep older records that
+// stored one solution as a string readable while new edits use an array.
+export const solutionList = v => (Array.isArray(v)
+  ? v.filter(Boolean)
+  : String(v || '').split(',').map(s => s.trim()).filter(Boolean))
+export const solutionLabel = v => solutionList(v).join(', ')
 // LJS (strategic) and AH (commercial & ops) decide gates; admins can see the queue.
 export const isApprover = role => role === 'LJS' || role === 'AH' || isAdminRole(role)
 export const displayRole = (role, config) => {

@@ -30,7 +30,7 @@ const StoreCtx = createContext(null)
 const CLARIFICATION_FIELD_KEYS = new Set([
   'oppName', 'rfqNumber', 'sellTo', 'category', 'location', 'customerStatus',
   'eucName', 'eucLocation', 'oppType', 'bu', 'segment', 'solution',
-  'contactPerson', 'contactPhone',
+  'contactPerson', 'contactPhone', 'additionalCustomerInformation',
 ])
 
 export { isPlaceholderSparesLine, sparesProposalBom }
@@ -798,7 +798,16 @@ export function StoreProvider({ children }) {
           && existing.type === req.type
           && ['Pending', 'Approved', 'Approved with conditions'].includes(existing.status)
           && (existing.approvalKey || approvalMemoryKey(existing)) === memoryKey)
-        if (alreadyRemembered) return s
+        if (alreadyRemembered) {
+          if (!req.refreshPendingContext || alreadyRemembered.status !== 'Pending') return s
+          const { refreshPendingContext, ...requestContext } = req
+          return withAudit({
+            ...s,
+            approvals: s.approvals.map(existing => existing.id === alreadyRemembered.id
+              ? { ...existing, ...requestContext, approvalKey: memoryKey }
+              : existing),
+          }, 'Approval request context updated', alreadyRemembered.id, `${alreadyRemembered.type} — ${alreadyRemembered.oppId}`)
+        }
         const id = mintId('AP', s.approvals, 100)
         const appr = {
           id, status: 'Pending', conditions: [], decisionTs: '', decisionNote: '',

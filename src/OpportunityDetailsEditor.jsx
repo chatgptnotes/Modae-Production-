@@ -1,6 +1,6 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { CATEGORIES, CUSTOMER_STATUSES, OWNERS, OPP_TYPES, BUS, SEGMENTS, SOLUTIONS, PRODUCTS, PROB_LEVELS } from './seed.js'
-import { displayRole, productList, rupeesToK } from './utils.js'
+import { displayRole, productList, solutionLabel, solutionList, rupeesToK } from './utils.js'
 
 const Field = ({ label, children }) => (
   <div className="opportunity-field"><label>{label}</label>{children}</div>
@@ -24,7 +24,7 @@ const displayOpportunityScope = value => String(value || '')
 const fields = [
   'owner', 'oppName', 'opportunityScope', 'rfqNumber', 'rfqDate', 'valueK', 'sellTo', 'category', 'location', 'customerStatus',
   'eucName', 'eucLocation', 'oppType', 'bu', 'segment', 'solution', 'product', 'prob',
-  'contactPerson', 'contactPhone',
+  'contactPerson', 'contactPhone', 'additionalCustomerInformation',
 ]
 
 const makeDraft = opp => ({
@@ -33,9 +33,10 @@ const makeDraft = opp => ({
   category: opp.category || '', location: opp.location || '',
   customerStatus: opp.customerStatus || '', eucName: opp.eucName || '',
   eucLocation: opp.eucLocation || '', oppType: opp.oppType || '',
-  bu: opp.bu || '', segment: opp.segment || '', solution: opp.solution || '',
+  bu: opp.bu || '', segment: opp.segment || '', solution: solutionList(opp.solution),
   product: productList(opp.product), prob: opp.prob || '',
   contactPerson: opp.contactPerson || '', contactPhone: opp.contactPhone || '',
+  additionalCustomerInformation: opp.additionalCustomerInformation || '',
 })
 
 export function OpportunityDetailsView({ opp, className = '' }) {
@@ -70,6 +71,10 @@ export function OpportunityDetailsView({ opp, className = '' }) {
         <ReadOnlyField label="Customer Status" value={opp.customerStatus} />
         <ReadOnlyField label="EUC Name" value={opp.eucName} />
         <ReadOnlyField label="EUC Location" value={opp.eucLocation} />
+        <div className="opportunity-details-wide">
+          <label>Additional customer information</label>
+          <div className="read-only-field read-only-field-multiline">{opp.additionalCustomerInformation || '—'}</div>
+        </div>
       </div>
 
       <div className="opportunity-details-group">Classification</div>
@@ -78,7 +83,7 @@ export function OpportunityDetailsView({ opp, className = '' }) {
         <ReadOnlyField label="BU" value={opp.bu} />
         <ReadOnlyField label="Segment" value={opp.segment} />
         <ReadOnlyField label="Estimated Value (₹)" value={opp.valueK == null ? '—' : `₹ ${Number(opp.valueK * 1000).toLocaleString('en-IN')}`} />
-        <ReadOnlyField label="Solution" value={opp.solution} />
+        <ReadOnlyField label="Solution" value={solutionLabel(opp.solution)} />
         <ReadOnlyField label="Probability" value={opp.prob} />
         <ReadOnlyField label="Product" value={product.length ? product.join(', ') : 'No products selected'} />
       </div>
@@ -124,6 +129,7 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
   const [draft, setDraft] = useState(() => makeDraft(opp))
   const [dirty, setDirty] = useState(false)
   const [productOpen, setProductOpen] = useState(false)
+  const [solutionOpen, setSolutionOpen] = useState(false)
   const contactPersonRef = useRef(null)
   const contactPhoneRef = useRef(null)
 
@@ -139,6 +145,7 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
     setDraft(makeDraft(opp))
     setDirty(false)
     setProductOpen(false)
+    setSolutionOpen(false)
   }, [opp.id, opp.lastUpdated])
 
   const set = (key, value) => {
@@ -164,11 +171,23 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
     set('product', next)
   }
 
+  const toggleSolution = solution => {
+    const next = draft.solution.includes(solution)
+      ? draft.solution.filter(value => value !== solution)
+      : [...draft.solution, solution]
+    set('solution', next)
+  }
+
   const productSummary = draft.product.length === 0
     ? 'No products selected'
     : draft.product.length === 1
       ? draft.product[0]
       : `${draft.product.length} products selected`
+  const solutionSummary = draft.solution.length === 0
+    ? 'No solutions selected'
+    : draft.solution.length === 1
+      ? draft.solution[0]
+      : `${draft.solution.length} solutions selected`
 
   return (
     <section className={`opportunity-details-editor ${className}`}>
@@ -203,6 +222,9 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
         <Field label="Customer Status"><select value={draft.customerStatus} onChange={e => set('customerStatus', e.target.value)}>{CUSTOMER_STATUSES.map(x => <option key={x}>{x}</option>)}</select></Field>
         <Field label="EUC Name"><input type="text" value={draft.eucName} onChange={e => set('eucName', e.target.value)} /></Field>
         <Field label="EUC Location"><input type="text" value={draft.eucLocation} onChange={e => set('eucLocation', e.target.value)} /></Field>
+        <div className="opportunity-details-wide">
+          <Field label="Additional customer information"><textarea rows={3} value={draft.additionalCustomerInformation} onChange={e => set('additionalCustomerInformation', e.target.value)} placeholder="Confirmed customer information that does not fit another field" /></Field>
+        </div>
       </div>
 
       <div className="opportunity-details-group">Classification</div>
@@ -213,7 +235,36 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
         <Field label="Estimated Value (₹)"><input type="number" min="0" step="1" value={draft.valueK} onChange={e => set('valueK', e.target.value === '' ? '' : Number(e.target.value))} /></Field>
         {/* On the client's Field List but not a Sales Pipeline column, so it is
             captured here rather than on the tracker sheet. */}
-        <Field label="Solution"><select value={draft.solution} onChange={e => set('solution', e.target.value)}><option value="">—</option>{SOLUTIONS.map(x => <option key={x}>{x}</option>)}</select></Field>
+        <Field label="Solution">
+          <div className="compact-product-picker">
+            <button
+              type="button"
+              className={`compact-product-trigger ${draft.solution.length ? 'has-selection' : ''}`}
+              aria-expanded={solutionOpen}
+              aria-haspopup="listbox"
+              onClick={() => setSolutionOpen(open => !open)}
+            >
+              <span>{solutionSummary}</span><span className="compact-product-caret" aria-hidden="true">▾</span>
+            </button>
+            {solutionOpen && (
+              <>
+                <div className="filter-overlay" onClick={() => setSolutionOpen(false)} />
+                <div className="compact-product-menu" role="listbox" aria-label="Solutions" aria-multiselectable="true" onClick={e => e.stopPropagation()}>
+                  {SOLUTIONS.map(solution => (
+                    <label key={solution} className="compact-product-option">
+                      <input type="checkbox" checked={draft.solution.includes(solution)} onChange={() => toggleSolution(solution)} />
+                      <span>{solution}</span>
+                    </label>
+                  ))}
+                  <div className="compact-product-menu-actions">
+                    <button type="button" className="ghost" onClick={() => set('solution', [])}>Clear</button>
+                    <button type="button" onClick={() => setSolutionOpen(false)}>Done</button>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </Field>
         <Field label="Probability"><select value={draft.prob} onChange={e => set('prob', e.target.value)}><option value="">—</option>{PROB_LEVELS.map(x => <option key={x}>{x}</option>)}</select></Field>
         <Field label="Product">
           <div className="compact-product-picker">

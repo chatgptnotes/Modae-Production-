@@ -477,8 +477,10 @@ For a fully answered question, map the answer to at most one Opportunity field
 only when the reply explicitly supplies that field. Use only one of the allowed
 field keys supplied below. Return empty fieldKey, fieldValue and fieldEvidence
 when no safe mapping exists. Never map a technical part number or price into a
-general Opportunity field. fieldValue must be the exact supported value. The
-salesperson will review and confirm the mapping.
+general Opportunity field. Use additionalCustomerInformation only for explicit
+customer-provided context that does not fit a structured field; never use it for
+part numbers, quantities, prices, or commercial terms. fieldValue must be the
+exact supported value. The salesperson will review and confirm the mapping.
 
 Opportunity: ${cap(p.oppName, 300)} · customer: ${cap(p.customer, 200)}
 From: ${cap(p.from, 300)} · Subject: ${cap(p.subject, 300)}

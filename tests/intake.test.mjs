@@ -3,11 +3,14 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { solutionLabel, solutionList } from '../src/utils.js'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
 
 const source = read('src/pages/IntakeForm.jsx')
+const editor = read('src/OpportunityDetailsEditor.jsx')
+const styles = read('src/styles.css')
 const bodyStart = source.indexOf('export default function IntakeForm')
 
 // A component declared inside the render body is a new element type on every
@@ -77,4 +80,19 @@ test('product readers normalise through productList/productLabel', () => {
   // A single-value <select> cannot represent a list.
   assert.doesNotMatch(read('src/pages/Tracker.jsx'), /<select value=\{o\.product\}/)
   assert.doesNotMatch(read('src/opppanel.jsx'), /<select value=\{opp\.product\}/)
+})
+
+test('opportunity editor supports multi-select solutions and legacy values', () => {
+  assert.deepEqual(solutionList('Automation, VMS/CMS'), ['Automation', 'VMS/CMS'])
+  assert.deepEqual(solutionList(['SSS', 'Fx-1']), ['SSS', 'Fx-1'])
+  assert.equal(solutionLabel(['Automation', 'SSS']), 'Automation, SSS')
+  assert.match(editor, /solution: solutionList\(opp\.solution\)/)
+  assert.match(editor, /aria-label="Solutions" aria-multiselectable="true"/)
+  assert.match(editor, /checked=\{draft\.solution\.includes\(solution\)\}/)
+  assert.match(read('src/opppanel.jsx'), /solutionLabel\(opp\.solution\)/)
+})
+
+test('opportunity checkbox controls are not stretched into full-size fields', () => {
+  assert.match(styles, /opportunity-details-grid input:not\(\[type=checkbox\]\)/)
+  assert.doesNotMatch(styles, /\.opportunity-details-grid input, \.opportunity-details-grid select/)
 })

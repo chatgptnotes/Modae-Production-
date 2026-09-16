@@ -4,7 +4,7 @@ import { useStore } from './store.jsx'
 import {
   SUBFOLDERS,
 } from './seed.js'
-import { fmt, fmtRupeesFromK, mmmYY, ddMmmYY, canViewCommercial, canPriceProposal, productList } from './utils.js'
+import { fmt, fmtRupeesFromK, mmmYY, ddMmmYY, canViewCommercial, canPriceProposal, productList, solutionLabel } from './utils.js'
 import { nextActionWith } from './gates.js'
 import { Icon } from './icons.jsx'
 import { Chip, ClassChip } from './ui.jsx'
@@ -243,7 +243,7 @@ function PartnerPanel({ opp, store, nav }) {
         <tr><td>Route</td><td>{opp.route || '—'}</td></tr>
         <tr><td>BU</td><td>{opp.bu || '—'}</td></tr>
         <tr><td>Segment</td><td>{opp.segment || '—'}</td></tr>
-        <tr><td>Solution</td><td>{opp.solution || '—'}</td></tr>
+        <tr><td>Solution</td><td>{solutionLabel(opp.solution) || '—'}</td></tr>
       </tbody></table>
       <div className="chip-group drawer-panel-chips">
         {products.length
