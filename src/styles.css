@@ -2558,9 +2558,8 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
   .approval-search { flex-basis: 100%; }
   .approval-filters select, .approval-clear { flex: 1 1 0; min-width: 0; }
 }
-/* 58px is a floor, not a cap: a subject or sender address that needs two lines
-   gets them rather than being cut off mid-word. */
-.mail-row { min-height: 58px; padding: 8px 10px 8px 8px; border-bottom: 1px solid var(--border-soft); cursor: pointer; color: var(--text-muted); transition: background .15s ease, box-shadow .15s ease; }
+/* Keep rows compact while allowing the metadata, subject, and preview to breathe. */
+.mail-row { min-height: 88px; overflow: visible; padding: 10px 10px 10px 8px; border-bottom: 1px solid var(--border-soft); cursor: pointer; color: var(--text-muted); transition: background .15s ease, box-shadow .15s ease; }
 .mail-row:hover { background: var(--palette-3353bb00); box-shadow: inset 3px 0 0 var(--primary-accent); }
 .mail-row.selected { background: var(--primary-soft); }
 .mail-row.unread { color: var(--text-main); background: var(--palette-b315b730); }
@@ -2574,14 +2573,13 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .mail-sender b, .mail-sender small { display: block; min-width: 0; overflow-wrap: break-word; }
 .mail-sender small, .mail-date small { margin-top: 3px; color: var(--text-subtle); font-size: 10.5px; }
 .mail-content { min-width: 0; padding-right: 12px; font-size: 12px; white-space: normal !important; }
-.mail-content-stack { display: flex; min-width: 0; max-width: 100%; flex-direction: column; justify-content: center; gap: 2px; }
-.mail-subject-line { display: flex; align-items: center; flex-wrap: wrap; min-width: 0; gap: 6px; color: var(--text-main); line-height: 1.25; }
-.mail-subject-line b { min-width: 0; flex: 1 1 auto; overflow-wrap: break-word; }
-.mail-content small { display: block; overflow-wrap: break-word; }
-.mail-content small { display: block; margin-top: 3px; color: var(--text-subtle); line-height: 1.25; }
+.mail-content-stack { display: flex; min-width: 0; max-width: 100%; flex-direction: column; justify-content: center; gap: 3px; }
+.mail-subject-meta { display: flex; align-items: center; min-width: 0; gap: 6px; overflow: hidden; flex-wrap: nowrap; white-space: nowrap; }
+.mail-subject-title { display: -webkit-box; min-width: 0; overflow: hidden; color: var(--text-main); line-height: 1.25; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+.mail-content small { display: -webkit-box; min-width: 0; margin-top: 3px; overflow: hidden; color: var(--text-subtle); line-height: 1.25; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
 .mail-ref { flex: 0 0 auto; max-width: 25%; overflow: hidden; color: var(--primary-deep) !important; font-size: 10.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-.mail-opportunity-link { display: inline-flex; align-items: center; flex: 0 0 auto; max-width: 44%; margin: 0; padding: 0; overflow: hidden; border: 0; background: transparent; color: var(--primary-deep); font: inherit; font-size: 10.5px; font-weight: 700; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
-.mail-opportunity-link:hover { text-decoration: underline; }
+.mail-opportunity-link { display: inline-flex; align-items: center; flex: 0 1 auto; max-width: 100%; margin: 0; padding: 0; overflow: hidden; border: 0; border-radius: 0; background: transparent !important; box-shadow: none; color: var(--primary-deep); font: inherit; font-size: 10.5px; font-weight: 700; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.mail-opportunity-link:hover { background: transparent !important; border-color: transparent; text-decoration: underline; }
 .mail-opportunity-link .pill { flex: 0 0 auto; margin-right: 4px; font-size: 9px; vertical-align: 1px; }
 .communication-row { cursor: pointer; }
 .communication-row:hover, .communication-row:focus { background: var(--primary-soft); outline: none; }
@@ -6442,6 +6440,7 @@ body {
 }
 .proposal-review-source { opacity: .75; font-weight: 700; }
 .proposal-review-issue-text { margin: 4px 0 0; line-height: 1.4; }
+.proposal-review-action { margin-top: 7px; }
 .proposal-review-evidence {
   display: grid; grid-template-columns: 58px minmax(0, 1fr); gap: 6px; align-items: start;
   margin-top: 6px; padding-top: 5px; border-top: 1px solid color-mix(in srgb, currentColor 18%, transparent);

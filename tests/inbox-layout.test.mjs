@@ -40,13 +40,18 @@ test('mailbox bulk toolbar actions are wired', () => {
   assert.match(fs.readFileSync(new URL('../src/store.jsx', import.meta.url), 'utf8'), /updateLeads\(ids, patch, detail = ''\)/)
 })
 
-test('subject and preview stay in a contained single-line inbox cell', () => {
+test('subject and preview stay in a contained two-line inbox cell', () => {
   assert.match(inbox, /className="mail-subject-head"[^>]*>Subject \/ preview/)
-  assert.match(inbox, /className="mail-subject-line">[\s\S]*<b>\{l\.subject\}<\/b>/)
+  assert.match(inbox, /className="mail-subject-meta">[\s\S]*className="mail-subject-title">\{l\.subject\}/)
   assert.match(inbox, /<small>\{l\.ai\?\.summary \|\| l\.body\?\.replace/)
   assert.match(inbox, /className="mail-content-stack"/)
-  assert.match(css, /\.mail-subject-line \{[\s\S]*text-overflow: ellipsis; white-space: nowrap;/)
-  assert.match(css, /\.mail-content small \{[\s\S]*text-overflow: ellipsis; white-space: nowrap;/)
+  assert.match(css, /\.mail-subject-meta \{[\s\S]*overflow: hidden;/)
+  assert.match(css, /\.mail-subject-meta \{[\s\S]*flex-wrap: nowrap;[\s\S]*white-space: nowrap;/)
+    assert.match(css, /\.mail-opportunity-link \{[\s\S]*white-space: nowrap;/)
+  assert.match(css, /\.mail-opportunity-link \{[\s\S]*background: transparent !important;/)
+  assert.match(css, /\.mail-row \{[\s\S]*min-height: 88px;[\s\S]*overflow: visible;/)
+  assert.match(css, /\.mail-subject-title \{[\s\S]*-webkit-line-clamp: 2;[\s\S]*overflow-wrap: anywhere;/)
+  assert.match(css, /\.mail-content small \{[\s\S]*-webkit-line-clamp: 2;[\s\S]*overflow-wrap: anywhere;/)
   assert.match(css, /\.mail-column-head \.mail-subject-head \{[\s\S]*white-space: nowrap;/)
   assert.match(css, /minmax\(320px, 4fr\)/)
 })

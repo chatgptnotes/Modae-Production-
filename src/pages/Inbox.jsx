@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useStore, nextOppId } from '../store.jsx'
-import { ddMmmYY, ageDays, gmailComposeHref, displayRole, formatISTTime, formatISTDate, nowIST } from '../utils.js'
+import { ddMmmYY, ageDays, isTodayIST, gmailComposeHref, displayRole, formatISTTime, formatISTDate, nowIST } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { Chip, ConfChip, WarnBox, ErrBox, Modal } from '../ui.jsx'
@@ -2943,7 +2943,7 @@ export default function Inbox() {
     }
   }, [sel?.id]) // eslint-disable-line react-hooks/exhaustive-deps
   if (sel) {
-    const age = ageDays((sel.ts || '').slice(0, 10))
+    const age = ageDays(sel.ts)
     return (
     <div className="lead-workspace">
         <div className="ws-topbar">
@@ -2985,7 +2985,7 @@ export default function Inbox() {
     const source = l.source || l.channel || ''
     const route = l.route || l.parse?.oppType || ''
     const completeness = l.completeness ?? (l.parse?.confidence != null ? Math.round(l.parse.confidence * 100) : null)
-    const age = ageDays((l.ts || '').slice(0, 10))
+    const age = ageDays(l.ts)
     if (sourceF && source !== sourceF) return false
     if (routeF && route !== routeF) return false
     if (urgencyF && (l.urgency || 'Normal') !== urgencyF) return false
@@ -2998,12 +2998,11 @@ export default function Inbox() {
       if (completenessF === 'low' && completeness >= 60) return false
     }
     if (receivedF) {
-      const maxAge = receivedF === 'today' ? 0 : receivedF === '7' ? 6 : 29
-      if (age == null || age > maxAge) return false
+      if (receivedF === 'today' ? !isTodayIST(l.ts) : age == null || age > (receivedF === '7' ? 6 : 29)) return false
     }
     if (ageF) {
       if (age == null) return false
-      if (ageF === 'today' && age !== 0) return false
+      if (ageF === 'today' && !isTodayIST(l.ts)) return false
       if (ageF === '7' && (age < 7 || age > 29)) return false
       if (ageF === '30' && age < 30) return false
     }
@@ -3331,10 +3330,11 @@ export default function Inbox() {
               <div className="mail-sender" title={[l.source || l.channel || 'Common mailbox', l.sender || l.from].filter(Boolean).join(' — ')}><b>{l.source || l.channel || 'Common mailbox'}</b><small>{l.sender || l.from}</small></div>
               <div className="mail-content" title={l.subject}>
                 <div className="mail-content-stack">
-                  <div className="mail-subject-line">
+                  {(l.status === 'Converted' && l.oppId || l.ref) && <div className="mail-subject-meta">
                     {l.status === 'Converted' && l.oppId && <button className="mail-opportunity-link" onClick={e => { e.stopPropagation(); nav('/opp/' + l.oppId) }} title="Open linked opportunity"><span className="pill Green">Opportunity</span> {l.oppId}</button>}
-                    <b>{l.subject}</b>{l.ref && <span className="mail-ref"> · {l.ref}</span>}
-                  </div>
+                    {l.ref && <span className="mail-ref"> · {l.ref}</span>}
+                  </div>}
+                  <b className="mail-subject-title">{l.subject}</b>
                   <small>{l.ai?.summary || l.body?.replace(/\s+/g, ' ').slice(0, 130) || 'No preview available'}</small>
                 </div>
               </div>
@@ -3359,8 +3359,8 @@ export default function Inbox() {
                <b>No opportunities here</b>
                <span>Leads converted into opportunities will appear in this tab.</span>
              </> : <>
-               <b>No messages here</b>
-              <span>Try another mailbox tab or change your filters.</span>
+              <b>{receivedF === 'today' || ageF === 'today' ? 'No messages received today' : 'No messages here'}</b>
+              <span>{receivedF === 'today' || ageF === 'today' ? 'No inbox records match the current India business date.' : 'Try another mailbox tab or change your filters.'}</span>
             </>}
           </div>
         )}

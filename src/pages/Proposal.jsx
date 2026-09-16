@@ -29,12 +29,12 @@ import { clausesFor, clauseWarnings } from '../clauses.js'
 import { fromInr, toInr, currencySymbol } from '../currency.js'
 import { reviewFindingKey } from '../approvalMemory.js'
 import OpportunityComingSoon from '../workbench/OpportunityComingSoon.jsx'
-import { normalizeCommercialTerm } from '../commercialTerms.js'
+import { modaeStandardCommercialTerms, normalizeCommercialTerm } from '../commercialTerms.js'
 
 const ROUTE_TABS = {
-  Project: ['Cover Letter', 'Edit Sheet', 'Document', 'Signal List', 'Rack Layout', 'Priced BoQ'],
-  Services: ['Cover Letter', 'Edit Sheet', 'Document', 'Scope of Work', 'Issues List', 'Proposal', 'Service Rate Schedule'],
-  Spares: ['Cover Letter', 'Edit Sheet', 'Document', 'Firm Offer', 'Clarifications', 'Sensor Comparison', 'Priced BoQ'],
+  Project: ['Cover Letter', 'Edit Sheet', 'Signal List', 'Rack Layout', 'Priced BoQ'],
+  Services: ['Cover Letter', 'Edit Sheet', 'Scope of Work', 'Issues List', 'Proposal', 'Service Rate Schedule'],
+  Spares: ['Cover Letter', 'Edit Sheet', 'Firm Offer', 'Clarifications', 'Sensor Comparison', 'Priced BoQ'],
 }
 
 const MEGGITT_ITEM_LIST_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-2 With Different Make (Not yet won)/Meggitt Item List.xlsx', import.meta.url).href
@@ -106,6 +106,22 @@ const rememberOverriddenFindings = (issues, override) => issues.map(issue => {
   }
 })
 
+// These two checks make the quotation easier to review, but they do not make
+// its pricing or quantity invalid. Older saved validations used `warning` for
+// them, which made a Validated proposal display contradictory “Needs review”
+// badges. Normalize legacy records as well as new validations.
+const informationalReviewFinding = issue => {
+  const text = String(issue?.text || '')
+  const code = String(issue?.code || '')
+  if (code === 'line.part-number-missing' || /one or more line items are missing a model or part number/i.test(text)) {
+    return { ...issue, code: 'line.part-number-missing', severity: 'info' }
+  }
+  if (code === 'terms.missing' || /commercial terms have not been added yet/i.test(text)) {
+    return { ...issue, code: 'terms.missing', severity: 'info' }
+  }
+  return issue
+}
+
 const reviewFindingTitle = issue => {
   const code = String(issue?.code || '')
   if (code === 'line.unmatched') return 'Workbook line needs review'
@@ -121,12 +137,13 @@ const reviewFindingTitle = issue => {
 
 const reviewSeverityLabel = severity => ({ block: 'Blocking', warning: 'Needs review', info: 'Information' }[severity] || 'Needs review')
 
-function ReviewIssue({ issue, overridden = false }) {
+function ReviewIssue({ issue, overridden = false, onUseStandardTerms }) {
   return <div className={`proposal-review-issue ${overridden ? 'info' : issue.severity}`}>
     <div className="proposal-review-issue-head"><span className="proposal-review-severity">{overridden ? 'Overridden' : reviewSeverityLabel(issue.severity)}</span><strong>{reviewFindingTitle(issue)}</strong>{issue.source === 'AI' && <span className="proposal-review-source">AI review</span>}</div>
     <p className="proposal-review-issue-text">{issue.text}</p>
     {issue.evidence && <div className="proposal-review-evidence"><span>Evidence</span><code>{issue.evidence}</code></div>}
     {issue.approval && <span className="proposal-review-approval">Already approved{issue.approval.approver ? ` by ${issue.approval.approver}` : ''}{issue.approval.date ? ` on ${issue.approval.date}` : ''}</span>}
+    {!overridden && issue.code === 'terms.missing' && onUseStandardTerms && <button type="button" className="btn-secondary proposal-review-action" onClick={onUseStandardTerms}>Use ModAE standard terms</button>}
   </div>
 }
 
@@ -312,6 +329,7 @@ const templateCellClass = (sheet, cell) => {
 }
 
 function RouteTemplateTab({ route, tab, p, doc, priced, lineQuoted }) {
+  const proposalSymbol = currencySymbol(p?.sourceCurrency || 'INR')
   const rows = (p.bom || []).map((line, i) => ({
     ...line,
     index: i + 1,
@@ -704,7 +722,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   const signalsStale = derivedTotal > 0 && derivedTotal !== totalSignals
   const rack = rackLayout(totalSignals)
 
-  const save = next => {
+  const save = (next, { preserveReview = false } = {}) => {
     if (!canEditProposal) return
     const isSparesProposal = next.proposalType === 'Spares' || next.route === 'Spares' || opp?.route === 'Spares'
     if (isSparesProposal) next = { ...next, bom: withSparesSupportRows(next.bom) }
@@ -714,9 +732,9 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     next = {
       ...next,
       pricedOnce: pRef.current.pricedOnce || next.bom.length > 0,
-      reviewStatus: ['Validated', 'Override accepted'].includes(next.reviewStatus) ? 'Needs review' : (next.reviewStatus || pRef.current.reviewStatus),
-      reviewIssues: ['Validated', 'Override accepted'].includes(next.reviewStatus) ? [] : (next.reviewIssues || pRef.current.reviewIssues || []),
-      reviewNeedsRevision: ['Validated', 'Override accepted'].includes(next.reviewStatus) ? true : (next.reviewNeedsRevision || pRef.current.reviewNeedsRevision || false),
+      reviewStatus: !preserveReview && ['Validated', 'Override accepted'].includes(next.reviewStatus) ? 'Needs review' : (next.reviewStatus || pRef.current.reviewStatus),
+      reviewIssues: !preserveReview && ['Validated', 'Override accepted'].includes(next.reviewStatus) ? [] : (next.reviewIssues || pRef.current.reviewIssues || []),
+      reviewNeedsRevision: !preserveReview && ['Validated', 'Override accepted'].includes(next.reviewStatus) ? true : (next.reviewNeedsRevision || pRef.current.reviewNeedsRevision || false),
     }
     setP(next)
     store.saveProposal(oppId, next)
@@ -799,6 +817,17 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
 
   const updTerm = (i, k) => e => save({ ...p, terms: p.terms.map((t, j) => (j === i ? normalizeCommercialTerm({ ...t, [k]: e.target.value }) : t)) })
   const addTerm = () => save({ ...p, terms: [...p.terms, { term: '', customerAsk: '', ourResponse: '', status: 'Comply', decision: 'Compliant', customerConfirmationStatus: 'Not required' }] })
+  const useModaeStandardTerms = () => {
+    const current = pRef.current
+    if (current.terms?.length) return
+    const next = {
+      ...current,
+      terms: modaeStandardCommercialTerms(),
+      reviewIssues: (current.reviewIssues || []).filter(issue => informationalReviewFinding(issue).code !== 'terms.missing'),
+    }
+    save(next, { preserveReview: true })
+    setReviewMessage('ModAE standard commercial terms added.')
+  }
   const routeScope = opp.international || opp.location === 'International' ? 'international' : 'domestic'
   const availableClauses = clausesFor(store.config?.clauses, route === 'Service' ? 'Services' : route, routeScope)
   const selectedClauses = (p.clauseIds || []).map(id => availableClauses.find(clause => clause.id === id)).filter(Boolean)
@@ -827,9 +856,12 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   const reviewStatus = p.reviewStatus || 'Not reviewed'
   const reviewReady = reviewStatus === 'Validated' || reviewStatus === 'Override accepted'
   const overrideAccepted = reviewStatus === 'Override accepted' && p.reviewOverride?.accepted
-  const displayReviewIssues = (p.reviewIssues || []).map(issue => overrideAccepted
+  const normalizedReviewIssues = (p.reviewIssues || []).map(informationalReviewFinding)
+  const displayReviewIssues = normalizedReviewIssues.map(issue => overrideAccepted
     ? { ...issue, severity: 'info', overridden: true }
     : issue)
+  const reviewIssuesAreInformational = displayReviewIssues.length > 0
+    && displayReviewIssues.every(issue => issue.severity === 'info')
   const reviewBanner = reviewStatus === 'Needs attention'
     ? { tone: 'warning', title: 'Validation needs attention', text: 'Fix the issues listed below before requesting approval.' }
     : reviewStatus === 'Validated'
@@ -894,10 +926,10 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
         snapshot: snapshotProposal(review),
       }] : (review.revisions || [])
       if (!review.bom?.length && route !== 'Services') issues.push({ severity: 'block', text: 'No proposal line items were found.' })
-      if (review.bom?.some(line => !String(line.pn || '').trim())) issues.push({ severity: 'warning', text: 'One or more line items are missing a model or part number.' })
+      if (review.bom?.some(line => !String(line.pn || '').trim())) issues.push({ severity: 'info', code: 'line.part-number-missing', text: 'One or more line items are missing a model or part number.' })
       if (review.bom?.some(line => Number(totalQty(line)) <= 0)) issues.push({ severity: 'block', text: 'Every proposal line must have a quantity greater than zero.' })
       if (review.bom?.some(line => line.quoted !== '' && Number(line.quoted) < 0)) issues.push({ severity: 'block', text: 'Negative quoted prices are not allowed.' })
-      if (!review.terms?.length) issues.push({ severity: 'warning', text: 'Commercial terms have not been added yet.' })
+      if (!review.terms?.length) issues.push({ severity: 'info', code: 'terms.missing', text: 'Commercial terms have not been added yet.' })
       if (review.reviewedUpload) issues.push({ severity: 'info', text: `Reviewed upload received: ${review.reviewedUpload.filename}` })
       if (review.reviewedUpload?.validationIssues?.length) issues.unshift(...review.reviewedUpload.validationIssues)
 
@@ -1165,12 +1197,12 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
           {reviewError && <div className="errbox">{reviewError}</div>}
           {reviewMessage && <div className="okbox">{reviewMessage}</div>}
           {p.reviewCompletedAt && <div className={`proposal-review-issues ${overrideAccepted ? 'is-overridden' : ''}`}>
-            <strong>{overrideAccepted ? 'Previously reviewed findings' : 'Validation findings'}</strong>
+            <strong>{overrideAccepted ? 'Previously reviewed findings' : reviewIssuesAreInformational ? 'Validation notes' : 'Validation findings'}</strong>
             {overrideAccepted && <div className="proposal-review-memory-summary">{displayReviewIssues.length} finding{displayReviewIssues.length === 1 ? '' : 's'} overridden by {displayRole(p.reviewOverride.by)}{p.reviewOverride.at ? ` on ${approvalDate(p.reviewOverride.at)}` : ''}. These findings are retained for audit and no longer block this proposal.</div>}
             {!!displayReviewIssues.length
               ? overrideAccepted
                 ? <details className="proposal-review-history"><summary>Show finding details</summary>{displayReviewIssues.map((issue, index) => <ReviewIssue key={index} issue={issue} overridden />)}</details>
-                : displayReviewIssues.map((issue, index) => <ReviewIssue key={index} issue={issue} />)
+                : displayReviewIssues.map((issue, index) => <ReviewIssue key={index} issue={issue} onUseStandardTerms={useModaeStandardTerms} />)
               : <div className="proposal-review-issue info">Review complete — proposal is ready to proceed.</div>}
             {reviewStatus === 'Needs attention' && <button className="btn-secondary" onClick={() => { if (window.confirm('Continue despite these validation findings? This override will be stored in the audit trail.')) continueAnyway() }}>Continue anyway</button>}
           </div>}

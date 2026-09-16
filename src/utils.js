@@ -138,9 +138,31 @@ export function sameCustomer(a, b) {
   return (sa.length >= 3 && sa === acronym(b)) || (sb.length >= 3 && sb === acronym(a))
 }
 
-export function ageDays(dateStr) {
-  if (!dateStr) return null
-  const d = Math.round((Date.now() - new Date(dateStr + 'T00:00:00').getTime()) / 86400000)
+const istDateKey = value => {
+  if (!value) return ''
+  const text = String(value)
+  // Persisted date-only fields already represent an IST business date. Do not
+  // parse them as UTC, which would move them to the previous day in India.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text
+  const date = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: BUSINESS_TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(date)
+  const fields = Object.fromEntries(parts.filter(part => part.type !== 'literal').map(part => [part.type, part.value]))
+  return `${fields.year}-${fields.month}-${fields.day}`
+}
+
+export function isTodayIST(value, now = new Date()) {
+  const date = istDateKey(value)
+  return !!date && date === istDateKey(now)
+}
+
+export function ageDays(value, now = new Date()) {
+  const date = istDateKey(value)
+  const today = istDateKey(now)
+  if (!date || !today) return null
+  const d = Math.floor((Date.parse(`${today}T00:00:00Z`) - Date.parse(`${date}T00:00:00Z`)) / 86400000)
   return d < 0 ? 0 : d
 }
 

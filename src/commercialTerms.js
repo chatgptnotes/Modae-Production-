@@ -3,6 +3,48 @@
 export const COMMERCIAL_DECISIONS = ['Decision pending', 'Match customer terms', 'Counter-offer with ModAE standard terms']
 export const CUSTOMER_CONFIRMATION_STATUSES = ['Not required', 'Awaiting reply', 'Accepted', 'Rejected', 'Countered']
 
+// The one-click fallback used when a proposal has no customer commercial
+// terms. These are ModAE's customer-facing standard positions, not customer
+// requests or deviations.
+export const modaeStandardCommercialTerms = () => [
+  {
+    key: 'payment', term: 'Payment', customerAsk: '',
+    standardTerm: 'Advance / 30 days from invoice preferred',
+    proposedTerm: '30 days from invoice', ourResponse: '30 days from invoice',
+    status: 'Comply', decision: 'Compliant', customerConfirmationStatus: 'Not required',
+    source: 'ModAE standard',
+  },
+  {
+    key: 'delivery', term: 'Delivery', customerAsk: '',
+    standardTerm: '10–12 weeks ex-works for imported sensor items',
+    proposedTerm: '10–12 weeks ex-works', ourResponse: '10–12 weeks ex-works',
+    status: 'Comply', decision: 'Compliant', customerConfirmationStatus: 'Not required',
+    source: 'ModAE standard',
+  },
+  {
+    key: 'warranty', term: 'Warranty', customerAsk: '',
+    standardTerm: '18 months from supply / 12 months from installation',
+    proposedTerm: '18 months from supply', ourResponse: '18 months from supply',
+    status: 'Comply', decision: 'Compliant', customerConfirmationStatus: 'Not required',
+    source: 'ModAE standard',
+  },
+  {
+    key: 'freight', term: 'Freight', customerAsk: '',
+    standardTerm: 'Freight-paid delivery to the named consignee',
+    proposedTerm: 'Freight-paid delivery to the named consignee',
+    ourResponse: 'Freight-paid delivery to the named consignee',
+    status: 'Comply', decision: 'Compliant', customerConfirmationStatus: 'Not required',
+    source: 'ModAE standard',
+  },
+  {
+    key: 'validity', term: 'Proposal validity', customerAsk: '',
+    standardTerm: '30 days from proposal date',
+    proposedTerm: '30 days from proposal date', ourResponse: '30 days from proposal date',
+    status: 'Comply', decision: 'Compliant', customerConfirmationStatus: 'Not required',
+    source: 'ModAE standard',
+  },
+]
+
 export const isCommercialDeviation = term => term?.status === 'Deviation'
 export const needsCommercialDecision = term => isCommercialDeviation(term)
   && (!COMMERCIAL_DECISIONS.slice(1).includes(term.decision)
