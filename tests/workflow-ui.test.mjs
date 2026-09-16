@@ -87,11 +87,21 @@ test('follow-up communications keep message bodies inside expandable rows', () =
   assert.doesNotMatch(workbench, /<div className="hint">\{c\.body\}<\/div>/)
 })
 
+test('communication log rows wrap long subjects and metadata inside the card', () => {
+  const workbench = read('src/pages/Workbench.jsx')
+  const styles = read('src/styles.css')
+  assert.match(workbench, /className="communication-row-copy"/)
+  assert.match(workbench, /className="communication-row-actions"/)
+  assert.match(styles, /\.communication-row-copy \{[\s\S]*min-width: 0;[\s\S]*overflow-wrap: anywhere;/)
+  assert.match(styles, /\.communication-row-actions \{[\s\S]*flex-wrap: wrap;/)
+})
+
 test('follow-up panels use a compact aligned responsive grid', () => {
   const workbench = read('src/pages/Workbench.jsx')
   const styles = read('src/styles.css')
   assert.match(workbench, /<div className="ana-grid follow-up-grid">/)
-  assert.equal((workbench.match(/follow-up-panel/g) || []).length, 6)
+  assert.equal((workbench.match(/follow-up-panel/g) || []).length, 5)
+  assert.doesNotMatch(workbench, /<SubmissionPanel opp=\{opp\} \/>\s*<\/div>\s*<div className="ana-card c-6 follow-up-panel">\s*<div className="ana-title">Customer communications<\/div>/s)
   assert.match(workbench, /className="follow-up-control-row revision-control-row"/)
   assert.match(workbench, /className="follow-up-control-row competitor-control-row"/)
   assert.match(workbench, /className="follow-up-form-stack"/)

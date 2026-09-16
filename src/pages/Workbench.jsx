@@ -500,9 +500,9 @@ export default function Workbench() {
                   {item.key === 'required-contactPerson' && <button className="exception-action" onClick={() => openMissingContact('contactPerson')}>Edit contact person</button>}
                   {item.key === 'required-contactPhone' && <button className="exception-action" onClick={() => openMissingContact('contactPhone')}>Edit contact phone</button>}
                   {(item.key.startsWith('sp-conf-') || item.key.startsWith('sp-price-')) && <button className="exception-action" onClick={() => openTransitionTab('sourcing')}>Open sourcing</button>}
-                  {approvable && openRequest && <span>{item.approvalType === 'Commercial deviation' ? 'AH approval for commercial deviations' : item.approvalType} <b>{openRequest.id}</b> is pending with {openRequest.needed?.join(openRequest.anyOf ? ' or ' : ' + ') || openRequest.approver} — <button className="inline-action" onClick={() => openTransitionTab('approvals')}>Open approval</button></span>}
+                  {approvable && openRequest && <span>{item.approvalType === 'Commercial deviation' ? 'AH approval for commercial deviations' : item.approvalType} <b>{openRequest.id}</b> is pending with {openRequest.needed?.join(openRequest.anyOf ? ' or ' : ' + ') || openRequest.approver}.</span>}
                   {approvable && !openRequest && <button className="exception-action" onClick={() => requestBlockerApproval(item)}>{item.approvalType === 'Commercial deviation' ? 'Request AH approval for commercial deviations' : `Request ${item.approvalType.toLowerCase()} from ${blockerOwner(item)}`}</button>}
-                  {requestable && exception?.status === 'Pending' && <span>Exception approval <b>{exception.id}</b> is pending — <button className="inline-action" onClick={() => openTransitionTab('approvals')}>Open approval</button></span>}
+                  {requestable && exception?.status === 'Pending' && <span>Exception approval <b>{exception.id}</b> is pending.</span>}
                   {requestable && !exception && <button className="exception-action" onClick={() => requestException(item)}>Request {blockerOwner(item)} approval to continue</button>}
                   {requestable && exception?.status === 'Rejected' && <span>Exception <b>{exception.id}</b> was rejected; resolve the requirement or request a new review.</span>}
                 </div>
@@ -2212,10 +2212,6 @@ function FollowUpPane({ opp, onRevision }) {
   return (
     <div className="ana-grid follow-up-grid">
       <div className="ana-card c-6 follow-up-panel">
-        <SubmissionPanel opp={opp} />
-      </div>
-      <div className="ana-card c-6 follow-up-panel">
-        <div className="ana-title">Customer communications</div>
         {(p.terms || []).some(term => term.decision === 'Counter-offer with ModAE standard terms') && <section className="form-card commercial-followup-panel" aria-label="Commercial confirmations">
           <div className="section-title">Commercial Confirmation Required</div>
           <p className="hint">Record the customer's response to each ModAE counter-offer. This does not change the internal approval decision.</p>
@@ -2585,6 +2581,9 @@ function LegacyCommsTab({ opp }) {
   return (
     <div className="ana-grid">
       <div className="ana-card c-6">
+        <SubmissionPanel opp={opp} />
+      </div>
+      <div className="ana-card c-6">
         <div className="ana-title">Communication log</div>
         {rows.map((c, i) => (
           <div key={i} className="check-row">
@@ -2594,9 +2593,6 @@ function LegacyCommsTab({ opp }) {
           </div>
         ))}
         {!rows.length && <p className="hint">No communications logged yet.</p>}
-      </div>
-      <div className="ana-card c-6">
-        <SubmissionPanel opp={opp} />
       </div>
     </div>
   )
@@ -2622,6 +2618,9 @@ function CommsTab({ opp }) {
   return (
     <div className="ana-grid">
       <div className="ana-card c-6">
+        <SubmissionPanel opp={opp} />
+      </div>
+      <div className="ana-card c-6">
         <div className="ana-title">Communication log</div>
         {rows.map((c, i) => {
           const sender = communicationSender(c, opp, lead)
@@ -2631,11 +2630,11 @@ function CommsTab({ opp }) {
               onClick={() => setSelectedCommunication(c)}
               onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setSelectedCommunication(c) } }}>
               <Icon name="mail" size={13} />
-              <span>
+              <span className="communication-row-copy">
                 <b>{c.subject}</b>
                 <div className="hint"><CommsName value={sender.name} email={sender.email} /> → <CommsName value={recipient.name} email={recipient.email} /> · {formatISTDateTime(c.ts)}</div>
               </span>
-              <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center', marginLeft: 'auto' }}>
+              <span className="communication-row-actions" style={{ display: 'inline-flex', gap: 4, alignItems: 'center', marginLeft: 'auto' }}>
                 <Chip tone={c.dir === 'In' ? 'Blue' : 'grey'}>{formatKind(c.kind)}</Chip>
                 {c.status && <Chip tone={c.status === 'sent' ? 'Green' : 'Amber'}>{formatCommunicationStatus(c.status)}</Chip>}
               </span>
@@ -2643,9 +2642,6 @@ function CommsTab({ opp }) {
           )
         })}
         {!rows.length && <p className="hint">No communications logged yet.</p>}
-      </div>
-      <div className="ana-card c-6">
-        <SubmissionPanel opp={opp} />
       </div>
       {selectedCommunication && (() => {
         const c = selectedCommunication
