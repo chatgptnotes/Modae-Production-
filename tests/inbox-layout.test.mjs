@@ -7,6 +7,7 @@ const inbox = fs.readFileSync(new URL('../src/pages/Inbox.jsx', import.meta.url)
 
 test('inbox keeps every column visible and scrolls the complete grid narrowly', () => {
   assert.match(css, /\.mail-date b, \.mail-date small \{ display: block; white-space: nowrap; \}/)
+  assert.match(css, /minmax\(130px, \.8fr\) minmax\(100px, 1fr\)\s+72px;/)
   assert.match(css, /--mail-grid-template:[\s\S]*minmax\(180px, 1\.35fr\)[\s\S]*minmax\(320px, 4fr\)/)
   assert.match(css, /grid-template-columns: var\(--mail-grid-template\);[\s\S]*min-width: 1350px;/)
   assert.match(css, /\.mailbox-list \{[\s\S]*overflow-x: auto; overflow-y: auto;/)
@@ -16,6 +17,7 @@ test('inbox keeps every column visible and scrolls the complete grid narrowly', 
   for (const label of ['Received', 'Source / sender', 'Subject / preview', 'AI route', 'Urgency', 'Dup. risk', 'Completeness', 'Sugg. owner', 'Status', 'Age']) {
     assert.match(inbox, new RegExp(label.replace(/[/.]/g, '\\$&')))
   }
+  assert.match(inbox, /age == null \? '—' : age === 0 \? 'Today' : `\$\{age\} d old`/)
 })
 
 test('simulated inquiries return to the shared inbox after saving', () => {

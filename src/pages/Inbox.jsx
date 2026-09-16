@@ -3370,6 +3370,7 @@ export default function Inbox() {
           const completeness = l.completeness ?? (l.parse?.confidence != null ? Math.round(l.parse.confidence * 100) : null)
           const route = l.route || l.parse?.oppType || '—'
           const unread = l.status === 'New' && !l.readAt
+          const age = ageDays(l.ts)
           return (
             <div key={l.id} className={`mail-row ${unread ? 'unread' : ''} ${selectedIds.has(l.id) ? 'selected' : ''}`} onClick={() => nav('/inbox/' + l.id)}>
               <label className="mail-check" onClick={e => e.stopPropagation()}><input type="checkbox" checked={selectedIds.has(l.id)} onChange={() => toggleSelected(l.id)} aria-label={`Select ${l.subject}`} /></label>
@@ -3392,7 +3393,9 @@ export default function Inbox() {
               <div>{completeness != null ? <ConfChip conf={completeness} thresholds={store.config.aiThresholds} /> : '—'}</div>
               <div className="mail-owner">{l.suggestedOwner || '—'}</div>
               <div><span className={`pill ${PILL[l.status] || 'Blue'}`}>{l.status}</span></div>
-              <div className="mail-age">{ageDays((l.ts || '').slice(0, 10))} d</div>
+              <div className="mail-age" title={age == null ? 'Age unavailable' : `${age} day${age === 1 ? '' : 's'} old`}>
+                {age == null ? '—' : age === 0 ? 'Today' : `${age} d old`}
+              </div>
             </div>
           )
         })}
