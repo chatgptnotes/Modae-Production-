@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import XLSX from 'xlsx-js-style'
 import { useParams, Link } from 'react-router-dom'
-import { useStore, sparesProposalBom, snapshotProposal } from '../store.jsx'
+import { useStore, isPlaceholderSparesLine, sparesProposalBom, snapshotProposal } from '../store.jsx'
 import { effectiveRate, fmt, exportCSV, canPriceProposal, isAdminRole, clampCosting, clampQty, MAX_GM_PCT, displayRole } from '../utils.js'
 import { useFormulaBar } from '../formulabar.jsx'
 import { Icon, ModaeImageLogo } from '../icons.jsx'
@@ -22,7 +22,7 @@ import { buildLeadProposalData } from '../leadBoq.js'
 import { putFiles } from '../leadBlobs.js'
 import { uploadOppFile } from '../filestore.js'
 import DetailTabs from '../DetailTabs.jsx'
-import { isSparesSupportRow, withSparesSupportRows } from '../proposal/sparesBoq.js'
+import { isLegacyAutoSparesSupportRow, isSparesSupportRow, orderedSparesProposalBom, withSparesSupportRows } from '../proposal/sparesBoq.js'
 import { runTaskResult } from '../ai.js'
 import { importReviewedWorkbook, normalizeAiReview, reviewWorkbookPayload } from '../proposal/reviewWorkbook.js'
 import { clausesFor, clauseWarnings } from '../clauses.js'
@@ -407,7 +407,7 @@ function RouteTemplateTab({ route, tab, p, doc, priced, lineQuoted }) {
       <div className="section-title">{title}</div>
       <p className="hint">{route === 'Services' ? 'Service template: priced activities, man-days, mobilisation, and payment milestones.' : 'Spares template: offered parts, quantities, unit prices, and total prices.'}</p>
       <table className="sheet"><thead><tr><th>#</th><th>Item / scope description</th><th>Proposed model / part no.</th><th>Qty</th>{priced && <th>{`Unit price (${proposalSymbol})`}</th>}</tr></thead><tbody>
-        {rows.map(row => <tr key={row.index}><td>{row.index}</td><td>{row.desc || row.itemCategory || '—'}</td><td>{row.pn || '—'}</td><td className="num">{row.qty}</td>{priced && <td className="num">{proposalSymbol} {fmt(lineQuoted(row))}</td>}</tr>)}
+        {rows.map(row => <tr key={row.index}><td>{row.index}</td><td>{row.desc || row.itemCategory || '—'}</td><td>{row.pn || '—'}</td><td className="num">{row.qty}</td>{priced && <td className="num">{proposalSymbol} {fmt(lineQuoted(row), 2)}</td>}</tr>)}
         {!rows.length && <tr><td colSpan={priced ? 5 : 4} className="hint">No line items captured yet.</td></tr>}
       </tbody></table>
     </div>
@@ -536,11 +536,15 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   useEffect(() => {
     if (isComingSoon) return
     if (!opp || routeForType(opp.oppType) !== 'Spares') return
-    const confirmed = (store.sparesLines || []).filter(line => line.oppId === oppId && line.confirmed)
-    if (!confirmed.length) return
+    const sourceLines = (store.sparesLines || []).filter(line => line.oppId === oppId
+      && !line.removedFromSourcing
+      && !isPlaceholderSparesLine(line)
+      && !isLegacyAutoSparesSupportRow(line)
+      && (line.confirmed && Number(line.qty) > 0 || isSparesSupportRow(line)))
+      .filter(line => line.origin !== 'proposal-support')
+    if (!sourceLines.length) return
     const current = store.getProposal(oppId)
-    const productBom = sparesProposalBom(confirmed, store.priceLists)
-    const nextBom = withSparesSupportRows([...productBom, ...(current.bom || []).filter(isSparesSupportRow)])
+    const nextBom = orderedSparesProposalBom(sourceLines, store.priceLists, current.costing)
     const same = current.bom?.length === nextBom.length
       && current.bom.every((line, index) => {
         const next = nextBom[index]
@@ -1574,7 +1578,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
                       <td className="num"><b>{q}</b></td>
                       <td>{l.uom}</td>
                       <td className="num"><input type="number" min="0" value={l.quoted} onChange={updLine(i, 'quoted', false)} placeholder={fmt(Math.round(lineComputed(l)))} style={{ width: 90, textAlign: 'right' }} title="Customer-facing (target) price — blank = computed price" /></td>
-                      <td className="num">{proposalSymbol} {fmt(lineQuoted(l) * q)}</td>
+                      <td className="num">{proposalSymbol} {fmt(lineQuoted(l) * q, 2)}</td>
                       <td className="num internal">₹ {fmt(lineCost(l))}</td>
                       <td className="num internal">₹ {fmt(lineCost(l) * q)}</td>
                       <td className="num internal">₹ {fmt(Math.round(lineComputed(l)))}</td>
@@ -1590,7 +1594,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
                   <tr>
                     <td colSpan={10}>Totals</td>
                     <td></td>
-                    <td className="num">{proposalSymbol} {fmt(p.bom.reduce((sum, line) => sum + lineQuoted(line) * totalQty(line), 0))}</td>
+                    <td className="num">{proposalSymbol} {fmt(p.bom.reduce((sum, line) => sum + lineQuoted(line) * totalQty(line), 0), 2)}</td>
                     <td className="internal"></td>
                     <td className="num internal">₹ {fmt(totals.cost)}</td>
                     <td className="internal" colSpan={2}></td>
@@ -1658,7 +1662,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
                       <tfoot>
                         <tr>
                           <td colSpan={3}>Totals</td>
-                          <td className="num">{proposalSymbol} {fmt(p.bom.reduce((sum, line) => sum + lineQuoted(line) * totalQty(line), 0))}</td>
+                          <td className="num">{proposalSymbol} {fmt(p.bom.reduce((sum, line) => sum + lineQuoted(line) * totalQty(line), 0), 2)}</td>
                           <td className="internal"></td>
                           <td className="num internal">₹ {fmt(totals.cost)}</td>
                           <td className="internal" colSpan={2}></td>

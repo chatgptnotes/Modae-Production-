@@ -456,7 +456,10 @@ export function matchParts(items, allParts) {
 export function parseLeadLineItems(text) {
   const source = String(text || '').replace(/\r/g, '')
   const qtyPattern = /(?:qty|quantity|qnty)\s*[:=]?\s*\d+(?:\.\d+)?|(?:x|×)\s*\d+(?:\.\d+)?|\d+(?:\.\d+)?\s*(?:nos?|pcs?|pieces?|sets?|ea)\b/i
-  const partPattern = /\b(?=[A-Z0-9./_-]*\d)[A-Z][A-Z0-9]*(?:[./_-][A-Z0-9]+)*\b/i
+  // Part numbers are conventionally uppercase. Do not treat ordinary title
+  // words such as "Customer" as part numbers when a row has only a serial or
+  // customer reference.
+  const partPattern = /\b(?=[A-Z0-9./_-]*\d)[A-Z][A-Z0-9]*(?:[./_-][A-Z0-9]+)*\b/
   const chunks = []
   for (const line of source.split(/\n|;|(?=\b\d+[.)]\s)/).map(s => s.trim()).filter(Boolean)) {
     const commaParts = line.split(',').map(s => s.trim()).filter(Boolean)
@@ -471,12 +474,13 @@ export function parseLeadLineItems(text) {
     if (!qtyM && !pnM) continue
     const qty = Number(qtyM?.[1] || qtyM?.[2] || qtyM?.[3] || 1)
     const pn = pnM?.[0] || ''
+    const serial = (chunk.match(/^\s*(\d{1,3})[.)]?\s+/) || [])[1] || ''
     const desc = chunk.replace(/^\d+[.)]\s*/, '')
       .replace(/(?:qty|quantity|qnty)\s*[:=]?\s*\d+(?:\.\d+)?/i, '')
       .replace(/(?:x|×)\s*\d+(?:\.\d+)?/i, '')
       .replace(/\d+(?:\.\d+)?\s*(?:nos?|pcs?|pieces?|sets?|ea)\b/i, '')
       .replace(pn, '').replace(/[,:\-–]+\s*$/, '').trim()
-    rows.push({ description: desc || pn, partNumber: pn, customerRef: pn, qty, uom: 'EA', confidence: pn ? 80 : 55, evidence: chunk })
+    rows.push({ description: desc, partNumber: pn, customerRef: pn || serial, serial, qty, uom: 'EA', confidence: pn ? 80 : 55, evidence: chunk })
   }
   return rows
 }

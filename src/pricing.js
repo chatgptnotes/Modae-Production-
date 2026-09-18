@@ -130,6 +130,29 @@ export function resolvePriceSource(line, priceLists = {}, adhocParts = [], vendo
   return null
 }
 
+// Reconcile a persisted manual-looking row without changing its amount. A
+// source is promoted only when the exact approved source price and currency
+// match the current amount; a different amount remains a deliberate manual
+// override.
+export function reconcilePriceSource(line = {}, priceLists = {}, vendorQuotes = []) {
+  const currentPrice = Number(line.listUnitPrice ?? line.listPrice) || 0
+  if (currentPrice <= 0) return line
+  const resolved = resolvePriceSource(line, priceLists, [], vendorQuotes)
+  if (!resolved || resolved.price <= 0) return line
+  const currentCurrency = String(line.currency || 'INR').trim().toUpperCase()
+  const sourceCurrency = String(resolved.currency || 'INR').trim().toUpperCase()
+  if (currentCurrency !== sourceCurrency || Math.abs(currentPrice - Number(resolved.price)) > 0.005) return line
+  return {
+    ...line,
+    priceSource: resolved.source,
+    priceSourceName: resolved.sourceName || line.priceSourceName || line.priceList || '',
+    priceSourceVersion: resolved.sourceVersion || '',
+    priceSourceRef: resolved.sourceRef || line.priceSourceRef || line.quoteRef || '',
+    priceSourceDate: resolved.sourceDate || line.priceSourceDate || '',
+    priceList: `${resolved.sourceName || ''} ${resolved.sourceVersion || ''}`.trim() || line.priceList,
+  }
+}
+
 export function adjustmentMultiplier({ discountPct = 0, markupPct = 0 } = {}) {
   const discount = Math.max(0, Math.min(100, Number(discountPct) || 0))
   const markup = normalizeMarkupPct(markupPct)
@@ -176,10 +199,17 @@ export function sparesLineFinancials(line = {}, costing = {}) {
 
 // A sourcing line is confirmable only when it has a positive quantity and
 // positive list/unit price. Keep this shared by UI and persistence paths.
+export function isMissingSparesDescription(line = {}) {
+  const description = String(line.desc || '').trim()
+  const generatedDescription = /^Customer-requested item\s+\d+(?:\.\d+)?$/i.test(description)
+  const noUsablePartNumber = !String(line.pn || '').trim() || /^\d+(?:\.\d+)?$/.test(String(line.pn || '').trim())
+  return (!description || generatedDescription) && noUsablePartNumber && /^\d+(?:\.\d+)?$/.test(String(line.custRef || '').trim())
+}
+
 export function isConfirmableSparesLine(line = {}) {
   const qty = Number(line.qty) || 0
   const listUnitPrice = Number(line.listUnitPrice ?? line.listPrice) || 0
-  return qty > 0 && listUnitPrice > 0
+  return qty > 0 && listUnitPrice > 0 && !isMissingSparesDescription(line)
 }
 
 export function normalizePriceFields(line = {}) {

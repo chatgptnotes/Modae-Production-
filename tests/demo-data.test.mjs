@@ -113,7 +113,8 @@ test('migration repairs old unconfirmed description-only catalogue matches', () 
   assert.equal(legacy.pn, '')
   assert.equal(legacy.desc, 'VM600 rack backplane connectors')
   const numberedLegacy = migrate({ ...state, sparesLines: [{ ...state.sparesLines[0], custRef: '9', desc: 'VM600 ABE042 rack' }] }).sparesLines[0]
-  assert.equal(numberedLegacy.desc, 'Customer-requested item 9')
+  assert.equal(numberedLegacy.desc, '')
+  assert.equal(numberedLegacy.missingDescription, true)
   assert.equal(legacy.listPrice, 0)
   assert.equal(legacy.priceState, 'Needs pricing')
   assert.equal(legacy.confirmed, false)
@@ -122,6 +123,47 @@ test('migration repairs old unconfirmed description-only catalogue matches', () 
   assert.deepEqual(migrated.proposals['OPP-1'].bom.map(line => line.pn), ['VM600-MPC4'])
   const rebooted = migrate(migrated)
   assert.deepEqual(rebooted, migrated)
+})
+
+test('migration removes legacy automatic Spares support rows but keeps manual ones', () => {
+  const state = seedState()
+  state.demoData = false
+  state.sparesLines = [
+    { id: 'SL-auto', oppId: 'OPP-1', sparesSupport: true, origin: 'proposal-support', pn: 'NA', desc: 'Warranty Certificate' },
+    { id: 'SL-manual', oppId: 'OPP-1', sparesSupport: true, origin: 'manual', supportAddedManually: true, pn: 'NA', desc: 'Country of Origin Certificate' },
+  ]
+  state.proposals = { 'OPP-1': { bom: [
+    { sparesSupport: true, pn: 'NA', desc: 'Warranty Certificate' },
+    { sparesSupport: true, origin: 'manual', pn: 'NA', desc: 'Country of Origin Certificate' },
+  ] } }
+  const migrated = migrate(state)
+  assert.deepEqual(migrated.sparesLines.map(line => line.id), ['SL-manual'])
+  assert.deepEqual(migrated.proposals['OPP-1'].bom.map(line => line.desc), ['Country of Origin Certificate'])
+})
+
+test('migration clears generated customer item labels even when previously confirmed', () => {
+  const state = seedState()
+  state.demoData = false
+  state.sparesLines = [{ id: 'SL-generated', oppId: 'OPP-1', confirmed: true, qty: 2, listPrice: 23, listUnitPrice: 23, priceState: 'Current', custRef: '2', desc: 'Customer-requested item 2' }]
+  const migrated = migrate(state)
+  assert.equal(migrated.sparesLines[0].desc, '')
+  assert.equal(migrated.sparesLines[0].missingDescription, true)
+  assert.equal(migrated.sparesLines[0].confirmed, false)
+})
+
+test('migration removes unknown sourcing placeholders without changing confirmed values', () => {
+  const migrated = migrate({
+    ...seedState(),
+    demoData: false,
+    sparesLines: [
+      { id: 'SL-placeholder', oppId: 'OPP-1', oem: 'TBD', leadTime: 'TBC', qty: 1, listPrice: 0 },
+      { id: 'SL-confirmed', oppId: 'OPP-1', oem: 'B&K', leadTime: '6-8 weeks', qty: 1, listPrice: 23 },
+    ],
+  })
+  assert.deepEqual(migrated.sparesLines.map(line => [line.oem, line.leadTime]), [
+    ['', ''],
+    ['B&K', '6-8 weeks'],
+  ])
 })
 
 // A record created after the wipe has to survive the same reload — an empty app

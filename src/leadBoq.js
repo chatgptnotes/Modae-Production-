@@ -2,14 +2,22 @@ import { matchParts, parseLeadLineItems } from './tenderParse.js'
 
 const relevantField = /line items?|requested items?|scope|coverage|materials?|parts?|spares?/i
 
+const usableDescription = value => {
+  const description = String(value || '').trim()
+  return !!description
+    && !/^Customer-requested item\s+\d+(?:\.\d+)?$/i.test(description)
+    && !/^\d+(?:\.\d+)?$/.test(description)
+}
+
 const normalizeItem = item => ({
-  description: item.description || item.desc || item.partNumber || item.pn || '',
+  description: item.description || item.desc || '',
   partNumber: item.partNumber || item.pn || '',
-  customerRef: item.customerRef || item.partNumber || item.pn || '',
+  customerRef: item.customerRef || item.customerReference || item.sapCode || item.partNumber || item.pn || '',
   qty: Number(item.qty) || 1,
   uom: item.uom || 'EA',
   confidence: Number(item.confidence ?? item.conf) || 0,
   evidence: item.evidence || item.ev || 'Linked lead',
+  sourceDocument: item.sourceDocument || item.document || '',
 })
 
 // AI and deterministic extraction can surface the same requested part more
@@ -17,28 +25,66 @@ const normalizeItem = item => ({
 // sourcing row per part/description and combine its requested quantity.
 const consolidateItems = items => {
   const merged = new Map()
-  items.map(normalizeItem).filter(item => item.description || item.partNumber).forEach(item => {
+  items.map(normalizeItem).filter(item => item.description || item.partNumber || item.customerRef).forEach(item => {
     const key = item.partNumber.trim()
       ? `pn:${item.partNumber.trim().toUpperCase()}`
-      : `desc:${item.description.trim().toLowerCase()}`
+      : item.description.trim()
+        ? `desc:${item.description.trim().toLowerCase()}`
+        : `ref:${String(item.customerRef || '').trim().toLowerCase()}`
     const existing = merged.get(key)
-    if (existing) existing.qty += item.qty
+    if (existing) {
+      existing.qty += item.qty
+      if (!existing.description && item.description) existing.description = item.description
+      if (!existing.customerRef && item.customerRef) existing.customerRef = item.customerRef
+      existing.descriptionMissing = !existing.description.trim()
+    }
     else merged.set(key, { ...item })
   })
   return [...merged.values()]
 }
 
 export function lineItemsFromLead(lead) {
-  if (Array.isArray(lead?.ai?.lineItems) && lead.ai.lineItems.length) {
-    return consolidateItems(lead.ai.lineItems)
+  const aiItems = Array.isArray(lead?.ai?.lineItems) ? lead.ai.lineItems : []
+  const attachmentItems = (lead?.attachments || []).flatMap(attachment => {
+    const parsed = parseLeadLineItems(attachment?.text || '')
+    const document = attachment?.name || attachment?.fileName || attachment?.path || 'Original attachment'
+    return parsed.map(item => ({ ...item, sourceDocument: document, evidence: `${document}: ${item.evidence}` }))
+  })
+
+  // AI extraction is useful for interpretation, but it can return only a
+  // customer reference (for example "9") when the original document contains
+  // the description. Enrich that incomplete row from the attachment without
+  // importing unrelated prose as new requested items.
+  if (aiItems.length) {
+    const enriched = aiItems.map((raw, index) => {
+      const item = normalizeItem(raw)
+      if (usableDescription(item.description)) return item
+      const ref = String(item.customerRef || '').trim().toLowerCase()
+      const pn = String(item.partNumber || '').trim().toLowerCase()
+      const candidate = attachmentItems.find((source, sourceIndex) => {
+        const sourceRef = String(source.customerRef || '').trim().toLowerCase()
+        const sourcePn = String(source.partNumber || '').trim().toLowerCase()
+        const sameReference = ref && sourceRef && ref === sourceRef
+        const samePart = pn && sourcePn && pn === sourcePn
+        const samePosition = !ref && !pn && sourceIndex === index && attachmentItems.length === aiItems.length
+        return usableDescription(source.description) && (sameReference || samePart || samePosition)
+      })
+      return candidate ? {
+        ...item,
+        description: candidate.description,
+        evidence: [item.evidence, candidate.evidence].filter(Boolean).join('; '),
+        sourceDocument: candidate.sourceDocument || item.sourceDocument,
+      } : item
+    })
+    return consolidateItems(enriched)
   }
 
   const sources = [
     lead?.body || '',
-    ...(lead?.attachments || []).map(a => a.text || ''),
+    ...attachmentItems,
     ...(lead?.ai?.fields || []).filter(f => relevantField.test(f.k || '')).map(f => f.v || ''),
   ].filter(Boolean)
-  return consolidateItems(sources.flatMap(parseLeadLineItems))
+  return consolidateItems(sources.flatMap(source => typeof source === 'string' ? parseLeadLineItems(source) : [source]))
 }
 
 export function buildLeadProposalData(lead, priceLists, vendorPrices = []) {
@@ -62,10 +108,12 @@ export function buildLeadProposalData(lead, priceLists, vendorPrices = []) {
       origin: 'customer',
       custRef: extracted[i].customerRef || item.pn || item.description,
       pn: pricedMatch?.pn || item.pn || '',
-      desc: pricedMatch?.desc || item.description,
+      desc: pricedMatch?.desc || item.description || '',
+      missingDescription: !String(pricedMatch?.desc || item.description || '').trim()
+        && !String(item.partNumber || '').trim().replace(/^\d+(?:\.\d+)?$/, ''),
       qty: item.qty,
       uom: extracted[i].uom || 'EA',
-      oem: pricedMatch ? 'B&K' : 'TBD',
+      oem: pricedMatch ? 'B&K' : '',
       match: pricedMatch ? (pricedMatch.tier === 1 ? 'Exact' : `Suggested · tier ${pricedMatch.tier}`) : (match ? 'Suggested · compare' : 'Unmatched'),
       conf: pricedMatch ? (pricedMatch.tier === 1 ? 100 : Math.max(60, extracted[i].confidence)) : extracted[i].confidence,
       confirmed: !!pricedMatch,

@@ -21,10 +21,10 @@ import { approvalMemoryKey } from './approvalMemory.js'
 import { syncProposalFromOpportunity } from './proposal/opportunitySync.js'
 import {
   isPlaceholderSparesLine,
+  isLegacyAutoSparesSupportRow,
   isSparesSupportRow,
-  SPARES_SUPPORT_ROWS,
   sparesProposalBom,
-  withSparesSupportRows,
+  orderedSparesProposalBom,
 } from './proposal/sparesBoq.js'
 
 const StoreCtx = createContext(null)
@@ -1273,7 +1273,7 @@ export function StoreProvider({ children }) {
             ...l,
             listPrice: unitPrice,
             currency: price?.currency || l.currency || 'INR',
-            leadTime: price?.leadTime || l.leadTime || 'TBC',
+            leadTime: price?.leadTime || l.leadTime || '',
             priceList: label,
             priceSource: PRICE_SOURCES.VENDOR,
             priceSourceName: price?.manufacturer || quote?.manufacturer || 'Vendor',
@@ -1319,43 +1319,9 @@ export function StoreProvider({ children }) {
       })
     },
     ensureSparesSupportLines(oppId) {
-      setState(s => {
-        const existing = s.sparesLines.filter(line => line.oppId === oppId && isSparesSupportRow(line))
-        const supportKey = row => `${/^na$/i.test(String(row.pn || '').trim()) ? '' : String(row.pn || '').trim().toLowerCase()}|${String(row.desc || '').trim().toLowerCase()}`
-        const existingKeys = new Set(existing.map(supportKey))
-        const proposalSupport = (s.proposals[oppId]?.bom || []).filter(isSparesSupportRow)
-        const additions = SPARES_SUPPORT_ROWS.filter(row => !existingKeys.has(supportKey(row))).reduce((added, row) => {
-          const proposalRow = proposalSupport.find(line => supportKey(line) === supportKey(row))
-          const price = Number(proposalRow?.quoted) || 0
-          added.push(normalizePriceFields({
-            // Include rows already added in this batch. Calling mintId with
-            // only the original collection gave every support row the same
-            // id, so editing/removing one row changed all of them together.
-            id: mintId('SL', [...s.sparesLines, ...added]),
-            oppId,
-            match: 'Support item',
-            conf: 100,
-            confirmed: price > 0,
-            origin: 'proposal-support',
-            sparesSupport: true,
-            pn: row.pn,
-            desc: row.desc,
-            custRef: row.pn,
-            qty: 1,
-            listPrice: price,
-            listUnitPrice: price,
-            baseCost: price,
-            currency: 'INR',
-            priceList: 'Support pricing',
-            priceSource: PRICE_SOURCES.MANUAL,
-            priceSourceName: 'Support pricing',
-            priceState: price > 0 ? 'Current' : 'Needs pricing',
-          }))
-          return added
-        }, [])
-        if (!additions.length) return s
-        return withAudit({ ...s, sparesLines: [...s.sparesLines, ...additions] }, 'Spares support lines added', oppId, `${additions.length} support line(s)`)
-      })
+      // Compatibility no-op: optional support rows are created only through
+      // an explicit manual add action.
+      return oppId
     },
     dedupeSparesLines(oppId) {
       setState(s => {
@@ -1427,29 +1393,31 @@ export function StoreProvider({ children }) {
     // extraction rows must not remain alongside the confirmed matches.
     sendLinesToProposal(oppId) {
       setState(s => {
-        const lines = s.sparesLines.filter(l => l.oppId === oppId && l.confirmed && !l.removedFromSourcing && Number(l.qty) > 0 && !isPlaceholderSparesLine(l))
-        const supportLines = s.sparesLines.filter(l => l.oppId === oppId && isSparesSupportRow(l) && !l.removedFromSourcing)
-        if (!lines.length && !supportLines.length) return s
+        const sourceLines = s.sparesLines.filter(l => l.oppId === oppId
+          && !l.removedFromSourcing
+          && !isPlaceholderSparesLine(l)
+          && !isLegacyAutoSparesSupportRow(l)
+          && (l.confirmed && Number(l.qty) > 0 || isSparesSupportRow(l)))
+        const lines = sourceLines.filter(l => l.confirmed && Number(l.qty) > 0)
+        const orderedSourceLines = sourceLines.filter(l => l.origin !== 'proposal-support')
         const opp = s.opportunities.find(o => o.id === oppId)
         const base = s.proposals[oppId] || newProposal(oppId, opp, {
           validityDays: s.config?.proposalValidityDays,
           currencyRates: s.config?.currencyRates,
           costingDefaults: s.config?.costingDefaults,
         })
+        if (!orderedSourceLines.length) {
+          if (!(base.bom || []).length) return s
+          return withAudit({
+            ...s,
+            proposals: { ...s.proposals, [oppId]: { ...base, bom: [] } },
+          }, 'Lines sent to proposal', oppId, '0 line(s) synchronized')
+        }
         const costing = {
           ...(base.costing || {}),
           currencyRates: normalizedCurrencyRates(base.costing?.currencyRates || s.config?.currencyRates),
         }
-        const productBom = sparesProposalBom(lines.filter(line => !isSparesSupportRow(line)), s.priceLists, costing)
-        const supportBom = withSparesSupportRows((base.bom || []).filter(isSparesSupportRow))
-        const syncedSupportBom = withSparesSupportRows([
-          ...supportBom,
-          ...supportLines.map(line => ({
-            ...line,
-            quoted: Number(line.listUnitPrice ?? line.listPrice) > 0 ? Number(line.listUnitPrice ?? line.listPrice) : '',
-          })),
-        ])
-        const bom = [...productBom, ...syncedSupportBom]
+        const bom = orderedSparesProposalBom(orderedSourceLines, s.priceLists, costing)
         const pricedLines = lines.reduce((totals, line) => {
           const financials = sparesLineFinancials(line, costing)
           return {

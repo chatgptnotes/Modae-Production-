@@ -168,7 +168,10 @@ export function ageDays(value, now = new Date()) {
 
 export function fmt(n, digits = 0) {
   if (n === '' || n == null || isNaN(n)) return ''
-  return Number(n).toLocaleString('en-IN', { maximumFractionDigits: digits })
+  return Number(n).toLocaleString('en-IN', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  })
 }
 
 // The business mailbox operates on India Standard Time for every user. Keep

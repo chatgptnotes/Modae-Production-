@@ -53,19 +53,18 @@ test('removed sourcing rows keep normal text contrast', () => {
   assert.match(styles, /\.sourcing-zero-row \{ opacity: 1; \}/)
 })
 
-test('automatic support rows receive distinct ids so one row edit cannot rename the others', () => {
-  assert.match(store, /SPARES_SUPPORT_ROWS\.filter\(row => !existingKeys\.has\(supportKey\(row\)\)\)\.reduce\(/)
-  assert.match(store, /mintId\('SL', \[\.\.\.s\.sparesLines, \.\.\.added\]\)/)
+test('support rows are not created automatically', () => {
+  assert.match(store, /Compatibility no-op: optional support rows are created only through/)
+  assert.match(store, /origin !== 'proposal-support'/)
   assert.match(store, /sparesLines: s\.sparesLines\.map\(l => \(l\.id === id \? updated : l\)\)/)
 })
 
-test('manufacturer RFQs are repeatable and can feed spares pricing', () => {
-  assert.match(workbench, /Draft manufacturer RFQ/, 'Sourcing must offer a manufacturer RFQ composer')
-  assert.doesNotMatch(workbench, /disabled=\{!!rfqDraft\}/, 'one draft must not block more manufacturers')
-  assert.match(workbench, /store\.addVendorQuote\(opp\.id/, 'sending an RFQ must create a quote record')
-  assert.match(workbench, /store\.attachVendorQuoteFile\(quoteFor\.id/, 'manufacturer replies must attach to quote records')
-  assert.match(workbench, /store\.applyVendorQuoteToLine\(quoteFor\.id/, 'quoted price must be applicable to a spares line')
-  assert.match(store, /applyVendorQuoteToLine\(id, lineId, price\)/, 'store must own line price application')
+test('vendor quote support remains in shared store modules after Sourcing panels are removed', () => {
+  assert.doesNotMatch(workbench, /Vendor \/ price-list versions|Vendor actions \(Coming soon\)|Manufacturer quotes \(Coming soon\)/)
+  assert.doesNotMatch(workbench, /Draft manufacturer RFQ|Upload \/ apply response/)
+  assert.match(store, /addVendorQuote\(oppId, quote\)/, 'vendor quote records must remain supported')
+  assert.match(store, /attachVendorQuoteFile\(id, file\)/, 'manufacturer replies must remain attachable')
+  assert.match(store, /applyVendorQuoteToLine\(id, lineId, price\)/, 'quoted prices must remain applicable to sourcing lines')
   assert.match(store, /priceList: label/, 'applying a quote must update the spares line price source')
   assert.match(store, /priceState: 'Current'/, 'applying a quote must clear stale price status')
 })
@@ -77,16 +76,12 @@ test('vendor quote application cannot confirm an unpriced sourcing line', () => 
   assert.match(store, /const unitPrice = hasReplacementPrice[\s\S]*currentLine\?\.listUnitPrice/)
 })
 
-test('Sourcing can generate and save an AI vendor response simulation', () => {
-  assert.match(workbench, /runJson\('vendor\.quote'/, 'Sourcing must call the vendor quote AI task')
-  assert.match(workbench, /Simulate vendor response/, 'Sourcing must expose the simulation action')
-  assert.match(workbench, /store\.addVendorQuote\(opp\.id/, 'the simulated response must be saved as a vendor quote')
-  assert.match(workbench, /store\.recordAiAction\(opp\.id/, 'the simulation must be auditable')
-  assert.match(workbench, /kind: 'vendor-response'/, 'the simulated response must appear in Communications')
-  assert.match(workbench, /fromName: result\.manufacturer/, 'the simulated manufacturer name must be retained')
-  assert.match(workbench, /simulatedVendorRows/, 'existing simulated quotes must remain visible after reload')
-  assert.match(api, /vendor\.quote/, 'the Vercel AI route must support vendor quotes')
-  assert.match(edgeAi, /vendor\.quote/, 'the Supabase AI function must support vendor quotes')
+test('vendor quote AI contracts remain available outside the removed Sourcing panels', () => {
+  assert.doesNotMatch(workbench, /runJson\('vendor\.quote'/)
+  assert.doesNotMatch(workbench, /Simulate vendor response/)
+  assert.match(api, /vendor\.quote/, 'the Vercel AI route must continue supporting vendor quotes')
+  assert.match(edgeAi, /vendor\.quote/, 'the Supabase AI function must continue supporting vendor quotes')
+  assert.match(workbench, /simulatedVendorRows/, 'existing simulated quotes must remain visible in Communications')
 })
 
 test('vendor quote state is backfilled and cleared with demo business records', () => {

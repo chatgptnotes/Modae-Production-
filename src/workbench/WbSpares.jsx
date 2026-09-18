@@ -5,13 +5,21 @@ import { canPriceProposal, unitCostINR, fmt, ddMmmYY } from '../utils.js'
 import { pricingThresholdExceptions } from '../gates.js'
 import { Chip, ConfChip, AiBadge, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
-import { PRICE_SOURCES, formatPriceSource, isConfirmableSparesLine, normalizeMarkupPct, resolvePriceSource, sparesLineFinancials } from '../pricing.js'
+import { PRICE_SOURCES, formatPriceSource, isConfirmableSparesLine, isMissingSparesDescription, normalizeMarkupPct, reconcilePriceSource, resolvePriceSource, sparesLineFinancials } from '../pricing.js'
 import { convertCurrency, currencySymbol, normalizedCurrencyRates } from '../currency.js'
 import { descriptionMatch, familyOf } from './sparesMatching.js'
+import { isLegacyAutoSparesSupportRow, orderSparesLines, supportRowForDescription } from '../proposal/sparesBoq.js'
 import { runTaskResult } from '../ai.js'
+import { buildLeadProposalData } from '../leadBoq.js'
 
 const n = value => Number.isFinite(Number(value)) ? Number(value) : 0
 const money = value => `₹ ${fmt(n(value))}`
+const sourcingDescription = line => {
+  const description = String(line?.desc || '').trim()
+  if (description && !/^Customer-requested item\s+\d+(?:\.\d+)?$/i.test(description)) return description
+  const reference = String(line?.custRef || line?.pn || '').trim()
+  return /^\d+(?:\.\d+)?$/.test(reference) ? `Description missing · Customer reference ${reference}` : (reference || 'Unspecified part')
+}
 
 const sourcingPartReference = line => {
   const values = [line?.pn, line?.custRef]
@@ -82,7 +90,7 @@ function PricingApprovalCard({ approval, approvers, role, canRequest, onRequest,
 export default function WbSpares({ opp, openBuilder, onContinue }) {
   const store = useStore()
   const comm = canPriceProposal(store.role)
-  const lines = store.sparesLines.filter(l => l.oppId === opp.id && !isPlaceholderSparesLine(l))
+  const lines = store.sparesLines.filter(l => l.oppId === opp.id && !isPlaceholderSparesLine(l) && !isLegacyAutoSparesSupportRow(l))
   const proposal = store.getProposal(opp.id)
   const [compareFor, setCompareFor] = useState(null)
   const [compareSearch, setCompareSearch] = useState('')
@@ -97,6 +105,32 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
   const [newLine, setNewLine] = useState({ pn: '', desc: '', qty: '1', listPrice: '' })
   const sourcingSheetWrapRef = useRef(null)
   const compareRequestRef = useRef(0)
+  useEffect(() => {
+    // Existing opportunities may have been created before extraction learned
+    // to keep a customer reference separate from its description. Reconcile
+    // only blocked rows, using the matching source lead, and never overwrite
+    // prices or confirmation decisions made in Sourcing.
+    const linkedLead = [...(store.leads || []), ...(store.leadArchive || [])]
+      .find(lead => lead.id === opp.sourceLeadId)
+    if (!linkedLead || !lines.some(isMissingSparesDescription)) return
+    const { workbenchRows } = buildLeadProposalData(linkedLead, store.priceLists, store.adhocParts)
+    lines.filter(isMissingSparesDescription).forEach(line => {
+      const currentRef = String(line.custRef || '').trim().toLowerCase()
+      const currentPn = String(line.pn || '').trim().toLowerCase()
+      const candidate = workbenchRows.find(row => {
+        const rowRef = String(row.custRef || '').trim().toLowerCase()
+        const rowPn = String(row.pn || '').trim().toLowerCase()
+        return row.desc && ((currentRef && rowRef === currentRef) || (currentPn && rowPn === currentPn))
+      })
+      if (candidate?.desc && !isMissingSparesDescription(candidate)) {
+        store.updateSparesLine(line.id, {
+          desc: candidate.desc,
+          missingDescription: false,
+          evidence: candidate.evidence || line.evidence,
+        })
+      }
+    })
+  }, [opp.id, opp.sourceLeadId, lines, store.leads, store.leadArchive, store.priceLists, store.adhocParts])
   useEffect(() => {
     store.dedupeSparesLines?.(opp.id)
     store.ensureSparesSupportLines?.(opp.id)
@@ -158,7 +192,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     return {
       id: line.id,
       partNo: line.pn || line.custRef || '',
-      description: line.desc || '',
+      description: sourcingDescription(line),
       qty: row.qty,
       listUnitPrice: row.listUnitPrice,
       listUnitPriceINR: row.listUnitPriceINR,
@@ -173,12 +207,13 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
       sourceLine: line,
     }
   }), [lines, proposal])
-  const orderedLineItems = useMemo(() => [...lineItems].sort((a, b) => Number(!!a.sourceLine.sparesSupport) - Number(!!b.sourceLine.sparesSupport)), [lineItems])
+  const orderedLineItems = useMemo(() => orderSparesLines(lineItems, item => item.sourceLine), [lineItems])
   const calculatedItems = useMemo(() => orderedLineItems.map(item => {
     return { ...item, lineProfit: item.lineTotal - item.lineTotalCogs }
   }), [orderedLineItems])
-  const pricedItems = calculatedItems.filter(item => item.qty > 0 && item.listUnitPrice > 0)
-  const activeItems = calculatedItems.filter(item => item.qty > 0 && item.confirmed)
+  const pricedItems = calculatedItems.filter(item => item.qty > 0 && item.listUnitPrice > 0 && !isMissingSparesDescription(item.sourceLine))
+  const activeItems = calculatedItems.filter(item => item.qty > 0 && item.confirmed && !isMissingSparesDescription(item.sourceLine))
+  const missingDescriptionLines = lines.filter(isMissingSparesDescription)
   const pendingConfirmationCount = pricedItems.filter(item => !item.confirmed).length
   const pricingExceptions = pricingThresholdExceptions(opp, proposal, store)
   const pricingApprovers = store.config?.approvalThresholds?.pricingApprovers?.filter(Boolean)?.length
@@ -277,7 +312,8 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     const quantity = Math.max(0, n(newLine.qty))
     const addedAt = new Date().toISOString()
     const addedBy = store.auth?.user?.name || store.auth?.user?.email || store.role
-    store.addSparesLine(opp.id, { origin: 'manual', custRef: newLine.pn.trim() || newLine.desc.trim(), pn: newLine.pn.trim(), desc: newLine.desc.trim(), qty: quantity, confirmed: quantity > 0 && price > 0, listPrice: price, listUnitPrice: price, baseCost: price, currency: 'INR', priceList: 'Manual pricing', priceSource: 'manual', priceState: price > 0 ? 'Current' : 'Needs pricing', priceSourceDate: addedAt.slice(0, 10), oem: 'Manual', leadTime: 'TBC', addedBy, addedByName: addedBy, addedAt })
+    const supportRow = supportRowForDescription(newLine.desc)
+    store.addSparesLine(opp.id, { origin: 'manual', custRef: newLine.pn.trim() || newLine.desc.trim(), pn: newLine.pn.trim(), desc: newLine.desc.trim(), qty: quantity, confirmed: quantity > 0 && price > 0, listPrice: price, listUnitPrice: price, baseCost: price, currency: 'INR', priceList: 'Manual pricing', priceSource: 'manual', priceState: price > 0 ? 'Current' : 'Needs pricing', priceSourceDate: addedAt.slice(0, 10), oem: 'Manual', leadTime: '', addedBy, addedByName: addedBy, addedAt, ...(supportRow ? { sparesSupport: true, supportAddedManually: true, pn: newLine.pn.trim() || supportRow.pn, desc: supportRow.desc } : {}) })
     setNewLine({ pn: '', desc: '', qty: '1', listPrice: '' })
     setManualLineError('')
   }
@@ -286,7 +322,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     setManualLineError('')
     setShowAddPart(true)
   }
-  const sourceDetails = line => formatPriceSource(line)
+  const sourceDetails = line => formatPriceSource(reconcilePriceSource(line, store.priceLists, store.vendorQuotes))
   const manualAttribution = line => {
     if (line.addedByName || line.addedBy || line.addedAt) return line
     const audit = (store.audit || []).find(entry => entry.action === 'Spares line updated'
@@ -459,6 +495,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     </details>}
     {!!expiredLines.length && <div className="warnbox spares-price-warning"><b>{expiredLines.length} price source{expiredLines.length === 1 ? '' : 's'} expired.</b>{' '}Use <b>Compare</b> in the Actions column to select a current price-list part, or apply a current manufacturer quote only when the approved price list cannot be used.</div>}
     {!!needsPricingLines.length && <div className="warnbox spares-price-warning"><b>{needsPricingLines.length} line{needsPricingLines.length === 1 ? '' : 's'} need pricing.</b>{' '}Use <b>Compare</b> to select a current price-list part, apply a manufacturer quote, or enter a manual price before continuing.</div>}
+    {!!missingDescriptionLines.length && <div className="warnbox spares-price-warning"><b>{missingDescriptionLines.length} line{missingDescriptionLines.length === 1 ? '' : 's'} need{missingDescriptionLines.length === 1 ? 's' : ''} a description.</b>{' '}The customer reference alone is not enough to send this line to Proposal.</div>}
     {!!pricingExceptions.rows.length && <PricingApprovalCard approval={pricingApproval} approvers={pricingApprovers} role={store.role} pricingRows={pricingExceptions.rows} canRequest={(comm || pricingApprovers.includes(store.role)) && (!pricingApproval || pricingApproval.status === 'Rejected')} onRequest={requestPricingApproval} onDecide={decision => pricingApproval && store.recordDecision(pricingApproval.id, decision)} />}
     {proposalOnlyMismatch && <div className="warnbox sourcing-flow-warning"><b>Proposal data is not linked to Sourcing.</b> Existing proposal rows are not imported automatically. Add or import the real parts here before continuing to Proposal.</div>}
     <div className="sourcing-table-card">
@@ -475,10 +512,10 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
       <div ref={sourcingSheetWrapRef} className="sheet-wrap sourcing-sheet-wrap"><table id="sourcing-spares-grid" className="sheet sourcing-sheet sourcing-sheet--fixed border-collapse">
         <thead><tr><th>Part number / customer reference</th><th>Description</th><th>Source</th><th>Qty</th><th>List unit</th><th>Discount %</th><th>Markup %</th><th>Adjusted Unit Price</th><th>Base cost</th><th>Original total</th><th>Quoted total</th><th>Actions</th></tr></thead>
         <tbody>
-          {calculatedItems.map(item => { const line = item.sourceLine; const row = { ...item, discountPct: item.discountPercent, markupPct: item.markupPercent, listTotal: item.listTotal, lineTotal: item.lineTotal, cogs: item.lineTotalCogs }; const confirmable = isConfirmableSparesLine(line); const invalidState = row.qty <= 0 ? 'Cannot confirm' : 'Needs pricing'; const rowMeta = line.sparesSupport ? 'Support charge' : `${line.oem || 'TBD'} · Lead: ${line.leadTime || 'TBC'}`; const partReference = sourcingPartReference(line); const removed = !!line.removedFromSourcing; return <tr key={line.id} className={row.qty === 0 ? 'sourcing-zero-row' : ''}>
+          {calculatedItems.map(item => { const line = item.sourceLine; const displayLine = reconcilePriceSource(line, store.priceLists, store.vendorQuotes); const row = { ...item, discountPct: item.discountPercent, markupPct: item.markupPercent, listTotal: item.listTotal, lineTotal: item.lineTotal, cogs: item.lineTotalCogs }; const confirmable = isConfirmableSparesLine(line); const invalidState = row.qty <= 0 ? 'Cannot confirm' : isMissingSparesDescription(line) ? 'Description required' : 'Needs pricing'; const rowMeta = line.sparesSupport ? 'Support charge' : [line.oem, line.leadTime && `Lead: ${line.leadTime}`].filter(Boolean).join(' · '); const partReference = sourcingPartReference(line); const removed = !!line.removedFromSourcing; return <tr key={line.id} className={row.qty === 0 ? 'sourcing-zero-row' : ''}>
             <td className="sourcing-cell-part-number align-top p-2 overflow-hidden" title={partReference}>{partReference}</td>
-            <td className="sourcing-cell-description align-top p-2 overflow-hidden"><div className="sourcing-part-line">{comm && (removed ? <button type="button" className="sourcing-restore-row" title="Restore row to active proposal" aria-label={`Restore ${line.pn || line.id}`} onClick={() => restoreLine(line)}>✓</button> : <button type="button" className="sourcing-remove-row sourcing-row-action" title="Remove row from active proposal" aria-label={`Remove ${line.pn || line.id}`} onClick={() => removeLine(line)}><Icon name="x" size={14} /></button>)}<div className="sourcing-part-copy"><div className="sourcing-part-description line-clamp-2 text-xs font-medium text-gray-900 leading-snug" title={line.desc || line.custRef || 'Unspecified part'}>{line.desc || line.custRef || 'Unspecified part'}</div><small className="hint truncate overflow-hidden text-ellipsis whitespace-nowrap">{rowMeta}</small></div></div></td>
-            <td className="sourcing-cell-source align-top p-2 overflow-hidden"><div className="sourcing-source-stack">{(() => { const source = sourceDetails(line); const attribution = manualAttribution(line); const sourcePayload = { ...source, pn: line.pn || line.custRef || line.id, priceState: line.priceState || 'Unstated', listPrice: line.listUnitPrice ?? line.listPrice, currency: line.currency || 'INR', addedBy: attribution.addedByName || attribution.addedBy || '', addedAt: attribution.addedAt || '' }; const isCatalogued = source.source === PRICE_SOURCES.LIST && priceListNameFor(line); return <><div className="sourcing-source-primary">{isCatalogued ? <button type="button" className="sourcing-source-link sourcing-source-name" title={`Open ${source.full} in the price list`} aria-label={`Open ${source.full} in the price list`} onClick={() => openPriceList(line)}>{source.primary}</button> : <button type="button" className="sourcing-source-details-link sourcing-source-name" title={`View full source: ${source.full}`} aria-label={`View full source: ${source.full}`} onClick={() => setEvidence(sourcePayload)}>{source.primary}</button>}</div>{source.secondary && <span className="sourcing-source-meta" title={source.full}>{source.secondary}</span>}{line.priceState === 'Expired' ? <><Chip tone="state-Blocks">Expired</Chip><AiBadge label="pricing anomaly" /></> : line.priceState === 'Needs pricing' ? <Chip tone="state-Review">Needs pricing</Chip> : source.source !== PRICE_SOURCES.MANUAL ? <Chip tone="state-Accepted">Current</Chip> : null}</> })()}</div></td>
+            <td className="sourcing-cell-description align-top p-2 overflow-hidden"><div className="sourcing-part-line">{comm && (removed ? <button type="button" className="sourcing-restore-row" title="Restore row to active proposal" aria-label={`Restore ${line.pn || line.id}`} onClick={() => restoreLine(line)}>✓</button> : <button type="button" className="sourcing-remove-row sourcing-row-action" title="Remove row from active proposal" aria-label={`Remove ${line.pn || line.id}`} onClick={() => removeLine(line)}><Icon name="x" size={14} /></button>)}<div className="sourcing-part-copy"><div className="sourcing-part-description line-clamp-2 text-xs font-medium text-gray-900 leading-snug" title={sourcingDescription(line)}>{sourcingDescription(line)}</div><small className="hint truncate overflow-hidden text-ellipsis whitespace-nowrap">{rowMeta}</small></div></div></td>
+            <td className="sourcing-cell-source align-top p-2 overflow-hidden"><div className="sourcing-source-stack">{(() => { const source = sourceDetails(displayLine); const attribution = manualAttribution(line); const sourcePayload = { ...source, pn: displayLine.pn || displayLine.custRef || displayLine.id, priceState: displayLine.priceState || 'Unstated', listPrice: displayLine.listUnitPrice ?? displayLine.listPrice, currency: displayLine.currency || 'INR', addedBy: attribution.addedByName || attribution.addedBy || '', addedAt: attribution.addedAt || '' }; const isCatalogued = source.source === PRICE_SOURCES.LIST && priceListNameFor(displayLine); return <><div className="sourcing-source-primary">{isCatalogued ? <button type="button" className="sourcing-source-link sourcing-source-name" title={`Open ${source.full} in the price list`} aria-label={`Open ${source.full} in the price list`} onClick={() => openPriceList(displayLine)}>{source.primary}</button> : <button type="button" className="sourcing-source-details-link sourcing-source-name" title={`View full source: ${source.full}`} aria-label={`View full source: ${source.full}`} onClick={() => setEvidence(sourcePayload)}>{source.primary}</button>}</div>{source.secondary && <span className="sourcing-source-meta" title={source.full}>{source.secondary}</span>}{line.priceState === 'Expired' ? <><Chip tone="state-Blocks">Expired</Chip><AiBadge label="pricing anomaly" /></> : line.priceState === 'Needs pricing' ? <Chip tone="state-Review">Needs pricing</Chip> : source.source !== PRICE_SOURCES.MANUAL ? <Chip tone="state-Accepted">Current</Chip> : null}</> })()}</div></td>
             <td className="num"><EditableNumber value={row.qty} label={`Quantity for ${line.pn || line.id}`} disabled={!comm} step="1" onChange={value => updateLine(line, 'qty', Math.max(0, Math.round(value)))} /></td>
             <td className="num"><EditableNumber value={fmt(displayValue(row.listUnitPriceINR), displayDigits)} label={`List price for ${line.pn || line.id} in ${displayCurrency}`} disabled={!comm} onChange={value => updateLine(line, 'listUnitPrice', convertCurrency(value, displayCurrency, 'INR', costing.currencyRates))} /></td>
             <td className="num"><EditableNumber value={Math.round(row.discountPct)} label={`Discount for ${line.pn || line.id}`} disabled={!comm} step="1" onChange={value => updateLine(line, 'discountPct', Math.min(100, Math.max(0, Math.round(value))))} suffix="%" /></td>

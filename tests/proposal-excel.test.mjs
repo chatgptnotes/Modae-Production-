@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import ExcelJS from 'exceljs'
 import { proposalWorkbookRows, buildProposalWorkbook, buildTableWorkbook } from '../src/proposal/excelExport.js'
 import { generateProposalWorkbook } from '../src/proposal/templateExcelExport.js'
+import { parseProposalWorkbook } from '../src/proposal/workbook.js'
 import { buildPricing } from '../src/proposal/docProps.js'
 import { defaultCosting } from '../src/seed.js'
 
@@ -81,6 +82,32 @@ test('Spares proposal pricing falls back to the confirmed sourcing line', () => 
   }, p)
   assert.equal(linePrice(p.bom[0]), 1250)
   assert.ok(lineQuoted(p.bom[0]) > 0)
+})
+
+test('generated proposal pricing rounds cached customer values to two decimals', async () => {
+  const templateBuffer = fs.readFileSync('branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx')
+  const output = await generateProposalWorkbook({
+    templateBuffer,
+    logoBuffer: fs.readFileSync('branding/mod-ae/assets/modae-official-logo.png'),
+    route: 'Spares',
+    p: { revision: '00', bom: [{ pn: 'P-1', desc: 'Probe', common: 2 }] },
+    opp: { id: '2609001PJS', sellTo: 'Customer' },
+    doc: { docTerms: [] },
+    totalQty: line => line.common,
+    lineQuoted: () => 39.36,
+  })
+  const workbook = new ExcelJS.Workbook()
+  await workbook.xlsx.load(output)
+  const firm = workbook.getWorksheet('Firm Rev-00')
+  assert.equal(firm.getCell('F10').value, 39.36)
+  assert.equal(firm.getCell('G10').value.result, 78.72)
+
+  const preview = parseProposalWorkbook(output, 'proposal.xlsx')
+  const rows = preview.sheets.find(sheet => /firm/i.test(sheet.name)).rows
+  const pricingRow = rows.find(row => row.includes('39.36'))
+  assert.ok(pricingRow)
+  assert.equal(pricingRow[4], '₹ 39.36')
+  assert.equal(pricingRow[5], '₹ 78.72')
 })
 
 test('exact proposal export preserves template artwork, merges and print layout', async () => {
@@ -164,6 +191,9 @@ test('spares export keeps reference rows but uses live proposal quantities', asy
         { pn: 'DS821.EC100/45/0', desc: 'Wrong live description', common: 1 },
         { pn: 'DS821.OD110/0', desc: 'Wrong live description', common: 1 },
         { pn: 'AC-3101/1', desc: 'Wrong live description', common: 1 },
+        { pn: 'NA', desc: 'Warranty Certificate', common: 1, sparesSupport: true },
+        { pn: 'NA', desc: 'Country of Origin Certificate', common: 1, sparesSupport: true },
+        { pn: 'NA', desc: 'Freight Charges from B&K Germany To ModAE India', common: 1, sparesSupport: true },
       ],
     },
     opp: { id: '2609001PJS', sellTo: 'Customer' },
@@ -184,7 +214,7 @@ test('spares export keeps reference rows but uses live proposal quantities', asy
   assert.deepEqual(Array.from({ length: 5 }, (_, index) => firm.getCell(`E${index + 10}`).value), [1, 1, 1, 1, 1])
   assert.deepEqual(Array.from({ length: 5 }, (_, index) => firm.getCell(`F${index + 10}`).value), [100, 100, 100, 100, 100])
   assert.equal(firm.getCell('G10').value.result, 100)
-  assert.equal(firm.getCell('G18').value.result, 500)
+  assert.equal(firm.getCell('G18').value.result, 800)
   assert.equal(firm.getCell('B18').value, 'Total For')
 })
 

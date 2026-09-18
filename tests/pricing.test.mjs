@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { applyAdjustment, formatPriceSource, resolvePriceSource, normalizePriceFields, isConfirmableSparesLine, sparesLineFinancials } from '../src/pricing.js'
+import { applyAdjustment, formatPriceSource, resolvePriceSource, reconcilePriceSource, normalizePriceFields, isConfirmableSparesLine, isMissingSparesDescription, sparesLineFinancials } from '../src/pricing.js'
 import { buildLeadProposalData } from '../src/leadBoq.js'
 import { sparesProposalBom } from '../src/proposal/sparesBoq.js'
 import { computeProposalTotals } from '../src/gates.js'
@@ -56,6 +56,20 @@ test('source display keeps vendor and manual origins explicit', () => {
   assert.equal(formatPriceSource({ priceSource: 'manual', priceList: 'Manual entry', addedAt: '2026-09-14T10:00:00.000Z' }).secondary, '14-Sep-26')
 })
 
+test('source reconciliation promotes an exact approved price-list match', () => {
+  const line = reconcilePriceSource({ pn: 'P-1', listPrice: 100, listUnitPrice: 100, currency: 'EUR', priceSource: 'manual', priceList: 'Manual pricing' }, lists, [])
+  assert.equal(line.priceSource, 'price-list')
+  assert.equal(line.priceSourceName, 'BNK')
+  assert.equal(line.priceSourceVersion, '2026-01')
+  assert.equal(line.priceSourceRef, 'P-1')
+})
+
+test('source reconciliation keeps a different amount as a manual override', () => {
+  const line = reconcilePriceSource({ pn: 'P-1', listPrice: 101, listUnitPrice: 101, currency: 'EUR', priceSource: 'manual', priceList: 'Manual pricing' }, lists, [])
+  assert.equal(line.priceSource, 'manual')
+  assert.equal(line.priceList, 'Manual pricing')
+})
+
 test('unmatched lead lines need pricing instead of appearing expired', () => {
   const { workbenchRows } = buildLeadProposalData({ ai: { lineItems: [{ description: 'Custom inspection module', qty: 1 }] } }, {}, [])
   assert.equal(workbenchRows[0].priceState, 'Needs pricing')
@@ -76,6 +90,13 @@ test('sourcing confirmation requires positive quantity and price', () => {
   assert.equal(isConfirmableSparesLine({ qty: 1, listPrice: 0 }), false)
   assert.equal(normalizePriceFields({ qty: 1, listPrice: 0, confirmed: true }).confirmed, false)
   assert.equal(normalizePriceFields({ qty: 0, listPrice: 10, confirmed: true }).confirmed, false)
+})
+
+test('numeric customer references without descriptions require clarification', () => {
+  const line = { custRef: '2', qty: 1, listPrice: 23, listUnitPrice: 23 }
+  assert.equal(isMissingSparesDescription(line), true)
+  assert.equal(isConfirmableSparesLine(line), false)
+  assert.equal(isMissingSparesDescription({ ...line, desc: 'Shielded signal cable' }), false)
 })
 
 test('positive manual pricing confirms the row while non-manual pricing remains explicit', () => {

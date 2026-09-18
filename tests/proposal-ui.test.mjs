@@ -62,8 +62,8 @@ test('Spares proposals carry the standard support rows without export duplicatio
   assert.match(support, /Country of Origin Certificate/)
   assert.match(support, /Freight Charges from B&K Germany To ModAE India/)
   assert.match(props, /route === 'Spares' \? withSparesSupportRows\(bom\)/)
-  assert.match(store, /const supportBom = withSparesSupportRows\(\(base\.bom \|\| \[\]\)\.filter\(isSparesSupportRow\)\)/)
-  assert.match(exporter, /p\.bom \|\| \[\]\)\.filter\(line => !isSparesSupportRow\(line\)/)
+  assert.match(store, /orderedSparesProposalBom\(orderedSourceLines, s\.priceLists, costing\)/)
+  assert.match(exporter, /const lines = p\.bom \|\| \[\]/)
 })
 
 test('customer preview is clearly separated from the legacy workbook draft', () => {
@@ -82,15 +82,30 @@ test('submitted proposal communications capture the approved proposal snapshot',
 
 test('generated support rows continue the live BOQ numbering', () => {
   const exporter = read('src/proposal/templateExcelExport.js')
-  assert.match(exporter, /lines\.length \+ index \+ 1/)
+  assert.match(exporter, /setValue\(worksheet\.getCell\(`B\$\{row\}`\), index \+ 1/)
   assert.match(exporter, /const round2 = value/)
+})
+
+test('customer-facing proposal prices use exactly two decimal places', () => {
+  const editor = read('src/proposal/ProposalSheetEditor.jsx')
+  const proposal = read('src/pages/Proposal.jsx')
+  const workbook = read('src/proposal/workbook.js')
+  const utils = read('src/utils.js')
+
+  assert.match(editor, /fmt\(lineQuoted\(l\), 2\)/)
+  assert.match(editor, /fmt\(lineQuoted\(l\) \* quantity, 2\)/)
+  assert.match(proposal, /fmt\(lineQuoted\(l\) \* q, 2\)/)
+  assert.match(utils, /minimumFractionDigits: digits/)
+  assert.match(utils, /maximumFractionDigits: digits/)
+  assert.match(workbook, /minimumFractionDigits: 2/)
+  assert.match(workbook, /maximumFractionDigits: 2/)
 })
 
 test('saved Spares proposal repair compares the full product and support BoQ', () => {
   const proposal = read('src/pages/Proposal.jsx')
 
-  assert.match(proposal, /const productBom = sparesProposalBom\(confirmed, store\.priceLists\)/)
-  assert.match(proposal, /const nextBom = withSparesSupportRows\(\[\.\.\.productBom, \.\.\.\(current\.bom \|\| \[\]\)\.filter\(isSparesSupportRow\)\]\)/)
+  assert.match(proposal, /const sourceLines = \(store\.sparesLines \|\| \[\]\)\.filter\(line => line\.oppId === oppId/)
+  assert.match(proposal, /const nextBom = orderedSparesProposalBom\(sourceLines, store\.priceLists, current\.costing\)/)
 })
 
 test('Spares proposal conversion replaces stale descriptions from the B&K catalogue', () => {

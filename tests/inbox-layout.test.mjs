@@ -162,6 +162,29 @@ test('customer KYC display honors verified lead-stage data and simulated mode', 
   assert.match(register, /kyc: leadVerification\.status === 'Verified' \? 'Valid' : 'Pending'/)
 })
 
+test('lead KYC upload scans before verification and keeps user confirmation', () => {
+  const workbench = fs.readFileSync(new URL('../src/pages/Inbox.jsx', import.meta.url), 'utf8')
+  const api = fs.readFileSync(new URL('../api/ai.js', import.meta.url), 'utf8')
+  assert.match(workbench, /scanKycDocument = async \(item, file, rec\)/)
+  assert.match(workbench, /runTaskResult\('kyc\.extract'/)
+  assert.match(workbench, /setPendingUpload\(previous => previous\?\.item === item/)
+  assert.match(workbench, /Confirm extracted value and verify/)
+  assert.match(workbench, /Review the extracted result before confirming/)
+  assert.match(workbench, /fileMeta\.scan = scan/)
+  assert.match(api, /kyc\.extract/)
+  assert.match(api, /kycExtractSchema/)
+})
+
+test('lead-stage KYC rows expose real uploaded documents for viewing', () => {
+  const workbench = fs.readFileSync(new URL('../src/pages/Workbench.jsx', import.meta.url), 'utf8')
+  assert.match(workbench, /const leadVerificationAttachment = \(sourceLead, name, snapshotItem\)/)
+  assert.match(workbench, /sourceLead\?\.attachments \|\| \[\]/)
+  assert.match(workbench, /className="kyc-file-open lead-verification-file-open"/)
+  assert.match(workbench, /openAttachment\(attachment, sourceLead\?\.id \|\| ''\)/)
+  assert.match(workbench, /<AttachmentViewer leadId=\{viewingLeadId\}/)
+  assert.match(workbench, /attachment && sourceLead\?\.id/)
+})
+
 test('Opportunity Customer/KYC tab can complete optional customer details', () => {
   const workbench = fs.readFileSync(new URL('../src/pages/Workbench.jsx', import.meta.url), 'utf8')
   assert.match(workbench, /Customer commercial details/)
@@ -170,6 +193,13 @@ test('Opportunity Customer/KYC tab can complete optional customer details', () =
   assert.match(workbench, /shippingAddress: opp\.shippingAddress/)
   assert.match(workbench, /shippingPincode: opp\.shippingPincode/)
   assert.match(workbench, /GSTIN/)
+  assert.match(workbench, /customer-detail-changed/)
+  assert.match(workbench, /const \[dirtyDetailKeys, setDirtyDetailKeys\] = useState\(\(\) => new Set\(\)\)/)
+  assert.match(workbench, /setDirtyDetailKeys\(previous => \{/)
+  assert.match(workbench, /const normalizeDetailValue = value => String\(value \?\? ''\)\.trim\(\)/)
+  assert.match(workbench, /customer-details-save-button/)
+  assert.match(workbench, /detailsDirty \? 'primary customer-details-save-button is-dirty' : 'customer-details-save-button'/)
+  assert.match(workbench, /disabled=\{!detailsDirty\}/)
 })
 
 test('red leads explain why payment confirmation is not shown', () => {

@@ -28,6 +28,7 @@ import {
 import { leadVerificationComplete, verificationDeadline, verificationItem, verificationSnapshot, redClearanceFor, isRedCleared } from '../leadVerification.js'
 import { checklistFor } from '../customerClasses.js'
 import { kycIdentityKey, simulatedKycValue, validateKycValue } from '../kycValidation.js'
+import { extractKycIdentityCandidate, normalizeKycCandidate } from '../kycExtraction.js'
 import { commercialTermsFromLead } from '../commercialTerms.js'
 import { downloadKycTemplate } from '../kycTemplate.js'
 import { PROJECT_TYPES, oppTypesForProjectType, templatesForSelection, simulatedLead, simulatedCount, SIMULATED_CUSTOMER_SCENARIOS } from '../simulatedLeads.js'
@@ -326,7 +327,7 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
       lineItems: (Array.isArray(ai.lineItems) && ai.lineItems.length
         ? ai.lineItems
         : parseLeadLineItems(`${body || ''}\n${attachmentText}`)).map(x => ({
-          description: x.description || x.desc || x.partNumber || '',
+          description: x.description || x.desc || '',
           partNumber: x.partNumber || x.pn || '',
           customerRef: x.customerRef || x.partNumber || x.pn || '',
           qty: Number(x.qty) || 1, uom: x.uom || 'EA',
@@ -390,6 +391,50 @@ function LeadVerification({ lead, customerStatus, store }) {
     store.clearLeadKycItem(lead.id, item)
   }
 
+  const scanKycDocument = async (item, file, rec) => {
+    const key = kycIdentityKey(item)
+    const local = extractKycIdentityCandidate(item, rec.text)
+    if (local) return local
+    const aiAttachments = await attachmentAiPayload([{ file }])
+    if (!aiAttachments.length && !rec.text) return {
+      key: key || 'NONE', value: '', confidence: 0, evidence: '', source: 'unreadable',
+      warnings: ['The document has no readable text or supported visual content. Enter the value manually.'],
+    }
+    const result = await runTaskResult('kyc.extract', {
+      item, key: key || 'NONE', text: rec.text || '', aiAttachments,
+    }, { model: store.config?.aiModel?.model })
+    const data = result.data?.data || result.data
+    if (!data) return {
+      key: key || 'NONE', value: '', confidence: 0, evidence: '', source: 'manual',
+      warnings: ['Automatic scanning is unavailable. Enter the value manually and review the document.'],
+    }
+    return {
+      key: data.key || key || 'NONE',
+      value: normalizeKycCandidate(data.value),
+      confidence: Math.max(0, Math.min(100, Number(data.confidence) || 0)),
+      evidence: String(data.evidence || ''),
+      source: 'ai-document-scan',
+      warnings: Array.isArray(data.warnings) ? data.warnings : [],
+      documentType: data.documentType || '',
+    }
+  }
+
+  const scanPendingUpload = async item => {
+    if (pendingUpload?.item !== item || !pendingUpload.file) return
+    setBusy(item)
+    setKycError('')
+    try {
+      const rec = await readAttachment(pendingUpload.file)
+      const scan = await scanKycDocument(item, pendingUpload.file, rec)
+      if (scan.value && kycIdentityKey(item)) setKycValues(values => ({ ...values, [item]: scan.value }))
+      setPendingUpload(previous => previous?.item === item ? { ...previous, rec, scan } : previous)
+    } catch (error) {
+      setKycError(error?.message || 'The KYC document could not be scanned. Enter the value manually.')
+    } finally {
+      setBusy('')
+    }
+  }
+
   useEffect(() => {
     const close = event => {
       if (menuRef.current && !menuRef.current.contains(event.target)) setMenuFor('')
@@ -398,7 +443,7 @@ function LeadVerification({ lead, customerStatus, store }) {
     return () => document.removeEventListener('click', close)
   }, [])
 
-  const saveKyc = async (item, file, mode) => {
+  const saveKyc = async (item, file, mode, scan = null, preparedRec = null) => {
     const value = mode === 'simulated' ? simulatedKycValue(item) : kycValues[item]
     if (mode === 'simulated' && value) setKycValues(values => ({ ...values, [item]: value }))
     const identity = validateKycValue(item, value, store.config)
@@ -407,8 +452,9 @@ function LeadVerification({ lead, customerStatus, store }) {
     setBusy(item)
     let fileMeta = {}
     if (file) {
-      const rec = await readAttachment(file)
+      const rec = preparedRec || await readAttachment(file)
       fileMeta = { file: rec.name, size: rec.size, pages: rec.pages || 0, kycItem: item }
+      if (scan) fileMeta.scan = scan
       holdMore(lead.id, [file])
       store.updateLead(lead.id, {
         attachments: [...(lead.attachments || []), fileMeta],
@@ -526,11 +572,18 @@ function LeadVerification({ lead, customerStatus, store }) {
               {pending
                 ? <>
                   <span className="hint" title={pendingUpload.file.name}>{pendingUpload.file.name}</span>
-                  <button type="button" className="primary icon-action" aria-label={`Confirm upload for ${item}`} title={`Confirm upload for ${item}`} disabled={busy === item} onClick={async () => {
-                    const file = pendingUpload.file
+                  {pendingUpload.scan && <div className="kyc-scan-review">
+                    <span>Review the extracted result before confirming.</span>
+                    <b>{pendingUpload.scan.value ? `Detected ${pendingUpload.scan.key}: ${pendingUpload.scan.value}` : 'No identity value detected'}</b>
+                    {!!pendingUpload.scan.evidence && <span>Evidence: {pendingUpload.scan.evidence}</span>}
+                    {!!pendingUpload.scan.warnings?.length && <span className="hint">{pendingUpload.scan.warnings.join(' ')}</span>}
+                  </div>}
+                  <button type="button" className="primary icon-action" aria-label={pendingUpload.scan ? `Confirm KYC verification for ${item}` : `Scan ${item} document`} title={pendingUpload.scan ? 'Confirm extracted value and verify' : 'Scan document'} disabled={busy === item} onClick={async () => {
+                    if (!pendingUpload.scan) return scanPendingUpload(item)
+                    const current = pendingUpload
                     setPendingUpload(null)
-                    await saveKyc(item, file, 'uploaded')
-                  }}><Icon name="check" size={14} /></button>
+                    await saveKyc(item, current.file, 'uploaded', current.scan, current.rec)
+                  }}><Icon name={pendingUpload.scan ? 'check' : 'eye'} size={14} /></button>
                   <button type="button" className="icon-action" aria-label={`Cancel upload for ${item}`} title={`Cancel upload for ${item}`} disabled={busy === item} onClick={() => cancelPendingUpload(item)}><Icon name="x" size={14} /></button>
                 </>
                 : <span className="kyc-upload-menu" ref={menuFor === item ? menuRef : null}>
@@ -3141,7 +3194,7 @@ export default function Inbox() {
       .map(field => ({ key: field.k, value: String(field.v).trim(), confidence: field.conf, evidence: field.ev || '', note: field.note || '' }))
     const requestedItems = (lead.ai?.lineItems || lead.ai?.items || [])
       .map(item => ({
-        description: item.description || item.desc || item.partNumber || item.pn || '',
+        description: item.description || item.desc || '',
         partNumber: item.partNumber || item.pn || '',
         qty: Number(item.qty) || 1,
         uom: item.uom || 'EA',

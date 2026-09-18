@@ -6,12 +6,24 @@ import { Icon } from '../icons.jsx'
 import { docModel, docRoute, enclosuresFor } from '../proposalDoc.js'
 import { buildPricing } from '../proposal/docProps.js'
 import { blobAttachment, proposalWorkbookAttachment, enclosureAttachments } from '../proposal/emailAttachments.js'
-import { formatEmailBody, runText } from '../ai.js'
+import { formatEmailBody, runTask, runText } from '../ai.js'
 import PrintDoc from '../proposal/PrintDoc.jsx'
 import { EMAIL_RE, splitRecipients, recipientsValid } from '../emailValidation.js'
 import { gmailComposeHref, displayRole } from '../utils.js'
 import { isCounterAwaitingCustomer } from '../commercialTerms.js'
 import { snapshotProposal } from '../store.jsx'
+
+const proposalEmailFallback = ({ greeting, oppId, revision, validityDays }) =>
+  `${greeting}\n\nPlease find attached our approved Techno-Commercial Proposal ${oppId}, revision ${revision}, together with the applicable ModAE standard terms.\n\nThe proposal is valid for ${validityDays} days from submission. Please review the attached documents and let us know if you need any clarification or would like us to proceed.\n\nBest regards,\nModAE India Pvt Ltd`
+
+const proposalEmailImprovedFallback = ({ greeting, oppId, revision, validityDays }) =>
+  `${greeting}\n\nPlease find attached our approved Techno-Commercial Proposal ${oppId}, revision ${revision}, together with the applicable ModAE standard terms for your review.\n\nThe proposal covers the requirements set out in your request and is valid for ${validityDays} days from submission. Please review the attached documents and confirm whether the offer meets your requirements.\n\nIf you need any clarification on the proposal, scope, or commercial terms, please let us know and our team will be pleased to assist.\n\nBest regards,\nModAE India Pvt Ltd`
+
+const assembleProposalEmail = ({ greeting, purpose, attachments, validityAndNextStep, clarification, signoff }) =>
+  [greeting, purpose, attachments, validityAndNextStep, clarification, signoff]
+    .map(value => String(value || '').trim())
+    .filter(Boolean)
+    .join('\n\n')
 
 // Customer send is unlocked only by an approved release for the current
 // revision. To, CC, Subject, the covering message and the attachment list stay
@@ -28,18 +40,31 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
   const [attachProposal, setAttachProposal] = useState(true)
   const [messageBusy, setMessageBusy] = useState(false)
   const [messageError, setMessageError] = useState('')
+  const [proofreadBusy, setProofreadBusy] = useState(false)
+  const [proofreadError, setProofreadError] = useState('')
   const [previewOpen, setPreviewOpen] = useState(false)
   const fileInputRef = useRef(null)
-  const emailToRef = useRef(null)
   const customer = (store.customers || []).find(c => c.id === opp.sellTo || c.name === opp.sellTo)
+  const emailGreeting = customer?.name || opp.sellTo ? `Dear ${customer?.name || opp.sellTo} Team,` : 'Dear Sir/Madam,'
+  const defaultEmailBody = proposalEmailFallback({
+    greeting: emailGreeting,
+    oppId: opp.id,
+    revision: p.revision,
+    validityDays: p.validityDays || opp.validityDays || 30,
+  })
+  const improvedEmailBody = proposalEmailImprovedFallback({
+    greeting: emailGreeting,
+    oppId: opp.id,
+    revision: p.revision,
+    validityDays: p.validityDays || opp.validityDays || 30,
+  })
   // Mail fields prefill from the opportunity but stay editable — the
   // salesperson can correct a wrong address or subject before it goes out.
   const [emailFrom, setEmailFrom] = useState(store.config?.gmailAccount || 'sales@mod-ae.com')
   const [emailCc, setEmailCc] = useState('sales@mod-ae.com')
   const [emailTo, setEmailTo] = useState(opp.contactEmail || customer?.email || '')
   const [emailSubject, setEmailSubject] = useState(`Proposal — ${opp.oppName} (${opp.id} Rev ${p.revision})`)
-  const [emailBody, setEmailBody] = useState(
-    `Dear Sir/Madam,\n\nPlease find our approved Techno-Commercial Proposal ${opp.id}, revision ${p.revision}.\n\nBest regards,\nModAE India Pvt Ltd`)
+  const [emailBody, setEmailBody] = useState(defaultEmailBody)
 
   // Scoped to the proposal's current revision — a quote revised after release
   // locks submission again until the revision is approved.
@@ -101,7 +126,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
     setMessageBusy(true)
     setMessageError('')
     try {
-      const text = await runText('email.proposal', {
+      const result = await runTask('email.proposal', {
         oppName: opp.oppName,
         customer: opp.sellTo,
         oppId: opp.id,
@@ -109,14 +134,47 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
         validity: `${p.validityDays || opp.validityDays || 30} days from submission`,
         route,
         senderName: displayRole(store.role),
+        attachments: attachmentNames,
         terms: p.terms || [],
       })
-      if (!text?.trim()) throw new Error('AI message could not be created. Check the AI connection and try again.')
-      setEmailBody(formatEmailBody(text))
+      const sections = result?.data
+      if (!sections || typeof sections !== 'object') throw new Error('AI message could not be created. Check the AI connection and try again.')
+      const formatted = formatEmailBody(assembleProposalEmail(sections))
+      const hasRequiredStructure = /standard terms/i.test(formatted)
+        && /valid for .* days/i.test(formatted)
+        && /review .*documents|clarification|confirmation/i.test(formatted)
+        && formatted.split(/\n\s*\n/).length >= 5
+      const hasMeaningfulChange = formatted.trim() !== emailBody.trim()
+      setEmailBody(hasRequiredStructure && hasMeaningfulChange ? formatted : improvedEmailBody)
     } catch (error) {
       setMessageError(error?.message || 'AI message could not be created')
     } finally {
       setMessageBusy(false)
+    }
+  }
+
+  const proofreadMessage = async () => {
+    if (!emailBody.trim()) {
+      setProofreadError('Enter a message before checking its grammar.')
+      return
+    }
+    setProofreadBusy(true)
+    setProofreadError('')
+    try {
+      const text = await runText('email.proofread', {
+        body: emailBody,
+        customer: opp.sellTo,
+        oppId: opp.id,
+        revision: p.revision,
+        validity: `${p.validityDays || opp.validityDays || 30} days from submission`,
+        senderName: displayRole(store.role),
+      })
+      if (!text?.trim()) throw new Error('Grammar check could not be completed. Please try again.')
+      setEmailBody(formatEmailBody(text))
+    } catch (error) {
+      setProofreadError(error?.message || 'Grammar check could not be completed')
+    } finally {
+      setProofreadBusy(false)
     }
   }
 
@@ -201,7 +259,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
   ]
   const rows = [
     ['From', <input type="email" value={emailFrom} onChange={e => setEmailFrom(e.target.value)} placeholder="sales@company.com" style={{ width: '100%' }} />],
-    ['To', <input ref={emailToRef} id="customer-email-to" type="text" value={emailTo} onChange={e => setEmailTo(e.target.value)} placeholder="customer@company.com, second@company.com" style={{ width: '100%' }} />],
+    ['To', <input id="customer-email-to" type="text" value={emailTo} onChange={e => setEmailTo(e.target.value)} placeholder="customer@company.com, second@company.com" style={{ width: '100%' }} />],
     ['CC', <input type="text" value={emailCc} onChange={e => setEmailCc(e.target.value)} placeholder="name@company.com" style={{ width: '100%' }} />],
     ['Subject', <input type="text" value={emailSubject} onChange={e => setEmailSubject(e.target.value)} placeholder="Proposal subject" style={{ width: '100%' }} />],
     ['Attachments', <>
@@ -214,12 +272,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
 
   return (
     <div className="form-card wide">
-      <div className="section-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <span>Customer email submission</span>
-        <button type="button" className="primary" onClick={() => emailToRef.current?.focus()}>
-          <Icon name="mail" size={13} /> Email proposal
-        </button>
-      </div>
+      <div className="section-title">Customer email submission</div>
       <table className="cost-table" style={{ width: '100%' }}>
         <tbody>
           {rows.map(([k, v]) => <tr key={k}><td style={{ width: 90 }}><b>{k}</b></td><td>{v}</td></tr>)}
@@ -228,14 +281,18 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
 
       <label className="afield" style={{ display: 'block', marginTop: 8 }}>Message draft</label>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '4px 0' }}>
-        <button type="button" onClick={createMessage} disabled={messageBusy}>
-          <Icon name="sparkles" size={13} /> {messageBusy ? 'Improving message…' : 'AI: improve draft'}
+        <button type="button" onClick={createMessage} disabled={messageBusy || proofreadBusy}>
+          <Icon name="sparkles" size={13} /> {messageBusy ? 'Improving message…' : 'Improve draft with AI'}
         </button>
-        <span className="hint">A ready-to-edit draft is filled in automatically. Use AI only to rewrite it.</span>
+        <button type="button" onClick={proofreadMessage} disabled={proofreadBusy || messageBusy}>
+          <Icon name="check" size={13} /> {proofreadBusy ? 'Checking grammar…' : 'Check grammar with AI'}
+        </button>
+        <span className="hint">Optional rewrite</span>
       </div>
       <textarea className="submission-message-draft" value={emailBody} onChange={e => setEmailBody(e.target.value)} rows={9}
         style={{ width: '100%', resize: 'vertical' }} />
       {messageError && <ErrBox>{messageError}</ErrBox>}
+      {proofreadError && <ErrBox>{proofreadError}</ErrBox>}
 
       <div className="check-row" style={{ marginTop: 8 }}>
         <input type="checkbox" checked={attachProposal} onChange={e => setAttachProposal(e.target.checked)} />
@@ -245,11 +302,23 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
         <ErrBox>Validate the proposal from the Proposal tab before attaching it. You can uncheck this option to send only the standard enclosures and optional files.</ErrBox>
       )}
 
-      <div style={{ marginTop: 8 }}>
+      <div className="submission-actions">
         <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={onFilesPicked} />
         <button className="secondary" type="button" disabled={readingFiles}
           onClick={() => fileInputRef.current?.click()}>
           <Icon name="upload" size={13} /> {readingFiles ? 'Reading files…' : `Attach files${extraFiles.length ? ` (${extraFiles.length})` : ''}`}
+        </button>
+        <button className="primary submission-draft-action" disabled={!canSend || sending}
+          title={pendingConds.length ? 'Confirm all approval conditions first'
+            : attachProposal && !proposalValidated ? 'Validate the proposal before attaching it'
+            : !fromValid ? 'Enter a valid sender email in the From field'
+            : !toValid ? 'Enter a valid recipient email in the To field'
+            : !ccValid ? 'The CC address is not valid'
+            : !emailSubject.trim() ? 'Enter a subject'
+            : !emailBody.trim() ? 'Enter a message'
+            : ''}
+          onClick={send}>
+          <Icon name="send" size={13} /> {sending ? 'Opening Gmail…' : 'Draft email'}
         </button>
         {extraFiles.map(f => (
           <div key={f.filename} className="check-row">
@@ -287,21 +356,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
         Current proposal revision is approved for customer submission.
       </div>
 
-      <div style={{ marginTop: 10 }}>
-        {sendError && <ErrBox>{sendError}</ErrBox>}
-        <button className="primary" disabled={!canSend || sending}
-          title={pendingConds.length ? 'Confirm all approval conditions first'
-            : attachProposal && !proposalValidated ? 'Validate the proposal before attaching it'
-            : !fromValid ? 'Enter a valid sender email in the From field'
-            : !toValid ? 'Enter a valid recipient email in the To field'
-            : !ccValid ? 'The CC address is not valid'
-            : !emailSubject.trim() ? 'Enter a subject'
-            : !emailBody.trim() ? 'Enter a message'
-            : ''}
-          onClick={send}>
-          <Icon name="send" size={13} /> {sending ? 'Opening Gmail…' : 'Open Gmail compose'}
-        </button>
-      </div>
+      {sendError && <ErrBox>{sendError}</ErrBox>}
       {draftOpened && !alreadySent && (
         <div className="errbox">
           Gmail draft opened — attach the downloaded files and send it in Gmail.

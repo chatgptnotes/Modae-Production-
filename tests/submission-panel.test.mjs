@@ -19,6 +19,8 @@ test('the customer submission panel exposes editable To, CC, Subject and message
   assert.match(submission, /const \[emailCc, setEmailCc\]/)
   assert.match(submission, /const \[emailSubject, setEmailSubject\]/)
   assert.match(submission, /const \[emailBody, setEmailBody\]/)
+  assert.match(submission, /Dear Sir\/Madam,/)
+  assert.match(submission, /const emailGreeting = customer\?\.name \|\| opp\.sellTo/)
   assert.match(submission, /onChange=\{e => setEmailTo\(e\.target\.value\)\}/)
   assert.match(submission, /onChange=\{e => setEmailCc\(e\.target\.value\)\}/)
   assert.match(submission, /onChange=\{e => setEmailSubject\(e\.target\.value\)\}/)
@@ -26,6 +28,8 @@ test('the customer submission panel exposes editable To, CC, Subject and message
   // Defaults still prefill from the opportunity so typing is usually unnecessary.
   assert.match(submission, /opp\.contactEmail \|\| customer\?\.email \|\| ''/)
   assert.match(submission, /Proposal — \$\{opp\.oppName\} \(\$\{opp\.id\} Rev \$\{p\.revision\}\)/)
+  assert.match(submission, /together with the applicable ModAE standard terms/)
+  assert.match(submission, /Please review the attached documents and let us know if you need any clarification or would like us to proceed/)
 })
 
 // To and CC take lists — a buyer plus their purchase department — and every
@@ -54,25 +58,45 @@ test('sending opens Gmail with the proposal and governed enclosure list', () => 
   assert.match(submission, /proposalWorkbookAttachment/)
   assert.match(submission, /enclosureAttachments\(route\)/)
   assert.match(submission, /enclosuresFor\(route\)\.map\(a => a\.filename\)/)
-  assert.match(submission, /Open Gmail compose/)
+  assert.match(submission, /Draft email/)
   assert.match(submission, /cc: emailCc/)
   assert.doesNotMatch(submission, /fetch\('\/api\/send-proposal-email'/)
 })
 
 test('proposal message can be created by AI and remains editable', () => {
-  assert.match(submission, /runText\('email\.proposal'/)
-  assert.match(submission, /AI: improve draft/)
-  assert.match(submission, /A ready-to-edit draft is filled in automatically\./)
-  assert.match(submission, /setEmailBody\(formatEmailBody\(text\)\)/)
+  assert.match(submission, /runTask\('email\.proposal'/)
+  assert.match(submission, /attachments: attachmentNames/)
+  assert.match(submission, /assembleProposalEmail\(sections\)/)
+  assert.match(submission, /Improve draft with AI/)
+  assert.match(submission, /runText\('email\.proofread'/)
+  assert.match(submission, /Check grammar with AI/)
+  assert.match(submission, /body: emailBody/)
+  assert.match(submission, /Optional rewrite/)
+  assert.match(submission, /const formatted = formatEmailBody\(assembleProposalEmail\(sections\)\)/)
+  assert.match(submission, /const hasRequiredStructure = \/standard terms\/i\.test\(formatted\)/)
+  assert.match(submission, /const hasMeaningfulChange = formatted\.trim\(\) !== emailBody\.trim\(\)/)
+  assert.match(submission, /setEmailBody\(hasRequiredStructure && hasMeaningfulChange \? formatted : improvedEmailBody\)/)
+  assert.match(submission, /confirm whether the offer meets your requirements/)
   assert.match(submission, /className="submission-message-draft" value=\{emailBody\}.*rows=\{9\}/)
   assert.match(aiApi, /'email\.proposal'/)
   assert.match(aiApi, /proposalEmailPrompt/)
   assert.match(aiApi, /emailProposalSchema/)
+  assert.match(aiApi, /validityAndNextStep/)
+  assert.match(aiApi, /attachments: \{ type: 'STRING' \}/)
+  assert.match(aiApi, /emailProofreadSchema/)
+  assert.match(aiApi, /emailProofreadPrompt/)
+  assert.match(aiApi, /professional medium-length customer email/)
+  assert.match(aiApi, /clarification: one polite sentence offering clarification/)
 })
 
 test('the automatic message draft stays comfortably readable', () => {
   const css = read('src/styles.css')
   assert.match(css, /\.submission-message-draft \{[\s\S]*min-height: 180px;/)
+})
+
+test('the draft action keeps the primary orange appearance when disabled', () => {
+  const css = read('src/styles.css')
+  assert.match(css, /\.submission-actions \.submission-draft-action:disabled \{ opacity: 1; \}/)
 })
 
 test('proposal attachment is opt-in and requires validated review', () => {

@@ -1,8 +1,7 @@
-// Standard non-catalogue rows that belong to the customer-facing Spares firm
-// offer. They are kept on the proposal so the editor, preview and export share
-// one row set; sourcing remains authoritative for catalogue product rows.
+// Optional non-catalogue rows that may be added to a customer-facing Spares
+// firm offer. They are not inserted automatically.
 import { defaultCosting } from '../seed.js'
-import { PRICE_SOURCES, sparesLineFinancials } from '../pricing.js'
+import { PRICE_SOURCES, isMissingSparesDescription, sparesLineFinancials } from '../pricing.js'
 
 export const SPARES_SUPPORT_ROWS = [
   { desc: 'Warranty Certificate', pn: 'NA', common: 1 },
@@ -11,6 +10,26 @@ export const SPARES_SUPPORT_ROWS = [
 ]
 
 export const isSparesSupportRow = line => line?.sparesSupport === true
+
+export function orderSparesLines(lines = [], getLine = line => line) {
+  return lines
+    .map((line, index) => ({ line, index }))
+    .sort((a, b) => {
+      const aSupport = Number(!!getLine(a.line)?.sparesSupport)
+      const bSupport = Number(!!getLine(b.line)?.sparesSupport)
+      return aSupport - bSupport || a.index - b.index
+    })
+    .map(entry => entry.line)
+}
+
+const isDefaultSupportRow = line => isSparesSupportRow(line)
+  && SPARES_SUPPORT_ROWS.some(row => supportKey(row) === supportKey(line))
+
+export const isManuallyAddedSparesSupportRow = line => line?.origin === 'manual' || line?.supportAddedManually === true
+export const isLegacyAutoSparesSupportRow = line => isDefaultSupportRow(line) && !isManuallyAddedSparesSupportRow(line)
+
+export const supportRowForDescription = description => SPARES_SUPPORT_ROWS.find(row =>
+  String(row.desc).trim().toLowerCase() === String(description || '').trim().toLowerCase()) || null
 
 export const isPlaceholderSparesLine = line => {
   const values = [line?.pn, line?.custRef, line?.desc].map(value => String(value || '').trim())
@@ -34,7 +53,7 @@ export function catalogueDescriptionForLine(line, priceLists = {}) {
 
 export function sparesProposalBom(lines = [], priceLists = {}, costing = defaultCosting) {
   return lines
-    .filter(line => line?.confirmed && !line.removedFromSourcing && Number(line.qty) > 0 && !isPlaceholderSparesLine(line))
+    .filter(line => line?.confirmed && !line.removedFromSourcing && Number(line.qty) > 0 && !isPlaceholderSparesLine(line) && !isMissingSparesDescription(line))
     .map(line => {
       const financials = sparesLineFinancials(line, costing)
       return {
@@ -66,23 +85,19 @@ export function sparesProposalBom(lines = [], priceLists = {}, costing = default
     })
 }
 
+export function orderedSparesProposalBom(lines = [], priceLists = {}, costing = defaultCosting) {
+  return orderSparesLines(lines).flatMap(line => {
+    if (!isSparesSupportRow(line)) return sparesProposalBom([line], priceLists, costing)
+    return withSparesSupportRows([{
+      ...line,
+      quoted: Number(line.listUnitPrice ?? line.listPrice) > 0 ? Number(line.listUnitPrice ?? line.listPrice) : '',
+    }])
+  })
+}
+
 export function withSparesSupportRows(bom = []) {
-  const existing = new Map(bom.filter(isSparesSupportRow).map(line => [supportKey(line), line]))
-  const products = bom.filter(line => !isSparesSupportRow(line))
-  const support = SPARES_SUPPORT_ROWS.map(row => ({
-    itemCategory: 'Support',
-    custRef: 'NA',
-    listPrice: 0,
-    adders: [],
-    qtyPerUnit: 0,
-    spares: 0,
-    quoted: '',
-    uom: 'EA',
-    list: 'Ad-hoc',
-    currency: 'INR',
-    sparesSupport: true,
-    ...row,
-    ...(existing.get(supportKey(row)) || {}),
-  }))
-  return [...products, ...support]
+  // Legacy builds injected the three standard rows on every Spares proposal.
+  // Drop those rows unless an explicit manual origin/marker says the user
+  // added them. Preserve every other line and its existing order.
+  return bom.filter(line => !isLegacyAutoSparesSupportRow(line))
 }

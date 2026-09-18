@@ -8,9 +8,10 @@ import {
   seedPoCompare, milestoneForStage, routeForType, contextForType,
   ROLES, B_STEPS, defaultBStepOwners, DEFAULT_WORKFLOW,
 } from './seed.js'
-import { normalizePriceFields } from './pricing.js'
+import { normalizePriceFields, reconcilePriceSource } from './pricing.js'
 import { DEFAULT_CURRENCY_RATES, normalizedCurrencyRates } from './currency.js'
 import { DEFAULT_CLAUSES } from './clauses.js'
+import { isLegacyAutoSparesSupportRow } from './proposal/sparesBoq.js'
 
 // The store's pure state layer, lifted out of store.jsx so it can be imported
 // and *run* by the tests — store.jsx is JSX and node --test cannot parse it,
@@ -31,7 +32,10 @@ const repairLegacyDescriptionMatches = s => {
   const legacy = new Map()
   const customerDescription = line => {
     const ref = String(line.custRef || '').trim()
-    return /^\d+(?:\.\d+)?$/.test(ref) ? `Customer-requested item ${ref}` : (ref || line.desc)
+    const description = String(line.desc || '').trim()
+    if (/^Customer-requested item\s+\d+(?:\.\d+)?$/i.test(description)) return ''
+    if (/^\d+(?:\.\d+)?$/.test(ref)) return ''
+    return ref || description
   }
   const repairedLines = (s.sparesLines || []).map(line => {
     const isLegacySuggestion = !line.confirmed && /^suggested\s*[·.]?\s*tier\s*4$/i.test(String(line.match || '').trim())
@@ -45,13 +49,15 @@ const repairLegacyDescriptionMatches = s => {
     const isNumberedUnconfirmedLine = !line.confirmed
       && !line.pn
       && line.priceState === 'Needs pricing'
-      && /^\d+(?:\.\d+)?$/.test(String(line.desc || '').trim())
-    if (!isLegacySuggestion && !isPreviouslyRepairedSuggestion && !isNumberedUnconfirmedLine) return line
+      && (/^\d+(?:\.\d+)?$/.test(String(line.desc || '').trim()) || /^Customer-requested item\s+\d+(?:\.\d+)?$/i.test(String(line.desc || '').trim()))
+    const isGeneratedCustomerItem = /^Customer-requested item\s+\d+(?:\.\d+)?$/i.test(String(line.desc || '').trim())
+    if (!isLegacySuggestion && !isPreviouslyRepairedSuggestion && !isNumberedUnconfirmedLine && !isGeneratedCustomerItem) return line
     legacy.set(`${line.oppId}|${String(line.pn || '').trim().toUpperCase()}|${String(line.custRef || '').trim().toLowerCase()}`, line)
     return normalizePriceFields({
       ...line,
       pn: '',
       desc: customerDescription(line),
+      missingDescription: !customerDescription(line),
       match: 'Suggested · compare',
       oem: 'TBD',
       confirmed: false,
@@ -84,6 +90,36 @@ const repairLegacyDescriptionMatches = s => {
     }
   }
   return { ...s, sparesLines: repairedLines, proposals }
+}
+
+const removeLegacyAutoSparesSupportRows = s => {
+  const sparesLines = (s.sparesLines || []).filter(line => !isLegacyAutoSparesSupportRow(line))
+  const proposals = Object.fromEntries(Object.entries(s.proposals || {}).map(([oppId, proposal]) => [
+    oppId,
+    proposal?.bom
+      ? { ...proposal, bom: proposal.bom.filter(line => !isLegacyAutoSparesSupportRow(line)) }
+      : proposal,
+  ]))
+  const changed = sparesLines.length !== (s.sparesLines || []).length
+    || Object.entries(proposals).some(([oppId, proposal]) => proposal?.bom?.length !== s.proposals?.[oppId]?.bom?.length)
+  return changed ? { ...s, sparesLines, proposals } : s
+}
+
+// Older sourcing rows used placeholders for facts that were not yet known.
+// Keep the fields available for later confirmation, but do not persist or
+// display invented manufacturer/lead-time values.
+const removeSparesPlaceholders = s => {
+  let changed = false
+  const sparesLines = (s.sparesLines || []).map(line => {
+    const next = {
+      ...line,
+      oem: line.oem === 'TBD' ? '' : line.oem,
+      leadTime: line.leadTime === 'TBC' ? '' : line.leadTime,
+    }
+    if (next.oem !== line.oem || next.leadTime !== line.leadTime) changed = true
+    return next
+  })
+  return changed ? { ...s, sparesLines } : s
 }
 
 // Exported: store.syncViewMode() calls this on resize. It used to live in
@@ -235,6 +271,8 @@ export function migrate(s) {
     })
   }
   Object.assign(s, repairLegacyDescriptionMatches(s))
+  Object.assign(s, removeLegacyAutoSparesSupportRows(s))
+  Object.assign(s, removeSparesPlaceholders(s))
   if (!Array.isArray(s.sparesAlternatives)) s.sparesAlternatives = demo ? seedSparesAlternatives : []
   if (!s.rateSheets) s.rateSheets = seedRateSheets
   if (!Array.isArray(s.svcEstimates)) s.svcEstimates = demo ? seedSvcEstimates : []
@@ -315,6 +353,13 @@ export function migrate(s) {
     const activeVersionId = list.activeVersionId || versions[versions.length - 1].id
     return [name, { ...list, versions, activeVersionId }]
   }))
+  s.sparesLines = s.sparesLines.map(line => reconcilePriceSource(line, s.priceLists, s.vendorQuotes))
+  s.proposals = Object.fromEntries(Object.entries(s.proposals || {}).map(([oppId, proposal]) => [
+    oppId,
+    proposal?.bom
+      ? { ...proposal, bom: proposal.bom.map(line => reconcilePriceSource(line, s.priceLists, s.vendorQuotes)) }
+      : proposal,
+  ]))
   if (demo && Array.isArray(s.rateSheet)) {
     const roles = new Set(s.rateSheet.map(r => r.role))
     s.rateSheet = [...s.rateSheet, ...seedRateSheet.filter(r => !roles.has(r.role))]

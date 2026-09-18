@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 import { BOQ_COLUMNS, BOQ_LANDSCAPE, boqGroups } from '../src/proposalDoc.js'
 import { normalizeProposal } from '../src/proposal/docProps.js'
+import { orderedSparesProposalBom, orderSparesLines } from '../src/proposal/sparesBoq.js'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
@@ -84,13 +85,28 @@ test('each variant carries its sample column set', () => {
   ])
 })
 
-test('Spares proposals add the three standard support rows in order', () => {
+test('Spares proposals do not add optional support rows automatically', () => {
   const p = normalizeProposal({ oppId: 'X', bom: [{ pn: 'P-1', desc: 'Probe', common: 10 }] }, { oppType: 'Spares' })
-  assert.deepEqual(p.bom.slice(-3).map(line => [line.desc, line.pn, line.common]), [
-    ['Warranty Certificate', 'NA', 1],
-    ['Country of Origin Certificate', 'NA', 1],
-    ['Freight Charges from B&K Germany To ModAE India', 'NA', 1],
-  ])
+  assert.deepEqual(p.bom.map(line => line.desc), ['Probe'])
+})
+
+test('manually added support rows are preserved', () => {
+  const p = normalizeProposal({ oppId: 'X', bom: [
+    { pn: 'P-1', desc: 'Probe', common: 10 },
+    { pn: 'NA', desc: 'Warranty Certificate', common: 1, sparesSupport: true, origin: 'manual' },
+  ] }, { oppType: 'Spares' })
+  assert.deepEqual(p.bom.map(line => line.desc), ['Probe', 'Warranty Certificate'])
+})
+
+test('Spares transfer order keeps support rows last and stable', () => {
+  const lines = [
+    { id: 'product-1', pn: 'P-1', desc: 'First', qty: 1, confirmed: true, listPrice: 10 },
+    { id: 'freight', pn: 'NA', desc: 'Freight Charges from B&K Germany To ModAE India', qty: 1, confirmed: true, listPrice: 32, sparesSupport: true, origin: 'manual' },
+    { id: 'product-2', pn: 'P-2', desc: 'Second', qty: 1, confirmed: true, listPrice: 20 },
+    { id: 'warranty', pn: 'NA', desc: 'Warranty Certificate', qty: 1, confirmed: true, listPrice: 32, sparesSupport: true, origin: 'manual' },
+  ]
+  assert.deepEqual(orderSparesLines(lines).map(line => line.id), ['product-1', 'product-2', 'freight', 'warranty'])
+  assert.deepEqual(orderedSparesProposalBom(lines).map(line => line.desc), ['First', 'Second', 'Freight Charges from B&K Germany To ModAE India', 'Warranty Certificate'])
 })
 
 // The app used to compute Qty/Unit, Common and Spares but print only the total.

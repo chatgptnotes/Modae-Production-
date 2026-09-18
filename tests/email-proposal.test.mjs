@@ -36,7 +36,7 @@ test('the enquiry sender is carried onto the opportunity', () => {
 test('the email dialog resolves a recipient without typing', () => {
   assert.match(submission, /useState\(opp\.contactEmail \|\| customer\?\.email \|\| ''\)/)
   // Subject is auto-built, and CC exists.
-  assert.match(submission, /useState\(`Proposal — \$\{opp\.oppName\} \(\$\{opp\.id\} Rev \$\{p\.revision\}\)`\)/)
+  assert.match(submission, /Please find attached our approved Techno-Commercial Proposal \$\{opp\.id\}, revision \$\{p\.revision\}/)
   assert.match(submission, /value=\{emailCc\}/)
 })
 
@@ -87,12 +87,12 @@ test('the sent email is logged against the opportunity', () => {
   assert.match(submission, /attachmentNames:/)
 })
 
-test('Email proposal is available from Quotation Submission, not Proposal', () => {
+test('the compact submission panel keeps one primary email action', () => {
   assert.doesNotMatch(proposal, /Email proposal/)
-  assert.match(submission, /<span>Customer email submission<\/span>/)
-  assert.match(submission, /<Icon name="mail" size=\{13\} \/> Email proposal/)
-  assert.match(submission, /emailToRef\.current\?\.focus\(\)/)
-  assert.ok(submission.indexOf('Email proposal') > submission.indexOf('if (!release)'))
+  assert.match(submission, /<div className="section-title">Customer email submission<\/div>/)
+  assert.match(submission, /className="submission-actions"/)
+  assert.match(submission, /className="primary submission-draft-action"/)
+  assert.doesNotMatch(submission, /emailToRef/)
 })
 
 test('proposal workspace labels distinct navigation and preview controls', () => {

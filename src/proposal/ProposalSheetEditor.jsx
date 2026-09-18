@@ -112,8 +112,8 @@ export default function ProposalSheetEditor({
                   <td className="num">
                     <span>{quantity || '—'}</span>
                   </td>
-                  {priced && <><td className="num">{proposalSymbol} {fmt(lineQuoted(l))}</td>
-                    <td className="num">{proposalSymbol} {fmt(lineQuoted(l) * quantity)}</td></>}
+                  {priced && <><td className="num">{proposalSymbol} {fmt(lineQuoted(l), 2)}</td>
+                    <td className="num">{proposalSymbol} {fmt(lineQuoted(l) * quantity, 2)}</td></>}
                 </tr>
               }
               return <tr key={i}>
@@ -124,11 +124,11 @@ export default function ProposalSheetEditor({
                 {editableFields.slice(2, 5).map(key => <td className="num" key={key}>{l[key] || '—'}</td>)}
                 <td className="num"><b>{totalQty(l)}</b></td>
                 <td>{l.uom || '—'}</td>
-                {priced && <><td className="num">{proposalSymbol} {fmt(lineQuoted(l))}</td>
-                <td className="num">{proposalSymbol} {fmt(lineQuoted(l) * totalQty(l))}</td></>}
+                {priced && <><td className="num">{proposalSymbol} {fmt(lineQuoted(l), 2)}</td>
+                <td className="num">{proposalSymbol} {fmt(lineQuoted(l) * totalQty(l), 2)}</td></>}
               </tr>
             })}</tbody>
-            {priced && <tfoot><tr><td colSpan={isSpares ? 5 : isServices ? 4 : 10}>{isSpares ? `Total For ${p.subject || opp?.oppName || 'Proposal'}` : 'Totals'}</td><td className="num">{proposalSymbol} {fmt(lineQuoted ? p.bom.reduce((sum, line) => sum + lineQuoted(line) * totalQty(line), 0) : 0)}</td></tr></tfoot>}
+            {priced && <tfoot><tr><td colSpan={isSpares ? 5 : isServices ? 4 : 10}>{isSpares ? `Total For ${p.subject || opp?.oppName || 'Proposal'}` : 'Totals'}</td><td className="num">{proposalSymbol} {fmt(lineQuoted ? p.bom.reduce((sum, line) => sum + lineQuoted(line) * totalQty(line), 0) : 0, 2)}</td></tr></tfoot>}
           </table>
         </div>
         <div className="costing-note">Internal cost and margin calculations remain protected; proposal editing is restricted to the sourcing workflow.</div>

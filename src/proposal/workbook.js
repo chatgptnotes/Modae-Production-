@@ -2,6 +2,11 @@ import XLSX from 'xlsx-js-style'
 
 const DOCUMENT_HEADER_TAGLINE = 'Your Partners In Achieving Excellence'
 
+const twoDecimals = (value, symbol = '') => `${symbol}${Number(value).toLocaleString('en-IN', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})}`
+
 export function parseProposalWorkbook(buffer, filename) {
   const workbook = XLSX.read(buffer, { type: 'array', cellStyles: true })
   return {
@@ -37,13 +42,25 @@ export function parseProposalWorkbook(buffer, filename) {
       const rows = []
       const styles = []
       const kinds = []
+      const customerCurrencySymbol = (() => {
+        for (let r = effectiveRange.s.r; r <= effectiveRange.e.r; r++) {
+          for (let c = effectiveRange.s.c; c <= effectiveRange.e.c; c++) {
+            const value = String(sheet[XLSX.utils.encode_cell({ r, c })]?.v ?? '')
+            const match = value.match(/Unit Price\s*\(([^)]+)\)/i)
+            if (match) return `${match[1].trim()} `
+          }
+        }
+        return ''
+      })()
       for (let r = effectiveRange.s.r; r <= effectiveRange.e.r; r++) {
         const row = []
         const styleRow = []
         const kindRow = []
         for (let c = effectiveRange.s.c; c <= effectiveRange.e.c; c++) {
           const cell = sheet[XLSX.utils.encode_cell({ r, c })]
-          row.push(cell?.w ?? (cell?.v == null ? '' : String(cell.v)))
+          const rawValue = cell?.w ?? (cell?.v == null ? '' : String(cell.v))
+          const isCustomerPrice = /firm|pricing|proposal/i.test(name) && (c - effectiveRange.s.c === 4 || c - effectiveRange.s.c === 5)
+          row.push(isCustomerPrice && typeof cell?.v === 'number' ? twoDecimals(cell.v, customerCurrencySymbol) : rawValue)
           styleRow.push(cell?.s ? { ...cell.s } : null)
           kindRow.push(cell?.f ? 'formula' : cell?.v == null ? 'empty' : typeof cell.v === 'number' || cell.t === 'n' ? 'number' : 'text')
         }

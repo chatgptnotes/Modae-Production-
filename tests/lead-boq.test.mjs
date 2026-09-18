@@ -38,6 +38,45 @@ test('structured AI line items take precedence over unrelated lead prose', () =>
   assert.equal(items[0].partNumber, 'IN081-3-110-50')
 })
 
+test('extraction keeps customer reference separate from the real description', () => {
+  const items = lineItemsFromLead({ ai: { lineItems: [
+    { description: 'Shielded signal cable', customerRef: '2', qty: 2 },
+  ] } })
+  assert.equal(items[0].description, 'Shielded signal cable')
+  assert.equal(items[0].customerRef, '2')
+})
+
+test('reference-only extraction remains unresolved instead of inventing an item name', () => {
+  const { extracted, workbenchRows } = buildLeadProposalData({ ai: { lineItems: [
+    { customerRef: '2', qty: 2 },
+  ] } }, seedPriceLists)
+  assert.equal(extracted[0].description, '')
+  assert.equal(workbenchRows[0].desc, '')
+  assert.equal(workbenchRows[0].missingDescription, true)
+  assert.equal(workbenchRows[0].confirmed, false)
+})
+
+test('incomplete AI reference is enriched from the matching original attachment row', () => {
+  const items = lineItemsFromLead({
+    ai: { lineItems: [{ description: '', customerRef: '9', qty: 2, evidence: 'AI extraction' }] },
+    attachments: [{ name: 'original-rfq.pdf', text: '9. Customer-requested shielded cable, 5 m — 2 nos' }],
+  })
+  assert.equal(items.length, 1)
+  assert.equal(items[0].description, 'Customer-requested shielded cable, 5 m —')
+  assert.equal(items[0].customerRef, '9')
+  assert.match(items[0].evidence, /original-rfq\.pdf/)
+})
+
+test('reference-only attachment rows do not use ordinary words as part numbers', () => {
+  const items = lineItemsFromLead({
+    attachments: [{ name: 'original-rfq.pdf', text: '9. Customer-requested item — 2 nos' }],
+  })
+  assert.equal(items.length, 1)
+  assert.equal(items[0].partNumber, '')
+  assert.equal(items[0].customerRef, '9')
+  assert.equal(items[0].description, 'Customer-requested item —')
+})
+
 test('duplicate structured line items collapse and combine quantities', () => {
   const items = lineItemsFromLead({
     ai: { lineItems: [

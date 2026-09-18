@@ -87,6 +87,19 @@ const vendorQuoteSchema = {
 const emailProposalSchema = {
   type: 'OBJECT',
   properties: {
+    greeting: { type: 'STRING' },
+    purpose: { type: 'STRING' },
+    attachments: { type: 'STRING' },
+    validityAndNextStep: { type: 'STRING' },
+    clarification: { type: 'STRING' },
+    signoff: { type: 'STRING' },
+  },
+  required: ['greeting', 'purpose', 'attachments', 'validityAndNextStep', 'clarification', 'signoff'],
+}
+
+const emailProofreadSchema = {
+  type: 'OBJECT',
+  properties: {
     text: { type: 'STRING' },
   },
   required: ['text'],
@@ -132,6 +145,19 @@ const conditionEvidenceSchema = {
     concerns: { type: 'STRING' },
   },
   required: ['assessment', 'confidence', 'evidence', 'concerns'],
+}
+
+const kycExtractSchema = {
+  type: 'OBJECT',
+  properties: {
+    documentType: { type: 'STRING' },
+    key: { type: 'STRING', enum: ['GST', 'PAN', 'CIN', 'NONE'] },
+    value: { type: 'STRING' },
+    confidence: { type: 'INTEGER' },
+    evidence: { type: 'STRING' },
+    warnings: { type: 'ARRAY', items: { type: 'STRING' } },
+  },
+  required: ['documentType', 'key', 'value', 'confidence', 'evidence', 'warnings'],
 }
 
 const templateLocationSchema = {
@@ -372,26 +398,26 @@ ${cap(JSON.stringify(p.currentFields || {}), 6000)}`
 function proposalEmailPrompt(p) {
   return `${HOUSE}
 
-Draft a concise customer email for sending an approved Techno-Commercial
-Proposal. Use a polite Indian industrial B2B tone. Do not invent commercial
-terms, prices, delivery dates, attachments or commitments. Mention the proposal
-revision, opportunity reference and validity only if supplied. Return only the
-plain-text message body, including greeting and sign-off.
+Draft a professional medium-length customer email for sending an approved
+Techno-Commercial Proposal. Use a polite Indian industrial B2B tone. Return
+structured fields only; the application will assemble the final email.
 
-Use this exact structure with a blank line between each paragraph:
-Dear [customer] Team,
+Return exactly these fields:
+- greeting: "Dear [customer] Team," or "Dear Sir/Madam,"
+- purpose: one sentence identifying the approved proposal, opportunity reference,
+  and revision.
+- attachments: one sentence naming only the supplied attachment filenames or
+  accurately describing the supplied proposal and ModAE standard terms.
+- validityAndNextStep: one or two sentences stating the supplied validity and
+  asking the customer to review and confirm whether the offer meets requirements.
+- clarification: one polite sentence offering clarification on the proposal,
+  scope, or commercial terms.
+- signoff: "Best regards,\\n[sender name]"
 
-One short paragraph explaining that the approved proposal is attached, including
-the supplied opportunity reference and revision.
-
-One short paragraph mentioning the supplied validity and requesting the
-customer's review.
-
-Best regards,
-[sender name]
-
-Do not return Markdown, HTML, headings, bullet points, or a single continuous
-paragraph. Keep the spaces and line breaks in the structure above.
+The final assembled email must be 100–150 words, use blank lines between
+sections, and contain no Markdown, HTML, headings, bullets, filler, repetition,
+or unsupported claims. Do not invent prices, delivery dates, quantities,
+commitments, technical claims, or attachment names. Use only supplied facts.
 
 OPPORTUNITY: ${cap(p.oppName, 300)} (${cap(p.oppId, 100)})
 CUSTOMER: ${cap(p.customer, 300)}
@@ -399,8 +425,30 @@ ROUTE: ${cap(p.route, 100)}
 REVISION: ${cap(p.revision, 50)}
 VALIDITY: ${cap(p.validity, 200)}
 SENDER: ${cap(p.senderName, 200)}
+ATTACHMENTS:
+${cap((p.attachments || []).join('\n'), 4000) || '(none supplied)'}
 TERMS:
 ${cap((p.terms || []).map(t => `${t.term || 'Term'}: ${t.ourResponse || t.customerAsk || t.status || ''}`).join('\n'), 6000) || 'No special terms supplied.'}`
+}
+
+function emailProofreadPrompt(p) {
+  return `${HOUSE}
+
+Proofread the manually written customer email below. Correct grammar, spelling,
+punctuation, spacing, and professional tone for an Indian industrial B2B email.
+Do not rewrite the meaning. Preserve every proposal ID, revision, date, price,
+quantity, validity period, attachment reference, recipient reference, and
+commercial term exactly. Do not add, remove, or invent facts. Return only the
+corrected plain-text email body, including its existing greeting and sign-off.
+
+PROPOSAL ID: ${cap(p.oppId, 100)}
+REVISION: ${cap(p.revision, 50)}
+CUSTOMER: ${cap(p.customer, 300)}
+VALIDITY: ${cap(p.validity, 200)}
+SENDER: ${cap(p.senderName, 200)}
+
+EMAIL TO PROOFREAD:
+${cap(p.body, 30000)}`
 }
 
 function inlineParts(payload) {
@@ -424,6 +472,25 @@ not support or Inconclusive. Keep evidence and concerns concise.
 
 CONDITION: ${cap(p.conditionText, 2000)}
 INCORPORATION NOTE: ${cap(p.incorporationNote, 2000)}`
+}
+
+function kycExtractPrompt(p) {
+  return `${HOUSE}
+
+Inspect the supplied KYC document for the requested document item. Extract only
+the identity value visibly supported by the document. Never invent or repair a
+partially readable value. Return key NONE and an empty value when the document
+does not contain the requested identity value. A scan is evidence for human
+review, not proof of authenticity or automatic approval.
+
+REQUESTED ITEM: ${cap(p.item, 200)}
+EXPECTED KEY: ${cap(p.key, 20)}
+EXTRACTED TEXT (may be empty for an image or scanned PDF):
+${cap(p.text, 30000) || '(none — inspect the supplied document image/PDF)'}
+
+Return the exact value, concise evidence, confidence from 0 to 100, and warnings
+for unreadable text, mismatch, multiple values, or a document that appears to
+be the wrong type.`
 }
 
 function templateMappingPrompt(p) {
@@ -468,7 +535,7 @@ export default async function handler(req, res) {
   const model = /^gemini-[\w.-]+$/.test(requestedModel)
     ? (MODEL_ALIASES[requestedModel] || requestedModel)
     : DEFAULT_MODEL
-  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'template.map', 'proposal.review'].includes(task)) {
+  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'kyc.extract', 'template.map', 'proposal.review'].includes(task)) {
     return fail(res, 400, 'AI_BAD_REQUEST', `Unsupported task: ${task}`)
   }
 
@@ -476,26 +543,30 @@ export default async function handler(req, res) {
     : task === 'lead.fill' ? fillPrompt(payload)
       : task === 'vendor.quote' ? vendorQuotePrompt(payload)
           : task === 'email.proposal' ? proposalEmailPrompt(payload)
-            : task === 'clarification.suggest' ? clarificationSuggestPrompt(payload)
+            : task === 'email.proofread' ? emailProofreadPrompt(payload)
+              : task === 'clarification.suggest' ? clarificationSuggestPrompt(payload)
               : task === 'spares.match' ? sparesMatchPrompt(payload)
               : task === 'clarification.answer' ? clarificationAnswerPrompt(payload)
-                : task === 'approval.condition-evidence' ? conditionEvidencePrompt(payload)
-                  : task === 'template.map' ? templateMappingPrompt(payload)
+                  : task === 'approval.condition-evidence' ? conditionEvidencePrompt(payload)
+                    : task === 'kyc.extract' ? kycExtractPrompt(payload)
+                      : task === 'template.map' ? templateMappingPrompt(payload)
                     : task === 'proposal.review' ? proposalReviewPrompt(payload)
                   : leadPrompt(payload)
   const requestBody = {
-    contents: [{ parts: [{ text: prompt }, ...(['lead.extract', 'approval.condition-evidence'].includes(task) ? inlineParts(payload) : [])] }],
-    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'template.map', 'proposal.review'].includes(task)
+    contents: [{ parts: [{ text: prompt }, ...(['lead.extract', 'approval.condition-evidence', 'kyc.extract'].includes(task) ? inlineParts(payload) : [])] }],
+    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'kyc.extract', 'template.map', 'proposal.review'].includes(task)
       ? {
           responseMimeType: 'application/json',
           responseSchema: task === 'lead.fill' ? fillSchema
             : task === 'vendor.quote' ? vendorQuoteSchema
               : task === 'email.proposal' ? emailProposalSchema
-                : task === 'clarification.suggest' ? clarificationSuggestSchema
+                : task === 'email.proofread' ? emailProofreadSchema
+                  : task === 'clarification.suggest' ? clarificationSuggestSchema
                   : task === 'spares.match' ? sparesMatchSchema
                   : task === 'clarification.answer' ? clarificationAnswerSchema
                   : task === 'approval.condition-evidence' ? conditionEvidenceSchema
-                    : task === 'template.map' ? templateMappingSchema
+                    : task === 'kyc.extract' ? kycExtractSchema
+                      : task === 'template.map' ? templateMappingSchema
                       : task === 'proposal.review' ? proposalReviewSchema
                 : leadSchema,
         }

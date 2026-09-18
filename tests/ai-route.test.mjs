@@ -115,3 +115,40 @@ test('proposal email formatter restores professional paragraph spacing', () => {
   )
   assert.equal(formatEmailBody('```text\nDear Team,\n\nPlease review.\n\nBest regards,\nModAE\n```'), 'Dear Team,\n\nPlease review.\n\nBest regards,\nModAE')
 })
+
+test('AI route accepts the protected email proofreading task', async () => {
+  const oldFetch = globalThis.fetch
+  let request
+  globalThis.fetch = async (_url, options) => {
+    request = JSON.parse(options.body)
+    return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ text: 'Dear Team,\\n\\nPlease review.\\n\\nRegards,\\nModAE' }) }] } }] }) }
+  }
+  try {
+    await withEnv('server-side-only', async () => {
+      const res = response()
+      await handler({ method: 'POST', body: { task: 'email.proofread', payload: { body: 'Dear Team, plese review.', oppId: '2609011PJS', revision: '00' } } }, res)
+      assert.equal(res.out.status, 200)
+      assert.equal(res.out.body.data.text, 'Dear Team,\\n\\nPlease review.\\n\\nRegards,\\nModAE')
+      assert.match(request.contents[0].parts[0].text, /Preserve every proposal ID, revision, date, price,[\s\S]*quantity, validity period/)
+    })
+  } finally { globalThis.fetch = oldFetch }
+})
+
+test('AI route requests structured proposal email sections', async () => {
+  const oldFetch = globalThis.fetch
+  let request
+  globalThis.fetch = async (_url, options) => {
+    request = JSON.parse(options.body)
+    return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ greeting: 'Dear Team,', purpose: 'Approved proposal 2609011PJS, Revision 00.', attachments: 'The proposal and ModAE standard terms are attached.', validityAndNextStep: 'Valid for 30 days. Please review and confirm.', clarification: 'Please contact us with any questions.', signoff: 'Best regards,\\nModAE India Pvt Ltd' }) }] } }] }) }
+  }
+  try {
+    await withEnv('server-side-only', async () => {
+      const res = response()
+      await handler({ method: 'POST', body: { task: 'email.proposal', payload: { oppId: '2609011PJS', attachments: ['proposal.xlsx', 'terms.pdf'] } } }, res)
+      assert.equal(res.out.status, 200)
+      assert.equal(res.out.body.data.greeting, 'Dear Team,')
+      assert.match(request.contents[0].parts[0].text, /Return exactly these fields:/)
+      assert.match(request.contents[0].parts[0].text, /ATTACHMENTS:\nproposal\.xlsx\nterms\.pdf/)
+    })
+  } finally { globalThis.fetch = oldFetch }
+})
