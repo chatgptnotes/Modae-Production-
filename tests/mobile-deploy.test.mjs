@@ -81,6 +81,20 @@ test('approval opportunity facts stay aligned on one desktop row', () => {
   assert.match(css, /\.approval-context-facts span \{ display: inline-flex; align-items: baseline;[\s\S]*white-space: nowrap;/)
 })
 
+test('approval BOQ opens a read-only details popup without navigation', () => {
+  const approvals = read('src/pages/Approvals.jsx')
+  assert.match(approvals, /function ApprovalBoqModal\(/)
+  assert.match(approvals, /onClick=\{\(\) => setBoqOppId\(opp\.id\)\}/)
+  assert.match(approvals, /<Modal title=\{`BOQ details — \$\{opp\.id\}`\}/)
+  assert.match(approvals, /<table className="approval-boq-table" aria-readonly="true">/)
+  assert.match(approvals, /<th>COGS \(₹\)<\/th><th>GM \(₹\)<\/th><th>Price source<\/th>/)
+  assert.match(approvals, /No BOQ lines are available for this opportunity\./)
+  assert.match(approvals, /onClose=\{\(\) => setBoqOppId\('\'\)\}/)
+  assert.doesNotMatch(approvals, /approval-boq-link" onClick=\{\(\) => nav\('\/proposal\//)
+  assert.match(css, /\.approval-boq-modal \{[\s\S]*width: min\(1220px, 96vw\)/)
+  assert.match(css, /\.approval-boq-table-wrap \{[\s\S]*overflow-x: auto;/)
+})
+
 test('approval queue copy explains the decision required', () => {
   const approvals = read('src/pages/Approvals.jsx')
   assert.match(approvals, /\{forMe\.length\} approvals waiting on you/)

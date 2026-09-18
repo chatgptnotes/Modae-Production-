@@ -2,13 +2,14 @@ import React, { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES } from '../seed.js'
-import { isApprover, canViewCommercial, ddMmmYY, displayRole, displayRoles, formatISTTime } from '../utils.js'
+import { isApprover, canViewCommercial, ddMmmYY, displayRole, displayRoles, formatISTTime, fmt } from '../utils.js'
 import { useDrawer } from '../drawer.jsx'
 import { Icon } from '../icons.jsx'
-import { AiBadge } from '../ui.jsx'
+import { AiBadge, Modal } from '../ui.jsx'
 import { runTaskResult } from '../ai.js'
 import { putFiles } from '../leadBlobs.js'
 import { pricingThresholdExceptions } from '../gates.js'
+import { buildPricing, normalizeProposal } from '../proposal/docProps.js'
 
 const NEW_APPROVAL_MS = 48 * 60 * 60 * 1000
 // Approval ts/decisionTs are full ISO stamps; ddMmmYY wants YYYY-MM-DD.
@@ -67,6 +68,73 @@ const DECISION_LABELS = {
   'Approved with conditions': 'Approve with conditions',
   'Returned': 'Send back',
   'Rejected': 'Reject',
+}
+
+function ApprovalBoqModal({ opp, proposal, store, onClose }) {
+  const normalized = normalizeProposal(proposal || { oppId: opp.id }, opp)
+  const pricing = buildPricing(store, normalized)
+  const rows = normalized.bom || []
+  const symbol = pricing.currencySymbol(normalized.sourceCurrency || 'INR')
+  const totals = pricing.computeTotals(normalized)
+  const totalMargin = totals.target - totals.cost
+
+  return (
+    <Modal title={`BOQ details — ${opp.id}`} wide className="approval-boq-modal" onClose={onClose}>
+      <div className="approval-boq-meta">
+        <span><b>Customer</b>{opp.sellTo || 'Not recorded'}</span>
+        <span><b>Route</b>{opp.route || 'Not recorded'}</span>
+        <span><b>Revision</b>{normalized.revision || '—'}</span>
+        <span><b>Lines</b>{rows.length}</span>
+      </div>
+      <div className="approval-boq-table-wrap">
+        <table className="approval-boq-table" aria-readonly="true">
+          <thead><tr>
+            <th>#</th><th>Description</th><th>Part / model</th><th>Qty</th><th>UOM</th>
+            <th>Unit price ({symbol})</th><th>Total price ({symbol})</th>
+            <th>Source price</th><th>COGS (₹)</th><th>GM (₹)</th><th>Price source</th>
+          </tr></thead>
+          <tbody>
+            {rows.map((line, index) => {
+              const qty = pricing.totalQty(line)
+              const unitQuoted = pricing.lineQuoted(line)
+              const totalQuoted = pricing.lineQuotedInr(line) * qty
+              const cogs = pricing.lineCost(line) * qty
+              const sourcePrice = pricing.linePrice(line)
+              const sourceCurrency = pricing.lineCurrency(line)
+              const source = pricing.lineSource(line)
+              return (
+                <tr key={`${line.pn || line.custRef || line.desc || 'line'}-${index}`}>
+                  <td className="num">{index + 1}</td>
+                  <td>{line.desc || line.itemCategory || '—'}</td>
+                  <td>{line.pn || line.custRef || '—'}</td>
+                  <td className="num">{qty || '—'}</td>
+                  <td>{line.uom || 'EA'}</td>
+                  <td className="num">{symbol} {fmt(unitQuoted, 2)}</td>
+                  <td className="num">₹ {fmt(totalQuoted, 2)}</td>
+                  <td className="num">{sourceCurrency} {fmt(sourcePrice, 2)}</td>
+                  <td className="num">₹ {fmt(cogs, 2)}</td>
+                  <td className="num">₹ {fmt(pricing.lineQuotedInr(line) * qty - cogs, 2)}</td>
+                  <td>{source?.full || line.priceState || 'No pricing source'}</td>
+                </tr>
+              )
+            })}
+            {!rows.length && <tr><td colSpan={11} className="hint">No BOQ lines are available for this opportunity.</td></tr>}
+          </tbody>
+          {!!rows.length && <tfoot><tr>
+            <td colSpan={6}>Totals</td>
+            <td className="num">₹ {fmt(totals.target, 2)}</td>
+            <td></td>
+            <td className="num">₹ {fmt(totals.cost, 2)}</td>
+            <td className="num">₹ {fmt(totalMargin, 2)}</td>
+            <td></td>
+          </tr></tfoot>}
+        </table>
+      </div>
+      <div className="form-actions approval-boq-actions">
+        <button type="button" onClick={onClose}>Close</button>
+      </div>
+    </Modal>
+  )
 }
 
 // Condition completion is an incorporation confirmation, not a new approval
@@ -234,6 +302,7 @@ export default function Approvals() {
   const [q, setQ] = useState('')
   const [statusF, setStatusF] = useState('')
   const [typeF, setTypeF] = useState('')
+  const [boqOppId, setBoqOppId] = useState('')
   // Approver workbench for LJS/AH/admins, plus any role named on a joint gate.
   const approverView = isApprover(role) || store.approvals.some(a => neededOf(a).includes(role))
   const canDecide = a => neededOf(a).includes(role)
@@ -292,6 +361,7 @@ export default function Approvals() {
   const OpportunityContext = ({ a }) => {
     if (!a.oppId && !a.opportunitySummary && !a.blockingReason) return null
     const opp = a.oppId ? store.opportunities.find(o => o.id === a.oppId) : null
+    const proposal = opp ? store.getProposal(opp.id) : null
     const snapshot = a.opportunitySnapshot || {}
     const summary = a.opportunitySummary || opp?.remarks || 'No opportunity summary was captured.'
     const isCommercialRequest = a.type === 'Commercial deviation'
@@ -310,7 +380,7 @@ export default function Approvals() {
           <span><b>Customer</b>{snapshot.customer || opp?.sellTo || 'Not recorded'}</span>
           <span><b>Route</b>{snapshot.route || opp?.route || 'Not recorded'}</span>
           <span><b>Milestone</b>{snapshot.milestone || opp?.milestone || opp?.stage || 'Not recorded'}</span>
-          {(snapshot.product || opp?.product) && <span><b>BOQ</b>{snapshot.product || (Array.isArray(opp.product) ? opp.product.join(', ') : opp.product)}</span>}
+          {opp && <span><b>BOQ</b><button type="button" className="approval-boq-link" onClick={() => setBoqOppId(opp.id)}>{proposal?.bom?.length ? `Open BOQ · ${proposal.bom.length} line${proposal.bom.length === 1 ? '' : 's'}` : 'Open BOQ preview'}</button></span>}
           {comm && snapshot.valueK != null && <span><b>Value</b>₹{snapshot.valueK}K</span>}
         </div>
         <div className="approval-context-reason"><b>What you're approving</b><span>{reason}</span></div>
@@ -319,6 +389,9 @@ export default function Approvals() {
             <div className="approval-context-deviation-head"><span></span><b>Customer asked</b><b>ModAE standard</b></div>
             {deviations.map((d, i) => <div key={`${d.term}-${i}`}><b>{d.term}</b><span>{d.customerAsk}</span><span>{d.ourResponse}</span></div>)}
           </div>
+        )}
+        {boqOppId === opp?.id && opp && (
+          <ApprovalBoqModal opp={opp} proposal={proposal} store={store} onClose={() => setBoqOppId('')} />
         )}
       </div>
     )
