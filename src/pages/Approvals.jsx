@@ -484,7 +484,7 @@ export default function Approvals() {
     <div className="approval-links">
       {a.oppId && <>
         <button onClick={() => drawer.open({ type: 'opp', id: a.oppId })}><Icon name="eye" size={12} /> Preview opportunity</button>
-        <button className="primary" title="Open this opportunity's Approvals tab" onClick={() => nav('/opp/' + a.oppId + '/approvals')}><Icon name="arrowRight" size={12} /> Open approval workspace</button>
+        <button className="primary" title="Open this opportunity" onClick={() => nav('/opp/' + a.oppId)}><Icon name="arrowRight" size={12} /> Open opportunity</button>
       </>}
       {a.leadId && <button className="primary" onClick={() => nav('/inbox/' + a.leadId)}><Icon name="inbox" size={12} /> Open opportunity workspace</button>}
       {a.customerName && <button onClick={() => drawer.open({ type: 'customer', id: a.customerName })}><Icon name="users" size={12} /> Open customer</button>}

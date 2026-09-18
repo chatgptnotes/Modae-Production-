@@ -39,3 +39,14 @@ test('BOQ sourcing uses clear labels, preview links, and removal confirmation', 
   assert.match(styles, /\.approval-boq-modal > \.section-title \{[\s\S]*position: sticky/)
   assert.match(styles, /\.approval-boq-table td:nth-child\(6\), \.approval-boq-table th:nth-child\(6\)/)
 })
+
+test('approval navigation opens the opportunity and does not duplicate workbench controls', () => {
+  const approvals = read('src/pages/Approvals.jsx')
+  const drawer = read('src/drawer.jsx')
+  assert.match(approvals, /title="Open this opportunity" onClick=\{\(\) => nav\('\/opp\/' \+ a\.oppId\)\}/)
+  assert.match(approvals, /> Open opportunity<\/button>/)
+  assert.doesNotMatch(approvals, /Open approval workspace/)
+  assert.match(approvals, /Preview opportunity/)
+  assert.doesNotMatch(drawer, /Open workbench/)
+  assert.match(drawer, /title="Close \(Esc\)"/)
+})
