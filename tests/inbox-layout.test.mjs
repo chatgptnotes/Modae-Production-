@@ -200,6 +200,12 @@ test('Opportunity Customer/KYC tab can complete optional customer details', () =
   assert.match(workbench, /customer-details-save-button/)
   assert.match(workbench, /detailsDirty \? 'primary customer-details-save-button is-dirty' : 'customer-details-save-button'/)
   assert.match(workbench, /disabled=\{!detailsDirty\}/)
+  assert.match(workbench, /className="dgrid2 customer-commercial-grid"/)
+  assert.match(workbench, /className="customer-commercial-field">Billing address/)
+  assert.match(css, /\.customer-commercial-grid \{[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/)
+  assert.match(css, /\.customer-commercial-field \{[\s\S]*display: grid;[\s\S]*min-width: 0;/)
+  assert.match(css, /\.customer-commercial-field input,[\s\S]*\.customer-commercial-field textarea \{[\s\S]*display: block;[\s\S]*width: 100%;[\s\S]*box-sizing: border-box;/)
+  assert.match(css, /@media \(max-width: 760px\) \{[\s\S]*\.customer-commercial-grid \{ grid-template-columns: 1fr; \}/)
 })
 
 test('red leads explain why payment confirmation is not shown', () => {

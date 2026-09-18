@@ -1005,17 +1005,17 @@ function CustomerKycTab({ opp }) {
             <p className="hint" style={{ marginTop: 4 }}>
               Optional at registration. Complete before the final quotation or invoice.
             </p>
-            <div className="dgrid2" style={{ marginTop: 8 }}>
-              <label>Billing address
+            <div className="dgrid2 customer-commercial-grid" style={{ marginTop: 8 }}>
+              <label className="customer-commercial-field">Billing address
                 <textarea className={detailChanged('billingAddress') ? 'customer-detail-changed' : undefined} rows={2} value={details.billingAddress} onChange={e => updateDetail('billingAddress', e.target.value)} placeholder="Add billing address" />
               </label>
-              <label>Shipping address
+              <label className="customer-commercial-field">Shipping address
                 <textarea className={detailChanged('shippingAddress') ? 'customer-detail-changed' : undefined} rows={2} value={details.shippingAddress} onChange={e => updateDetail('shippingAddress', e.target.value)} placeholder="Add shipping address" />
               </label>
-              <label>Shipping pincode
+              <label className="customer-commercial-field">Shipping pincode
                 <input className={detailChanged('shippingPincode') ? 'customer-detail-changed' : undefined} value={details.shippingPincode} onChange={e => updateDetail('shippingPincode', e.target.value)} placeholder="e.g. 440001" inputMode="numeric" />
               </label>
-              <label>GSTIN
+              <label className="customer-commercial-field">GSTIN
                 <input className={detailChanged('gstin') ? 'customer-detail-changed' : undefined} value={details.gstin} onChange={e => updateDetail('gstin', e.target.value.toUpperCase())} placeholder="Add GSTIN" />
               </label>
             </div>

@@ -2270,6 +2270,25 @@ tr.rowclick { cursor: pointer; }
 .drawer-form input[type=text], .drawer-form input[type=number], .drawer-form input[type=date],
 .drawer-form select, .drawer-form textarea { width: 100%; }
 .dgrid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; }
+.customer-commercial-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+.customer-commercial-field {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.2;
+}
+.customer-commercial-field input,
+.customer-commercial-field textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
 .dgrid2 input.customer-detail-changed,
 .dgrid2 textarea.customer-detail-changed {
   border-color: var(--action-accent);
@@ -2298,6 +2317,9 @@ tr.rowclick { cursor: pointer; }
   border-color: var(--action-secondary-border);
   color: var(--action-secondary-text);
   opacity: .55;
+}
+@media (max-width: 760px) {
+  .customer-commercial-grid { grid-template-columns: 1fr; }
 }
 .drawer .ro {
   background: var(--header-fill); color: var(--text-muted); border: 1px solid var(--grid-line);
