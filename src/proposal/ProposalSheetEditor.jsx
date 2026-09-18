@@ -87,12 +87,12 @@ export default function ProposalSheetEditor({
              )}
              <thead><tr>
               {isSpares || isServices ? (
-                <><th>Sl.</th><th>{isServices ? 'Scope / activity' : 'Item Description'}</th>{isSpares && <th>Proposed Model/Part No.</th>}<th>{isServices ? 'Days / hours' : 'Qty'}</th>
+                <><th>Sl.</th><th>{isServices ? 'Scope / activity' : 'Scope / Equipment Description'}</th>{isSpares && <th>Proposed Model/Part No.</th>}<th>{isServices ? 'Days / hours' : 'Quantity'}</th>
                   {priced && <><th>{isServices ? `Rate ${proposalSymbol}` : `Unit Price ${proposalSymbol}`}</th><th>Total Price {proposalSymbol}</th></>}
                 </>
               ) : (
                 <><th>Sl.</th><th>Item category</th><th>Description</th><th>Model / part number</th>
-                  <th>Qty/unit</th><th>Common</th><th>Spares</th><th>Total qty</th><th>UOM</th>
+                  <th>Quantity / unit</th><th>Common</th><th>Spares</th><th>Total quantity</th><th>UOM</th>
                   {priced && <><th>Unit price ₹</th><th>Total price ₹</th></>}
                 </>
               )}

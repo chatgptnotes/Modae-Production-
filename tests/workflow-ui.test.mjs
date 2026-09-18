@@ -67,7 +67,7 @@ test('Brownfield sign-off belongs to the opportunity salesperson or LJS', () => 
 test('Brownfield sign-off UI identifies the opportunity salesperson, not step owners', () => {
   const panel = read('src/workbench/BSteps.jsx')
   assert.match(panel, /canSignBStep\(store\.role, opp\)/)
-  assert.match(panel, /Assigned salesperson: \{displayRole\(opp\.owner\)\}/)
+  assert.match(panel, /Opportunity Owner: \{displayRole\(opp\.owner\)\}/)
   assert.doesNotMatch(panel, /Responsible person/)
   assert.doesNotMatch(panel, /assignBStep\(/)
 })
@@ -217,7 +217,7 @@ test('manual sourcing lines are entered through a popup form', () => {
 test('sourcing separates part identity and keeps support charges last', () => {
   const spares = read('src/workbench/WbSpares.jsx')
   const styles = read('src/styles.css')
-  assert.match(spares, /<th>Part number \/ customer reference<\/th><th>Description<\/th><th>Source<\/th>/)
+  assert.match(spares, /<th>Part number \/ customer reference<\/th><th>Description<\/th><th>Price source<\/th><th>Quantity<\/th>/)
   assert.match(spares, /orderSparesLines\(lineItems, item => item\.sourceLine\)/)
   assert.match(spares, /isLegacyAutoSparesSupportRow\(l\)/)
   assert.match(spares, /const sourcingPartReference = line =>/)

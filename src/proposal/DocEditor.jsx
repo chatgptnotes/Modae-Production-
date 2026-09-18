@@ -214,7 +214,7 @@ export default function DocEditor({ p, opp, save, files, totals, priced }) {
 
       <Section title="2 · Scope of supply">
         <table className="sheet">
-          <thead><tr><th>#</th><th>Category</th><th>Offered model</th><th className="num">Qty</th><th className="num">Spec points</th></tr></thead>
+          <thead><tr><th>#</th><th>Category</th><th>Offered model</th><th className="num">Quantity</th><th className="num">Spec points</th></tr></thead>
           <tbody>
             {doc.scope.map((it, i) => (
               <tr key={i}>

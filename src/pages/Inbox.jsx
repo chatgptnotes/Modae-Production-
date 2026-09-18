@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useStore, nextOppId } from '../store.jsx'
-import { ddMmmYY, ageDays, isTodayIST, gmailComposeHref, displayRole, formatISTTime, formatISTDate, nowIST } from '../utils.js'
+import { ddMmmYY, ageDays, isTodayIST, gmailComposeHref, displayRole, formatISTTime, formatISTDate, nowIST, productDisplayLabel } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { Chip, ConfChip, WarnBox, ErrBox, Modal } from '../ui.jsx'
@@ -834,7 +834,7 @@ function PasteLeadModal({ onClose }) {
 const PARSE_FIELDS = [
   ['Sell-to', 'sellTo'], ['Category', 'category'], ['Location', 'location'],
   ['EUC name', 'eucName'], ['EUC location', 'eucLocation'], ['Opp name', 'oppName'],
-  ['Opp type', 'oppType'], ['BU', 'bu'], ['Segment', 'segment'], ['Product', 'product'],
+  ['Opp type', 'oppType'], ['BU', 'bu'], ['Segment', 'segment'], ['Equipment / Product Family', 'product'],
   ['Contact person', 'contactPerson'], ['Contact phone', 'contactPhone'],
 ]
 
@@ -1113,7 +1113,7 @@ function StructuredItemsTable({ items, title = 'Requested items', className = ''
       <div className="converted-section-title" id={`${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-title`}>{title}</div>
       <div className="converted-table-wrap">
         <table>
-          <thead><tr><th scope="col">Part description</th><th scope="col">Qty</th></tr></thead>
+          <thead><tr><th scope="col">Part description</th><th scope="col">Quantity</th></tr></thead>
           <tbody>{items.map((item, index) => (
             <tr key={`${item.description || item.desc}-${index}`}>
               <td>{item.description || item.desc || item.partNumber || 'Unspecified item'}</td>
@@ -1191,7 +1191,7 @@ function ReadOnlyDecisionForm({ lead, items = [] }) {
         <p className="lead-boq-preview-meta">Extracted bill of quantities for <b>{lead.subject || 'this enquiry'}</b>.</p>
         <div className="lead-boq-preview-table-wrap">
           <table className="lead-boq-preview-table">
-            <thead><tr><th>Sr. No.</th><th>Part / description</th><th>Part number</th><th>Qty</th><th>UOM</th></tr></thead>
+            <thead><tr><th>Sr. No.</th><th>Part / description</th><th>Part number</th><th>Quantity</th><th>UOM</th></tr></thead>
             <tbody>{boqItems.map((item, index) => <tr key={`${item.partNumber || item.pn || item.description || 'line'}-${index}`}>
               <td className="num">{index + 1}</td>
               <td>{item.description || item.desc || '—'}</td>
@@ -1758,7 +1758,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
       updateLeadField(next, label, draft[key], 'Customer'), ai.fields)
     const nextFields = updateLeadField(updateLeadField(updateLeadField(updateLeadField(identityFields,
       'Location', draft.location, 'Customer'), 'Opp Type', draft.oppType),
-      'BU / Segment', `${draft.bu} / ${draft.segment}`), 'Product', draft.product)
+      'BU / Segment', `${draft.bu} / ${draft.segment}`), 'Equipment / Product Family', productDisplayLabel(draft.product))
     const scopedFields = updateLeadField(nextFields, 'Opportunity scope', draft.scope, 'RFQ')
     const nextMissing = reconcileMissingWithDecisions(ai.missing, draft, scopedFields, ai.lineItems)
     const fastTrack = isFastTrackLead({ ...lead, customerStatus: draft.customerStatus }, store.config, customer)
@@ -2267,10 +2267,10 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
               {SEGMENTS.map(segment => <option key={segment}>{segment}</option>)}
             </select>{decisionAiStatus('segment')}</div>
           </label>
-          <label><span className="decision-field-heading">Product {decisionAiMeta('product', false)}</span>
+          <label><span className="decision-field-heading">Equipment / Product Family {decisionAiMeta('product', false)}</span>
             <div className="decision-value-row"><select value={decisionDraft.product} disabled={lead.status === 'Dropped'}
               onChange={e => setDecisionDraft({ ...decisionDraft, product: e.target.value })}>
-              {PRODUCTS.map(product => <option key={product}>{product}</option>)}
+              {PRODUCTS.map(product => <option key={product} value={product}>{product === 'Various' ? 'Multiple equipment items' : product}</option>)}
             </select>{decisionAiStatus('product')}</div>
           </label>
         </div>
@@ -2582,10 +2582,10 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
                   {SEGMENTS.map(segment => <option key={segment}>{segment}</option>)}
                 </select>
               </label>
-              <label>Product {decisionAiMeta('product')}
+              <label>Equipment / Product Family {decisionAiMeta('product')}
                 <select value={decisionDraft.product} disabled={lead.status === 'Dropped'}
                   onChange={e => setDecisionDraft({ ...decisionDraft, product: e.target.value })}>
-                  {PRODUCTS.map(product => <option key={product}>{product}</option>)}
+                {PRODUCTS.map(product => <option key={product} value={product}>{product === 'Various' ? 'Multiple equipment items' : product}</option>)}
                 </select>
               </label>
             </div>
@@ -2872,7 +2872,7 @@ function LegacyLeadDetail({ lead }) {
       {(p.items || []).length > 0 && (
         <div className="sheet-wrap" style={{ marginTop: 8 }}>
           <table className="sheet">
-            <thead><tr><th>Item</th><th>P/N</th><th>Qty</th></tr></thead>
+            <thead><tr><th>BOQ line</th><th>P/N</th><th>Quantity</th></tr></thead>
             <tbody>
               {p.items.map((it, i) => (
                 <tr key={i}><td>{it.desc}</td><td>{it.pn || '—'}</td><td>{it.qty}</td></tr>

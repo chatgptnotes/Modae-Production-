@@ -96,7 +96,7 @@ export function resolvePriceSource(line, priceLists = {}, adhocParts = [], vendo
     .find(({ quote, price }) => (line?.id && price.lineId === line.id) || samePart(price.pn, pn))
   if (vendorPrice) return {
     source: PRICE_SOURCES.VENDOR,
-    sourceName: vendorPrice.quote.manufacturer || 'Vendor',
+    sourceName: vendorPrice.quote.manufacturer || 'Supplier',
     sourceVersion: '',
     sourceRef: vendorPrice.price.quoteRef || vendorPrice.quote.quoteRef || vendorPrice.quote.id || '',
     sourceDate: vendorPrice.price.appliedAt || vendorPrice.quote.receivedAt || vendorPrice.quote.sentAt || '',
@@ -108,7 +108,7 @@ export function resolvePriceSource(line, priceLists = {}, adhocParts = [], vendo
   const adhoc = (adhocParts || []).find(row => samePart(row.pn, pn))
   if (adhoc) return {
     source: PRICE_SOURCES.VENDOR,
-    sourceName: adhoc.supplier || 'Vendor reference',
+    sourceName: adhoc.supplier || 'Supplier quotation/reference',
     sourceVersion: '',
     sourceRef: adhoc.pn,
     sourceDate: adhoc.date || '',

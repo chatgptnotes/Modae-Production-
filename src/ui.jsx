@@ -11,10 +11,10 @@ export const Chip = ({ tone = '', children, title }) => (
 )
 
 // AI-confidence chip; thresholds come from Admin config (high ≥90, med ≥75).
-export function ConfChip({ conf, thresholds = { high: 90, med: 75 } }) {
+export function ConfChip({ conf, thresholds = { high: 90, med: 75 }, label = '' }) {
   const pct = conf > 1 ? conf : Math.round(conf * 100)
   const tone = pct >= thresholds.high ? 'conf-hi' : pct >= thresholds.med ? 'conf-med' : 'conf-lo'
-  return <span className={`chip ${tone}`} title={`AI confidence ${pct}%`}>{pct}%</span>
+  return <span className={`chip ${tone}`} title={`AI confidence ${pct}%`}>{label ? `${label} · ` : ''}{pct}%</span>
 }
 
 // Customer classification chip (Green / Blue / Amber / Red).

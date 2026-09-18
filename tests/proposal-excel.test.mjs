@@ -25,14 +25,14 @@ const input = {
 test('proposal Excel rows contain the cover and customer pricing sheets', () => {
   const { cover, pricing } = proposalWorkbookRows(input)
   assert.equal(cover[6][1], '2608227RS')
-  assert.deepEqual(pricing[2], ['Sl.', 'Item Description', 'Proposed Model/Part No.', 'Qty', 'Unit Price ₹', 'Total Price ₹'])
+  assert.deepEqual(pricing[2], ['Sl.', 'Scope / Equipment Description', 'Proposed Model/Part No.', 'Quantity', 'Unit Price ₹', 'Total Price ₹'])
   assert.deepEqual(pricing[3], [1, 'Probe', 'P-1', 3, 100, 300])
   assert.deepEqual(pricing.at(-1), ['1. Validity', '30 days'])
 })
 
 test('restricted Excel rows omit customer prices', () => {
   const { pricing } = proposalWorkbookRows({ ...input, priced: false })
-  assert.deepEqual(pricing[2], ['Sl.', 'Item Description', 'Proposed Model/Part No.', 'Qty'])
+  assert.deepEqual(pricing[2], ['Sl.', 'Scope / Equipment Description', 'Proposed Model/Part No.', 'Quantity'])
   assert.equal(pricing[3].length, 4)
 })
 

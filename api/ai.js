@@ -147,6 +147,17 @@ const conditionEvidenceSchema = {
   required: ['assessment', 'confidence', 'evidence', 'concerns'],
 }
 
+const approvalCommentSchema = {
+  type: 'OBJECT',
+  properties: {
+    classification: { type: 'STRING', enum: ['clear', 'conditional', 'unclear'] },
+    summary: { type: 'STRING' },
+    requiredActions: { type: 'ARRAY', items: { type: 'STRING' } },
+    confidence: { type: 'INTEGER' },
+  },
+  required: ['classification', 'summary', 'requiredActions', 'confidence'],
+}
+
 const kycExtractSchema = {
   type: 'OBJECT',
   properties: {
@@ -474,6 +485,26 @@ CONDITION: ${cap(p.conditionText, 2000)}
 INCORPORATION NOTE: ${cap(p.incorporationNote, 2000)}`
 }
 
+function approvalCommentPrompt(p) {
+  return `${HOUSE}
+
+Review an approver's decision comment for an internal approval request.
+Classify the comment only; do not make the approval decision.
+
+Use "conditional" when the comment says approval depends on a correction,
+document, value, confirmation, or other future action. Use "clear" when the
+comment is a normal unconditional approval or rejection note. Use "unclear"
+when the meaning cannot be determined safely.
+
+For a conditional or rejection comment, extract short, actionable correction
+items. Do not invent work that is not stated. If there are no separate actions,
+use the original meaning as one action. Return concise plain language.
+
+DECISION: ${cap(p.decision, 30)}
+COMMENT:
+${cap(p.comment, 5000)}`
+}
+
 function kycExtractPrompt(p) {
   return `${HOUSE}
 
@@ -535,7 +566,7 @@ export default async function handler(req, res) {
   const model = /^gemini-[\w.-]+$/.test(requestedModel)
     ? (MODEL_ALIASES[requestedModel] || requestedModel)
     : DEFAULT_MODEL
-  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'kyc.extract', 'template.map', 'proposal.review'].includes(task)) {
+  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review'].includes(task)) {
     return fail(res, 400, 'AI_BAD_REQUEST', `Unsupported task: ${task}`)
   }
 
@@ -547,14 +578,15 @@ export default async function handler(req, res) {
               : task === 'clarification.suggest' ? clarificationSuggestPrompt(payload)
               : task === 'spares.match' ? sparesMatchPrompt(payload)
               : task === 'clarification.answer' ? clarificationAnswerPrompt(payload)
-                  : task === 'approval.condition-evidence' ? conditionEvidencePrompt(payload)
+                    : task === 'approval.condition-evidence' ? conditionEvidencePrompt(payload)
+                      : task === 'approval.comment-review' ? approvalCommentPrompt(payload)
                     : task === 'kyc.extract' ? kycExtractPrompt(payload)
                       : task === 'template.map' ? templateMappingPrompt(payload)
                     : task === 'proposal.review' ? proposalReviewPrompt(payload)
                   : leadPrompt(payload)
   const requestBody = {
     contents: [{ parts: [{ text: prompt }, ...(['lead.extract', 'approval.condition-evidence', 'kyc.extract'].includes(task) ? inlineParts(payload) : [])] }],
-    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'kyc.extract', 'template.map', 'proposal.review'].includes(task)
+    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review'].includes(task)
       ? {
           responseMimeType: 'application/json',
           responseSchema: task === 'lead.fill' ? fillSchema
@@ -565,6 +597,7 @@ export default async function handler(req, res) {
                   : task === 'spares.match' ? sparesMatchSchema
                   : task === 'clarification.answer' ? clarificationAnswerSchema
                   : task === 'approval.condition-evidence' ? conditionEvidenceSchema
+                    : task === 'approval.comment-review' ? approvalCommentSchema
                     : task === 'kyc.extract' ? kycExtractSchema
                       : task === 'template.map' ? templateMappingSchema
                       : task === 'proposal.review' ? proposalReviewSchema

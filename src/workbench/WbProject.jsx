@@ -76,7 +76,7 @@ export default function WbProject({ opp, openBuilder }) {
         )}
         <div className="sheet-wrap">
           <table className="sheet">
-            <thead><tr><th>Part number</th><th>Description</th><th>Qty/Unit</th><th>Common</th><th>Spares</th><th>Compliance</th></tr></thead>
+            <thead><tr><th>Part number</th><th>Scope description</th><th>Quantity / Unit</th><th>Common</th><th>Spares</th><th>Compliance</th></tr></thead>
             <tbody>
               {rows.map((l, i) => (
                 <tr key={i}>
@@ -93,7 +93,7 @@ export default function WbProject({ opp, openBuilder }) {
           </table>
         </div>
         <p style={{ marginTop: 8 }}>
-          <Link to={`/proposal/${opp.id}`}><Icon name="fileSheet" size={13} /> Open full workbook (Priced BoQ)</Link>
+          <Link to={`/proposal/${opp.id}`}><Icon name="fileSheet" size={13} /> Open priced BOQ workbook</Link>
         </p>
       </div>
     )

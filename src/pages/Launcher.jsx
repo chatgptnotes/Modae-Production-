@@ -16,7 +16,7 @@ const SCENARIOS = [
   { n: 1, icon: 'clipboardCheck', label: 'Spares benchmark — enquiry 14716', hint: 'GeM five-item B&K enquiry → priced firm offer', persona: 'RS', to: '/inbox/LD-208' },
   { n: 2, icon: 'checkCircle', label: 'Green spares fast-track', hint: 'Green customer post-visit — quote within 24h', persona: 'RS', to: '/inbox/LD-203' },
   { n: 3, icon: 'alert', label: 'Missing info & clarification', hint: 'Low-confidence GeM bid, clarification loop', persona: 'PP', to: '/inbox/LD-205' },
-  { n: 4, icon: 'refresh', label: 'Obsolete product → equivalent', hint: 'Vibrotest 60 → VST-100 suggestion', persona: 'PP', to: '/inbox/LD-204' },
+  { n: 4, icon: 'refresh', label: 'Obsolete equipment → equivalent', hint: 'Vibrotest 60 → VST-100 suggestion', persona: 'PP', to: '/inbox/LD-204' },
   { n: 5, icon: 'layers', label: 'Project workbench deep-dive', hint: 'BOQ, signals, compliance, commercial gate', persona: 'RS', to: '/opp/2608222RS/proposal' },
   { n: 6, icon: 'flag', label: 'Red-class continuation (AP-1)', hint: 'Joint LJS+AH clearance, prepay-only terms', persona: 'RS', to: '/inbox/LD-206' },
 ]

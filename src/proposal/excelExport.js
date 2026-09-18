@@ -43,7 +43,7 @@ export function proposalWorkbookRows({ p, opp, doc, priced, totalQty, lineQuoted
     ['', doc.preparedBy?.division || ''],
   ]
 
-  const priceHeader = route === 'Spares' ? ['Sl.', 'Item Description', 'Proposed Model/Part No.', 'Qty'] : ['Sl.', 'Item Description', 'Model / Part Number', 'Total Qty', 'UOM']
+  const priceHeader = route === 'Spares' ? ['Sl.', 'Scope / Equipment Description', 'Proposed Model/Part No.', 'Quantity'] : ['Sl.', 'Scope / Equipment Description', 'Model / Part Number', 'Total Quantity', 'UOM']
   if (priced) priceHeader.push(`Unit Price ${symbol}`, `Total Price ${symbol}`)
   const rows = (p.bom || []).map((line, i) => {
     const qty = totalQty(line)
@@ -153,7 +153,7 @@ export function proposalWorkbookBase64(args) {
 // no standard terms or internal workbook sheets are sent without a choice.
 export function buildPricedBoqWorkbook({ p, opp, priced, totalQty, lineQuoted, route }) {
   const symbol = currencySymbol(p.sourceCurrency || 'INR')
-  const headers = route === 'Spares' ? ['Sl.', 'Item Description', 'Proposed Model/Part No.', 'Qty'] : ['Sl.', 'Item Description', 'Model / Part Number', 'Total Qty', 'UOM']
+  const headers = route === 'Spares' ? ['Sl.', 'Scope / Equipment Description', 'Proposed Model/Part No.', 'Quantity'] : ['Sl.', 'Scope / Equipment Description', 'Model / Part Number', 'Total Quantity', 'UOM']
   if (priced) headers.push(`Unit Price ${symbol}`, `Total Price ${symbol}`)
   const rows = (p.bom || []).map((line, i) => {
     const qty = totalQty(line)

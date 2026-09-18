@@ -273,7 +273,7 @@ export default function Analytics({ embedded = false }) {
   // Active chips — the locked owner is scope, not a chip the user can drop.
   const CHIP_LABELS = {
     owner: 'Owner', customer: 'Customer', bu: 'BU', oppType: 'Opp type',
-    segment: 'Segment', product: 'Product', stage: 'Stage', prob: 'Probability', status: 'Status',
+  segment: 'Segment', product: 'Equipment / Product Family', stage: 'Stage', prob: 'Probability', status: 'Status',
   }
   const chips = Object.keys(CHIP_LABELS)
     .filter(k => f[k] !== 'All' && !(k === 'owner' && lockedOwner))
@@ -412,7 +412,7 @@ export default function Analytics({ embedded = false }) {
           <Field label="BU" value={f.bu} onChange={v => set('bu', v)} options={['All', ...BUS]} />
           <Field label="Opp type" value={f.oppType} onChange={v => set('oppType', v)} options={['All', ...OPP_TYPES]} />
           <Field label="Segment" value={f.segment} onChange={v => set('segment', v)} options={['All', ...SEGMENTS]} />
-          <Field label="Product" value={f.product} onChange={v => set('product', v)} options={['All', ...PRODUCTS]} />
+          <Field label="Equipment / Product Family" value={f.product} onChange={v => set('product', v)} options={['All', ...PRODUCTS.map(p => p === 'Various' ? { value: 'Various', label: 'Multiple equipment items' } : p)]} />
           <Field label="Stage" value={f.stage} onChange={v => set('stage', v)} options={['All', ...STAGES]} />
           <Field label="Probability" value={f.prob} onChange={v => set('prob', v)} options={['All', ...PROB_LEVELS]} />
           <Field label="Status" value={f.status} onChange={v => set('status', v)} options={['All', 'Open', 'Closed']} />

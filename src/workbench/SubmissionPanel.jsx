@@ -66,10 +66,10 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
   const [emailSubject, setEmailSubject] = useState(`Proposal — ${opp.oppName} (${opp.id} Rev ${p.revision})`)
   const [emailBody, setEmailBody] = useState(defaultEmailBody)
 
-  // Scoped to the proposal's current revision — a quote revised after release
-  // locks submission again until the revision is approved.
-  const serviceRelease = opp.route === 'Service' ? serviceApprovalSet(store.approvals, opp.id)[0].approved : null
-  const { release: genericRelease } = releaseState(p, store.approvals, opp.id)
+  // A quote remains releasable after unrelated edits; material customer-facing
+  // changes reopen the release gate.
+  const serviceRelease = opp.route === 'Service' ? serviceApprovalSet(store.approvals, opp.id, p, opp)[0].approved : null
+  const { release: genericRelease } = releaseState(p, store.approvals, opp.id, opp)
   const release = opp.route === 'Service' ? serviceRelease : genericRelease
   const pendingConds = store.approvals
     .filter(a => a.oppId === opp.id && a.status === 'Approved with conditions')

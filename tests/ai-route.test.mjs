@@ -152,3 +152,31 @@ test('AI route requests structured proposal email sections', async () => {
     })
   } finally { globalThis.fetch = oldFetch }
 })
+
+test('AI route reviews approval comments without making the approval decision', async () => {
+  const oldFetch = globalThis.fetch
+  let request
+  globalThis.fetch = async (_url, options) => {
+    request = JSON.parse(options.body)
+    return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({
+      classification: 'conditional',
+      summary: 'Approval depends on receiving the signed customer form.',
+      requiredActions: ['Upload the signed customer form.'],
+      confidence: 96,
+    }) }] } }] }) }
+  }
+  try {
+    await withEnv('server-side-only', async () => {
+      const res = response()
+      await handler({ method: 'POST', body: {
+        task: 'approval.comment-review',
+        payload: { decision: 'Approved', comment: 'Approved subject to signed customer form.' },
+      } }, res)
+      assert.equal(res.out.status, 200)
+      assert.equal(res.out.body.data.classification, 'conditional')
+      assert.equal(res.out.body.data.requiredActions[0], 'Upload the signed customer form.')
+      assert.match(request.contents[0].parts[0].text, /do not make the approval decision/i)
+      assert.equal(request.generationConfig.responseMimeType, 'application/json')
+    })
+  } finally { globalThis.fetch = oldFetch }
+})

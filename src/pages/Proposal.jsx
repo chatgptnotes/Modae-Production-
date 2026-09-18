@@ -6,6 +6,7 @@ import { effectiveRate, fmt, exportCSV, canPriceProposal, isAdminRole, clampCost
 import { useFormulaBar } from '../formulabar.jsx'
 import { Icon, ModaeImageLogo } from '../icons.jsx'
 import { Modal } from '../ui.jsx'
+import AttachmentViewer from '../AttachmentViewer.jsx'
 import { readiness, isBlocked } from '../gates.js'
 import { docModel, docRoute, enclosuresFor, MODAE_COMPANY } from '../proposalDoc.js'
 import DocEditor from '../proposal/DocEditor.jsx'
@@ -20,7 +21,7 @@ import { parseProposalWorkbook as parseRenderedWorkbook } from '../proposal/work
 import { isWorkflowAvailable, routeForType } from '../seed.js'
 import { buildLeadProposalData } from '../leadBoq.js'
 import { putFiles } from '../leadBlobs.js'
-import { uploadOppFile } from '../filestore.js'
+import { fmtSize, uploadOppFile } from '../filestore.js'
 import DetailTabs from '../DetailTabs.jsx'
 import { isLegacyAutoSparesSupportRow, isSparesSupportRow, orderedSparesProposalBom, withSparesSupportRows } from '../proposal/sparesBoq.js'
 import { runTaskResult } from '../ai.js'
@@ -129,7 +130,7 @@ const rememberOverriddenFindings = (issues, override) => issues.map(issue => {
 const informationalReviewFinding = issue => {
   const text = String(issue?.text || '')
   const code = String(issue?.code || '')
-  if (code === 'line.part-number-missing' || /one or more line items are missing a model or part number/i.test(text)) {
+  if (code === 'line.part-number-missing' || /one or more (?:line items|BOQ lines) are missing a model or part number/i.test(text)) {
     return { ...issue, code: 'line.part-number-missing', severity: 'info' }
   }
   if (code === 'terms.missing' || /commercial terms have not been added yet/i.test(text)) {
@@ -406,9 +407,9 @@ function RouteTemplateTab({ route, tab, p, doc, priced, lineQuoted }) {
     return <div className="form-card route-template-panel">
       <div className="section-title">{title}</div>
       <p className="hint">{route === 'Services' ? 'Service template: priced activities, man-days, mobilisation, and payment milestones.' : 'Spares template: offered parts, quantities, unit prices, and total prices.'}</p>
-      <table className="sheet"><thead><tr><th>#</th><th>Item / scope description</th><th>Proposed model / part no.</th><th>Qty</th>{priced && <th>{`Unit price (${proposalSymbol})`}</th>}</tr></thead><tbody>
+      <table className="sheet"><thead><tr><th>#</th><th>Scope / equipment description</th><th>Proposed model / part no.</th><th>Quantity</th>{priced && <th>{`Unit price (${proposalSymbol})`}</th>}</tr></thead><tbody>
         {rows.map(row => <tr key={row.index}><td>{row.index}</td><td>{row.desc || row.itemCategory || '—'}</td><td>{row.pn || '—'}</td><td className="num">{row.qty}</td>{priced && <td className="num">{proposalSymbol} {fmt(lineQuoted(row), 2)}</td>}</tr>)}
-        {!rows.length && <tr><td colSpan={priced ? 5 : 4} className="hint">No line items captured yet.</td></tr>}
+        {!rows.length && <tr><td colSpan={priced ? 5 : 4} className="hint">No BOQ lines captured yet.</td></tr>}
       </tbody></table>
     </div>
   }
@@ -491,6 +492,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   const [templateError, setTemplateError] = useState('')
   const [reviewBusy, setReviewBusy] = useState(false)
   const [validateChoice, setValidateChoice] = useState(false)
+  const [reviewedUploadViewing, setReviewedUploadViewing] = useState(false)
   const uploadInputRef = useRef(null)
   const [reviewMessage, setReviewMessage] = useState('')
   const [reviewError, setReviewError] = useState('')
@@ -889,7 +891,9 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       ? { tone: 'success', title: 'Review complete', text: 'This proposal is ready for approval.' }
       : reviewStatus === 'Override accepted'
         ? { tone: 'override', title: 'Review override accepted', text: 'The findings were saved and the proposal can continue through approval.' }
-        : { tone: 'neutral', title: 'Review the AI draft before approval', text: 'Edit inline, download and revise externally, or upload the reviewed workbook, then use Validate review above.' }
+        : p.reviewedUpload
+          ? { tone: 'neutral', title: 'Uploaded proposal review', text: 'This uploaded workbook is being checked against the opportunity and its approval history.' }
+          : { tone: 'neutral', title: 'Review the generated proposal', text: 'Validate the system-generated workbook before requesting approval.' }
   const approvalRequired = blockers.some(bl => bl.approvalType && bl.severity !== 'wait') || pendingForOpp.length > 0
   const readinessSummary = readinessSummaryFor({ blockers, pendingForOpp, submitted })
 
@@ -940,8 +944,8 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
         note: 'Proposal edited and revalidated', status: 'Revised', type: 'Other',
         snapshot: snapshotProposal(review),
       }] : (review.revisions || [])
-      if (!review.bom?.length && route !== 'Services') issues.push({ severity: 'block', text: 'No proposal line items were found.' })
-      if (review.bom?.some(line => !String(line.pn || '').trim())) issues.push({ severity: 'info', code: 'line.part-number-missing', text: 'One or more line items are missing a model or part number.' })
+      if (!review.bom?.length && route !== 'Services') issues.push({ severity: 'block', text: 'No BOQ lines were found in the proposal.' })
+      if (review.bom?.some(line => !String(line.pn || '').trim())) issues.push({ severity: 'info', code: 'line.part-number-missing', text: 'One or more BOQ lines are missing a model or part number.' })
       if (review.bom?.some(line => Number(totalQty(line)) <= 0)) issues.push({ severity: 'block', text: 'Every proposal line must have a quantity greater than zero.' })
       if (review.bom?.some(line => line.quoted !== '' && Number(line.quoted) < 0)) issues.push({ severity: 'block', text: 'Negative quoted prices are not allowed.' })
       if (!review.terms?.length) issues.push({ severity: 'info', code: 'terms.missing', text: 'Commercial terms have not been added yet.' })
@@ -991,6 +995,24 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     }
   }
 
+  const validateAiDraft = async () => {
+    setValidateChoice(false)
+    const uploaded = p.reviewedUpload
+    const { reviewedUpload, ...withoutUpload } = p
+    const next = {
+      ...withoutUpload,
+      ...(uploaded?.baseProposal || {}),
+      reviewStatus: 'Needs review',
+      reviewIssues: [],
+      reviewCompletedAt: null,
+      reviewNeedsRevision: true,
+      reviewOverride: null,
+    }
+    setP(next)
+    store.saveProposal(oppId, next)
+    await validateReviewedProposal(next)
+  }
+
   const continueAnyway = () => {
     const findings = p.reviewIssues || []
     const overriddenFindings = findings.map(issue => ({
@@ -1024,9 +1046,18 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     try {
       const parsed = parseProposalWorkbook(await file.arrayBuffer(), file.name)
       const imported = importReviewedWorkbook(parsed, p, opp)
+      const blobKey = `proposal-review-${opp.id}`
+      await putFiles(blobKey, [file])
+      let cloud = {}
+      try {
+        const uploaded = await uploadOppFile(opp, 'Proposal', file)
+        cloud = { webUrl: uploaded.webUrl, url: uploaded.url, path: uploaded.path, itemId: uploaded.itemId }
+      } catch (error) {
+        cloud = { cloudErr: error?.message || String(error) }
+      }
       const next = {
         ...imported.proposal,
-        reviewedUpload: { filename: file.name, size: file.size, uploadedAt: new Date().toISOString(), sheets: parsed.sheets, importedChanges: imported.changes, validationIssues: imported.issues, table: imported.table },
+        reviewedUpload: { filename: file.name, type: file.type, size: file.size, uploadedAt: new Date().toISOString(), blobKey, ...cloud, sheets: parsed.sheets, importedChanges: imported.changes, validationIssues: imported.issues, table: imported.table, baseProposal: snapshotProposal(p) },
         reviewStatus: 'Ready for validation',
         reviewIssues: imported.issues,
         reviewNeedsRevision: true,
@@ -1044,7 +1075,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
 
   const exportBoQ = () => exportCSV(
     `${oppId}_Priced_BoQ.csv`,
-    ['Sl.', 'Item Category', 'Item/Scope Description', 'Proposed Model & Part Number', 'Customer Item Code', 'Adders', 'Qty/Unit', 'Common', 'Spares', 'Total Qty', 'UOM', `Unit Price ${proposalSymbol}`, `Total Price ${proposalSymbol}`, 'Unit Cost ₹', 'Total Cost ₹', `List Price`, 'Currency'],
+                    ['Sl.', 'BOQ Line Category', 'Scope / Equipment Description', 'Proposed Model & Part Number', 'Customer Item Code', 'Adders', 'Quantity / Unit', 'Common', 'Spares', 'Total Quantity', 'UOM', `Unit Price ${proposalSymbol}`, `Total Price ${proposalSymbol}`, 'Unit Cost ₹', 'Total Cost ₹', `List Price`, 'Currency'],
     p.bom.map((l, i) => [i + 1, l.itemCategory, l.desc, l.pn, l.custRef, l.adders.join('+'), l.qtyPerUnit, l.common, l.spares, totalQty(l), l.uom, lineQuoted(l), lineQuoted(l) * totalQty(l), Math.round(lineCost(l)), Math.round(lineCost(l) * totalQty(l)), linePrice(l), l.currency])
   )
   const exportExcel = () => downloadProposalXlsx({ p, opp, doc, priced, totalQty, lineQuoted, lineCost, linePrice, totals, route, mapping: configuredProposalTemplate?.mapping, mappingWarnings: configuredProposalTemplate?.mappingWarnings }).catch(error => {
@@ -1150,6 +1181,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
           <span className="eyebrow">Customer proposal</span>
           <h3>{route} proposal <span className="proposal-meta-chip">Rev-{p.revision || '00'}</span></h3>
           <div className="proposal-header-meta" aria-label="Proposal setup">
+            <span className="proposal-source-label">{p.reviewedUpload ? 'Uploaded proposal' : 'System-generated proposal'}</span>
             {!embedded && <Link className="btn proposal-folder-link" to={`/folders/${oppId}`}>Back to folder</Link>}
             <label className="proposal-type-control">Type
               <select value={p.proposalType || 'Project'} onChange={set('proposalType')}>
@@ -1194,11 +1226,40 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
           <span>{reviewBanner.text}</span>
         </div>
       </section>
+      {p.reviewedUpload && (
+        <section className="proposal-uploaded-file-card" aria-label="Uploaded proposal">
+          <div>
+            <span className="eyebrow">Uploaded proposal</span>
+            <strong>{p.reviewedUpload.filename}</strong>
+            <span className="hint">Uploaded {approvalDate(p.reviewedUpload.uploadedAt)} · {fmtSize(p.reviewedUpload.size)}</span>
+          </div>
+          <div className="proposal-uploaded-file-actions">
+            <button type="button" className="btn-secondary" onClick={() => setReviewedUploadViewing(true)}>
+              <Icon name="eye" size={13} /> Open uploaded file
+            </button>
+            <button type="button" className="btn-secondary" onClick={validateAiDraft} disabled={reviewBusy}>
+              Use AI draft instead
+            </button>
+            {(p.reviewedUpload.webUrl || p.reviewedUpload.url) && (
+              <a className="btn" href={p.reviewedUpload.webUrl || p.reviewedUpload.url} target="_blank" rel="noreferrer">
+                Open storage link
+              </a>
+            )}
+          </div>
+        </section>
+      )}
+      {reviewedUploadViewing && p.reviewedUpload && (
+        <AttachmentViewer
+          leadId={p.reviewedUpload.blobKey || `proposal-review-${oppId}`}
+          attachment={p.reviewedUpload}
+          onClose={() => setReviewedUploadViewing(false)}
+        />
+      )}
       {validateChoice && (
         <Modal title="Validate review" onClose={() => setValidateChoice(false)}>
           <p className="hint">Validate the current AI-generated draft as-is, or upload a workbook that's already been reviewed outside the app.</p>
           <div className="forms-actions proposal-review-actions">
-            <button className="primary" onClick={() => { setValidateChoice(false); validateReviewedProposal() }}>
+            <button className="primary" onClick={validateAiDraft}>
               <Icon name="checkCircle" size={13} /> Continue with AI draft
             </button>
             <button onClick={() => { setValidateChoice(false); uploadInputRef.current?.click() }}>
@@ -1481,7 +1542,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
                 across {rack.rackCount} rack{rack.rackCount > 1 ? 's' : ''} — {rack.spareSlots} spare.
               </div>
               <table className="sheet" style={{ maxWidth: 560, marginBottom: 18 }}>
-                <thead><tr><th>Module</th><th>Part Number</th><th>Qty</th></tr></thead>
+                <thead><tr><th>Module</th><th>Part Number</th><th>Quantity</th></tr></thead>
                 <tbody>
                   {rack.modules.map(m => (
                     <tr key={m.key}>
@@ -1535,8 +1596,8 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
             <table className="sheet">
               <thead>
                 <tr>
-                  <th>Sl.</th><th>Item category</th><th>Description</th><th>Model / part number</th><th>Add-ons</th>
-                  <th>Qty / unit</th><th>Common</th><th>Spares</th><th>Total quantity</th><th>UOM</th>
+                  <th>Sl.</th><th>BOQ line category</th><th>Scope / equipment description</th><th>Model / part number</th><th>Add-ons</th>
+                  <th>Quantity / unit</th><th>Common</th><th>Spares</th><th>Total quantity</th><th>UOM</th>
                   <th>{`Unit Price ${proposalSymbol}`}</th><th>{`Total Price ${proposalSymbol}`}</th>
                   <th className="internal">Unit Cost ₹</th><th className="internal">Total Cost ₹</th><th className="internal">Computed ₹</th><th className="internal">List Price</th><th></th>
                 </tr>
@@ -1583,11 +1644,11 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
                       <td className="num internal">₹ {fmt(lineCost(l) * q)}</td>
                       <td className="num internal">₹ {fmt(Math.round(lineComputed(l)))}</td>
                         <td className="num internal">{l.currency === 'USD' ? '$' : l.currency === 'INR' ? '₹' : '€'} {fmt(linePrice(l))}<div className="hint">{l.priceSourceName || l.priceList || 'Price source'}</div></td>
-                      <td><span className="proposal-row-control" title="Adjust quantity with the stepper">Qty</span></td>
+                      <td><span className="proposal-row-control" title="Adjust quantity with the stepper">Quantity</span></td>
                     </tr>
                   )
                 })}
-                {!p.bom.length && <tr><td colSpan={17} className="hint">No lines yet — add parts from the price list above. Quantities work like the sheet: Total Qty = Qty/Unit × {units} units + Common + Spares.</td></tr>}
+                {!p.bom.length && <tr><td colSpan={17} className="hint">No BOQ lines yet — add parts from the price list above. Quantities work like the sheet: Total Quantity = Quantity / Unit × {units} units + Common + Spares.</td></tr>}
               </tbody>
               {p.bom.length > 0 && (
                 <tfoot>
@@ -1634,7 +1695,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
                   <table className="sheet">
                     <thead>
                       <tr>
-                        <th>Sl.</th><th>Item</th><th className="num">Total Qty</th>
+                        <th>Sl.</th><th>BOQ line</th><th className="num">Total Quantity</th>
                         <th className="num">{`Quoted ${proposalSymbol}`}</th>
                         <th className="num internal">Unit Cost ₹</th><th className="num internal">Total Cost ₹</th>
                         <th className="num internal">Computed ₹</th><th className="num internal">List Price</th>
@@ -1691,7 +1752,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
           {!!referenceRows.length && <div className="proposal-preview-scroll reference-workbook-preview">
             <table className="sheet" style={{ minWidth: 940, tableLayout: 'fixed' }}>
               <colgroup><col style={{ width: 88 }} /><col style={{ width: 560 }} /><col style={{ width: 110 }} /><col style={{ width: 120 }} /><col style={{ width: 140 }} /></colgroup>
-              <thead><tr><th>Sr. No</th><th>Item Description</th><th>Quantity</th><th>Unit Price</th><th>Total Price</th></tr></thead>
+              <thead><tr><th>Sr. No</th><th>Scope / Equipment Description</th><th>Quantity</th><th>Unit Price</th><th>Total Price</th></tr></thead>
               <tbody>{referenceRows.map((row, i) => <tr key={i}>
                 <td>{row.srNo}</td>
                 <td><textarea rows={2} value={row.description} onChange={e => updateReferenceRow(i, 'description', e.target.value)} style={{ width: '100%', resize: 'vertical' }} /></td>

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { approvalMemoryKey, reviewFindingKey } from '../src/approvalMemory.js'
+import { approvalMemoryKey, approvalAffectedByProposal, proposalApprovalSnapshot, reviewFindingKey } from '../src/approvalMemory.js'
 
 test('approval memory is stable for the same scoped decision', () => {
   const first = approvalMemoryKey({ oppId: 'OP-1', type: 'Pricing threshold exception', rev: '01', detail: 'Markup above 10%' })
@@ -19,4 +19,28 @@ test('review finding keys ignore formatting-only differences', () => {
     reviewFindingKey({ code: 'line.part', text: 'Missing  part number', evidence: 'Workbook row 3' }),
     reviewFindingKey({ code: ' line.part ', text: 'Missing part number', evidence: 'Workbook row 3' }),
   )
+})
+
+test('snapshot-backed approvals survive unrelated proposal edits', () => {
+  const original = { units: 1, sourceCurrency: 'INR', bom: [{ desc: 'Probe', pn: 'PRB-1', qtyPerUnit: 1, common: 0, spares: 0, quoted: 100 }], terms: [{ term: 'Payment', status: 'Standard' }], subject: 'Original' }
+  const approval = { approvalSnapshot: proposalApprovalSnapshot(original, { sellTo: 'ACME', route: 'Project' }) }
+  assert.equal(approvalAffectedByProposal(approval, 'Commercial approval', { ...original, subject: 'Corrected subject' }, { sellTo: 'ACME', route: 'Project' }), false)
+})
+
+test('snapshot-backed approvals reopen only the affected decision domain', () => {
+  const original = { units: 1, sourceCurrency: 'INR', bom: [{ desc: 'Probe', pn: 'PRB-1', qtyPerUnit: 1, common: 0, spares: 0, quoted: 100 }], terms: [{ term: 'Payment', status: 'Standard' }] }
+  const approval = { approvalSnapshot: proposalApprovalSnapshot(original, { sellTo: 'ACME', route: 'Project' }) }
+  const changed = { ...original, bom: [{ ...original.bom[0], quoted: 125 }] }
+  assert.equal(approvalAffectedByProposal(approval, 'Technical approval', changed, { sellTo: 'ACME', route: 'Project' }), false)
+  assert.equal(approvalAffectedByProposal(approval, 'Commercial approval', changed, { sellTo: 'ACME', route: 'Project' }), true)
+  assert.equal(approvalAffectedByProposal(approval, 'Final quote release', changed, { sellTo: 'ACME', route: 'Project' }), true)
+})
+
+test('customer changes affect every approval domain', () => {
+  const proposal = { units: 1, sourceCurrency: 'INR', bom: [{ desc: 'Probe', pn: 'PRB-1', qtyPerUnit: 1, common: 0, spares: 0, quoted: 100 }] }
+  const approval = { approvalSnapshot: proposalApprovalSnapshot(proposal, { sellTo: 'ACME', route: 'Project' }) }
+  const changedCustomer = { sellTo: 'OTHER', route: 'Project' }
+  assert.equal(approvalAffectedByProposal(approval, 'Technical approval', proposal, changedCustomer), true)
+  assert.equal(approvalAffectedByProposal(approval, 'Commercial approval', proposal, changedCustomer), true)
+  assert.equal(approvalAffectedByProposal(approval, 'Final quote release', proposal, changedCustomer), true)
 })

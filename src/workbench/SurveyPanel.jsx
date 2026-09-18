@@ -60,7 +60,7 @@ export default function SurveyPanel({ opp, est }) {
           <input placeholder="What the survey must establish" style={{ flex: 1, minWidth: 200 }}
             value={detail} onChange={e => setDetail(e.target.value)} />
           <button className="primary" onClick={() => store.requestSurvey(opp.id, detail.trim())}>
-            <Icon name="send" size={13} /> Generate survey request
+            <Icon name="send" size={13} /> Raise site survey request
           </button>
         </div>
       ) : (
@@ -86,7 +86,7 @@ export default function SurveyPanel({ opp, est }) {
               <button className="primary" disabled={!report.trim() || !survey.visitOn}
                 title={!survey.visitOn ? 'Record the site visit date first' : ''}
                 onClick={() => store.updateSurvey(opp.id, { report: report.trim(), state: 'Report submitted' }, 'Survey report filed')}>
-                File report
+                Submit site survey report
               </button>
             </div>
           )}
@@ -105,9 +105,9 @@ export default function SurveyPanel({ opp, est }) {
               <textarea rows={3} placeholder="Scope of work written up from the survey report" style={{ flex: 1, minWidth: 240 }}
                 value={sow} onChange={e => setSow(e.target.value)} />
               <button className="primary" disabled={!sow.trim() || !survey.report}
-                title={!survey.report ? 'File the survey report first' : ''}
+                title={!survey.report ? 'Submit the site survey report first' : ''}
                 onClick={() => store.updateSurvey(opp.id, { sow: sow.trim(), state: 'SoW ready' }, 'Statement of Work written')}>
-                Save SoW
+                Save Statement of Work
               </button>
             </div>
           )}

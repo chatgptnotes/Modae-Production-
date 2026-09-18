@@ -13,6 +13,7 @@ import { isPlaceholderSparesLine } from './proposal/sparesBoq.js'
 import { classRule, classOrder, noExceptionKeys } from './customerClasses.js'
 import { needsCommercialApproval, needsCommercialDecision, commercialApprovalDetails, isLegacyCommercialClarification, isCommercialConfirmationRow, isDeliveryBasisClarification, sourceContainsDeliveryRequirement } from './commercialTerms.js'
 import { clarificationTopic } from './leadClarification.js'
+import { approvalAffectedByProposal } from './approvalMemory.js'
 
 // A customer answer is complete when it contains a response and does not
 // leave an explicit missing-information note. AI field mapping review is an
@@ -143,7 +144,9 @@ function pricingApprovers(state) {
 function pricingApprovalFor(opp, proposal, approvals) {
   const rev = String(proposal?.revision ?? '')
   return (approvals || []).find(a => a.status !== 'Cancelled' && a.oppId === opp.id && a.type === 'Pricing threshold exception'
-    && (a.rev == null || String(a.rev) === rev))
+    && (a.approvalSnapshot
+      ? !approvalAffectedByProposal(a, a.type, proposal, opp)
+      : (a.rev == null || String(a.rev) === rev)))
 }
 
 // Diagram 02 §5C — the margin approval matrix. Routing is on *order value*
@@ -297,9 +300,13 @@ export function oppBlockers(opp, proposal, approvals, config = null) {
   if (!opp) return []
   const b = []
   const mine = approvals.filter(a => a.oppId === opp.id)
+  const currentApproval = (approval, type) => approval.approvalSnapshot
+    ? !approvalAffectedByProposal(approval, type, proposal, opp)
+    : true
   const hasApproved = type => mine.some(a => a.type === type
+    && currentApproval(a, type)
     && (a.status === 'Approved' || a.status === 'Approved with conditions'))
-  const hasOpen = type => mine.some(a => a.type === type && a.status === 'Pending')
+  const hasOpen = type => mine.some(a => a.type === type && currentApproval(a, type) && a.status === 'Pending')
 
   // The customer-class advisory row. `needed` matters on a joint gate: without
   // it, requestBlockerApproval builds the gate from `approver` alone, and a Red
@@ -401,14 +408,16 @@ const commercialApprovalCoversProposal = (approval, proposal) => {
 // concession one approver can sign away.
 export const NO_EXCEPTION = noExceptionKeys()
 
-export function approvalForRev(type, proposal, approvals, oppId) {
+export function approvalForRev(type, proposal, approvals, oppId, opportunity) {
   const rev = String(proposal?.revision ?? '')
   const mine = (approvals || []).filter(a =>
     a.oppId === oppId
     && (a.type === type || (type === APPROVAL_5B && a.type === COMMERCIAL_DEVIATION))
-    && (type === APPROVAL_5B
-      ? (a.rev == null || commercialApprovalCoversProposal(a, proposal))
-      : (a.rev == null || String(a.rev) === rev)))
+    && (a.approvalSnapshot
+      ? !approvalAffectedByProposal(a, type, proposal, opportunity)
+      : (type === APPROVAL_5B
+        ? (a.rev == null || commercialApprovalCoversProposal(a, proposal))
+        : (a.rev == null || String(a.rev) === rev))))
   return {
     pending: mine.find(a => a.status === 'Pending') || null,
     approved: mine.find(a => ['Approved', 'Approved with conditions'].includes(a.status)) || null,
@@ -417,20 +426,23 @@ export function approvalForRev(type, proposal, approvals, oppId) {
 
 // The §5C release, kept under its original name — it is the gate the
 // submission panel and the proposal builder read.
-export function releaseState(proposal, approvals, oppId) {
-  const { pending, approved } = approvalForRev(APPROVAL_5C, proposal, approvals, oppId)
+export function releaseState(proposal, approvals, oppId, opportunity) {
+  const { pending, approved } = approvalForRev(APPROVAL_5C, proposal, approvals, oppId, opportunity)
   return { pending, release: approved }
 }
 
 // All three §5 gates in one call, for the "All Approvals Completed" box.
-export function approvalSet(proposal, approvals, oppId) {
+export function approvalSet(proposal, approvals, oppId, opportunity) {
   return [APPROVAL_5A, APPROVAL_5B, APPROVAL_5C].map(type => ({
-    type, ...approvalForRev(type, proposal, approvals, oppId),
+    type, ...approvalForRev(type, proposal, approvals, oppId, opportunity),
   }))
 }
 
-export function serviceApprovalSet(approvals, oppId) {
+export function serviceApprovalSet(approvals, oppId, proposal, opportunity) {
   const mine = (approvals || []).filter(a => a.oppId === oppId && a.type === 'Service offer review')
+    .filter(a => a.approvalSnapshot
+      ? !approvalAffectedByProposal(a, 'Service offer review', proposal, opportunity)
+      : true)
   return [{
     type: 'Service offer review',
     pending: mine.find(a => a.status === 'Pending') || null,
@@ -538,7 +550,7 @@ export function transitionBlockers(opp, target, proposal, state) {
       { type: APPROVAL_5C, key: 'release', label: 'Final quote release', approver: 'LJS', needed: ['LJS', 'AH'] },
     ]
     for (const g of gates) {
-      const { approved, pending: waiting } = approvalForRev(g.type, proposal, approvals, opp.id)
+      const { approved, pending: waiting } = approvalForRev(g.type, proposal, approvals, opp.id, opp)
       if (approved) continue
       b.push({
         key: g.key, severity: waiting ? 'wait' : 'block', approver: g.approver,

@@ -395,7 +395,7 @@ function setCommercialSheet(workbook, worksheet, args) {
   const totalRow = Math.max(firstRow + lines.length, originalTotalRow)
   if (totalRow > originalTotalRow) worksheet.spliceRows(originalTotalRow, 0, ...Array.from({ length: totalRow - originalTotalRow }, () => []))
 
-  const headers = [['B9', 'Sl. No.'], ['C9', 'Item Description'], ['D9', 'Proposed Model / Part No.'], ['E9', 'Qty'], ['F9', `Unit Price (${proposalSymbol})`], ['G9', `Total Price (${proposalSymbol})`], ['J9', 'Unit Price (₹)'], ['K9', 'Total Price (₹)'], ['L9', 'Unit Cost (₹)'], ['M9', 'Total Cost (₹)'], ['N9', 'Unit Cost (€)'], ['O9', 'Total Cost (€)']]
+    const headers = [['B9', 'Sl. No.'], ['C9', 'Scope / Equipment Description'], ['D9', 'Proposed Model / Part No.'], ['E9', 'Quantity'], ['F9', `Unit Price (${proposalSymbol})`], ['G9', `Total Price (${proposalSymbol})`], ['J9', 'Unit Price (₹)'], ['K9', 'Total Price (₹)'], ['L9', 'Unit Cost (₹)'], ['M9', 'Total Cost (₹)'], ['N9', 'Unit Cost (€)'], ['O9', 'Total Cost (€)']]
   for (const [ref, value] of headers) {
     setValue(worksheet.getCell(ref), value, {
       font: { name: 'Candara', size: MODAE_DOCUMENT_STANDARDS.headingSizePt, bold: true, color: { argb: 'FF222222' } },

@@ -125,7 +125,7 @@ export function OpportunityDetailsView({ opp, className = '' }) {
   )
 }
 
-const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ opp, store, className = '' }, ref) {
+const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ opp, store, className = '', editable = true }, ref) {
   const [draft, setDraft] = useState(() => makeDraft(opp))
   const [dirty, setDirty] = useState(false)
   const [productOpen, setProductOpen] = useState(false)
@@ -188,6 +188,8 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
     : draft.solution.length === 1
       ? draft.solution[0]
       : `${draft.solution.length} solutions selected`
+
+  if (!editable) return <OpportunityDetailsView opp={opp} className={className} />
 
   return (
     <section className={`opportunity-details-editor ${className}`}>

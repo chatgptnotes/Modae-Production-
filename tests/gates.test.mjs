@@ -8,6 +8,7 @@ import { ROLES, PERMS, PORTAL_ENABLED, selectableRoles } from '../src/seed.js'
 import { canViewCommercial, canPriceProposal, isSalesOwner } from '../src/utils.js'
 import { transitionBlockers, releaseState, readiness, commercialGate, approvalForRev } from '../src/gates.js'
 import { contextForType, routeForType, CONTEXTS, OPP_TYPES } from '../src/seed.js'
+import { proposalApprovalSnapshot } from '../src/approvalMemory.js'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
@@ -149,6 +150,24 @@ test('a commercial deviation approval carries forward when the same terms remain
     terms: [...proposal.terms, { term: 'Warranty', status: 'Deviation' }],
   }, [approval], 'OP-1').approved, null,
   'a new deviation must require a new approval')
+})
+
+test('snapshot-backed release approval survives an unrelated proposal edit', () => {
+  const proposal = { ...releasedProposal, subject: 'Original subject' }
+  const approval = {
+    id: 'AP-SNAPSHOT', oppId: 'OP-1', type: 'Final quote release', rev: '01', status: 'Approved',
+    approvalSnapshot: proposalApprovalSnapshot(proposal, baseOpp),
+  }
+  assert.ok(releaseState({ ...proposal, revision: '02', revisionDate: '2026-09-18' }, [approval], 'OP-1', baseOpp).release)
+})
+
+test('snapshot-backed commercial approval reopens when pricing changes', () => {
+  const proposal = { ...releasedProposal, discountPct: 5 }
+  const approval = {
+    id: 'AP-SNAPSHOT', oppId: 'OP-1', type: 'Commercial approval', rev: '01', status: 'Approved',
+    approvalSnapshot: proposalApprovalSnapshot(proposal, baseOpp),
+  }
+  assert.equal(approvalForRev('Commercial approval', { ...proposal, discountPct: 12, revision: '02' }, [approval], 'OP-1', baseOpp).approved, null)
 })
 
 test('final quote release requires both AH and LJS', () => {
@@ -359,7 +378,7 @@ test('transition approval blockers explain why approval is requested', () => {
 // ever met one blocked transition at a time.
 test('the three §5 gates are shown together as one status', () => {
   const builder = read('src/workbench/PropBuilder.jsx')
-  assert.match(builder, /approvalSet\(p, store\.approvals, opp\.id\)/, 'PropBuilder must call approvalSet')
+  assert.match(builder, /approvalSet\(p, store\.approvals, opp\.id(?:, opp)?\)/, 'PropBuilder must call approvalSet')
   assert.match(builder, /allApproved/, 'the panel must resolve a single all-clear state')
   assert.match(builder, /All approvals completed/, 'the all-clear must name the diagram\'s outcome')
 })

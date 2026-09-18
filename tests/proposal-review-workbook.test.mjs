@@ -9,7 +9,7 @@ const proposal = {
 
 test('imports reviewed workbook quantities and prices into matching proposal lines', () => {
   const result = importReviewedWorkbook({ sheets: [{ name: 'Priced BoQ', rows: [
-    ['Sl.', 'Item Description', 'Proposed Model/Part No.', 'Total Qty', 'UOM', 'Unit Price ₹', 'Total Price ₹'],
+    ['Sl.', 'Scope / Equipment Description', 'Proposed Model/Part No.', 'Total Quantity', 'UOM', 'Unit Price ₹', 'Total Price ₹'],
     [1, 'Proximity probe, 8 mm', 'PRB-8', 2, 'EA', 1250, 2500],
   ] }] }, proposal, { sellTo: 'KSB Limited' })
   assert.equal(result.proposal.bom[0].common, 2)

@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { OWNERS, ROLES } from '../seed.js'
-import { canPriceProposal, canViewCommercial, isSalesOwner, fmtRupeesFromK, mmmYY, ddMmmYY, stageClass, productLabel, displayRole } from '../utils.js'
+import { canPriceProposal, canViewCommercial, isSalesOwner, fmtRupeesFromK, mmmYY, ddMmmYY, stageClass, productDisplayLabel, displayRole } from '../utils.js'
 import { nextActionWith } from '../gates.js'
 import { useDrawer } from '../drawer.jsx'
 import { Icon } from '../icons.jsx'
@@ -39,7 +39,7 @@ export default function MyOpps() {
   const fullCell = (o, key) => {
     if (['cogsK', 'gmK', 'gmPct'].includes(key) && !canSeeCommercial) return <Icon name="lock" size={12} />
     if (key === 'id') return <b>{o.id}</b>
-    if (key === 'product') return productLabel(o.product) || '—'
+    if (key === 'product') return productDisplayLabel(o.product) || '—'
     if (key === 'valueK') return o.valueK ? fmtRupeesFromK(o.valueK) : '—'
     if (key === 'cogsK') return o.cogsK ? fmtRupeesFromK(o.cogsK) : '—'
     if (key === 'gmK') return o.valueK ? fmtRupeesFromK((o.valueK || 0) - (o.cogsK || 0)) : '—'

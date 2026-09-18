@@ -130,7 +130,7 @@ test('source and opportunity details keeps pipeline metadata as a live read-only
   assert.match(requirement, /Reference only\. Update pipeline fields in Opportunity details/)
   assert.match(requirement, /\['Stage', opp\.stage \|\| '—'\]/)
   assert.match(requirement, /\['Probability', opp\.prob \|\| '—'\]/)
-  assert.match(requirement, /\['Product', Array\.isArray\(opp\.product\)/)
+  assert.match(requirement, /\['Equipment \/ Product Family', productDisplayLabel\(opp\.product\)/)
   assert.doesNotMatch(requirement, /const editable =/)
   assert.doesNotMatch(requirement, /onChange=\{upd\(k\)\}/)
 })

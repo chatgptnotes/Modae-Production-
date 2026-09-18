@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { STAGES, CLOSE_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES } from '../seed.js'
-import { fmt, fmtRupeesFromK, rupeesToK, mmmYY, ddMmmYY, stageClass, productList, productLabel, sameCustomer, displayRole } from '../utils.js'
+import { fmt, fmtRupeesFromK, rupeesToK, mmmYY, ddMmmYY, stageClass, productList, productLabel, productDisplayLabel, sameCustomer, displayRole } from '../utils.js'
 import { downloadTableXlsx } from '../proposal/excelExport.js'
 import { useFormulaBar } from '../formulabar.jsx'
 import { useDrawer } from '../drawer.jsx'
@@ -36,7 +36,7 @@ export const COLS = [
   { key: 'oppType', letter: 'L', label: 'Opp Type', w: 11, wAll: 8 },
   { key: 'bu', letter: 'M', label: 'BU', w: 4 },
   { key: 'segment', letter: 'N', label: 'Segment', w: 5 },
-  { key: 'product', letter: 'O', label: 'Product', w: 6 },
+  { key: 'product', letter: 'O', label: 'Equipment / Product Family', w: 6 },
   { key: 'prob', letter: 'P', label: 'Prob (%)', w: 9, wAll: 7 },
   { key: 'valueK', letter: 'Q', label: 'Value (₹)*', num: true, w: 8 },
   { key: 'cogsK', letter: 'R', label: 'COGS (₹)*', num: true, w: 5 },
@@ -206,7 +206,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
       case 'lastUpdated': return ddMmmYY(o[key])
       case 'forecast': return o.forecast ? '✓ Checked' : '☐ Unchecked'
       case 'prob': return o.prob || ''
-      case 'product': return productLabel(o.product)
+      case 'product': return productLabel(o.product).replace(/\bVarious\b/g, 'Multiple equipment items')
       case 'owner': return displayRole(o.owner)
       case 'nextActionOwner': return displayRole(o.nextActionOwner || nextActionWith(o, store.getProposal(o.id), store).owner || '')
       default: return o[key] ?? ''
@@ -351,7 +351,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     rows.map((o, index) => [index + 1, ...exportCols.map(col => {
       switch (col.key) {
         case 'customerStatus': return customerStatusFor(o)
-        case 'product': return productLabel(o.product)
+      case 'product': return productLabel(o.product).replace(/\bVarious\b/g, 'Multiple equipment items')
         case 'valueK': return o.valueK ? o.valueK * 1000 : ''
         case 'cogsK': return o.cogsK ? o.cogsK * 1000 : ''
         case 'gmK': return o.valueK ? gmK(o) * 1000 : ''
@@ -379,7 +379,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
         <div className="filter-pop" style={{ position: 'fixed', left: pos.x, top: pos.y + 4 }} onClick={e => e.stopPropagation()}>
           {PRODUCTS.map(p => (
             <label className="fitem" key={p}>
-              <input type="checkbox" checked={chosen.includes(p)} onChange={() => toggle(p)} /> {p}
+              <input type="checkbox" checked={chosen.includes(p)} onChange={() => toggle(p)} /> {p === 'Various' ? 'Multiple equipment items' : p}
             </label>
           ))}
           <hr />
@@ -554,14 +554,14 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                     for any opportunity carrying more than one product. */}
                 <td onClick={selectCell(o, COLS[12])} className={isSel(o, COLS[12]) ? 'cell-sel' : ''}>
                   <button type="button" className="cell-pick"
-                    title={productLabel(o.product) || 'No product selected'}
+                    title={productDisplayLabel(o.product) || 'No equipment or product family selected'}
                     onClick={e => {
                       e.stopPropagation()
                       if (productPick?.id === o.id) { setProductPick(null); return }
                       const r = e.currentTarget.getBoundingClientRect()
                       setProductPick({ id: o.id, x: r.left, y: r.bottom })
                     }}>
-                    {productLabel(o.product) || <span className="hint">— select —</span>}
+                    {productDisplayLabel(o.product) || <span className="hint">— select equipment / product family —</span>}
                   </button>
                   {productPick?.id === o.id && renderProductPop(o, productPick)}
                 </td>

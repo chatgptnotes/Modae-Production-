@@ -6,9 +6,9 @@ const number = value => {
 }
 
 const aliases = {
-  description: ['item description', 'description', 'item scope', 'scope'],
+  description: ['item description', 'description', 'item scope', 'scope', 'scope / equipment description'],
   partNumber: ['proposed model part no', 'proposed modelpart no', 'model part number', 'modelpartnumber', 'part no', 'part number', 'model'],
-  quantity: ['total qty', 'qty', 'quantity', 'qty unit'],
+  quantity: ['total qty', 'total quantity', 'qty', 'quantity', 'qty unit'],
   uom: ['uom', 'unit'],
   unitPrice: ['unit price', 'unit price inr', 'unit price rs'],
   totalPrice: ['total price', 'total price inr', 'quoted total'],

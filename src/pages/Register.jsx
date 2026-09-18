@@ -353,9 +353,9 @@ export default function Register() {
                 {SEGMENTS.map(s => <option key={s}>{s}</option>)}
               </select>
             </label>
-            <label className="afield">Product
+            <label className="afield">Equipment / Product Family
               <select value={product} onChange={e => setProduct(e.target.value)} style={{ display: 'block', marginTop: 2, width: '100%' }}>
-                {PRODUCTS.map(p => <option key={p}>{p}</option>)}
+                {PRODUCTS.map(p => <option key={p} value={p}>{p === 'Various' ? 'Multiple equipment items' : p}</option>)}
               </select>
             </label>
           </div>

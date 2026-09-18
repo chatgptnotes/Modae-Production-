@@ -45,14 +45,14 @@ function Select({ field, options, placeholder }) {
 function ProductDropdown({ options }) {
   const { selectedProducts, setF, aiMissing } = React.useContext(FormCtx)
   const selectedLabel = selectedProducts.length === 0
-    ? 'Select products'
+    ? 'Select equipment / product family'
     : selectedProducts.length === 1
-      ? selectedProducts[0]
-      : `${selectedProducts.length} products selected`
+      ? (selectedProducts[0] === 'Various' ? 'Multiple equipment items' : selectedProducts[0])
+      : `${selectedProducts.length} equipment / product families selected`
   return (
     <details className={`product-dropdown${aiMissing?.has('product') ? ' not-extracted' : ''}`}>
-      <summary aria-label="Select products">{selectedLabel}</summary>
-      <div className="product-dropdown-menu" role="group" aria-label="Products">
+      <summary aria-label="Select equipment or product family">{selectedLabel}</summary>
+      <div className="product-dropdown-menu" role="group" aria-label="Equipment or product families">
         {options.map(option => {
           const checked = selectedProducts.includes(option)
           return (
@@ -67,7 +67,7 @@ function ProductDropdown({ options }) {
                     : selectedProducts.filter(product => product !== option),
                 }))}
               />
-              <span>{option}</span>
+              <span>{option === 'Various' ? 'Multiple equipment items' : option}</span>
             </label>
           )
         })}
@@ -629,7 +629,7 @@ export default function IntakeForm({ destinationPicker = null }) {
 
             <div className="q">
               <div className="q-label">
-                14. Products<span className="star">*</span>
+                14. Equipment / Product Family<span className="star">*</span>
                 {aiFilledFields.has('product') && <span className="ai-badge">AI</span>}
               </div>
               <Pills field="product" options={PRODUCTS} />

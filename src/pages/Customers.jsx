@@ -55,7 +55,7 @@ function EditCustomer({ customer, canEditDirect, onClose }) {
   }
 
   return (
-    <Modal title={`${canEditDirect ? 'Edit' : 'Request change'} — ${customer.name}`} onClose={onClose} wide>
+    <Modal title={`${canEditDirect ? 'Edit' : 'Submit customer master change request'} — ${customer.name}`} onClose={onClose} wide>
       <form onSubmit={submit} className="drawer-form">
         <div className="dgrid2">
           {FIELDS.map(([k, label, opts]) => (
@@ -290,7 +290,7 @@ export default function Customers() {
                     : (
                       <button onClick={() => setEditing(c.name)}
                         title={canEditDirect ? 'Edit this record' : 'Request a change (needs AH approval)'}>
-                        <Icon name="edit" size={13} /> {canEditDirect ? 'Edit' : 'Request change'}
+                        <Icon name="edit" size={13} /> {canEditDirect ? 'Edit' : 'Submit change request'}
                       </button>
                     )}
                 </td>

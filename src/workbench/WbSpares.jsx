@@ -36,7 +36,6 @@ const sourcingPartReference = line => {
 function PricingApprovalCard({ approval, approvers, role, canRequest, onRequest, onDecide, pricingRows }) {
   const [decision, setDecision] = useState('Approved')
   const [note, setNote] = useState('')
-  const [condition, setCondition] = useState('')
   const [error, setError] = useState('')
   const needed = approval?.needed?.length ? approval.needed : [approval?.approver].filter(Boolean)
   const myDecision = approval && (approval.decisions || {})[role]
@@ -50,14 +49,9 @@ function PricingApprovalCard({ approval, approvers, role, canRequest, onRequest,
       setError('Add a decision note before submitting.')
       return
     }
-    if (decision === 'Approved with conditions' && !condition.trim()) {
-      setError('Add at least one condition, or choose Approve.')
-      return
-    }
     setError('')
-    onDecide({ d: decision, comment: note.trim(), conditions: decision === 'Approved with conditions' ? [condition.trim()] : [] })
+    onDecide({ d: decision, comment: note.trim() })
     setNote('')
-    setCondition('')
   }
 
   return <div className={`sourcing-pricing-approval ${statusClass}`} role="status">
@@ -77,9 +71,8 @@ function PricingApprovalCard({ approval, approvers, role, canRequest, onRequest,
       <label>Decision note <textarea value={note} onChange={event => setNote(event.target.value)} placeholder="Explain the pricing decision" rows="2" /></label>
       <div className="sourcing-approval-decision-row">
         <select value={decision} onChange={event => setDecision(event.target.value)} aria-label="Pricing approval decision">
-          <option>Approved</option><option>Approved with conditions</option><option>Rejected</option>
+          <option>Approved</option><option>Rejected</option>
         </select>
-        {decision === 'Approved with conditions' && <input value={condition} onChange={event => setCondition(event.target.value)} placeholder="Condition" aria-label="Approval condition" />}
         <button type="submit" className="sourcing-approval-action"><Icon name="check" size={13} /> Submit decision</button>
       </div>
       {error && <div className="sourcing-approval-error">{error}</div>}
@@ -222,7 +215,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
   const pricingApproval = pricingExceptions.rows.length
     ? (store.approvals || []).find(a => a.status !== 'Cancelled' && a.oppId === opp.id && a.type === 'Pricing threshold exception' && (a.rev == null || String(a.rev) === String(proposal?.revision ?? '')))
     : null
-  const pricingApprovalClear = !pricingExceptions.rows.length || ['Approved', 'Approved with conditions'].includes(pricingApproval?.status)
+  const pricingApprovalClear = !pricingExceptions.rows.length || pricingApproval?.status === 'Approved'
   const canContinueToProposal = pricedItems.length > 0 && pendingConfirmationCount === 0 && activeItems.length > 0 && pricingApprovalClear
   const totals = useMemo(() => pricedItems.reduce((total, item) => ({
     revenue: total.revenue + item.lineTotal,
@@ -248,6 +241,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     pricingRows: pricingExceptions.rows,
   })
   const removeLine = line => {
+    if (!window.confirm(`Remove ${sourcingDescription(line)} from this BOQ?`)) return
     const removedLine = { ...line, qty: 0, removedFromSourcing: true, confirmed: false }
     const remainingPricing = pricingThresholdExceptions(opp, proposal, {
       ...store,
@@ -322,7 +316,10 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     setManualLineError('')
     setShowAddPart(true)
   }
-  const sourceDetails = line => formatPriceSource(reconcilePriceSource(line, store.priceLists, store.vendorQuotes))
+  // Vendor/manufacturer quotations remain historical data, but are no longer
+  // an active sourcing path. Current sourcing uses approved price lists or an
+  // explicitly entered manual price.
+  const sourceDetails = line => formatPriceSource(reconcilePriceSource(line, store.priceLists, []))
   const manualAttribution = line => {
     if (line.addedByName || line.addedBy || line.addedAt) return line
     const audit = (store.audit || []).find(entry => entry.action === 'Spares line updated'
@@ -368,9 +365,8 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
   // Where an alternative's price would come from if selected — mirrors the same
   // price-list → vendor-quote → manual precedence used for confirmed lines.
   const altSourceInfo = alt => {
-    const resolved = resolvePriceSource({ pn: alt.pn }, store.priceLists, [], store.vendorQuotes)
+    const resolved = resolvePriceSource({ pn: alt.pn }, store.priceLists, [], [])
     if (resolved?.source === PRICE_SOURCES.LIST) return { tone: '', label: `Price list · ${resolved.sourceName} ${resolved.sourceVersion}`.trim() }
-    if (resolved?.source === PRICE_SOURCES.VENDOR) return { tone: 'state-Review', label: `Vendor price list · ${resolved.sourceName}` }
     return { tone: 'grey', label: 'Manual — no priced match yet' }
   }
 
@@ -469,7 +465,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     loadAiSuggestions(line)
   }
   const useAlternative = (line, alt) => {
-    const resolved = resolvePriceSource({ pn: alt.pn }, store.priceLists, [], store.vendorQuotes)
+    const resolved = resolvePriceSource({ pn: alt.pn }, store.priceLists, [], [])
     const priced = resolved && resolved.price > 0 ? {
       listPrice: resolved.price, listUnitPrice: resolved.price, currency: resolved.currency,
       priceList: `${resolved.sourceName} ${resolved.sourceVersion}`.trim(),
@@ -488,18 +484,18 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
   }
 
   return <div className="sourcing-workbench">
-    <div className="section-title">Spares workbench — part matching ({lines.length} line{lines.length === 1 ? '' : 's'})</div>
+    <div className="section-title">Bill of Quantities (BOQ) — Spares sourcing ({lines.length} line{lines.length === 1 ? '' : 's'})</div>
     {clarifications.length > 0 && <details className="okbox customer-information-banner sourcing-clarification-context">
       <summary><b>Confirmed customer information</b><span className="hint"> These answers stay attached to the opportunity and should be checked while validating each line.</span></summary>
       <div className="sourcing-clarification-content">{clarifications.map(c => <div key={c.id} className="sourcing-clarification-row"><b>{c.category || 'Clarification'}:</b> {c.response}<span className="hint"> · {c.answerSource || 'Customer'}{c.answeredAt ? ` · ${c.answeredAt}` : ''}</span></div>)}</div>
     </details>}
-    {!!expiredLines.length && <div className="warnbox spares-price-warning"><b>{expiredLines.length} price source{expiredLines.length === 1 ? '' : 's'} expired.</b>{' '}Use <b>Compare</b> in the Actions column to select a current price-list part, or apply a current manufacturer quote only when the approved price list cannot be used.</div>}
-    {!!needsPricingLines.length && <div className="warnbox spares-price-warning"><b>{needsPricingLines.length} line{needsPricingLines.length === 1 ? '' : 's'} need pricing.</b>{' '}Use <b>Compare</b> to select a current price-list part, apply a manufacturer quote, or enter a manual price before continuing.</div>}
+    {!!expiredLines.length && <div className="warnbox spares-price-warning"><b>{expiredLines.length} price source{expiredLines.length === 1 ? '' : 's'} expired.</b>{' '}Use <b>Compare</b> in the Actions column to select a current approved price-list part, or enter a manual price.</div>}
+    {!!needsPricingLines.length && <div className="warnbox spares-price-warning"><b>{needsPricingLines.length} line{needsPricingLines.length === 1 ? '' : 's'} need pricing.</b>{' '}Use <b>Compare</b> to select a current approved price-list part or enter a manual price before continuing.</div>}
     {!!missingDescriptionLines.length && <div className="warnbox spares-price-warning"><b>{missingDescriptionLines.length} line{missingDescriptionLines.length === 1 ? '' : 's'} need{missingDescriptionLines.length === 1 ? 's' : ''} a description.</b>{' '}The customer reference alone is not enough to send this line to Proposal.</div>}
     {!!pricingExceptions.rows.length && <PricingApprovalCard approval={pricingApproval} approvers={pricingApprovers} role={store.role} pricingRows={pricingExceptions.rows} canRequest={(comm || pricingApprovers.includes(store.role)) && (!pricingApproval || pricingApproval.status === 'Rejected')} onRequest={requestPricingApproval} onDecide={decision => pricingApproval && store.recordDecision(pricingApproval.id, decision)} />}
     {proposalOnlyMismatch && <div className="warnbox sourcing-flow-warning"><b>Proposal data is not linked to Sourcing.</b> Existing proposal rows are not imported automatically. Add or import the real parts here before continuing to Proposal.</div>}
     <div className="sourcing-table-card">
-      <div className="sourcing-table-heading"><div><b>Source, adjust and validate each line here</b><span className="hint"> Price-list values are loaded first; vendor values are the fallback.</span></div><div className="sourcing-table-heading-actions"><span className="sourcing-currency-indicator" title={`All displayed amounts are in ${displayCurrency}`}>Currency: {displayCurrency} ({currencySymbol(displayCurrency)})</span>{comm && <label className="sourcing-currency-view">View amounts in <select value={displayCurrency} onChange={e => setDisplayCurrency(e.target.value)}>{displayCurrencies.map(currency => <option key={currency}>{currency}</option>)}</select></label>}{comm && <button type="button" className="sourcing-add-part-link" aria-expanded={showAddPart} onClick={openManualLine}>Add manual line</button>}{!comm && <span className="restricted"><Icon name="lock" size={12} /> Pricing restricted</span>}</div></div>
+      <div className="sourcing-table-heading"><div><b>BOQ lines — review quantity, price source, and totals</b><span className="hint"> Each line shows whether the price came from an approved price list, supplier quotation, or manual pricing.</span></div><div className="sourcing-table-heading-actions"><button type="button" className="sourcing-add-part-link" onClick={openBuilder}><Icon name="eye" size={13} /> Open BOQ preview</button><span className="sourcing-currency-indicator" title={`All displayed amounts are in ${displayCurrency}`}>Currency: {displayCurrency} ({currencySymbol(displayCurrency)})</span>{comm && <label className="sourcing-currency-view">View amounts in <select value={displayCurrency} onChange={e => setDisplayCurrency(e.target.value)}>{displayCurrencies.map(currency => <option key={currency}>{currency}</option>)}</select></label>}{comm && <button type="button" className="sourcing-add-part-link" aria-expanded={showAddPart} onClick={openManualLine}>Add manual line</button>}{!comm && <span className="restricted"><Icon name="lock" size={12} /> Pricing restricted</span>}</div></div>
       {comm && <div className="sourcing-costing-controls" aria-label="Sourcing costing basis">
         <b>Costing basis</b>
         <label>1 EUR = ₹ <input type="number" min="0.0001" step="0.01" value={costing.currencyRates.EUR || ''} onChange={e => updateCosting('currencyRates', { ...costing.currencyRates, EUR: n(e.target.value) })} onBlur={() => updateCosting('currencyRates', costing.currencyRates)} /></label>
@@ -510,9 +506,9 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
         <span className={handlingOutOfRange ? 'warnbox sourcing-costing-warning' : 'hint'}>{handlingOutOfRange ? `Combined total ${importFactorPct.toFixed(1)}% — recommended range is ${handlingMin}–${handlingMax}%` : `Combined: ${importFactorPct.toFixed(1)}% · Admin guide: ${handlingMin}–${handlingMax}%`}</span>
       </div>}
       <div ref={sourcingSheetWrapRef} className="sheet-wrap sourcing-sheet-wrap"><table id="sourcing-spares-grid" className="sheet sourcing-sheet sourcing-sheet--fixed border-collapse">
-        <thead><tr><th>Part number / customer reference</th><th>Description</th><th>Source</th><th>Qty</th><th>List unit</th><th>Discount %</th><th>Markup %</th><th>Adjusted Unit Price</th><th>Base cost</th><th>Original total</th><th>Quoted total</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Part number / customer reference</th><th>Description</th><th>Price source</th><th>Quantity</th><th>Unit price</th><th>Discount %</th><th>Markup %</th><th>Adjusted unit price</th><th>Base cost</th><th>Original total</th><th>Quoted total</th><th>Actions</th></tr></thead>
         <tbody>
-          {calculatedItems.map(item => { const line = item.sourceLine; const displayLine = reconcilePriceSource(line, store.priceLists, store.vendorQuotes); const row = { ...item, discountPct: item.discountPercent, markupPct: item.markupPercent, listTotal: item.listTotal, lineTotal: item.lineTotal, cogs: item.lineTotalCogs }; const confirmable = isConfirmableSparesLine(line); const invalidState = row.qty <= 0 ? 'Cannot confirm' : isMissingSparesDescription(line) ? 'Description required' : 'Needs pricing'; const rowMeta = line.sparesSupport ? 'Support charge' : [line.oem, line.leadTime && `Lead: ${line.leadTime}`].filter(Boolean).join(' · '); const partReference = sourcingPartReference(line); const removed = !!line.removedFromSourcing; return <tr key={line.id} className={row.qty === 0 ? 'sourcing-zero-row' : ''}>
+          {calculatedItems.map(item => { const line = item.sourceLine; const displayLine = reconcilePriceSource(line, store.priceLists, []); const row = { ...item, discountPct: item.discountPercent, markupPct: item.markupPercent, listTotal: item.listTotal, lineTotal: item.lineTotal, cogs: item.lineTotalCogs }; const confirmable = isConfirmableSparesLine(line); const invalidState = row.qty <= 0 ? 'Cannot confirm' : isMissingSparesDescription(line) ? 'Description required' : 'Needs pricing'; const rowMeta = line.sparesSupport ? 'Support charge' : [line.oem, line.leadTime && `Lead: ${line.leadTime}`].filter(Boolean).join(' · '); const partReference = sourcingPartReference(line); const removed = !!line.removedFromSourcing; return <tr key={line.id} className={row.qty === 0 ? 'sourcing-zero-row' : ''}>
             <td className="sourcing-cell-part-number align-top p-2 overflow-hidden" title={partReference}>{partReference}</td>
             <td className="sourcing-cell-description align-top p-2 overflow-hidden"><div className="sourcing-part-line">{comm && (removed ? <button type="button" className="sourcing-restore-row" title="Restore row to active proposal" aria-label={`Restore ${line.pn || line.id}`} onClick={() => restoreLine(line)}>✓</button> : <button type="button" className="sourcing-remove-row sourcing-row-action" title="Remove row from active proposal" aria-label={`Remove ${line.pn || line.id}`} onClick={() => removeLine(line)}><Icon name="x" size={14} /></button>)}<div className="sourcing-part-copy"><div className="sourcing-part-description line-clamp-2 text-xs font-medium text-gray-900 leading-snug" title={sourcingDescription(line)}>{sourcingDescription(line)}</div><small className="hint truncate overflow-hidden text-ellipsis whitespace-nowrap">{rowMeta}</small></div></div></td>
             <td className="sourcing-cell-source align-top p-2 overflow-hidden"><div className="sourcing-source-stack">{(() => { const source = sourceDetails(displayLine); const attribution = manualAttribution(line); const sourcePayload = { ...source, pn: displayLine.pn || displayLine.custRef || displayLine.id, priceState: displayLine.priceState || 'Unstated', listPrice: displayLine.listUnitPrice ?? displayLine.listPrice, currency: displayLine.currency || 'INR', addedBy: attribution.addedByName || attribution.addedBy || '', addedAt: attribution.addedAt || '' }; const isCatalogued = source.source === PRICE_SOURCES.LIST && priceListNameFor(displayLine); return <><div className="sourcing-source-primary">{isCatalogued ? <button type="button" className="sourcing-source-link sourcing-source-name" title={`Open ${source.full} in the price list`} aria-label={`Open ${source.full} in the price list`} onClick={() => openPriceList(displayLine)}>{source.primary}</button> : <button type="button" className="sourcing-source-details-link sourcing-source-name" title={`View full source: ${source.full}`} aria-label={`View full source: ${source.full}`} onClick={() => setEvidence(sourcePayload)}>{source.primary}</button>}</div>{source.secondary && <span className="sourcing-source-meta" title={source.full}>{source.secondary}</span>}{line.priceState === 'Expired' ? <><Chip tone="state-Blocks">Expired</Chip><AiBadge label="pricing anomaly" /></> : line.priceState === 'Needs pricing' ? <Chip tone="state-Review">Needs pricing</Chip> : source.source !== PRICE_SOURCES.MANUAL ? <Chip tone="state-Accepted">Current</Chip> : null}</> })()}</div></td>
@@ -539,7 +535,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
           <div><span>Gross Margin</span><strong className={`inline-flex items-center px-2 py-0.5 rounded font-bold bg-red-100 text-red-700 text-xs ${grossMarginPct >= 0 ? 'is-positive' : ''}`}>{grossMarginPct.toFixed(1)}%</strong></div>
           <div className="sourcing-summary-validity"><span>Quote Validity</span><strong>{quoteValidityDays} days</strong></div>
         </div>
-        <div className="sourcing-summary-actions ml-auto flex-shrink-0"><button className="primary sourcing-summary-action bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded text-xs transition-colors" disabled={!canContinueToProposal} title={continueTitle} onClick={sendToProposal}><Icon name="arrowRight" size={13} /> Continue to proposal</button></div>
+        <div className="sourcing-summary-actions ml-auto flex-shrink-0"><button className="primary sourcing-summary-action" disabled={!canContinueToProposal} title={continueTitle} onClick={sendToProposal}><Icon name="arrowRight" size={13} /> Next: Proposal</button></div>
       </div>}
       {showAddPart && <Modal title="Add manual part" onClose={() => { setShowAddPart(false); setManualLineError('') }} className="sourcing-manual-modal">
         <form className="sourcing-manual-form" onSubmit={event => { event.preventDefault(); addManual() }}>
@@ -570,7 +566,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
           <div className="compare-alt-header">
             <b>{a.pn}</b>
             {isAiSuggested && <AiBadge label="AI suggested" />}
-            {a.conf != null && <ConfChip conf={a.conf} thresholds={store.config?.aiThresholds} />}
+            {a.conf != null && <ConfChip conf={a.conf} label="AI match" thresholds={store.config?.aiThresholds} />}
             {a.priceState === 'Expired' ? <Chip tone="state-Blocks">Expired price</Chip> : <Chip tone="state-Accepted">Current price</Chip>}
             <Chip tone={src.tone}>{src.label}</Chip>
           </div>

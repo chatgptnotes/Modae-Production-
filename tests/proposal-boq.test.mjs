@@ -74,14 +74,14 @@ test('a proposal with no groups still gets Item-10', () => {
 // Column sets come from the sample headers, one per variant.
 test('each variant carries its sample column set', () => {
   assert.deepEqual(labels('project'), [
-    'Sl.', 'Item Category', 'Item/Scope Description', 'Proposed Model & Part Number',
-    'Qty Per Unit', 'Common', 'Spares', 'Total Qty', 'Unit Price ₹', 'Total Price ₹',
+    'Sl.', 'BOQ Line Category', 'Scope / Equipment Description', 'Proposed Model & Part Number',
+    'Quantity Per Unit', 'Common', 'Spares', 'Total Quantity', 'Unit Price ₹', 'Total Price ₹',
   ])
   assert.deepEqual(labels('firm'), [
-    'Sl.', 'Item Description', 'Proposed Model/Part No.', 'Qty', 'Unit Price ₹', 'Total Price ₹',
+    'Sl.', 'Scope / Equipment Description', 'Proposed Model/Part No.', 'Quantity', 'Unit Price ₹', 'Total Price ₹',
   ])
   assert.deepEqual(labels('rate'), [
-    'Sl.', 'Item Description', 'Total Qty', 'Unit Price ₹', 'Total Price ₹',
+    'Sl.', 'Scope / Equipment Description', 'Total Quantity', 'Unit Price ₹', 'Total Price ₹',
   ])
 })
 
@@ -111,7 +111,7 @@ test('Spares transfer order keeps support rows last and stable', () => {
 
 // The app used to compute Qty/Unit, Common and Spares but print only the total.
 test('the project sheet publishes the quantity build-up', () => {
-  for (const col of ['Qty Per Unit', 'Common', 'Spares', 'Total Qty']) {
+  for (const col of ['Quantity Per Unit', 'Common', 'Spares', 'Total Quantity']) {
     assert.ok(labels('project').includes(col), `the project BoQ must show ${col}`)
   }
 })

@@ -90,7 +90,7 @@ test('proposal workbook parser ignores branding-only rows above customer content
     ['', '', '', '', '', 'Your Partners In Achieving Excellence'],
     ['', '', '', '', '', 'Your Partners In Achieving Excellence'],
     ['Item-10', 'Proposal for NMCL'],
-    ['Sl. No.', 'Item Description'],
+    ['Sl. No.', 'Scope / Equipment Description'],
   ])
   XLSX.utils.book_append_sheet(book, sheet, 'Firm Rev-00')
   const parsed = parseProposalWorkbook(XLSX.write(book, { bookType: 'xlsx', type: 'array' }), 'offer.xlsx')

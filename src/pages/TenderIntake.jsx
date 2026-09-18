@@ -10,7 +10,7 @@ import { runJson } from '../ai.js'
 
 const STAGES_MSG = [
   'Reading document…',
-  'AI extracting header & line items…',
+  'AI extracting header & BOQ lines…',
   'Matching parts against price lists…',
   'Checking clauses against ModAE standard terms…',
 ]
@@ -302,7 +302,7 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
               </select>
             )}
             <div className="costing-note">
-              AI reads the document, extracts line items and commercial terms, checks them against ModAE standards —
+              AI reads the document, extracts BOQ lines and commercial terms, checks them against ModAE standards —
               and you confirm every field before anything is created.
             </div>
             </div>}
@@ -388,8 +388,8 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
                   <select value={draft.bu} onChange={setD('bu')}>{BUS.map(c => <option key={c}>{c}</option>)}</select></div>
                 <div><label>Segment</label>
                   <select value={draft.segment} onChange={setD('segment')}>{SEGMENTS.map(c => <option key={c}>{c}</option>)}</select></div>
-                <div><label>Product</label>
-                  <select value={draft.product} onChange={setD('product')}>{PRODUCTS.map(c => <option key={c}>{c}</option>)}</select></div>
+                <div><label>Equipment / Product Family</label>
+                  <select value={draft.product} onChange={setD('product')}>{PRODUCTS.map(c => <option key={c} value={c}>{c === 'Various' ? 'Multiple equipment items' : c}</option>)}</select></div>
                 <div><label>Contact Person</label><input value={draft.contactPerson} onChange={setD('contactPerson')} /></div>
                 <div><label>Contact Phone # <span className="hint">(not in document)</span></label>
                   <input className={draft.contactPhone ? '' : 'needs-input'} value={draft.contactPhone} onChange={setD('contactPhone')} /></div>
@@ -403,12 +403,12 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
           )}
 
           <div className="section-title">
-            Line items ({items.length}) <ConfBadge v={parse.confidence.items} />
+            BOQ lines ({items.length}) <ConfBadge v={parse.confidence.items} />
           </div>
           <div className="sheet-wrap" style={{ marginBottom: 14 }}>
             <table className="sheet">
               <thead>
-                <tr><th></th><th>S/N</th><th>Description</th><th>Item Code (SAP)</th><th>Part Number</th><th>UOM</th><th>Qty</th><th>Price source</th><th></th></tr>
+                <tr><th></th><th>S/N</th><th>Scope description</th><th>Item Code (SAP)</th><th>Part Number</th><th>UOM</th><th>Quantity</th><th>Price source</th><th></th></tr>
               </thead>
               <tbody>
                 {items.map((it, i) => (

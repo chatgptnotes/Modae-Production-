@@ -30,8 +30,8 @@ export function SignalListSheet({ p }) {
             <th>Measurement Parameter</th>
             <th>Sensor Type</th>
             <th>Sensor Location</th>
-            <th className="num">Qty Per Unit</th>
-            <th className="num">Total Qty</th>
+            <th className="num">Quantity Per Unit</th>
+            <th className="num">Total Quantity</th>
           </tr>
         </thead>
         <tbody>
@@ -108,7 +108,7 @@ export function RackLayoutSheet({ rack, p }) {
         <>
           <div className="doc-block-h">Modules</div>
           <table className="doc-table">
-            <thead><tr><th>Module</th><th>Part number</th><th className="num">Qty</th></tr></thead>
+            <thead><tr><th>Module</th><th>Part number</th><th className="num">Quantity</th></tr></thead>
             <tbody>
               {rack.modules.filter(m => m.qty > 0).map(m => (
                 <tr key={m.key}>

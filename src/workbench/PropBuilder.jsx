@@ -33,25 +33,25 @@ export default function PropBuilder({ opp, onRevision }) {
   const [tcSim, setTcSim] = useState(false)
 
   const revisions = p.revisions || []
-  // Scoped to the current revision: a revised quote is no longer released,
-  // so 'Submit for approval' re-opens rather than staying permanently locked.
-  const serviceReview = opp.route === 'Service' ? serviceApprovalSet(store.approvals, opp.id)[0] : null
+  // Snapshot-backed approvals survive unrelated edits; material changes reopen
+  // only the affected approval domain.
+  const serviceReview = opp.route === 'Service' ? serviceApprovalSet(store.approvals, opp.id, p, opp)[0] : null
   const { pending: pendingRelease, release } = opp.route === 'Service'
     ? { pending: serviceReview?.pending, release: serviceReview?.approved }
-    : releaseState(p, store.approvals, opp.id)
+    : releaseState(p, store.approvals, opp.id, opp)
   const released = !!release
   // Diagram 02 §5 — technical, commercial and margin are drawn as one
   // checkpoint feeding "All Approvals Completed → Quote Ready for Dispatch",
   // so they are shown together rather than discovered one blocker at a time.
-  // Each covers the current revision only.
+  // Each approval is evaluated against the current proposal snapshot.
   const gates5 = opp.route === 'Service'
-    ? serviceApprovalSet(store.approvals, opp.id)
-    : approvalSet(p, store.approvals, opp.id)
+    ? serviceApprovalSet(store.approvals, opp.id, p, opp)
+    : approvalSet(p, store.approvals, opp.id, opp)
   const allApproved = gates5.every(g => !!g.approved)
 
   // Content sections come from the workbook; the rest are auto-drafted by
   // proposalDoc and the checkbox records that a human has read them.
-  const CONTENT = { 'Line items / BOQ': () => (p.bom || []).length > 0, Terms: () => (p.terms || []).length > 0 }
+  const CONTENT = { 'BOQ / scope lines': () => (p.bom || []).length > 0, Terms: () => (p.terms || []).length > 0 }
   const sectionDone = s => (CONTENT[s] ? CONTENT[s]() : !!manualDone[s])
   const derived = s => !!CONTENT[s]
 
@@ -158,7 +158,7 @@ export default function PropBuilder({ opp, onRevision }) {
           </div>
         ))}
         <p className="hint" style={{ marginTop: 8 }}>
-          Line items and Terms derive from the workbook. The rest are auto-drafted into the printed
+          BOQ / scope lines and Terms derive from the workbook. The rest are auto-drafted into the printed
           document and editable on the proposal's Document tab — tick each once you have read it.
         </p>
       </div>
@@ -171,7 +171,7 @@ export default function PropBuilder({ opp, onRevision }) {
           <p style={{ margin: '6px 0' }}>Kind attn: {p.kindAttn || opp.contactPerson}</p>
           <p style={{ margin: '6px 0' }}><b>Subject:</b> {p.subject || `Proposal For ${opp.oppName}`}</p>
           <p style={{ margin: '6px 0' }}><b>Ref:</b> {opp.id} · Rev {p.revision}</p>
-          <p style={{ margin: '6px 0' }}><b>Line items:</b> {totalLine}</p>
+          <p style={{ margin: '6px 0' }}><b>BOQ lines:</b> {totalLine}</p>
           {!comm && <p className="hint"><Icon name="lock" size={11} /> Commercial totals restricted — sales owners, approvers and admin only.</p>}
           <p className="hint">Full document includes: {PROP_SECTIONS.join(' · ')}.</p>
         </div>

@@ -95,6 +95,7 @@ export const productList = v => (Array.isArray(v)
   ? v.filter(Boolean)
   : String(v || '').split(',').map(s => s.trim()).filter(Boolean))
 export const productLabel = v => productList(v).join(', ')
+export const productDisplayLabel = v => productLabel(v).replace(/\bVarious\b/g, 'Multiple equipment items')
 // Solution is multi-value in the opportunity editor. Keep older records that
 // stored one solution as a string readable while new edits use an array.
 export const solutionList = v => (Array.isArray(v)

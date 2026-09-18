@@ -2,9 +2,9 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, REVISION_TYPES, DEFAULT_WORKFLOW, isWorkflowAvailable } from '../seed.js'
-import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY, gmailComposeHref, displayRole, displayRoles, displayRoleLabel, formatISTDateTime } from '../utils.js'
+import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY, gmailComposeHref, displayRole, displayRoles, displayRoleLabel, formatISTDateTime, productDisplayLabel } from '../utils.js'
 import { pricingThresholdExceptions, readiness, isBlocked, nextActionWith, transitionBlockers, isClarificationResolved, actionableClarifications } from '../gates.js'
-import { COMMERCIAL_RX, ConditionCompletion } from './Approvals.jsx'
+import { COMMERCIAL_RX } from './Approvals.jsx'
 import { Chip, ClassChip, AiBadge, WarnBox, ErrBox, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 import { productBrandProfiles } from '../branding/modae.js'
@@ -352,7 +352,7 @@ export default function Workbench() {
   const approvalContextFor = blocker => {
     const lead = (store.leads || []).find(l => l.oppId === opp.id)
     const aiSummary = lead?.ai?.summary?.trim() || ''
-    const fallbackSummary = `${opp.oppName || 'This opportunity'} is a ${opp.route || 'sales'} opportunity for ${opp.sellTo || 'the customer'}${opp.product ? ` covering ${Array.isArray(opp.product) ? opp.product.join(', ') : opp.product}` : ''}.`
+    const fallbackSummary = `${opp.oppName || 'This opportunity'} is a ${opp.route || 'sales'} opportunity for ${opp.sellTo || 'the customer'}${opp.product ? ` covering ${productDisplayLabel(opp.product)}` : ''}.`
     const deviations = blocker.key === 'dev'
       ? (proposal?.terms || []).filter(t => t.status === 'Deviation').map(t => ({
         term: t.term,
@@ -435,7 +435,7 @@ export default function Workbench() {
     if (blocker.key === 'comm-approval') return 'Section 5B: the commercial position must be signed off by AH before the quote can be dispatched.'
     if (blocker.key === 'release') return 'Section 5C: the final quote release, routed by order value and margin. It covers this revision only — a revised quote must be released again.'
     if (blocker.key.startsWith('sp-conf-')) return 'This spares line’s part match has not been confirmed. Confirm the match — or pick an alternative — in Sourcing before the proposal can be built.'
-    if (blocker.key.startsWith('sp-price-')) return 'This spares line’s price source has expired. Refresh it against a current price list or vendor quote in Sourcing.'
+    if (blocker.key.startsWith('sp-price-')) return 'This spares line’s price source has expired. Refresh it against a current price list or supplier quotation in Sourcing.'
     if (blocker.key === 'pricing-threshold') return 'A discount or markup exceeds the Admin-configured limit. Request one approval from AH or LJS before continuing.'
     return 'Complete the requirement shown below before continuing.'
   }
@@ -626,7 +626,7 @@ function CommercialDecisionPanel({ opp }) {
     if (!deviationDetails.length) return
     const lead = (store.leads || []).find(item => item.oppId === opp.id)
     const aiSummary = lead?.ai?.summary?.trim() || ''
-    const opportunitySummary = aiSummary || `${opp.oppName || 'This opportunity'} is a ${opp.route || 'sales'} opportunity for ${opp.sellTo || 'the customer'}${opp.product ? ` covering ${Array.isArray(opp.product) ? opp.product.join(', ') : opp.product}` : ''}.`
+    const opportunitySummary = aiSummary || `${opp.oppName || 'This opportunity'} is a ${opp.route || 'sales'} opportunity for ${opp.sellTo || 'the customer'}${opp.product ? ` covering ${productDisplayLabel(opp.product)}` : ''}.`
     store.requestApproval({
       oppId: opp.id,
       type: 'Commercial deviation',
@@ -745,7 +745,9 @@ function RegistrationTab({ opp, goTab, detailsRef, spares = false }) {
         )}
       </div>
       <div className="ana-card c-12">
-        <OpportunityDetailsEditor ref={detailsRef} opp={opp} store={store} className="workbench-details-editor" />
+        {['Intake', 'Registration'].includes(opp.milestone)
+          ? <OpportunityDetailsEditor ref={detailsRef} opp={opp} store={store} className="workbench-details-editor" editable />
+          : <OpportunityDetailsView opp={opp} className="workbench-details-editor" />}
       </div>
     </div>
   )
@@ -763,7 +765,7 @@ function RequirementTab({ opp }) {
     ['Contact', `${opp.contactPerson || '—'} ${opp.contactPhone || ''}`],
     ['Stage', opp.stage || '—'], ['Probability', opp.prob || '—'],
     ['BU', opp.bu || '—'], ['Segment', opp.segment || '—'],
-    ['Product', Array.isArray(opp.product) ? opp.product.join(', ') || '—' : opp.product || '—'],
+    ['Equipment / Product Family', productDisplayLabel(opp.product) || '—'],
     ['Additional customer information', opp.additionalCustomerInformation || '—'],
   ]
 
@@ -1192,7 +1194,7 @@ function AiFieldSuggestion({ suggestion, onConfirm, onReject }) {
 // ---------------------------------------------------------------------------
 const CLAR_SUGGESTIONS = {
   Spares: [
-    { category: 'Technical', gap: 'Part identification incomplete', q: 'Please confirm nameplate part numbers, quantities and any legacy / superseded references for each line item.', evidence: 'RFQ line items' },
+    { category: 'Technical', gap: 'Part identification incomplete', q: 'Please confirm nameplate part numbers, quantities and any legacy / superseded references for each BOQ line.', evidence: 'RFQ BOQ lines' },
     { category: 'Commercial', gap: 'Delivery basis missing', q: 'Confirm the required delivery period and destination (ex-works or door delivery).', evidence: 'RFQ email' },
   ],
   Service: [
@@ -1646,7 +1648,6 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
             <label className="afield">Source
               <select value={answerForm.answerSource} onChange={e => setAnswerForm({ ...answerForm, answerSource: e.target.value })}>
                 <option>Customer</option>
-                <option>Manufacturer / Vendor</option>
                 <option>Internal</option>
               </select>
             </label>
@@ -2175,7 +2176,6 @@ function ApprovalsTab({ opp }) {
     const current = pricingThresholdExceptions(opp, store.getProposal(opp.id), store).rows
     return current.length ? current : (a.pricingRows || [])
   }
-  const canCompleteCondition = a => store.role === opp.owner || store.role === a.requestedBy
   return (
     <div>
       {rows.map(a => (
@@ -2206,25 +2206,6 @@ function ApprovalsTab({ opp }) {
               )
             })}
           </div>
-          {(a.conditions || []).length > 0 && (
-            <div style={{ marginTop: 6 }}>
-              {a.conditions.map((c, i) => (
-                <div key={i} className="approval-condition-row">
-                  <div className="approval-condition-text">{c.text}</div>
-                  <ConditionCompletion
-                    approval={a}
-                    index={i}
-                    condition={c}
-                    canComplete={canCompleteCondition(a)}
-                    onConfirm={store.confirmCondition}
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-          {!canCompleteCondition(a) && (a.conditions || []).some(c => !c.incorporated) && (
-            <div className="hint" style={{ marginTop: 6 }}>The opportunity owner confirms incorporation of open conditions.</div>
-          )}
         </div>
       ))}
       {!rows.length && <p className="hint">No approvals raised for this opportunity yet — the builder routes them when needed.</p>}
@@ -2290,7 +2271,7 @@ function LegacyCommsTab({ opp }) {
     .map(q => ({
       id: `vendor-response-${q.id}`, ts: q.receivedAt || q.sentAt, dir: 'In',
       from: q.email, fromName: q.manufacturer, to: displayRole(opp.owner),
-      subject: q.subject || `Vendor response - ${q.manufacturer}`, body: q.body || q.notes,
+      subject: q.subject || `Supplier response - ${q.manufacturer}`, body: q.body || q.notes,
       kind: 'vendor-response', simulated: true, attachmentNames: q.attachmentNames || [],
     }))
   const rows = [...inbound, ...leadRows, ...opportunityRows, ...simulatedVendorRows]

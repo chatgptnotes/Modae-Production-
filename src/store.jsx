@@ -17,7 +17,7 @@ import { unitCostINR, unitSellINR, setRoleNameConfig, nowIST, toISTISOString } f
 import { PRICE_SOURCES, isConfirmableSparesLine, normalizePriceFields, sparesLineFinancials } from './pricing.js'
 import { clarificationTopic } from './leadClarification.js'
 import { normalizedCurrencyRates } from './currency.js'
-import { approvalMemoryKey } from './approvalMemory.js'
+import { approvalMemoryKey, proposalApprovalSnapshot } from './approvalMemory.js'
 import { syncProposalFromOpportunity } from './proposal/opportunitySync.js'
 import {
   isPlaceholderSparesLine,
@@ -356,6 +356,19 @@ export function StoreProvider({ children }) {
       // Status-folder diff BEFORE the patch lands — a stage change (Won/Lost/
       // reopen) moves the SharePoint folder between the four status folders.
       const before = stateRef.current.opportunities.find(o => o.id === id)
+      // Registration facts are editable only while the opportunity is being
+      // captured. Later stages, including Approval, must not rewrite the
+      // values an approver reviewed.
+      const editableMilestones = new Set(['Intake', 'Registration'])
+      const detailFields = new Set([
+        'owner', 'oppName', 'opportunityScope', 'rfqNumber', 'rfqDate', 'valueK',
+        'sellTo', 'category', 'location', 'customerStatus', 'eucName',
+        'eucLocation', 'oppType', 'bu', 'segment', 'solution', 'product',
+        'prob', 'contactPerson', 'contactPhone', 'additionalCustomerInformation',
+      ])
+      if (before && !editableMilestones.has(before.milestone)) {
+        patch = Object.fromEntries(Object.entries(patch).filter(([key]) => !detailFields.has(key)))
+      }
       // A type change re-derives both branching axes — leaving a Retrofit on
       // the Greenfield lane would silently skip the B-01..B-05 chain.
       if (patch.oppType) {
@@ -812,9 +825,24 @@ export function StoreProvider({ children }) {
           }, 'Approval request context updated', alreadyRemembered.id, `${alreadyRemembered.type} — ${alreadyRemembered.oppId}`)
         }
         const id = mintId('AP', s.approvals, 100)
+        const previous = s.approvals
+          .filter(existing => existing.oppId === req.oppId
+            && existing.type === req.type
+            && existing.status === 'Rejected'
+            && (existing.approvalKey || approvalMemoryKey(existing)) === memoryKey)
+          .sort((a, b) => (b.decisionTs || b.ts || '').localeCompare(a.decisionTs || a.ts || ''))[0]
+        const previousRejection = previous ? {
+          approvalId: previous.id,
+          comment: previous.decisionNote || '',
+          requiredActions: previous.rejectionActions?.length
+            ? previous.rejectionActions
+            : [previous.decisionNote].filter(Boolean),
+        } : null
         const appr = {
           id, status: 'Pending', conditions: [], decisionTs: '', decisionNote: '',
           ts: new Date().toISOString(), requestedBy: s.role, ...req, approvalKey: memoryKey,
+          approvalSnapshot: req.approvalSnapshot || proposalApprovalSnapshot(s.proposals[req.oppId], s.opportunities.find(item => item.id === req.oppId)),
+          ...(previousRejection ? { previousRejection } : {}),
         }
         return withAudit(
           { ...s, approvals: [appr, ...s.approvals] },
@@ -984,17 +1012,22 @@ export function StoreProvider({ children }) {
     // ---- Joint approvals (BT flow: needed:[roles] × decisions) ------------
     // Records one approver's decision; overall status resolves when every
     // needed role has decided (any Reject → Rejected immediately).
-    recordDecision(id, { d, comment = '', conditions = [] }) {
+    recordDecision(id, { d, comment = '', commentReview = null }) {
       setState(s => {
         const appr = s.approvals.find(a => a.id === id)
         if (!appr) return s
+        // The active approval workflow has only two outcomes. Historical
+        // conditional/returned records remain readable but cannot be created.
+        if (!['Approved', 'Rejected'].includes(d)) return s
         const needed = appr.needed || [appr.approver].filter(Boolean)
         // Guard at the model layer, not only in Approvals.canDecide. Keying by
         // persona alone let an ADMIN/SUPER decision land outside `needed`, and
         // `needed.every(...)` then never came true — stranding a joint gate at
         // Pending with no way back.
         if (needed.length && !needed.includes(s.role)) return s
-        const decisions = { ...(appr.decisions || {}), [s.role]: { d, c: comment, when: new Date().toISOString() } }
+        const decisions = { ...(appr.decisions || {}), [s.role]: {
+          d, c: comment, when: new Date().toISOString(), commentReview,
+        } }
         // Diagram 02 §5 names two approvers on some gates but only needs one of
         // them: 5A technical is "LJS *or* AN", and the "< ₹10 L & <= 50%" row of
         // the 5C margin matrix is "AH *or* LJS". `anyOf` marks those; every
@@ -1003,22 +1036,24 @@ export function StoreProvider({ children }) {
         // rather than sending the request round to the other.
         const allIn = appr.anyOf ? needed.some(r => decisions[r]) : needed.every(r => decisions[r])
         const anyRejected = Object.values(decisions).some(x => x.d === 'Rejected')
-        const anyReturned = Object.values(decisions).some(x => x.d === 'Returned')
-        const newConds = conditions.filter(Boolean).map(text => ({ text, incorporated: false, note: '' }))
-        const allConds = [...(appr.conditions || []), ...newConds]
         const status = anyRejected ? 'Rejected'
           : !allIn ? 'Pending'
-          : anyReturned ? 'Returned'
-          : allConds.length ? 'Approved with conditions' : 'Approved'
+          : 'Approved'
         let next = {
           ...s,
           approvals: s.approvals.map(a => a.id === id
-            ? { ...a, decisions, conditions: allConds, status,
+            ? { ...a, decisions, status,
                 decisionTs: status === 'Pending' ? a.decisionTs : new Date().toISOString(),
-                decisionNote: comment || a.decisionNote }
+                decisionNote: comment || a.decisionNote,
+                ...(status === 'Rejected' ? {
+                  rejectionActions: commentReview?.requiredActions?.length
+                    ? commentReview.requiredActions
+                    : [comment].filter(Boolean),
+                  rejectionCommentReview: commentReview || null,
+                } : {}) }
             : a),
         }
-        if (status !== 'Pending') next = applyApprovalEffects(next, { ...appr, status, conditions: allConds })
+        if (status !== 'Pending') next = applyApprovalEffects(next, { ...appr, status })
         return withAudit(next, `Approval ${d.toLowerCase()}`, id, comment)
       })
     },

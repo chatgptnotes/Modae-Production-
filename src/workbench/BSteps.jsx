@@ -36,7 +36,7 @@ export default function BSteps({ opp, steps = ALL_B_STEPS, title = 'Brownfield w
           {title} <Chip tone={done === steps.length ? 'state-Accepted' : 'grey'}>{done} of {steps.length} signed</Chip>
         </div>
         <p className="hint">
-          The assigned salesperson, or LJS, must sign each activity in order before the proposal can go
+          The Opportunity Owner, or LJS, must sign each activity in order before the proposal can go
           for approval. Revisions reopen the step that owns the change.
         </p>
       </div>
@@ -51,7 +51,7 @@ export default function BSteps({ opp, steps = ALL_B_STEPS, title = 'Brownfield w
           <div key={step.id} className={'ana-card c-6' + (isNext ? ' b-step-current' : '')}>
             <div className="ana-title">
               {step.id} - {step.label}
-              <span className="hint">Assigned salesperson: {displayRole(opp.owner)}</span>
+              <span className="hint">Opportunity Owner: {displayRole(opp.owner)}</span>
               {ok
                 ? <Chip tone="state-Accepted">Signed</Chip>
                 : isNext ? <Chip tone="state-Review">Next</Chip> : <Chip tone="grey">Waiting</Chip>}
