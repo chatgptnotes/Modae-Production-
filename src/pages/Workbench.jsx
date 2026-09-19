@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, REVISION_TYPES, DEFAULT_WORKFLOW, isWorkflowAvailable } from '../seed.js'
 import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY, gmailComposeHref, displayRole, displayRoles, displayRoleLabel, formatISTDateTime, productDisplayLabel } from '../utils.js'
-import { pricingThresholdExceptions, readiness, isBlocked, nextActionWith, transitionBlockers, isClarificationResolved, actionableClarifications, releaseVoidReason } from '../gates.js'
+import { pricingThresholdExceptions, readiness, isBlocked, nextActionWith, transitionBlockers, isClarificationResolved, actionableClarifications, displayClarifications, isClarificationCoveredBySource, releaseVoidReason } from '../gates.js'
 import { COMMERCIAL_RX } from './Approvals.jsx'
 import { Chip, ClassChip, AiBadge, WarnBox, ErrBox, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
@@ -1215,8 +1215,8 @@ const CLAR_SUGGESTIONS = {
   ],
 }
 
-const clarTone = s => (s === 'Answered' ? 'state-Accepted' : ['Sent', 'Needs review'].includes(s) ? 'state-Review' : 'grey')
-const clarificationStatus = clarification => isClarificationResolved(clarification) ? 'Answered' : clarification.status
+const clarTone = s => (['Answered', 'Covered by source'].includes(s) ? 'state-Accepted' : ['Sent', 'Needs review'].includes(s) ? 'state-Review' : 'grey')
+const clarificationStatus = (clarification, covered = false) => covered ? 'Covered by source' : isClarificationResolved(clarification) ? 'Answered' : clarification.status
 
 function ClarificationsTab({ opp, sourceText = '', compact = false }) {
   const store = useStore()
@@ -1225,13 +1225,15 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
   // The same topic-level list drives the cards and lifecycle gates. Repeated
   // imports remain auditable in state, but one completed answer clears the
   // shared customer fact instead of leaving a hidden duplicate open.
-  const rows = actionableClarifications(opp, store)
+  const rows = displayClarifications(opp, store)
+  const coveredIds = new Set(rows.filter(c => isClarificationCoveredBySource(opp, c, store)).map(c => c.id))
   // Sent questions are still waiting for the customer's reply. Only answered
   // questions should be excluded from the single-reply update flow.
-  const open = rows.filter(c => !isClarificationResolved(c))
-  const awaitingReply = rows.filter(c => !isClarificationResolved(c) && c.status === 'Sent').length
-  const needsReview = rows.filter(c => !isClarificationResolved(c) && c.status === 'Needs review').length
-  const answered = rows.filter(c => isClarificationResolved(c)).length
+  const open = rows.filter(c => !coveredIds.has(c.id) && !isClarificationResolved(c))
+  const awaitingReply = rows.filter(c => !coveredIds.has(c.id) && !isClarificationResolved(c) && c.status === 'Sent').length
+  const needsReview = rows.filter(c => !coveredIds.has(c.id) && !isClarificationResolved(c) && c.status === 'Needs review').length
+  const answered = rows.filter(c => !coveredIds.has(c.id) && isClarificationResolved(c)).length
+  const covered = coveredIds.size
   const [draftOpen, setDraftOpen] = useState(false)
   const [draft, setDraft] = useState(null)
   const [sentOk, setSentOk] = useState(false)
@@ -1567,7 +1569,7 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
       {compact && <div className={`clarification-status ${open.length ? 'is-blocked' : 'is-clear'}`} role="status">
         <div><b>{open.length ? 'Sourcing is blocked' : 'Ready for sourcing'}</b><span>{open.length ? ' Answer every customer clarification before moving to Spares Sourcing.' : ' All customer clarifications are resolved.'}</span></div>
         <div className="clarification-counts" aria-label="Clarification status summary">
-          <span><b>{rows.length}</b> total</span><span><b>{open.length}</b> open</span><span><b>{awaitingReply}</b> awaiting reply</span><span><b>{needsReview}</b> needs review</span><span><b>{answered}</b> answered</span>
+          <span><b>{rows.length}</b> total</span><span><b>{open.length}</b> open</span><span><b>{awaitingReply}</b> awaiting reply</span><span><b>{needsReview}</b> needs review</span><span><b>{answered}</b> answered</span><span><b>{covered}</b> covered by source</span>
         </div>
       </div>}
       {compact && <div className="clarification-cards">
@@ -1575,15 +1577,15 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
           <article className="clarification-card" key={c.id}>
             <div className="clarification-card-head">
               <div className="clarification-card-label"><b>{c.category}</b><span>Clarification {index + 1}</span></div>
-              <Chip tone={clarTone(clarificationStatus(c))}>{clarificationStatus(c)}</Chip>
+              <Chip tone={clarTone(clarificationStatus(c, coveredIds.has(c.id)))}>{clarificationStatus(c, coveredIds.has(c.id))}</Chip>
             </div>
             <div className="clarification-card-question">{c.q}</div>
             <div className="clarification-card-meta"><span><b>Gap:</b> {c.gap}</span><span><b>Evidence:</b> {c.evidence || '—'}</span><span><b>Owner:</b> {displayRole(c.owner)}</span><span><b>Due:</b> {ddMmmYY(c.due) || '—'}</span></div>
             {(c.response || c.missing) && <div className={`clarification-answer-box ${clarificationStatus(c) === 'Needs review' ? 'needs-review' : 'answered'}`}>{c.response && <>Response: {c.response}</>}{c.missing && <div className="hint"><b>Still needed:</b> {c.missing}</div>}<div className="hint">From {c.answerSource || c.audience || 'source'}{c.answeredAt ? ` · ${ddMmmYY(c.answeredAt)}` : ''}</div>{c.answerEvidence && <div className="hint">Evidence: {c.answerEvidence}</div>}{(c.attachments || []).map(f => <div key={f.name} className="hint"><Icon name="fileText" size={11} /> {f.name}</div>)}</div>}
             <AiFieldSuggestion suggestion={c.aiFieldSuggestion} onConfirm={() => confirmAiField(c)} onReject={() => rejectAiField(c)} />
             <div className="clarification-card-actions">
-              <label>Updates field<select value={c.field || ''} disabled={isClarificationResolved(c)} title="Once answered, apply this response straight to that Opportunity Details field" onChange={e => store.updateClarification(c.id, { field: e.target.value })}>{OPP_FIELD_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
-              <button onClick={() => openAnswer(c)}>{isClarificationResolved(c) ? 'Edit information' : 'Update information'}</button>
+              <label>Updates field<select value={c.field || ''} disabled={coveredIds.has(c.id) || isClarificationResolved(c)} title="Once answered, apply this response straight to that Opportunity Details field" onChange={e => store.updateClarification(c.id, { field: e.target.value })}>{OPP_FIELD_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+              <button disabled={coveredIds.has(c.id)} onClick={() => openAnswer(c)}>{coveredIds.has(c.id) ? 'Source already covers this' : isClarificationResolved(c) ? 'Edit information' : 'Update information'}</button>
             </div>
           </article>
         ))}
@@ -1602,16 +1604,16 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
                 <td>{displayRole(c.owner)}</td>
                 <td>{c.audience}</td>
                 <td>{ddMmmYY(c.due)}</td>
-                <td><Chip tone={clarTone(clarificationStatus(c))}>{clarificationStatus(c)}</Chip></td>
+                <td><Chip tone={clarTone(clarificationStatus(c, coveredIds.has(c.id)))}>{clarificationStatus(c, coveredIds.has(c.id))}</Chip></td>
                 <td>
-                  <select value={c.field || ''} disabled={isClarificationResolved(c)}
+                  <select value={c.field || ''} disabled={coveredIds.has(c.id) || isClarificationResolved(c)}
                     title="Once answered, apply this response straight to that Opportunity Details field"
                     onChange={e => store.updateClarification(c.id, { field: e.target.value })}>
                     {OPP_FIELD_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
                   </select>
                 </td>
                 <td>
-                  <button onClick={() => openAnswer(c)}>{c.status === 'Answered' ? 'Edit information' : 'Update information'}</button>
+                  <button disabled={coveredIds.has(c.id)} onClick={() => openAnswer(c)}>{coveredIds.has(c.id) ? 'Source already covers this' : c.status === 'Answered' ? 'Edit information' : 'Update information'}</button>
                 </td>
               </tr>
             ))}

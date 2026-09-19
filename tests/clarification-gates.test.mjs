@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { actionableClarifications, readiness, transitionBlockers } from '../src/gates.js'
+import { actionableClarifications, displayClarifications, isClarificationCoveredBySource, readiness, transitionBlockers } from '../src/gates.js'
 
 const opp = {
   id: 'CLAR-1', sellTo: 'ACME', oppName: 'VM600 supply', owner: 'PJS',
@@ -47,5 +47,19 @@ test('a redundant delivery clarification does not block when the RFQ states deli
   }
   const deliveryOpp = { ...opp, remarks: 'Delivery to Chennai is required within 12 weeks.' }
   assert.equal(actionableClarifications(deliveryOpp, state).length, 0)
+  assert.equal(displayClarifications(deliveryOpp, state).length, 1)
+  assert.equal(isClarificationCoveredBySource(deliveryOpp, state.clarifications[0], state), true)
   assert.equal(transitionBlockers(deliveryOpp, 'Proposal', proposal, state).some(blocker => blocker.key === 'clarifications'), false)
+})
+
+test('internal commercial history is hidden from customer clarification display', () => {
+  const state = {
+    approvals: [],
+    clarifications: [{
+      id: 'CL-5', oppId: opp.id, category: 'Commercial', status: 'Open',
+      gap: 'Payment deviation requires customer confirmation',
+      q: 'Please confirm whether the offered payment terms are acceptable.',
+    }],
+  }
+  assert.equal(displayClarifications(opp, state).length, 0)
 })

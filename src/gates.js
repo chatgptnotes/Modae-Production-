@@ -29,18 +29,25 @@ export const isClarificationResolved = clarification => {
 // A clarification topic can reach state through more than one import or AI
 // suggestion. One customer response resolves that fact; duplicate records stay
 // in the audit trail but must not leave a hidden open copy blocking Proposal.
-export function actionableClarifications(opp, state = {}) {
-  if (!opp) return []
+const clarificationSourceText = (opp, state = {}) => {
   const sourceLead = [...(state.leads || []), ...(state.leadArchive || [])]
-    .find(lead => lead.id === opp.sourceLeadId || lead.oppId === opp.id)
-  const sourceText = [sourceLead?.subject, sourceLead?.body, opp.remarks, opp.oppName]
+    .find(lead => lead.id === opp?.sourceLeadId || lead.oppId === opp?.id)
+  return [sourceLead?.subject, sourceLead?.body, opp?.remarks, opp?.oppName]
     .filter(Boolean).join(' ')
+}
+
+export const isClarificationCoveredBySource = (opp, clarification, state = {}) =>
+  sourceContainsDeliveryRequirement(clarificationSourceText(opp, state))
+  && isDeliveryBasisClarification(clarification)
+
+const dedupeClarifications = (opp, state = {}, excludeSourceCovered = false) => {
+  if (!opp) return []
   const byTopic = new Map()
   for (const clarification of state.clarifications || []) {
     if (clarification.oppId !== opp.id
       || isLegacyCommercialClarification(clarification)
       || isCommercialConfirmationRow(clarification)
-      || (sourceContainsDeliveryRequirement(sourceText) && isDeliveryBasisClarification(clarification))) continue
+      || (excludeSourceCovered && isClarificationCoveredBySource(opp, clarification, state))) continue
     const topic = clarificationTopic(clarification.q) || `record:${clarification.id}`
     const current = byTopic.get(topic)
     // Prefer a completed record for the topic. This makes the displayed
@@ -50,6 +57,14 @@ export function actionableClarifications(opp, state = {}) {
     }
   }
   return [...byTopic.values()]
+}
+
+export function displayClarifications(opp, state = {}) {
+  return dedupeClarifications(opp, state)
+}
+
+export function actionableClarifications(opp, state = {}) {
+  return dedupeClarifications(opp, state, true)
 }
 
 // A lead-stage verification snapshot of the shape this class records satisfies

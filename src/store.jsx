@@ -17,6 +17,7 @@ import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLea
 import { unitCostINR, unitSellINR, setRoleNameConfig, nowIST, toISTISOString } from './utils.js'
 import { PRICE_SOURCES, isConfirmableSparesLine, normalizePriceFields, sparesLineFinancials } from './pricing.js'
 import { clarificationTopic } from './leadClarification.js'
+import { isCommercialConfirmationRow, isLegacyCommercialClarification } from './commercialTerms.js'
 import { normalizedCurrencyRates } from './currency.js'
 import { approvalMemoryKey, pricingExceptionSignature, proposalApprovalSnapshot } from './approvalMemory.js'
 import { syncProposalFromOpportunity } from './proposal/opportunitySync.js'
@@ -1226,7 +1227,10 @@ export function StoreProvider({ children }) {
     addClarification(row) {
       setState(s => {
         const topic = clarificationTopic(row.q)
-        if (!topic || s.clarifications.some(existing => existing.oppId === row.oppId && clarificationTopic(existing.q) === topic)) return s
+        if (!topic || s.clarifications.some(existing => existing.oppId === row.oppId
+          && !isLegacyCommercialClarification(existing)
+          && !isCommercialConfirmationRow(existing)
+          && clarificationTopic(existing.q) === topic)) return s
         const id = mintId('CL', s.clarifications)
         return withAudit({
           ...s,
