@@ -885,24 +885,38 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     : issue)
   const reviewIssuesAreInformational = displayReviewIssues.length > 0
     && displayReviewIssues.every(issue => issue.severity === 'info')
+  const approvalRequired = blockers.some(bl => bl.approvalType && bl.severity !== 'wait') || pendingForOpp.length > 0
   const reviewBanner = reviewStatus === 'Needs attention'
     ? { tone: 'warning', title: 'Validation needs attention', text: 'Fix the issues listed below before requesting approval.' }
     : reviewStatus === 'Validated'
-      ? { tone: 'success', title: 'Review complete', text: 'This proposal is ready for approval.' }
+      ? approvalRequired
+        ? { tone: 'success', title: 'Review complete', text: 'Approval is required before the quote can be released.' }
+        : { tone: 'success', title: 'Review complete', text: 'This proposal is ready for approval.' }
       : reviewStatus === 'Override accepted'
         ? { tone: 'override', title: 'Review override accepted', text: 'The findings were saved and the proposal can continue through approval.' }
         : p.reviewedUpload
           ? { tone: 'neutral', title: 'Uploaded proposal review', text: 'This uploaded workbook is being checked against the opportunity and its approval history.' }
           : { tone: 'neutral', title: 'Review the generated proposal', text: 'Validate the system-generated workbook before requesting approval.' }
-  const approvalRequired = blockers.some(bl => bl.approvalType && bl.severity !== 'wait') || pendingForOpp.length > 0
   const readinessSummary = readinessSummaryFor({ blockers, pendingForOpp, submitted })
+
+  // Keep the approval request self-contained so an approver can understand
+  // the commercial reason without reopening the proposal first.
+  const approvalDetail = bl => {
+    const findings = displayReviewIssues
+      .filter(issue => ['block', 'warning'].includes(issue.severity) && String(issue.text || '').trim())
+      .slice(0, 3)
+      .map(issue => issue.text.trim())
+    return findings.length
+      ? `${bl.text}. Review findings: ${findings.join(' | ')}`
+      : bl.text
+  }
 
   // Forward `needed` and `anyOf`. Dropping them let recordDecision fall back to
   // [approver], so a joint LJS+AH gate raised from this page — the Red customer
   // clearance among them — cleared on LJS alone. Workbench.jsx and PropBuilder
   // already forward both; this call site was the odd one out.
   const requestApproval = bl => () => store.requestApproval({
-    oppId, type: bl.approvalType, approver: bl.approver, rev: bl.rev || String(p.revision ?? ''), detail: bl.text,
+    oppId, type: bl.approvalType, approver: bl.approver, rev: bl.rev || String(p.revision ?? ''), detail: approvalDetail(bl),
     ...(bl.needed ? { needed: bl.needed } : {}),
     ...(bl.anyOf ? { anyOf: bl.anyOf } : {}),
     ...(bl.deviationDetails ? { deviationDetails: bl.deviationDetails } : {}),
@@ -1092,7 +1106,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     const pendingTypes = new Set(pendingForOpp.map(item => item.type))
     const actionable = blockers.filter(bl => bl.approvalType && bl.severity !== 'wait' && !pendingTypes.has(bl.approvalType))
     actionable.forEach(bl => store.requestApproval({
-      oppId, type: bl.approvalType, approver: bl.approver, rev: bl.rev || String(p.revision ?? ''), detail: bl.text,
+      oppId, type: bl.approvalType, approver: bl.approver, rev: bl.rev || String(p.revision ?? ''), detail: approvalDetail(bl),
       ...(bl.needed ? { needed: bl.needed } : {}),
       ...(bl.anyOf ? { anyOf: bl.anyOf } : {}),
       ...(bl.deviationDetails ? { deviationDetails: bl.deviationDetails } : {}),
@@ -1250,7 +1264,11 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       {reviewedUploadViewing && p.reviewedUpload && (
         <AttachmentViewer
           leadId={p.reviewedUpload.blobKey || `proposal-review-${oppId}`}
-          attachment={p.reviewedUpload}
+          attachment={{
+            ...p.reviewedUpload,
+            name: p.reviewedUpload.name || p.reviewedUpload.filename,
+            workbook: p.reviewedUpload.sheets?.length ? { sheets: p.reviewedUpload.sheets } : undefined,
+          }}
           onClose={() => setReviewedUploadViewing(false)}
         />
       )}

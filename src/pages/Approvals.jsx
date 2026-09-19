@@ -307,7 +307,10 @@ export default function Approvals() {
   )
   const Detail = ({ a }) => {
     const hasContext = Boolean(a.oppId || a.opportunitySummary || a.blockingReason)
-    const showStandaloneDetail = !hasContext || a.type !== 'Commercial deviation'
+    // OpportunityContext owns the reason whenever a request is linked to an
+    // opportunity. Rendering the raw detail again below created duplicate
+    // lines on approval cards.
+    const showStandaloneDetail = !hasContext
     return <>
       <OpportunityContext a={a} />
       <RejectionRequirements approval={a} />
@@ -326,9 +329,19 @@ export default function Approvals() {
     const snapshot = a.opportunitySnapshot || {}
     const summary = a.opportunitySummary || opp?.remarks || 'No opportunity summary was captured.'
     const isCommercialRequest = a.type === 'Commercial deviation'
-    const reason = !comm && isCommercialRequest
+    const baseReason = !comm && isCommercialRequest
       ? 'Commercial deviation approval is required before submission.'
       : (a.blockingReason || a.detail || 'Approval is required before the workflow can continue.')
+    const reviewFindings = comm
+      ? (proposal?.reviewIssues || [])
+        .filter(issue => ['block', 'warning'].includes(issue?.severity) && String(issue?.text || '').trim())
+        .slice(0, 3)
+        .map(issue => String(issue.text).trim())
+      : []
+    // Older and newly-created requests may both carry the findings in their
+    // stored detail. Render them as a structured list here instead of one
+    // dense inline paragraph.
+    const reason = baseReason.replace(/\s+Review findings:[\s\S]*$/i, '').trim()
     const deviations = comm ? (a.deviationDetails || []) : []
     return (
       <div className="approval-opportunity-context">
@@ -344,7 +357,18 @@ export default function Approvals() {
           {opp && <span><b>BOQ</b><button type="button" className="approval-boq-link" onClick={() => setBoqOppId(opp.id)}>{proposal?.bom?.length ? `Open BOQ · ${proposal.bom.length} line${proposal.bom.length === 1 ? '' : 's'}` : 'Open BOQ preview'}</button></span>}
           {comm && snapshot.valueK != null && <span><b>Value</b>₹{snapshot.valueK}K</span>}
         </div>
-        <div className="approval-context-reason"><b>What you're approving</b><span>{reason}</span></div>
+        <div className="approval-context-reason">
+          <b>What you're approving</b>
+          <div className="approval-context-reason-body">
+            <span>{reason}</span>
+            {reviewFindings.length > 0 && (
+              <div className="approval-context-findings">
+                <strong>Review findings</strong>
+                <ul>{reviewFindings.map((finding, index) => <li key={`${finding}-${index}`}>{finding}</li>)}</ul>
+              </div>
+            )}
+          </div>
+        </div>
         {deviations.length > 0 && (
           <div className="approval-context-deviations">
             <div className="approval-context-deviation-head"><span></span><b>Customer asked</b><b>ModAE standard</b></div>

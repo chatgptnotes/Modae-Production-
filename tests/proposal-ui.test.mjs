@@ -40,6 +40,19 @@ test('proposal drawers use compact expanded surfaces', () => {
   assert.match(styles, /\.proposal-context-drawer \.ai-notice,[\s\S]*padding: 5px 8px;/)
 })
 
+test('embedded proposal review chrome does not cover the review banner', () => {
+  const styles = read('src/styles.css')
+  assert.match(styles, /\.proposal-embedded \.proposal-workspace-header \{[\s\S]*position: static;[\s\S]*top: auto;/)
+})
+
+test('proposal approval requests carry concise review findings', () => {
+  const proposal = read('src/pages/Proposal.jsx')
+  const approvals = read('src/pages/Approvals.jsx')
+  assert.match(proposal, /const approvalDetail = bl =>/)
+  assert.match(proposal, /detail: approvalDetail\(bl\)/)
+  assert.match(approvals, /Review findings:/)
+})
+
 test('proposal BOQ is a read-only table without row editing controls', () => {
   const proposal = read('src/proposal/ProposalSheetEditor.jsx')
   const styles = read('src/styles.css')
