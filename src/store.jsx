@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import * as filestore from './filestore.js'
 import * as datastore from './datastore.js'
 import * as leadBlobs from './leadBlobs.js'
+import { deleteDemoUserFiles } from './userFiles.js'
 import { mintId, nextSeq, seqOf } from './ids.js'
 import { statusFolderFor } from './sharepoint.js'
 import {
@@ -1874,6 +1875,10 @@ export function StoreProvider({ children }) {
         try { await datastore.resetAll(syncedOf(next)) }
         catch (e) { console.warn('Supabase reset failed — server data left as-is:', e?.message) }
       }
+      if (datastore.dbEnabled()) {
+        try { await deleteDemoUserFiles() }
+        catch (e) { console.warn('Supabase demo file cleanup failed:', e?.message) }
+      }
       // Lead file blobs live in IndexedDB, outside the localStorage snapshot.
       try { await leadBlobs.clearAll() }
       catch (e) { console.warn('Lead file store reset failed:', e?.message) }
@@ -1893,6 +1898,10 @@ export function StoreProvider({ children }) {
       if (datastore.dbEnabled()) {
         try { await datastore.resetAll(syncedOf(next)) }
         catch (e) { console.warn('Supabase clear failed — server data left as-is:', e?.message) }
+      }
+      if (datastore.dbEnabled()) {
+        try { await deleteDemoUserFiles() }
+        catch (e) { console.warn('Supabase demo file cleanup failed:', e?.message) }
       }
       try { await leadBlobs.clearAll() }
       catch (e) { console.warn('Lead file store clear failed:', e?.message) }

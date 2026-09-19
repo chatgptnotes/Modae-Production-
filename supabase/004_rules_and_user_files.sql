@@ -42,12 +42,15 @@ create table if not exists public.user_files (
   file_type text not null default 'application/octet-stream',
   file_size bigint not null,
   file_data bytea not null,
+  is_demo boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint user_files_name_length check (char_length(file_name) between 1 and 255),
   constraint user_files_size_matches check (file_size = octet_length(file_data)),
   constraint user_files_size_limit check (file_size between 0 and 10485760)
 );
+
+alter table public.user_files add column if not exists is_demo boolean not null default false;
 
 create unique index if not exists user_files_scope_name_idx
   on public.user_files (user_id, record_type, record_id, folder, file_name);

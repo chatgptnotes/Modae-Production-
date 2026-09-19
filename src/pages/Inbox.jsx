@@ -17,7 +17,7 @@ import DetailTabs from '../DetailTabs.jsx'
 import { findDuplicates } from '../insights.js'
 import { leadWorkflow } from '../leadWorkflow.js'
 import { parseLeadLineItems } from '../tenderParse.js'
-import { deterministicLeadRoute, leadTextChunks, mergeLeadResults, cleanDisplayValue } from '../leadExtraction.js'
+import { deterministicLeadRoute, leadTextChunks, mergeLeadResults, cleanDisplayValue, extractLeadIdentityFacts } from '../leadExtraction.js'
 import { scanAttachment, parsedToLeadFields, deterministicPromptContext, mergeDeterministicIntoAi } from '../docScan.js'
 import { customerContactFromText, customerCompanyFromText, customerPhoneFromText, hardenLeadExtraction, isFastTrackLead, isInternalSender, isRegistrationCriticalField, normalizeLeadContactFields, routeOwner, supplyMissing } from '../leadRules.js'
 import { INDIA_LOCATION_GROUPS, indiaLocation, indiaRegionForLocation } from '../indiaLocations.js'
@@ -239,18 +239,26 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
       return match ? match[1].trim() : ''
     }
     const customerName = customerCompanyFromText(text)
-    const eucName = labeled('end\\s+user|euc(?:\\s+name)?|plant(?:\\s+name)?') || customerName
-    const eucLocation = labeled('delivery\\s+(?:location|address)|euc\\s+location|plant\\s+location|location|deliver(?:y|ed)\\s+to')
+    const identityFacts = extractLeadIdentityFacts(text)
+    const eucName = identityFacts.eucName || customerName
+    const eucLocation = identityFacts.eucLocation
+      || identityFacts.fields.find(field => /location$/i.test(field.k))?.v
+      || labeled('deliver(?:y|ed)\\s+to|location|address')
     const phone = customerPhoneFromText(text)
     const contactPerson = customerContactFromText(text)
     const scopeValue = cleanDisplayValue(body)
       .replace(/^dear[^\n]*\n+/i, '')
-      .replace(/^\s*(?:customer|euc\s+name|euc\s+location|contact\s+person|contact\s+phone)\s*:[^\n]*\n?/gim, '')
+      .replace(/^\s*(?:customer|euc|eun|end\s+user|ultimate\s+customer|beneficiary|site|plant|station|project\s+site|installation\s+site|contact\s+person|contact\s+phone)[^\n:]*\s*:[^\n]*\n?/gim, '')
       .replace(/\n\s*(?:regards|best regards|kind regards),[\s\S]*$/i, '')
       .trim() || cleanDisplayValue(body)
     if (customerName) fields.push({ group: 'Customer', k: 'Sell-to customer', v: customerName, conf: 98, ev: 'Explicit customer/company label in email body' })
-    if (eucName) fields.push({ group: 'Customer', k: 'EUC Name', v: eucName, conf: 96, ev: 'Explicit end-user or customer identity in email body' })
-    if (eucLocation) fields.push({ group: 'Customer', k: 'EUC Location', v: eucLocation, conf: 96, ev: 'Delivery/location detail in email body' })
+    fields.push(...identityFacts.fields)
+    if (eucName && !identityFacts.fields.some(field => field.k === 'EUC Name' && field.v === eucName)) {
+      fields.push({ group: 'Customer', k: 'EUC Name', v: eucName, conf: 96, ev: 'Explicit end-user or customer identity in email body' })
+    }
+    if (eucLocation && !identityFacts.fields.some(field => /location$/i.test(field.k) && field.v === eucLocation)) {
+      fields.push({ group: 'Customer', k: 'EUC Location', v: eucLocation, conf: 96, ev: 'Delivery/location detail in email body' })
+    }
     if (from?.trim()) fields.push({ group: 'Customer', k: 'Sender', v: from.trim(), conf: 45, ev: 'From address', note: 'Confirm the customer and contact person.' })
     if (contactPerson) fields.push({ group: 'Customer', k: 'Contact person', v: contactPerson, conf: 95, ev: 'Explicit customer contact in email body' })
     if (phone) fields.push({ group: 'Customer', k: 'Contact phone', v: phone, conf: 98, ev: 'Explicit phone number in email body' })

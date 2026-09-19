@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { leadFieldValue, leadIdentity, splitBuSegment } from '../src/leadFieldMapping.js'
+import { leadFieldValue, leadIdentity, splitBuSegment, normalizeLeadLabel } from '../src/leadFieldMapping.js'
 
 const fields = [
   { k: 'CUSTOMER NAME', v: 'KSB Limited', state: 'accepted' },
@@ -28,4 +28,23 @@ test('human lead fields take priority over extracted aliases', () => {
   assert.equal(identity.sellTo, 'Confirmed Customer')
   assert.equal(identity.eucName, 'Confirmed Site')
   assert.equal(identity.contactPerson, 'Neha Kulkarni')
+})
+
+test('EUN and project-site aliases map to the primary EUC fields', () => {
+  const aliases = [
+    { k: 'EUN', v: 'Tarali PSP' },
+    { k: 'Project Site Address', v: 'Tarali, Maharashtra' },
+  ]
+  assert.equal(leadFieldValue(aliases, 'eucName'), 'Tarali PSP')
+  assert.equal(leadFieldValue(aliases, 'eucLocation'), 'Tarali, Maharashtra')
+  assert.equal(normalizeLeadLabel('BU / Segment'), 'bu segment')
+})
+
+test('site, plant and station facts remain available when EUC is absent', () => {
+  const identity = leadIdentity({}, [
+    { k: 'Station Name', v: 'Koyna Stage 3' },
+    { k: 'Plant Location', v: 'Koyna, Maharashtra' },
+  ])
+  assert.equal(identity.eucName, 'Koyna Stage 3')
+  assert.equal(identity.eucLocation, 'Koyna, Maharashtra')
 })

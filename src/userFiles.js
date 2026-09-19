@@ -1,6 +1,14 @@
 import { supabase } from './supabase.js'
 
 export const MAX_FILE_BYTES = 10 * 1024 * 1024
+const APP_STATE_KEY = 'wintrack-modae-v4'
+
+function isDemoMode() {
+  try {
+    const state = JSON.parse(localStorage.getItem(APP_STATE_KEY) || 'null')
+    return state?.demoData !== false
+  } catch { return false }
+}
 
 const requireClient = () => {
   if (!supabase) throw new Error('Supabase is not configured.')
@@ -52,6 +60,7 @@ const meta = row => ({
   recordType: row.record_type,
   recordId: row.record_id,
   folder: row.folder || '',
+  isDemo: row.is_demo === true,
 })
 
 export async function insertUserFile({ recordType, recordId, folder = '', file }) {
@@ -68,9 +77,10 @@ export async function insertUserFile({ recordType, recordId, folder = '', file }
     file_type: file.type || 'application/octet-stream',
     file_size: Number(file.size) || 0,
     file_data: fileData,
+    is_demo: isDemoMode(),
     updated_at: new Date().toISOString(),
   }
-  const { data, error } = await client.from('user_files').insert(row).select('id, record_type, record_id, folder, file_name, file_type, file_size, created_at').single()
+  const { data, error } = await client.from('user_files').insert(row).select('id, record_type, record_id, folder, file_name, file_type, file_size, is_demo, created_at').single()
   if (error) throw error
   return meta(data)
 }
@@ -91,7 +101,7 @@ export async function replaceUserFile(scope) {
 export async function listUserFiles({ recordType, recordId, folder = '' }) {
   const client = requireClient()
   let query = client.from('user_files')
-    .select('id, record_type, record_id, folder, file_name, file_type, file_size, created_at')
+    .select('id, record_type, record_id, folder, file_name, file_type, file_size, is_demo, created_at')
     .eq('record_type', String(recordType || 'record'))
     .eq('record_id', String(recordId || ''))
   if (folder !== null) query = query.eq('folder', String(folder || ''))
@@ -103,7 +113,7 @@ export async function listUserFiles({ recordType, recordId, folder = '' }) {
 export async function getUserFile({ recordType, recordId, folder = '', fileName }) {
   const client = requireClient()
   const { data, error } = await client.from('user_files')
-    .select('id, record_type, record_id, folder, file_name, file_type, file_size, created_at, file_data')
+    .select('id, record_type, record_id, folder, file_name, file_type, file_size, is_demo, created_at, file_data')
     .eq('record_type', String(recordType || 'record'))
     .eq('record_id', String(recordId || ''))
     .eq('folder', String(folder || ''))
@@ -136,5 +146,14 @@ export async function deleteUserFiles({ recordType, recordId, folder = null } = 
     .eq('record_id', String(recordId || ''))
   if (folder !== null) query = query.eq('folder', String(folder || ''))
   const { error } = await query
+  if (error) throw error
+}
+
+export async function deleteDemoUserFiles() {
+  const client = requireClient()
+  const userId = await currentUserId()
+  const { error } = await client.from('user_files').delete()
+    .eq('user_id', userId)
+    .eq('is_demo', true)
   if (error) throw error
 }

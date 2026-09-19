@@ -342,8 +342,9 @@ Produce:
 - summary: 2-3 sentences a salesperson can act on, naming what is being asked for
   and what blocks pricing it.
 - fields: the extractable facts, grouped. Always attempt: Sell-to customer,
-  Category, Contact person, Contact email, Contact phone, Plant/station/location
-  (Customer); RFQ or tender reference, RFQ date, submission mode/platform, Opp
+  Category, Contact person, Contact email, Contact phone, EUC/EUN/end user name,
+  plant/station/site/project/installation name, and the corresponding location,
+  address, city, state and country (Customer); RFQ or tender reference, RFQ date, submission mode/platform, Opp
   type, Opportunity scope (RFQ); delivery schedule and other schedule dates
   (Schedule); payment terms, warranty, price basis, EMD/security deposit
   (Commercial); certification and documentation/compliance asks (Compliance);
@@ -353,6 +354,11 @@ Produce:
 - For the customer fields, explicitly distinguish the company named after
   labels such as Customer/Buyer/Company from the person named after labels such
   as Contact/Attn/Kind attention. Never use the ModAE sender as either value.
+- Treat EUC, EUN, End User, Ultimate Customer, Beneficiary, Plant, Station,
+  Site, Project Site and Installation Site as useful end-user/site evidence.
+  Preserve every distinct site or location found, even when one primary EUC
+  Name and EUC Location must be selected for registration. Use a clear field
+  label and cite the source for each supporting fact.
 - completeness: 0-100, how much of what we need to quote is actually present.
 - lineItems: one row for every requested material or spare, with description,
   partNumber/customerRef when present, quantity, UOM, confidence and evidence.

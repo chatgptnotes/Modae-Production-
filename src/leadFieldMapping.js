@@ -2,8 +2,18 @@
 // Human-edited lead properties are checked before these extracted values.
 const LABELS = {
   sellTo: [/^sell[ -]?to(?: customer)?$/, /^customer(?: name)?$/, /^buyer$/],
-  eucName: [/^euc name$/, /^site(?: name)?$/, /^plant(?: name)?$/, /^end user(?: name)?$/],
-  eucLocation: [/^euc location$/, /^(?:site|plant) location$/, /^location$/, /^region$/],
+  eucName: [
+    /^euc(?: name)?$/, /^eun(?: name)?$/, /^end user(?: name)?$/,
+    /^ultimate customer(?: name)?$/, /^beneficiary(?: name)?$/,
+    /^(?:project )?site(?: name)?$/, /^plant(?: name)?$/,
+    /^station(?: name)?$/, /^installation(?: site| name)?$/,
+  ],
+  eucLocation: [
+    /^(?:euc|eun|end user)(?: site)? location$/,
+    /^(?:site|plant|station|project site|installation) (?:location|address)$/,
+    /^delivery (?:location|address|site)$/, /^site address$/,
+    /^location$/, /^region$/, /^city(?: and state)?$/, /^state$/, /^country$/,
+  ],
   contactPerson: [/^contact person$/, /^signatory$/, /^(?:kind )?attn?$/, /^contact$/],
   contactPhone: [/^contact phone(?: number| #)?$/, /^(?:phone|mobile|telephone)(?: number| #)?$/],
   oppName: [/^(?:opportunity|opp) name$/, /^opportunity description$/, /^description$/, /^subject$/],
@@ -15,7 +25,14 @@ const LABELS = {
   product: [/^product$/, /^products$/],
 }
 
-const labelText = value => String(value || '').toLowerCase().replace(/[：:]/g, '').replace(/\s+/g, ' ').trim()
+export const normalizeLeadLabel = value => String(value || '')
+  .toLowerCase()
+  .replace(/[：:;/|_\-]+/g, ' ')
+  .replace(/[()]/g, '')
+  .replace(/\s+/g, ' ')
+  .trim()
+
+const labelText = normalizeLeadLabel
 
 export const leadFieldValue = (fields = [], key) => {
   const matchers = LABELS[key] || []
@@ -24,7 +41,7 @@ export const leadFieldValue = (fields = [], key) => {
 }
 
 export const splitBuSegment = (fields = []) => {
-  const combined = (fields || []).find(item => item.state !== 'rejected' && /^bu\s*\/\s*segment$/i.test(labelText(item.k)))
+  const combined = (fields || []).find(item => item.state !== 'rejected' && /^bu\s+(?:and\s+)?segment$/i.test(labelText(item.k)))
   if (!combined?.v) return { bu: leadFieldValue(fields, 'bu'), segment: leadFieldValue(fields, 'segment') }
   const [bu, ...rest] = String(combined.v).split(/\s*\/\s*/)
   return { bu: bu.trim(), segment: rest.join(' / ').trim() }

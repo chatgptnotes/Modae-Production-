@@ -9,7 +9,7 @@
 // (private mode, blocked storage): the feature falls back to the old
 // in-memory-only behaviour instead of breaking the page.
 import { supabase } from './supabase.js'
-import { insertUserFile, listUserFiles, getUserFile, deleteUserFiles, deleteUserFile } from './userFiles.js'
+import { insertUserFile, listUserFiles, getUserFile, deleteUserFiles, deleteUserFile, deleteDemoUserFiles } from './userFiles.js'
 
 const DB_NAME = 'modae-lead-files'
 const STORE = 'files'
@@ -125,5 +125,7 @@ export function deleteFile(leadId, name) {
 }
 
 export function clearAll() {
-  return tx('readwrite', store => { store.clear() })
+  const local = tx('readwrite', store => { store.clear() })
+  const remote = supabase ? deleteDemoUserFiles().catch(() => null) : Promise.resolve()
+  return Promise.all([local, remote]).then(() => undefined)
 }

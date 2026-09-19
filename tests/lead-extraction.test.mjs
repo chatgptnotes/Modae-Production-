@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
-import { deterministicLeadRoute, leadTextChunks, mergeLeadResults, pageAwareChunks, textChunks } from '../src/leadExtraction.js'
+import { deterministicLeadRoute, extractLeadIdentityFacts, leadTextChunks, mergeLeadResults, pageAwareChunks, textChunks } from '../src/leadExtraction.js'
 
 test('long email and attachment text are split into complete labelled chunks', () => {
   const body = 'B'.repeat(12001)
@@ -63,6 +63,33 @@ test('genuinely conflicting field values are kept as structured alternatives, no
   assert.equal(field.alt.length, 1)
   assert.equal(field.alt[0].v, 'RFQ-200')
   assert.match(field.note, /Conflicting values/)
+})
+
+test('identity extraction captures EUC/EUN and multiple supporting site facts', () => {
+  const found = extractLeadIdentityFacts(`
+    EUN: NHPC
+    Plant Name: Salal Power Station
+    End User Location: Reasi, Jammu & Kashmir
+    Delivery Site: Reasi plant
+  `)
+  assert.equal(found.eucName, 'NHPC')
+  assert.equal(found.eucLocation, 'Reasi, Jammu & Kashmir')
+  assert.equal(found.fields.length, 4)
+  assert.equal(found.fields.some(field => field.k === 'Site / Plant Name' && field.v === 'Salal Power Station'), true)
+  assert.equal(found.fields.some(field => field.k === 'Delivery / Site Location' && field.v === 'Reasi plant'), true)
+})
+
+test('equivalent site labels merge while differing site values remain in alternatives', () => {
+  const merged = mergeLeadResults([
+    { fields: [{ group: 'Customer', k: 'EUN', v: 'NHPC', conf: 90, ev: 'mail' }], lineItems: [], missing: [], next: [] },
+    { fields: [{ group: 'Customer', k: 'End User Name', v: 'NHPC', conf: 95, ev: 'attachment' }], lineItems: [], missing: [], next: [] },
+    { fields: [{ group: 'Customer', k: 'Plant Name', v: 'Salal Station', conf: 80, ev: 'attachment' }], lineItems: [], missing: [], next: [] },
+  ])
+  assert.equal(merged.fields.length, 2)
+  assert.equal(merged.fields[0].k, 'EUC Name')
+  assert.equal(merged.fields[0].v, 'NHPC')
+  assert.equal(merged.fields[1].k, 'Site / Plant Name')
+  assert.equal(merged.fields[1].v, 'Salal Station')
 })
 
 test('pageAwareChunks packs whole pages without splitting one across chunks', () => {
