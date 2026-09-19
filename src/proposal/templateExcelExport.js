@@ -1,5 +1,5 @@
 import ExcelJS from 'exceljs'
-import { MODAE_DOCUMENT_STANDARDS } from '../branding/modae.js'
+import { MODAE_COLORS, MODAE_DOCUMENT_STANDARDS } from '../branding/modae.js'
 import { effectiveRate } from '../utils.js'
 import { currencySymbol } from '../currency.js'
 
@@ -27,8 +27,13 @@ const excelDate = value => {
   return Number.isNaN(date.getTime()) ? clean(value) : date
 }
 
-const border = { style: 'thin', color: { argb: 'FFD9D9D9' } }
+const argb = value => `FF${String(value).replace(/^#/, '').toUpperCase()}`
+const border = { style: 'thin', color: { argb: argb(MODAE_COLORS.border) } }
 const allBorders = { top: border, left: border, bottom: border, right: border }
+const brandHeaderFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(MODAE_COLORS.ink) } }
+const brandHeaderFont = { name: 'Candara', size: MODAE_DOCUMENT_STANDARDS.headingSizePt, bold: true, color: { argb: argb(MODAE_COLORS.surface) } }
+const brandTotalFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(MODAE_COLORS.primaryLight) } }
+const brandTotalBorder = { style: 'thin', color: { argb: argb(MODAE_COLORS.primary) } }
 const rupeeFormat = '₹#,##0.00'
 const euroFormat = '€#,##0.00'
 const customerFormat = symbol => `${symbol}#,##0.00`
@@ -139,6 +144,30 @@ function applyDocumentFont(workbook) {
   }
 }
 
+function applyCustomerBranding(worksheet, { firstRow = 1, lastRow = worksheet.rowCount, firstColumn = 1, lastColumn = worksheet.columnCount, headerRows = [], totalRows = [] } = {}) {
+  for (let rowNumber = firstRow; rowNumber <= lastRow; rowNumber++) {
+    for (let column = firstColumn; column <= lastColumn; column++) {
+      const cell = worksheet.getCell(rowNumber, column)
+      if (cell.isMerged && cell.master && cell.address !== cell.master.address) continue
+      const isHeader = headerRows.includes(rowNumber)
+      const isTotal = totalRows.includes(rowNumber)
+      cell.font = {
+        ...(cell.font || {}),
+        name: 'Candara',
+        size: isHeader ? MODAE_DOCUMENT_STANDARDS.headingSizePt : MODAE_DOCUMENT_STANDARDS.bodySizePt,
+        ...(isHeader ? brandHeaderFont : {}),
+        ...(isTotal ? { color: { argb: argb(MODAE_COLORS.primaryDark) } } : {}),
+      }
+      cell.border = isHeader || isTotal
+        ? { top: brandTotalBorder, bottom: brandTotalBorder, left: border, right: border }
+        : allBorders
+      if (isHeader) cell.fill = brandHeaderFill
+      else if (isTotal) cell.fill = brandTotalFill
+      else if (cell.value != null) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(MODAE_COLORS.surface) } }
+    }
+  }
+}
+
 function expandSharedFormulas(workbook) {
   // ExcelJS cannot re-emit some source workbooks whose shared-formula clones
   // refer to a master that is later changed. Expand each shared range into
@@ -233,6 +262,11 @@ function setCoverSheet(workbook, worksheet, { p, opp, doc, route, mapping }) {
     ['project', customerSafe(p.project), 'C20:Q20', 'C20'],
   ]
   const writtenTargets = coverTargets.map(([key, value, range, cell]) => writeField(key, value, range, cell)).filter(Boolean)
+  // Keep the address band as a single customer-facing line even when the
+  // uploaded template omitted the merge in its serialized worksheet model.
+  if (!worksheet.model.merges.includes('B14:Q14')) {
+    setCoverRow(worksheet, 'B14:Q14', worksheet.getCell('B14').value || '')
+  }
   if (mappedMode && writtenTargets.length === 0) {
     // A mapping without cover fields is still usable; leave the uploaded
     // cover content intact rather than forcing the legacy cell coordinates.
@@ -262,7 +296,20 @@ function setCoverSheet(workbook, worksheet, { p, opp, doc, route, mapping }) {
   setWrappedHeight(worksheet, 24, [{ value: worksheet.getCell('B24').value, width: rangeWidth(worksheet, 2, 17) }], { min: 30, max: 300, lineHeight: 15 })
   setWrappedHeight(worksheet, 26, [{ value: worksheet.getCell('B26').value, width: rangeWidth(worksheet, 2, 17) }], { min: 45, max: 150, lineHeight: 15 })
   for (const ref of ['B6', 'B7', 'B8', 'B9', 'B16', 'B18', 'B20']) {
-    worksheet.getCell(ref).font = { ...(worksheet.getCell(ref).font || {}), bold: true }
+    worksheet.getCell(ref).font = {
+      ...(worksheet.getCell(ref).font || {}),
+      name: 'Candara',
+      size: MODAE_DOCUMENT_STANDARDS.headingSizePt,
+      bold: true,
+      color: { argb: argb(MODAE_COLORS.primary) },
+    }
+  }
+  for (const row of [5, 11, 12, 13, 14, 16, 18, 20, 22, 24, 26]) {
+    for (let column = 2; column <= 17; column++) {
+      const cell = worksheet.getCell(row, column)
+      if (cell.value == null) continue
+      cell.font = { ...(cell.font || {}), name: 'Candara', size: MODAE_DOCUMENT_STANDARDS.bodySizePt }
+    }
   }
 }
 
@@ -398,8 +445,8 @@ function setCommercialSheet(workbook, worksheet, args) {
     const headers = [['B9', 'Sl. No.'], ['C9', 'Scope / Equipment Description'], ['D9', 'Proposed Model / Part No.'], ['E9', 'Quantity'], ['F9', `Unit Price (${proposalSymbol})`], ['G9', `Total Price (${proposalSymbol})`], ['J9', 'Unit Price (₹)'], ['K9', 'Total Price (₹)'], ['L9', 'Unit Cost (₹)'], ['M9', 'Total Cost (₹)'], ['N9', 'Unit Cost (€)'], ['O9', 'Total Cost (€)']]
   for (const [ref, value] of headers) {
     setValue(worksheet.getCell(ref), value, {
-      font: { name: 'Candara', size: MODAE_DOCUMENT_STANDARDS.headingSizePt, bold: true, color: { argb: 'FF222222' } },
-      fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEAEAEA' } },
+      font: brandHeaderFont,
+      fill: brandHeaderFill,
       alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
     })
   }
@@ -458,12 +505,12 @@ function setCommercialSheet(workbook, worksheet, args) {
   const footer = totalRow
   const footerPriceMerge = `F${footer}:G${footer}`
   if (worksheet.model.merges.includes(footerPriceMerge)) worksheet.unMergeCells(footerPriceMerge)
-  setValue(worksheet.getCell(`B${footer}`), 'Total For', { font: { bold: true }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDE9D9' } } })
+  setValue(worksheet.getCell(`B${footer}`), 'Total For', { font: { bold: true, color: { argb: argb(MODAE_COLORS.primaryDark) } }, fill: brandTotalFill })
   setValue(worksheet.getCell(`C${footer}`), customerSafe(doc.subject) || customerSafe(p.subject)
-    || customerSafe(opp.oppName) || `${route || 'Techno-Commercial'} Proposal`, { font: { bold: true }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDE9D9' } }, alignment: { wrapText: true } })
+    || customerSafe(opp.oppName) || `${route || 'Techno-Commercial'} Proposal`, { font: { bold: true, color: { argb: argb(MODAE_COLORS.primaryDark) } }, fill: brandTotalFill, alignment: { wrapText: true } })
   for (const column of ['F', 'G', 'J', 'K', 'L', 'M', 'N', 'O']) {
     const cell = worksheet.getCell(`${column}${footer}`)
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDE9D9' } }
+    cell.fill = brandTotalFill
     cell.border = allBorders
     cell.numFmt = ['F', 'G'].includes(column) ? proposalFormat : ['N', 'O'].includes(column) ? euroFormat : rupeeFormat
     if (['G', 'K', 'M', 'O'].includes(column)) {
@@ -480,6 +527,8 @@ function setCommercialSheet(workbook, worksheet, args) {
   // unit-price value in the customer-facing column.
   worksheet.getCell(`F${footer}`).value = null
   const termsStart = footer + 2
+  applyCustomerBranding(worksheet, { firstRow: 9, lastRow: termsStart - 1, firstColumn: 2, lastColumn: redactInternalCosting ? 7 : 15, headerRows: [9], totalRows: [footer] })
+  worksheet.getCell('B16').alignment = { ...(worksheet.getCell('B16').alignment || {}), wrapText: true }
   // The source templates contain leftover customer-facing rows below the BOQ
   // (including an older, duplicate Terms & Conditions block). Clear those
   // rows before writing the generated terms so they cannot leak into page 2.

@@ -1,6 +1,6 @@
 import XLSX from 'xlsx-js-style'
 import { MODAE_COMPANY } from '../proposalDoc.js'
-import { MODAE_DOCUMENT_STANDARDS } from '../branding/modae.js'
+import { MODAE_COLORS, MODAE_DOCUMENT_STANDARDS } from '../branding/modae.js'
 import { generateProposalWorkbook, customerSafe } from './templateExcelExport.js'
 import { currencySymbol } from '../currency.js'
 
@@ -11,6 +11,7 @@ const routeSheetName = (route, revision) => route === 'Services'
     : `Firm Offer Rev-${revision}`
 
 const clean = value => value == null ? '' : value
+const rgb = value => String(value).replace(/^#/, '').toUpperCase()
 
 export function proposalWorkbookRows({ p, opp, doc, priced, totalQty, lineQuoted, route }) {
   const symbol = currencySymbol(p.sourceCurrency || 'INR')
@@ -89,9 +90,14 @@ const styleSheet = (sheet, rows, widths, headerRows = []) => {
     cell.s = {
       alignment: { vertical: 'top', wrapText: typeof cell.v === 'string' },
       ...(headerRows.includes(row)
-        ? { font: { name: 'Candara', sz: MODAE_DOCUMENT_STANDARDS.headingSizePt, bold: true }, fill: { fgColor: { rgb: 'E8EEF6' } } }
+        ? {
+            font: { name: 'Candara', sz: MODAE_DOCUMENT_STANDARDS.headingSizePt, bold: true },
+            fill: { patternType: 'solid', fgColor: { rgb: rgb(MODAE_COLORS.primaryLight) } },
+            border: { top: { style: 'thin', color: { rgb: rgb(MODAE_COLORS.primary) } }, bottom: { style: 'thin', color: { rgb: rgb(MODAE_COLORS.primary) } } },
+          }
         : { font: { name: 'Candara', sz: MODAE_DOCUMENT_STANDARDS.bodySizePt } }),
     }
+    if (!headerRows.includes(row)) cell.s.border = { bottom: { style: 'thin', color: { rgb: rgb(MODAE_COLORS.border) } } }
   }
 }
 
