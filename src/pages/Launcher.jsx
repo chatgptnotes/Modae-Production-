@@ -45,7 +45,7 @@ export default function Launcher() {
 
       {!demo && (
         <div className="warn-box" style={{ marginBottom: 14 }}>
-          Demo data removed — restore it below to run the guided scenarios.
+          Demo data removed — guided scenarios are unavailable in this workspace.
         </div>
       )}
 

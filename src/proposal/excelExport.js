@@ -144,10 +144,6 @@ export async function downloadProposalXlsx(args) {
   setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
-export function proposalWorkbookBase64(args) {
-  return XLSX.write(buildProposalWorkbook(args), { bookType: 'xlsx', type: 'base64' })
-}
-
 // The email action sends only the customer-facing priced BoQ by default. The
 // covering letter and optional documents can still be shared explicitly, but
 // no standard terms or internal workbook sheets are sent without a choice.

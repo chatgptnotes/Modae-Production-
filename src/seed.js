@@ -551,20 +551,20 @@ export const selectableRoles = () =>
 // Page-permission matrix (from the BT prototype's PERMS). Sales owners all get
 // the same set; CUST sees the external portal only.
 const pages = list => (PORTAL_ENABLED ? list : list.filter(p => p !== 'portal'))
-const SALES_PAGES = ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders',
+const SALES_PAGES = ['mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders',
   'proposal', 'pricelists', 'analytics', 'customers', 'po', 'aimap', 'launcher', 'voice']
 export const PERMS = {
-  SUPER: pages(['home', 'mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'pricelists',
-    'dashboard', 'analytics', 'customers', 'audit', 'users', 'aimap', 'admin', 'po', 'launcher', 'voice', 'portal']),
-  ADMIN: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'pricelists',
-    'dashboard', 'analytics', 'customers', 'audit', 'users', 'aimap', 'admin', 'po', 'launcher', 'voice'],
-  LJS: pages(['home', 'mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'pricelists',
-    'dashboard', 'analytics', 'customers', 'audit', 'aimap', 'admin', 'po', 'launcher', 'voice', 'portal']),
-  AH: ['home', 'mydashboard', 'tracker', 'my', 'approvals', 'folders', 'proposal', 'pricelists', 'dashboard', 'analytics',
-    'customers', 'audit', 'aimap', 'po', 'launcher'],
+  SUPER: pages(['mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'pricelists',
+    'analytics', 'customers', 'audit', 'users', 'aimap', 'admin', 'po', 'launcher', 'voice', 'portal']),
+  ADMIN: ['mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'pricelists',
+    'analytics', 'customers', 'audit', 'users', 'aimap', 'admin', 'po', 'launcher', 'voice'],
+  LJS: pages(['mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'pricelists',
+    'analytics', 'customers', 'audit', 'aimap', 'admin', 'po', 'launcher', 'voice', 'portal']),
+  AH: ['mydashboard', 'tracker', 'my', 'approvals', 'folders', 'proposal', 'pricelists',
+    'analytics', 'customers', 'audit', 'aimap', 'po', 'launcher'],
   RS: SALES_PAGES, PP: SALES_PAGES, SS: SALES_PAGES, PJS: SALES_PAGES, RJS: SALES_PAGES, SR: SALES_PAGES,
-  AN: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'proposal', 'pricelists', 'analytics', 'approvals', 'folders', 'aimap', 'launcher'],
-  TECH: ['home', 'mydashboard', 'inbox', 'tracker', 'my', 'proposal', 'pricelists', 'analytics', 'approvals', 'aimap', 'launcher'],
+  AN: ['mydashboard', 'inbox', 'tracker', 'my', 'proposal', 'pricelists', 'analytics', 'approvals', 'folders', 'aimap', 'launcher'],
+  TECH: ['mydashboard', 'inbox', 'tracker', 'my', 'proposal', 'pricelists', 'analytics', 'approvals', 'aimap', 'launcher'],
   CUST: pages(['portal']),
 }
 
@@ -667,11 +667,6 @@ export const REVISION_TYPES = [
   { id: 'Pricing', label: 'Pricing change (discount / price / margin)' },
   { id: 'Other', label: 'Other changes (documents / SoW / compliance)' },
 ]
-
-// Diagram 02 §6/§7 — the channels a quote is dispatched on and then monitored.
-// Only Email has a real send path today; the rest are labelled simulated in
-// the UI until the Microsoft tenancy decision lands.
-export const DISPATCH_CHANNELS = ['Email', 'Teams', 'WhatsApp', 'Customer Portal', 'Tender Portal']
 
 // Ownership is driven by the opportunity type, while routeForType controls
 // which document workbench is shown. These are intentionally separate rules.

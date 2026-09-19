@@ -11,6 +11,7 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
 
 const tracker = read('src/pages/Tracker.jsx')
+const styles = read('src/styles.css')
 const myOpps = read('src/pages/MyOpps.jsx')
 const state = {
   approvals: seedApprovals, kyc: seedKyc,
@@ -63,6 +64,14 @@ test('tracker offers all, mine, and specific-owner filtering', () => {
   assert.match(tracker, /My Opportunities/)
   assert.match(tracker, /All Opportunities/)
   assert.match(tracker, /sortVal = \(o, key\) => \(DATE_KEYS\.includes\(key\) \? \(o\[key\] \|\| ''\)/)
+})
+
+test('tracker column controls compose filters and support select-all toggling', () => {
+  assert.match(tracker, /matchesFilters = \(o, activeFilters = filters, except = null\)/)
+  assert.match(tracker, /searchableBase\.filter\(o => matchesFilters\(o\)\)/)
+  assert.match(tracker, /current\[col\.key\] \? undefined : new Set\(values\)/)
+  assert.match(tracker, /<button type="button" className="tracker-th-control"/)
+  assert.match(styles, /table\.sheet th\.th-filter[\s\S]*font-weight: 700/)
 })
 
 test('My Opportunities shows the same working columns', () => {

@@ -1,5 +1,4 @@
 export const CLAUSE_SCOPES = ['domestic', 'international']
-export const CLAUSE_CATEGORIES = ['project', 'spares', 'services', 'commercial', 'legal']
 
 export const DEFAULT_CLAUSES = [
   { id: 'validity', label: 'Proposal Validity', category: 'commercial', routes: ['Project', 'Spares', 'Services'], scopes: CLAUSE_SCOPES, required: true, text: 'This proposal remains valid for the validity period stated from the date of issue.' },

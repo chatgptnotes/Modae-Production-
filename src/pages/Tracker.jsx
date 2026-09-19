@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { STAGES, CLOSE_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES } from '../seed.js'
@@ -171,7 +172,6 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const [ownerFilter, setOwnerFilter] = useState(() => initialOwnerFilter || (isSalesRep && !isManager ? 'Mine' : 'All'))
 
   const [filters, setFilters] = useState({})           // col key -> Set of allowed display values
-  const [frozenIds, setFrozenIds] = useState(null)     // row ids captured when a filter was applied
   const [sort, setSort] = useState(null)               // { key, dir: 1 | -1 }
   const [openFilter, setOpenFilter] = useState(null)   // { key, x, y } of the open dropdown
   const [filterSearch, setFilterSearch] = useState({})
@@ -188,6 +188,23 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   // full sheet. Either can switch — nothing is taken away, only folded.
   const [colView, setColView] = useState(() => ((OWNERS.includes(store.role)
     && !(ROLES[store.role]?.admin || ROLES[store.role]?.commercial)) ? 'key' : 'all'))
+
+  useEffect(() => {
+    if (!openFilter) return undefined
+    const close = event => {
+      if (event.key === 'Escape') setOpenFilter(null)
+    }
+    const onResize = () => setOpenFilter(null)
+    const onScroll = () => setOpenFilter(null)
+    window.addEventListener('keydown', close)
+    window.addEventListener('resize', onResize)
+    window.addEventListener('scroll', onScroll, true)
+    return () => {
+      window.removeEventListener('keydown', close)
+      window.removeEventListener('resize', onResize)
+      window.removeEventListener('scroll', onScroll, true)
+    }
+  }, [openFilter])
 
   const gmK = o => (o.valueK || 0) - (o.cogsK || 0)
   const gmPct = o => (o.valueK ? Math.round((gmK(o) / o.valueK) * 100) + '%' : null)
@@ -224,21 +241,12 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     ? base.filter(o => [o.id, o.sellTo, o.oppName].some(value => String(value || '').toLowerCase().includes(normalizedSearch)))
     : base
 
-  // Excel-Table behavior: each column's dropdown lists values filtered by the OTHER columns.
-  const rowsFilteredExcept = except => searchableBase.filter(o =>
-    Object.entries(filters).every(([k, set]) => k === except || !set || set.has(String(cellVal(o, k)))))
-
-  // Like Excel, filters are applied ONCE (row ids frozen at apply time), not
-  // re-evaluated on every edit — otherwise a row vanishes mid-keystroke the
-  // moment its value (or auto-bumped Last Updated) stops matching.
-  const applyFilters = nextFilters => {
-    setFilters(nextFilters)
-    const active = Object.values(nextFilters).some(Boolean)
-    setFrozenIds(active
-      ? new Set(searchableBase.filter(o =>
-          Object.entries(nextFilters).every(([k, set]) => !set || set.has(String(cellVal(o, k))))).map(o => o.id))
-      : null)
-  }
+  // Filters are derived from the current searchable rows so toolbar search,
+  // owner selection, and every column filter always compose predictably.
+  const applyFilters = nextFilters => setFilters(nextFilters)
+  const matchesFilters = (o, activeFilters = filters, except = null) =>
+    Object.entries(activeFilters).every(([key, allowed]) =>
+      key === except || !allowed || allowed.has(String(cellVal(o, key))))
 
   // Analytics bars land here pre-filtered via query params (?owner= / ?oppType= / ?bu= / ?stage=).
   const [params, setParams] = useSearchParams()
@@ -257,17 +265,45 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const DATE_KEYS = ['createDate', 'proposalDate', 'orderDate', 'invoiceDate', 'lastUpdated']
   const sortVal = (o, key) => (DATE_KEYS.includes(key) ? (o[key] || '') : cellVal(o, key))
 
-  let rows = frozenIds ? searchableBase.filter(o => frozenIds.has(o.id)) : searchableBase
+  let rows = searchableBase.filter(o => matchesFilters(o))
   if (sort) {
     const { key, dir } = sort
     rows = [...rows].sort((a, b) => {
       const va = sortVal(a, key), vb = sortVal(b, key)
+      const aBlank = va === '' || va == null
+      const bBlank = vb === '' || vb == null
+      if (aBlank || bBlank) {
+        if (aBlank && bBlank) return 0
+        return aBlank ? 1 : -1
+      }
       if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir
       return String(va).localeCompare(String(vb), undefined, { numeric: true }) * dir
     })
   }
 
   const totals = rows.reduce((t, o) => ({ v: t.v + (+o.valueK || 0), c: t.c + (+o.cogsK || 0) }), { v: 0, c: 0 })
+  const activeFilterCount = Object.values(filters).filter(value => value instanceof Set).length
+
+  const clearAllTableState = () => {
+    setFilters({})
+    setSort(null)
+    setFilterSearch({})
+    setOpenFilter(null)
+  }
+
+  const openColumnMenu = (col, event) => {
+    event.stopPropagation()
+    if (openFilter?.key === col.key) {
+      setOpenFilter(null)
+      return
+    }
+    const rect = event.currentTarget.getBoundingClientRect()
+    setOpenFilter({
+      key: col.key,
+      x: Math.max(8, Math.min(rect.left, window.innerWidth - 230)),
+      y: Math.min(rect.bottom + 4, window.innerHeight - 330),
+    })
+  }
 
   const upd = (id, field) => e => {
     let value = e.target.type === 'checkbox' ? e.target.checked : e.target.value
@@ -311,6 +347,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   useEffect(() => () => clearTimeout(horizontalGestureTimer.current), [])
 
   const handleSheetScroll = e => {
+    if (openFilter) setOpenFilter(null)
     const wrap = e.currentTarget
     const movedHorizontally = Math.abs(wrap.scrollLeft - lastSheetScrollLeft.current) > 0
     if (movedHorizontally && !horizontalGestureNudged.current && wrap.scrollHeight > wrap.clientHeight) {
@@ -363,8 +400,8 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     })])
   )
 
-  // Plain render function (not a component type) so the open dropdown's DOM is
-  // diffed in place — checkbox focus and scroll position survive toggles.
+  // The filter menu is portaled to document.body so it is not clipped or
+  // trapped behind the sticky table header while the sheet scrolls.
   // Checkbox picker for the multi-value Product cell. Reuses the filter
   // popover's overlay + positioning so the grid keeps one dropdown idiom.
   const renderProductPop = (o, pos) => {
@@ -390,7 +427,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   }
 
   const renderFilterPop = (col, pos) => {
-    const rowsForVals = rowsFilteredExcept(col.key)
+    const rowsForVals = searchableBase.filter(o => matchesFilters(o, filters, col.key))
     const values = DATE_KEYS.includes(col.key)
       ? [...new Set([...rowsForVals].sort((a, b) => String(a[col.key] || '').localeCompare(String(b[col.key] || '')))
           .map(o => String(cellVal(o, col.key))))]
@@ -401,23 +438,38 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     const visibleValues = query ? values.filter(v => v.toLowerCase().includes(query)) : values
     const isChecked = v => !active || active.has(v)
     const toggle = v => {
-      const next = new Set(active || values)
-      if (next.has(v)) next.delete(v); else next.add(v)
-      // "No filter" only when every visible value is explicitly checked.
-      applyFilters({ ...filters, [col.key]: values.every(x => next.has(x)) ? undefined : next })
+      setFilters(current => {
+        const currentAllowed = current[col.key]
+        const next = new Set(currentAllowed || values)
+        if (next.has(v)) next.delete(v); else next.add(v)
+        return { ...current, [col.key]: values.every(x => next.has(x)) ? undefined : next }
+      })
     }
-    return (
+    const close = () => setOpenFilter(null)
+    const clearColumnFilter = () => {
+      setFilters(current => ({ ...current, [col.key]: undefined }))
+      setSort(current => current?.key === col.key ? null : current)
+      close()
+    }
+    const sortColumn = dir => {
+      setSort({ key: col.key, dir })
+      close()
+    }
+    const menu = (
       <>
-        <div className="filter-overlay" onClick={() => setOpenFilter(null)} />
-        <div className="filter-pop" style={{ position: 'fixed', left: pos.x, top: pos.y + 4 }} onClick={e => e.stopPropagation()}>
-          <div className="fitem" onClick={() => { setSort({ key: col.key, dir: 1 }); setOpenFilter(null) }}>⇩ Sort A to Z</div>
-          <div className="fitem" onClick={() => { setSort({ key: col.key, dir: -1 }); setOpenFilter(null) }}>⇧ Sort Z to A</div>
-          <div className="fitem" onClick={() => { setSort(null); applyFilters({ ...filters, [col.key]: undefined }); setOpenFilter(null) }}>✕ Clear filter &amp; sort</div>
+        <div className="filter-overlay" onClick={close} />
+        <div className="filter-pop" style={{ position: 'fixed', left: pos.x, top: pos.y }} onClick={e => e.stopPropagation()} role="dialog" aria-label={`${col.label} sort and filter`}>
+          <button type="button" className="fitem" onClick={() => sortColumn(1)}>⇩ Sort A to Z</button>
+          <button type="button" className="fitem" onClick={() => sortColumn(-1)}>⇧ Sort Z to A</button>
+          <button type="button" className="fitem" onClick={clearColumnFilter}>✕ Clear this column filter</button>
           <hr />
           <input className="filter-search" type="search" placeholder={`Search ${col.label}`} value={filterSearch[col.key] || ''}
             onChange={e => setFilterSearch({ ...filterSearch, [col.key]: e.target.value })} />
           <label className="fitem">
-            <input type="checkbox" checked={!active} onChange={() => applyFilters({ ...filters, [col.key]: undefined })} /> (Select All)
+            <input type="checkbox" checked={!active} onChange={() => setFilters(current => ({
+              ...current,
+              [col.key]: current[col.key] ? undefined : new Set(values),
+            }))} /> (Select All)
           </label>
           {visibleValues.map(v => (
             <label className="fitem" key={v || '(blank)'}>
@@ -427,6 +479,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
         </div>
       </>
     )
+    return createPortal(menu, document.body)
   }
 
   return (
@@ -441,7 +494,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
         <label className="tracker-search" aria-label="Search opportunities">
           <Icon name="search" size={14} />
           <input type="search" placeholder="Search opportunity ID, customer or name" value={searchTerm}
-            onChange={e => { setSearchTerm(e.target.value); setFrozenIds(null) }} />
+            onChange={e => setSearchTerm(e.target.value)} />
         </label>
         {isSalesRep && (
           <label className="mail-show-all tracker-show-all" title="Show all opportunities">
@@ -455,6 +508,11 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
           </label>
         )}
         <span className="spacer" />
+        {activeFilterCount > 0 && (
+          <button type="button" className="tracker-clear-filters" onClick={clearAllTableState}>
+            Clear filters &amp; sort ({activeFilterCount})
+          </button>
+        )}
         {colView === 'key' && (
           <span className="pill Blue" title="Total value of the rows shown">₹ {fmt(totals.v)}K</span>
         )}
@@ -493,17 +551,16 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
             <tr>
               <th className="rowhead">Sl</th>
               {COLS.map(col => (
-                <th key={col.key} className={`th-filter ${filters[col.key] ? 'filtered' : ''}`} title={col.label}>
-                  {col.label}
-                  <span className="filter-caret" title="Sort & filter"
-                    onClick={e => {
-                      e.stopPropagation()
-                      if (openFilter?.key === col.key) { setOpenFilter(null); return }
-                      const r = e.currentTarget.getBoundingClientRect()
-                      setOpenFilter({ key: col.key, x: Math.min(r.left, window.innerWidth - 210), y: r.bottom })
-                    }}>
-                    {filters[col.key] ? '▼*' : sort?.key === col.key ? (sort.dir === 1 ? '▲' : '▼') : '▼'}
-                  </span>
+                <th key={col.key} className={`th-filter ${filters[col.key] ? 'filtered' : ''}`} title={col.label}
+                  aria-sort={sort?.key === col.key ? (sort.dir === 1 ? 'ascending' : 'descending') : 'none'}>
+                  <button type="button" className="tracker-th-control" title={`Sort and filter ${col.label}`}
+                    aria-label={`Sort and filter ${col.label}`} aria-haspopup="dialog"
+                    aria-expanded={openFilter?.key === col.key} onClick={e => openColumnMenu(col, e)}>
+                    <span className="tracker-th-label">{col.label}</span>
+                    <span className="tracker-th-indicator" aria-hidden="true">
+                      {filters[col.key] ? '▼*' : sort?.key === col.key ? (sort.dir === 1 ? '▲' : '▼') : '▼'}
+                    </span>
+                  </button>
                   {openFilter?.key === col.key && renderFilterPop(col, openFilter)}
                 </th>
               ))}

@@ -25,10 +25,6 @@ export function add(leadId, files) {
   blobs.putFiles(leadId, real)
 }
 
-export function peek(leadId) {
-  return held.get(leadId) || []
-}
-
 // Remove one held document without touching the lead's other attachments.
 export async function remove(leadId, name) {
   if (!leadId || !name) return

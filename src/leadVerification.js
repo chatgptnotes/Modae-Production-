@@ -53,12 +53,6 @@ export function verificationDeadline(lead, customerStatus, config = {}, now = ne
 export const verificationItem = (verification, item) =>
   verification?.kyc?.[item] || { state: 'Missing', mode: '', file: '', verifiedAt: '' }
 
-export function blueKycComplete(verification, config = null) {
-  if (verification?.kycRequestStatus === 'cancelled') return false
-  const items = checklistFor(config, 'Blue')
-  return items.every(item => verificationItem(verification, item).state === 'Verified')
-}
-
 export function amberPaymentComplete(verification) {
   return verification?.payment?.state === 'Confirmed'
 }

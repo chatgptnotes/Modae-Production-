@@ -191,10 +191,6 @@ export function toISTISOString(value = new Date()) {
   return shifted.toISOString().replace('Z', '+05:30')
 }
 
-export function todayIST() {
-  return nowIST().slice(0, 10)
-}
-
 export function formatISTTime(value, options = {}) {
   const date = new Date(value || '')
   if (Number.isNaN(date.getTime())) return ''

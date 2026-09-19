@@ -1,4 +1,3 @@
-import { pricedBoqWorkbookBase64 } from './excelExport.js'
 import { generateProposalWorkbook, MIME_XLSX } from './templateExcelExport.js'
 import { ENCLOSURES, enclosuresFor } from '../proposalDoc.js'
 import { parseProposalWorkbook } from './workbook.js'
@@ -47,12 +46,4 @@ export async function proposalWorkbookAttachment(args) {
 export async function proposalWorkbookPreview(args) {
   const bytes = await generateProposalWorkbook({ ...args, redactInternalCosting: true })
   return parseProposalWorkbook(bytes, `${args.opp.id}_Proposal_Rev_${args.p.revision}.xlsx`)
-}
-
-export function pricedBoqAttachment(args) {
-  return {
-    filename: `${args.opp.id}_Priced_BoQ_Rev_${args.p.revision}.xlsx`,
-    mimeType: MIME_XLSX,
-    contentBase64: pricedBoqWorkbookBase64(args),
-  }
 }

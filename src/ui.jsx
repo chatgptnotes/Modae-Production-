@@ -28,9 +28,8 @@ export const AiBadge = ({ label = 'AI' }) => (
   <span className="chip ai-badge"><Icon name="sparkles" size={11} /> {label}</span>
 )
 
-// Compact lifecycle stepper. Post-submission terminal states remain in the
-// domain model, but the visible workflow stays focused on the ten user-facing
-// phases used by the Workbench.
+// Retained for the legacy workflow UI contract and source-level compatibility
+// checks. The active Workbench renders its richer progress control directly.
 const VISIBLE_MILESTONES = MILESTONES.filter(m => !['Submitted', 'PO Validation', 'Handover'].includes(m))
 
 export function Stepper({ current, onStep }) {
@@ -95,31 +94,23 @@ const REMOVE_MSG = 'Remove all demo data?\n\n'
   + 'The app is emptied — every opportunity, lead, customer, approval and order goes, '
   + 'including anything you added since.\n\n'
   + 'Your logins and Admin configuration stay, and you can restore the demo dataset later.'
-const RESTORE_MSG = 'Restore the demo dataset?\n\n'
-  + 'Anything you entered since removing it is discarded.'
-
 export function DemoDataControls({ className = '', size = 13, label = x => x }) {
   const store = useStore()
   const demo = store.demoData !== false
   const ask = (msg, run) => () => { if (window.confirm(msg)) run() }
   return (
     <>
-      {demo && (
+      {!demo ? null : (
+        <>
         <button className={className} title="Discard local changes and reload the seed dataset"
           onClick={ask(RESET_MSG, store.restoreDemo)}>
           <Icon name="refresh" size={size} /> {label('Reset all demo data')}
         </button>
-      )}
-      {demo ? (
         <button className={className} title="Empty the app — logins and configuration stay"
           onClick={ask(REMOVE_MSG, store.clearDemo)}>
           <Icon name="x" size={size} /> {label('Remove demo data')}
         </button>
-      ) : (
-        <button className={className} title="Bring the seeded demo dataset back"
-          onClick={ask(RESTORE_MSG, store.restoreDemo)}>
-          <Icon name="refresh" size={size} /> {label('Restore demo data')}
-        </button>
+        </>
       )}
     </>
   )

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react'
+import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES } from '../seed.js'
@@ -7,7 +7,6 @@ import { useDrawer } from '../drawer.jsx'
 import { Icon } from '../icons.jsx'
 import { AiBadge, Modal } from '../ui.jsx'
 import { runTaskResult } from '../ai.js'
-import { putFiles } from '../leadBlobs.js'
 import { pricingThresholdExceptions } from '../gates.js'
 import { buildPricing, normalizeProposal } from '../proposal/docProps.js'
 
@@ -203,111 +202,6 @@ function ApprovalBoqModal({ opp, proposal, store, onClose }) {
         <button type="button" className="approval-boq-close" onClick={onClose}>Close review</button>
       </div>
     </Modal>
-  )
-}
-
-// Condition completion is an incorporation confirmation, not a new approval
-// decision. Keep it available on every approval surface, but only let the
-// linked opportunity owner or original requester record it.
-export function ConditionCompletion({ approval, index, condition, canComplete, onConfirm }) {
-  const [note, setNote] = useState('')
-  const [error, setError] = useState('')
-  const [evidenceFile, setEvidenceFile] = useState(null)
-  const [evidenceResult, setEvidenceResult] = useState(null)
-  const [checking, setChecking] = useState(false)
-  const fileRef = useRef(null)
-
-  if (condition.incorporated) {
-    return (
-      <div className="approval-condition-complete">
-        <span className="condition-complete-label"><Icon name="check" size={12} /> Incorporated</span>
-        {condition.note && <span className="hint"> — {condition.note}</span>}
-        {condition.evidence?.name && <span className="hint"> · Evidence: {condition.evidence.name}</span>}
-        {condition.evidence?.assessment && <span className="approval-evidence-result">AI: {condition.evidence.assessment}</span>}
-      </div>
-    )
-  }
-
-  if (!canComplete) {
-    return <div className="approval-condition-open"><Icon name="alert" size={12} /> Condition open</div>
-  }
-
-  const toBase64 = file => new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(String(reader.result || '').split(',')[1] || '')
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
-
-  const submit = async event => {
-    event.preventDefault()
-    if (!note.trim()) {
-      setError('Add a note describing how this condition was incorporated.')
-      return
-    }
-    setError('')
-    onConfirm(approval.id, index, note.trim(), evidenceResult)
-    setEvidenceFile(null)
-    setEvidenceResult(null)
-    setNote('')
-  }
-
-  const scanEvidence = async file => {
-    setEvidenceFile(file)
-    setEvidenceResult(null)
-    setError('')
-    setChecking(true)
-    try {
-      await putFiles(`approval:${approval.id}`, [file])
-      const result = await runTaskResult('approval.condition-evidence', {
-        approvalId: approval.id,
-        conditionText: condition.text,
-        incorporationNote: note.trim(),
-        aiAttachments: [{ name: file.name, mimeType: file.type || 'application/octet-stream', dataBase64: await toBase64(file) }],
-      })
-      setEvidenceResult({
-        name: file.name,
-        mimeType: file.type || 'application/octet-stream',
-        size: file.size,
-        checkedAt: new Date().toISOString(),
-        assessment: result.data?.data?.assessment || result.data?.assessment || '',
-        confidence: result.data?.data?.confidence ?? result.data?.confidence ?? null,
-        evidence: result.data?.data?.evidence || result.data?.evidence || '',
-        concerns: result.data?.data?.concerns || result.data?.concerns || '',
-        aiError: result.error || '',
-      })
-    } catch (e) {
-      setEvidenceResult({ name: file.name, mimeType: file.type || 'application/octet-stream', size: file.size, aiError: e?.message || 'Evidence could not be scanned' })
-    } finally {
-      setChecking(false)
-    }
-  }
-
-  return (
-    <form className="approval-condition-action" onSubmit={submit}>
-      <div className="approval-condition-open"><Icon name="alert" size={12} /> Condition open</div>
-      <div className="approval-condition-controls">
-        <input
-          aria-label="Condition completion note"
-          placeholder="How was it incorporated?"
-          value={note}
-          onChange={event => { setNote(event.target.value); setError('') }}
-        />
-        <input ref={fileRef} type="file" className="approval-evidence-input" onChange={event => {
-          const file = event.target.files?.[0]
-          if (file && file.size > 5 * 1024 * 1024) { setError('Evidence file must be 5 MB or smaller.'); return }
-          if (!file) return
-          scanEvidence(file)
-        }} />
-        <button type="button" onClick={() => fileRef.current?.click()}><Icon name="upload" size={13} /> {evidenceFile ? evidenceFile.name : 'Add file'}</button>
-        {evidenceFile && !checking && <button type="button" onClick={() => { setEvidenceFile(null); setEvidenceResult(null); setError(''); if (fileRef.current) fileRef.current.value = '' }}>Cancel upload</button>}
-        <button className="primary" type="submit" disabled={checking}><Icon name="clipboardCheck" size={13} /> {checking ? 'Checking evidence...' : 'Complete condition'}</button>
-      </div>
-      {checking && <div className="hint approval-evidence-status">Scanning evidence…</div>}
-      {!checking && evidenceResult?.assessment && <div className="approval-evidence-result">AI: {evidenceResult.assessment}{evidenceResult.confidence != null ? ` · ${evidenceResult.confidence}% confidence` : ''}</div>}
-      {!checking && evidenceResult?.aiError && <div className="hint approval-evidence-status">AI scan unavailable — you can still complete the condition.</div>}
-      {error && <div className="errbox approval-condition-error">{error}</div>}
-    </form>
   )
 }
 

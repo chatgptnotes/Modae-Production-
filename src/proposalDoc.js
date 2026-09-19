@@ -737,13 +737,3 @@ export const ENCLOSURES = Object.freeze({
 
 export const enclosuresFor = route =>
   route === 'Services' ? [ENCLOSURES.gtc, ENCLOSURES.serviceRates] : [ENCLOSURES.gtc]
-
-// The keys docModel can auto-draft — used by the editor's "reset to auto-draft".
-export const DOC_FIELDS = [
-  'letterSalutation', 'letterBody', 'letterClose', 'letterCc',
-  'execSummary', 'scopeIncludes', 'scopeNote', 'priceBasis', 'paymentMilestones',
-  'commercialNote', 'gstPct', 'deliveryMilestones', 'deliveryNote',
-  'assumptions', 'exclusions', 'deviationNotes', 'offerTerms',
-  'docTerms', 'docTermsHeading',
-  'validityDays', 'validityNote', 'attachments', 'about', 'preparedBy',
-]
