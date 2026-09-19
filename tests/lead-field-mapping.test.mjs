@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { leadFieldValue, leadIdentity, splitBuSegment, normalizeLeadLabel } from '../src/leadFieldMapping.js'
+import { leadFieldValue, leadIdentity, splitBuSegment, normalizeLeadLabel, inferEucFromText } from '../src/leadFieldMapping.js'
 
 const fields = [
   { k: 'CUSTOMER NAME', v: 'KSB Limited', state: 'accepted' },
@@ -47,4 +47,17 @@ test('site, plant and station facts remain available when EUC is absent', () => 
   ])
   assert.equal(identity.eucName, 'Koyna Stage 3')
   assert.equal(identity.eucLocation, 'Koyna, Maharashtra')
+})
+
+test('prose installation details fill EUC name and location when labels are absent', () => {
+  const identity = leadIdentity({
+    subject: 'Request for quotation — Metrix vibration monitoring spares',
+    body: 'Please quote replacement spares for the existing installation at Demo Thermal Plant, Korba, Chhattisgarh.',
+  }, [])
+  assert.deepEqual(inferEucFromText('existing installation at Demo Thermal Plant, Korba, Chhattisgarh'), {
+    eucName: 'Demo Thermal Plant',
+    eucLocation: 'Korba, Chhattisgarh',
+  })
+  assert.equal(identity.eucName, 'Demo Thermal Plant')
+  assert.equal(identity.eucLocation, 'Korba, Chhattisgarh')
 })

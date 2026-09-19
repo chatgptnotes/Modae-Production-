@@ -40,6 +40,20 @@ export const leadFieldValue = (fields = [], key) => {
   return field?.v == null ? '' : String(field.v).trim()
 }
 
+// A plain email often describes the end user in prose instead of using an
+// explicit "EUC Name" / "EUC Location" label. Recover the common plant/site
+// pattern as a suggestion, while keeping explicit or human-entered values as
+// the stronger source below.
+export const inferEucFromText = (text = '') => {
+  const source = String(text || '').replace(/\s+/g, ' ').trim()
+  const match = source.match(/(?:existing\s+)?(?:installation|plant|station|site)\s+(?:at|in)\s+([^,.;]+),\s*([^,.;]+),\s*([^,.;]+)/i)
+  if (!match) return { eucName: '', eucLocation: '' }
+  return {
+    eucName: match[1].trim(),
+    eucLocation: `${match[2].trim()}, ${match[3].trim()}`,
+  }
+}
+
 export const splitBuSegment = (fields = []) => {
   const combined = (fields || []).find(item => item.state !== 'rejected' && /^bu\s+(?:and\s+)?segment$/i.test(labelText(item.k)))
   if (!combined?.v) return { bu: leadFieldValue(fields, 'bu'), segment: leadFieldValue(fields, 'segment') }
@@ -47,17 +61,26 @@ export const splitBuSegment = (fields = []) => {
   return { bu: bu.trim(), segment: rest.join(' / ').trim() }
 }
 
-export const leadIdentity = (lead, fields = []) => ({
-  sellTo: String(lead?.sellTo || leadFieldValue(fields, 'sellTo') || lead?.parse?.sellTo || '').trim(),
-  // Repair the old fallback that copied Contact Person into EUC Name. A
-  // confirmed Site/Plant extraction is the stronger source in that exact case.
-  eucName: String(
-    leadFieldValue(fields, 'eucName') && lead?.eucName && lead?.contactPerson
-      && String(lead.eucName).trim() === String(lead.contactPerson).trim()
-      ? leadFieldValue(fields, 'eucName')
-      : lead?.eucName || leadFieldValue(fields, 'eucName') || lead?.parse?.eucName || '',
-  ).trim(),
-  eucLocation: String(lead?.eucLocation || leadFieldValue(fields, 'eucLocation') || lead?.parse?.eucLocation || '').trim(),
-  contactPerson: String(lead?.contactPerson || leadFieldValue(fields, 'contactPerson') || lead?.parse?.contactPerson || '').trim(),
-  contactPhone: String(lead?.contactPhone || leadFieldValue(fields, 'contactPhone') || lead?.parse?.contactPhone || '').trim(),
-})
+export const leadIdentity = (lead, fields = []) => {
+  const inferred = inferEucFromText([
+    lead?.subject,
+    lead?.body,
+    lead?.opportunityScope,
+    lead?.ai?.summary,
+  ].filter(Boolean).join(' '))
+  const extractedEucName = leadFieldValue(fields, 'eucName')
+  return {
+    sellTo: String(lead?.sellTo || leadFieldValue(fields, 'sellTo') || lead?.parse?.sellTo || '').trim(),
+    // Repair the old fallback that copied Contact Person into EUC Name. A
+    // confirmed Site/Plant extraction is the stronger source in that exact case.
+    eucName: String(
+      extractedEucName && lead?.eucName && lead?.contactPerson
+        && String(lead.eucName).trim() === String(lead.contactPerson).trim()
+        ? extractedEucName
+        : lead?.eucName || extractedEucName || lead?.parse?.eucName || inferred.eucName || '',
+    ).trim(),
+    eucLocation: String(lead?.eucLocation || leadFieldValue(fields, 'eucLocation') || lead?.parse?.eucLocation || inferred.eucLocation || '').trim(),
+    contactPerson: String(lead?.contactPerson || leadFieldValue(fields, 'contactPerson') || lead?.parse?.contactPerson || '').trim(),
+    contactPhone: String(lead?.contactPhone || leadFieldValue(fields, 'contactPhone') || lead?.parse?.contactPhone || '').trim(),
+  }
+}

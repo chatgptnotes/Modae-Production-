@@ -199,7 +199,14 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
         body: chunk.source === 'Email body' ? chunk.text : '',
         attachments: chunk.source === 'Email body' ? [] : [{ name: chunk.source.replace(/^Attachment: /, ''), text: chunk.text }],
         aiAttachments: chunk.index === 0 ? aiAttachments : [],
-        chunk: { source: chunk.source, index: chunk.index, total: chunk.total },
+        chunk: {
+          source: chunk.source,
+          index: chunk.index,
+          total: chunk.total,
+          pageStart: chunk.pageStart,
+          pageEnd: chunk.pageEnd,
+          phase: chunk.total > 1 ? (chunk.index === chunk.total - 1 ? 'final-segment' : 'segment') : 'single-source',
+        },
       }, { fallback })
       if (aiResult.data?.data) results.push(aiResult.data.data)
     }
@@ -208,14 +215,16 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
     if (aiResult.data?.data) results.push(aiResult.data.data)
   }
   const mergedResults = mergeLeadResults(results)
+  const sourceText = `${subject || ''}\n${body || ''}\n${attachmentText}`
+  const identityFacts = extractLeadIdentityFacts(sourceText)
   // When Gemini fails outright but a deterministic parse succeeded, still hand
   // back that scaffold rather than falling through to the plain-text fallback
   // below — a mechanical RFQ read beats an unstructured text preview.
-  const baseAi = mergedResults || (deterministic.fields.length || deterministic.lineItems.length
+  const baseAi = mergedResults || (deterministic.fields.length || deterministic.lineItems.length || identityFacts.fields.length
     ? { summary: '', route: '', urgency: 'Normal', completeness: 0, suggestedOwner: '', fields: [], lineItems: [], missing: [], next: [] }
     : null)
-  const aiRaw = mergeDeterministicIntoAi(baseAi, deterministic.fields, deterministic.lineItems)
-  const sourceText = `${subject || ''}\n${body || ''}\n${attachmentText}`
+  const aiWithDeterministic = mergeDeterministicIntoAi(baseAi, deterministic.fields, deterministic.lineItems)
+  const aiRaw = mergeDeterministicIntoAi(aiWithDeterministic, identityFacts.fields, [])
   const ai = hardenLeadExtraction(aiRaw, { from, text: sourceText, config: store.config })
   // The proxy is optional in demo/staging builds. Keep the intake usable when
   // it is absent or temporarily unavailable: preserve only facts present in
