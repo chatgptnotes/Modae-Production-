@@ -162,7 +162,7 @@ async function saveRuleTables(config = {}) {
   writeCachedRules(config)
 }
 
-const BUSINESS_KEYS = new Set(['leads', 'opportunities', 'approvals', 'proposals', 'sparesLines', 'audit', 'priceLists'])
+const BUSINESS_KEYS = new Set(['leads', 'opportunities', 'approvals', 'proposals', 'sparesLines', 'clarifications', 'audit', 'priceLists'])
 
 async function saveSettings(dirty = {}) {
   const rows = Object.entries(dirty)
@@ -182,7 +182,7 @@ async function loadBusinessTables() {
     supabase.from('leads').select('data'),
     supabase.from('opportunities').select('data'),
     supabase.from('approvals').select('data'),
-    supabase.from('records').select('entity, id, data').in('entity', ['proposals', 'spares_lines', 'audit']),
+    supabase.from('records').select('entity, id, data').in('entity', ['proposals', 'spares_lines', 'clarifications', 'audit']),
   ])
   if (tables.some(result => result.error)) return {}
   const records = tables[3].data || []
@@ -192,6 +192,7 @@ async function loadBusinessTables() {
     approvals: tables[2].data.map(row => row.data),
     proposals: Object.fromEntries(records.filter(row => row.entity === 'proposals').map(row => [row.id, row.data])),
     sparesLines: records.filter(row => row.entity === 'spares_lines').map(row => row.data),
+    clarifications: records.filter(row => row.entity === 'clarifications').map(row => row.data),
     audit: records.filter(row => row.entity === 'audit').map(row => row.data),
   }
 }
@@ -202,6 +203,7 @@ async function saveBusinessTables(dirty = {}) {
   if (dirty.opportunities) writes.push(['opportunities', supabase.from('opportunities').upsert(dirty.opportunities.map(row => ({ id: row.id, data: row, rev: 1, updated_at: new Date().toISOString() })), { onConflict: 'id' })])
   if (dirty.approvals) writes.push(['approvals', supabase.from('approvals').upsert(dirty.approvals.map(row => ({ id: row.id, data: row, rev: 1, updated_at: new Date().toISOString() })), { onConflict: 'id' })])
   if (dirty.sparesLines) writes.push(['sparesLines', supabase.from('records').upsert(dirty.sparesLines.map(row => ({ entity: 'spares_lines', id: row.id, data: row, rev: 1, updated_at: new Date().toISOString() })), { onConflict: 'entity,id' })])
+  if (dirty.clarifications) writes.push(['clarifications', supabase.from('records').upsert(dirty.clarifications.map(row => ({ entity: 'clarifications', id: row.id, data: row, rev: 1, updated_at: new Date().toISOString() })), { onConflict: 'entity,id' })])
   if (dirty.audit) writes.push(['audit', supabase.from('records').upsert(dirty.audit.map(row => ({ entity: 'audit', id: row.id || `AUD-${row.ts || Date.now()}-${Math.random().toString(36).slice(2, 7)}`, data: row, rev: 1, updated_at: new Date().toISOString() })), { onConflict: 'entity,id' })])
   if (dirty.proposals) writes.push(['proposals', supabase.from('records').upsert(Object.entries(dirty.proposals).map(([id, row]) => ({ entity: 'proposals', id, data: row, rev: 1, updated_at: new Date().toISOString() })), { onConflict: 'entity,id' })])
   if (!writes.length) return []

@@ -642,7 +642,11 @@ export function mergeClarificationSlice(local = [], server = [], baseline = []) 
     if (baseRow) {
       if (!localRow) return []
       if (!sameValue(localRow, baseRow)) return [localRow]
-      return serverRow ? [serverRow] : []
+      // A missing row is not a delete signal: clarifications are append-only
+      // audit records and a delayed Supabase read can legitimately omit a
+      // question this device has already confirmed. Keep it locally so the
+      // sync loop can upsert it again.
+      return serverRow ? [serverRow] : [localRow]
     }
     return localRow ? [localRow] : [serverRow]
   })

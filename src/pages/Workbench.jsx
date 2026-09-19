@@ -10,7 +10,7 @@ import { Icon } from '../icons.jsx'
 import { productBrandProfiles } from '../branding/modae.js'
 import { MODAE_COMPANY } from '../proposalDoc.js'
 import { runJson, runTaskResult, runText } from '../ai.js'
-import { clarificationSender, clarificationTopic } from '../leadClarification.js'
+import { clarificationSender } from '../leadClarification.js'
 import WbSpares from '../workbench/WbSpares.jsx'
 import WbService from '../workbench/WbService.jsx'
 import WbProject from '../workbench/WbProject.jsx'
@@ -235,6 +235,14 @@ export default function Workbench() {
   const viewTab = requestedWorkflowStep
     ? activeStepConfig.tab
     : (legacyStep ? activeStepConfig.tab : (hiddenApprovalTab ? activeStepConfig.tab : tab))
+  // A workflow step can be opened for review without making it the current
+  // editable step. Keep the persisted milestone as the write boundary so
+  // clicking ahead in the rail never turns a future screen into an editor.
+  const viewedStep = requestedWorkflowStep?.slug
+    || legacyStep
+    || workflowStepForTab(viewTab)?.slug
+    || activeStep
+  const workflowReadOnly = !!persistedWorkflowStep && viewedStep !== persistedWorkflowStep.slug
   const serviceMilestonePhase = { Intake: 0, Qualification: 1, Screening: 2, Sourcing: 2, Proposal: 3, Approval: 4, Submitted: 5, 'Follow-up': 7 }
   const persistedServicePhase = opp.route === 'Service'
     ? (Number.isInteger(opp.servicePhase) ? opp.servicePhase : (serviceMilestonePhase[effectiveMilestone] ?? 0))
@@ -525,7 +533,8 @@ export default function Workbench() {
           )}
         </Modal>
       )}
-      <div className="wb-body">
+      <fieldset className={`wb-body workflow-edit-boundary ${workflowReadOnly ? 'workflow-edit-boundary--readonly' : ''}`} disabled={workflowReadOnly} aria-readonly={workflowReadOnly || undefined}>
+        {workflowReadOnly && <div className="workflow-readonly-notice" role="status">Read-only view — select the current workflow step to edit.</div>}
         {viewTab === 'overview' && opp.route === 'Spares' && <SparesIntakeTab opp={opp} detailsRef={detailsRef} />}
         {viewTab === 'overview' && opp.route !== 'Spares' && <OverviewTab opp={opp} detailsRef={detailsRef} />}
         {viewTab === 'requirement' && <RequirementTab opp={opp} />}
@@ -549,7 +558,7 @@ export default function Workbench() {
         {!activeStepConfig && viewTab === 'po' && <PoHandover opp={opp} />}
         {!activeStepConfig && viewTab === 'files' && <FilesTab opp={opp} />}
         {!activeStepConfig && viewTab === 'audit' && <AuditTab opp={opp} />}
-      </div>
+      </fieldset>
     </div>
   )
 }
@@ -1315,10 +1324,6 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
     const q = manualForm.q.trim()
     if (!category || !gap || !q) {
       setManualErr('Add a category, gap and customer question before saving.')
-      return
-    }
-    if (rows.some(row => clarificationTopic(row.q) === clarificationTopic(q))) {
-      setManualErr('This question is already listed for the opportunity.')
       return
     }
     store.addClarification({

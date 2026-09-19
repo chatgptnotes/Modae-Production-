@@ -3885,6 +3885,28 @@ button.install:hover { background: var(--primary-hover); }
   min-height: 42px; padding: 8px 12px; background: var(--ws-surface);
   border: 1px solid var(--ws-border); border-radius: 10px; box-shadow: var(--ws-shadow);
 }
+.workflow-edit-boundary {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.workflow-edit-boundary--readonly {
+  position: relative;
+  border: 1px solid var(--ws-border);
+  border-radius: 10px;
+  background: var(--ws-surface);
+}
+.workflow-readonly-notice {
+  margin: 10px 12px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--ws-border);
+  border-radius: 7px;
+  background: var(--ws-surface-sunken, var(--ws-surface));
+  color: var(--ws-text-3);
+  font-size: 11.5px;
+  font-weight: 650;
+}
 .converted-status {
   display: inline-flex; align-items: center; gap: 7px; color: var(--ws-emerald);
   font-size: 12.5px; font-weight: 750;
@@ -5498,6 +5520,17 @@ html, body { overflow-x: hidden; max-width: 100%; }
   font-weight: 700;
 }
 .tracker-page .tracker-clear-filters:hover { background: var(--select-fill); }
+.tracker-page > .toolbar {
+  column-gap: 12px;
+  row-gap: 10px;
+}
+.tracker-page > .toolbar .tracker-search {
+  min-width: min(420px, 100%);
+}
+.tracker-page > .toolbar .tracker-show-all {
+  gap: 8px;
+  margin-left: 2px;
+}
 .tracker-page table.sheet td input, .tracker-page table.sheet td select { min-width: 0; text-overflow: ellipsis; }
 .tracker-page table.sheet td.num input { text-align: right; }
 

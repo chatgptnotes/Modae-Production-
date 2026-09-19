@@ -52,6 +52,13 @@ test('clarification hydration preserves local answers but accepts confirmed serv
   assert.deepEqual(merged.rows, local.concat(server.slice(1)))
 })
 
+test('clarification refresh preserves a confirmed question omitted by a stale server snapshot', () => {
+  const confirmed = [{ id: 'CL-1', oppId: 'O-1', status: 'Open', q: 'Confirm the part number' }]
+  const merged = mergeClarificationSlice(confirmed, [], confirmed)
+  assert.deepEqual(merged.rows, confirmed)
+  assert.deepEqual(merged.baseline, [])
+})
+
 test('an intentional clarification reset remains empty', () => {
   const server = [{ id: 'CL-old', oppId: 'O-1', status: 'Open', q: 'Old question' }]
   const merged = mergeClarificationSlice([], [], server)
