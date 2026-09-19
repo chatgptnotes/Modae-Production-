@@ -116,6 +116,7 @@ function applyApprovalEffects(s, appr) {
           releaseStatus: 'Released',
           approvedPricing: {
             revision: p.revision,
+            approvalSnapshot: appr.approvalSnapshot || proposalApprovalSnapshot(p, next.opportunities.find(o => o.id === appr.oppId)),
             listValue: appr.listValue ?? null,
             approvedValue: appr.requestedValue ?? null,
             discountPct: appr.discountPct ?? 0,
@@ -1122,10 +1123,16 @@ export function StoreProvider({ children }) {
         const status = anyRejected ? 'Rejected'
           : !allIn ? 'Pending'
           : 'Approved'
+        const decisionOpportunity = s.opportunities.find(o => o.id === appr.oppId)
+        const decisionProposal = appr.oppId ? s.proposals[appr.oppId] : null
+        const approvalSnapshot = appr.approvalSnapshot || (status === 'Approved' && decisionProposal
+          ? proposalApprovalSnapshot(decisionProposal, decisionOpportunity)
+          : null)
         let next = {
           ...s,
           approvals: s.approvals.map(a => a.id === id
             ? { ...a, decisions, status, __sv: syncStamp,
+                ...(approvalSnapshot ? { approvalSnapshot } : {}),
                 decisionTs: status === 'Pending' ? a.decisionTs : new Date().toISOString(),
                 decisionNote: comment || a.decisionNote,
                 ...(status === 'Rejected' ? {
@@ -1136,7 +1143,7 @@ export function StoreProvider({ children }) {
                 } : {}) }
             : a),
         }
-        if (status !== 'Pending') next = applyApprovalEffects(next, { ...appr, status })
+        if (status !== 'Pending') next = applyApprovalEffects(next, { ...appr, status, approvalSnapshot })
         return withAudit(next, `Approval ${d.toLowerCase()}`, id, comment)
       })
     },
