@@ -34,3 +34,10 @@ test('the second final-release decision uses the normal transition gate before a
   assert.match(store, /releasedOpp\.milestone !== 'Submitted'/,
     'duplicate realtime events must not advance an already submitted quote again')
 })
+
+test('an already-approved current release is reconciled after boot or live refresh', () => {
+  const store = read('src/store.jsx')
+  assert.match(store, /function reconcileApprovedSubmissions\(s\)/)
+  assert.match(store, /reconcileApprovedSubmissions\(migrate\(/)
+  assert.match(store, /opp\.milestone !== 'Approval'/)
+})

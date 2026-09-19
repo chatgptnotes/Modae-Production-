@@ -370,9 +370,13 @@ export function oppBlockers(opp, proposal, approvals, config = null) {
     })
   }
 
-  // Any other pending request (e.g. amber terms sent for approval).
+  // Any other pending request (e.g. amber terms sent for approval).  Section
+  // 5 approvals deliberately stay out of this early-readiness list: they gate
+  // customer submission, not the move from Proposal into Approval.  Their
+  // current revision/snapshot is evaluated by transitionBlockers at Submitted;
+  // otherwise an obsolete release request can strand a fully approved quote.
   for (const a of mine.filter(x => x.status === 'Pending'
-    && !['Red customer clearance', 'Commercial deviation'].includes(x.type))) {
+    && !['Red customer clearance', 'Commercial deviation', APPROVAL_5A, APPROVAL_5B, APPROVAL_5C].includes(x.type))) {
     b.push({ key: `wait-${a.id}`, severity: 'wait', text: `${a.type} awaiting ${a.approver} decision.` })
   }
 

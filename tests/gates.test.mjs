@@ -363,6 +363,21 @@ const submittedBlockers = (approvals) => transitionBlockers(
   { approvals, poCompare: {}, kyc: {}, clarifications: [], sparesLines: [] },
 )
 
+test('an obsolete final release never blocks entry into Approval', () => {
+  const approvals = [
+    { id: 'AP-OLD', oppId: 'OP-1', type: 'Final quote release', rev: '00', status: 'Pending', approver: 'LJS' },
+    { id: 'AP-CURRENT', oppId: 'OP-1', type: 'Final quote release', rev: '01', status: 'Approved' },
+  ]
+  const state = { approvals, poCompare: {}, kyc: {}, clarifications: [], sparesLines: [] }
+  const early = transitionBlockers({ ...baseOpp, milestone: 'Proposal' }, 'Approval', releasedProposal, state)
+  assert.ok(!early.some(blocker => blocker.key === 'wait-AP-OLD'),
+    'a prior pending release belongs to its old revision and cannot stop Proposal → Approval')
+
+  const submitted = transitionBlockers({ ...baseOpp, milestone: 'Approval' }, 'Submitted', releasedProposal, state)
+  assert.ok(!submitted.some(blocker => blocker.key === 'release'),
+    'the current approved release still clears Quotation Submission')
+})
+
 test('a milestone exception cannot waive the §5 approvals', () => {
   const exception = key => ([{
     id: 'AP-9', oppId: 'OP-1', type: 'Milestone exception',

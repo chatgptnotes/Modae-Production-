@@ -28,7 +28,7 @@ import {
   sparesProposalBom,
   orderedSparesProposalBom,
 } from './proposal/sparesBoq.js'
-import { transitionBlockers } from './gates.js'
+import { releaseState, transitionBlockers } from './gates.js'
 
 const StoreCtx = createContext(null)
 const CLARIFICATION_FIELD_KEYS = new Set([
@@ -65,7 +65,7 @@ const initialState = () => {
   const state = stateFromSaved(saved)
   // Production starts clean. Existing demo-mode snapshots are migrated once
   // into an empty workspace; real records entered after that remain intact.
-  return state.demoData === true ? emptyState(state) : state
+  return reconcileApprovedSubmissions(state.demoData === true ? emptyState(state) : state)
 }
 
 // Append-only event log, newest first. Every mutation gets its own entry: audit
@@ -159,6 +159,25 @@ function applyApprovalEffects(s, appr) {
     }
   }
   return next
+}
+
+// An approval may have been completed before this version was deployed, or on
+// another device while this browser was closed.  Reconcile those already-valid
+// releases during boot and shared-state refresh, rather than waiting for a new
+// button click to run applyApprovalEffects.  Only Approval moves forward here:
+// a green historical release must never skip a quote from Proposal directly to
+// Submitted, and later milestones must never move backward.
+function reconcileApprovedSubmissions(s) {
+  let changed = false
+  const opportunities = (s.opportunities || []).map(opp => {
+    if (opp.milestone !== 'Approval') return opp
+    const proposal = s.proposals?.[opp.id]
+    if (!proposal || !releaseState(proposal, s.approvals, opp.id, opp).release) return opp
+    if (transitionBlockers(opp, 'Submitted', proposal, s).length) return opp
+    changed = true
+    return { ...opp, milestone: 'Submitted', lastUpdated: new Date().toISOString().slice(0, 10) }
+  })
+  return changed ? { ...s, opportunities } : s
 }
 
 export function StoreProvider({ children }) {
@@ -286,7 +305,7 @@ export function StoreProvider({ children }) {
         if (k in s && s[k] !== bootRef.current[k]) continue // edited this session — keep local
         accepted[k] = v
       }
-      const merged = migrate({ ...s, ...accepted, leadSyncBaseline: nextBaseline, clarificationSyncBaseline: nextClarificationBaseline })
+      const merged = reconcileApprovedSubmissions(migrate({ ...s, ...accepted, leadSyncBaseline: nextBaseline, clarificationSyncBaseline: nextClarificationBaseline }))
       // Only the slices we took from the server are known to match it. A slice
       // we kept is still unsaved, so it must stay dirty for the flush below.
       lastSavedRef.current = Object.fromEntries(
@@ -335,7 +354,7 @@ export function StoreProvider({ children }) {
       if (k === 'leads' || k === 'leadArchive') nextBaseline[k] = v
     }
     if (!Object.keys(updates).length) return
-    const merged = migrate({ ...s, ...updates, leadSyncBaseline: nextBaseline, clarificationSyncBaseline: nextClarificationBaseline })
+    const merged = reconcileApprovedSubmissions(migrate({ ...s, ...updates, leadSyncBaseline: nextBaseline, clarificationSyncBaseline: nextClarificationBaseline }))
     // Keep the server snapshot as the dirty baseline. If the merge preserved
     // a local question over stale server data, the next debounced save must
     // still upload that local row instead of treating it as already synced.
