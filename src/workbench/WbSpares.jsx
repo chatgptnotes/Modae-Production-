@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { isPlaceholderSparesLine, useStore } from '../store.jsx'
 import { defaultCosting } from '../seed.js'
 import { canPriceProposal, unitCostINR, fmt, ddMmmYY } from '../utils.js'
-import { pricingThresholdExceptions } from '../gates.js'
+import { pricingApprovalFor, pricingThresholdExceptions } from '../gates.js'
 import { Chip, ConfChip, AiBadge, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 import { PRICE_SOURCES, formatPriceSource, isConfirmableSparesLine, isMissingSparesDescription, normalizeMarkupPct, reconcilePriceSource, resolvePriceSource, sparesLineFinancials } from '../pricing.js'
@@ -213,7 +213,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     ? store.config.approvalThresholds.pricingApprovers.filter(Boolean)
     : ['AH', 'LJS']
   const pricingApproval = pricingExceptions.rows.length
-    ? (store.approvals || []).find(a => a.status !== 'Cancelled' && a.oppId === opp.id && a.type === 'Pricing threshold exception' && (a.rev == null || String(a.rev) === String(proposal?.revision ?? '')))
+    ? pricingApprovalFor(opp, proposal, store.approvals || [], pricingExceptions.rows)
     : null
   const pricingApprovalClear = !pricingExceptions.rows.length || pricingApproval?.status === 'Approved'
   const canContinueToProposal = pricedItems.length > 0 && pendingConfirmationCount === 0 && activeItems.length > 0 && pricingApprovalClear

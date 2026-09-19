@@ -453,3 +453,42 @@ test('the portal is currently parked, and nothing offers a way in', () => {
     assert.equal((PERMS[role] || []).includes('portal'), false, `${role} must not hold the portal page permission`)
   }
 })
+
+// The Submitted step must never show a bare "release pending" while the
+// Approvals list shows a green row — releaseState has to say WHY it is closed.
+test('releaseState explains why the submission gate is closed', () => {
+  // Waiting on the second approver of the joint gate.
+  const pendingRow = {
+    id: 'AP-P', oppId: 'OP-1', type: 'Final quote release', rev: '01', status: 'Pending',
+    approver: 'LJS', needed: ['LJS', 'AH'],
+    decisions: { AH: { d: 'Approved', c: '', when: '2026-09-19T06:00:00Z' } },
+  }
+  const waiting = releaseState(releasedProposal, [pendingRow], 'OP-1', baseOpp)
+  assert.equal(waiting.release, null)
+  assert.match(waiting.reason, /awaiting LJS/, 'the reason must name the missing approver')
+  // Approved, but the released content changed after sign-off.
+  const approvedRow = {
+    id: 'AP-A', oppId: 'OP-1', type: 'Final quote release', rev: '01', status: 'Approved',
+    approvalSnapshot: proposalApprovalSnapshot(releasedProposal, baseOpp),
+  }
+  const edited = { ...releasedProposal, subject: 'Changed subject after approval' }
+  const voided = releaseState(edited, [approvedRow], 'OP-1', baseOpp)
+  assert.equal(voided.release, null)
+  assert.match(voided.reason, /changed after sign-off/, 'a voided approval must say so')
+  // Untouched proposal → gate open, nothing to explain.
+  const open = releaseState(releasedProposal, [approvedRow], 'OP-1', baseOpp)
+  assert.ok(open.release)
+  assert.equal(open.reason, '')
+})
+
+test('the Submitted step renders the release reason, not just the generic text', () => {
+  const source = read('src/workbench/SubmissionPanel.jsx')
+  assert.match(source, /releaseReason/,
+    'SubmissionPanel must surface releaseState.reason in its pending branch')
+  // The panel must be able to break the deadlock in place: request the joint
+  // LJS + AH release without navigating away to the transition dialog.
+  assert.match(source, /needed: \['LJS', 'AH'\]/,
+    'the in-place release request must be the joint LJS + AH gate')
+  assert.match(source, /pendingRelease &&/,
+    'the request button must hide while a release request is already pending')
+})

@@ -12,9 +12,9 @@ import {
   redClearanceFor,
   verificationSnapshot,
 } from '../src/leadVerification.js'
-import { oppBlockers, transitionBlockers, NO_EXCEPTION } from '../src/gates.js'
+import { oppBlockers, transitionBlockers, NO_EXCEPTION, approvalForRev, APPROVAL_5B } from '../src/gates.js'
 import { seedJointApprovals, seedAiLeads, seedCustomers } from '../src/seed.js'
-import { migrate, seedState } from '../src/appState.js'
+import { migrate, seedState, mergeApprovalRows } from '../src/appState.js'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
@@ -151,7 +151,7 @@ test('a Returned clearance can be raised again from the inbox', () => {
 
 test('only a needed role can decide, and a converted lead never regresses', () => {
   const source = read('src/store.jsx')
-  assert.match(source, /if \(needed\.length && !needed\.includes\(s\.role\)\) return s/)
+  assert.match(source, /if \(needed\.length && !needed\.includes\(s\.role\)\) \{\s*\n\s*console\.warn\(`Decision ignored/)
   assert.match(source, /lead\?\.status === 'Converted' \? null : \{ status: 'Qualified' \}/)
 })
 
@@ -224,4 +224,146 @@ test('migrate keeps a half-approved final quote release pending', () => {
   assert.equal(release.anyOf, false)
   assert.ok(release.decisions.AH)
   assert.equal(release.decisions.LJS, undefined)
+})
+
+
+// Regression: requestApproval used to dedupe against same-key approvals in ANY
+// of Pending/Approved/Approved-with-conditions. A stale Approved record (the
+// quote changed since it was granted) therefore swallowed the "Request…"
+// button click in the transition dialog — the gate still showed the blocker
+// but no new request could ever be created, and the move looked permanently
+// stuck. Only a Pending request may suppress a duplicate.
+test('requestApproval only dedupes against a Pending request, never a stale Approved one', () => {
+  const source = read('src/store.jsx')
+  const dedupe = source.match(/const alreadyRemembered = s\.approvals\.find\(([\s\S]*?)\)\n        if \(alreadyRemembered\)/)
+  assert.ok(dedupe, 'requestApproval dedupe block not found in store.jsx')
+  assert.match(dedupe[1], /existing\.status === 'Pending'/,
+    'dedupe must only match Pending requests')
+  assert.doesNotMatch(dedupe[1], /'Approved with conditions'\]\.includes/,
+    'dedupe must not treat Approved records as suppressing a re-request')
+})
+
+// --- §5B / §5C approved-then-voided regression ------------------------------
+// The transition dialog's §5B request used to stamp deviationDetails: [],
+// so commercialApprovalCoversProposal voided the Approved row whenever the
+// quote had any deviation term — the Approvals page showed Approved while
+// the gate re-raised the blocker and the dialog re-asked forever.
+const coverOpp = { id: 'O-9', route: 'Project', milestone: 'Proposal', customerStatus: 'Blue', owner: 'RS' }
+const coverProposal = deviation => ({
+  revision: '01',
+  terms: [{
+    term: 'Payment terms', status: 'Deviation', decision: deviation,
+    customerAsk: '60 days credit', standardTerm: '30 days from invoice',
+  }],
+})
+const section5B = (patch = {}) => ({
+  id: 'AP-5B', oppId: 'O-9', type: APPROVAL_5B, approver: 'AH', needed: ['AH'],
+  status: 'Approved', rev: '01',
+  decisions: { AH: { d: 'Approved', c: '', when: '2026-09-19T06:00:00Z' } },
+  deviationDetails: [{ term: 'Payment terms', customerAsk: '60 days credit', ourResponse: '30 days from invoice', standardTerm: '30 days from invoice' }],
+  ...patch,
+})
+
+test('an approved §5B with deviation details covers the quote it signed off', () => {
+  const { approved } = approvalForRev(APPROVAL_5B, coverProposal('Match customer terms'), [section5B()], 'O-9', coverOpp)
+  assert.ok(approved, 'AH sign-off must cover the recorded deviations')
+})
+
+test('an approved §5B without deviation details does not cover a deviating quote', () => {
+  const { approved } = approvalForRev(APPROVAL_5B, coverProposal('Match customer terms'), [section5B({ deviationDetails: [] })], 'O-9', coverOpp)
+  assert.equal(approved, null, 'a sign-off that recorded no deviations cannot cover one')
+})
+
+test('a Counter-offer term still needs recorded §5B coverage', () => {
+  // §5B signs off the whole commercial position: a term that keeps status
+  // 'Deviation' — even after a counter-offer — must appear in the recorded
+  // deviationDetails for the approval to cover it.
+  const { approved } = approvalForRev(APPROVAL_5B, coverProposal('Counter-offer'), [section5B({ deviationDetails: [] })], 'O-9', coverOpp)
+  assert.equal(approved, null, '§5B covers the whole commercial position — any Deviation-status term needs recorded coverage')
+})
+
+test('the transition dialog stamps deviation details on §5B requests', () => {
+  const source = read('src/pages/Workbench.jsx')
+  assert.match(source, /blocker\.key === 'comm-approval'/,
+    'approvalContextFor must record deviation details for the comm-approval blocker')
+})
+
+test('a System Owner decision on an AH-only gate is discarded loudly, not silently', () => {
+  const source = read('src/store.jsx')
+  const guard = source.match(/if \(needed\.length && !needed\.includes\(s\.role\)\) \{\s*\n\s*console\.warn/)
+  assert.ok(guard, 'recordDecision must warn when the persona is not a required approver')
+})
+
+test('migrate backfills deviation details on pre-stamp approved §5B rows', () => {
+  const migrated = migrate({
+    ...seedState(),
+    proposals: {
+      'O-9': {
+        revision: '01',
+        terms: [{ term: 'Payment terms', status: 'Deviation', decision: 'Match customer terms', customerAsk: '60 days credit' }],
+      },
+    },
+    approvals: [{
+      id: 'AP-OLD', oppId: 'O-9', type: 'Commercial approval', approver: 'AH',
+      status: 'Approved', rev: '01', decisionTs: '2026-09-19T06:00:00Z',
+    }],
+  })
+  const row = migrated.approvals.find(a => a.id === 'AP-OLD')
+  assert.equal(row.status, 'Approved', 'a decided row stays decided')
+  assert.equal(row.deviationDetails.length, 1, 'details backfilled from the named revision')
+  assert.equal(row.deviationDetails[0].term, 'Payment terms')
+  // A revision mismatch means the row was granted for a different quote —
+  // no backfill, the gate rightly keeps voiding it.
+  const mismatched = migrate({
+    ...seedState(),
+    proposals: { 'O-9': { revision: '02', terms: [] } },
+    approvals: [{
+      id: 'AP-OLD2', oppId: 'O-9', type: 'Commercial approval', approver: 'AH',
+      status: 'Approved', rev: '01', decisionTs: '2026-09-19T06:00:00Z',
+    }],
+  })
+  assert.equal(mismatched.approvals.find(a => a.id === 'AP-OLD2').deviationDetails, undefined,
+    'no backfill when the approval names a different revision')
+})
+
+test('re-requesting a gate supersedes the stale same-key approval row', () => {
+  const source = read('src/store.jsx')
+  assert.match(source, /supersededBy: id/,
+    'requestApproval must mark superseded Approved rows Cancelled so the Approvals list cannot mislead')
+})
+
+// A stale server snapshot (failed save, second tab, slow device) used to
+// overwrite newer local approvals on the focus refetch — re-locking an
+// already-approved release gate minutes later. __sv stamps make the merge
+// per-row and monotonic.
+test('sync merge keeps a newer local approval over a stale server row', () => {
+  const local = [{
+    id: 'AP-9', oppId: 'O-9', type: 'Final quote release', status: 'Approved',
+    needed: ['LJS', 'AH'], decisions: { LJS: { d: 'Approved' }, AH: { d: 'Approved' } },
+    __sv: '2026-09-19T10:00:00Z',
+  }]
+  const staleServer = [{
+    id: 'AP-9', oppId: 'O-9', type: 'Final quote release', status: 'Pending',
+    needed: ['LJS', 'AH'], decisions: {}, __sv: '2026-09-19T09:00:00Z',
+  }]
+  const merged = mergeApprovalRows(local, staleServer)
+  assert.equal(merged.length, 1)
+  assert.equal(merged[0].status, 'Approved', 'a newer local decision must not be downgraded')
+})
+
+test('sync merge takes a server row that is newer or unknown locally', () => {
+  const local = [{ id: 'AP-1', status: 'Pending', __sv: '2026-09-19T08:00:00Z' }]
+  const server = [
+    { id: 'AP-1', status: 'Approved', __sv: '2026-09-19T09:00:00Z' },
+    { id: 'AP-2', status: 'Pending' },
+  ]
+  const merged = mergeApprovalRows(local, server)
+  assert.equal(merged.length, 2, 'server-only rows are adopted')
+  assert.equal(merged.find(a => a.id === 'AP-1').status, 'Approved', 'newer server row wins')
+})
+
+test('sync merge never drops a local-only approval the server has not seen', () => {
+  const local = [{ id: 'AP-LOCAL', oppId: 'O-9', type: 'Final quote release', status: 'Pending', __sv: '2026-09-19T10:00:00Z' }]
+  const merged = mergeApprovalRows(local, [])
+  assert.equal(merged.length, 1, 'a request created before its save landed survives the refetch')
 })

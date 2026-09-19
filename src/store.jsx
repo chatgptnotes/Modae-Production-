@@ -12,12 +12,12 @@ import {
 } from './seed.js'
 import { leadConfig, routeOwner, expiredLeadDeadline, aiAuditDetail } from './leadRules.js'
 import { withoutSimulated, simulatedCount } from './simulatedLeads.js'
-import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLeadSlice, defaultViewMode } from './appState.js'
+import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLeadSlice, mergeApprovalRows, defaultViewMode } from './appState.js'
 import { unitCostINR, unitSellINR, setRoleNameConfig, nowIST, toISTISOString } from './utils.js'
 import { PRICE_SOURCES, isConfirmableSparesLine, normalizePriceFields, sparesLineFinancials } from './pricing.js'
 import { clarificationTopic } from './leadClarification.js'
 import { normalizedCurrencyRates } from './currency.js'
-import { approvalMemoryKey, proposalApprovalSnapshot } from './approvalMemory.js'
+import { approvalMemoryKey, pricingExceptionSignature, proposalApprovalSnapshot } from './approvalMemory.js'
 import { syncProposalFromOpportunity } from './proposal/opportunitySync.js'
 import {
   isPlaceholderSparesLine,
@@ -247,6 +247,12 @@ export function StoreProvider({ children }) {
           nextBaseline[k] = mergedLead.baseline
           continue
         }
+        // Approvals merge per row by sync stamp: a stale server snapshot must
+        // never downgrade a local decision (this re-locked approved releases).
+        if (k === 'approvals') {
+          accepted[k] = mergeApprovalRows(s.approvals || [], v)
+          continue
+        }
         if (k in s && s[k] !== bootRef.current[k]) continue // edited this session — keep local
         accepted[k] = v
       }
@@ -272,6 +278,16 @@ export function StoreProvider({ children }) {
     const updates = {}
     const nextBaseline = { ...(s.leadSyncBaseline || {}) }
     for (const [k, v] of Object.entries(syncedOf(slices))) {
+      // Approvals merge per row by sync stamp — a stale server snapshot must
+      // never downgrade a decision that was just recorded locally.
+      if (k === 'approvals') {
+        const mergedApprovals = mergeApprovalRows(s.approvals || [], v)
+        if (JSON.stringify(s.approvals) !== JSON.stringify(mergedApprovals)) {
+          updates.approvals = mergedApprovals
+          nextBaseline.approvals = mergedApprovals
+        }
+        continue
+      }
       const dirty = k in s && s[k] !== lastSavedRef.current[k]
       if (dirty) continue
       if (JSON.stringify(s[k]) === JSON.stringify(v)) continue
@@ -812,7 +828,7 @@ export function StoreProvider({ children }) {
         const memoryKey = approvalMemoryKey(req)
         const alreadyRemembered = s.approvals.find(existing => existing.oppId === req.oppId
           && existing.type === req.type
-          && ['Pending', 'Approved', 'Approved with conditions'].includes(existing.status)
+          && existing.status === 'Pending'
           && (existing.approvalKey || approvalMemoryKey(existing)) === memoryKey)
         if (alreadyRemembered) {
           if (!req.refreshPendingContext || alreadyRemembered.status !== 'Pending') return s
@@ -841,11 +857,35 @@ export function StoreProvider({ children }) {
         const appr = {
           id, status: 'Pending', conditions: [], decisionTs: '', decisionNote: '',
           ts: new Date().toISOString(), requestedBy: s.role, ...req, approvalKey: memoryKey,
+          // Sync stamp: lets applyServer tell a newer local row from a stale
+          // server copy (see mergeApprovalRows).
+          __sv: new Date().toISOString(),
           approvalSnapshot: req.approvalSnapshot || proposalApprovalSnapshot(s.proposals[req.oppId], s.opportunities.find(item => item.id === req.oppId)),
+          // Pricing approvals are remembered by the offending rows only, so the
+          // approval survives unrelated proposal edits and revision bumps.
+          ...(req.type === 'Pricing threshold exception' && req.pricingRows?.length
+            ? { pricingSignature: pricingExceptionSignature(req.pricingRows) }
+            : {}),
           ...(previousRejection ? { previousRejection } : {}),
         }
+        // A same-key Approved/Returned row the gate still refuses to honor
+        // (stale stamp from before deviationDetails were recorded) is
+        // superseded here, not left dangling — otherwise the Approvals list
+        // shows a green "Approved" row while the dialog keeps asking, and the
+        // approver can never tell which row actually counts.
+        const superseded = s.approvals
+          .filter(existing => existing.oppId === req.oppId
+            && existing.type === req.type
+            && ['Approved', 'Approved with conditions', 'Returned'].includes(existing.status)
+            && (existing.approvalKey || approvalMemoryKey(existing)) === memoryKey)
         return withAudit(
-          { ...s, approvals: [appr, ...s.approvals] },
+          { ...s,
+            approvals: [
+              appr,
+              ...s.approvals.map(existing => superseded.some(x => x.id === existing.id)
+                ? { ...existing, status: 'Cancelled', supersededBy: id, cancelledAt: new Date().toISOString(), __sv: new Date().toISOString() }
+                : existing),
+            ] },
           'Approval requested', appr.id, `${appr.type} — ${appr.oppId} → ${appr.approver}`)
       })
     },
@@ -857,7 +897,7 @@ export function StoreProvider({ children }) {
         const next = {
           ...s,
           approvals: s.approvals.map(a => (a.id === id
-            ? { ...a, status: 'Cancelled', cancelledBy: s.role, cancelledAt: new Date().toISOString(), decisionNote: reason || a.decisionNote }
+            ? { ...a, status: 'Cancelled', cancelledBy: s.role, cancelledAt: new Date().toISOString(), __sv: new Date().toISOString(), decisionNote: reason || a.decisionNote }
             : a)),
         }
         return withAudit(next, 'Approval cancelled', id, reason || 'No longer required')
@@ -1023,11 +1063,18 @@ export function StoreProvider({ children }) {
         // Guard at the model layer, not only in Approvals.canDecide. Keying by
         // persona alone let an ADMIN/SUPER decision land outside `needed`, and
         // `needed.every(...)` then never came true — stranding a joint gate at
-        // Pending with no way back.
-        if (needed.length && !needed.includes(s.role)) return s
+        // Pending with no way back. Discard silently NO MORE: a System Owner
+        // clicking Approve on an AH gate must at least see why nothing changed.
+        if (needed.length && !needed.includes(s.role)) {
+          console.warn(`Decision ignored: ${s.role} is not a required approver for "${appr.type}" (needs ${needed.join(' + ')})`)
+          return s
+        }
         const decisions = { ...(appr.decisions || {}), [s.role]: {
           d, c: comment, when: new Date().toISOString(), commentReview,
         } }
+        // Sync stamp (see mergeApprovalRows): the decision must survive a
+        // stale server snapshot on the next focus refetch.
+        const syncStamp = new Date().toISOString()
         // Diagram 02 §5 names two approvers on some gates but only needs one of
         // them: 5A technical is "LJS *or* AN", and the "< ₹10 L & <= 50%" row of
         // the 5C margin matrix is "AH *or* LJS". `anyOf` marks those; every
@@ -1042,7 +1089,7 @@ export function StoreProvider({ children }) {
         let next = {
           ...s,
           approvals: s.approvals.map(a => a.id === id
-            ? { ...a, decisions, status,
+            ? { ...a, decisions, status, __sv: syncStamp,
                 decisionTs: status === 'Pending' ? a.decisionTs : new Date().toISOString(),
                 decisionNote: comment || a.decisionNote,
                 ...(status === 'Rejected' ? {

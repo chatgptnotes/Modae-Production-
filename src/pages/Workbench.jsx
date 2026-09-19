@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, REVISION_TYPES, DEFAULT_WORKFLOW, isWorkflowAvailable } from '../seed.js'
 import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY, gmailComposeHref, displayRole, displayRoles, displayRoleLabel, formatISTDateTime, productDisplayLabel } from '../utils.js'
-import { pricingThresholdExceptions, readiness, isBlocked, nextActionWith, transitionBlockers, isClarificationResolved, actionableClarifications } from '../gates.js'
+import { pricingThresholdExceptions, readiness, isBlocked, nextActionWith, transitionBlockers, isClarificationResolved, actionableClarifications, releaseVoidReason } from '../gates.js'
 import { COMMERCIAL_RX } from './Approvals.jsx'
 import { Chip, ClassChip, AiBadge, WarnBox, ErrBox, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
@@ -353,7 +353,12 @@ export default function Workbench() {
     const lead = (store.leads || []).find(l => l.oppId === opp.id)
     const aiSummary = lead?.ai?.summary?.trim() || ''
     const fallbackSummary = `${opp.oppName || 'This opportunity'} is a ${opp.route || 'sales'} opportunity for ${opp.sellTo || 'the customer'}${opp.product ? ` covering ${productDisplayLabel(opp.product)}` : ''}.`
-    const deviations = blocker.key === 'dev'
+    // §5B comm-approval signs off the commercial position, so it must record
+    // the same deviation terms commercialApprovalCoversProposal checks (raw
+    // status 'Deviation', any decision) — otherwise the Approved row is voided
+    // the moment the quote has a deviation term, and the dialog re-asks forever.
+    const wantsDeviationDetails = blocker.key === 'dev' || blocker.key === 'comm-approval'
+    const deviations = wantsDeviationDetails
       ? (proposal?.terms || []).filter(t => t.status === 'Deviation').map(t => ({
         term: t.term,
         customerAsk: t.customerAsk || 'Not recorded',
@@ -433,7 +438,10 @@ export default function Workbench() {
     // before every revision. All three must clear; there is no exception route.
     if (blocker.key === 'tech-approval') return 'Section 5A: the technical scope must be signed off by LJS or AN before the quote can be dispatched. Either approver alone clears it.'
     if (blocker.key === 'comm-approval') return 'Section 5B: the commercial position must be signed off by AH before the quote can be dispatched.'
-    if (blocker.key === 'release') return 'Section 5C: the final quote release, routed by order value and margin. It covers this revision only — a revised quote must be released again.'
+    if (blocker.key === 'release') {
+      const voided = releaseVoidReason(proposal, store.approvals, opp.id, opp)
+      return `Section 5C: the final quote release, routed by order value and margin. It covers this revision only — a revised quote must be released again.${voided ? ` ${voided}` : ''}`
+    }
     if (blocker.key.startsWith('sp-conf-')) return 'This spares line’s part match has not been confirmed. Confirm the match — or pick an alternative — in Sourcing before the proposal can be built.'
     if (blocker.key.startsWith('sp-price-')) return 'This spares line’s price source has expired. Refresh it against a current price list or supplier quotation in Sourcing.'
     if (blocker.key === 'pricing-threshold') return 'A discount or markup exceeds the Admin-configured limit. Request one approval from AH or LJS before continuing.'

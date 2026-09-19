@@ -112,3 +112,15 @@ export const reviewFindingKey = issue => [
   issue?.text,
   issue?.evidence,
 ].map(normalize).join('|')
+
+// A pricing-threshold approval covers the offending values, not the whole
+// quote. This signature captures exactly those rows (line, discount/markup,
+// and the thresholds they breached), so unrelated edits elsewhere in the
+// proposal — or a harmless revision bump — cannot void the approval. A change
+// to an over-threshold value (or to the thresholds themselves) produces a
+// different signature and re-opens the gate.
+export const pricingExceptionSignature = rows => (rows || [])
+  .map(row => [row?.label, row?.discount, row?.markup, row?.discountPct, row?.markupPct]
+    .map(normalize).join('|'))
+  .sort()
+  .join(';')

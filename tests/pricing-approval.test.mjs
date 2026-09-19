@@ -1,7 +1,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-import { pricingThresholdExceptions, readiness } from '../src/gates.js'
+import { pricingApprovalFor, pricingThresholdExceptions, readiness } from '../src/gates.js'
+import { pricingExceptionSignature } from '../src/approvalMemory.js'
+
+const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 
 const opp = { id: 'PRICE-1', route: 'Spares', customerStatus: 'Green' }
 const state = { config: { approvalThresholds: { discountPct: 5, markupPct: 10 } }, approvals: [], sparesLines: [] }
@@ -59,6 +65,56 @@ test('Admin-configured pricing approvers are used by the blocker', () => {
   assert.deepEqual(pricing.needed, ['AN'])
   assert.equal(pricing.anyOf, false)
 })
+
+const signedApproval = (rows, extra = {}) => ({
+  oppId: 'PRICE-1', type: 'Pricing threshold exception', status: 'Approved',
+  pricingSignature: pricingExceptionSignature(rows),
+  ...extra,
+})
+
+test('a signature-backed pricing approval survives a revision bump and unrelated edits', () => {
+  const proposal = { revision: '01', discountPct: 8, bom: [{ pn: 'P-1', quoted: 100 }] }
+  const offendingRows = pricingThresholdExceptions(opp, proposal, state).rows
+  assert.ok(offendingRows.length)
+  const approval = signedApproval(offendingRows, { rev: '01' })
+  // Revision bumped and an unrelated line edited — the approved values did not change.
+  const bumped = {
+    ...proposal,
+    revision: '02',
+    bom: [{ pn: 'P-1', quoted: 100 }, { pn: 'P-9', quoted: 555, markupPct: 2 }],
+  }
+  const blockers = readiness(opp, bumped, { ...state, approvals: [approval] })
+  assert.equal(blockers.some(item => item.key === 'pricing-threshold'), false)
+})
+
+test('a pricing approval re-opens when an approved over-threshold value changes', () => {
+  const proposal = { revision: '01', discountPct: 8, bom: [] }
+  const offendingRows = pricingThresholdExceptions(opp, proposal, state).rows
+  const approval = signedApproval(offendingRows)
+  // The discount the approver signed off was raised — re-approval required.
+  const blockers = readiness(opp, { ...proposal, discountPct: 12 }, { ...state, approvals: [approval] })
+  assert.equal(blockers.some(item => item.key === 'pricing-threshold'), true)
+})
+
+test('a pending pricing approval with a matching signature still waits, not blocks', () => {
+  const proposal = { revision: '01', discountPct: 8, bom: [] }
+  const rows = pricingThresholdExceptions(opp, proposal, state).rows
+  const blockers = readiness(opp, proposal, {
+    ...state,
+    approvals: [signedApproval(rows, { status: 'Pending' })],
+  })
+  assert.equal(blockers.find(item => item.key === 'pricing-threshold')?.severity, 'wait')
+})
+
+test('the Proposal page forwards pricingRows so its approvals carry the signature', () => {
+  const source = read('src/pages/Proposal.jsx')
+  const matches = source.match(/\.\.\.\(bl\.pricingRows\?\.length \? \{ pricingRows: bl\.pricingRows \} : \{\}\)/g) || []
+  assert.equal(matches.length, 2, 'both requestApproval call sites must forward pricingRows')
+})
+
+function read(relative) {
+  return fs.readFileSync(path.join(root, relative), 'utf8')
+}
 
 test('unpriced spares lines have a distinct pricing blocker', () => {
   const blockers = readiness(opp, { bom: [] }, {

@@ -13,7 +13,7 @@ import { isPlaceholderSparesLine } from './proposal/sparesBoq.js'
 import { classRule, classOrder, noExceptionKeys } from './customerClasses.js'
 import { needsCommercialApproval, needsCommercialDecision, commercialApprovalDetails, isLegacyCommercialClarification, isCommercialConfirmationRow, isDeliveryBasisClarification, sourceContainsDeliveryRequirement } from './commercialTerms.js'
 import { clarificationTopic } from './leadClarification.js'
-import { approvalAffectedByProposal } from './approvalMemory.js'
+import { approvalAffectedByProposal, pricingExceptionSignature, proposalImpact } from './approvalMemory.js'
 
 // A customer answer is complete when it contains a response and does not
 // leave an explicit missing-information note. AI field mapping review is an
@@ -141,12 +141,19 @@ function pricingApprovers(state) {
   return roles.length ? roles : ['AH', 'LJS']
 }
 
-function pricingApprovalFor(opp, proposal, approvals) {
+// A pricing approval is remembered by its pricingExceptionSignature — the
+// offending rows it was decided on — so unrelated proposal edits or a revision
+// bump do not void it. Legacy rows fall back to the snapshot check, then to
+// revision stamping.
+export function pricingApprovalFor(opp, proposal, approvals, pricingRows = []) {
   const rev = String(proposal?.revision ?? '')
+  const signature = pricingExceptionSignature(pricingRows)
   return (approvals || []).find(a => a.status !== 'Cancelled' && a.oppId === opp.id && a.type === 'Pricing threshold exception'
-    && (a.approvalSnapshot
-      ? !approvalAffectedByProposal(a, a.type, proposal, opp)
-      : (a.rev == null || String(a.rev) === rev)))
+    && (a.pricingSignature
+      ? a.pricingSignature === signature
+      : (a.approvalSnapshot
+        ? !approvalAffectedByProposal(a, a.type, proposal, opp)
+        : (a.rev == null || String(a.rev) === rev))))
 }
 
 // Diagram 02 §5C — the margin approval matrix. Routing is on *order value*
@@ -260,7 +267,7 @@ export function readiness(opp, proposal, state) {
 
   const pricing = pricingThresholdExceptions(opp, proposal, state)
   if (pricing.rows.length) {
-    const approval = pricingApprovalFor(opp, proposal, state.approvals)
+    const approval = pricingApprovalFor(opp, proposal, state.approvals, pricing.rows)
     const approved = approval && ['Approved', 'Approved with conditions'].includes(approval.status)
     if (!approved) {
       const pending = approval?.status === 'Pending'
@@ -389,6 +396,9 @@ const deviationTermKey = value => {
 }
 
 const commercialApprovalCoversProposal = (approval, proposal) => {
+  // Raw status filter, deliberately: §5B signs off the whole commercial
+  // position, including counter-offers, so any term still marked 'Deviation'
+  // must be covered by the recorded deviationDetails.
   const currentTerms = (proposal?.terms || [])
     .filter(term => term.status === 'Deviation')
     .map(term => deviationTermKey(term.term))
@@ -428,7 +438,35 @@ export function approvalForRev(type, proposal, approvals, oppId, opportunity) {
 // submission panel and the proposal builder read.
 export function releaseState(proposal, approvals, oppId, opportunity) {
   const { pending, approved } = approvalForRev(APPROVAL_5C, proposal, approvals, oppId, opportunity)
-  return { pending, release: approved }
+  return { pending, release: approved, reason: approved ? '' : releaseVoidReason(proposal, approvals, oppId, opportunity) }
+}
+
+// Why the customer-submission gate is still closed. Returns '' when there is
+// nothing to explain (release approved, or nothing requested yet). The
+// Submitted step and the transition dialog both render this verbatim — a
+// green "Approved" row in the Approvals list while the panel stays locked is
+// exactly the confusion this exists to prevent.
+export function releaseVoidReason(proposal, approvals, oppId, opportunity) {
+  const mine = (approvals || []).filter(a => a.oppId === oppId && a.type === APPROVAL_5C)
+  const pending = mine.find(a => a.status === 'Pending')
+  if (pending) {
+    const needed = pending.needed?.length ? pending.needed : [pending.approver].filter(Boolean)
+    const remaining = needed.filter(role => !(pending.decisions || {})[role])
+    return `Release ${pending.id} is awaiting ${remaining.join(' + ') || 'the approvers'}.`
+  }
+  const prior = mine.find(a => ['Approved', 'Approved with conditions'].includes(a.status) && a.approvalSnapshot)
+  if (prior) {
+    const impact = proposalImpact(prior.approvalSnapshot, proposal, opportunity)
+    const labels = {
+      customer: 'customer details',
+      release: 'the released content (subject, terms, pricing or BOM)',
+    }
+    const changed = ['customer', 'release'].filter(domain => impact?.has?.(domain))
+    return changed.length
+      ? `Release ${prior.id} was approved, but ${changed.map(domain => labels[domain]).join(' and ')} changed after sign-off — release the updated quote again.`
+      : `Release ${prior.id} is approved but does not cover this revision — release it again.`
+  }
+  return ''
 }
 
 // All three §5 gates in one call, for the "All Approvals Completed" box.

@@ -69,7 +69,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
   // A quote remains releasable after unrelated edits; material customer-facing
   // changes reopen the release gate.
   const serviceRelease = opp.route === 'Service' ? serviceApprovalSet(store.approvals, opp.id, p, opp)[0].approved : null
-  const { release: genericRelease } = releaseState(p, store.approvals, opp.id, opp)
+  const { release: genericRelease, reason: releaseReason, pending: pendingRelease } = releaseState(p, store.approvals, opp.id, opp)
   const release = opp.route === 'Service' ? serviceRelease : genericRelease
   const pendingConds = store.approvals
     .filter(a => a.oppId === opp.id && a.status === 'Approved with conditions')
@@ -81,13 +81,27 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
   const draftOpened = sentNow || submission?.status === 'draft'
 
   if (!release) {
+    const requestRelease = () => store.requestApproval({
+      oppId: opp.id,
+      type: 'Final quote release',
+      rev: String(p.revision ?? ''),
+      approver: 'LJS',
+      needed: ['LJS', 'AH'],
+      detail: 'Final quote release is required before the customer quote can be sent.',
+      blockingReason: 'The customer-facing quote cannot be sent until LJS + AH approve its final release.',
+      opportunitySummary: `${opp.oppName || 'This opportunity'} is a ${opp.route || 'sales'} opportunity for ${opp.sellTo || 'the customer'}.`,
+    })
     return (
       <div className="form-card wide">
           <div className="section-title">Customer submission (simulated)</div>
+        {releaseReason && <p className="hint"><b>Why the release gate is closed:</b> {releaseReason}</p>}
         <p className="hint">
           {opp.route === 'Service' ? 'Service Review pending — submission opens once AH + LJS approve the offer.' : "Release approval pending — submission opens once a 'Final quote release' is approved."}
           Prepare the proposal in the builder and submit it for approval first.
         </p>
+        {opp.route !== 'Service' && !pendingRelease && (
+          <button className="exception-action" onClick={requestRelease}>Request final quote release from LJS + AH</button>
+        )}
       </div>
     )
   }

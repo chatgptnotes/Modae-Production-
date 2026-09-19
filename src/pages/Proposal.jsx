@@ -906,6 +906,8 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     ...(bl.needed ? { needed: bl.needed } : {}),
     ...(bl.anyOf ? { anyOf: bl.anyOf } : {}),
     ...(bl.deviationDetails ? { deviationDetails: bl.deviationDetails } : {}),
+    // Pricing approvals remember the offending rows, not the whole quote.
+    ...(bl.pricingRows?.length ? { pricingRows: bl.pricingRows } : {}),
   })
   const confirmCond = bl => () => {
     setConditionTarget(bl)
@@ -1094,6 +1096,8 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       ...(bl.needed ? { needed: bl.needed } : {}),
       ...(bl.anyOf ? { anyOf: bl.anyOf } : {}),
       ...(bl.deviationDetails ? { deviationDetails: bl.deviationDetails } : {}),
+      // Pricing approvals remember the offending rows, not the whole quote.
+      ...(bl.pricingRows?.length ? { pricingRows: bl.pricingRows } : {}),
     }))
     setReadinessOpen(true)
   }

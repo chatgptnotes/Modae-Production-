@@ -11,6 +11,7 @@ import {
 import { normalizePriceFields, reconcilePriceSource } from './pricing.js'
 import { DEFAULT_CURRENCY_RATES, normalizedCurrencyRates } from './currency.js'
 import { DEFAULT_CLAUSES } from './clauses.js'
+import { modaeStandardCommercialTerms } from './commercialTerms.js'
 import { isLegacyAutoSparesSupportRow } from './proposal/sparesBoq.js'
 
 // The store's pure state layer, lifted out of store.jsx so it can be imported
@@ -354,12 +355,13 @@ export function migrate(s) {
     return [name, { ...list, versions, activeVersionId }]
   }))
   s.sparesLines = s.sparesLines.map(line => reconcilePriceSource(line, s.priceLists, s.vendorQuotes))
-  s.proposals = Object.fromEntries(Object.entries(s.proposals || {}).map(([oppId, proposal]) => [
-    oppId,
-    proposal?.bom
-      ? { ...proposal, bom: proposal.bom.map(line => reconcilePriceSource(line, s.priceLists, s.vendorQuotes)) }
-      : proposal,
-  ]))
+  s.proposals = Object.fromEntries(Object.entries(s.proposals || {}).map(([oppId, proposal]) => {
+    if (!proposal?.bom) return [oppId, proposal]
+    const terms = Array.isArray(proposal.terms) && proposal.terms.length
+      ? proposal.terms
+      : modaeStandardCommercialTerms()
+    return [oppId, { ...proposal, terms, bom: proposal.bom.map(line => reconcilePriceSource(line, s.priceLists, s.vendorQuotes)) }]
+  }))
   if (demo && Array.isArray(s.rateSheet)) {
     const roles = new Set(s.rateSheet.map(r => r.role))
     s.rateSheet = [...s.rateSheet, ...seedRateSheet.filter(r => !roles.has(r.role))]
@@ -433,16 +435,58 @@ export function migrate(s) {
       : !decided ? 'Pending'
       : returned ? 'Returned'
       : (a.conditions || []).length ? 'Approved with conditions' : 'Approved'
+    // Approvals granted before the dialog stamped deviationDetails carry an
+    // empty list, which commercialApprovalCoversProposal treats as "covers
+    // nothing" — permanently voiding an Approved §5B row. §5B signs off the
+    // whole commercial position of the revision it names, so backfill the
+    // missing details from that same revision's deviation terms.
+    let deviationDetails = a.deviationDetails
+    if (a.type === 'Commercial approval'
+      && ['Approved', 'Approved with conditions'].includes(status)
+      && !(deviationDetails || []).length) {
+      const p = (s.proposals || {})[a.oppId]
+      if (p && (a.rev == null || String(a.rev) === String(p.revision ?? ''))) {
+        deviationDetails = (p.terms || [])
+          .filter(t => t.status === 'Deviation')
+          .map(t => ({
+            term: t.term,
+            customerAsk: t.customerAsk || 'Not recorded',
+            ourResponse: t.ourResponse || 'Pending review',
+          }))
+      }
+    }
     return {
       ...a,
       needed,
       ...(joint ? { anyOf: false } : {}),
       decisions,
       status,
+      deviationDetails,
     }
   })
   return s
 }
+
+// Per-row merge for the approvals slice during sync. Every create, decision
+// and cancel stamps its row with __sv (a local write timestamp), so a stale
+// server snapshot — a failed save, a second tab, a slow device — can never
+// downgrade a newer local decision on the focus refetch. That downgrade is
+// what re-locked an already-approved release gate minutes after it opened.
+export function mergeApprovalRows(localRows = [], serverRows = []) {
+  const byId = new Map(localRows.map(row => [row.id, row]))
+  for (const row of serverRows) {
+    const local = byId.get(row.id)
+    if (!local) { byId.set(row.id, row); continue }
+    const localStamp = local.__sv || ''
+    const serverStamp = row.__sv || ''
+    // A local row without a stamp predates stamping — the server copy wins so
+    // legacy rows still converge. Stamped rows only lose to a same-or-newer
+    // server stamp; local-only decisions can never be reverted by the server.
+    if (!localStamp || serverStamp >= localStamp) byId.set(row.id, row)
+  }
+  return [...byId.values()]
+}
+
 
 // Sales keeps its FY frame and owner targets when the demo data goes: targets
 // are configuration the business sets, only the booked orders are demo records.
