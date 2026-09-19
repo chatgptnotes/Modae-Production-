@@ -28,6 +28,7 @@ import {
   sparesProposalBom,
   orderedSparesProposalBom,
 } from './proposal/sparesBoq.js'
+import { transitionBlockers } from './gates.js'
 
 const StoreCtx = createContext(null)
 const CLARIFICATION_FIELD_KEYS = new Set([
@@ -135,6 +136,21 @@ function applyApprovalEffects(s, appr) {
             approvalId: appr.id,
           }],
         } },
+      }
+      // Once the second joint decision lands, the quote is ready to dispatch
+      // without requiring the owner to revisit the stepper.  Run the same
+      // transition guard used by the workbench: a release must not skip a
+      // still-pending technical/commercial gate or another lifecycle rule.
+      const releasedProposal = next.proposals[appr.oppId]
+      const releasedOpp = next.opportunities.find(o => o.id === appr.oppId)
+      if (releasedProposal && releasedOpp && releasedOpp.milestone !== 'Submitted'
+        && !transitionBlockers(releasedOpp, 'Submitted', releasedProposal, next).length) {
+        next = {
+          ...next,
+          opportunities: next.opportunities.map(o => o.id === appr.oppId
+            ? { ...o, milestone: 'Submitted', lastUpdated: new Date().toISOString().slice(0, 10) }
+            : o),
+        }
       }
     } else if (appr.status === 'Returned') {
       next = { ...next, opportunities: next.opportunities.map(o => (o.id === appr.oppId ? { ...o, milestone: 'Proposal' } : o)) }
@@ -348,6 +364,33 @@ export function StoreProvider({ children }) {
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('pagehide', onPageHide)
+    }
+  }, [])
+
+  // Keep open devices in step without waiting for a focus event.  Several
+  // database events can arrive for one approval (approval, proposal and the
+  // automatic milestone update), so coalesce them into one authoritative
+  // fetch.  applyServer performs the timestamp-aware row merge and preserves
+  // local work that has not been saved yet.
+  useEffect(() => {
+    if (!datastore.dbEnabled()) return
+    let reloadTimer = null
+    const reload = () => {
+      if (reloadTimer) return
+      reloadTimer = setTimeout(() => {
+        reloadTimer = null
+        if (!hydratedRef.current) { hydrate(); return }
+        datastore.loadAll().then(res => { if (res && !res.empty) applyServer(res.slices) })
+      }, 80)
+    }
+    const unsubscribe = datastore.subscribeBusinessChanges(reload, status => {
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        console.warn(`Live workspace sync unavailable (${status}); changes will refresh on focus.`)
+      }
+    })
+    return () => {
+      if (reloadTimer) clearTimeout(reloadTimer)
+      unsubscribe()
     }
   }, [])
 
@@ -1146,6 +1189,11 @@ export function StoreProvider({ children }) {
         if (status !== 'Pending') next = applyApprovalEffects(next, { ...appr, status, approvalSnapshot })
         return withAudit(next, `Approval ${d.toLowerCase()}`, id, comment)
       })
+      // Decisions are coordination events, not ordinary draft edits.  Start
+      // persistence on the next turn (after React has committed state) instead
+      // of waiting for the normal 1.5s debounce; realtime then updates every
+      // other open device immediately.
+      setTimeout(flushSaves, 0)
     },
 
     // ---- Customer KYC ------------------------------------------------------

@@ -12,6 +12,25 @@ export const LOCAL_ONLY = ['viewMode', 'viewModePinned', 'tabletTheme', 'spSync'
 
 export const dbEnabled = () => !!supabase
 
+// Shared business records are normally refreshed on focus.  That is not
+// enough for approvals: the salesperson can be staring at a blocked quote on
+// one device while LJS/AH decides it on another.  Postgres Changes gives the
+// store a small, authoritative nudge; it deliberately reloads through
+// loadAll() so the existing merge/version rules remain the single source of
+// truth rather than trying to reconstruct a complete workspace from a single
+// event payload.
+export function subscribeBusinessChanges(onChange, onStatus = () => {}) {
+  if (!supabase) return () => {}
+  const channel = supabase
+    .channel('modae-workspace-business')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'approvals' }, payload => onChange({ table: 'approvals', payload }))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'opportunities' }, payload => onChange({ table: 'opportunities', payload }))
+    // Release effects update the proposal row as well as the approval itself.
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'records', filter: 'entity=eq.proposals' }, payload => onChange({ table: 'proposals', payload }))
+    .subscribe(status => onStatus(status))
+  return () => { supabase.removeChannel(channel) }
+}
+
 const TABLE = 'app_state'
 
 // → { empty, slices: {key: value} } | null when disabled or on error
