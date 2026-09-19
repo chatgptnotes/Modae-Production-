@@ -1,6 +1,7 @@
 // Backend-agnostic facade over opportunity file storage.
 // Picks SharePoint (configured + signed in) → Supabase (env configured) → mock.
-import { supabase, uploadFile as sbUpload, uploadAdminTemplate as sbUploadAdminTemplate, removePaths, removePrefix } from './supabase.js'
+import { supabase } from './supabase.js'
+import { replaceUserFile, listUserFiles, getUserFile, deleteUserFile, deleteUserFiles } from './userFiles.js'
 import * as sp from './sharepoint.js'
 
 const today = () => new Date().toISOString().slice(0, 10)
@@ -19,9 +20,8 @@ export function activeBackend() {
 export async function uploadAdminTemplate(lane, file) {
   if (!supabase) throw new Error('Supabase storage is not configured. Connect Supabase before uploading templates.')
   const safeName = String(file.name || 'template.xlsx').replace(/[^a-z0-9._-]+/gi, '-')
-  const path = `admin/templates/${lane}/${Date.now()}-${safeName}`
-  const url = await sbUploadAdminTemplate(path, file)
-  return { path, url }
+  const rec = await replaceUserFile({ recordType: 'admin-template', recordId: lane, folder: 'templates', file: new File([file], safeName, { type: file.type }) })
+  return { path: `${lane}/${safeName}`, ...rec }
 }
 
 export async function uploadOppFile(opp, subfolder, file) {
@@ -35,8 +35,8 @@ export async function uploadOppFile(opp, subfolder, file) {
       return { name: item.name, date: today(), size: fmtSize(file.size), webUrl: item.webUrl, itemId: item.itemId }
     }
     if (backend === 'supabase') {
-      const url = await sbUpload(opp.id + '/' + subfolder + '/' + file.name, file)
-      return { name: file.name, date: today(), size: fmtSize(file.size), url }
+      const rec = await replaceUserFile({ recordType: 'opportunity', recordId: opp.id, folder: subfolder, file })
+      return { ...rec, name: file.name, date: today(), size: fmtSize(file.size) }
     }
     return { name: file.name, date: today(), size: fmtSize(file.size) }
   } catch (e) {
@@ -47,6 +47,14 @@ export async function uploadOppFile(opp, subfolder, file) {
 // SharePoint is the source of truth for its files; other backends return null
 // so callers keep using the store's own file records.
 export async function listOppFiles(opp) {
+  if (activeBackend() === 'supabase') {
+    const rows = await listUserFiles({ recordType: 'opportunity', recordId: opp.id, folder: null })
+    return rows.reduce((out, row) => {
+      const folder = row.folder || 'Customer Specs'
+      ;(out[folder] ||= []).push({ ...row, size: fmtSize(row.size) })
+      return out
+    }, {})
+  }
   if (activeBackend() !== 'sharepoint') return null
   try {
     return await sp.listFiles(opp)
@@ -55,18 +63,28 @@ export async function listOppFiles(opp) {
   }
 }
 
+export async function getOppFile(opp, subfolder, name) {
+  if (activeBackend() !== 'supabase') return null
+  return getUserFile({ recordType: 'opportunity', recordId: opp.id, folder: subfolder, fileName: name })
+}
+
 export async function deleteOppFile(opp, subfolder, fileRec) {
   const backend = activeBackend()
   try {
     if (backend === 'sharepoint') {
       if (fileRec && fileRec.itemId) await sp.deleteItem(fileRec.itemId)
     } else if (backend === 'supabase') {
-      await removePaths([opp.id + '/' + subfolder + '/' + fileRec.name])
+      await deleteUserFile({ recordType: 'opportunity', recordId: opp.id, folder: subfolder, fileName: fileRec.name })
     }
     // mock → nothing to do
   } catch (e) {
     throw new Error('Delete of ' + ((fileRec && fileRec.name) || 'file') + ' failed: ' + ((e && e.message) || e))
   }
+}
+
+export async function removeOppPrefix(oppId, subfolder = null) {
+  if (activeBackend() !== 'supabase') return
+  await deleteUserFiles({ recordType: 'opportunity', recordId: oppId, folder: subfolder })
 }
 
 export async function ensureOppFolder(opp) {
@@ -95,7 +113,7 @@ export async function removeOpp(opp) {
     if (backend === 'sharepoint') {
       await sp.moveOppFolder(opp, sp.statusFolderFor(opp), 'Not In Opp List')
     } else if (backend === 'supabase') {
-      await removePrefix(opp.id)
+      await deleteUserFiles({ recordType: 'opportunity', recordId: opp.id, folder: undefined })
     }
     // mock → nothing to do
   } catch (e) {

@@ -498,12 +498,13 @@ export function transitionBlockers(opp, target, proposal, state) {
   const next = MILESTONES.indexOf(target)
   if (next <= current) return []
   const b = []
-  const required = [
-    ['sellTo', 'Customer is required'], ['eucName', 'EUC name is required'], ['eucLocation', 'EUC location is required'],
-    ['oppName', 'Opportunity name is required'],
-    ['owner', 'Opportunity owner is required'], ['route', 'Opportunity route is required'],
-    ['contactPerson', 'Customer contact person is required'], ['contactPhone', 'Customer contact phone is required'],
-  ]
+  const required = (state.config?.workflowRequiredFields?.length
+    ? state.config.workflowRequiredFields.map(item => [item.field, item.text])
+    : [
+      ['sellTo', 'Customer is required'], ['eucName', 'EUC name is required'], ['eucLocation', 'EUC location is required'],
+      ['oppName', 'Opportunity name is required'], ['owner', 'Opportunity owner is required'], ['route', 'Opportunity route is required'],
+      ['contactPerson', 'Customer contact person is required'], ['contactPhone', 'Customer contact phone is required'],
+    ]).filter(([field, text]) => field && text)
   required.forEach(([field, text]) => { if (!opp[field]) b.push({ key: `required-${field}`, severity: 'block', text }) })
 
   const approvals = state.approvals || []
@@ -573,20 +574,22 @@ export function transitionBlockers(opp, target, proposal, state) {
   if (next >= MILESTONES.indexOf('Submitted')) {
     // §5A is drawn as "LJS OR AN" and §5B as "AH ONLY", so 5A names both roles
     // and marks itself `anyOf` — either technical approver alone clears it.
-    const gates = opp?.route === 'Service' ? [
+    const configuredGates = (state.config?.approvalRules || [])
+      .filter(rule => !rule.routes?.length || rule.routes.includes(opp?.route))
+      .filter(rule => rule.enabled !== false)
+      .map(rule => ({
+        type: rule.type, key: rule.key, label: rule.label || rule.type,
+        approver: rule.approver, needed: rule.needed || [], anyOf: !!rule.anyOf,
+      }))
+    const gates = configuredGates.length ? configuredGates : (opp?.route === 'Service' ? [
       { type: 'Service offer review', key: 'service-review', label: 'Service offer review', approver: 'AH', needed: ['AH', 'LJS'] },
     ] : [
-      // Spares are priced from the approved catalogue and do not need the
-      // technical-review gate in phase one. Keep the gate for engineered
-      // Project and Services work.
       ...(opp?.route === 'Spares' ? [] : [
         { type: APPROVAL_5A, key: 'tech-approval', label: 'Technical approval (LJS or AN)', approver: 'LJS', needed: ['LJS', 'AN'], anyOf: true },
       ]),
       { type: APPROVAL_5B, key: 'comm-approval', label: 'Commercial approval (AH)', approver: 'AH', needed: ['AH'] },
-      // Final quote release is a joint commercial decision. Both named
-      // approvers must sign off before the customer-facing proposal can go out.
       { type: APPROVAL_5C, key: 'release', label: 'Final quote release', approver: 'LJS', needed: ['LJS', 'AH'] },
-    ]
+    ])
     for (const g of gates) {
       const { approved, pending: waiting } = approvalForRev(g.type, proposal, approvals, opp.id, opp)
       if (approved) continue

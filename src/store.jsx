@@ -1823,6 +1823,17 @@ export function StoreProvider({ children }) {
       }))
       return { ok: true }
     },
+    loginExternal(user, fallbackRole = 'RS') {
+      if (!user?.id || !user.email) return { ok: false, err: 'Supabase did not return a valid user.' }
+      const local = stateRef.current.users.find(item => item.email.toLowerCase() === user.email.toLowerCase())
+      const role = local?.role || user.user_metadata?.role || fallbackRole
+      setState(st => ({
+        ...withAudit(st, 'Signed in', user.email),
+        auth: { user: { id: user.id, name: local?.name || user.user_metadata?.name || user.email, email: user.email, role } },
+        role: ROLES[role] ? role : st.role,
+      }))
+      return { ok: true }
+    },
     logout() {
       setState(st => ({ ...withAudit(st, 'Signed out', st.auth?.user?.email || ''), auth: { user: null } }))
     },

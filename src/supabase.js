@@ -20,8 +20,8 @@ function makeClient() {
     // every hydration request fail with "Invalid API key".
     return createClient(url, anonKey, {
       auth: {
-        persistSession: false,
-        autoRefreshToken: false,
+        persistSession: true,
+        autoRefreshToken: true,
         detectSessionInUrl: false,
       },
     })
@@ -32,41 +32,14 @@ function makeClient() {
 }
 export const supabase = makeClient()
 
-export const BUCKET = 'opportunity-files'
+export const supabaseAuth = supabase?.auth || null
 
-export async function uploadAdminTemplate(path, file) {
-  if (!supabase) throw new Error('Supabase storage is not configured')
-  const { error } = await supabase.storage.from(BUCKET).upload(path, file, { upsert: true })
-  if (error) throw error
-  return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl
+export async function signInWithPassword(email, password) {
+  if (!supabase) return { data: null, error: new Error('Supabase is not configured.') }
+  return supabase.auth.signInWithPassword({ email, password })
 }
 
-// Objects live at <oppId>/<subfolder>/<filename>.
-export async function uploadFile(path, file) {
-  const { error } = await supabase.storage.from(BUCKET).upload(path, file, { upsert: true })
-  if (error) throw error
-  return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl
-}
-
-export async function removePaths(paths) {
-  if (!paths.length) return
-  const { error } = await supabase.storage.from(BUCKET).remove(paths)
-  if (error) throw error
-}
-
-// Storage has no real directories — deleting a "folder" means listing every
-// object under the prefix (entries without an id are pseudo-folders) and
-// removing them in one call.
-export async function removePrefix(prefix) {
-  const collect = async pre => {
-    const { data, error } = await supabase.storage.from(BUCKET).list(pre, { limit: 1000 })
-    if (error) throw error
-    const out = []
-    for (const entry of data || []) {
-      if (entry.id) out.push(`${pre}/${entry.name}`)
-      else out.push(...await collect(`${pre}/${entry.name}`))
-    }
-    return out
-  }
-  await removePaths(await collect(prefix))
+export async function signUpWithPassword(email, password, metadata = {}) {
+  if (!supabase) return { data: null, error: new Error('Supabase is not configured.') }
+  return supabase.auth.signUp({ email, password, options: { data: metadata } })
 }

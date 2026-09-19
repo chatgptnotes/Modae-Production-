@@ -8,6 +8,9 @@
 // Every function degrades to a safe empty value when IndexedDB is unavailable
 // (private mode, blocked storage): the feature falls back to the old
 // in-memory-only behaviour instead of breaking the page.
+import { supabase } from './supabase.js'
+import { insertUserFile, listUserFiles, getUserFile, deleteUserFiles, deleteUserFile } from './userFiles.js'
+
 const DB_NAME = 'modae-lead-files'
 const STORE = 'files'
 const VERSION = 1
@@ -68,40 +71,57 @@ function tx(mode, run, fallback) {
 export function putFiles(leadId, files) {
   const real = (files || []).filter(Boolean)
   if (!real.length) return Promise.resolve()
-  return tx('readwrite', store => {
+  const local = tx('readwrite', store => {
     for (const file of real) {
       store.put({ leadId, name: file.name, type: file.type || '', blob: file }, keyOf(leadId, file.name))
     }
   })
+  const remote = supabase
+    ? Promise.all(real.map(file => insertUserFile({ recordType: 'attachment', recordId: leadId, folder: '', file }).catch(() => null)))
+    : Promise.resolve()
+  return Promise.all([local, remote]).then(() => undefined)
 }
 
 // Returns a File/Blob, or null when this lead never had the bytes stored.
 export function getFile(leadId, name) {
-  return tx('readonly', (store, set) => {
+  const local = () => tx('readonly', (store, set) => {
     const req = store.get(keyOf(leadId, name))
     req.onsuccess = () => set(req.result ? req.result.blob : null)
   }, null)
+  if (!supabase) return local()
+  return getUserFile({ recordType: 'attachment', recordId: leadId, folder: '', fileName: name })
+    .then(row => row?.blob || local())
+    .catch(() => local())
 }
 
 export function listFiles(leadId) {
-  return tx('readonly', (store, set) => {
+  const local = () => tx('readonly', (store, set) => {
     const req = store.index('leadId').getAll(leadId)
     req.onsuccess = () => set((req.result || []).map(r => r.blob).filter(Boolean))
   }, [])
+  if (!supabase) return local()
+  return listUserFiles({ recordType: 'attachment', recordId: leadId, folder: '' })
+    .then(rows => Promise.all(rows.map(row => getUserFile({ recordType: 'attachment', recordId: leadId, folder: '', fileName: row.name }))))
+    .then(rows => rows.map(row => row?.blob).filter(Boolean))
+    .catch(() => local())
 }
 
 export function deleteLead(leadId) {
-  return tx('readwrite', store => {
+  const local = tx('readwrite', store => {
     const req = store.index('leadId').getAllKeys(leadId)
     req.onsuccess = () => { for (const k of req.result || []) store.delete(k) }
   })
+  const remote = supabase ? deleteUserFiles({ recordType: 'attachment', recordId: leadId }).catch(() => null) : Promise.resolve()
+  return Promise.all([local, remote]).then(() => undefined)
 }
 
 export function deleteFile(leadId, name) {
   if (!leadId || !name) return Promise.resolve()
-  return tx('readwrite', store => {
+  const local = tx('readwrite', store => {
     store.delete(keyOf(leadId, name))
   })
+  const remote = supabase ? deleteUserFile({ recordType: 'attachment', recordId: leadId, folder: '', fileName: name }).catch(() => null) : Promise.resolve()
+  return Promise.all([local, remote]).then(() => undefined)
 }
 
 export function clearAll() {

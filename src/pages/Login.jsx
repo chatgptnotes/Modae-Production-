@@ -7,6 +7,7 @@ import { displayRole, displayRoleLabel } from '../utils.js'
 import { Icon, ModaeImageLogo, MicrosoftLogo } from '../icons.jsx'
 import { InstallBanner } from '../install.jsx'
 import BrandWatermark from '../branding/BrandWatermark.jsx'
+import { supabase, signInWithPassword, signUpWithPassword } from '../supabase.js'
 
 // Roles a new registrant may request: the sales owners plus the technical
 // reviewer. Approvers/admin accounts are provisioned by a super admin.
@@ -38,20 +39,36 @@ export default function Login() {
   }
   const shortLabel = u => displayRole(u.role)
 
-  const submitSignIn = e => {
+  const submitSignIn = async e => {
     e.preventDefault()
     setErr('')
+    if (supabase) {
+      const { data, error } = await signInWithPassword(email.trim(), pw)
+      if (error) { setErr(error.message || 'Supabase sign-in failed.'); return }
+      const res = store.loginExternal(data?.user)
+      if (!res.ok) { setErr(res.err); return }
+      nav('/my-dashboard', { replace: true })
+      return
+    }
     const res = store.login(email, pw)
     if (!res.ok) setErr(res.err)
     else nav('/my-dashboard', { replace: true })
     // on ok the integrator's App reacts to store.auth.user
   }
 
-  const submitRegister = e => {
+  const submitRegister = async e => {
     e.preventDefault()
     setErr('')
     if (!name.trim() || !email.trim() || !pw) {
       setErr('Name, email and password are all required.')
+      return
+    }
+    if (supabase) {
+      const { error } = await signUpWithPassword(email.trim(), pw, { name: name.trim(), role })
+      if (error) { setErr(error.message || 'Supabase registration failed.'); return }
+      setOk('Account created. Confirm your email if required, then sign in.')
+      setMode('signin')
+      setPw('')
       return
     }
     const res = store.registerUser({ name: name.trim(), email: email.trim(), pw, role })
@@ -116,7 +133,7 @@ export default function Login() {
           </form>
         )}
 
-        {mode === 'signin' && (
+        {mode === 'signin' && !supabase && (
           <div className="quick-login">
             <div className="ql-title"><Icon name="sparkles" size={12} /> Quick login — one tap, no password</div>
             <div className="ql-grid">

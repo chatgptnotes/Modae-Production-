@@ -3,7 +3,6 @@ import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { SUBFOLDERS } from '../seed.js'
 import { stageClass, displayRole } from '../utils.js'
-import { removePrefix } from '../supabase.js'
 import * as filestore from '../filestore.js'
 import { getConfig } from '../sharepoint.js'
 import { Icon } from '../icons.jsx'
@@ -70,10 +69,10 @@ export default function Folders() {
   // in the explorer bar but never blocks the UI.
   const cloud = fn => { if (backend !== 'mock') fn().catch(e => setCloudErr(`Cloud delete failed: ${e.message}`)) }
 
-  // Files LIVE in SharePoint — merge its listing into the local cache so the
-  // subfolder views show them. Best-effort: a failure shows in the bar.
+  // Cloud-backed files are the source of truth — merge the listing into the
+  // local metadata cache so the subfolder views survive a reload.
   useEffect(() => {
-    if (!opp || filestore.activeBackend() !== 'sharepoint') return
+    if (!opp || !['sharepoint', 'supabase'].includes(filestore.activeBackend())) return
     let alive = true
     filestore.listOppFiles(opp).then(map => {
       if (!alive || !map) return
@@ -106,6 +105,22 @@ export default function Folders() {
     store.addFile(oppId, subfolder, {
       name, date: new Date().toISOString().slice(0, 10), size: `${Math.ceil(Math.random() * 900) + 90} KB`,
     })
+  }
+
+  const openSupabaseFile = async (file, event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const tab = window.open('', '_blank', 'noopener')
+    try {
+      const found = await filestore.getOppFile(opp, subfolder, file.name)
+      if (!found?.blob) throw new Error('The file could not be loaded.')
+      const url = URL.createObjectURL(found.blob)
+      if (tab) tab.location.href = url
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    } catch (error) {
+      if (tab) tab.close()
+      setCloudErr(error.message)
+    }
   }
 
   const addSubfolder = () => {
@@ -172,7 +187,7 @@ export default function Folders() {
                   <DeleteButton id={o.id} armed={confirmDel === o.id} onArm={setConfirmDel}
                     onDelete={() => {
                       setConfirmDel(null)
-                      if (backend === 'supabase') cloud(() => removePrefix(o.id))
+                      if (backend === 'supabase') cloud(() => filestore.removeOppPrefix(o.id))
                       store.deleteOpportunity(o.id)
                     }}
                     title={spConnected
@@ -251,6 +266,7 @@ export default function Folders() {
                       <Icon name={isWorkbook ? 'fileSheet' : 'fileText'} size={13} />{' '}
                       {isWorkbook ? <b>{fl.name}</b>
                         : href ? <a href={href} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>{fl.name}</a>
+                        : backend === 'supabase' ? <a href="#" onClick={e => openSupabaseFile(fl, e)}>{fl.name}</a>
                         : fl.name}
                     </td>
                     <td>{fl.date}</td><td>{fl.size}</td>
@@ -304,7 +320,7 @@ export default function Folders() {
               <DeleteButton id={`${opp.id}:${sf}`} armed={confirmDel === `${opp.id}:${sf}`} onArm={setConfirmDel}
                 onDelete={() => {
                   setConfirmDel(null)
-                  if (backend === 'supabase') cloud(() => removePrefix(`${opp.id}/${sf}`))
+                  if (backend === 'supabase') cloud(() => filestore.removeOppPrefix(opp.id, sf))
                   store.deleteSubfolder(opp.id, sf)
                 }}
                 title={count ? `Permanently delete ${sf} and its ${count} file(s)` : `Delete empty folder ${sf}`} />

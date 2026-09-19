@@ -1,4 +1,5 @@
 import { supabase } from './supabase.js'
+import { applyRuleRows, readCachedRules, writeCachedRules } from './rules.js'
 
 // Server persistence for the store: one JSONB row per top-level state slice in
 // public.app_state (see supabase-setup.sql). Mirrors the filestore facade —
@@ -24,6 +25,14 @@ export async function loadAll() {
     for (const row of data || []) slices[row.key] = row.value
     const settings = await supabase.from('app_settings').select('key, value')
     if (!settings.error) for (const row of settings.data || []) slices[row.key] = row.value
+    const rules = await loadRuleTables()
+    if (rules) {
+      slices.config = applyRuleRows(slices.config || {}, rules)
+      writeCachedRules(slices.config)
+    } else if (!slices.config) {
+      const cached = readCachedRules()
+      if (cached) slices.config = cached
+    }
     const business = await loadBusinessTables()
     for (const [key, value] of Object.entries(business)) {
       if (value != null && (!Array.isArray(value) || value.length)) slices[key] = value
@@ -108,12 +117,49 @@ export async function saveSlices(dirty) {
   }
   const savedSettings = await saveSettings(normalizedDirty)
   for (const key of savedSettings) delete normalizedDirty[key]
+  if (dirty.config) await saveRuleTables(dirty.config)
   const rows = Object.entries(normalizedDirty).map(([key, value]) => ({
     key, value, updated_at: new Date().toISOString(),
   }))
   if (!rows.length) return
   const { error } = await supabase.from(TABLE).upsert(rows)
   if (error) throw error
+}
+
+async function loadRuleTables() {
+  const [workflow, approval, lead] = await Promise.all([
+    supabase.from('workflow_rules').select('rule_key, label, definition, enabled, updated_at'),
+    supabase.from('approval_rules').select('rule_key, label, definition, enabled, updated_at'),
+    supabase.from('lead_rules').select('rule_key, label, definition, enabled, updated_at'),
+  ])
+  if (workflow.error || approval.error || lead.error) return null
+  return { workflow: workflow.data || [], approval: approval.data || [], lead: lead.data || [] }
+}
+
+async function saveRuleTables(config = {}) {
+  const writes = [
+    supabase.from('approval_rules').upsert({
+      rule_key: 'approval-thresholds', label: 'Approval thresholds', definition: {
+        thresholds: config.approvalThresholds || {}, gates: config.approvalRules || [],
+      }, enabled: true,
+    }, { onConflict: 'rule_key' }),
+    supabase.from('lead_rules').upsert({
+      rule_key: 'lead-routing-and-deadlines', label: 'Lead routing and deadlines', definition: {
+        ownershipRules: config.ownershipRules || [], ownerRules: config.ownerRules || [], stateRegions: config.stateRegions || [],
+        leadDeadlines: config.leadDeadlines || {}, fastTrack: config.fastTrack || {},
+      }, enabled: true,
+    }, { onConflict: 'rule_key' }),
+    supabase.from('workflow_rules').upsert({
+      rule_key: 'workflow-and-gates', label: 'Workflow and gate definitions', definition: {
+        workflow: config.workflow || {}, customerClasses: config.customerClasses || {}, documentChecklists: config.documentChecklists || {},
+        kycItems: config.kycItems || [], kycValidation: config.kycValidation || {}, classRules: config.classRules || {}, amberFee: config.amberFee || {},
+        requiredFields: config.workflowRequiredFields || [], routeRules: config.workflowRouteRules || [],
+      }, enabled: true,
+    }, { onConflict: 'rule_key' }),
+  ]
+  const results = await Promise.all(writes)
+  if (results.some(result => result.error)) throw results.find(result => result.error).error
+  writeCachedRules(config)
 }
 
 const BUSINESS_KEYS = new Set(['leads', 'opportunities', 'approvals', 'proposals', 'sparesLines', 'audit', 'priceLists'])
