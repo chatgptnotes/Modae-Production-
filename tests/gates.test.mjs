@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 import { ROLES, PERMS, PORTAL_ENABLED, selectableRoles } from '../src/seed.js'
 import { canViewCommercial, canPriceProposal, isSalesOwner } from '../src/utils.js'
-import { transitionBlockers, releaseState, readiness, commercialGate, approvalForRev } from '../src/gates.js'
+import { transitionBlockers, releaseState, readiness, commercialGate, approvalForRev, approvalSet } from '../src/gates.js'
 import { contextForType, routeForType, CONTEXTS, OPP_TYPES } from '../src/seed.js'
 import { proposalApprovalSnapshot } from '../src/approvalMemory.js'
 
@@ -185,6 +185,41 @@ test('final quote release requires both AH and LJS', () => {
   assert.equal(release.anyOf, false)
 })
 
+test('standard ModAE terms do not require commercial AH approval', () => {
+  const blockers = transitionBlockers(
+    { ...baseOpp, milestone: 'Approval' }, 'Submitted', releasedProposal,
+    { ...poState({}), approvals: [] },
+  )
+  assert.equal(blockers.some(b => b.key === 'comm-approval'), false,
+    'standard terms must not create the commercial-deviation blocker')
+  assert.ok(blockers.some(b => b.key === 'tech-approval'),
+    'technical approval remains applicable')
+  assert.ok(blockers.some(b => b.key === 'release'),
+    'final quote release remains applicable')
+})
+
+test('matching a customer commercial deviation still requires AH approval', () => {
+  const proposal = {
+    ...releasedProposal,
+    terms: [{
+      term: 'Payment', status: 'Deviation', decision: 'Match customer terms',
+      customerAsk: '60 days from invoice', standardTerm: '30 days from invoice',
+    }],
+  }
+  const blockers = transitionBlockers(
+    { ...baseOpp, milestone: 'Approval' }, 'Submitted', proposal, poState({}),
+  )
+  const commercial = blockers.find(b => b.key === 'comm-approval')
+  assert.ok(commercial, 'a matched customer deviation must require commercial approval')
+  assert.equal(commercial.approvalType, 'Commercial approval')
+  assert.deepEqual(commercial.needed, ['AH'])
+})
+
+test('approval checklist omits commercial approval for standard terms', () => {
+  const gates = approvalSet(releasedProposal, [], 'OP-1', baseOpp)
+  assert.deepEqual(gates.map(g => g.type), ['Technical approval', 'Final quote release'])
+})
+
 test('revising a released quote re-blocks the Submitted milestone', () => {
   const state = poState({})
   const submitted = proposal => transitionBlockers(
@@ -319,8 +354,10 @@ test('the §5C matrix routes both margin rows, not just the healthy one', () => 
 
 // Diagram 02 §5 is drawn with exactly one "No" branch — Return for Revision.
 // canRequestException used to return true for any blocker carrying an
-// approvalType, which included all three §5 gates, so a single decision on a
-// Milestone exception released a quote nobody had technically approved.
+// approvalType, which included the technical and commercial approval gates, so
+// a single decision on a Milestone exception released a quote nobody had
+// technically approved. Standard terms now omit the commercial gate; a real
+// deviation is covered by the focused deviation test above.
 const submittedBlockers = (approvals) => transitionBlockers(
   { ...baseOpp, milestone: 'Approval' }, 'Submitted', releasedProposal,
   { approvals, poCompare: {}, kyc: {}, clarifications: [], sparesLines: [] },
@@ -331,7 +368,7 @@ test('a milestone exception cannot waive the §5 approvals', () => {
     id: 'AP-9', oppId: 'OP-1', type: 'Milestone exception',
     targetMilestone: 'Submitted', blockerKey: key, status: 'Approved',
   }])
-  for (const key of ['tech-approval', 'comm-approval', 'release']) {
+  for (const key of ['tech-approval', 'release']) {
     const keys = submittedBlockers(exception(key)).map(b => b.key)
     assert.ok(keys.includes(key), `an exception must not clear §5 blocker ${key}`)
   }

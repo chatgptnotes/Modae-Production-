@@ -475,7 +475,10 @@ export function releaseVoidReason(proposal, approvals, oppId, opportunity) {
 
 // All three §5 gates in one call, for the "All Approvals Completed" box.
 export function approvalSet(proposal, approvals, oppId, opportunity) {
-  return [APPROVAL_5A, APPROVAL_5B, APPROVAL_5C].map(type => ({
+  const types = [APPROVAL_5A]
+  if ((proposal?.terms || []).some(needsCommercialApproval)) types.push(APPROVAL_5B)
+  types.push(APPROVAL_5C)
+  return types.map(type => ({
     type, ...approvalForRev(type, proposal, approvals, oppId, opportunity),
   }))
 }
@@ -573,14 +576,18 @@ export function transitionBlockers(opp, target, proposal, state) {
   }
 
   // Diagram 02 §5 — the layered approval, mandatory before the first dispatch
-  // and repeated for every revision. All three must clear before a quote is
-  // "Ready for Dispatch".
+  // and repeated for every revision. All applicable gates must clear before a
+  // quote is "Ready for Dispatch".
   if (next >= MILESTONES.indexOf('Submitted')) {
     // §5A is drawn as "LJS OR AN" and §5B as "AH ONLY", so 5A names both roles
     // and marks itself `anyOf` — either technical approver alone clears it.
+    const hasCommercialDeviation = (proposal?.terms || []).some(needsCommercialApproval)
     const configuredGates = (state.config?.approvalRules || [])
       .filter(rule => !rule.routes?.length || rule.routes.includes(opp?.route))
       .filter(rule => rule.enabled !== false)
+      // Section 5B is an exception approval for customer terms that ModAE has
+      // agreed to match. Standard ModAE terms do not need a separate AH gate.
+      .filter(rule => rule.type !== APPROVAL_5B || hasCommercialDeviation)
       .map(rule => ({
         type: rule.type, key: rule.key, label: rule.label || rule.type,
         approver: rule.approver, needed: rule.needed || [], anyOf: !!rule.anyOf,
@@ -591,7 +598,9 @@ export function transitionBlockers(opp, target, proposal, state) {
       ...(opp?.route === 'Spares' ? [] : [
         { type: APPROVAL_5A, key: 'tech-approval', label: 'Technical approval (LJS or AN)', approver: 'LJS', needed: ['LJS', 'AN'], anyOf: true },
       ]),
-      { type: APPROVAL_5B, key: 'comm-approval', label: 'Commercial approval (AH)', approver: 'AH', needed: ['AH'] },
+      ...(hasCommercialDeviation ? [
+        { type: APPROVAL_5B, key: 'comm-approval', label: 'Commercial approval (AH)', approver: 'AH', needed: ['AH'] },
+      ] : []),
       { type: APPROVAL_5C, key: 'release', label: 'Final quote release', approver: 'LJS', needed: ['LJS', 'AH'] },
     ])
     for (const g of gates) {

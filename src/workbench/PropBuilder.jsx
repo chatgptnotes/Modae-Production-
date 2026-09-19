@@ -40,9 +40,10 @@ export default function PropBuilder({ opp, onRevision }) {
     ? { pending: serviceReview?.pending, release: serviceReview?.approved }
     : releaseState(p, store.approvals, opp.id, opp)
   const released = !!release
-  // Diagram 02 §5 — technical, commercial and margin are drawn as one
-  // checkpoint feeding "All Approvals Completed → Quote Ready for Dispatch",
-  // so they are shown together rather than discovered one blocker at a time.
+  // Diagram 02 §5 — applicable technical, commercial and margin approvals are
+  // drawn as one checkpoint feeding "All Approvals Completed → Quote Ready for
+  // Dispatch", so they are shown together rather than discovered one blocker
+  // at a time. Commercial approval is only applicable to deviations.
   // Each approval is evaluated against the current proposal snapshot.
   const gates5 = opp.route === 'Service'
     ? serviceApprovalSet(store.approvals, opp.id, p, opp)
@@ -277,7 +278,7 @@ export default function PropBuilder({ opp, onRevision }) {
         {allApproved ? (
           <div className="okbox">All approvals completed — quote ready for dispatch (revision {p.revision || '00'}).</div>
         ) : (
-          <p className="hint">All three must clear before the quote can be dispatched, and again after every
+          <p className="hint">All applicable approvals must clear before the quote can be dispatched, and again after every
             revision. Raise a missing one from the lifecycle stepper when the move to Submitted is blocked.</p>
         )}
 
