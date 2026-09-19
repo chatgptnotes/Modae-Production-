@@ -8,7 +8,7 @@ import { applyRuleRows, readCachedRules, writeCachedRules } from './rules.js'
 
 // Per-device/session state that must never be shared across browsers.
 export const LOCAL_ONLY = ['viewMode', 'viewModePinned', 'tabletTheme', 'spSync', 'auth', 'role',
-  'inboxShowAll', 'leadSyncBaseline']
+  'inboxShowAll', 'leadSyncBaseline', 'clarificationSyncBaseline']
 
 export const dbEnabled = () => !!supabase
 

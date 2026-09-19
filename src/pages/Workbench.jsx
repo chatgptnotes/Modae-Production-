@@ -1286,7 +1286,7 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
       for (const s of selected) {
         store.addClarification({ ...s, oppId: opp.id, owner: opp.owner, audience: 'Customer', due, status: 'Open' })
       }
-      store.updateOpportunity(opp.id, { autoClarificationSuggestedAt: new Date().toISOString() })
+      if (selected.length) store.updateOpportunity(opp.id, { autoClarificationSuggestedAt: new Date().toISOString() })
     } catch (error) {
       setSuggestErr(`Could not generate clarification questions: ${error?.message || String(error)}`)
     } finally {

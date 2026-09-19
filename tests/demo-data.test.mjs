@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
-import { migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLeadSlice, KEY } from '../src/appState.js'
+import { migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLeadSlice, mergeClarificationSlice, KEY } from '../src/appState.js'
 import { seedAiLeads, seedJointApprovals } from '../src/seed.js'
 
 // The app ships full of seeded demo records, and until now there was no way out
@@ -36,6 +36,26 @@ test('lead hydration preserves local edits and deletes against a stale server sn
   ]
   const merged = mergeLeadSlice(local, server, baseline)
   assert.deepEqual(merged.rows, [{ id: 'LD-edit', subject: 'After', status: 'Qualified' }])
+})
+
+test('clarification hydration preserves local questions against a stale empty server slice', () => {
+  const local = [{ id: 'CL-local', oppId: 'O-1', status: 'Open', q: 'Confirm the delivery address' }]
+  const merged = mergeClarificationSlice(local, [], [])
+  assert.deepEqual(merged.rows, local)
+})
+
+test('clarification hydration preserves local answers but accepts confirmed server rows', () => {
+  const baseline = [{ id: 'CL-1', oppId: 'O-1', status: 'Open', q: 'Confirm the part number', response: '' }]
+  const local = [{ ...baseline[0], status: 'Answered', response: 'MX-2033' }]
+  const server = [{ ...baseline[0], status: 'Answered', response: 'MX-2033' }, { id: 'CL-2', oppId: 'O-1', status: 'Open', q: 'Confirm quantity' }]
+  const merged = mergeClarificationSlice(local, server, baseline)
+  assert.deepEqual(merged.rows, local.concat(server.slice(1)))
+})
+
+test('an intentional clarification reset remains empty', () => {
+  const server = [{ id: 'CL-old', oppId: 'O-1', status: 'Open', q: 'Old question' }]
+  const merged = mergeClarificationSlice([], [], server)
+  assert.deepEqual(merged.rows, [])
 })
 
 test('the seeded state is flagged as demo data', () => {

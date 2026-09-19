@@ -74,6 +74,7 @@ test('clarifications auto-suggest on source changes and allow required manual qu
   assert.match(workbench, /evidence: 'Manual entry'/)
   assert.match(workbench, /status: 'Open'/)
   assert.match(workbench, /It will block sourcing until answered/)
+  assert.match(workbench, /if \(selected\.length\) store\.updateOpportunity\(opp\.id, \{ autoClarificationSuggestedAt:/)
 })
 
 test('commercial decision terms use separate readable labels and values', () => {

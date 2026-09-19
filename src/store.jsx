@@ -13,7 +13,7 @@ import {
 } from './seed.js'
 import { leadConfig, routeOwner, expiredLeadDeadline, aiAuditDetail } from './leadRules.js'
 import { withoutSimulated, simulatedCount } from './simulatedLeads.js'
-import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLeadSlice, mergeApprovalRows, defaultViewMode } from './appState.js'
+import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLeadSlice, mergeClarificationSlice, mergeApprovalRows, defaultViewMode } from './appState.js'
 import { unitCostINR, unitSellINR, setRoleNameConfig, nowIST, toISTISOString } from './utils.js'
 import { PRICE_SOURCES, isConfirmableSparesLine, normalizePriceFields, sparesLineFinancials } from './pricing.js'
 import { clarificationTopic } from './leadClarification.js'
@@ -187,11 +187,15 @@ export function StoreProvider({ children }) {
         for (const [key, value] of Object.entries(dirty)) {
           if (JSON.stringify(current[key]) !== JSON.stringify(value)) continue
           saved[key] = value
-          if (key === 'leads' || key === 'leadArchive') confirmed[key] = value
+          if (key === 'leads' || key === 'leadArchive' || key === 'clarifications') confirmed[key] = value
         }
         lastSavedRef.current = saved
         if (Object.keys(confirmed).length) {
-          setState(s => ({ ...s, leadSyncBaseline: { ...(s.leadSyncBaseline || {}), ...confirmed } }))
+          setState(s => ({
+            ...s,
+            leadSyncBaseline: { ...(s.leadSyncBaseline || {}), ...Object.fromEntries(Object.entries(confirmed).filter(([key]) => key === 'leads' || key === 'leadArchive')) },
+            clarificationSyncBaseline: confirmed.clarifications || s.clarificationSyncBaseline || [],
+          }))
         }
       })
       .catch(e => console.warn('Supabase save failed — will retry on next change/focus:', e?.message))
@@ -218,7 +222,7 @@ export function StoreProvider({ children }) {
         hydratedRef.current = true
         setState(s => ({ ...s, leadSyncBaseline: {
           ...(s.leadSyncBaseline || {}), leads: s.leads, leadArchive: s.leadArchive || [],
-        } }))
+        }, clarificationSyncBaseline: s.clarifications || [] }))
       } catch (e) {
         console.warn('Supabase seed failed — retrying on next focus:', e?.message)
       }
@@ -239,6 +243,7 @@ export function StoreProvider({ children }) {
         return
       }
       const nextBaseline = { ...(s.leadSyncBaseline || {}) }
+      let nextClarificationBaseline = s.clarificationSyncBaseline || []
       for (const [k, v] of Object.entries(serverSlices)) {
         if (k === 'leads' || k === 'leadArchive') {
           const deletedLeadIds = [...new Set([...(s.deletedLeadIds || []), ...(serverSlices.deletedLeadIds || [])])]
@@ -254,10 +259,16 @@ export function StoreProvider({ children }) {
           accepted[k] = mergeApprovalRows(s.approvals || [], v)
           continue
         }
+        if (k === 'clarifications') {
+          const mergedClarifications = mergeClarificationSlice(s.clarifications || [], v, s.clarificationSyncBaseline || [])
+          accepted[k] = mergedClarifications.rows
+          nextClarificationBaseline = mergedClarifications.baseline
+          continue
+        }
         if (k in s && s[k] !== bootRef.current[k]) continue // edited this session — keep local
         accepted[k] = v
       }
-      const merged = migrate({ ...s, ...accepted, leadSyncBaseline: nextBaseline })
+      const merged = migrate({ ...s, ...accepted, leadSyncBaseline: nextBaseline, clarificationSyncBaseline: nextClarificationBaseline })
       // Only the slices we took from the server are known to match it. A slice
       // we kept is still unsaved, so it must stay dirty for the flush below.
       lastSavedRef.current = Object.fromEntries(
@@ -278,6 +289,7 @@ export function StoreProvider({ children }) {
     const s = stateRef.current
     const updates = {}
     const nextBaseline = { ...(s.leadSyncBaseline || {}) }
+    let nextClarificationBaseline = s.clarificationSyncBaseline || []
     for (const [k, v] of Object.entries(syncedOf(slices))) {
       // Approvals merge per row by sync stamp — a stale server snapshot must
       // never downgrade a decision that was just recorded locally.
@@ -289,6 +301,15 @@ export function StoreProvider({ children }) {
         }
         continue
       }
+      if (k === 'clarifications') {
+        const mergedClarifications = mergeClarificationSlice(s.clarifications || [], v, s.clarificationSyncBaseline || [])
+        // Even when the rendered rows stay local, a differing server snapshot
+        // must update the dirty baseline so the preserved questions are pushed
+        // back instead of silently accepted as synced.
+        if (JSON.stringify(s.clarifications || []) !== JSON.stringify(v)) updates.clarifications = mergedClarifications.rows
+        nextClarificationBaseline = mergedClarifications.baseline
+        continue
+      }
       const dirty = k in s && s[k] !== lastSavedRef.current[k]
       if (dirty) continue
       if (JSON.stringify(s[k]) === JSON.stringify(v)) continue
@@ -296,8 +317,11 @@ export function StoreProvider({ children }) {
       if (k === 'leads' || k === 'leadArchive') nextBaseline[k] = v
     }
     if (!Object.keys(updates).length) return
-    const merged = migrate({ ...s, ...updates, leadSyncBaseline: nextBaseline })
-    lastSavedRef.current = syncedOf(merged)
+    const merged = migrate({ ...s, ...updates, leadSyncBaseline: nextBaseline, clarificationSyncBaseline: nextClarificationBaseline })
+    // Keep the server snapshot as the dirty baseline. If the merge preserved
+    // a local question over stale server data, the next debounced save must
+    // still upload that local row instead of treating it as already synced.
+    lastSavedRef.current = { ...lastSavedRef.current, ...Object.fromEntries(Object.entries(syncedOf(slices))) }
     setState(merged)
   }
 

@@ -302,6 +302,7 @@ export function migrate(s) {
   if (typeof s.inboxShowAll !== 'boolean') s.inboxShowAll = false
   // Per-device baseline used to distinguish unsaved lead changes after reload.
   if (!s.leadSyncBaseline || typeof s.leadSyncBaseline !== 'object') s.leadSyncBaseline = {}
+  if (!Array.isArray(s.clarificationSyncBaseline)) s.clarificationSyncBaseline = []
   // Diagram 02 workflow objects: the Brownfield B-01..B-05 sign-off ledger,
   // the §4 service site surveys, and §8 competitor tracking.
   if (!s.bSteps) s.bSteps = {}
@@ -618,4 +619,32 @@ export function mergeLeadSlice(local = [], server = [], baseline = [], deletedId
   })
 
   return { rows, baseline: nextBaseline }
+}
+
+// Clarifications are stored as one synced slice, but questions can be created
+// while a browser is waiting for hydration or while another device still has
+// an older snapshot. Merge them like leads so a stale empty slice cannot erase
+// questions the user has already seen. There is no delete action for these
+// records; an intentional demo reset sends an empty local slice and baseline.
+export function mergeClarificationSlice(local = [], server = [], baseline = []) {
+  const localRows = Array.isArray(local) ? local : []
+  const serverRows = Array.isArray(server) ? server : []
+  const baseRows = Array.isArray(baseline) ? baseline : []
+  const byId = rows => new Map(rows.filter(row => row?.id).map(row => [row.id, row]))
+  const localById = byId(localRows)
+  const serverById = byId(serverRows)
+  const baseById = byId(baseRows)
+  const ids = [...new Set([...localRows, ...serverRows].map(row => row?.id).filter(Boolean))]
+  const rows = ids.flatMap(id => {
+    const localRow = localById.get(id)
+    const serverRow = serverById.get(id)
+    const baseRow = baseById.get(id)
+    if (baseRow) {
+      if (!localRow) return []
+      if (!sameValue(localRow, baseRow)) return [localRow]
+      return serverRow ? [serverRow] : []
+    }
+    return localRow ? [localRow] : [serverRow]
+  })
+  return { rows, baseline: serverRows }
 }
