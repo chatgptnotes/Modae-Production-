@@ -65,3 +65,10 @@ test('legacy release approvals ignore the old automatic header-sync mismatch', (
 
   assert.equal(approvalAffectedByProposal(approval, 'Final quote release', current, opportunity), false)
 })
+
+test('an approval snapshot must include the generated proposal before first save', () => {
+  const opportunity = { sellTo: 'ACME', contactPerson: 'A. Buyer', oppName: 'Turbine package', route: 'Spares' }
+  const generated = { addressee: 'M/s. ACME', kindAttn: 'A. Buyer', subject: 'Proposal For Turbine package', proposalType: 'Spares', sourceCurrency: 'INR', bom: [], terms: [] }
+  const approval = { approvalSnapshot: proposalApprovalSnapshot(generated, opportunity) }
+  assert.equal(approvalAffectedByProposal(approval, 'Final quote release', generated, opportunity), false)
+})

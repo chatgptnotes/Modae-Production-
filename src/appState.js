@@ -13,6 +13,7 @@ import { DEFAULT_CURRENCY_RATES, normalizedCurrencyRates } from './currency.js'
 import { DEFAULT_CLAUSES } from './clauses.js'
 import { modaeStandardCommercialTerms } from './commercialTerms.js'
 import { isLegacyAutoSparesSupportRow } from './proposal/sparesBoq.js'
+import { proposalApprovalSnapshot } from './approvalMemory.js'
 
 // The store's pure state layer, lifted out of store.jsx so it can be imported
 // and *run* by the tests — store.jsx is JSX and node --test cannot parse it,
@@ -456,6 +457,14 @@ export function migrate(s) {
           }))
       }
     }
+    const opportunity = s.opportunities.find(o => o.id === a.oppId)
+    const proposal = s.proposals?.[a.oppId]
+    const legacyEmptySnapshot = a.type === 'Final quote release'
+      && ['Approved', 'Approved with conditions'].includes(status)
+      && proposal
+      && opportunity
+      && !a.snapshotRepair
+      && JSON.stringify(a.approvalSnapshot) === JSON.stringify(proposalApprovalSnapshot(undefined, opportunity))
     return {
       ...a,
       needed,
@@ -463,6 +472,10 @@ export function migrate(s) {
       decisions,
       status,
       deviationDetails,
+      ...(legacyEmptySnapshot ? {
+        approvalSnapshot: proposalApprovalSnapshot(proposal, opportunity),
+        snapshotRepair: { reason: 'Approval was requested before the proposal was persisted', repairedAt: new Date().toISOString() },
+      } : {}),
     }
   })
   return s

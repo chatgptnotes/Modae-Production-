@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useStore, snapshotProposal } from '../store.jsx'
+import { proposalApprovalSnapshot } from '../approvalMemory.js'
 import { canPriceProposal, fmt, ddMmmYY, displayRole, displayRoles } from '../utils.js'
 import { readiness, isBlocked, commercialGate, releaseState, approvalSet, serviceApprovalSet } from '../gates.js'
 import { REVISION_TYPES } from '../seed.js'
@@ -113,6 +114,7 @@ export default function PropBuilder({ opp, onRevision }) {
       // still determines the routing context, but neither approver can release
       // the quote alone.
       approver: 'LJS', needed: ['LJS', 'AH'], anyOf: false,
+      approvalSnapshot: proposalApprovalSnapshot(p, opp),
     })
     store.updateOpportunity(opp.id, { milestone: 'Approval' })
     store.saveProposal(opp.id, {

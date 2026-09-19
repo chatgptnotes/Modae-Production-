@@ -852,6 +852,15 @@ export function StoreProvider({ children }) {
     // ---- Approvals --------------------------------------------------------
     requestApproval(req) {
       setState(s => {
+        const opportunity = s.opportunities.find(item => item.id === req.oppId)
+        // The builder can display a generated proposal before the first save.
+        // Snapshot that same proposal instead of recording an empty snapshot,
+        // otherwise approval is immediately voided when the quote is saved.
+        const proposal = s.proposals[req.oppId] || newProposal(req.oppId, opportunity, {
+          validityDays: s.config?.proposalValidityDays,
+          currencyRates: s.config?.currencyRates,
+          costingDefaults: s.config?.costingDefaults,
+        })
         const memoryKey = approvalMemoryKey(req)
         const alreadyRemembered = s.approvals.find(existing => existing.oppId === req.oppId
           && existing.type === req.type
@@ -887,7 +896,7 @@ export function StoreProvider({ children }) {
           // Sync stamp: lets applyServer tell a newer local row from a stale
           // server copy (see mergeApprovalRows).
           __sv: new Date().toISOString(),
-          approvalSnapshot: req.approvalSnapshot || proposalApprovalSnapshot(s.proposals[req.oppId], s.opportunities.find(item => item.id === req.oppId)),
+          approvalSnapshot: req.approvalSnapshot || proposalApprovalSnapshot(proposal, opportunity),
           // Pricing approvals are remembered by the offending rows only, so the
           // approval survives unrelated proposal edits and revision bumps.
           ...(req.type === 'Pricing threshold exception' && req.pricingRows?.length
