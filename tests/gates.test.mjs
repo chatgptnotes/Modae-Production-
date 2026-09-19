@@ -152,13 +152,26 @@ test('a commercial deviation approval carries forward when the same terms remain
   'a new deviation must require a new approval')
 })
 
-test('snapshot-backed release approval survives an unrelated proposal edit', () => {
+test('final release uses the quote revision as its single source of truth', () => {
   const proposal = { ...releasedProposal, subject: 'Original subject' }
   const approval = {
     id: 'AP-SNAPSHOT', oppId: 'OP-1', type: 'Final quote release', rev: '01', status: 'Approved',
     approvalSnapshot: proposalApprovalSnapshot(proposal, baseOpp),
   }
-  assert.ok(releaseState({ ...proposal, revision: '02', revisionDate: '2026-09-18' }, [approval], 'OP-1', baseOpp).release)
+  assert.ok(releaseState({ ...proposal, revision: '01', subject: 'Corrected copy' }, [approval], 'OP-1', baseOpp).release,
+    'description or snapshot differences cannot duplicate the same revision gate')
+  assert.equal(releaseState({ ...proposal, revision: '02' }, [approval], 'OP-1', baseOpp).release, null,
+    'a genuinely new revision still requires a new release')
+})
+
+test('an approved release wins over a duplicate pending row for the same revision', () => {
+  const approvals = [
+    { id: 'AP-141', oppId: 'OP-1', type: 'Final quote release', rev: '01', status: 'Approved' },
+    { id: 'AP-142', oppId: 'OP-1', type: 'Final quote release', rev: '01', status: 'Pending', needed: ['LJS', 'AH'] },
+  ]
+  const state = releaseState({ ...releasedProposal, revision: '01' }, approvals, 'OP-1', baseOpp)
+  assert.equal(state.release?.id, 'AP-141')
+  assert.equal(state.reason, '')
 })
 
 test('snapshot-backed commercial approval reopens when pricing changes', () => {
@@ -518,15 +531,20 @@ test('releaseState explains why the submission gate is closed', () => {
   const waiting = releaseState(releasedProposal, [pendingRow], 'OP-1', baseOpp)
   assert.equal(waiting.release, null)
   assert.match(waiting.reason, /awaiting LJS/, 'the reason must name the missing approver')
-  // Approved, but the released content changed after sign-off.
+  // Description/snapshot differences on the same revision must not create a
+  // duplicate gate — the revision is the final-release source of truth.
   const approvedRow = {
     id: 'AP-A', oppId: 'OP-1', type: 'Final quote release', rev: '01', status: 'Approved',
     approvalSnapshot: proposalApprovalSnapshot(releasedProposal, baseOpp),
   }
   const edited = { ...releasedProposal, subject: 'Changed subject after approval' }
-  const voided = releaseState(edited, [approvedRow], 'OP-1', baseOpp)
-  assert.equal(voided.release, null)
-  assert.match(voided.reason, /changed after sign-off/, 'a voided approval must say so')
+  const sameRevision = releaseState(edited, [approvedRow], 'OP-1', baseOpp)
+  assert.ok(sameRevision.release)
+  assert.equal(sameRevision.reason, '')
+  // A new quote revision still needs its own release.
+  const revised = releaseState({ ...edited, revision: '02' }, [approvedRow], 'OP-1', baseOpp)
+  assert.equal(revised.release, null)
+  assert.match(revised.reason, /current quote is revision 02/)
   // Untouched proposal → gate open, nothing to explain.
   const open = releaseState(releasedProposal, [approvedRow], 'OP-1', baseOpp)
   assert.ok(open.release)

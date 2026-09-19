@@ -18,6 +18,7 @@ import { parsePriceListFile } from '../priceListImport.js'
 import { normalizedCurrencyRates } from '../currency.js'
 import { kycValidationConfig } from '../kycValidation.js'
 import { DEFAULT_CLAUSES } from '../clauses.js'
+import { BUILT_IN_PROPOSAL_TEMPLATES, loadProposalTemplateBuffer, resolveProposalTemplate } from '../proposal/templateRegistry.js'
 
 // Admin — every runtime rule the app obeys, in one card grid. Data lives in
 // store.config; all changes are audited by the store mutators.
@@ -43,11 +44,7 @@ const isCustomModel = m => {
 }
 const FALLBACK_PROVIDER = 'Built-in fallback'
 const DEMO_CONTROLS_PASSWORD = '32605'
-const TEMPLATE_LANES = [
-  { key: 'Project', label: 'Project proposal', url: new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Big Project Opp/2608222RS  Project Rev-00.xlsx', import.meta.url).href, filename: '2608222RS Project Rev-00.xlsx' },
-  { key: 'Service', label: 'Service proposal', url: new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Big Service Opp-1 (Won) With SoW/Service Proposal 14Apr26 Rev-01.xlsx', import.meta.url).href, filename: 'Service Proposal 14Apr26 Rev-01.xlsx' },
-  { key: 'Spares', label: 'Spares firm offer', url: new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx', import.meta.url).href, filename: 'Spares Firm Offer Rev00 2May2026.xlsx' },
-]
+const TEMPLATE_LANES = BUILT_IN_PROPOSAL_TEMPLATES
 const ADMIN_TABS = [
   { id: 'overview', label: 'Overview', icon: 'cards' },
   { id: 'workflow', label: 'Workflow & governance', icon: 'shield' },
@@ -382,7 +379,7 @@ export default function Admin() {
   const currencyRates = normalizedCurrencyRates(config.currencyRates)
   const currencies = [...new Set(['EUR', 'USD', ...Object.keys(currencyRates)].filter(currency => currency !== 'INR' && currency !== 'GBP'))]
   const uploadedTemplateFor = lane => proposalTemplates.find(item => item.lane === lane && item.status === 'Current')
-  const templateInfo = lane => uploadedTemplateFor(lane) || TEMPLATE_LANES.find(item => item.key === lane)
+  const templateInfo = lane => resolveProposalTemplate(config, lane)
 
   const kycTemplateLane = itemName => `kyc-${String(itemName || 'document').toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
 
@@ -405,9 +402,7 @@ export default function Admin() {
     setTemplatePreviewError('')
     setTemplatePreviewBusy(true)
     try {
-      const response = await fetch(info.url)
-      if (!response.ok) throw new Error('Template file could not be loaded')
-      const workbook = parseProposalWorkbook(await response.arrayBuffer(), info.name || info.filename)
+      const workbook = parseProposalWorkbook(await loadProposalTemplateBuffer({ ...info, key: lane }), info.name || info.filename)
       setTemplatePreview({ lane, info, workbook })
       setTemplateDirty(false)
     } catch (error) {

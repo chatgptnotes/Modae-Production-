@@ -124,13 +124,18 @@ export const approvalAffectedByProposal = (approval, type, proposal, opportunity
   return domainsForType(type).some(domain => impact.has(domain))
 }
 
-// Approval memory is scoped to the opportunity, decision type, revision, and
-// business detail. It is never a global approval cache.
+// A final-release request is one gate per opportunity revision.  The proposal
+// builder and submission panel use different explanatory copy, but that copy
+// must not mint two approvals for the same quote. Other approval families keep
+// their finding/detail in the key because one revision may contain several
+// independent exceptions.
 export const approvalMemoryKey = request => [
   request?.oppId,
   request?.type,
   request?.rev,
-  request?.findingKey || request?.detail || request?.blockingReason || request?.text,
+  request?.type === 'Final quote release'
+    ? ''
+    : request?.findingKey || request?.detail || request?.blockingReason || request?.text,
 ].map(normalize).join('|')
 
 export const reviewFindingKey = issue => [

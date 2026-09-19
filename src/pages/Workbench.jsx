@@ -2245,7 +2245,10 @@ function ApprovalsTab({ opp }) {
 const cleanAddress = value => typeof value === 'string' ? value.trim() : ''
 
 function CommsName({ value, email }) {
-  return <>{value}{email && <span className="hint"> &lt;{email}&gt;</span>}</>
+  return <span className="communication-identity">
+    <span className="communication-identity-name">{value}</span>
+    {email && <span className="communication-identity-email">{email}</span>}
+  </span>
 }
 
 function communicationRecipient(entry, opp, customer, vendorQuotes, mailbox) {
@@ -2379,7 +2382,8 @@ function CommsTab({ opp }) {
         const sender = communicationSender(c, opp, lead)
         const recipient = communicationRecipient(c, opp, customer, vendorQuotes, mailbox)
         return (
-          <Modal title={c.subject || 'Communication'} onClose={() => setSelectedCommunication(null)} wide>
+          <Modal title={c.subject || 'Communication'} onClose={() => setSelectedCommunication(null)} wide className="communication-detail-modal">
+            <button type="button" className="communication-detail-close" onClick={() => setSelectedCommunication(null)} aria-label="Close communication">Close</button>
             <div className="communication-detail">
               <div className="communication-detail-meta">
                 <div><b>From</b><span><CommsName value={sender.name} email={sender.email} /></span></div>

@@ -36,23 +36,26 @@ test('the enquiry sender is carried onto the opportunity', () => {
 test('the email dialog resolves a recipient without typing', () => {
   assert.match(submission, /useState\(opp\.contactEmail \|\| customer\?\.email \|\| ''\)/)
   // Subject is auto-built, and CC exists.
-  assert.match(submission, /Please find attached our approved Techno-Commercial Proposal \$\{opp\.id\}, revision \$\{p\.revision\}/)
+  assert.match(submission, /we are pleased to submit our approved Techno-Commercial Proposal for Opportunity \$\{oppId\}, Revision \$\{revision\}/)
+  assert.match(submission, /Please find enclosed \$\{attachments\.join\(' and '\)\}/)
   assert.match(submission, /value=\{emailCc\}/)
 })
 
 // The preview was four lines of text claiming to be the proposal. The
 // salesperson has to see the actual document before it goes out.
 test('preview renders the real document, not a text stub', () => {
-  assert.doesNotMatch(submission, /proposalWorkbookPreview/)
-  assert.match(submission, /<PrintDoc p=\{p\} opp=\{opp\}/,
-    'the email flow must preview the current ModAE document')
-  assert.match(submission, /proposalWorkbookAttachment/)
+  assert.match(submission, /customerProposalArtifact\(\{/)
+  assert.match(submission, /getCustomerArtifact/)
+  assert.match(submission, /<WorkbookPreview workbook=\{previewWorkbook\}/,
+    'the email flow must preview the generated Excel attachment')
+  assert.match(submission, /\(await getCustomerArtifact\(\)\)\.attachment/)
+  assert.doesNotMatch(submission, /<PrintDoc p=\{p\} opp=\{opp\}/)
   assert.doesNotMatch(submission, /Attached: \{opp\.id\}_Proposal_Rev_/)
 })
 
 test('the email sends the BoQ by default and permits selected extra files', () => {
   assert.match(submission, /const \[attachProposal, setAttachProposal\] = useState\(true\)/)
-  assert.match(submission, /proposalWorkbookAttachment\(/)
+  assert.match(submission, /customerProposalArtifact\(\{/)
   assert.match(submission, /const \[extraFiles, setExtraFiles\] = useState\(\[\]\)/)
   assert.match(submission, /Attach files/)
 })
@@ -134,6 +137,6 @@ test('every outbound email surface exposes sender and copy recipients', () => {
   assert.match(submission, /const \[emailCc, setEmailCc\]/)
   assert.match(submission, /cc: emailCc/)
   assert.match(read('api/send-proposal-email.js'), /mimeMessage\(\{ from: account, to, cc, subject, body, attachments \}\)/)
-  assert.match(submission, /proposalWorkbookAttachment/)
+  assert.match(submission, /customerProposalArtifact/)
   assert.match(submission, /enclosureAttachments/)
 })

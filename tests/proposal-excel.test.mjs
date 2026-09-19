@@ -74,6 +74,14 @@ test('the table workbook wraps long text inside capped columns', () => {
   assert.equal(sheet.A1.s.font.bold, true, 'the header row is bold')
 })
 
+test('generic Excel headers use the ModAE document palette', () => {
+  const sheet = buildTableWorkbook('Pipeline', ['Part', 'Description'], [['P-1', 'Probe']]).Sheets.Pipeline
+  assert.equal(sheet.A1.s.fill.fgColor.rgb, 'FDEDEB')
+  assert.equal(sheet.A1.s.border.top.color.rgb, 'ED3F2F')
+  assert.equal(sheet.B2.s.border.bottom.color.rgb, 'E3E3E5')
+  assert.equal(sheet.B2.s.font.name, 'Candara')
+})
+
 test('Spares proposal pricing falls back to the confirmed sourcing line', () => {
   const p = { route: 'Spares', units: 1, costing: { ...defaultCosting }, bom: [{ pn: 'P-1', desc: 'Probe', listPrice: '', adders: [], currency: 'EUR' }] }
   const { linePrice, lineQuoted } = buildPricing({
@@ -112,6 +120,10 @@ test('generated proposal pricing rounds cached customer values to two decimals',
 
 test('exact proposal export preserves template artwork, merges and print layout', async () => {
   const templateBuffer = fs.readFileSync('branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx')
+  const sourceWorkbook = new ExcelJS.Workbook()
+  await sourceWorkbook.xlsx.load(templateBuffer)
+  const sourceCover = sourceWorkbook.getWorksheet('Cover Letter')
+  const sourceFirm = sourceWorkbook.getWorksheet('Firm Rev-00')
   const logoBuffer = fs.readFileSync('branding/mod-ae/assets/modae-official-logo.png')
   const output = await generateProposalWorkbook({
     templateBuffer,
@@ -137,23 +149,41 @@ test('exact proposal export preserves template artwork, merges and print layout'
   assert.equal(firm.getCell('G10').value.formula, 'F10*E10')
   assert.equal(firm.getCell('C10').value, 'Probe')
   assert.equal(cover.getCell('B24').alignment.wrapText, true)
-  assert.equal(cover.views[0].showGridLines, false)
-  assert.deepEqual(
-    ['B11:Q11', 'B12:Q12', 'B13:Q13', 'B14:Q14', 'C16:Q16', 'C18:Q18', 'C20:Q20', 'B22:Q22', 'B24:Q24', 'B26:Q26']
-      .map(range => cover.model.merges.includes(range)),
-    [true, true, true, true, true, true, true, true, true, true],
-  )
-  assert.equal(cover.getCell('B11').alignment.wrapText, true)
-  assert.equal(cover.getCell('B13').alignment.wrapText, true)
-  assert.ok(cover.getRow(13).height >= 18)
+  assert.equal(cover.views[0].showGridLines, sourceCover.views[0].showGridLines)
+  assert.deepEqual([...cover.model.merges].sort(), [...sourceCover.model.merges].sort())
+  assert.deepEqual(firm.getCell('B9').style, sourceFirm.getCell('B9').style)
+  assert.deepEqual(firm.getCell('C10').style, sourceFirm.getCell('C10').style)
+  assert.equal(cover.getRow(13).height, sourceCover.getRow(13).height)
   assert.equal(firm.getCell('C10').alignment.wrapText, true)
-  assert.equal(firm.getCell('D10').alignment.wrapText, true)
-  assert.ok(firm.getRow(10).height >= 30)
-  assert.equal(firm.getCell('B16').alignment.wrapText, true)
-  assert.ok(firm.model.merges.includes('B16:H16'), 'terms heading spans the customer-facing page width')
-  assert.equal(firm.getCell('B17').value, '1. Validity: 30 days')
+  assert.deepEqual(firm.getCell('D10').style, sourceFirm.getCell('D10').style)
+  assert.equal(firm.getRow(10).height, sourceFirm.getRow(10).height)
+  assert.deepEqual(firm.getCell('B16').style, sourceFirm.getCell('B16').style)
+  assert.ok(firm.model.merges.includes('F18:G18'), 'the supplied total-row merge is preserved')
+  assert.equal(firm.getCell('B20').value, 'Terms & Conditions:')
+  assert.equal(firm.getCell('B21').value, '1. Validity: 30 days')
   assert.equal(firm.getCell('B26').value, null, 'template duplicate terms are cleared')
   assert.equal(cover.getCell('C6').value, '2608227RS')
+})
+
+test('proposal Excel customer-facing cells preserve the supplied template styling', async () => {
+  const templateBuffer = fs.readFileSync('branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx')
+  const source = new ExcelJS.Workbook()
+  await source.xlsx.load(templateBuffer)
+  const output = await generateProposalWorkbook({
+    templateBuffer,
+    logoBuffer: fs.readFileSync('branding/mod-ae/assets/modae-official-logo.png'),
+    route: 'Spares',
+    p: { revision: '00', bom: [{ pn: 'P-1', desc: 'Probe', common: 1 }] },
+    opp: { id: '2609001PJS', sellTo: 'Customer' },
+    doc: { docTerms: [] },
+    totalQty: line => line.common,
+    lineQuoted: () => 100,
+  })
+  const workbook = new ExcelJS.Workbook()
+  await workbook.xlsx.load(output)
+  const firm = workbook.getWorksheet('Firm Rev-00')
+  const sourceFirm = source.getWorksheet('Firm Rev-00')
+  for (const ref of ['B9', 'C10', 'B18']) assert.deepEqual(firm.getCell(ref).style, sourceFirm.getCell(ref).style)
 })
 
 test('customer-facing proposal export removes internal and template-only columns', async () => {

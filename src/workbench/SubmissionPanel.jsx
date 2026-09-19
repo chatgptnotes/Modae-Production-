@@ -1,23 +1,23 @@
 import React, { useRef, useState } from 'react'
 import { useStore } from '../store.jsx'
-import { ErrBox, Modal } from '../ui.jsx'
+import { ErrBox, Modal, WarnBox } from '../ui.jsx'
 import { releaseState, serviceApprovalSet } from '../gates.js'
 import { Icon } from '../icons.jsx'
 import { docModel, docRoute, enclosuresFor } from '../proposalDoc.js'
 import { buildPricing } from '../proposal/docProps.js'
-import { blobAttachment, proposalWorkbookAttachment, enclosureAttachments } from '../proposal/emailAttachments.js'
-import { formatEmailBody, runTask, runText } from '../ai.js'
-import PrintDoc from '../proposal/PrintDoc.jsx'
+import { blobAttachment, customerProposalArtifact, enclosureAttachments } from '../proposal/emailAttachments.js'
+import { formatEmailBody, runTaskResult, textFromTaskResult } from '../ai.js'
+import WorkbookPreview from '../proposal/WorkbookPreview.jsx'
 import { EMAIL_RE, splitRecipients, recipientsValid } from '../emailValidation.js'
 import { gmailComposeHref, displayRole } from '../utils.js'
 import { isCounterAwaitingCustomer } from '../commercialTerms.js'
 import { snapshotProposal } from '../store.jsx'
+import { loadProposalTemplateBuffer, resolveProposalTemplate } from '../proposal/templateRegistry.js'
 
-const proposalEmailFallback = ({ greeting, oppId, revision, validityDays }) =>
-  `${greeting}\n\nPlease find attached our approved Techno-Commercial Proposal ${oppId}, revision ${revision}, together with the applicable ModAE standard terms.\n\nThe proposal is valid for ${validityDays} days from submission. Please review the attached documents and let us know if you need any clarification or would like us to proceed.\n\nBest regards,\nModAE India Pvt Ltd`
+const proposalEmailFallback = ({ greeting, oppName, oppId, revision, validityDays, senderName, attachments }) =>
+  `${greeting}\n\nWith reference to your request for quotation for ${oppName}, we are pleased to submit our approved Techno-Commercial Proposal for Opportunity ${oppId}, Revision ${revision}.\n\nPlease find enclosed ${attachments.join(' and ')} for your review and records.\n\nOur offer is valid for ${validityDays} days from the date of submission. Kindly review the attached documents and confirm whether the offer meets your technical and commercial requirements.\n\nShould you require any additional information or clarification regarding the scope, technical specifications, or commercial terms, please feel free to contact us.\n\nWe look forward to your response.\n\nBest regards,\n${senderName}\nModAE India Pvt. Ltd.`
 
-const proposalEmailImprovedFallback = ({ greeting, oppId, revision, validityDays }) =>
-  `${greeting}\n\nPlease find attached our approved Techno-Commercial Proposal ${oppId}, revision ${revision}, together with the applicable ModAE standard terms for your review.\n\nThe proposal covers the requirements set out in your request and is valid for ${validityDays} days from submission. Please review the attached documents and confirm whether the offer meets your requirements.\n\nIf you need any clarification on the proposal, scope, or commercial terms, please let us know and our team will be pleased to assist.\n\nBest regards,\nModAE India Pvt Ltd`
+const proposalEmailImprovedFallback = proposalEmailFallback
 
 const assembleProposalEmail = ({ greeting, purpose, attachments, validityAndNextStep, clarification, signoff }) =>
   [greeting, purpose, attachments, validityAndNextStep, clarification, signoff]
@@ -25,12 +25,25 @@ const assembleProposalEmail = ({ greeting, purpose, attachments, validityAndNext
     .filter(Boolean)
     .join('\n\n')
 
+const proposalFilenameFor = (oppId, revision) => `ModAE_Techno-Commercial_Proposal_${oppId}_Rev_${revision}.xlsx`
+const validProposalFilename = value => {
+  const filename = String(value || '').trim()
+  return filename.length > 5 && filename.length <= 140 && /\.xlsx$/i.test(filename) && !/[\\/:*?"<>|]/.test(filename)
+}
+
 // Customer send is unlocked only by an approved release for the current
 // revision. To, CC, Subject, the covering message and the attachment list stay
 // editable before Gmail opens a draft.
 export default function SubmissionPanel({ opp, onSubmitted }) {
   const store = useStore()
   const p = store.getProposal(opp.id)
+  const route = docRoute(p, opp)
+  const proposalTemplate = resolveProposalTemplate(store.config, route)
+  const [proposalFilename, setProposalFilename] = useState(() => proposalFilenameFor(opp.id, p.revision))
+  const governedAttachmentNames = [
+    proposalFilename,
+    ...enclosuresFor(route).map(enclosure => enclosure.filename),
+  ]
   const [sentNow, setSentNow] = useState(false)
   const [communicationId, setCommunicationId] = useState('')
   const [sending, setSending] = useState(false)
@@ -39,24 +52,35 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
   const [extraFiles, setExtraFiles] = useState([])
   const [attachProposal, setAttachProposal] = useState(true)
   const [messageBusy, setMessageBusy] = useState(false)
-  const [messageError, setMessageError] = useState('')
+  const [messageNotice, setMessageNotice] = useState('')
   const [proofreadBusy, setProofreadBusy] = useState(false)
   const [proofreadError, setProofreadError] = useState('')
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewWorkbook, setPreviewWorkbook] = useState(null)
+  const [previewBusy, setPreviewBusy] = useState(false)
+  const [previewError, setPreviewError] = useState('')
   const fileInputRef = useRef(null)
+  const aiRequestRef = useRef(0)
+  const customerArtifactRef = useRef({ key: '', promise: null })
   const customer = (store.customers || []).find(c => c.id === opp.sellTo || c.name === opp.sellTo)
   const emailGreeting = customer?.name || opp.sellTo ? `Dear ${customer?.name || opp.sellTo} Team,` : 'Dear Sir/Madam,'
   const defaultEmailBody = proposalEmailFallback({
     greeting: emailGreeting,
+    oppName: opp.oppName,
     oppId: opp.id,
     revision: p.revision,
     validityDays: p.validityDays || opp.validityDays || 30,
+    senderName: displayRole(store.role),
+    attachments: governedAttachmentNames,
   })
   const improvedEmailBody = proposalEmailImprovedFallback({
     greeting: emailGreeting,
+    oppName: opp.oppName,
     oppId: opp.id,
     revision: p.revision,
     validityDays: p.validityDays || opp.validityDays || 30,
+    senderName: displayRole(store.role),
+    attachments: governedAttachmentNames,
   })
   // Mail fields prefill from the opportunity but stay editable — the
   // salesperson can correct a wrong address or subject before it goes out.
@@ -107,7 +131,6 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
   }
 
   const doc = docModel(p, opp, { files: [], config: store.config })
-  const route = docRoute(p, opp)
   const { totalQty, lineQuoted, lineCost, linePrice, computeTotals } = buildPricing(store, p)
   const totals = computeTotals(p)
   const priced = p.bidType !== 'Unpriced (Technical)'
@@ -115,7 +138,8 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
   const fromValid = EMAIL_RE.test(emailFrom.trim())
   const toValid = recipientsValid(emailTo)
   const ccValid = splitRecipients(emailCc).length === 0 || recipientsValid(emailCc)
-  const canSend = !pendingConds.length && (!attachProposal || proposalValidated) && fromValid && toValid && ccValid && Boolean(emailSubject.trim()) && Boolean(emailBody.trim()) && !readingFiles
+  const filenameValid = !attachProposal || validProposalFilename(proposalFilename)
+  const canSend = !pendingConds.length && (!attachProposal || proposalValidated) && filenameValid && fromValid && toValid && ccValid && Boolean(emailSubject.trim()) && Boolean(emailBody.trim()) && !readingFiles
 
   const removeExtraFile = filename => setExtraFiles(files => files.filter(f => f.filename !== filename))
 
@@ -136,11 +160,44 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
     }
   }
 
-  const createMessage = async () => {
-    setMessageBusy(true)
-    setMessageError('')
+  const artifactKey = JSON.stringify({
+    proposal: snapshotProposal(p),
+    opportunity: { id: opp.id, name: opp.oppName, customer: opp.sellTo, route },
+    template: {
+      source: proposalTemplate?.source,
+      id: proposalTemplate?.id,
+      path: proposalTemplate?.path,
+      filename: proposalTemplate?.filename,
+      mapping: proposalTemplate?.mapping,
+    },
+    filename: proposalFilename,
+  })
+  const getCustomerArtifact = async () => {
+    if (customerArtifactRef.current.key !== artifactKey || !customerArtifactRef.current.promise) {
+      const promise = loadProposalTemplateBuffer(proposalTemplate).then(templateBuffer => customerProposalArtifact({
+        templateBuffer,
+        mapping: proposalTemplate?.mapping,
+        mappingWarnings: proposalTemplate?.mappingWarnings,
+        filename: proposalFilename.trim(),
+        p, opp, doc, priced, totalQty, lineQuoted, lineCost, linePrice, totals, route,
+      }))
+      customerArtifactRef.current = { key: artifactKey, promise }
+    }
     try {
-      const result = await runTask('email.proposal', {
+      return await customerArtifactRef.current.promise
+    } catch (error) {
+      if (customerArtifactRef.current.key === artifactKey) customerArtifactRef.current = { key: '', promise: null }
+      throw error
+    }
+  }
+
+  const createMessage = async () => {
+    const requestId = ++aiRequestRef.current
+    setMessageBusy(true)
+    setProofreadError('')
+    setMessageNotice('')
+    try {
+      const result = await runTaskResult('email.proposal', {
         oppName: opp.oppName,
         customer: opp.sellTo,
         oppId: opp.id,
@@ -150,9 +207,14 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
         senderName: displayRole(store.role),
         attachments: attachmentNames,
         terms: p.terms || [],
-      })
-      const sections = result?.data
-      if (!sections || typeof sections !== 'object') throw new Error('AI message could not be created. Check the AI connection and try again.')
+      }, { timeoutMs: 12000 })
+      if (requestId !== aiRequestRef.current) return
+      const sections = result?.data?.data
+      if (!sections || typeof sections !== 'object') {
+        setEmailBody(improvedEmailBody)
+        setMessageNotice(`AI was unavailable${result?.error ? ` (${result.error})` : ''}. A professional built-in draft was applied; please review it before sending.`)
+        return
+      }
       const formatted = formatEmailBody(assembleProposalEmail(sections))
       const hasRequiredStructure = /standard terms/i.test(formatted)
         && /valid for .* days/i.test(formatted)
@@ -160,8 +222,13 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
         && formatted.split(/\n\s*\n/).length >= 5
       const hasMeaningfulChange = formatted.trim() !== emailBody.trim()
       setEmailBody(hasRequiredStructure && hasMeaningfulChange ? formatted : improvedEmailBody)
+      if (!(hasRequiredStructure && hasMeaningfulChange)) {
+        setMessageNotice('The AI response did not meet the required email structure, so the professional built-in draft was applied.')
+      }
     } catch (error) {
-      setMessageError(error?.message || 'AI message could not be created')
+      if (requestId !== aiRequestRef.current) return
+      setEmailBody(improvedEmailBody)
+      setMessageNotice(`AI was unavailable${error?.message ? ` (${error.message})` : ''}. A professional built-in draft was applied; please review it before sending.`)
     } finally {
       setMessageBusy(false)
     }
@@ -172,27 +239,46 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
       setProofreadError('Enter a message before checking its grammar.')
       return
     }
+    const requestId = ++aiRequestRef.current
     setProofreadBusy(true)
     setProofreadError('')
+    setMessageNotice('')
     try {
-      const text = await runText('email.proofread', {
+      const result = await runTaskResult('email.proofread', {
         body: emailBody,
         customer: opp.sellTo,
         oppId: opp.id,
         revision: p.revision,
         validity: `${p.validityDays || opp.validityDays || 30} days from submission`,
         senderName: displayRole(store.role),
-      })
-      if (!text?.trim()) throw new Error('Grammar check could not be completed. Please try again.')
+      }, { timeoutMs: 12000 })
+      if (requestId !== aiRequestRef.current) return
+      const text = textFromTaskResult(result?.data)
+      if (!text?.trim()) throw new Error(result?.error || 'Grammar check could not be completed. Please try again.')
       setEmailBody(formatEmailBody(text))
     } catch (error) {
+      if (requestId !== aiRequestRef.current) return
       setProofreadError(error?.message || 'Grammar check could not be completed')
     } finally {
       setProofreadBusy(false)
     }
   }
 
-  const openProposalPreview = () => setPreviewOpen(true)
+  const openProposalPreview = async () => {
+    if (previewBusy) return
+    setPreviewOpen(true)
+    setPreviewBusy(true)
+    setPreviewError('')
+    try {
+      const artifact = await getCustomerArtifact()
+      setPreviewWorkbook(artifact.workbookPreview)
+    } catch (error) {
+      setPreviewWorkbook(null)
+      setPreviewError(error?.message || 'The proposal workbook preview could not be generated')
+    } finally {
+      setPreviewBusy(false)
+    }
+  }
 
   const downloadAttachment = attachment => {
     const binary = atob(attachment.contentBase64)
@@ -213,7 +299,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
     setSendError('')
     try {
       const attachments = [
-        ...(attachProposal ? [await proposalWorkbookAttachment({ p, opp, doc, priced, totalQty, lineQuoted, lineCost, linePrice, totals, route })] : []),
+        ...(attachProposal ? [(await getCustomerArtifact()).attachment] : []),
         ...(await enclosureAttachments(route)),
         ...extraFiles,
       ]
@@ -235,7 +321,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
         proposalSnapshot: snapshotProposal(p),
         attachments,
         attachmentNames: [
-          ...(attachProposal ? [`${opp.id}_Proposal_Rev_${p.revision}.xlsx`] : []),
+          ...(attachProposal ? [proposalFilename.trim()] : []),
           ...enclosuresFor(route).map(a => a.filename),
           ...extraFiles.map(a => a.filename),
         ],
@@ -267,7 +353,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
   }
 
   const attachmentNames = [
-    ...(attachProposal ? [`${opp.id}_Proposal_Rev_${p.revision}.xlsx`] : []),
+    ...(attachProposal ? [proposalFilename] : []),
     ...enclosuresFor(route).map(e => e.filename),
     ...extraFiles.map(f => f.filename),
   ]
@@ -276,12 +362,20 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
     ['To', <input id="customer-email-to" type="text" value={emailTo} onChange={e => setEmailTo(e.target.value)} placeholder="customer@company.com, second@company.com" style={{ width: '100%' }} />],
     ['CC', <input type="text" value={emailCc} onChange={e => setEmailCc(e.target.value)} placeholder="name@company.com" style={{ width: '100%' }} />],
     ['Subject', <input type="text" value={emailSubject} onChange={e => setEmailSubject(e.target.value)} placeholder="Proposal subject" style={{ width: '100%' }} />],
-    ['Attachments', <>
-      <span>{attachmentNames.join(' · ')}</span>
-      <button type="button" onClick={openProposalPreview} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 8 }} title="View the current ModAE customer proposal">
-        <Icon name="fileSheet" size={13} /> View proposal
-      </button>
-    </>],
+    ['Attachments', <div className="submission-attachment-editor">
+      {attachProposal && <label className="submission-attachment-name">
+        <span>Proposal workbook filename</span>
+        <input type="text" value={proposalFilename} onChange={event => setProposalFilename(event.target.value)}
+          aria-invalid={!filenameValid} aria-describedby={!filenameValid ? 'proposal-filename-error' : undefined} />
+      </label>}
+      {!filenameValid && <span id="proposal-filename-error" className="err-text">Use a valid filename ending in .xlsx.</span>}
+      <div className="submission-attachment-supporting">
+        <span><b>Also attached:</b> {[...enclosuresFor(route).map(e => e.filename), ...extraFiles.map(f => f.filename)].join(' · ') || 'No additional files'}</span>
+        <button type="button" onClick={openProposalPreview} className="submission-preview-action" title="View the exact Excel workbook that will be attached">
+          <Icon name="fileSheet" size={13} /> View proposal Excel
+        </button>
+      </div>
+    </div>],
   ]
 
   return (
@@ -296,16 +390,16 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
       <label className="afield" style={{ display: 'block', marginTop: 8 }}>Message draft</label>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '4px 0' }}>
         <button type="button" onClick={createMessage} disabled={messageBusy || proofreadBusy}>
-          <Icon name="sparkles" size={13} /> {messageBusy ? 'Improving message…' : 'Improve draft with AI'}
+          <Icon name="sparkles" size={13} /> {messageBusy ? 'Improving draft…' : 'Improve with AI'}
         </button>
         <button type="button" onClick={proofreadMessage} disabled={proofreadBusy || messageBusy}>
-          <Icon name="check" size={13} /> {proofreadBusy ? 'Checking grammar…' : 'Check grammar with AI'}
+          <Icon name="check" size={13} /> {proofreadBusy ? 'Proofreading…' : 'Proofread with AI'}
         </button>
-        <span className="hint">Optional rewrite</span>
+        <span className="hint">Optional professional review</span>
       </div>
-      <textarea className="submission-message-draft" value={emailBody} onChange={e => setEmailBody(e.target.value)} rows={9}
+      <textarea className="submission-message-draft" value={emailBody} onChange={e => { aiRequestRef.current += 1; setEmailBody(e.target.value) }} rows={9}
         style={{ width: '100%', resize: 'vertical' }} />
-      {messageError && <ErrBox>{messageError}</ErrBox>}
+      {messageNotice && <WarnBox>{messageNotice}</WarnBox>}
       {proofreadError && <ErrBox>{proofreadError}</ErrBox>}
 
       <div className="check-row" style={{ marginTop: 8 }}>
@@ -328,6 +422,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
             : !fromValid ? 'Enter a valid sender email in the From field'
             : !toValid ? 'Enter a valid recipient email in the To field'
             : !ccValid ? 'The CC address is not valid'
+            : !filenameValid ? 'Enter a valid proposal filename ending in .xlsx'
             : !emailSubject.trim() ? 'Enter a subject'
             : !emailBody.trim() ? 'Enter a message'
             : ''}
@@ -385,12 +480,10 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
       {previewOpen && (
         <Modal onClose={() => setPreviewOpen(false)} wide className="proposal-preview-modal">
           <div className="proposal-preview-toolbar">
-            <span className="hint">Current ModAE customer proposal · read-only</span>
+            <span className="hint">Exact customer Excel attachment · read-only</span>
             <button type="button" onClick={() => setPreviewOpen(false)}>Close</button>
           </div>
-          <div className="proposal-preview-scroll">
-            <PrintDoc p={p} opp={opp} doc={doc} priced={priced} totals={totals} lineQuoted={lineQuoted} />
-          </div>
+          <WorkbookPreview workbook={previewWorkbook} loading={previewBusy} error={previewError} />
         </Modal>
       )}
     </div>

@@ -431,7 +431,12 @@ export function approvalForRev(type, proposal, approvals, oppId, opportunity) {
   const mine = (approvals || []).filter(a =>
     a.oppId === oppId
     && (a.type === type || (type === APPROVAL_5B && a.type === COMMERCIAL_DEVIATION))
-    && (a.approvalSnapshot
+    // Final release has one deliberately simple identity: opportunity plus
+    // quote revision. Explanatory copy and snapshot bookkeeping must never
+    // create a second gate for the same revision.
+    && (type === APPROVAL_5C
+      ? (a.rev == null || String(a.rev) === rev)
+      : a.approvalSnapshot
       ? !approvalAffectedByProposal(a, type, proposal, opportunity)
       : (type === APPROVAL_5B
         ? (a.rev == null || commercialApprovalCoversProposal(a, proposal))
@@ -455,24 +460,18 @@ export function releaseState(proposal, approvals, oppId, opportunity) {
 // green "Approved" row in the Approvals list while the panel stays locked is
 // exactly the confusion this exists to prevent.
 export function releaseVoidReason(proposal, approvals, oppId, opportunity) {
-  const mine = (approvals || []).filter(a => a.oppId === oppId && a.type === APPROVAL_5C)
+  const rev = String(proposal?.revision ?? '')
+  const all = (approvals || []).filter(a => a.oppId === oppId && a.type === APPROVAL_5C)
+  const mine = all.filter(a => a.rev == null || String(a.rev) === rev)
   const pending = mine.find(a => a.status === 'Pending')
   if (pending) {
     const needed = pending.needed?.length ? pending.needed : [pending.approver].filter(Boolean)
     const remaining = needed.filter(role => !(pending.decisions || {})[role])
     return `Release ${pending.id} is awaiting ${remaining.join(' + ') || 'the approvers'}.`
   }
-  const prior = mine.find(a => ['Approved', 'Approved with conditions'].includes(a.status) && a.approvalSnapshot)
+  const prior = all.find(a => ['Approved', 'Approved with conditions'].includes(a.status))
   if (prior) {
-    const impact = proposalImpact(prior.approvalSnapshot, proposal, opportunity)
-    const labels = {
-      customer: 'customer details',
-      release: 'the released content (subject, terms, pricing or BOM)',
-    }
-    const changed = ['customer', 'release'].filter(domain => impact?.has?.(domain))
-    return changed.length
-      ? `Release ${prior.id} was approved, but ${changed.map(domain => labels[domain]).join(' and ')} changed after sign-off — release the updated quote again.`
-      : `Release ${prior.id} is approved but does not cover this revision — release it again.`
+    return `Release ${prior.id} approved revision ${prior.rev || 'legacy'}, but the current quote is revision ${rev || 'unversioned'} — release this revision.`
   }
   return ''
 }

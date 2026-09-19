@@ -14,6 +14,12 @@ test('approval memory changes for a new revision or business detail', () => {
   assert.notEqual(approvalMemoryKey(base), approvalMemoryKey({ ...base, detail: 'Warranty terms differ' }))
 })
 
+test('final release identity ignores screen-specific description text', () => {
+  const builder = approvalMemoryKey({ oppId: 'OP-1', type: 'Final quote release', rev: '01', detail: 'GM 45% — AH + LJS' })
+  const submission = approvalMemoryKey({ oppId: 'OP-1', type: 'Final quote release', rev: '01', detail: 'Final quote release is required before sending' })
+  assert.equal(builder, submission, 'one quote revision must have one final-release gate')
+})
+
 test('review finding keys ignore formatting-only differences', () => {
   assert.equal(
     reviewFindingKey({ code: 'line.part', text: 'Missing  part number', evidence: 'Workbook row 3' }),

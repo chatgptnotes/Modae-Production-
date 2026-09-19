@@ -1,11 +1,9 @@
 import ExcelJS from 'exceljs'
-import { MODAE_COLORS, MODAE_DOCUMENT_STANDARDS } from '../branding/modae.js'
 import { effectiveRate } from '../utils.js'
 import { currencySymbol } from '../currency.js'
+import { BUILT_IN_PROPOSAL_TEMPLATES, proposalTemplateLane } from './templateRegistry.js'
 
 const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-const SPARES_TEMPLATE_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx', import.meta.url).href
-const SERVICES_TEMPLATE_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Big Service Opp-1 (Won) With SoW/Service Proposal 14Apr26 Rev-01.xlsx', import.meta.url).href
 const LOGO_URL = new URL('../../branding/mod-ae/assets/modae-official-logo.png', import.meta.url).href
 
 const clean = value => value == null ? '' : String(value)
@@ -27,18 +25,9 @@ const excelDate = value => {
   return Number.isNaN(date.getTime()) ? clean(value) : date
 }
 
-const argb = value => `FF${String(value).replace(/^#/, '').toUpperCase()}`
-const border = { style: 'thin', color: { argb: argb(MODAE_COLORS.border) } }
-const allBorders = { top: border, left: border, bottom: border, right: border }
-const brandHeaderFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(MODAE_COLORS.ink) } }
-const brandHeaderFont = { name: 'Candara', size: MODAE_DOCUMENT_STANDARDS.headingSizePt, bold: true, color: { argb: argb(MODAE_COLORS.surface) } }
-const brandTotalFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(MODAE_COLORS.primaryLight) } }
-const brandTotalBorder = { style: 'thin', color: { argb: argb(MODAE_COLORS.primary) } }
 const rupeeFormat = '₹#,##0.00'
 const euroFormat = '€#,##0.00'
 const customerFormat = symbol => `${symbol}#,##0.00`
-
-const columnWidth = (worksheet, column) => worksheet.getColumn(column).width || 10
 
 const columnName = columnNumber => {
   let number = columnNumber
@@ -51,33 +40,16 @@ const columnName = columnNumber => {
   return name
 }
 
-function rangeWidth(worksheet, start, end = start) {
-  let width = 0
-  for (let column = start; column <= end; column++) width += columnWidth(worksheet, column)
-  return width
-}
-
-function wrappedLines(value, width) {
-  const chars = Math.max(8, Math.floor(width))
-  return clean(value).split(/\r?\n/).reduce((total, line) => total + Math.max(1, Math.ceil(line.length / chars)), 0)
-}
-
-function setWrappedHeight(worksheet, rowNumber, cells, { min = 18, max = 120, lineHeight = 15 } = {}) {
-  const lines = cells.reduce((total, cell) => Math.max(total, wrappedLines(cell.value, cell.width)), 1)
-  worksheet.getRow(rowNumber).height = Math.max(min, Math.min(max, lines * lineHeight + 3))
-}
-
 function setValue(cell, value, options = {}) {
   cell.value = value
   if (options.font) cell.font = { ...(cell.font || {}), ...options.font }
   if (options.alignment) cell.alignment = { ...(cell.alignment || {}), ...options.alignment }
   if (options.fill) cell.fill = options.fill
-  if (options.border !== false) cell.border = allBorders
+  if (options.border) cell.border = options.border
 }
 
-function styleNarrative(cell) {
-  cell.alignment = { ...(cell.alignment || {}), vertical: 'top', wrapText: true }
-  cell.border = allBorders
+const setNumberFormat = (cell, numFmt) => {
+  cell.style = { ...(cell.style || {}), numFmt }
 }
 
 function setCoverRow(worksheet, range, value) {
@@ -89,15 +61,7 @@ function setCoverRow(worksheet, range, value) {
   // Clear stale template values before merging so old cover text cannot leak
   // into the new customer-facing field.
   for (let column = start.col + 1; column <= end.col; column++) row.getCell(column).value = null
-  if (!worksheet.model.merges.includes(range)) worksheet.mergeCells(range)
-
-  for (let column = start.col; column <= end.col; column++) {
-    const cell = row.getCell(column)
-    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFFFF' } }
-    cell.border = allBorders
-    cell.alignment = { ...(cell.alignment || {}), horizontal: 'left', vertical: 'top', wrapText: true }
-  }
-  setValue(start, value, { alignment: { horizontal: 'left', vertical: 'top', wrapText: true } })
+  setValue(start, value)
 }
 
 function ensureLogo(workbook, worksheet, logoBuffer, lastColumn) {
@@ -111,60 +75,14 @@ function ensureLogo(workbook, worksheet, logoBuffer, lastColumn) {
 }
 
 function setPrintLayout(worksheet, orientation) {
-  // Normal (continuous) view. 'pageLayout' made Excel open the workbook broken
-  // into separate printed pages with margin gaps and repeated header bands —
-  // the page setup below still governs how it prints.
-  worksheet.views = [{ showGridLines: false, activeCell: 'A1' }]
+  if (!worksheet.views?.length) worksheet.views = [{ showGridLines: true, activeCell: 'A1' }]
   worksheet.pageSetup = {
     ...(worksheet.pageSetup || {}),
-    orientation,
-    paperSize: 9,
-    fitToPage: true,
-    fitToWidth: 1,
-    fitToHeight: 0,
-    horizontalDpi: 300,
-    verticalDpi: 300,
-    margins: MODAE_DOCUMENT_STANDARDS.marginsInches,
-  }
-  worksheet.headerFooter = {
-    oddHeader: `&R${MODAE_DOCUMENT_STANDARDS.header.tagline}`,
-    oddFooter: `&C${MODAE_DOCUMENT_STANDARDS.footerLines.join('\n')}`,
-  }
-}
-
-function applyDocumentFont(workbook) {
-  for (const worksheet of workbook.worksheets) {
-    worksheet.eachRow(row => row.eachCell(cell => {
-      cell.font = {
-        ...(cell.font || {}),
-        name: 'Candara',
-        size: MODAE_DOCUMENT_STANDARDS.bodySizePt,
-      }
-    }))
-  }
-}
-
-function applyCustomerBranding(worksheet, { firstRow = 1, lastRow = worksheet.rowCount, firstColumn = 1, lastColumn = worksheet.columnCount, headerRows = [], totalRows = [] } = {}) {
-  for (let rowNumber = firstRow; rowNumber <= lastRow; rowNumber++) {
-    for (let column = firstColumn; column <= lastColumn; column++) {
-      const cell = worksheet.getCell(rowNumber, column)
-      if (cell.isMerged && cell.master && cell.address !== cell.master.address) continue
-      const isHeader = headerRows.includes(rowNumber)
-      const isTotal = totalRows.includes(rowNumber)
-      cell.font = {
-        ...(cell.font || {}),
-        name: 'Candara',
-        size: isHeader ? MODAE_DOCUMENT_STANDARDS.headingSizePt : MODAE_DOCUMENT_STANDARDS.bodySizePt,
-        ...(isHeader ? brandHeaderFont : {}),
-        ...(isTotal ? { color: { argb: argb(MODAE_COLORS.primaryDark) } } : {}),
-      }
-      cell.border = isHeader || isTotal
-        ? { top: brandTotalBorder, bottom: brandTotalBorder, left: border, right: border }
-        : allBorders
-      if (isHeader) cell.fill = brandHeaderFill
-      else if (isTotal) cell.fill = brandTotalFill
-      else if (cell.value != null) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(MODAE_COLORS.surface) } }
-    }
+    orientation: worksheet.pageSetup?.orientation || orientation,
+    paperSize: worksheet.pageSetup?.paperSize || 9,
+    fitToPage: worksheet.pageSetup?.fitToPage ?? true,
+    fitToWidth: worksheet.pageSetup?.fitToWidth ?? 1,
+    fitToHeight: worksheet.pageSetup?.fitToHeight ?? 0,
   }
 }
 
@@ -244,7 +162,7 @@ function setCoverSheet(workbook, worksheet, { p, opp, doc, route, mapping }) {
   // merged region is occupied by the logo in Excel and caused cover overlap.
   if (!mappedMode) {
     setValue(worksheet.getCell('B5'), excelDate(p.revisionDate), { alignment: { vertical: 'middle' } })
-    worksheet.getCell('B5').numFmt = 'd-mmm-yyyy'
+    setNumberFormat(worksheet.getCell('B5'), 'd-mmm-yyyy')
     setValue(worksheet.getCell('C6'), p.ourRef || opp.id)
     setValue(worksheet.getCell('C7'), p.bidStage)
     setValue(worksheet.getCell('C8'), p.bidType)
@@ -262,11 +180,6 @@ function setCoverSheet(workbook, worksheet, { p, opp, doc, route, mapping }) {
     ['project', customerSafe(p.project), 'C20:Q20', 'C20'],
   ]
   const writtenTargets = coverTargets.map(([key, value, range, cell]) => writeField(key, value, range, cell)).filter(Boolean)
-  // Keep the address band as a single customer-facing line even when the
-  // uploaded template omitted the merge in its serialized worksheet model.
-  if (!worksheet.model.merges.includes('B14:Q14')) {
-    setCoverRow(worksheet, 'B14:Q14', worksheet.getCell('B14').value || '')
-  }
   if (mappedMode && writtenTargets.length === 0) {
     // A mapping without cover fields is still usable; leave the uploaded
     // cover content intact rather than forcing the legacy cell coordinates.
@@ -284,33 +197,6 @@ function setCoverSheet(workbook, worksheet, { p, opp, doc, route, mapping }) {
     ].filter(Boolean).join('\n'))
   }
 
-  for (const ref of ['B11', 'B12', 'B13', 'B14', 'C16', 'B22', 'B24', 'B26', 'C18', 'C20']) styleNarrative(worksheet.getCell(ref))
-  setWrappedHeight(worksheet, 11, [{ value: worksheet.getCell('B11').value, width: rangeWidth(worksheet, 2, 17) }])
-  setWrappedHeight(worksheet, 12, [{ value: worksheet.getCell('B12').value, width: rangeWidth(worksheet, 2, 17) }])
-  setWrappedHeight(worksheet, 13, [{ value: worksheet.getCell('B13').value, width: rangeWidth(worksheet, 2, 17) }])
-  setWrappedHeight(worksheet, 14, [{ value: worksheet.getCell('B14').value, width: rangeWidth(worksheet, 2, 17) }])
-  setWrappedHeight(worksheet, 16, [{ value: worksheet.getCell('C16').value, width: rangeWidth(worksheet, 3, 17) }])
-  setWrappedHeight(worksheet, 18, [{ value: worksheet.getCell('C18').value, width: rangeWidth(worksheet, 3, 17) }])
-  setWrappedHeight(worksheet, 20, [{ value: worksheet.getCell('C20').value, width: rangeWidth(worksheet, 3, 17) }])
-  setWrappedHeight(worksheet, 22, [{ value: worksheet.getCell('B22').value, width: rangeWidth(worksheet, 2, 17) }])
-  setWrappedHeight(worksheet, 24, [{ value: worksheet.getCell('B24').value, width: rangeWidth(worksheet, 2, 17) }], { min: 30, max: 300, lineHeight: 15 })
-  setWrappedHeight(worksheet, 26, [{ value: worksheet.getCell('B26').value, width: rangeWidth(worksheet, 2, 17) }], { min: 45, max: 150, lineHeight: 15 })
-  for (const ref of ['B6', 'B7', 'B8', 'B9', 'B16', 'B18', 'B20']) {
-    worksheet.getCell(ref).font = {
-      ...(worksheet.getCell(ref).font || {}),
-      name: 'Candara',
-      size: MODAE_DOCUMENT_STANDARDS.headingSizePt,
-      bold: true,
-      color: { argb: argb(MODAE_COLORS.primary) },
-    }
-  }
-  for (const row of [5, 11, 12, 13, 14, 16, 18, 20, 22, 24, 26]) {
-    for (let column = 2; column <= 17; column++) {
-      const cell = worksheet.getCell(row, column)
-      if (cell.value == null) continue
-      cell.font = { ...(cell.font || {}), name: 'Candara', size: MODAE_DOCUMENT_STANDARDS.bodySizePt }
-    }
-  }
 }
 
 const MODAE_PHONE_EMAIL = '+91 973 15 77 199 · ceo@mod-ae.com'
@@ -342,11 +228,19 @@ function setSummaryCard(worksheet, p, totals, financeCost = 0) {
   ]
   for (const [ref, value] of values) {
     const cell = worksheet.getCell(ref)
-    setValue(cell, value, { alignment: { vertical: 'middle', wrapText: true } })
-    if (/^K/.test(ref)) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } }
+    setValue(cell, value)
   }
-  for (let row = 2; row <= 6; row++) {
-    for (let col = 10; col <= 15; col++) worksheet.getCell(row, col).border = allBorders
+}
+
+function cloneRowPresentation(worksheet, sourceRowNumber, targetRowNumber) {
+  const source = worksheet.getRow(sourceRowNumber)
+  const target = worksheet.getRow(targetRowNumber)
+  target.height = source.height
+  for (let column = 1; column <= worksheet.columnCount; column++) {
+    const sourceCell = source.getCell(column)
+    const targetCell = target.getCell(column)
+    targetCell.style = { ...sourceCell.style }
+    targetCell.numFmt = sourceCell.numFmt
   }
 }
 
@@ -362,11 +256,13 @@ const isEmptyCell = cell => {
 // column Y and row 41 while the customer table ends at H. Delete rather than
 // blank: hidden columns still travel with the file, and the empty padding is
 // what reads as "much space" when the customer opens it.
-function stripInternalCosting(worksheet) {
+function stripInternalCosting(worksheet, firstInternal = 9) {
   // Everything from column J rightwards is the internal cost/margin block —
   // unit and total cost in ₹ and €, the costing-factors card, the ModAE
   // cost/target/GM roll-up and the deal notes beside it.
-  const firstInternal = 9 // column I is the spacer before the internal block
+  // firstInternal is one-based. For Spares it is column I, the spacer before
+  // the internal J:O costing block. Other route templates supply their own
+  // last customer column through the template mapping.
   for (const range of Object.values(worksheet._merges || {})) {
     const model = range?.model
     if (!model || model.right < firstInternal) continue
@@ -440,18 +336,16 @@ function setCommercialSheet(workbook, worksheet, args) {
   // Keep the reference sheet's minimum body height for small direct exports,
   // while still writing the live BoQ in full when it has more rows.
   const totalRow = Math.max(firstRow + lines.length, originalTotalRow)
-  if (totalRow > originalTotalRow) worksheet.spliceRows(originalTotalRow, 0, ...Array.from({ length: totalRow - originalTotalRow }, () => []))
+  if (totalRow > originalTotalRow) {
+    const addedRows = totalRow - originalTotalRow
+    worksheet.spliceRows(originalTotalRow, 0, ...Array.from({ length: addedRows }, () => []))
+    for (let row = originalTotalRow; row < totalRow; row++) cloneRowPresentation(worksheet, originalTotalRow - 1, row)
+  }
 
     const headers = [['B9', 'Sl. No.'], ['C9', 'Scope / Equipment Description'], ['D9', 'Proposed Model / Part No.'], ['E9', 'Quantity'], ['F9', `Unit Price (${proposalSymbol})`], ['G9', `Total Price (${proposalSymbol})`], ['J9', 'Unit Price (₹)'], ['K9', 'Total Price (₹)'], ['L9', 'Unit Cost (₹)'], ['M9', 'Total Cost (₹)'], ['N9', 'Unit Cost (€)'], ['O9', 'Total Cost (€)']]
   for (const [ref, value] of headers) {
-    setValue(worksheet.getCell(ref), value, {
-      font: brandHeaderFont,
-      fill: brandHeaderFill,
-      alignment: { horizontal: 'center', vertical: 'middle', wrapText: true },
-    })
+    setValue(worksheet.getCell(ref), value)
   }
-  const widths = { B: 8, C: 45, D: 32, E: 10, F: 18, G: 18, J: 18, K: 18, L: 18, M: 18, N: 18, O: 18 }
-  for (const [column, width] of Object.entries(widths)) worksheet.getColumn(column).width = width
 
   lines.forEach((line, index) => {
     const row = firstRow + index
@@ -463,7 +357,7 @@ function setCommercialSheet(workbook, worksheet, args) {
         const cell = worksheet.getRow(row).getCell(cellIndex + 2)
         cell.value = source.value
         cell.style = { ...source.style }
-        if (source.numFmt) cell.numFmt = source.numFmt
+        if (source.numFmt) setNumberFormat(cell, source.numFmt)
       })
     }
     // The proposal BoQ is the source of truth. Template rows provide layout
@@ -475,26 +369,22 @@ function setCommercialSheet(workbook, worksheet, args) {
     // every internal cost cell of the ModAE copy.
     const unitLandedCost = lineCost ? number(lineCost(line)) : 0
     const unitEuro = linePrice ? number(linePrice(line)) : 0
-    setValue(worksheet.getCell(`B${row}`), index + 1, { alignment: { horizontal: 'center', vertical: 'top' } })
-    setValue(worksheet.getCell(`C${row}`), line.desc || line.itemCategory || templateProduct?.description || '', { alignment: { vertical: 'top', wrapText: true } })
-    setValue(worksheet.getCell(`D${row}`), line.pn || line.custRef || '', { alignment: { vertical: 'top', wrapText: true } })
-    setValue(worksheet.getCell(`E${row}`), qty, { alignment: { horizontal: 'center', vertical: 'top' } })
-    setValue(worksheet.getCell(`F${row}`), unitPrice, { alignment: { horizontal: 'right', vertical: 'top' } })
-    setValue(worksheet.getCell(`G${row}`), { formula: `F${row}*E${row}`, result: round2(unitPrice * qty) }, { alignment: { horizontal: 'right', vertical: 'top' } })
-    setValue(worksheet.getCell(`J${row}`), unitPrice, { alignment: { horizontal: 'right', vertical: 'top' } })
-    setValue(worksheet.getCell(`K${row}`), { formula: `J${row}*E${row}`, result: round2(unitPrice * qty) }, { alignment: { horizontal: 'right', vertical: 'top' } })
-    setValue(worksheet.getCell(`L${row}`), unitLandedCost, { alignment: { horizontal: 'right', vertical: 'top' } })
-    setValue(worksheet.getCell(`M${row}`), { formula: `L${row}*E${row}`, result: unitLandedCost * qty }, { alignment: { horizontal: 'right', vertical: 'top' } })
-    setValue(worksheet.getCell(`N${row}`), unitEuro, { alignment: { horizontal: 'right', vertical: 'top' } })
-    setValue(worksheet.getCell(`O${row}`), { formula: `N${row}*E${row}`, result: unitEuro * qty }, { alignment: { horizontal: 'right', vertical: 'top' } })
-    setWrappedHeight(worksheet, row, [
-      { value: line.desc || line.itemCategory || templateProduct?.description || '', width: columnWidth(worksheet, 3) },
-      { value: line.pn || line.custRef || '', width: columnWidth(worksheet, 4) },
-    ], { min: 30, max: 120, lineHeight: 15 })
-    for (const column of ['F', 'G']) worksheet.getCell(`${column}${row}`).numFmt = proposalFormat
-    for (const column of ['J', 'K', 'L', 'M']) worksheet.getCell(`${column}${row}`).numFmt = rupeeFormat
-    for (const column of ['N', 'O']) worksheet.getCell(`${column}${row}`).numFmt = euroFormat
-    worksheet.getCell(`E${row}`).numFmt = '#,##0'
+    setValue(worksheet.getCell(`B${row}`), index + 1)
+    setValue(worksheet.getCell(`C${row}`), line.desc || line.itemCategory || templateProduct?.description || '')
+    setValue(worksheet.getCell(`D${row}`), line.pn || line.custRef || '')
+    setValue(worksheet.getCell(`E${row}`), qty)
+    setValue(worksheet.getCell(`F${row}`), unitPrice)
+    setValue(worksheet.getCell(`G${row}`), { formula: `F${row}*E${row}`, result: round2(unitPrice * qty) })
+    setValue(worksheet.getCell(`J${row}`), unitPrice)
+    setValue(worksheet.getCell(`K${row}`), { formula: `J${row}*E${row}`, result: round2(unitPrice * qty) })
+    setValue(worksheet.getCell(`L${row}`), unitLandedCost)
+    setValue(worksheet.getCell(`M${row}`), { formula: `L${row}*E${row}`, result: unitLandedCost * qty })
+    setValue(worksheet.getCell(`N${row}`), unitEuro)
+    setValue(worksheet.getCell(`O${row}`), { formula: `N${row}*E${row}`, result: unitEuro * qty })
+    for (const column of ['F', 'G']) setNumberFormat(worksheet.getCell(`${column}${row}`), proposalFormat)
+    for (const column of ['J', 'K', 'L', 'M']) setNumberFormat(worksheet.getCell(`${column}${row}`), rupeeFormat)
+    for (const column of ['N', 'O']) setNumberFormat(worksheet.getCell(`${column}${row}`), euroFormat)
+    setNumberFormat(worksheet.getCell(`E${row}`), '#,##0')
   })
 
   // Remove any unused template body rows between the live BoQ and footer.
@@ -504,15 +394,13 @@ function setCommercialSheet(workbook, worksheet, args) {
 
   const footer = totalRow
   const footerPriceMerge = `F${footer}:G${footer}`
-  if (worksheet.model.merges.includes(footerPriceMerge)) worksheet.unMergeCells(footerPriceMerge)
-  setValue(worksheet.getCell(`B${footer}`), 'Total For', { font: { bold: true, color: { argb: argb(MODAE_COLORS.primaryDark) } }, fill: brandTotalFill })
+  const mergedCustomerTotal = worksheet.model.merges.includes(footerPriceMerge)
+  setValue(worksheet.getCell(`B${footer}`), 'Total For')
   setValue(worksheet.getCell(`C${footer}`), customerSafe(doc.subject) || customerSafe(p.subject)
-    || customerSafe(opp.oppName) || `${route || 'Techno-Commercial'} Proposal`, { font: { bold: true, color: { argb: argb(MODAE_COLORS.primaryDark) } }, fill: brandTotalFill, alignment: { wrapText: true } })
-  for (const column of ['F', 'G', 'J', 'K', 'L', 'M', 'N', 'O']) {
+    || customerSafe(opp.oppName) || `${route || 'Techno-Commercial'} Proposal`)
+  for (const column of ['J', 'K', 'L', 'M', 'N', 'O']) {
     const cell = worksheet.getCell(`${column}${footer}`)
-    cell.fill = brandTotalFill
-    cell.border = allBorders
-    cell.numFmt = ['F', 'G'].includes(column) ? proposalFormat : ['N', 'O'].includes(column) ? euroFormat : rupeeFormat
+    setNumberFormat(cell, ['F', 'G'].includes(column) ? proposalFormat : ['N', 'O'].includes(column) ? euroFormat : rupeeFormat)
     if (['G', 'K', 'M', 'O'].includes(column)) {
       const result = lines.reduce((sum, line, index) => {
         const row = firstRow + index
@@ -523,38 +411,29 @@ function setCommercialSheet(workbook, worksheet, args) {
       cell.value = { formula: `SUM(${column}${firstRow}:${column}${footer - 1})`, result }
     }
   }
-  // The footer has a customer total only; do not retain the template's stale
-  // unit-price value in the customer-facing column.
-  worksheet.getCell(`F${footer}`).value = null
+  const customerTotal = lines.reduce((sum, line) => sum + round2(lineQuoted(line)) * number(totalQty(line)), 0)
+  if (mergedCustomerTotal) {
+    const totalCell = worksheet.getCell(`F${footer}`)
+    totalCell.value = { formula: `SUM(G${firstRow}:G${footer - 1})`, result: round2(customerTotal) }
+    setNumberFormat(totalCell, proposalFormat)
+  } else {
+    worksheet.getCell(`F${footer}`).value = null
+    const totalCell = worksheet.getCell(`G${footer}`)
+    totalCell.value = { formula: `SUM(G${firstRow}:G${footer - 1})`, result: round2(customerTotal) }
+    setNumberFormat(totalCell, proposalFormat)
+  }
   const termsStart = footer + 2
-  applyCustomerBranding(worksheet, { firstRow: 9, lastRow: termsStart - 1, firstColumn: 2, lastColumn: redactInternalCosting ? 7 : 15, headerRows: [9], totalRows: [footer] })
-  worksheet.getCell('B16').alignment = { ...(worksheet.getCell('B16').alignment || {}), wrapText: true }
   // The source templates contain leftover customer-facing rows below the BOQ
   // (including an older, duplicate Terms & Conditions block). Clear those
   // rows before writing the generated terms so they cannot leak into page 2.
   // Keep the internal costing columns J:O untouched.
-  for (const range of Object.values(worksheet._merges || {})) {
-    const model = range?.model
-    if (!model || model.top < termsStart) continue
-    const mergeRef = `${columnName(model.left)}${model.top}:${columnName(model.right)}${model.bottom}`
-    worksheet.unMergeCells(mergeRef)
-  }
   for (let row = footer + 1; row <= worksheet.rowCount; row++) {
     for (let column = 2; column <= 8; column++) worksheet.getCell(row, column).value = null
   }
 
-  const termWidth = rangeWidth(worksheet, 2, 8)
   const writeTermRow = (row, value, heading = false) => {
-    worksheet.mergeCells(`B${row}:H${row}`)
-    setValue(worksheet.getCell(`B${row}`), value, {
-      font: { bold: heading },
-      alignment: { horizontal: 'left', vertical: 'top', wrapText: true },
-    })
-    setWrappedHeight(worksheet, row, [{ value, width: termWidth }], {
-      min: heading ? 24 : 24,
-      max: 120,
-      lineHeight: 15,
-    })
+    if (row > termsStart + 1) cloneRowPresentation(worksheet, termsStart + 1, row)
+    setValue(worksheet.getCell(`B${row}`), value, heading ? { font: { bold: true } } : {})
   }
 
   writeTermRow(termsStart, doc.docTermsHeading || 'Terms & Conditions:', true)
@@ -562,14 +441,6 @@ function setCommercialSheet(workbook, worksheet, args) {
     const row = termsStart + index + 1
     writeTermRow(row, `${index + 1}. ${term.label || ''}: ${term.text || ''}`.trim())
   })
-  // Keep the template's two customer-facing columns visible and the costing block intact.
-  worksheet.getColumn('B').width = 8
-  worksheet.getColumn('C').width = 45
-  worksheet.getColumn('D').width = 32
-  worksheet.getColumn('E').width = 10
-  worksheet.getColumn('F').width = 18
-  worksheet.getColumn('G').width = 18
-
   if (redactInternalCosting) stripInternalCosting(worksheet)
 }
 
@@ -578,19 +449,45 @@ function setCommercialSheet(workbook, worksheet, args) {
 // cells and leave the workbook's own layout, logo, formulas and surrounding
 // content untouched.
 function setMappedCommercialSheet(worksheet, args) {
-  const { p, totalQty, lineQuoted, mapping } = args
+  const { p, doc, totalQty, lineQuoted, mapping, redactInternalCosting } = args
   const table = mapping?.lineTable
   const columns = table?.columns || {}
   if (!table || !Number.isInteger(table.headerRow) || !Number.isInteger(columns.description) || !Number.isInteger(columns.quantity)) return false
   setPrintLayout(worksheet, 'landscape')
   const lines = p.bom || []
-  const firstRow = table.headerRow + 2
+  // Admin template mappings store the detected header as a zero-based raw
+  // worksheet index, so the first ExcelJS data row is two greater. Built-in
+  // mappings use an explicit firstDataRow to avoid any coordinate ambiguity.
+  const firstRow = Number.isInteger(table.firstDataRow) ? table.firstDataRow : table.headerRow + 2
+  const customerLastColumn = Number(mapping?.customerLastColumn)
+    || Math.max(...Object.values(columns).filter(Number.isInteger).map(index => index + 1))
+  const customerFirstColumn = Math.min(...Object.values(columns).filter(Number.isInteger).map(index => index + 1))
+  const detectedTotalRow = Number.isInteger(table.totalRow) ? table.totalRow : (() => {
+    for (let row = firstRow; row <= worksheet.rowCount; row++) {
+      const rowText = Array.from({ length: customerLastColumn - 1 }, (_, index) => clean(worksheet.getCell(row, index + 2).value)).join(' ')
+      if (/\b(?:grand\s+)?total\b/i.test(rowText)) return row
+    }
+    return null
+  })()
+  const lastDataRow = Number.isInteger(table.lastDataRow)
+    ? table.lastDataRow
+    : detectedTotalRow ? detectedTotalRow - 1 : firstRow + Math.max(lines.length - 1, 0)
+  const totalRow = detectedTotalRow || firstRow + lines.length
+  if (lines.length > lastDataRow - firstRow + 1) {
+    throw new Error(`${worksheet.name} supports ${lastDataRow - firstRow + 1} proposal lines; remove or consolidate lines before generating the customer workbook`)
+  }
   const cell = (row, key) => Number.isInteger(columns[key]) ? worksheet.getCell(row, columns[key] + 1) : null
+  const contentEndRow = Number.isInteger(table.contentEndRow) ? table.contentEndRow : totalRow
+  for (let row = firstRow; row <= contentEndRow; row++) {
+    for (let column = customerFirstColumn; column <= customerLastColumn; column++) worksheet.getCell(row, column).value = null
+  }
   lines.forEach((line, index) => {
     const row = firstRow + index
     const qty = number(totalQty(line))
     const unit = round2(lineQuoted(line))
     const values = {
+      serial: index + 1,
+      itemCategory: line.itemCategory || '',
       partNumber: line.pn || line.custRef || '',
       description: line.desc || line.itemCategory || '',
       quantity: qty,
@@ -600,17 +497,30 @@ function setMappedCommercialSheet(worksheet, args) {
     for (const [key, value] of Object.entries(values)) {
       const target = cell(row, key)
       if (target) {
-        setValue(target, value, { alignment: { vertical: 'top', wrapText: true } })
-        if (['unitPrice', 'totalPrice'].includes(key)) target.numFmt = '#,##0.00'
+        setValue(target, value)
+        if (['unitPrice', 'totalPrice'].includes(key)) setNumberFormat(target, '#,##0.00')
       }
     }
   })
-  const totalRow = firstRow + lines.length
   const total = round2(lines.reduce((sum, line) => sum + round2(lineQuoted(line)) * number(totalQty(line)), 0))
   const totalCell = cell(totalRow, 'totalPrice')
-  if (totalCell) setValue(totalCell, total, { font: { bold: true }, alignment: { horizontal: 'right' } })
+  if (totalCell) setValue(totalCell, total)
   const descriptionCell = cell(totalRow, 'description')
-  if (descriptionCell) setValue(descriptionCell, 'Total', { font: { bold: true } })
+  if (descriptionCell) setValue(descriptionCell, 'Total')
+  const termsStartRow = Number.isInteger(table.termsStartRow) ? table.termsStartRow : totalRow + 2
+  const terms = doc?.docTerms || []
+  if (terms.length) {
+    const headingCell = worksheet.getCell(termsStartRow, 2)
+    setValue(headingCell, doc?.docTermsHeading || 'Terms & Conditions:', { font: { bold: true } })
+    terms.forEach((term, index) => {
+      const row = termsStartRow + index + 1
+      if (row > worksheet.rowCount) cloneRowPresentation(worksheet, Math.min(termsStartRow + 1, worksheet.rowCount), row)
+      setValue(worksheet.getCell(row, 2), `${index + 1}. ${term.label || ''}: ${term.text || ''}`.trim())
+    })
+  }
+  if (redactInternalCosting) {
+    stripInternalCosting(worksheet, customerLastColumn + 1)
+  }
   return true
 }
 
@@ -627,23 +537,26 @@ async function fetchOptionalLogo(logoBuffer) {
 }
 
 export async function generateProposalWorkbook(args) {
-  const templateUrl = args.templateBuffer || (args.route === 'Services' ? SERVICES_TEMPLATE_URL : SPARES_TEMPLATE_URL)
+  const builtInTemplate = BUILT_IN_PROPOSAL_TEMPLATES.find(item => item.key === proposalTemplateLane(args.route))
+  const templateUrl = args.templateBuffer || args.templateUrl || builtInTemplate?.url
+  if (!templateUrl) throw new Error(`No proposal template is available for ${args.route || 'this route'}`)
+  const generationArgs = { ...args, mapping: args.mapping || builtInTemplate?.mapping }
   const workbook = new ExcelJS.Workbook()
   await workbook.xlsx.load(await readBuffer(templateUrl))
   expandSharedFormulas(workbook)
   sanitizeWorkbook(workbook)
-  applyDocumentFont(workbook)
   const logo = await fetchOptionalLogo(args.logoBuffer)
   const byName = name => workbook.worksheets.find(sheet => sheet.name.trim() === name)
-  const cover = byName(args.mapping?.coverSheet) || byName('Cover Letter') || workbook.worksheets[0]
-  const commercial = byName(args.mapping?.commercialSheet) || byName(args.route === 'Services' ? 'Proposal' : 'Firm Rev-00') || workbook.worksheets[1] || cover
+  const cover = byName(generationArgs.mapping?.coverSheet) || byName('Cover Letter') || workbook.worksheets[0]
+  const defaultCommercialSheet = args.route === 'Project' ? 'Priced BoQ' : args.route === 'Services' ? 'Proposal' : 'Firm Rev-00'
+  const commercial = byName(generationArgs.mapping?.commercialSheet) || byName(defaultCommercialSheet) || workbook.worksheets[1] || cover
   if (!cover || !commercial) throw new Error('Proposal template must contain a cover and commercial worksheet')
   ensureLogo(workbook, cover, logo, 18)
   ensureLogo(workbook, commercial, logo, 24)
-  setCoverSheet(workbook, cover, args)
-  const mappedCommercial = args.mapping?.method?.startsWith('gemini') && args.mapping?.lineTable?.sheet === commercial.name
-  if (mappedCommercial && !setMappedCommercialSheet(commercial, args)) setCommercialSheet(workbook, commercial, args)
-  else if (!mappedCommercial) setCommercialSheet(workbook, commercial, args)
+  setCoverSheet(workbook, cover, generationArgs)
+  const mappedCommercial = generationArgs.mapping?.lineTable?.sheet === commercial.name
+  if (mappedCommercial && !setMappedCommercialSheet(commercial, generationArgs)) setCommercialSheet(workbook, commercial, generationArgs)
+  else if (!mappedCommercial) setCommercialSheet(workbook, commercial, generationArgs)
   return new Uint8Array(await workbook.xlsx.writeBuffer())
 }
 

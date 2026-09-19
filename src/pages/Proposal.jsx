@@ -31,6 +31,7 @@ import { fromInr, toInr, currencySymbol } from '../currency.js'
 import { reviewFindingKey } from '../approvalMemory.js'
 import OpportunityComingSoon from '../workbench/OpportunityComingSoon.jsx'
 import { modaeStandardCommercialTerms, normalizeCommercialTerm } from '../commercialTerms.js'
+import { loadProposalTemplateBuffer, resolveProposalTemplate } from '../proposal/templateRegistry.js'
 
 const ROUTE_TABS = {
   Project: ['Cover Letter', 'Edit Sheet', 'Signal List', 'Rack Layout', 'Priced BoQ'],
@@ -39,9 +40,6 @@ const ROUTE_TABS = {
 }
 
 const MEGGITT_ITEM_LIST_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-2 With Different Make (Not yet won)/Meggitt Item List.xlsx', import.meta.url).href
-const PROJECT_PROPOSAL_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Big Project Opp/2608222RS  Project Rev-00.xlsx', import.meta.url).href
-const SPARES_PROPOSAL_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx', import.meta.url).href
-const SERVICE_PROPOSAL_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Big Service Opp-1 (Won) With SoW/Service Proposal 14Apr26 Rev-01.xlsx', import.meta.url).href
 
 const approvalTermKey = value => {
   const text = String(value || '').toLowerCase()
@@ -598,8 +596,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   const proposalTemplate = route === 'Project' ? p.projectProposalWorkbook
     : route === 'Spares' ? p.sparesProposalWorkbook
       : route === 'Services' ? p.serviceProposalWorkbook : null
-  const configuredProposalTemplate = (store.config?.uploads?.proposalTemplates || [])
-    .find(item => item.lane === (route === 'Services' ? 'Service' : route) && item.status === 'Current')
+  const configuredProposalTemplate = resolveProposalTemplate(store.config, route)
   const proposalTemplateSheets = proposalTemplate?.sheets || []
   const referencePartNumber = description => String(description || '').match(/[A-Z]{1,8}[A-Z0-9]*(?:[./-][A-Z0-9]+){2,}/i)?.[0] || ''
   const referenceBom = rows => rows.map(row => {
@@ -642,16 +639,13 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     if (isComingSoon) return
     if (!opp || !['Project', 'Spares', 'Services'].includes(route) || proposalTemplate) return
     let cancelled = false
+    const selectedTemplate = resolveProposalTemplate(store.config, route)
     const isSpares = route === 'Spares'
-    const lane = route === 'Services' ? 'Service' : route
-    const configured = (store.config?.uploads?.proposalTemplates || []).find(item => item.lane === lane && item.status === 'Current')
-    const url = configured?.url || (route === 'Project' ? PROJECT_PROPOSAL_URL : isSpares ? SPARES_PROPOSAL_URL : SERVICE_PROPOSAL_URL)
     const key = route === 'Project' ? 'projectProposalWorkbook' : isSpares ? 'sparesProposalWorkbook' : 'serviceProposalWorkbook'
-    const filename = configured?.name || (route === 'Project' ? '2608222RS Project Rev-00.xlsx' : isSpares ? 'Spares Firm Offer Rev00 2May2026.xlsx' : 'Service Proposal 14Apr26 Rev-01.xlsx')
+    const filename = selectedTemplate.filename
     setTemplateLoading(true)
     setTemplateError('')
-    fetch(url)
-      .then(response => { if (!response.ok) throw new Error('Proposal template could not be loaded'); return response.arrayBuffer() })
+    loadProposalTemplateBuffer(selectedTemplate)
       .then(buffer => {
         if (cancelled) return
         const workbook = parseProposalWorkbook(buffer, filename)
@@ -682,18 +676,15 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     setTemplateLoading(true)
     setTemplateError('')
     try {
-      const configured = (store.config?.uploads?.proposalTemplates || []).find(item => item.lane === (route === 'Services' ? 'Service' : route) && item.status === 'Current')
-      const url = configured?.url || (route === 'Project' ? PROJECT_PROPOSAL_URL : route === 'Spares' ? SPARES_PROPOSAL_URL : SERVICE_PROPOSAL_URL)
-      const response = await fetch(url)
-      if (!response.ok) throw new Error('Proposal template could not be loaded')
+      const selectedTemplate = resolveProposalTemplate(store.config, route)
       const bytes = await generateProposalWorkbook({
-        templateBuffer: await response.arrayBuffer(),
+        templateBuffer: await loadProposalTemplateBuffer(selectedTemplate),
         p, opp, doc, priced, totalQty, lineQuoted, lineCost, linePrice, totals, route,
-        mapping: configured?.mapping,
-        mappingWarnings: configured?.mappingWarnings,
+        mapping: selectedTemplate.mapping,
+        mappingWarnings: selectedTemplate.mappingWarnings,
         redactInternalCosting: false,
       })
-      setRenderedTemplateWorkbook(parseRenderedWorkbook(bytes, configured?.name || proposalTemplate?.filename || `${oppId} Proposal.xlsx`))
+      setRenderedTemplateWorkbook(parseRenderedWorkbook(bytes, selectedTemplate.filename || proposalTemplate?.filename || `${oppId} Proposal.xlsx`))
     } catch (error) {
       setTemplateError(error?.message || 'Proposal workbook could not be generated')
       setRenderedTemplateWorkbook(null)
@@ -1094,10 +1085,19 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
                     ['Sl.', 'BOQ Line Category', 'Scope / Equipment Description', 'Proposed Model & Part Number', 'Customer Item Code', 'Adders', 'Quantity / Unit', 'Common', 'Spares', 'Total Quantity', 'UOM', `Unit Price ${proposalSymbol}`, `Total Price ${proposalSymbol}`, 'Unit Cost ₹', 'Total Cost ₹', `List Price`, 'Currency'],
     p.bom.map((l, i) => [i + 1, l.itemCategory, l.desc, l.pn, l.custRef, l.adders.join('+'), l.qtyPerUnit, l.common, l.spares, totalQty(l), l.uom, lineQuoted(l), lineQuoted(l) * totalQty(l), Math.round(lineCost(l)), Math.round(lineCost(l) * totalQty(l)), linePrice(l), l.currency])
   )
-  const exportExcel = () => downloadProposalXlsx({ p, opp, doc, priced, totalQty, lineQuoted, lineCost, linePrice, totals, route, mapping: configuredProposalTemplate?.mapping, mappingWarnings: configuredProposalTemplate?.mappingWarnings }).catch(error => {
-    console.error('Proposal Excel export failed', error)
-    setReviewError(`The proposal workbook could not be downloaded: ${error?.message || 'unknown export error'}`)
-  })
+  const exportExcel = async () => {
+    try {
+      const templateBuffer = await loadProposalTemplateBuffer(configuredProposalTemplate)
+      await downloadProposalXlsx({
+        templateBuffer, p, opp, doc, priced, totalQty, lineQuoted, lineCost, linePrice, totals, route,
+        mapping: configuredProposalTemplate?.mapping,
+        mappingWarnings: configuredProposalTemplate?.mappingWarnings,
+      })
+    } catch (error) {
+      console.error('Proposal Excel export failed', error)
+      setReviewError(`The proposal workbook could not be downloaded: ${error?.message || 'unknown export error'}`)
+    }
+  }
   const submitForApproval = () => {
     if (!reviewReady) {
       setReviewError('Run validation after reviewing the proposal before requesting approval.')

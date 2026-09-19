@@ -438,25 +438,30 @@ ${cap(JSON.stringify(p.currentFields || {}), 6000)}`
 function proposalEmailPrompt(p) {
   return `${HOUSE}
 
-Draft a professional medium-length customer email for sending an approved
-Techno-Commercial Proposal. Use a polite Indian industrial B2B tone. Return
-structured fields only; the application will assemble the final email.
+Draft formal customer correspondence for sending an approved Techno-Commercial
+Proposal. Use concise Indian industrial B2B language suitable for an OEM, EPC,
+power plant, refinery, or engineering customer. Prefer "With reference to your
+request for quotation" over promotional wording. Return structured fields only;
+the application will assemble the final email.
 
 Return exactly these fields:
 - greeting: "Dear [customer] Team," or "Dear Sir/Madam,"
-- purpose: one sentence identifying the approved proposal, opportunity reference,
-  and revision.
-- attachments: one sentence naming only the supplied attachment filenames or
-  accurately describing the supplied proposal and ModAE standard terms.
-- validityAndNextStep: one or two sentences stating the supplied validity and
-  asking the customer to review and confirm whether the offer meets requirements.
-- clarification: one polite sentence offering clarification on the proposal,
-  scope, or commercial terms.
+- purpose: one sentence identifying the RFQ subject, approved proposal,
+  opportunity reference, and revision.
+- attachments: one sentence naming only the supplied attachment filenames and
+  stating that they are enclosed for review and records.
+- validityAndNextStep: one or two sentences stating the supplied validity,
+  including delivery terms only when explicitly supplied, and asking the
+  customer to review and confirm whether the offer meets requirements.
+- clarification: one polite sentence offering clarification on scope, technical
+  specifications, or commercial terms, followed by a restrained sentence such
+  as "We look forward to your response."
 - signoff: "Best regards,\\n[sender name]"
 
-The final assembled email must be 100–150 words, use blank lines between
-sections, and contain no Markdown, HTML, headings, bullets, filler, repetition,
-or unsupported claims. Do not invent prices, delivery dates, quantities,
+The final assembled email must be 120–180 words, use blank lines between
+sections, and contain no Markdown, HTML, headings, sales hype, filler,
+repetition, or unsupported claims. Include delivery terms only when explicitly
+present in the supplied terms. Do not invent prices, delivery dates, quantities,
 commitments, technical claims, or attachment names. Use only supplied facts.
 
 OPPORTUNITY: ${cap(p.oppName, 300)} (${cap(p.oppId, 100)})

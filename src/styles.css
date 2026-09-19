@@ -2133,6 +2133,15 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 /* Cards holding a full grid: fill the content area instead of the 760px form column */
 .form-card.wide { max-width: none; }
 .submission-message-draft { display: block; min-height: 180px; line-height: 1.55; }
+.submission-attachment-editor { display: grid; gap: 8px; min-width: 0; padding: 6px 0; }
+.submission-attachment-name { display: grid; grid-template-columns: minmax(150px, 190px) minmax(260px, 1fr); align-items: center; gap: 10px; }
+.submission-attachment-name > span { color: var(--text-secondary); font-size: 11px; font-weight: 700; }
+.submission-attachment-name input { width: 100%; min-width: 0; font-variant-numeric: tabular-nums; }
+.submission-attachment-name input[aria-invalid="true"] { border-color: var(--color-crimson); outline-color: var(--color-crimson); }
+.submission-attachment-editor .err-text { margin: -2px 0 0 200px; }
+.submission-attachment-supporting { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; color: var(--text-tertiary); font-size: 11.5px; }
+.submission-attachment-supporting > span { min-width: 0; overflow-wrap: anywhere; }
+.submission-preview-action { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; }
 .submission-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .submission-actions .submission-draft-action { margin-left: auto; }
 .submission-actions .submission-draft-action:disabled { opacity: 1; }
@@ -2140,6 +2149,9 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .submission-actions > .hint { flex-basis: 100%; margin-top: -2px; }
 @media (max-width: 680px) {
   .submission-actions .submission-draft-action { margin-left: 0; }
+  .submission-attachment-name { grid-template-columns: 1fr; gap: 5px; }
+  .submission-attachment-editor .err-text { margin-left: 0; }
+  .submission-attachment-supporting { align-items: flex-start; flex-direction: column; }
 }
 /* Modals also carry .form-card, whose max-width above (same specificity, later
    source order) was winning the cascade over every earlier modal rule — it
@@ -2782,13 +2794,28 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .communication-expanded { margin: 0 4px 8px 25px; padding: 8px 10px; border-left: 2px solid var(--border-soft); overflow-wrap: anywhere; }
 .communication-expanded-body { margin-top: 6px; white-space: pre-wrap; font-size: 12px; line-height: 1.45; }
 .communication-expanded-attachments { margin-top: 6px; color: var(--text-muted); font-size: 11px; }
-.communication-detail-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 18px; padding: 12px; background: var(--palette-f58d7116); border: 1px solid var(--border-soft); border-radius: 6px; }
+.communication-detail-modal { width: min(780px, calc(100vw - 40px)); max-width: min(780px, calc(100vw - 40px)); padding: 22px 24px 26px; overflow: hidden; }
+.communication-detail-modal > .section-title { max-width: calc(100% - 88px); margin: 0 0 18px; color: var(--text-primary); font-size: 18px; line-height: 1.25; letter-spacing: -.015em; text-wrap: balance; }
+.communication-detail-close { position: absolute; top: 16px; right: 18px; }
+.communication-detail { max-height: calc(86vh - 82px); overflow-y: auto; padding-right: 4px; }
+.communication-detail-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 24px; padding: 16px 18px; background: var(--surface-sunken); border: 1px solid var(--border-subtle); border-radius: 8px; }
 .communication-detail-meta div { min-width: 0; }
-.communication-detail-meta b, .communication-detail-attachments b { display: block; margin-bottom: 3px; color: var(--text-muted); font-size: 10px; text-transform: uppercase; letter-spacing: .35px; }
-.communication-detail-meta span, .communication-detail-attachments span { overflow-wrap: anywhere; font-size: 12px; }
-.communication-detail-body { min-height: 110px; margin-top: 12px; padding: 12px; border: 1px solid var(--border-soft); border-radius: 6px; background: var(--palette-4843938); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12.5px; line-height: 1.5; }
-.communication-detail-attachments { margin-top: 12px; padding: 9px 12px; background: var(--palette-f58d7116); border-radius: 6px; }
-@media (max-width: 640px) { .communication-detail-meta { grid-template-columns: 1fr; } }
+.communication-detail-meta b, .communication-detail-attachments b { display: block; margin-bottom: 5px; color: var(--text-tertiary); font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+.communication-detail-meta span, .communication-detail-attachments span { font-size: 12.5px; }
+.communication-identity { display: flex; min-width: 0; flex-direction: column; gap: 2px; }
+.communication-identity-name { color: var(--text-primary); font-weight: 650; overflow-wrap: break-word; }
+.communication-identity-email { color: var(--text-tertiary); font-size: 11.5px; overflow-wrap: anywhere; }
+.communication-row .communication-identity { display: inline; }
+.communication-row .communication-identity-name { font-weight: inherit; }
+.communication-row .communication-identity-email::before { content: ' <'; }
+.communication-row .communication-identity-email::after { content: '>'; }
+.communication-detail-body { min-height: 180px; margin-top: 14px; padding: 20px 22px 24px; border: 1px solid var(--border-subtle); border-radius: 8px; background: var(--surface-default); color: var(--text-primary); white-space: pre-wrap; overflow-wrap: break-word; font-size: 14px; line-height: 1.65; text-wrap: pretty; }
+.communication-detail-attachments { margin-top: 14px; padding: 12px 16px; background: var(--surface-sunken); border-radius: 7px; }
+@media (max-width: 640px) {
+  .communication-detail-modal { width: calc(100vw - 24px); max-width: calc(100vw - 24px); padding: 18px 16px 20px; }
+  .communication-detail-meta { grid-template-columns: 1fr; }
+  .communication-detail-body { padding: 16px; font-size: 13.5px; }
+}
 .mail-labels { display: flex; align-items: center; justify-content: flex-start; gap: 7px; padding-right: 10px; white-space: nowrap; }
 .mail-detail-label { display: inline-flex; align-items: center; gap: 4px; }
 .mail-detail-label em { color: var(--text-subtle); font-size: 9px; font-style: normal; text-transform: uppercase; letter-spacing: .35px; }

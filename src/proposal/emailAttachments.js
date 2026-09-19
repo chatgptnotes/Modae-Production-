@@ -32,18 +32,33 @@ export function enclosureAttachments(route) {
 // unconditionally for the emailed attachment, unlike the internal "Download
 // Draft" copy which keeps them for pre-send review.
 export async function proposalWorkbookAttachment(args) {
+  return (await customerProposalArtifact(args)).attachment
+}
+
+const artifactSignature = bytes => {
+  let hash = 2166136261
+  for (const byte of bytes) hash = Math.imul(hash ^ byte, 16777619)
+  return `${bytes.length}-${(hash >>> 0).toString(16)}`
+}
+
+// Build the customer workbook once. The submission preview and the downloaded
+// Gmail attachment reuse this object, so the salesperson reviews the same XLSX
+// bytes that are sent to the customer.
+export async function customerProposalArtifact(args) {
   const bytes = await generateProposalWorkbook({ ...args, redactInternalCosting: true })
+  const filename = args.filename || `${args.opp.id}_Proposal_Rev_${args.p.revision}.xlsx`
   return {
-    filename: `${args.opp.id}_Proposal_Rev_${args.p.revision}.xlsx`,
-    mimeType: MIME_XLSX,
-    contentBase64: bytesBase64(bytes),
+    bytes,
+    signature: artifactSignature(bytes),
+    workbookPreview: parseProposalWorkbook(bytes, filename),
+    attachment: {
+      filename,
+      mimeType: MIME_XLSX,
+      contentBase64: bytesBase64(bytes),
+    },
   }
 }
 
-// The send panel previews the exact generated XLSX, rather than a separate
-// HTML document. Parsing the same bytes that will be attached keeps worksheet
-// names, values, and customer-facing redaction in sync with the sent file.
 export async function proposalWorkbookPreview(args) {
-  const bytes = await generateProposalWorkbook({ ...args, redactInternalCosting: true })
-  return parseProposalWorkbook(bytes, `${args.opp.id}_Proposal_Rev_${args.p.revision}.xlsx`)
+  return (await customerProposalArtifact(args)).workbookPreview
 }
