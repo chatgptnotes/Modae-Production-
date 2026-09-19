@@ -1250,9 +1250,13 @@ function StructuredLeadDetail({ lead, converted = false }) {
       {converted ? (
         <header className="converted-statusbar">
           <span className="converted-status"><Icon name="checkCircle" size={15} /> Converted to Opportunity {oppId}</span>
-          <button type="button" className="converted-history" onClick={() => nav('/audit')}>
-            View Workflow History <Icon name="arrowRight" size={12} />
-          </button>
+          <span className="converted-status-actions">
+            {lead.oppId && (
+              <button type="button" className="converted-history" onClick={() => nav('/opp/' + lead.oppId)}>
+                Open Opportunity <Icon name="arrowRight" size={12} />
+              </button>
+            )}
+          </span>
         </header>
       ) : (
         <div className="structured-active-workflow"><LeadWorkflowBar lead={lead} /></div>
