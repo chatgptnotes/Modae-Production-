@@ -44,3 +44,24 @@ test('customer changes affect every approval domain', () => {
   assert.equal(approvalAffectedByProposal(approval, 'Commercial approval', proposal, changedCustomer), true)
   assert.equal(approvalAffectedByProposal(approval, 'Final quote release', proposal, changedCustomer), true)
 })
+
+test('legacy release approvals ignore the old automatic header-sync mismatch', () => {
+  const opportunity = {
+    sellTo: 'ACME',
+    contactPerson: 'A. Buyer',
+    oppName: 'Turbine package',
+    route: 'Spares',
+  }
+  const approvedBeforeSync = {
+    units: 1,
+    sourceCurrency: 'INR',
+    addressee: 'M/s. ACME',
+    kindAttn: 'A. Buyer',
+    subject: '',
+    bom: [],
+  }
+  const approval = { approvalSnapshot: proposalApprovalSnapshot(approvedBeforeSync, opportunity) }
+  const current = { ...approvedBeforeSync, subject: 'Proposal For Turbine package' }
+
+  assert.equal(approvalAffectedByProposal(approval, 'Final quote release', current, opportunity), false)
+})

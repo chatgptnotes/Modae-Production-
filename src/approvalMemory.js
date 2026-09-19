@@ -67,17 +67,43 @@ export const proposalApprovalSnapshot = (proposal = {}, opportunity = {}) => ({
 
 const same = (left, right) => json(left) === json(right)
 
+// Older approval records were sometimes snapshotted immediately before a
+// milestone update. That update used to copy the opportunity header into the
+// proposal, so a release approval could appear stale even though nobody had
+// changed the customer-facing quote. Treat that narrow, header-only mismatch
+// as equivalent when the current proposal now contains the canonical header.
+const canonicalReleaseHeader = opportunity => ({
+  addressee: normalize(opportunity?.sellTo ? `M/s. ${opportunity.sellTo}` : ''),
+  kindAttn: normalize(opportunity?.contactPerson),
+  subject: normalize(opportunity?.oppName ? `Proposal For ${opportunity.oppName}` : ''),
+})
+
+const releaseWithoutAutoSyncedHeader = (release, opportunity, currentRelease) => {
+  const canonical = canonicalReleaseHeader(opportunity)
+  const headerKeys = Object.keys(canonical)
+  const businessKeys = ['letterBody', 'validityDays', 'technical', 'commercial', 'terms']
+  const headerIsCanonical = headerKeys.every(key => currentRelease?.[key] === canonical[key])
+  const businessIsSame = businessKeys.every(key => same(release?.[key], currentRelease?.[key]))
+  if (!headerIsCanonical || !businessIsSame) return release
+  return { ...release, ...currentRelease }
+}
+
 // Returns the decision domains affected by the current proposal compared with
 // an approval snapshot. `customer` is intentionally broad: customer identity,
 // route, or currency changes can invalidate every customer-facing decision.
 export const proposalImpact = (approvedSnapshot, proposal, opportunity = {}) => {
   if (!approvedSnapshot) return null
   const current = proposalApprovalSnapshot(proposal, opportunity)
+  const approvedRelease = releaseWithoutAutoSyncedHeader(
+    approvedSnapshot.release,
+    opportunity,
+    current.release,
+  )
   const impact = new Set()
   if (!same(approvedSnapshot.customer, current.customer)) impact.add('customer')
   if (!same(approvedSnapshot.technical, current.technical)) impact.add('technical')
   if (!same(approvedSnapshot.commercial, current.commercial)) impact.add('commercial')
-  if (!same(approvedSnapshot.release, current.release)) impact.add('release')
+  if (!same(approvedRelease, current.release)) impact.add('release')
   return impact
 }
 

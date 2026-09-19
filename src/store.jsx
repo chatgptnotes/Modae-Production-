@@ -20,7 +20,7 @@ import { clarificationTopic } from './leadClarification.js'
 import { reconcileSparesLines } from './clarificationSparesSync.js'
 import { normalizedCurrencyRates } from './currency.js'
 import { approvalMemoryKey, pricingExceptionSignature, proposalApprovalSnapshot } from './approvalMemory.js'
-import { syncProposalFromOpportunity } from './proposal/opportunitySync.js'
+import { shouldSyncProposalFromOpportunity, syncProposalFromOpportunity } from './proposal/opportunitySync.js'
 import {
   isPlaceholderSparesLine,
   isLegacyAutoSparesSupportRow,
@@ -416,6 +416,7 @@ export function StoreProvider({ children }) {
       if (patch.oppType) {
         patch = { route: routeForType(patch.oppType), context: contextForType(patch.oppType), ...patch }
       }
+      const shouldSyncProposal = shouldSyncProposalFromOpportunity(patch)
       setState(s => {
         const opportunities = s.opportunities.map(o =>
           o.id === id ? { ...o, ...patch, lastUpdated: today } : o)
@@ -424,7 +425,7 @@ export function StoreProvider({ children }) {
         return withAudit({
           ...s,
           opportunities,
-          ...(proposal && updated
+          ...(proposal && updated && shouldSyncProposal
             ? { proposals: { ...s.proposals, [id]: syncProposalFromOpportunity(proposal, updated) } }
             : {}),
         }, 'Opportunity updated', id, Object.keys(patch).join(', '))

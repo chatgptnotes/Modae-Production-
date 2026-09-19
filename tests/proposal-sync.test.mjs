@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { syncProposalFromOpportunity } from '../src/proposal/opportunitySync.js'
+import { shouldSyncProposalFromOpportunity, syncProposalFromOpportunity } from '../src/proposal/opportunitySync.js'
 import { newProposal } from '../src/seed.js'
 
 test('opportunity metadata syncs into proposal header fields', () => {
@@ -37,6 +37,12 @@ test('opportunity metadata syncs into proposal header fields', () => {
   assert.deepEqual(next.bom, proposal.bom)
   assert.deepEqual(next.terms, proposal.terms)
   assert.deepEqual(next.costing, proposal.costing)
+})
+
+test('workflow-only opportunity updates do not sync proposal headers', () => {
+  assert.equal(shouldSyncProposalFromOpportunity({ milestone: 'Approval' }), false)
+  assert.equal(shouldSyncProposalFromOpportunity({ lastUpdated: '2026-09-19', milestone: 'Approval' }), false)
+  assert.equal(shouldSyncProposalFromOpportunity({ sellTo: 'Updated Customer' }), true)
 })
 
 test('empty optional opportunity fields clear canonical proposal headers', () => {

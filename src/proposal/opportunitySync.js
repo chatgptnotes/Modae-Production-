@@ -11,6 +11,16 @@ const real = value => {
   return INTAKE_PLACEHOLDERS.some(pattern => pattern.test(text)) ? '' : text
 }
 
+// Only these opportunity fields are copied into an existing proposal. A
+// workflow-only update (for example, moving Proposal to Approval) must not
+// rewrite the proposal after an approval snapshot has been taken.
+export const PROPOSAL_SYNC_FIELDS = [
+  'oppName', 'sellTo', 'contactPhone', 'contactPerson', 'rfqNumber', 'rfqDate',
+]
+
+export const shouldSyncProposalFromOpportunity = patch =>
+  Object.keys(patch || {}).some(key => PROPOSAL_SYNC_FIELDS.includes(key))
+
 export function syncProposalFromOpportunity(proposal, opportunity) {
   if (!proposal || !opportunity) return proposal
 
