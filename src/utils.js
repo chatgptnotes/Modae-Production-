@@ -167,6 +167,71 @@ export function ageDays(value, now = new Date()) {
   return d < 0 ? 0 : d
 }
 
+// Calendar ranges used by the Opportunities tracker. Date-only opportunity
+// fields are compared as ISO strings so browser timezone differences cannot
+// move a row across a boundary.
+export const OPPORTUNITY_DATE_FIELDS = [
+  { key: 'createDate', label: 'Create Date' },
+  { key: 'proposalDate', label: 'Proposal Date' },
+  { key: 'orderDate', label: 'Expected Order Date' },
+  { key: 'invoiceDate', label: 'Expected Ship Date' },
+  { key: 'lastUpdated', label: 'Last Updated' },
+]
+
+export const OPPORTUNITY_PERIODS = [
+  { key: 'all', label: 'All time' },
+  { key: 'specific', label: 'Specific date' },
+  { key: 'week', label: 'This week' },
+  { key: 'month', label: 'This month' },
+  { key: 'quarter', label: 'This quarter' },
+  { key: 'year', label: 'This year' },
+  { key: 'custom', label: 'Custom range' },
+]
+
+const dateOnly = date => date.toISOString().slice(0, 10)
+const parseDateOnly = value => new Date(`${value}T00:00:00Z`)
+const shiftDateOnly = (value, days) => {
+  const date = parseDateOnly(value)
+  date.setUTCDate(date.getUTCDate() + days)
+  return dateOnly(date)
+}
+
+export function opportunityDateRange(period, values = {}, now = new Date()) {
+  const today = istDateKey(now)
+  if (!period || period === 'all') return { range: null, error: '' }
+  if (period === 'specific') {
+    return values.date ? { range: [values.date, values.date], error: '' } : { range: null, error: '' }
+  }
+  if (period === 'custom') {
+    const from = values.from || ''
+    const to = values.to || ''
+    return from && to && from > to
+      ? { range: null, error: 'From date must be on or before the To date.' }
+      : { range: from || to ? [from, to] : null, error: '' }
+  }
+  if (!today) return { range: null, error: '' }
+  const date = parseDateOnly(today)
+  if (period === 'week') {
+    const mondayOffset = (date.getUTCDay() + 6) % 7
+    const monday = shiftDateOnly(today, -mondayOffset)
+    return { range: [monday, shiftDateOnly(monday, 6)], error: '' }
+  }
+  if (period === 'month') {
+    const start = `${today.slice(0, 8)}01`
+    const end = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0))
+    return { range: [start, dateOnly(end)], error: '' }
+  }
+  if (period === 'quarter') {
+    const month = date.getUTCMonth()
+    const startMonth = Math.floor(month / 3) * 3
+    const start = new Date(Date.UTC(date.getUTCFullYear(), startMonth, 1))
+    const end = new Date(Date.UTC(date.getUTCFullYear(), startMonth + 3, 0))
+    return { range: [dateOnly(start), dateOnly(end)], error: '' }
+  }
+  if (period === 'year') return { range: [`${today.slice(0, 4)}-01-01`, `${today.slice(0, 4)}-12-31`], error: '' }
+  return { range: null, error: '' }
+}
+
 export function fmt(n, digits = 0) {
   if (n === '' || n == null || isNaN(n)) return ''
   return Number(n).toLocaleString('en-IN', {

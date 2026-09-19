@@ -514,7 +514,8 @@ ${cap((p.candidates || []).map((c: any) => `${c.partNumber} | ${c.description} |
       properties: {
         rows: arrOf({
           type: 'OBJECT',
-          properties: { id: STR, status: STR, response: STR, missing: STR, confidence: INT, evidence: STR, fieldKey: STR, fieldValue: STR, fieldEvidence: STR },
+          properties: { id: STR, status: STR, response: STR, missing: STR, confidence: INT, evidence: STR, fieldKey: STR, fieldValue: STR, fieldEvidence: STR,
+            lineItems: arrOf({ type: 'OBJECT', properties: { partNumber: STR, description: STR, qty: INT, uom: STR, evidence: STR }, required: ['partNumber', 'description', 'qty', 'uom', 'evidence'] }) },
           required: ['id', 'status', 'response', 'missing', 'confidence', 'evidence', 'fieldKey', 'fieldValue', 'fieldEvidence'],
         }),
       },
@@ -534,6 +535,11 @@ in evidence. A partial BOQ without part numbers or without all requested lines
 must be Needs review, not Answered. A system-configuration question is not fully
 answered by only giving the application or RPM. “See attached BOM” answers a
 part-number question only when the BOM is actually present and readable.
+
+When an answered question contains requested spares or BOQ details, also return
+lineItems with one object per customer-requested part: exact partNumber, concise
+description, numeric qty, uom (normally EA), and evidence. Do not put prices in
+lineItems. Return an empty lineItems array when no requested parts are supplied.
 
 For a fully answered question, map the answer to at most one Opportunity field
 only when the reply explicitly supplies that field. Use only one of the allowed

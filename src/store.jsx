@@ -17,6 +17,7 @@ import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLea
 import { unitCostINR, unitSellINR, setRoleNameConfig, nowIST, toISTISOString } from './utils.js'
 import { PRICE_SOURCES, isConfirmableSparesLine, normalizePriceFields, sparesLineFinancials } from './pricing.js'
 import { clarificationTopic } from './leadClarification.js'
+import { reconcileSparesLines } from './clarificationSparesSync.js'
 import { normalizedCurrencyRates } from './currency.js'
 import { approvalMemoryKey, pricingExceptionSignature, proposalApprovalSnapshot } from './approvalMemory.js'
 import { syncProposalFromOpportunity } from './proposal/opportunitySync.js'
@@ -1322,6 +1323,29 @@ export function StoreProvider({ children }) {
           ...fieldPatch,
         }, resolvedStatus === 'Needs review' ? 'Clarification marked needs review' : 'Clarification answered', id, response)
       })
+    },
+
+    syncClarificationSpares(oppId, clarificationId, requested, { answeredAt = '', answerSource = '' } = {}) {
+      if (!oppId || !Array.isArray(requested) || !requested.length) return { changes: [], unmatched: [] }
+      let report = { changes: [], unmatched: [] }
+      setState(s => {
+        const current = s.sparesLines.filter(line => line.oppId === oppId)
+        const result = reconcileSparesLines(current, requested, {
+          priceLists: s.priceLists,
+          clarificationId,
+          answeredAt,
+          answerSource,
+        })
+        report = { changes: result.changes, unmatched: result.unmatched }
+        if (!result.changes.length) return s
+        const byId = new Map(result.lines.map(line => [line.id, line]))
+        const nextLines = s.sparesLines.map(line => byId.get(line.id) || line)
+        const added = result.lines.filter(line => !line.id)
+        const withIds = added.map(line => normalizePriceFields({ ...line, id: mintId('SL', [...nextLines, ...added]), oppId }))
+        return withAudit({ ...s, sparesLines: [...nextLines, ...withIds] }, 'Customer clarification synced to sourcing', oppId,
+          `${result.changes.length} line change(s)${result.unmatched.length ? `; review ${result.unmatched.length} existing line(s)` : ''}`)
+      })
+      return report
     },
 
     // ---- Manufacturer / vendor quotes --------------------------------------

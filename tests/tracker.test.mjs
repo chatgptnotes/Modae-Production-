@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 import { nextActionWith } from '../src/gates.js'
 import { seedOpportunities, seedApprovals, seedKyc, seedSparesLines, seedSvcEstimates, newProposal, routeForType } from '../src/seed.js'
+import { opportunityDateRange } from '../src/utils.js'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
@@ -68,10 +69,33 @@ test('tracker offers all, mine, and specific-owner filtering', () => {
 
 test('tracker column controls compose filters and support select-all toggling', () => {
   assert.match(tracker, /matchesFilters = \(o, activeFilters = filters, except = null\)/)
-  assert.match(tracker, /searchableBase\.filter\(o => matchesFilters\(o\)\)/)
+  assert.match(tracker, /dateFilteredBase\.filter\(o => matchesFilters\(o\)\)/)
   assert.match(tracker, /current\[col\.key\] \? undefined : new Set\(values\)/)
   assert.match(tracker, /<button type="button" className="tracker-th-control"/)
   assert.match(styles, /table\.sheet th\.th-filter[\s\S]*font-weight: 700/)
+})
+
+test('tracker date filter supports specific dates and calendar periods', () => {
+  assert.deepEqual(opportunityDateRange('specific', { date: '2026-09-19' }).range, ['2026-09-19', '2026-09-19'])
+  assert.deepEqual(opportunityDateRange('week', {}, new Date('2026-09-19T12:00:00Z')).range, ['2026-09-14', '2026-09-20'])
+  assert.deepEqual(opportunityDateRange('month', {}, new Date('2026-09-19T12:00:00Z')).range, ['2026-09-01', '2026-09-30'])
+  assert.deepEqual(opportunityDateRange('quarter', {}, new Date('2026-09-19T12:00:00Z')).range, ['2026-07-01', '2026-09-30'])
+  assert.deepEqual(opportunityDateRange('year', {}, new Date('2026-09-19T12:00:00Z')).range, ['2026-01-01', '2026-12-31'])
+})
+
+test('tracker custom date range validates ordering and allows open bounds', () => {
+  assert.equal(opportunityDateRange('custom', { from: '2026-10-01', to: '2026-09-01' }).error, 'From date must be on or before the To date.')
+  assert.equal(opportunityDateRange('custom', {}).range, null)
+  assert.deepEqual(opportunityDateRange('custom', { from: '2026-09-01', to: '' }).range, ['2026-09-01', ''])
+})
+
+test('tracker renders selectable date fields and period controls', () => {
+  assert.match(tracker, /Custom date filter/)
+  assert.match(tracker, /aria-label="Custom filter date field"/)
+  assert.match(tracker, /aria-label="Custom filter period"/)
+  assert.match(tracker, /OPPORTUNITY_DATE_FIELDS/)
+  assert.match(tracker, /OPPORTUNITY_PERIODS/)
+  assert.match(tracker, /matchesDateFilter\(o\)/)
 })
 
 test('My Opportunities shows the same working columns', () => {

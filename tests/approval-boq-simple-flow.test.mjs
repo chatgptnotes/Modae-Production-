@@ -20,13 +20,13 @@ test('approval decisions expose only approve and reject', () => {
   assert.doesNotMatch(store, /const anyReturned = Object\.values\(decisions\)/)
 })
 
-test('BOQ sourcing uses clear labels, preview links, and removal confirmation', () => {
+test('BOQ sourcing uses clear labels and removal confirmation', () => {
   const spares = read('src/workbench/WbSpares.jsx')
   const approvals = read('src/pages/Approvals.jsx')
   const styles = read('src/styles.css')
   assert.match(spares, /Bill of Quantities \(BOQ\)/)
   assert.match(spares, /<th>Price source<\/th><th>Quantity<\/th>/)
-  assert.match(spares, /Open BOQ preview/)
+  assert.doesNotMatch(spares, /Open BOQ preview/)
   assert.match(spares, /window\.confirm\(`Remove \$\{sourcingDescription\(line\)\} from this BOQ\?`\)/)
   assert.match(spares, /Next: Proposal<\/button>/)
   assert.match(approvals, /className="approval-boq-link"/)

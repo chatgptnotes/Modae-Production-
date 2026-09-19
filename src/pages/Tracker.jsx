@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { STAGES, CLOSE_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES } from '../seed.js'
-import { fmt, fmtRupeesFromK, rupeesToK, mmmYY, ddMmmYY, stageClass, productList, productLabel, productDisplayLabel, sameCustomer, displayRole } from '../utils.js'
+import { fmt, fmtRupeesFromK, rupeesToK, mmmYY, ddMmmYY, stageClass, productList, productLabel, productDisplayLabel, sameCustomer, displayRole, OPPORTUNITY_DATE_FIELDS, OPPORTUNITY_PERIODS, opportunityDateRange } from '../utils.js'
 import { downloadTableXlsx } from '../proposal/excelExport.js'
 import { useFormulaBar } from '../formulabar.jsx'
 import { useDrawer } from '../drawer.jsx'
@@ -13,6 +13,7 @@ import { Modal } from '../ui.jsx'
 import { Icon, ModaeImageLogo } from '../icons.jsx'
 
 const OPEN_STAGES = STAGES.filter(s => s !== 'Won' && s !== 'Lost')
+const DEFAULT_DATE_FILTER = { field: 'orderDate', period: 'all', date: '', from: '', to: '' }
 
 // Columns with their real-sheet letters (row number = Sl + 2, as in the sheet).
 // `w` is the column's share of the sheet width — free text gets the generous
@@ -176,6 +177,10 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const [openFilter, setOpenFilter] = useState(null)   // { key, x, y } of the open dropdown
   const [filterSearch, setFilterSearch] = useState({})
   const [searchTerm, setSearchTerm] = useState('')
+  const [dateFilter, setDateFilter] = useState(DEFAULT_DATE_FILTER)
+  const [dateFilterDraft, setDateFilterDraft] = useState(DEFAULT_DATE_FILTER)
+  const [dateFilterOpen, setDateFilterOpen] = useState(false)
+  const [dateFilterPos, setDateFilterPos] = useState(null)
   const [productPick, setProductPick] = useState(null) // { id, x, y } of the open product picker
   const [closePending, setClosePending] = useState(null) // { id, stage } awaiting a closed reason
   const [closeReason, setCloseReason] = useState('')
@@ -205,6 +210,23 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
       window.removeEventListener('scroll', onScroll, true)
     }
   }, [openFilter])
+
+  useEffect(() => {
+    if (!dateFilterOpen) return undefined
+    const close = event => {
+      if (event.key === 'Escape') setDateFilterOpen(false)
+    }
+    const onResize = () => setDateFilterOpen(false)
+    const onScroll = () => setDateFilterOpen(false)
+    window.addEventListener('keydown', close)
+    window.addEventListener('resize', onResize)
+    window.addEventListener('scroll', onScroll, true)
+    return () => {
+      window.removeEventListener('keydown', close)
+      window.removeEventListener('resize', onResize)
+      window.removeEventListener('scroll', onScroll, true)
+    }
+  }, [dateFilterOpen])
 
   const gmK = o => (o.valueK || 0) - (o.cogsK || 0)
   const gmPct = o => (o.valueK ? Math.round((gmK(o) / o.valueK) * 100) + '%' : null)
@@ -248,6 +270,17 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     Object.entries(activeFilters).every(([key, allowed]) =>
       key === except || !allowed || allowed.has(String(cellVal(o, key))))
 
+  const dateFilterState = opportunityDateRange(dateFilter.period, dateFilter)
+  const dateFilterActive = !!dateFilterState.range
+  const matchesDateFilter = o => {
+    if (!dateFilterActive) return true
+    const value = String(o[dateFilter.field] || '').slice(0, 10)
+    if (!value) return false
+    const [from, to] = dateFilterState.range
+    return (!from || value >= from) && (!to || value <= to)
+  }
+  const dateFilteredBase = searchableBase.filter(o => matchesDateFilter(o))
+
   // Analytics bars land here pre-filtered via query params (?owner= / ?oppType= / ?bu= / ?stage=).
   const [params, setParams] = useSearchParams()
   useEffect(() => {
@@ -265,7 +298,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const DATE_KEYS = ['createDate', 'proposalDate', 'orderDate', 'invoiceDate', 'lastUpdated']
   const sortVal = (o, key) => (DATE_KEYS.includes(key) ? (o[key] || '') : cellVal(o, key))
 
-  let rows = searchableBase.filter(o => matchesFilters(o))
+  let rows = dateFilteredBase.filter(o => matchesFilters(o))
   if (sort) {
     const { key, dir } = sort
     rows = [...rows].sort((a, b) => {
@@ -283,16 +316,50 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
 
   const totals = rows.reduce((t, o) => ({ v: t.v + (+o.valueK || 0), c: t.c + (+o.cogsK || 0) }), { v: 0, c: 0 })
   const activeFilterCount = Object.values(filters).filter(value => value instanceof Set).length
+    + (dateFilterActive || dateFilterState.error ? 1 : 0)
 
   const clearAllTableState = () => {
     setFilters({})
     setSort(null)
     setFilterSearch({})
     setOpenFilter(null)
+    setDateFilter(DEFAULT_DATE_FILTER)
+    setDateFilterDraft(DEFAULT_DATE_FILTER)
+    setDateFilterOpen(false)
+  }
+
+  const openDateFilterMenu = event => {
+    event.stopPropagation()
+    if (dateFilterOpen) {
+      setDateFilterOpen(false)
+      return
+    }
+    const rect = event.currentTarget.getBoundingClientRect()
+    setDateFilterDraft({ ...dateFilter })
+    setDateFilterPos({
+      x: Math.max(8, Math.min(rect.left, window.innerWidth - 330)),
+      y: Math.min(rect.bottom + 4, window.innerHeight - 390),
+    })
+    setOpenFilter(null)
+    setDateFilterOpen(true)
+  }
+
+  const applyDateFilter = () => {
+    const nextState = opportunityDateRange(dateFilterDraft.period, dateFilterDraft)
+    if (nextState.error) return
+    setDateFilter({ ...dateFilterDraft })
+    setDateFilterOpen(false)
+  }
+
+  const clearDateFilter = () => {
+    setDateFilter(DEFAULT_DATE_FILTER)
+    setDateFilterDraft(DEFAULT_DATE_FILTER)
+    setDateFilterOpen(false)
   }
 
   const openColumnMenu = (col, event) => {
     event.stopPropagation()
+    setDateFilterOpen(false)
     if (openFilter?.key === col.key) {
       setOpenFilter(null)
       return
@@ -427,7 +494,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   }
 
   const renderFilterPop = (col, pos) => {
-    const rowsForVals = searchableBase.filter(o => matchesFilters(o, filters, col.key))
+    const rowsForVals = dateFilteredBase.filter(o => matchesFilters(o, filters, col.key))
     const values = DATE_KEYS.includes(col.key)
       ? [...new Set([...rowsForVals].sort((a, b) => String(a[col.key] || '').localeCompare(String(b[col.key] || '')))
           .map(o => String(cellVal(o, col.key))))]
@@ -482,6 +549,65 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     return createPortal(menu, document.body)
   }
 
+  const renderDateFilterPop = pos => {
+    const draftState = opportunityDateRange(dateFilterDraft.period, dateFilterDraft)
+    const fieldLabel = OPPORTUNITY_DATE_FIELDS.find(field => field.key === dateFilterDraft.field)?.label || 'Date'
+    const summary = draftState.range
+      ? `${fieldLabel} · ${draftState.range[0] || '…'} → ${draftState.range[1] || '…'}`
+      : `${fieldLabel} · All time`
+    const updateDraft = patch => setDateFilterDraft(current => ({ ...current, ...patch }))
+    const menu = (
+      <>
+        <div className="filter-overlay" onClick={() => setDateFilterOpen(false)} />
+        <div className="filter-pop tracker-date-pop" style={{ position: 'fixed', left: pos.x, top: pos.y }}
+          onClick={e => e.stopPropagation()} role="dialog" aria-label="Custom date filter">
+          <div className="tracker-date-pop-title">Custom date filter</div>
+          <div className="tracker-date-pop-summary">{summary}</div>
+          <label className="tracker-date-pop-field">
+            <span>Date field</span>
+            <select aria-label="Custom filter date field" value={dateFilterDraft.field}
+              onChange={e => updateDraft({ field: e.target.value })}>
+              {OPPORTUNITY_DATE_FIELDS.map(field => <option key={field.key} value={field.key}>{field.label}</option>)}
+            </select>
+          </label>
+          <label className="tracker-date-pop-field">
+            <span>Period</span>
+            <select aria-label="Custom filter period" value={dateFilterDraft.period}
+              onChange={e => updateDraft({ period: e.target.value })}>
+              {OPPORTUNITY_PERIODS.map(period => <option key={period.key} value={period.key}>{period.label}</option>)}
+            </select>
+          </label>
+          {dateFilterDraft.period === 'specific' && (
+            <label className="tracker-date-pop-field">
+              <span>Specific date</span>
+              <input type="date" aria-label="Custom filter specific date" value={dateFilterDraft.date}
+                onChange={e => updateDraft({ date: e.target.value })} />
+            </label>
+          )}
+          {dateFilterDraft.period === 'custom' && (
+            <div className="tracker-date-pop-range">
+              <label className="tracker-date-pop-field"><span>From</span><input type="date" aria-label="Custom filter from date" value={dateFilterDraft.from}
+                onChange={e => updateDraft({ from: e.target.value })} /></label>
+              <label className="tracker-date-pop-field"><span>To</span><input type="date" aria-label="Custom filter to date" value={dateFilterDraft.to}
+                onChange={e => updateDraft({ to: e.target.value })} /></label>
+            </div>
+          )}
+          {draftState.error && <div className="tracker-date-error" role="alert">{draftState.error}</div>}
+          <div className="tracker-date-pop-actions">
+            <button type="button" className="ghost" onClick={clearDateFilter}>Clear</button>
+            <button type="button" onClick={() => setDateFilterOpen(false)}>Cancel</button>
+            <button type="button" className="primary" disabled={!!draftState.error} onClick={applyDateFilter}>Apply</button>
+          </div>
+        </div>
+      </>
+    )
+    return createPortal(menu, document.body)
+  }
+
+  const dateFilterSummary = dateFilterActive && dateFilterState.range
+    ? `${OPPORTUNITY_DATE_FIELDS.find(field => field.key === dateFilter.field)?.label || 'Date'} · ${dateFilterState.range[0] || '…'} → ${dateFilterState.range[1] || '…'}`
+    : 'Choose a date field and period'
+
   return (
     <div className="page tracker-page">
       <h2>Opportunities {sheet === 'Old Closed Opps' && '— Old Closed Opps'}</h2>
@@ -496,6 +622,10 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
           <input type="search" placeholder="Search opportunity ID, customer or name" value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)} />
         </label>
+        <button type="button" className={`tracker-date-filter-button${dateFilterActive ? ' active' : ''}`} onClick={openDateFilterMenu}
+          aria-haspopup="dialog" aria-expanded={dateFilterOpen} title={dateFilterSummary}>
+          Date filter{dateFilterActive ? ' · Active' : ''}
+        </button>
         {isSalesRep && (
           <label className="mail-show-all tracker-show-all" title="Show all opportunities">
             <input
@@ -538,6 +668,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
           </Link>
         )}
       </div>
+      {dateFilterOpen && dateFilterPos && renderDateFilterPop(dateFilterPos)}
 
       <div ref={sheetWrapRef} className="sheet-wrap fill" onScroll={handleSheetScroll}>
         {colView === 'key'

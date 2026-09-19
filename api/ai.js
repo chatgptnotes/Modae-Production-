@@ -131,6 +131,9 @@ const clarificationAnswerSchema = {
     rows: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
       id: { type: 'STRING' }, status: { type: 'STRING' }, response: { type: 'STRING' }, missing: { type: 'STRING' }, confidence: { type: 'INTEGER' }, evidence: { type: 'STRING' },
       fieldKey: { type: 'STRING' }, fieldValue: { type: 'STRING' }, fieldEvidence: { type: 'STRING' },
+      lineItems: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+        partNumber: { type: 'STRING' }, description: { type: 'STRING' }, qty: { type: 'NUMBER' }, uom: { type: 'STRING' }, evidence: { type: 'STRING' },
+      }, required: ['partNumber', 'description', 'qty', 'uom', 'evidence'] } },
     }, required: ['id', 'status', 'response', 'missing', 'confidence', 'evidence', 'fieldKey', 'fieldValue', 'fieldEvidence'] } },
   },
   required: ['rows'],
@@ -398,6 +401,11 @@ in evidence. A partial BOQ without part numbers or without all requested lines
 must be Needs review, not Answered. A system-configuration question is not fully
 answered by only giving the application or RPM. “See attached BOM” answers a
 part-number question only when the BOM is actually present and readable.
+
+When an answered question contains requested spares or BOQ details, also return
+lineItems with one object per customer-requested part: exact partNumber, concise
+description, numeric qty, uom (normally EA), and evidence. Do not put prices in
+lineItems. Return an empty lineItems array when no requested parts are supplied.
 
 For a fully answered question, map the answer to at most one Opportunity field
 only when the reply explicitly supplies that field. Use only one of the allowed

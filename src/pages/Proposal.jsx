@@ -1187,11 +1187,6 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
           <div className="proposal-header-meta" aria-label="Proposal setup">
             <span className="proposal-source-label">{p.reviewedUpload ? 'Uploaded proposal' : 'System-generated proposal'}</span>
             {!embedded && <Link className="btn proposal-folder-link" to={`/folders/${oppId}`}>Back to folder</Link>}
-            <label className="proposal-type-control">Type
-              <select value={p.proposalType || 'Project'} onChange={set('proposalType')}>
-                <option>Project</option><option>Spares</option><option>Services</option>
-              </select>
-            </label>
             <span className="proposal-status-label">Review status</span>
             <span className={`pill ${reviewReady ? 'won' : reviewStatus === 'Needs attention' ? 'Red' : 'grey'}`}>{reviewStatus}</span>
             {pendingForOpp.length > 0 && <span className="pill Amber">{pendingForOpp.length} approval{pendingForOpp.length > 1 ? 's' : ''} pending</span>}

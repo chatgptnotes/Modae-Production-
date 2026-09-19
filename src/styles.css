@@ -808,6 +808,7 @@ select, input[type=text], input[type=number], input[type=date], input[type=tel],
   font-size: 12px;
 }
 .sourcing-costing-controls > b { color: var(--text-primary); }
+.sourcing-costing-fixed { color: var(--text-primary); font-weight: 600; white-space: nowrap; }
 .sourcing-costing-controls label { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .sourcing-costing-controls input { width: 78px; text-align: right; }
 .sourcing-costing-warning { margin: 0; padding: 3px 7px; font-size: 11px; }
@@ -5531,6 +5532,19 @@ html, body { overflow-x: hidden; max-width: 100%; }
   gap: 8px;
   margin-left: 2px;
 }
+.tracker-date-filter-button { white-space: nowrap; }
+.tracker-date-filter-button.active { border-color: var(--primary-accent); background: var(--primary-soft); color: var(--primary-deep); }
+.tracker-date-pop { min-width: 300px; max-height: none; padding: 12px; }
+.tracker-date-pop-title { color: var(--text-main); font-size: 13px; font-weight: 800; }
+.tracker-date-pop-summary { margin: 3px 0 12px; color: var(--text-muted); font-size: 11px; }
+.tracker-date-pop-field { display: grid; gap: 4px; margin-top: 9px; color: var(--text-muted); font-size: 11px; font-weight: 700; }
+.tracker-date-pop-field select,
+.tracker-date-pop-field input { width: 100%; min-height: 31px; padding: 5px 7px; border-radius: 5px; }
+.tracker-date-pop-range { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tracker-date-error { color: var(--status-danger); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.tracker-date-pop-actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border-soft); }
+.tracker-date-pop-actions button { min-height: 30px; padding: 5px 10px; }
+@media (max-width: 760px) { .tracker-date-pop { width: min(300px, calc(100vw - 16px)); min-width: 0; } .tracker-date-error { white-space: normal; } }
 .tracker-page table.sheet td input, .tracker-page table.sheet td select { min-width: 0; text-overflow: ellipsis; }
 .tracker-page table.sheet td.num input { text-align: right; }
 
