@@ -11,6 +11,7 @@ import { productBrandProfiles } from '../branding/modae.js'
 import { MODAE_COMPANY } from '../proposalDoc.js'
 import { runJson, runTaskResult, runText } from '../ai.js'
 import { clarificationSender } from '../leadClarification.js'
+import { extractCustomerSparesLines } from '../clarificationSparesSync.js'
 import WbSpares from '../workbench/WbSpares.jsx'
 import WbService from '../workbench/WbService.jsx'
 import WbProject from '../workbench/WbProject.jsx'
@@ -1491,6 +1492,13 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
           missing: String(row.missing || '').trim(),
         })
       }
+      if (opp.route === 'Spares' && row.status === 'Answered') {
+        const requested = extractCustomerSparesLines(row.response, row.lineItems, store.priceLists)
+        if (requested.length) store.syncClarificationSpares(opp.id, row.id, requested, {
+          answeredAt: replyForm.receivedAt,
+          answerSource: 'Customer',
+        })
+      }
     }
     const answered = matches.filter(row => row.status === 'Answered').length
     const needsReview = matches.filter(row => row.status === 'Needs review').length
@@ -1526,6 +1534,13 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
       answeredAt: answerForm.receivedAt,
       attachments,
     })
+    if (opp.route === 'Spares') {
+      const requested = extractCustomerSparesLines(answerForm.response, [], store.priceLists)
+      if (requested.length) store.syncClarificationSpares(opp.id, answerFor.id, requested, {
+        answeredAt: answerForm.receivedAt,
+        answerSource: answerForm.answerSource,
+      })
+    }
     setBusy('')
     setAnswerFor(null)
   }
@@ -1583,7 +1598,7 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
             </div>
             <div className="clarification-card-question">{c.q}</div>
             <div className="clarification-card-meta"><span><b>Gap:</b> {c.gap}</span><span><b>Evidence:</b> {c.evidence || '—'}</span><span><b>Owner:</b> {displayRole(c.owner)}</span><span><b>Due:</b> {ddMmmYY(c.due) || '—'}</span></div>
-            {(c.response || c.missing) && <div className={`clarification-answer-box ${clarificationStatus(c) === 'Needs review' ? 'needs-review' : 'answered'}`}>{c.response && <>Response: {c.response}</>}{c.missing && <div className="hint"><b>Still needed:</b> {c.missing}</div>}<div className="hint">From {c.answerSource || c.audience || 'source'}{c.answeredAt ? ` · ${ddMmmYY(c.answeredAt)}` : ''}</div>{c.answerEvidence && <div className="hint">Evidence: {c.answerEvidence}</div>}{(c.attachments || []).map(f => <div key={f.name} className="hint"><Icon name="fileText" size={11} /> {f.name}</div>)}</div>}
+            {(c.response || c.missing) && <div className={`clarification-answer-box ${c.status === 'Needs review' ? 'needs-review' : 'answered'}`}>{c.response && <>Response: {c.response}</>}{c.missing && <div className="hint"><b>Still needed:</b> {c.missing}</div>}<div className="hint">From {c.answerSource || c.audience || 'source'}{c.answeredAt ? ` · ${ddMmmYY(c.answeredAt)}` : ''}</div>{c.answerEvidence && <div className="hint">Evidence: {c.answerEvidence}</div>}{(c.attachments || []).map(f => <div key={f.name} className="hint"><Icon name="fileText" size={11} /> {f.name}</div>)}</div>}
             <AiFieldSuggestion suggestion={c.aiFieldSuggestion} onConfirm={() => confirmAiField(c)} onReject={() => rejectAiField(c)} />
             <div className="clarification-card-actions">
               <label>Updates field<select value={c.field || ''} disabled={coveredIds.has(c.id) || isClarificationResolved(c)} title="Once answered, apply this response straight to that Opportunity Details field" onChange={e => store.updateClarification(c.id, { field: e.target.value })}>{OPP_FIELD_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
@@ -1602,7 +1617,7 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
                 <td>{c.id}</td>
                 <td>{c.category}</td>
                 <td>{c.gap}<div className="hint">{c.evidence}</div></td>
-                <td>{c.q}{(c.response || c.missing) && <div className={`clarification-answer-box ${clarificationStatus(c) === 'Needs review' ? 'needs-review' : 'answered'}`}>{c.response && <>Response: {c.response}</>}{c.missing && <div className="hint"><b>Still needed:</b> {c.missing}</div>}<div className="hint">From {c.answerSource || c.audience || 'source'}{c.answeredAt ? ` · ${ddMmmYY(c.answeredAt)}` : ''}</div>{c.answerEvidence && <div className="hint">Evidence: {c.answerEvidence}</div>}{(c.attachments || []).map(f => <div key={f.name} className="hint"><Icon name="fileText" size={11} /> {f.name}</div>)}</div>}<AiFieldSuggestion suggestion={c.aiFieldSuggestion} onConfirm={() => confirmAiField(c)} onReject={() => rejectAiField(c)} /></td>
+                <td>{c.q}{(c.response || c.missing) && <div className={`clarification-answer-box ${c.status === 'Needs review' ? 'needs-review' : 'answered'}`}>{c.response && <>Response: {c.response}</>}{c.missing && <div className="hint"><b>Still needed:</b> {c.missing}</div>}<div className="hint">From {c.answerSource || c.audience || 'source'}{c.answeredAt ? ` · ${ddMmmYY(c.answeredAt)}` : ''}</div>{c.answerEvidence && <div className="hint">Evidence: {c.answerEvidence}</div>}{(c.attachments || []).map(f => <div key={f.name} className="hint"><Icon name="fileText" size={11} /> {f.name}</div>)}</div>}<AiFieldSuggestion suggestion={c.aiFieldSuggestion} onConfirm={() => confirmAiField(c)} onReject={() => rejectAiField(c)} /></td>
                 <td>{displayRole(c.owner)}</td>
                 <td>{c.audience}</td>
                 <td>{ddMmmYY(c.due)}</td>

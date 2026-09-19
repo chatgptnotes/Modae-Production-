@@ -35,3 +35,14 @@ test('uploaded proposal review has a stored file and no longer presents the old 
   assert.match(proposal, /Uploaded proposal/)
   assert.match(proposal, /Open uploaded file/)
 })
+
+test('uploaded proposal viewer normalizes reviewed-upload filenames', () => {
+  const proposal = read('src/pages/Proposal.jsx')
+  const viewer = read('src/AttachmentViewer.jsx')
+  assert.match(proposal, /attachment=\{\{[\s\S]*name: p\.reviewedUpload\.name \|\| p\.reviewedUpload\.filename[\s\S]*workbook: p\.reviewedUpload\.sheets\?\.length/)
+  assert.match(viewer, /attachment\?\.name \|\| attachment\?\.filename/)
+  assert.match(viewer, /getFile\(leadId, filename\)/)
+  assert.match(viewer, /setLoadError\(/)
+  assert.match(viewer, /attachment\.workbook\?\.sheets\?\.length/)
+  assert.match(proposal, /workbook: p\.reviewedUpload\.sheets\?\.length/)
+})

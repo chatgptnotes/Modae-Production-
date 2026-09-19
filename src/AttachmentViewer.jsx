@@ -10,6 +10,7 @@ import { Modal } from './ui.jsx'
 import { Icon } from './icons.jsx'
 import { getFile } from './leadBlobs.js'
 import { extractDocxText } from './docText.js'
+import WorkbookPreview from './proposal/WorkbookPreview.jsx'
 
 const isImage = (name, type) => (type || '').startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(name)
 const isPdf = (name, type) => type === 'application/pdf' || /\.pdf$/i.test(name)
@@ -158,17 +159,26 @@ function PdfPreview({ blob }) {
 export default function AttachmentViewer({ leadId, attachment, onClose }) {
   const [blob, setBlob] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [url, setUrl] = useState('')
+  const filename = attachment?.name || attachment?.filename || 'attachment'
 
   useEffect(() => {
     let dead = false
-    getFile(leadId, attachment.name).then(found => {
+    setLoading(true)
+    setLoadError('')
+    getFile(leadId, filename).then(found => {
       if (dead) return
       setBlob(found)
       setLoading(false)
+    }).catch(error => {
+      if (dead) return
+      setBlob(null)
+      setLoading(false)
+      setLoadError(error?.message || 'The stored file could not be loaded.')
     })
     return () => { dead = true }
-  }, [leadId, attachment.name])
+  }, [leadId, filename])
 
   // One object URL for the download link and the image preview, revoked on close.
   useEffect(() => {
@@ -181,14 +191,23 @@ export default function AttachmentViewer({ leadId, attachment, onClose }) {
   const body = () => {
     if (loading) return <p className="hint att-view-note">Loading…</p>
     const type = attachment.type || attachment.mimeType || blob?.type || ''
-    if (blob && isPdf(attachment.name, type)) return <PdfPreview blob={blob} />
-    if (blob && isImage(attachment.name, type) && url) {
-      return <div className="att-view-canvas"><img src={url} alt={attachment.name} /></div>
+    if (loadError && !blob && !attachment.text) return <p className="hint att-view-note"><Icon name="alert" size={12} /> {loadError}</p>
+    if (blob && isPdf(filename, type)) return <PdfPreview blob={blob} />
+    if (blob && isImage(filename, type) && url) {
+      return <div className="att-view-canvas"><img src={url} alt={filename} /></div>
     }
-    if (blob && isDocx(attachment.name, type)) return <DocxPreview blob={blob} fallback={attachment.text || ''} />
-    if (blob && isSpreadsheet(attachment.name, type)) return <SpreadsheetPreview blob={blob} fallback={attachment.text || ''} />
-    if (blob && isText(attachment.name, type)) {
+    if (blob && isDocx(filename, type)) return <DocxPreview blob={blob} fallback={attachment.text || ''} />
+    if (blob && isSpreadsheet(filename, type)) return <SpreadsheetPreview blob={blob} fallback={attachment.text || ''} />
+    if (blob && isText(filename, type)) {
       return <TextFilePreview blob={blob} fallback={attachment.text || ''} />
+    }
+    if (attachment.workbook?.sheets?.length) {
+      return (
+        <>
+          <p className="hint att-view-note"><Icon name="fileText" size={12} /> Showing the saved workbook preview. The original file copy is not available in this browser.</p>
+          <WorkbookPreview workbook={attachment.workbook} />
+        </>
+      )
     }
     if (attachment.text) {
       return (
@@ -201,7 +220,7 @@ export default function AttachmentViewer({ leadId, attachment, onClose }) {
     return (
       <p className="hint att-view-note">
         <Icon name="alert" size={12} />{' '}
-        {attachment.err || (blob
+          {attachment.err || loadError || (blob
           ? 'No inline preview for this file type. Download it to open the original.'
           : 'No stored copy of this file and no extracted text — only the file name was recorded.')}
       </p>
@@ -209,13 +228,13 @@ export default function AttachmentViewer({ leadId, attachment, onClose }) {
   }
 
   return (
-    <Modal title={attachment.name} onClose={onClose} wide className="attachment-viewer-modal">
+    <Modal title={filename} onClose={onClose} wide className="attachment-viewer-modal">
       <p className="hint att-view-sub">
         {[attachment.pages ? attachment.pages + ' pages' : '', attachment.size || ''].filter(Boolean).join(' · ') || 'Attachment'}
       </p>
       <div className="att-view-body">{body()}</div>
       <div className="att-view-foot">
-        {url && <a className="btn" href={url} download={attachment.name}><Icon name="download" size={13} /> Download</a>}
+        {url && <a className="btn" href={url} download={filename}><Icon name="download" size={13} /> Download</a>}
         <button className="primary" onClick={onClose}>Close</button>
       </div>
     </Modal>
