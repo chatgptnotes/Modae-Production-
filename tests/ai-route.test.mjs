@@ -61,6 +61,38 @@ test('AI route health check returns the configured model on success', async () =
   } finally { globalThis.fetch = oldFetch }
 })
 
+test('lead extraction prompt enforces complete chunk-aware document scanning', async () => {
+  const oldFetch = globalThis.fetch
+  let request
+  globalThis.fetch = async (_url, options) => {
+    request = JSON.parse(options.body)
+    return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({
+      summary: 'Scanned enquiry.', route: 'Spares', urgency: 'Normal', completeness: 50,
+      suggestedOwner: '', fields: [], lineItems: [], missing: [], next: [],
+    }) }] } }] }) }
+  }
+  try {
+    await withEnv('server-side-only', async () => {
+      const res = response()
+      await handler({ method: 'POST', body: {
+        task: 'lead.extract',
+        payload: {
+          from: 'buyer@example.com', subject: 'RFQ', body: 'Please scan the attached schedule.',
+          attachments: [{ name: 'rfq.pdf', pages: 4, text: 'Plant Name: Salal\nQty 2' }],
+          chunk: { source: 'Attachment: rfq.pdf', index: 1, total: 2, pageStart: 3, pageEnd: 4, phase: 'final-segment' },
+        },
+      } }, res)
+      assert.equal(res.out.status, 200)
+      const prompt = request.contents[0].parts[0].text
+      assert.match(prompt, /Read every supplied page,\s+section and table row/i)
+      assert.match(prompt, /not readable\/scan-only/i)
+      assert.match(prompt, /preserve every distinct customer, EUC\/EUN/i)
+      assert.match(prompt, /"phase":"final-segment"/)
+      assert.match(prompt, /one row per item, preserving description/i)
+    })
+  } finally { globalThis.fetch = oldFetch }
+})
+
 test('AI route maps the retired Gemini Pro alias to the supported Flash model', async () => {
   const oldFetch = globalThis.fetch
   let requestedUrl = ''

@@ -244,6 +244,24 @@ ${cap(p.body, 20000)}
 
 ATTACHMENTS AND EXTRACTED TEXT:
 ${cap((p.attachments || []).map(a => `--- ${a.name} ---\n${a.text || '(visual document part supplied; read it directly)'}`).join('\n\n'), 100000) || 'none'}
+SCAN PROTOCOL:
+- Inventory every supplied source before extracting. Read every supplied page,
+  section and table row; never summarize a table into one representative row.
+- Cite the exact attachment name plus page, section or table context in every
+  field and line-item evidence. Generic evidence such as "the document" is not
+  acceptable.
+- Distinguish not mentioned, not readable/scan-only, and unclear/conflicting.
+  Never repair an unreadable value or invent a missing quantity, location,
+  part number, date or company.
+- Preserve every distinct customer, EUC/EUN, plant, station, site, delivery
+  location, project, part, quantity and specification reference. Select a
+  primary registration value only after retaining supporting facts.
+- This may be one chunk of a larger scan. The chunk metadata below identifies
+  whether this is a segment or the final segment. For non-final segments,
+  return facts found here but do not claim the overall enquiry is missing a
+  fact merely because it is absent from this chunk.
+SCAN CONTEXT:
+${cap(JSON.stringify(p.chunk || { phase: 'single-source' }), 1000)}
 ${p.deterministicContext ? `
 DETERMINISTIC PARSE (already extracted mechanically from an attachment — cross-check
 and correct only if it looks wrong; do not restate these as new facts, add what
@@ -257,19 +275,22 @@ Ownership rules:
 ${cap((p.ownershipRules || []).map(r => `${r.region} -> ${r.owner}`).join('\n'), 1000)}
 
 Always attempt to extract, grouped as shown: Sell-to customer, Category, Contact
-person, Contact email, Contact phone, Plant/station/location (Customer); RFQ or
-tender reference, RFQ date, submission mode/platform, Opp type, Opportunity
-scope (RFQ); delivery schedule, other schedule dates (Schedule); payment terms,
-warranty, price basis, EMD/security deposit (Commercial); certification asks,
+person, Contact email, Contact phone, EUC/EUN/end-user identity, plant/station/
+site/project/installation identity and all related location/address/city/state/
+country facts (Customer); RFQ or tender reference, RFQ date, submission
+mode/platform, Opp type, Opportunity scope (RFQ); delivery schedule and other
+schedule dates (Schedule); payment terms, warranty, price basis, EMD/security
+deposit, freight, tax and validity (Commercial); certification asks,
 documentation/compliance asks (Compliance); BU and Segment (Customer); any
 installed-base or known-project reference (Known Project). Return every
-requested material as lineItems with one row per item. Cite the email or
-attachment name in evidence. For Opp type, classify procurement of physical
-items with part numbers, quantities, sensors, probes, cables or spare materials
-as Spares, even if the document mentions service/support in a commercial
-clause. Use Service only when the requested work is labour such as
-maintenance, repair, calibration, commissioning or field engineering. Ask only
-for information absent from both sources.`
+requested material as lineItems with one row per item, preserving description,
+part number, customer reference, quantity, UOM and specifications separately.
+Ask only for information absent from the complete enquiry, not absent from one
+non-final chunk. For Opp type, classify procurement of physical items with part
+numbers, quantities, sensors, probes, cables or spare materials as Spares, even
+if the document mentions service/support in a commercial clause. Use Service
+only when the requested work is labour such as maintenance, repair, calibration
+or field engineering.`
 }
 
 function fillPrompt(p) {

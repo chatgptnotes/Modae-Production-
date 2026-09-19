@@ -315,6 +315,26 @@ Read this inbound sales enquiry and extract it for human review. Treat the
 email body and every attachment as one single enquiry — do not report a fact
 as missing if any attachment supports it.
 
+SCAN PROTOCOL:
+- First inventory the supplied body, attachments and scan context. Read every
+  supplied character/page/section before deciding what is present or absent.
+- For tables, inspect every row and preserve one lineItem per requested item;
+  do not summarize a table into one representative row.
+- For each field and lineItem, cite the source attachment and page/section/table
+  context when available. Do not use generic evidence such as "the document".
+- Distinguish three states: not mentioned, not readable/scan-only, and unclear
+  or conflicting. Put the correct state in missing or note; never convert an
+  unreadable value into a guess.
+- Preserve every distinct customer, EUC/EUN, plant, station, site, delivery
+  location, project, part, quantity and specification reference. A primary
+  registration value may be selected later, but supporting facts must remain.
+- This request may be one segment of a larger scan. When phase is `segment`,
+  report facts found in this segment and do not claim that the overall enquiry
+  is missing a fact merely because it is not in this segment. Only report an
+  explicit unreadable/absent statement from the source, or use missing during
+  a `single-source` or `final-segment` pass when the supplied context supports
+  that conclusion.
+
 FROM: ${cap(p.from, 200)}
 SUBJECT: ${cap(p.subject, 300)}
 ATTACHMENTS: ${cap((p.attachments || []).map((a: any) => `${a.name} (${a.pages ?? '?'}p)`).join(', '), 500) || 'none'}
@@ -326,6 +346,8 @@ live here, not in the covering mail; cite the file name in ev for any fact taken
 from one):
 ${cap((p.attachments || []).map((a: any) =>
   `--- ${a.name} ---\n${a.text || '(no text extracted — do not infer its contents)'}`).join('\n\n'), 100000) || 'none'}
+SCAN CONTEXT:
+${cap(JSON.stringify(p.chunk || { phase: 'single-source' }), 1000)}
 ${p.deterministicContext ? `
 DETERMINISTIC PARSE (already extracted mechanically from an attachment — cross-check
 and correct only if it looks wrong; do not restate these as new facts, add what
