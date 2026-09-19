@@ -1264,7 +1264,6 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
       const proposal = store.getProposal(opp.id)
       const deviations = (proposal.terms || []).filter(t => t.status === 'Deviation')
       const existingQuestions = rows.map(c => ({ question: c.q, status: c.status, missing: c.missing || '' }))
-      const existingTopics = new Set(rows.map(c => clarificationTopic(c.q)))
       const ai = await runJson('clarification.suggest', {
         oppName: opp.oppName, sellTo: opp.sellTo, route: opp.route, segment: opp.segment,
         eucName: opp.eucName, location: opp.location, remarks: opp.remarks,
@@ -1274,9 +1273,7 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
         currentFields: { oppName: opp.oppName, rfqNumber: opp.rfqNumber, sellTo: opp.sellTo, category: opp.category, location: opp.location, eucName: opp.eucName, eucLocation: opp.eucLocation, contactPerson: opp.contactPerson, contactPhone: opp.contactPhone },
       }, { fallback: store.config?.aiModel?.provider === 'Built-in fallback' })
       const due = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
-      const isNewTopic = row => row?.q && !existingTopics.has(clarificationTopic(row.q))
-      const aiRows = (ai?.rows || []).filter(row => !isCommercialConfirmationRow(row)
-        && isNewTopic(row)
+      const aiRows = (ai?.rows || []).filter(row => row?.q && !isCommercialConfirmationRow(row)
         && !(sourceContainsDeliveryRequirement(sourceText) && isDeliveryBasisClarification(row)))
       // Commercial deviations are decisions for Sales/Approval, never generated
       // customer questions. Route templates may still ask for genuinely missing
@@ -1284,7 +1281,7 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
       // delivery term.
       const fallbackRows = (CLAR_SUGGESTIONS[opp.route] || CLAR_SUGGESTIONS.Project)
         .filter(row => !(sourceContainsDeliveryRequirement(sourceText) && isDeliveryBasisClarification(row)))
-      const selected = (aiRows.length ? aiRows : fallbackRows).filter(isNewTopic).slice(0, 6)
+      const selected = aiRows.length ? aiRows : fallbackRows.filter(row => row?.q)
       for (const s of selected) {
         store.addClarification({ ...s, oppId: opp.id, owner: opp.owner, audience: 'Customer', due, status: 'Open' })
       }

@@ -11,7 +11,7 @@ const opp = {
 const proposal = { bom: [], terms: [], revision: '00' }
 const technicalQuestion = 'Please confirm nameplate part numbers, quantities and any legacy references for each line item.'
 
-test('one completed duplicate clarification resolves the topic for Proposal gates', () => {
+test('each saved clarification row remains independently actionable', () => {
   const state = {
     approvals: [],
     clarifications: [
@@ -20,10 +20,9 @@ test('one completed duplicate clarification resolves the topic for Proposal gate
     ],
   }
   const topics = actionableClarifications(opp, state)
-  assert.equal(topics.length, 1)
-  assert.equal(topics[0].id, 'CL-2')
-  assert.equal(readiness(opp, proposal, state).some(blocker => blocker.key === 'clarifications'), false)
-  assert.equal(transitionBlockers(opp, 'Proposal', proposal, state).some(blocker => blocker.key === 'clarifications'), false)
+  assert.deepEqual(topics.map(row => row.id), ['CL-1', 'CL-2'])
+  assert.equal(readiness(opp, proposal, state).some(blocker => blocker.key === 'clarifications'), true)
+  assert.equal(transitionBlockers(opp, 'Proposal', proposal, state).some(blocker => blocker.key === 'clarifications'), true)
 })
 
 test('a different unanswered clarification still blocks Proposal', () => {
@@ -62,4 +61,17 @@ test('internal commercial history is hidden from customer clarification display'
     }],
   }
   assert.equal(displayClarifications(opp, state).length, 0)
+})
+
+test('all customer clarification rows for an opportunity remain visible and actionable', () => {
+  const state = {
+    approvals: [],
+    clarifications: [
+      { id: 'CL-6', oppId: opp.id, category: 'Technical', status: 'Open', q: technicalQuestion },
+      { id: 'CL-7', oppId: opp.id, category: 'Technical', status: 'Open', q: technicalQuestion },
+      { id: 'CL-8', oppId: 'OTHER', category: 'Technical', status: 'Open', q: technicalQuestion },
+    ],
+  }
+  assert.deepEqual(displayClarifications(opp, state).map(row => row.id), ['CL-6', 'CL-7'])
+  assert.deepEqual(actionableClarifications(opp, state).map(row => row.id), ['CL-6', 'CL-7'])
 })

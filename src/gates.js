@@ -40,31 +40,20 @@ export const isClarificationCoveredBySource = (opp, clarification, state = {}) =
   sourceContainsDeliveryRequirement(clarificationSourceText(opp, state))
   && isDeliveryBasisClarification(clarification)
 
-const dedupeClarifications = (opp, state = {}, excludeSourceCovered = false) => {
+const clarificationRows = (opp, state = {}, excludeSourceCovered = false) => {
   if (!opp) return []
-  const byTopic = new Map()
-  for (const clarification of state.clarifications || []) {
-    if (clarification.oppId !== opp.id
-      || isLegacyCommercialClarification(clarification)
-      || isCommercialConfirmationRow(clarification)
-      || (excludeSourceCovered && isClarificationCoveredBySource(opp, clarification, state))) continue
-    const topic = clarificationTopic(clarification.q) || `record:${clarification.id}`
-    const current = byTopic.get(topic)
-    // Prefer a completed record for the topic. This makes the displayed
-    // clarification and the transition gate agree even with legacy duplicates.
-    if (!current || (!isClarificationResolved(current) && isClarificationResolved(clarification))) {
-      byTopic.set(topic, clarification)
-    }
-  }
-  return [...byTopic.values()]
+  return (state.clarifications || []).filter(clarification => clarification.oppId === opp.id
+    && !isLegacyCommercialClarification(clarification)
+    && !isCommercialConfirmationRow(clarification)
+    && !(excludeSourceCovered && isClarificationCoveredBySource(opp, clarification, state)))
 }
 
 export function displayClarifications(opp, state = {}) {
-  return dedupeClarifications(opp, state)
+  return clarificationRows(opp, state)
 }
 
 export function actionableClarifications(opp, state = {}) {
-  return dedupeClarifications(opp, state, true)
+  return clarificationRows(opp, state, true)
 }
 
 // A lead-stage verification snapshot of the shape this class records satisfies

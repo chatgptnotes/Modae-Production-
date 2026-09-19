@@ -77,6 +77,7 @@ test('clarifications auto-suggest on source changes and allow required manual qu
   assert.match(workbench, /if \(selected\.length\) store\.updateOpportunity\(opp\.id, \{ autoClarificationSuggestedAt:/)
   assert.match(workbench, /covered by source/)
   assert.match(workbench, /Source already covers this/)
+  assert.match(workbench, /const selected = aiRows\.length \? aiRows : fallbackRows\.filter\(row => row\?\.q\)/)
 })
 
 test('commercial decision terms use separate readable labels and values', () => {
