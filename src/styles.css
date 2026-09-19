@@ -4,54 +4,54 @@
    ModAE semantic color contract
    -------------------------------------------------------------------------
    Components consume roles; the values below are the only palette source.
-   The palette is intentionally locked to neutral surfaces, warm orange actions,
+   The palette is intentionally locked to ModAE red actions, charcoal chrome,
    and distinct status ramps for meaning. Do not add a one-off color in a
    component rule.
    ------------------------------------------------------------------------- */
 :root {
   color-scheme: light;
-  --surface-canvas: #F8FAFC;
-  --surface-default: #ffffff;
-  --surface-raised: #f8fafc;
-  --surface-sunken: #F1F5F9;
-  --surface-inverse: #1E293B;
-  --surface-inverse-raised: #334155;
-  --text-primary: #0F172A;
-  --text-secondary: #334155;
-  --text-tertiary: #475569;
+  --surface-canvas: #F7F7F8;
+  --surface-default: #FFFFFF;
+  --surface-raised: #FFFFFF;
+  --surface-sunken: #F1F1F2;
+  --surface-inverse: #282828;
+  --surface-inverse-raised: #3A3A3A;
+  --text-primary: #282828;
+  --text-secondary: #3F3F3F;
+  --text-tertiary: #616161;
   --text-on-inverse: #ffffff;
   --text-on-accent: #ffffff;
-  --border-default: #cbd5e1;
-  --border-subtle: #e2e8f0;
+  --border-default: #E3E3E5;
+  --border-subtle: #EFEFF1;
   --border-inverse: rgba(255, 255, 255, .22);
-  --color-primary: #EA580C;
-  --color-primary-hover: #C2410C;
-  --color-primary-active: #9A3412;
-  --color-primary-soft: #FFF7ED;
-  --color-crimson: #B91C1C;
-  --color-crimson-soft: #FEE2E2;
+  --color-primary: #ED3F2F;
+  --color-primary-hover: #C7291B;
+  --color-primary-active: #9E1F14;
+  --color-primary-soft: #FDEDEB;
+  --color-crimson: #C93838;
+  --color-crimson-soft: #FBE9E9;
   --action-primary: var(--color-primary);
   --action-primary-hover: var(--color-primary-hover);
   --action-primary-active: var(--color-primary-active);
   --action-primary-soft: var(--color-primary-soft);
-  --action-secondary-bg: #f1f5f9;
-  --action-secondary-text: #475569;
-  --action-secondary-border: #E2E8F0;
-  --action-secondary-hover: #e2e8f0;
+  --action-secondary-bg: #F1F1F2;
+  --action-secondary-text: #3F3F3F;
+  --action-secondary-border: #E3E3E5;
+  --action-secondary-hover: #EFEFF1;
   --action-accent: var(--action-primary);
   --action-accent-hover: var(--action-primary-hover);
   --action-accent-ink: var(--action-primary-hover);
   --action-accent-soft: var(--action-primary-soft);
-  --action-accent-border: #FDBA74;
-  --status-success: #16A34A;
-  --status-success-soft: #DCFCE7;
-  --status-warning: #D97706;
-  --status-warning-soft: #FEF3C7;
-  --status-danger: #DC2626;
-  --status-danger-soft: #FEE2E2;
-  --status-info: #2563EB;
-  --status-info-soft: #DBEAFE;
-  --focus-ring: #C2410C;
+  --action-accent-border: #F6C3BD;
+  --status-success: #37A64A;
+  --status-success-soft: #E8F6EB;
+  --status-warning: #D99200;
+  --status-warning-soft: #FBF1DC;
+  --status-danger: #C93838;
+  --status-danger-soft: #FBE9E9;
+  --status-info: #2F80ED;
+  --status-info-soft: #E5F1FB;
+  --focus-ring: #C7291B;
   --shadow-color: rgba(40, 40, 40, .18);
   /* Brand source aliases retained for tooling and downstream integrations. */
   --primary-accent: #ed3f2f;
@@ -59,17 +59,19 @@
   --primary-ink: #9e1f14;
   --primary-soft: #fdedeb;
   --status-bad: #c93838;
-  --bg-sidebar: #1E293B;
-  --bg-app: #F8FAFC;
-  --card-bg: #ffffff;
-  --text-main: #0F172A;
-  --text-muted: #64748B;
+  --bg-sidebar: #282828;
+  --bg-app: #F7F7F8;
+  --card-bg: #FFFFFF;
+  --text-main: #282828;
+  --text-muted: #616161;
   --won-fill: #e8f6eb;
   --won-text: #237a33;
   --lost-fill: #fbe9e9;
   --lost-text: #b23a3a;
   --amber-fill: #fbf1dc;
   --amber-text: #8f6100;
+  --status-good: #37a64a;
+  --status-warn: #d99200;
   --font-heading: 'Inter', 'Segoe UI', system-ui, sans-serif;
   --font-body: 'Inter', 'Segoe UI', system-ui, sans-serif;
   --font-document: 'Candara', 'Optima', 'Segoe UI', system-ui, sans-serif;
@@ -93,10 +95,10 @@
   --border-default: rgba(227, 227, 229, .30);
   --border-subtle: rgba(227, 227, 229, .16);
   --border-inverse: rgba(0, 0, 0, .35);
-  --color-primary: #FB923C;
-  --color-primary-hover: #FDBA74;
-  --color-primary-active: #FED7AA;
-  --color-primary-soft: rgba(234, 88, 12, .18);
+  --color-primary: #EF7765;
+  --color-primary-hover: #F39C8E;
+  --color-primary-active: #F6B4AD;
+  --color-primary-soft: rgba(237, 63, 47, .18);
   --action-secondary-bg: #1f2937;
   --action-secondary-text: #e2e8f0;
   --action-secondary-border: #475569;
@@ -105,7 +107,7 @@
   --action-accent-hover: var(--action-primary-hover);
   --action-accent-ink: var(--action-primary-active);
   --action-accent-soft: var(--action-primary-soft);
-  --action-accent-border: #FDBA74;
+  --action-accent-border: #EF7765;
   --status-success: #4fbf62;
   --status-success-soft: rgba(79, 191, 98, .18);
   --status-warning: #e8a93a;
@@ -455,7 +457,7 @@
   --bg-sidebar-2: var(--palette-be87547e);      /* raised surface inside dark chrome */
   --bg-app: var(--palette-3380d128);            /* canvas */
   --card-bg: var(--palette-7e6529f6);
-  /* Action aliases keep legacy selectors aligned with the warm primary system. */
+  /* Action aliases keep legacy selectors aligned with the ModAE red system. */
   --primary-accent: var(--action-primary);
   --primary-fill: var(--action-primary);
   --primary-ink: var(--action-primary-hover);
@@ -484,10 +486,10 @@
   --select-fill: var(--primary-soft);
 
   /* Legacy status aliases remain synchronized with the semantic status ramps. */
-  --status-good: #16A34A;
-  --status-info: #2563EB;
-  --status-warn: #D97706;
-  --status-bad: #DC2626;
+  --status-good: #37A64A;
+  --status-info: #2F80ED;
+  --status-warn: #D99200;
+  --status-bad: #C93838;
   /* dashviz.jsx primitives (Sparkline, ArcGauge, DonutGauge) read only these.
      Declared here so they resolve on every page; .tablet-mode.theme-dark
      overrides the set with steps chosen for a dark surface. */
@@ -10458,4 +10460,70 @@ button:not(.primary):not(.danger):not(.dark):not(.ghost),
 .approval-boq-link:hover,
 .approval-boq-link:focus-visible {
   color: var(--primary-hover);
+}
+
+/* -------------------------------------------------------------------------
+   ModAE final brand guardrail
+   -------------------------------------------------------------------------
+   A legacy workspace layer below the component styles previously reintroduced
+   orange/navy literals. Keep the visible application chrome on the official
+   ModAE red, charcoal, warm-white, and neutral-grey system.
+   ------------------------------------------------------------------------- */
+body,
+.page,
+.admin-page,
+.home-page,
+.dashboard-page,
+.tracker-page {
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+}
+
+button.primary,
+.btn.primary,
+.admin-page button.primary,
+.admin-page .btn.primary {
+  background: var(--action-primary);
+  border-color: var(--action-primary);
+  color: var(--text-on-accent);
+}
+
+button.primary:hover,
+.btn.primary:hover,
+.admin-page button.primary:hover,
+.admin-page .btn.primary:hover {
+  background: var(--action-primary-hover);
+  border-color: var(--action-primary-hover);
+}
+
+button.secondary,
+.btn.secondary,
+.admin-page button.secondary,
+.admin-page .btn.secondary,
+button:not(.primary):not(.danger):not(.dark):not(.ghost),
+.btn:not(.primary):not(.danger):not(.dark):not(.ghost) {
+  background: var(--action-secondary-bg);
+  border-color: var(--action-secondary-border);
+  color: var(--action-secondary-text);
+}
+
+.admin-category-link,
+.admin-page .text-button,
+.admin-page .link-button,
+table.sheet td.oppid a:hover {
+  color: var(--primary-accent);
+}
+
+.home-analytics,
+.dashboard-page .stat-cards > .dashboard-top-kpi:nth-child(2),
+.dashboard-page .stat-cards > .dashboard-top-kpi:nth-child(4) {
+  border-top-color: var(--primary-accent);
+}
+
+table.sheet tbody tr:hover td {
+  background: var(--primary-soft);
+}
+
+.sourcing-restore-row {
+  color: var(--primary-dark, var(--primary-fill));
 }
