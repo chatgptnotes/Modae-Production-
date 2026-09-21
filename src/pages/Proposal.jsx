@@ -141,6 +141,7 @@ const informationalReviewFinding = issue => {
 const reviewFindingTitle = issue => {
   const code = String(issue?.code || '')
   if (code === 'line.unmatched') return 'Workbook line needs review'
+  if (code === 'line.value-changed') return 'Workbook value changed'
   if (code === 'line.part') return 'Part number is missing'
   if (code === 'line.quantity') return 'Quantity is invalid'
   if (code === 'line.price') return 'Quoted price is invalid'

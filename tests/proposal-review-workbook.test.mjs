@@ -16,8 +16,23 @@ test('imports reviewed workbook quantities and prices into matching proposal lin
   assert.equal(result.proposal.bom[0].qtyPerUnit, 0)
   assert.equal(result.proposal.bom[0].quoted, 1250)
   assert.equal(result.changes[0].type, 'updated')
-  assert.equal(result.issues.length, 1)
-  assert.equal(result.issues[0].code, 'customer.mismatch')
+  assert.deepEqual(result.changes[0].fields.map(field => field.field), ['quantity', 'unitPrice', 'totalPrice'])
+  assert.ok(result.issues.some(issue => issue.code === 'line.value-changed' && /Quantity.*from 7 to 2/.test(issue.text)))
+  assert.ok(result.issues.some(issue => issue.code === 'line.value-changed' && /Unit price.*from blank to 1250/.test(issue.text)))
+  assert.ok(result.issues.some(issue => issue.code === 'customer.mismatch'))
+})
+
+test('does not report value changes when the uploaded workbook is unchanged', () => {
+  const unchanged = {
+    ...proposal,
+    bom: [{ ...proposal.bom[0], common: 2, qtyPerUnit: 0, quoted: 1250 }],
+  }
+  const result = importReviewedWorkbook({ sheets: [{ name: 'Priced BoQ', rows: [
+    ['Sl.', 'Scope / Equipment Description', 'Proposed Model/Part No.', 'Total Quantity', 'UOM', 'Unit Price ₹', 'Total Price ₹'],
+    [1, 'Proximity probe, 8 mm', 'PRB-8', 2, 'EA', 1250, 2500],
+  ] }] }, unchanged, { sellTo: '' })
+  assert.equal(result.issues.some(issue => issue.code === 'line.value-changed'), false)
+  assert.deepEqual(result.changes[0].fields, [])
 })
 
 test('reports invalid quantities, totals, and unmatched workbook rows', () => {

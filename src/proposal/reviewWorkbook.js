@@ -38,6 +38,42 @@ function findTable(workbook) {
 const valueAt = (row, index) => index == null ? '' : row[index]
 const rowIsTotal = row => row.some(value => /total/i.test(clean(value)))
 
+const displayValue = value => value == null || value === '' ? 'blank' : String(value)
+const sameNumber = (left, right) => Number(left) === Number(right)
+
+const changedField = (field, label, before, after, equal = (left, right) => clean(left) === clean(right)) => {
+  if (equal(before, after)) return null
+  return { field, label, before, after }
+}
+
+const totalQuantity = (line, units = 1) =>
+  (Number(line?.qtyPerUnit) || 0) * (Number(units) || 1)
+  + (Number(line?.common) || 0)
+  + (Number(line?.spares) || 0)
+
+const changesForRow = (old, row, units) => [
+  changedField('description', 'Description', old.desc, row.description),
+  changedField('partNumber', 'Part number', old.pn, row.pn),
+  changedField('quantity', 'Quantity', totalQuantity(old, units), row.qty, sameNumber),
+  changedField('uom', 'UOM', old.uom || 'EA', row.uom),
+  row.unitPrice == null ? null : changedField('unitPrice', 'Unit price', old.quoted, row.unitPrice, sameNumber),
+  row.totalPrice == null ? null : changedField(
+    'totalPrice',
+    'Total price',
+    Number(old.quoted) * totalQuantity(old, units),
+    row.totalPrice,
+    sameNumber,
+  ),
+].filter(Boolean)
+
+const valueChangeIssue = (row, change, sheetName) => ({
+  severity: 'warning',
+  code: 'line.value-changed',
+  text: `Workbook row ${row.index} changed ${change.label} for "${row.description || row.pn}" from ${displayValue(change.before)} to ${displayValue(change.after)}.`,
+  evidence: `${sheetName}, Row ${row.index}`,
+  change: { ...change, row: row.index, line: row.description || row.pn },
+})
+
 export function importReviewedWorkbook(workbook, proposal, opportunity) {
   const issues = []
   const changes = []
@@ -82,6 +118,7 @@ export function importReviewedWorkbook(workbook, proposal, opportunity) {
     if (existingIndex >= 0) {
       used.add(existingIndex)
       const old = nextBom[existingIndex]
+      const fieldChanges = changesForRow(old, row, proposal.units)
       const updated = {
         ...old,
         desc: row.description || old.desc,
@@ -96,7 +133,8 @@ export function importReviewedWorkbook(workbook, proposal, opportunity) {
         ...(row.unitPrice != null ? { quoted: row.unitPrice } : {}),
       }
       nextBom[existingIndex] = updated
-      changes.push({ type: 'updated', line: row.description || row.pn })
+      changes.push({ type: 'updated', line: row.description || row.pn, fields: fieldChanges })
+      issues.push(...fieldChanges.map(change => valueChangeIssue(row, change, table.sheet.name)))
     } else {
       nextBom.push({ itemCategory: 'Imported', desc: row.description, pn: row.pn, custRef: '', adders: [], qtyPerUnit: 0, common: row.qty, spares: 0, quoted: row.unitPrice == null ? '' : row.unitPrice, uom: row.uom, currency: 'INR' })
       changes.push({ type: 'added', line: row.description || row.pn })
