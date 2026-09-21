@@ -87,6 +87,23 @@ test('follow-up communications keep message bodies inside expandable rows', () =
   assert.doesNotMatch(workbench, /<div className="hint">\{c\.body\}<\/div>/)
 })
 
+test('completed workflow stages can be moved back with a recorded reason', () => {
+  const workbench = read('src/pages/Workbench.jsx')
+  assert.match(workbench, /onBack=\{step => \{/)
+  assert.match(workbench, /openBackwardTransition\(activeStepConfig\)/)
+  assert.match(workbench, /Move back to \{activeStepConfig\?\.label \|\| 'this stage'\} to edit/)
+  assert.match(workbench, /targetStep: step, reason: ''/)
+  assert.match(workbench, /moveBackwardToStep\(transition\.targetStep/)
+  assert.match(workbench, /Backward movement is allowed for corrections, but a reason is required/)
+  assert.match(workbench, /disabled=\{!transition\.reason\?\.trim\(\)\}/)
+})
+
+test('Service backward movement restores the selected service phase', () => {
+  const workbench = read('src/pages/Workbench.jsx')
+  assert.match(workbench, /if \(opp\.route === 'Service' && step\.servicePhase != null\)/)
+  assert.match(workbench, /store\.updateServiceFlow\(opp\.id, \{ servicePhase: step\.servicePhase \}\)/)
+})
+
 test('communication log rows wrap long subjects and metadata inside the card', () => {
   const workbench = read('src/pages/Workbench.jsx')
   const styles = read('src/styles.css')

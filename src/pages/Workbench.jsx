@@ -141,7 +141,7 @@ const titleCase = value => String(value || '').toLowerCase().split(/\s+/).map((w
   return small ? word : word.charAt(0).toUpperCase() + word.slice(1)
 }).join(' ').replace(/\bBoq\b/g, 'BOQ').replace(/\bKyc\b/g, 'KYC').replace(/\bRfq\b/g, 'RFQ')
 
-function OpportunityProgress({ activeStep, completedThrough, onStep, onNext, steps = WORKFLOW_STEPS }) {
+function OpportunityProgress({ activeStep, completedThrough, onStep, onBack, onNext, steps = WORKFLOW_STEPS }) {
   const activeIndex = steps.findIndex(step => step.slug === activeStep)
   return (
     <nav className="opportunity-progress" aria-label="Opportunity progress">
@@ -153,7 +153,7 @@ function OpportunityProgress({ activeStep, completedThrough, onStep, onNext, ste
         <div className="progress-controls" aria-label="Navigate workflow views">
           <button type="button" className="progress-arrow" disabled={activeIndex <= 0}
             aria-label="Previous workflow step" title="Previous workflow step"
-            onClick={() => onStep?.(steps[activeIndex - 1].slug)}>
+            onClick={() => onBack?.(steps[activeIndex - 1])}>
             <Icon name="chevronLeft" size={17} />
           </button>
           <span>{steps[activeIndex]?.label}</span>
@@ -273,6 +273,16 @@ export default function Workbench() {
   const moveToMilestone = (milestone, reason = '', tabOverride = '') => {
     store.setMilestone(opp.id, milestone, reason)
     goTab(tabOverride || LIFECYCLE_TABS[milestone] || 'overview')
+  }
+  const openBackwardTransition = step => {
+    if (!step) return
+    setTransition({ kind: 'backward', target: step.milestone, targetStep: step, reason: '' })
+  }
+  const moveBackwardToStep = (step, reason) => {
+    moveToMilestone(step.milestone, reason, step.tab)
+    if (opp.route === 'Service' && step.servicePhase != null) {
+      store.updateServiceFlow(opp.id, { servicePhase: step.servicePhase })
+    }
   }
   const blockers = readiness(opp, proposal, store)
   const nextAction = nextActionWith(opp, proposal, store)
@@ -471,7 +481,14 @@ export default function Workbench() {
         <div className="summary-meta-item opp-summary-action"><span>Next action</span><b>{nextAction.text || NEXT_ACTION[opp.milestone] || 'Progress the opportunity'}</b></div>
         <div className={`summary-meta-item summary-due ${isOverdue ? 'is-overdue' : ''}`}><span>Due</span><div className="summary-meta-value"><b>{ddMmmYY(due) || '-'}</b>{isOverdue && <Chip tone="state-Blocks">Overdue</Chip>}</div></div>
       </div>
-      <OpportunityProgress steps={workflowSteps} activeStep={activeStep} completedThrough={persistedStepIndex} onStep={selectStep} onNext={nextWorkflowStep} />
+      <OpportunityProgress steps={workflowSteps} activeStep={activeStep} completedThrough={persistedStepIndex}
+        onStep={selectStep}
+        onBack={step => {
+          const activeIndex = workflowSteps.findIndex(item => item.slug === activeStep)
+          if (activeIndex === persistedStepIndex) openBackwardTransition(step)
+          else selectStep(step.slug)
+        }}
+        onNext={nextWorkflowStep} />
       {transition && (
         <Modal title={transition.kind === 'blocked' ? `Cannot move from ${opp.milestone} to ${transition.target}` : `Move back to ${transition.target}`} onClose={() => setTransition(null)} wide>
           {transition.kind === 'blocked' ? (
@@ -510,13 +527,18 @@ export default function Workbench() {
             <>
               <p className="hint">Backward movement is allowed for corrections, but a reason is required and will be recorded in the audit trail.</p>
               <label>Reason<textarea rows={3} value={transition.reason} onChange={e => setTransition({ ...transition, reason: e.target.value })} placeholder="Explain what changed or why this stage needs correction." /></label>
-              <div className="forms-actions"><button className="primary" disabled={!transition.reason?.trim()} onClick={() => { moveToMilestone(transition.target, transition.reason.trim()); setTransition(null) }}>Move backward</button><button onClick={() => setTransition(null)}>Cancel</button></div>
+              <div className="forms-actions"><button className="primary" disabled={!transition.reason?.trim()} onClick={() => { moveBackwardToStep(transition.targetStep || { milestone: transition.target, tab: LIFECYCLE_TABS[transition.target] }, transition.reason.trim()); setTransition(null) }}>Move backward</button><button onClick={() => setTransition(null)}>Cancel</button></div>
             </>
           )}
         </Modal>
       )}
+      {workflowReadOnly && <div className="workflow-readonly-notice" role="status">
+        <span>Read-only review — return to the current workflow stage to edit.</span>
+        <button type="button" className="secondary" onClick={() => openBackwardTransition(activeStepConfig)}>
+          Move back to {activeStepConfig?.label || 'this stage'} to edit
+        </button>
+      </div>}
       <fieldset className={`wb-body workflow-edit-boundary ${workflowReadOnly ? 'workflow-edit-boundary--readonly' : ''}`} disabled={workflowReadOnly && viewTab !== 'comms'} aria-readonly={workflowReadOnly || undefined}>
-        {workflowReadOnly && <div className="workflow-readonly-notice" role="status">Read-only review — return to the current workflow stage to edit.</div>}
         {viewTab === 'overview' && opp.route === 'Spares' && <SparesIntakeTab opp={opp} detailsRef={detailsRef} />}
         {viewTab === 'overview' && opp.route !== 'Spares' && <OverviewTab opp={opp} detailsRef={detailsRef} />}
         {viewTab === 'requirement' && <RequirementTab opp={opp} />}
