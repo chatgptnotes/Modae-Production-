@@ -2318,35 +2318,6 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
           {decisionSaved && !decisionIsDirty && !decisionAutosaving && <span className="lead-decision-saved">Saved just now</span>}
         </div>
         <div className="lead-decision-grid">
-          <details className="lead-routing-optional lead-decision-full">
-            <summary>Optional routing city / region</summary>
-            <label>City / location {decisionAiMeta('location')}
-              <input type="search" value={locationSearch || (selectedLocation ? selectedLocation.city : '')} disabled={lead.status === 'Dropped'}
-                onChange={e => setLocationSearch(e.target.value)} placeholder="Search city or state" aria-label="Search city or state" />
-              <div className="location-suggestions" role="listbox" aria-label="City suggestions">
-                {locationQuery && visibleLocations.map(item => (
-                  <button type="button" key={item.value} className="location-suggestion"
-                    disabled={lead.status === 'Dropped'} onClick={() => updateDecisionRegion(item.value)}>
-                    <strong>{item.city}</strong><span>{item.state} · {item.region}</span>
-                  </button>
-                ))}
-                {locationQuery && filteredLocations.length > 50 && (
-                  <span className="location-suggestion-note">Showing 50 of {filteredLocations.length} matches. Refine your search.</span>
-                )}
-                {locationQuery && !filteredLocations.length && (
-                  <span className="location-suggestion-note">No cities found</span>
-                )}
-                {!locationQuery && selectedLocation && (
-                  <span className="location-selected"><strong>{selectedLocation.city}</strong> · {selectedLocation.state}</span>
-                )}
-                {!locationQuery && !selectedLocation && (
-                  <span className="location-suggestion-note">Type above to search for a city or town</span>
-                )}
-                <button type="button" className="location-other" disabled={lead.status === 'Dropped'}
-                  onClick={() => updateDecisionRegion('Other / Unclassified')}>Other / Unclassified</button>
-              </div>
-            </label>
-          </details>
           <div className="lead-decision-subsection">Customer and contact</div>
             <label><span className="decision-field-heading">Sell To Customer <span className="required-mark">*</span> {decisionAiMeta('sellTo', false)}</span>
             <div className="decision-value-row"><input type="text" value={decisionDraft.sellTo} disabled={lead.status === 'Dropped'}
