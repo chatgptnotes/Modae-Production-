@@ -31,7 +31,6 @@ vercel login
 vercel link                      # choose/create the "wintrack" project
 vercel env add VITE_SUPABASE_URL production
 vercel env add VITE_SUPABASE_ANON_KEY production
-# VITE_AI_FUNCTION_URL only if the edge function is not on the same Supabase project
 ```
 
 Set the project's Production Branch to `main` in Vercel → Settings → Git.
@@ -50,7 +49,7 @@ Vercel environment and exposes only the `/api/ai` proxy to the SPA:
 
 ```text
 GEMINI_API_KEY=...           # Vercel server-side variable
-VITE_AI_FUNCTION_URL=/api/ai # public build-time route, no secret
+# The SPA calls the same-origin Vercel route; no AI URL override is required.
 ```
 
 With no key the function returns 503 and the app falls back to its deterministic

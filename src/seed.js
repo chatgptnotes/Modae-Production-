@@ -1248,7 +1248,7 @@ export const seedConfig = {
     { id: 'payment', label: 'Payment gateway', state: 'Unavailable' },
     { id: 'bi', label: 'BI', state: 'Healthy' },
   ],
-  // No key here by design: it lives in the ai Edge Function's secrets.
+  // No key here by design: it lives in Vercel's server-side environment.
   aiModel: { provider: 'Google', model: 'gemini-3.6-flash', customModel: '', endpoint: '', updatedBy: '', updatedOn: '' },
   // Admin document uploads (metadata only — content stays with the file's home).
   uploads: {

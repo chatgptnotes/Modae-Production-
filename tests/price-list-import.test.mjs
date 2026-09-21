@@ -87,6 +87,25 @@ test('a supplier workbook is read even though it is not the template', () => {
   assert.ok(result.parts.every(part => part.pn.trim() === part.pn && Number.isFinite(part.price)))
 })
 
+test('AI column mapping overrides misleading supplier headers', () => {
+  const buffer = supplierBuffer({
+    Active: [
+      ['Serial', 'Internal group', 'B&K order code', 'Product description', 'List amount'],
+      [1, 'Sensors', 'VC-8000-001', 'VC8000 monitor module', 1250],
+      [2, 'Sensors', 'VC-8000-002', 'VC8000 input module', 980],
+    ],
+  })
+  const result = parsePriceListFile(buffer, 'EUR', {
+    currency: 'EUR',
+    sheets: [{
+      name: 'Active', headerRow: 0, partNumberColumn: 2,
+      partNumberPrefixColumn: -1, descriptionColumn: 3, priceColumn: 4,
+    }],
+  })
+  assert.deepEqual(result.parts.map(part => part.pn), ['VC-8000-001', 'VC-8000-002'])
+  assert.deepEqual(result.parts.map(part => part.price), [1250, 980])
+})
+
 test('a configurator sheet becomes one part per model with its options as adders', () => {
   const result = parsePriceListFile(supplierBuffer({
     Sheet1: [

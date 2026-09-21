@@ -143,10 +143,10 @@ test('lead attachments are read through docText, not the PDF-only path', () => {
   assert.match(inbox, /aiAttachments/, 'AI extraction must receive temporary file inputs')
 })
 
-test('the edge function sends uploaded files as Gemini inline data', () => {
-  const ai = read('supabase/functions/ai/index.ts')
+test('the Vercel AI route sends uploaded files as Gemini inline data', () => {
+  const ai = read('api/ai.js')
   assert.match(ai, /inlineData/, 'multimodal attachments must be sent to Gemini')
-  assert.match(ai, /payload\.aiAttachments/, 'the edge function must read the attachment payload')
+  assert.match(ai, /payload\.aiAttachments/, 'the Vercel route must read the attachment payload')
 })
 
 test('the Vercel AI route uses only the server-side Gemini key', () => {

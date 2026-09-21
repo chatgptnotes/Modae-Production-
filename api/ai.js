@@ -139,6 +139,34 @@ const clarificationAnswerSchema = {
   required: ['rows'],
 }
 
+const replyClassifySchema = {
+  type: 'OBJECT',
+  properties: {
+    outcome: { type: 'STRING', enum: ['accepted', 'rejected', 'revision', 'follow-up'] },
+    confidence: { type: 'INTEGER' }, summary: { type: 'STRING' }, nextStep: { type: 'STRING' },
+    revisionType: { type: 'STRING', enum: ['Technical', 'Commercial', 'Pricing', 'Other', 'None'] }, evidence: { type: 'STRING' },
+  },
+  required: ['outcome', 'confidence', 'summary', 'nextStep', 'revisionType', 'evidence'],
+}
+
+const tenderExtractSchema = {
+  type: 'OBJECT',
+  properties: {
+    header: { type: 'OBJECT', properties: {
+      buyer: { type: 'STRING' }, station: { type: 'STRING' }, subject: { type: 'STRING' }, sectionRef: { type: 'STRING' }, signatory: { type: 'STRING' },
+      location: { type: 'STRING' }, contactPerson: { type: 'STRING' }, contactPhone: { type: 'STRING' }, deliveryPeriod: { type: 'STRING' }, validity: { type: 'STRING' }, paymentTerms: { type: 'STRING' }, rfqDate: { type: 'STRING' }, senderEmail: { type: 'STRING' },
+    } },
+    guesses: { type: 'OBJECT', properties: {
+      segment: { type: 'STRING', enum: ['Thermal', 'Nuclear', 'Hydro', 'Industrial', 'O&G-US', 'O&G-MS', 'O&G-DS', 'Petrochem', 'Test Bed', 'Others'] },
+      oppType: { type: 'STRING', enum: ['Project', 'Spares', 'Service', 'Upgrade', 'AMC', 'Training'] },
+      bu: { type: 'STRING', enum: ['Aero', 'Energy', 'Service'] }, category: { type: 'STRING', enum: ['EUC', 'OEM', 'EPC', 'MAC', 'SI', 'ACP', 'RE/TR'] }, product: { type: 'STRING' },
+    } },
+    risks: { type: 'ARRAY', items: { type: 'OBJECT', properties: { clause: { type: 'STRING' }, why: { type: 'STRING' } }, required: ['clause', 'why'] } },
+    missing: { type: 'ARRAY', items: { type: 'STRING' } }, notes: { type: 'ARRAY', items: { type: 'STRING' } },
+  },
+  required: ['header', 'guesses', 'risks', 'missing'],
+}
+
 const conditionEvidenceSchema = {
   type: 'OBJECT',
   properties: {
@@ -148,6 +176,24 @@ const conditionEvidenceSchema = {
     concerns: { type: 'STRING' },
   },
   required: ['assessment', 'confidence', 'evidence', 'concerns'],
+}
+
+const priceListInspectionSchema = {
+  type: 'OBJECT',
+  properties: {
+    supplier: { type: 'STRING' },
+    currency: { type: 'STRING', enum: ['EUR', 'USD', 'INR', 'GBP', 'UNKNOWN'] },
+    confidence: { type: 'INTEGER' },
+    summary: { type: 'STRING' },
+    sheets: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+      name: { type: 'STRING' }, headerRow: { type: 'INTEGER' },
+      partNumberColumn: { type: 'INTEGER' }, partNumberPrefixColumn: { type: 'INTEGER' },
+      descriptionColumn: { type: 'INTEGER' }, priceColumn: { type: 'INTEGER' },
+      confidence: { type: 'INTEGER' }, issues: { type: 'ARRAY', items: { type: 'STRING' } },
+    }, required: ['name', 'headerRow', 'partNumberColumn', 'partNumberPrefixColumn', 'descriptionColumn', 'priceColumn', 'confidence', 'issues'] } },
+    issues: { type: 'ARRAY', items: { type: 'STRING' } },
+  },
+  required: ['supplier', 'currency', 'confidence', 'summary', 'sheets', 'issues'],
 }
 
 const approvalCommentSchema = {
@@ -519,6 +565,117 @@ CONDITION: ${cap(p.conditionText, 2000)}
 INCORPORATION NOTE: ${cap(p.incorporationNote, 2000)}`
 }
 
+function priceListInspectionPrompt(p) {
+  return `${HOUSE}
+
+Inspect this supplier price-list workbook preview. Do not extract or invent
+catalogue rows. Identify the workbook's supplier, currency, and the columns the
+local importer should use. All row and column indexes are zero-based.
+
+Rules:
+- headerRow is the row containing the meaningful product headers. Use -1 only
+  when the sheet has no usable product table.
+- partNumberColumn must contain actual orderable/model/part numbers, not serial
+  numbers, row numbers, quantities, years, or section indexes.
+- descriptionColumn contains the product description.
+- priceColumn contains the base/list/unit price.
+- partNumberPrefixColumn is -1 unless a short prefix column must be joined to
+  the part number.
+- Use -1 for a missing field and lower confidence below 75 when uncertain.
+- Currency must be supported by a header, currency symbol, number format, or
+  unmistakable workbook context. Otherwise return UNKNOWN.
+- A filename or selected list is only a clue; never treat it as proof.
+
+FILENAME: ${cap(p.filename, 300)}
+SELECTED PRICE-LIST TAB: ${cap(p.selectedList, 80)}
+WORKBOOK PREVIEW:
+${cap(JSON.stringify(p.workbook || {}), 50000)}
+
+Return a concise summary and issues for human review.`
+}
+
+function leadClarifyPrompt(p) {
+  return `${HOUSE}
+
+Drafting only. The model never sends this email. Write a plain-text email to a
+prospective customer asking for the listed missing information. Do not invent
+part numbers, prices, dates, specifications, or commitments. Open with the
+supplied salutation and close with the supplied sender block.
+
+PURPOSE: ${cap(p.kind === 'quote-fee' ? 'Request the pre-quote fee confirmation and compliance documents.' : 'Request the missing information before preparing the offer.', 300)}
+CUSTOMER: ${cap(p.sellTo, 200)} · contact: ${cap(p.contactPerson, 200)}
+SUBJECT: ${cap(p.subject, 300)}
+ITEMS:
+${cap((p.items || []).map((item, i) => `${i + 1}. ${item}`).join('\n'), 6000)}
+BODY:
+${cap(p.body, 6000)}
+SENDER:
+${cap(p.senderBlock, 600)}`
+}
+
+function clarificationEmailPrompt(p) {
+  return `${HOUSE}
+
+Write a plain-text customer email asking for the outstanding clarifications.
+Open with "Dear Sir," and close with the supplied sender block. Number every
+question and do not ask for information already answered.
+
+OPPORTUNITY: ${cap(p.oppName, 300)}
+CUSTOMER: ${cap(p.sellTo, 200)} · contact: ${cap(p.contactPerson, 200)}
+QUESTIONS:
+${cap((p.questions || []).map((q, i) => `${i + 1}. ${q}`).join('\n'), 6000)}
+SENDER:
+${cap(p.senderName, 120)}\nModAE India Pvt Ltd`
+}
+
+function followupEmailPrompt(p) {
+  return `${HOUSE}
+
+Write a polite plain-text follow-up email for a quotation with no response.
+Reference the quote and validity, offer to clarify or revise, and propose one
+concrete next step. Do not discount or invent commercial terms. Close with the
+sender block.
+
+OPPORTUNITY: ${cap(p.oppName, 300)}
+CUSTOMER: ${cap(p.sellTo, 200)} · contact: ${cap(p.contactPerson, 200)}
+QUOTE: ${cap(p.quoteRef, 120)} · sent ${cap(p.sentOn, 40)} · ${cap(p.ageDays, 10)} days ago
+VALIDITY: ${cap(p.validity, 80)}
+HISTORY: ${cap((p.history || []).join('\n'), 3000) || '(none)'}
+SENDER: ${cap(p.senderName, 120)}\nModAE India Pvt Ltd`
+}
+
+function replyClassifyPrompt(p) {
+  return `${HOUSE}
+
+Classify this customer's quotation reply for human review. Use accepted only
+when the customer clearly accepts or awards the quoted scope; rejected only for
+a clear decline/cancellation; revision for requested changes; follow-up when
+ambiguous or awaiting information. Do not invent dates, prices, commitments,
+or purchase orders.
+
+OPPORTUNITY: ${cap(p.oppName, 300)} (${cap(p.oppId, 100)})
+CUSTOMER: ${cap(p.customer, 300)} · REVISION: ${cap(p.revision, 30)}
+SUBJECT: ${cap(p.subject, 500)}
+REPLY:
+${cap(p.body, 12000)}`
+}
+
+function tenderExtractPrompt(p) {
+  return `${HOUSE}
+
+Read this tender/specification and return only fields supported by the source.
+The deterministic parser output is authoritative; fill only blanks and flag
+commercial risks. Do not invent values. RFQ date is the date carried by the
+enquiry/document, and senderEmail is the enquiry sender when shown.
+
+DOCUMENT: ${cap(p.filename, 200)} (${cap(p.pages, 10)} pages)
+PARSED:
+${cap(JSON.stringify(p.parsed || {}), 4000)}
+TEXT:
+${cap(p.text, 120000)}
+PRODUCTS: ${cap((p.products || []).join(', '), 600) || 'Various'}`
+}
+
 function approvalCommentPrompt(p) {
   return `${HOUSE}
 
@@ -596,11 +753,12 @@ export default async function handler(req, res) {
   catch { return fail(res, 400, 'AI_BAD_REQUEST', 'Malformed request body') }
   const task = String(input.task || '')
   const payload = input.payload || {}
+  const structuredTasks = new Set(['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'reply.classify', 'tender.extract'])
   const requestedModel = String(input.model || '')
   const model = /^gemini-[\w.-]+$/.test(requestedModel)
     ? (MODEL_ALIASES[requestedModel] || requestedModel)
     : DEFAULT_MODEL
-  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review'].includes(task)) {
+  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'lead.clarify', 'email.clarification', 'email.followup', 'reply.classify', 'tender.extract'].includes(task)) {
     return fail(res, 400, 'AI_BAD_REQUEST', `Unsupported task: ${task}`)
   }
 
@@ -615,12 +773,18 @@ export default async function handler(req, res) {
                     : task === 'approval.condition-evidence' ? conditionEvidencePrompt(payload)
                       : task === 'approval.comment-review' ? approvalCommentPrompt(payload)
                     : task === 'kyc.extract' ? kycExtractPrompt(payload)
-                      : task === 'template.map' ? templateMappingPrompt(payload)
+                    : task === 'template.map' ? templateMappingPrompt(payload)
                     : task === 'proposal.review' ? proposalReviewPrompt(payload)
+                      : task === 'price-list.inspect' ? priceListInspectionPrompt(payload)
+                        : task === 'lead.clarify' ? leadClarifyPrompt(payload)
+                          : task === 'email.clarification' ? clarificationEmailPrompt(payload)
+                            : task === 'email.followup' ? followupEmailPrompt(payload)
+                              : task === 'reply.classify' ? replyClassifyPrompt(payload)
+                                : task === 'tender.extract' ? tenderExtractPrompt(payload)
                   : leadPrompt(payload)
   const requestBody = {
     contents: [{ parts: [{ text: prompt }, ...(['lead.extract', 'approval.condition-evidence', 'kyc.extract'].includes(task) ? inlineParts(payload) : [])] }],
-    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review'].includes(task)
+    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'reply.classify', 'tender.extract'].includes(task)
       ? {
           responseMimeType: 'application/json',
           responseSchema: task === 'lead.fill' ? fillSchema
@@ -635,6 +799,9 @@ export default async function handler(req, res) {
                     : task === 'kyc.extract' ? kycExtractSchema
                       : task === 'template.map' ? templateMappingSchema
                       : task === 'proposal.review' ? proposalReviewSchema
+                        : task === 'price-list.inspect' ? priceListInspectionSchema
+                          : task === 'reply.classify' ? replyClassifySchema
+                            : task === 'tender.extract' ? tenderExtractSchema
                 : leadSchema,
         }
       : {},
@@ -662,7 +829,7 @@ export default async function handler(req, res) {
     const out = await upstream.json()
     const text = out?.candidates?.[0]?.content?.parts?.map(p => p?.text || '').join('') || ''
     if (!text) return fail(res, 502, 'AI_EMPTY_RESPONSE', 'Gemini returned no usable output')
-    if (task === 'health') return send(res, 200, { ok: true, model, text })
+    if (task === 'health' || !structuredTasks.has(task)) return send(res, 200, { ok: true, model, text })
     return send(res, 200, { ok: true, model, data: JSON.parse(text) })
   } catch (error) {
     console.error('Vercel Gemini proxy failed', error?.message || error)

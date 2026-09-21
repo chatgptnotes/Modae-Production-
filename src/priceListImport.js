@@ -120,7 +120,7 @@ function columnStats({ rows, width }) {
   return stats
 }
 
-function detectLayout(grid) {
+function detectLayout(grid, aiHint = null) {
   const { rows } = grid
   let best = null
   rows.slice(0, 10).forEach((row, index) => {
@@ -150,6 +150,17 @@ function detectLayout(grid) {
   // 2026") or a margin formula rather than the word "price".
   const stats = columnStats(grid)
   const layout = best || { headerRow: -1, code: -1, codeCols: [], desc: -1, price: -1, score: 0 }
+  // AI supplies explicit zero-based column positions when the workbook uses
+  // unusual labels or several numeric-looking columns. Keep the deterministic
+  // inference as a fallback for any field the model could not identify.
+  if (aiHint && Number.isInteger(aiHint.headerRow)) {
+    layout.headerRow = aiHint.headerRow
+    if (Number.isInteger(aiHint.partNumberColumn)) layout.code = aiHint.partNumberColumn
+    if (Number.isInteger(aiHint.descriptionColumn)) layout.desc = aiHint.descriptionColumn
+    if (Number.isInteger(aiHint.priceColumn)) layout.price = aiHint.priceColumn
+    if (Number.isInteger(aiHint.partNumberPrefixColumn)) layout.codeCols = [aiHint.partNumberPrefixColumn, layout.code]
+    else if (layout.code >= 0) layout.codeCols = [layout.code]
+  }
   const taken = new Set([layout.code, layout.desc].filter(c => c >= 0))
   if (layout.desc < 0) {
     const described = stats.filter(s => s.text > 2 && !taken.has(s.c)).sort((a, b) => b.avg - a.avg)[0]
@@ -206,9 +217,9 @@ function currencyOf(sheet, layout, rows) {
   return fromFormat ? CURRENCY_TOKENS[fromFormat] : ''
 }
 
-function extractSheet(sheet, name) {
+function extractSheet(sheet, name, aiHint = null) {
   const grid = gridOf(sheet)
-  const layout = detectLayout(grid)
+  const layout = detectLayout(grid, aiHint)
   if (!layout) return { name, parts: [], skipped: grid.rows.length, headerRow: 0, currency: '' }
 
   const parts = []
@@ -267,7 +278,7 @@ function extractSheet(sheet, name) {
   return { name, parts, skipped, headerRow: layout.headerRow + 1, currency: currencyOf(sheet, layout, grid.rows) }
 }
 
-export function extractSupplierWorkbook(workbook, defaultCurrency = 'EUR') {
+export function extractSupplierWorkbook(workbook, defaultCurrency = 'EUR', aiReview = null) {
   const parts = []
   const byPn = new Map()
   const sheets = []
@@ -275,7 +286,8 @@ export function extractSupplierWorkbook(workbook, defaultCurrency = 'EUR') {
   let currency = ''
 
   for (const name of workbook.SheetNames) {
-    const result = extractSheet(workbook.Sheets[name], name)
+    const hint = aiReview?.sheets?.find(item => item.name === name)
+    const result = extractSheet(workbook.Sheets[name], name, hint)
     let kept = 0
     let adders = 0
     for (const part of result.parts) {
@@ -306,10 +318,10 @@ export function extractSupplierWorkbook(workbook, defaultCurrency = 'EUR') {
   }
 }
 
-export function parsePriceListFile(arrayBuffer, defaultCurrency = 'EUR') {
+export function parsePriceListFile(arrayBuffer, defaultCurrency = 'EUR', aiReview = null) {
   const workbook = XLSX.read(arrayBuffer, { type: 'array' })
   // Anything without the template's Parts sheet is treated as a supplier file.
-  if (!workbook.Sheets.Parts) return extractSupplierWorkbook(workbook, defaultCurrency)
+  if (!workbook.Sheets.Parts) return extractSupplierWorkbook(workbook, defaultCurrency, aiReview)
   const partsSheet = workbook.Sheets.Parts
   const addersSheet = workbook.Sheets.Adders
   const rawParts = partsSheet ? XLSX.utils.sheet_to_json(partsSheet, { defval: '' }) : []
@@ -367,4 +379,18 @@ export function parsePriceListFile(arrayBuffer, defaultCurrency = 'EUR') {
       adders: parts.reduce((total, part) => total + part.adders.length, 0),
     },
   }
+}
+
+// Keep the AI request bounded: the model needs headers and representative rows
+// to identify columns, not the entire catalogue. The local parser still reads
+// every row after the AI returns its mapping.
+export function buildPriceListInspectionPayload(arrayBuffer, filename = '', selectedList = '') {
+  const workbook = XLSX.read(arrayBuffer, { type: 'array', cellDates: false })
+  const sheets = workbook.SheetNames.map(name => {
+    const sheet = workbook.Sheets[name]
+    const grid = gridOf(sheet)
+    const rows = grid.rows.slice(0, 24).map(row => row.slice(0, Math.min(grid.width, 18)).map(cell => cell?.v ?? ''))
+    return { name, rowCount: grid.rows.length, columnCount: grid.width, rows }
+  })
+  return { filename, selectedList, sheets }
 }

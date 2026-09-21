@@ -10,15 +10,15 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
 
 const intake = read('src/pages/IntakeForm.jsx')
-const aiFn = read('supabase/functions/ai/index.ts')
+const aiFn = read('api/ai.js')
 
 // Biji, 13 Aug: "AI has to extract the RFQ number. If the RFQ number is missing,
 // AI can say that missing RFQ number — or if there is no RFQ number, can simply
 // say email dated so-and-so."
 test('the AI schema can return the RFQ date and the sender', () => {
-  assert.match(aiFn, /rfqDate: STR, senderEmail: STR,/,
+  assert.match(aiFn, /rfqDate: \{ type: 'STRING' \}, senderEmail: \{ type: 'STRING' \},/,
     'the model had no field to put the RFQ date in, so the regex was the only source')
-  assert.match(aiFn, /rfqDate is the\s*\n?\s*\/\/?\s*date that enquiry carries|rfqDate is the/,
+  assert.match(aiFn, /RFQ date is the date carried by the enquiry\/document/,
     'the prompt must tell the model what these fields are')
 })
 

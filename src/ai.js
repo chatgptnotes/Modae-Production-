@@ -3,18 +3,16 @@
 // function owns the prompt, schema and credential.
 //
 // Mirrors the filestore/datastore facade — every call returns null when the AI
-// is unavailable (no Supabase, no key, timeout, bad JSON) so each call site can
+// is unavailable (no Vercel key, timeout, bad JSON) so each call site can
 // fall back to the deterministic path the app has always had:
 //
 //   const ai = await runTask('lead.extract', payload)
 //   const result = ai ?? deterministicParse(...)
 
-// Keep an explicit URL override for local development, but default every
-// environment to the same-origin Vercel function. Never add a browser-side
-// Gemini key.
-const AI_URL = ((import.meta.env || {}).VITE_AI_FUNCTION_URL || '').trim() || '/api/ai'
-const DEV_ADMIN_URL = ((import.meta.env || {}).VITE_AI_ADMIN_FUNCTION_URL || '').trim()
-export const usesVercelAi = () => AI_URL === '/api/ai'
+// AI always goes through the same-origin Vercel function. Never add a
+// browser-side Gemini key or an alternate Supabase function URL.
+const AI_URL = '/api/ai'
+export const usesVercelAi = () => true
 
 export const aiEnabled = () => !!AI_URL
 
@@ -86,18 +84,5 @@ export async function testConnection(model) {
 // Sends a new provider credential only to the server-side setup function. It
 // is deliberately not persisted in app state or localStorage.
 export async function saveAiKey(apiKey, role = '') {
-  if (!apiKey) throw new Error('API key is required')
-  const body = { apiKey }
-  const adminUrl = DEV_ADMIN_URL || (AI_URL && !AI_URL.endsWith('/api/ai') ? AI_URL.replace(/\/ai\/?$/, '/ai-admin') : '')
-  if (adminUrl) {
-    const res = await fetch(adminUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-wintrack-role': role },
-      body: JSON.stringify(body),
-    })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok || !data?.ok) throw new Error(data?.error || 'AI credential setup failed')
-    return data
-  }
   throw new Error('AI credentials are managed in the Vercel environment')
 }

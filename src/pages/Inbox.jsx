@@ -133,7 +133,7 @@ const ConfBadge = ({ c }) => (
 )
 
 // ---------------------------------------------------------------------------
-// Gemini extraction (task 'lead.extract', see supabase/functions/ai/index.ts).
+// Gemini extraction (task 'lead.extract', served by the Vercel /api/ai route).
 // The model returns the lead.ai shape the three-panel view already renders; we
 // only stamp state:'pending' on each field, because "AI proposes, humans decide"
 // is enforced by that state — nothing is accepted until someone accepts it.

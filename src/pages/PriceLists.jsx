@@ -1,15 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { fmt, exportCSV, canViewCommercial, isAdminRole } from '../utils.js'
+import { fmt, exportCSV, canViewCommercial, canManagePriceLists } from '../utils.js'
 import { Modal } from '../ui.jsx'
-import { downloadPriceListTemplate, parsePriceListFile } from '../priceListImport.js'
+import { buildPriceListInspectionPayload, downloadPriceListTemplate, parsePriceListFile } from '../priceListImport.js'
 import { normalizedCurrencyRates } from '../currency.js'
+import { runTaskResult } from '../ai.js'
 
 export default function PriceLists() {
   const store = useStore()
   const canEdit = canViewCommercial(store.role)
-  const canUpload = isAdminRole(store.role)
+  const canUpload = canManagePriceLists(store.role)
   const [searchParams, setSearchParams] = useSearchParams()
   const requestedList = searchParams.get('list') || ''
   const requestedPart = searchParams.get('part') || ''
@@ -22,6 +23,7 @@ export default function PriceLists() {
   const [uploadVersion, setUploadVersion] = useState('')
   const [uploadCurrency, setUploadCurrency] = useState('')
   const [uploadPreview, setUploadPreview] = useState(null)
+  const [aiBusy, setAiBusy] = useState(false)
   const [versionId, setVersionId] = useState(null)
   const [editOpen, setEditOpen] = useState(false)
   const [editRows, setEditRows] = useState([])
@@ -72,17 +74,43 @@ export default function PriceLists() {
 
   const inspectUpload = async file => {
     setUploadFile(file); setUploadPreview(null)
+    setAiBusy(true)
     try {
-      const parsed = parsePriceListFile(await file.arrayBuffer(), uploadCurrency || displayList.currency)
-      setUploadPreview(parsed)
+      const buffer = await file.arrayBuffer()
+      const fallback = parsePriceListFile(buffer, uploadCurrency || displayList.currency)
+      setUploadPreview({ ...fallback, aiReview: { status: 'reviewing', message: 'AI is checking the workbook structure…' } })
+      const aiResult = await runTaskResult('price-list.inspect', {
+        filename: file.name,
+        selectedList: list,
+        workbook: buildPriceListInspectionPayload(buffer, file.name, list),
+      }, { timeoutMs: 60000 })
+      const review = aiResult.data
+      if (!review?.data || !Array.isArray(review.data.sheets)) {
+        if (fallback.currency) setUploadCurrency(fallback.currency)
+        setUploadPreview({ ...fallback, aiReview: { status: 'fallback', message: aiResult.error || 'AI review was unavailable. Local parser result shown.' } })
+        return
+      }
+      const aiReview = review.data
+      const mapped = parsePriceListFile(buffer, aiReview.currency && aiReview.currency !== 'UNKNOWN' ? aiReview.currency : (fallback.currency || displayList.currency), aiReview)
+      const detectedCurrency = aiReview.currency && aiReview.currency !== 'UNKNOWN' ? aiReview.currency : mapped.currency
+      const confidence = Number(aiReview.confidence) || 0
+      const blocked = !mapped.parts.length || confidence < 50 || aiReview.sheets.some(sheet => Number(sheet.confidence) < 40 && sheet.headerRow >= 0)
+      setUploadCurrency(detectedCurrency)
+      setUploadPreview({ ...mapped, currency: detectedCurrency, aiReview: {
+        status: 'reviewed', supplier: aiReview.supplier, confidence, summary: aiReview.summary,
+        issues: [...(aiReview.issues || []), ...(aiReview.sheets || []).flatMap(sheet => sheet.issues || [])],
+        blocked,
+      } })
     } catch (error) {
       setUploadPreview({ parts: [], errors: [`The workbook could not be read: ${error.message || error}`] })
+    } finally {
+      setAiBusy(false)
     }
   }
 
   const confirmUpload = () => {
-    if (!uploadPreview || uploadPreview.errors.length || !uploadFile) return
-    store.replacePriceList(list, uploadPreview, { filename: uploadFile.name, version: uploadVersion.trim(), currency: uploadCurrency })
+    if (!uploadPreview || uploadPreview.errors.length || uploadPreview.aiReview?.blocked || !uploadFile || aiBusy) return
+    store.replacePriceList(list, uploadPreview, { filename: uploadFile.name, version: uploadVersion.trim(), currency: uploadPreview.currency || uploadCurrency })
     setVersionId(null)
     setUploadOpen(false); setUploadFile(null); setUploadPreview(null)
   }
@@ -168,12 +196,24 @@ export default function PriceLists() {
             <label className="afield">Currency<select value={uploadCurrency} onChange={e => setUploadCurrency(e.target.value)}><option>EUR</option><option>INR</option><option>USD</option></select></label>
           </div>
           <div className="admin-actions" style={{ marginTop: 12 }}>
-            <input type="file" accept=".xlsx,.xls,.csv" onChange={e => e.target.files?.[0] && inspectUpload(e.target.files[0])} />
+            <input type="file" accept=".xlsx,.xls,.csv" disabled={aiBusy} onChange={e => e.target.files?.[0] && inspectUpload(e.target.files[0])} />
             <button onClick={() => downloadPriceListTemplate(list, uploadCurrency)}>Download blank template</button>
           </div>
           {uploadFile && <div className="hint" style={{ marginTop: 8 }}>{uploadFile.name}</div>}
+          {aiBusy && <div className="hint" style={{ marginTop: 10 }}>AI is reviewing sheet headers and sample rows. Please wait…</div>}
           {uploadPreview && (
             <div style={{ marginTop: 12 }}>
+              {uploadPreview.aiReview?.status === 'reviewed' && (
+                <div className={uploadPreview.aiReview.blocked ? 'errbox' : 'okbox'}>
+                  <b>AI review:</b> {uploadPreview.aiReview.supplier || 'Supplier not identified'} · {uploadPreview.currency || 'Currency not identified'} · confidence {uploadPreview.aiReview.confidence}%.
+                  {uploadPreview.aiReview.summary && <div>{uploadPreview.aiReview.summary}</div>}
+                  {uploadPreview.aiReview.blocked && <div><b>Import is blocked until the workbook mapping is reviewed.</b></div>}
+                </div>
+              )}
+              {uploadPreview.aiReview?.status === 'fallback' && <div className="warnbox"><b>AI review unavailable.</b> {uploadPreview.aiReview.message}</div>}
+              {uploadPreview.aiReview?.issues?.length > 0 && (
+                <div className="warnbox" style={{ marginTop: 8 }}><ul>{uploadPreview.aiReview.issues.slice(0, 8).map((issue, i) => <li key={i}>{issue}</li>)}</ul></div>
+              )}
               {uploadPreview.errors.length > 0 && (
                 <div className="errbox"><b>Fix these errors before importing:</b><ul>{uploadPreview.errors.map((error, i) => <li key={i}>{error}</li>)}</ul></div>
               )}
@@ -207,7 +247,7 @@ export default function PriceLists() {
               )}
             </div>
           )}
-          <div className="form-actions" style={{ marginTop: 16 }}><button onClick={() => setUploadOpen(false)}>Cancel</button><button className="primary" disabled={!uploadPreview || uploadPreview.errors.length > 0 || !uploadPreview.parts.length || !uploadFile} onClick={confirmUpload}>Import and make current</button></div>
+          <div className="form-actions" style={{ marginTop: 16 }}><button onClick={() => setUploadOpen(false)}>Cancel</button><button className="primary" disabled={aiBusy || !uploadPreview || uploadPreview.errors.length > 0 || uploadPreview.aiReview?.blocked || !uploadPreview.parts.length || !uploadFile} onClick={confirmUpload}>{aiBusy ? 'Reviewing…' : 'Import and make current'}</button></div>
         </Modal>
       )}
 

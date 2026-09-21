@@ -6,7 +6,7 @@
 //
 // `kind` is what is really behind it, and the page badges every row with it, so
 // clicking through the map never finds a claim the code does not honour:
-//   ai      — calls Gemini through the ai Edge Function
+//   ai      — calls Gemini through the Vercel /api/ai proxy
 //   rule    — deterministic executable logic (no model, but real behaviour)
 //   preview — illustrative only; nothing computes yet
 //

@@ -39,7 +39,7 @@ scheduler (Tier 3 below).
 
 | Diagram step | Implementation |
 |---|---|
-| AI-01/02/03 parse, extract RFQ metadata, check missing info | Gemini `lead.extract` — `supabase/functions/ai/index.ts:86`. Returns summary, route, urgency, completeness, suggested owner, and per-field values each with a confidence score and evidence quote |
+| AI-01/02/03 parse, extract RFQ metadata, check missing info | Gemini `lead.extract` — `api/ai.js`. Returns summary, route, urgency, completeness, suggested owner, and per-field values each with a confidence score and evidence quote |
 | D-02 Information Complete? | Registration blocked while any AI field is unreviewed below threshold — `src/pages/Inbox.jsx:663` |
 | AI-04 Green / Blue / Amber / Red | `CUSTOMER_STATUSES` — `src/seed.js:28` |
 | Red → joint LJS + AH clearance | Blocks qualification *and* withholds the Opportunity ID — `src/pages/Inbox.jsx:376,583` |
@@ -277,7 +277,7 @@ clear their own tinted fills. Asserted in `tests/brand-identity.test.mjs`.
 
 | Item | Where |
 |---|---|
-| Lead-clarification email: AI drafts, human sends; common mailbox pre-assignment, salesperson post-assignment | `src/leadClarification.js`, the `lead.clarify` task in `supabase/functions/ai/index.ts`, the draft/send panel in `src/pages/Inbox.jsx`, `commonMailbox` on the Admin page |
+| Lead-clarification email: AI drafts, human sends; common mailbox pre-assignment, salesperson post-assignment | `src/leadClarification.js`, the `lead.clarify` task in `api/ai.js`, the draft/send panel in `src/pages/Inbox.jsx`, `commonMailbox` on the Admin page |
 | Fix the red-customer approval flow | See above |
 | Monthly Bookings chart per the reference HTML | `RunRateChart` in `src/pages/MyDashboard.jsx`, plus `monthlyTarget` and `monthsElapsed` in `src/kpi.js` |
 | Full ModAE brand identity from the website | `MODAE_COLORS` / `MODAE_TYPE` in `src/branding/modae.js`, mirrored into `:root` in `src/styles.css`; self-hosted Rubik and Roboto in `public/fonts/` |

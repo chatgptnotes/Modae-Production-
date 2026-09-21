@@ -24,13 +24,13 @@ test('every automation declares what is actually behind it', () => {
     'the drifted live flag must be gone — kind is the single source of truth')
 })
 
-test('only the tasks the edge function implements are labelled Live AI', () => {
-  const aiFn = read('supabase/functions/ai/index.ts')
+test('only the tasks the Vercel function implements are labelled Live AI', () => {
+  const aiFn = read('api/ai.js')
   const live = items.filter(i => i.kind === 'ai')
   assert.ok(live.length >= 4, 'the map must still claim the real model calls')
   // Each live claim needs a task in the function to back it.
   const tasks = ['lead.extract', 'clarification.suggest', 'email.followup', 'tender.extract']
-  for (const t of tasks) assert.ok(aiFn.includes(`'${t}'`), `${t} must exist in the edge function`)
+  for (const t of tasks) assert.ok(aiFn.includes(t), `${t} must exist in the Vercel function`)
 })
 
 test('opportunity ID and owner suggestion is not sold as a model call', () => {

@@ -255,7 +255,7 @@ test('the AI key is never exposed to the browser bundle', () => {
   // Anything prefixed VITE_ is compiled into the client bundle.
   assert.doesNotMatch(read('.env.example'), /^VITE_GEMINI/m)
   assert.doesNotMatch(read('src/ai.js'), /GEMINI_API_KEY/)
-  assert.match(read('supabase/functions/ai/index.ts'), /Deno\.env\.get\('GEMINI_API_KEY'\)/)
+  assert.match(read('api/ai.js'), /process\.env\.GEMINI_API_KEY/)
 })
 
 test('env files stay out of the repository', () => {

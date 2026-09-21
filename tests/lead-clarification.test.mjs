@@ -213,8 +213,8 @@ test('the inbox drafts and sends in two separate, human-triggered steps', () => 
 })
 
 test('the AI task drafts a body and has no dispatch capability', () => {
-  const fn = read('supabase/functions/ai/index.ts')
-  assert.match(fn, /'lead\.clarify': \{/)
+  const fn = read('api/ai.js')
+  assert.match(fn, /function leadClarifyPrompt\(/)
   // It returns prose only — no schema, so no structured "send" instruction can
   // come back from it, and the client only ever reads `.text`.
   assert.match(read('src/pages/Inbox.jsx'), /runText\('lead\.clarify'/)

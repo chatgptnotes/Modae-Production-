@@ -362,7 +362,7 @@ export default function Admin() {
       setSavingAi(false)
     }
   }
-  // Real round-trip through the Supabase Edge Function to the model.
+  // Real round-trip through the Vercel /api/ai proxy to the model.
   const testAi = async () => {
     setTesting(true); setTestResult(null)
     const res = await testConnection(isCustomModel(model) ? customModel : model)

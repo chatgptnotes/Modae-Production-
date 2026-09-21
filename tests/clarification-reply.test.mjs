@@ -34,11 +34,8 @@ test('AI endpoints expose clarification answer mapping', () => {
   assert.match(read('api/ai.js'), /ALLOWED OPPORTUNITY FIELDS/)
   assert.match(read('api/ai.js'), /CURRENT OPPORTUNITY FIELDS \(already known; do not ask for these again\)/)
   assert.match(read('api/ai.js'), /Needs review/)
-  assert.match(read('supabase/functions/ai/index.ts'), /'clarification\.answer'/)
-  assert.match(read('supabase/functions/ai/index.ts'), /missing: STR/)
-  assert.match(read('supabase/functions/ai/index.ts'), /fieldKey: STR/)
   assert.match(read('api/ai.js'), /additionalCustomerInformation only for explicit/)
-  assert.match(read('supabase/functions/ai/index.ts'), /additionalCustomerInformation only for explicit/)
+  assert.doesNotMatch(read('src/ai.js'), /VITE_AI_FUNCTION_URL|VITE_AI_ADMIN_FUNCTION_URL/)
 })
 
 test('partial customer answers remain reviewable and blocking', () => {
