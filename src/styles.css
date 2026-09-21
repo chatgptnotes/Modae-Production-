@@ -3622,7 +3622,7 @@ button.install:hover { background: var(--primary-hover); }
    ========================================================================= */
 .lead-workspace {
   --ws-chrome: 0px;                 /* full-site shell has no global chrome */
-  --ws-bg: var(--bg-app);
+  --ws-bg: var(--palette-f58d7116);
   --ws-surface: var(--palette-7e6529f6);
   --ws-surface-2: var(--palette-f58d7116);
   /* .ws-body scrolls behind a classic (space-taking) scrollbar; its non-scrolling
@@ -3634,7 +3634,7 @@ button.install:hover { background: var(--primary-hover); }
   --ws-text: var(--text-main);
   --ws-text-2: var(--palette-1464dbd4);
   --ws-text-3: var(--text-subtle);
-  --ws-blue: var(--primary-hover); --ws-blue-soft: var(--primary-soft); --ws-blue-line: var(--primary-border);
+  --ws-blue: var(--primary-hover); --ws-blue-soft: var(--ws-surface-2); --ws-blue-line: var(--ws-border);
   --ws-primary: var(--primary-accent); --ws-primary-hover: var(--primary-hover);
   --ws-violet: var(--teal-dark); --ws-violet-soft: var(--teal-soft); --ws-violet-line: var(--palette-59862085);
   --ws-amber: var(--palette-58c5a833); --ws-amber-soft: var(--palette-c9fb3389); --ws-amber-line: var(--palette-6d08d430);
@@ -3691,7 +3691,7 @@ button.install:hover { background: var(--primary-hover); }
 .lead-flow-step.blocked { color: var(--ws-amber); }
 .lead-flow-step.blocked .lead-flow-dot { color: var(--ws-amber); background: var(--ws-amber-soft); border-color: var(--ws-amber); }
 .lead-flow-note { margin: 9px 0 0; color: var(--ws-text-3); font-size: 11px; }
-.lead-decision-card { margin-top: 14px; border: 1px solid var(--ws-blue-line); border-radius: 10px; padding: 11px 12px; background: var(--ws-blue-soft); }
+.lead-decision-card { margin-top: 14px; border: 1px solid var(--ws-border); border-radius: 10px; padding: 11px 12px; background: var(--ws-surface); }
 .lead-decision-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 9px; }
 .lead-decision-head > div { display: flex; flex-direction: column; gap: 2px; }
 .lead-decision-head b { font-size: 12px; color: var(--ws-text); }
@@ -3738,7 +3738,7 @@ button.install:hover { background: var(--primary-hover); }
   margin-top: 5px;
   padding: 7px 9px 5px;
   border-bottom: 1px solid var(--ws-border);
-  border-left: 3px solid var(--ws-primary);
+  border-left: 3px solid var(--ws-border-strong);
   border-radius: 4px 4px 0 0;
   background: var(--ws-surface-2);
   color: var(--ws-text);
@@ -3820,7 +3820,7 @@ button.install:hover { background: var(--primary-hover); }
   white-space: pre-wrap;
 }
 .lead-decision-full { grid-column: 1 / -1; }
-.required-mark { color: var(--ws-rose); font-weight: 700; margin-left: 2px; }
+.required-mark { color: var(--ws-text-3); font-weight: 700; margin-left: 2px; }
 .lead-decision-grid input, .lead-decision-grid select { width: 100%; min-width: 0; border: 1px solid var(--ws-border-strong); border-radius: 6px; padding: 7px 8px; background: var(--ws-surface); color: var(--ws-text); font-size: 11.5px; }
 .lead-decision-grid input:focus, .lead-decision-grid select:focus { outline: 2px solid var(--ws-blue-line); border-color: var(--ws-primary); }
 .lead-decision-grid input:disabled, .lead-decision-grid select:disabled { background: var(--ws-surface-2); color: var(--ws-text-3); cursor: not-allowed; }
