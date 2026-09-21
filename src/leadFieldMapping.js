@@ -54,6 +54,16 @@ export const inferEucFromText = (text = '') => {
   }
 }
 
+// Recover an explicit location label from the original enquiry when the AI
+// response omitted the corresponding structured field. This is deliberately
+// narrower than prose inference: a labelled site/location line is direct
+// evidence and should be safe to carry into the mandatory EUC Location field.
+export const labeledEucLocationFromText = (text = '') => {
+  const source = String(text || '')
+  const match = source.match(/(?:^|\n)\s*(?:(?:euc|eun|end\s+user)\s+(?:site\s+)?(?:location|address)|(?:site|plant|station|project\s+site|installation)\s+(?:location|address)|delivery\s+(?:location|address|site)|site\s+address)\s*:\s*([^\n;]+)/i)
+  return match?.[1]?.trim().replace(/[.,]+$/, '') || ''
+}
+
 export const splitBuSegment = (fields = []) => {
   const combined = (fields || []).find(item => item.state !== 'rejected' && /^bu\s+(?:and\s+)?segment$/i.test(labelText(item.k)))
   if (!combined?.v) return { bu: leadFieldValue(fields, 'bu'), segment: leadFieldValue(fields, 'segment') }
@@ -62,12 +72,14 @@ export const splitBuSegment = (fields = []) => {
 }
 
 export const leadIdentity = (lead, fields = []) => {
-  const inferred = inferEucFromText([
+  const sourceText = [
     lead?.subject,
     lead?.body,
     lead?.opportunityScope,
     lead?.ai?.summary,
-  ].filter(Boolean).join(' '))
+  ].filter(Boolean).join('\n')
+  const inferred = inferEucFromText(sourceText)
+  const labeledLocation = labeledEucLocationFromText(sourceText)
   const extractedEucName = leadFieldValue(fields, 'eucName')
   return {
     sellTo: String(lead?.sellTo || leadFieldValue(fields, 'sellTo') || lead?.parse?.sellTo || '').trim(),
@@ -79,7 +91,7 @@ export const leadIdentity = (lead, fields = []) => {
         ? extractedEucName
         : lead?.eucName || extractedEucName || lead?.parse?.eucName || inferred.eucName || '',
     ).trim(),
-    eucLocation: String(lead?.eucLocation || leadFieldValue(fields, 'eucLocation') || lead?.parse?.eucLocation || inferred.eucLocation || '').trim(),
+    eucLocation: String(lead?.eucLocation || leadFieldValue(fields, 'eucLocation') || lead?.parse?.eucLocation || labeledLocation || inferred.eucLocation || '').trim(),
     contactPerson: String(lead?.contactPerson || leadFieldValue(fields, 'contactPerson') || lead?.parse?.contactPerson || '').trim(),
     contactPhone: String(lead?.contactPhone || leadFieldValue(fields, 'contactPhone') || lead?.parse?.contactPhone || '').trim(),
   }

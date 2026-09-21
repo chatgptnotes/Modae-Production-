@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { leadFieldValue, leadIdentity, splitBuSegment, normalizeLeadLabel, inferEucFromText } from '../src/leadFieldMapping.js'
+import { leadFieldValue, leadIdentity, splitBuSegment, normalizeLeadLabel, inferEucFromText, labeledEucLocationFromText } from '../src/leadFieldMapping.js'
 
 const fields = [
   { k: 'CUSTOMER NAME', v: 'KSB Limited', state: 'accepted' },
@@ -60,4 +60,20 @@ test('prose installation details fill EUC name and location when labels are abse
   })
   assert.equal(identity.eucName, 'Demo Thermal Plant')
   assert.equal(identity.eucLocation, 'Korba, Chhattisgarh')
+})
+
+test('explicit Site Location text fills EUC Location when AI fields omit it', () => {
+  const body = `
+    End User: ABC Engineering Pvt. Ltd.
+    Site Location: Pune, Maharashtra
+    Contact Person: Rahul Mehta
+  `
+  assert.equal(labeledEucLocationFromText(body), 'Pune, Maharashtra')
+  assert.equal(leadIdentity({ body }, []).eucLocation, 'Pune, Maharashtra')
+})
+
+test('saved or structured EUC Location overrides the text fallback', () => {
+  const body = 'Site Location: Pune, Maharashtra'
+  assert.equal(leadIdentity({ body, eucLocation: 'Mumbai, Maharashtra' }, []).eucLocation, 'Mumbai, Maharashtra')
+  assert.equal(leadIdentity({ body }, [{ k: 'EUC Location', v: 'Nashik, Maharashtra' }]).eucLocation, 'Nashik, Maharashtra')
 })
