@@ -376,7 +376,7 @@ export function StoreProvider({ children }) {
       if (Date.now() - lastFetch < 10000) return
       lastFetch = Date.now()
       if (!hydratedRef.current) { hydrate(); return }
-      datastore.loadAll().then(res => { if (res && !res.empty) applyServer(res.slices) })
+      datastore.loadAll({ force: true }).then(res => { if (res && !res.empty) applyServer(res.slices) })
     }
     const onVisibility = () => { if (document.visibilityState === 'hidden') flushSaves() }
     // visibilitychange is not reliably delivered when the page is being torn
@@ -1946,6 +1946,14 @@ export function StoreProvider({ children }) {
     // ---- SharePoint sync bookkeeping --------------------------------------
     setSpSync(oppId, patch) {
       setState(s => ({ ...s, spSync: { ...s.spSync, [oppId]: { ...(s.spSync[oppId] || {}), ...patch, ts: new Date().toISOString() } } }))
+    },
+
+    async refreshSharedData() {
+      if (!datastore.dbEnabled()) return false
+      const res = await datastore.loadAll({ force: true })
+      if (!res || res.empty) return false
+      applyServer(res.slices)
+      return true
     },
 
     // ---- Auth (demo login — plaintext by design, disclaimed on screen) ----

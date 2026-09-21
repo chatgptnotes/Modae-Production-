@@ -15,6 +15,7 @@ test('the shared workspace subscribes to the rows that can resolve a release', (
   const store = read('src/store.jsx')
   assert.match(store, /datastore\.subscribeBusinessChanges\(reload/)
   assert.match(store, /datastore\.loadAll\(\{ force: true \}\)\.then/)
+  assert.match(store, /async refreshSharedData\(\)/)
   assert.match(store, /setTimeout\(flushSaves, 0\)/,
     'approval decisions must bypass the ordinary draft-save debounce')
 })
@@ -26,6 +27,12 @@ test('the live-sync migration publishes only shared business tables', () => {
   }
   assert.match(migration, /alter publication supabase_realtime add table public\.%I/)
   assert.match(migration, /existing RLS policies/)
+})
+
+test('normalized opportunity writes fail loudly instead of falling back to ignored legacy slices', () => {
+  const datastore = read('src/datastore.js')
+  assert.match(datastore, /const failed = results\.find\(result => result\.error\)/)
+  assert.match(datastore, /if \(failed\) throw failed\.error/)
 })
 
 test('the second final-release decision uses the normal transition gate before auto-advancing', () => {

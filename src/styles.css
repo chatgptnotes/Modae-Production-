@@ -9747,6 +9747,29 @@ table.sheet tfoot td {
   padding: 11px 0;
   color: #1E293B;
   white-space: normal;
+  cursor: pointer;
+}
+
+/* The pill is inline-flex inside a display:block title, so it needs its own
+   spacing and baseline correction rather than the row's flex gap. */
+.dashboard-page .dashboard-action-title .pill {
+  margin-right: 7px;
+  vertical-align: middle;
+}
+
+.dashboard-page .dashboard-action-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px 14px;
+  min-width: 0;
+  color: #64748B;
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+
+.dashboard-page .dashboard-action-meta > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .dashboard-page .dashboard-action-title {

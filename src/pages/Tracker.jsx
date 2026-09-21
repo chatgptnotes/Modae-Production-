@@ -186,6 +186,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const [closeReason, setCloseReason] = useState('')
   const [closeReasonNote, setCloseReasonNote] = useState('')
   const [deleteArmedId, setDeleteArmedId] = useState(null)
+  const [refreshing, setRefreshing] = useState(false)
   const sheetWrapRef = useRef(null)
   const lastSheetScrollLeft = useRef(0)
   const horizontalGestureNudged = useRef(false)
@@ -327,6 +328,13 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     setDateFilter(DEFAULT_DATE_FILTER)
     setDateFilterDraft(DEFAULT_DATE_FILTER)
     setDateFilterOpen(false)
+  }
+
+  const refreshOpportunities = async () => {
+    if (refreshing || !store.refreshSharedData) return
+    setRefreshing(true)
+    try { await store.refreshSharedData() }
+    finally { setRefreshing(false) }
   }
 
   const openDateFilterMenu = event => {
@@ -626,6 +634,10 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
         <button type="button" className={`tracker-date-filter-button${dateFilterActive ? ' active' : ''}`} onClick={openDateFilterMenu}
           aria-haspopup="dialog" aria-expanded={dateFilterOpen} title={dateFilterSummary}>
           Date filter{dateFilterActive ? ' · Active' : ''}
+        </button>
+        <button type="button" className="tracker-refresh-button" onClick={refreshOpportunities} disabled={refreshing}
+          title="Refresh opportunities from the shared workspace" aria-label="Refresh opportunities">
+          <Icon name="refresh" size={14} /> {refreshing ? 'Refreshing…' : 'Refresh'}
         </button>
         {isSalesRep && (
           <label className="mail-show-all tracker-show-all" title="Show all opportunities">

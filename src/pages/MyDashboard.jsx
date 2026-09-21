@@ -380,17 +380,30 @@ function useWorkQueue(store, role, mine) {
   return { opportunities, open, blocked, nextActions }
 }
 
+// 'info' rows carry no pill: only a real blocker or a pending decision is worth
+// flagging, and tagging everything would make the flags meaningless.
+const NEXT_ACTION_TAG = { block: { cls: 'Red', label: 'Blocked' }, wait: { cls: 'Amber', label: 'Waiting' } }
+
 function NextActions({ nextActions, nav }) {
-  if (!nextActions.length) return <p className="hint">Nothing is waiting — no open opportunity needs an action.</p>
-  return nextActions.map(({ opp, text, severity }) => (
-    <button key={opp.id} className="dashboard-action" onClick={() => nav(`/opp/${opp.id}`)}>
-      <span className="dashboard-action-title">
-        {severity === 'block' && <span className="pill Red" style={{ marginRight: 6 }}>Blocked</span>}
-        <b>{opp.id}</b> — {opp.oppName}
-      </span>
-      <span className="hint dashboard-action-detail">{text}</span>
-    </button>
-  ))
+  if (!nextActions.length) return <div className="dashboard-empty">Nothing is waiting — no open opportunity needs an action.</div>
+  return nextActions.map(({ opp, text, owner, severity }) => {
+    const tag = NEXT_ACTION_TAG[severity]
+    return (
+      <button key={opp.id} className="dashboard-action" onClick={() => nav(`/opp/${opp.id}`)}>
+        <span className="dashboard-action-title">
+          {tag && <span className={`pill ${tag.cls}`}>{tag.label}</span>}
+          <b>{opp.id}</b> — {opp.oppName}
+        </span>
+        {/* title= keeps the full sentence reachable when the 3-line clamp bites. */}
+        <span className="hint dashboard-action-detail" title={text}>{text}</span>
+        <span className="dashboard-action-meta">
+          {opp.sellTo && <span>{opp.sellTo}</span>}
+          {owner && <span>{severity === 'wait' ? `Waiting on ${owner}` : owner}</span>}
+          {opp.lastUpdated && <span>Updated {ddMmmYY(opp.lastUpdated)}</span>}
+        </span>
+      </button>
+    )
+  })
 }
 
 export default function MyDashboard() {

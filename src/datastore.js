@@ -270,7 +270,8 @@ async function saveBusinessTables(dirty = {}) {
   if (dirty.proposals) writes.push(['proposals', supabase.from('records').upsert(Object.entries(dirty.proposals).map(([id, row]) => ({ entity: 'proposals', id, data: row, rev: 1, updated_at: new Date().toISOString() })), { onConflict: 'entity,id' })])
   if (!writes.length) return []
   const results = await Promise.all(writes.map(([, promise]) => promise))
-  if (results.some(result => result.error)) return []
+  const failed = results.find(result => result.error)
+  if (failed) throw failed.error
   return writes.map(([key]) => key === 'sparesLines' ? 'sparesLines' : key === 'opportunities' ? 'opportunities' : key === 'proposals' ? 'proposals' : key)
 }
 
