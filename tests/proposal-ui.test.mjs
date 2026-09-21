@@ -21,6 +21,16 @@ test('proposal review and context panels use distinct, descriptive labels', () =
   assert.doesNotMatch(proposal, /<summary>Proposal notes/)
 })
 
+test('validated uploaded workbooks remain the active proposal source', () => {
+  const proposal = read('src/pages/Proposal.jsx')
+
+  assert.match(proposal, /const validatedUploadActive = reviewReady && !!p\.reviewedUpload\?\.sheets\?\.length/)
+  assert.match(proposal, /Validated uploaded proposal/)
+  assert.match(proposal, /Uploaded workbook validated and set as the active proposal/)
+  assert.match(proposal, /const next = \{[\s\S]*reviewedUpload,[\s\S]*reviewStatus: hasActiveBlock/)
+  assert.match(proposal, /Use AI draft instead/)
+})
+
 test('proposal readiness drawer exposes a useful collapsed summary', () => {
   const proposal = read('src/pages/Proposal.jsx')
 
@@ -97,10 +107,10 @@ test('revision badge opens current and snapshot-backed historical previews', () 
 
 test('historical proposal previews stay read-only but can print the selected revision', () => {
   const proposal = read('src/pages/Proposal.jsx')
-  assert.match(proposal, /Historical customer-facing document/)
+  assert.match(proposal, /Historical customer-facing Excel workbook/)
+  assert.match(proposal, /<WorkbookPreview workbook=\{previewWorkbook\}/)
   assert.match(proposal, /read-only historical snapshot/)
   assert.match(proposal, /setPrintingModel\(previewModel\)/)
-  assert.match(proposal, /comm && !previewModel\.historical/)
 })
 
 test('submitted proposal communications capture the approved proposal snapshot', () => {

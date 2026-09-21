@@ -32,6 +32,7 @@ import { reviewFindingKey } from '../approvalMemory.js'
 import OpportunityComingSoon from '../workbench/OpportunityComingSoon.jsx'
 import { modaeStandardCommercialTerms, normalizeCommercialTerm } from '../commercialTerms.js'
 import { loadProposalTemplateBuffer, resolveProposalTemplate } from '../proposal/templateRegistry.js'
+import { customerProposalArtifact } from '../proposal/emailAttachments.js'
 import { latestSubmissionForRevision, submissionStatusLabel } from '../submissionStatus.js'
 
 const ROUTE_TABS = {
@@ -530,6 +531,9 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   const [workbook, setWorkbook] = useState('proposal')
   const [printingModel, setPrintingModel] = useState(null)
   const [previewTarget, setPreviewTarget] = useState(null)
+  const [previewWorkbook, setPreviewWorkbook] = useState(null)
+  const [previewWorkbookBusy, setPreviewWorkbookBusy] = useState(false)
+  const [previewWorkbookError, setPreviewWorkbookError] = useState('')
   const [referencePreviewOpen, setReferencePreviewOpen] = useState(false)
   const [referenceLoading, setReferenceLoading] = useState(false)
   const [referenceError, setReferenceError] = useState('')
@@ -922,6 +926,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   const submitted = comms.some(c => c.kind === 'submission' || c.kind === 'proposal-email')
   const reviewStatus = p.reviewStatus || 'Not reviewed'
   const reviewReady = reviewStatus === 'Validated' || reviewStatus === 'Override accepted'
+  const validatedUploadActive = reviewReady && !!p.reviewedUpload?.sheets?.length
   const overrideAccepted = reviewStatus === 'Override accepted' && p.reviewOverride?.accepted
   const normalizedReviewIssues = (p.reviewIssues || []).map(informationalReviewFinding)
   const displayReviewIssues = normalizedReviewIssues.map(issue => overrideAccepted
@@ -941,7 +946,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       : reviewStatus === 'Override accepted'
         ? { tone: 'override', title: 'Review override accepted', text: 'The findings were saved and the proposal can continue through approval.' }
         : p.reviewedUpload
-          ? { tone: 'neutral', title: 'Uploaded proposal review', text: 'This uploaded workbook is being checked against the opportunity and its approval history.' }
+            ? { tone: 'neutral', title: 'Uploaded proposal review', text: 'This uploaded workbook is being checked against the opportunity and its approval history.' }
           : { tone: 'neutral', title: 'Review the generated proposal', text: 'Validate the system-generated workbook before requesting approval.' }
   const readinessSummary = readinessSummaryFor({ blockers, pendingForOpp, submitted })
 
@@ -1070,7 +1075,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
         setReviewMessage(allIssues.length === 0
           ? 'Review complete — proposal is ready to proceed.'
           : automatic
-            ? 'Workbook uploaded, imported, and validated. Review the findings before proceeding.'
+            ? 'Uploaded workbook validated and set as the active proposal. Review the findings before proceeding.'
             : 'Review complete. The proposal can now move to approval or customer send.')
       } else {
         setReviewError('Review found blocking issues. Resolve them before continuing.')
@@ -1245,6 +1250,49 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     })()
     : null
 
+  // Revision previews use the same customer-safe workbook artifact that is
+  // attached during submission, keeping the preview faithful to the Excel
+  // file the customer will receive for every proposal route.
+  useEffect(() => {
+    let cancelled = false
+    if (!previewModel || !previewTarget) {
+      setPreviewWorkbook(null)
+      setPreviewWorkbookBusy(false)
+      setPreviewWorkbookError('')
+      return () => { cancelled = true }
+    }
+    const previewRoute = docRoute(previewModel.p, opp)
+    const selectedTemplate = resolveProposalTemplate(store.config, previewRoute)
+    const pricing = buildPricing(store, previewModel.p)
+    setPreviewWorkbook(null)
+    setPreviewWorkbookBusy(true)
+    setPreviewWorkbookError('')
+    loadProposalTemplateBuffer(selectedTemplate)
+      .then(templateBuffer => customerProposalArtifact({
+        templateBuffer,
+        p: previewModel.p,
+        opp,
+        doc: previewModel.doc,
+        priced: previewModel.priced,
+        totalQty: pricing.totalQty,
+        lineQuoted: pricing.lineQuoted,
+        lineCost: pricing.lineCost,
+        linePrice: pricing.linePrice,
+        totals: pricing.computeTotals(previewModel.p),
+        route: previewRoute,
+        mapping: selectedTemplate.mapping,
+        mappingWarnings: selectedTemplate.mappingWarnings,
+      }))
+      .then(artifact => {
+        if (!cancelled) setPreviewWorkbook(artifact.workbookPreview)
+      })
+      .catch(error => {
+        if (!cancelled) setPreviewWorkbookError(error?.message || 'Proposal Excel preview could not be generated')
+      })
+      .finally(() => { if (!cancelled) setPreviewWorkbookBusy(false) })
+    return () => { cancelled = true }
+  }, [previewTarget?.key, previewModel?.p?.revision, oppId, store.config?.uploads?.proposalTemplates]) // eslint-disable-line
+
   // Signal List and Rack Layout are project artefacts. Biji, 13 Aug: "in the
   // spare parts case, there will not be any signal list, there will not be
   // rack layout." Hide the tabs rather than show them with an apology.
@@ -1323,7 +1371,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
             onSelect={option => setPreviewTarget(option)}
           /></h3>
           <div className="proposal-header-meta" aria-label="Proposal setup">
-            <span className="proposal-source-label">{p.reviewedUpload ? 'Uploaded proposal' : 'System-generated proposal'}</span>
+            <span className="proposal-source-label">{validatedUploadActive ? 'Validated uploaded proposal' : p.reviewedUpload ? 'Uploaded proposal' : 'System-generated proposal'}</span>
             {!embedded && <Link className="btn proposal-folder-link" to={`/folders/${oppId}`}>Back to folder</Link>}
             <span className="proposal-status-label">Review status</span>
             <span className={`pill ${reviewReady ? 'won' : reviewStatus === 'Needs attention' ? 'Red' : 'grey'}`}>{reviewStatus}</span>
@@ -1377,7 +1425,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       {p.reviewedUpload && (
         <section className="proposal-uploaded-file-card" aria-label="Uploaded proposal">
           <div>
-            <span className="eyebrow">Uploaded proposal</span>
+            <span className="eyebrow">{validatedUploadActive ? 'Active uploaded proposal' : 'Uploaded proposal'}</span>
             <strong>{p.reviewedUpload.filename}</strong>
             <span className="hint">Uploaded {approvalDate(p.reviewedUpload.uploadedAt)} · {fmtSize(p.reviewedUpload.size)}</span>
           </div>
@@ -1830,11 +1878,11 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       )}
 
       {previewModel && (
-        <Modal title={`Proposal preview — ${oppId}`} onClose={() => setPreviewTarget(null)} wide className="proposal-preview-modal">
+        <Modal title={`Proposal preview — ${oppId}`} onClose={() => setPreviewTarget(null)} wide className="proposal-preview-modal workbook-preview-modal">
           <div className="proposal-preview-toolbar">
             <span className="hint">
-              {previewModel.historical ? 'Historical customer-facing document' : 'Customer-facing document'} · Rev-{previewModel.p.revision}
-              {previewModel.historical ? ' · read-only historical snapshot' : comm ? ' · the ModAE costing block below is internal and editable' : ' · read-only preview'}
+              {previewModel.historical ? 'Historical customer-facing Excel workbook' : 'Customer-facing Excel workbook'} · Rev-{previewModel.p.revision}
+              {previewModel.historical ? ' · read-only historical snapshot' : ' · read-only customer-facing preview'}
             </span>
             <div className="forms-actions">
               <button onClick={() => setPreviewTarget(null)}>Close</button>
@@ -1843,66 +1891,12 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
               </button>
             </div>
           </div>
-          <div className="proposal-preview-scroll">
-            <PrintDoc p={previewModel.p} opp={opp} doc={previewModel.doc} priced={previewModel.priced} totals={previewModel.totals} lineQuoted={previewModel.lineQuoted} />
-            {/* ModAE-internal costing — deliberately outside PrintDoc, which is
-                the customer document. None of this reaches the customer copy. */}
-            {comm && !previewModel.historical && (
-              <section className="proposal-preview-internal">
-                <div className="section-title"><Icon name="lock" size={13} /> ModAE internal — costing (not sent to the customer)</div>
-                {costingFactorsPanel}
-                <div className="sheet-wrap">
-                  <table className="sheet">
-                    <thead>
-                      <tr>
-                        <th>Sl.</th><th>BOQ line</th><th className="num">Total Quantity</th>
-                        <th className="num">{`Quoted ${proposalSymbol}`}</th>
-                        <th className="num internal">Unit Cost ₹</th><th className="num internal">Total Cost ₹</th>
-                        <th className="num internal">Computed ₹</th><th className="num internal">List Price</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {p.bom.map((l, i) => {
-                        const q = totalQty(l)
-                        return (
-                          <tr key={i}>
-                            <td className="num">{i + 1}</td>
-                            <td>{l.desc || l.itemCategory}<div className="hint">{l.pn || l.custRef || ''}</div></td>
-                            <td className="num">{q}</td>
-                            <td className="num"><input type="number" min="0" value={l.quoted} onChange={updLine(i, 'quoted', false)} placeholder={fmt(Math.round(lineComputed(l)))} style={{ width: 90, textAlign: 'right' }} title="Customer-facing (target) price — blank = computed price" /></td>
-                            <td className="num internal">₹ {fmt(lineCost(l))}</td>
-                            <td className="num internal">₹ {fmt(lineCost(l) * q)}</td>
-                            <td className="num internal">₹ {fmt(Math.round(lineComputed(l)))}</td>
-                            <td className="num internal">{l.currency === 'USD' ? '$' : l.currency === 'INR' ? '₹' : '€'} {fmt(linePrice(l))}</td>
-                          </tr>
-                        )
-                      })}
-                      {!p.bom.length && <tr><td colSpan={8} className="hint">No lines yet.</td></tr>}
-                    </tbody>
-                    {p.bom.length > 0 && (
-                      <tfoot>
-                        <tr>
-                          <td colSpan={3}>Totals</td>
-                          <td className="num">{proposalSymbol} {fmt(p.bom.reduce((sum, line) => sum + lineQuoted(line) * totalQty(line), 0), 2)}</td>
-                          <td className="internal"></td>
-                          <td className="num internal">₹ {fmt(totals.cost)}</td>
-                          <td className="internal" colSpan={2}></td>
-                        </tr>
-                      </tfoot>
-                    )}
-                  </table>
-                </div>
-                <div className="costing-note">
-                  Grey columns are calculated from the costing factors and the price list — edit the factors above or a line's Quoted ₹ to change them.
-                </div>
-              </section>
-            )}
-          </div>
+          <WorkbookPreview workbook={previewWorkbook} loading={previewWorkbookBusy} error={previewWorkbookError} />
         </Modal>
       )}
 
       {referencePreviewOpen && (
-        <Modal title={`Meggitt Item List — ${oppId}`} onClose={() => setReferencePreviewOpen(false)} wide className="proposal-preview-modal">
+        <Modal title={`Meggitt Item List — ${oppId}`} onClose={() => setReferencePreviewOpen(false)} wide className="proposal-preview-modal workbook-preview-modal">
           <div className="proposal-preview-toolbar">
             <span className="hint">Editable source workbook · changes update the proposal BOQ immediately</span>
             <button onClick={() => setReferencePreviewOpen(false)}>Close</button>
@@ -1926,7 +1920,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       )}
 
       {templatePreviewOpen && (
-        <Modal title={`${route === 'Project' ? 'Project Proposal' : route === 'Spares' ? 'Spares Firm Offer' : 'Service Proposal'} - ${oppId}`} onClose={() => setTemplatePreviewOpen(false)} wide className="proposal-preview-modal">
+        <Modal title={`${route === 'Project' ? 'Project Proposal' : route === 'Spares' ? 'Spares Firm Offer' : 'Service Proposal'} - ${oppId}`} onClose={() => setTemplatePreviewOpen(false)} wide className="proposal-preview-modal workbook-preview-modal">
           <div className="proposal-preview-toolbar">
             <span className="hint">Draft/reference workbook only — customer documents use the current ModAE preview</span>
             <button onClick={() => setTemplatePreviewOpen(false)}>Close</button>

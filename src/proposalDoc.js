@@ -9,6 +9,7 @@ import { routeForType } from './seed.js'
 import { MODAE_STANDARD_TERMS } from './tenderParse.js'
 import { MODAE_BRAND } from './branding/modae.js'
 import { classRule } from './customerClasses.js'
+import { normalizeLocationValue } from './locations.js'
 
 export const MODAE_COMPANY = {
   name: MODAE_BRAND.letterhead.legalName,
@@ -258,7 +259,7 @@ export function defaultExecSummary(p, opp) {
   const buyer = opp?.sellTo || 'The customer'
   const project = p.project || opp?.oppName || 'the referenced scope'
   // buildProposal already appends the station to `project` — don't say it twice.
-  const siteRaw = [opp?.eucName, opp?.eucLocation].filter(Boolean).join(', ')
+  const siteRaw = [opp?.eucName, normalizeLocationValue(opp?.eucLocation)].filter(Boolean).join(', ')
   const site = siteRaw && !project.includes(opp?.eucName) ? siteRaw : ''
   const days = p.validityDays ?? 30
   return [

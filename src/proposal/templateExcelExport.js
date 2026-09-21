@@ -2,6 +2,7 @@ import ExcelJS from 'exceljs'
 import { effectiveRate } from '../utils.js'
 import { currencySymbol } from '../currency.js'
 import { BUILT_IN_PROPOSAL_TEMPLATES, proposalTemplateLane } from './templateRegistry.js'
+import { normalizeLocationValue } from '../locations.js'
 
 const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 const LOGO_URL = new URL('../../branding/mod-ae/assets/modae-official-logo.png', import.meta.url).href
@@ -172,7 +173,7 @@ function setCoverSheet(workbook, worksheet, { p, opp, doc, route, mapping }) {
   const subject = customerSafe(p.subject) || customerSafe(opp.oppName) || `${route || 'Techno-Commercial'} Proposal`
   const coverTargets = [
     ['customerName', customerName, 'B11:Q11', 'B11'],
-    ['location', opp.eucLocation || opp.location || '', 'B12:Q12', 'B12'],
+    ['location', normalizeLocationValue(opp.eucLocation || opp.location), 'B12:Q12', 'B12'],
     ['customerAddress', opp.customerAddress || '', 'B13:Q13', 'B13'],
     ['contactPerson', customerSafe(p.kindAttn) || customerSafe(opp.contactPerson), 'C16:Q16', 'C16'],
     ['subject', [p.rfqNumber && `RFQ ${p.rfqNumber}`, subject].filter(Boolean).join(' - '), 'C18:Q18', 'C18'],

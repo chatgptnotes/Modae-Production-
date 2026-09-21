@@ -502,7 +502,7 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
         <div className="okbox">Proposal email marked as sent — logged in Communications; moved to Follow-up.</div>
       )}
       {previewOpen && (
-        <Modal onClose={() => setPreviewOpen(false)} wide className="proposal-preview-modal">
+        <Modal onClose={() => setPreviewOpen(false)} wide className="proposal-preview-modal workbook-preview-modal">
           <div className="proposal-preview-toolbar">
             <span className="hint">Exact customer Excel attachment · read-only</span>
             <button type="button" onClick={() => setPreviewOpen(false)}>Close</button>

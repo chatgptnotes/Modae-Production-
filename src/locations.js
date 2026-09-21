@@ -13,6 +13,26 @@ const localLocations = INDIA_LOCATIONS.map(item => ({
 const textFor = item => [item.city, item.state, item.country].filter(Boolean).join(' ').toLowerCase()
 const keyFor = item => `${item.city}|${item.state}|${item.country}`.toLowerCase()
 
+// Keep free-form locations usable while making the common Indian address
+// spelling consistent in customer-facing documents. For example,
+// "Plant - 400000, Maharashtra" becomes "Plant, Maharashtra - 400000".
+// Unknown formats are preserved rather than guessed or discarded.
+export function normalizeLocationValue(value) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim()
+  if (!text) return ''
+  const suffixPostal = text.match(/^(.+?),\s*([^,]+?)(?:\s*,\s*(.+?))?\s*-\s*(\d{3,10})$/)
+  if (suffixPostal) {
+    const [, place, region, country, postalCode] = suffixPostal
+    const countryPart = country && !/^india$/i.test(country.trim()) ? `, ${country.trim()}` : ''
+    return `${place.trim()}, ${region.trim()}${countryPart} - ${postalCode}`
+  }
+  const prefixPostal = text.match(/^(.+?)\s*-\s*(\d{3,10})\s*,\s*([^,]+?)(?:\s*,\s*(.+))?$/)
+  if (!prefixPostal) return text
+  const [, place, postalCode, region, country] = prefixPostal
+  const countryPart = country && !/^india$/i.test(country.trim()) ? `, ${country.trim()}` : ''
+  return `${place.trim()}, ${region.trim()}${countryPart} - ${postalCode}`
+}
+
 export function localLocationSearch(query, limit = 50) {
   const needle = String(query || '').trim().toLowerCase()
   if (!needle) return []

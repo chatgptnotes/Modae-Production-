@@ -34,7 +34,7 @@ import { downloadKycTemplate } from '../kycTemplate.js'
 import { PROJECT_TYPES, oppTypesForProjectType, templatesForSelection, simulatedLead, simulatedCount, SIMULATED_CUSTOMER_SCENARIOS } from '../simulatedLeads.js'
 import { buildLeadProposalData } from '../leadBoq.js'
 import { leadFieldValue as mappedLeadFieldValue, splitBuSegment, leadIdentity } from '../leadFieldMapping.js'
-import { useGlobalLocationSearch } from '../locations.js'
+import { normalizeLocationValue, useGlobalLocationSearch } from '../locations.js'
 // Common-mailbox lead inbox: AI parses each inquiry, a human decides whether it
 // becomes an opportunity (Qualify → registration / intake form) or is dropped.
 const PILL = { New: 'Blue', Qualified: 'Amber', Dropped: 'Red', Converted: 'Green' }
@@ -1386,7 +1386,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
     location: initialLocation,
     region: initialRegion,
     eucName: identity.eucName,
-    eucLocation: identity.eucLocation || initialLocation,
+    eucLocation: normalizeLocationValue(identity.eucLocation || initialLocation),
     contactPerson: identity.contactPerson || storedCustomerContact,
     contactPhone: identity.contactPhone || sourcePhone,
     owner: savedOverride ? lead.assignedOwner : regionalOwner,
@@ -1846,7 +1846,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
       region: draft.region,
       location: draft.location,
       eucName: String(draft.eucName || '').trim(),
-      eucLocation: String(draft.eucLocation || '').trim(),
+      eucLocation: normalizeLocationValue(draft.eucLocation),
       contactPerson: String(draft.contactPerson || '').trim(),
       contactPhone: String(draft.contactPhone || '').trim(),
       suggestedOwner: routedOwner || effectiveOwner,
@@ -2030,7 +2030,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
   }
 
   const selectEucLocation = (item) => {
-    const value = [item.city, item.state, item.country].filter(Boolean).join(', ')
+    const value = normalizeLocationValue([item.city, item.state, item.country].filter(Boolean).join(', '))
     setEucLocationSearch(value)
     setEucLocationOpen(false)
     updateDecisionField('eucLocation', value)
