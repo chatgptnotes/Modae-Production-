@@ -60,8 +60,22 @@ export const inferEucFromText = (text = '') => {
 // evidence and should be safe to carry into the mandatory EUC Location field.
 export const labeledEucLocationFromText = (text = '') => {
   const source = String(text || '')
-  const match = source.match(/(?:^|\n)\s*(?:(?:euc|eun|end\s+user)\s+(?:site\s+)?(?:location|address)|(?:site|plant|station|project\s+site|installation)\s+(?:location|address)|delivery\s+(?:location|address|site)|site\s+address)\s*:\s*([^\n;]+)/i)
-  return match?.[1]?.trim().replace(/[.,]+$/, '') || ''
+  const label = '(?:(?:euc|eun|end\\s+user)\\s+(?:site\\s+)?(?:location|address)|(?:site|plant|station|project\\s+site|installation)\\s+(?:location|address)|(?:required\\s+)?delivery\\s+(?:location|address|site)|site\\s+address)'
+  const inline = source.match(new RegExp(`(?:^|\\n)[ \\t]*${label}[ \\t]*:[ \\t]*([^\\n;]+)`, 'i'))
+  if (inline?.[1]) return inline[1].trim().replace(/[.,]+$/, '').replace(/,\\s*India$/i, '')
+
+  // RFQs commonly put the delivery heading on one line and the company/site
+  // address on the following lines. Prefer the city/state line when the first
+  // line is only the delivery customer's name.
+  const lines = source.split(/\r?\n/)
+  const heading = new RegExp(`^\\s*${label}\\s*:?\\s*$`, 'i')
+  for (let i = 0; i < lines.length; i += 1) {
+    if (!heading.test(lines[i])) continue
+    const following = lines.slice(i + 1, i + 4).map(line => line.trim()).filter(Boolean)
+    const locationLine = following.find(line => /,/.test(line)) || following[0]
+    if (locationLine) return locationLine.replace(/[.,]+$/, '').replace(/,\s*India$/i, '')
+  }
+  return ''
 }
 
 export const splitBuSegment = (fields = []) => {
@@ -80,18 +94,24 @@ export const leadIdentity = (lead, fields = []) => {
   ].filter(Boolean).join('\n')
   const inferred = inferEucFromText(sourceText)
   const labeledLocation = labeledEucLocationFromText(sourceText)
+  const sellTo = String(lead?.sellTo || leadFieldValue(fields, 'sellTo') || lead?.parse?.sellTo || '').trim()
   const extractedEucName = leadFieldValue(fields, 'eucName')
+  const eucName = String(
+    extractedEucName && lead?.eucName && lead?.contactPerson
+      && String(lead.eucName).trim() === String(lead.contactPerson).trim()
+      ? extractedEucName
+      : lead?.eucName || extractedEucName || lead?.parse?.eucName || inferred.eucName || sellTo,
+  ).trim()
+  const eucLocation = String(
+    lead?.eucLocation || leadFieldValue(fields, 'eucLocation') || lead?.parse?.eucLocation
+      || lead?.location || labeledLocation || inferred.eucLocation || '',
+  ).trim()
   return {
-    sellTo: String(lead?.sellTo || leadFieldValue(fields, 'sellTo') || lead?.parse?.sellTo || '').trim(),
+    sellTo,
     // Repair the old fallback that copied Contact Person into EUC Name. A
     // confirmed Site/Plant extraction is the stronger source in that exact case.
-    eucName: String(
-      extractedEucName && lead?.eucName && lead?.contactPerson
-        && String(lead.eucName).trim() === String(lead.contactPerson).trim()
-        ? extractedEucName
-        : lead?.eucName || extractedEucName || lead?.parse?.eucName || inferred.eucName || '',
-    ).trim(),
-    eucLocation: String(lead?.eucLocation || leadFieldValue(fields, 'eucLocation') || lead?.parse?.eucLocation || labeledLocation || inferred.eucLocation || '').trim(),
+    eucName,
+    eucLocation,
     contactPerson: String(lead?.contactPerson || leadFieldValue(fields, 'contactPerson') || lead?.parse?.contactPerson || '').trim(),
     contactPhone: String(lead?.contactPhone || leadFieldValue(fields, 'contactPhone') || lead?.parse?.contactPhone || '').trim(),
   }

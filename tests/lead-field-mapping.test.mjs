@@ -72,6 +72,33 @@ test('explicit Site Location text fills EUC Location when AI fields omit it', ()
   assert.equal(leadIdentity({ body }, []).eucLocation, 'Pune, Maharashtra')
 })
 
+test('same-customer delivery RFQs infer EUC name and multiline delivery location', () => {
+  const body = `
+    Please submit your quotation for the following spare components.
+
+    Required delivery location:
+    Tata Power Ltd.
+    Mumbai, Maharashtra, India
+  `
+  assert.equal(labeledEucLocationFromText(body), 'Mumbai, Maharashtra')
+  assert.deepEqual(leadIdentity({ sellTo: 'Tata Power Ltd.', body }, []), {
+    sellTo: 'Tata Power Ltd.',
+    eucName: 'Tata Power Ltd.',
+    eucLocation: 'Mumbai, Maharashtra',
+    contactPerson: '',
+    contactPhone: '',
+  })
+})
+
+test('explicit end-user values override same-customer fallback', () => {
+  const identity = leadIdentity({ sellTo: 'ABC EPC Pvt. Ltd.', body: 'Delivery location: Chennai, Tamil Nadu' }, [
+    { k: 'EUN', v: 'Tata Power Mumbai Plant', state: 'accepted' },
+    { k: 'EUC Location', v: 'Mumbai, Maharashtra', state: 'accepted' },
+  ])
+  assert.equal(identity.eucName, 'Tata Power Mumbai Plant')
+  assert.equal(identity.eucLocation, 'Mumbai, Maharashtra')
+})
+
 test('saved or structured EUC Location overrides the text fallback', () => {
   const body = 'Site Location: Pune, Maharashtra'
   assert.equal(leadIdentity({ body, eucLocation: 'Mumbai, Maharashtra' }, []).eucLocation, 'Mumbai, Maharashtra')
