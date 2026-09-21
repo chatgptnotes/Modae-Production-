@@ -141,7 +141,7 @@ const titleCase = value => String(value || '').toLowerCase().split(/\s+/).map((w
   return small ? word : word.charAt(0).toUpperCase() + word.slice(1)
 }).join(' ').replace(/\bBoq\b/g, 'BOQ').replace(/\bKyc\b/g, 'KYC').replace(/\bRfq\b/g, 'RFQ')
 
-function OpportunityProgress({ activeStep, completedThrough, onStep, steps = WORKFLOW_STEPS }) {
+function OpportunityProgress({ activeStep, completedThrough, onStep, onNext, steps = WORKFLOW_STEPS }) {
   const activeIndex = steps.findIndex(step => step.slug === activeStep)
   return (
     <nav className="opportunity-progress" aria-label="Opportunity progress">
@@ -157,9 +157,13 @@ function OpportunityProgress({ activeStep, completedThrough, onStep, steps = WOR
             <Icon name="chevronLeft" size={17} />
           </button>
           <span>{steps[activeIndex]?.label}</span>
-          <button type="button" className="progress-arrow" disabled={activeIndex < 0 || activeIndex >= completedThrough}
+          <button type="button" className="progress-arrow" disabled={activeIndex < 0 || activeIndex >= steps.length - 1}
             aria-label="Next workflow step" title="Next workflow step"
-            onClick={() => onStep?.(steps[activeIndex + 1].slug)}>
+            onClick={() => {
+              const next = steps[activeIndex + 1]
+              if (!next) return
+              onNext?.(next, activeIndex < completedThrough)
+            }}>
             <Icon name="chevronRight" size={17} />
           </button>
         </div>
@@ -309,6 +313,11 @@ export default function Workbench() {
     }
     const moved = moveMilestone(step.milestone, step.tab)
     if (opp.route === 'Service' && moved) store.updateServiceFlow(opp.id, { servicePhase: step.servicePhase })
+  }
+  const nextWorkflowStep = (step, alreadyCompleted) => {
+    if (!step) return
+    if (alreadyCompleted) selectStep(step.slug)
+    else advanceStep(step.slug)
   }
   const exceptionApprovalFor = blocker => (store.approvals || []).find(a =>
     a.type === 'Milestone exception' && a.oppId === opp.id
@@ -462,7 +471,7 @@ export default function Workbench() {
         <div className="summary-meta-item opp-summary-action"><span>Next action</span><b>{nextAction.text || NEXT_ACTION[opp.milestone] || 'Progress the opportunity'}</b></div>
         <div className={`summary-meta-item summary-due ${isOverdue ? 'is-overdue' : ''}`}><span>Due</span><div className="summary-meta-value"><b>{ddMmmYY(due) || '-'}</b>{isOverdue && <Chip tone="state-Blocks">Overdue</Chip>}</div></div>
       </div>
-      <OpportunityProgress steps={workflowSteps} activeStep={activeStep} completedThrough={persistedStepIndex} onStep={selectStep} />
+      <OpportunityProgress steps={workflowSteps} activeStep={activeStep} completedThrough={persistedStepIndex} onStep={selectStep} onNext={nextWorkflowStep} />
       {transition && (
         <Modal title={transition.kind === 'blocked' ? `Cannot move from ${opp.milestone} to ${transition.target}` : `Move back to ${transition.target}`} onClose={() => setTransition(null)} wide>
           {transition.kind === 'blocked' ? (
@@ -511,7 +520,7 @@ export default function Workbench() {
         {viewTab === 'overview' && opp.route === 'Spares' && <SparesIntakeTab opp={opp} detailsRef={detailsRef} />}
         {viewTab === 'overview' && opp.route !== 'Spares' && <OverviewTab opp={opp} detailsRef={detailsRef} />}
         {viewTab === 'requirement' && <RequirementTab opp={opp} />}
-        {viewTab === 'requirement-validation' && <SparesRequirementTab opp={opp} sourceText={sourceText} />}
+        {viewTab === 'requirement-validation' && <SparesRequirementTab opp={opp} sourceText={sourceText} onContinueToSourcing={() => advanceStep('sourcing')} />}
         {viewTab === 'customer' && <CustomerKycTab opp={opp} />}
         {viewTab === 'registration' && <RegistrationTab opp={opp} goTab={goTab} />}
         {viewTab === 'clarifications' && <ClarificationsTab opp={opp} sourceText={sourceText} />}
@@ -692,7 +701,7 @@ function CommercialDecisionPanel({ opp }) {
   )
 }
 
-function SparesRequirementTab({ opp, sourceText = '' }) {
+function SparesRequirementTab({ opp, sourceText = '', onContinueToSourcing }) {
   return (
     <div className="spares-merged-workflow">
       <CommercialDecisionPanel opp={opp} />
@@ -705,6 +714,11 @@ function SparesRequirementTab({ opp, sourceText = '' }) {
         <div className="workbench-section-title">Source &amp; opportunity details</div>
         <p className="hint">Use this reference to confirm the requested parts, quantities, specifications, compatibility, and delivery requirements.</p>
         <RequirementTab opp={opp} />
+      </div>
+      <div className="forms-actions workflow-next-actions">
+        <button type="button" className="primary" onClick={onContinueToSourcing}>
+          <Icon name="arrowRight" size={13} /> Next: Spares Sourcing
+        </button>
       </div>
     </div>
   )
