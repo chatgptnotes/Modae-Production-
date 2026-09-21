@@ -84,6 +84,14 @@ test('AI missing information is optional for registration', () => {
   assert.doesNotMatch(inbox, /Optional information still missing/)
 })
 
+test('compact lead review keeps the AI clarification email action visible', () => {
+  assert.match(inbox, /Draft clarification email/)
+  assert.match(inbox, /Ask customer for missing information/)
+  assert.match(inbox, /async function draftClarificationMail\(\)/)
+  assert.match(inbox, /clarification-rail/)
+  assert.doesNotMatch(css, /\.structured-active-sections \.compact-workflow-content \.compact-action-col \.compact-clarification-rail[\s\S]*display: none/)
+})
+
 test('internal senders cannot become customer contacts', () => {
   assert.match(inbox, /normalizeLeadContactFields\(ai\.fields/)
   assert.match(inbox, /contactPerson: value\(\/contact person\/i\) \|\| ''/)

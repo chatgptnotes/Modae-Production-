@@ -638,6 +638,10 @@ function LeadVerification({ lead, customerStatus, store }) {
       </div>
       {kycError && <div className="errbox" role="alert">{kycError}</div>}
       {!leadVerificationComplete(lead, customerStatus, { config: store.config }) && <p className="lead-decision-note">Customer KYC is not complete — Opportunity creation is blocked.</p>}
+      {pendingCancel && <ConfirmModal title="Remove KYC file" tone="danger"
+        message={`Cancel the ${pendingCancel.item} file only? Other KYC documents and the KYC request will remain unchanged.`}
+        confirmLabel="Remove file" onClose={() => setPendingCancel(null)}
+        onConfirm={() => cancelVerifiedFile(pendingCancel.item, pendingCancel.row)} />}
     </div>
   )
 
@@ -1643,6 +1647,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
   // approval gates block the next step.
   const registrationBlocked = missingIdentity.length > 0 || registrationPendingLow.length > 0 || verificationBlocked
   const canAct = !['Converted', 'Dropped'].includes(lead.status)
+  const clarificationAvailable = canAct && !!clarificationKindFor(lead, previewCustomerStatus)
 
   const createDirectly = () => {
     if (registrationBlocked || directCreateBusy || lead.status !== 'Qualified') return
@@ -1693,6 +1698,11 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
             </li>
           ))}
         </ul>
+        {clarificationAvailable && (
+          <button className="primary compact-missing-email-action" type="button" onClick={draftClarificationMail} disabled={clarBusy}>
+            <Icon name="mail" size={12} /> {clarBusy ? 'Drafting email…' : 'Ask customer for missing information'}
+          </button>
+        )}
       </div>
     </details>
   )
@@ -1706,9 +1716,9 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
   const clarRecord = lead.clarification || null
   const clarKind = clarificationKindFor(lead, previewCustomerStatus)
   const clarSender = clarificationSender(lead, store.users, store.config)
-  const canDraftClar = canAct && !!clarKind
+  const canDraftClar = clarificationAvailable
 
-  const draftClarificationMail = async () => {
+  async function draftClarificationMail() {
     setClarErr('')
     setClarBusy(true)
     try {
@@ -1727,7 +1737,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
         feeText: `₹${Number(store.config?.amberFee?.amount ?? 25000).toLocaleString('en-IN')}`,
         senderBlock: [clarSender.rule === 'assigned-owner' ? clarSender.name : '', 'ModAE India Pvt Ltd']
           .filter(Boolean).join('\n'),
-      })
+      }, { timeoutMs: 8000 })
       const draft = draftClarification(lead, {
         kind: clarKind, customer, users: store.users, config: store.config, aiBody: aiBody || '',
       })
@@ -2416,6 +2426,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
               )}
 
               {clarDraft && (
+                <Modal title="Review clarification email" className="clarification-compose-modal" onClose={() => { setClarDraft(null); setClarErr('') }}>
                 <div className="clar-mail-form">
                   <label className="afield">To
                     <input value={clarDraft.to} onChange={e => setClarDraft({ ...clarDraft, to: e.target.value })} />
