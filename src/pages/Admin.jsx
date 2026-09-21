@@ -46,7 +46,6 @@ const FALLBACK_PROVIDER = 'Built-in fallback'
 const DEMO_CONTROLS_PASSWORD = '32605'
 const TEMPLATE_LANES = BUILT_IN_PROPOSAL_TEMPLATES
 const ADMIN_TABS = [
-  { id: 'overview', label: 'Overview', icon: 'cards' },
   { id: 'workflow', label: 'Workflow & governance', icon: 'shield' },
   { id: 'documents', label: 'Documents & templates', icon: 'upload' },
   { id: 'integrations', label: 'Integrations & AI', icon: 'cloud' },
@@ -330,7 +329,7 @@ export default function Admin() {
   const [templatePreviewError, setTemplatePreviewError] = useState('')
   const [templateDirty, setTemplateDirty] = useState(false)
   const [currencyRateDraft, setCurrencyRateDraft] = useState({})
-  const [adminView, setAdminView] = useState('overview')
+  const [adminView, setAdminView] = useState('workflow')
 
   // Route-level gate AFTER the hooks (an early return before them would change
   // the hook count when the persona flips while /admin is mounted). Approval
@@ -533,30 +532,6 @@ export default function Admin() {
       </nav>
 
       <div className="admin-layout">
-        <section id="admin-panel-overview" className={`admin-panel admin-overview-panel ${adminView === 'overview' ? 'is-active' : ''}`}
-          role="tabpanel" aria-labelledby="admin-tab-overview" hidden={adminView !== 'overview'}>
-          <div className="admin-section-heading">
-            <div><h3>Workspace overview</h3><p>Choose a category to update the settings behind your sales workspace.</p></div>
-          </div>
-          <div className="admin-category-grid">
-            <button type="button" className="admin-category-card" onClick={() => setAdminView('workflow')}>
-              <span className="admin-category-icon"><Icon name="shield" size={16} /></span>
-              <span><b>Workflow &amp; governance</b><small>Owners, approvals, customer rules, currencies, and intake controls.</small></span>
-              <span className="admin-category-link">Open settings →</span>
-            </button>
-            <button type="button" className="admin-category-card" onClick={() => setAdminView('documents')}>
-              <span className="admin-category-icon"><Icon name="upload" size={16} /></span>
-              <span><b>Documents &amp; templates</b><small>Upload KYC forms, price lists, datasheets, and proposal workbooks.</small></span>
-              <span className="admin-category-link">Open settings →</span>
-            </button>
-            <button type="button" className="admin-category-card" onClick={() => setAdminView('integrations')}>
-              <span className="admin-category-icon"><Icon name="cloud" size={16} /></span>
-              <span><b>Integrations &amp; AI</b><small>Monitor connectors and configure SharePoint and AI services.</small></span>
-              <span className="admin-category-link">Open settings →</span>
-            </button>
-          </div>
-        </section>
-
         <section id="admin-panel-workflow" className={`admin-panel ${adminView === 'workflow' ? 'is-active' : ''}`}
           role="tabpanel" aria-labelledby="admin-tab-workflow" hidden={adminView !== 'workflow'}>
         <div className="admin-section-heading">
@@ -571,11 +546,15 @@ export default function Admin() {
             <button type="button" className="secondary" disabled={!canEdit} onClick={() => store.removeClause(clause.id)}>Remove</button>
           </div>)}
         </div>
-        <div className="admin-fixed-columns">
-          <div className="admin-column">
+        <div className="admin-setting-groups">
+        <section className="admin-setting-group" aria-labelledby="admin-group-routing">
+          <header className="admin-setting-group-head">
+            <div><h4 id="admin-group-routing">Access, routing &amp; ownership</h4><p>Manage workspace access and route incoming work to the right owner and region.</p></div>
+          </header>
+          <div className="admin-setting-grid">
 
         {/* 1 — Users & roles */}
-        <div className="admin-card">
+        <div className="admin-card admin-card--list">
           <h3><Icon name="shield" size={14} /> Users &amp; roles</h3>
           {userCounts.map(([st, n]) => (
             <div key={st} className="arow"><span>{st} accounts</span><b>{n}</b></div>
@@ -587,7 +566,7 @@ export default function Admin() {
         </div>
 
         {/* 2 — Ownership rules */}
-        <div className="admin-card">
+        <div className="admin-card admin-card--form">
           <h3><Icon name="target" size={14} /> Ownership rules</h3>
           {(config.ownershipRules || []).map((r, i) => (
             <div key={i} className="arow">
@@ -603,7 +582,7 @@ export default function Admin() {
         </div>
 
         {/* 2a — Owner by opportunity type */}
-        <div className="admin-card">
+        <div className="admin-card admin-card--list">
           <h3><Icon name="target" size={14} /> Owner by opportunity type</h3>
           {(config.ownerRules || []).map((r, i) => (
             <div key={r.oppType} className="arow">
@@ -617,11 +596,8 @@ export default function Admin() {
           <p className="hint">Fallback owner used when no regional rule matches (e.g. Spares leads → PJS by default).</p>
         </div>
 
-          </div>
-          <div className="admin-column">
-
         {/* 2b — State → region mapping */}
-        <div className="admin-card admin-state-map-card">
+        <div className="admin-card admin-card--list admin-state-map-card">
           <h3><Icon name="target" size={14} /> State → region mapping</h3>
           <p className="hint">Which Ownership-rules region each Indian state/UT feeds into. Location text typed on lead intake is matched to a state, then routed here.</p>
           <div className="admin-scroll-list">
@@ -637,8 +613,17 @@ export default function Admin() {
           </div>
         </div>
 
+          </div>
+        </section>
+
+        <section className="admin-setting-group" aria-labelledby="admin-group-commercial">
+          <header className="admin-setting-group-head">
+            <div><h4 id="admin-group-commercial">Commercial &amp; automation</h4><p>Thresholds, conversion rates, and automated decision rules.</p></div>
+          </header>
+          <div className="admin-setting-grid">
+
         {/* 3 — AI confidence thresholds */}
-        <div className="admin-card">
+        <div className="admin-card admin-card--form">
           <h3><Icon name="bot" size={14} /> AI confidence thresholds</h3>
           <NumField label="High ≥ %" value={aiTh.high} disabled={!canEdit}
             onChange={v => store.updateConfig({ aiThresholds: { ...aiTh, high: v } })} />
@@ -648,7 +633,7 @@ export default function Admin() {
         </div>
 
         {/* 4 — Approval thresholds */}
-        <div className="admin-card">
+        <div className="admin-card admin-card--featured">
           <h3><Icon name="checkCircle" size={14} /> Approval thresholds</h3>
           <NumField label="Order value break (INR)" value={thresholds.valueBreak} disabled={!canEdit}
             onChange={v => store.updateConfig({ approvalThresholds: { ...thresholds, valueBreak: v } })} />
@@ -677,7 +662,7 @@ export default function Admin() {
           <p className="hint">Values above the discount or markup limits require one approval from the selected role(s). Existing value/margin routing remains unchanged.</p>
         </div>
 
-        <div className="admin-card">
+        <div className="admin-card admin-card--form">
           <h3><Icon name="tag" size={14} /> Currency &amp; conversion rates</h3>
           <p className="hint">INR is the reporting currency. Source price-list values remain in their original currency.</p>
           {currencies.map(currency => (
@@ -695,7 +680,7 @@ export default function Admin() {
           ))}
         </div>
 
-        <div className="admin-card">
+        <div className="admin-card admin-card--form">
           <h3><Icon name="gear" size={14} /> Imported costing defaults</h3>
           <p className="hint">These defaults are copied into new proposals. Sourcing can override them for an individual proposal.</p>
           <NumField label="Default Customs Duty (%)" value={config.costingDefaults?.customsDutyPct ?? 8.5} disabled={!canEdit}
@@ -711,10 +696,16 @@ export default function Admin() {
         </div>
 
           </div>
-          <div className="admin-column">
+        </section>
+
+        <section className="admin-setting-group" aria-labelledby="admin-group-customer">
+          <header className="admin-setting-group-head">
+            <div><h4 id="admin-group-customer">Customer governance</h4><p>Verification, lead controls, and customer-facing registries.</p></div>
+          </header>
+          <div className="admin-setting-grid">
 
         {/* 5 — Customer-class rules & Amber fee */}
-        <div className="admin-card">
+        <div className="admin-card admin-card--featured">
           <h3><Icon name="flag" size={14} /> Customer-class rules &amp; Amber fee</h3>
           <p className="hint">What each class must verify, who signs it off and where it gates. Open a class to edit it.</p>
           {CLASS_ORDER.map(cls => (
@@ -731,7 +722,7 @@ export default function Admin() {
         </div>
 
         {/* Lead workflow controls */}
-        <div className="admin-card">
+        <div className="admin-card admin-card--form">
           <h3><Icon name="clock" size={14} /> Lead workflow controls</h3>
           <p className="hint">These rules control expiry and fast-track behavior for active leads.</p>
           <NumField label="Clarification deadline (days)" value={config.leadDeadlines?.clarificationDays ?? 7} disabled={!canEdit}
@@ -763,11 +754,8 @@ export default function Admin() {
           </label>
         </div>
 
-          </div>
-          <div className="admin-column">
-
         {/* 6 — KYC checklist */}
-        <div className="admin-card">
+        <div className="admin-card admin-card--list">
           <h3><Icon name="clipboardCheck" size={14} /> KYC checklist</h3>
           {(config.kycItems || []).map((k, i) => (
             <div key={k + i} className="arow">
@@ -793,7 +781,7 @@ export default function Admin() {
           )}
         </div>
 
-        <div className="admin-card">
+        <div className="admin-card admin-card--list">
           <h3><Icon name="shield" size={14} /> KYC number validation</h3>
           <p className="hint">Choose which GST, PAN, and CIN numbers are checked during KYC. The pattern uses a regular expression.</p>
           {Object.entries(kycValidation).map(([key, rule]) => (
@@ -811,7 +799,7 @@ export default function Admin() {
         </div>
 
         {/* 7 — Price-list & rate registries */}
-        <div className="admin-card">
+        <div className="admin-card admin-card--list">
           <h3><Icon name="tag" size={14} /> Price-list &amp; rate registries</h3>
           {(uploads.priceLists || []).map((p, i) => (
             <div key={i} className="arow">
@@ -828,6 +816,8 @@ export default function Admin() {
         </div>
 
           </div>
+        </section>
+
         </div>
         </section>
 
@@ -1008,7 +998,7 @@ export default function Admin() {
 
         </div>
 
-        <div className="admin-wide-grid admin-bottom-wide-grid">
+        <div className="admin-wide-grid">
 
         {/* 11 — SharePoint connector */}
         <SharePointCard canEdit={canEdit} />
