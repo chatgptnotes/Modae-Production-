@@ -33,3 +33,14 @@ test('manual SQL migration declares BYTEA, rule tables, and owner RLS', () => {
   assert.match(sql, /create table if not exists public\.workflow_rules/)
   assert.match(sql, /user_id = \(select auth\.uid\(\)\)/)
 })
+
+test('normalized business hydration avoids legacy duplicate payloads', () => {
+  const datastore = fs.readFileSync(path.join(root, 'src/datastore.js'), 'utf8')
+  assert.match(datastore, /NORMALIZED_BUSINESS_KEYS/)
+  assert.match(datastore, /\.not\('key', 'in', legacyKeys\)/)
+  assert.match(datastore, /from\('leads'\)\.select\('id, data'\)\.is\('deleted_at', null\)/)
+  assert.match(datastore, /from\('opportunities'\)\.select\('id, data'\)\.is\('deleted_at', null\)/)
+  assert.match(datastore, /from\('records'\)\.select\('entity, id, data'\)\.is\('deleted_at', null\)/)
+  assert.match(datastore, /LOAD_CACHE_MS = 15000/)
+  assert.match(datastore, /if \(loadInFlight\) return loadInFlight/)
+})

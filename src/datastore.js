@@ -33,12 +33,51 @@ export function subscribeBusinessChanges(onChange, onStatus = () => {}) {
 
 const TABLE = 'app_state'
 
+// These slices have dedicated normalized tables. Loading their legacy JSON
+// copies as well doubles the database response without adding information.
+// Keep the legacy rows in place for migration/rollback, but do not transfer
+// them during normal hydration.
+const NORMALIZED_BUSINESS_KEYS = [
+  'leads', 'opportunities', 'approvals', 'proposals',
+  'sparesLines', 'clarifications', 'audit', 'priceLists',
+]
+
+// Focus/live-sync events can arrive close together. Reusing a short-lived
+// read avoids transferring the same workspace payload repeatedly while still
+// refreshing promptly after a save or the next focus interval.
+const LOAD_CACHE_MS = 15000
+let loadCache = null
+let loadCacheAt = 0
+let loadInFlight = null
+
+export function invalidateLoadCache() {
+  loadCache = null
+  loadCacheAt = 0
+}
+
 // → { empty, slices: {key: value} } | null when disabled or on error
 // (caller stays on localStorage and may retry later).
-export async function loadAll() {
+export async function loadAll({ force = false } = {}) {
   if (!supabase) return null
+  if (!force && loadCache && Date.now() - loadCacheAt < LOAD_CACHE_MS) return loadCache
+  if (loadInFlight) return loadInFlight
+  loadInFlight = fetchAll()
   try {
-    const { data, error } = await supabase.from(TABLE).select('key, value')
+    loadCache = await loadInFlight
+    loadCacheAt = Date.now()
+    return loadCache
+  } finally {
+    loadInFlight = null
+  }
+}
+
+async function fetchAll() {
+  try {
+    const legacyKeys = `(${NORMALIZED_BUSINESS_KEYS.join(',')})`
+    const { data, error } = await supabase
+      .from(TABLE)
+      .select('key, value')
+      .not('key', 'in', legacyKeys)
     if (error) throw error
     const slices = {}
     for (const row of data || []) slices[row.key] = row.value
@@ -53,8 +92,10 @@ export async function loadAll() {
       if (cached) slices.config = cached
     }
     const business = await loadBusinessTables()
+    // Apply empty normalized arrays too. This prevents stale local/demo rows
+    // from surviving when the server intentionally has no active rows.
     for (const [key, value] of Object.entries(business)) {
-      if (value != null && (!Array.isArray(value) || value.length)) slices[key] = value
+      if (value != null) slices[key] = value
     }
     // Currency rates are normalized data, not part of the legacy app_state
     // blob. Keep a graceful fallback while the SQL migration is being run.
@@ -111,6 +152,7 @@ export async function loadAll() {
 // dirty: {key: value}. Throws on error so the caller can keep the keys dirty.
 export async function saveSlices(dirty) {
   if (!supabase) return
+  invalidateLoadCache()
   let normalizedDirty = dirty
     const savedBusiness = await saveBusinessTables(dirty)
   if (savedBusiness.length) {
@@ -198,10 +240,10 @@ async function saveSettings(dirty = {}) {
 
 async function loadBusinessTables() {
   const tables = await Promise.all([
-    supabase.from('leads').select('data'),
-    supabase.from('opportunities').select('data'),
-    supabase.from('approvals').select('data'),
-    supabase.from('records').select('entity, id, data').in('entity', ['proposals', 'spares_lines', 'clarifications', 'audit']),
+    supabase.from('leads').select('id, data').is('deleted_at', null),
+    supabase.from('opportunities').select('id, data').is('deleted_at', null),
+    supabase.from('approvals').select('id, data').is('deleted_at', null),
+    supabase.from('records').select('entity, id, data').is('deleted_at', null).in('entity', ['proposals', 'spares_lines', 'clarifications', 'audit']),
   ])
   if (tables.some(result => result.error)) return {}
   const records = tables[3].data || []
