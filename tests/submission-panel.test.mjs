@@ -54,7 +54,8 @@ test('extra files can be attached, listed and removed before sending', () => {
 // must attach before submitting the message.
 test('sending opens Gmail with the proposal and governed enclosure list', () => {
   assert.match(submission, /gmailComposeHref/)
-  assert.match(submission, /window\.open\(href, '_blank', 'noopener'\)/)
+  assert.match(submission, /draftWindow\.location\.href = href/)
+  assert.match(submission, /window\.open\(gmailDraftHref, '_blank', 'noopener'\)/)
   assert.match(submission, /attachments\.forEach\(downloadAttachment\)/)
   assert.match(submission, /customerProposalArtifact/)
   assert.match(submission, /enclosureAttachments\(route\)/)
@@ -62,6 +63,18 @@ test('sending opens Gmail with the proposal and governed enclosure list', () => 
   assert.match(submission, /Draft email/)
   assert.match(submission, /cc: emailCc/)
   assert.doesNotMatch(submission, /fetch\('\/api\/send-proposal-email'/)
+})
+
+test('Gmail opens from the click before asynchronous attachment preparation', () => {
+  const sendStart = submission.indexOf('const send = async () => {')
+  const popup = submission.indexOf("const draftWindow = window.open('', '_blank')", sendStart)
+  const artifact = submission.indexOf('await getCustomerArtifact()', sendStart)
+  assert.ok(sendStart >= 0)
+  assert.ok(popup > sendStart, 'send should reserve a tab')
+  assert.ok(artifact > popup, 'attachment generation should happen after the tab is reserved')
+  assert.match(submission, /Chrome blocked the Gmail draft tab/)
+  assert.match(submission, /Open Gmail draft/)
+  assert.match(submission, /draftWindow\.location\.href = href/)
 })
 
 test('proposal message can be created by AI and remains editable', () => {
@@ -168,6 +181,24 @@ test('the page distinguishes an opened Gmail draft from a confirmed sent email',
   assert.match(submission, /Mark as sent/)
   assert.match(submission, /status: 'sent'/)
   assert.match(submission, /Proposal email marked as sent/)
+})
+
+test('opening Gmail does not complete the opportunity workflow', () => {
+  const sendStart = submission.indexOf('const send = async () => {')
+  const sendEnd = submission.indexOf('  const markAsSent = () => {', sendStart)
+  const sendFlow = submission.slice(sendStart, sendEnd)
+  assert.doesNotMatch(sendFlow, /store\.updateOpportunity\(/)
+  assert.doesNotMatch(sendFlow, /store\.updateServiceFlow\(/)
+  assert.match(sendFlow, /status: 'draft'/)
+})
+
+test('manual confirmation only marks the communication as sent', () => {
+  const markStart = submission.indexOf('const markAsSent = () => {')
+  const markEnd = submission.indexOf('  const retryGmailDraft = () => {', markStart)
+  const markFlow = submission.slice(markStart, markEnd)
+  assert.match(markFlow, /store\.updateCommunication\(opp\.id, id, \{ status: 'sent' \}/)
+  assert.doesNotMatch(markFlow, /store\.updateOpportunity\(/)
+  assert.doesNotMatch(markFlow, /store\.updateServiceFlow\(/)
 })
 
 test('proposal surfaces expose customer-send status per revision', () => {

@@ -49,6 +49,7 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
   const [communicationId, setCommunicationId] = useState('')
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState('')
+  const [gmailDraftHref, setGmailDraftHref] = useState('')
   const [readingFiles, setReadingFiles] = useState(false)
   const [extraFiles, setExtraFiles] = useState([])
   const [attachProposal, setAttachProposal] = useState(true)
@@ -298,6 +299,26 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
   const send = async () => {
     setSending(true)
     setSendError('')
+    setGmailDraftHref('')
+    const href = gmailComposeHref({ to: emailTo, cc: emailCc, subject: emailSubject, body: emailBody })
+    if (!href) {
+      setSending(false)
+      setSendError('Add a recipient email address before opening the Gmail draft')
+      return
+    }
+
+    // Reserve the tab while the click is still trusted. Generating the
+    // workbook and reading enclosures are asynchronous; opening Gmail after
+    // those awaits makes Chrome treat the popup as unsolicited and can leave
+    // the user with a blank tab instead of the compose screen.
+    const draftWindow = window.open('', '_blank')
+    setGmailDraftHref(href)
+    if (!draftWindow) {
+      setSending(false)
+      setSendError('Chrome blocked the Gmail draft tab. Use “Open Gmail draft” below or allow pop-ups for this site.')
+      return
+    }
+
     try {
       const attachments = [
         ...(attachProposal ? [(await getCustomerArtifact()).attachment] : []),
@@ -305,9 +326,7 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
         ...extraFiles,
       ]
       attachments.forEach(downloadAttachment)
-      const href = gmailComposeHref({ to: emailTo, cc: emailCc, subject: emailSubject, body: emailBody })
-      if (!href) throw new Error('Add a recipient email address before opening the Gmail draft')
-      window.open(href, '_blank', 'noopener')
+      draftWindow.location.href = href
       const id = 'CM-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8)
       store.addCommunication(opp.id, {
         id,
@@ -329,18 +348,10 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
         ],
       })
       setCommunicationId(id)
-      store.updateOpportunity(opp.id, {
-        milestone: 'Follow-up',
-        proposalDate: new Date().toISOString().slice(0, 10),
-      })
-      if (opp.route === 'Service') store.updateServiceFlow(opp.id, {
-        offerSent: true,
-        offerSentOn: new Date().toISOString().slice(0, 10),
-        offerRecipient: emailTo,
-      })
       setSentNow(true)
       onSubmitted?.()
     } catch (error) {
+      draftWindow.close()
       setSendError(error?.message || 'Gmail draft could not be opened')
     } finally {
       setSending(false)
@@ -352,6 +363,12 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
     if (!id) return
     store.updateCommunication(opp.id, id, { status: 'sent' }, 'Proposal email marked as sent')
     setSentNow(false)
+  }
+
+  const retryGmailDraft = () => {
+    if (!gmailDraftHref) return
+    window.open(gmailDraftHref, '_blank', 'noopener')
+    setSendError('')
   }
 
   const attachmentNames = [
@@ -468,6 +485,11 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
       </div>
 
       {sendError && <ErrBox>{sendError}</ErrBox>}
+      {gmailDraftHref && !draftOpened && (
+        <div className="hint" style={{ marginTop: 8 }}>
+          <button type="button" className="secondary" onClick={retryGmailDraft}>Open Gmail draft</button>
+        </div>
+      )}
       {draftOpened && !alreadySent && (
         <div className="errbox">
           Gmail draft opened — attach the downloaded files and send it in Gmail.
