@@ -9966,10 +9966,13 @@ button:not(.primary):not(.danger):not(.dark):not(.ghost),
 
 .structured-active-sections .compact-workflow-content .compact-routing-panel .lead-decision-card {
   margin-top: 12px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 11px 12px;
+  border: 1px solid var(--ws-blue-line);
+  border-radius: 10px;
+  background: var(--ws-blue-soft);
+  box-shadow: var(--ws-shadow);
 }
 
 .structured-active-sections .compact-workflow-content .compact-routing-panel .lead-decision-head {

@@ -1,4 +1,4 @@
--- Deliver approval and workflow changes to other open devices immediately.
+-- Deliver lead, approval, and workflow changes to other open devices immediately.
 -- Safe to run after supabase-tables.sql.  Realtime still enforces the table's
 -- existing RLS policies for each subscriber; this migration grants no access.
 
@@ -6,7 +6,7 @@ do $$
 declare
   target text;
 begin
-  foreach target in array array['approvals', 'opportunities', 'records'] loop
+  foreach target in array array['leads', 'approvals', 'opportunities', 'records'] loop
     if not exists (
       select 1
       from pg_publication_tables

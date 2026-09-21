@@ -7,20 +7,21 @@ const read = file => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8'
 test('the shared workspace subscribes to the rows that can resolve a release', () => {
   const datastore = read('src/datastore.js')
   assert.match(datastore, /subscribeBusinessChanges/)
+  assert.match(datastore, /table: 'leads'/)
   assert.match(datastore, /table: 'approvals'/)
   assert.match(datastore, /table: 'opportunities'/)
   assert.match(datastore, /filter: 'entity=eq\.proposals'/)
 
   const store = read('src/store.jsx')
   assert.match(store, /datastore\.subscribeBusinessChanges\(reload/)
-  assert.match(store, /datastore\.loadAll\(\)\.then/)
+  assert.match(store, /datastore\.loadAll\(\{ force: true \}\)\.then/)
   assert.match(store, /setTimeout\(flushSaves, 0\)/,
     'approval decisions must bypass the ordinary draft-save debounce')
 })
 
 test('the live-sync migration publishes only shared business tables', () => {
   const migration = read('supabase/007_live_workspace_sync.sql')
-  for (const table of ['approvals', 'opportunities', 'records']) {
+  for (const table of ['leads', 'approvals', 'opportunities', 'records']) {
     assert.match(migration, new RegExp(`'${table}'`))
   }
   assert.match(migration, /alter publication supabase_realtime add table public\.%I/)

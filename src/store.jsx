@@ -405,7 +405,9 @@ export function StoreProvider({ children }) {
       reloadTimer = setTimeout(() => {
         reloadTimer = null
         if (!hydratedRef.current) { hydrate(); return }
-        datastore.loadAll().then(res => { if (res && !res.empty) applyServer(res.slices) })
+        // Realtime means the database changed after the normal load cache was
+        // populated, so this read must bypass the short-lived cache.
+        datastore.loadAll({ force: true }).then(res => { if (res && !res.empty) applyServer(res.slices) })
       }, 80)
     }
     const unsubscribe = datastore.subscribeBusinessChanges(reload, status => {
