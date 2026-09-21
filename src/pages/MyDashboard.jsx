@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS } from '../seed.js'
 import { readiness, isBlocked, nextActionWith } from '../gates.js'
-import { isApprover, isAdminRole, isSalesOwner, canViewCommercial, canPriceProposal, fmtLakh, ddMmmYY, displayRole, displayRoleLabel } from '../utils.js'
+import { isApprover, isAdminRole, isSalesOwner, canViewCommercial, canPriceProposal, fmtLakh, ddMmmYY, displayRole, displayRoleLabel, isHiddenDashboardOpportunity } from '../utils.js'
 import { analyticsSnapshot, counts, salesPerformance, FY_QUARTERS, FY_MONTHS, PROB_WEIGHT } from '../kpi.js'
 import { ArcGauge } from '../dashviz.jsx'
 import { Icon } from '../icons.jsx'
@@ -342,7 +342,8 @@ function RunRateChart({ perf }) {
 }
 
 function SalesOpportunitySection({ store, open, nav, money }) {
-  const rows = [...open].sort((a, b) => (b.lastUpdated || '').localeCompare(a.lastUpdated || ''))
+  const rows = open.filter(o => !isHiddenDashboardOpportunity(o))
+    .sort((a, b) => (b.lastUpdated || '').localeCompare(a.lastUpdated || ''))
   const action = o => nextActionWith(o, store.getProposal(o.id), store)
   return (
     <Card title="My opportunities" icon="sheet" tone="tone-sky" span={12}>

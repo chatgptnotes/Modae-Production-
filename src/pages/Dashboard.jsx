@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { fmt, fmtLakh, monthKey, monthLabel, exportCSV, canViewCommercial, displayRole } from '../utils.js'
+import { fmt, fmtLakh, monthKey, monthLabel, exportCSV, canViewCommercial, displayRole, isHiddenDashboardOpportunity } from '../utils.js'
 
 // The "Pivot" sheet, shaped like the real one: rows = customers, columns =
 // Expected Order Date months, values = Sum of Value (₹), with an Expected Order Date quarter
@@ -143,7 +143,7 @@ export default function Dashboard({ embedded = false }) {
         <table className="sheet">
           <thead><tr><th>Opp ID</th><th>Customer</th><th>Opportunity</th><th>Owner</th><th>Stage</th><th>Prob</th><th>Order Month</th><th>Value (₹)</th></tr></thead>
           <tbody>
-            {inScope.map(o => (
+            {inScope.filter(o => !isHiddenDashboardOpportunity(o)).map(o => (
               <tr key={o.id}>
                 <td className="oppid">{o.id}</td><td>{o.sellTo}</td><td>{o.oppName}</td>
                 <td>{displayRole(o.owner)}</td><td>{o.stage}</td><td>{o.prob || ''}</td>
