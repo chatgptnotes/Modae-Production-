@@ -167,6 +167,7 @@ export function migrate(s) {
   }
   if (!ROLES[s.role]) s.role = 'SUPER'
   if (!s.communications) s.communications = {}
+  if (!s.oneTimeCleanups || typeof s.oneTimeCleanups !== 'object' || Array.isArray(s.oneTimeCleanups)) s.oneTimeCleanups = {}
   if (!Array.isArray(s.leads)) s.leads = demo ? seedLeads : []
   if (!Array.isArray(s.deletedLeadIds)) s.deletedLeadIds = []
   if (!Array.isArray(s.approvals)) s.approvals = demo ? seedApprovals : []

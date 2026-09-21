@@ -14,7 +14,7 @@ import {
 import { leadConfig, routeOwner, expiredLeadDeadline, aiAuditDetail } from './leadRules.js'
 import { withoutSimulated, simulatedCount } from './simulatedLeads.js'
 import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLeadSlice, mergeClarificationSlice, mergeApprovalRows, defaultViewMode } from './appState.js'
-import { unitCostINR, unitSellINR, setRoleNameConfig, nowIST, toISTISOString } from './utils.js'
+import { unitCostINR, unitSellINR, setRoleNameConfig, nowIST, toISTISOString, canManagePriceLists } from './utils.js'
 import { PRICE_SOURCES, isConfirmableSparesLine, normalizePriceFields, sparesLineFinancials } from './pricing.js'
 import { clarificationTopic } from './leadClarification.js'
 import { reconcileSparesLines } from './clarificationSparesSync.js'
@@ -31,6 +31,11 @@ import {
 import { releaseState, transitionBlockers } from './gates.js'
 
 const StoreCtx = createContext(null)
+// One-time maintenance migration requested for the current workspace. The
+// fixed key/cutoff are intentional: this must never become a recurring
+// age-based deletion policy for future opportunities.
+const ONE_TIME_OPP_CLEANUP_KEY = 'opportunities-before-2026-09-11-v2'
+const ONE_TIME_OPP_CLEANUP_CUTOFF = '2026-09-11'
 const CLARIFICATION_FIELD_KEYS = new Set([
   'oppName', 'rfqNumber', 'sellTo', 'category', 'location', 'customerStatus',
   'eucName', 'eucLocation', 'oppType', 'bu', 'segment', 'solution',
@@ -192,6 +197,7 @@ export function StoreProvider({ children }) {
   // hydratedRef gates server saves until the boot fetch resolves, so a fresh
   // device can't clobber good server data with its local seeds.
   const hydratedRef = useRef(!datastore.dbEnabled())
+  const oneTimeCleanupStartedRef = useRef(false)
   const lastSavedRef = useRef({}) // per-slice snapshot of what the server has
   const saveTimerRef = useRef(null)
   // What this device booted from. The boot fetch resolves *after* the app is
@@ -1825,7 +1831,7 @@ export function StoreProvider({ children }) {
     },
     replacePriceList(name, catalog, meta = {}) {
       setState(s => {
-        if (!ROLES[s.role]?.admin) return s
+        if (!canManagePriceLists(s.role)) return s
         const current = s.priceLists?.[name] || {
           version: 'Initial', currency: catalog.currency || meta.currency || 'INR', uploaded: '', parts: [], versions: [], activeVersionId: '',
         }
@@ -1864,7 +1870,7 @@ export function StoreProvider({ children }) {
     },
     savePriceListVersion(name, baseVersionId, parts, meta = {}) {
       setState(s => {
-        if (!ROLES[s.role]?.admin) return s
+        if (!canManagePriceLists(s.role)) return s
         const current = s.priceLists?.[name]
         if (!current) return s
         const requestedVersion = meta.version || `Revision ${(current.versions || []).length + 1}`
@@ -1884,7 +1890,7 @@ export function StoreProvider({ children }) {
     },
     updateCurrencyRate(currency, value) {
       setState(s => {
-        if (!ROLES[s.role]?.admin) return s
+        if (!canManagePriceLists(s.role)) return s
         const code = String(currency || '').trim().toUpperCase()
         const rate = Number(value)
         if (!code || code === 'INR' || !Number.isFinite(rate) || rate <= 0) return s
@@ -1897,7 +1903,7 @@ export function StoreProvider({ children }) {
     },
     restorePriceListVersion(name, versionId) {
       setState(s => {
-        if (!ROLES[s.role]?.admin) return s
+        if (!canManagePriceLists(s.role)) return s
         const current = s.priceLists?.[name]
         const version = current?.versions?.find(item => item.id === versionId)
         if (!current || !version) return s
@@ -2043,6 +2049,29 @@ export function StoreProvider({ children }) {
       window.location.reload()
     },
   }
+
+  // Run the requested cleanup once, after shared state hydration. It uses the
+  // normal deleteOpportunity path so proposals, files, communications,
+  // approvals, audit entries, and SharePoint folder handling stay consistent.
+  useEffect(() => {
+    if (!hydratedRef.current || oneTimeCleanupStartedRef.current) return
+    if (state.oneTimeCleanups?.[ONE_TIME_OPP_CLEANUP_KEY]) return
+    oneTimeCleanupStartedRef.current = true
+    const candidates = stateRef.current.opportunities.filter(o =>
+      o.createDate && o.createDate < ONE_TIME_OPP_CLEANUP_CUTOFF)
+    candidates.forEach(o => api.deleteOpportunity(o.id))
+    setState(s => withAudit({
+      ...s,
+      oneTimeCleanups: {
+        ...(s.oneTimeCleanups || {}),
+        [ONE_TIME_OPP_CLEANUP_KEY]: {
+          completedAt: new Date().toISOString(),
+          deletedCount: candidates.length,
+        },
+      },
+    }, 'One-time opportunity cleanup completed', 'maintenance',
+    `${candidates.length} opportunities created before ${ONE_TIME_OPP_CLEANUP_CUTOFF} removed`))
+  }, [state])
 
   // Deadline processing is idempotent and runs on boot/focus so the browser
   // remains responsive while Supabase-backed state is synchronised. A hosted

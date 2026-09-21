@@ -77,6 +77,9 @@ export const setRoleNameConfig = config => { activeRoleNames = config?.roleNames
 // persona, per the wireframe's "Restricted — commercial data" rule.
 export const canViewCommercial = role => !!ROLES[role]?.commercial
 export const isAdminRole = role => !!ROLES[role]?.admin
+// LJS owns the commercial pricing decision and may maintain supplier price lists,
+// without receiving the broader system-administration permissions of SUPER/ADMIN.
+export const canManagePriceLists = role => isAdminRole(role) || role === 'LJS'
 export const isSalesOwner = role => !!ROLES[role]?.sales
 // A sales owner writes their own proposal, so they must see the numbers that go
 // into it — BoQ rates, landed cost, margin — even though they stay outside the

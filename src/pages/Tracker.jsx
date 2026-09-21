@@ -185,6 +185,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const [closePending, setClosePending] = useState(null) // { id, stage } awaiting a closed reason
   const [closeReason, setCloseReason] = useState('')
   const [closeReasonNote, setCloseReasonNote] = useState('')
+  const [deleteArmedId, setDeleteArmedId] = useState(null)
   const sheetWrapRef = useRef(null)
   const lastSheetScrollLeft = useRef(0)
   const horizontalGestureNudged = useRef(false)
@@ -709,7 +710,26 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                 }}>
                 <td className="rowhead">{index + 1}</td>
                 <td onClick={selectCell(o, COLS[0])} className={`oppid ${customerStatusFor(o)} ${stageClass(o) === 'open' ? '' : stageClass(o)} ${isSel(o, COLS[0]) ? 'cell-sel' : ''}`}>
-                  <Link to={`/opp/${o.id}`} title="Open opportunity workspace">{o.id}</Link>
+                  <span className="tracker-oppid-actions">
+                    <Link to={`/opp/${o.id}`} title="Open opportunity workspace">{o.id}</Link>
+                    <button
+                      type="button"
+                      className={`tracker-row-delete${deleteArmedId === o.id ? ' armed' : ''}`}
+                      aria-label={deleteArmedId === o.id ? `Confirm delete ${o.id}` : `Delete ${o.id}`}
+                      title={deleteArmedId === o.id ? 'Click again to delete this opportunity' : 'Delete this opportunity'}
+                      onClick={e => {
+                        e.stopPropagation()
+                        if (deleteArmedId !== o.id) {
+                          setDeleteArmedId(o.id)
+                          return
+                        }
+                        store.deleteOpportunity(o.id)
+                        setDeleteArmedId(null)
+                      }}
+                    >
+                      <Icon name="trash" size={12} />
+                    </button>
+                  </span>
                 </td>
                 <td onClick={selectCell(o, COLS[1])} className={isSel(o, COLS[1]) ? 'cell-sel' : ''} title={o.sellTo}><WrapInput value={o.sellTo} onChange={upd(o.id, 'sellTo')} title={o.sellTo} /></td>
                 <td onClick={selectCell(o, COLS[2])} className={isSel(o, COLS[2]) ? 'cell-sel' : ''}>

@@ -568,15 +568,16 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }
   z-index: 3;
 }
 .sidenav {
-  width: 216px; flex: 0 0 216px; background: var(--bg-sidebar); color: var(--palette-2f9724ea);
+  width: var(--sidenav-w, 216px); flex: 0 0 var(--sidenav-w, 216px); background: var(--bg-sidebar); color: var(--palette-2f9724ea);
   display: flex; flex-direction: column;
   position: fixed; left: 0; top: 0; bottom: 0; height: 100dvh; z-index: 44;
-  overflow: hidden; transition: width .2s ease;
+  overflow: visible; transition: width .2s ease;
 }
 .brand {
   position: relative; display: flex; align-items: center; padding: 16px 16px 14px; color: var(--palette-4843938); cursor: pointer;
   border-bottom: 1px solid var(--palette-340872cc);
 }
+.sidebar-brand-popover { display: none; }
 .sidebar-toggle {
   position: absolute; right: 10px; top: 18px; display: inline-flex; align-items: center; justify-content: center;
   width: 24px; height: 24px; min-height: 0; padding: 0; border: 1px solid var(--palette-8d28c56c);
@@ -604,7 +605,7 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }
 }
 /* On the dark sidebar the tile would vanish into the background — lift it */
 .sidenav .modae-mark rect, .tablet-bar .modae-mark rect { fill: var(--palette-c6206cbf); }
-.side-nav { flex: 1; overflow-y: auto; padding: 8px 0; }
+.side-nav { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 8px 0; }
 .side-nav-group + .side-nav-group { margin-top: 10px; }
 .side-nav-heading { padding: 5px 16px 3px; color: var(--palette-1fb54521); font-size: 10px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; }
 .side-item {
@@ -621,7 +622,7 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }
 .side-foot select { width: 100%; font-size: 12px; padding: 5px 6px; border-radius: 4px; border: 1px solid var(--palette-daf00dcc); background: var(--bg-sidebar-2); color: var(--palette-951c7b4e); }
 .side-foot button.reset { background: transparent; border: 1px solid var(--palette-85176fb3); color: var(--palette-2f9724ea); border-radius: 4px; padding: 5px 8px; font-size: 11px; cursor: pointer; }
 .side-foot button.reset:hover { color: var(--palette-4843938); border-color: var(--palette-d2deb813); }
-.main-col { flex: 1; min-width: 0; width: calc(100% - 216px); margin-left: 216px; display: flex; flex-direction: column; transition: margin-left .2s ease, width .2s ease; }
+.main-col { flex: 1; min-width: 0; width: calc(100% - var(--shell-nav-w, 216px)); margin-left: var(--shell-nav-w, 216px); display: flex; flex-direction: column; transition: margin-left .2s ease, width .2s ease; }
 .main-col { position: relative; }
 .shell-nav-burger { display: none; }
 .sidebar-mode-switch { display: flex; align-items: center; justify-content: flex-start; gap: 7px; width: 100%; text-align: left; }
@@ -646,14 +647,47 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }
 }
 
 @media (min-width: 1025px) {
-  .sidebar-compact .sidenav { width: 68px; }
-  .sidebar-compact .main-col { width: calc(100% - 68px); margin-left: 68px; }
-  .sidebar-compact .brand { justify-content: flex-start; min-height: 64px; padding: 16px 4px 14px; }
-  .sidebar-compact .brand .ml-text, .sidebar-compact .side-label,
-  .sidebar-compact .side-foot label { display: none; }
-  .sidebar-compact .brand .modae-logo { display: block; width: 36px; overflow: hidden; }
-  .sidebar-compact .modae-official-logo { width: 36px; max-width: 36px; height: auto; }
-  .sidebar-compact .sidebar-toggle { position: absolute; right: 4px; top: 18px; width: 22px; height: 24px; min-height: 0; margin: 0; }
+  .sidebar-compact .brand { justify-content: center; min-height: 64px; padding: 16px 4px 14px; }
+  .sidebar-compact .brand .modae-logo, .sidebar-compact .brand .ml-text,
+  .sidebar-compact .brand .modae-official-logo, .sidebar-compact .side-label,
+  .sidebar-compact .side-foot label, .sidebar-compact .side-nav-heading { display: none; }
+  .sidebar-compact .brand:hover .sidebar-brand-popover,
+  .sidebar-compact .brand:focus-within .sidebar-brand-popover {
+    display: block;
+    position: absolute;
+    top: 8px;
+    left: calc(100% + 8px);
+    z-index: 60;
+    padding: 10px 14px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--palette-4843938);
+    box-shadow: 0 8px 22px var(--palette-8946acb8);
+    pointer-events: none;
+  }
+  .sidebar-compact .brand .sidebar-brand-popover .modae-logo {
+    display: inline-flex;
+    width: auto;
+    height: auto;
+    overflow: visible;
+  }
+  .sidebar-compact .brand .sidebar-brand-popover .modae-official-logo {
+    display: block;
+    width: auto;
+    max-width: 112px;
+    height: 28px;
+  }
+  .sidebar-compact .sidebar-toggle {
+    position: absolute;
+    top: 18px;
+    left: 50%;
+    right: auto;
+    width: 30px;
+    height: 28px;
+    min-height: 0;
+    margin: 0;
+    transform: translateX(-50%);
+  }
   .sidebar-compact .side-item { justify-content: center; padding-left: 0; padding-right: 0; }
   .sidebar-compact .side-item .ic { opacity: 1; }
   .sidebar-compact .side-badge { position: absolute; top: 5px; right: 7px; min-width: 14px; padding: 1px 4px; font-size: 9px; }
@@ -2259,6 +2293,15 @@ tr.rowclick { cursor: pointer; }
 .opportunity-details-dirty { flex: none; color: var(--warn-text); font-size: 11px; font-weight: 700; }
 .opportunity-details-actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: 8px; padding-top: 6px; border-top: 1px solid var(--grid-line); }
 .opportunity-details-actions button { padding: 3px 9px; font-size: 11.5px; }
+.opportunity-delete-actions { display: flex; align-items: center; gap: 6px; margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--grid-line); }
+.opportunity-delete-actions .danger { color: var(--lost-text); border-color: color-mix(in srgb, var(--lost-text) 45%, var(--border-color)); background: transparent; }
+.opportunity-delete-actions .danger:hover, .opportunity-delete-actions .danger.delete-armed { color: var(--palette-4843938); background: var(--lost-text); border-color: var(--lost-text); }
+.opportunity-delete-actions button { padding: 5px 9px; font-size: 11.5px; }
+.tracker-oppid-actions { display: flex; align-items: center; justify-content: space-between; gap: 5px; min-width: 0; }
+.tracker-oppid-actions > a { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tracker-row-delete { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; width: 21px; height: 21px; padding: 0; color: var(--lost-text); border: 1px solid transparent; background: transparent; opacity: .58; }
+.tracker-row-delete:hover, .tracker-row-delete:focus-visible, .tracker-row-delete.armed { color: var(--palette-4843938); border-color: var(--lost-text); background: var(--lost-text); opacity: 1; }
+.tracker-row-delete.armed::after { content: '?'; margin-left: 1px; font-size: 10px; font-weight: 800; }
 .workbench-details-editor { background: var(--palette-4843938); border: 1px solid var(--border-soft); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; box-shadow: 0 2px 8px var(--palette-9c5f15c9); }
 .workbench-details-editor .opportunity-details-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 @media (max-width: 900px) { .workbench-details-editor .opportunity-details-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
@@ -5144,13 +5187,8 @@ html, body { overflow-x: hidden; max-width: 100%; }
     width: auto;
     flex: 1 1 auto;
     min-width: 0;
-    margin-left: 216px;
+    margin-left: var(--shell-nav-w);
     overflow-x: clip;
-  }
-
-  .sidebar-compact .shell > .main-col,
-  .shell.sidebar-compact > .main-col {
-    margin-left: 68px;
   }
 }
 
@@ -5473,9 +5511,9 @@ html, body { overflow-x: hidden; max-width: 100%; }
    Scoped off .tablet-mode: the tablet shell (tablet/TabletApp.jsx) is a
    block-flow document with a fixed bottom tab bar and wants native scrolling.
    ========================================================================= */
-.shell { --shell-nav-w: 216px; }
-.shell.sidebar-compact { --shell-nav-w: 68px; }
-@media (max-width: 1024px) { .shell { --shell-nav-w: 0px; } }
+.shell { --sidenav-w: 252px; --shell-nav-w: 252px; }
+.shell.sidebar-compact { --sidenav-w: 76px; --shell-nav-w: 76px; }
+@media (max-width: 1024px) { .shell { --sidenav-w: 216px; --shell-nav-w: 0px; } }
 
 .shell:not(.tablet-mode) { height: 100dvh; overflow: hidden; }
 .shell:not(.tablet-mode) > .main-col { min-height: 0; overflow: hidden; }
@@ -8055,10 +8093,6 @@ button.install, .btn.install,
    smaller screens.
    ------------------------------------------------------------------------- */
 @media (min-width: 1025px) {
-  .sidenav { width: 252px; flex-basis: 252px; }
-  .main-col { width: calc(100% - 252px); margin-left: 252px; }
-  .sidebar-compact .sidenav { width: 76px; }
-  .sidebar-compact .main-col { width: calc(100% - 76px); margin-left: 76px; }
   .main-scroll > .page { max-width: none; padding-inline: 40px; }
   .proposal-workspace-header { top: 0; }
 }
@@ -10281,10 +10315,12 @@ button:not(.primary):not(.danger):not(.dark):not(.ghost),
 
 @media (min-width: 1025px) {
   .shell {
+    --sidenav-w: 252px;
     --shell-nav-w: 252px;
   }
 
   .shell.sidebar-compact {
+    --sidenav-w: 76px;
     --shell-nav-w: 76px;
   }
 
