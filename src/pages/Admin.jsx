@@ -1076,7 +1076,7 @@ export default function Admin() {
 
       {templatePreview && (
         <Modal title={`${templatePreview.info.name || templatePreview.info.filename} — ${templatePreview.lane} template`}
-          onClose={() => { if (!templateBusy) setTemplatePreview(null) }} wide className="proposal-preview-modal">
+          onClose={() => { if (!templateBusy) setTemplatePreview(null) }} wide className="proposal-preview-modal workbook-preview-modal">
           <div className="proposal-preview-toolbar">
             <span className="hint">Edit the workbook template, then save it as a new current version.</span>
             <span style={{ display: 'inline-flex', gap: 6 }}>

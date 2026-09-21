@@ -274,15 +274,24 @@ export default function Workbench() {
     store.setMilestone(opp.id, milestone, reason)
     goTab(tabOverride || LIFECYCLE_TABS[milestone] || 'overview')
   }
+  const workflowPosition = step => opp.route === 'Service' && Number.isInteger(step?.servicePhase)
+    ? step.servicePhase
+    : MILESTONES.indexOf(step?.milestone)
   const openBackwardTransition = step => {
-    if (!step) return
+    const currentIndex = workflowPosition({ milestone: opp.milestone, servicePhase: opp.servicePhase })
+    const targetIndex = workflowPosition(step)
+    if (!step || targetIndex < 0 || currentIndex < 0 || targetIndex >= currentIndex) return
     setTransition({ kind: 'backward', target: step.milestone, targetStep: step, reason: '' })
   }
   const moveBackwardToStep = (step, reason) => {
+    const currentIndex = workflowPosition({ milestone: opp.milestone, servicePhase: opp.servicePhase })
+    const targetIndex = workflowPosition(step)
+    if (!step || !reason?.trim() || targetIndex < 0 || currentIndex < 0 || targetIndex >= currentIndex) return false
     moveToMilestone(step.milestone, reason, step.tab)
     if (opp.route === 'Service' && step.servicePhase != null) {
       store.updateServiceFlow(opp.id, { servicePhase: step.servicePhase })
     }
+    return true
   }
   const blockers = readiness(opp, proposal, store)
   const nextAction = nextActionWith(opp, proposal, store)
@@ -490,7 +499,7 @@ export default function Workbench() {
         }}
         onNext={nextWorkflowStep} />
       {transition && (
-        <Modal title={transition.kind === 'blocked' ? `Cannot move from ${opp.milestone} to ${transition.target}` : `Move back to ${transition.target}`} onClose={() => setTransition(null)} wide>
+        <Modal title={transition.kind === 'blocked' ? `Cannot move from ${opp.milestone} to ${transition.target}` : `Return to ${transition.target} for correction`} onClose={() => setTransition(null)} wide>
           {transition.kind === 'blocked' ? (
             <>
               <p className="transition-intro">This opportunity cannot move to <b>{transition.target}</b> until the following items are resolved or approved.</p>
@@ -525,9 +534,9 @@ export default function Workbench() {
             </>
           ) : (
             <>
-              <p className="hint">Backward movement is allowed for corrections, but a reason is required and will be recorded in the audit trail.</p>
+              <p className="hint">Returning from {opp.milestone} to {transition.target} is allowed for corrections. Enter a reason; it will be recorded in the audit trail.</p>
               <label>Reason<textarea rows={3} value={transition.reason} onChange={e => setTransition({ ...transition, reason: e.target.value })} placeholder="Explain what changed or why this stage needs correction." /></label>
-              <div className="forms-actions"><button className="primary" disabled={!transition.reason?.trim()} onClick={() => { moveBackwardToStep(transition.targetStep || { milestone: transition.target, tab: LIFECYCLE_TABS[transition.target] }, transition.reason.trim()); setTransition(null) }}>Move backward</button><button onClick={() => setTransition(null)}>Cancel</button></div>
+              <div className="forms-actions"><button className="primary" disabled={!transition.reason?.trim()} onClick={() => { const moved = moveBackwardToStep(transition.targetStep || { milestone: transition.target, tab: LIFECYCLE_TABS[transition.target] }, transition.reason.trim()); if (moved) setTransition(null) }}>Return to stage</button><button onClick={() => setTransition(null)}>Cancel</button></div>
             </>
           )}
         </Modal>

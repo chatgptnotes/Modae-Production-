@@ -2145,6 +2145,35 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
   max-height: none; margin-top: 10px; overflow-x: auto;
 }
 
+/* Every Excel preview uses this same wide document viewer contract. WorkbookPreview
+   owns the vertical scroll; callers should not wrap it in a second scrollbox. */
+.workbook-preview-modal {
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(1400px, calc(100vw - 40px));
+  max-width: min(1400px, calc(100vw - 40px));
+  max-height: min(92dvh, 960px);
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 16px 18px 14px;
+  box-sizing: border-box;
+}
+.workbook-preview-modal > * { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.workbook-preview-modal .proposal-preview-toolbar { flex: 0 0 auto; }
+.workbook-preview-modal .template-workbook-preview,
+.workbook-preview-modal > .att-view-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: calc(92dvh - 150px);
+}
+.workbook-preview-modal .template-workbook-preview { margin-top: 12px; }
+.workbook-preview-modal .att-view-body { margin-top: 0; }
+.workbook-preview-modal .att-view-foot { flex: 0 0 auto; }
+.workbook-preview-modal .reference-workbook-preview { flex: 1 1 auto; max-height: calc(92dvh - 150px); }
+
 .proposal-sheet-editor { max-width: 1100px; }
 .proposal-sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .proposal-sheet-head h3 { margin: 0 0 4px; }
@@ -2312,6 +2341,19 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
   .proposal-preview-toolbar { align-items: flex-start; flex-direction: column; }
   .proposal-preview-scroll { max-height: calc(96vh - 132px); padding: 6px; }
   .proposal-preview-scroll .doc-page { padding: 22px 24px 14px; min-height: 0; }
+}
+@media (max-width: 700px) {
+  .workbook-preview-modal {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: calc(100vw - 24px);
+    max-width: calc(100vw - 24px);
+    max-height: calc(100dvh - 24px);
+    padding: 12px;
+  }
+  .workbook-preview-modal .proposal-preview-scroll { max-height: calc(100dvh - 150px); }
+  .workbook-preview-modal .proposal-preview-toolbar { align-items: flex-start; }
 }
 .err-text { color: var(--palette-bbf39d23); font-size: 12px; margin-bottom: 8px; }
 
@@ -5742,13 +5784,28 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .lead-workspace .attach-row.attach-row-open:hover .attach-open { color: var(--ws-blue); }
 .lead-workspace .attach-add { margin-top: 8px; border-radius: 10px; }
 
-.attachment-viewer-modal { width: 780px; top: 60px; transform: translateX(-50%); }
-.att-view-sub { margin: -2px 0 10px; }
-.att-view-body {
-  border: 1px solid var(--border-soft); border-radius: 4px; background: var(--palette-f58d7116);
-  padding: 10px; max-height: 62vh; overflow: auto;
+.attachment-viewer-modal {
+  width: min(1080px, calc(100vw - 48px));
+  max-width: min(1080px, calc(100vw - 48px));
+  max-height: min(90dvh, 900px);
+  padding: 18px 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
 }
-.att-view-note { margin: 4px 2px; display: flex; align-items: center; gap: 6px; }
+.attachment-viewer-modal .modal-header { flex: 0 0 auto; margin: 0; align-items: center; }
+.attachment-viewer-modal .modal-header .section-title { font-size: 14px; color: var(--text-muted); letter-spacing: .04em; text-transform: uppercase; }
+.att-view-file-head { display: flex; align-items: center; gap: 11px; min-width: 0; padding: 2px 2px 13px; border-bottom: 1px solid var(--border-soft); }
+.att-view-file-icon { display: grid; place-items: center; flex: 0 0 auto; width: 36px; height: 36px; border-radius: 9px; background: var(--primary-soft); color: var(--primary-deep); }
+.att-view-file-copy { display: grid; min-width: 0; gap: 3px; }
+.att-view-file-copy strong { min-width: 0; overflow: hidden; color: var(--text-main); font-size: 15px; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+.att-view-file-copy span { color: var(--text-muted); font-size: 11.5px; }
+.att-view-body {
+  flex: 1 1 auto; min-height: 0; border: 1px solid var(--border-soft); border-radius: 9px; background: var(--palette-f58d7116);
+  padding: 12px; overflow: auto; overscroll-behavior: contain;
+}
+.att-view-note { margin: 2px 2px 12px; display: flex; align-items: flex-start; gap: 7px; line-height: 1.45; }
 .att-view-canvas { display: flex; justify-content: center; }
 .att-view-canvas canvas, .att-view-canvas img {
   max-width: 100%; height: auto; background: var(--palette-4843938); border: 1px solid var(--border-soft);
@@ -5756,9 +5813,23 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .att-view-text {
   white-space: pre-wrap; font-family: inherit; font-size: 12px; color: var(--palette-4bf509); margin: 0;
 }
-.att-view-pager { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 8px; }
-.att-view-foot { display: flex; gap: 8px; justify-content: flex-end; align-items: center; margin-top: 10px; }
+.att-view-pager { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border-soft); }
+.att-view-foot { flex: 0 0 auto; display: flex; gap: 8px; justify-content: flex-end; align-items: center; padding-top: 2px; }
 .att-view-foot .btn { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
+@media (max-width: 720px) {
+  .attachment-viewer-modal {
+    width: calc(100vw - 24px);
+    max-width: calc(100vw - 24px);
+    max-height: calc(100dvh - 24px);
+    padding: 14px 12px 12px;
+    gap: 10px;
+  }
+  .attachment-viewer-modal .modal-header .section-title { font-size: 12px; }
+  .att-view-file-copy strong { font-size: 13px; }
+  .att-view-body { padding: 8px; }
+  .att-view-foot { justify-content: stretch; }
+  .att-view-foot > * { flex: 1 1 0; justify-content: center; }
+}
 
 /* Reporting now lives under My Dashboard. Keep the optional deep reports
    visually subordinate to the primary KPI and funnel view. */

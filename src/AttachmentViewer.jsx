@@ -227,16 +227,23 @@ export default function AttachmentViewer({ leadId, attachment, onClose }) {
     )
   }
 
+  const metadata = [attachment.pages ? `${attachment.pages} pages` : '', attachment.size || ''].filter(Boolean).join(' · ')
+  const workbookAttachment = !!attachment.workbook?.sheets?.length || isSpreadsheet(filename, attachment.type || attachment.mimeType || '')
+
   return (
-    <Modal title={filename} onClose={onClose} wide className="attachment-viewer-modal">
-      <p className="hint att-view-sub">
-        {[attachment.pages ? attachment.pages + ' pages' : '', attachment.size || ''].filter(Boolean).join(' · ') || 'Attachment'}
-      </p>
+    <Modal title="Attachment preview" onClose={onClose} wide className={`attachment-viewer-modal ${workbookAttachment ? 'workbook-preview-modal' : ''}`}>
+      <header className="att-view-file-head">
+        <div className="att-view-file-icon"><Icon name="fileText" size={18} /></div>
+        <div className="att-view-file-copy">
+          <strong title={filename}>{filename}</strong>
+          <span>{metadata || 'Attachment'}</span>
+        </div>
+      </header>
       <div className="att-view-body">{body()}</div>
-      <div className="att-view-foot">
+      <footer className="att-view-foot">
         {url && <a className="btn" href={url} download={filename}><Icon name="download" size={13} /> Download</a>}
         <button className="primary" onClick={onClose}>Close</button>
-      </div>
+      </footer>
     </Modal>
   )
 }

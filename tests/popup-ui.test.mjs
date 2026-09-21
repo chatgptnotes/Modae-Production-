@@ -37,3 +37,26 @@ test('custom popup surfaces expose dialog or popup semantics', () => {
   assert.match(read('src/pages/Tracker.jsx'), /role="dialog" aria-label=\{`\$\{col\.label\} sort and filter`\}/)
   assert.match(read('src/OpportunityDetailsEditor.jsx'), /role="listbox" aria-label="Solutions"/)
 })
+
+test('attachment viewer has a structured, bounded preview shell', () => {
+  const viewer = read('src/AttachmentViewer.jsx')
+  assert.match(viewer, /title="Attachment preview"/)
+  assert.match(viewer, /className="att-view-file-head"/)
+  assert.match(viewer, /className="att-view-body"/)
+  assert.match(viewer, /<footer className="att-view-foot">/)
+  assert.match(styles, /\.attachment-viewer-modal \{[\s\S]*max-height: min\(90dvh, 900px\)/)
+  assert.match(styles, /\.att-view-body \{[\s\S]*overscroll-behavior: contain;/)
+})
+
+test('Excel preview entry points share the wide workbook modal contract', () => {
+  const proposal = read('src/pages/Proposal.jsx')
+  const admin = read('src/pages/Admin.jsx')
+  const submission = read('src/workbench/SubmissionPanel.jsx')
+  const attachment = read('src/AttachmentViewer.jsx')
+
+  assert.ok((proposal.match(/workbook-preview-modal/g) || []).length >= 3)
+  assert.match(admin, /proposal-preview-modal workbook-preview-modal/)
+  assert.match(submission, /proposal-preview-modal workbook-preview-modal/)
+  assert.match(attachment, /workbookAttachment \? 'workbook-preview-modal' : ''/)
+  assert.match(styles, /\.workbook-preview-modal \{[\s\S]*width: min\(1400px, calc\(100vw - 40px\)\)/)
+})

@@ -92,9 +92,11 @@ test('completed workflow stages can be moved back with a recorded reason', () =>
   assert.match(workbench, /onBack=\{step => \{/)
   assert.match(workbench, /openBackwardTransition\(activeStepConfig\)/)
   assert.match(workbench, /Move back to \{activeStepConfig\?\.label \|\| 'this stage'\} to edit/)
+  assert.match(workbench, /targetIndex >= currentIndex\) return/)
   assert.match(workbench, /targetStep: step, reason: ''/)
   assert.match(workbench, /moveBackwardToStep\(transition\.targetStep/)
-  assert.match(workbench, /Backward movement is allowed for corrections, but a reason is required/)
+  assert.match(workbench, /Returning from \{opp\.milestone\} to \{transition\.target\} is allowed for corrections/)
+  assert.match(workbench, /!reason\?\.trim\(\)/)
   assert.match(workbench, /disabled=\{!transition\.reason\?\.trim\(\)\}/)
 })
 
