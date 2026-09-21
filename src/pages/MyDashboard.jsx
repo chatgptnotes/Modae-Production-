@@ -34,7 +34,7 @@ function Card({ title, icon, tone = '', span = 6, children, action }) {
       <div className="ana-title">
         {icon && <span className={`ana-ico ${tone}`}><Icon name={icon} size={15} /></span>}
         {title}
-        {action && <span style={{ marginLeft: 'auto' }}>{action}</span>}
+        {action && <span className="ana-title-action">{action}</span>}
       </div>
       {children}
     </section>
@@ -336,7 +336,7 @@ function SalesOpportunitySection({ store, open, nav, money }) {
   const action = o => nextActionWith(o, store.getProposal(o.id), store)
   return (
     <Card title="My opportunities" icon="sheet" tone="tone-sky" span={12}>
-      <div className="dashboard-table-scroll"><table className="dashboard-table"><thead><tr><th>ID</th><th>Opportunity</th><th>Customer</th><th>Stage</th><th>Value (₹)</th><th>Win %</th><th>Next action</th><th>Due</th></tr></thead><tbody>{rows.map(o => { const na = action(o); return <tr key={o.id} onClick={() => nav(`/opp/${o.id}`)}><td><b>{o.id}</b></td><td>{o.oppName}</td><td>{o.sellTo}</td><td><span className="pill open">{o.stage}</span></td><td>{money ? fmtLakh(o.valueK) : '—'}</td><td>{o.prob || '—'}</td><td title={na.text}>{na.text || o.remarks || 'Review next step'}</td><td>{o.orderDate ? ddMmmYY(o.orderDate) : '—'}</td></tr>})}</tbody></table></div>
+      <div className="dashboard-table-scroll"><table className="dashboard-table"><thead><tr><th>ID</th><th>Opportunity</th><th>Customer</th><th>Stage</th><th>Value (₹)</th><th>Win %</th><th>Next action</th><th>Due</th></tr></thead><tbody>{rows.map(o => { const na = action(o); return <tr key={o.id} onClick={() => nav(`/opp/${o.id}`)}><td><b>{o.id}</b></td><td><span className="dashboard-cell-ellipsis">{o.oppName}</span></td><td><span className="dashboard-cell-ellipsis">{o.sellTo}</span></td><td><span className="pill open">{o.stage}</span></td><td>{money ? fmtLakh(o.valueK) : '—'}</td><td>{o.prob || '—'}</td><td title={na.text}><span className="dashboard-cell-clamp">{na.text || o.remarks || 'Review next step'}</span></td><td>{o.orderDate ? ddMmmYY(o.orderDate) : '—'}</td></tr>})}</tbody></table></div>
       {!rows.length && <div className="dashboard-empty">No open opportunities are assigned to you.</div>}
     </Card>
   )
@@ -352,7 +352,7 @@ function SalesCustomerSection({ store, open, orders, nav, money }) {
     return { name, status: customer?.status || '—', region, open: opps.length, value: opps.reduce((s, o) => s + (+o.valueK || 0), 0), orders: booked.length }
   }).sort((a, b) => b.value - a.value)
   return <Card title="My customers" icon="users" tone="tone-green" span={12} action={<button onClick={() => nav('/customers')}>Open customer master</button>}>
-    <div className="dashboard-table-scroll"><table className="dashboard-table customer-table"><thead><tr><th>Customer</th><th>Class</th><th>Region</th><th>Open opportunities</th><th>Open value (₹)</th><th>Orders</th></tr></thead><tbody>{rows.map(row => <tr key={row.name} onClick={() => nav('/customers')}><td><b>{row.name}</b></td><td><span className={`pill ${row.status}`}>{row.status}</span></td><td>{row.region}</td><td>{row.open}</td><td>{money ? fmtLakh(row.value) : '—'}</td><td>{row.orders}</td></tr>)}</tbody></table></div>
+    <div className="dashboard-table-scroll"><table className="dashboard-table customer-table"><thead><tr><th>Customer</th><th>Class</th><th>Region</th><th>Open opportunities</th><th>Open value (₹)</th><th>Orders</th></tr></thead><tbody>{rows.map(row => <tr key={row.name} onClick={() => nav('/customers')}><td><b className="dashboard-cell-ellipsis">{row.name}</b></td><td><span className={`pill ${row.status}`}>{row.status}</span></td><td><span className="dashboard-cell-ellipsis">{row.region}</span></td><td>{row.open}</td><td>{money ? fmtLakh(row.value) : '—'}</td><td>{row.orders}</td></tr>)}</tbody></table></div>
     {!rows.length && <div className="dashboard-empty">Customers will appear here when you have an opportunity or booked order.</div>}
   </Card>
 }
@@ -384,11 +384,11 @@ function NextActions({ nextActions, nav }) {
   if (!nextActions.length) return <p className="hint">Nothing is waiting — no open opportunity needs an action.</p>
   return nextActions.map(({ opp, text, severity }) => (
     <button key={opp.id} className="dashboard-action" onClick={() => nav(`/opp/${opp.id}`)}>
-      <span>
+      <span className="dashboard-action-title">
         {severity === 'block' && <span className="pill Red" style={{ marginRight: 6 }}>Blocked</span>}
         <b>{opp.id}</b> — {opp.oppName}
       </span>
-      <span className="hint">{text}</span>
+      <span className="hint dashboard-action-detail">{text}</span>
     </button>
   ))
 }

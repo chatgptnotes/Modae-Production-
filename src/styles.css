@@ -7268,6 +7268,69 @@ body {
 .dashboard-page textarea { border-radius: 6px; }
 .dashboard-page .hint { color: var(--text-subtle); }
 
+/* Dashboard readability: preserve compact rows without breaking long labels. */
+.dashboard-page .ana-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dashboard-page .ana-title-action {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+.dashboard-page .dashboard-table td {
+  vertical-align: top;
+}
+.dashboard-page .dashboard-table td:nth-child(1),
+.dashboard-page .dashboard-table td:nth-child(4),
+.dashboard-page .dashboard-table td:nth-child(5),
+.dashboard-page .dashboard-table td:nth-child(6),
+.dashboard-page .dashboard-table td:nth-child(8) {
+  white-space: nowrap;
+}
+.dashboard-page .dashboard-table td:nth-child(2),
+.dashboard-page .dashboard-table td:nth-child(3),
+.dashboard-page .dashboard-table.customer-table td:nth-child(1),
+.dashboard-page .dashboard-table.customer-table td:nth-child(3) {
+  overflow: hidden;
+}
+.dashboard-page .dashboard-table td:nth-child(2) > .dashboard-cell-ellipsis,
+.dashboard-page .dashboard-table td:nth-child(3) > .dashboard-cell-ellipsis,
+.dashboard-page .dashboard-table.customer-table td:nth-child(1) > b,
+.dashboard-page .dashboard-table.customer-table td:nth-child(3) > .dashboard-cell-ellipsis {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dashboard-page .dashboard-table td:nth-child(7) {
+  line-height: 1.35;
+  max-height: 2.7em;
+  overflow: hidden;
+  white-space: normal;
+}
+.dashboard-page .dashboard-cell-clamp {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.dashboard-page .dashboard-action-title {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dashboard-page .dashboard-action-detail {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.35;
+}
+
 @media (max-width: 900px) {
   .dashboard-page .stat-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
