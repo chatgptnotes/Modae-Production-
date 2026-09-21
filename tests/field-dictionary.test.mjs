@@ -131,9 +131,10 @@ test('Central India is no longer silently routed to PP', () => {
 // Every lead used to carry source: 'Common mailbox', which recorded how it
 // arrived rather than where it came from, so "which channels produce work"
 // was unanswerable.
-test('the seven documented lead sources are offered', () => {
+test('the eight documented lead sources are offered', () => {
   assert.deepEqual(LEAD_SOURCES, [
     'Website enquiry',
+    'Email',
     'OEM referral',
     'WhatsApp',
     'Phone call',

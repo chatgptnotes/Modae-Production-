@@ -17,6 +17,16 @@ import ForecastDashboard from './Dashboard.jsx'
 
 const roleLabel = role => displayRoleLabel(role) || role
 
+function LiveSyncBadge({ status }) {
+  const label = status === 'live' ? 'Live' : status === 'reconnecting' ? 'Reconnecting' : status === 'offline' ? 'Offline' : 'Connecting'
+  return (
+    <span className={`dashboard-sync dashboard-sync-${status || 'offline'}`} title="Opportunity data sync status">
+      <span className="dashboard-sync-dot" aria-hidden="true" />
+      {label}
+    </span>
+  )
+}
+
 function Metric({ label, value, hint, tone = '', onClick, variant = '' }) {
   const El = onClick ? 'button' : 'div'
   return (
@@ -424,7 +434,10 @@ export default function MyDashboard() {
         <h2>My Dashboard</h2>
         <p className="hint">{roleLabel(role)}{store.sales?.fy ? ` · ${store.sales.fy}` : ''}</p>
       </div>
-      <button onClick={() => nav('/opportunities')}><Icon name="cards" size={13} /> Opportunities</button>
+      <div className="home-head-actions">
+        <LiveSyncBadge status={store.liveSyncStatus} />
+        <button onClick={() => nav('/opportunities')}><Icon name="cards" size={13} /> Opportunities</button>
+      </div>
     </div>
   )
 

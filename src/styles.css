@@ -4793,6 +4793,29 @@ button.install:hover { background: var(--primary-hover); }
    ========================================================================= */
 .home-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .home-head h2 { margin: 4px 0 10px; }
+.home-head-actions { display: flex; align-items: center; gap: 10px; }
+.dashboard-sync {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  color: var(--text-subtle);
+  background: var(--card-bg);
+  font-size: 11px;
+  font-weight: 750;
+}
+.dashboard-sync-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-subtle); }
+.dashboard-sync-live { color: var(--status-success); border-color: var(--status-success-soft); }
+.dashboard-sync-live .dashboard-sync-dot { background: var(--status-success); }
+.dashboard-sync-reconnecting { color: var(--status-warning); border-color: var(--status-warning-soft); }
+.dashboard-sync-reconnecting .dashboard-sync-dot { background: var(--status-warning); }
+@media (max-width: 560px) {
+  .home-head { align-items: flex-start; }
+  .home-head-actions { align-items: flex-end; flex-direction: column; gap: 6px; }
+}
 .brandmark {
   display: block;
   width: auto;

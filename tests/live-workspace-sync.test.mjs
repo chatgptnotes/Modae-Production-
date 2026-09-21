@@ -35,6 +35,21 @@ test('normalized opportunity writes fail loudly instead of falling back to ignor
   assert.match(datastore, /if \(failed\) throw failed\.error/)
 })
 
+test('forced realtime reads wait out an older request before fetching fresh data', () => {
+  const datastore = read('src/datastore.js')
+  assert.match(datastore, /if \(loadInFlight\) \{[\s\S]*const pending = loadInFlight[\s\S]*return force \? pending\.then\(\(\) => loadAll\(\{ force: true \}\)\)/)
+})
+
+test('the store exposes live sync state for dashboard status', () => {
+  const store = read('src/store.jsx')
+  const dashboard = read('src/pages/MyDashboard.jsx')
+  assert.match(store, /useState\(\(\) => datastore\.dbEnabled\(\) \? 'connecting' : 'offline'\)/)
+  assert.match(store, /setLiveSyncStatus\('live'\)/)
+  assert.match(store, /value=\{\{ \.\.\.api, liveSyncStatus \}\}/)
+  assert.match(dashboard, /LiveSyncBadge/)
+  assert.match(dashboard, /store\.liveSyncStatus/)
+})
+
 test('the second final-release decision uses the normal transition gate before auto-advancing', () => {
   const store = read('src/store.jsx')
   assert.match(store, /transitionBlockers\(releasedOpp, 'Submitted', releasedProposal, next\)/)

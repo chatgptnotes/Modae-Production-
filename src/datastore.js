@@ -61,7 +61,13 @@ export function invalidateLoadCache() {
 export async function loadAll({ force = false } = {}) {
   if (!supabase) return null
   if (!force && loadCache && Date.now() - loadCacheAt < LOAD_CACHE_MS) return loadCache
-  if (loadInFlight) return loadInFlight
+  // A realtime event must not settle for a request that started before the
+  // event arrived. Wait for that request, then issue a fresh read so the
+  // dashboard cannot render a stale snapshot after a remote opportunity edit.
+  if (loadInFlight) {
+    const pending = loadInFlight
+    return force ? pending.then(() => loadAll({ force: true })) : pending
+  }
   loadInFlight = fetchAll()
   try {
     loadCache = await loadInFlight

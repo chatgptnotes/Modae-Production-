@@ -55,6 +55,7 @@ export const CUSTOMER_STATUSES = ['Green', 'Amber', 'Red', 'Blue']
 // origin, and only the latter answers "where does our work come from".
 export const LEAD_SOURCES = [
   'Website enquiry',
+  'Email',
   'OEM referral',
   'WhatsApp',
   'Phone call',

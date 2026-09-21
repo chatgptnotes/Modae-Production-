@@ -187,6 +187,7 @@ function reconcileApprovedSubmissions(s) {
 
 export function StoreProvider({ children }) {
   const [state, setState] = useState(initialState)
+  const [liveSyncStatus, setLiveSyncStatus] = useState(() => datastore.dbEnabled() ? 'connecting' : 'offline')
   setRoleNameConfig(state.config)
   // Ref mirror so read APIs (getProposal) see same-tick mutations, not the render closure.
   const stateRef = useRef(state)
@@ -407,11 +408,16 @@ export function StoreProvider({ children }) {
         if (!hydratedRef.current) { hydrate(); return }
         // Realtime means the database changed after the normal load cache was
         // populated, so this read must bypass the short-lived cache.
-        datastore.loadAll({ force: true }).then(res => { if (res && !res.empty) applyServer(res.slices) })
+        datastore.loadAll({ force: true })
+          .then(res => { if (res && !res.empty) applyServer(res.slices) })
+          .catch(() => setLiveSyncStatus('reconnecting'))
       }, 80)
     }
     const unsubscribe = datastore.subscribeBusinessChanges(reload, status => {
-      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+      if (status === 'SUBSCRIBED') {
+        setLiveSyncStatus('live')
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        setLiveSyncStatus('reconnecting')
         console.warn(`Live workspace sync unavailable (${status}); changes will refresh on focus.`)
       }
     })
@@ -2099,7 +2105,7 @@ export function StoreProvider({ children }) {
     return () => window.removeEventListener('focus', onFocus)
   }, [])
 
-  return <StoreCtx.Provider value={api}>{children}</StoreCtx.Provider>
+  return <StoreCtx.Provider value={{ ...api, liveSyncStatus }}>{children}</StoreCtx.Provider>
 }
 
 export const useStore = () => useContext(StoreCtx)
