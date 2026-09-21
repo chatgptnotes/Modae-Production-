@@ -93,7 +93,6 @@ const WORKFLOW_STEPS = [
 ]
 
 const WORKFLOW_STEP_BY_SLUG = Object.fromEntries(WORKFLOW_STEPS.map(step => [step.slug, step]))
-const WORKFLOW_STEP_BY_TAB = Object.fromEntries(WORKFLOW_STEPS.map(step => [step.tab, step.slug]))
 const SPARES_WORKFLOW_STEPS = [
   { slug: 'intake', label: 'Opportunity Intake', milestone: 'Intake', milestones: ['Intake', 'Registration'], tabs: ['overview', 'registration'], tab: 'overview' },
   { slug: 'customer-kyc', label: 'Customer Verification', milestone: 'Customer/KYC', milestones: ['Customer/KYC'], tab: 'customer' },
@@ -142,7 +141,7 @@ const titleCase = value => String(value || '').toLowerCase().split(/\s+/).map((w
   return small ? word : word.charAt(0).toUpperCase() + word.slice(1)
 }).join(' ').replace(/\bBoq\b/g, 'BOQ').replace(/\bKyc\b/g, 'KYC').replace(/\bRfq\b/g, 'RFQ')
 
-function OpportunityProgress({ activeStep, completedThrough, onStep, onNext, steps = WORKFLOW_STEPS }) {
+function OpportunityProgress({ activeStep, completedThrough, onStep, steps = WORKFLOW_STEPS }) {
   const activeIndex = steps.findIndex(step => step.slug === activeStep)
   return (
     <nav className="opportunity-progress" aria-label="Opportunity progress">
@@ -154,13 +153,13 @@ function OpportunityProgress({ activeStep, completedThrough, onStep, onNext, ste
         <div className="progress-controls" aria-label="Navigate workflow views">
           <button type="button" className="progress-arrow" disabled={activeIndex <= 0}
             aria-label="Previous workflow step" title="Previous workflow step"
-            onClick={() => onStep(steps[activeIndex - 1].slug)}>
+            onClick={() => onStep?.(steps[activeIndex - 1].slug)}>
             <Icon name="chevronLeft" size={17} />
           </button>
           <span>{steps[activeIndex]?.label}</span>
-          <button type="button" className="progress-arrow" disabled={activeIndex < 0 || activeIndex >= steps.length - 1}
+          <button type="button" className="progress-arrow" disabled={activeIndex < 0 || activeIndex >= completedThrough}
             aria-label="Next workflow step" title="Next workflow step"
-            onClick={() => onNext(steps[activeIndex + 1].slug)}>
+            onClick={() => onStep?.(steps[activeIndex + 1].slug)}>
             <Icon name="chevronRight" size={17} />
           </button>
         </div>
@@ -168,11 +167,12 @@ function OpportunityProgress({ activeStep, completedThrough, onStep, onNext, ste
       <div className="progress-steps" style={{ '--progress-step-count': steps.length }}>
         <span className="progress-track" aria-hidden="true" />
         {steps.map((step, index) => (
-          <button key={step.slug} type="button"
+          <button key={step.slug} type="button" disabled={index > completedThrough}
             className={`progress-step ${index < completedThrough ? 'done' : ''} ${index === activeIndex ? 'current' : ''}`}
             aria-current={index === activeIndex ? 'step' : undefined}
-            aria-label={`${step.label}${index === activeIndex ? ', selected step' : ''}`}
-            title={`View ${step.label}`} onClick={() => onStep(step.slug)}>
+            aria-label={`${step.label}${index === activeIndex ? ', current workflow stage' : ', workflow stage'}`}
+            title={index === activeIndex ? `Current stage: ${step.label}` : index <= completedThrough ? `Review ${step.label}` : `Future stage: ${step.label}`}
+            onClick={() => onStep?.(step.slug)}>
             <span className="progress-node">{index < completedThrough ? '✓' : String(index + 1).padStart(2, '0')}</span>
             <span className="progress-label">{step.label}</span>
           </button>
@@ -211,55 +211,39 @@ export default function Workbench() {
   const approvalPending = hasPendingApproval(store.approvals, opp.id)
   const workflowSteps = allWorkflowSteps.filter(step =>
     step.milestone !== 'Approval' || approvalPending)
-  const allWorkflowBySlug = Object.fromEntries(allWorkflowSteps.map(step => [step.slug, step]))
   const workflowBySlug = Object.fromEntries(workflowSteps.map(step => [step.slug, step]))
-  const workflowStepForTab = currentTab => workflowSteps.find(step =>
-    [step.tab, ...(step.tabs || [])].includes(currentTab))
-  const legacyStep = tab === 'overview' && opp.route !== 'Spares'
-    ? null
-    : workflowStepForTab(tab)?.slug || (workflowBySlug[WORKFLOW_STEP_BY_TAB[tab]] ? WORKFLOW_STEP_BY_TAB[tab] : null)
   const requestedStep = searchParams.get('step')
   const effectiveMilestone = opp.route === 'Spares' && opp.milestone === 'Qualification' ? 'Screening' : opp.milestone
-  const requestedWorkflowStep = workflowBySlug[requestedStep]
-    || workflowSteps.find(step => (step.milestones || [step.milestone]).includes(requestedStep))
-  const persistedWorkflowStep = allWorkflowSteps.find(step =>
-    (step.milestones || [step.milestone]).includes(effectiveMilestone))
-  const fallbackStep = workflowBySlug[persistedWorkflowStep?.slug]
-    || workflowSteps[Math.max(0, allWorkflowSteps.indexOf(persistedWorkflowStep) - 1)]
-    || workflowSteps[0]
-  const activeStep = requestedWorkflowStep?.slug
-    || (requestedStep && allWorkflowBySlug[requestedStep] ? fallbackStep?.slug : null)
-    || legacyStep
-    || fallbackStep?.slug
-    || 'intake'
-  const activeStepConfig = workflowBySlug[activeStep]
-  const hiddenApprovalTab = tab === 'approval' && !workflowSteps.some(step => step.tab === 'approval')
-  const viewTab = requestedWorkflowStep
-    ? activeStepConfig.tab
-    : (legacyStep ? activeStepConfig.tab : (hiddenApprovalTab ? activeStepConfig.tab : tab))
-  // A workflow step can be opened for review without making it the current
-  // editable step. Keep the persisted milestone as the write boundary so
-  // clicking ahead in the rail never turns a future screen into an editor.
-  const viewedStep = requestedWorkflowStep?.slug
-    || legacyStep
-    || workflowStepForTab(viewTab)?.slug
-    || activeStep
-  const workflowReadOnly = !!persistedWorkflowStep && viewedStep !== persistedWorkflowStep.slug
   const serviceMilestonePhase = { Intake: 0, Qualification: 1, Screening: 2, Sourcing: 2, Proposal: 3, Approval: 4, Submitted: 5, 'Follow-up': 7 }
   const persistedServicePhase = opp.route === 'Service'
     ? (Number.isInteger(opp.servicePhase) ? opp.servicePhase : (serviceMilestonePhase[effectiveMilestone] ?? 0))
     : null
+  const persistedWorkflowStep = opp.route === 'Service'
+    ? allWorkflowSteps.find(step => step.servicePhase === persistedServicePhase)
+      || [...allWorkflowSteps].reverse().find(step => step.servicePhase <= persistedServicePhase)
+    : allWorkflowSteps.find(step => (step.milestones || [step.milestone]).includes(effectiveMilestone))
+  const fallbackStep = workflowBySlug[persistedWorkflowStep?.slug]
+    || workflowSteps[Math.max(0, allWorkflowSteps.indexOf(persistedWorkflowStep) - 1)]
+    || workflowSteps[0]
   const persistedStepIndex = opp.route === 'Service'
     ? workflowSteps.filter(step => step.servicePhase != null && step.servicePhase < persistedServicePhase).length
     : Math.max(0, workflowSteps.findIndex(step => (step.milestones || [step.milestone]).includes(effectiveMilestone)))
-  const hiddenApprovalRequested = requestedStep && allWorkflowBySlug[requestedStep] && !workflowBySlug[requestedStep]
+  const requestedWorkflowStep = workflowBySlug[requestedStep]
+    || workflowSteps.find(step => (step.milestones || [step.milestone]).includes(requestedStep))
+  const requestedStepIndex = requestedWorkflowStep ? workflowSteps.findIndex(step => step.slug === requestedWorkflowStep.slug) : -1
+  const reviewingCompletedStep = requestedStepIndex >= 0 && requestedStepIndex < persistedStepIndex
+  const activeStep = reviewingCompletedStep ? requestedWorkflowStep.slug : (fallbackStep?.slug || 'intake')
+  const activeStepConfig = workflowBySlug[activeStep]
+  const viewTab = activeStepConfig?.tab || 'overview'
+  const workflowReadOnly = reviewingCompletedStep
   useEffect(() => {
-    if (hiddenApprovalRequested && fallbackStep?.slug) {
-      nav(`/opp/${opp.id}?step=${encodeURIComponent(fallbackStep.slug)}`, { replace: true })
+    if (tab !== 'overview' || requestedStep !== activeStep) {
+      nav(`/opp/${opp.id}?step=${encodeURIComponent(activeStep)}`, { replace: true })
     }
-  }, [hiddenApprovalRequested, fallbackStep?.slug, nav, opp.id])
+  }, [activeStep, nav, opp.id, requestedStep, tab])
   const selectStep = step => {
-    if (!workflowBySlug[step]) return
+    const index = workflowSteps.findIndex(item => item.slug === step)
+    if (index < 0 || index > persistedStepIndex) return
     nav(`/opp/${opp.id}?step=${encodeURIComponent(step)}`)
   }
   const servicePhaseBlockers = step => {
@@ -323,7 +307,6 @@ export default function Workbench() {
         return
       }
     }
-    selectStep(slug)
     const moved = moveMilestone(step.milestone, step.tab)
     if (opp.route === 'Service' && moved) store.updateServiceFlow(opp.id, { servicePhase: step.servicePhase })
   }
@@ -418,19 +401,6 @@ export default function Workbench() {
       anyOf: !!blocker.anyOf,
     })
   }
-  const openTransitionTab = tabName => {
-    setTransition(null)
-    goTab(tabName)
-  }
-  const openMissingContact = field => {
-    setTransition(null)
-    if (tab !== 'overview') nav(`/opp/${opp.id}/overview`)
-    window.setTimeout(() => detailsRef.current?.focusField(field), tab === 'overview' ? 0 : 120)
-  }
-  const openDetails = () => {
-    if (tab !== 'overview') nav(`/opp/${opp.id}/overview`)
-    window.setTimeout(() => detailsRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }), tab === 'overview' ? 0 : 120)
-  }
   const clarificationRows = actionableClarifications(opp, store)
     .filter(c => !isClarificationResolved(c))
   const deviationRows = (proposal?.terms || []).filter(t => t.status === 'Deviation')
@@ -492,7 +462,7 @@ export default function Workbench() {
         <div className="summary-meta-item opp-summary-action"><span>Next action</span><b>{nextAction.text || NEXT_ACTION[opp.milestone] || 'Progress the opportunity'}</b></div>
         <div className={`summary-meta-item summary-due ${isOverdue ? 'is-overdue' : ''}`}><span>Due</span><div className="summary-meta-value"><b>{ddMmmYY(due) || '-'}</b>{isOverdue && <Chip tone="state-Blocks">Overdue</Chip>}</div></div>
       </div>
-      <OpportunityProgress steps={workflowSteps} activeStep={activeStep} completedThrough={persistedStepIndex} onStep={selectStep} onNext={advanceStep} />
+      <OpportunityProgress steps={workflowSteps} activeStep={activeStep} completedThrough={persistedStepIndex} onStep={selectStep} />
       {transition && (
         <Modal title={transition.kind === 'blocked' ? `Cannot move from ${opp.milestone} to ${transition.target}` : `Move back to ${transition.target}`} onClose={() => setTransition(null)} wide>
           {transition.kind === 'blocked' ? (
@@ -511,12 +481,13 @@ export default function Workbench() {
                   {item.key === 'clarifications' && clarificationRows.length > 0 && <div className="transition-detail-list">{clarificationRows.map(row => <div key={row.id}><b>{row.id}</b> · {row.category} · {row.q} <em>{row.status}</em></div>)}</div>}
                   {item.key === 'dev' && deviationRows.length > 0 && <div className="transition-detail-list">{deviationRows.map((row, index) => <div key={`${row.term}-${index}`}><b>{row.term}</b><br />Customer requested: {row.customerAsk || 'Not recorded'}<br />ModAE offered: {row.ourResponse || 'Pending review'}</div>)}</div>}
                   {item.severity === 'wait' && <span>Waiting for the responsible approver.</span>}
-                  {item.key === 'clarifications' && <button className="exception-action" onClick={() => openTransitionTab('clarifications')}>Open clarifications</button>}
-                  {item.key === 'kyc' && <button className="exception-action" onClick={() => openTransitionTab('customer')}>Open Customer/KYC</button>}
-                  {/* KYC is not exception-waivable; only amber-fee and red-clearance can request an exception. */}
-                  {item.key === 'required-contactPerson' && <button className="exception-action" onClick={() => openMissingContact('contactPerson')}>Edit contact person</button>}
-                  {item.key === 'required-contactPhone' && <button className="exception-action" onClick={() => openMissingContact('contactPhone')}>Edit contact phone</button>}
-                  {(item.key.startsWith('sp-conf-') || item.key.startsWith('sp-price-')) && <button className="exception-action" onClick={() => openTransitionTab('sourcing')}>Open sourcing</button>}
+                  {/* Keep blocker handling on the current workflow page; the active
+                      stage owns the next action and users should not be detoured
+                      into another editable page from this dialog. */}
+                  {['clarifications', 'kyc', 'required-contactPerson', 'required-contactPhone'].includes(item.key)
+                    || item.key.startsWith('sp-conf-') || item.key.startsWith('sp-price-')
+                    ? <span className="hint">Resolve this requirement from the current workflow stage.</span>
+                    : null}
                   {approvable && openRequest && <span>{item.approvalType === 'Commercial deviation' ? 'AH approval for commercial deviations' : item.approvalType} <b>{openRequest.id}</b> is pending with {openRequest.needed?.join(openRequest.anyOf ? ' or ' : ' + ') || openRequest.approver}.</span>}
                   {approvable && !openRequest && <button className="exception-action" onClick={() => requestBlockerApproval(item)}>{item.approvalType === 'Commercial deviation' ? 'Request AH approval for commercial deviations' : `Request ${item.approvalType.toLowerCase()} from ${blockerOwner(item)}`}</button>}
                   {requestable && exception?.status === 'Pending' && <span>Exception approval <b>{exception.id}</b> is pending.</span>}
@@ -536,7 +507,7 @@ export default function Workbench() {
         </Modal>
       )}
       <fieldset className={`wb-body workflow-edit-boundary ${workflowReadOnly ? 'workflow-edit-boundary--readonly' : ''}`} disabled={workflowReadOnly && viewTab !== 'comms'} aria-readonly={workflowReadOnly || undefined}>
-        {workflowReadOnly && <div className="workflow-readonly-notice" role="status">Read-only view — select the current workflow step to edit.</div>}
+        {workflowReadOnly && <div className="workflow-readonly-notice" role="status">Read-only review — return to the current workflow stage to edit.</div>}
         {viewTab === 'overview' && opp.route === 'Spares' && <SparesIntakeTab opp={opp} detailsRef={detailsRef} />}
         {viewTab === 'overview' && opp.route !== 'Spares' && <OverviewTab opp={opp} detailsRef={detailsRef} />}
         {viewTab === 'requirement' && <RequirementTab opp={opp} />}
@@ -756,7 +727,7 @@ function RegistrationTab({ opp, goTab, detailsRef, spares = false }) {
           <div className="warnbox">
             <b>{blocking.length} registration requirement{blocking.length === 1 ? '' : 's'} outstanding.</b>
             <div className="transition-detail-list">
-              {blocking.map(item => <div key={item.key}><b>{item.text}</b>{item.key === 'kyc' && <button className="inline-action" onClick={() => goTab('customer')}>Open Customer/KYC</button>}</div>)}
+              {blocking.map(item => <div key={item.key}><b>{item.text}</b></div>)}
             </div>
           </div>
         ) : (

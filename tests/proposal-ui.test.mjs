@@ -86,6 +86,23 @@ test('customer preview is clearly separated from the legacy workbook draft', () 
   assert.doesNotMatch(proposal, />Customer Preview · read-only</)
 })
 
+test('revision badge opens current and snapshot-backed historical previews', () => {
+  const proposal = read('src/pages/Proposal.jsx')
+  assert.match(proposal, /function RevisionMenu\({ currentRevision, options, onSelect }\)/)
+  assert.match(proposal, /const revisionOptions = \[/)
+  assert.match(proposal, /snapshot \|\| null/)
+  assert.match(proposal, /Snapshot unavailable/)
+  assert.match(proposal, /onSelect=\{option => setPreviewTarget\(option\)\}/)
+})
+
+test('historical proposal previews stay read-only but can print the selected revision', () => {
+  const proposal = read('src/pages/Proposal.jsx')
+  assert.match(proposal, /Historical customer-facing document/)
+  assert.match(proposal, /read-only historical snapshot/)
+  assert.match(proposal, /setPrintingModel\(previewModel\)/)
+  assert.match(proposal, /comm && !previewModel\.historical/)
+})
+
 test('submitted proposal communications capture the approved proposal snapshot', () => {
   const submission = read('src/workbench/SubmissionPanel.jsx')
   const store = read('src/store.jsx')

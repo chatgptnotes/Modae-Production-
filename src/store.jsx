@@ -482,6 +482,11 @@ export function StoreProvider({ children }) {
       if (before && !editableMilestones.has(before.milestone)) {
         patch = Object.fromEntries(Object.entries(patch).filter(([key]) => !detailFields.has(key)))
       }
+      // Legacy pipeline edits still need to move the canonical workflow. The
+      // milestone is what the workbench and list views use to choose the page.
+      if (patch.stage && !patch.milestone) {
+        patch = { ...patch, milestone: milestoneForStage(patch.stage, patch.status || before?.status) }
+      }
       // A type change re-derives both branching axes — leaving a Retrofit on
       // the Greenfield lane would silently skip the B-01..B-05 chain.
       if (patch.oppType) {
@@ -1757,9 +1762,10 @@ export function StoreProvider({ children }) {
     },
 
     setMilestone(oppId, milestone, reason = '') {
+      const today = new Date().toISOString().slice(0, 10)
       setState(s => withAudit({
         ...s,
-        opportunities: s.opportunities.map(o => (o.id === oppId ? { ...o, milestone } : o)),
+        opportunities: s.opportunities.map(o => (o.id === oppId ? { ...o, milestone, lastUpdated: today } : o)),
       }, 'Milestone moved', oppId, reason ? `${milestone} — ${reason}` : milestone))
     },
 

@@ -2,7 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { STAGES, CLOSE_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES } from '../seed.js'
+import { CLOSE_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES } from '../seed.js'
 import { fmt, fmtRupeesFromK, rupeesToK, mmmYY, ddMmmYY, stageClass, productList, productLabel, productDisplayLabel, sameCustomer, displayRole, OPPORTUNITY_DATE_FIELDS, OPPORTUNITY_PERIODS, opportunityDateRange } from '../utils.js'
 import { downloadTableXlsx } from '../proposal/excelExport.js'
 import { useFormulaBar } from '../formulabar.jsx'
@@ -11,8 +11,8 @@ import { nextActionWith } from '../gates.js'
 import { suggestProbability } from '../insights.js'
 import { Modal } from '../ui.jsx'
 import { Icon, ModaeImageLogo } from '../icons.jsx'
+import { workflowStageLabelFor, workflowStageMilestoneFor, workflowStageOptionsFor } from '../workflowStage.js'
 
-const OPEN_STAGES = STAGES.filter(s => s !== 'Won' && s !== 'Lost')
 const DEFAULT_DATE_FILTER = { field: 'orderDate', period: 'all', date: '', from: '', to: '' }
 
 // Columns with their real-sheet letters (row number = Sl + 2, as in the sheet).
@@ -819,8 +819,11 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                   </select>
                 </td>
                 <td onClick={selectCell(o, COLS[23])} className={isSel(o, COLS[23]) ? 'cell-sel' : ''}>
-                  <select value={o.stage} onChange={upd(o.id, 'stage')}>
-                    {(o.status === 'Closed' ? STAGES : OPEN_STAGES.concat(['Won', 'Lost'])).map(s => <option key={s}>{s}</option>)}
+                  <select value={workflowStageMilestoneFor(o)} onChange={e => store.setMilestone(o.id, e.target.value, 'Workflow stage updated from Opportunities')}>
+                    {workflowStageOptionsFor(o).map(option => <option key={option.milestone} value={option.milestone}>{option.label}</option>)}
+                    {!workflowStageOptionsFor(o).some(option => option.milestone === workflowStageMilestoneFor(o)) && (
+                      <option value={workflowStageMilestoneFor(o)}>{workflowStageLabelFor(o)}</option>
+                    )}
                   </select>
                 </td>
                 <td onClick={selectCell(o, COLS[24])}

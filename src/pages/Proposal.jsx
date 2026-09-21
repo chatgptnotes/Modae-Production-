@@ -454,6 +454,55 @@ function PreviewMenu({ onPreviewProposal, onPreviewTemplate }) {
   )
 }
 
+function RevisionMenu({ currentRevision, options, onSelect }) {
+  const [open, setOpen] = useState(false)
+  const menuRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return undefined
+    const close = event => {
+      if (!menuRef.current?.contains(event.target)) setOpen(false)
+    }
+    document.addEventListener('pointerdown', close)
+    return () => document.removeEventListener('pointerdown', close)
+  }, [open])
+
+  return (
+    <span className="proposal-revision-menu" ref={menuRef}>
+      <button
+        type="button"
+        className="proposal-meta-chip proposal-revision-trigger"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen(value => !value)}
+      >
+        Rev-{currentRevision || '00'} <Icon name="chevronDown" size={11} />
+      </button>
+      {open && (
+        <span className="proposal-revision-menu-list" role="menu" aria-label="Proposal revisions">
+          {options.map(option => (
+            <button
+              key={option.key}
+              type="button"
+              role="menuitem"
+              disabled={!option.available}
+              className={option.current ? 'current' : ''}
+              onClick={() => {
+                if (!option.available) return
+                setOpen(false)
+                onSelect(option)
+              }}
+            >
+              <span>Rev-{option.revision}</span>
+              <small>{option.current ? 'Current' : option.available ? 'Historical preview' : 'Snapshot unavailable'}</small>
+            </button>
+          ))}
+        </span>
+      )}
+    </span>
+  )
+}
+
 // Rendered two ways: as the standalone /proposal/:oppId page, and embedded in the
 // opportunity workspace (Proposal tab → Builder). Embedded mode drops the page
 // chrome — title, back link, duplicated blocker list — and unpins the sheet tabs.
@@ -478,8 +527,8 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   const canEditProposal = !!opp && (opp.owner === store.role || isAdminRole(store.role))
   const [tab, setTab] = useState(initialTab)
   const [workbook, setWorkbook] = useState('proposal')
-  const [printing, setPrinting] = useState(false)
-  const [previewOpen, setPreviewOpen] = useState(false)
+  const [printingModel, setPrintingModel] = useState(null)
+  const [previewTarget, setPreviewTarget] = useState(null)
   const [referencePreviewOpen, setReferencePreviewOpen] = useState(false)
   const [referenceLoading, setReferenceLoading] = useState(false)
   const [referenceError, setReferenceError] = useState('')
@@ -565,8 +614,8 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   // readiness panel) is not part of the customer document — the print stylesheet
   // hides it off this body class, which only exists while the dialog is open.
   useEffect(() => {
-    if (!printing) return
-    const done = () => setPrinting(false)
+    if (!printingModel) return
+    const done = () => setPrintingModel(null)
     if (embedded) document.body.classList.add('proposal-printing')
     window.addEventListener('afterprint', done, { once: true })
     const t = setTimeout(() => window.print(), 60)
@@ -575,7 +624,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       window.removeEventListener('afterprint', done)
       document.body.classList.remove('proposal-printing')
     }
-  }, [printing, embedded])
+  }, [printingModel, embedded])
 
   if (!opp) return <div className="page"><h2>Unknown opportunity</h2><Link to="/">Back to tracker</Link></div>
   if (isComingSoon) return <OpportunityComingSoon opp={opp} />
@@ -1129,6 +1178,46 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   // remain separately protected by the commercial-role checks.
   const priced = p.bidType !== 'Unpriced (Technical)'
 
+  const revisionOptions = [
+    {
+      key: 'current',
+      revision: String(p.revision || '00'),
+      proposal: p,
+      current: true,
+      available: true,
+    },
+    ...(p.revisions || []).map((entry, index) => {
+      const openedRevision = String(entry.rev || '').replace(/^Rev[- ]?/i, '')
+      const snapshot = entry.snapshot
+      const revision = String(snapshot?.revision ?? openedRevision)
+      return {
+        key: `history-${index}-${revision}`,
+        revision,
+        proposal: snapshot || null,
+        current: false,
+        available: !!snapshot,
+      }
+    }),
+  ]
+    .filter(option => /^\d+$/.test(option.revision))
+    .filter((option, index, all) => index === all.findIndex(item => item.revision === option.revision))
+    .sort((a, b) => Number(b.revision) - Number(a.revision))
+
+  const previewModel = previewTarget
+    ? (() => {
+      const previewP = normalize(previewTarget.proposal, opp)
+      const previewPricing = buildPricing(store, previewP)
+      return {
+        p: previewP,
+        doc: docModel(previewP, opp, { files: specFiles.map(f => f.name).filter(Boolean), config: store.config }),
+        priced: previewP.bidType !== 'Unpriced (Technical)',
+        totals: previewPricing.computeTotals(previewP),
+        lineQuoted: previewPricing.lineQuoted,
+        historical: !previewTarget.current,
+      }
+    })()
+    : null
+
   // Signal List and Rack Layout are project artefacts. Biji, 13 Aug: "in the
   // spare parts case, there will not be any signal list, there will not be
   // rack layout." Hide the tabs rather than show them with an apology.
@@ -1185,10 +1274,10 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     </>
   )
 
-  if (printing) {
+  if (printingModel) {
     return (
       <div className={shellClass}>
-        <PrintDoc p={p} opp={opp} doc={doc} priced={priced} totals={totals} lineQuoted={lineQuoted} />
+        <PrintDoc p={printingModel.p} opp={opp} doc={printingModel.doc} priced={printingModel.priced} totals={printingModel.totals} lineQuoted={printingModel.lineQuoted} />
       </div>
     )
   }
@@ -1201,7 +1290,11 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       <header className="proposal-workspace-header">
         <div className="proposal-workspace-title">
           <span className="eyebrow">Customer proposal</span>
-          <h3>{route} proposal <span className="proposal-meta-chip">Rev-{p.revision || '00'}</span></h3>
+          <h3>{route} proposal <RevisionMenu
+            currentRevision={p.revision || '00'}
+            options={revisionOptions}
+            onSelect={option => setPreviewTarget(option)}
+          /></h3>
           <div className="proposal-header-meta" aria-label="Proposal setup">
             <span className="proposal-source-label">{p.reviewedUpload ? 'Uploaded proposal' : 'System-generated proposal'}</span>
             {!embedded && <Link className="btn proposal-folder-link" to={`/folders/${oppId}`}>Back to folder</Link>}
@@ -1224,7 +1317,9 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
             <Icon name="download" size={13} /> Draft
           </button>
           <PreviewMenu
-            onPreviewProposal={() => setPreviewOpen(true)}
+            onPreviewProposal={() => setPreviewTarget({
+              key: 'current', revision: String(p.revision || '00'), proposal: p, current: true, available: true,
+            })}
             onPreviewTemplate={['Project', 'Spares', 'Services'].includes(route) ? openTemplatePreview : null}
           />
           {reviewReady && approvalRequired && !pendingForOpp.length && (
@@ -1703,25 +1798,25 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
         </>
       )}
 
-      {previewOpen && (
-        <Modal title={`Proposal preview — ${oppId}`} onClose={() => setPreviewOpen(false)} wide className="proposal-preview-modal">
+      {previewModel && (
+        <Modal title={`Proposal preview — ${oppId}`} onClose={() => setPreviewTarget(null)} wide className="proposal-preview-modal">
           <div className="proposal-preview-toolbar">
             <span className="hint">
-              Customer-facing document · Rev-{p.revision}
-              {comm ? ' · the ModAE costing block below is internal and editable' : ' · read-only preview'}
+              {previewModel.historical ? 'Historical customer-facing document' : 'Customer-facing document'} · Rev-{previewModel.p.revision}
+              {previewModel.historical ? ' · read-only historical snapshot' : comm ? ' · the ModAE costing block below is internal and editable' : ' · read-only preview'}
             </span>
             <div className="forms-actions">
-              <button onClick={() => setPreviewOpen(false)}>Close</button>
-              <button className="primary" onClick={() => { setPreviewOpen(false); setPrinting(true) }}>
+              <button onClick={() => setPreviewTarget(null)}>Close</button>
+              <button className="primary" onClick={() => { setPreviewTarget(null); setPrintingModel(previewModel) }}>
                 <Icon name="printer" size={13} /> Print / PDF proposal
               </button>
             </div>
           </div>
           <div className="proposal-preview-scroll">
-            <PrintDoc p={p} opp={opp} doc={doc} priced={priced} totals={totals} lineQuoted={lineQuoted} />
+            <PrintDoc p={previewModel.p} opp={opp} doc={previewModel.doc} priced={previewModel.priced} totals={previewModel.totals} lineQuoted={previewModel.lineQuoted} />
             {/* ModAE-internal costing — deliberately outside PrintDoc, which is
                 the customer document. None of this reaches the customer copy. */}
-            {comm && (
+            {comm && !previewModel.historical && (
               <section className="proposal-preview-internal">
                 <div className="section-title"><Icon name="lock" size={13} /> ModAE internal — costing (not sent to the customer)</div>
                 {costingFactorsPanel}

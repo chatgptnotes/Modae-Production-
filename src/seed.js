@@ -590,6 +590,7 @@ export function milestoneForStage(stage, status) {
     case 'RFI': return 'Clarification'
     case 'Budgetary': return 'Proposal'
     case 'RFQ': return 'Sourcing'
+    case 'Negotiate': return 'Proposal'
     case 'Firm Bid': return 'Submitted'
     case 'Won': return 'Handover'
     case 'Lost': return 'Follow-up'

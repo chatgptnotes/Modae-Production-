@@ -103,12 +103,15 @@ test('compact lead review keeps the AI clarification email action visible', () =
   assert.doesNotMatch(css, /\.structured-active-sections \.compact-workflow-content \.compact-action-col \.compact-clarification-rail[\s\S]*display: none/)
 })
 
-test('lead decisions comparison action is in the visible section header only', () => {
+test('compact lead review keeps the two-column rail and left-side review order', () => {
   assert.match(inbox, /className=\{`ws-group\$\{compact \? ' lead-decision-section-head' : ''\}`\}/)
-  assert.match(inbox, /lead-decision-section-head[\s\S]*Compare with original email/)
-  assert.doesNotMatch(inbox, /<div className="lead-decision-head">[\s\S]{0,500}lead-decision-compare-trigger/)
-  assert.match(css, /\.lead-decision-section-head[\s\S]*flex-wrap: wrap;/)
-  assert.match(css, /\.lead-decision-section-head > \.lead-decision-compare-trigger[\s\S]*flex-basis: 100%;/)
+  const leadCard = inbox.indexOf('className="lead-decision-card"')
+  const compareCard = inbox.indexOf('className="lead-compare-card"')
+  const missingPanel = inbox.indexOf('className="lead-missing-information-panel"')
+  assert.ok(leadCard >= 0 && compareCard > leadCard && missingPanel > compareCard)
+  assert.match(inbox, /compact-source-rail[\s\S]*LeadSourceContext/)
+  assert.match(inbox, /lead-compare-card[\s\S]*Compare with original email/)
+  assert.match(css, /\.lead-detail-layout[\s\S]*grid-template-columns: minmax\(0, 1fr\) minmax\(320px, 390px\)/)
 })
 
 test('internal senders cannot become customer contacts', () => {
