@@ -851,7 +851,7 @@ function PasteLeadModal({ onClose }) {
           ? <WarnBox>Built-in fallback is selected — the email will be parsed locally and remain pending human review.</WarnBox>
           : !aiEnabled() && <WarnBox>AI proxy is not configured — extraction will use the built-in email fallback and remain pending human review.</WarnBox>}
         {err && <ErrBox>{err}</ErrBox>}
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 10 }}>
+        <div className="lead-paste-actions">
           <button onClick={onClose}>Cancel</button>
           {err && <button onClick={addRaw}>Add unextracted</button>}
           <button className="primary" onClick={add} disabled={busy || reading}>

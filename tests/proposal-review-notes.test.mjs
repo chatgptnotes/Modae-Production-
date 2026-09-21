@@ -18,6 +18,15 @@ test('only blocking findings prevent proposal validation', () => {
   assert.match(proposal, /reviewStatus: hasActiveBlock \? 'Needs attention'/)
 })
 
+test('stored workbook reviews are recomputed from the pre-import snapshot and shown first', () => {
+  assert.match(proposal, /reviewedUpload\.baseProposal/)
+  assert.match(proposal, /comparisonAvailable: true/)
+  assert.match(proposal, /review\.comparison-unavailable/)
+  assert.match(proposal, /Workbook changes detected/)
+  assert.match(proposal, /const workbookChangeIssues = displayReviewIssues\.filter\(issue => issue\.code === 'line\.value-changed'\)/)
+  assert.match(proposal, /const otherReviewIssues = displayReviewIssues\.filter\(issue => issue\.code !== 'line\.value-changed'\)/)
+})
+
 test('ModAE standard commercial terms are complete and non-blocking', () => {
   const terms = modaeStandardCommercialTerms()
   assert.deepEqual(terms.map(term => term.key), ['payment', 'delivery', 'warranty', 'freight', 'validity'])

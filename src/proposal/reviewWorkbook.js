@@ -38,7 +38,7 @@ function findTable(workbook) {
 const valueAt = (row, index) => index == null ? '' : row[index]
 const rowIsTotal = row => row.some(value => /total/i.test(clean(value)))
 
-const displayValue = value => value == null || value === '' ? 'blank' : String(value)
+const displayValue = value => `"${value == null || value === '' ? 'blank' : String(value)}"`
 const sameNumber = (left, right) => Number(left) === Number(right)
 
 const changedField = (field, label, before, after, equal = (left, right) => clean(left) === clean(right)) => {
@@ -69,7 +69,7 @@ const changesForRow = (old, row, units) => [
 const valueChangeIssue = (row, change, sheetName) => ({
   severity: 'warning',
   code: 'line.value-changed',
-  text: `Workbook row ${row.index} changed ${change.label} for "${row.description || row.pn}" from ${displayValue(change.before)} to ${displayValue(change.after)}.`,
+  text: `${change.label} for "${row.description || row.pn}" changed from ${displayValue(change.before)} to ${displayValue(change.after)}.`,
   evidence: `${sheetName}, Row ${row.index}`,
   change: { ...change, row: row.index, line: row.description || row.pn },
 })

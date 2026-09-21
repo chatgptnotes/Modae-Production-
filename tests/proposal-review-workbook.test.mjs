@@ -17,9 +17,21 @@ test('imports reviewed workbook quantities and prices into matching proposal lin
   assert.equal(result.proposal.bom[0].quoted, 1250)
   assert.equal(result.changes[0].type, 'updated')
   assert.deepEqual(result.changes[0].fields.map(field => field.field), ['quantity', 'unitPrice', 'totalPrice'])
-  assert.ok(result.issues.some(issue => issue.code === 'line.value-changed' && /Quantity.*from 7 to 2/.test(issue.text)))
-  assert.ok(result.issues.some(issue => issue.code === 'line.value-changed' && /Unit price.*from blank to 1250/.test(issue.text)))
+  assert.ok(result.issues.some(issue => issue.code === 'line.value-changed' && /Quantity for .* changed from "7" to "2"/.test(issue.text)))
+  assert.ok(result.issues.some(issue => issue.code === 'line.value-changed' && /Unit price for .* changed from "blank" to "1250"/.test(issue.text)))
   assert.ok(result.issues.some(issue => issue.code === 'customer.mismatch'))
+})
+
+test('formats UOM changes with explicit old and new values', () => {
+  const result = importReviewedWorkbook({ sheets: [{ name: 'Priced BoQ', rows: [
+    ['Description', 'Part Number', 'Quantity', 'UOM'],
+    ['VC-8000 universal monitoring module', 'VC-8000/UMM', 1, 'EA'],
+  ] }] }, {
+    units: 1,
+    bom: [{ desc: 'VC-8000 universal monitoring module', pn: 'VC-8000/UMM', qtyPerUnit: 0, common: 1, spares: 0, uom: 'No.' }],
+  }, { sellTo: '' })
+  assert.ok(result.issues.some(issue => issue.code === 'line.value-changed'
+    && issue.text === 'UOM for "VC-8000 universal monitoring module" changed from "No." to "EA".'))
 })
 
 test('does not report value changes when the uploaded workbook is unchanged', () => {

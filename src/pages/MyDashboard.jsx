@@ -1,4 +1,4 @@
-import React, { useId, useRef, useState } from 'react'
+import React, { useEffect, useId, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS } from '../seed.js'
@@ -38,16 +38,40 @@ function Metric({ label, value, hint, tone = '', onClick, variant = '' }) {
   )
 }
 
-function Card({ title, icon, tone = '', span = 6, children, action }) {
+function Card({ title, icon, tone = '', span = 6, children, action, className = '' }) {
   return (
-    <section className={`ana-card dashboard-card c-${span}`}>
+    <section className={`ana-card dashboard-card c-${span}${className ? ` ${className}` : ''}`}>
       <div className="ana-title">
         {icon && <span className={`ana-ico ${tone}`}><Icon name={icon} size={15} /></span>}
-        {title}
+        <span className="dashboard-card-title">{title}</span>
         {action && <span className="ana-title-action">{action}</span>}
       </div>
       {children}
     </section>
+  )
+}
+
+function ForecastReportCard() {
+  const location = useLocation()
+  const [forecastOpen, setForecastOpen] = useState(false)
+
+  useEffect(() => {
+    if (location.hash === '#forecast-details') setForecastOpen(true)
+  }, [location.hash])
+
+  return (
+    <>
+      <Card title="Forecast reporting" icon="chartLine" tone="tone-sky" span={12}>
+        <div className="dashboard-report-actions">
+          <button onClick={() => setForecastOpen(value => !value)} aria-expanded={forecastOpen}>
+            {forecastOpen ? 'Hide forecast pivot' : 'Open forecast by customer/month'}
+            <span aria-hidden="true">{forecastOpen ? ' ↑' : ' ↓'}</span>
+          </button>
+        </div>
+        {!forecastOpen && <p className="hint">Review forecast by customer and month.</p>}
+      </Card>
+      {forecastOpen && <div id="forecast-details" className="dashboard-embedded-report"><ForecastDashboard embedded /></div>}
+    </>
   )
 }
 
@@ -402,8 +426,11 @@ function NextActions({ nextActions, nav }) {
     return (
       <button key={opp.id} className="dashboard-action" onClick={() => nav(`/opp/${opp.id}`)}>
         <span className="dashboard-action-title">
+          <span className="dashboard-action-identity">
+            <b className="dashboard-action-id">{opp.id}</b>
+            <span className="dashboard-action-name"> — {opp.oppName}</span>
+          </span>
           {tag && <span className={`pill ${tag.cls}`}>{tag.label}</span>}
-          <b>{opp.id}</b> — {opp.oppName}
         </span>
         {/* title= keeps the full sentence reachable when the 3-line clamp bites. */}
         <span className="hint dashboard-action-detail" title={text}>{text}</span>
@@ -464,11 +491,6 @@ export default function MyDashboard() {
 
 // ------------------------------------------------------------------- sales
 function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head }) {
-  const [forecastOpen, setForecastOpen] = useState(false)
-  const location = useLocation()
-  React.useEffect(() => {
-    if (location.hash === '#forecast-details') setForecastOpen(true)
-  }, [location.hash])
   const perf = salesPerformance(store, role)
   const money = canPriceProposal(role)
   const openValue = open.reduce((s, o) => s + (+o.valueK || 0), 0)
@@ -504,20 +526,22 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
       </div>
 
       <div className="ana-grid">
-        <Card title="Annual attainment" icon="target" tone="tone-green" span={4}>
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '4px 0 10px' }}>
-            <ArcGauge pct={perf.attainPct} value={`${Math.round(perf.attainPct)}%`} caption={`of ${fmtLakh(perf.annual)}`} />
+        <Card title="Annual attainment" icon="target" tone="tone-green" span={4} className="annual-attainment-card">
+          <div className="annual-attainment-body">
+            <div className="annual-attainment-gauge">
+              <ArcGauge pct={perf.attainPct} value={`${Math.round(perf.attainPct)}%`} caption={`of ${fmtLakh(perf.annual)}`} />
+            </div>
+            <table className="cost-table annual-attainment-table" style={{ width: '100%' }}>
+              <tbody>
+                <tr><td>Expected by now</td><td className="num">{fmtLakh(perf.expected)}</td></tr>
+                <tr><td>Achieved</td><td className="num">{fmtLakh(perf.achieved)}</td></tr>
+                <tr className="total"><td>Variance</td>
+                  <td className="num" style={{ color: variance >= 0 ? 'var(--won-text)' : 'var(--amber-text)' }}>
+                    {variance >= 0 ? '+' : ''}{fmtLakh(variance)}
+                  </td></tr>
+              </tbody>
+            </table>
           </div>
-          <table className="cost-table" style={{ width: '100%' }}>
-            <tbody>
-              <tr><td>Expected by now</td><td className="num">{fmtLakh(perf.expected)}</td></tr>
-              <tr><td>Achieved</td><td className="num">{fmtLakh(perf.achieved)}</td></tr>
-              <tr className="total"><td>Variance</td>
-                <td className="num" style={{ color: variance >= 0 ? 'var(--won-text)' : 'var(--amber-text)' }}>
-                  {variance >= 0 ? '+' : ''}{fmtLakh(variance)}
-                </td></tr>
-            </tbody>
-          </table>
         </Card>
 
         <Card title="Quarterly target vs actual" icon="chartBar" tone="tone-sky" span={8}>
@@ -540,17 +564,7 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
           <div className="hint" style={{ marginTop: 8 }}>Your leads through to won business, with the conversion from each stage to the next.</div>
         </Card>
 
-        <Card title="Forecast reporting" icon="chartLine" tone="tone-sky" span={12}>
-          <div className="dashboard-report-actions">
-            <button onClick={() => setForecastOpen(value => !value)} aria-expanded={forecastOpen}>
-              {forecastOpen ? 'Hide forecast pivot' : 'Open forecast by customer/month'}
-              <span aria-hidden="true">{forecastOpen ? ' ↑' : ' ↓'}</span>
-            </button>
-          </div>
-          {!forecastOpen && <p className="hint">Review forecast by customer and month.</p>}
-        </Card>
-
-        {forecastOpen && <div id="forecast-details" className="dashboard-embedded-report"><ForecastDashboard embedded /></div>}
+        <ForecastReportCard />
 
         {/* The "Monthly bookings" sparkline that used to sit here plotted the
             same perf.monthly array as the chart above, with no target line, no
@@ -764,6 +778,8 @@ function ApproverDashboard({ store, nav, role, c, open, blocked, nextActions, he
         <Card title="Next best actions" icon="target" tone="tone-amber" span={6}>
           <NextActions {...{ nextActions, nav }} />
         </Card>
+
+        <ForecastReportCard />
       </div>
     </div>
   )
@@ -822,6 +838,7 @@ function AdminDashboard({ store, nav, role, c, open, blocked, head }) {
         </Card>
 
         <TeamTargetsCard store={store} />
+        <ForecastReportCard />
       </div>
     </div>
   )
@@ -863,6 +880,7 @@ function TechDashboard({ store, nav, open, blocked, nextActions, head }) {
         <Card title="Next best actions" icon="target" tone="tone-amber" span={6}>
           <NextActions {...{ nextActions, nav }} />
         </Card>
+        <ForecastReportCard />
       </div>
     </div>
   )

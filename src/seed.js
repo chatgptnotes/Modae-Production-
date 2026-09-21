@@ -524,7 +524,7 @@ export const seedOpportunities = [
 export const ROLES = {
   SUPER: { name: 'System Owner', label: 'Super Admin — Platform Owner', commercial: true, admin: true },
   ADMIN: { name: 'Admin', label: 'Admin — System Administrator', commercial: true, admin: true },
-  LJS: { name: 'L. J. Swaminathan', label: 'LJS — Strategic Approver', commercial: true },
+  LJS: { name: 'L. J. Swaminathan', label: 'LJS — Strategic Approver / Application Administrator', commercial: true, admin: true },
   AH: { name: 'Ashwath Hegde', label: 'AH — Commercial & Ops Approver', commercial: true },
   RS: { name: 'R. Sundaram', label: 'RS — Sales Owner', commercial: false, sales: true },
   PP: { name: 'P. Prakash', label: 'PP — Sales Owner', commercial: false, sales: true },
@@ -549,8 +549,9 @@ export const PORTAL_ENABLED = false
 export const selectableRoles = () =>
   Object.entries(ROLES).filter(([id]) => PORTAL_ENABLED || id !== 'CUST')
 
-// Page-permission matrix (from the BT prototype's PERMS). Sales owners all get
-// the same set; CUST sees the external portal only.
+// Page-permission matrix (from the BT prototype's PERMS). ADMIN and LJS are
+// co-equal application authorities; sales owners all get the same set; CUST
+// sees the external portal only.
 const pages = list => (PORTAL_ENABLED ? list : list.filter(p => p !== 'portal'))
 const SALES_PAGES = ['mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders',
   'proposal', 'pricelists', 'analytics', 'customers', 'po', 'aimap', 'launcher', 'voice']
@@ -559,8 +560,8 @@ export const PERMS = {
     'analytics', 'customers', 'audit', 'users', 'aimap', 'admin', 'po', 'launcher', 'voice', 'portal']),
   ADMIN: ['mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'pricelists',
     'analytics', 'customers', 'audit', 'users', 'aimap', 'admin', 'po', 'launcher', 'voice'],
-  LJS: pages(['mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'pricelists',
-    'analytics', 'customers', 'audit', 'aimap', 'admin', 'po', 'launcher', 'voice', 'portal']),
+  LJS: ['mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'pricelists',
+    'analytics', 'customers', 'audit', 'users', 'aimap', 'admin', 'po', 'launcher', 'voice'],
   AH: ['mydashboard', 'tracker', 'my', 'approvals', 'folders', 'proposal', 'pricelists',
     'analytics', 'customers', 'audit', 'aimap', 'po', 'launcher'],
   RS: SALES_PAGES, PP: SALES_PAGES, SS: SALES_PAGES, PJS: SALES_PAGES, RJS: SALES_PAGES, SR: SALES_PAGES,

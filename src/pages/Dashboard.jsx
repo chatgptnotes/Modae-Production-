@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { fmt, fmtLakh, monthKey, monthLabel, exportCSV, canViewCommercial, displayRole, isHiddenDashboardOpportunity } from '../utils.js'
+import { fmt, fmtLakh, monthKey, monthLabel, exportCSV, canViewForecast, forecastOwnerScope, displayRole, isHiddenDashboardOpportunity } from '../utils.js'
 
 // The "Pivot" sheet, shaped like the real one: rows = customers, columns =
 // Expected Order Date months, values = Sum of Value (₹), with an Expected Order Date quarter
@@ -18,22 +18,27 @@ export default function Dashboard({ embedded = false }) {
   const [toQ, setToQ] = useState('2027-Q4')
   const [forecastOnly, setForecastOnly] = useState(true)
 
-  // The whole pivot is Sum of Value — commercial data, restricted per role.
-  if (!canViewCommercial(store.role)) {
+  // Forecast reporting is available to every internal role. Sales owners are
+  // scoped to their own book; application authorities and other internal roles
+  // can review the full internal pipeline.
+  if (!canViewForecast(store.role)) {
     return (
       <div className={`page${embedded ? ' embedded-forecast' : ''}`}>
         <h2>Pivot — Sum of Value (₹) by Customer × Order Month</h2>
         <div className="restricted" style={{ maxWidth: 640 }}>
-          Restricted — the forecast pivot rolls up commercial values and is visible to approvers/admin only.
-          Switch the acting-as persona in the header to view it.
+          Forecast reporting is available to internal users only. Switch the acting-as persona in the header to view it.
         </div>
       </div>
     )
   }
 
-  const owners = ['All', ...new Set(store.opportunities.map(o => o.owner))]
+  const ownerScope = forecastOwnerScope(store.role)
+  const visibleOpportunities = ownerScope
+    ? store.opportunities.filter(o => o.owner === ownerScope)
+    : store.opportunities
+  const owners = ['All', ...new Set(visibleOpportunities.map(o => o.owner))]
 
-  const open = store.opportunities.filter(o =>
+  const open = visibleOpportunities.filter(o =>
     o.status === 'Open' && (ownerFilter === 'All' || o.owner === ownerFilter))
 
   const inScope = open.filter(o => {
@@ -60,8 +65,8 @@ export default function Dashboard({ embedded = false }) {
   const grandTotal = customers.reduce((s, c) => s + rowTotal(c), 0)
 
   const pipelineK = open.reduce((s, o) => s + (+o.valueK || 0), 0)
-  const won = store.opportunities.filter(o => o.stage === 'Won' && (ownerFilter === 'All' || o.owner === ownerFilter))
-  const lost = store.opportunities.filter(o => o.stage === 'Lost' && (ownerFilter === 'All' || o.owner === ownerFilter))
+  const won = visibleOpportunities.filter(o => o.stage === 'Won' && (ownerFilter === 'All' || o.owner === ownerFilter))
+  const lost = visibleOpportunities.filter(o => o.stage === 'Lost' && (ownerFilter === 'All' || o.owner === ownerFilter))
 
   const doExport = () => exportCSV(
     'forecast_pivot.csv',

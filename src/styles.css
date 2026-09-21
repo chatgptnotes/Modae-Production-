@@ -1866,17 +1866,42 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
   overflow-y: auto;
 }
 .lead-paste-form {
-  padding: 2px 12px 8px;
+  padding: 0 8px 4px;
 }
+.lead-paste-form > label {
+  display: block;
+  margin-top: 7px !important;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .06em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+.lead-paste-form > label:first-child { margin-top: 0 !important; }
 .lead-paste-form textarea {
-  min-height: 220px;
-  max-height: 32dvh;
+  min-height: 156px;
+  max-height: 24dvh;
+  line-height: 1.4;
 }
 .lead-paste-form .tender-drop.compact {
-  min-height: 132px;
+  min-height: 96px;
+  padding: 10px 14px;
 }
+.lead-paste-form .tender-drop.compact .tender-drop-icon { margin-bottom: 0; }
 .lead-paste-form .attach-row {
-  padding: 6px 0;
+  padding: 5px 0;
+}
+.lead-paste-actions {
+  position: sticky;
+  bottom: -4px;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 8px;
+  padding: 10px 0 4px;
+  border-top: 1px solid var(--border-soft);
+  background: var(--palette-4843938);
 }
 /* Five selectors, five choice cards and a footer row outgrow a single 420px
    column — widen the dialog and wrap the controls and cards into two columns
@@ -2399,8 +2424,10 @@ tr.rowclick { cursor: pointer; }
     max-height: calc(100dvh - 24px);
   }
   .lead-paste-form textarea {
-    max-height: 28dvh;
+    min-height: 132px;
+    max-height: 22dvh;
   }
+  .lead-paste-actions { flex-wrap: wrap; }
 }
 .opportunity-details-grid { gap: 5px 10px; }
 .opportunity-details-wide { grid-column: 1 / -1; }
@@ -7144,6 +7171,9 @@ body {
 .proposal-review-history summary { padding: 7px 9px; cursor: pointer; color: var(--text-muted); font-size: 11px; font-weight: 700; }
 .proposal-review-history[open] summary { border-bottom: 1px solid var(--border-soft); }
 .proposal-review-history .proposal-review-issue { margin: 5px; }
+.proposal-review-workbook-changes { display: grid; gap: 5px; padding: 7px; border: 1px solid var(--palette-9c482213); border-radius: 6px; background: var(--palette-f07f705); }
+.proposal-review-workbook-changes > strong { padding: 0 2px 2px; color: var(--palette-8784f8b3); font-size: 11px; }
+.proposal-review-workbook-changes .proposal-review-issue { background: var(--palette-95bf2caf); }
 .proposal-review-issues.is-overridden > strong { color: var(--status-good); }
 .proposal-review-approval { display: inline-flex; margin-left: 8px; padding: 2px 6px; border: 1px solid var(--palette-1fb54521); border-radius: 4px; color: var(--status-good); background: var(--palette-4843938); font-size: 10.5px; font-weight: 700; }
 .proposal-sheet-editor .form-card { border: 1px solid var(--border-soft); border-radius: 6px; box-shadow: none; padding: 16px; }
@@ -9711,6 +9741,11 @@ table.sheet tfoot td {
   border-radius: 8px;
 }
 
+.dashboard-page .stat-card-v2 {
+  align-items: start;
+  grid-template-areas: 'value spark' 'label spark' 'hint spark';
+}
+
 .dashboard-page .stat-card-v2 .sc-value {
   color: #0F172A;
   font-size: clamp(27px, 2.2vw, 34px);
@@ -9729,14 +9764,18 @@ table.sheet tfoot td {
 }
 
 .dashboard-page .stat-card-v2 .hint {
+  grid-area: hint;
   margin-top: 3px;
   color: #475569;
   font-size: 12px;
   line-height: 1.25;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .dashboard-page .ana-grid {
   gap: 18px;
+  align-items: stretch;
 }
 
 .dashboard-page .dashboard-card,
@@ -9745,17 +9784,65 @@ table.sheet tfoot td {
   border-radius: 8px;
 }
 
+.dashboard-page .dashboard-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
 .dashboard-page .dashboard-card .ana-title {
+  display: flex;
+  flex: 0 0 auto;
+  min-width: 0;
   min-height: 24px;
   margin-bottom: 16px;
   color: #1E293B;
   font-size: 15px;
   font-weight: 700;
   line-height: 1.25;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.dashboard-page .dashboard-card-title {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-page .dashboard-card .ana-title-action {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .dashboard-page .dashboard-card .ana-ico {
   flex: 0 0 auto;
+}
+
+.dashboard-page .annual-attainment-card {
+  min-height: 100%;
+}
+
+.dashboard-page .annual-attainment-body {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.dashboard-page .annual-attainment-gauge {
+  display: flex;
+  min-height: 156px;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 0 0;
+}
+
+.dashboard-page .annual-attainment-table {
+  margin-top: auto;
 }
 
 .dashboard-page .hint {
@@ -9765,12 +9852,35 @@ table.sheet tfoot td {
 }
 
 .dashboard-page .dashboard-action {
+  display: flex;
+  width: 100%;
+  min-width: 0;
   min-height: 0;
   gap: 5px;
-  padding: 11px 0;
+  padding: 12px 0;
   color: #1E293B;
+  border: 0;
+  border-bottom: 1px solid #E2E8F0;
+  border-radius: 0;
+  background: transparent;
   white-space: normal;
   cursor: pointer;
+}
+
+.dashboard-page .dashboard-action:last-of-type {
+  border-bottom: 0;
+}
+
+.dashboard-page .dashboard-action:hover {
+  background: #F8FAFC;
+  filter: none;
+}
+
+.dashboard-page .dashboard-action:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid #EA580C;
+  outline-offset: 2px;
 }
 
 /* The pill is inline-flex inside a display:block title, so it needs its own
@@ -9802,6 +9912,7 @@ table.sheet tfoot td {
   font-size: 14px;
   line-height: 1.35;
   text-wrap: pretty;
+  overflow-wrap: anywhere;
 }
 
 .dashboard-page .dashboard-action-detail {
@@ -9810,7 +9921,6 @@ table.sheet tfoot td {
   line-height: 1.45;
   white-space: normal;
   overflow-wrap: anywhere;
-  -webkit-line-clamp: 3;
 }
 
 .dashboard-page .dashboard-table {
@@ -9845,11 +9955,14 @@ table.sheet tfoot td {
 .dashboard-page .dashboard-table.customer-table td:nth-child(3) > .dashboard-cell-ellipsis {
   white-space: normal;
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .dashboard-page .dashboard-cell-clamp {
-  -webkit-line-clamp: 3;
+  display: block;
   line-height: 1.4;
+  overflow: visible;
+  overflow-wrap: anywhere;
 }
 
 .dashboard-page .qcard {
@@ -9899,6 +10012,17 @@ table.sheet tfoot td {
   .dashboard-page .dashboard-card,
   .dashboard-page .home-analytics {
     padding: 16px;
+  }
+
+  .dashboard-page .dashboard-card .ana-title {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .dashboard-page .dashboard-card .ana-title-action {
+    flex: 1 1 100%;
+    margin-left: 0;
+    margin-top: 4px;
   }
 }
 
@@ -11256,4 +11380,86 @@ table.sheet tbody tr:hover td {
   background: var(--ws-amber) !important;
   border-color: var(--ws-amber) !important;
   color: var(--palette-4843938) !important;
+}
+
+/* Dashboard action rows must win over the final global secondary-button
+   guardrail. Keep them as a clean divided list instead of filled buttons. */
+.dashboard-page button.dashboard-action,
+.dashboard-page button.dashboard-action:not(.primary):not(.danger):not(.dark):not(.ghost) {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 0;
+  border: 0;
+  border-bottom: 1px solid #E2E8F0;
+  border-radius: 0;
+  background: transparent;
+  color: #1E293B;
+  text-align: left;
+  white-space: normal;
+}
+
+.dashboard-page button.dashboard-action:last-of-type {
+  border-bottom: 0;
+}
+
+.dashboard-page button.dashboard-action:hover,
+.dashboard-page button.dashboard-action:not(.primary):not(.danger):not(.dark):not(.ghost):hover {
+  background: #F8FAFC;
+  border-color: #E2E8F0;
+  filter: none;
+}
+
+.dashboard-page button.dashboard-action:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid #EA580C;
+  outline-offset: 2px;
+}
+
+.dashboard-page .dashboard-action-title {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 7px;
+  overflow: visible;
+  font-size: 14px;
+  line-height: 1.35;
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-page .dashboard-action-title .pill {
+  flex: 0 0 auto;
+  margin: 1px 0 0 auto;
+}
+
+.dashboard-page .dashboard-action-identity {
+  display: block;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dashboard-page .dashboard-action-id {
+  white-space: nowrap;
+}
+
+.dashboard-page .dashboard-action-name {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 560px) {
+  .dashboard-page .dashboard-action-title {
+    flex-wrap: wrap;
+  }
+
+  .dashboard-page .dashboard-action-title .pill {
+    margin-left: 0;
+  }
 }

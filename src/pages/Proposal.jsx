@@ -929,6 +929,8 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     : issue)
   const reviewIssuesAreInformational = displayReviewIssues.length > 0
     && displayReviewIssues.every(issue => issue.severity === 'info')
+  const workbookChangeIssues = displayReviewIssues.filter(issue => issue.code === 'line.value-changed')
+  const otherReviewIssues = displayReviewIssues.filter(issue => issue.code !== 'line.value-changed')
   const approvalRequired = blockers.some(bl => bl.approvalType && bl.severity !== 'wait') || pendingForOpp.length > 0
   const reviewBanner = reviewStatus === 'Needs attention'
     ? { tone: 'warning', title: 'Validation needs attention', text: 'Fix the issues listed below before requesting approval.' }
@@ -997,6 +999,22 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     try {
       const review = proposal
       const issues = []
+      let reviewedUpload = review.reviewedUpload
+      // Re-run the deterministic comparison from the pre-import snapshot so
+      // older uploads also receive the exact old-value → new-value findings.
+      if (reviewedUpload?.sheets?.length && reviewedUpload.baseProposal) {
+        const recomputed = importReviewedWorkbook(
+          { sheets: reviewedUpload.sheets },
+          reviewedUpload.baseProposal,
+          opp,
+        )
+        reviewedUpload = {
+          ...reviewedUpload,
+          importedChanges: recomputed.changes,
+          validationIssues: recomputed.issues,
+          comparisonAvailable: true,
+        }
+      }
       const revisionChanged = !!review.reviewNeedsRevision
       const nextRevision = revisionChanged ? String((Number(review.revision) || 0) + 1).padStart(2, '0') : review.revision
       const nextRevisionLog = revisionChanged ? [...(review.revisions || []), {
@@ -1010,12 +1028,19 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       if (review.bom?.some(line => Number(totalQty(line)) <= 0)) issues.push({ severity: 'block', text: 'Every proposal line must have a quantity greater than zero.' })
       if (review.bom?.some(line => line.quoted !== '' && Number(line.quoted) < 0)) issues.push({ severity: 'block', text: 'Negative quoted prices are not allowed.' })
       if (!review.terms?.length) issues.push({ severity: 'info', code: 'terms.missing', text: 'Commercial terms have not been added yet.' })
-      if (review.reviewedUpload) issues.push({ severity: 'info', text: `Reviewed upload received: ${review.reviewedUpload.filename}` })
-      if (review.reviewedUpload?.validationIssues?.length) issues.unshift(...review.reviewedUpload.validationIssues)
+      if (reviewedUpload) issues.push({ severity: 'info', text: `Reviewed upload received: ${reviewedUpload.filename}` })
+      if (reviewedUpload?.validationIssues?.length) issues.unshift(...reviewedUpload.validationIssues)
+      if (reviewedUpload?.sheets?.length && !reviewedUpload.baseProposal) {
+        issues.unshift({
+          severity: 'info',
+          code: 'review.comparison-unavailable',
+          text: 'Exact workbook-change comparison is unavailable because the pre-upload proposal snapshot is missing. Upload the workbook again to compare changes.',
+        })
+      }
 
       let aiIssues = []
-      if (review.reviewedUpload?.sheets?.length) {
-        const aiResult = await runTaskResult('proposal.review', reviewWorkbookPayload(review.reviewedUpload, review, opp, issues), { model: store.config?.aiModel?.model })
+      if (reviewedUpload?.sheets?.length) {
+        const aiResult = await runTaskResult('proposal.review', reviewWorkbookPayload(reviewedUpload, review, opp, issues), { model: store.config?.aiModel?.model })
         aiIssues = normalizeAiReview(aiResult.data?.data || aiResult.data)
         if (!aiResult.data && aiResult.error) aiIssues.push({ severity: 'info', code: 'ai.unavailable', source: 'AI', text: `AI semantic review was unavailable: ${aiResult.error}. Local checks were still completed.` })
       }
@@ -1028,6 +1053,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
 
       const next = {
         ...review,
+        reviewedUpload,
         revision: nextRevision,
         revisions: nextRevisionLog,
         reviewStatus: hasActiveBlock ? 'Needs attention' : hasRememberedOverride ? 'Override accepted' : 'Validated',
@@ -1401,11 +1427,15 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
           {p.reviewCompletedAt && <div className={`proposal-review-issues ${overrideAccepted ? 'is-overridden' : ''}`}>
             <strong>{overrideAccepted ? 'Previously reviewed findings' : reviewIssuesAreInformational ? 'Validation notes' : 'Validation findings'}</strong>
             {overrideAccepted && <div className="proposal-review-memory-summary">{displayReviewIssues.length} finding{displayReviewIssues.length === 1 ? '' : 's'} overridden by {displayRole(p.reviewOverride.by)}{p.reviewOverride.at ? ` on ${approvalDate(p.reviewOverride.at)}` : ''}. These findings are retained for audit and no longer block this proposal.</div>}
-            {!!displayReviewIssues.length
+            {!!workbookChangeIssues.length && <div className="proposal-review-workbook-changes">
+              <strong>Workbook changes detected</strong>
+              {workbookChangeIssues.map((issue, index) => <ReviewIssue key={`change-${index}`} issue={issue} overridden={overrideAccepted} />)}
+            </div>}
+            {!!otherReviewIssues.length
               ? overrideAccepted
-                ? <details className="proposal-review-history"><summary>Show finding details</summary>{displayReviewIssues.map((issue, index) => <ReviewIssue key={index} issue={issue} overridden />)}</details>
-                : displayReviewIssues.map((issue, index) => <ReviewIssue key={index} issue={issue} onUseStandardTerms={useModaeStandardTerms} />)
-              : <div className="proposal-review-issue info">Review complete — proposal is ready to proceed.</div>}
+                ? <details className="proposal-review-history"><summary>Show finding details</summary>{otherReviewIssues.map((issue, index) => <ReviewIssue key={index} issue={issue} overridden />)}</details>
+                : otherReviewIssues.map((issue, index) => <ReviewIssue key={index} issue={issue} onUseStandardTerms={useModaeStandardTerms} />)
+              : !workbookChangeIssues.length && <div className="proposal-review-issue info">Review complete — proposal is ready to proceed.</div>}
             {reviewStatus === 'Needs attention' && <button className="btn-secondary" onClick={() => setOverrideConfirmOpen(true)}>Continue anyway</button>}
           </div>}
         </section>

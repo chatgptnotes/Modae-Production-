@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 import { seedSales, PERMS, ROLES } from '../src/seed.js'
 import { salesPerformance, FY_QUARTERS, FY_MONTHS, fyQuarter } from '../src/kpi.js'
+import { canViewForecast, forecastOwnerScope, isAdminRole } from '../src/utils.js'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
@@ -61,6 +62,27 @@ test('every internal role can open detailed reporting', () => {
     assert.ok(PERMS[role]?.includes('analytics'), `${role} must reach detailed reporting`)
   }
   assert.ok(!PERMS.CUST.includes('analytics'))
+})
+
+test('ADMIN and LJS are co-equal application authorities', () => {
+  assert.equal(isAdminRole('ADMIN'), true)
+  assert.equal(isAdminRole('LJS'), true)
+  assert.deepEqual(PERMS.LJS, PERMS.ADMIN)
+})
+
+test('forecast reporting is available internally with sales-owner scoping', () => {
+  for (const role of Object.keys(ROLES).filter(r => r !== 'CUST')) {
+    assert.equal(canViewForecast(role), true, `${role} should see forecast reporting`)
+  }
+  assert.equal(canViewForecast('CUST'), false)
+  assert.equal(forecastOwnerScope('RS'), 'RS')
+  assert.equal(forecastOwnerScope('LJS'), null)
+  assert.equal(forecastOwnerScope('TECH'), null)
+
+  const source = read('src/pages/Dashboard.jsx')
+  assert.match(source, /forecastOwnerScope/)
+  assert.match(source, /visibleOpportunities/)
+  assert.doesNotMatch(source, /visible to approvers\/admin only/)
 })
 
 test('win and loss reasons are visible in the shared dashboard overview', () => {
