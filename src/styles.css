@@ -571,13 +571,12 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }
   width: var(--sidenav-w, 216px); flex: 0 0 var(--sidenav-w, 216px); background: var(--bg-sidebar); color: var(--palette-2f9724ea);
   display: flex; flex-direction: column;
   position: fixed; left: 0; top: 0; bottom: 0; height: 100dvh; z-index: 44;
-  overflow: visible; transition: width .2s ease;
+  overflow: hidden; transition: width .2s ease;
 }
 .brand {
   position: relative; display: flex; align-items: center; padding: 16px 16px 14px; color: var(--palette-4843938); cursor: pointer;
   border-bottom: 1px solid var(--palette-340872cc);
 }
-.sidebar-brand-popover { display: none; }
 .sidebar-toggle {
   position: absolute; right: 10px; top: 18px; display: inline-flex; align-items: center; justify-content: center;
   width: 24px; height: 24px; min-height: 0; padding: 0; border: 1px solid var(--palette-8d28c56c);
@@ -651,32 +650,6 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }
   .sidebar-compact .brand .modae-logo, .sidebar-compact .brand .ml-text,
   .sidebar-compact .brand .modae-official-logo, .sidebar-compact .side-label,
   .sidebar-compact .side-foot label, .sidebar-compact .side-nav-heading { display: none; }
-  .sidebar-compact .brand:hover .sidebar-brand-popover,
-  .sidebar-compact .brand:focus-within .sidebar-brand-popover {
-    display: block;
-    position: absolute;
-    top: 8px;
-    left: calc(100% + 8px);
-    z-index: 60;
-    padding: 10px 14px;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    background: var(--palette-4843938);
-    box-shadow: 0 8px 22px var(--palette-8946acb8);
-    pointer-events: none;
-  }
-  .sidebar-compact .brand .sidebar-brand-popover .modae-logo {
-    display: inline-flex;
-    width: auto;
-    height: auto;
-    overflow: visible;
-  }
-  .sidebar-compact .brand .sidebar-brand-popover .modae-official-logo {
-    display: block;
-    width: auto;
-    max-width: 112px;
-    height: 28px;
-  }
   .sidebar-compact .sidebar-toggle {
     position: absolute;
     top: 18px;

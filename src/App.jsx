@@ -319,9 +319,6 @@ export default function App() {
       <aside className={`sidenav ${navOpen ? 'open' : ''}`}>
         <div className="brand" onClick={() => nav('/opportunities')}>
           <ModaeLogo size={28} />
-          <span className="sidebar-brand-popover" aria-hidden="true">
-            <ModaeLogo size={28} />
-          </span>
           <button className="sidebar-toggle" onClick={e => { e.stopPropagation(); toggleSidebar() }}
             title={sidebarCompact ? 'Expand sidebar' : 'Collapse sidebar'} aria-label={sidebarCompact ? 'Expand sidebar' : 'Collapse sidebar'}>
             <Icon name={sidebarCompact ? 'chevronRight' : 'chevronLeft'} size={15} />
