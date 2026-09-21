@@ -2,10 +2,10 @@ import React, { useEffect, useRef, useState } from 'react'
 import XLSX from 'xlsx-js-style'
 import { useParams, Link } from 'react-router-dom'
 import { useStore, isPlaceholderSparesLine, sparesProposalBom, snapshotProposal } from '../store.jsx'
-import { effectiveRate, fmt, exportCSV, canPriceProposal, isAdminRole, clampCosting, clampQty, MAX_GM_PCT, displayRole } from '../utils.js'
+import { effectiveRate, fmt, exportCSV, canPriceProposal, isAdminRole, clampCosting, clampQty, MAX_GM_PCT, displayRole, formatISTDateTime } from '../utils.js'
 import { useFormulaBar } from '../formulabar.jsx'
 import { Icon, ModaeImageLogo } from '../icons.jsx'
-import { Modal } from '../ui.jsx'
+import { ConfirmModal, Modal } from '../ui.jsx'
 import AttachmentViewer from '../AttachmentViewer.jsx'
 import { readiness, isBlocked } from '../gates.js'
 import { docModel, docRoute, enclosuresFor, MODAE_COMPANY } from '../proposalDoc.js'
@@ -32,6 +32,7 @@ import { reviewFindingKey } from '../approvalMemory.js'
 import OpportunityComingSoon from '../workbench/OpportunityComingSoon.jsx'
 import { modaeStandardCommercialTerms, normalizeCommercialTerm } from '../commercialTerms.js'
 import { loadProposalTemplateBuffer, resolveProposalTemplate } from '../proposal/templateRegistry.js'
+import { latestSubmissionForRevision, submissionStatusLabel } from '../submissionStatus.js'
 
 const ROUTE_TABS = {
   Project: ['Cover Letter', 'Edit Sheet', 'Signal List', 'Rack Layout', 'Priced BoQ'],
@@ -494,6 +495,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   const uploadInputRef = useRef(null)
   const [reviewMessage, setReviewMessage] = useState('')
   const [reviewError, setReviewError] = useState('')
+  const [overrideConfirmOpen, setOverrideConfirmOpen] = useState(false)
   const [conditionTarget, setConditionTarget] = useState(null)
   const [conditionNote, setConditionNote] = useState('')
   const [readinessOpen, setReadinessOpen] = useState(false)
@@ -861,6 +863,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   const removeTerm = i => () => save({ ...p, terms: p.terms.filter((_, j) => j !== i) })
 
   const comms = (store.communications || {})[oppId] || []
+  const currentSubmission = latestSubmissionForRevision(comms, p.revision)
 
   // Submission gates: red-customer clearance, deviation approvals, and
   // approved-with-conditions confirmations, per the Aug 10 review.
@@ -929,6 +932,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       to: opp.contactPerson || opp.sellTo,
       subject: `${oppId} — Proposal Rev ${p.revision} submitted to customer`,
       kind: 'submission',
+      revision: String(p.revision ?? ''),
     })
     if (!opp.proposalDate) store.updateOpportunity(oppId, { proposalDate: new Date().toISOString().slice(0, 10) })
   }
@@ -1203,6 +1207,15 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
             {!embedded && <Link className="btn proposal-folder-link" to={`/folders/${oppId}`}>Back to folder</Link>}
             <span className="proposal-status-label">Review status</span>
             <span className={`pill ${reviewReady ? 'won' : reviewStatus === 'Needs attention' ? 'Red' : 'grey'}`}>{reviewStatus}</span>
+            <span className="proposal-status-label">Customer submission</span>
+            <span className={`pill ${currentSubmission?.status === 'sent' ? 'won' : currentSubmission?.status === 'draft' ? 'Amber' : 'grey'}`}>
+              {submissionStatusLabel(currentSubmission)}
+            </span>
+            {currentSubmission?.status === 'sent' && (
+              <span className="proposal-submission-meta">
+                {currentSubmission.to || 'Recipient not recorded'}{currentSubmission.ts ? ` · ${formatISTDateTime(currentSubmission.ts)}` : ''}
+              </span>
+            )}
             {pendingForOpp.length > 0 && <span className="pill Amber">{pendingForOpp.length} approval{pendingForOpp.length > 1 ? 's' : ''} pending</span>}
           </div>
         </div>
@@ -1297,10 +1310,14 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
                 ? <details className="proposal-review-history"><summary>Show finding details</summary>{displayReviewIssues.map((issue, index) => <ReviewIssue key={index} issue={issue} overridden />)}</details>
                 : displayReviewIssues.map((issue, index) => <ReviewIssue key={index} issue={issue} onUseStandardTerms={useModaeStandardTerms} />)
               : <div className="proposal-review-issue info">Review complete — proposal is ready to proceed.</div>}
-            {reviewStatus === 'Needs attention' && <button className="btn-secondary" onClick={() => { if (window.confirm('Continue despite these validation findings? This override will be stored in the audit trail.')) continueAnyway() }}>Continue anyway</button>}
+            {reviewStatus === 'Needs attention' && <button className="btn-secondary" onClick={() => setOverrideConfirmOpen(true)}>Continue anyway</button>}
           </div>}
         </section>
       )}
+      {overrideConfirmOpen && <ConfirmModal title="Continue with validation findings?" tone="danger"
+        message="These findings will be overridden and the decision will be stored in the audit trail."
+        confirmLabel="Continue anyway" onClose={() => setOverrideConfirmOpen(false)}
+        onConfirm={() => { continueAnyway(); setOverrideConfirmOpen(false) }} />}
 
       <div className="proposal-tab-bar">
         <DetailTabs ariaLabel="Proposal documents" activeId={tab}

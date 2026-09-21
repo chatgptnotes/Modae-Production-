@@ -6,6 +6,7 @@ import { stageClass, displayRole } from '../utils.js'
 import * as filestore from '../filestore.js'
 import { getConfig } from '../sharepoint.js'
 import { Icon } from '../icons.jsx'
+import { PromptModal } from '../ui.jsx'
 
 // The client's four real SharePoint status folders and their Excel-ish colors.
 const OPEN_FOLDER = { fill: 'var(--amber-fill)', stroke: 'var(--amber-text)' }
@@ -63,6 +64,7 @@ export default function Folders() {
   const fileInput = useRef(null)
   const [busy, setBusy] = useState(false)
   const [cloudErr, setCloudErr] = useState('')
+  const [prompt, setPrompt] = useState(null)
   const backend = filestore.activeBackend()
   const spConnected = backend === 'sharepoint'
   // Cloud deletes run best-effort behind the store update; a failure surfaces
@@ -100,10 +102,17 @@ export default function Folders() {
   }
 
   const addMockFile = () => {
-    const name = prompt('File name to upload (mock):', 'Customer_Spec.pdf')
-    if (!name) return
+    setPrompt({ kind: 'file', title: 'Add mock file', message: 'Enter the file name to add to this folder.', defaultValue: 'Customer_Spec.pdf' })
+  }
+  const savePrompt = name => {
+    setPrompt(null)
+    if (!name?.trim()) return
+    if (prompt?.kind === 'folder') {
+      store.addSubfolder(opp.id, name.trim())
+      return
+    }
     store.addFile(oppId, subfolder, {
-      name, date: new Date().toISOString().slice(0, 10), size: `${Math.ceil(Math.random() * 900) + 90} KB`,
+      name: name.trim(), date: new Date().toISOString().slice(0, 10), size: `${Math.ceil(Math.random() * 900) + 90} KB`,
     })
   }
 
@@ -124,9 +133,7 @@ export default function Folders() {
   }
 
   const addSubfolder = () => {
-    const name = prompt('New subfolder name:', 'Site Photos')
-    if (!name || !name.trim()) return
-    store.addSubfolder(opp.id, name.trim())
+    setPrompt({ kind: 'folder', title: 'Create subfolder', message: 'Enter a name for the new subfolder.', defaultValue: 'Site Photos' })
   }
 
   // Root: the "Sales - Opportunities" wall, grouped by the four SharePoint status folders
@@ -295,6 +302,8 @@ export default function Folders() {
   // Opportunity folder: subfolders (standard three + any custom) + workbook shortcut
   return (
     <div className="page">
+      {prompt && <PromptModal title={prompt.title} message={prompt.message} defaultValue={prompt.defaultValue}
+        confirmLabel={prompt.kind === 'file' ? 'Add file' : 'Create folder'} onClose={() => setPrompt(null)} onSubmit={savePrompt} />}
       <div className="explorer-bar">
         <FolderIcon cls={stageClass(opp)} size={18} />
         <Link to="/folders">Sales - Opportunities</Link> ›

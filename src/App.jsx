@@ -141,6 +141,14 @@ function NotificationBell({ store, nav }) {
     setUnseenOnOpen(unseenNotifications.map(item => item.id))
     setOpen(true)
   }
+  useEffect(() => {
+    if (!open) return undefined
+    const onKeyDown = event => {
+      if (event.key === 'Escape') closeNotifications()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [open, notifications.length])
   return (
     <div className="notification-wrap">
       <button
@@ -157,7 +165,7 @@ function NotificationBell({ store, nav }) {
       {open && (
         <>
           <div className="notification-overlay" onClick={closeNotifications} />
-          <div id="notification-popover" className="notification-popover" role="dialog" aria-label="Notifications">
+          <div id="notification-popover" className="notification-popover" role="dialog" aria-modal="false" aria-label="Notifications" tabIndex="-1">
             <div className="notification-heading"><b>Notifications</b><span>{unseenOnOpen.length ? `${unseenOnOpen.length} new` : 'All seen'}</span></div>
             {notifications.length ? notifications.map(item => (
               <button key={item.id} className={`notification-item${unseenOnOpen.includes(item.id) ? ' unseen' : ''}`} type="button" onClick={() => { markSeen([item]); setOpen(false); nav(item.to) }}>

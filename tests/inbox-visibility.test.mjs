@@ -65,6 +65,12 @@ test('the inbox reads the toggle from the store', () => {
   assert.match(read('src/store.jsx'), /setInboxShowAll\(on\)/)
 })
 
+test('inbox rows are ordered by newest received enquiry first', () => {
+  assert.match(inbox, /const inboxReceivedAt = lead => lead\?\.ts \|\| lead\?\.receivedAt/)
+  assert.match(inbox, /const compareInboxRows = \(a, b\) =>/)
+  assert.match(inbox, /const mailboxRows = rows\.filter\(matchesTab\)\.sort\(compareInboxRows\)/)
+})
+
 test('the owner rule reports what it is holding back', () => {
   // Split out of the column filters so the count is answerable at all.
   assert.match(inbox, /const ownerVisible = l =>/)

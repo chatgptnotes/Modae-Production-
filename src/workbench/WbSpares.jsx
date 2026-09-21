@@ -3,7 +3,7 @@ import { isPlaceholderSparesLine, useStore } from '../store.jsx'
 import { defaultCosting } from '../seed.js'
 import { canPriceProposal, unitCostINR, fmt, ddMmmYY } from '../utils.js'
 import { pricingApprovalFor, pricingThresholdExceptions } from '../gates.js'
-import { Chip, ConfChip, AiBadge, Modal } from '../ui.jsx'
+import { Chip, ConfChip, AiBadge, ConfirmModal, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 import { PRICE_SOURCES, formatPriceSource, isConfirmableSparesLine, isMissingSparesDescription, normalizeMarkupPct, reconcilePriceSource, resolvePriceSource, sparesLineFinancials } from '../pricing.js'
 import { convertCurrency, currencySymbol, normalizedCurrencyRates } from '../currency.js'
@@ -96,6 +96,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
   const [showAddPart, setShowAddPart] = useState(false)
   const [manualLineError, setManualLineError] = useState('')
   const [newLine, setNewLine] = useState({ pn: '', desc: '', qty: '1', listPrice: '' })
+  const [pendingRemove, setPendingRemove] = useState(null)
   const sourcingSheetWrapRef = useRef(null)
   const compareRequestRef = useRef(0)
   useEffect(() => {
@@ -241,7 +242,9 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     pricingRows: pricingExceptions.rows,
   })
   const removeLine = line => {
-    if (!window.confirm(`Remove ${sourcingDescription(line)} from this BOQ?`)) return
+    setPendingRemove(line)
+  }
+  const confirmRemoveLine = line => {
     const removedLine = { ...line, qty: 0, removedFromSourcing: true, confirmed: false }
     const remainingPricing = pricingThresholdExceptions(opp, proposal, {
       ...store,
@@ -256,6 +259,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     if (!remainingPricing.rows.length && pricingApproval?.status === 'Pending') {
       store.cancelApproval(pricingApproval.id, 'Cancelled automatically: the pricing-exception line was removed from Sourcing.')
     }
+    setPendingRemove(null)
   }
   const restoreLine = line => store.updateSparesLine(line.id, {
     qty: Math.max(1, n(line.removedQty)),
@@ -487,6 +491,10 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
   }
 
   return <div className="sourcing-workbench">
+    {pendingRemove && <ConfirmModal title="Remove sourcing line" tone="danger"
+      message={`Remove ${sourcingDescription(pendingRemove)} from this BOQ?`}
+      confirmLabel="Remove line" onClose={() => setPendingRemove(null)}
+      onConfirm={() => confirmRemoveLine(pendingRemove)} />}
     <div className="section-title">Bill of Quantities (BOQ) — Spares sourcing ({lines.length} line{lines.length === 1 ? '' : 's'})</div>
     {clarifications.length > 0 && <details className="okbox customer-information-banner sourcing-clarification-context">
       <summary><b>Confirmed customer information</b><span className="hint"> These answers stay attached to the opportunity and should be checked while validating each line.</span></summary>

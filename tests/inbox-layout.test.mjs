@@ -87,9 +87,28 @@ test('AI missing information is optional for registration', () => {
 test('compact lead review keeps the AI clarification email action visible', () => {
   assert.match(inbox, /Draft clarification email/)
   assert.match(inbox, /Ask customer for missing information/)
+  assert.match(inbox, /Record customer response/)
+  assert.doesNotMatch(inbox, /Add customer clarification response/)
+  assert.doesNotMatch(inbox, /onDraftClarification={draftClarificationMail}/)
+  assert.match(inbox, /title="Ask customer for missing information"/)
+  assert.match(inbox, /Compare with original email/)
+  assert.match(inbox, /lead-decision-compare-modal/)
+  assert.match(inbox, /open={!compact \|\| !!clarDraft}/)
+  assert.match(inbox, /clarification-compose-modal mail-compose-modal/)
+  assert.match(inbox, /clarification-response-modal mail-compose-modal/)
+  assert.match(css, /\.mail-compose-modal[\s\S]*max-height: min\(90vh, 820px\)/)
+  assert.match(css, /\.mail-compose-modal textarea[\s\S]*max-height: min\(38vh, 360px\)/)
   assert.match(inbox, /async function draftClarificationMail\(\)/)
   assert.match(inbox, /clarification-rail/)
   assert.doesNotMatch(css, /\.structured-active-sections \.compact-workflow-content \.compact-action-col \.compact-clarification-rail[\s\S]*display: none/)
+})
+
+test('lead decisions comparison action is in the visible section header only', () => {
+  assert.match(inbox, /className=\{`ws-group\$\{compact \? ' lead-decision-section-head' : ''\}`\}/)
+  assert.match(inbox, /lead-decision-section-head[\s\S]*Compare with original email/)
+  assert.doesNotMatch(inbox, /<div className="lead-decision-head">[\s\S]{0,500}lead-decision-compare-trigger/)
+  assert.match(css, /\.lead-decision-section-head[\s\S]*flex-wrap: wrap;/)
+  assert.match(css, /\.lead-decision-section-head > \.lead-decision-compare-trigger[\s\S]*flex-basis: 100%;/)
 })
 
 test('internal senders cannot become customer contacts', () => {
@@ -333,7 +352,8 @@ test('compact missing information has one heading and a direct item list', () =>
   assert.match(inbox, /<summary>[\s\S]*Missing information/)
   assert.match(inbox, /<ul className="ws-missing compact-missing-list">/)
   assert.doesNotMatch(inbox, /<b>Missing information<\/b>/)
-  assert.match(inbox, /\{compact && missingInformationPanel\}[\s\S]*?<div className="lead-decision-actions">/)
+  assert.match(inbox, /<div className="lead-missing-information-panel">\{missingInformationPanel\}<\/div>/)
+  assert.match(inbox, /lead-decision-actions[\s\S]*?<\/div>\s*\{compact && <div className="lead-missing-information-panel">/)
   assert.match(inbox, /\{!compact && missingInformationPanel\}/)
 })
 

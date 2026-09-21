@@ -37,6 +37,7 @@ import ServiceExecutionPanel from '../workbench/ServiceExecutionPanel.jsx'
 import ServiceReportPanel from '../workbench/ServiceReportPanel.jsx'
 import ServiceInvoicePanel from '../workbench/ServiceInvoicePanel.jsx'
 import { COMMERCIAL_DECISIONS, CUSTOMER_CONFIRMATION_STATUSES, commercialApprovalDetails, isCommercialConfirmationRow, isDeliveryBasisClarification, isLegacyCommercialClarification, needsCommercialApproval, normalizeCommercialTerm, sourceContainsDeliveryRequirement } from '../commercialTerms.js'
+import { latestSubmissionForRevision, submissionStatusLabel } from '../submissionStatus.js'
 
 const statusPill = s =>
   s === 'Approved' ? 'Green' : s === 'Rejected' ? 'Red' : s === 'Approved with conditions' ? 'Amber' : 'Blue'
@@ -534,7 +535,7 @@ export default function Workbench() {
           )}
         </Modal>
       )}
-      <fieldset className={`wb-body workflow-edit-boundary ${workflowReadOnly ? 'workflow-edit-boundary--readonly' : ''}`} disabled={workflowReadOnly} aria-readonly={workflowReadOnly || undefined}>
+      <fieldset className={`wb-body workflow-edit-boundary ${workflowReadOnly ? 'workflow-edit-boundary--readonly' : ''}`} disabled={workflowReadOnly && viewTab !== 'comms'} aria-readonly={workflowReadOnly || undefined}>
         {workflowReadOnly && <div className="workflow-readonly-notice" role="status">Read-only view — select the current workflow step to edit.</div>}
         {viewTab === 'overview' && opp.route === 'Spares' && <SparesIntakeTab opp={opp} detailsRef={detailsRef} />}
         {viewTab === 'overview' && opp.route !== 'Spares' && <OverviewTab opp={opp} detailsRef={detailsRef} />}
@@ -555,7 +556,7 @@ export default function Workbench() {
         {viewTab === 'service-report' && <ServiceReportPanel opp={opp} />}
         {viewTab === 'service-invoice' && <ServiceInvoicePanel opp={opp} />}
         {!activeStepConfig && viewTab === 'approvals' && <ApprovalsTab opp={opp} />}
-        {viewTab === 'comms' && <CommsTab opp={opp} />}
+        {viewTab === 'comms' && <CommsTab opp={opp} readOnly={workflowReadOnly} />}
         {!activeStepConfig && viewTab === 'po' && <PoHandover opp={opp} />}
         {!activeStepConfig && viewTab === 'files' && <FilesTab opp={opp} />}
         {!activeStepConfig && viewTab === 'audit' && <AuditTab opp={opp} />}
@@ -2073,8 +2074,19 @@ function FollowUpPane({ opp, onRevision }) {
       <div className="ana-card c-6 follow-up-panel">
         <div className="ana-title">Revisions</div>
         {revisions.map((r, i) => (
-          <div key={i} className="check-row">
-            <b>{r.rev}</b><span>{r.note}</span>
+          <div key={i} className="check-row revision-history-row">
+            {(() => {
+              const openedRevision = String(r.rev || '').replace(/^Rev[- ]?/i, '')
+              const historicalRevision = String(r.snapshot?.revision ?? openedRevision)
+              const submission = latestSubmissionForRevision(store.communications?.[opp.id], historicalRevision)
+              return <>
+                <b>Rev-{historicalRevision}</b><span>{r.note}</span>
+                {openedRevision !== historicalRevision && <span className="hint">Revision opened: Rev-{openedRevision}</span>}
+                <Chip tone={submission?.status === 'sent' ? 'state-Accepted' : submission?.status === 'draft' ? 'state-Review' : 'grey'}>
+                  {submissionStatusLabel(submission)}
+                </Chip>
+              </>
+            })()}
             <Chip tone="grey">{r.status}</Chip>
             {r.type && <Chip tone="state-Review">{r.type} revision</Chip>}
             <span className="hint" style={{ marginLeft: 'auto' }}>{ddMmmYY(r.when)} · {r.by}</span>
@@ -2333,7 +2345,7 @@ function LegacyCommsTab({ opp }) {
 }
 
 // ---------------------------------------------------------------------------
-function CommsTab({ opp }) {
+function CommsTab({ opp, readOnly = false }) {
   const store = useStore()
   const [selectedCommunication, setSelectedCommunication] = useState(null)
   const lead = [...(store.leads || []), ...(store.leadArchive || [])].find(l => l.id === opp.sourceLeadId)
@@ -2352,7 +2364,7 @@ function CommsTab({ opp }) {
   return (
     <div className="ana-grid">
       <div className="ana-card c-12">
-        <SubmissionPanel opp={opp} />
+        <SubmissionPanel opp={opp} readOnly={readOnly} />
       </div>
       <div className="ana-card c-12">
         <div className="ana-title">Communication log</div>

@@ -4,6 +4,7 @@ import { useStore } from '../store.jsx'
 import { selectableRoles, ROLES } from '../seed.js'
 import { ddMmmYY, isAdminRole, displayRoleLabel } from '../utils.js'
 import { Icon } from '../icons.jsx'
+import { ConfirmModal } from '../ui.jsx'
 
 // Roles assignable through the UI (incl. TECH) — SUPER is deliberately not
 // offered, and CUST only while the portal is enabled (seed.js PORTAL_ENABLED).
@@ -20,6 +21,7 @@ export default function Users() {
   const [roleNameError, setRoleNameError] = useState('')
   const [roleNameSaved, setRoleNameSaved] = useState(false)
   const [usersView, setUsersView] = useState('accounts')
+  const [rejecting, setRejecting] = useState(null)
 
   // Route-level gate: the account roster (names, emails, roles) is restricted
   // directory data — non-admins get a restricted block, not a read-only view.
@@ -135,7 +137,7 @@ export default function Users() {
                     <td>Requested <b>{displayRoleLabel(u.role)}</b></td>
                     <td>
                       <button className="primary" onClick={() => store.updateUser(u.id, { status: 'Active' })}>Approve</button>{' '}
-                      <button onClick={() => { if (window.confirm(`Reject and remove the registration for ${u.email}?`)) store.deleteUser(u.id) }}>Reject</button>
+                      <button onClick={() => setRejecting(u)}>Reject</button>
                     </td>
                   </tr>
                 ))}
@@ -236,6 +238,10 @@ export default function Users() {
       </form>
       </section>
 
+      {rejecting && <ConfirmModal title="Reject registration" tone="danger"
+        message={`Reject and remove the registration for ${rejecting.email}?`}
+        confirmLabel="Reject registration" onClose={() => setRejecting(null)}
+        onConfirm={() => { store.deleteUser(rejecting.id); setRejecting(null) }} />}
     </div>
   )
 }

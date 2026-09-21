@@ -4,7 +4,7 @@ import { useStore, nextOppId } from '../store.jsx'
 import { ddMmmYY, ageDays, isTodayIST, gmailComposeHref, displayRole, formatISTTime, formatISTDate, nowIST, productDisplayLabel } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { useDrawer } from '../drawer.jsx'
-import { Chip, ConfChip, WarnBox, ErrBox, Modal } from '../ui.jsx'
+import { Chip, ConfChip, ConfirmModal, WarnBox, ErrBox, Modal } from '../ui.jsx'
 import { ROLES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, CUSTOMER_STATUSES, LEAD_SOURCES, ownerForOppType, routeForType, newProposal } from '../seed.js'
 import { isAdminRole, isApprover } from '../utils.js'
 import { aiEnabled, runTaskResult, runText } from '../ai.js'
@@ -96,6 +96,16 @@ function createOpportunityFromLeadPage({ store, lead, fields, decision, customer
 const receivedTime = ts => {
   if (!ts) return '—'
   return formatISTTime(ts) || '—'
+}
+
+// The inbox is a mailbox, so the newest received enquiry must lead the list
+// regardless of the order in which local or synced records were persisted.
+// Keep deterministic fallbacks for legacy rows that do not carry a timestamp.
+const inboxReceivedAt = lead => lead?.ts || lead?.receivedAt || lead?.createdAt || lead?.lastUpdated || ''
+const compareInboxRows = (a, b) => {
+  const time = new Date(inboxReceivedAt(b)).getTime() - new Date(inboxReceivedAt(a)).getTime()
+  if (Number.isFinite(time) && time !== 0) return time
+  return String(b?.id || '').localeCompare(String(a?.id || ''), undefined, { numeric: true })
 }
 
 // Disqualifying and reverting both need a written reason. Biji, 13 Aug: "there
@@ -372,6 +382,7 @@ function LeadVerification({ lead, customerStatus, store }) {
   const [downloadedFor, setDownloadedFor] = useState('')
   const [kycValues, setKycValues] = useState({})
   const [kycError, setKycError] = useState('')
+  const [pendingCancel, setPendingCancel] = useState(null)
   const menuRef = useRef(null)
   const verification = lead.verification || {}
   useEffect(() => {
@@ -403,9 +414,9 @@ function LeadVerification({ lead, customerStatus, store }) {
   }
 
   const cancelVerifiedFile = async (item, row) => {
-    if (!window.confirm(`Cancel the ${item} file only? Other KYC documents and the KYC request will remain unchanged.`)) return
     if (row.file) await removeHeldFile(lead.id, row.file)
     store.clearLeadKycItem(lead.id, item)
+    setPendingCancel(null)
   }
 
   const scanKycDocument = async (item, file, rec) => {
@@ -584,7 +595,7 @@ function LeadVerification({ lead, customerStatus, store }) {
             </span>
             {editable && verification.kycRequestStatus !== 'cancelled' && (
               row.state === 'Verified'
-                ? <button type="button" className="icon-action" aria-label={`Remove ${item}`} title={`Remove ${item}`} disabled={busy === item} onClick={() => cancelVerifiedFile(item, row)}><Icon name="x" size={14} /></button>
+                ? <button type="button" className="icon-action" aria-label={`Remove ${item}`} title={`Remove ${item}`} disabled={busy === item} onClick={() => setPendingCancel({ item, row })}><Icon name="x" size={14} /></button>
                 : <>
               {pending
                 ? <>
@@ -1090,7 +1101,7 @@ function LeadSourceContext({ lead, canAct }) {
           {canAct && <>
             {reNote && <p className="hint" role="status"><Icon name="checkCircle" size={12} /> {reNote}</p>}
             <div className="clar-response-upload">
-              <button type="button" onClick={() => { setResponseOpen(true); setResponseErr('') }}><Icon name="mail" size={12} /> Add customer clarification response</button>
+              <button type="button" onClick={() => { setResponseOpen(true); setResponseErr('') }}><Icon name="mail" size={12} /> Record customer response</button>
             </div>
           </>}
           {viewing && <AttachmentViewer leadId={lead.id} attachment={viewing} onClose={() => setViewing(null)} />}
@@ -1098,18 +1109,25 @@ function LeadSourceContext({ lead, canAct }) {
       </details>
 
       {canAct && responseOpen && (
-        <Modal title="Add customer clarification response" onClose={closeResponse} className="clarification-response-modal">
+        <Modal title="Record customer response" onClose={closeResponse} className="clarification-response-modal mail-compose-modal">
           <div className="drawer-form">
             <p className="hint modal-intro">Paste the customer’s reply or attach a document. The saved response will be added to the lead context and sent through AI re-reading.</p>
-            <label>From</label>
-            <input value={responseFrom} onChange={event => setResponseFrom(event.target.value)} placeholder="customer@company.com" />
-            <label>Subject</label>
-            <input value={responseSubject} onChange={event => setResponseSubject(event.target.value)} placeholder="Re: Clarification request" />
-            <label>Reply body</label>
-            <textarea rows={7} value={responseBody} onChange={event => setResponseBody(event.target.value)} placeholder="Paste the customer's clarification reply" />
-            <label>Reply attachments</label>
-            <input ref={responseInput} type="file" multiple style={{ display: 'none' }} onChange={event => { addResponseFiles(event.target.files); event.target.value = '' }} />
-            <button type="button" onClick={() => responseInput.current?.click()}><Icon name="upload" size={12} /> Add files</button>
+            <div className="mail-header-fields">
+              <label>From
+                <input value={responseFrom} onChange={event => setResponseFrom(event.target.value)} placeholder="customer@company.com" />
+              </label>
+              <label>Subject
+                <input value={responseSubject} onChange={event => setResponseSubject(event.target.value)} placeholder="Re: Clarification request" />
+              </label>
+            </div>
+            <label className="mail-body-field">Reply body
+              <textarea rows={7} value={responseBody} onChange={event => setResponseBody(event.target.value)} placeholder="Paste the customer's clarification reply" />
+            </label>
+            <div className="mail-attachments">
+              <label>Reply attachments</label>
+              <input ref={responseInput} type="file" multiple style={{ display: 'none' }} onChange={event => { addResponseFiles(event.target.files); event.target.value = '' }} />
+              <button type="button" onClick={() => responseInput.current?.click()}><Icon name="upload" size={12} /> Add files</button>
+            </div>
             {responseFiles.length > 0 && <div className="clarification-response-files">
               {responseFiles.map((file, index) => <div className="attach-row" key={`${file.name}-${index}`}>
                 <Icon name="fileText" size={13} /><span className="attach-name">{file.name}</span>
@@ -1347,6 +1365,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
   const [directCreatedId, setDirectCreatedId] = useState('')
   const [reassignTo, setReassignTo] = useState(lead.suggestedOwner || OWNERS[0])
   const [reassignOpen, setReassignOpen] = useState(false)
+  const [compareOpen, setCompareOpen] = useState(false)
   const internalSender = isInternalSender(lead.from, store.config)
   const explicitCustomerContact = customerContactFromText(`${lead.subject || ''}\n${lead.body || ''}`)
   const storedCustomerContact = internalSender
@@ -1563,6 +1582,25 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
       </span>
     )
   }
+  const comparisonFieldRows = [
+    ['sellTo', 'Sell to customer'],
+    ['scope', 'Opportunity scope'],
+    ['eucName', 'EUC name'],
+    ['eucLocation', 'EUC location'],
+    ['contactPerson', 'Contact person'],
+    ['contactPhone', 'Contact phone'],
+    ['owner', 'Assigned owner'],
+    ['oppType', 'Opportunity type'],
+    ['customerStatus', 'Customer class'],
+    ['bu', 'Business unit'],
+    ['segment', 'Segment'],
+    ['product', 'Equipment / product family'],
+  ].map(([key, label]) => ({
+    key,
+    label,
+    value: decisionDraft[key] || '—',
+    source: decisionAiField(key),
+  }))
   // Compact mode uses this as the single Lead decisions section, so required
   // identity/routing fields stay visible beside their direct AI controls.
   const visibleAiFields = ai.fields
@@ -1648,6 +1686,9 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
   const registrationBlocked = missingIdentity.length > 0 || registrationPendingLow.length > 0 || verificationBlocked
   const canAct = !['Converted', 'Dropped'].includes(lead.status)
   const clarificationAvailable = canAct && !!clarificationKindFor(lead, previewCustomerStatus)
+  const clarificationParts = (ai.lineItems || []).filter(item =>
+    String(item?.description || item?.partNumber || item?.customerRef || '').trim()
+  )
 
   const createDirectly = () => {
     if (registrationBlocked || directCreateBusy || lead.status !== 'Qualified') return
@@ -1723,6 +1764,15 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
     setClarBusy(true)
     try {
       const items = clarKind === 'quote-fee' ? QUOTE_FEE_DOCUMENTS : clarificationItems(lead)
+      const fallbackDraft = draftClarification(lead, {
+        kind: clarKind, customer, users: store.users, config: store.config,
+      })
+      // Open the editor immediately with the deterministic template. The AI
+      // response can improve the prose, but it must never be the reason the
+      // salesperson is left staring at a loading button.
+      setClarDraft(fallbackDraft)
+      store.updateLead(lead.id, draftPatch(fallbackDraft),
+        `${fallbackDraft.kind === 'quote-fee' ? 'Pre-quote fee' : 'Clarification'} mail template opened — not sent`)
       // The model writes the prose; the template writes it when the model is
       // unavailable, refused or times out. runText already returns null rather
       // than throwing, so the fallback is the normal case, not the error case.
@@ -1743,7 +1793,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
       })
       store.updateLead(lead.id, draftPatch(draft),
         `${draft.kind === 'quote-fee' ? 'Pre-quote fee' : 'Clarification'} mail drafted by ${draft.draftedBy} — not sent`)
-      setClarDraft(draft)
+      setClarDraft(current => current?.body === fallbackDraft.body ? draft : current)
     } catch (e) {
       setClarErr(e?.message || 'Could not draft the mail')
     } finally {
@@ -2010,6 +2060,58 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
         <button type="button" className="primary" onClick={reassign}><Icon name="check" size={13} /> Confirm reassignment</button>
       </div>
     </Modal>}
+    {compareOpen && <Modal title="Compare Lead decisions with original email" onClose={() => setCompareOpen(false)} className="lead-decision-compare-modal">
+      <div className="lead-decision-compare-layout">
+        <section className="lead-decision-compare-pane" aria-label="Extracted lead decisions">
+          <div className="lead-decision-compare-pane-head">
+            <div><b>Extracted lead decisions</b><span>Review against the customer’s original message</span></div>
+          </div>
+          <div className="lead-decision-compare-fields">
+            {comparisonFieldRows.map(row => (
+              <div className="lead-decision-compare-field" key={row.key}>
+                <div className="lead-decision-compare-label">
+                  <span>{row.label}</span>
+                  {row.source?.conf != null && <span className="lead-decision-compare-confidence">{row.source.conf}%</span>}
+                </div>
+                <div className="lead-decision-compare-value">{row.value}</div>
+                {row.source?.ev && <div className="lead-decision-compare-evidence">{row.source.ev}</div>}
+              </div>
+            ))}
+          </div>
+          <div className="lead-decision-compare-subhead">Extracted requested parts</div>
+          {ai.lineItems?.length ? (
+            <div className="lead-decision-compare-parts">
+              {ai.lineItems.map((item, index) => (
+                <div className="lead-decision-compare-part" key={`${item.partNumber || item.customerRef || item.description || 'item'}-${index}`}>
+                  <div><b>{item.partNumber || item.customerRef || 'Requested item'}</b><span>{item.qty || 1} {item.uom || 'EA'}</span></div>
+                  <p>{item.description || 'Description not extracted'}</p>
+                </div>
+              ))}
+            </div>
+          ) : <p className="hint">No requested parts were extracted.</p>}
+        </section>
+        <section className="lead-decision-compare-pane lead-decision-source-pane" aria-label="Original customer email">
+          <div className="lead-decision-compare-pane-head">
+            <div><b>Original customer email</b><span>Source used for the extraction</span></div>
+          </div>
+          <div className="lead-decision-source-meta">
+            <b>{lead.sender || lead.from || 'Inbound mailbox'}</b>
+            <span>{lead.from || 'No sender address'}</span>
+            <strong>{lead.subject || 'Original RFQ'}</strong>
+          </div>
+          <div className="lead-decision-source-body">{lead.body || 'No original email body is available.'}</div>
+          {attachments.length > 0 && <>
+            <div className="lead-decision-compare-subhead">Attachments</div>
+            <div className="lead-decision-source-attachments">
+              {attachments.map((attachment, index) => <div className="lead-decision-source-attachment" key={`${attachment.name}-${index}`}>
+                <Icon name="fileText" size={13} /><span>{attachment.name}</span>
+              </div>)}
+            </div>
+          </>}
+        </section>
+      </div>
+      <div className="lead-decision-compare-actions"><button type="button" onClick={() => setCompareOpen(false)}>Close</button></div>
+    </Modal>}
     <LeadWorkflowBar lead={lead} customerStatus={previewCustomerStatus} />
     <div className="lead-detail-layout">
     <div className="lead-detail-main">
@@ -2062,20 +2164,28 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
               <div className="clar-response-upload">
                 {!responseOpen ? (
                   <button type="button" onClick={() => { setResponseOpen(true); setResponseErr('') }}>
-                    <Icon name="mail" size={12} /> Add customer clarification response
+                    <Icon name="mail" size={12} /> Record customer response
                   </button>
                 ) : (
+                  <Modal title="Record customer response" className="clarification-response-modal mail-compose-modal" onClose={() => { if (!responseBusy) { setResponseOpen(false); setResponseErr('') } }}>
                   <div className="drawer-form">
                     <b>Customer clarification received</b>
-                    <label style={{ marginTop: 6 }}>From</label>
-                    <input value={responseFrom} onChange={e => setResponseFrom(e.target.value)} placeholder="customer@company.com" />
-                    <label style={{ marginTop: 6 }}>Subject</label>
-                    <input value={responseSubject} onChange={e => setResponseSubject(e.target.value)} placeholder="Re: Clarification request" />
-                    <label style={{ marginTop: 6 }}>Reply body</label>
-                    <textarea rows={6} value={responseBody} onChange={e => setResponseBody(e.target.value)} placeholder="Paste the customer's clarification reply" />
-                    <label style={{ marginTop: 6 }}>Reply attachments</label>
-                    <input ref={responseInput} type="file" multiple style={{ display: 'none' }} onChange={e => { addResponseFiles(e.target.files); e.target.value = '' }} />
-                    <button type="button" onClick={() => responseInput.current.click()}><Icon name="upload" size={12} /> Add files</button>
+                    <div className="mail-header-fields">
+                      <label>From
+                        <input value={responseFrom} onChange={e => setResponseFrom(e.target.value)} placeholder="customer@company.com" />
+                      </label>
+                      <label>Subject
+                        <input value={responseSubject} onChange={e => setResponseSubject(e.target.value)} placeholder="Re: Clarification request" />
+                      </label>
+                    </div>
+                    <label className="mail-body-field">Reply body
+                      <textarea rows={6} value={responseBody} onChange={e => setResponseBody(e.target.value)} placeholder="Paste the customer's clarification reply" />
+                    </label>
+                    <div className="mail-attachments">
+                      <label>Reply attachments</label>
+                      <input ref={responseInput} type="file" multiple style={{ display: 'none' }} onChange={e => { addResponseFiles(e.target.files); e.target.value = '' }} />
+                      <button type="button" onClick={() => responseInput.current.click()}><Icon name="upload" size={12} /> Add files</button>
+                    </div>
                     {responseFiles.map((file, i) => <div className="attach-row" key={`${file.name}-${i}`}><Icon name="fileText" size={13} /><span className="attach-name" style={{ flex: 1 }}>{file.name}</span><button type="button" onClick={() => setResponseFiles(responseFiles.filter((_, j) => j !== i))}>×</button></div>)}
                     {responseErr && <ErrBox>{responseErr}</ErrBox>}
                     <div className="toolbar" style={{ margin: 0 }}>
@@ -2083,6 +2193,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
                       <button type="button" disabled={responseBusy} onClick={() => { setResponseOpen(false); setResponseErr('') }}>Cancel</button>
                     </div>
                   </div>
+                  </Modal>
                 )}
               </div>
             </>
@@ -2168,7 +2279,12 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
     </div>
     </div>
       <section className={`lead-qualification-panel${compact ? ' compact-routing-panel' : ''}`} aria-label={compact ? 'Lead decisions' : 'Qualification and ownership'}>
-        <div className="ws-group">{compact ? 'Lead decisions' : 'Qualification &amp; ownership'}</div>
+        <div className={`ws-group${compact ? ' lead-decision-section-head' : ''}`}>
+          <span>{compact ? 'Lead decisions' : 'Qualification &amp; ownership'}</span>
+          {compact && <button type="button" className="lead-decision-compare-trigger" onClick={() => setCompareOpen(true)}>
+            <Icon name="eye" size={12} /> Compare with original email
+          </button>}
+        </div>
         <div className="ws-kv">
         <span className="ws-kv-k">Customer match</span>
         <span className="ws-kv-v">
@@ -2319,7 +2435,6 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
           </label>
         )}
         {isFastTrackLead(previewLead, store.config, customer) && <div className="okbox" style={{ marginTop: 8 }}>Fast-track enabled for this Green customer.</div>}
-        {compact && missingInformationPanel}
         {!compact && <div className="lead-decision-actions">
           <button className="primary" disabled={lead.status === 'Dropped'} onClick={saveDecisions}>
             <Icon name="check" size={12} /> Save changes
@@ -2334,6 +2449,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
         </div>}
         {lead.status === 'Converted' && <p className="lead-decision-note">This edits the lead record only. The linked opportunity is unchanged.</p>}
         </div>
+        {compact && <div className="lead-missing-information-panel">{missingInformationPanel}</div>}
       </section>
 
       <aside className={`ws-col lead-action-sidebar ${compact ? 'compact-action-col' : ''}`} aria-label={compact ? 'Review summary' : 'Lead AI summary and actions'}>
@@ -2397,7 +2513,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
               "Send" opens a compose window that still has to be submitted by
               hand, and only that click marks the record Sent. */}
           {(canDraftClar || clarRecord) && (
-            <details className="compact-rail-section compact-clarification-rail" open={!compact}>
+            <details className="compact-rail-section compact-clarification-rail" open={!compact || !!clarDraft}>
               <summary><span><Icon name="mail" size={13} /> Clarification request</span><Icon name="chevronDown" size={13} /></summary>
               <div className="compact-rail-body"><div className="clar-mail">
               <div className="clar-mail-head">
@@ -2425,37 +2541,80 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
                 </div>
               )}
 
-              {clarDraft && (
-                <Modal title="Review clarification email" className="clarification-compose-modal" onClose={() => { setClarDraft(null); setClarErr('') }}>
-                <div className="clar-mail-form">
-                  <label className="afield">To
-                    <input value={clarDraft.to} onChange={e => setClarDraft({ ...clarDraft, to: e.target.value })} />
-                  </label>
-                  <label className="afield">CC
-                    <input value={clarDraft.cc} onChange={e => setClarDraft({ ...clarDraft, cc: e.target.value })} />
-                  </label>
-                  <label className="afield">Subject
-                    <input value={clarDraft.subject} onChange={e => setClarDraft({ ...clarDraft, subject: e.target.value })} />
-                  </label>
-                  <label className="afield">Body
-                    <textarea rows={14} value={clarDraft.body}
-                      onChange={e => setClarDraft({ ...clarDraft, body: e.target.value })} />
-                  </label>
-                  <p className="hint">
-                    Drafted by {clarDraft.draftedBy === 'AI' ? 'the model' : 'the standard ModAE template'}.
-                    Review every line before sending — nothing leaves the app until you press Send.
-                  </p>
-                  <div className="clar-mail-actions">
-                    <button className="primary" onClick={sendClarification}>
-                      <Icon name="mail" size={12} /> Send
-                    </button>
-                    <button onClick={() => {
-                      store.updateLead(lead.id, draftPatch({ ...clarDraft }), 'Clarification draft saved')
-                      setClarDraft(null)
-                    }}>Save draft</button>
-                    <button onClick={() => { setClarDraft(null); setClarErr('') }}>Cancel</button>
+                {clarDraft && (
+                  <Modal title="Ask customer for missing information" className="clarification-compose-modal mail-compose-modal" onClose={() => { setClarDraft(null); setClarErr('') }}>
+                <div className="clarification-compose-layout">
+                  <aside className="clarification-review-panel" aria-label="Extracted request review">
+                    <section className="clarification-review-section">
+                      <div className="clarification-review-heading">
+                        <span>Extracted parts</span>
+                        <span className="clarification-review-count">{clarificationParts.length}</span>
+                      </div>
+                      {clarificationParts.length > 0 ? (
+                        <div className="clarification-part-list">
+                          {clarificationParts.map((item, index) => (
+                            <div className="clarification-part" key={`${item.partNumber || item.customerRef || item.description}-${index}`}>
+                              <div className="clarification-part-topline">
+                                <strong>{item.partNumber || item.customerRef || 'Requested item'}</strong>
+                                <span>{item.qty || 1} {item.uom || 'EA'}</span>
+                              </div>
+                              <div className="clarification-part-description">{item.description || 'Description not extracted'}</div>
+                              <div className="clarification-part-meta">
+                                {item.confidence != null && <span>{Math.round(Number(item.confidence) <= 1 ? Number(item.confidence) * 100 : Number(item.confidence))}% confidence</span>}
+                                {item.sourceDocument && <span>{item.sourceDocument}</span>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : <p className="hint">No parts were extracted from this enquiry.</p>}
+                    </section>
+                    <section className="clarification-review-section">
+                      <div className="clarification-review-heading">
+                        <span>Questions in this email</span>
+                        <span className="clarification-review-count">{(clarDraft.items || []).length}</span>
+                      </div>
+                      <ul className="clarification-review-question-list">
+                        {(clarDraft.items || []).map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}
+                      </ul>
+                    </section>
+                  </aside>
+                  <div className="clar-mail-form">
+                    <div className="mail-header-fields">
+                      <label className="afield">From
+                        <input readOnly value={clarDraft.from || ''} aria-readonly="true" />
+                      </label>
+                      <label className="afield">To
+                        <input disabled={clarBusy} value={clarDraft.to} onChange={e => setClarDraft({ ...clarDraft, to: e.target.value })} />
+                      </label>
+                      <label className="afield">CC
+                        <input disabled={clarBusy} value={clarDraft.cc} onChange={e => setClarDraft({ ...clarDraft, cc: e.target.value })} />
+                      </label>
+                      <label className="afield">Subject
+                        <input disabled={clarBusy} value={clarDraft.subject} onChange={e => setClarDraft({ ...clarDraft, subject: e.target.value })} />
+                      </label>
+                    </div>
+                    <label className="afield mail-body-field">Body
+                      <textarea rows={14} value={clarDraft.body}
+                        disabled={clarBusy}
+                        onChange={e => setClarDraft({ ...clarDraft, body: e.target.value })} />
+                    </label>
+                    <p className="hint">
+                      {clarBusy ? 'AI is drafting the customer question…' : `Drafted by ${clarDraft.draftedBy === 'AI' ? 'the model' : 'the standard ModAE template'}.`}
+                      Review every line before sending — nothing leaves the app until you press Send.
+                    </p>
+                    <div className="clar-mail-actions">
+                      <button className="primary" disabled={clarBusy} onClick={sendClarification}>
+                        <Icon name="mail" size={12} /> Send
+                      </button>
+                      <button disabled={clarBusy} onClick={() => {
+                        store.updateLead(lead.id, draftPatch({ ...clarDraft }), 'Clarification draft saved')
+                        setClarDraft(null)
+                      }}>Save draft</button>
+                      <button onClick={() => { setClarDraft(null); setClarErr('') }}>Cancel</button>
+                    </div>
                   </div>
                 </div>
+                </Modal>
               )}
               </div></div>
             </details>
@@ -3004,6 +3163,7 @@ export default function Inbox() {
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [pasteOpen, setPasteOpen] = useState(false)
   const [simulationOpen, setSimulationOpen] = useState(false)
+  const [clearSimulatedConfirm, setClearSimulatedConfirm] = useState(false)
   const [simProjectType, setSimProjectType] = useState(PROJECT_TYPES[0])
   const [simOppType, setSimOppType] = useState(() => oppTypesForProjectType(PROJECT_TYPES[0])[0] || PROJECT_TYPES[0])
   const [simCategory, setSimCategory] = useState('')
@@ -3104,7 +3264,7 @@ export default function Inbox() {
   }
 
   const rows = listSource.filter(l => ownerVisible(l) && matchesFilters(l))
-  const mailboxRows = rows.filter(matchesTab)
+  const mailboxRows = rows.filter(matchesTab).sort(compareInboxRows)
   const staleAiLeads = (store.leads || []).filter(isUnavailableAiSummary)
   // Rows this tab would show if they were yours. Surfaced rather than dropped.
   const hiddenByOwner = listSource.filter(l => !ownerVisible(l) && matchesFilters(l) && matchesTab(l)).length
@@ -3275,9 +3435,9 @@ export default function Inbox() {
   }
   const simulatedLeadCount = simulatedCount(store.leads, store.leadArchive)
   const clearSimulated = () => {
-    if (!window.confirm(`Clear ${simulatedLeadCount} simulated lead${simulatedLeadCount === 1 ? '' : 's'}?\n\nOnly rows generated by this simulator go. Seeded and hand-entered leads stay, and a simulated lead already converted to an opportunity is kept.`)) return
     store.clearSimulatedLeads()
     setSimulationOpen(false)
+    setClearSimulatedConfirm(false)
   }
   const tabCount = tab => rows.filter(l => tab === 'unread'
     ? l.status === 'New' && !l.readAt
@@ -3300,6 +3460,9 @@ export default function Inbox() {
 
   return (
     <div className="page mailbox-page">
+      {clearSimulatedConfirm && <ConfirmModal title="Clear simulated leads" tone="danger"
+        message={`Clear ${simulatedLeadCount} simulated lead${simulatedLeadCount === 1 ? '' : 's'}? Only rows generated by this simulator go. Seeded and hand-entered leads stay, and a simulated lead already converted to an opportunity is kept.`}
+        confirmLabel="Clear simulated leads" onClose={() => setClearSimulatedConfirm(false)} onConfirm={clearSimulated} />}
       <div className="mailbox-head">
         <div>
           <h2><Icon name="inbox" size={18} /> Lead inbox</h2>
@@ -3381,7 +3544,7 @@ export default function Inbox() {
           </div>
           {simulatedLeadCount > 0 && (
             <div className="lead-decision-actions" style={{ marginTop: 12 }}>
-              <button onClick={clearSimulated}>
+              <button onClick={() => setClearSimulatedConfirm(true)}>
                 <Icon name="x" size={13} /> Clear {simulatedLeadCount} simulated lead{simulatedLeadCount === 1 ? '' : 's'}
               </button>
             </div>

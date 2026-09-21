@@ -13,6 +13,7 @@ import { gmailComposeHref, displayRole } from '../utils.js'
 import { isCounterAwaitingCustomer } from '../commercialTerms.js'
 import { snapshotProposal } from '../store.jsx'
 import { loadProposalTemplateBuffer, resolveProposalTemplate } from '../proposal/templateRegistry.js'
+import { latestSubmissionForRevision } from '../submissionStatus.js'
 
 const proposalEmailFallback = ({ greeting, oppName, oppId, revision, validityDays, senderName, attachments }) =>
   `${greeting}\n\nWith reference to your request for quotation for ${oppName}, we are pleased to submit our approved Techno-Commercial Proposal for Opportunity ${oppId}, Revision ${revision}.\n\nPlease find enclosed ${attachments.join(' and ')} for your review and records.\n\nOur offer is valid for ${validityDays} days from the date of submission. Kindly review the attached documents and confirm whether the offer meets your technical and commercial requirements.\n\nShould you require any additional information or clarification regarding the scope, technical specifications, or commercial terms, please feel free to contact us.\n\nWe look forward to your response.\n\nBest regards,\n${senderName}\nModAE India Pvt. Ltd.`
@@ -34,7 +35,7 @@ const validProposalFilename = value => {
 // Customer send is unlocked only by an approved release for the current
 // revision. To, CC, Subject, the covering message and the attachment list stay
 // editable before Gmail opens a draft.
-export default function SubmissionPanel({ opp, onSubmitted }) {
+export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) {
   const store = useStore()
   const p = store.getProposal(opp.id)
   const route = docRoute(p, opp)
@@ -100,7 +101,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
     .flatMap(a => (a.conditions || []).filter(c => !c.incorporated)
       .map(c => ({ ...c, approver: a.approver, type: a.type })))
   const pendingCommercialConfirmations = (p.terms || []).filter(isCounterAwaitingCustomer)
-  const submission = (store.communications[opp.id] || []).find(c => c.kind === 'submission')
+  const submission = latestSubmissionForRevision(store.communications[opp.id], p.revision)
   const alreadySent = submission?.status === 'sent'
   const draftOpened = sentNow || submission?.status === 'draft'
 
@@ -139,7 +140,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
   const toValid = recipientsValid(emailTo)
   const ccValid = splitRecipients(emailCc).length === 0 || recipientsValid(emailCc)
   const filenameValid = !attachProposal || validProposalFilename(proposalFilename)
-  const canSend = !pendingConds.length && (!attachProposal || proposalValidated) && filenameValid && fromValid && toValid && ccValid && Boolean(emailSubject.trim()) && Boolean(emailBody.trim()) && !readingFiles
+  const canSend = !pendingConds.length && (!attachProposal || proposalValidated) && filenameValid && fromValid && toValid && ccValid && Boolean(emailSubject.trim()) && Boolean(emailBody.trim()) && !readingFiles && !readOnly
 
   const removeExtraFile = filename => setExtraFiles(files => files.filter(f => f.filename !== filename))
 
@@ -318,6 +319,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
         body: emailBody,
         kind: 'submission',
         status: 'draft',
+        revision: String(p.revision ?? ''),
         proposalSnapshot: snapshotProposal(p),
         attachments,
         attachmentNames: [
@@ -358,14 +360,14 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
     ...extraFiles.map(f => f.filename),
   ]
   const rows = [
-    ['From', <input type="email" value={emailFrom} onChange={e => setEmailFrom(e.target.value)} placeholder="sales@company.com" style={{ width: '100%' }} />],
-    ['To', <input id="customer-email-to" type="text" value={emailTo} onChange={e => setEmailTo(e.target.value)} placeholder="customer@company.com, second@company.com" style={{ width: '100%' }} />],
-    ['CC', <input type="text" value={emailCc} onChange={e => setEmailCc(e.target.value)} placeholder="name@company.com" style={{ width: '100%' }} />],
-    ['Subject', <input type="text" value={emailSubject} onChange={e => setEmailSubject(e.target.value)} placeholder="Proposal subject" style={{ width: '100%' }} />],
+    ['From', <input type="email" value={emailFrom} disabled={readOnly} onChange={e => setEmailFrom(e.target.value)} placeholder="sales@company.com" style={{ width: '100%' }} />],
+    ['To', <input id="customer-email-to" type="text" value={emailTo} disabled={readOnly} onChange={e => setEmailTo(e.target.value)} placeholder="customer@company.com, second@company.com" style={{ width: '100%' }} />],
+    ['CC', <input type="text" value={emailCc} disabled={readOnly} onChange={e => setEmailCc(e.target.value)} placeholder="name@company.com" style={{ width: '100%' }} />],
+    ['Subject', <input type="text" value={emailSubject} disabled={readOnly} onChange={e => setEmailSubject(e.target.value)} placeholder="Proposal subject" style={{ width: '100%' }} />],
     ['Attachments', <div className="submission-attachment-editor">
       {attachProposal && <label className="submission-attachment-name">
         <span>Proposal workbook filename</span>
-        <input type="text" value={proposalFilename} onChange={event => setProposalFilename(event.target.value)}
+        <input type="text" value={proposalFilename} disabled={readOnly} onChange={event => setProposalFilename(event.target.value)}
           aria-invalid={!filenameValid} aria-describedby={!filenameValid ? 'proposal-filename-error' : undefined} />
       </label>}
       {!filenameValid && <span id="proposal-filename-error" className="err-text">Use a valid filename ending in .xlsx.</span>}
@@ -389,21 +391,21 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
 
       <label className="afield" style={{ display: 'block', marginTop: 8 }}>Message draft</label>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '4px 0' }}>
-        <button type="button" onClick={createMessage} disabled={messageBusy || proofreadBusy}>
+        <button type="button" onClick={createMessage} disabled={readOnly || messageBusy || proofreadBusy}>
           <Icon name="sparkles" size={13} /> {messageBusy ? 'Improving draft…' : 'Improve with AI'}
         </button>
-        <button type="button" onClick={proofreadMessage} disabled={proofreadBusy || messageBusy}>
+        <button type="button" onClick={proofreadMessage} disabled={readOnly || proofreadBusy || messageBusy}>
           <Icon name="check" size={13} /> {proofreadBusy ? 'Proofreading…' : 'Proofread with AI'}
         </button>
         <span className="hint">Optional professional review</span>
       </div>
-      <textarea className="submission-message-draft" value={emailBody} onChange={e => { aiRequestRef.current += 1; setEmailBody(e.target.value) }} rows={9}
+      <textarea className="submission-message-draft" value={emailBody} disabled={readOnly} onChange={e => { aiRequestRef.current += 1; setEmailBody(e.target.value) }} rows={9}
         style={{ width: '100%', resize: 'vertical' }} />
       {messageNotice && <WarnBox>{messageNotice}</WarnBox>}
       {proofreadError && <ErrBox>{proofreadError}</ErrBox>}
 
       <div className="check-row" style={{ marginTop: 8 }}>
-        <input type="checkbox" checked={attachProposal} onChange={e => setAttachProposal(e.target.checked)} />
+        <input type="checkbox" checked={attachProposal} disabled={readOnly} onChange={e => setAttachProposal(e.target.checked)} />
         <span><b>Attach validated proposal</b><span className="hint"> — generated Rev {p.revision} workbook</span></span>
       </div>
       {attachProposal && !proposalValidated && (
@@ -412,7 +414,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
 
       <div className="submission-actions">
         <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={onFilesPicked} />
-        <button className="secondary" type="button" disabled={readingFiles}
+        <button className="secondary" type="button" disabled={readOnly || readingFiles}
           onClick={() => fileInputRef.current?.click()}>
           <Icon name="upload" size={13} /> {readingFiles ? 'Reading files…' : `Attach files${extraFiles.length ? ` (${extraFiles.length})` : ''}`}
         </button>
@@ -433,7 +435,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
           <div key={f.filename} className="check-row">
             <Icon name="fileText" size={13} />
             <span>{f.filename}</span>
-            <button className="secondary" type="button" style={{ marginLeft: 'auto', padding: '2px 8px' }}
+            <button className="secondary" type="button" disabled={readOnly} style={{ marginLeft: 'auto', padding: '2px 8px' }}
               onClick={() => removeExtraFile(f.filename)}>
               <Icon name="x" size={11} /> Remove
             </button>
@@ -469,7 +471,7 @@ export default function SubmissionPanel({ opp, onSubmitted }) {
       {draftOpened && !alreadySent && (
         <div className="errbox">
           Gmail draft opened — attach the downloaded files and send it in Gmail.
-          <button type="button" className="secondary" style={{ marginLeft: 8 }} onClick={markAsSent}>
+          <button type="button" className="secondary" disabled={readOnly} style={{ marginLeft: 8 }} onClick={markAsSent}>
             Mark as sent
           </button>
         </div>

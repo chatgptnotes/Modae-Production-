@@ -1,4 +1,5 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useId, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { MILESTONES } from './seed.js'
 import { Icon } from './icons.jsx'
 import { useStore } from './store.jsx'
@@ -58,23 +59,112 @@ export const KpiCard = ({ label, value, hint, onClick }) => (
 export const WarnBox = ({ children }) => <div className="warnbox">{children}</div>
 export const ErrBox = ({ children }) => <div className="errbox">{children}</div>
 
-export function Modal({ title, onClose, children, wide, className = '' }) {
+const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+function useDialogBehavior({ onClose, dialogRef, initialFocusRef }) {
+  const restoreRef = useRef(null)
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+
   useEffect(() => {
+    restoreRef.current = document.activeElement
+    const dialog = dialogRef.current
+    const focusInitial = () => {
+      const target = initialFocusRef?.current || dialog?.querySelector(FOCUSABLE)
+      if (target) target.focus()
+      else dialog?.focus()
+    }
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const raf = window.requestAnimationFrame(focusInitial)
     const onKeyDown = event => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onCloseRef.current()
+        return
+      }
+      if (event.key !== 'Tab' || !dialog) return
+      const items = [...dialog.querySelectorAll(FOCUSABLE)]
+      if (!items.length) {
+        event.preventDefault()
+        dialog.focus()
+        return
+      }
+      const first = items[0]
+      const last = items[items.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
     }
     document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [onClose])
+    return () => {
+      window.cancelAnimationFrame(raf)
+      document.removeEventListener('keydown', onKeyDown)
+      document.body.style.overflow = previousOverflow
+      if (restoreRef.current?.focus) restoreRef.current.focus()
+    }
+  }, [dialogRef, initialFocusRef])
+}
 
-  return (
+export function Modal({ title, onClose, children, wide, className = '', initialFocusRef, closeLabel = 'Close dialog' }) {
+  const dialogRef = useRef(null)
+  const titleId = useId()
+  useDialogBehavior({ onClose, dialogRef, initialFocusRef })
+
+  return createPortal((
     <>
-      <div className="filter-overlay modal-overlay" onClick={onClose} />
-      <div className={`modal form-card ${wide ? 'wide' : ''} ${className}`.trim()} role="dialog" aria-modal="true" aria-label={title}>
-        {title && <div className="section-title">{String(title)}</div>}
+      <div className="filter-overlay modal-overlay" onClick={onClose} aria-hidden="true" />
+      <div className={`modal form-card ${wide ? 'wide' : ''} ${className}`.trim()} ref={dialogRef}
+        role="dialog" aria-modal="true" aria-labelledby={title ? titleId : undefined}
+        aria-label={title ? undefined : 'Dialog'} tabIndex="-1">
+        <div className="modal-header">
+          {title && <div className="section-title" id={titleId}>{String(title)}</div>}
+          <button type="button" className="modal-close" onClick={onClose} aria-label={closeLabel} title={closeLabel}>×</button>
+        </div>
         {children}
       </div>
     </>
+  ), document.body)
+}
+
+export function ConfirmModal({ title = 'Confirm action', message, children, confirmLabel = 'Confirm', cancelLabel = 'Cancel', tone = '', onConfirm, onClose }) {
+  const confirmRef = useRef(null)
+  return (
+    <Modal title={title} onClose={onClose} initialFocusRef={confirmRef} className="confirm-modal">
+      {message && <p className="modal-message">{message}</p>}
+      {children}
+      <div className="forms-actions modal-actions">
+        <button type="button" onClick={onClose}>{cancelLabel}</button>
+        <button type="button" ref={confirmRef} className={tone === 'danger' ? 'danger' : 'primary'} onClick={onConfirm}>{confirmLabel}</button>
+      </div>
+    </Modal>
+  )
+}
+
+export function PromptModal({ title = 'Enter a value', message, defaultValue = '', placeholder = '', confirmLabel = 'Save', onSubmit, onClose }) {
+  const [value, setValue] = useState(defaultValue)
+  const inputRef = useRef(null)
+  const submit = event => {
+    event.preventDefault()
+    onSubmit(value)
+  }
+  return (
+    <Modal title={title} onClose={onClose} initialFocusRef={inputRef} className="prompt-modal">
+      <form onSubmit={submit}>
+        {message && <p className="modal-message">{message}</p>}
+        <label className="modal-prompt-field">Value
+          <input ref={inputRef} value={value} onChange={event => setValue(event.target.value)} placeholder={placeholder} autoComplete="off" />
+        </label>
+        <div className="forms-actions modal-actions">
+          <button type="button" onClick={onClose}>Cancel</button>
+          <button type="submit" className="primary" disabled={!value.trim()}>{confirmLabel}</button>
+        </div>
+      </form>
+    </Modal>
   )
 }
 
@@ -97,7 +187,8 @@ const REMOVE_MSG = 'Remove all demo data?\n\n'
 export function DemoDataControls({ className = '', size = 13, label = x => x }) {
   const store = useStore()
   const demo = store.demoData !== false
-  const ask = (msg, run) => () => { if (window.confirm(msg)) run() }
+  const [pending, setPending] = useState(null)
+  const ask = (msg, run, title) => () => setPending({ msg, run, title })
   return (
     <>
       {!demo ? null : (
@@ -107,11 +198,13 @@ export function DemoDataControls({ className = '', size = 13, label = x => x }) 
           <Icon name="refresh" size={size} /> {label('Reset all demo data')}
         </button>
         <button className={className} title="Empty the app — logins and configuration stay"
-          onClick={ask(REMOVE_MSG, store.clearDemo)}>
+          onClick={ask(REMOVE_MSG, store.clearDemo, 'Remove demo data')}>
           <Icon name="x" size={size} /> {label('Remove demo data')}
         </button>
         </>
       )}
+      {pending && <ConfirmModal title={pending.title || 'Reset demo data'} message={pending.msg} tone="danger"
+        confirmLabel="Continue" onClose={() => setPending(null)} onConfirm={() => { pending.run(); setPending(null) }} />}
     </>
   )
 }

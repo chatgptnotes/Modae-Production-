@@ -39,13 +39,15 @@ export function DrawerHost() {
   return (
     <>
       <div className={`drawer-backdrop ${sel ? 'open' : ''}`} onClick={close} />
-      <div className={`drawer ${sel ? 'open' : ''}`}>
+      <div className={`drawer ${sel ? 'open' : ''}`} role={sel ? 'dialog' : undefined}
+        aria-modal={sel ? 'true' : undefined} aria-label={sel ? (sel.type === 'opp' ? `${sel.id} details` : `${sel.id} customer details`) : undefined}
+        aria-hidden={!sel}>
         {shown && (
           <>
             <div className="drawer-head">
               <span>{shown.type === 'opp' ? `${shown.id} — details` : shown.id}</span>
-              <button className="drawer-x" style={{ marginLeft: 'auto' }}
-                onClick={close} title="Close (Esc)">✕</button>
+              <button className="drawer-x" style={{ marginLeft: 'auto' }} type="button"
+                onClick={close} title="Close (Esc)" aria-label="Close details">✕</button>
             </div>
             {shown.type === 'opp'
               ? <OppPanel oppId={shown.id} />

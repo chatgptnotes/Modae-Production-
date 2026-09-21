@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { usePwaInstall } from './pwa.js'
 import { Icon } from './icons.jsx'
+import { Modal } from './ui.jsx'
 
 // Dismissing the login banner is a snooze, not a permanent no — a phone user
 // who skips it today should still be offered the app in a fortnight.
@@ -29,11 +30,10 @@ export function InstallButton() {
       <>
         <button className="install install-secondary" onClick={() => setShowIos(v => !v)}><Icon name="install" size={14} /> Install</button>
         {showIos && (
-          <div className="modal form-card" style={{ top: 70 }}>
-            <div className="section-title">Add ModAE to your Home Screen</div>
+          <Modal title="Add ModAE to your Home Screen" className="ios-install-modal" onClose={() => setShowIos(false)}>
             <p style={{ fontSize: 13 }}>In Safari: tap the <b>Share</b> button, then <b>"Add to Home Screen"</b>. ModAE opens full-screen like an app.</p>
             <div className="forms-actions"><button onClick={() => setShowIos(false)}>Close</button></div>
-          </div>
+          </Modal>
         )}
       </>
     )

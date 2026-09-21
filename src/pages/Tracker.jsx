@@ -33,9 +33,9 @@ export const COLS = [
   { key: 'customerStatus', letter: 'G', label: 'Customer Status', w: 5 },
   { key: 'eucName', letter: 'H', label: 'EUC Name*', w: 8 },
   { key: 'eucLocation', letter: 'I', label: 'EUC Location', w: 6 },
-  { key: 'oppName', letter: 'J', label: 'Opportunity Name/Description*', w: 20, wAll: 18 },
+  { key: 'oppName', letter: 'J', label: 'Opportunity Name/Description*', w: 22, wAll: 18 },
   { key: 'owner', letter: 'K', label: 'Owner', w: 4 },
-  { key: 'oppType', letter: 'L', label: 'Opp Type', w: 11, wAll: 8 },
+  { key: 'oppType', letter: 'L', label: 'Opp Type', w: 10, wAll: 8 },
   { key: 'bu', letter: 'M', label: 'BU', w: 4 },
   { key: 'segment', letter: 'N', label: 'Segment', w: 5 },
   { key: 'product', letter: 'O', label: 'Equipment / Product Family', w: 6 },
@@ -46,7 +46,7 @@ export const COLS = [
   { key: 'gmPct', letter: 'T', label: 'GM%', num: true, w: 3 },
   { key: 'createDate', letter: 'U', label: 'Create Date', w: 5, wAll: 7 },
   { key: 'proposalDate', letter: 'V', label: 'Proposal Date', w: 5, wAll: 7 },
-  { key: 'orderDate', letter: 'W', label: 'Expected Order Date', w: 11, wAll: 9 },
+  { key: 'orderDate', letter: 'W', label: 'Expected Order Date', w: 14, wAll: 9 },
   { key: 'invoiceDate', letter: 'X', label: 'Expected Ship Date', w: 7, wAll: 9 },
   { key: 'status', letter: 'Y', label: 'Status*', w: 5 },
   { key: 'stage', letter: 'Z', label: 'Stage*', w: 11, wAll: 8 },
@@ -56,7 +56,7 @@ export const COLS = [
   { key: 'lastUpdated', letter: 'AD', label: 'Last Updated', w: 5, wAll: 7 },
   { key: 'forecast', letter: 'AE', label: 'Forecast', w: 3 },
   { key: 'remarks', letter: 'AF', label: 'Update/Remarks', w: 10 },
-  { key: 'nextActionOwner', letter: 'AG', label: 'Next Action', w: 9 },
+  { key: 'nextActionOwner', letter: 'AG', label: 'Next Action', w: 11 },
 ]
 
 // The columns a sales owner actually works from, in Biji's words on 13 Aug:

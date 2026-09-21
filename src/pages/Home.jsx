@@ -8,6 +8,7 @@ import { Sparkline } from '../dashviz.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { Icon, BrandMark } from '../icons.jsx'
 import { displayRole } from '../utils.js'
+import { Modal } from '../ui.jsx'
 
 // Tiles come from the shared registry (src/tiles.js) so the desktop Home and
 // the tablet launcher never drift; only the "Generate Proposal" action tile is
@@ -128,20 +129,16 @@ export default function Home() {
       )}
 
       {pick && (
-        <>
-          <div className="filter-overlay" onClick={() => setPick(false)} />
-          <div className="modal form-card">
-            <div className="section-title">Generate proposal — pick an open opportunity</div>
+        <Modal title="Generate proposal — pick an open opportunity" onClose={() => setPick(false)}>
             <div className="pick-list">
               {[...openOpps].sort((a, b) => (b.lastUpdated || '').localeCompare(a.lastUpdated || '')).map(o => (
-                <div key={o.id} className="tile-hit" onClick={() => nav(`/proposal/${o.id}`)}>
+                <button type="button" key={o.id} className="tile-hit" onClick={() => nav(`/proposal/${o.id}`)}>
                   <b>{o.id}</b> — {o.sellTo} <span className="hint">{o.oppName.slice(0, 48)}{o.proposalDate ? '' : ' · no proposal yet'}</span>
-                </div>
+                </button>
               ))}
             </div>
             <div className="forms-actions"><button onClick={() => setPick(false)}>Cancel</button></div>
-          </div>
-        </>
+        </Modal>
       )}
     </div>
   )

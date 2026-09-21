@@ -163,9 +163,21 @@ test('Gmail compose failures surface a useful message', () => {
 
 test('the page distinguishes an opened Gmail draft from a confirmed sent email', () => {
   assert.match(submission, /status: 'draft'/)
+  assert.match(submission, /revision: String\(p\.revision \?\? ''\)/)
+  assert.match(submission, /latestSubmissionForRevision\(store\.communications\[opp\.id\], p\.revision\)/)
   assert.match(submission, /Mark as sent/)
   assert.match(submission, /status: 'sent'/)
   assert.match(submission, /Proposal email marked as sent/)
+})
+
+test('proposal surfaces expose customer-send status per revision', () => {
+  const proposal = read('src/pages/Proposal.jsx')
+  const workbench = read('src/pages/Workbench.jsx')
+  assert.match(proposal, /Customer submission/)
+  assert.match(proposal, /submissionStatusLabel\(currentSubmission\)/)
+  assert.match(proposal, /latestSubmissionForRevision\(comms, p\.revision\)/)
+  assert.match(workbench, /latestSubmissionForRevision\(store\.communications\?\.\[opp\.id\], historicalRevision\)/)
+  assert.match(workbench, /submissionStatusLabel\(submission\)/)
 })
 
 test('the mail API accepts business documents and rejects executables', () => {
