@@ -90,6 +90,14 @@ test('same-customer delivery RFQs infer EUC name and multiline delivery location
   })
 })
 
+test('inline RFQ wording infers the EUC from customer and city after at', () => {
+  const identity = leadIdentity({
+    body: 'Please submit your quotation for the components required at Tata Power, Mumbai:',
+  }, [])
+  assert.equal(identity.eucName, 'Tata Power')
+  assert.equal(identity.eucLocation, 'Mumbai')
+})
+
 test('explicit end-user values override same-customer fallback', () => {
   const identity = leadIdentity({ sellTo: 'ABC EPC Pvt. Ltd.', body: 'Delivery location: Chennai, Tamil Nadu' }, [
     { k: 'EUN', v: 'Tata Power Mumbai Plant', state: 'accepted' },

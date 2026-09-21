@@ -47,10 +47,20 @@ export const leadFieldValue = (fields = [], key) => {
 export const inferEucFromText = (text = '') => {
   const source = String(text || '').replace(/\s+/g, ' ').trim()
   const match = source.match(/(?:existing\s+)?(?:installation|plant|station|site)\s+(?:at|in)\s+([^,.;]+),\s*([^,.;]+),\s*([^,.;]+)/i)
-  if (!match) return { eucName: '', eucLocation: '' }
+  if (match) {
+    return {
+      eucName: match[1].trim(),
+      eucLocation: `${match[2].trim()}, ${match[3].trim()}`,
+    }
+  }
+
+  // Common RFQ wording puts the customer/site after "at" without an
+  // explicit field label, for example: "... at Tata Power, Mumbai:".
+  const inline = source.match(/(?:^|[\s,:])at\s+([^,\n;:]+),\s*([^,\n;:]+)(?:,\s*([^,\n;:]+))?(?=[:.;\n]|$)/i)
+  if (!inline) return { eucName: '', eucLocation: '' }
   return {
-    eucName: match[1].trim(),
-    eucLocation: `${match[2].trim()}, ${match[3].trim()}`,
+    eucName: inline[1].trim(),
+    eucLocation: [inline[2], inline[3]].filter(Boolean).map(value => value.trim()).join(', '),
   }
 }
 
