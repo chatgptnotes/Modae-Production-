@@ -2429,7 +2429,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
             <span className="ws-head-icon emerald"><Icon name="sparkles" size={13} /></span>
             <span className="ws-head-title">AI summary & actions</span>
             {aiEnabled() && canAct && (
-              <button className="ws-head-meta" onClick={reExtract} disabled={reExtracting}
+              <button className="ws-head-meta reextract-button" onClick={reExtract} disabled={reExtracting}
                 title="Re-read the original email with the configured model">
                 <Icon name="refresh" size={12} /> {reExtracting ? 'Extracting…' : 'Re-run'}
               </button>
@@ -2441,7 +2441,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
             <summary>
               <span><Icon name="sparkles" size={13} /> AI summary</span>
               {compact && aiEnabled() && canAct && (
-                <button type="button" className="ws-head-meta" disabled={reExtracting}
+                <button type="button" className="ws-head-meta reextract-button" disabled={reExtracting}
                   onClick={e => { e.preventDefault(); e.stopPropagation(); reExtract() }}
                   title="Re-read the original email with the configured model">
                   <Icon name="refresh" size={12} /> {reExtracting ? 'Extracting…' : 'Re-run'}

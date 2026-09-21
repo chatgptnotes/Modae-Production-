@@ -3932,6 +3932,21 @@ button.install:hover { background: var(--primary-hover); }
 .ws-head-icon.emerald { background: var(--ws-emerald-soft); color: var(--ws-emerald); }
 .ws-head-title { font-size: 13px; font-weight: 700; color: var(--ws-text); letter-spacing: -.005em; }
 .ws-head-meta { margin-left: auto; font-size: 11px; color: var(--ws-text-3); white-space: nowrap; }
+.reextract-button {
+  padding: 7px 10px;
+  border: 1px solid var(--ws-amber-line);
+  border-radius: 8px;
+  background: var(--ws-amber-soft);
+  color: var(--ws-amber);
+  font-weight: 700;
+}
+.reextract-button:hover:not(:disabled) {
+  background: var(--ws-amber);
+  color: var(--palette-4843938);
+  border-color: var(--ws-amber);
+  filter: none;
+}
+.reextract-button:disabled { opacity: .65; }
 .ws-body { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px; scrollbar-width: thin; scrollbar-color: var(--ws-border-strong) transparent; }
 .ws-body::-webkit-scrollbar { width: var(--ws-scrollbar-w, 10px); }
 .ws-body::-webkit-scrollbar-track { background: transparent; }
@@ -10941,4 +10956,16 @@ table.sheet tbody tr:hover td {
 
 .sourcing-restore-row {
   color: var(--primary-dark, var(--primary-fill));
+}
+
+/* Keep the AI re-run action amber after the final global button guardrail. */
+.lead-workspace .reextract-button {
+  background: var(--ws-amber-soft) !important;
+  border-color: var(--ws-amber-line) !important;
+  color: var(--ws-amber) !important;
+}
+.lead-workspace .reextract-button:hover:not(:disabled) {
+  background: var(--ws-amber) !important;
+  border-color: var(--ws-amber) !important;
+  color: var(--palette-4843938) !important;
 }
