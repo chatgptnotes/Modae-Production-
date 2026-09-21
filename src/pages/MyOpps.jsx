@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { OWNERS, ROLES } from '../seed.js'
-import { canPriceProposal, canViewCommercial, isSalesOwner, fmtRupeesFromK, mmmYY, ddMmmYY, stageClass, productDisplayLabel, displayRole } from '../utils.js'
+import { canPriceProposal, canViewCommercial, isSalesOwner, fmtRupeesFromK, mmmYY, ddMmmYY, stageClass, productDisplayLabel, displayRole, isHiddenDashboardOpportunity } from '../utils.js'
 import { nextActionWith } from '../gates.js'
 import { useDrawer } from '../drawer.jsx'
 import { Icon } from '../icons.jsx'
@@ -27,7 +27,7 @@ export default function MyOpps() {
   // anything typed into the sheet's Next Action Pending Owner column.
   const na = o => nextActionWith(o, store.getProposal(o.id), store)
 
-  let rows = [...store.opportunities]
+  let rows = store.opportunities.filter(o => !isHiddenDashboardOpportunity(o))
     .sort((a, b) => (b.lastUpdated || '').localeCompare(a.lastUpdated || ''))
   // Role-based filtering: sales reps see only their opportunities by default
   // Admin/System Owner/Management roles see all opportunities by default

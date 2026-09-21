@@ -311,6 +311,14 @@ export function monthKey(dateStr) {
   return dateStr.slice(0, 7) // YYYY-MM
 }
 
+// This legacy/demo row is retained in stored data for audit/history, but is
+// intentionally omitted from dashboard and opportunity-list presentations.
+export const HIDDEN_DASHBOARD_OPPORTUNITY_NAME = 'Primary 10 Opportunity'
+export function isHiddenDashboardOpportunity(opportunity) {
+  return String(opportunity?.oppName || '').trim().toLowerCase()
+    === HIDDEN_DASHBOARD_OPPORTUNITY_NAME.toLowerCase()
+}
+
 // "Jun-26" style, as in the pipeline sheet's date columns.
 export function mmmYY(dateStr) {
   if (!dateStr) return ''
