@@ -20,7 +20,7 @@ import { parseLeadLineItems } from '../tenderParse.js'
 import { deterministicLeadRoute, leadTextChunks, mergeLeadResults, cleanDisplayValue, extractLeadIdentityFacts } from '../leadExtraction.js'
 import { scanAttachment, parsedToLeadFields, deterministicPromptContext, mergeDeterministicIntoAi } from '../docScan.js'
 import { customerContactFromText, customerCompanyFromText, customerPhoneFromText, hardenLeadExtraction, isFastTrackLead, isInternalSender, isRegistrationCriticalField, normalizeLeadContactFields, routeOwner, supplyMissing } from '../leadRules.js'
-import { INDIA_LOCATION_GROUPS, indiaLocation, indiaRegionForLocation } from '../indiaLocations.js'
+import { indiaLocation, indiaRegionForLocation } from '../indiaLocations.js'
 import {
   QUOTE_FEE_DOCUMENTS, answeredPatch, clarificationItems, clarificationKindFor,
   clarificationSender, draftClarification, draftPatch, senderLabel, sentPatch,
@@ -34,6 +34,7 @@ import { downloadKycTemplate } from '../kycTemplate.js'
 import { PROJECT_TYPES, oppTypesForProjectType, templatesForSelection, simulatedLead, simulatedCount, SIMULATED_CUSTOMER_SCENARIOS } from '../simulatedLeads.js'
 import { buildLeadProposalData } from '../leadBoq.js'
 import { leadFieldValue as mappedLeadFieldValue, splitBuSegment, leadIdentity } from '../leadFieldMapping.js'
+import { useGlobalLocationSearch } from '../locations.js'
 // Common-mailbox lead inbox: AI parses each inquiry, a human decides whether it
 // becomes an opportunity (Qualify → registration / intake form) or is dropped.
 const PILL = { New: 'Blue', Qualified: 'Amber', Dropped: 'Red', Converted: 'Green' }
@@ -1406,23 +1407,15 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
   const [decisionAutosaving, setDecisionAutosaving] = useState(false)
   const [locationSearch, setLocationSearch] = useState('')
   const locationQuery = locationSearch.trim().toLowerCase()
-  const filteredLocationGroups = locationQuery
-    ? INDIA_LOCATION_GROUPS.map(group => ({
-      ...group,
-      locations: group.locations.filter(item => `${item.city} ${item.state}`.toLowerCase().includes(locationQuery)),
-    })).filter(group => group.locations.length)
-    : INDIA_LOCATION_GROUPS
-  const filteredLocations = filteredLocationGroups.flatMap(group => group.locations)
+  const locationSearchState = useGlobalLocationSearch(locationQuery)
+  const filteredLocations = locationSearchState.matches
   const visibleLocations = filteredLocations.slice(0, 50)
   const selectedLocation = indiaLocation(decisionDraft.location)
   const [eucLocationSearch, setEucLocationSearch] = useState(() => initialDecisions().eucLocation || '')
   const [eucLocationOpen, setEucLocationOpen] = useState(false)
   const eucLocationQuery = eucLocationSearch.trim().toLowerCase()
-  const eucLocationMatches = eucLocationQuery
-    ? INDIA_LOCATION_GROUPS.flatMap(group => group.locations)
-      .filter(item => `${item.city} ${item.state}`.toLowerCase().includes(eucLocationQuery))
-      .slice(0, 50)
-    : []
+  const eucLocationSearchState = useGlobalLocationSearch(eucLocationQuery)
+  const eucLocationMatches = eucLocationSearchState.matches
 
   // Re-read the mail (plus whatever documents are now on the lead).
   // `keepDecisions` is the automatic path taken after a document is added: the
@@ -2007,8 +2000,8 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
     } finally { setResponseBusy(false) }
   }
 
-  const updateDecisionRegion = (location) => {
-    const mappedRegion = indiaRegionForLocation(location, store.config) || (location.trim() ? 'Unclassified leads' : '')
+  const updateDecisionRegion = (location, selectedRegion = '') => {
+    const mappedRegion = selectedRegion || indiaRegionForLocation(location, store.config) || (location.trim() ? 'Unclassified leads' : '')
     setLocationSearch('')
     setDecisionDraft(previous => ({
       ...previous,
@@ -2037,7 +2030,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
   }
 
   const selectEucLocation = (item) => {
-    const value = `${item.city}, ${item.state}`
+    const value = [item.city, item.state, item.country].filter(Boolean).join(', ')
     setEucLocationSearch(value)
     setEucLocationOpen(false)
     updateDecisionField('eucLocation', value)
@@ -2334,8 +2327,9 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
                 onFocus={() => setEucLocationOpen(true)} onChange={e => { setEucLocationOpen(true); updateEucLocation(e.target.value) }} placeholder="Search city or state" aria-label="Search EUC city or state" />{decisionAiStatus('eucLocation')}</div>
               {eucLocationOpen && eucLocationQuery && <div className="location-suggestions euc-location-suggestions" role="listbox" aria-label="EUC location suggestions">
                 {eucLocationMatches.map(item => <button type="button" key={item.value} className="location-suggestion" disabled={lead.status === 'Dropped'}
-                  onClick={() => selectEucLocation(item)}><strong>{item.city}</strong><span>{item.state}</span></button>)}
-                {!eucLocationMatches.length && <span className="location-suggestion-note">No cities found — you can continue with a custom location.</span>}
+                  onClick={() => selectEucLocation(item)}><strong>{item.city}</strong><span>{[item.state, item.country].filter(Boolean).join(' · ')}</span></button>)}
+                {eucLocationSearchState.loading && <span className="location-suggestion-note">Searching worldwide locations…</span>}
+                {!eucLocationSearchState.loading && !eucLocationMatches.length && <span className="location-suggestion-note">No cities found — you can continue with a custom location.</span>}
               </div>}
             </div>
           </label>
@@ -2682,8 +2676,9 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
                     onFocus={() => setEucLocationOpen(true)} onChange={e => { setEucLocationOpen(true); updateEucLocation(e.target.value) }} placeholder="Search city or state" aria-label="Search EUC city or state" />
                   {eucLocationOpen && eucLocationQuery && <div className="location-suggestions euc-location-suggestions" role="listbox" aria-label="EUC location suggestions">
                     {eucLocationMatches.map(item => <button type="button" key={item.value} className="location-suggestion" disabled={lead.status === 'Dropped'}
-                      onClick={() => selectEucLocation(item)}><strong>{item.city}</strong><span>{item.state}</span></button>)}
-                    {!eucLocationMatches.length && <span className="location-suggestion-note">No cities found — you can continue with a custom location.</span>}
+                      onClick={() => selectEucLocation(item)}><strong>{item.city}</strong><span>{[item.state, item.country].filter(Boolean).join(' · ')}</span></button>)}
+                    {eucLocationSearchState.loading && <span className="location-suggestion-note">Searching worldwide locations…</span>}
+                    {!eucLocationSearchState.loading && !eucLocationMatches.length && <span className="location-suggestion-note">No cities found — you can continue with a custom location.</span>}
                   </div>}
                 </div>
               </label>
@@ -2739,16 +2734,14 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
                 <input type="search" value={locationSearch || (selectedLocation ? selectedLocation.city : '')} disabled={lead.status === 'Dropped'}
                   onChange={e => setLocationSearch(e.target.value)} placeholder="Search city or state" aria-label="Search city or state" />
                 <div className="location-suggestions" role="listbox" aria-label="City suggestions">
+                  {locationSearchState.loading && <span className="location-suggestion-note">Searching worldwide locations…</span>}
                   {locationQuery && visibleLocations.map(item => (
                     <button type="button" key={item.value} className="location-suggestion"
-                      disabled={lead.status === 'Dropped'} onClick={() => updateDecisionRegion(item.value)}>
-                      <strong>{item.city}</strong><span>{item.state} · {item.region}</span>
+                      disabled={lead.status === 'Dropped'} onClick={() => updateDecisionRegion(item.value, item.routingRegion)}>
+                      <strong>{item.city}</strong><span>{[item.state, item.country, item.region].filter(Boolean).join(' · ')}</span>
                     </button>
                   ))}
-                  {locationQuery && filteredLocations.length > 50 && (
-                    <span className="location-suggestion-note">Showing 50 of {filteredLocations.length} matches. Refine your search.</span>
-                  )}
-                  {locationQuery && !filteredLocations.length && (
+                  {locationQuery && !locationSearchState.loading && !filteredLocations.length && (
                     <span className="location-suggestion-note">No cities found</span>
                   )}
                   {!locationQuery && selectedLocation && (

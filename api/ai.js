@@ -167,6 +167,16 @@ const tenderExtractSchema = {
   required: ['header', 'guesses', 'risks', 'missing'],
 }
 
+const locationSearchSchema = {
+  type: 'OBJECT',
+  properties: {
+    locations: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+      city: { type: 'STRING' }, state: { type: 'STRING' }, country: { type: 'STRING' }, countryCode: { type: 'STRING' },
+    }, required: ['city', 'country'] } },
+  },
+  required: ['locations'],
+}
+
 const conditionEvidenceSchema = {
   type: 'OBJECT',
   properties: {
@@ -676,6 +686,27 @@ ${cap(p.text, 120000)}
 PRODUCTS: ${cap((p.products || []).join(', '), 600) || 'Various'}`
 }
 
+function locationSearchPrompt(p) {
+  const query = cap(p.query, 80)
+  const limit = Math.min(Math.max(Number(p.limit) || 20, 1), 50)
+  return `You are a worldwide city and place autocomplete service.
+
+Return up to ${limit} real, commonly recognized cities or populated places matching this search:
+${JSON.stringify(query)}
+
+Rules:
+- Search across every country, not only India.
+- Match the query against city, state/region, and country names.
+- Correct obvious typing mistakes and common alternate spellings, for example
+  "tokoyo" should match Tokyo and "mumbay" should match Mumbai.
+- Accept common transliterations and Latin-script spellings of international
+  place names.
+- Do not invent places. Return an empty locations array when there is no reliable match.
+- Prefer major and exact matches first, then useful partial matches.
+- Include the country for every result and the country code when known.
+- Return JSON matching the response schema exactly.`
+}
+
 function approvalCommentPrompt(p) {
   return `${HOUSE}
 
@@ -753,12 +784,12 @@ export default async function handler(req, res) {
   catch { return fail(res, 400, 'AI_BAD_REQUEST', 'Malformed request body') }
   const task = String(input.task || '')
   const payload = input.payload || {}
-  const structuredTasks = new Set(['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'reply.classify', 'tender.extract'])
+  const structuredTasks = new Set(['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'reply.classify', 'tender.extract', 'location.search'])
   const requestedModel = String(input.model || '')
   const model = /^gemini-[\w.-]+$/.test(requestedModel)
     ? (MODEL_ALIASES[requestedModel] || requestedModel)
     : DEFAULT_MODEL
-  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'lead.clarify', 'email.clarification', 'email.followup', 'reply.classify', 'tender.extract'].includes(task)) {
+  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'lead.clarify', 'email.clarification', 'email.followup', 'reply.classify', 'tender.extract', 'location.search'].includes(task)) {
     return fail(res, 400, 'AI_BAD_REQUEST', `Unsupported task: ${task}`)
   }
 
@@ -781,10 +812,11 @@ export default async function handler(req, res) {
                             : task === 'email.followup' ? followupEmailPrompt(payload)
                               : task === 'reply.classify' ? replyClassifyPrompt(payload)
                                 : task === 'tender.extract' ? tenderExtractPrompt(payload)
+                                  : task === 'location.search' ? locationSearchPrompt(payload)
                   : leadPrompt(payload)
   const requestBody = {
     contents: [{ parts: [{ text: prompt }, ...(['lead.extract', 'approval.condition-evidence', 'kyc.extract'].includes(task) ? inlineParts(payload) : [])] }],
-    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'reply.classify', 'tender.extract'].includes(task)
+    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'reply.classify', 'tender.extract', 'location.search'].includes(task)
       ? {
           responseMimeType: 'application/json',
           responseSchema: task === 'lead.fill' ? fillSchema
@@ -802,6 +834,7 @@ export default async function handler(req, res) {
                         : task === 'price-list.inspect' ? priceListInspectionSchema
                           : task === 'reply.classify' ? replyClassifySchema
                             : task === 'tender.extract' ? tenderExtractSchema
+                              : task === 'location.search' ? locationSearchSchema
                 : leadSchema,
         }
       : {},
