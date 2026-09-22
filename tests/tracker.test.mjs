@@ -131,9 +131,19 @@ test('tracker offers all, mine, and specific-owner filtering', () => {
 test('tracker column controls compose filters and support select-all toggling', () => {
   assert.match(tracker, /matchesFilters = \(o, activeFilters = filters, except = null\)/)
   assert.match(tracker, /dateFilteredBase\.filter\(o => matchesFilters\(o\)\)/)
-  assert.match(tracker, /current\[col\.key\] \? undefined : new Set\(values\)/)
+  assert.match(tracker, /toggleSubsetIn\(current\[col\.key\], values, visibleValues\)/)
+  assert.match(tracker, /key=\{filterValueKey\(v\)\}/)
+  assert.match(tracker, /matchesFilterQuery\(v, query\)/)
   assert.match(tracker, /<button type="button" className="tracker-th-control"/)
   assert.match(styles, /table\.sheet th\.th-filter[\s\S]*font-weight: 700/)
+})
+
+test('tracker provides dual-layer global and quick filtering with removable chips', () => {
+  assert.match(tracker, /matchesGlobalSearch\(o, searchTerm, COLS, cellVal\)/)
+  assert.match(tracker, /Filter opportunities by status/)
+  assert.match(tracker, /className="tracker-filter-chips flex flex-wrap items-center gap-1"/)
+  assert.match(tracker, /No opportunities match these filters\./)
+  assert.match(tracker, /placeholder="Search all opportunities…"/)
 })
 
 test('tracker date filter supports specific dates and calendar periods', () => {

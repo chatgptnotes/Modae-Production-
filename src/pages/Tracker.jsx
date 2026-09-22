@@ -12,6 +12,11 @@ import { suggestProbability } from '../insights.js'
 import { MarkWonControl, Modal } from '../ui.jsx'
 import { Icon, ModaeImageLogo } from '../icons.jsx'
 import { workflowStageLabelFor } from '../workflowStage.js'
+import {
+  filterValueKey, filterValueLabel, matchesFilterQuery,
+  toggleSubsetIn, toggleValueIn,
+} from '../columnFilter.js'
+import { colType, compareVals, matchesGlobalSearch, sortLabels } from '../trackerFilters.js'
 
 const DEFAULT_DATE_FILTER = { field: 'orderDate', period: 'all', date: '', from: '', to: '' }
 
@@ -155,6 +160,14 @@ function WrapInput({ value, onChange, title }) {
   )
 }
 
+// A capturing window listener sits on the propagation path of every element's
+// scroll event, so a popover that scrolls its own overflow used to close itself.
+// Harmless while the lists were short; fatal once they scroll or take arrow keys.
+const scrolledInsidePopover = event => {
+  const target = event.target
+  return !!(target && target.nodeType === 1 && target.closest?.('.filter-pop'))
+}
+
 export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const store = useStore()
   const fb = useFormulaBar()
@@ -163,13 +176,15 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
 
   const isSalesRep = OWNERS.includes(store.role)
   const isManager = ROLES[store.role]?.admin || ROLES[store.role]?.commercial
-  const [ownerFilter, setOwnerFilter] = useState(() => initialOwnerFilter || (isSalesRep && !isManager ? 'Mine' : 'All'))
+  const defaultOwnerFilter = initialOwnerFilter || (isSalesRep && !isManager ? 'Mine' : 'All')
+  const [ownerFilter, setOwnerFilter] = useState(defaultOwnerFilter)
 
   const [filters, setFilters] = useState({})           // col key -> Set of allowed display values
   const [sort, setSort] = useState(null)               // { key, dir: 1 | -1 }
   const [openFilter, setOpenFilter] = useState(null)   // { key, x, y } of the open dropdown
   const [filterSearch, setFilterSearch] = useState({})
   const [searchTerm, setSearchTerm] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
   const [dateFilter, setDateFilter] = useState(DEFAULT_DATE_FILTER)
   const [dateFilterDraft, setDateFilterDraft] = useState(DEFAULT_DATE_FILTER)
   const [dateFilterOpen, setDateFilterOpen] = useState(false)
@@ -195,7 +210,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
       if (event.key === 'Escape') setOpenFilter(null)
     }
     const onResize = () => setOpenFilter(null)
-    const onScroll = () => setOpenFilter(null)
+    const onScroll = event => { if (!scrolledInsidePopover(event)) setOpenFilter(null) }
     window.addEventListener('keydown', close)
     window.addEventListener('resize', onResize)
     window.addEventListener('scroll', onScroll, true)
@@ -212,7 +227,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
       if (event.key === 'Escape') setDateFilterOpen(false)
     }
     const onResize = () => setDateFilterOpen(false)
-    const onScroll = () => setDateFilterOpen(false)
+    const onScroll = event => { if (!scrolledInsidePopover(event)) setDateFilterOpen(false) }
     window.addEventListener('keydown', close)
     window.addEventListener('resize', onResize)
     window.addEventListener('scroll', onScroll, true)
@@ -231,7 +246,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const cellVal = (o, key) => {
     switch (key) {
       case 'customerStatus': return customerStatusFor(o)
-      case 'gmK': return gmK(o)
+      case 'gmK': return gmK(o) * 1000
       case 'gmPct': return gmPct(o) || '—'
       case 'valueK': return (o.valueK || 0) * 1000
       case 'cogsK': return (o.cogsK || 0) * 1000
@@ -253,10 +268,11 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     (ownerFilter === 'Mine' ? o.owner === store.role : ownerFilter === 'All' || o.owner === ownerFilter) &&
     (sheet !== 'Old Closed Opps' || o.status === 'Closed'))
 
-  const normalizedSearch = searchTerm.trim().toLowerCase()
-  const searchableBase = normalizedSearch
-    ? base.filter(o => [o.id, o.sellTo, o.oppName].some(value => String(value || '').toLowerCase().includes(normalizedSearch)))
-    : base
+  const searchableBase = base.filter(o => matchesGlobalSearch(o, searchTerm, COLS, cellVal))
+  const statusOptions = [...new Set(all.map(o => o.status).filter(Boolean))].sort()
+  const statusFilteredBase = statusFilter
+    ? searchableBase.filter(o => o.status === statusFilter)
+    : searchableBase
 
   // Filters are derived from the current searchable rows so toolbar search,
   // owner selection, and every column filter always compose predictably.
@@ -274,7 +290,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     const [from, to] = dateFilterState.range
     return (!from || value >= from) && (!to || value <= to)
   }
-  const dateFilteredBase = searchableBase.filter(o => matchesDateFilter(o))
+  const dateFilteredBase = statusFilteredBase.filter(o => matchesDateFilter(o))
 
   // Analytics bars land here pre-filtered via query params (?owner= / ?oppType= / ?bu= / ?stage=).
   const [params, setParams] = useSearchParams()
@@ -305,15 +321,20 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
         return aBlank ? 1 : -1
       }
       if (typeof va === 'number' && typeof vb === 'number') return (va - vb) * dir
-      return String(va).localeCompare(String(vb), undefined, { numeric: true }) * dir
+      return compareVals(va, vb, dir)
     })
   }
 
   const totals = rows.reduce((t, o) => ({ v: t.v + (+o.valueK || 0), c: t.c + (+o.cogsK || 0) }), { v: 0, c: 0 })
   const activeFilterCount = Object.values(filters).filter(value => value instanceof Set).length
     + (dateFilterActive || dateFilterState.error ? 1 : 0)
+    + (searchTerm.trim() ? 1 : 0)
+    + (statusFilter ? 1 : 0)
 
   const clearAllTableState = () => {
+    setSearchTerm('')
+    setStatusFilter('')
+    setOwnerFilter(defaultOwnerFilter)
     setFilters({})
     setSort(null)
     setFilterSearch({})
@@ -510,14 +531,12 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
           .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
     const active = filters[col.key]
     const query = String(filterSearch[col.key] || '').trim().toLowerCase()
-    const visibleValues = query ? values.filter(v => v.toLowerCase().includes(query)) : values
+    const visibleValues = query ? values.filter(v => matchesFilterQuery(v, query)) : values
     const isChecked = v => !active || active.has(v)
     const toggle = v => {
       setFilters(current => {
         const currentAllowed = current[col.key]
-        const next = new Set(currentAllowed || values)
-        if (next.has(v)) next.delete(v); else next.add(v)
-        return { ...current, [col.key]: values.every(x => next.has(x)) ? undefined : next }
+        return { ...current, [col.key]: toggleValueIn(currentAllowed, values, v) }
       })
     }
     const close = () => setOpenFilter(null)
@@ -534,21 +553,22 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
       <>
         <div className="filter-overlay" onClick={close} />
         <div className="filter-pop" style={{ position: 'fixed', left: pos.x, top: pos.y }} onClick={e => e.stopPropagation()} role="dialog" aria-label={`${col.label} sort and filter`}>
-          <button type="button" className="fitem" onClick={() => sortColumn(1)}>⇩ Sort A to Z</button>
-          <button type="button" className="fitem" onClick={() => sortColumn(-1)}>⇧ Sort Z to A</button>
+          <button type="button" className="fitem" onClick={() => sortColumn(1)}>⇩ Sort {sortLabels(colType(col.key)).asc}</button>
+          <button type="button" className="fitem" onClick={() => sortColumn(-1)}>⇧ Sort {sortLabels(colType(col.key)).desc}</button>
           <button type="button" className="fitem" onClick={clearColumnFilter}>✕ Clear this column filter</button>
           <hr />
           <input className="filter-search" type="search" placeholder={`Search ${col.label}`} value={filterSearch[col.key] || ''}
             onChange={e => setFilterSearch({ ...filterSearch, [col.key]: e.target.value })} />
           <label className="fitem">
-            <input type="checkbox" checked={!active} onChange={() => setFilters(current => ({
-              ...current,
-              [col.key]: current[col.key] ? undefined : new Set(values),
-            }))} /> (Select All)
+            <input type="checkbox" checked={visibleValues.length > 0 && visibleValues.every(v => !active || active.has(v))}
+              onChange={() => setFilters(current => ({
+                ...current,
+                [col.key]: toggleSubsetIn(current[col.key], values, visibleValues),
+              }))} /> (Select All)
           </label>
           {visibleValues.map(v => (
-            <label className="fitem" key={v || '(blank)'}>
-              <input type="checkbox" checked={isChecked(v)} onChange={() => toggle(v)} /> {v === '' ? '(Blanks)' : v}
+            <label className="fitem" key={filterValueKey(v)}>
+              <input type="checkbox" checked={isChecked(v)} onChange={() => toggle(v)} /> {filterValueLabel(v)}
             </label>
           ))}
         </div>
@@ -616,6 +636,20 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     ? `${OPPORTUNITY_DATE_FIELDS.find(field => field.key === dateFilter.field)?.label || 'Date'} · ${dateFilterState.range[0] || '…'} → ${dateFilterState.range[1] || '…'}`
     : 'Choose a date field and period'
 
+  const activeChips = [
+    searchTerm.trim() && { id: 'search', label: `Search: ${searchTerm.trim()}`, remove: () => setSearchTerm('') },
+    ownerFilter !== defaultOwnerFilter && { id: 'owner', label: `Owner: ${ownerFilter === 'Mine' ? 'My opportunities' : displayRole(ownerFilter)}`, remove: () => setOwnerFilter(defaultOwnerFilter) },
+    statusFilter && { id: 'status', label: `Status: ${statusFilter}`, remove: () => setStatusFilter('') },
+    dateFilterActive && { id: 'date', label: dateFilterSummary, remove: clearDateFilter },
+    ...Object.entries(filters)
+      .filter(([, allowed]) => allowed instanceof Set)
+      .map(([key, allowed]) => ({
+        id: `column-${key}`,
+        label: `${COLS.find(col => col.key === key)?.label || key}: ${allowed.size} selected`,
+        remove: () => setFilters(current => ({ ...current, [key]: undefined })),
+      })),
+  ].filter(Boolean)
+
   return (
     <div className="page tracker-page">
       <h2>Opportunities {sheet === 'Old Closed Opps' && '— Old Closed Opps'}</h2>
@@ -625,10 +659,17 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
             {p === 'All' ? 'All Opportunities' : p === 'Mine' ? 'My Opportunities' : displayRole(p)}
           </option>)}
         </select>
-        <label className="tracker-search" aria-label="Search opportunities">
+        <label className="tracker-search" aria-label="Search all opportunities">
           <Icon name="search" size={14} />
-          <input type="search" placeholder="Search opportunity ID, customer or name" value={searchTerm}
+          <input type="search" placeholder="Search all opportunities…" value={searchTerm}
             onChange={e => setSearchTerm(e.target.value)} />
+        </label>
+        <label className="tracker-quick-filter">
+          <span>Status</span>
+          <select aria-label="Filter opportunities by status" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+            <option value="">All statuses</option>
+            {statusOptions.map(status => <option key={status} value={status}>{status}</option>)}
+          </select>
         </label>
         <button type="button" className={`tracker-date-filter-button${dateFilterActive ? ' active' : ''}`} onClick={openDateFilterMenu}
           aria-haspopup="dialog" aria-expanded={dateFilterOpen} title={dateFilterSummary}>
@@ -648,6 +689,16 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
             />
             Show all
           </label>
+        )}
+        {activeChips.length > 0 && (
+          <div className="tracker-filter-chips flex flex-wrap items-center gap-1" aria-label="Active filters">
+            {activeChips.map(chip => (
+              <button key={chip.id} type="button" className="tracker-filter-chip inline-flex items-center gap-1" onClick={chip.remove}
+                title={`Remove ${chip.label}`} aria-label={`Remove ${chip.label}`}>
+                <span>{chip.label}</span><span aria-hidden="true">×</span>
+              </button>
+            ))}
+          </div>
         )}
         <span className="spacer" />
         {activeFilterCount > 0 && (
@@ -880,6 +931,15 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                 </td>
               </tr>
             ))}
+            {!rows.length && (
+              <tr>
+                <td colSpan={COLS.length + 1} className="tracker-empty-state">
+                  <strong>No opportunities match these filters.</strong>
+                  <span>Try changing the search or removing an active filter.</span>
+                  <button type="button" onClick={clearAllTableState}>Clear all filters</button>
+                </td>
+              </tr>
+            )}
           </tbody>
           <tfoot>
             <tr>

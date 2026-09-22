@@ -7,7 +7,7 @@ WinTrack / ModAE sales platform, measured against the two official process diagr
 | **Reference 01** | `branding/Official Lead Management Workflow (2).pdf` — *Expected Lead Management Workflow Post Implementation* |
 | **Reference 02** | `branding/Opportunity Workflow 7 Jun 2026.jpeg` — *02 – Opportunity Management Workflow (FINAL)* |
 | **Presentation copy** | `branding/Workflow Conformance Review.pdf` (8 pages, ModAE letterhead) |
-| **Date** | 18 August 2026 · Diagram 02 re-reviewed 19 August 2026 · §5 closed 19 August 2026 |
+| **Date** | 18 August 2026 · Diagram 02 re-reviewed 19 August · §5 closed 19 August · **Diagram 01 re-reviewed and the service flow re-reviewed 22 September 2026** |
 | **Scope** | Full source review — pages, state store, gating rules, approval logic, AI tasks, integrations |
 
 ## Headline finding
@@ -29,7 +29,18 @@ scheduler (Tier 3 below).
 
 > The original 18 Aug assessment read "~35% conformant… the diagram's primary axis does not
 > exist in the data model". That is no longer true and the Diagram 02 section below has been
-> rewritten. Diagram 01 has **not** been re-reviewed since 18 August.
+> rewritten.
+
+**Diagram 01 re-reviewed 22 September 2026.** Six of the eleven gaps recorded on 18 August
+have since been closed and the table below has been corrected — L1, L3, L5, L6, L7 and L10.
+The August text was still being quoted as current a month later, which is how the service
+review came to under-report its own intake score; each surviving row now carries the
+file:line that was checked on 22 September.
+
+**Service flow (Diagram 02 §4) closed 22 September 2026.** Measured against the client's
+"Service Lead Workflow Process" spec — the Gemini thread of 19 September plus the 18
+September review meeting — every requirement is now implemented. See the 22 September
+section at the foot of this document.
 
 ---
 
@@ -53,17 +64,17 @@ scheduler (Tier 3 below).
 
 | Ref | Diagram element | Reality | Severity |
 |---|---|---|---|
-| **L1** | Seven lead sources (Website, OEM Referral, WhatsApp, Phone, GeM/Tender, Networking, Existing Green) | One free-text `source`, always `'Common mailbox'`. Zero hits for WhatsApp / phone call / networking / OEM referral in `src/` | High |
+| ~~**L1**~~ | ~~Seven lead sources (Website, OEM Referral, WhatsApp, Phone, GeM/Tender, Networking, Existing Green)~~ | **Closed.** All seven are `LEAD_SOURCES` (`src/seed.js:60`) and selectable on the lead (`src/pages/Inbox.jsx:816`) | — |
 | **L2** | L-02 Initial Review, L-03 Business Relevance Assessment, D-01 Worth Pursuing? | Collapsed into one "Qualify lead" button. No stage names, no record that a review occurred | Medium |
-| **L3** | L-05-AI region → owner routing | Rules exist as config text (`src/seed.js:993`) and as an LLM prompt hint only. **No region field on a lead.** Fallback routes by opportunity *type* (`ownerForOppType`, `src/seed.js:548`) — a different rule to the one drawn. Override "needs LJS/AH + reason" is display text; the dropdown is freely editable with no role check | High |
+| ~~**L3**~~ | ~~L-05-AI region → owner routing~~ | **Substantially closed.** `routeOwner()` (`src/leadRules.js:142`) resolves the owner from `ownershipRules`, and an unmatched region falls to the diagram's "Unclassified → LJS" row rather than to the caller's guess. `src/pages/Register.jsx:56` routes on `lead.region \|\| lead.location`. *Remaining:* region is read from the location rather than captured as its own field, and the owner dropdown still has no role check on override | Low |
 | **L4** | Teams chatbot confirms every Human Validation step | No Teams integration. `src/pages/Register.jsx:222` states it is simulated. Validation happens in-app instead | High |
 | ~~**L11**~~ | ~~AI-03 drafts the clarification request~~ | **Closed 20 Aug.** `src/leadClarification.js` and the `lead.clarify` task draft it; the inbox edits it and a human sends it. Nothing dispatches on its own | — |
-| **L5** | Discard if KYC / fee not received within one week | **No scheduler exists in the codebase.** Admin reminder toggles have no engine. A lead waits indefinitely | High |
-| **L6** | Discarded leads → separate archived Lead Database | Same `state.leads` array with `status:'Dropped'`. No archive, no screen consumes them | Medium |
-| **L7** | Fast Track Path for existing Green customers | `fastTrack:true` set on one seed lead, **read by nothing**. Green follows the identical path | Medium |
+| ~~**L5**~~ | ~~Discard if KYC / fee not received within one week~~ | **Closed.** `expiredLeadDeadline()` (`src/leadRules.js:228`) and `processLeadDeadlines()` (`src/store.jsx:901`) drop the lead with a reason; run on load and on window focus (`src/store.jsx:2126`). Still client-side, so it fires when someone opens the app rather than on a server clock | — |
+| ~~**L6**~~ | ~~Discarded leads → separate archived Lead Database~~ | **Closed.** `state.leadArchive` is its own collection (`src/appState.js:254`), written on expiry with `archivedAt` and `archiveReason`, and read by the Inbox and Workbench | — |
+| ~~**L7**~~ | ~~Fast Track Path for existing Green customers~~ | **Closed.** `isFastTrackLead()` (`src/leadRules.js:160`) is config-driven and consumed by the Inbox at four points (`src/pages/Inbox.jsx:1838`, `:2399`, `:2771`, `:2854`) | — |
 | **L8** | KYC form — GST, PAN, cancelled cheque, EFT mandate | Checklist of document *names* only. No number capture, no validation, uploads simulated | Medium |
 | **L9** | AI-07 register in CRM & Sales Pipeline (Stage 1) | Labelled "Simulated". The app *is* the CRM — needs a client decision | Low |
-| **L10** | "All AI actions … logged for a complete audit trail" | Audit logs **human actions only**; no model, prompt or response recorded. Capped at 500 entries, client-writable | Medium |
+| ~~**L10**~~ | ~~"All AI actions … logged for a complete audit trail"~~ | **Closed for content.** `aiAuditDetail()` (`src/leadRules.js:233`) records provider, model, action and result, logged as 'AI action' (`src/store.jsx:923`). The log is append-only and no longer capped. *Remaining:* it is still browser state, so it is client-writable | Low |
 
 **Also:** `nextOppId` now resets the serial per month, but still computes from browser
 state — two concurrent registrations can collide. No DB sequence or uniqueness constraint
@@ -469,3 +480,53 @@ Ranked. None are blocking, all are real.
 16. `MODAE_COLORS` claims to be the source of truth but has no `primaryFill` or
     `primaryInk` — the two tokens the accessibility fix invented live only in
     CSS.
+
+---
+
+## 22 September 2026 — Service flow closed against the client's spec
+
+Reference: the client's "Service Lead Workflow Process" thread (19 September) and the
+WinTrack review meeting of 18 September. Measured against the 30 requirements that
+thread sets out, every stage is now implemented. The two lanes it names are Path A
+(standard rate sheet) and Path B (customised proposal / SoW / AMC).
+
+### Delivered
+
+| Spec requirement | Implementation |
+|---|---|
+| Path A issues the published rate schedule **pre-visit**, on its own | `src/workbench/RateSheetPanel.jsx` — reuses the `ModAE Services Rate Schedule FY2025-26.pdf` enclosure the proposal already carried (`enclosuresFor`, `src/proposalDoc.js:739`), sends it standalone, logs it as `kind: 'rate-sheet'`, and re-issues with an incrementing issue number on renegotiation |
+| Invoice on **actual engineer days**, with weekday / weekend / OT premiums | `src/serviceRates.js` — the cost build-up was extracted out of `WbService.jsx`, so the estimate and the bill compute from one function. Actuals overlay the quoted quantities per field (`actualQuantities`); `ServiceExecutionPanel` captures them, `ServiceInvoicePanel` bills them |
+| Mid-visit escalation, Path A → Path B | `src/workbench/ServiceReportPanel.jsx` — the engineer flags "Detailed BOQ / SoW required", which flips `offerMode`, sets `surveyRequired` and raises the survey from the report text |
+| §5 layered approval applies to Service | `src/gates.js` — the blanket `route === 'Service'` bypass is gone. Technical (LJS or AN), Commercial (AH, on deviations) and the ₹10 L × 50% matrix in `commercialGate()` now apply |
+| Published rates carry no approval; a discount does | `serviceMatrixExempt()` (`src/gates.js:174`) exempts an undiscounted Path A offer. A discount lands on `rateDiscountPct` and routes through the existing `pricingThresholdExceptions()` — spec Scenario 2 |
+| Requirement source: Site visit / SoW / AMC | A confirmed field on the service estimate (`REQUIREMENT_SOURCES`, `src/workbench/WbService.jsx`) that decides the lane and derives `surveyRequired`. The old regex over `oppName` is demoted to the AI's opening suggestion. AMC is first-class again rather than free text |
+| Domestic vs international rates | `sheetFor()` / `sheetForLocation()` (`src/serviceRates.js`) derive the sheet from the site address; the manual toggle remains an override |
+| Rate sheets, multipliers and limits from the admin panel | One dataset. The standalone role table was folded into `rateSheets[sheet].roles`, with overlapping roles reading the calculator's own rates via `rateKey` so the published table and the bill cannot drift. Edited in Admin (`ServiceRateSheetEditor`) through the audited `store.updateRateSheets` |
+| Quote validity and idle follow-up (Scenario 6) | `computeAlerts()` (`src/monitoring.js`) raises `rate-sheet-idle` after 7 days and `rate-sheet-expiry` past `config.rateSheetValidityDays` |
+
+### Decisions recorded
+
+- The §5 matrix applies to **all** service work, not Path B only — client decision,
+  reversing the "one combined review" simplification of 19 August.
+- An opportunity that already carries a `'Service offer review'` keeps running on it
+  (`legacyServiceReview`, `src/gates.js`), so nothing in flight was stranded.
+- The rate schedule dispatches **before** any internal approval: it is a published rate
+  card, not a negotiated price.
+
+### Defect found and fixed during this review
+
+**Contractual boilerplate had been silently paraphrased.** Commit `a9e1704`
+("chore: commit remaining workspace updates", 3 September) rewrote eight strings in
+`DOC_TERM_TEXT` (`src/proposalDoc.js`) that commit `ba8f3d8` ("Act on the 20 August
+client review") had transcribed from ModAE's own sample proposals — price basis,
+freight liability, delivery period, payment milestones, site services, the escalation
+clause and the standard-terms reference. Only two were test-covered; the rest were going
+out on every proposal. All are restored and now pinned by a test, because these are
+commercial terms and changing one is a client decision, not an editorial one.
+
+### Still open
+
+- **Region is derived, not captured.** The rate sheet is chosen from the site address
+  rather than from a region field on the lead (see L3 above).
+- **No browser walkthrough.** The work is covered by tests and a clean build; the three
+  branches have not been clicked through by a person.

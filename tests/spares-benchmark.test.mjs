@@ -191,3 +191,25 @@ test('the placeholder prices are flagged as placeholders', () => {
   assert.match(block, /02_7425309-Buyers Speces\.pdf/)
   assert.match(block, /Spares Firm Offer Rev00 2May2026\.xlsx/)
 })
+
+// The contractual boilerplate is transcribed from ModAE's own sample proposals
+// and was signed off in the 20 August client review. It was silently paraphrased
+// once by a catch-all "chore" commit — eight strings, of which only two were
+// covered — so every clause is pinned here. These are commercial terms: freight
+// liability, payment milestones and price escalation. Changing one is a client
+// decision, not an editorial one, so a failure here means ask, not rewrite.
+test('the contractual boilerplate matches the client-reviewed sample wording', async () => {
+  const { DOC_TERM_TEXT } = await import('../src/proposalDoc.js')
+  const expected = {
+    fxEscalation: 'Any price escalation until delivery of the goods due to exchange rate variations shall be to your account.',
+    priceBasis: 'Ex Works, Bangalore. All taxes and duties shall be extra as applicable.',
+    freightCustomer: 'Freight and insurance are to the customer’s account.',
+    deliverySpares: '16 weeks after receipt of purchase order and advance payment.',
+    siteServices: 'Site services, if required, are additional and chargeable as per the ModAE standard rate schedule.',
+    paymentSpares: '50% advance along with the purchase order, and the balance 50% plus applicable taxes on material readiness.',
+    standardTerms: 'Other terms and conditions: as per ModAE India standard terms and conditions of sale.',
+  }
+  for (const [key, text] of Object.entries(expected)) {
+    assert.equal(DOC_TERM_TEXT[key], text, `${key} must keep its client-reviewed wording`)
+  }
+})

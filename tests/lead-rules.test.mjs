@@ -58,7 +58,8 @@ test('lead deadlines are generated from configurable rules', () => {
   const lead = { id: 'LD-1', ts: '2026-08-01T00:00:00.000Z', customerStatus: 'Blue', ai: { missing: ['GST'] } }
   const rows = deadlineForLead(lead, config)
   assert.deepEqual(rows.map(r => r.type), ['kyc'])
-  assert.equal(rows[0].dueAt, '2026-08-08T00:00:00.000Z')
+  // Stamped in IST, so compare the instant rather than its representation.
+  assert.equal(new Date(rows[0].dueAt).toISOString(), '2026-08-08T00:00:00.000Z')
   assert.equal(expiredLeadDeadline(lead, config, new Date('2026-08-09T00:00:00.000Z')).type, 'kyc')
 })
 

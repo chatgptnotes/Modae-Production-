@@ -1,3 +1,5 @@
+@import "tailwindcss/utilities.css";
+
 * { box-sizing: border-box; }
 
 /* -------------------------------------------------------------------------
@@ -6094,6 +6096,66 @@ html, body { overflow-x: hidden; max-width: 100%; }
 }
 .tracker-page > .toolbar .tracker-search {
   min-width: min(420px, 100%);
+}
+.tracker-page .tracker-quick-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+.tracker-page .tracker-quick-filter select {
+  min-height: 30px;
+  padding: 4px 24px 4px 8px;
+  border: 1px solid var(--border-default);
+  border-radius: 5px;
+  background: var(--surface-default);
+  color: var(--text-primary);
+  font-size: 12px;
+}
+.tracker-page .tracker-filter-chips {
+  flex: 1 1 100%;
+  min-width: 0;
+  margin-top: -2px;
+}
+.tracker-page .tracker-filter-chip {
+  min-height: 25px;
+  padding: 3px 7px 3px 9px;
+  border: 1px solid var(--primary-accent);
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary-deep);
+  font-size: 11px;
+  font-weight: 700;
+}
+.tracker-page .tracker-filter-chip:hover,
+.tracker-page .tracker-filter-chip:focus-visible {
+  background: var(--select-fill);
+  outline: 2px solid var(--xl-green);
+  outline-offset: 1px;
+}
+.tracker-page .tracker-empty-state {
+  padding: 56px 20px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+.tracker-page .tracker-empty-state strong,
+.tracker-page .tracker-empty-state span {
+  display: block;
+}
+.tracker-page .tracker-empty-state strong { color: var(--text-primary); font-size: 14px; }
+.tracker-page .tracker-empty-state span { margin-top: 5px; font-size: 12px; }
+.tracker-page .tracker-empty-state button {
+  margin-top: 14px;
+  padding: 6px 10px;
+  border: 1px solid var(--primary-accent);
+  border-radius: 5px;
+  background: var(--primary-soft);
+  color: var(--primary-deep);
+  font-size: 12px;
+  font-weight: 700;
 }
 .tracker-page > .toolbar .tracker-show-all {
   gap: 8px;

@@ -32,6 +32,7 @@ test('verification deadline starts when the customer request is sent', () => {
   const lead = { ts: '2026-08-01T00:00:00.000Z', verification: { requestedAt: '2026-08-10T00:00:00.000Z' } }
   const deadline = verificationDeadline(lead, 'Blue', { leadDeadlines: { kycDays: 7 } }, new Date('2026-08-12T00:00:00.000Z'))
   assert.equal(deadline.requestedAt, '2026-08-10T00:00:00.000Z')
-  assert.equal(deadline.dueAt, '2026-08-17T00:00:00.000Z')
+  // Stamped in IST, so compare the instant rather than its representation.
+  assert.equal(new Date(deadline.dueAt).toISOString(), '2026-08-17T00:00:00.000Z')
   assert.equal(deadline.remaining, 5)
 })

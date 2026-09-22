@@ -81,9 +81,15 @@ export function clarificationSender(lead, users = [], config = {}) {
   }
 }
 
-export const senderLabel = sender => (sender.rule === 'assigned-owner'
-  ? `${sender.name} (${displayRole(sender.role)}) — lead is assigned`
-  : 'Common mailbox — lead is not assigned yet')
+// Role names are configurable and are now set to the people's own names, so
+// displayRole('RS') returns "R. Sundaram" — the same string as sender.name. The
+// parenthetical is only worth showing when it actually adds something.
+export const senderLabel = sender => {
+  if (sender.rule !== 'assigned-owner') return 'Common mailbox — lead is not assigned yet'
+  const role = displayRole(sender.role)
+  const qualifier = role && role !== sender.name ? ` (${role})` : ''
+  return `${sender.name}${qualifier} — lead is assigned`
+}
 
 // ------------------------------------------------------------- what to draft
 export function clarificationKindFor(lead, customerStatus = lead?.customerStatus || '') {

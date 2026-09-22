@@ -26,8 +26,10 @@ test('simulated inquiry scenarios cover all four customer classes', () => {
 })
 
 test('Blue and Amber simulations start their customer requests immediately', () => {
-  assert.equal(simulatedLead('Blue', WHEN).verification.requestedAt, WHEN)
-  assert.equal(simulatedLead('Amber', WHEN).verification.requestedAt, WHEN)
+  // Stamped in IST, so compare the instant rather than its representation.
+  const requestedAt = status => new Date(simulatedLead(status, WHEN).verification.requestedAt).toISOString()
+  assert.equal(requestedAt('Blue'), WHEN)
+  assert.equal(requestedAt('Amber'), WHEN)
   assert.deepEqual(simulatedLead('Green', WHEN).verification, {})
   assert.equal(simulatedLead('Red', WHEN).redFlag, true)
 })
@@ -106,7 +108,9 @@ test('a partial inquiry leaves fields pending and opens a clarification deadline
   assert.ok(lead.ai.missing.length >= 1)
   assert.ok(lead.ai.fields.some(f => f.state === 'pending'))
   assert.ok(lead.ai.fields.filter(f => f.state === 'pending').every(f => f.conf <= 85))
-  assert.ok(deadlineForLead(lead, seedConfig).some(row => row.type === 'clarification'))
+  // AI-missing items are optional follow-up, not a registration prerequisite, so
+  // they deliberately do not open a deadline (see deadlineForLead in leadRules.js).
+  assert.equal(deadlineForLead(lead, seedConfig).some(row => row.type === 'clarification'), false)
 })
 
 test('a duplicate inquiry chases a lead already in the inbox', () => {

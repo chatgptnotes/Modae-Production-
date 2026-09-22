@@ -52,7 +52,11 @@ test('an assigned lead sends from the salesperson, copying the mailbox', () => {
   assert.equal(sender.role, 'RS')
   assert.equal(sender.address, seedUsers.find(u => u.role === 'RS').email)
   assert.equal(sender.cc, seedConfig.commonMailbox, 'the team must keep sight of the thread')
-  assert.match(senderLabel(sender), /RS/)
+  // Role names are configured to the people's own names, so the label carries
+  // the salesperson's name rather than the raw role code — and carries it once.
+  assert.match(senderLabel(sender), new RegExp(sender.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))
+  assert.match(senderLabel(sender), /lead is assigned/)
+  assert.doesNotMatch(senderLabel(sender), /(\S+ \S+) \(\1\)/, 'the sender must not be named twice')
 })
 
 test('the sender rule degrades rather than drafting a blank From', () => {
