@@ -104,6 +104,7 @@ export async function listUserFiles({ recordType, recordId, folder = '' }) {
     .select('id, record_type, record_id, folder, file_name, file_type, file_size, is_demo, created_at')
     .eq('record_type', String(recordType || 'record'))
     .eq('record_id', String(recordId || ''))
+  if (!isDemoMode()) query = query.eq('is_demo', false)
   if (folder !== null) query = query.eq('folder', String(folder || ''))
   const { data, error } = await query.order('created_at', { ascending: true })
   if (error) throw error
@@ -112,13 +113,14 @@ export async function listUserFiles({ recordType, recordId, folder = '' }) {
 
 export async function getUserFile({ recordType, recordId, folder = '', fileName }) {
   const client = requireClient()
-  const { data, error } = await client.from('user_files')
+  let query = client.from('user_files')
     .select('id, record_type, record_id, folder, file_name, file_type, file_size, is_demo, created_at, file_data')
     .eq('record_type', String(recordType || 'record'))
     .eq('record_id', String(recordId || ''))
     .eq('folder', String(folder || ''))
     .eq('file_name', String(fileName || ''))
-    .maybeSingle()
+  if (!isDemoMode()) query = query.eq('is_demo', false)
+  const { data, error } = await query.maybeSingle()
   if (error) throw error
   if (!data) return null
   const bytes = fromBytea(data.file_data)

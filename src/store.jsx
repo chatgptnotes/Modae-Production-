@@ -31,11 +31,6 @@ import {
 import { releaseState, transitionBlockers } from './gates.js'
 
 const StoreCtx = createContext(null)
-// One-time maintenance migration requested for the current workspace. The
-// fixed key/cutoff are intentional: this must never become a recurring
-// age-based deletion policy for future opportunities.
-const ONE_TIME_OPP_CLEANUP_KEY = 'opportunities-before-2026-09-11-v2'
-const ONE_TIME_OPP_CLEANUP_CUTOFF = '2026-09-11'
 const CLARIFICATION_FIELD_KEYS = new Set([
   'oppName', 'rfqNumber', 'sellTo', 'category', 'location', 'customerStatus',
   'eucName', 'eucLocation', 'oppType', 'bu', 'segment', 'solution',
@@ -198,7 +193,6 @@ export function StoreProvider({ children }) {
   // hydratedRef gates server saves until the boot fetch resolves, so a fresh
   // device can't clobber good server data with its local seeds.
   const hydratedRef = useRef(!datastore.dbEnabled())
-  const oneTimeCleanupStartedRef = useRef(false)
   const lastSavedRef = useRef({}) // per-slice snapshot of what the server has
   const saveTimerRef = useRef(null)
   // What this device booted from. The boot fetch resolves *after* the app is
@@ -2071,29 +2065,6 @@ export function StoreProvider({ children }) {
       window.location.reload()
     },
   }
-
-  // Run the requested cleanup once, after shared state hydration. It uses the
-  // normal deleteOpportunity path so proposals, files, communications,
-  // approvals, audit entries, and SharePoint folder handling stay consistent.
-  useEffect(() => {
-    if (!hydratedRef.current || oneTimeCleanupStartedRef.current) return
-    if (state.oneTimeCleanups?.[ONE_TIME_OPP_CLEANUP_KEY]) return
-    oneTimeCleanupStartedRef.current = true
-    const candidates = stateRef.current.opportunities.filter(o =>
-      o.createDate && o.createDate < ONE_TIME_OPP_CLEANUP_CUTOFF)
-    candidates.forEach(o => api.deleteOpportunity(o.id))
-    setState(s => withAudit({
-      ...s,
-      oneTimeCleanups: {
-        ...(s.oneTimeCleanups || {}),
-        [ONE_TIME_OPP_CLEANUP_KEY]: {
-          completedAt: new Date().toISOString(),
-          deletedCount: candidates.length,
-        },
-      },
-    }, 'One-time opportunity cleanup completed', 'maintenance',
-    `${candidates.length} opportunities created before ${ONE_TIME_OPP_CLEANUP_CUTOFF} removed`))
-  }, [state])
 
   // Deadline processing is idempotent and runs on boot/focus so the browser
   // remains responsive while Supabase-backed state is synchronised. A hosted
