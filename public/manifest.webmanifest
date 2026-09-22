@@ -3,7 +3,7 @@
   "short_name": "ModAE",
   "description": "ModAE sales opportunity, approval and proposal workspace.",
   "id": "/",
-  "start_url": "./#/home",
+  "start_url": "/opportunities",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#282828",

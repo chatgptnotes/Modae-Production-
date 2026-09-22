@@ -104,7 +104,7 @@ export function getAccount() {
   return currentAccount
 }
 
-// Popup flow — redirect auth collides with HashRouter URLs.
+// Popup flow — redirect auth must preserve the browser-router URL.
 export async function signIn() {
   const app = await ensureMsal()
   const res = await app.loginPopup({ scopes: SCOPES })

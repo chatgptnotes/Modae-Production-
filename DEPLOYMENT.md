@@ -110,7 +110,7 @@ demo data and can never write to either real database.
 
 ## Notes
 
-- `vercel.json` rewrites everything to `/index.html`; the app is a hash-router
+- `vercel.json` rewrites everything to `/index.html`; the app is a browser-router
   SPA, so a deep link refresh works without further config.
 - `public/sw.js` is network-first for navigations, so a new deploy is picked up
   on the next load rather than being pinned by the service worker.

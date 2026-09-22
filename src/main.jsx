@@ -1,6 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { HashRouter } from 'react-router-dom'
+import { BrowserRouter } from 'react-router-dom'
 import App from './App.jsx'
 import ErrorBoundary from './ErrorBoundary.jsx'
 import { StoreProvider } from './store.jsx'
@@ -11,10 +11,16 @@ import './styles.css'
 
 registerSW()
 
+// Migrate links created by the previous hash-routing implementation. A route
+// hash starts with "#/"; ordinary in-page anchors such as "#forecast-details"
+// are intentionally left alone.
+const legacyRoute = window.location.hash.match(/^#(\/.*)$/)?.[1]
+if (legacyRoute) window.history.replaceState(null, '', legacyRoute)
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <ErrorBoundary>
-      <HashRouter>
+      <BrowserRouter>
         <StoreProvider>
           <FormulaBarProvider>
             <DrawerProvider>
@@ -22,7 +28,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
             </DrawerProvider>
           </FormulaBarProvider>
         </StoreProvider>
-      </HashRouter>
+      </BrowserRouter>
     </ErrorBoundary>
   </React.StrictMode>,
 )

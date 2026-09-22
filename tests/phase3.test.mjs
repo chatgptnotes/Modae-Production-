@@ -108,9 +108,17 @@ test('dashboard and Phase 1 UI wiring are present', () => {
 test('PWA metadata and service worker registration are configured', () => {
   const manifest = JSON.parse(read('public/manifest.webmanifest'))
   assert.equal(manifest.display, 'standalone')
-  assert.equal(manifest.start_url, './#/home')
+  assert.equal(manifest.start_url, '/opportunities')
   assert.ok(manifest.icons.length >= 2)
   assert.match(read('src/pwa.js'), /serviceWorker\.register/)
+})
+
+test('browser routing uses clean URLs and migrates legacy route hashes', () => {
+  const main = read('src/main.jsx')
+  assert.match(main, /import \{ BrowserRouter \} from 'react-router-dom'/)
+  assert.doesNotMatch(main, /HashRouter/)
+  assert.match(main, /window\.location\.hash\.match\(\/\^#\(\\\/\.\*\)\$\/\)/)
+  assert.match(main, /window\.history\.replaceState\(null, '', legacyRoute\)/)
 })
 
 test('user-facing admin setup no longer instructs localhost redirect URLs', () => {
