@@ -31,13 +31,6 @@ function CostingNumberInput({ value, onChange, onBlur, ...props }) {
   const focusedRef = useRef(false)
 
   useEffect(() => {
-    lines.forEach(line => {
-      const reconciled = reconcileCatalogueMatch(line, store.priceLists)
-      const changed = ['pn', 'desc', 'priceState', 'listPrice', 'listUnitPrice', 'priceSourceSuggested'].some(key => reconciled[key] !== line[key])
-      if (changed) store.updateSparesLine(line.id, reconciled)
-    })
-  }, [lines, store.priceLists])
-  useEffect(() => {
     if (!focusedRef.current) setDraft(normalizeNumericDraft(value))
   }, [value])
 
@@ -151,6 +144,13 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
   const [pendingRemove, setPendingRemove] = useState(null)
   const sourcingSheetWrapRef = useRef(null)
   const compareRequestRef = useRef(0)
+  useEffect(() => {
+    lines.forEach(line => {
+      const reconciled = reconcileCatalogueMatch(line, store.priceLists)
+      const changed = ['pn', 'desc', 'priceState', 'listPrice', 'listUnitPrice', 'priceSourceSuggested'].some(key => reconciled[key] !== line[key])
+      if (changed) store.updateSparesLine(line.id, reconciled)
+    })
+  }, [lines, store.priceLists])
   useEffect(() => {
     // Existing opportunities may have been created before extraction learned
     // to keep a customer reference separate from its description. Reconcile
