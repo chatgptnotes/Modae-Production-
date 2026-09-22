@@ -794,16 +794,22 @@ table.sheet td.cell-sel { outline: 2px solid var(--xl-green); outline-offset: -2
 
 .page { padding: 14px 16px 64px; }
 .page h2 { font-size: 15px; margin: 4px 0 10px; color: var(--xl-green-dark); }
+.tracker-page { min-width: 0; overflow-x: clip; padding-inline: clamp(.5rem, 2vw, 1rem); }
 
 .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
 .toolbar .spacer { flex: 1; }
 .tracker-search { display: inline-flex; align-items: center; gap: 7px; min-width: min(360px, 100%); padding: 6px 10px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--palette-4843938); color: var(--text-muted); }
 .tracker-search:focus-within { border-color: var(--primary-accent); box-shadow: 0 0 0 2px var(--primary-soft); }
 .tracker-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; }
-.tracker-create-logo { display: inline-flex; align-items: center; justify-content: center; min-width: 92px; padding: 4px 8px; border: 0; background: transparent; cursor: pointer; }
-.tracker-create-logo:hover { background: var(--palette-4843938); border-radius: 5px; }
+.tracker-create-logo { display: inline-flex; align-items: center; justify-content: center; min-width: 48px; height: 34px; padding: 3px 8px; border: 1px solid var(--action-secondary-border); border-radius: 5px; background: var(--action-secondary-bg); color: var(--action-secondary-text); cursor: pointer; }
+.tracker-create-logo:hover { background: var(--select-fill); border-color: var(--primary-accent); }
 .tracker-create-logo:focus-visible { outline: 2px solid var(--primary-accent); outline-offset: 2px; border-radius: 5px; }
-.tracker-create-logo .modae-image-logo { max-width: 92px; }
+.tracker-create-logo .modae-image-logo { width: 56px; max-width: 56px; height: 24px; object-fit: contain; }
+.tracker-page .toolbar { align-items: stretch; min-width: 0; }
+.tracker-page .toolbar > * { min-width: 0; max-width: 100%; }
+.tracker-page .toolbar select,
+.tracker-page .toolbar button,
+.tracker-page .toolbar label { min-width: 0; }
 .filter-search { width: calc(100% - 16px); margin: 5px 8px; padding: 6px 8px; border: 1px solid var(--border-color); border-radius: 4px; }
 .link-button { margin-left: 6px; padding: 0; border: 0; background: transparent; color: var(--primary-accent); text-decoration: underline; cursor: pointer; }
 /* The bell is position:fixed, so it reserves no space and will sit on top of
@@ -1347,6 +1353,114 @@ table.sheet td.internal { background: var(--border-soft) !important; color: var(
 @media (max-width: 700px) {
   .opportunities-head { display: block; }
   .opportunities-actions { justify-content: flex-start; margin-top: 10px; }
+}
+
+/* The tracker is a spreadsheet at desktop widths, but a spreadsheet cannot
+   remain legible at high browser zoom or on a narrow viewport. The card mode
+   removes the horizontal scroll trap and gives every value its generated
+   column label through --tracker-cell-label. */
+@media (max-width: 900px) {
+  .tracker-page .toolbar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .5rem;
+  }
+  .tracker-page .toolbar > .tracker-search,
+  .tracker-page .toolbar > .tracker-filter-chips,
+  .tracker-page .toolbar > .spacer {
+    grid-column: 1 / -1;
+  }
+  .tracker-page .toolbar > .spacer { display: none; }
+  .tracker-page .tracker-search { width: auto; min-width: 0; }
+  .tracker-page .sheet-wrap {
+    overflow-x: hidden;
+    border: 0;
+    background: transparent;
+  }
+  .tracker-page table.sheet,
+  .tracker-page table.sheet thead,
+  .tracker-page table.sheet tbody,
+  .tracker-page table.sheet tfoot,
+  .tracker-page table.sheet tr,
+  .tracker-page table.sheet td {
+    display: block;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    box-sizing: border-box;
+  }
+  .tracker-page table.sheet { table-layout: auto !important; background: transparent; }
+  .tracker-page table.sheet thead { display: none; }
+  .tracker-page table.sheet tbody { display: grid; gap: .75rem; }
+  .tracker-page table.sheet tbody tr.rowclick {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    overflow: hidden;
+    border: 1px solid var(--grid-line);
+    border-radius: .5rem;
+    background: var(--palette-4843938);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, .06);
+  }
+  .tracker-page table.sheet tbody tr.rowclick td {
+    display: grid;
+    grid-template-columns: minmax(7.5rem, 34%) minmax(0, 1fr);
+    align-items: start;
+    gap: .5rem;
+    padding: .55rem .7rem;
+    border: 0;
+    border-bottom: 1px solid var(--border-soft);
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    text-align: left;
+  }
+  .tracker-page table.sheet tbody tr.rowclick td:last-child { border-bottom: 0; }
+  .tracker-page table.sheet tbody tr.rowclick td::before {
+    content: var(--tracker-cell-label);
+    min-width: 0;
+    color: var(--text-muted);
+    font-size: .68rem;
+    font-weight: 700;
+    line-height: 1.25;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+  }
+  .tracker-page table.sheet tbody tr.rowclick td.rowhead {
+    display: none;
+  }
+  .tracker-page table.sheet tbody tr.rowclick td > * {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+  .tracker-page table.sheet tbody tr.rowclick td input,
+  .tracker-page table.sheet tbody tr.rowclick td select,
+  .tracker-page table.sheet tbody tr.rowclick td textarea,
+  .tracker-page table.sheet tbody tr.rowclick td .cell-pick {
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .tracker-page table.sheet tbody tr:not(.rowclick) td.tracker-empty-state {
+    display: grid;
+    gap: .35rem;
+    text-align: center;
+    border: 1px solid var(--grid-line);
+    border-radius: .5rem;
+    padding: 1rem;
+  }
+  .tracker-page table.sheet tbody tr:not(.rowclick) td.tracker-empty-state::before { display: none; }
+  .tracker-page table.sheet tfoot { margin-top: .75rem; }
+  .tracker-page table.sheet tfoot tr,
+  .tracker-page table.sheet tfoot td { display: block; width: 100%; box-sizing: border-box; }
+  .tracker-page table.sheet tfoot td:not(:first-child) { display: none; }
+}
+
+@media (max-width: 480px) {
+  .tracker-page .toolbar { grid-template-columns: minmax(0, 1fr); }
+  .tracker-page .toolbar > .tracker-search,
+  .tracker-page .toolbar > .tracker-filter-chips { grid-column: 1; }
+  .tracker-page table.sheet tbody tr.rowclick td { grid-template-columns: 1fr; gap: .25rem; }
 }
 
 /* OneDrive-style folder wall */
@@ -6000,7 +6114,7 @@ html, body { overflow-x: hidden; max-width: 100%; }
    block-flow document with a fixed bottom tab bar and wants native scrolling.
    ========================================================================= */
 .shell { --sidenav-w: 252px; --shell-nav-w: 252px; }
-.shell.sidebar-compact { --sidenav-w: 76px; --shell-nav-w: 76px; }
+.shell.sidebar-compact { --sidenav-w: 88px; --shell-nav-w: 88px; }
 @media (max-width: 1024px) { .shell { --sidenav-w: 216px; --shell-nav-w: 0px; } }
 
 .shell:not(.tablet-mode) { height: 100dvh; overflow: hidden; }
@@ -6091,11 +6205,25 @@ html, body { overflow-x: hidden; max-width: 100%; }
 }
 .tracker-page .tracker-clear-filters:hover { background: var(--select-fill); }
 .tracker-page > .toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   column-gap: 12px;
   row-gap: 10px;
 }
+.tracker-page .tracker-toolbar-filters,
+.tracker-page .tracker-toolbar-actions {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.tracker-page .tracker-toolbar-filters { flex-wrap: wrap; }
+.tracker-page .tracker-toolbar-actions { justify-content: flex-end; flex-wrap: nowrap; }
+.tracker-page .tracker-toolbar-filters > select { flex: 0 1 auto; }
 .tracker-page > .toolbar .tracker-search {
-  min-width: min(420px, 100%);
+  flex: 1 1 240px;
+  min-width: min(240px, 100%);
 }
 .tracker-page .tracker-quick-filter {
   display: inline-flex;
@@ -6116,7 +6244,8 @@ html, body { overflow-x: hidden; max-width: 100%; }
   font-size: 12px;
 }
 .tracker-page .tracker-filter-chips {
-  flex: 1 1 100%;
+  grid-column: 1 / -1;
+  display: flex;
   min-width: 0;
   margin-top: -2px;
 }
@@ -6163,6 +6292,25 @@ html, body { overflow-x: hidden; max-width: 100%; }
 }
 .tracker-date-filter-button { white-space: nowrap; }
 .tracker-date-filter-button.active { border-color: var(--primary-accent); background: var(--primary-soft); color: var(--primary-deep); }
+
+@media (max-width: 72em) {
+  .tracker-page > .toolbar { grid-template-columns: 1fr; }
+  .tracker-page .tracker-toolbar-actions { justify-content: flex-start; flex-wrap: wrap; }
+  .tracker-page .tracker-filter-chips { grid-column: 1; }
+}
+
+@media (max-width: 40em) {
+  .tracker-page .tracker-toolbar-filters,
+  .tracker-page .tracker-toolbar-actions { align-items: stretch; }
+  .tracker-page .tracker-toolbar-filters > select,
+  .tracker-page .tracker-toolbar-filters > .tracker-search,
+  .tracker-page .tracker-toolbar-filters > .tracker-quick-filter,
+  .tracker-page .tracker-toolbar-filters > .tracker-date-filter-button,
+  .tracker-page .tracker-toolbar-filters > .tracker-show-all { flex: 1 1 100%; }
+  .tracker-page .tracker-toolbar-actions > button,
+  .tracker-page .tracker-toolbar-actions > .pill,
+  .tracker-page .tracker-toolbar-actions > .tracker-create-logo { flex: 1 1 auto; }
+}
 .tracker-date-pop { min-width: 300px; max-height: none; padding: 12px; }
 .tracker-date-pop-title { color: var(--text-main); font-size: 13px; font-weight: 800; }
 .tracker-date-pop-summary { margin: 3px 0 12px; color: var(--text-muted); font-size: 11px; }
@@ -6646,6 +6794,390 @@ select:focus, input:focus, textarea:focus {
   .topbar-title { max-width: 52vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .page { padding: 18px 14px 56px; }
   .page h2 { font-size: 20px; }
+}
+
+/* =========================================================================
+   Fluid layout contract
+   -------------------------------------------------------------------------
+   This is the final shared layout layer. It intentionally changes layout
+   dimensions, not the product's visual language or data behavior. `em`
+   breakpoints respond to browser zoom as well as physical viewport width.
+   ========================================================================= */
+:root {
+  --layout-max: 75rem;
+  --layout-gutter: clamp(.75rem, 2.2vw, 2rem);
+  --layout-gap: clamp(.5rem, 1.2vw, 1.25rem);
+  --layout-control-gap: clamp(.4rem, .8vw, .75rem);
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+body,
+button,
+input,
+select,
+textarea {
+  max-width: 100%;
+}
+
+img,
+svg,
+video,
+canvas,
+iframe,
+embed,
+object {
+  max-width: 100%;
+}
+
+img,
+video,
+canvas {
+  height: auto;
+}
+
+.shell,
+.main-col,
+.main-scroll,
+.page,
+.panel,
+.form-card,
+.sheet-wrap,
+.toolbar,
+.topbar,
+.modal,
+.drawer {
+  min-width: 0;
+}
+
+.page {
+  width: min(calc(100% - 2 * var(--layout-gutter)), var(--layout-max));
+  max-width: 100%;
+  margin-inline: auto;
+  padding-inline: 0;
+}
+
+.page-narrow {
+  width: min(calc(100% - 2 * var(--layout-gutter)), 32rem);
+  margin: clamp(2rem, 8vh, 5rem) auto;
+}
+
+.tracker-page,
+.opportunities-page,
+.mailbox-page,
+.proposal-page,
+.workbench-page {
+  width: min(calc(100% - 2 * var(--layout-gutter)), 100%);
+}
+
+.page h1,
+.page h2,
+.page h3,
+.page h4,
+.page p,
+.page .hint,
+.page .restricted {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.toolbar,
+.topbar,
+.forms-head,
+.proposal-sent-head,
+.proposal-sent-head-actions,
+.sourcing-footer-actions,
+.lead-decision-actions,
+.progress-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--layout-control-gap);
+  min-width: 0;
+}
+
+.toolbar > *,
+.topbar > *,
+.forms-head > *,
+.proposal-sent-head > *,
+.proposal-sent-head-actions > *,
+.sourcing-footer-actions > *,
+.lead-decision-actions > *,
+.progress-controls > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.toolbar input,
+.toolbar select,
+.toolbar textarea,
+.toolbar label,
+.toolbar .tracker-search,
+.toolbar .tracker-quick-filter {
+  min-width: min(100%, 12rem);
+  max-width: 100%;
+}
+
+.toolbar input,
+.toolbar select,
+.toolbar .tracker-search {
+  flex: 1 1 12rem;
+}
+
+.toolbar button,
+.toolbar .btn {
+  flex: 0 1 auto;
+  white-space: normal;
+}
+
+.forms-grid,
+.dgrid2,
+.admin-field-grid,
+.admin-setting-grid,
+.admin-wide-grid,
+.admin-bottom-grid,
+.ws-grid,
+.lead-decision-grid,
+.readonly-decision-grid,
+.opportunity-details-grid,
+.tool-columns,
+.qcards,
+.dash-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  min-width: 0;
+}
+
+.forms-grid > *,
+.dgrid2 > *,
+.admin-field-grid > *,
+.admin-setting-grid > *,
+.admin-wide-grid > *,
+.admin-bottom-grid > *,
+.ws-grid > *,
+.lead-decision-grid > *,
+.readonly-decision-grid > *,
+.opportunity-details-grid > *,
+.tool-columns > *,
+.qcards > *,
+.dash-grid > * {
+  min-width: 0;
+}
+
+.sheet-wrap,
+.proposal-sent-table-wrap,
+.proposal-boq-sheet-wrap,
+.approval-boq-table-wrap,
+.lead-boq-preview-table-wrap,
+.att-view-table-wrap,
+.converted-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overscroll-behavior-inline: contain;
+}
+
+table {
+  max-width: 100%;
+}
+
+table:not(.sheet) th,
+table:not(.sheet) td {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.page img,
+.page svg,
+.page video,
+.page canvas {
+  max-width: 100%;
+}
+
+.page-portal-parked .lead-decision-actions {
+  margin-top: var(--layout-gap);
+}
+
+/* Ordinary list tables become readable cards when the available inline size
+   is tight. Workbook and tracker sheets retain their own contained scroller. */
+@media (max-width: 56.25em) {
+  .proposal-sent-table-wrap,
+  .approval-boq-table-wrap,
+  .lead-boq-preview-table-wrap,
+  .att-view-table-wrap,
+  .converted-table-wrap {
+    overflow-x: hidden;
+  }
+
+  .proposal-sent-table,
+  .approval-boq-table,
+  .lead-boq-preview-table,
+  .att-view-table,
+  .converted-table {
+    width: 100%;
+    min-width: 0;
+    table-layout: auto;
+  }
+
+  .proposal-sent-table thead,
+  .approval-boq-table thead,
+  .lead-boq-preview-table thead,
+  .att-view-table thead,
+  .converted-table thead {
+    display: none;
+  }
+
+  .proposal-sent-table,
+  .proposal-sent-table tbody,
+  .proposal-sent-table tr,
+  .proposal-sent-table td,
+  .approval-boq-table,
+  .approval-boq-table tbody,
+  .approval-boq-table tr,
+  .approval-boq-table td,
+  .lead-boq-preview-table,
+  .lead-boq-preview-table tbody,
+  .lead-boq-preview-table tr,
+  .lead-boq-preview-table td,
+  .att-view-table,
+  .att-view-table tbody,
+  .att-view-table tr,
+  .att-view-table td,
+  .converted-table,
+  .converted-table tbody,
+  .converted-table tr,
+  .converted-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .proposal-sent-table tbody,
+  .approval-boq-table tbody,
+  .lead-boq-preview-table tbody,
+  .att-view-table tbody,
+  .converted-table tbody {
+    display: grid;
+    gap: var(--layout-gap);
+  }
+
+  .proposal-sent-table tbody tr,
+  .approval-boq-table tbody tr,
+  .lead-boq-preview-table tbody tr,
+  .att-view-table tbody tr,
+  .converted-table tbody tr {
+    padding: var(--layout-gap);
+    border: 1px solid var(--border-default);
+    border-radius: var(--r-card);
+    background: var(--surface-raised);
+  }
+
+  .proposal-sent-table tbody td,
+  .approval-boq-table tbody td,
+  .lead-boq-preview-table tbody td,
+  .att-view-table tbody td,
+  .converted-table tbody td {
+    max-width: none;
+    padding: .4rem 0;
+    border: 0;
+    white-space: normal;
+  }
+
+  .proposal-sent-table tbody td::before,
+  .approval-boq-table tbody td::before,
+  .lead-boq-preview-table tbody td::before,
+  .att-view-table tbody td::before,
+  .converted-table tbody td::before {
+    display: block;
+    margin-bottom: .2rem;
+    color: var(--text-tertiary);
+    font-size: .68rem;
+    font-weight: 800;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+  }
+
+  .proposal-sent-table tbody td:nth-child(1)::before { content: 'Opportunity'; }
+  .proposal-sent-table tbody td:nth-child(2)::before { content: 'Customer'; }
+  .proposal-sent-table tbody td:nth-child(3)::before { content: 'Owner'; }
+  .proposal-sent-table tbody td:nth-child(4)::before { content: 'Proposal'; }
+  .proposal-sent-table tbody td:nth-child(5)::before { content: 'Sent'; }
+  .proposal-sent-table tbody td:nth-child(6)::before { content: 'Validity'; }
+  .proposal-sent-table tbody td:nth-child(7)::before { content: 'Status'; }
+  .proposal-sent-table tbody td:nth-child(8)::before { content: 'Action'; }
+
+  .proposal-sent-table .proposal-sent-cell-text,
+  .proposal-sent-table .proposal-sent-date-cell > span:first-child,
+  .proposal-sent-table td,
+  .proposal-sent-table td span {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+}
+
+@media (max-width: 42em) {
+  .page {
+    width: min(calc(100% - 1.25rem), var(--layout-max));
+  }
+
+  .page h2 {
+    font-size: clamp(1.15rem, 5vw, 1.4rem);
+  }
+
+  .toolbar,
+  .topbar,
+  .forms-head,
+  .proposal-sent-head,
+  .proposal-sent-head-actions,
+  .sourcing-footer-actions {
+    align-items: stretch;
+  }
+
+  .toolbar > *,
+  .toolbar input,
+  .toolbar select,
+  .toolbar label,
+  .toolbar button,
+  .toolbar .btn,
+  .proposal-sent-head-actions > *,
+  .sourcing-footer-actions > * {
+    width: 100%;
+    flex-basis: 100%;
+  }
+
+  .toolbar .spacer {
+    display: none;
+  }
+
+  .forms-head,
+  .proposal-sent-head {
+    flex-direction: column;
+  }
+
+  .forms-head .req-note {
+    text-align: left;
+    white-space: normal;
+  }
+}
+
+@media (max-width: 64em) {
+  .sidenav {
+    width: min(18rem, 82vw);
+  }
+
+  .shell:not(.tablet-mode) .main-col {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .main-col {
+    max-width: 100%;
+  }
 }
 
 /* Proposal action hierarchy: one decisive action, quiet utility controls. */
@@ -11489,7 +12021,7 @@ button:not(.primary):not(.danger):not(.dark):not(.ghost),
 
 /* Keep the fixed navigation rail and the page column on the same width
    contract. Several older desktop rules used 216/68px while the current rail
-   is 252/76px, which let the expanded rail cover the page's left edge. */
+   is 252/88px, which let the expanded rail cover the page's left edge. */
 
 @media (min-width: 1025px) {
   .shell {
@@ -11498,8 +12030,8 @@ button:not(.primary):not(.danger):not(.dark):not(.ghost),
   }
 
   .shell.sidebar-compact {
-    --sidenav-w: 76px;
-    --shell-nav-w: 76px;
+    --sidenav-w: 88px;
+    --shell-nav-w: 88px;
   }
 
   .shell > .sidenav {
@@ -12395,5 +12927,92 @@ table.sheet tbody tr:hover td {
 
   .admin-page .admin-template-meta > span:not(.hint) {
     white-space: normal;
+  }
+}
+
+/* Desktop sidebar control: float the collapse affordance on the rail edge so
+   it remains discoverable in both expanded and compact modes without taking
+   space away from the logo or navigation labels. The mobile drawer keeps its
+   separate hamburger control above. */
+@media (min-width: 64.0625em) {
+  .shell:not(.tablet-mode) > .sidenav {
+    overflow: visible;
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .sidebar-toggle {
+    top: 1.15rem;
+    right: -1.45rem;
+    left: auto;
+    z-index: 3;
+    display: inline-flex;
+    width: 1.45rem;
+    height: 2.45rem;
+    min-width: 1.45rem;
+    min-height: 2.45rem;
+    padding: .35rem .2rem;
+    border: 1px solid color-mix(in srgb, var(--border-color) 88%, transparent);
+    border-left: 0;
+    border-radius: 0 .45rem .45rem 0;
+    background: var(--bg-sidebar);
+    color: var(--text-secondary);
+    box-shadow: .25rem .2rem .7rem rgba(0, 0, 0, .16);
+    transform: none;
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .sidebar-toggle:hover {
+    background: var(--surface-raised);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    transform: translateX(.1rem);
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .sidebar-toggle:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 3px;
+  }
+
+  .shell.sidebar-compact:not(.tablet-mode) > .sidenav .sidebar-toggle {
+    top: 2.25rem;
+    right: -1.45rem;
+    left: auto;
+    transform: none;
+  }
+}
+
+/* Compact rail branding: retain a small official wordmark while reducing the
+   edge control to a quiet, touchable icon button. */
+@media (min-width: 64.0625em) {
+  .shell.sidebar-compact:not(.tablet-mode) > .sidenav > .brand {
+    min-height: 4.35rem;
+    justify-content: center;
+    padding: .55rem .25rem 1.25rem;
+  }
+
+  .shell.sidebar-compact:not(.tablet-mode) > .sidenav .brand .modae-logo {
+    display: inline-flex;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .shell.sidebar-compact:not(.tablet-mode) > .sidenav .brand .modae-official-logo {
+    display: block;
+    width: 4.5rem;
+    height: 1.4rem;
+    max-width: 100%;
+    object-fit: contain;
+  }
+
+  .shell.sidebar-compact:not(.tablet-mode) > .sidenav .brand .ml-text {
+    display: none;
+  }
+
+  .shell.sidebar-compact:not(.tablet-mode) > .sidenav .sidebar-toggle {
+    top: 2.25rem;
+    right: -1.45rem;
+    width: 1.45rem;
+    height: 2.25rem;
+    min-width: 1.45rem;
+    min-height: 2.25rem;
+    padding: .3rem .2rem;
   }
 }

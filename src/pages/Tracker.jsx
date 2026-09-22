@@ -109,19 +109,20 @@ const ROWHEAD_PX = 34
 function columnWidthCss(cols, scope, all = false) {
   const share = c => (all && c.wAll) || (!all && c.wKey) || c.w
   const rule = (sel, value) => `${scope} thead tr > ${sel}, ${scope} tbody tr > ${sel} { ${value} }`
+  const label = value => `--tracker-cell-label: ${JSON.stringify(value)};`
   if (all) {
     const px = c => Math.max(MIN_COL_PX, Math.round(share(c) * PX_PER_UNIT))
     return [
-      rule(':nth-child(1)', `width: ${ROWHEAD_PX}px; min-width: ${ROWHEAD_PX}px;`),
-      ...cols.map(c => rule(`:nth-child(${COLS.indexOf(c) + 2})`, `min-width: ${px(c)}px;`)),
+      rule(':nth-child(1)', `width: ${ROWHEAD_PX}px; min-width: ${ROWHEAD_PX}px; ${label('SL')}`),
+      ...cols.map(c => rule(`:nth-child(${COLS.indexOf(c) + 2})`, `min-width: ${px(c)}px; ${label(c.label)}`)),
     ].join('\n')
   }
   const total = cols.reduce((sum, c) => sum + share(c), 0)
   const budget = 100 - ROWHEAD_PCT
   const pct = value => `width: ${value.toFixed(3)}%;`
   return [
-    rule(':nth-child(1)', pct(ROWHEAD_PCT)),
-    ...cols.map(c => rule(`:nth-child(${COLS.indexOf(c) + 2})`, pct((share(c) / total) * budget))),
+    rule(':nth-child(1)', `${pct(ROWHEAD_PCT)} ${label('SL')}`),
+    ...cols.map(c => rule(`:nth-child(${COLS.indexOf(c) + 2})`, `${pct((share(c) / total) * budget)} ${label(c.label)}`)),
   ].join('\n')
 }
 
@@ -194,7 +195,6 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const [closeReason, setCloseReason] = useState('')
   const [closeReasonNote, setCloseReasonNote] = useState('')
   const [deleteArmedId, setDeleteArmedId] = useState(null)
-  const [refreshing, setRefreshing] = useState(false)
   const sheetWrapRef = useRef(null)
   const lastSheetScrollLeft = useRef(0)
   const horizontalGestureNudged = useRef(false)
@@ -342,13 +342,6 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     setDateFilter(DEFAULT_DATE_FILTER)
     setDateFilterDraft(DEFAULT_DATE_FILTER)
     setDateFilterOpen(false)
-  }
-
-  const refreshOpportunities = async () => {
-    if (refreshing || !store.refreshSharedData) return
-    setRefreshing(true)
-    try { await store.refreshSharedData() }
-    finally { setRefreshing(false) }
   }
 
   const openDateFilterMenu = event => {
@@ -654,42 +647,71 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     <div className="page tracker-page">
       <h2>Opportunities {sheet === 'Old Closed Opps' && '— Old Closed Opps'}</h2>
       <div className="toolbar">
-        <select id="opportunities-owner-filter" aria-label="Opportunity owner" value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)}>
-          {owners.map(p => <option key={p} value={p}>
-            {p === 'All' ? 'All Opportunities' : p === 'Mine' ? 'My Opportunities' : displayRole(p)}
-          </option>)}
-        </select>
-        <label className="tracker-search" aria-label="Search all opportunities">
-          <Icon name="search" size={14} />
-          <input type="search" placeholder="Search all opportunities…" value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)} />
-        </label>
-        <label className="tracker-quick-filter">
-          <span>Status</span>
-          <select aria-label="Filter opportunities by status" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-            <option value="">All statuses</option>
-            {statusOptions.map(status => <option key={status} value={status}>{status}</option>)}
+        <div className="tracker-toolbar-filters">
+          <select id="opportunities-owner-filter" aria-label="Opportunity owner" value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)}>
+            {owners.map(p => <option key={p} value={p}>
+              {p === 'All' ? 'All Opportunities' : p === 'Mine' ? 'My Opportunities' : displayRole(p)}
+            </option>)}
           </select>
-        </label>
-        <button type="button" className={`tracker-date-filter-button${dateFilterActive ? ' active' : ''}`} onClick={openDateFilterMenu}
-          aria-haspopup="dialog" aria-expanded={dateFilterOpen} title={dateFilterSummary}>
-          Date filter{dateFilterActive ? ' · Active' : ''}
-        </button>
-        <button type="button" className="tracker-refresh-button" onClick={refreshOpportunities} disabled={refreshing}
-          title="Refresh opportunities from the shared workspace" aria-label="Refresh opportunities">
-          <Icon name="refresh" size={14} /> {refreshing ? 'Refreshing…' : 'Refresh'}
-        </button>
-        {isSalesRep && (
-          <label className="mail-show-all tracker-show-all" title="Show all opportunities">
-            <input
-              type="checkbox"
-              aria-label="Show all opportunities"
-              checked={ownerFilter === 'All'}
-              onChange={e => setOwnerFilter(e.target.checked ? 'All' : 'Mine')}
-            />
-            Show all
+          <label className="tracker-search" aria-label="Search all opportunities">
+            <Icon name="search" size={14} />
+            <input type="search" placeholder="Search all opportunities…" value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)} />
           </label>
-        )}
+          <label className="tracker-quick-filter">
+            <span>Status</span>
+            <select aria-label="Filter opportunities by status" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+              <option value="">All statuses</option>
+              {statusOptions.map(status => <option key={status} value={status}>{status}</option>)}
+            </select>
+          </label>
+          <button type="button" className={`tracker-date-filter-button${dateFilterActive ? ' active' : ''}`} onClick={openDateFilterMenu}
+            aria-haspopup="dialog" aria-expanded={dateFilterOpen} title={dateFilterSummary}>
+            Date filter{dateFilterActive ? ' · Active' : ''}
+          </button>
+          {isSalesRep && (
+            <label className="mail-show-all tracker-show-all" title="Show all opportunities">
+              <input
+                type="checkbox"
+                aria-label="Show all opportunities"
+                checked={ownerFilter === 'All'}
+                onChange={e => setOwnerFilter(e.target.checked ? 'All' : 'Mine')}
+              />
+              Show all
+            </label>
+          )}
+        </div>
+        <div className="tracker-toolbar-actions">
+          {activeFilterCount > 0 && (
+            <button type="button" className="tracker-clear-filters" onClick={clearAllTableState}>
+              Clear filters &amp; sort ({activeFilterCount})
+            </button>
+          )}
+          {colView === 'key' && (
+            <span className="pill Blue" title="Total value of the rows shown">₹ {fmt(totals.v)}K</span>
+          )}
+          <button onClick={() => setColView(colView === 'key' ? 'all' : 'key')}
+            title={colView === 'key'
+              ? 'Show every column in the pipeline sheet'
+              : `Show only the working columns: ${KEY_COLS.length} of ${COLS.length}`}>
+            {colView === 'key' ? `All ${COLS.length} columns` : 'Key columns'}
+          </button>
+          <button onClick={exportRows} title="Export all columns for the rows shown">Extract to Excel</button>
+          {onCreateOpportunity ? (
+            <button
+              className="tracker-create-logo"
+              onClick={onCreateOpportunity}
+              aria-label="Create opportunity"
+              title="Create opportunity"
+            >
+              <ModaeImageLogo height={30} />
+            </button>
+          ) : (
+            <Link className="tracker-create-logo" to="/new" aria-label="Create opportunity" title="Create opportunity">
+              <ModaeImageLogo height={30} />
+            </Link>
+          )}
+        </div>
         {activeChips.length > 0 && (
           <div className="tracker-filter-chips flex flex-wrap items-center gap-1" aria-label="Active filters">
             {activeChips.map(chip => (
@@ -699,36 +721,6 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
               </button>
             ))}
           </div>
-        )}
-        <span className="spacer" />
-        {activeFilterCount > 0 && (
-          <button type="button" className="tracker-clear-filters" onClick={clearAllTableState}>
-            Clear filters &amp; sort ({activeFilterCount})
-          </button>
-        )}
-        {colView === 'key' && (
-          <span className="pill Blue" title="Total value of the rows shown">₹ {fmt(totals.v)}K</span>
-        )}
-        <button onClick={() => setColView(colView === 'key' ? 'all' : 'key')}
-          title={colView === 'key'
-            ? 'Show every column in the pipeline sheet'
-            : `Show only the working columns: ${KEY_COLS.length} of ${COLS.length}`}>
-          {colView === 'key' ? `All ${COLS.length} columns` : 'Key columns'}
-        </button>
-        <button onClick={exportRows} title="Export all columns for the rows shown">Extract to Excel</button>
-        {onCreateOpportunity ? (
-          <button
-            className="tracker-create-logo"
-            onClick={onCreateOpportunity}
-            aria-label="Create opportunity"
-            title="Create opportunity"
-          >
-            <ModaeImageLogo height={30} />
-          </button>
-        ) : (
-          <Link className="tracker-create-logo" to="/new" aria-label="Create opportunity" title="Create opportunity">
-            <ModaeImageLogo height={30} />
-          </Link>
         )}
       </div>
       {dateFilterOpen && dateFilterPos && renderDateFilterPop(dateFilterPos)}

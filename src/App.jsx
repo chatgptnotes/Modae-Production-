@@ -190,7 +190,7 @@ function PortalParked() {
   return (
     <div className="shell">
       <div className="main-col">
-        <div className="page" style={{ maxWidth: 520, margin: '80px auto' }}>
+        <div className="page page-narrow page-portal-parked">
           <h2><Icon name="lock" size={18} /> Customer portal unavailable</h2>
           <p className="hint">
             The customer-facing portal is switched off for now. The internal workspace is unaffected.
