@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { isPlaceholderSparesLine, useStore } from '../store.jsx'
 import { defaultCosting } from '../seed.js'
-import { canPriceProposal, unitCostINR, fmt, ddMmmYY } from '../utils.js'
+import { canPriceProposal, clampCosting, unitCostINR, fmt, ddMmmYY } from '../utils.js'
 import { pricingApprovalFor, pricingThresholdExceptions } from '../gates.js'
 import { Chip, ConfChip, AiBadge, ConfirmModal, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
@@ -14,6 +14,51 @@ import { buildLeadProposalData } from '../leadBoq.js'
 
 const n = value => Number.isFinite(Number(value)) ? Number(value) : 0
 const money = value => `₹ ${fmt(n(value))}`
+
+// Keep numeric costing inputs canonical while preserving a usable editing
+// state. In particular, 016 becomes 16, while 0.5 remains 0.5.
+const normalizeNumericDraft = value => {
+  const text = String(value ?? '')
+  if (!text) return ''
+  if (!/^\d*\.?\d*$/.test(text)) return text
+  const [whole = '', fraction] = text.split('.')
+  const normalizedWhole = whole.replace(/^0+(?=\d)/, '') || (whole ? '0' : '')
+  return fraction === undefined ? normalizedWhole : `${normalizedWhole || '0'}.${fraction}`
+}
+
+function CostingNumberInput({ value, onChange, onBlur, ...props }) {
+  const [draft, setDraft] = useState(() => normalizeNumericDraft(value))
+  const focusedRef = useRef(false)
+
+  useEffect(() => {
+    if (!focusedRef.current) setDraft(normalizeNumericDraft(value))
+  }, [value])
+
+  const commit = raw => {
+    const normalized = normalizeNumericDraft(raw)
+    const numeric = normalized === '' ? 0 : Number(normalized)
+    setDraft(normalized === '' ? '0' : normalized)
+    onChange(numeric)
+    onBlur?.(numeric)
+  }
+
+  return <input
+    {...props}
+    type="number"
+    value={draft}
+    onFocus={() => { focusedRef.current = true }}
+    onChange={event => {
+      const normalized = normalizeNumericDraft(event.target.value)
+      setDraft(normalized)
+      if (normalized !== '') onChange(Number(normalized))
+    }}
+    onBlur={() => {
+      focusedRef.current = false
+      commit(draft)
+    }}
+  />
+}
+
 const sourcingDescription = line => {
   const description = String(line?.desc || '').trim()
   if (description && !/^Customer-requested item\s+\d+(?:\.\d+)?$/i.test(description)) return description
@@ -146,6 +191,20 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     cdErvHandlingPct: proposal.costing?.cdErvHandlingPct ?? proposal.costing?.cdErvContPct ?? costingDefaults.cdErvHandlingPct ?? defaultCosting.cdErvContPct,
     currencyRates: normalizedCurrencyRates(proposal.costing?.currencyRates || currencyRates),
   }
+  // Keep recalculation tied to the actual costing inputs rather than relying
+  // only on the proposal object identity. This makes every valid keystroke
+  // flow through the row and summary calculations immediately.
+  const costingSignature = JSON.stringify({
+    baseRate: costing.baseRate,
+    usdBase: costing.usdBase,
+    customsDutyPct: costing.customsDutyPct,
+    ervPct: costing.ervPct,
+    handlingPct: costing.handlingPct,
+    cdErvHandlingPct: costing.cdErvHandlingPct,
+    cdErvContPct: costing.cdErvContPct,
+    bnkDiscPct: costing.bnkDiscPct,
+    currencyRates: costing.currencyRates,
+  })
   const handlingMin = n(costingDefaults.cdErvHandlingMinPct ?? 15)
   const handlingMax = n(costingDefaults.cdErvHandlingMaxPct ?? 20)
   const importFactorPct = costing.customsDutyPct + costing.ervPct + costing.handlingPct
@@ -162,7 +221,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
       store.updateProposalCosting(opp.id, { currencyRates: normalizedCurrencyRates(value) })
       return
     }
-    const next = Math.max(0, n(value))
+    const next = clampCosting(field, value)
     store.updateProposalCosting(opp.id, { [field]: next })
   }
 
@@ -193,14 +252,16 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
       discountPercent: row.discountPct,
       markupPercent: row.markupPct,
       baseCost: row.baseCost,
+      landedUnitCost: row.landedUnitCostINR,
       listTotal: row.listTotal,
+      landedTotal: row.landedTotalINR,
       adjustedUnitPrice: row.adjustedUnitPrice,
       lineTotal: row.lineTotal,
       lineTotalCogs: row.cogs,
       confirmed: !!line.confirmed,
       sourceLine: line,
     }
-  }), [lines, proposal])
+  }), [lines, proposal, costingSignature])
   const orderedLineItems = useMemo(() => orderSparesLines(lineItems, item => item.sourceLine), [lineItems])
   const calculatedItems = useMemo(() => orderedLineItems.map(item => {
     return { ...item, lineProfit: item.lineTotal - item.lineTotalCogs }
@@ -226,6 +287,8 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
   }), { revenue: 0, cogs: 0, originalTotal: 0, quantity: 0 }), [pricedItems])
   const grossProfit = totals.revenue - totals.cogs
   const grossMarginPct = totals.revenue > 0 ? grossProfit / totals.revenue * 100 : 0
+  const importedLineCount = lines.filter(line => String(line.currency || 'INR').toUpperCase() !== 'INR').length
+  const domesticLineCount = lines.length - importedLineCount
   const proposalOnlyMismatch = !lines.length && (proposal.bom || []).length > 0
   const expiredLines = lines.filter(l => l.priceState === 'Expired')
   const needsPricingLines = lines.filter(l => l.priceState === 'Needs pricing')
@@ -509,32 +572,34 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
       <div className="sourcing-table-heading"><div><b>BOQ lines — review quantity, price source, and totals</b><span className="hint"> Each line shows whether the price came from an approved price list, supplier quotation, or manual pricing.</span></div><div className="sourcing-table-heading-actions"><span className="sourcing-currency-indicator" title={`All displayed amounts are in ${displayCurrency}`}>Currency: {displayCurrency} ({currencySymbol(displayCurrency)})</span>{comm && <label className="sourcing-currency-view">View amounts in <select value={displayCurrency} onChange={e => setDisplayCurrency(e.target.value)}>{displayCurrencies.map(currency => <option key={currency}>{currency}</option>)}</select></label>}{comm && <button type="button" className="sourcing-add-part-link" aria-expanded={showAddPart} onClick={openManualLine}>Add manual line</button>}{!comm && <span className="restricted"><Icon name="lock" size={12} /> Pricing restricted</span>}</div></div>
       {comm && <div className="sourcing-costing-controls" aria-label="Sourcing costing basis">
         <b>Costing basis</b>
-        <label>1 EUR = ₹ <input type="number" min="0.0001" step="0.01" value={costing.currencyRates.EUR || ''} onChange={e => updateCosting('currencyRates', { ...costing.currencyRates, EUR: n(e.target.value) })} onBlur={() => updateCosting('currencyRates', costing.currencyRates)} /></label>
-        <label>1 USD = ₹ <input type="number" min="0.0001" step="0.01" value={costing.currencyRates.USD || ''} onChange={e => updateCosting('currencyRates', { ...costing.currencyRates, USD: n(e.target.value) })} onBlur={() => updateCosting('currencyRates', costing.currencyRates)} /></label>
-        <label>Customs Duty <input type="number" min="0" max="200" step="0.1" value={costing.customsDutyPct} onChange={e => updateCosting('customsDutyPct', e.target.value)} />%</label>
-        <label>ERV <input type="number" min="0" max="200" step="0.1" value={costing.ervPct} onChange={e => updateCosting('ervPct', e.target.value)} />%</label>
-        <label>Handling <input type="number" min="0" max="200" step="0.1" value={costing.handlingPct} onChange={e => updateCosting('handlingPct', e.target.value)} />%</label>
+        <label>1 EUR = ₹ <CostingNumberInput min="0.0001" step="0.01" value={costing.currencyRates.EUR || ''} onChange={value => updateCosting('currencyRates', { ...costing.currencyRates, EUR: value })} /></label>
+        <label>1 USD = ₹ <CostingNumberInput min="0.0001" step="0.01" value={costing.currencyRates.USD || ''} onChange={value => updateCosting('currencyRates', { ...costing.currencyRates, USD: value })} /></label>
+        <label>Customs Duty <CostingNumberInput min="0" max="200" step="0.1" value={costing.customsDutyPct} onChange={value => updateCosting('customsDutyPct', value)} />%</label>
+        <label>ERV <CostingNumberInput min="0" max="200" step="0.1" value={costing.ervPct} onChange={value => updateCosting('ervPct', value)} />%</label>
+        <label>Handling <CostingNumberInput min="0" max="200" step="0.1" value={costing.handlingPct} onChange={value => updateCosting('handlingPct', value)} />%</label>
         <span className={handlingOutOfRange ? 'warnbox sourcing-costing-warning' : 'hint'}>{handlingOutOfRange ? `Combined total ${importFactorPct.toFixed(1)}% — recommended range is ${handlingMin}–${handlingMax}%` : `Combined: ${importFactorPct.toFixed(1)}% · Admin guide: ${handlingMin}–${handlingMax}%`}</span>
+        <span className="hint" aria-live="polite">Live: {importedLineCount} imported row{importedLineCount === 1 ? '' : 's'} recalculating{domesticLineCount ? ` · ${domesticLineCount} INR row${domesticLineCount === 1 ? '' : 's'} unchanged` : ''}</span>
       </div>}
       <div ref={sourcingSheetWrapRef} className="sheet-wrap sourcing-sheet-wrap"><table id="sourcing-spares-grid" className="sheet sourcing-sheet sourcing-sheet--fixed border-collapse">
-        <thead><tr><th>Part number / customer reference</th><th>Description</th><th>Price source</th><th>Quantity</th><th>Landed unit price</th><th>Discount %</th><th>Markup %</th><th>Adjusted unit price</th><th>Base cost</th><th>Original total</th><th>Quoted total</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Part number / customer reference</th><th>Description</th><th>Price source</th><th>Quantity</th><th>Supplier unit cost</th><th>Discount %</th><th>Markup %</th><th>Landed unit cost</th><th>Customer unit price</th><th>Base cost</th><th>Original total</th><th>Quoted total</th><th>Actions</th></tr></thead>
         <tbody>
           {calculatedItems.map(item => { const line = item.sourceLine; const displayLine = reconcilePriceSource(line, store.priceLists, []); const row = { ...item, discountPct: item.discountPercent, markupPct: item.markupPercent, listTotal: item.listTotal, lineTotal: item.lineTotal, cogs: item.lineTotalCogs }; const confirmable = isConfirmableSparesLine(line); const invalidState = row.qty <= 0 ? 'Cannot confirm' : isMissingSparesDescription(line) ? 'Description required' : 'Needs pricing'; const customerMeta = line.customerConfirmed ? `Customer confirmed${line.customerConfirmationPreviousQty != null ? ` · qty ${line.customerConfirmationPreviousQty} → ${line.qty}` : ''}` : ''; const rowMeta = line.sparesSupport ? 'Support charge' : [line.oem, line.leadTime && `Lead: ${line.leadTime}`, customerMeta].filter(Boolean).join(' · '); const partReference = sourcingPartReference(line); const removed = !!line.removedFromSourcing; return <tr key={line.id} className={row.qty === 0 ? 'sourcing-zero-row' : ''}>
             <td className="sourcing-cell-part-number align-top p-2 overflow-hidden" title={partReference}>{partReference}</td>
             <td className="sourcing-cell-description align-top p-2 overflow-hidden"><div className="sourcing-part-line">{comm && (removed ? <button type="button" className="sourcing-restore-row" title="Restore row to active proposal" aria-label={`Restore ${line.pn || line.id}`} onClick={() => restoreLine(line)}>✓</button> : <button type="button" className="sourcing-remove-row sourcing-row-action" title="Remove row from active proposal" aria-label={`Remove ${line.pn || line.id}`} onClick={() => removeLine(line)}><Icon name="x" size={14} /></button>)}<div className="sourcing-part-copy"><div className="sourcing-part-description line-clamp-2 text-xs font-medium text-gray-900 leading-snug" title={sourcingDescription(line)}>{sourcingDescription(line)}</div><small className="hint truncate overflow-hidden text-ellipsis whitespace-nowrap" title={line.customerConfirmationEvidence || ''}>{rowMeta}</small></div></div></td>
             <td className="sourcing-cell-source align-top p-2 overflow-hidden"><div className="sourcing-source-stack">{(() => { const source = sourceDetails(displayLine); const attribution = manualAttribution(line); const sourcePayload = { ...source, pn: displayLine.pn || displayLine.custRef || displayLine.id, priceState: displayLine.priceState || 'Unstated', listPrice: displayLine.listUnitPrice ?? displayLine.listPrice, currency: displayLine.currency || 'INR', addedBy: attribution.addedByName || attribution.addedBy || '', addedAt: attribution.addedAt || '' }; const isCatalogued = source.source === PRICE_SOURCES.LIST && priceListNameFor(displayLine); return <><div className="sourcing-source-primary">{isCatalogued ? <button type="button" className="sourcing-source-link sourcing-source-name" title={`Open ${source.full} in the price list`} aria-label={`Open ${source.full} in the price list`} onClick={() => openPriceList(displayLine)}>{source.primary}</button> : <button type="button" className="sourcing-source-details-link sourcing-source-name" title={`View full source: ${source.full}`} aria-label={`View full source: ${source.full}`} onClick={() => setEvidence(sourcePayload)}>{source.primary}</button>}</div>{source.secondary && <span className="sourcing-source-meta" title={source.full}>{source.secondary}</span>}{line.priceState === 'Expired' ? <><Chip tone="state-Blocks">Expired</Chip><AiBadge label="pricing anomaly" /></> : line.priceState === 'Needs pricing' ? <Chip tone="state-Review">Needs pricing</Chip> : source.source !== PRICE_SOURCES.MANUAL ? <Chip tone="state-Accepted">Current</Chip> : null}</> })()}</div></td>
             <td className="num"><EditableNumber value={row.qty} label={`Quantity for ${line.pn || line.id}`} disabled={!comm} step="1" onChange={value => updateLine(line, 'qty', Math.max(0, Math.round(value)))} /></td>
-            <td className="num"><EditableNumber prefix={currencySymbol(displayCurrency)} value={fmt(displayValue(row.listUnitPriceINR), displayDigits)} label={`Landed unit price for ${line.pn || line.id} in ${displayCurrency}`} disabled={!comm} onChange={value => updateLine(line, 'listUnitPrice', convertCurrency(value, displayCurrency, 'INR', costing.currencyRates))} /></td>
+            <td className="num"><EditableNumber prefix={currencySymbol(displayCurrency)} value={fmt(displayValue(row.listUnitPriceINR), displayDigits)} label={`Supplier unit cost for ${line.pn || line.id} in ${displayCurrency}`} disabled={!comm} onChange={value => updateLine(line, 'listUnitPrice', convertCurrency(value, displayCurrency, 'INR', costing.currencyRates))} /></td>
             <td className="num"><EditableNumber value={Math.round(row.discountPct)} label={`Discount for ${line.pn || line.id}`} disabled={!comm} step="1" onChange={value => updateLine(line, 'discountPct', Math.min(100, Math.max(0, Math.round(value))))} suffix="%" /></td>
             <td className="num"><EditableNumber value={Math.round(row.markupPct)} label={`Markup for ${line.pn || line.id}`} disabled={!comm} step="1" onChange={value => updateLine(line, 'markupPct', normalizeMarkupPct(Math.round(value)))} suffix="%" /></td>
-            <td className="num">{comm ? displayMoney(row.adjustedUnitPrice) : <span className="restricted"><Icon name="lock" size={11} /></span>}</td>
+            <td className="num">{comm ? displayMoney(row.landedUnitCost) : <span className="restricted"><Icon name="lock" size={11} /></span>}</td>
+            <td className="num"><b>{comm ? displayMoney(row.adjustedUnitPrice) : <span className="restricted"><Icon name="lock" size={11} /></span>}</b></td>
             <td className="num"><EditableNumber prefix={currencySymbol(displayCurrency)} className={`sourcing-base-cost-input ${line.baseCost == null || n(line.baseCost) <= 0 || row.adjustedUnitPrice < row.baseCost ? 'is-warning' : ''}`} value={fmt(displayValue(row.baseCost), displayDigits)} label={`Base cost for ${line.pn || line.id} in ${displayCurrency}`} disabled={!comm} onChange={value => store.updateSparesLine(line.id, { baseCost: Math.max(0, convertCurrency(value, displayCurrency, 'INR', costing.currencyRates)) })} /></td>
             <td className="num">{comm ? displayMoney(row.listTotal) : '—'}</td><td className="num"><b>{comm ? displayMoney(row.lineTotal) : '—'}</b></td>
             <td className="sourcing-cell-actions align-top p-2">{comm && <div className="sourcing-row-actions">{line.confirmed && confirmable ? <Chip tone="state-Accepted" title="Sourcing line confirmed"><Icon name="check" size={11} /> OK</Chip> : confirmable ? <button type="button" className="primary sourcing-row-action sourcing-row-action--confirm" title="Confirm sourcing line" aria-label={`Confirm ${line.pn || line.id}`} onClick={() => store.updateSparesLine(line.id, { confirmed: true })}>OK</button> : <button type="button" className="sourcing-row-action sourcing-row-action--confirm sourcing-row-action--disabled" disabled title={`${invalidState}: enter a positive ${row.qty <= 0 ? 'quantity' : 'list price'}`} aria-label={`${invalidState} for ${line.pn || line.id}`}><Icon name="lock" size={12} /> {invalidState}</button>}<button type="button" className="sourcing-row-action sourcing-row-action--compare" title="Compare sourcing alternatives" aria-label={`Compare alternatives for ${line.pn || line.id}`} onClick={() => openCompare(line)}><Icon name="gitCompare" size={14} /></button></div>}</td>
           </tr> })}
         </tbody>
         {comm && <tfoot className="sourcing-total-row"><tr>
-          <td><b>Totals</b></td><td></td><td></td><td className="num"><b>{totals.quantity}</b></td><td></td><td></td><td></td><td></td><td></td>
+          <td><b>Totals</b></td><td></td><td></td><td className="num"><b>{totals.quantity}</b></td><td></td><td></td><td></td><td></td><td></td><td></td>
           <td className="num"><b>{displayMoney(totals.originalTotal)}</b></td><td className="num"><b>{displayMoney(totals.revenue)}</b></td><td></td>
         </tr></tfoot>}
       </table></div>

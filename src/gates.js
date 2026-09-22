@@ -8,7 +8,7 @@
 
 import { unitCostINR, unitSellINR } from './utils.js'
 import { defaultCosting, MILESTONES } from './seed.js'
-import { applyAdjustment, normalizeMarkupPct } from './pricing.js'
+import { applyAdjustment, normalizeMarkupPct, sparesLineFinancials } from './pricing.js'
 import { isPlaceholderSparesLine } from './proposal/sparesBoq.js'
 import { classRule, classOrder, noExceptionKeys } from './customerClasses.js'
 import { needsCommercialApproval, needsCommercialDecision, commercialApprovalDetails, isLegacyCommercialClarification, isCommercialConfirmationRow, isDeliveryBasisClarification, sourceContainsDeliveryRequirement } from './commercialTerms.js'
@@ -103,10 +103,22 @@ export function computeProposalTotals(proposal) {
     const adjusted = l.quoted !== '' && l.quoted != null ? sell : applyAdjustment(sell, proposal)
     value += adjusted * q
     listValue += sell * q
-    const baseCost = l.baseCost == null
-      ? unitCostINR(l.listPrice || 0, costing, l.currency || 'EUR', isBnk)
-      : Math.max(0, Number(l.baseCost) || 0)
-    cogs += baseCost * q
+    // Spares sourcing is the authority for purchase cost. Reuse its shared
+    // financials so supplier discounts, FX, import factors, and explicit
+    // base-cost overrides produce the same COGS on Proposal and Sourcing.
+    if (proposal.route === 'Spares') {
+      cogs += sparesLineFinancials({
+        ...l,
+        qty: q,
+        listUnitPrice: l.listUnitPrice ?? l.listPrice,
+        priceList: l.priceList || l.list,
+      }, costing).cogsINR
+    } else {
+      const baseCost = l.baseCost == null
+        ? unitCostINR(l.listPrice || 0, costing, l.currency || 'EUR', isBnk)
+        : Math.max(0, Number(l.baseCost) || 0)
+      cogs += baseCost * q
+    }
   }
   const gmPct = value ? ((value - cogs) / value) * 100 : 0
   return { value, listValue, cogs, gmPct }

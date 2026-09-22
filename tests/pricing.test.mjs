@@ -5,7 +5,7 @@ import { buildLeadProposalData } from '../src/leadBoq.js'
 import { sparesProposalBom } from '../src/proposal/sparesBoq.js'
 import { computeProposalTotals } from '../src/gates.js'
 import { convertCurrency, normalizedCurrencyRates } from '../src/currency.js'
-import { effectiveRate } from '../src/utils.js'
+import { clampCosting, effectiveRate } from '../src/utils.js'
 
 const lists = {
   'BNK': { version: '2026-01', currency: 'EUR', uploaded: '2026-01-02', parts: [{ pn: 'P-1', price: 100, adders: [] }] },
@@ -114,8 +114,27 @@ test('spares rollups normalize source currency to INR before margin math', () =>
   }, { baseRate: 100, usdBase: 90, cdErvContPct: 0, bnkDiscPct: 0 })
 
   assert.equal(financials.listUnitPriceINR, 10000)
+  assert.equal(financials.landedUnitCostINR, 10000)
   assert.equal(financials.lineTotalINR, 20000)
   assert.equal(financials.cogsINR, 20000)
+})
+
+test('industry costing applies import factors before markup', () => {
+  const financials = sparesLineFinancials({
+    qty: 1,
+    listUnitPrice: 100,
+    currency: 'EUR',
+    discountPct: 10,
+    markupPct: 20,
+    priceList: 'Supplier quote',
+  }, { currencyRates: { EUR: 100 }, customsDutyPct: 10, ervPct: 5, handlingPct: 5, bnkDiscPct: 0 })
+
+  assert.equal(financials.listUnitPriceINR, 10000)
+  assert.equal(financials.discountedPurchaseUnitPriceINR, 9000)
+  assert.equal(financials.landedUnitCostINR, 10800)
+  assert.equal(financials.adjustedUnitPriceINR, 12960)
+  assert.equal(financials.lineTotalINR, 12960)
+  assert.equal(financials.cogsINR, 10800)
 })
 
 test('B&K discount affects landed COGS, not customer-facing list revenue', () => {
@@ -145,6 +164,41 @@ test('manual INR base cost remains INR and is used by downstream proposal totals
   const bom = sparesProposalBom([line])
   assert.equal(bom[0].quoted, 1000)
   assert.equal(computeProposalTotals({ bom, costing: { baseRate: 100, cdErvContPct: 0, bnkDiscPct: 0 } }).cogs, 600)
+})
+
+test('Spares Proposal COGS matches discounted Sourcing COGS', () => {
+  const costing = {
+    currencyRates: { EUR: 100, USD: 90 },
+    customsDutyPct: 10,
+    ervPct: 5,
+    handlingPct: 5,
+    bnkDiscPct: 0,
+  }
+  const line = {
+    confirmed: true,
+    qty: 1,
+    listUnitPrice: 100,
+    listPrice: 100,
+    currency: 'EUR',
+    priceList: 'Ad-hoc EUR',
+    discountPct: 10,
+    markupPct: 20,
+    desc: 'Imported item',
+  }
+  const sourcing = sparesLineFinancials(line, costing)
+  const bom = sparesProposalBom([line], {}, costing)
+  const proposal = computeProposalTotals({ route: 'Spares', bom, costing })
+
+  assert.equal(sourcing.landedUnitCostINR, 10800)
+  assert.equal(sourcing.adjustedUnitPriceINR, 12960)
+  assert.equal(proposal.cogs, sourcing.cogsINR)
+  assert.equal(proposal.gmPct, ((12960 - sourcing.cogsINR) / 12960) * 100)
+})
+
+test('split import costing inputs clamp to 200%', () => {
+  assert.equal(clampCosting('customsDutyPct', 250), 200)
+  assert.equal(clampCosting('ervPct', 250), 200)
+  assert.equal(clampCosting('handlingPct', 250), 200)
 })
 
 test('display currency conversion uses the configured INR bridge', () => {

@@ -170,17 +170,36 @@ export function sparesLineFinancials(line = {}, costing = {}) {
   const effectiveCosting = { ...defaultCosting, ...(costing || {}) }
   const qty = Math.max(0, Number(line.qty) || 0)
   const listUnitPrice = Math.max(0, Number(line.listUnitPrice ?? line.listPrice) || 0)
-  const currency = line.currency || 'INR'
+  const currency = String(line.currency || 'INR').toUpperCase()
   const isBnk = String(line.priceList || '').startsWith('BNK')
   const discountPct = Math.max(0, Math.min(100, Number(line.discountPct) || 0))
   const markupPct = normalizeMarkupPct(line.markupPct)
-  const sourceRate = effectiveRate(effectiveCosting, currency, false)
+  // Supplier/list prices are purchase costs. Import charges apply to foreign
+  // currency/imported rows; INR rows are assumed to be domestic landed costs.
+  // Keep the FX bridge separate from effectiveRate(), which also includes the
+  // import factor and is used by legacy proposal calculations.
+  const configuredRate = effectiveCosting?.currencyRates?.[currency]
+  const sourceRate = currency === 'INR'
+    ? 1
+    : Number(configuredRate) > 0
+      ? Number(configuredRate)
+      : currency === 'USD'
+        ? (Number(effectiveCosting.usdBase) > 0 ? Number(effectiveCosting.usdBase) : 90)
+        : (Number(effectiveCosting.baseRate) > 0 ? Number(effectiveCosting.baseRate) : 112)
+  const hasSplitCosting = ['customsDutyPct', 'ervPct', 'handlingPct']
+    .some(key => effectiveCosting[key] != null)
+  const importFactorPct = hasSplitCosting
+    ? Number(effectiveCosting.customsDutyPct ?? 0)
+      + Number(effectiveCosting.ervPct ?? 0)
+      + Number(effectiveCosting.handlingPct ?? 0)
+    : Number(effectiveCosting.cdErvHandlingPct ?? effectiveCosting.cdErvContPct ?? 0)
+  const importMultiplier = currency === 'INR' ? 1 : 1 + importFactorPct / 100
   const listUnitPriceINR = listUnitPrice * sourceRate
-  const adjustedUnitPriceINR = listUnitPriceINR
-    * (1 - discountPct / 100)
-    * (1 + markupPct / 100)
+  const discountedPurchaseUnitPriceINR = listUnitPriceINR * (1 - discountPct / 100)
+  const landedUnitCostINR = discountedPurchaseUnitPriceINR * importMultiplier
+  const adjustedUnitPriceINR = landedUnitCostINR * (1 + markupPct / 100)
   const baseCostINR = line.baseCost == null
-    ? unitCostINR(listUnitPrice, effectiveCosting, currency, isBnk)
+    ? unitCostINR(listUnitPrice * (1 - discountPct / 100), effectiveCosting, currency, isBnk)
     : Math.max(0, Number(line.baseCost) || 0)
   return {
     qty,
@@ -189,9 +208,14 @@ export function sparesLineFinancials(line = {}, costing = {}) {
     listUnitPriceINR,
     discountPct,
     markupPct,
+    importFactorPct,
+    importMultiplier,
+    discountedPurchaseUnitPriceINR,
+    landedUnitCostINR,
     adjustedUnitPriceINR,
     baseCostINR,
     listTotalINR: listUnitPriceINR * qty,
+    landedTotalINR: landedUnitCostINR * qty,
     lineTotalINR: adjustedUnitPriceINR * qty,
     cogsINR: baseCostINR * qty,
   }
