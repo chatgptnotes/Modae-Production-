@@ -1693,6 +1693,22 @@ export function StoreProvider({ children }) {
     },
 
     // ---- Service workbench -------------------------------------------------
+    // Service day rates are commercial reference data — an FY revision has to
+    // leave a trail, so this is audited like any other gated change.
+    updateRateSheets(sheet, patch) {
+      setState(s => withAudit({
+        ...s,
+        rateSheets: {
+          ...s.rateSheets,
+          [sheet]: {
+            ...s.rateSheets[sheet],
+            ...patch,
+            rates: { ...s.rateSheets[sheet].rates, ...(patch.rates || {}) },
+          },
+        },
+      }, 'Service rate sheet updated', sheet, Object.keys(patch.rates || patch).join(', ')))
+    },
+
     updateSvcEstimate(oppId, patch) {
       setState(s => {
         const has = s.svcEstimates.some(e => e.oppId === oppId)

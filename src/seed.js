@@ -976,9 +976,13 @@ export const seedAdhocParts = [
   { pn: 'FRT-AIR-EU-IN', supplier: 'DHL Global Forwarding', price: 2350, currency: 'EUR', date: '2026-03-19', note: 'Air freight EU → Mumbai, ~180 kg incl. customs handling' },
 ]
 
-export const seedRateSheet = [
-  { role: 'Service Engineer', ratePerDayK: 45 },
-  { role: 'Senior Engineer / Commissioning', ratePerDayK: 65 },
+// The named roles quoted off a service rate sheet. Where a role is one the
+// service calculator also prices, it points at that rate with `rateKey` instead
+// of carrying its own copy — these used to be two separate tables that agreed
+// only by coincidence.
+const INDIA_ROLES = [
+  { role: 'Service Engineer', rateKey: 'engineerDay' },
+  { role: 'Senior Engineer / Commissioning', rateKey: 'seniorDay' },
   { role: 'Training (per day, classroom)', ratePerDayK: 55 },
   { role: 'Training (per day, on-site)', ratePerDayK: 72 },
   { role: 'Site Supervisor / Installation', ratePerDayK: 38 },
@@ -986,6 +990,12 @@ export const seedRateSheet = [
   { role: 'Application Engineer (remote/offline)', ratePerDayK: 32 },
   { role: 'Project Manager (part allocation)', ratePerDayK: 58 },
   { role: 'Emergency callout (within 48 hrs)', ratePerDayK: 95 },
+]
+
+// Only the two roles the international sheet actually publishes a rate for.
+const INTERNATIONAL_ROLES = [
+  { role: 'Service Engineer', rateKey: 'engineerDay' },
+  { role: 'Senior Engineer / Commissioning', rateKey: 'seniorDay' },
 ]
 
 const CUSTOMER_ROWS = [
@@ -1353,10 +1363,12 @@ export const seedRateSheets = {
   India: {
     currency: 'INR', gst: 18,
     rates: { engineerDay: 45, seniorDay: 65, travelDay: 20, otHour: 6, weekendPct: 50, standbyDay: 25, minCallout: 90, flight: 18, hotelNight: 6, transportDay: 4, perDiem: 3, tools: 12 },
+    roles: INDIA_ROLES,
   },
   International: {
     currency: 'USD', gst: 0,
     rates: { engineerDay: 900, seniorDay: 1300, travelDay: 450, otHour: 120, weekendPct: 50, standbyDay: 500, minCallout: 1800, flight: 1400, hotelNight: 180, transportDay: 90, perDiem: 80, tools: 250 },
+    roles: INTERNATIONAL_ROLES,
   },
 }
 export const seedSvcEstimates = [

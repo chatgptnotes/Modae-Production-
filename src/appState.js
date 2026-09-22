@@ -1,7 +1,7 @@
 import * as datastore from './datastore.js'
 import {
   seedOpportunities, seedFiles, seedPriceLists, seedAdhocParts,
-  seedRateSheet, seedCustomers, seedUsers, seedLeads, seedApprovals,
+  seedCustomers, seedUsers, seedLeads, seedApprovals,
   seedConfig, seedKyc, seedSales, seedSparesLines, seedSparesAlternatives,
   seedRateSheets, seedSvcEstimates, seedClarifications, seedHandover,
   seedAiLeads, seedJointApprovals, seedCatalogRev,
@@ -367,10 +367,10 @@ export function migrate(s) {
       : modaeStandardCommercialTerms()
     return [oppId, { ...proposal, terms, bom: proposal.bom.map(line => reconcilePriceSource(line, s.priceLists, s.vendorQuotes)) }]
   }))
-  if (demo && Array.isArray(s.rateSheet)) {
-    const roles = new Set(s.rateSheet.map(r => r.role))
-    s.rateSheet = [...s.rateSheet, ...seedRateSheet.filter(r => !roles.has(r.role))]
-  }
+  // The standalone role table was merged into rateSheets[sheet].roles on
+  // 22 Sep. Any snapshot still carrying it drops it rather than keeping a second
+  // copy of the day rates that can drift from the billed ones. Demo or not.
+  if (Array.isArray(s.rateSheet)) delete s.rateSheet
   if (demo && Array.isArray(s.adhocParts)) {
     const akey = a => `${a.pn}|${a.date}`
     const known = new Set(s.adhocParts.map(akey))
@@ -523,12 +523,15 @@ export function emptyState(prev) {
     // configuration, not demo transactions, and are required to price the
     // first real opportunity entered after the wipe.
     priceLists: prev.priceLists || {}, adhocParts: prev.adhocParts || [],
+    // Service day rates became admin-editable on 22 Sep, so they are an edited
+    // catalogue now — a wipe must not quietly revert an FY revision to seed.
+    rateSheets: prev.rateSheets || seedRateSheets,
     approvals: [], customers: [],
     sparesLines: [], sparesAlternatives: [], svcEstimates: [], clarifications: [], vendorQuotes: [],
     surveys: [], competitors: [],
     files: {}, proposals: {}, communications: {}, kyc: {},
     poCompare: {}, handover: {}, bSteps: {}, bStepOwners: {},
-    sales: emptySales(prev.sales), rateSheet: prev.rateSheet || [],
+    sales: emptySales(prev.sales),
     // The one piece of demo data hiding inside config — the placeholder price
     // list Admin renders with a "DUMMY — replace with actual" chip.
     config: uploads
@@ -544,7 +547,6 @@ export function seedState() {
     files: seedFiles,
     priceLists: seedPriceLists,
     adhocParts: seedAdhocParts,
-    rateSheet: seedRateSheet,
     customers: seedCustomers,
     proposals: {},
     communications: {},

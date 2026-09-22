@@ -41,6 +41,15 @@ export const engineerDaysFrom = q => num(q.workDays) + num(q.weekendDays)
 export const hasActuals = (est = {}) => ['actualWeekdayDays', 'actualWeekendDays', 'actualOtHours', 'actualTravelDays', 'actualStandbyDays']
   .some(k => est[k] != null && est[k] !== '')
 
+// The named roles a sheet publishes, with rates resolved. A role that points at
+// the calculator's own rate reads it live, so the published table and the bill
+// can never disagree.
+export const roleRates = (sheetObj = {}) => (sheetObj.roles || []).map(row => ({
+  role: row.role,
+  ratePerDay: row.rateKey ? sheetObj.rates?.[row.rateKey] : row.ratePerDayK,
+  derived: !!row.rateKey,
+}))
+
 export function serviceCost(rateSheets, sheetName, q) {
   const sheet = normalizeSheet(sheetName)
   const rs = rateSheets[sheet]
