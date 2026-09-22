@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, WON_REASONS, REVISION_TYPES, DEFAULT_WORKFLOW, isWorkflowAvailable } from '../seed.js'
 import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY, gmailComposeHref, displayRole, displayRoles, displayRoleLabel, formatISTDateTime, productDisplayLabel } from '../utils.js'
-import { pricingThresholdExceptions, readiness, isBlocked, nextActionWith, transitionBlockers, isClarificationResolved, actionableClarifications, displayClarifications, isClarificationCoveredBySource, releaseVoidReason } from '../gates.js'
+import { pricingThresholdExceptions, readiness, isBlocked, nextActionWith, transitionBlockers, isClarificationResolved, actionableClarifications, displayClarifications, isClarificationCoveredBySource, releaseVoidReason, serviceOfferCleared } from '../gates.js'
 import { COMMERCIAL_RX } from './Approvals.jsx'
 import { Chip, ClassChip, AiBadge, MarkWonControl, WarnBox, ErrBox, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
@@ -254,13 +254,15 @@ export default function Workbench() {
     if (opp.route !== 'Service' || step.servicePhase == null || step.servicePhase <= persistedStepIndex) return []
     const est = (store.svcEstimates || []).find(e => e.oppId === opp.id) || {}
     const survey = (store.surveys || []).find(v => v.oppId === opp.id)
-    const review = (store.approvals || []).find(a => a.oppId === opp.id && a.type === 'Service offer review' && ['Approved', 'Approved with conditions'].includes(a.status))
-    const communication = (store.communications?.[opp.id] || []).find(c => c.kind === 'submission' && c.status === 'sent')
+    const review = serviceOfferCleared(opp, store.getProposal(opp.id), store)
+    // Path A's offer *is* the published rate schedule, issued on its own before
+    // the site visit — it never becomes a proposal submission.
+    const communication = (store.communications?.[opp.id] || []).find(c => ['submission', 'rate-sheet'].includes(c.kind) && c.status === 'sent')
     const blockers = []
     if (step.servicePhase >= 2 && !est.scopeConfirmed) blockers.push({ key: 'service-scope', severity: 'block', text: 'Confirm the Service scope and offer path' })
     if (step.servicePhase >= 3 && (!est.travelConfirmed || (est.surveyRequired && !survey?.sow))) blockers.push({ key: 'service-evidence', severity: 'block', text: est.surveyRequired ? 'Complete travel confirmation, survey report, and SoW before preparing the offer' : 'Confirm the manual travel estimate before preparing the offer' })
     if (step.servicePhase >= 4 && !(est.offerPrepared || est.serviceLineAdded)) blockers.push({ key: 'service-offer', severity: 'block', text: 'Prepare the Standard Rate Sheet or Customized Proposal first' })
-    if (step.servicePhase >= 5 && !review) blockers.push({ key: 'service-review', severity: 'block', text: 'Complete the combined AH + LJS Service Review first' })
+    if (step.servicePhase >= 5 && !review) blockers.push({ key: 'service-review', severity: 'block', text: 'Approve the offer for release before sending it to the customer' })
     if (step.servicePhase >= 6 && !communication) blockers.push({ key: 'service-send', severity: 'block', text: 'Send the approved offer to the customer first' })
     if (step.servicePhase >= 7 && est.customerDecision !== 'Accepted') blockers.push({ key: 'service-decision', severity: 'block', text: 'Record customer acceptance before scheduling service execution' })
     if (step.servicePhase >= 8 && (!est.engineer || !est.executionDate || !(Number(est.actualEngineerDays) > 0))) blockers.push({ key: 'service-execution', severity: 'block', text: 'Assign an engineer, schedule the service, and record actual engineer days' })

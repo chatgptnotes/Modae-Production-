@@ -136,6 +136,12 @@ export function pricingThresholdExceptions(opp, proposal, state = {}) {
     ;(state.sparesLines || []).filter(line => line.oppId === opp.id && !line.removedFromSourcing && (line.qty == null || Number(line.qty) > 0) && !isPlaceholderSparesLine(line))
       .forEach(line => add(line, line.pn || line.custRef || line.desc || line.id))
   }
+  // A Path A offer has no proposal to carry a discount — the negotiated rate sits
+  // on the service estimate, so the same thresholds are read straight off it.
+  if (opp?.route === 'Service') {
+    const est = (state.svcEstimates || []).find(e => e.oppId === opp.id)
+    if (est) add({ discountPct: est.rateDiscountPct }, 'Service rate sheet')
+  }
   return { discountPct, markupPct, rows }
 }
 
@@ -158,6 +164,35 @@ export function pricingApprovalFor(opp, proposal, approvals, pricingRows = []) {
       : (a.approvalSnapshot
         ? !approvalAffectedByProposal(a, a.type, proposal, opp)
         : (a.rev == null || String(a.rev) === rev))))
+}
+
+// A Service opportunity now runs the same §5 stack as a project — technical,
+// commercial and the margin matrix (decision, 22 Sep). The one carve-out is
+// Path A while it is selling at published rates: the standard rate schedule is
+// a rate card, not a negotiated price, so there is nothing for an approver to
+// decide. Discount it and the full matrix applies.
+export function serviceMatrixExempt(opp, state) {
+  if (opp?.route !== 'Service') return false
+  const est = (state?.svcEstimates || []).find(e => e.oppId === opp.id) || {}
+  if ((est.offerMode || est.aiOfferMode) !== 'Standard Rate Sheet') return false
+  return !(Number(est.rateDiscountPct) > 0)
+}
+
+// Opportunities raised before that decision carry a single 'Service offer
+// review' instead. They keep running on it rather than stranding mid-flight.
+export const legacyServiceReview = (opp, approvals) => (opp?.route === 'Service'
+  ? (approvals || []).find(a => a.oppId === opp.id && a.type === 'Service offer review' && a.status !== 'Cancelled') || null
+  : null)
+
+// Is this service offer cleared to go in front of the customer? Three regimes,
+// one answer, so the panels do not each re-derive the policy: a published-rate
+// Path A offer needs no clearance, a legacy opportunity needs its single review,
+// and everything else needs the §5 release.
+export function serviceOfferCleared(opp, proposal, state) {
+  if (serviceMatrixExempt(opp, state)) return true
+  const legacy = legacyServiceReview(opp, state?.approvals)
+  if (legacy) return ['Approved', 'Approved with conditions'].includes(legacy.status)
+  return !!releaseState(proposal, state?.approvals, opp?.id, opp).release
 }
 
 // Diagram 02 §5C — the margin approval matrix. Routing is on *order value*
@@ -236,6 +271,12 @@ export function readiness(opp, proposal, state) {
 
   if (opp.route === 'Service') {
     const est = (state.svcEstimates || []).find(e => e.oppId === opp.id)
+    // Until 22 Sep an unconditional 'Service offer review' blocker stood here and
+    // incidentally covered this. Confirming the scope and the offer path is the
+    // salesperson's own step, so it is stated in its own right.
+    if (!est?.scopeConfirmed) {
+      b.push({ key: 'svc-scope', severity: 'block', text: 'Service scope and offer path not confirmed' })
+    }
     if (est && !est.travelConfirmed) {
       b.push({ key: 'svc-travel', severity: 'block', text: 'Manual travel estimate not confirmed' })
     }
@@ -251,11 +292,14 @@ export function readiness(opp, proposal, state) {
         b.push({ key: 'survey-sow', severity: 'block', text: 'Statement of Work must be written up from the survey report' })
       }
     }
-    const serviceReview = (state.approvals || []).find(a => a.oppId === opp.id && a.type === 'Service offer review' && a.status !== 'Cancelled')
-    if (!serviceReview || !['Approved', 'Approved with conditions'].includes(serviceReview.status)) {
+    // A review already in flight still governs its own opportunity. Everything
+    // raised since runs the §5 stack instead, which transitionBlockers applies,
+    // so nothing extra is demanded here.
+    const serviceReview = legacyServiceReview(opp, state.approvals)
+    if (serviceReview && !['Approved', 'Approved with conditions'].includes(serviceReview.status)) {
       b.push({
-        key: 'service-review', severity: serviceReview?.status === 'Pending' ? 'wait' : 'block',
-        text: serviceReview?.status === 'Pending' ? 'Service offer review is awaiting AH + LJS' : 'One Service offer review is required before the proposal can proceed',
+        key: 'service-review', severity: serviceReview.status === 'Pending' ? 'wait' : 'block',
+        text: serviceReview.status === 'Pending' ? 'Service offer review is awaiting AH + LJS' : 'One Service offer review is required before the proposal can proceed',
         approvalType: 'Service offer review', approver: 'AH', needed: ['AH', 'LJS'], anyOf: false,
       })
     }
@@ -595,17 +639,24 @@ export function transitionBlockers(opp, target, proposal, state) {
         type: rule.type, key: rule.key, label: rule.label || rule.type,
         approver: rule.approver, needed: rule.needed || [], anyOf: !!rule.anyOf,
       }))
-    const gates = configuredGates.length ? configuredGates : (opp?.route === 'Service' ? [
-      { type: 'Service offer review', key: 'service-review', label: 'Service offer review', approver: 'AH', needed: ['AH', 'LJS'] },
-    ] : [
-      ...(opp?.route === 'Spares' ? [] : [
-        { type: APPROVAL_5A, key: 'tech-approval', label: 'Technical approval (LJS or AN)', approver: 'LJS', needed: ['LJS', 'AN'], anyOf: true },
-      ]),
-      ...(hasCommercialDeviation ? [
-        { type: APPROVAL_5B, key: 'comm-approval', label: 'Commercial approval (AH)', approver: 'AH', needed: ['AH'] },
-      ] : []),
-      { type: APPROVAL_5C, key: 'release', label: 'Final quote release', approver: 'LJS', needed: ['LJS', 'AH'] },
-    ])
+    // Service runs the same layered approval as a project. Two exceptions: an
+    // opportunity still carrying the older single review runs on that, and a
+    // Path A offer at published rates needs no §5 approval at all.
+    const legacyReview = legacyServiceReview(opp, approvals)
+    const gates = configuredGates.length ? configuredGates
+      : legacyReview ? [
+        { type: 'Service offer review', key: 'service-review', label: 'Service offer review', approver: 'AH', needed: ['AH', 'LJS'] },
+      ]
+      : serviceMatrixExempt(opp, state) ? []
+      : [
+        ...(opp?.route === 'Spares' ? [] : [
+          { type: APPROVAL_5A, key: 'tech-approval', label: 'Technical approval (LJS or AN)', approver: 'LJS', needed: ['LJS', 'AN'], anyOf: true },
+        ]),
+        ...(hasCommercialDeviation ? [
+          { type: APPROVAL_5B, key: 'comm-approval', label: 'Commercial approval (AH)', approver: 'AH', needed: ['AH'] },
+        ] : []),
+        { type: APPROVAL_5C, key: 'release', label: 'Final quote release', approver: 'LJS', needed: ['LJS', 'AH'] },
+      ]
     for (const g of gates) {
       const { approved, pending: waiting } = approvalForRev(g.type, proposal, approvals, opp.id, opp)
       if (approved) continue

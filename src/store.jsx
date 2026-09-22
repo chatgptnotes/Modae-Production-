@@ -13,7 +13,7 @@ import {
 } from './seed.js'
 import { leadConfig, routeOwner, expiredLeadDeadline, aiAuditDetail } from './leadRules.js'
 import { withoutSimulated, simulatedCount } from './simulatedLeads.js'
-import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLeadSlice, mergeClarificationSlice, mergeApprovalRows, defaultViewMode } from './appState.js'
+import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLeadSlice, mergeOpportunitySlice, mergeClarificationSlice, mergeApprovalRows, defaultViewMode } from './appState.js'
 import { unitCostINR, unitSellINR, setRoleNameConfig, nowIST, toISTISOString, canManagePriceLists } from './utils.js'
 import { PRICE_SOURCES, isConfirmableSparesLine, normalizePriceFields, sparesLineFinancials } from './pricing.js'
 import { clarificationTopic } from './leadClarification.js'
@@ -221,11 +221,11 @@ export function StoreProvider({ children }) {
       .then(() => {
         const current = stateRef.current
         const saved = { ...lastSavedRef.current }
-        const confirmed = {}
+      const confirmed = {}
         for (const [key, value] of Object.entries(dirty)) {
           if (JSON.stringify(current[key]) !== JSON.stringify(value)) continue
           saved[key] = value
-          if (key === 'leads' || key === 'leadArchive' || key === 'clarifications') confirmed[key] = value
+          if (key === 'leads' || key === 'leadArchive' || key === 'clarifications' || key === 'opportunities') confirmed[key] = value
         }
         lastSavedRef.current = saved
         if (Object.keys(confirmed).length) {
@@ -233,6 +233,7 @@ export function StoreProvider({ children }) {
             ...s,
             leadSyncBaseline: { ...(s.leadSyncBaseline || {}), ...Object.fromEntries(Object.entries(confirmed).filter(([key]) => key === 'leads' || key === 'leadArchive')) },
             clarificationSyncBaseline: confirmed.clarifications || s.clarificationSyncBaseline || [],
+            opportunitySyncBaseline: confirmed.opportunities || s.opportunitySyncBaseline || [],
           }))
         }
       })
@@ -260,7 +261,7 @@ export function StoreProvider({ children }) {
         hydratedRef.current = true
         setState(s => ({ ...s, leadSyncBaseline: {
           ...(s.leadSyncBaseline || {}), leads: s.leads, leadArchive: s.leadArchive || [],
-        }, clarificationSyncBaseline: s.clarifications || [] }))
+        }, clarificationSyncBaseline: s.clarifications || [], opportunitySyncBaseline: s.opportunities || [] }))
       } catch (e) {
         console.warn('Supabase seed failed — retrying on next focus:', e?.message)
       }
@@ -282,6 +283,7 @@ export function StoreProvider({ children }) {
       }
       const nextBaseline = { ...(s.leadSyncBaseline || {}) }
       let nextClarificationBaseline = s.clarificationSyncBaseline || []
+      let nextOpportunityBaseline = s.opportunitySyncBaseline || []
       for (const [k, v] of Object.entries(serverSlices)) {
         if (k === 'leads' || k === 'leadArchive') {
           const deletedLeadIds = [...new Set([...(s.deletedLeadIds || []), ...(serverSlices.deletedLeadIds || [])])]
@@ -303,10 +305,16 @@ export function StoreProvider({ children }) {
           nextClarificationBaseline = mergedClarifications.baseline
           continue
         }
+        if (k === 'opportunities') {
+          const mergedOpportunities = mergeOpportunitySlice(s.opportunities || [], v, s.opportunitySyncBaseline || [], s.deletedOpportunityIds || [])
+          accepted[k] = mergedOpportunities.rows
+          nextOpportunityBaseline = mergedOpportunities.baseline
+          continue
+        }
         if (k in s && s[k] !== bootRef.current[k]) continue // edited this session — keep local
         accepted[k] = v
       }
-      const merged = reconcileApprovedSubmissions(migrate({ ...s, ...accepted, leadSyncBaseline: nextBaseline, clarificationSyncBaseline: nextClarificationBaseline }))
+      const merged = reconcileApprovedSubmissions(migrate({ ...s, ...accepted, leadSyncBaseline: nextBaseline, clarificationSyncBaseline: nextClarificationBaseline, opportunitySyncBaseline: nextOpportunityBaseline }))
       // Only the slices we took from the server are known to match it. A slice
       // we kept is still unsaved, so it must stay dirty for the flush below.
       lastSavedRef.current = Object.fromEntries(
@@ -328,6 +336,7 @@ export function StoreProvider({ children }) {
     const updates = {}
     const nextBaseline = { ...(s.leadSyncBaseline || {}) }
     let nextClarificationBaseline = s.clarificationSyncBaseline || []
+    let nextOpportunityBaseline = s.opportunitySyncBaseline || []
     for (const [k, v] of Object.entries(syncedOf(slices))) {
       // Approvals merge per row by sync stamp — a stale server snapshot must
       // never downgrade a decision that was just recorded locally.
@@ -348,6 +357,12 @@ export function StoreProvider({ children }) {
         nextClarificationBaseline = mergedClarifications.baseline
         continue
       }
+      if (k === 'opportunities') {
+        const mergedOpportunities = mergeOpportunitySlice(s.opportunities || [], v, s.opportunitySyncBaseline || [], s.deletedOpportunityIds || [])
+        if (JSON.stringify(s.opportunities || []) !== JSON.stringify(mergedOpportunities.rows)) updates.opportunities = mergedOpportunities.rows
+        nextOpportunityBaseline = mergedOpportunities.baseline
+        continue
+      }
       const dirty = k in s && s[k] !== lastSavedRef.current[k]
       if (dirty) continue
       if (JSON.stringify(s[k]) === JSON.stringify(v)) continue
@@ -355,7 +370,7 @@ export function StoreProvider({ children }) {
       if (k === 'leads' || k === 'leadArchive') nextBaseline[k] = v
     }
     if (!Object.keys(updates).length) return
-    const merged = reconcileApprovedSubmissions(migrate({ ...s, ...updates, leadSyncBaseline: nextBaseline, clarificationSyncBaseline: nextClarificationBaseline }))
+    const merged = reconcileApprovedSubmissions(migrate({ ...s, ...updates, leadSyncBaseline: nextBaseline, clarificationSyncBaseline: nextClarificationBaseline, opportunitySyncBaseline: nextOpportunityBaseline }))
     // Keep the server snapshot as the dirty baseline. If the merge preserved
     // a local question over stale server data, the next debounced save must
     // still upload that local row instead of treating it as already synced.
@@ -459,6 +474,7 @@ export function StoreProvider({ children }) {
       setState(s => withAudit({
         ...s,
         opportunities: [...s.opportunities, opp],
+        deletedOpportunityIds: (s.deletedOpportunityIds || []).filter(id => id !== opp.id),
         files: { ...s.files, [opp.id]: Object.fromEntries(SUBFOLDERS.map(f => [f, []])) },
       }, 'Opportunity registered', opp.id, opp.oppName))
       spTrack(opp.id, 'Open', () => filestore.ensureOppFolder(opp))
@@ -529,6 +545,7 @@ export function StoreProvider({ children }) {
         return withAudit(
           {
             ...s, opportunities: s.opportunities.filter(o => o.id !== id), files, proposals, communications,
+            deletedOpportunityIds: [...new Set([...(s.deletedOpportunityIds || []), id])],
             // Ghost approvals would inflate pending counts forever.
             approvals: (s.approvals || []).filter(a => a.oppId !== id),
           },

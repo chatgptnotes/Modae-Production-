@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react'
 import { useStore } from '../store.jsx'
 import { ErrBox, Modal, WarnBox } from '../ui.jsx'
-import { releaseState, serviceApprovalSet } from '../gates.js'
+import { releaseState, serviceApprovalSet, legacyServiceReview } from '../gates.js'
 import { Icon } from '../icons.jsx'
 import { docModel, docRoute, enclosuresFor } from '../proposalDoc.js'
 import { buildPricing } from '../proposal/docProps.js'
@@ -94,9 +94,12 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
 
   // A quote remains releasable after unrelated edits; material customer-facing
   // changes reopen the release gate.
-  const serviceRelease = opp.route === 'Service' ? serviceApprovalSet(store.approvals, opp.id, p, opp)[0].approved : null
+  // Only a service opportunity still on the older single review releases off it;
+  // the rest release through §5 like any other quote.
+  const onLegacyReview = !!legacyServiceReview(opp, store.approvals)
+  const serviceRelease = onLegacyReview ? serviceApprovalSet(store.approvals, opp.id, p, opp)[0].approved : null
   const { release: genericRelease, reason: releaseReason, pending: pendingRelease } = releaseState(p, store.approvals, opp.id, opp)
-  const release = opp.route === 'Service' ? serviceRelease : genericRelease
+  const release = onLegacyReview ? serviceRelease : genericRelease
   const pendingConds = store.approvals
     .filter(a => a.oppId === opp.id && a.status === 'Approved with conditions')
     .flatMap(a => (a.conditions || []).filter(c => !c.incorporated)

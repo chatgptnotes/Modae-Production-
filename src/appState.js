@@ -170,6 +170,7 @@ export function migrate(s) {
   if (!s.oneTimeCleanups || typeof s.oneTimeCleanups !== 'object' || Array.isArray(s.oneTimeCleanups)) s.oneTimeCleanups = {}
   if (!Array.isArray(s.leads)) s.leads = demo ? seedLeads : []
   if (!Array.isArray(s.deletedLeadIds)) s.deletedLeadIds = []
+  if (!Array.isArray(s.deletedOpportunityIds)) s.deletedOpportunityIds = []
   if (!Array.isArray(s.approvals)) s.approvals = demo ? seedApprovals : []
   if (!Array.isArray(s.audit)) s.audit = []
   // ---- phase 2 slices ----
@@ -305,6 +306,7 @@ export function migrate(s) {
   // Per-device baseline used to distinguish unsaved lead changes after reload.
   if (!s.leadSyncBaseline || typeof s.leadSyncBaseline !== 'object') s.leadSyncBaseline = {}
   if (!Array.isArray(s.clarificationSyncBaseline)) s.clarificationSyncBaseline = []
+  if (!Array.isArray(s.opportunitySyncBaseline)) s.opportunitySyncBaseline = []
   // Diagram 02 workflow objects: the Brownfield B-01..B-05 sign-off ledger,
   // the §4 service site surveys, and §8 competitor tracking.
   if (!s.bSteps) s.bSteps = {}
@@ -552,6 +554,7 @@ export function seedState() {
     leadArchive: [],
     leadDeadlines: [],
     deletedLeadIds: [],
+    deletedOpportunityIds: [],
     users: seedUsers,
     role: 'SUPER',
   })
@@ -633,6 +636,15 @@ export function mergeLeadSlice(local = [], server = [], baseline = [], deletedId
   })
 
   return { rows, baseline: nextBaseline }
+}
+
+// Opportunities are shared workspace rows, but a browser can render a local
+// row before the normalized server read finishes. Merge the two snapshots so
+// hydration and realtime refreshes do not make the tracker visibly jump
+// between different row sets. A local edit wins until it has been persisted;
+// a local delete remains a delete against the last known baseline.
+export function mergeOpportunitySlice(local = [], server = [], baseline = [], deletedIds = []) {
+  return mergeLeadSlice(local, server, baseline, deletedIds)
 }
 
 // Clarifications are stored as one synced slice, but questions can be created

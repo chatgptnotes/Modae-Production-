@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useStore, snapshotProposal } from '../store.jsx'
 import { proposalApprovalSnapshot } from '../approvalMemory.js'
 import { canPriceProposal, fmt, ddMmmYY, displayRole, displayRoles } from '../utils.js'
-import { readiness, isBlocked, commercialGate, releaseState, approvalSet, serviceApprovalSet } from '../gates.js'
+import { readiness, isBlocked, commercialGate, releaseState, approvalSet, serviceApprovalSet, legacyServiceReview } from '../gates.js'
 import { REVISION_TYPES } from '../seed.js'
 import { Chip, AiBadge, Phase2Badge, ErrBox, WarnBox, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
@@ -36,8 +36,11 @@ export default function PropBuilder({ opp, onRevision }) {
   const revisions = p.revisions || []
   // Snapshot-backed approvals survive unrelated edits; material changes reopen
   // only the affected approval domain.
-  const serviceReview = opp.route === 'Service' ? serviceApprovalSet(store.approvals, opp.id, p, opp)[0] : null
-  const { pending: pendingRelease, release } = opp.route === 'Service'
+  // Only an opportunity still carrying the older single review runs on it;
+  // every other service opportunity uses the same §5 stack as a project.
+  const onLegacyReview = !!legacyServiceReview(opp, store.approvals)
+  const serviceReview = onLegacyReview ? serviceApprovalSet(store.approvals, opp.id, p, opp)[0] : null
+  const { pending: pendingRelease, release } = onLegacyReview
     ? { pending: serviceReview?.pending, release: serviceReview?.approved }
     : releaseState(p, store.approvals, opp.id, opp)
   const released = !!release
@@ -46,7 +49,7 @@ export default function PropBuilder({ opp, onRevision }) {
   // Dispatch", so they are shown together rather than discovered one blocker
   // at a time. Commercial approval is only applicable to deviations.
   // Each approval is evaluated against the current proposal snapshot.
-  const gates5 = opp.route === 'Service'
+  const gates5 = onLegacyReview
     ? serviceApprovalSet(store.approvals, opp.id, p, opp)
     : approvalSet(p, store.approvals, opp.id, opp)
   const allApproved = gates5.every(g => !!g.approved)
@@ -98,7 +101,9 @@ export default function PropBuilder({ opp, onRevision }) {
   }
 
   const submitForApproval = () => {
-    if (opp.route === 'Service') return
+    // A legacy service opportunity is released by its single review, not by the
+    // §5 release request.
+    if (onLegacyReview) return
     const today = new Date().toISOString().slice(0, 10)
     // The approval is stamped with the revision it approves, so a later
     // revision cannot inherit it.

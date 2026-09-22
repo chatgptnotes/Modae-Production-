@@ -186,10 +186,13 @@ test('a typed owner overrides the derivation', () => {
   assert.equal(na.derived, false)
 })
 
-test('an opportunity with incomplete customer verification names the verification owner', () => {
+// The customer here is Green, i.e. already cleared, so no verification gate
+// applies. What is outstanding is the service scope, and that sits with the
+// salesperson who owns the opportunity.
+test('an unscoped service opportunity names its own salesperson', () => {
   const clear = { id: 'X-1', status: 'Open', owner: 'RS', route: 'Service', customerStatus: 'Green', oppType: 'Service', sellTo: 'ACME', eucName: 'ACME Plant', eucLocation: 'Pune', oppName: 'Service scope', contactPerson: 'Buyer', contactPhone: '9999999999' }
   const na = nextActionWith(clear, { bom: [], terms: [] }, { approvals: [], kyc: {}, sparesLines: [], svcEstimates: [] })
-  assert.equal(na.owner, 'AH')
+  assert.equal(na.owner, 'RS')
   assert.equal(na.derived, true)
 })
 

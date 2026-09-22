@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
-import { migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLeadSlice, mergeClarificationSlice, KEY } from '../src/appState.js'
+import { migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLeadSlice, mergeOpportunitySlice, mergeClarificationSlice, KEY } from '../src/appState.js'
 import { seedAiLeads, seedJointApprovals } from '../src/seed.js'
 
 // The app ships full of seeded demo records, and until now there was no way out
@@ -22,6 +22,24 @@ test('lead hydration keeps a local mail created before the server save completes
   const server = [{ id: 'LD-old', subject: 'Old mail', status: 'New' }]
   const merged = mergeLeadSlice(local, server, [])
   assert.deepEqual(merged.rows.map(l => l.id), ['LD-local', 'LD-old'])
+})
+
+test('opportunity hydration merges local and server rows without jumping lists', () => {
+  const local = [{ id: 'OP-local', oppName: 'Local opportunity' }]
+  const server = [{ id: 'OP-server', oppName: 'Server opportunity' }]
+  const merged = mergeOpportunitySlice(local, server, [])
+  assert.deepEqual(merged.rows.map(o => o.id), ['OP-local', 'OP-server'])
+})
+
+test('opportunity hydration keeps local edits and deletions against a stale server snapshot', () => {
+  const baseline = [
+    { id: 'OP-edit', oppName: 'Before' },
+    { id: 'OP-delete', oppName: 'Remove me' },
+  ]
+  const local = [{ id: 'OP-edit', oppName: 'After' }]
+  const server = [...baseline]
+  const merged = mergeOpportunitySlice(local, server, baseline)
+  assert.deepEqual(merged.rows, [{ id: 'OP-edit', oppName: 'After' }])
 })
 
 test('lead hydration preserves local edits and deletes against a stale server snapshot', () => {
