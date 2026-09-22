@@ -9,8 +9,8 @@ import { PRICE_SOURCES, formatPriceSource, isConfirmableSparesLine, isMissingSpa
 import { convertCurrency, currencySymbol, normalizedCurrencyRates } from '../currency.js'
 import { descriptionMatch, familyOf } from './sparesMatching.js'
 import { isLegacyAutoSparesSupportRow, orderSparesLines, supportRowForDescription } from '../proposal/sparesBoq.js'
-import { runTaskResult } from '../ai.js'
 import { buildLeadProposalData } from '../leadBoq.js'
+import { getSparesMatchEntry, requestSparesMatch } from './sparesMatchCache.js'
 
 const n = value => Number.isFinite(Number(value)) ? Number(value) : 0
 const money = value => `₹ ${fmt(n(value))}`
@@ -497,44 +497,25 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
   }
   const loadAiSuggestions = async line => {
     const requestId = ++compareRequestRef.current
-    setCompareAiBusy(true)
     setCompareAiError('')
-    setAiSuggestions([])
-    const allParts = allPriceListParts()
-    const preferred = priceListAlternatives(line)
-      .map(alternative => allParts.find(part => part.pn === alternative.pn))
-      .filter(Boolean)
-    const candidates = [...preferred, ...allParts.filter(part => !preferred.some(item => item.pn === part.pn))].slice(0, 160)
-    try {
-      const aiResult = await runTaskResult('spares.match', {
-        line: { pn: line.pn || '', customerReference: line.custRef || '', description: line.desc || '', quantity: line.qty || 0 },
-        candidates: candidates.map(part => ({ partNumber: part.pn, description: part.desc, list: part.list, version: part.version })),
-      }, { fallback: store.config?.aiModel?.provider === 'Built-in fallback' })
-      const result = aiResult?.data
-      if (!result) {
-        setCompareAiError(aiResult?.error || 'AI suggestions are unavailable in this environment. Search the approved price lists manually.')
-        return
-      }
-      const byPartNumber = new Map(candidates.map(part => [String(part.pn || '').trim().toUpperCase(), part]))
-      const seen = new Set()
-      const matches = (Array.isArray(result?.matches) ? result.matches : [])
-        .map(match => {
-          const part = byPartNumber.get(String(match.partNumber || '').trim().toUpperCase())
-          if (!part || seen.has(part.pn)) return null
-          seen.add(part.pn)
-          return {
-            forPn: line.pn, pn: part.pn, desc: part.desc,
-            conf: Math.max(0, Math.min(100, Number(match.confidence) || 0)),
-            reason: String(match.reason || 'AI identified a possible catalogue match.'),
-            note: listPriceLabel(part), priceState: 'Current', suggestedBy: 'AI',
-          }
-        }).filter(Boolean).slice(0, 6)
-      if (requestId === compareRequestRef.current) setAiSuggestions(matches)
-    } catch (error) {
-      if (requestId === compareRequestRef.current) setCompareAiError(`AI suggestions unavailable: ${error?.message || String(error)}`)
-    } finally {
-      if (requestId === compareRequestRef.current) setCompareAiBusy(false)
+    const cached = getSparesMatchEntry(opp.id, line, store.priceLists)
+    if (cached?.status === 'ready') {
+      setAiSuggestions(cached.suggestions || [])
+      setCompareAiBusy(false)
+      return
     }
+    setCompareAiBusy(true)
+    const result = await requestSparesMatch({
+      oppId: opp.id,
+      line,
+      priceLists: store.priceLists,
+      model: store.config?.aiModel?.model,
+      fallback: store.config?.aiModel?.provider === 'Built-in fallback',
+    })
+    if (requestId !== compareRequestRef.current) return
+    setAiSuggestions(result.suggestions || [])
+    if (result.status === 'error') setCompareAiError(result.error)
+    setCompareAiBusy(false)
   }
   const openCompare = line => {
     setCompareFor(line.id)

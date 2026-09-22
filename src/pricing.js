@@ -163,6 +163,11 @@ export function resolvePriceSource(line, priceLists = {}, adhocParts = [], vendo
 // never become confirmed automatically.
 export function reconcileCatalogueMatch(line = {}, priceLists = {}) {
   if (line.confirmed || line.sparesSupport || line.priceSource === PRICE_SOURCES.MANUAL && Number(line.listPrice) > 0) return line
+  // A high-confidence AI suggestion has already selected the approved
+  // catalogue part, but remains a suggested (not exact) match until the user
+  // confirms it. Do not collapse that state into an exact match just because
+  // the selected catalogue number is now present in `pn`.
+  if (line.priceSourceSuggested && line.priceSourceSuggestedPart && samePart(line.pn, line.priceSourceSuggestedPart)) return line
   const match = findPriceListMatch(line, priceLists)
   const resolved = sourceFromPriceListMatch(match)
   if (!resolved || resolved.price <= 0) return line

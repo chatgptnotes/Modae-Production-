@@ -428,10 +428,19 @@ function sparesMatchPrompt(p) {
 
 Rank the approved price-list candidates for this sourcing line. Return only candidates
 from the supplied list; never invent, complete, or alter a part number. A candidate
-must be technically plausible from the line description, customer reference and
-part-number evidence. Use confidence below 75 when the description is generic or
-the match is uncertain. Return at most 6 candidates, best first, with a concise
-reason that names the matching evidence. An AI suggestion is not a confirmation.
+must be technically plausible from the line description, customer reference,
+structured technical details and part-number evidence. Do not require the customer
+and catalogue descriptions to use the same words or word order. Treat harmless
+differences in punctuation, singular/plural form, abbreviations, units and common
+technical synonyms as equivalent only when the technical evidence agrees.
+
+Give extra weight to matching manufacturer, model/series, numeric identifiers,
+size, length, voltage and product type. Do not match two parts merely because they
+both say card, module, cable, probe, unit or system. A conflicting model number,
+size, length or voltage is a strong reason not to match. Use confidence below 75
+when the description is generic, evidence is incomplete, or the match is uncertain.
+Return at most 6 candidates, best first, with a concise reason naming the matching
+evidence. An AI suggestion is not a confirmation.
 
 CURRENT SOURCING LINE:
 ${cap(JSON.stringify(p.line || {}), 3000)}

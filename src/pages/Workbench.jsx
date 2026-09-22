@@ -38,6 +38,7 @@ import ServiceReportPanel from '../workbench/ServiceReportPanel.jsx'
 import ServiceInvoicePanel from '../workbench/ServiceInvoicePanel.jsx'
 import { COMMERCIAL_DECISIONS, CUSTOMER_CONFIRMATION_STATUSES, commercialApprovalDetails, isCommercialConfirmationRow, isDeliveryBasisClarification, isLegacyCommercialClarification, needsCommercialApproval, normalizeCommercialTerm, sourceContainsDeliveryRequirement } from '../commercialTerms.js'
 import { latestSubmissionForRevision, submissionStatusLabel } from '../submissionStatus.js'
+import { prefetchSparesMatches } from '../workbench/sparesMatchCache.js'
 
 const statusPill = s =>
   s === 'Approved' ? 'Green' : s === 'Rejected' ? 'Red' : s === 'Approved with conditions' ? 'Amber' : 'Blue'
@@ -272,6 +273,48 @@ export default function Workbench() {
   const proposal = store.getProposal(opp.id)
   const sourceLead = [...(store.leads || []), ...(store.leadArchive || [])].find(lead => lead.id === opp.sourceLeadId || lead.oppId === opp.id)
   const sourceText = [sourceLead?.subject, sourceLead?.body, opp.remarks, opp.oppName].filter(Boolean).join(' ')
+  useEffect(() => {
+    if (opp.route !== 'Spares') return undefined
+    const lines = (store.sparesLines || []).filter(line =>
+      line.oppId === opp.id && !isPlaceholderSparesLine(line) && !line.removedFromSourcing)
+    void prefetchSparesMatches({
+      oppId: opp.id,
+      lines,
+      priceLists: store.priceLists,
+      model: store.config?.aiModel?.model,
+      fallback: store.config?.aiModel?.provider === 'Built-in fallback',
+    }).then(workerResults => {
+      workerResults.flat().forEach(({ line, result }) => {
+        const suggestion = result?.suggestions?.[0]
+        if (result?.status !== 'ready' || !suggestion || Number(suggestion.conf) < 85 || Number(suggestion.price) <= 0) return
+        const current = (store.sparesLines || []).find(item => item.id === line.id)
+        if (!current || current.confirmed || current.pn !== line.pn || current.desc !== line.desc || Number(current.qty) !== Number(line.qty)) return
+        if (current.priceSource === 'manual' && Number(current.listPrice) > 0) return
+        store.updateSparesLine(current.id, {
+          pn: suggestion.pn,
+          desc: suggestion.desc || current.desc,
+          match: 'Suggested price-list match',
+          conf: suggestion.conf,
+          confirmed: false,
+          priceSource: 'price-list',
+          priceSourceName: suggestion.priceList,
+          priceSourceVersion: suggestion.priceListVersion,
+          priceSourceRef: suggestion.pn,
+          priceSourceSuggested: true,
+          priceSourceSuggestedPart: suggestion.pn,
+          priceSourceSuggestedDescription: suggestion.desc || '',
+          priceSourceSuggestedList: suggestion.priceList || '',
+          priceSourceSuggestedVersion: suggestion.priceListVersion || '',
+          priceState: 'Current',
+          listPrice: suggestion.price,
+          listUnitPrice: suggestion.price,
+          baseCost: Number(current.baseCost) > 0 ? current.baseCost : suggestion.price,
+          currency: suggestion.currency || current.currency || 'INR',
+        })
+      })
+    })
+    return undefined
+  }, [opp.id, opp.route, store.sparesLines, store.priceLists, store.config?.aiModel?.model, store.config?.aiModel?.provider])
   const moveToMilestone = (milestone, reason = '', tabOverride = '') => {
     store.setMilestone(opp.id, milestone, reason, { alreadyGated: true })
     goTab(tabOverride || LIFECYCLE_TABS[milestone] || 'overview')
