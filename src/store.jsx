@@ -1716,7 +1716,7 @@ export function StoreProvider({ children }) {
           ...s,
           svcEstimates: has
             ? s.svcEstimates.map(e => (e.oppId === oppId ? { ...e, ...patch } : e))
-            : [...s.svcEstimates, { oppId, sheet: 'India', workDays: 1, travelDays: 1, dailyHours: 8, otHours: 0, weekendDays: 0, standbyDays: 0, engineer: '', mobilisation: '', toolsCerts: '', travelConfirmed: false, ...patch }],
+            : [...s.svcEstimates, { oppId, workDays: 1, travelDays: 1, dailyHours: 8, otHours: 0, weekendDays: 0, standbyDays: 0, engineer: '', mobilisation: '', toolsCerts: '', travelConfirmed: false, ...patch }],
         }
       })
     },

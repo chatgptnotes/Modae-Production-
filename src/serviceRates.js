@@ -1,4 +1,5 @@
 import { fmt } from './utils.js'
+import { STATES } from './indiaLocations.js'
 
 // The reactive-service cost build-up. This lived inside WbService.jsx, which is
 // why the invoice could never reuse it: the estimate and the bill have to agree
@@ -6,6 +7,31 @@ import { fmt } from './utils.js'
 // weekend / OT as applicable) rather than on what was quoted.
 
 export const normalizeSheet = name => (name === 'International' ? 'International' : 'India')
+
+const INDIAN_STATES = Object.values(STATES).map(name => name.toLowerCase())
+
+// Which rate sheet a job is priced off follows from where the site is, not from
+// a toggle someone remembers to set. ModAE is an Indian company doing mostly
+// domestic work, so a blank or unrecognised location stays domestic; naming a
+// state or "India" confirms it, and anything else is priced internationally.
+export function sheetForLocation(location) {
+  const text = String(location || '').trim().toLowerCase()
+  if (!text) return 'India'
+  if (text.includes('india')) return 'India'
+  if (INDIAN_STATES.some(state => text.includes(state))) return 'India'
+  // A bare city with no country is ambiguous; only an explicit foreign country
+  // reads as international.
+  return /\b(uae|dubai|abu dhabi|oman|muscat|qatar|doha|saudi|ksa|kuwait|bahrain|singapore|malaysia|indonesia|vietnam|thailand|philippines|bangladesh|sri lanka|nepal|kenya|nigeria|egypt|turkey|germany|france|italy|spain|netherlands|uk|united kingdom|usa|united states|canada|australia|japan|korea|china)\b/
+    .test(text)
+    ? 'International'
+    : 'India'
+}
+
+// The sheet this job is priced off: an explicit override if one was set, the
+// site's location otherwise. Every surface that prices or bills service work
+// resolves it through here so they cannot disagree.
+export const sheetFor = (opp, est = {}) =>
+  normalizeSheet(est.sheet || sheetForLocation(opp?.eucLocation || opp?.location))
 
 const num = v => Math.max(0, Number(v) || 0)
 

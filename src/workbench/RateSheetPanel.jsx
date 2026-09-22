@@ -3,7 +3,7 @@ import { useStore } from '../store.jsx'
 import { ENCLOSURES } from '../proposalDoc.js'
 import { SERVICE_RATE_SCHEDULE_URL } from '../proposal/emailAttachments.js'
 import { gmailComposeHref, displayRole, fmt } from '../utils.js'
-import { normalizeSheet } from '../serviceRates.js'
+import { sheetFor } from '../serviceRates.js'
 import { Chip } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 
@@ -22,7 +22,7 @@ const RATE_PREVIEW = [
 
 export default function RateSheetPanel({ opp, est }) {
   const store = useStore()
-  const sheet = normalizeSheet(est.sheet)
+  const sheet = sheetFor(opp, est)
   const rs = store.rateSheets[sheet]
   const customer = (store.customers || []).find(c => c.id === opp.sellTo || c.name === opp.sellTo)
   const enclosure = ENCLOSURES.serviceRates

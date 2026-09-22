@@ -2,7 +2,7 @@ import React from 'react'
 import { useStore } from '../store.jsx'
 import { Chip } from '../ui.jsx'
 import { canPriceProposal } from '../utils.js'
-import { serviceCost, actualQuantities, engineerDaysFrom, serviceMoney, normalizeSheet, hasActuals } from '../serviceRates.js'
+import { serviceCost, actualQuantities, engineerDaysFrom, serviceMoney, sheetFor, hasActuals } from '../serviceRates.js'
 import { Icon } from '../icons.jsx'
 
 export default function ServiceInvoicePanel({ opp }) {
@@ -14,7 +14,7 @@ export default function ServiceInvoicePanel({ opp }) {
   })
   const ready = !!est.serviceReport
   const comm = canPriceProposal(store.role)
-  const sheet = normalizeSheet(est.sheet)
+  const sheet = sheetFor(opp, est)
   const basis = est.invoiceBasis || (est.offerMode === 'Standard Rate Sheet' ? 'Actual engineer days' : 'Approved scope / BOQ / lump sum')
   const money = v => serviceMoney(sheet, v)
 

@@ -26,6 +26,26 @@ export function computeAlerts(state, today = new Date()) {
     if (opp.proposalExpiry && new Date(opp.proposalExpiry).getTime() < now) add('proposal-expiry', 'high', opp.id, `${opp.id} proposal has expired`, 'Revise proposal', opp.proposalExpiry)
     if (!opp.nextAction && daysSince(opp.lastUpdated) >= 3) add('missing-follow-up', 'medium', opp.id, `${opp.id} has no follow-up recorded`, 'Add next action', when)
   }
+  // Spec Scenario 6 — a customer goes quiet after the rate schedule, then comes
+  // back weeks later. The schedule has a validity, so it is chased while it is
+  // live and re-validated once it is not.
+  const validityDays = Number(state?.config?.rateSheetValidityDays) || 30
+  for (const est of state?.svcEstimates || []) {
+    if (!est.rateSheetSentOn || est.customerDecision) continue
+    const opp = (state?.opportunities || []).find(o => o.id === est.oppId)
+    if (!opp || opp.status !== 'Open' || !ownsOpportunity(opp, role)) continue
+    const age = daysSince(est.rateSheetSentOn)
+    if (age >= validityDays) {
+      add('rate-sheet-expiry', 'high', opp.id,
+        `${opp.id} rate schedule has passed its ${validityDays}-day validity`,
+        'Re-validate the rates and re-issue', est.rateSheetSentOn)
+    } else if (age >= 7) {
+      add('rate-sheet-idle', 'medium', opp.id,
+        `${opp.id} rate schedule sent ${age} days ago with no decision`,
+        'Follow up with the customer', est.rateSheetSentOn)
+    }
+  }
+
   for (const approval of state?.approvals || []) {
     if (approval.status !== 'Pending' || !involvedInApproval(approval, role)) continue
     add('pending-approval', 'medium', approval.oppId || approval.id, `${approval.type || 'Approval'} is pending`, 'Open Approvals', approval.ts, approval.id)
