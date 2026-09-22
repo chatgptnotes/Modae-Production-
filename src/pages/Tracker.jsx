@@ -1,6 +1,6 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { CLOSE_REASONS, WON_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES } from '../seed.js'
 import { fmt, fmtRupeesFromK, rupeesToK, mmmYY, ddMmmYY, stageClass, productList, productLabel, productDisplayLabel, sameCustomer, displayRole, OPPORTUNITY_DATE_FIELDS, OPPORTUNITY_PERIODS, opportunityDateRange } from '../utils.js'
@@ -26,37 +26,37 @@ export const COLS = [
   // 11, not 8: an opp ID is 9 characters and must never wrap — at 8 the key
   // view gave the column ~64px against the ~66px the ID needs, so exactly one
   // character spilled onto a second line.
-  { key: 'id', letter: 'C', label: 'Opp ID', w: 11, wAll: 13 },
-  { key: 'sellTo', letter: 'D', label: 'Sell To Customer*', w: 16, wAll: 13 },
+  { key: 'id', letter: 'C', label: 'Opp ID', w: 11, wAll: 13, wKey: 12 },
+  { key: 'sellTo', letter: 'D', label: 'Sell To Customer*', w: 16, wAll: 13, wKey: 17 },
   { key: 'category', letter: 'E', label: 'Category', w: 6 },
   { key: 'location', letter: 'F', label: 'Location', w: 6 },
   { key: 'customerStatus', letter: 'G', label: 'Customer Status', w: 5 },
   { key: 'eucName', letter: 'H', label: 'EUC Name*', w: 8 },
   { key: 'eucLocation', letter: 'I', label: 'EUC Location', w: 6 },
-  { key: 'oppName', letter: 'J', label: 'Opportunity Name/Description*', w: 22, wAll: 18 },
+  { key: 'oppName', letter: 'J', label: 'Opportunity Name/Description*', w: 22, wAll: 18, wKey: 27 },
   { key: 'owner', letter: 'K', label: 'Owner', w: 4 },
-  { key: 'oppType', letter: 'L', label: 'Opp Type', w: 10, wAll: 8 },
+  { key: 'oppType', letter: 'L', label: 'Opp Type', w: 10, wAll: 8, wKey: 10 },
   { key: 'bu', letter: 'M', label: 'BU', w: 4 },
   { key: 'segment', letter: 'N', label: 'Segment', w: 5 },
   { key: 'product', letter: 'O', label: 'Equipment / Product Family', w: 6 },
-  { key: 'prob', letter: 'P', label: 'Prob (%)', w: 9, wAll: 7 },
-  { key: 'valueK', letter: 'Q', label: 'Value (₹)*', num: true, w: 8 },
+  { key: 'prob', letter: 'P', label: 'Prob (%)', w: 9, wAll: 7, wKey: 8 },
+  { key: 'valueK', letter: 'Q', label: 'Value (₹)*', num: true, w: 8, wKey: 9 },
   { key: 'cogsK', letter: 'R', label: 'COGS (₹)*', num: true, w: 5 },
   { key: 'gmK', letter: 'S', label: 'GM (₹)', num: true, w: 4 },
   { key: 'gmPct', letter: 'T', label: 'GM%', num: true, w: 3 },
   { key: 'createDate', letter: 'U', label: 'Create Date', w: 5, wAll: 7 },
-  { key: 'proposalDate', letter: 'V', label: 'Proposal Send Date', w: 5, wAll: 7 },
+  { key: 'proposalDate', letter: 'V', label: 'Proposal Send Date', w: 5, wAll: 7, wKey: 12 },
   { key: 'orderDate', letter: 'W', label: 'Expected Order Date', w: 14, wAll: 9 },
   { key: 'invoiceDate', letter: 'X', label: 'Expected Ship Date', w: 7, wAll: 9 },
   { key: 'status', letter: 'Y', label: 'Status*', w: 5 },
-  { key: 'stage', letter: 'Z', label: 'Stage*', w: 11, wAll: 8 },
+  { key: 'stage', letter: 'Z', label: 'Stage*', w: 11, wAll: 8, wKey: 13 },
   { key: 'closedReason', letter: 'AA', label: 'Closed Reason*', w: 6 },
   { key: 'contactPerson', letter: 'AB', label: 'Contact Person*', w: 7 },
   { key: 'contactPhone', letter: 'AC', label: 'Contact Phone #*', w: 6 },
   { key: 'lastUpdated', letter: 'AD', label: 'Last Updated', w: 5, wAll: 7 },
   { key: 'forecast', letter: 'AE', label: 'Forecast', w: 3 },
   { key: 'remarks', letter: 'AF', label: 'Update/Remarks', w: 10 },
-  { key: 'nextActionOwner', letter: 'AG', label: 'Next Action', w: 11 },
+  { key: 'nextActionOwner', letter: 'AG', label: 'Next Action', w: 11, wKey: 15 },
 ]
 
 // The columns a sales owner actually works from, in Biji's words on 13 Aug:
@@ -90,39 +90,33 @@ function hiddenColumnCss(hidden) {
 // scrolls sideways inside .sheet-wrap instead.
 //
 // Same nth-child indexing as hiddenColumnCss: the Sl rowhead is child 1, so
-// COLS[i] is child i + 2. Two columns live outside COLS and still need sizing:
-// the Sl rowhead at child 1 and the trailing Proposal link at the last child.
+// COLS[i] is child i + 2. Only the Sl rowhead lives outside COLS.
 // Percentages must stay plain — Chrome resolves a calc() containing a
 // percentage as `auto` for fixed-layout column widths, which silently
 // collapses every column to an equal share and undoes the whole point.
 const ROWHEAD_PCT = 2.6
-// 8.5 fits the word "Proposal" on one line; at 6.5 the header broke to "PROPOS/AL".
-const PROPOSAL_PCT = 8.5
 // px per weight unit in the scrolling view, and the floor below which a column
 // is too narrow to read its own header. Sums to a sheet about 3000px wide.
 const PX_PER_UNIT = 13
 const MIN_COL_PX = 78
 const ROWHEAD_PX = 34
-const PROPOSAL_PX = 84
 
 function columnWidthCss(cols, scope, all = false) {
-  const share = c => (all && c.wAll) || c.w
+  const share = c => (all && c.wAll) || (!all && c.wKey) || c.w
   const rule = (sel, value) => `${scope} thead tr > ${sel}, ${scope} tbody tr > ${sel} { ${value} }`
   if (all) {
     const px = c => Math.max(MIN_COL_PX, Math.round(share(c) * PX_PER_UNIT))
     return [
       rule(':nth-child(1)', `width: ${ROWHEAD_PX}px; min-width: ${ROWHEAD_PX}px;`),
       ...cols.map(c => rule(`:nth-child(${COLS.indexOf(c) + 2})`, `min-width: ${px(c)}px;`)),
-      rule(':last-child', `min-width: ${PROPOSAL_PX}px;`),
     ].join('\n')
   }
   const total = cols.reduce((sum, c) => sum + share(c), 0)
-  const budget = 100 - ROWHEAD_PCT - PROPOSAL_PCT
+  const budget = 100 - ROWHEAD_PCT
   const pct = value => `width: ${value.toFixed(3)}%;`
   return [
     rule(':nth-child(1)', pct(ROWHEAD_PCT)),
     ...cols.map(c => rule(`:nth-child(${COLS.indexOf(c) + 2})`, pct((share(c) / total) * budget))),
-    rule(':last-child', pct(PROPOSAL_PCT)),
   ].join('\n')
 }
 
@@ -163,7 +157,6 @@ function WrapInput({ value, onChange, title }) {
 
 export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const store = useStore()
-  const navigate = useNavigate()
   const fb = useFormulaBar()
   const drawer = useDrawer()
   const [sheet, setSheet] = useState('Opportunities') // Opportunities | Old Closed Opps
@@ -392,7 +385,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     const patch = { [field]: value }
     // Reopening clears the closure fields; a Won/Lost stage must not survive.
     if (field === 'status' && value === 'Open') Object.assign(patch, { closedReason: '', closedReasonNote: '', stage: 'Firm Bid' })
-    if (field === 'closedReason' && value !== 'Others') patch.closedReasonNote = ''
+    if (field === 'closedReason' && !['Others', 'Other'].includes(value)) patch.closedReasonNote = ''
     if (field === 'status' && value === 'Closed') {
       setClosePending({ id, stage: '' })
       setCloseReason('')
@@ -416,13 +409,12 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
 
   const confirmClose = () => {
     const note = closeReasonNote.trim()
-    if (!closePending || !closeReason || (closeReason === 'Others' && !note)) return
-    const reason = closeReason === 'Others' ? note : closeReason
+    const requiresNote = closePending?.stage === 'Won' ? closeReason === 'Other' : closeReason === 'Others'
+    if (!closePending || !closeReason || (requiresNote && !note)) return
     if (closePending.stage === 'Won') {
-      store.markWon(closePending.id, reason)
+      store.markWon(closePending.id, closeReason, requiresNote ? note : '')
     } else {
-      store.closeLost(closePending.id, reason)
-      if (closeReason === 'Others') store.updateOpportunity(closePending.id, { closedReason: closeReason, closedReasonNote: note })
+      store.closeLost(closePending.id, closeReason, null, requiresNote ? note : '')
     }
     cancelClose()
   }
@@ -715,7 +707,6 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                   {openFilter?.key === col.key && renderFilterPop(col, openFilter)}
                 </th>
               ))}
-              <th>Proposal</th>
             </tr>
           </thead>
           <tbody>
@@ -839,8 +830,15 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                 </td>
                 <td onClick={selectCell(o, COLS[23])} className={isSel(o, COLS[23]) ? 'cell-sel' : ''}>
                   <div className="tracker-stage-cell">
-                    <div className="ro" title="Workflow stages are changed from the opportunity workspace">{workflowStageLabelFor(o)}</div>
-                    {o.status === 'Closed' && <MarkWonControl opp={o} store={store} />}
+                    {o.status === 'Closed' && ['Won', 'Lost'].includes(o.stage) ? (
+                      <div className={`tracker-terminal-stage ${o.stage.toLowerCase()}`} title="Terminal outcome; workflow milestone shown below">
+                        <span className="tracker-outcome-label">{o.stage}</span>
+                        <span className="tracker-stage-context">{workflowStageLabelFor(o)}</span>
+                      </div>
+                    ) : (
+                      <div className="ro" title="Workflow stages are changed from the opportunity workspace">{workflowStageLabelFor(o)}</div>
+                    )}
+                    {o.status === 'Closed' && o.stage !== 'Lost' && <MarkWonControl opp={o} store={store} />}
                   </div>
                 </td>
                 <td onClick={selectCell(o, COLS[24])}
@@ -848,9 +846,10 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                   title={o.status === 'Closed' && !o.closedReason ? 'Closed Reason is mandatory — pick a justification' : ''}>
                   {o.status === 'Closed' ? (
                     <select value={o.closedReason} onChange={upd(o.id, 'closedReason')}
-                      title={o.closedReason === 'Others' && o.closedReasonNote ? `Others — ${o.closedReasonNote}` : ''}>
+                      title={(o.closedReason === 'Others' || o.closedReason === 'Other') && o.closedReasonNote ? `${o.closedReason} — ${o.closedReasonNote}` : ''}>
                       <option value="">— required —</option>
-                      {CLOSE_REASONS.map(r => <option key={r}>{r}</option>)}
+                      {[...(o.stage === 'Won' ? WON_REASONS : CLOSE_REASONS), ...(o.closedReason && !(o.stage === 'Won' ? WON_REASONS : CLOSE_REASONS).includes(o.closedReason) ? [o.closedReason] : [])]
+                        .map(r => <option key={r}>{r}</option>)}
                     </select>
                   ) : ''}
                 </td>
@@ -879,13 +878,6 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                     )
                   })()}
                 </td>
-                <td>
-                  <Link to={`/proposal/${o.id}`}>Open ▸</Link>
-                  <button type="button" className="link-button" title="Create a new proposal revision"
-                    onClick={e => { e.stopPropagation(); store.reviseProposal(o.id, 'Revision opened from Opportunities list'); navigate(`/opp/${o.id}/proposal`) }}>
-                    Revise
-                  </button>
-                </td>
               </tr>
             ))}
           </tbody>
@@ -897,7 +889,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
               <td className="num">₹ {fmt(totals.c)}</td>
               <td className="num">₹ {fmt(totals.v - totals.c)}</td>
               <td className="num" style={{ color: 'var(--amber-text)' }}>{totals.v ? Math.round(((totals.v - totals.c) / totals.v) * 100) + '%' : ''}</td>
-              <td colSpan={14}></td>
+              <td colSpan={13}></td>
             </tr>
           </tfoot>
         </table>
@@ -933,14 +925,14 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                 value={closeReason}
                 onChange={e => {
                   setCloseReason(e.target.value)
-                  if (e.target.value !== 'Others') setCloseReasonNote('')
+                  if (!(closePending.stage === 'Won' ? e.target.value === 'Other' : e.target.value === 'Others')) setCloseReasonNote('')
                 }}
                 autoFocus
               >
                 <option value="">— select a reason —</option>
                 {(closePending.stage === 'Won' ? WON_REASONS : CLOSE_REASONS).map(reason => <option key={reason} value={reason}>{reason}</option>)}
               </select>
-              {closeReason === 'Others' && (
+              {((closePending.stage === 'Won' && closeReason === 'Other') || (closePending.stage !== 'Won' && closeReason === 'Others')) && (
                 <label className="tracker-close-reason-note" htmlFor="tracker-close-reason-note">
                   Additional explanation
                   <textarea
@@ -956,7 +948,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
             </>
           )}
           <div className="forms-actions">
-            <button className="primary" disabled={!closePending.stage || !closeReason || (closeReason === 'Others' && !closeReasonNote.trim())} onClick={confirmClose}>Confirm</button>
+              <button className="primary" disabled={!closePending.stage || !closeReason || ((closePending.stage === 'Won' ? closeReason === 'Other' : closeReason === 'Others') && !closeReasonNote.trim())} onClick={confirmClose}>Confirm</button>
             <button onClick={cancelClose}>Cancel</button>
           </div>
         </Modal>

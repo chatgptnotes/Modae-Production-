@@ -8,7 +8,7 @@ import { statusFolderFor } from './sharepoint.js'
 import {
   buildPoCompare, buildHandover, milestoneForStage, routeForType,
   contextForType, B_STEPS, REVISION_TYPES,
-  ROLES, SUBFOLDERS, newProposal, PORTAL_ENABLED, defaultBStepOwners,
+  ROLES, SUBFOLDERS, MILESTONES, newProposal, PORTAL_ENABLED, defaultBStepOwners,
   canSignBStep,
 } from './seed.js'
 import { leadConfig, routeOwner, expiredLeadDeadline, aiAuditDetail } from './leadRules.js'
@@ -148,7 +148,7 @@ function applyApprovalEffects(s, appr) {
         next = {
           ...next,
           opportunities: next.opportunities.map(o => o.id === appr.oppId
-            ? { ...o, milestone: 'Submitted', lastUpdated: new Date().toISOString().slice(0, 10) }
+            ? { ...o, milestone: 'Submitted', lastUpdated: nowIST().slice(0, 10) }
             : o),
         }
       }
@@ -175,7 +175,7 @@ function reconcileApprovedSubmissions(s) {
     if (!proposal || !releaseState(proposal, s.approvals, opp.id, opp).release) return opp
     if (transitionBlockers(opp, 'Submitted', proposal, s).length) return opp
     changed = true
-    return { ...opp, milestone: 'Submitted', lastUpdated: new Date().toISOString().slice(0, 10) }
+    return { ...opp, milestone: 'Submitted', lastUpdated: nowIST().slice(0, 10) }
   })
   return changed ? { ...s, opportunities } : s
 }
@@ -465,7 +465,7 @@ export function StoreProvider({ children }) {
     },
 
     updateOpportunity(id, patch) {
-      const today = new Date().toISOString().slice(0, 10)
+      const today = nowIST().slice(0, 10)
       // Status-folder diff BEFORE the patch lands — a stage change (Won/Lost/
       // reopen) moves the SharePoint folder between the four status folders.
       const before = stateRef.current.opportunities.find(o => o.id === id)
@@ -734,13 +734,13 @@ export function StoreProvider({ children }) {
 
     // Closing a lost opportunity always carries a reason — the diagram's
     // "Capture Loss Reason & Close Opportunity" box. Callers must pass one.
-    closeLost(oppId, reason, competitor = null) {
+    closeLost(oppId, reason, competitor = null, reasonNote = '') {
       if (!reason) return
       setState(s => {
         const next = withAudit({
           ...s,
           opportunities: s.opportunities.map(o => (o.id === oppId
-            ? { ...o, stage: 'Lost', status: 'Closed', closedReason: reason, lastUpdated: new Date().toISOString().slice(0, 10) }
+            ? { ...o, stage: 'Lost', status: 'Closed', closedReason: reason, closedReasonNote: reason === 'Others' ? reasonNote : '', milestone: 'Follow-up', lastUpdated: nowIST().slice(0, 10) }
             : o)),
         }, 'Opportunity lost', oppId, reason)
         return competitor?.name
@@ -756,14 +756,14 @@ export function StoreProvider({ children }) {
       }
     },
 
-    markWon(oppId, reason = 'Customer acceptance') {
-      const today = new Date().toISOString().slice(0, 10)
+    markWon(oppId, reason = 'Customer acceptance', reasonNote = '') {
+      const today = nowIST().slice(0, 10)
       const before = stateRef.current.opportunities.find(o => o.id === oppId)
       if (!before) return
       setState(s => withAudit({
         ...s,
         opportunities: s.opportunities.map(o => (o.id === oppId
-          ? { ...o, stage: 'Won', status: 'Closed', closedReason: reason, milestone: 'Handover', lastUpdated: today }
+          ? { ...o, stage: 'Won', status: 'Closed', closedReason: reason, closedReasonNote: reason === 'Other' ? reasonNote : '', milestone: 'Handover', lastUpdated: today }
           : o)),
       }, 'Opportunity won', oppId, reason))
       const after = { ...before, stage: 'Won', status: 'Closed', milestone: 'Handover' }
@@ -1761,7 +1761,7 @@ export function StoreProvider({ children }) {
     },
     approveHandover(oppId) {
       setState(s => {
-        const today = new Date().toISOString().slice(0, 10)
+        const today = nowIST().slice(0, 10)
         return withAudit({
           ...s,
           handover: { ...s.handover, [oppId]: { ...s.handover[oppId], approved: true, approvedBy: s.role, approvedOn: today } },
@@ -1772,12 +1772,21 @@ export function StoreProvider({ children }) {
       })
     },
 
-    setMilestone(oppId, milestone, reason = '') {
-      const today = new Date().toISOString().slice(0, 10)
+    setMilestone(oppId, milestone, reason = '', { alreadyGated = false } = {}) {
+      const before = stateRef.current.opportunities.find(o => o.id === oppId)
+      if (!before) return false
+      if (!alreadyGated) {
+        const currentIndex = MILESTONES.indexOf(before.milestone)
+        const targetIndex = MILESTONES.indexOf(milestone)
+        if (targetIndex >= 0 && currentIndex >= 0 && targetIndex < currentIndex && !reason.trim()) return false
+        if (targetIndex > currentIndex && transitionBlockers(before, milestone, stateRef.current.proposals?.[oppId], stateRef.current).length) return false
+      }
+      const today = nowIST().slice(0, 10)
       setState(s => withAudit({
         ...s,
         opportunities: s.opportunities.map(o => (o.id === oppId ? { ...o, milestone, lastUpdated: today } : o)),
       }, 'Milestone moved', oppId, reason ? `${milestone} — ${reason}` : milestone))
+      return true
     },
 
     // ---- Admin config ------------------------------------------------------

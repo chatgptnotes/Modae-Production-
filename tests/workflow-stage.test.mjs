@@ -20,3 +20,8 @@ test('workflow options use milestone values while showing user-facing labels', (
     { milestone: 'Screening', label: 'Requirement Validation' },
   ])
 })
+
+test('closed terminal stages override stale saved milestones', () => {
+  assert.equal(workflowStageMilestoneFor({ route: 'Spares', status: 'Closed', stage: 'Lost', milestone: 'Submitted' }), 'Follow-up')
+  assert.equal(workflowStageMilestoneFor({ route: 'Spares', status: 'Closed', stage: 'Won', milestone: 'Submitted' }), 'Handover')
+})

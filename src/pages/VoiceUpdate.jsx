@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { CLOSE_REASONS } from '../seed.js'
+import { CLOSE_REASONS, WON_REASONS } from '../seed.js'
 import { Icon } from '../icons.jsx'
 
 const SR = typeof window !== 'undefined'
@@ -70,7 +70,10 @@ function parseTranscript(raw, opps) {
       if (stage === 'Won' || stage === 'Lost') {
         if (found.opp.status !== 'Closed') patch.status = 'Closed'
         // Default reason — the confirmation card asks the user to pick.
-        patch.closedReason = found.opp.closedReason || 'Relationship'
+        const allowedReasons = stage === 'Won' ? WON_REASONS : CLOSE_REASONS
+        patch.closedReason = allowedReasons.includes(found.opp.closedReason)
+          ? found.opp.closedReason
+          : (stage === 'Won' ? 'Customer acceptance' : 'Relationship')
       }
       break
     }
@@ -150,7 +153,15 @@ export default function VoiceUpdate() {
 
   const apply = () => {
     const { opp, patch, remarks } = pending
-    store.updateOpportunity(opp.id, { ...patch, remarks })
+    if (patch.stage === 'Won') {
+      store.markWon(opp.id, patch.closedReason || 'Customer acceptance')
+      if (remarks !== opp.remarks) store.updateOpportunity(opp.id, { remarks })
+    } else if (patch.stage === 'Lost') {
+      store.closeLost(opp.id, patch.closedReason || 'Relationship')
+      if (remarks !== opp.remarks) store.updateOpportunity(opp.id, { remarks })
+    } else {
+      store.updateOpportunity(opp.id, { ...patch, remarks })
+    }
     setApplied({ opp, patch, transcript: pending.transcript })
     setPending(null)
   }
@@ -239,7 +250,7 @@ export default function VoiceUpdate() {
                           ...pending,
                           patch: { ...pending.patch, closedReason: e.target.value },
                         })}>
-                        {CLOSE_REASONS.map(r => <option key={r}>{r}</option>)}
+                        {(pending.patch.stage === 'Won' ? WON_REASONS : CLOSE_REASONS).map(r => <option key={r}>{r}</option>)}
                       </select>
                     ) : c.to}
                   </div>

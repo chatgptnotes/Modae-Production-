@@ -31,8 +31,9 @@ test('the live-sync migration publishes only shared business tables', () => {
 
 test('normalized opportunity writes fail loudly instead of falling back to ignored legacy slices', () => {
   const datastore = read('src/datastore.js')
-  assert.match(datastore, /const failed = results\.find\(result => result\.error\)/)
-  assert.match(datastore, /if \(failed\) throw failed\.error/)
+  assert.match(datastore, /function saveNormalizedRowsNow\(entity, rows\)/)
+  assert.match(datastore, /supabase\.rpc\('save_rows'/)
+  assert.match(datastore, /if \(result\.error\) throw result\.error/)
 })
 
 test('opportunity writes use revision-safe latest-save-wins persistence', () => {
@@ -66,6 +67,13 @@ test('the store exposes live sync state for dashboard status', () => {
   assert.match(store, /value=\{\{ \.\.\.api, liveSyncStatus \}\}/)
   assert.match(dashboard, /LiveSyncBadge/)
   assert.match(dashboard, /store\.liveSyncStatus/)
+})
+
+test('workflow stage changes are gated and use the India business date', () => {
+  const store = read('src/store.jsx')
+  assert.match(store, /setMilestone\(oppId, milestone, reason = '', \{ alreadyGated = false \} = \{\}\)/)
+  assert.match(store, /transitionBlockers\(before, milestone, stateRef\.current\.proposals\?\.\[oppId\]/)
+  assert.match(store, /const today = nowIST\(\)\.slice\(0, 10\)/)
 })
 
 test('the second final-release decision uses the normal transition gate before auto-advancing', () => {

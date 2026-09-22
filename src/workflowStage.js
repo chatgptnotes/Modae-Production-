@@ -43,7 +43,13 @@ const routeStages = opp => opp?.route === 'Spares'
 export const workflowStageOptionsFor = opp => routeStages(opp).map(([milestone, label]) => ({ milestone, label }))
 
 export const workflowStageMilestoneFor = opp => {
-  const stored = opp?.milestone || milestoneForStage(opp?.stage, opp?.status)
+  // Terminal pipeline stages are authoritative. Older rows could be closed
+  // through the tracker without their workbench milestone being updated, so
+  // never let a stale Submitted/Proposal milestone hide Won or Lost here.
+  const terminal = opp?.status === 'Closed' && ['Won', 'Lost'].includes(opp?.stage)
+    ? milestoneForStage(opp.stage, opp.status)
+    : null
+  const stored = terminal || opp?.milestone || milestoneForStage(opp?.stage, opp?.status)
   return opp?.route === 'Spares' && stored === 'Qualification' ? 'Screening' : stored
 }
 

@@ -6063,7 +6063,8 @@ html, body { overflow-x: hidden; max-width: 100%; }
   flex: 1 1 auto;
   min-width: 0;
   white-space: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
   line-height: 1.15;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -6113,6 +6114,11 @@ html, body { overflow-x: hidden; max-width: 100%; }
 @media (max-width: 760px) { .tracker-date-pop { width: min(300px, calc(100vw - 16px)); min-width: 0; } .tracker-date-error { white-space: normal; } }
 .tracker-page table.sheet td input, .tracker-page table.sheet td select { min-width: 0; text-overflow: ellipsis; }
 .tracker-stage-cell { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.tracker-terminal-stage { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+.tracker-outcome-label { font-size: 11px; font-weight: 800; letter-spacing: .02em; }
+.tracker-terminal-stage.won .tracker-outcome-label { color: var(--won-text); }
+.tracker-terminal-stage.lost .tracker-outcome-label { color: var(--lost-text); }
+.tracker-stage-context { color: var(--text-muted); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mark-won-control { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; color: var(--won-text); font-size: 10px; font-weight: 700; white-space: nowrap; cursor: pointer; }
 .mark-won-control input { accent-color: var(--won-text); margin: 0; cursor: pointer; }
 .mark-won-control input:disabled { cursor: default; }
@@ -6137,7 +6143,7 @@ html, body { overflow-x: hidden; max-width: 100%; }
    kept whole rather than chopped — `anywhere` was splitting opportunity IDs
    as "2609003R / S". */
 .tracker-page .sheet.cols-key th, .tracker-page .sheet.cols-key td {
-  white-space: normal; overflow-wrap: break-word; vertical-align: middle;
+  white-space: normal; overflow-wrap: normal; word-break: normal; vertical-align: middle;
 }
 /* Opp ID and Proposal hold one indivisible token each. Wrapping those reads as
    corrupt data, so they stay on one line and fall back to an ellipsis (and the
@@ -6166,8 +6172,27 @@ table.sheet td .wrapcell:focus { outline: 2px solid var(--xl-green); background:
    stay single-line and clip to an ellipsis; every cell carries a title, so a
    value wider than its column is one hover away. */
 .tracker-page .sheet:not(.cols-key) { table-layout: auto; width: max-content; min-width: 100%; }
-.tracker-page .sheet:not(.cols-key) th, .tracker-page .sheet:not(.cols-key) td { overflow: hidden; text-overflow: ellipsis; }
+.tracker-page .sheet:not(.cols-key) th,
+.tracker-page .sheet:not(.cols-key) td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: normal;
+  vertical-align: middle;
+}
 .tracker-page .sheet:not(.cols-key) .wrapcell { height: auto !important; white-space: pre; }
+
+/* Keep identifiers and the trailing action link intact in the scrolling view;
+   ordinary labels and values may wrap at word boundaries. */
+.tracker-page .sheet:not(.cols-key) thead tr > :nth-child(2),
+.tracker-page .sheet:not(.cols-key) tbody tr > :nth-child(2),
+.tracker-page .sheet:not(.cols-key) thead tr > :last-child,
+.tracker-page .sheet:not(.cols-key) tbody tr > :last-child {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
 
 /* Scrolling sideways past a dozen columns loses you the row you were reading,
    so the Sl number and the Opp ID pin to the left edge. A sticky cell needs an

@@ -76,7 +76,7 @@ function createOpportunityFromLeadPage({ store, lead, fields, decision, customer
     createDate: today, proposalDate: '', orderDate: '', invoiceDate: '',
     status: 'Open', stage: 'Lead', milestone: 'Screening', closedReason: '',
     contactPerson, contactPhone,
-    contactEmail: lead.from || '', lastUpdated: today, forecast: false,
+    contactEmail: isInternalSender(lead.from, store.config) ? '' : (lead.from || ''), lastUpdated: today, forecast: false,
     remarks: 'Registered from lead ' + lead.id, route: routeForType(decision.oppType),
   }
   store.addOpportunity(opp)
@@ -3381,7 +3381,8 @@ export default function Inbox() {
       segment: buSegment.segment || 'Others', product: [product], prob: '', valueK: 0, cogsK: 0,
       rfqNumber, rfqDate: rfqDate || lead.ts?.slice(0, 10) || '', extractedFields, requestedItems, createDate: today,
       proposalDate: '', orderDate: '', invoiceDate: '', status: 'Open', stage: 'Lead', closedReason: '',
-      contactPerson: mapped('contactPerson') || '', contactPhone: mapped('contactPhone') || '', contactEmail: lead.from || '',
+      contactPerson: mapped('contactPerson') || '', contactPhone: mapped('contactPhone') || '',
+      contactEmail: internalSender ? '' : (lead.from || ''),
       lastUpdated: today, forecast: false, remarks: lead.body || '', nextActionOwner: '', simulated: true,
     }
     store.addOpportunity(opp)

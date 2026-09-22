@@ -10,7 +10,7 @@ import { take } from '../leadFiles.js'
 import { leadVerificationBlockers, verificationSnapshot, redClearanceFor, isRedCleared } from '../leadVerification.js'
 import { buildLeadProposalData } from '../leadBoq.js'
 import { displayRole } from '../utils.js'
-import { isRegistrationCriticalField, routeOwner } from '../leadRules.js'
+import { isInternalSender, isRegistrationCriticalField, routeOwner } from '../leadRules.js'
 import { leadFieldValue, splitBuSegment, leadIdentity } from '../leadFieldMapping.js'
 
 // Registration — the moment a qualified lead becomes an opportunity and the
@@ -213,7 +213,7 @@ export default function Register() {
       gstin: customer?.gstin || lead.gstin || '',
       // The address the enquiry came from is the address the proposal goes back
       // to — carried here so Email Proposal resolves a recipient by itself.
-      contactEmail: lead.from || '',
+      contactEmail: isInternalSender(lead.from, store.config) ? '' : (lead.from || ''),
       lastUpdated: today, forecast: false,
       remarks: 'Registered from lead ' + lead.id,
       route: routeForType(oppType),

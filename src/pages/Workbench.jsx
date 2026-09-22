@@ -1915,6 +1915,7 @@ function FollowUpPane({ opp, onRevision }) {
   // Diagram 02 §7 "Opportunity Lost — Capture Loss Reason" and §8 competitor
   // tracking. Both close-out branches live beside the follow-up loop they end.
   const [lossReason, setLossReason] = useState('')
+  const [lossReasonNote, setLossReasonNote] = useState('')
   const [lossCompetitor, setLossCompetitor] = useState('')
   const [closeOutcome, setCloseOutcome] = useState('')
   const [wonReason, setWonReason] = useState('')
@@ -1972,9 +1973,12 @@ function FollowUpPane({ opp, onRevision }) {
 
   const sendFu = () => {
     store.addCommunication(opp.id, {
+      from: store.config?.commonMailbox || 'sales@modae.demo',
       to: opp.contactPerson || opp.sellTo,
       subject: `Follow-up — ${opp.oppName}`,
+      body: fuDraft,
       kind: 'follow-up',
+      status: 'logged',
     })
     setFuOpen(false)
     setFuSent(true)
@@ -2182,12 +2186,14 @@ function FollowUpPane({ opp, onRevision }) {
                   <option value="">— loss reason (required) —</option>
                   {CLOSE_REASONS.map(r => <option key={r}>{r}</option>)}
                 </select>
+                {lossReason === 'Others' && <textarea value={lossReasonNote} onChange={e => setLossReasonNote(e.target.value)}
+                  maxLength={240} rows={3} placeholder="Enter the loss explanation" />}
                 <input placeholder="Competitor who won it (optional)" value={lossCompetitor}
                   onChange={e => setLossCompetitor(e.target.value)} />
-                <button disabled={!lossReason} title={lossReason ? '' : 'Select a loss reason first'}
+                <button disabled={!lossReason || (lossReason === 'Others' && !lossReasonNote.trim())} title={lossReason ? '' : 'Select a loss reason first'}
                   onClick={() => {
-                    store.closeLost(opp.id, lossReason, lossCompetitor.trim() ? { name: lossCompetitor.trim() } : null)
-                    setCloseOutcome(''); setLossReason(''); setLossCompetitor('')
+                    store.closeLost(opp.id, lossReason, lossCompetitor.trim() ? { name: lossCompetitor.trim() } : null, lossReason === 'Others' ? lossReasonNote.trim() : '')
+                    setCloseOutcome(''); setLossReason(''); setLossReasonNote(''); setLossCompetitor('')
                   }}>
                   <Icon name="flag" size={13} /> Close as lost
                 </button>
@@ -2204,8 +2210,7 @@ function FollowUpPane({ opp, onRevision }) {
                 <button disabled={!wonReason || (wonReason === 'Other' && !wonReasonNote.trim())}
                   title={wonReason ? '' : 'Select a won reason first'}
                   onClick={() => {
-                    const reason = wonReason === 'Other' ? wonReasonNote.trim() : wonReason
-                    store.markWon(opp.id, reason)
+                    store.markWon(opp.id, wonReason, wonReason === 'Other' ? wonReasonNote.trim() : '')
                     setCloseOutcome(''); setWonReason(''); setWonReasonNote('')
                   }}>
                   <Icon name="check" size={13} /> Close as won

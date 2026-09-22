@@ -56,6 +56,17 @@ let loadInFlight = null
 const opportunityRevisions = new Map()
 const opportunityRecords = new Map()
 let opportunitySaveQueue = Promise.resolve()
+const normalizedRevisions = new Map()
+const normalizedRecords = new Map()
+const normalizedSaveQueues = new Map()
+const normalizedKey = (entity, id) => `${entity}|${id}`
+const clearNormalizedEntity = entity => {
+  const prefix = `${entity}|`
+  for (const key of normalizedRecords.keys()) if (key.startsWith(prefix)) {
+    normalizedRecords.delete(key)
+    normalizedRevisions.delete(key)
+  }
+}
 
 export function invalidateLoadCache() {
   loadCache = null
@@ -253,18 +264,34 @@ async function saveSettings(dirty = {}) {
 
 async function loadBusinessTables() {
   const tables = await Promise.all([
-    supabase.from('leads').select('id, data').is('deleted_at', null),
+    supabase.from('leads').select('id, data, rev').is('deleted_at', null),
     supabase.from('opportunities').select('id, data, rev').is('deleted_at', null),
-    supabase.from('approvals').select('id, data').is('deleted_at', null),
-    supabase.from('records').select('entity, id, data').is('deleted_at', null).in('entity', ['proposals', 'spares_lines', 'clarifications', 'audit']),
+    supabase.from('approvals').select('id, data, rev').is('deleted_at', null),
+    supabase.from('records').select('entity, id, data, rev').is('deleted_at', null).in('entity', ['proposals', 'spares_lines', 'clarifications', 'audit']),
   ])
   if (tables.some(result => result.error)) return {}
   const records = tables[3].data || []
   opportunityRevisions.clear()
   opportunityRecords.clear()
+  for (const entity of ['leads', 'approvals', 'proposals', 'spares_lines', 'clarifications', 'audit']) clearNormalizedEntity(entity)
   for (const row of tables[1].data || []) {
     opportunityRevisions.set(row.id, Number(row.rev) || 0)
     opportunityRecords.set(row.id, { data: row.data, rev: Number(row.rev) || 0 })
+  }
+  for (const row of tables[0].data || []) {
+    const key = normalizedKey('leads', row.id)
+    normalizedRevisions.set(key, Number(row.rev) || 0)
+    normalizedRecords.set(key, { data: row.data, rev: Number(row.rev) || 0 })
+  }
+  for (const row of tables[2].data || []) {
+    const key = normalizedKey('approvals', row.id)
+    normalizedRevisions.set(key, Number(row.rev) || 0)
+    normalizedRecords.set(key, { data: row.data, rev: Number(row.rev) || 0 })
+  }
+  for (const row of records) {
+    const key = normalizedKey(row.entity, row.id)
+    normalizedRevisions.set(key, Number(row.rev) || 0)
+    normalizedRecords.set(key, { data: row.data, rev: Number(row.rev) || 0 })
   }
   return {
     leads: tables[0].data.map(row => row.data),
@@ -279,17 +306,76 @@ async function loadBusinessTables() {
 
 async function saveBusinessTables(dirty = {}) {
   const writes = []
-  if (dirty.leads) writes.push(['leads', supabase.from('leads').upsert(dirty.leads.map(row => ({ id: row.id, data: row, rev: 1, updated_at: new Date().toISOString() })), { onConflict: 'id' })])
-  if (dirty.approvals) writes.push(['approvals', supabase.from('approvals').upsert(dirty.approvals.map(row => ({ id: row.id, data: row, rev: 1, updated_at: new Date().toISOString() })), { onConflict: 'id' })])
-  if (dirty.sparesLines) writes.push(['sparesLines', supabase.from('records').upsert(dirty.sparesLines.map(row => ({ entity: 'spares_lines', id: row.id, data: row, rev: 1, updated_at: new Date().toISOString() })), { onConflict: 'entity,id' })])
-  if (dirty.clarifications) writes.push(['clarifications', supabase.from('records').upsert(dirty.clarifications.map(row => ({ entity: 'clarifications', id: row.id, data: row, rev: 1, updated_at: new Date().toISOString() })), { onConflict: 'entity,id' })])
-  if (dirty.audit) writes.push(['audit', supabase.from('records').upsert(dirty.audit.map(row => ({ entity: 'audit', id: row.id || `AUD-${row.ts || Date.now()}-${Math.random().toString(36).slice(2, 7)}`, data: row, rev: 1, updated_at: new Date().toISOString() })), { onConflict: 'entity,id' })])
-  if (dirty.proposals) writes.push(['proposals', supabase.from('records').upsert(Object.entries(dirty.proposals).map(([id, row]) => ({ entity: 'proposals', id, data: row, rev: 1, updated_at: new Date().toISOString() })), { onConflict: 'entity,id' })])
-  const results = await Promise.all(writes.map(([, promise]) => promise))
-  const failed = results.find(result => result.error)
-  if (failed) throw failed.error
+  if (dirty.leads) writes.push(['leads', saveNormalizedRows('leads', dirty.leads)])
+  if (dirty.approvals) writes.push(['approvals', saveNormalizedRows('approvals', dirty.approvals)])
+  if (dirty.sparesLines) writes.push(['sparesLines', saveNormalizedRows('spares_lines', dirty.sparesLines)])
+  if (dirty.clarifications) writes.push(['clarifications', saveNormalizedRows('clarifications', dirty.clarifications)])
+  if (dirty.audit) writes.push(['audit', saveNormalizedRows('audit', dirty.audit)])
+  if (dirty.proposals) writes.push(['proposals', saveNormalizedRows('proposals', Object.entries(dirty.proposals).map(([id, data]) => ({ id, ...data })))])
+  await Promise.all(writes.map(([, promise]) => promise))
   if (dirty.opportunities) await saveOpportunityRows(dirty.opportunities)
   return [...writes.map(([key]) => key === 'sparesLines' ? 'sparesLines' : key === 'proposals' ? 'proposals' : key), ...(dirty.opportunities ? ['opportunities'] : [])]
+}
+
+function normalizedPayload(entity, rows, deletedIds = []) {
+  const active = rows.map(row => ({
+    id: row.id,
+    data: row,
+    rev: normalizedRevisions.get(normalizedKey(entity, row.id)) ?? 0,
+  }))
+  const deleted = deletedIds.map(id => {
+    const previous = normalizedRecords.get(normalizedKey(entity, id))
+    return previous ? { id, data: previous.data, rev: previous.rev, deleted: true } : null
+  }).filter(Boolean)
+  return [...active, ...deleted]
+}
+
+async function saveNormalizedRowsNow(entity, rows) {
+  const localById = new Map(rows.map(row => [row.id, row]))
+  const prefix = `${entity}|`
+  const deletedIds = [...normalizedRecords.keys()]
+    .filter(key => key.startsWith(prefix))
+    .map(key => key.slice(prefix.length))
+    .filter(id => !localById.has(id))
+  const write = async payload => {
+    const result = await supabase.rpc('save_rows', { p_entity: entity, p_rows: payload })
+    if (result.error) throw result.error
+    return result.data || { conflicts: [] }
+  }
+  const firstPayload = normalizedPayload(entity, rows, deletedIds)
+  const first = await write(firstPayload)
+  const conflicts = Array.isArray(first.conflicts) ? first.conflicts : []
+  if (conflicts.length) {
+    const retry = conflicts.map(serverRow => ({
+      id: serverRow.id,
+      data: localById.get(serverRow.id) || serverRow.data,
+      rev: Number(serverRow.rev) || 0,
+      deleted: !localById.has(serverRow.id),
+    }))
+    const second = await write(retry)
+    const remaining = Array.isArray(second.conflicts) ? second.conflicts : []
+    if (remaining.length) throw new Error(`${entity} save conflict for ${remaining.map(row => row.id).join(', ')}`)
+    for (const row of retry) {
+      const key = normalizedKey(entity, row.id)
+      normalizedRevisions.set(key, row.rev + 1)
+      if (row.deleted) normalizedRecords.delete(key)
+      else normalizedRecords.set(key, { data: row.data, rev: row.rev + 1 })
+    }
+  }
+  for (const row of firstPayload) {
+    if (conflicts.some(conflict => conflict.id === row.id)) continue
+    const key = normalizedKey(entity, row.id)
+    normalizedRevisions.set(key, row.rev + 1)
+    if (row.deleted) normalizedRecords.delete(key)
+    else normalizedRecords.set(key, { data: row.data, rev: row.rev + 1 })
+  }
+}
+
+function saveNormalizedRows(entity, rows) {
+  const previous = normalizedSaveQueues.get(entity) || Promise.resolve()
+  const next = previous.catch(() => {}).then(() => saveNormalizedRowsNow(entity, rows))
+  normalizedSaveQueues.set(entity, next)
+  return next
 }
 
 function opportunityPayload(rows, deletedIds = []) {

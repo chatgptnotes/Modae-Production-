@@ -73,7 +73,34 @@ test('the opportunities table does not directly edit workflow stages', () => {
 
 test('closed opportunities expose the shared mark-won control', () => {
   assert.match(tracker, /MarkWonControl/)
-  assert.match(tracker, /o\.status === 'Closed' && <MarkWonControl opp=\{o\} store=\{store\} \/>/)
+  assert.match(tracker, /o\.status === 'Closed' && o\.stage !== 'Lost' && <MarkWonControl opp=\{o\} store=\{store\} \/>/)
+})
+
+test('closed terminal outcomes are explicit in the tracker stage cell', () => {
+  assert.match(tracker, /tracker-terminal-stage \$\{o\.stage\.toLowerCase\(\)\}/)
+  assert.match(tracker, /<span className="tracker-outcome-label">\{o\.stage\}<\/span>/)
+  assert.match(tracker, /<span className="tracker-stage-context">\{workflowStageLabelFor\(o\)\}<\/span>/)
+  assert.match(styles, /\.tracker-terminal-stage\.lost \.tracker-outcome-label \{ color: var\(--lost-text\); \}/)
+})
+
+test('tracker column text wraps at word boundaries without arbitrary word splitting', () => {
+  assert.match(styles, /\.tracker-page \.tracker-th-label[\s\S]*overflow-wrap: normal;[\s\S]*word-break: normal;/)
+  assert.match(styles, /\.tracker-page \.sheet:not\(\.cols-key\) th,[\s\S]*overflow-wrap: break-word;[\s\S]*word-break: normal;/)
+  assert.match(styles, /\.tracker-page \.sheet:not\(\.cols-key\) thead tr > :nth-child\(2\)[\s\S]*white-space: nowrap;/)
+})
+
+test('key columns use dedicated readable width weights and natural wrapping', () => {
+  assert.match(tracker, /wKey: 27/)
+  assert.match(tracker, /\(!all && c\.wKey\) \|\| c\.w/)
+  assert.match(styles, /\.tracker-page \.sheet\.cols-key th, \.tracker-page \.sheet\.cols-key td[\s\S]*overflow-wrap: normal; word-break: normal;/)
+})
+
+test('tracker has no trailing proposal action column', () => {
+  assert.doesNotMatch(tracker, /<th>Proposal<\/th>/)
+  assert.doesNotMatch(tracker, /Open ▸/)
+  assert.doesNotMatch(tracker, /Revision opened from Opportunities list/)
+  assert.doesNotMatch(tracker, /PROPOSAL_PCT|PROPOSAL_PX/)
+  assert.match(tracker, /<td colSpan=\{13\}><\/td>/)
 })
 
 test('closing from the Status column requires outcome then reason', () => {
@@ -82,8 +109,15 @@ test('closing from the Status column requires outcome then reason', () => {
   assert.match(tracker, /tracker-close-outcome-options/)
   assert.match(tracker, /closePending\.stage === outcome/)
   assert.match(tracker, /closePending\.stage === 'Won' \? WON_REASONS : CLOSE_REASONS/)
-  assert.match(tracker, /store\.closeLost\(closePending\.id, reason\)/)
-  assert.match(tracker, /store\.markWon\(closePending\.id, reason\)/)
+  assert.match(tracker, /store\.closeLost\(closePending\.id, closeReason, null, requiresNote \? note : ''\)/)
+  assert.match(tracker, /store\.markWon\(closePending\.id, closeReason, requiresNote \? note : ''\)/)
+})
+
+test('Won and Lost closure paths keep terminal milestones and reason notes aligned', () => {
+  assert.match(read('src/store.jsx'), /stage: 'Lost', status: 'Closed', closedReason: reason, closedReasonNote: reason === 'Others' \? reasonNote : '', milestone: 'Follow-up'/)
+  assert.match(read('src/store.jsx'), /stage: 'Won', status: 'Closed', closedReason: reason, closedReasonNote: reason === 'Other' \? reasonNote : '', milestone: 'Handover'/)
+  assert.match(tracker, /o\.stage === 'Won' \? WON_REASONS : CLOSE_REASONS/)
+  assert.match(tracker, /closePending\.stage === 'Won' \? closeReason === 'Other' : closeReason === 'Others'/)
 })
 
 test('tracker offers all, mine, and specific-owner filtering', () => {
