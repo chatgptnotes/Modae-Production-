@@ -30,7 +30,7 @@ import WorkflowAdmin from './pages/WorkflowAdmin.jsx'
 import { RequireAuth } from './pages/Login.jsx'
 import Register from './pages/Register.jsx'
 import Workbench from './pages/Workbench.jsx'
-import PurchaseOrders from './pages/PurchaseOrders.jsx'
+import ProposalSent from './pages/ProposalSent.jsx'
 import Portal from './pages/Portal.jsx'
 import Opportunities from './pages/Opportunities.jsx'
 import TabletApp from './tablet/TabletApp.jsx'
@@ -213,7 +213,7 @@ const NAV = [
   { section: 'Workspace', to: '/inbox', label: 'Lead inbox', icon: 'inbox', page: 'inbox', badge: c => c.newLeads, badgeHint: 'new leads requiring qualification' },
   { section: 'Workspace', to: '/opportunities', label: 'Opportunities', icon: 'cards', page: 'tracker' },
   { section: 'Workspace', to: '/approvals', label: 'Approvals', icon: 'checkCircle', page: 'approvals', badge: c => c.forMe + c.myPending, badgeHint: 'gates waiting on you, plus your own requests' },
-  { section: 'Workspace', to: '/po', label: 'Purchase Orders', icon: 'clipboardCheck', page: 'po' },
+  { section: 'Workspace', to: '/proposal-sent', label: 'Proposal Sent', icon: 'send', page: 'proposalSent' },
   { section: 'Workspace', to: '/folders', label: 'Documents', icon: 'folder', page: 'folders' },
   { section: 'Workspace', to: '/customers', label: 'Customers', icon: 'users', page: 'customers' },
   { section: 'Workspace', to: '/pricelists', label: 'Price Lists', icon: 'tag', page: 'pricelists' },
@@ -294,7 +294,8 @@ export default function App() {
       <Route path="/opp/:oppId" element={<PageGate page="tracker"><Workbench /></PageGate>} />
       <Route path="/opp/:oppId/:tab" element={<PageGate page="tracker"><Workbench /></PageGate>} />
       <Route path="/approvals" element={<PageGate page="approvals"><Approvals /></PageGate>} />
-      <Route path="/po" element={<PageGate page="po"><PurchaseOrders /></PageGate>} />
+      <Route path="/proposal-sent" element={<PageGate page="proposalSent"><ProposalSent /></PageGate>} />
+      <Route path="/po" element={<Navigate to="/proposal-sent" replace />} />
       <Route path="/audit" element={<PageGate page="audit"><Audit /></PageGate>} />
       <Route path="/new" element={<PageGate page="new"><IntakeForm /></PageGate>} />
       <Route path="/tender" element={<PageGate page="tender"><TenderIntake /></PageGate>} />

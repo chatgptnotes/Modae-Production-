@@ -554,19 +554,19 @@ export const selectableRoles = () =>
 // sees the external portal only.
 const pages = list => (PORTAL_ENABLED ? list : list.filter(p => p !== 'portal'))
 const SALES_PAGES = ['mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders',
-  'proposal', 'pricelists', 'analytics', 'customers', 'po', 'aimap', 'launcher', 'voice']
+  'proposal', 'proposalSent', 'pricelists', 'analytics', 'customers', 'po', 'aimap', 'launcher', 'voice']
 export const PERMS = {
-  SUPER: pages(['mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'pricelists',
+  SUPER: pages(['mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'proposalSent', 'pricelists',
     'analytics', 'customers', 'audit', 'users', 'aimap', 'admin', 'po', 'launcher', 'voice', 'portal']),
-  ADMIN: ['mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'pricelists',
+  ADMIN: ['mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'proposalSent', 'pricelists',
     'analytics', 'customers', 'audit', 'users', 'aimap', 'admin', 'po', 'launcher', 'voice'],
-  LJS: ['mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'pricelists',
+  LJS: ['mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'proposalSent', 'pricelists',
     'analytics', 'customers', 'audit', 'users', 'aimap', 'admin', 'po', 'launcher', 'voice'],
-  AH: ['mydashboard', 'tracker', 'my', 'approvals', 'folders', 'proposal', 'pricelists',
+  AH: ['mydashboard', 'tracker', 'my', 'approvals', 'folders', 'proposal', 'pricelists', 'proposalSent',
     'analytics', 'customers', 'audit', 'aimap', 'po', 'launcher'],
   RS: SALES_PAGES, PP: SALES_PAGES, SS: SALES_PAGES, PJS: SALES_PAGES, RJS: SALES_PAGES, SR: SALES_PAGES,
-  AN: ['mydashboard', 'inbox', 'tracker', 'my', 'proposal', 'pricelists', 'analytics', 'approvals', 'folders', 'aimap', 'launcher'],
-  TECH: ['mydashboard', 'inbox', 'tracker', 'my', 'proposal', 'pricelists', 'analytics', 'approvals', 'aimap', 'launcher'],
+  AN: ['mydashboard', 'inbox', 'tracker', 'my', 'proposal', 'proposalSent', 'pricelists', 'analytics', 'approvals', 'folders', 'aimap', 'launcher'],
+  TECH: ['mydashboard', 'inbox', 'tracker', 'my', 'proposal', 'proposalSent', 'pricelists', 'analytics', 'approvals', 'aimap', 'launcher'],
   CUST: pages(['portal']),
 }
 

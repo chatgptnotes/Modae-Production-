@@ -560,7 +560,9 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
         </Card>
 
         <Card title="My funnel" icon="layers" tone="tone-teal" span={4}>
-          <AnalyticsFunnel stages={funnelStages} showValue={false} conversion />
+          <div className="funnel-stage-link" role="link" tabIndex={0} onClick={() => nav('/proposal-sent')} onKeyDown={event => event.key === 'Enter' && nav('/proposal-sent')} title="Open Proposal Sent workspace">
+            <AnalyticsFunnel stages={funnelStages} showValue={false} conversion />
+          </div>
           <div className="hint" style={{ marginTop: 8 }}>Your leads through to won business, with the conversion from each stage to the next.</div>
         </Card>
 

@@ -50,6 +50,12 @@ const LOAD_CACHE_MS = 15000
 let loadCache = null
 let loadCacheAt = 0
 let loadInFlight = null
+// Normalized opportunity rows carry their revision outside the application
+// state. Keeping sync metadata out of state means it cannot leak into exports,
+// localStorage, or business rules.
+const opportunityRevisions = new Map()
+const opportunityRecords = new Map()
+let opportunitySaveQueue = Promise.resolve()
 
 export function invalidateLoadCache() {
   loadCache = null
@@ -248,12 +254,18 @@ async function saveSettings(dirty = {}) {
 async function loadBusinessTables() {
   const tables = await Promise.all([
     supabase.from('leads').select('id, data').is('deleted_at', null),
-    supabase.from('opportunities').select('id, data').is('deleted_at', null),
+    supabase.from('opportunities').select('id, data, rev').is('deleted_at', null),
     supabase.from('approvals').select('id, data').is('deleted_at', null),
     supabase.from('records').select('entity, id, data').is('deleted_at', null).in('entity', ['proposals', 'spares_lines', 'clarifications', 'audit']),
   ])
   if (tables.some(result => result.error)) return {}
   const records = tables[3].data || []
+  opportunityRevisions.clear()
+  opportunityRecords.clear()
+  for (const row of tables[1].data || []) {
+    opportunityRevisions.set(row.id, Number(row.rev) || 0)
+    opportunityRecords.set(row.id, { data: row.data, rev: Number(row.rev) || 0 })
+  }
   return {
     leads: tables[0].data.map(row => row.data),
     opportunities: tables[1].data.map(row => row.data),
@@ -268,17 +280,88 @@ async function loadBusinessTables() {
 async function saveBusinessTables(dirty = {}) {
   const writes = []
   if (dirty.leads) writes.push(['leads', supabase.from('leads').upsert(dirty.leads.map(row => ({ id: row.id, data: row, rev: 1, updated_at: new Date().toISOString() })), { onConflict: 'id' })])
-  if (dirty.opportunities) writes.push(['opportunities', supabase.from('opportunities').upsert(dirty.opportunities.map(row => ({ id: row.id, data: row, rev: 1, updated_at: new Date().toISOString() })), { onConflict: 'id' })])
   if (dirty.approvals) writes.push(['approvals', supabase.from('approvals').upsert(dirty.approvals.map(row => ({ id: row.id, data: row, rev: 1, updated_at: new Date().toISOString() })), { onConflict: 'id' })])
   if (dirty.sparesLines) writes.push(['sparesLines', supabase.from('records').upsert(dirty.sparesLines.map(row => ({ entity: 'spares_lines', id: row.id, data: row, rev: 1, updated_at: new Date().toISOString() })), { onConflict: 'entity,id' })])
   if (dirty.clarifications) writes.push(['clarifications', supabase.from('records').upsert(dirty.clarifications.map(row => ({ entity: 'clarifications', id: row.id, data: row, rev: 1, updated_at: new Date().toISOString() })), { onConflict: 'entity,id' })])
   if (dirty.audit) writes.push(['audit', supabase.from('records').upsert(dirty.audit.map(row => ({ entity: 'audit', id: row.id || `AUD-${row.ts || Date.now()}-${Math.random().toString(36).slice(2, 7)}`, data: row, rev: 1, updated_at: new Date().toISOString() })), { onConflict: 'entity,id' })])
   if (dirty.proposals) writes.push(['proposals', supabase.from('records').upsert(Object.entries(dirty.proposals).map(([id, row]) => ({ entity: 'proposals', id, data: row, rev: 1, updated_at: new Date().toISOString() })), { onConflict: 'entity,id' })])
-  if (!writes.length) return []
   const results = await Promise.all(writes.map(([, promise]) => promise))
   const failed = results.find(result => result.error)
   if (failed) throw failed.error
-  return writes.map(([key]) => key === 'sparesLines' ? 'sparesLines' : key === 'opportunities' ? 'opportunities' : key === 'proposals' ? 'proposals' : key)
+  if (dirty.opportunities) await saveOpportunityRows(dirty.opportunities)
+  return [...writes.map(([key]) => key === 'sparesLines' ? 'sparesLines' : key === 'proposals' ? 'proposals' : key), ...(dirty.opportunities ? ['opportunities'] : [])]
+}
+
+function opportunityPayload(rows, deletedIds = []) {
+  const active = rows.map(row => ({
+    id: row.id,
+    data: row,
+    // New rows start at revision zero; save_rows stores them as revision one.
+    rev: opportunityRevisions.get(row.id) ?? 0,
+  }))
+  const deleted = deletedIds
+    .map(id => {
+      const previous = opportunityRecords.get(id)
+      if (!previous) return null
+      return { id, data: previous.data, rev: previous.rev, deleted: true }
+    })
+    .filter(Boolean)
+  return [...active, ...deleted]
+}
+
+async function saveOpportunityRowsNow(rows) {
+  const localById = new Map(rows.map(row => [row.id, row]))
+  const deletedIds = [...opportunityRecords.keys()].filter(id => !localById.has(id))
+  const write = async payload => {
+    const result = await supabase.rpc('save_rows', { p_entity: 'opportunities', p_rows: payload })
+    if (result.error) throw result.error
+    return result.data || { accepted: [], conflicts: [] }
+  }
+
+  const firstPayload = opportunityPayload(rows, deletedIds)
+  const first = await write(firstPayload)
+  const conflicts = Array.isArray(first.conflicts) ? first.conflicts : []
+  if (conflicts.length) {
+    // Latest-save-wins: rebase only the rows rejected by the revision guard
+    // onto the server revision, while preserving the local row being saved.
+    const retry = conflicts
+      .map(serverRow => {
+        const local = localById.get(serverRow.id)
+        return {
+          id: serverRow.id,
+          data: local || serverRow.data,
+          rev: Number(serverRow.rev) || 0,
+          deleted: !local,
+        }
+      })
+      .filter(Boolean)
+    if (retry.length) {
+      const second = await write(retry)
+      const remaining = Array.isArray(second.conflicts) ? second.conflicts : []
+      if (remaining.length) throw new Error(`Opportunity save conflict for ${remaining.map(row => row.id).join(', ')}`)
+      for (const row of retry) {
+        opportunityRevisions.set(row.id, row.rev + 1)
+        if (row.deleted) opportunityRecords.delete(row.id)
+        else opportunityRecords.set(row.id, { data: row.data, rev: row.rev + 1 })
+      }
+    }
+  }
+
+  for (const row of firstPayload) {
+    if (conflicts.some(conflict => conflict.id === row.id)) continue
+    opportunityRevisions.set(row.id, row.rev + 1)
+    if (row.deleted) opportunityRecords.delete(row.id)
+    else opportunityRecords.set(row.id, { data: row.data, rev: row.rev + 1 })
+  }
+}
+
+// Debounced local saves and pagehide can overlap. Serialize them so an older
+// full-slice snapshot can never finish after a newer one.
+function saveOpportunityRows(rows) {
+  opportunitySaveQueue = opportunitySaveQueue
+    .catch(() => {})
+    .then(() => saveOpportunityRowsNow(rows))
+  return opportunitySaveQueue
 }
 
 export async function savePriceLists(priceLists = {}) {

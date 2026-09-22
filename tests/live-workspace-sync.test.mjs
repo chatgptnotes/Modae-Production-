@@ -35,6 +35,24 @@ test('normalized opportunity writes fail loudly instead of falling back to ignor
   assert.match(datastore, /if \(failed\) throw failed\.error/)
 })
 
+test('opportunity writes use revision-safe latest-save-wins persistence', () => {
+  const datastore = read('src/datastore.js')
+  assert.match(datastore, /supabase\.rpc\('save_rows'/)
+  assert.match(datastore, /p_entity: 'opportunities'/)
+  assert.match(datastore, /opportunityRevisions\.get\(row\.id\) \?\? 0/)
+  assert.match(datastore, /Latest-save-wins/)
+  assert.match(datastore, /serverRow\.rev/)
+  assert.match(datastore, /deleted: true/)
+  assert.match(datastore, /opportunityRecords\.keys\(\)/)
+  assert.doesNotMatch(datastore, /dirty\.opportunities\.map\(row => \(\{ id: row\.id, data: row, rev: 1/)
+})
+
+test('opportunity saves are serialized across debounce and pagehide flushes', () => {
+  const datastore = read('src/datastore.js')
+  assert.match(datastore, /let opportunitySaveQueue = Promise\.resolve\(\)/)
+  assert.match(datastore, /opportunitySaveQueue = opportunitySaveQueue[\s\S]*saveOpportunityRowsNow\(rows\)/)
+})
+
 test('forced realtime reads wait out an older request before fetching fresh data', () => {
   const datastore = read('src/datastore.js')
   assert.match(datastore, /if \(loadInFlight\) \{[\s\S]*const pending = loadInFlight[\s\S]*return force \? pending\.then\(\(\) => loadAll\(\{ force: true \}\)\)/)

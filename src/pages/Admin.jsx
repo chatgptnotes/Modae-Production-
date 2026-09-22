@@ -976,7 +976,7 @@ export default function Admin() {
         <div className="admin-bottom-grid">
 
         {/* 10 — Connector state */}
-        <div className="admin-card">
+        <div className="admin-card admin-card--compact admin-connector-state-card">
           <h3><Icon name="globe" size={14} /> Connector state</h3>
           {(config.connectors || []).map(c => (
             <div key={c.id} className="arow">

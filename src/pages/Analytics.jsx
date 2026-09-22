@@ -160,7 +160,7 @@ function BarCard({ title, icon, tone, span = 4, entries, color, onPick, hint, sh
 // `conversion` swaps the share-of-pipeline caption for the prototype's
 // "N% of prior" conversion between lifecycle stages (`pctTxt`, Bt_html
 // clickable prototype.html:3643) — geometry and shading stay the same.
-export function Funnel({ stages, showValue, conversion = false }) {
+export function Funnel({ stages, showValue, conversion = false, onStageClick }) {
   const W = 620, ROW = 46, GAP = 7, NUM = 46, DETAIL = 190
   const H = stages.length * ROW + (stages.length - 1) * GAP
   const plotW = W - NUM - DETAIL
@@ -200,7 +200,7 @@ export function Funnel({ stages, showValue, conversion = false }) {
         const top = y(i) + 3, bot = y(i) + ROW - 3
         const wTop = wAt(i), wBot = wAt(i + 1)
         return (
-          <g key={s.label}>
+          <g key={s.label} onClick={() => onStageClick?.(s)} className={onStageClick ? 'funnel-stage-interactive' : undefined}>
             <text x={NUM - 12} y={y(i) + ROW / 2 + 9} textAnchor="end" fontSize="25" fontWeight="800"
               fill={FUNNEL_RAMP[i]} opacity=".7">{String(i + 1).padStart(2, '0')}</text>
 
