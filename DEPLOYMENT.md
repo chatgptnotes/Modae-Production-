@@ -31,6 +31,7 @@ vercel login
 vercel link                      # choose/create the "wintrack" project
 vercel env add VITE_SUPABASE_URL production
 vercel env add VITE_SUPABASE_ANON_KEY production
+vercel env add SUPABASE_SERVICE_ROLE_KEY production
 ```
 
 Set the project's Production Branch to `main` in Vercel → Settings → Git.
@@ -38,7 +39,7 @@ Set the project's Production Branch to `main` in Vercel → Settings → Git.
 ### Staging
 
 Create a second Vercel project from the same repository, set its Production
-Branch to `staging`, then add the same three variables pointed at the **staging**
+Branch to `staging`, then add the same four variables pointed at the **staging**
 Supabase project.
 
 ### The AI key

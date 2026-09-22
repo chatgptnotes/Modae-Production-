@@ -1093,9 +1093,11 @@ export function StoreProvider({ children }) {
     },
 
     addUser(user) {
-      setState(s => s.users.some(u => u.email.toLowerCase() === user.email.toLowerCase())
-        ? s
-        : withAudit({ ...s, users: [...s.users, user] }, 'User added', user.id || user.email, `role ${user.role || '—'}`))
+      setState(s => {
+        if (!ROLES[s.role]?.admin || !user?.email) return s
+        if (s.users.some(u => String(u.email || '').toLowerCase() === String(user.email).toLowerCase())) return s
+        return withAudit({ ...s, users: [...s.users, user] }, 'User added', user.id || user.email, `role ${user.role || '—'}`)
+      })
     },
 
     updateUser(id, patch) {
@@ -1111,7 +1113,16 @@ export function StoreProvider({ children }) {
             ...(patch.role !== undefined ? { role: patch.role } : {}),
           } }
           : s.auth
-        return withAudit({ ...s, users, auth, role: isCurrentUser && patch.role !== undefined ? patch.role : s.role }, 'User updated', id, JSON.stringify({ before: s.users.find(u => u.id === id), patch }))
+        const safeUser = user => {
+          if (!user) return user
+          const { pw: _pw, ...withoutPassword } = user
+          return withoutPassword
+        }
+        const safePatch = Object.fromEntries(Object.entries(patch || {}).map(([key, value]) => [key, key === 'pw' ? '[redacted]' : value]))
+        return withAudit(
+          { ...s, users, auth, role: isCurrentUser && patch.role !== undefined ? patch.role : s.role },
+          'User updated', id,
+          JSON.stringify({ before: safeUser(s.users.find(u => u.id === id)), patch: safePatch }))
       })
     },
 

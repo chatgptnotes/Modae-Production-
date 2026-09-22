@@ -1828,6 +1828,43 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .users-role-name-row input { width: 100%; min-width: 0; box-sizing: border-box; }
 .users-role-name-row .role-id { color: var(--text-secondary); font-size: 11px; font-weight: 800; letter-spacing: .06em; }
 .users-role-name-actions { justify-content: flex-end; margin-top: 16px; }
+.users-create-panel {
+  margin: 0 0 16px; padding: 18px; border: 1px solid var(--border-default);
+  border-left: 3px solid var(--action-accent); border-radius: 10px;
+  background: var(--surface-raised);
+}
+.users-create-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.users-create-heading .section-title { margin-top: 0; }
+.users-create-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; margin-top: 14px; }
+.users-create-grid label { display: grid; gap: 5px; color: var(--text-secondary); font-size: 11px; font-weight: 700; }
+.users-create-grid input, .users-create-grid select { width: 100%; box-sizing: border-box; }
+.users-create-actions { justify-content: flex-end; margin-top: 16px; }
+.users-credential-notice {
+  display: flex; align-items: center; gap: 12px; margin: 0 0 14px; padding: 11px 13px;
+  border: 1px solid var(--primary-border); border-radius: 8px; background: var(--primary-soft);
+  color: var(--text-main); font-size: 12px;
+}
+.users-credential-notice > div { display: grid; gap: 2px; margin-right: auto; }
+.users-credential-notice > div span { color: var(--text-muted); font-size: 11px; }
+.users-credential-notice code { padding: 4px 7px; border-radius: 5px; background: var(--surface-raised); font-size: 12px; }
+.users-auth-status { display: inline-flex; align-items: center; padding: 3px 7px; border-radius: 5px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+.users-auth-status.ok { color: var(--won-text); background: var(--won-fill); }
+.users-auth-status.warning { color: var(--amber-text); background: var(--amber-fill); }
+.users-auth-status.checking, .users-auth-status.neutral { color: var(--text-muted); background: var(--bg-app); }
+.users-provision-summary { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--primary-border); border-radius: 8px; background: var(--primary-soft); color: var(--text-main); font-size: 12px; }
+.users-provision-summary button { margin-left: auto; }
+.users-provision-summary.error { border-color: var(--danger-border); background: var(--danger-soft); color: var(--danger-text); }
+.users-reset-row td { padding: 0; background: var(--surface-raised); }
+.users-reset-panel { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 11px 12px; border-top: 1px solid var(--border-soft); }
+.users-reset-panel strong { margin-right: auto; font-size: 12px; }
+.users-reset-panel input { width: 170px; }
+.users-reset-panel .err-text { flex-basis: 100%; }
+@media (max-width: 760px) {
+  .users-create-grid { grid-template-columns: 1fr; }
+  .users-credential-notice { align-items: flex-start; flex-wrap: wrap; }
+  .users-credential-notice > div { flex-basis: 100%; }
+  .users-reset-panel input { width: 100%; }
+}
 .modal {
   /* Centered dialog. It used to sit at a fixed top: 90px — pinned over the
      sticky workspace header and floating high on tall screens — and had no
