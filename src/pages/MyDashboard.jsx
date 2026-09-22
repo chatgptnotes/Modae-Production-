@@ -18,9 +18,14 @@ import ForecastDashboard from './Dashboard.jsx'
 const roleLabel = role => displayRoleLabel(role) || role
 
 function LiveSyncBadge({ status }) {
-  const label = status === 'live' ? 'Live' : status === 'reconnecting' ? 'Reconnecting' : status === 'offline' ? 'Offline' : 'Connecting'
+  const label = status === 'live' ? 'Live' : status === 'reconnecting' ? 'Reconnecting' : status === 'offline' ? 'Local only' : 'Connecting'
+  const title = status === 'offline'
+    ? 'Shared data is unavailable. Changes stay in this browser until Supabase is configured.'
+    : status === 'reconnecting'
+      ? 'Shared data connection is reconnecting. Avoid closing immediately after creating a record.'
+      : 'Opportunity data sync status'
   return (
-    <span className={`dashboard-sync dashboard-sync-${status || 'offline'}`} title="Opportunity data sync status">
+    <span className={`dashboard-sync dashboard-sync-${status || 'offline'}`} title={title} role="status">
       <span className="dashboard-sync-dot" aria-hidden="true" />
       {label}
     </span>
