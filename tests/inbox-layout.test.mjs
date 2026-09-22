@@ -32,6 +32,10 @@ test('simulated inquiries return to the shared inbox after saving', () => {
   assert.match(inbox, /nav\('\/inbox\/' \+ lead\.id\)\r?\n\s+return/)
 })
 
+test('lead inbox does not expose the simulated inquiry header button', () => {
+  assert.doesNotMatch(inbox, /<button[^>]*setSimulationOpen\(true\)[\s\S]*?Simulate incoming inquiry/)
+})
+
 test('mailbox bulk toolbar actions are wired', () => {
   assert.match(inbox, /const [bulkMenuOpen, setBulkMenuOpen]/)
   assert.match(inbox, /Select all visible/)
