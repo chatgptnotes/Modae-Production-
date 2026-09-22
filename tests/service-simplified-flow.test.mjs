@@ -257,3 +257,53 @@ test('an admin rate revision survives a demo wipe', async () => {
   const edited = { India: { currency: 'INR', gst: 18, rates: { engineerDay: 999 }, roles: [] } }
   assert.equal(emptyState({ rateSheets: edited, config: {} }).rateSheets.India.rates.engineerDay, 999)
 })
+
+// ---- Tier 3: classification, region and follow-up --------------------------
+
+test('the requirement source decides the lane, not the opportunity name', async () => {
+  const wb = fs.readFileSync('src/workbench/WbService.jsx', 'utf8')
+  assert.match(wb, /export const REQUIREMENT_SOURCES = \['Site visit', 'SoW \/ Proposal', 'AMC'\]/)
+  // AMC is a first-class classification again rather than free text in oppName.
+  assert.match(wb, /sources\.includes\('AMC'\) \|\| sources\.includes\('SoW \/ Proposal'\)/)
+  // Confirming the scope persists the field and derives the survey requirement.
+  assert.match(wb, /requirementSource, scopeConfirmed: true/)
+  assert.match(wb, /s === 'Site visit' \|\| s === 'SoW \/ Proposal'/)
+})
+
+test('the site location picks the rate sheet', async () => {
+  const { sheetForLocation, sheetFor } = await import('../src/serviceRates.js')
+  assert.equal(sheetForLocation('Chennai, Tamil Nadu'), 'India')
+  assert.equal(sheetForLocation('Pune, Maharashtra - 411001'), 'India')
+  assert.equal(sheetForLocation('Jubail, Saudi Arabia'), 'International')
+  assert.equal(sheetForLocation('Dubai, UAE'), 'International')
+  // ModAE is an Indian company: a blank or unreadable address stays domestic.
+  assert.equal(sheetForLocation(''), 'India')
+  assert.equal(sheetForLocation('Plot 7, Phase II'), 'India')
+
+  const opp = { eucLocation: 'Muscat, Oman' }
+  assert.equal(sheetFor(opp, {}), 'International')
+  // An explicit choice still wins over the address.
+  assert.equal(sheetFor(opp, { sheet: 'India' }), 'India')
+})
+
+test('a quiet customer and an expired schedule both raise an alert', async () => {
+  const { computeAlerts } = await import('../src/monitoring.js')
+  const day = 86400000
+  const ago = n => new Date(Date.now() - n * day).toISOString().slice(0, 10)
+  const opp = { id: 'SVC-9', status: 'Open', owner: 'RS', lastUpdated: ago(1) }
+  const run = est => computeAlerts({
+    role: 'RS', opportunities: [opp], approvals: [], svcEstimates: [est], config: {},
+  }).filter(a => a.type.startsWith('rate-sheet'))
+
+  assert.equal(run({ oppId: 'SVC-9', rateSheetSentOn: ago(2) }).length, 0, 'a fresh schedule is not chased')
+
+  const idle = run({ oppId: 'SVC-9', rateSheetSentOn: ago(10) })
+  assert.equal(idle[0].type, 'rate-sheet-idle')
+
+  const expired = run({ oppId: 'SVC-9', rateSheetSentOn: ago(45) })
+  assert.equal(expired[0].type, 'rate-sheet-expiry')
+  assert.match(expired[0].nextAction, /Re-validate/)
+
+  // Once the customer has answered there is nothing to chase.
+  assert.equal(run({ oppId: 'SVC-9', rateSheetSentOn: ago(45), customerDecision: 'Accepted' }).length, 0)
+})

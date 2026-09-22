@@ -1224,6 +1224,8 @@ export const seedConfig = {
   ownerRules: OPP_TYPES.map(t => ({ oppType: t, owner: DEFAULT_OWNER_FOR_OPP_TYPE[t] })),
   leadDeadlines: { kycDays: 7, amberFeeDays: 7, clarificationDays: 7 },
   proposalValidityDays: 30,
+  // How long a published service rate schedule stands before it is re-validated.
+  rateSheetValidityDays: 30,
   // The mailbox every enquiry lands in. Clarification mail goes out from here
   // until a lead is assigned, and from the assigned salesperson after that.
   commonMailbox: 'sales@modae.demo',
