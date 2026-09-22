@@ -217,3 +217,43 @@ test('the margin matrix routes Service by value and margin', async () => {
   const small = commercialGate(opp, proposal(500000, 100000), {})
   assert.ok(small.valueBreak === 1000000 && small.marginBreak === 50)
 })
+
+// ---- One rate dataset, editable in Admin -----------------------------------
+
+test('the published role table and the billed rates are one dataset', async () => {
+  const { seedRateSheets } = await import('../src/seed.js')
+  const { roleRates } = await import('../src/serviceRates.js')
+
+  // The engineer and senior-engineer rows are not copies — they read the same
+  // numbers the invoice bills from, so the two can no longer drift apart.
+  const india = roleRates(seedRateSheets.India)
+  const engineer = india.find(r => r.role === 'Service Engineer')
+  const senior = india.find(r => r.role === 'Senior Engineer / Commissioning')
+  assert.equal(engineer.derived, true)
+  assert.equal(engineer.ratePerDay, seedRateSheets.India.rates.engineerDay)
+  assert.equal(senior.ratePerDay, seedRateSheets.India.rates.seniorDay)
+
+  // Roles the sheet prices on their own still carry their own rate.
+  const training = india.find(r => r.role === 'Training (per day, classroom)')
+  assert.equal(training.derived, false)
+  assert.ok(training.ratePerDay > 0)
+
+  assert.ok(roleRates(seedRateSheets.International).every(r => r.ratePerDay > 0))
+})
+
+test('service rates are editable and the edit is audited', () => {
+  const store = fs.readFileSync('src/store.jsx', 'utf8')
+  const admin = fs.readFileSync('src/pages/Admin.jsx', 'utf8')
+  assert.match(store, /updateRateSheets\(sheet, patch\)/)
+  assert.match(store, /'Service rate sheet updated'/)
+  assert.match(admin, /function ServiceRateSheetEditor/)
+  assert.match(admin, /store\.updateRateSheets\(sheet, \{ rates: \{ \[key\]: Math\.max\(0, v\) \} \}\)/)
+  // The old claim that rates were editable on Price Lists is gone.
+  assert.doesNotMatch(admin, /Rates are editable on the Price Lists page/)
+})
+
+test('an admin rate revision survives a demo wipe', async () => {
+  const { emptyState } = await import('../src/appState.js')
+  const edited = { India: { currency: 'INR', gst: 18, rates: { engineerDay: 999 }, roles: [] } }
+  assert.equal(emptyState({ rateSheets: edited, config: {} }).rateSheets.India.rates.engineerDay, 999)
+})

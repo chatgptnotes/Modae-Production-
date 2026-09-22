@@ -109,7 +109,11 @@ test('logins, configuration and the catalogues survive the wipe', () => {
   assert.ok(s.users.length > 0, 'the demo logins are how you get back in')
   assert.deepEqual(s.users, seeded.users)
   assert.ok(Object.keys(s.priceLists).length > 0, 'price lists are reference data')
-  assert.ok(s.rateSheet.length > 0, 'the rate sheet is reference data')
+  // One canonical set of service rate sheets since 22 Sep, and they are edited
+  // in Admin, so a wipe must keep them.
+  assert.ok(Object.keys(s.rateSheets).length > 0, 'the service rate sheets are reference data')
+  assert.ok(s.rateSheets.India.rates.engineerDay > 0)
+  assert.equal(s.rateSheet, undefined, 'the duplicate role table is gone')
   assert.ok(s.adhocParts.length >= 0)
   assert.ok(s.config.approvalThresholds, 'admin configuration is kept')
   assert.ok(Object.keys(s.sales.targets).length > 0, 'owner targets are configuration, not demo rows')

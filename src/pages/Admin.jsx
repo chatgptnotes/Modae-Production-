@@ -60,6 +60,46 @@ function NumField({ label, value, disabled, onChange }) {
   )
 }
 
+// The service day rates every service quote and invoice is priced from. These
+// used to live in source with no way to change them, while a second, unrelated
+// role table on Price Lists claimed to be editable. One sheet now, edited here.
+const RATE_FIELDS = [
+  ['engineerDay', 'Engineer / day'], ['seniorDay', 'Senior engineer / day'],
+  ['travelDay', 'Travel / day'], ['otHour', 'Overtime / hour'],
+  ['weekendPct', 'Weekend premium (%)'], ['standbyDay', 'Standby / day'],
+  ['flight', 'Flight (each way)'], ['hotelNight', 'Hotel / night'],
+  ['transportDay', 'Local transport / day'], ['perDiem', 'Per diem'],
+  ['tools', 'Tools & consumables'],
+]
+
+function ServiceRateSheetEditor({ canEdit }) {
+  const store = useStore()
+  const [sheet, setSheet] = useState('India')
+  const current = store.rateSheets[sheet]
+  const unit = current.currency === 'INR' ? 'K₹' : 'USD'
+  return (
+    <div style={{ marginTop: 10 }}>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
+        {['India', 'International'].map(name => (
+          <button key={name} className={sheet === name ? 'primary' : ''} onClick={() => setSheet(name)}>{name}</button>
+        ))}
+        <Chip tone="state-Accepted">{current.currency} · {unit}</Chip>
+      </div>
+      {RATE_FIELDS.map(([key, label]) => (
+        <NumField key={key} label={`${label}${key === 'weekendPct' ? '' : ` (${unit})`}`}
+          value={current.rates[key]} disabled={!canEdit}
+          onChange={v => store.updateRateSheets(sheet, { rates: { [key]: Math.max(0, v) } })} />
+      ))}
+      <NumField label="GST (%)" value={current.gst} disabled={!canEdit}
+        onChange={v => store.updateRateSheets(sheet, { gst: Math.max(0, Math.min(100, v)) })} />
+      <p className="hint">
+        Drives the service estimate, the customer-facing rate schedule and the invoice.
+        Changing a rate here is audited and applies to work priced from now on.
+      </p>
+    </div>
+  )
+}
+
 // A real <input type="file"> behind a button — metadata only, contents are
 // never read or stored in the demo.
 function FileButton({ label, disabled, onFile, variant = 'secondary', accept }) {
@@ -810,9 +850,7 @@ export default function Admin() {
               </span>
             </div>
           ))}
-          <div className="arow"><span>Rate sheet — India (INR, GST 18%)</span><Chip tone="state-Accepted">Current</Chip></div>
-          <div className="arow"><span>Rate sheet — International (USD)</span><Chip tone="state-Accepted">Current</Chip></div>
-          <p className="hint">Rates are editable on the Price Lists page; registries here track which versions are live.</p>
+          <ServiceRateSheetEditor canEdit={canEdit} />
         </div>
 
           </div>

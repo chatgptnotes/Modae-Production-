@@ -5,11 +5,11 @@ import { Chip, AiBadge } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 import SurveyPanel from './SurveyPanel.jsx'
 import RateSheetPanel from './RateSheetPanel.jsx'
-import { serviceCost, estimateQuantities, serviceMoney, serviceAbsolute, normalizeSheet } from '../serviceRates.js'
+import { serviceCost, estimateQuantities, serviceMoney, serviceAbsolute, sheetFor } from '../serviceRates.js'
 import { serviceMatrixExempt, legacyServiceReview, serviceOfferCleared } from '../gates.js'
 
 const DEFAULT_EST = {
-  sheet: 'India', workDays: 1, travelDays: 1, dailyHours: 8, otHours: 0,
+  workDays: 1, travelDays: 1, dailyHours: 8, otHours: 0,
   weekendDays: 0, standbyDays: 0, engineer: '', mobilisation: '', toolsCerts: '',
   travelConfirmed: false,
 }
@@ -23,12 +23,30 @@ const serviceText = opp => [
   opp?.oppName, opp?.remarks, opp?.solution, opp?.product,
 ].flat().filter(Boolean).join(' ').toLowerCase()
 
-const suggestedOfferFor = opp => {
-  const text = serviceText(opp)
-  return /amc|annual|complex|diagnostic|long[- ]duration|negotiat|statement of work|sow|boq|survey/.test(text)
+// Step 2 of the workflow: what does this enquiry actually need? The three
+// sources are what decide the lane, so they are a field the salesperson
+// confirms rather than something inferred from the opportunity's name.
+export const REQUIREMENT_SOURCES = ['Site visit', 'SoW / Proposal', 'AMC']
+
+// AMC and a formal Statement of Work both mean a customised proposal. A site
+// visit on its own does not — a standard inspection is still rate-sheet work.
+const offerForSources = sources =>
+  (sources.includes('AMC') || sources.includes('SoW / Proposal')
     ? 'Customized Proposal'
-    : 'Standard Rate Sheet'
+    : 'Standard Rate Sheet')
+
+// The AI's opening guess, from the enquiry text. It seeds the checkboxes; the
+// confirmed field is what the rest of the flow reads.
+const aiSourcesFor = opp => {
+  const text = serviceText(opp)
+  const sources = []
+  if (/amc|annual maintenance|recurring maintenance/.test(text)) sources.push('AMC')
+  if (/statement of work|\bsow\b|\bboq\b|complex|diagnostic|long[- ]duration|negotiat/.test(text)) sources.push('SoW / Proposal')
+  if (/survey|site visit|inspection|troubleshoot/.test(text)) sources.push('Site visit')
+  return sources
 }
+
+const suggestedOfferFor = opp => offerForSources(aiSourcesFor(opp))
 
 // Reactive-service workbench: rate-sheet driven cost build-up with the manual
 // travel-estimate confirmation gate.
@@ -36,10 +54,14 @@ export default function WbService({ opp, openBuilder }) {
   const store = useStore()
   const comm = canPriceProposal(store.role)
   const est = store.svcEstimates.find(e => e.oppId === opp.id) || { oppId: opp.id, ...DEFAULT_EST }
-  const sheet = normalizeSheet(est.sheet)
+  // The site's location picks the sheet; the toggle below stays as an override
+  // for the cases the address does not settle.
+  const sheet = sheetFor(opp, est)
   const rs = store.rateSheets[sheet]
   const suggestedOffer = est.aiOfferMode || suggestedOfferFor(opp)
   const offerMode = est.offerMode || suggestedOffer
+  // Until it is confirmed the field shows the AI's reading of the enquiry.
+  const requirementSource = est.requirementSource || aiSourcesFor(opp)
   const scopeConfirmed = !!est.scopeConfirmed
   // Three approval regimes meet here. A published-rate Path A offer needs none;
   // an opportunity raised before 22 Sep still runs its single combined review;
@@ -62,7 +84,11 @@ export default function WbService({ opp, openBuilder }) {
   const money = v => serviceMoney(sheet, v)
 
   const confirmScope = () => {
-    store.updateServiceFlow(opp.id, { aiOfferMode: suggestedOffer, offerMode, scopeConfirmed: true })
+    store.updateServiceFlow(opp.id, {
+      aiOfferMode: suggestedOffer, offerMode, requirementSource, scopeConfirmed: true,
+      // A site visit or a formal SoW is what makes the survey sub-flow apply.
+      surveyRequired: est.surveyRequired || requirementSource.some(s => s === 'Site visit' || s === 'SoW / Proposal'),
+    })
   }
 
   const requestServiceReview = () => {
@@ -121,6 +147,24 @@ export default function WbService({ opp, openBuilder }) {
           </select>
         </label>
         <p className="hint">AI suggestion: {suggestedOffer}. Change it only if the scope requires another path.</p>
+
+        <div className="section-title" style={{ marginTop: 10 }}>What does this enquiry need?</div>
+        {REQUIREMENT_SOURCES.map(source => (
+          <div className="check-row" key={source}>
+            <input type="checkbox" checked={requirementSource.includes(source)} disabled={scopeConfirmed}
+              onChange={e => {
+                const next = e.target.checked
+                  ? [...requirementSource, source]
+                  : requirementSource.filter(item => item !== source)
+                upd({ requirementSource: next, offerMode: offerForSources(next) })
+              }} />
+            <span>{source}</span>
+          </div>
+        ))}
+        <p className="hint">
+          A Statement of Work or an AMC is priced as a customised proposal; a plain site
+          visit is still rate-sheet work. Ticking a site visit or SoW raises the survey below.
+        </p>
         <button className="primary" disabled={scopeConfirmed} onClick={confirmScope}>{scopeConfirmed ? 'Scope confirmed' : 'Confirm scope and offer path'}</button>
       </div>
       {/* Diagram 02 §4 decides the lane before anything is priced: a standard

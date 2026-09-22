@@ -5,6 +5,7 @@ import { fmt, exportCSV, canViewCommercial, canManagePriceLists } from '../utils
 import { Modal } from '../ui.jsx'
 import { buildPriceListInspectionPayload, downloadPriceListTemplate, parsePriceListFile } from '../priceListImport.js'
 import { normalizedCurrencyRates } from '../currency.js'
+import { roleRates, normalizeSheet } from '../serviceRates.js'
 import { runTaskResult } from '../ai.js'
 
 export default function PriceLists() {
@@ -18,6 +19,8 @@ export default function PriceLists() {
   const initialList = store.priceLists?.[requestedList] ? requestedList : firstList
   const [list, setList] = useState(initialList)
   const [highlightedPart, setHighlightedPart] = useState('')
+  const [rateSheetName, setRateSheetName] = useState('India')
+  const rateSheet = store.rateSheets[normalizeSheet(rateSheetName)]
   const [uploadOpen, setUploadOpen] = useState(false)
   const [uploadFile, setUploadFile] = useState(null)
   const [uploadVersion, setUploadVersion] = useState('')
@@ -341,17 +344,29 @@ export default function PriceLists() {
       )}
 
       <div className="section-title">Service Rate Sheet</div>
-      <div className="sheet-wrap" style={{ maxWidth: 520 }}>
+      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
+        {['India', 'International'].map(name => (
+          <button key={name} className={rateSheetName === name ? 'primary' : ''} onClick={() => setRateSheetName(name)}>{name}</button>
+        ))}
+        <span className="hint">{rateSheet.currency}, GST {rateSheet.gst}%</span>
+      </div>
+      <div className="sheet-wrap" style={{ maxWidth: 560 }}>
         <table className="sheet">
-          <thead><tr><th>Role</th><th>Rate / day (K₹)</th></tr></thead>
+          <thead><tr><th>Role</th><th>Rate / day ({rateSheetName === 'India' ? 'K₹' : 'USD'})</th></tr></thead>
           <tbody>
-            {store.rateSheet.map(r => (
-              <tr key={r.role}><td>{r.role}</td><td className="num">{fmt(r.ratePerDayK)}</td></tr>
+            {roleRates(rateSheet).map(r => (
+              <tr key={r.role}>
+                <td>{r.role}</td>
+                <td className="num">{fmt(r.ratePerDay)}</td>
+              </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <div className="costing-note">Service quotes = rate sheet × number of days; used directly for service/training proposals.</div>
+      <div className="costing-note">
+        Service quotes = rate sheet × number of days; this is the same sheet the service
+        workbench prices from and the invoice bills against. Rates are edited in Admin.
+      </div>
     </div>
   )
 }
