@@ -15,6 +15,7 @@ import {
 import { oppBlockers, transitionBlockers, NO_EXCEPTION, approvalForRev, APPROVAL_5B } from '../src/gates.js'
 import { seedJointApprovals, seedAiLeads, seedCustomers } from '../src/seed.js'
 import { migrate, seedState, mergeApprovalRows } from '../src/appState.js'
+import { customerStatusForLead } from '../src/leadCustomerClass.js'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
@@ -128,6 +129,17 @@ test('the seeded demo path is the one the client reproduced', () => {
   assert.equal(ap1.status, 'Pending')
   // CAPSA is Red in the master, which is what drives the lead's class.
   assert.ok(seedCustomers.some(c => c.status === 'Red'))
+})
+
+test('an exact Customer Master match overrides a stale inferred Blue lead class', () => {
+  const customers = [{ name: 'Vedanta (Lanjigarh)', status: 'Red' }]
+  const lead = {
+    sellTo: 'Vedanta (Lanjigarh)',
+    customerStatus: 'Blue',
+    ai: { fields: [{ k: 'Sell-to customer', v: 'Vedanta (Lanjigarh)' }] },
+  }
+  assert.equal(customerStatusForLead(lead, customers), 'Red')
+  assert.equal(customerStatusForLead({ ...lead, customerStatusOverride: 'Blue' }, customers), 'Blue')
 })
 
 test('Register no longer stacks an unclearable duplicate blocker', () => {

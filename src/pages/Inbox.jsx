@@ -35,6 +35,8 @@ import { PROJECT_TYPES, oppTypesForProjectType, templatesForSelection, simulated
 import { buildLeadProposalData } from '../leadBoq.js'
 import { leadFieldValue as mappedLeadFieldValue, splitBuSegment, leadIdentity } from '../leadFieldMapping.js'
 import { normalizeLocationValue, useGlobalLocationSearch } from '../locations.js'
+import { matchCustomer, customerStatusForLead } from '../leadCustomerClass.js'
+export { matchCustomer, customerStatusForLead } from '../leadCustomerClass.js'
 // Common-mailbox lead inbox: AI parses each inquiry, a human decides whether it
 // becomes an opportunity (Qualify → registration / intake form) or is dropped.
 const PILL = { New: 'Blue', Qualified: 'Amber', Dropped: 'Red', Converted: 'Green' }
@@ -871,19 +873,6 @@ const PARSE_FIELDS = [
   ['Contact person', 'contactPerson'], ['Contact phone', 'contactPhone'],
 ]
 
-// Best-effort customer match against the master, off the AI sell-to field.
-export function matchCustomer(customers, lead) {
-  const sellTo = mappedLeadFieldValue(lead.ai?.fields || [], 'sellTo') || lead.parse?.sellTo || ''
-  const s = sellTo.toLowerCase()
-  return customers.find(c => {
-    const n = c.name.toLowerCase()
-    return s && (s.includes(n) || n.includes(s))
-  }) || null
-}
-
-export const customerStatusForLead = (lead, customers) =>
-  lead.customerStatus || matchCustomer(customers, lead)?.status || (lead.redFlag ? 'Red' : 'Blue')
-
 const leadFieldValue = (fields, pattern) => {
   const field = (fields || []).find(f => pattern.test(f.k) && f.state !== 'rejected')
   return field?.v ? cleanDisplayValue(field.v) : ''
@@ -1393,7 +1382,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
     oppType: OPP_TYPES.includes(lead.oppType)
       ? lead.oppType
       : mappedLeadFieldValue(ai.fields, 'oppType') || (lead.route === 'Service' ? 'Service' : lead.route === 'Project' ? 'Project' : 'Spares'),
-    customerStatus: lead.customerStatus || customerStatusForLead(lead, store.customers),
+    customerStatus: customerStatusForLead(lead, store.customers),
     bu: buSegment.bu || 'Energy',
     segment: buSegment.segment || 'Others',
     product: mappedLeadFieldValue(ai.fields, 'product') || 'Various',
@@ -1857,6 +1846,10 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
       oppType: draft.oppType,
       route: routeForType(draft.oppType),
       customerStatus: draft.customerStatus,
+      customerStatusOverride: (() => {
+        const masterStatus = matchCustomer(store.customers, { ...lead, sellTo: draft.sellTo })?.status || ''
+        return masterStatus && draft.customerStatus === masterStatus ? '' : draft.customerStatus
+      })(),
       customerClassifiedAt: lead.customerClassifiedAt || nowIST(),
       verification: ['Blue', 'Amber'].includes(draft.customerStatus)
         ? { ...(lead.verification || {}), requestedAt: lead.verification?.requestedAt || nowIST(), requestedFor: draft.customerStatus }
