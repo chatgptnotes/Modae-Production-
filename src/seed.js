@@ -43,6 +43,10 @@ export const CLOSE_REASONS = [
   'Technical Compliance', 'Commercial Compliance', 'Capability', 'Lead Time',
   'No Bid', 'Abandoned/Delayed', 'Duplicate Opportunity', 'Validity Expired', 'Others',
 ]
+export const WON_REASONS = [
+  'Customer acceptance', 'Purchase order received', 'Commercial confirmation',
+  'Written customer confirmation', 'Other',
+]
 // Blue = new customer pending admin verification (per the meeting's
 // green/amber/red/blue qualification rules).
 export const CUSTOMER_STATUSES = ['Green', 'Amber', 'Red', 'Blue']

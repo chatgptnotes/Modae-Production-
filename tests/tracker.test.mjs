@@ -25,11 +25,13 @@ const proposalFor = o => newProposal(o.id, o)
 // Opportunity Name, Stage, Probability… I need value, value and expected order
 // date… and I should know where is the next action pending." Opportunity Owner
 // and Updated were explicitly not required.
-test('the key-column set is exactly the columns the client asked for', () => {
+test('the key-column set includes Proposal Send Date instead of Expected Order Date', () => {
   const m = tracker.match(/const KEY_COLS = \[([^\]]*)\]/)
   assert.ok(m, 'KEY_COLS must exist')
   const keys = m[1].split(',').map(s => s.trim().replace(/'/g, '')).filter(Boolean)
-  assert.deepEqual(keys, ['id', 'sellTo', 'oppName', 'stage', 'oppType', 'prob', 'valueK', 'orderDate', 'nextActionOwner'])
+  assert.deepEqual(keys, ['id', 'sellTo', 'oppName', 'stage', 'oppType', 'prob', 'valueK', 'proposalDate', 'nextActionOwner'])
+  assert.match(tracker, /label: 'Proposal Send Date'/)
+  assert.match(tracker, /label: 'Expected Order Date'/)
   assert.ok(!keys.includes('owner'), 'Owner is not required for a sales owner')
   assert.ok(!keys.includes('lastUpdated'), 'Updated is not required for a sales owner')
 })
@@ -52,11 +54,36 @@ test('Excel export includes every tracker column for every role', () => {
 })
 
 test('Value and COGS are editable for every tracker user while GM stays derived', () => {
-  assert.match(tracker, /value=\{o\.valueK \|\| ''\} onChange=\{upd\(o\.id, 'valueK'\)\}/)
-  assert.match(tracker, /value=\{o\.cogsK \|\| ''\} onChange=\{upd\(o\.id, 'cogsK'\)\}/)
-  assert.match(tracker, />\{o\.valueK \? fmt\(gmK\(o\)\) : '-'\}<\/td>/)
+  assert.match(tracker, /value=\{o\.valueK \? o\.valueK \* 1000 : ''\} onChange=\{upd\(o\.id, 'valueK'\)\}/)
+  assert.match(tracker, /value=\{o\.cogsK \? o\.cogsK \* 1000 : ''\} onChange=\{upd\(o\.id, 'cogsK'\)\}/)
+  assert.match(tracker, />\{o\.valueK \? fmtRupeesFromK\(gmK\(o\)\) : '-'\}<\/td>/)
   assert.doesNotMatch(tracker, /className="num locked"/)
   assert.doesNotMatch(tracker, /name="lock"/)
+})
+
+test('registration details become visibly read-only after registration', () => {
+  assert.match(tracker, /Locked after registration/)
+  assert.match(tracker, /\['Intake', 'Registration'\]\.includes\(o\.milestone\)/)
+})
+
+test('the opportunities table does not directly edit workflow stages', () => {
+  assert.match(tracker, /Workflow stages are changed from the opportunity workspace/)
+  assert.doesNotMatch(tracker, /store\.setMilestone\(o\.id, e\.target\.value/)
+})
+
+test('closed opportunities expose the shared mark-won control', () => {
+  assert.match(tracker, /MarkWonControl/)
+  assert.match(tracker, /o\.status === 'Closed' && <MarkWonControl opp=\{o\} store=\{store\} \/>/)
+})
+
+test('closing from the Status column requires outcome then reason', () => {
+  assert.match(tracker, /field === 'status' && value === 'Closed'/)
+  assert.match(tracker, /Choose Won or Lost first, then select the reason/)
+  assert.match(tracker, /tracker-close-outcome-options/)
+  assert.match(tracker, /closePending\.stage === outcome/)
+  assert.match(tracker, /closePending\.stage === 'Won' \? WON_REASONS : CLOSE_REASONS/)
+  assert.match(tracker, /store\.closeLost\(closePending\.id, reason\)/)
+  assert.match(tracker, /store\.markWon\(closePending\.id, reason\)/)
 })
 
 test('tracker offers all, mine, and specific-owner filtering', () => {
@@ -125,10 +152,10 @@ test('a typed owner overrides the derivation', () => {
   assert.equal(na.derived, false)
 })
 
-test('an unblocked opportunity names nobody rather than guessing', () => {
-  const clear = { id: 'X-1', status: 'Open', owner: 'RS', route: 'Service', customerStatus: 'Green', oppType: 'Service' }
+test('an opportunity with incomplete customer verification names the verification owner', () => {
+  const clear = { id: 'X-1', status: 'Open', owner: 'RS', route: 'Service', customerStatus: 'Green', oppType: 'Service', sellTo: 'ACME', eucName: 'ACME Plant', eucLocation: 'Pune', oppName: 'Service scope', contactPerson: 'Buyer', contactPhone: '9999999999' }
   const na = nextActionWith(clear, { bom: [], terms: [] }, { approvals: [], kyc: {}, sparesLines: [], svcEstimates: [] })
-  assert.equal(na.owner, '')
+  assert.equal(na.owner, 'AH')
   assert.equal(na.derived, true)
 })
 

@@ -6112,6 +6112,18 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .tracker-date-pop-actions button { min-height: 30px; padding: 5px 10px; }
 @media (max-width: 760px) { .tracker-date-pop { width: min(300px, calc(100vw - 16px)); min-width: 0; } .tracker-date-error { white-space: normal; } }
 .tracker-page table.sheet td input, .tracker-page table.sheet td select { min-width: 0; text-overflow: ellipsis; }
+.tracker-stage-cell { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.mark-won-control { display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto; color: var(--won-text); font-size: 10px; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.mark-won-control input { accent-color: var(--won-text); margin: 0; cursor: pointer; }
+.mark-won-control input:disabled { cursor: default; }
+.warnbox .mark-won-control { margin-top: 8px; }
+.mark-won-modal .modal-message { margin-bottom: 14px; }
+.close-outcome-options { display: flex; gap: 8px; margin-top: 12px; }
+.close-outcome-option { display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: 5px; font-size: 11px; font-weight: 700; cursor: pointer; }
+.close-outcome-option.selected.lost { color: var(--lost-text); background: var(--lost-fill); border-color: var(--lost-text); }
+.close-outcome-option.selected.won { color: var(--won-text); background: var(--won-fill); border-color: var(--won-text); }
+.close-outcome-form { margin-top: 9px; }
+.close-outcome-form textarea { min-height: 58px; resize: vertical; }
 .tracker-page table.sheet td.num input { text-align: right; }
 
 /* Key view — 9 columns divide the viewport between them, so nothing scrolls
@@ -10351,6 +10363,11 @@ table.sheet tfoot td {
   resize: vertical;
   line-height: 1.35;
 }
+
+.tracker-close-outcome-options { display: flex; gap: 8px; margin: 12px 0; }
+.tracker-close-outcome-option { display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid var(--border-color); border-radius: 5px; font-size: 11px; font-weight: 700; cursor: pointer; }
+.tracker-close-outcome-option.selected.lost { color: var(--lost-text); background: var(--lost-fill); border-color: var(--lost-text); }
+.tracker-close-outcome-option.selected.won { color: var(--won-text); background: var(--won-fill); border-color: var(--won-text); }
 
 button.primary,
 .btn.primary,

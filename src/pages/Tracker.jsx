@@ -2,16 +2,16 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { CLOSE_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES } from '../seed.js'
+import { CLOSE_REASONS, WON_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES } from '../seed.js'
 import { fmt, fmtRupeesFromK, rupeesToK, mmmYY, ddMmmYY, stageClass, productList, productLabel, productDisplayLabel, sameCustomer, displayRole, OPPORTUNITY_DATE_FIELDS, OPPORTUNITY_PERIODS, opportunityDateRange } from '../utils.js'
 import { downloadTableXlsx } from '../proposal/excelExport.js'
 import { useFormulaBar } from '../formulabar.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { nextActionWith } from '../gates.js'
 import { suggestProbability } from '../insights.js'
-import { Modal } from '../ui.jsx'
+import { MarkWonControl, Modal } from '../ui.jsx'
 import { Icon, ModaeImageLogo } from '../icons.jsx'
-import { workflowStageLabelFor, workflowStageMilestoneFor, workflowStageOptionsFor } from '../workflowStage.js'
+import { workflowStageLabelFor } from '../workflowStage.js'
 
 const DEFAULT_DATE_FILTER = { field: 'orderDate', period: 'all', date: '', from: '', to: '' }
 
@@ -45,7 +45,7 @@ export const COLS = [
   { key: 'gmK', letter: 'S', label: 'GM (₹)', num: true, w: 4 },
   { key: 'gmPct', letter: 'T', label: 'GM%', num: true, w: 3 },
   { key: 'createDate', letter: 'U', label: 'Create Date', w: 5, wAll: 7 },
-  { key: 'proposalDate', letter: 'V', label: 'Proposal Date', w: 5, wAll: 7 },
+  { key: 'proposalDate', letter: 'V', label: 'Proposal Send Date', w: 5, wAll: 7 },
   { key: 'orderDate', letter: 'W', label: 'Expected Order Date', w: 14, wAll: 9 },
   { key: 'invoiceDate', letter: 'X', label: 'Expected Ship Date', w: 7, wAll: 9 },
   { key: 'status', letter: 'Y', label: 'Status*', w: 5 },
@@ -61,10 +61,10 @@ export const COLS = [
 
 // The columns a sales owner actually works from, in Biji's words on 13 Aug:
 // "Opportunity ID, Customer, Opportunity Name, Stage, Probability… I need
-// value, value and expected order date… and I should know where is the next
-// action pending." He was explicit that Opportunity Owner and Updated are not
+// value, proposal send date… and I should know where is the next action
+// pending." He was explicit that Opportunity Owner and Updated are not
 // required — a rep filtered to their own rows already knows the owner.
-const KEY_COLS = ['id', 'sellTo', 'oppName', 'stage', 'oppType', 'prob', 'valueK', 'orderDate', 'nextActionOwner']
+const KEY_COLS = ['id', 'sellTo', 'oppName', 'stage', 'oppType', 'prob', 'valueK', 'proposalDate', 'nextActionOwner']
 // Hiding a spreadsheet column means hiding the header and the matching cell in
 // every row. The cells are written out in COLS order, so one generated rule per
 // hidden column does it — the same thing Excel's "hide column" does, and it
@@ -182,7 +182,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const [dateFilterOpen, setDateFilterOpen] = useState(false)
   const [dateFilterPos, setDateFilterPos] = useState(null)
   const [productPick, setProductPick] = useState(null) // { id, x, y } of the open product picker
-  const [closePending, setClosePending] = useState(null) // { id, stage } awaiting a closed reason
+  const [closePending, setClosePending] = useState(null) // { id, stage } awaiting outcome and reason
   const [closeReason, setCloseReason] = useState('')
   const [closeReasonNote, setCloseReasonNote] = useState('')
   const [deleteArmedId, setDeleteArmedId] = useState(null)
@@ -393,6 +393,12 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     // Reopening clears the closure fields; a Won/Lost stage must not survive.
     if (field === 'status' && value === 'Open') Object.assign(patch, { closedReason: '', closedReasonNote: '', stage: 'Firm Bid' })
     if (field === 'closedReason' && value !== 'Others') patch.closedReasonNote = ''
+    if (field === 'status' && value === 'Closed') {
+      setClosePending({ id, stage: '' })
+      setCloseReason('')
+      setCloseReasonNote('')
+      return
+    }
     if (field === 'stage' && (value === 'Won' || value === 'Lost')) {
       setClosePending({ id, stage: value })
       setCloseReason('')
@@ -411,12 +417,13 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const confirmClose = () => {
     const note = closeReasonNote.trim()
     if (!closePending || !closeReason || (closeReason === 'Others' && !note)) return
-    store.updateOpportunity(closePending.id, {
-      stage: closePending.stage,
-      status: 'Closed',
-      closedReason: closeReason,
-      closedReasonNote: closeReason === 'Others' ? note : '',
-    })
+    const reason = closeReason === 'Others' ? note : closeReason
+    if (closePending.stage === 'Won') {
+      store.markWon(closePending.id, reason)
+    } else {
+      store.closeLost(closePending.id, reason)
+      if (closeReason === 'Others') store.updateOpportunity(closePending.id, { closedReason: closeReason, closedReasonNote: note })
+    }
     cancelClose()
   }
 
@@ -743,37 +750,37 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                     </button>
                   </span>
                 </td>
-                <td onClick={selectCell(o, COLS[1])} className={isSel(o, COLS[1]) ? 'cell-sel' : ''} title={o.sellTo}><WrapInput value={o.sellTo} onChange={upd(o.id, 'sellTo')} title={o.sellTo} /></td>
+                <td onClick={selectCell(o, COLS[1])} className={isSel(o, COLS[1]) ? 'cell-sel' : ''} title={o.sellTo}>{['Intake', 'Registration'].includes(o.milestone) ? <WrapInput value={o.sellTo} onChange={upd(o.id, 'sellTo')} title={o.sellTo} /> : <div className="ro" title="Locked after registration">{o.sellTo || '—'}</div>}</td>
                 <td onClick={selectCell(o, COLS[2])} className={isSel(o, COLS[2]) ? 'cell-sel' : ''}>
-                  <select value={o.category} onChange={upd(o.id, 'category')}>{CATEGORIES.map(c => <option key={c}>{c}</option>)}</select>
+                  {['Intake', 'Registration'].includes(o.milestone) ? <select value={o.category} onChange={upd(o.id, 'category')}>{CATEGORIES.map(c => <option key={c}>{c}</option>)}</select> : <div className="ro" title="Locked after registration">{o.category || '—'}</div>}
                 </td>
-                <td onClick={selectCell(o, COLS[3])} className={isSel(o, COLS[3]) ? 'cell-sel' : ''} title={o.location}><input type="text" value={o.location} onChange={upd(o.id, 'location')} /></td>
+                <td onClick={selectCell(o, COLS[3])} className={isSel(o, COLS[3]) ? 'cell-sel' : ''} title={o.location}>{['Intake', 'Registration'].includes(o.milestone) ? <input type="text" value={o.location} onChange={upd(o.id, 'location')} /> : <div className="ro" title="Locked after registration">{o.location || '—'}</div>}</td>
                 <td onClick={selectCell(o, COLS[4])} className={`cstat ${customerStatusFor(o)} ${isSel(o, COLS[4]) ? 'cell-sel' : ''}`}
                   title="Customer status is managed from the Customer master">
                   <span className={`status-pill status-pill--${customerStatusFor(o).toLowerCase()}`}>
                     {customerStatusFor(o)}
                   </span>
                 </td>
-                <td onClick={selectCell(o, COLS[5])} className={isSel(o, COLS[5]) ? 'cell-sel' : ''} title={o.eucName}><input type="text" value={o.eucName} onChange={upd(o.id, 'eucName')} /></td>
-                <td onClick={selectCell(o, COLS[6])} className={isSel(o, COLS[6]) ? 'cell-sel' : ''} title={o.eucLocation}><input type="text" value={o.eucLocation} onChange={upd(o.id, 'eucLocation')} /></td>
-                <td onClick={selectCell(o, COLS[7])} className={isSel(o, COLS[7]) ? 'cell-sel' : ''} title={o.oppName}><WrapInput value={o.oppName} onChange={upd(o.id, 'oppName')} title={o.oppName} /></td>
+                <td onClick={selectCell(o, COLS[5])} className={isSel(o, COLS[5]) ? 'cell-sel' : ''} title={o.eucName}>{['Intake', 'Registration'].includes(o.milestone) ? <input type="text" value={o.eucName} onChange={upd(o.id, 'eucName')} /> : <div className="ro" title="Locked after registration">{o.eucName || '—'}</div>}</td>
+                <td onClick={selectCell(o, COLS[6])} className={isSel(o, COLS[6]) ? 'cell-sel' : ''} title={o.eucLocation}>{['Intake', 'Registration'].includes(o.milestone) ? <input type="text" value={o.eucLocation} onChange={upd(o.id, 'eucLocation')} /> : <div className="ro" title="Locked after registration">{o.eucLocation || '—'}</div>}</td>
+                <td onClick={selectCell(o, COLS[7])} className={isSel(o, COLS[7]) ? 'cell-sel' : ''} title={o.oppName}>{['Intake', 'Registration'].includes(o.milestone) ? <WrapInput value={o.oppName} onChange={upd(o.id, 'oppName')} title={o.oppName} /> : <div className="ro" title="Locked after registration">{o.oppName || '—'}</div>}</td>
                 <td onClick={selectCell(o, COLS[8])} className={isSel(o, COLS[8]) ? 'cell-sel' : ''}>
-                  <select value={o.owner} onChange={upd(o.id, 'owner')}>{OWNERS.map(c => <option key={c} value={c}>{displayRole(c)}</option>)}</select>
+                  {['Intake', 'Registration'].includes(o.milestone) ? <select value={o.owner} onChange={upd(o.id, 'owner')}>{OWNERS.map(c => <option key={c} value={c}>{displayRole(c)}</option>)}</select> : <div className="ro" title="Locked after registration">{displayRole(o.owner) || '—'}</div>}
                 </td>
                 <td onClick={selectCell(o, COLS[9])} className={isSel(o, COLS[9]) ? 'cell-sel' : ''}>
-                  <select value={o.oppType} onChange={upd(o.id, 'oppType')}>{OPP_TYPES.map(c => <option key={c}>{c}</option>)}</select>
+                  {['Intake', 'Registration'].includes(o.milestone) ? <select value={o.oppType} onChange={upd(o.id, 'oppType')}>{OPP_TYPES.map(c => <option key={c}>{c}</option>)}</select> : <div className="ro" title="Locked after registration">{o.oppType || '—'}</div>}
                 </td>
                 <td onClick={selectCell(o, COLS[10])} className={isSel(o, COLS[10]) ? 'cell-sel' : ''}>
-                  <select value={o.bu} onChange={upd(o.id, 'bu')}>{BUS.map(c => <option key={c}>{c}</option>)}</select>
+                  {['Intake', 'Registration'].includes(o.milestone) ? <select value={o.bu} onChange={upd(o.id, 'bu')}>{BUS.map(c => <option key={c}>{c}</option>)}</select> : <div className="ro" title="Locked after registration">{o.bu || '—'}</div>}
                 </td>
                 <td onClick={selectCell(o, COLS[11])} className={isSel(o, COLS[11]) ? 'cell-sel' : ''}>
-                  <select value={o.segment} onChange={upd(o.id, 'segment')}>{SEGMENTS.map(c => <option key={c}>{c}</option>)}</select>
+                  {['Intake', 'Registration'].includes(o.milestone) ? <select value={o.segment} onChange={upd(o.id, 'segment')}>{SEGMENTS.map(c => <option key={c}>{c}</option>)}</select> : <div className="ro" title="Locked after registration">{o.segment || '—'}</div>}
                 </td>
                 {/* Product is multi-value, so the cell is a checkbox popover
                     rather than a single-value <select> that would render blank
                     for any opportunity carrying more than one product. */}
                 <td onClick={selectCell(o, COLS[12])} className={isSel(o, COLS[12]) ? 'cell-sel' : ''}>
-                  <button type="button" className="cell-pick"
+                  {['Intake', 'Registration'].includes(o.milestone) ? <button type="button" className="cell-pick"
                     title={productDisplayLabel(o.product) || 'No equipment or product family selected'}
                     onClick={e => {
                       e.stopPropagation()
@@ -782,7 +789,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                       setProductPick({ id: o.id, x: r.left, y: r.bottom })
                     }}>
                     {productDisplayLabel(o.product) || <span className="hint">— select equipment / product family —</span>}
-                  </button>
+                  </button> : <div className="ro" title="Locked after registration">{productDisplayLabel(o.product) || '—'}</div>}
                   {productPick?.id === o.id && renderProductPop(o, productPick)}
                 </td>
                 {/* Suggested from stage, account class and how long the row has
@@ -791,12 +798,12 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                   {(() => {
                     const sug = suggestProbability(o, store.getProposal(o.id), store.config)
                     return (
-                      <select value={o.prob || ''} onChange={upd(o.id, 'prob')}
+                      ['Intake', 'Registration'].includes(o.milestone) ? <select value={o.prob || ''} onChange={upd(o.id, 'prob')}
                         className={!o.prob && sug ? 'derived' : ''}
                         title={sug ? `Suggested ${sug.level} — ${sug.why}` : ''}>
                         <option value="">{sug ? `${sug.level} (suggested)` : ''}</option>
                         {PROB_LEVELS.map(p => <option key={p}>{p}</option>)}
-                      </select>
+                      </select> : <div className="ro" title="Locked after registration">{o.prob || (sug ? `${sug.level} (suggested)` : '—')}</div>
                     )
                   })()}
                 </td>
@@ -831,12 +838,10 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                   </select>
                 </td>
                 <td onClick={selectCell(o, COLS[23])} className={isSel(o, COLS[23]) ? 'cell-sel' : ''}>
-                  <select value={workflowStageMilestoneFor(o)} onChange={e => store.setMilestone(o.id, e.target.value, 'Workflow stage updated from Opportunities')}>
-                    {workflowStageOptionsFor(o).map(option => <option key={option.milestone} value={option.milestone}>{option.label}</option>)}
-                    {!workflowStageOptionsFor(o).some(option => option.milestone === workflowStageMilestoneFor(o)) && (
-                      <option value={workflowStageMilestoneFor(o)}>{workflowStageLabelFor(o)}</option>
-                    )}
-                  </select>
+                  <div className="tracker-stage-cell">
+                    <div className="ro" title="Workflow stages are changed from the opportunity workspace">{workflowStageLabelFor(o)}</div>
+                    {o.status === 'Closed' && <MarkWonControl opp={o} store={store} />}
+                  </div>
                 </td>
                 <td onClick={selectCell(o, COLS[24])}
                   className={`${o.status === 'Closed' && !o.closedReason ? 'err' : ''} ${isSel(o, COLS[24]) ? 'cell-sel' : ''}`}
@@ -849,8 +854,8 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                     </select>
                   ) : ''}
                 </td>
-                <td onClick={selectCell(o, COLS[25])} className={isSel(o, COLS[25]) ? 'cell-sel' : ''} title={o.contactPerson}><input type="text" value={o.contactPerson} onChange={upd(o.id, 'contactPerson')} /></td>
-                <td onClick={selectCell(o, COLS[26])} className={isSel(o, COLS[26]) ? 'cell-sel' : ''} title={o.contactPhone}><input type="text" value={o.contactPhone} onChange={upd(o.id, 'contactPhone')} /></td>
+                <td onClick={selectCell(o, COLS[25])} className={isSel(o, COLS[25]) ? 'cell-sel' : ''} title={o.contactPerson}>{['Intake', 'Registration'].includes(o.milestone) ? <input type="text" value={o.contactPerson} onChange={upd(o.id, 'contactPerson')} /> : <div className="ro" title="Locked after registration">{o.contactPerson || '—'}</div>}</td>
+                <td onClick={selectCell(o, COLS[26])} className={isSel(o, COLS[26]) ? 'cell-sel' : ''} title={o.contactPhone}>{['Intake', 'Registration'].includes(o.milestone) ? <input type="text" value={o.contactPhone} onChange={upd(o.id, 'contactPhone')} /> : <div className="ro" title="Locked after registration">{o.contactPhone || '—'}</div>}</td>
                 <td onClick={selectCell(o, COLS[27])} className={isSel(o, COLS[27]) ? 'cell-sel' : ''}>
                   <div className="ro" title="Auto-stamped — read only">{ddMmmYY(o.lastUpdated)}</div>
                 </td>
@@ -909,36 +914,49 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
       </div>
 
       {closePending && (
-        <Modal title={`Close opportunity as ${closePending.stage}`} onClose={cancelClose}>
-          <p className="hint">Select a reason before this opportunity is moved to {closePending.stage}.</p>
-          <label htmlFor="tracker-close-reason">Closed reason</label>
-          <select
-            id="tracker-close-reason"
-            value={closeReason}
-            onChange={e => {
-              setCloseReason(e.target.value)
-              if (e.target.value !== 'Others') setCloseReasonNote('')
-            }}
-            autoFocus
-          >
-            <option value="">— select a reason —</option>
-            {CLOSE_REASONS.map(reason => <option key={reason} value={reason}>{reason}</option>)}
-          </select>
-          {closeReason === 'Others' && (
-            <label className="tracker-close-reason-note" htmlFor="tracker-close-reason-note">
-              Additional explanation
-              <textarea
-                id="tracker-close-reason-note"
-                value={closeReasonNote}
-                onChange={e => setCloseReasonNote(e.target.value)}
-                maxLength={240}
-                placeholder="Enter the reason"
-                rows={3}
-              />
-            </label>
+        <Modal title="Close opportunity" onClose={cancelClose}>
+          <p className="hint">Choose Won or Lost first, then select the reason before this opportunity is closed.</p>
+          <div className="tracker-close-outcome-options" role="radiogroup" aria-label="Close opportunity outcome">
+            {['Lost', 'Won'].map(outcome => (
+              <label key={outcome} className={`tracker-close-outcome-option ${outcome.toLowerCase()}${closePending.stage === outcome ? ' selected' : ''}`}>
+                <input type="radio" name="tracker-close-outcome" value={outcome} checked={closePending.stage === outcome}
+                  onChange={() => { setClosePending(pending => ({ ...pending, stage: outcome })); setCloseReason(''); setCloseReasonNote('') }} />
+                <span>Mark as {outcome}</span>
+              </label>
+            ))}
+          </div>
+          {closePending.stage && (
+            <>
+              <label htmlFor="tracker-close-reason">{closePending.stage} reason</label>
+              <select
+                id="tracker-close-reason"
+                value={closeReason}
+                onChange={e => {
+                  setCloseReason(e.target.value)
+                  if (e.target.value !== 'Others') setCloseReasonNote('')
+                }}
+                autoFocus
+              >
+                <option value="">— select a reason —</option>
+                {(closePending.stage === 'Won' ? WON_REASONS : CLOSE_REASONS).map(reason => <option key={reason} value={reason}>{reason}</option>)}
+              </select>
+              {closeReason === 'Others' && (
+                <label className="tracker-close-reason-note" htmlFor="tracker-close-reason-note">
+                  Additional explanation
+                  <textarea
+                    id="tracker-close-reason-note"
+                    value={closeReasonNote}
+                    onChange={e => setCloseReasonNote(e.target.value)}
+                    maxLength={240}
+                    placeholder="Enter the reason"
+                    rows={3}
+                  />
+                </label>
+              )}
+            </>
           )}
           <div className="forms-actions">
-            <button className="primary" disabled={!closeReason || (closeReason === 'Others' && !closeReasonNote.trim())} onClick={confirmClose}>Confirm</button>
+            <button className="primary" disabled={!closePending.stage || !closeReason || (closeReason === 'Others' && !closeReasonNote.trim())} onClick={confirmClose}>Confirm</button>
             <button onClick={cancelClose}>Cancel</button>
           </div>
         </Modal>

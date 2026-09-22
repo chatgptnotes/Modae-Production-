@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, REVISION_TYPES, DEFAULT_WORKFLOW, isWorkflowAvailable } from '../seed.js'
+import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, WON_REASONS, REVISION_TYPES, DEFAULT_WORKFLOW, isWorkflowAvailable } from '../seed.js'
 import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY, gmailComposeHref, displayRole, displayRoles, displayRoleLabel, formatISTDateTime, productDisplayLabel } from '../utils.js'
 import { pricingThresholdExceptions, readiness, isBlocked, nextActionWith, transitionBlockers, isClarificationResolved, actionableClarifications, displayClarifications, isClarificationCoveredBySource, releaseVoidReason } from '../gates.js'
 import { COMMERCIAL_RX } from './Approvals.jsx'
-import { Chip, ClassChip, AiBadge, WarnBox, ErrBox, Modal } from '../ui.jsx'
+import { Chip, ClassChip, AiBadge, MarkWonControl, WarnBox, ErrBox, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 import { productBrandProfiles } from '../branding/modae.js'
 import { MODAE_COMPANY } from '../proposalDoc.js'
@@ -271,7 +271,7 @@ export default function Workbench() {
   const sourceLead = [...(store.leads || []), ...(store.leadArchive || [])].find(lead => lead.id === opp.sourceLeadId || lead.oppId === opp.id)
   const sourceText = [sourceLead?.subject, sourceLead?.body, opp.remarks, opp.oppName].filter(Boolean).join(' ')
   const moveToMilestone = (milestone, reason = '', tabOverride = '') => {
-    store.setMilestone(opp.id, milestone, reason)
+    store.setMilestone(opp.id, milestone, reason, { alreadyGated: true })
     goTab(tabOverride || LIFECYCLE_TABS[milestone] || 'overview')
   }
   const workflowPosition = step => opp.route === 'Service' && Number.isInteger(step?.servicePhase)
@@ -1889,14 +1889,14 @@ function FollowUpPane({ opp, onRevision }) {
     const result = replyReview?.classification
     if (!replyReview || replyReview.status === 'analyzing') return
     if (action === 'accepted-won') store.markWon(opp.id, 'Customer acceptance')
-    if (action === 'accepted-po') store.setMilestone(opp.id, 'PO Validation', 'Customer accepted proposal — PO required')
+    if (action === 'accepted-po') store.setMilestone(opp.id, 'PO Validation', 'Customer accepted proposal — PO required', { alreadyGated: true })
     if (action === 'rejected') store.closeLost(opp.id, 'Others')
     if (action === 'revision') {
       const type = revisionType || result?.revisionType || REVISION_TYPES[0].id
       store.reviseProposal(opp.id, result?.nextStep || result?.summary || 'Customer requested a proposal change', type)
       onRevision?.()
     }
-    if (action === 'follow-up') store.setMilestone(opp.id, 'Follow-up', result?.nextStep || 'Customer reply requires follow-up')
+    if (action === 'follow-up') store.setMilestone(opp.id, 'Follow-up', result?.nextStep || 'Customer reply requires follow-up', { alreadyGated: true })
     store.updateCommunication(opp.id, replyReview.id, {
       reviewerDecision: action,
       reviewerAt: new Date().toISOString(),
@@ -1916,6 +1916,9 @@ function FollowUpPane({ opp, onRevision }) {
   // tracking. Both close-out branches live beside the follow-up loop they end.
   const [lossReason, setLossReason] = useState('')
   const [lossCompetitor, setLossCompetitor] = useState('')
+  const [closeOutcome, setCloseOutcome] = useState('')
+  const [wonReason, setWonReason] = useState('')
+  const [wonReasonNote, setWonReasonNote] = useState('')
   const [compName, setCompName] = useState('')
   const [compNote, setCompNote] = useState('')
 
@@ -2153,31 +2156,62 @@ function FollowUpPane({ opp, onRevision }) {
         <div className="ana-title">Close-out</div>
         {opp.status === 'Closed' ? (
           <div className={opp.stage === 'Won' ? 'okbox' : 'warnbox'}>
-            Closed as <b>{opp.stage}</b>{opp.closedReason ? ` — ${opp.closedReason}` : ''}
+            <div>Closed as <b>{opp.stage}</b>{opp.closedReason ? ` — ${opp.closedReason}` : ''}</div>
+            {opp.stage !== 'Won' && <MarkWonControl opp={opp} store={store} />}
           </div>
         ) : (
           <>
             <p className="hint">
-              A lost opportunity always carries a reason — it is what the win/loss analytics read.
+              Choose the outcome first, then record the reason used by win/loss analytics.
             </p>
-            <div className="follow-up-form-stack">
-              <select value={lossReason} onChange={e => setLossReason(e.target.value)}>
-                <option value="">— loss reason (required) —</option>
-                {CLOSE_REASONS.map(r => <option key={r}>{r}</option>)}
-              </select>
-              <input placeholder="Competitor who won it (optional)" value={lossCompetitor}
-                onChange={e => setLossCompetitor(e.target.value)} />
-              <div>
-                <button disabled={!lossReason}
-                  title={lossReason ? '' : 'Select a loss reason first'}
+            <div className="close-outcome-options" role="radiogroup" aria-label="Close opportunity outcome">
+              <label className={`close-outcome-option lost${closeOutcome === 'Lost' ? ' selected' : ''}`}>
+                <input type="radio" name={`close-outcome-${opp.id}`} value="Lost" checked={closeOutcome === 'Lost'}
+                  onChange={() => setCloseOutcome('Lost')} />
+                <span>Mark as Lost</span>
+              </label>
+              <label className={`close-outcome-option won${closeOutcome === 'Won' ? ' selected' : ''}`}>
+                <input type="radio" name={`close-outcome-${opp.id}`} value="Won" checked={closeOutcome === 'Won'}
+                  onChange={() => setCloseOutcome('Won')} />
+                <span>Mark as Won</span>
+              </label>
+            </div>
+            {closeOutcome === 'Lost' && (
+              <div className="follow-up-form-stack close-outcome-form">
+                <select value={lossReason} onChange={e => setLossReason(e.target.value)} autoFocus>
+                  <option value="">— loss reason (required) —</option>
+                  {CLOSE_REASONS.map(r => <option key={r}>{r}</option>)}
+                </select>
+                <input placeholder="Competitor who won it (optional)" value={lossCompetitor}
+                  onChange={e => setLossCompetitor(e.target.value)} />
+                <button disabled={!lossReason} title={lossReason ? '' : 'Select a loss reason first'}
                   onClick={() => {
                     store.closeLost(opp.id, lossReason, lossCompetitor.trim() ? { name: lossCompetitor.trim() } : null)
-                    setLossReason(''); setLossCompetitor('')
+                    setCloseOutcome(''); setLossReason(''); setLossCompetitor('')
                   }}>
                   <Icon name="flag" size={13} /> Close as lost
                 </button>
               </div>
-            </div>
+            )}
+            {closeOutcome === 'Won' && (
+              <div className="follow-up-form-stack close-outcome-form">
+                <select value={wonReason} onChange={e => setWonReason(e.target.value)} autoFocus>
+                  <option value="">— won reason (required) —</option>
+                  {WON_REASONS.map(r => <option key={r}>{r}</option>)}
+                </select>
+                {wonReason === 'Other' && <textarea value={wonReasonNote} onChange={e => setWonReasonNote(e.target.value)}
+                  maxLength={240} rows={3} placeholder="Enter the reason" />}
+                <button disabled={!wonReason || (wonReason === 'Other' && !wonReasonNote.trim())}
+                  title={wonReason ? '' : 'Select a won reason first'}
+                  onClick={() => {
+                    const reason = wonReason === 'Other' ? wonReasonNote.trim() : wonReason
+                    store.markWon(opp.id, reason)
+                    setCloseOutcome(''); setWonReason(''); setWonReasonNote('')
+                  }}>
+                  <Icon name="check" size={13} /> Close as won
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>

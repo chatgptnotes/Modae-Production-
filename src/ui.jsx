@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { MILESTONES } from './seed.js'
+import { MILESTONES, WON_REASONS } from './seed.js'
 import { Icon } from './icons.jsx'
 import { useStore } from './store.jsx'
 
@@ -165,6 +165,83 @@ export function PromptModal({ title = 'Enter a value', message, defaultValue = '
         </div>
       </form>
     </Modal>
+  )
+}
+
+// Closed opportunities can be corrected to Won from more than one surface.
+// Keep the control and its reason guard shared so those surfaces cannot drift.
+export function MarkWonControl({ opp, store, className = '' }) {
+  const [open, setOpen] = useState(false)
+  const [reason, setReason] = useState('')
+  const [reasonNote, setReasonNote] = useState('')
+  if (!opp || opp.status !== 'Closed') return null
+
+  const alreadyWon = opp.stage === 'Won'
+  const submit = event => {
+    event.preventDefault()
+    const value = reason.trim()
+    if (!value) return
+    store.markWon(opp.id, value)
+    setOpen(false)
+  }
+
+  return (
+    <>
+      <label className={`mark-won-control${className ? ` ${className}` : ''}`} title={alreadyWon ? 'Opportunity is already marked Won' : 'Mark this closed opportunity as Won'}>
+        <input
+          type="checkbox"
+          checked={alreadyWon}
+          disabled={alreadyWon}
+          aria-label={alreadyWon ? `${opp.id} is marked Won` : `Mark ${opp.id} as Won`}
+          onChange={event => {
+            event.stopPropagation()
+            if (event.target.checked) {
+              setReason('')
+              setReasonNote('')
+              setOpen(true)
+            }
+          }}
+          onClick={event => event.stopPropagation()}
+        />
+        <span>Won</span>
+      </label>
+      {open && (
+        <Modal title="Mark opportunity as Won" onClose={() => setOpen(false)} className="mark-won-modal">
+          <form onSubmit={submit}>
+            <p className="modal-message">Record why {opp.id} was won. This will move it to Handover and add an audit entry.</p>
+            <label className="modal-prompt-field" htmlFor={`mark-won-reason-${opp.id}`}>
+              Won reason
+              <select
+                id={`mark-won-reason-${opp.id}`}
+                value={reason}
+                onChange={event => setReason(event.target.value)}
+                autoFocus
+              >
+                <option value="">— select a won reason —</option>
+                {WON_REASONS.map(option => <option key={option}>{option}</option>)}
+              </select>
+            </label>
+            {reason === 'Other' && (
+              <label className="modal-prompt-field" htmlFor={`mark-won-reason-note-${opp.id}`}>
+                Additional explanation
+                <textarea
+                  id={`mark-won-reason-note-${opp.id}`}
+                  value={reasonNote}
+                  onChange={event => setReasonNote(event.target.value)}
+                  maxLength={240}
+                  rows={3}
+                  placeholder="Enter the reason"
+                />
+              </label>
+            )}
+            <div className="forms-actions modal-actions">
+              <button type="button" onClick={() => setOpen(false)}>Cancel</button>
+              <button type="submit" className="primary" disabled={!reason || (reason === 'Other' && !reasonNote.trim())}>Mark as Won</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+    </>
   )
 }
 

@@ -337,6 +337,26 @@ test('losing an opportunity goes through closeLost, which demands a reason', () 
   assert.match(drawer, /store\.closeLost\(oppId/)
 })
 
+test('closed opportunity close-out exposes the shared mark-won control', () => {
+  const workbench = read('src/pages/Workbench.jsx')
+  const ui = read('src/ui.jsx')
+  assert.match(workbench, /MarkWonControl opp=\{opp\} store=\{store\}/)
+  assert.match(ui, /store\.markWon\(opp\.id, value\)/)
+  assert.match(ui, /Won reason/)
+})
+
+test('open close-out chooses the outcome before showing its reason', () => {
+  const workbench = read('src/pages/Workbench.jsx')
+  assert.match(workbench, /role="radiogroup" aria-label="Close opportunity outcome"/)
+  assert.match(workbench, /value="Lost" checked=\{closeOutcome === 'Lost'\}/)
+  assert.match(workbench, /value="Won" checked=\{closeOutcome === 'Won'\}/)
+  assert.match(workbench, /closeOutcome === 'Lost'/)
+  assert.match(workbench, /closeOutcome === 'Won'/)
+  assert.match(workbench, /WON_REASONS\.map/)
+  assert.match(workbench, /store\.closeLost\(opp\.id, lossReason/)
+  assert.match(workbench, /store\.markWon\(opp\.id, reason\)/)
+})
+
 test('the lane an opportunity runs in is visible, not just derived', () => {
   const workbench = read('src/pages/Workbench.jsx')
   assert.match(workbench, /\{opp\.context && <Chip/, 'the header must show the Greenfield / Brownfield / Service lane')
