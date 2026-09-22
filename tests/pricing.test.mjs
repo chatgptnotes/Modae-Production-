@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { applyAdjustment, formatPriceSource, resolvePriceSource, reconcilePriceSource, normalizePriceFields, isConfirmableSparesLine, isMissingSparesDescription, sparesLineFinancials } from '../src/pricing.js'
+import { applyAdjustment, formatPriceSource, resolvePriceSource, reconcileCatalogueMatch, reconcilePriceSource, normalizePriceFields, isConfirmableSparesLine, isMissingSparesDescription, sparesLineFinancials } from '../src/pricing.js'
 import { buildLeadProposalData } from '../src/leadBoq.js'
 import { sparesProposalBom } from '../src/proposal/sparesBoq.js'
 import { computeProposalTotals } from '../src/gates.js'
@@ -23,6 +23,25 @@ test('vendor reference is used when no approved price-list row exists', () => {
   assert.equal(source.source, 'vendor-quote')
   assert.equal(source.price, 50)
   assert.equal(source.currency, 'INR')
+})
+
+test('saved alias rows are repaired to the catalogue part and price without confirmation', () => {
+  const priceLists = {
+    Meggitt: { version: '2026-02', currency: 'EUR', parts: [
+      { pn: 'TQ402-A', aliases: ['TQ402'], desc: 'TQ402 signal conditioner', price: 620 },
+      { pn: 'VM600-MPC4', aliases: ['MPC4'], desc: 'MPC4 protection card', price: 4750 },
+    ] },
+  }
+  const tq = reconcileCatalogueMatch({ custRef: 'TQ402', pn: 'TQ402', priceState: 'Needs pricing', listPrice: 0 }, priceLists)
+  const mpc = reconcileCatalogueMatch({ custRef: 'MPC4', pn: 'MPC4', priceState: 'Needs pricing', listPrice: 0 }, priceLists)
+  assert.deepEqual([tq.custRef, tq.pn, tq.listPrice, tq.priceState, tq.confirmed], ['TQ402', 'TQ402-A', 620, 'Current', false])
+  assert.deepEqual([mpc.custRef, mpc.pn, mpc.listPrice, mpc.priceState, mpc.confirmed], ['MPC4', 'VM600-MPC4', 4750, 'Current', false])
+})
+
+test('saved manual overrides and confirmed rows are not rewritten by alias reconciliation', () => {
+  const priceLists = { Meggitt: { version: '2026-02', currency: 'EUR', parts: [{ pn: 'TQ402-A', aliases: ['TQ402'], price: 620 }] } }
+  assert.equal(reconcileCatalogueMatch({ custRef: 'TQ402', pn: 'TQ402', priceSource: 'manual', listPrice: 999 }, priceLists).pn, 'TQ402')
+  assert.equal(reconcileCatalogueMatch({ custRef: 'TQ402', pn: 'TQ402', confirmed: true, listPrice: 0 }, priceLists).pn, 'TQ402')
 })
 
 test('discount and markup are mutually exclusive adjustments', () => {

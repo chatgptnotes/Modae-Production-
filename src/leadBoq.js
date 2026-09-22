@@ -18,6 +18,12 @@ const normalizeItem = item => ({
   confidence: Number(item.confidence ?? item.conf) || 0,
   evidence: item.evidence || item.ev || 'Linked lead',
   sourceDocument: item.sourceDocument || item.document || '',
+  manufacturer: item.manufacturer || item.oem || '',
+  model: item.model || '',
+  size: item.size || '',
+  length: item.length || '',
+  productType: item.productType || item.type || '',
+  structured: item.structured || item.details || item.specification || {},
 })
 
 // AI and deterministic extraction can surface the same requested part more
@@ -98,12 +104,22 @@ export function buildLeadProposalData(lead, priceLists, vendorPrices = []) {
   const workbenchRows = matchParts(extracted.map(item => ({
     description: item.description,
     pn: item.partNumber,
+    customerRef: item.customerRef,
     qty: item.qty,
+    manufacturer: item.manufacturer,
+    model: item.model,
+    size: item.size,
+    length: item.length,
+    productType: item.productType,
+    structured: item.structured,
   })), allParts).map(({ item, match }, i) => {
     // A description-only match is a useful catalogue suggestion, but it is
     // not evidence that the customer requested that exact catalogue part.
     // Do not import its price into Sourcing until a salesperson confirms it.
-    const pricedMatch = match && match.tier <= 2 ? match : null
+    const pricedMatch = match && match.tier <= 4 ? match : null
+    const exactCatalogueReference = pricedMatch?.matchKind === 'exact'
+      && String(extracted[i].partNumber || '').trim().toUpperCase() === String(pricedMatch.pn || '').trim().toUpperCase()
+    const isSuggested = !!pricedMatch && !exactCatalogueReference
     return {
       origin: 'customer',
       custRef: extracted[i].customerRef || item.pn || item.description,
@@ -114,17 +130,17 @@ export function buildLeadProposalData(lead, priceLists, vendorPrices = []) {
       qty: item.qty,
       uom: extracted[i].uom || 'EA',
       oem: pricedMatch ? 'B&K' : '',
-      match: pricedMatch ? (pricedMatch.tier === 1 ? 'Exact' : `Suggested · tier ${pricedMatch.tier}`) : (match ? 'Suggested · compare' : 'Unmatched'),
-      conf: pricedMatch ? (pricedMatch.tier === 1 ? 100 : Math.max(60, extracted[i].confidence)) : extracted[i].confidence,
-      confirmed: !!pricedMatch,
+      match: pricedMatch ? (isSuggested ? 'Suggested price-list match' : 'Exact') : 'Unmatched',
+      conf: pricedMatch ? (exactCatalogueReference ? 100 : Math.max(75, extracted[i].confidence)) : extracted[i].confidence,
+      confirmed: exactCatalogueReference,
       priceList: pricedMatch ? `${pricedMatch.list || 'Price list'}${pricedMatch.version ? ` ${pricedMatch.version}` : ''}` : 'Ad-hoc',
       priceSource: pricedMatch?.list === 'Vendor quote' ? 'vendor-quote' : pricedMatch ? 'price-list' : 'manual',
       priceSourceName: pricedMatch?.list === 'Vendor quote' ? (pricedMatch.desc || 'Vendor reference') : pricedMatch?.list || 'Manual entry',
-      priceSourceSuggested: !!match && !pricedMatch,
-      priceSourceSuggestedPart: match?.pn || '',
-      priceSourceSuggestedDescription: match?.desc || '',
-      priceSourceSuggestedList: match?.list || '',
-      priceSourceSuggestedVersion: match?.version || '',
+      priceSourceSuggested: isSuggested,
+      priceSourceSuggestedPart: isSuggested ? pricedMatch.pn : '',
+      priceSourceSuggestedDescription: isSuggested ? pricedMatch.desc : '',
+      priceSourceSuggestedList: isSuggested ? pricedMatch.list || '' : '',
+      priceSourceSuggestedVersion: isSuggested ? pricedMatch.version || '' : '',
       // An unmatched line has never had a usable price source. Keep that
       // distinct from an actual catalogue row whose validity has elapsed.
       priceState: pricedMatch ? 'Current' : 'Needs pricing',

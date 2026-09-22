@@ -8,7 +8,7 @@ import {
   seedPoCompare, milestoneForStage, routeForType, contextForType,
   ROLES, B_STEPS, defaultBStepOwners, DEFAULT_WORKFLOW,
 } from './seed.js'
-import { normalizePriceFields, reconcilePriceSource } from './pricing.js'
+import { normalizePriceFields, reconcileCatalogueMatch, reconcilePriceSource } from './pricing.js'
 import { DEFAULT_CURRENCY_RATES, normalizedCurrencyRates } from './currency.js'
 import { DEFAULT_CLAUSES } from './clauses.js'
 import { modaeStandardCommercialTerms } from './commercialTerms.js'
@@ -359,7 +359,9 @@ export function migrate(s) {
     const activeVersionId = list.activeVersionId || versions[versions.length - 1].id
     return [name, { ...list, versions, activeVersionId }]
   }))
-  s.sparesLines = s.sparesLines.map(line => reconcilePriceSource(line, s.priceLists, s.vendorQuotes))
+  s.sparesLines = s.sparesLines
+    .map(line => reconcileCatalogueMatch(line, s.priceLists))
+    .map(line => reconcilePriceSource(line, s.priceLists, s.vendorQuotes))
   s.proposals = Object.fromEntries(Object.entries(s.proposals || {}).map(([oppId, proposal]) => {
     if (!proposal?.bom) return [oppId, proposal]
     const terms = Array.isArray(proposal.terms) && proposal.terms.length

@@ -133,6 +133,7 @@ export default function PriceLists() {
     }).filter(item => item.code || item.desc || item.price !== ''),
   } : row))
   const adderText = row => (row.adders || []).map(adder => `${adder.code}|${adder.desc}|${adder.price}`).join('; ')
+  const aliasText = row => (row.aliases || []).join(', ')
   const saveEditedVersion = () => {
     const parts = editRows.map(row => ({ ...row, price: Number(row.price) || 0, adders: (row.adders || []).map(a => ({ ...a, price: Number(a.price) || 0 })) }))
     store.savePriceListVersion(list, versionId || pl.activeVersionId, parts, { version: editVersion.trim(), currency: displayList.currency })
@@ -256,13 +257,14 @@ export default function PriceLists() {
 
       {editOpen && (
         <Modal title={`Edit ${list} version`} wide onClose={() => setEditOpen(false)}>
-          <p className="hint">Changes are saved as a new version. Use the Adders format <b>CODE|Description|Price</b>; separate multiple adders with semicolons.</p>
+          <p className="hint">Changes are saved as a new version. Add approved customer references as comma-separated aliases; these are reused by enquiry matching. Use the Adders format <b>CODE|Description|Price</b>; separate multiple adders with semicolons.</p>
           <label className="afield">New version name<input value={editVersion} onChange={e => setEditVersion(e.target.value)} /></label>
-          <div className="sheet-wrap" style={{ marginTop: 12, maxHeight: 420 }}><table className="sheet"><thead><tr><th>Part Number</th><th>Description</th><th>Price</th><th>Adders</th></tr></thead><tbody>
+          <div className="sheet-wrap" style={{ marginTop: 12, maxHeight: 420 }}><table className="sheet"><thead><tr><th>Part Number</th><th>Description</th><th>Price</th><th>Customer aliases</th><th>Adders</th></tr></thead><tbody>
             {editRows.map((row, index) => <tr key={index}>
               <td><input value={row.pn} onChange={e => updateEditRow(index, 'pn', e.target.value)} /></td>
               <td><input value={row.desc} onChange={e => updateEditRow(index, 'desc', e.target.value)} /></td>
               <td><input type="number" value={row.price} onChange={e => updateEditRow(index, 'price', e.target.value)} /></td>
+              <td><input value={aliasText(row)} placeholder="e.g. MPC4, MPC 4" onChange={e => updateEditRow(index, 'aliases', e.target.value.split(',').map(value => value.trim()).filter(Boolean))} /></td>
               <td><input value={adderText(row)} placeholder="CODE|Description|Price" onChange={e => updateEditAdder(index, e.target.value)} /></td>
             </tr>)}
           </tbody></table></div>

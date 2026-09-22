@@ -72,23 +72,51 @@ const samePart = (a, b) => {
   return left && right && left === right
 }
 
+const normalizedPart = value => String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+const usableReference = value => {
+  const text = String(value || '').trim()
+  return text && !/^\d+(?:\.\d+)?$/.test(text) ? text : ''
+}
+const partAliases = part => [part?.pn, ...(Array.isArray(part?.aliases) ? part.aliases : [])]
+  .map(value => String(value || '').trim())
+  .filter(Boolean)
+
+// Catalogue aliases are part of the approved price-list row. This resolver is
+// shared by new lead matching and reconciliation of already-saved sourcing
+// rows, so an alias cannot work in only one path.
+export function findPriceListMatch(line = {}, priceLists = {}) {
+  const references = [line.pn, line.custRef, line.customerReference]
+    .map(usableReference)
+    .filter(Boolean)
+  if (!references.length) return null
+  for (const [name, list] of Object.entries(priceLists || {})) {
+    const parts = list.parts || []
+    const exact = parts.find(part => references.some(reference => samePart(part.pn, reference)))
+    if (exact) return { name, list, part: exact, matchKind: 'exact' }
+    const normalized = parts.find(part => references.some(reference =>
+      partAliases(part).some(alias => normalizedPart(alias) === normalizedPart(reference))))
+    if (normalized) return { name, list, part: normalized, matchKind: 'alias' }
+  }
+  return null
+}
+
+const sourceFromPriceListMatch = match => match && ({
+  source: PRICE_SOURCES.LIST,
+  sourceName: match.name,
+  sourceVersion: match.list.version || '',
+  sourceRef: match.part.pn,
+  sourceDate: match.list.uploaded || '',
+  price: Number(match.part.price) || 0,
+  currency: match.list.currency || 'INR',
+  adders: match.part.adders || [],
+  matchKind: match.matchKind,
+  description: match.part.desc || '',
+})
+
 export function resolvePriceSource(line, priceLists = {}, adhocParts = [], vendorQuotes = []) {
   const pn = line?.pn || line?.custRef
-  if (pn) {
-    for (const [name, list] of Object.entries(priceLists || {})) {
-      const part = (list.parts || []).find(row => samePart(row.pn, pn))
-      if (part) return {
-        source: PRICE_SOURCES.LIST,
-        sourceName: name,
-        sourceVersion: list.version || '',
-        sourceRef: part.pn,
-        sourceDate: list.uploaded || '',
-        price: Number(part.price) || 0,
-        currency: list.currency || 'INR',
-        adders: part.adders || [],
-      }
-    }
-  }
+  const priceListMatch = findPriceListMatch(line, priceLists)
+  if (priceListMatch) return sourceFromPriceListMatch(priceListMatch)
 
   const vendorPrice = (vendorQuotes || []).flatMap(quote =>
     (quote.prices || []).map(price => ({ quote, price })))
@@ -128,6 +156,42 @@ export function resolvePriceSource(line, priceLists = {}, adhocParts = [], vendo
     adders: [],
   }
   return null
+}
+
+// Repair an old or partially imported sourcing row when the approved list now
+// contains a direct part or alias. Suggestions receive a price immediately but
+// never become confirmed automatically.
+export function reconcileCatalogueMatch(line = {}, priceLists = {}) {
+  if (line.confirmed || line.sparesSupport || line.priceSource === PRICE_SOURCES.MANUAL && Number(line.listPrice) > 0) return line
+  const match = findPriceListMatch(line, priceLists)
+  const resolved = sourceFromPriceListMatch(match)
+  if (!resolved || resolved.price <= 0) return line
+  const suggested = resolved.matchKind !== 'exact'
+  return {
+    ...line,
+    pn: resolved.sourceRef,
+    desc: resolved.description || line.desc || '',
+    missingDescription: false,
+    match: suggested ? 'Suggested price-list match' : 'Exact',
+    conf: suggested ? Math.max(75, Number(line.conf) || 0) : 100,
+    confirmed: suggested ? false : Boolean(line.confirmed),
+    priceList: `${resolved.sourceName} ${resolved.sourceVersion}`.trim(),
+    priceSource: PRICE_SOURCES.LIST,
+    priceSourceName: resolved.sourceName,
+    priceSourceVersion: resolved.sourceVersion,
+    priceSourceRef: resolved.sourceRef,
+    priceSourceDate: resolved.sourceDate,
+    priceSourceSuggested: suggested,
+    priceSourceSuggestedPart: suggested ? resolved.sourceRef : '',
+    priceSourceSuggestedDescription: suggested ? resolved.description : '',
+    priceSourceSuggestedList: suggested ? resolved.sourceName : '',
+    priceSourceSuggestedVersion: suggested ? resolved.sourceVersion : '',
+    priceState: 'Current',
+    listPrice: resolved.price,
+    listUnitPrice: resolved.price,
+    baseCost: Number(line.baseCost) > 0 ? line.baseCost : resolved.price,
+    currency: resolved.currency,
+  }
 }
 
 // Reconcile a persisted manual-looking row without changing its amount. A

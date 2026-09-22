@@ -87,16 +87,34 @@ test('duplicate structured line items collapse and combine quantities', () => {
   assert.deepEqual(items.map(item => [item.partNumber, item.qty]), [['MPC4', 3]])
 })
 
-test('description-only catalogue suggestions do not import a price automatically', () => {
+test('structured catalogue suggestions import the candidate price but remain unconfirmed', () => {
   const { workbenchRows } = buildLeadProposalData({
     ai: { lineItems: [{ description: 'VM600 rack backplane connectors', qty: 2 }] },
   }, seedPriceLists)
   assert.equal(workbenchRows.length, 1)
-  assert.equal(workbenchRows[0].pn, '')
-  assert.equal(workbenchRows[0].listPrice, 0)
-  assert.equal(workbenchRows[0].priceState, 'Needs pricing')
+  assert.equal(workbenchRows[0].pn, 'VM600-ABE042')
+  assert.ok(workbenchRows[0].listPrice > 0)
+  assert.equal(workbenchRows[0].priceState, 'Current')
   assert.equal(workbenchRows[0].confirmed, false)
-  assert.equal(workbenchRows[0].match, 'Suggested · compare')
+  assert.equal(workbenchRows[0].match, 'Suggested price-list match')
+})
+
+test('approved catalogue aliases price TQ402 and MPC4 without replacing customer references', () => {
+  const { workbenchRows } = buildLeadProposalData({
+    ai: { lineItems: [
+      { customerRef: 'TQ402', description: 'signal conditioner', qty: 1 },
+      { customerRef: 'MPC4', description: 'machinery protection card', qty: 1 },
+      { customerRef: 'IC04T', qty: 1 },
+      { customerRef: 'EA402', qty: 1 },
+      { customerRef: 'IC4', qty: 1 },
+      { customerRef: 'PS-24VDC', qty: 1 },
+    ] },
+  }, seedPriceLists)
+  assert.deepEqual(workbenchRows.slice(0, 2).map(row => [row.custRef, row.pn, row.listPrice, row.confirmed]), [
+    ['TQ402', 'TQ402-A', 620, false],
+    ['MPC4', 'VM600-MPC4', 4750, false],
+  ])
+  assert.ok(workbenchRows.slice(2).every(row => row.match === 'Unmatched' && row.priceState === 'Needs pricing'))
 })
 
 test('exact customer part numbers still import current catalogue pricing', () => {

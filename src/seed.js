@@ -929,6 +929,7 @@ export const seedPriceLists = {
         desc: 'Vibro-Meter XPR04 proximity probe, 8 mm tip, 1 m integral cable, standard version',
         keywords: ['proximity probe', 'xpr04', '1m'] },
       { pn: 'TQ402-A', price: 620, adders: [],
+        aliases: ['TQ402'],
         desc: 'Vibro-Meter TQ402 signal conditioner for piezo accelerometers, DIN-rail',
         keywords: ['signal conditioner', 'tq402', 'charge amplifier'] },
       { pn: 'CE680-A-0-0', price: 1450, adders: [],
@@ -937,6 +938,7 @@ export const seedPriceLists = {
       { pn: 'VM600-MPC4', price: 4750, adders: [
         { code: 'IOC', desc: 'IOC4T I/O card', price: 980 },
       ],
+        aliases: ['MPC4', 'MPC 4'],
         desc: 'VM600 MPC4 machinery protection card, 4-channel, API 670',
         keywords: ['vm600', 'mpc4', 'protection card'] },
       { pn: 'VM600-CPUM', price: 3900, adders: [],

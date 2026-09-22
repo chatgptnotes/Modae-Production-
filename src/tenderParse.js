@@ -413,39 +413,65 @@ export function parseTender(fullText, struct = null) {
 
 const norm = s => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
 
-// Tier 1: exact part number. Tier 2: normalized equality. Tier 3: normalized
-// prefix/contains (≥5 chars). null = no price source — ad-hoc entry needed.
+const referenceValues = item => [item?.pn, item?.customerRef, item?.customerReference]
+  .map(value => String(value || '').trim())
+  .filter(value => value && !/^\d+(?:\.\d+)?$/.test(value))
+
+const aliasValues = part => [part?.pn, ...(Array.isArray(part?.aliases) ? part.aliases : [])]
+  .map(value => String(value || '').trim())
+  .filter(Boolean)
+
+const structuredTerms = item => {
+  const details = item?.structured || item?.details || item?.specification || {}
+  return [
+    item?.manufacturer, item?.model, item?.size, item?.length, item?.productType,
+    details.manufacturer, details.model, details.size, details.length, details.productType,
+  ].filter(Boolean).map(value => String(value).toLowerCase())
+}
+
+const descriptionTerms = value => String(value || '').toLowerCase()
+  .split(/[^a-z0-9.]+/)
+  .filter(term => term.length > 1)
+
+const structuredMatch = (item, part) => {
+  const source = [item?.description, ...structuredTerms(item)].join(' ')
+  if (!source.trim()) return null
+  const haystack = [part?.desc, part?.manufacturer, part?.model, part?.size, part?.length, part?.productType, ...(part?.keywords || [])].join(' ').toLowerCase()
+  const terms = [...new Set(descriptionTerms(source))]
+  const specific = terms.filter(term => /\d/.test(term) || term.length >= 5)
+  const overlap = specific.filter(term => haystack.includes(term))
+  const keywordHits = (part?.keywords || []).filter(keyword => source.toLowerCase().includes(String(keyword).toLowerCase()))
+  const score = new Set([...overlap, ...keywordHits.map(String)]).size
+  return score >= 2 ? { score, words: [...new Set([...overlap, ...keywordHits.map(String)])].slice(0, 5) } : null
+}
+
+// Tier 1: exact part number. Tier 2: normalized equality or an approved
+// catalogue alias. Tier 4: structured description/specification match.
+// null = no price source — ad-hoc entry needed.
 export function matchParts(items, allParts) {
   return items.map(item => {
     let match = null
-    if (item.pn) {
-      const exact = allParts.find(p => p.pn.toUpperCase() === item.pn.toUpperCase())
-      if (exact) match = { ...exact, tier: 1 }
+    const references = referenceValues(item)
+    if (references.length) {
+      const exact = allParts.find(p => references.some(reference => String(p.pn || '').toUpperCase() === reference.toUpperCase()))
+      if (exact) match = { ...exact, tier: 1, matchKind: 'exact' }
       if (!match) {
-        const n = norm(item.pn)
-        const eq = allParts.find(p => norm(p.pn) === n)
-        if (eq) match = { ...eq, tier: 2 }
-        if (!match && n.length >= 5) {
-          const part = allParts.find(p => {
-            const pp = norm(p.pn)
-            return pp.length >= 5 && (pp.startsWith(n) || n.startsWith(pp) || pp.includes(n))
-          })
-          if (part) match = { ...part, tier: 3 }
-        }
+        const normalized = allParts.find(p => references.some(reference => aliasValues(p).some(alias => norm(alias) === norm(reference))))
+        if (normalized) match = { ...normalized, tier: 2, matchKind: 'alias' }
       }
     }
     // Tier 4: the tender line gives a specification but no part number (common
     // for cables and accessories). Score price-list parts by how many of their
     // `keywords` appear in the description; needs ≥2 hits and a strictly best
     // candidate, and the UI presents it as a suggestion to confirm, not a match.
-    if (!match && !item.pn) {
+    if (!match) {
       const d = String(item.description || '').toLowerCase()
       const scored = allParts
-        .map(p => ({ p, n: (p.keywords || []).filter(k => d.includes(k)).length }))
+        .map(p => ({ p, n: structuredMatch(item, p)?.score || 0 }))
         .filter(x => x.n >= 2)
         .sort((a, b) => b.n - a.n)
       if (scored.length && (scored.length === 1 || scored[0].n > scored[1].n)) {
-        match = { ...scored[0].p, tier: 4 }
+        match = { ...scored[0].p, tier: 4, matchKind: 'structured' }
       }
     }
     return { item, match }
