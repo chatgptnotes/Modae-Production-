@@ -62,11 +62,30 @@ export function snapshotProposal(p) {
 // The localStorage read is all that is left here; the decision itself lives in
 // appState.js so the tests can drive the boot path directly.
 const initialState = () => {
+  // v4 stored the full catalogue locally and can consume the remaining
+  // browser quota even though v5 no longer reads it.
+  try { localStorage.removeItem('wintrack-modae-v4') } catch { /* private mode */ }
   const saved = localStorage.getItem(KEY)
   const state = stateFromSaved(saved)
   // Production starts clean. Existing demo-mode snapshots are migrated once
   // into an empty workspace; real records entered after that remain intact.
   return reconcileApprovedSubmissions(state.demoData === true ? emptyState(state) : state)
+}
+
+// Supabase is the authoritative store for catalogues, files, and the full
+// audit trail. Keeping those large slices in localStorage makes the browser
+// snapshot exceed its quota after a price-list import. Retain the compact
+// working state locally so the shell can still start while Supabase loads.
+const localSnapshot = state => ({
+  ...state,
+  priceLists: {},
+  files: {},
+  audit: Array.isArray(state.audit) ? state.audit.slice(0, 100) : [],
+})
+
+const persistLocalSnapshot = state => {
+  try { localStorage.setItem(KEY, JSON.stringify(localSnapshot(state))) }
+  catch (e) { console.warn('Local save skipped — Supabase remains the source of truth:', e?.message) }
 }
 
 // Append-only event log, newest first. Every mutation gets its own entry: audit
@@ -472,8 +491,7 @@ export function StoreProvider({ children }) {
     // silently while the app carried on looking normal — seed data is rebuilt
     // by migrate() on every boot, so only the records the user created would
     // go missing. Fail loudly in the console instead.
-    try { localStorage.setItem(KEY, JSON.stringify(state)) }
-    catch (e) { console.warn('Local save failed — changes may not survive a reload:', e?.message) }
+    persistLocalSnapshot(state)
     if (!datastore.dbEnabled() || !hydratedRef.current) return
     if (!Object.keys(dirtySlices()).length) return
     clearTimeout(saveTimerRef.current)
@@ -2121,8 +2139,7 @@ export function StoreProvider({ children }) {
       // Lead file blobs live in IndexedDB, outside the localStorage snapshot.
       try { await leadBlobs.clearAll() }
       catch (e) { console.warn('Lead file store reset failed:', e?.message) }
-      try { localStorage.setItem(KEY, JSON.stringify(next)) }
-      catch (e) { console.warn('Local save failed — restored demo data may not persist:', e?.message) }
+      persistLocalSnapshot(next)
       window.location.reload()
     },
     // The original name of the action above — kept so existing callers and the
@@ -2146,8 +2163,7 @@ export function StoreProvider({ children }) {
       catch (e) { console.warn('Lead file store clear failed:', e?.message) }
       // Written, not removed: an absent key sends initialState() back to the
       // seeds, which is the opposite of what this action means.
-      try { localStorage.setItem(KEY, JSON.stringify(next)) }
-      catch (e) { console.warn('Local save failed — demo data may return on reload:', e?.message) }
+      persistLocalSnapshot(next)
       window.location.reload()
     },
   }

@@ -1,7 +1,7 @@
 import { supabase } from './supabase.js'
 
 export const MAX_FILE_BYTES = 10 * 1024 * 1024
-const APP_STATE_KEY = 'wintrack-modae-v4'
+const APP_STATE_KEY = 'wintrack-modae-v5'
 
 function isDemoMode() {
   try {

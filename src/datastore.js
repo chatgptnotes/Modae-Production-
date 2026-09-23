@@ -271,9 +271,19 @@ export async function saveSlices(dirty) {
       normalizedDirty = { ...normalizedDirty, config: configWithoutRates }
     }
   }
-  const savedSettings = await saveSettings(normalizedDirty)
+  // Rule/settings tables use Supabase Auth RLS. Business rows can still be
+  // saved by the shared client when the browser has no Supabase session;
+  // protected configuration writes must not make those saves fail.
+  const canWriteProtectedConfig = dirty.config ? await canWriteProtectedConfigForSession() : false
+  const savedSettings = await saveSettings(normalizedDirty, { includeConfig: canWriteProtectedConfig })
   for (const key of savedSettings) delete normalizedDirty[key]
-  if (dirty.config) await saveRuleTables(dirty.config)
+  if (dirty.config && canWriteProtectedConfig) {
+    try {
+      await saveRuleTables(dirty.config)
+    } catch (e) {
+      console.warn('Protected rule save skipped — business data was saved:', e?.message)
+    }
+  }
   const rows = Object.entries(normalizedDirty).map(([key, value]) => ({
     key, value, updated_at: new Date().toISOString(),
   }))
@@ -318,13 +328,26 @@ async function saveRuleTables(config = {}) {
   writeCachedRules(config)
 }
 
+async function canWriteProtectedConfigForSession() {
+  try {
+    const { data: session } = await supabase.auth.getSession()
+    if (!session?.session?.user?.id) return false
+    const { data: profile, error } = await supabase.from('user_profiles')
+      .select('role').eq('id', session.session.user.id).maybeSingle()
+    return !error && ['SUPER', 'LJS'].includes(profile?.role)
+  } catch {
+    return false
+  }
+}
+
 const BUSINESS_KEYS = new Set(['leads', 'opportunities', 'approvals', 'proposals', 'sparesLines', 'clarifications', 'audit', 'priceLists'])
 
-async function saveSettings(dirty = {}) {
+async function saveSettings(dirty = {}, { includeConfig = true } = {}) {
+  if (!includeConfig) return []
   const rows = Object.entries(dirty)
     .filter(([key]) => !BUSINESS_KEYS.has(key) && key !== 'config')
     .map(([key, value]) => ({ key, value, updated_at: new Date().toISOString() }))
-  if (dirty.config) {
+  if (dirty.config && includeConfig) {
     const { currencyRates, ...configWithoutRates } = dirty.config
     rows.push({ key: 'config', value: configWithoutRates, updated_at: new Date().toISOString() })
   }
@@ -578,17 +601,18 @@ export async function savePriceLists(priceLists = {}) {
         if (partError) return false
         const adders = parts.flatMap(part => {
           const source = (version.parts || []).find(row => row.pn === part.part_number)
-          const saved = savedParts.find(row => row.part_number === part.part_number)
-          return (source?.adders || []).map(adder => ({
+          const saved = savedParts?.find(row => row.part_number === part.part_number)
+          return (source?.adders || []).filter(() => saved?.id).map(adder => ({
             part_id: saved.id,
             code: adder.code,
             description: adder.desc || '',
             unit_price: Number(adder.price) || 0,
           }))
         })
-        if (adders.length) {
-          const { error: adderError } = await supabase.from('price_list_adders').upsert(adders, { onConflict: 'part_id,code' })
-          if (adderError) return false
+        const uniqueAdders = [...new Map(adders.map(adder => [`${adder.part_id}|${adder.code}`, adder])).values()]
+        if (uniqueAdders.length) {
+          const { error: adderError } = await supabase.from('price_list_adders').upsert(uniqueAdders, { onConflict: 'part_id,code' })
+          if (adderError) console.warn('Price-list adders were not saved; list and parts remain available:', adderError.message)
         }
       }
     }
