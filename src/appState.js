@@ -1,6 +1,6 @@
 import * as datastore from './datastore.js'
 import {
-  seedOpportunities, seedFiles, seedPriceLists, seedAdhocParts,
+  seedOpportunities, seedPriceLists, seedAdhocParts,
   seedCustomers, seedUsers, seedLeads, seedApprovals,
   seedConfig, seedKyc, seedSales, seedSparesLines, seedSparesAlternatives,
   seedRateSheets, seedSvcEstimates, seedClarifications, seedHandover,
@@ -21,10 +21,11 @@ import { proposalApprovalSnapshot } from './approvalMemory.js'
 // Nothing here touches React; StoreProvider owns everything that does.
 
 // v3: schema updated after the Aug 10 meeting review (prob column, Partner Docs
-// key, corrected products, costing.usdBase/financeCostK) — bump forces a reseed.
-// Bumped to v4 with the expanded FY26 history + FY27 pipeline seed — v3 caches
-// hold the old 14-row dataset and would never show it.
-export const KEY = 'wintrack-modae-v4'
+// key, corrected products, costing.usdBase/financeCostK). The client no longer
+// seeds opportunities; this key only invalidates old local snapshots.
+// Bump the local snapshot key so browsers do not reopen the previous
+// hardcoded opportunity snapshot after the client seed was removed.
+export const KEY = 'wintrack-modae-v5'
 
 // Before description-only catalogue suggestions were made review-only, a
 // tier-4 suggestion could be persisted as a priced sourcing line. Repair only
@@ -544,9 +545,9 @@ export function emptyState(prev) {
 
 export function seedState() {
   return migrate({
-    demoData: true,
-    opportunities: seedOpportunities,
-    files: seedFiles,
+    demoData: false,
+    opportunities: [],
+    files: {},
     priceLists: seedPriceLists,
     adhocParts: seedAdhocParts,
     customers: seedCustomers,
