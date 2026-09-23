@@ -194,16 +194,51 @@ function applyApprovalEffects(s, appr) {
 // a green historical release must never skip a quote from Proposal directly to
 // Submitted, and later milestones must never move backward.
 function reconcileApprovedSubmissions(s) {
+  // Approval and proposal rows are persisted separately in Supabase. A
+  // realtime/focus refresh can therefore briefly deliver the approved
+  // decision without the proposal mutation written by applyApprovalEffects
+  // (and older clients may never have written that mutation at all). Rebuild
+  // the release marker from the authoritative approval row so the submission
+  // panel cannot stay locked after an approval that is already complete.
+  let proposals = s.proposals || {}
+  for (const approval of s.approvals || []) {
+    if (approval.type !== 'Final quote release'
+      || !approval.oppId
+      || !['Approved', 'Approved with conditions'].includes(approval.status)) continue
+    const proposal = proposals[approval.oppId]
+    const opportunity = (s.opportunities || []).find(opp => opp.id === approval.oppId)
+    if (!proposal || !opportunity || !releaseState(proposal, s.approvals, approval.oppId, opportunity).release) continue
+    if (proposal.releaseStatus === 'Released' && proposal.approvedPricing?.approvalId === approval.id) continue
+    proposals = {
+      ...proposals,
+      [approval.oppId]: {
+        ...proposal,
+        releaseStatus: 'Released',
+        approvedPricing: {
+          ...(proposal.approvedPricing || {}),
+          revision: proposal.revision,
+          approvalSnapshot: approval.approvalSnapshot || proposalApprovalSnapshot(proposal, opportunity),
+          listValue: approval.listValue ?? proposal.approvedPricing?.listValue ?? null,
+          approvedValue: approval.requestedValue ?? proposal.approvedPricing?.approvedValue ?? null,
+          discountPct: approval.discountPct ?? proposal.approvedPricing?.discountPct ?? 0,
+          markupPct: approval.markupPct ?? proposal.approvedPricing?.markupPct ?? 0,
+          approvedAt: approval.decisionTs || proposal.approvedPricing?.approvedAt || new Date().toISOString(),
+          approvalId: approval.id,
+        },
+      },
+    }
+  }
   let changed = false
   const opportunities = (s.opportunities || []).map(opp => {
     if (opp.milestone !== 'Approval') return opp
-    const proposal = s.proposals?.[opp.id]
+    const proposal = proposals[opp.id]
     if (!proposal || !releaseState(proposal, s.approvals, opp.id, opp).release) return opp
     if (transitionBlockers(opp, 'Submitted', proposal, s).length) return opp
     changed = true
     return { ...opp, milestone: 'Submitted', lastUpdated: nowIST().slice(0, 10) }
   })
-  return changed ? { ...s, opportunities } : s
+  const proposalsChanged = proposals !== s.proposals
+  return changed || proposalsChanged ? { ...s, proposals, opportunities } : s
 }
 
 export function StoreProvider({ children }) {
