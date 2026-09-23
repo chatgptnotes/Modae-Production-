@@ -649,7 +649,15 @@ export function mergeLeadSlice(local = [], server = [], baseline = [], deletedId
 // between different row sets. A local edit wins until it has been persisted;
 // a local delete remains a delete against the last known baseline.
 export function mergeOpportunitySlice(local = [], server = [], baseline = [], deletedIds = []) {
-  return mergeLeadSlice(local, server, baseline, deletedIds)
+  // An opportunity missing from the authoritative server snapshot is a
+  // remote deletion. Treat it as deleted even when an older browser still
+  // carries a locally edited copy; otherwise that browser can save the stale
+  // row back after someone removes it in Supabase.
+  const serverIds = new Set((server || []).map(row => row?.id).filter(Boolean))
+  const remotelyDeleted = (baseline || [])
+    .map(row => row?.id)
+    .filter(id => id && !serverIds.has(id))
+  return mergeLeadSlice(local, server, baseline, [...new Set([...(deletedIds || []), ...remotelyDeleted])])
 }
 
 // Clarifications are stored as one synced slice, but questions can be created
