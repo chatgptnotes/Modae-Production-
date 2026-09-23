@@ -1,16 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { ModaeImageLogo } from '../icons.jsx'
 import { MODAE_DOCUMENT_STANDARDS } from '../branding/modae.js'
+import { isPlaceholderLocation } from '../locations.js'
 
-const cellsForRow = (sheet, rowIndex) => {
+const cellsForRow = (sheet, rowIndex, hidePlaceholderLocations = false) => {
   const columnCount = sheet.widths.length || Math.max(1, ...sheet.rows.map(row => row.length))
+  const portrait = /cover letter|scope of work|^sow$|issues/i.test(String(sheet.name || ''))
   const cells = []
   for (let columnIndex = 0; columnIndex < columnCount; columnIndex++) {
     const merge = (sheet.merges || []).find(item => item.s.r <= rowIndex && item.e.r >= rowIndex && item.s.c <= columnIndex && item.e.c >= columnIndex)
     if (merge && (merge.s.r !== rowIndex || merge.s.c !== columnIndex)) continue
     let colSpan = merge ? merge.e.c - merge.s.c + 1 : 1
-    const value = sheet.rows[rowIndex]?.[columnIndex] ?? ''
-    if (!merge && String(value).length > 35) {
+    const sourceValue = sheet.rows[rowIndex]?.[columnIndex] ?? ''
+    const value = hidePlaceholderLocations && portrait && isPlaceholderLocation(sourceValue) ? '' : sourceValue
+    if (!merge && (String(value).length > 35 || portrait && String(value).trim())) {
       let end = columnIndex
       while (end + 1 < columnCount
         && !(sheet.rows[rowIndex]?.[end + 1])
@@ -114,7 +117,7 @@ const cellClass = (sheet, cell) => {
   ].filter(Boolean).join(' ')
 }
 
-export default function WorkbookPreview({ workbook, editable = false, onChange, loading = false, error = '' }) {
+export default function WorkbookPreview({ workbook, editable = false, onChange, loading = false, error = '', hidePlaceholderLocations = false }) {
   const [activeSheet, setActiveSheet] = useState(0)
   const [editing, setEditing] = useState(null)
   const [draft, setDraft] = useState('')
@@ -149,12 +152,11 @@ export default function WorkbookPreview({ workbook, editable = false, onChange, 
         <nav className="template-workbook-page-nav template-workbook-page-nav-top" aria-label="Workbook pages">
           <div className="template-workbook-page-tabs">
             {workbook.sheets.map((item, index) => <button type="button" key={item.name} className={index === activeSheet ? 'active' : ''}
-              onClick={() => { setEditing(null); setActiveSheet(index) }}>Page {index + 1} - {item.name.trim() || 'Sheet'}</button>)}
+              onClick={() => { setEditing(null); setActiveSheet(index) }}>{item.name.trim() || 'Sheet'}</button>)}
           </div>
         </nav>
         {!!sheet && <div ref={previewScrollRef} className="proposal-preview-scroll template-workbook-preview">
           <section className={`template-workbook-page ${pageClass(sheet)}`}>
-            <div className="template-workbook-page-title">Page {activeSheet + 1} - {sheet.name.trim() || 'Sheet'}{editable ? ' · editable' : ' · read-only'}</div>
             <header className="template-workbook-sheet-header">
               <ModaeImageLogo height={34} />
               <div className="template-workbook-sheet-header-copy">
@@ -165,7 +167,7 @@ export default function WorkbookPreview({ workbook, editable = false, onChange, 
               <table className="sheet template-workbook-table">
                 <colgroup>{(sheet.widths || []).map((width, i) => <col key={i} style={{ width: `${Math.max(90, Number(width) || 110)}px` }} />)}</colgroup>
                 <tbody>{sheet.rows.map((row, rowIndex) => <tr key={rowIndex} style={{ minHeight: sheet.heights?.[rowIndex] || 24 }}>
-                  {cellsForRow(sheet, rowIndex).map(cell => {
+                  {cellsForRow(sheet, rowIndex, hidePlaceholderLocations).map(cell => {
                     const isEditing = editing?.sheetName === sheet.name && editing.rowIndex === rowIndex && editing.columnIndex === cell.columnIndex
                     const editableCell = editable && isEditableTextCell(sheet, cell)
                     return <td key={cell.columnIndex} rowSpan={cell.rowSpan} colSpan={cell.colSpan} style={cellStyle(cell)}

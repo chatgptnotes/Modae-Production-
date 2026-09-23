@@ -1447,6 +1447,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       {reviewedUploadViewing && p.reviewedUpload && (
         <AttachmentViewer
           leadId={p.reviewedUpload.blobKey || `proposal-review-${oppId}`}
+          dialogTitle={`${route === 'Project' ? 'Project Proposal' : route === 'Spares' ? 'Spares Firm Offer' : 'Service Proposal'} - ${oppId}`}
           attachment={{
             ...p.reviewedUpload,
             name: p.reviewedUpload.name || p.reviewedUpload.filename,

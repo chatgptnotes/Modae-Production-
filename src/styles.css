@@ -2547,6 +2547,7 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .template-workbook-page .sheet td.template-cell-number { min-width: 90px; text-align: right; white-space: nowrap; word-break: normal; overflow-wrap: normal; }
 .template-workbook-page .sheet td.template-cell-label { font-weight: 700; color: var(--text-strong); }
 .template-workbook-page .sheet td.template-cell-heading { font-weight: 700; color: var(--text-strong); background: #fff; }
+.template-page-portrait .sheet td.template-workbook-cell { text-align: left; }
 .template-workbook-page .sheet td.template-cell-locked { cursor: default; }
 .template-workbook-page .sheet td.template-cell-editable { cursor: text; }
 .template-workbook-page .sheet td.template-cell-compact { min-width: 110px; white-space: nowrap; }

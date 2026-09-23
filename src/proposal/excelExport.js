@@ -3,7 +3,7 @@ import { MODAE_COMPANY } from '../proposalDoc.js'
 import { MODAE_COLORS, MODAE_DOCUMENT_STANDARDS } from '../branding/modae.js'
 import { generateProposalWorkbook, customerSafe } from './templateExcelExport.js'
 import { currencySymbol } from '../currency.js'
-import { normalizeLocationValue } from '../locations.js'
+import { customerLocationValue } from '../locations.js'
 
 const routeSheetName = (route, revision) => route === 'Services'
   ? `BoQ & Price-${revision}`
@@ -29,7 +29,7 @@ export function proposalWorkbookRows({ p, opp, doc, priced, totalQty, lineQuoted
     ['Revision', p.revision],
     [],
     ['', customerSafe(p.addressee) || (customerSafe(opp.sellTo) && `M/s. ${customerSafe(opp.sellTo)}`)],
-    ['', normalizeLocationValue(opp.eucLocation || opp.location)],
+    ['', customerLocationValue(opp.eucLocation || opp.location)],
     [],
     ['Kind Attn:', customerSafe(p.kindAttn) || customerSafe(opp.contactPerson)],
     ['Subject:', [p.rfqNumber && `RFQ ${p.rfqNumber}`, customerSafe(p.subject) || customerSafe(opp.oppName)

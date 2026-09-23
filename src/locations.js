@@ -33,6 +33,21 @@ export function normalizeLocationValue(value) {
   return `${place.trim()}, ${region.trim()}${countryPart} - ${postalCode}`
 }
 
+// Uploaded enquiry data occasionally contains an obvious placeholder instead
+// of a real locality. Keep the source value intact, but never print that
+// placeholder in a customer-facing document.
+export function isPlaceholderLocation(value) {
+  const text = String(value || '').replace(/\s+/g, ' ').trim()
+  if (!text) return false
+  const head = text.split(/\s*[-,]\s*/, 1)[0].trim()
+  return /^(?:g{2,}|x{2,}|z{2,}|test|tbd|tbc|n\/a|na|unknown|placeholder)$/i.test(head)
+}
+
+export function customerLocationValue(value) {
+  const normalized = normalizeLocationValue(value)
+  return isPlaceholderLocation(normalized) ? '' : normalized
+}
+
 export function localLocationSearch(query, limit = 50) {
   const needle = String(query || '').trim().toLowerCase()
   if (!needle) return []

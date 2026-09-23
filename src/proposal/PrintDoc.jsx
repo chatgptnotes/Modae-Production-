@@ -4,7 +4,7 @@ import { ModaeImageLogo } from '../icons.jsx'
 import { MODAE_COMPANY, docLayout, docSheets } from '../proposalDoc.js'
 import { MODAE_DOCUMENT_STANDARDS } from '../branding/modae.js'
 import { rackLayout, countSignals } from '../rack.js'
-import { normalizeLocationValue } from '../locations.js'
+import { customerLocationValue } from '../locations.js'
 import BoqSheet from './sheets/BoqSheet.jsx'
 import {
   SignalListSheet, RackLayoutSheet, ComplianceSheet, ClarificationsSheet,
@@ -114,7 +114,7 @@ export default function PrintDoc({ p, opp, doc, priced, totals, lineQuoted }) {
 
   const addressLines = [
     opp.eucName && opp.eucName !== opp.sellTo ? opp.eucName : '',
-    normalizeLocationValue(opp.eucLocation || opp.location),
+    customerLocationValue(opp.eucLocation || opp.location),
   ].filter(Boolean)
   return (
     <div className="propdoc">

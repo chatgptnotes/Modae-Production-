@@ -156,7 +156,7 @@ function PdfPreview({ blob }) {
   )
 }
 
-export default function AttachmentViewer({ leadId, attachment, onClose }) {
+export default function AttachmentViewer({ leadId, attachment, onClose, dialogTitle = 'Attachment preview' }) {
   const [blob, setBlob] = useState(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -191,7 +191,16 @@ export default function AttachmentViewer({ leadId, attachment, onClose }) {
   const body = () => {
     if (loading) return <p className="hint att-view-note">Loading…</p>
     const type = attachment.type || attachment.mimeType || blob?.type || ''
+    const savedWorkbook = attachment.workbook?.sheets?.length ? attachment.workbook : null
     if (loadError && !blob && !attachment.text) return <p className="hint att-view-note"><Icon name="alert" size={12} /> {loadError}</p>
+    // A reviewed proposal already has the uploaded workbook's mapped sheets.
+    // Prefer those sheets over reparsing the blob so the uploaded values keep
+    // their intended document alignment and branded page structure.
+    if (savedWorkbook) {
+      return (
+        <WorkbookPreview workbook={savedWorkbook} editable={false} hidePlaceholderLocations />
+      )
+    }
     if (blob && isPdf(filename, type)) return <PdfPreview blob={blob} />
     if (blob && isImage(filename, type) && url) {
       return <div className="att-view-canvas"><img src={url} alt={filename} /></div>
@@ -200,14 +209,6 @@ export default function AttachmentViewer({ leadId, attachment, onClose }) {
     if (blob && isSpreadsheet(filename, type)) return <SpreadsheetPreview blob={blob} fallback={attachment.text || ''} />
     if (blob && isText(filename, type)) {
       return <TextFilePreview blob={blob} fallback={attachment.text || ''} />
-    }
-    if (attachment.workbook?.sheets?.length) {
-      return (
-        <>
-          <p className="hint att-view-note"><Icon name="fileText" size={12} /> Showing the saved workbook preview. The original file copy is not available in this browser.</p>
-          <WorkbookPreview workbook={attachment.workbook} />
-        </>
-      )
     }
     if (attachment.text) {
       return (
@@ -231,7 +232,7 @@ export default function AttachmentViewer({ leadId, attachment, onClose }) {
   const workbookAttachment = !!attachment.workbook?.sheets?.length || isSpreadsheet(filename, attachment.type || attachment.mimeType || '')
 
   return (
-    <Modal title="Attachment preview" onClose={onClose} wide className={`attachment-viewer-modal ${workbookAttachment ? 'workbook-preview-modal' : ''}`}>
+    <Modal title={dialogTitle} onClose={onClose} wide className={`attachment-viewer-modal ${workbookAttachment ? 'workbook-preview-modal' : ''}`}>
       <header className="att-view-file-head">
         <div className="att-view-file-icon"><Icon name="fileText" size={18} /></div>
         <div className="att-view-file-copy">
