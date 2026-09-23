@@ -91,6 +91,16 @@ function applyTaglineBranding(workbook) {
   }))
 }
 
+function applyHeaderRule(worksheet, firstColumn, lastColumn) {
+  for (let column = firstColumn; column <= lastColumn; column++) {
+    const cell = worksheet.getRow(3).getCell(column)
+    cell.border = {
+      ...(cell.border || {}),
+      bottom: { style: 'double', color: { argb: 'FF090759' } },
+    }
+  }
+}
+
 function ensureLogo(workbook, worksheet, logoBuffer, lastColumn) {
   if (!logoBuffer || worksheet.getImages().length) return
   const imageId = workbook.addImage({ buffer: logoBuffer, extension: 'png' })
@@ -103,6 +113,7 @@ function ensureLogo(workbook, worksheet, logoBuffer, lastColumn) {
 
 function setPrintLayout(worksheet, orientation) {
   if (!worksheet.views?.length) worksheet.views = [{ showGridLines: true, activeCell: 'A1' }]
+  worksheet.views = worksheet.views.map(view => ({ ...view, style: 'normal' }))
   worksheet.pageSetup = {
     ...(worksheet.pageSetup || {}),
     orientation: worksheet.pageSetup?.orientation || orientation,
@@ -582,10 +593,12 @@ export async function generateProposalWorkbook(args) {
   ensureLogo(workbook, commercial, logo, 24)
   setCoverSheet(workbook, cover, generationArgs)
   clearPlaceholderLocations(cover)
+  applyHeaderRule(cover, 1, 18)
   applyTaglineBranding(workbook)
   const mappedCommercial = generationArgs.mapping?.lineTable?.sheet === commercial.name
   if (mappedCommercial && !setMappedCommercialSheet(commercial, generationArgs)) setCommercialSheet(workbook, commercial, generationArgs)
   else if (!mappedCommercial) setCommercialSheet(workbook, commercial, generationArgs)
+  applyHeaderRule(commercial, 1, 9)
   return new Uint8Array(await workbook.xlsx.writeBuffer())
 }
 

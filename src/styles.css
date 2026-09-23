@@ -2508,7 +2508,7 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 }
 .template-workbook-brandbar > span { font-size: 12pt; font-weight: 700; color: var(--text-main); }
 .template-workbook-brandbar-copy { display: grid; gap: 2px; margin-left: auto; text-align: right; }
-.template-workbook-brandbar-copy > span { color: var(--primary-accent); font-size: 18pt; font-style: italic; font-weight: 700; }
+.template-workbook-brandbar-copy > span { color: #3333FF; font-size: 18pt; font-style: italic; font-weight: 700; }
 .template-workbook-brandbar small { color: var(--text-muted); font-size: 10pt; }
 .workbook-preview-mode-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0 12px; }
 .workbook-preview-mode-tabs button.active { background: var(--primary-fill); color: var(--palette-4843938); border-color: var(--primary-fill); }
@@ -2523,10 +2523,10 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .template-workbook-page-title { font-weight: 700; color: var(--text-strong); padding-bottom: 10px; border-bottom: 2px solid var(--primary-fill); margin-bottom: 10px; }
 .template-workbook-sheet-header {
   display: flex; align-items: center; gap: 14px; min-height: 56px; padding: 8px 10px 10px;
-  border-bottom: 2px solid var(--primary-accent); font-family: var(--font-document); color: var(--text-strong);
+  border-bottom: 3px double #090759; font-family: var(--font-document); color: var(--text-strong);
 }
 .template-workbook-sheet-header > div { display: grid; gap: 2px; margin-left: auto; text-align: right; }
-.template-workbook-sheet-header strong { color: var(--primary-accent); font-size: 18pt; font-style: italic; font-weight: 700; }
+.template-workbook-sheet-header strong { color: #3333FF; font-size: 18pt; font-style: italic; font-weight: 700; }
 .template-workbook-sheet-header span, .template-workbook-sheet-header small { color: var(--text-muted); font-size: 10pt; }
 /* Horizontal scroll only. A per-sheet vertical scrollbox (plus a height cap)
    split the workbook into separate scrolling pages; the modal's
