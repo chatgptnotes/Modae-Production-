@@ -163,6 +163,8 @@ test('exact proposal export preserves template artwork, merges and print layout'
   assert.equal(firm.getCell('B21').value, '1. Validity: 30 days')
   assert.equal(firm.getCell('B26').value, null, 'template duplicate terms are cleared')
   assert.equal(cover.getCell('C6').value, '2608227RS')
+  assert.equal(cover.getCell('L2').font.color.argb, 'FFED3F2F')
+  assert.equal(firm.getCell('G3').font.color.argb, 'FFED3F2F')
 })
 
 test('mapped cover exports remove stale placeholder locations without inventing an address', async () => {

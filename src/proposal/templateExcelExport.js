@@ -3,6 +3,7 @@ import { effectiveRate } from '../utils.js'
 import { currencySymbol } from '../currency.js'
 import { BUILT_IN_PROPOSAL_TEMPLATES, proposalTemplateLane } from './templateRegistry.js'
 import { customerLocationValue, isPlaceholderLocation } from '../locations.js'
+import { MODAE_COLORS, MODAE_DOCUMENT_STANDARDS } from '../branding/modae.js'
 
 const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 const LOGO_URL = new URL('../../branding/mod-ae/assets/modae-official-logo.png', import.meta.url).href
@@ -78,6 +79,15 @@ function cellText(value) {
 function clearPlaceholderLocations(worksheet) {
   worksheet.eachRow(row => row.eachCell(cell => {
     if (isPlaceholderLocation(cellText(cell.value))) cell.value = null
+  }))
+}
+
+function applyTaglineBranding(workbook) {
+  const tagline = MODAE_DOCUMENT_STANDARDS.header.tagline
+  const argb = `FF${MODAE_COLORS.primary.slice(1).toUpperCase()}`
+  for (const worksheet of workbook.worksheets) worksheet.eachRow(row => row.eachCell(cell => {
+    if (cellText(cell.value).trim() !== tagline) return
+    cell.font = { ...(cell.font || {}), color: { type: 'argb', argb } }
   }))
 }
 
@@ -572,6 +582,7 @@ export async function generateProposalWorkbook(args) {
   ensureLogo(workbook, commercial, logo, 24)
   setCoverSheet(workbook, cover, generationArgs)
   clearPlaceholderLocations(cover)
+  applyTaglineBranding(workbook)
   const mappedCommercial = generationArgs.mapping?.lineTable?.sheet === commercial.name
   if (mappedCommercial && !setMappedCommercialSheet(commercial, generationArgs)) setCommercialSheet(workbook, commercial, generationArgs)
   else if (!mappedCommercial) setCommercialSheet(workbook, commercial, generationArgs)
