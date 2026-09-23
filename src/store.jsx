@@ -256,7 +256,7 @@ export function StoreProvider({ children }) {
   // straight away, and it is gone). Same rule as applyServer, measured against
   // bootRef instead of lastSavedRef because we have not saved anything yet.
   const hydrate = async () => {
-    const res = await datastore.loadAll()
+    const res = await datastore.loadCore()
     if (!res) {
       if (!supabaseConfigError) setLiveSyncStatus('error')
       return
@@ -338,6 +338,16 @@ export function StoreProvider({ children }) {
       // setState above has just scheduled.
       setTimeout(flushSaves, 0)
     }
+    // Non-critical configuration and catalogues must not delay the first
+    // opportunity render. They still flow through applyServer so dirty local
+    // edits and the normal merge rules remain protected.
+    datastore.loadBackground()
+      .then(background => {
+        if (!background) return
+        if (background.diagnostics) setSyncDiagnostics(background.diagnostics)
+        if (hydratedRef.current && !background.empty) applyServer(background.slices, background.diagnostics)
+      })
+      .catch(() => setLiveSyncStatus('error'))
   }
 
   // Focus refetch: pull server slices where this device has no unsaved edits.

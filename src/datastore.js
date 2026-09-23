@@ -51,6 +51,7 @@ const LOAD_CACHE_MS = 15000
 let loadCache = null
 let loadCacheAt = 0
 let loadInFlight = null
+let coreLoadInFlight = null
 // Normalized opportunity rows carry their revision outside the application
 // state. Keeping sync metadata out of state means it cannot leak into exports,
 // localStorage, or business rules.
@@ -93,6 +94,54 @@ export async function loadAll({ force = false } = {}) {
     return loadCache
   } finally {
     loadInFlight = null
+  }
+}
+
+// Fast startup path. The workspace can render once these core business rows
+// arrive; rules, catalogues, and diagnostics are loaded separately below.
+export async function loadCore() {
+  if (coreLoadInFlight) return coreLoadInFlight
+  coreLoadInFlight = fetchCore()
+  try {
+    return await coreLoadInFlight
+  } finally {
+    coreLoadInFlight = null
+  }
+}
+
+// Secondary startup path. This deliberately reuses the complete loader so
+// focus/realtime refreshes continue to have one authoritative code path.
+export async function loadBackground() {
+  return loadAll({ force: true })
+}
+
+async function fetchCore() {
+  try {
+    const legacyKeys = `(${NORMALIZED_BUSINESS_KEYS.join(',')})`
+    const [stateResult, settings, business] = await Promise.all([
+      supabase.from(TABLE).select('key, value').not('key', 'in', legacyKeys),
+      supabase.from('app_settings').select('key, value'),
+      loadBusinessTables(),
+    ])
+    if (stateResult.error) throw stateResult.error
+    const slices = {}
+    for (const row of stateResult.data || []) slices[row.key] = row.value
+    if (!settings.error) for (const row of settings.data || []) slices[row.key] = row.value
+    for (const [key, value] of Object.entries(business)) {
+      if (value != null) slices[key] = value
+    }
+    const hasBusinessData = Object.values(business).some(value => Array.isArray(value) ? value.length > 0 : Object.keys(value || {}).length > 0)
+    return {
+      empty: (!stateResult.data || stateResult.data.length === 0) && !settings.data?.length && !hasBusinessData,
+      slices,
+      diagnostics: {
+        normalizedOpportunityCount: Array.isArray(business.opportunities) ? business.opportunities.length : 0,
+        legacyOpportunityCount: null,
+      },
+    }
+  } catch (e) {
+    console.warn('Supabase core load failed — staying on localStorage:', e?.message)
+    return null
   }
 }
 
