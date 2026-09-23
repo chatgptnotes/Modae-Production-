@@ -2,7 +2,7 @@ import ExcelJS from 'exceljs'
 import { effectiveRate } from '../utils.js'
 import { currencySymbol } from '../currency.js'
 import { BUILT_IN_PROPOSAL_TEMPLATES, proposalTemplateLane } from './templateRegistry.js'
-import { customerLocationValue } from '../locations.js'
+import { customerLocationValue, isPlaceholderLocation } from '../locations.js'
 
 const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 const LOGO_URL = new URL('../../branding/mod-ae/assets/modae-official-logo.png', import.meta.url).href
@@ -49,6 +49,10 @@ function setValue(cell, value, options = {}) {
   if (options.border) cell.border = options.border
 }
 
+function styleNarrative(cell) {
+  cell.alignment = { ...(cell.alignment || {}), vertical: 'middle', wrapText: true }
+}
+
 const setNumberFormat = (cell, numFmt) => {
   cell.style = { ...(cell.style || {}), numFmt }
 }
@@ -63,6 +67,18 @@ function setCoverRow(worksheet, range, value) {
   // into the new customer-facing field.
   for (let column = start.col + 1; column <= end.col; column++) row.getCell(column).value = null
   setValue(start, value)
+}
+
+function cellText(value) {
+  if (typeof value === 'string' || typeof value === 'number') return String(value)
+  if (Array.isArray(value?.richText)) return value.richText.map(item => item.text || '').join('')
+  return ''
+}
+
+function clearPlaceholderLocations(worksheet) {
+  worksheet.eachRow(row => row.eachCell(cell => {
+    if (isPlaceholderLocation(cellText(cell.value))) cell.value = null
+  }))
 }
 
 function ensureLogo(workbook, worksheet, logoBuffer, lastColumn) {
@@ -555,6 +571,7 @@ export async function generateProposalWorkbook(args) {
   ensureLogo(workbook, cover, logo, 18)
   ensureLogo(workbook, commercial, logo, 24)
   setCoverSheet(workbook, cover, generationArgs)
+  clearPlaceholderLocations(cover)
   const mappedCommercial = generationArgs.mapping?.lineTable?.sheet === commercial.name
   if (mappedCommercial && !setMappedCommercialSheet(commercial, generationArgs)) setCommercialSheet(workbook, commercial, generationArgs)
   else if (!mappedCommercial) setCommercialSheet(workbook, commercial, generationArgs)

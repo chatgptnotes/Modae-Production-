@@ -165,6 +165,31 @@ test('exact proposal export preserves template artwork, merges and print layout'
   assert.equal(cover.getCell('C6').value, '2608227RS')
 })
 
+test('mapped cover exports remove stale placeholder locations without inventing an address', async () => {
+  const templateBuffer = fs.readFileSync('branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx')
+  const source = new ExcelJS.Workbook()
+  await source.xlsx.load(templateBuffer)
+  source.getWorksheet('Cover Letter').getCell('B14').value = 'gggg - 400000, Maharashtra'
+  const staleTemplate = new Uint8Array(await source.xlsx.writeBuffer())
+  const output = await generateProposalWorkbook({
+    templateBuffer: staleTemplate,
+    logoBuffer: fs.readFileSync('branding/mod-ae/assets/modae-official-logo.png'),
+    route: 'Spares',
+    mapping: { method: 'gemini-v1', coverSheet: 'Cover Letter', fields: { location: { sheet: 'Cover Letter', row: 11, column: 0 } } },
+    p: { revision: '00', bom: [{ pn: 'P-1', desc: 'Probe', common: 1 }] },
+    opp: { id: '2609001PJS', sellTo: 'Customer', eucLocation: 'Jamshedpur, Jharkhand' },
+    doc: { docTerms: [] },
+    totalQty: line => line.common,
+    lineQuoted: () => 100,
+  })
+  const workbook = new ExcelJS.Workbook()
+  await workbook.xlsx.load(output)
+  const cover = workbook.getWorksheet('Cover Letter')
+  const values = cover.getColumn(2).values.map(value => String(value || ''))
+  assert.equal(cover.getCell('B12').value, 'Jamshedpur, Jharkhand')
+  assert.equal(values.some(value => /gggg\s*-\s*400000/i.test(value)), false)
+})
+
 test('proposal Excel customer-facing cells preserve the supplied template styling', async () => {
   const templateBuffer = fs.readFileSync('branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx')
   const source = new ExcelJS.Workbook()

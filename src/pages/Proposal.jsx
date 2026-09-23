@@ -1938,6 +1938,8 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
             workbook={renderedTemplateWorkbook}
             editable={templatePreviewMode === 'draft'}
             onChange={updateTemplateCell}
+            hidePlaceholderLocations
+            customerFacingOnly={false}
           />}
         </Modal>
       )}

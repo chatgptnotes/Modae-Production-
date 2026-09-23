@@ -23,9 +23,9 @@ const cellsForRow = (sheet, rowIndex, hidePlaceholderLocations = false) => {
     const rowSpan = merge ? merge.e.r - merge.s.r + 1 : 1
     const width = (sheet.widths || []).slice(columnIndex, columnIndex + colSpan).reduce((sum, item) => sum + item, 0)
     const name = String(sheet.name || '')
-    const portrait = /cover letter|scope of work|^sow$|issues/i.test(name)
+    const sheetIsPortrait = /cover letter|scope of work|^sow$|issues/i.test(name)
     const wideSheet = /firm|pricing|proposal/i.test(name)
-    const previewWidth = portrait ? 820 : wideSheet ? 1400 : 1180
+    const previewWidth = sheetIsPortrait ? 820 : wideSheet ? 1400 : 1180
     const totalWidth = (sheet.widths || []).reduce((sum, item) => sum + Math.max(1, Number(item) || 1), 0) || 1
     const renderedWidth = Math.max(24, (width / totalWidth) * previewWidth)
     const rows = Math.max(1, Math.ceil(String(value).length / Math.max(12, Math.floor(renderedWidth / 7))))
@@ -117,13 +117,13 @@ const cellClass = (sheet, cell) => {
   ].filter(Boolean).join(' ')
 }
 
-export default function WorkbookPreview({ workbook, editable = false, onChange, loading = false, error = '', hidePlaceholderLocations = false }) {
+export default function WorkbookPreview({ workbook, editable = false, onChange, loading = false, error = '', hidePlaceholderLocations = false, customerFacingOnly = true }) {
   const [activeSheet, setActiveSheet] = useState(0)
   const [editing, setEditing] = useState(null)
   const [draft, setDraft] = useState('')
   const previewScrollRef = useRef(null)
   const sourceSheet = workbook?.sheets?.[activeSheet] || workbook?.sheets?.[0]
-  const sheet = sourceSheet ? customerFacingSheet(sourceSheet) : sourceSheet
+  const sheet = sourceSheet ? (customerFacingOnly ? customerFacingSheet(sourceSheet) : sourceSheet) : sourceSheet
   const workbookSignature = (workbook?.sheets || []).map(item => item.name).join('|')
 
   useEffect(() => {
