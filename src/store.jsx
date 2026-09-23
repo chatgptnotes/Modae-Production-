@@ -66,6 +66,11 @@ const initialState = () => {
   // browser quota even though v5 no longer reads it.
   try { localStorage.removeItem('wintrack-modae-v4') } catch { /* private mode */ }
   const saved = localStorage.getItem(KEY)
+  // When Supabase is configured it is authoritative; remove the old local
+  // snapshot after reading it once so it cannot consume quota indefinitely.
+  if (datastore.dbEnabled()) {
+    try { localStorage.removeItem(KEY) } catch { /* private mode */ }
+  }
   const state = stateFromSaved(saved)
   // Production starts clean. Existing demo-mode snapshots are migrated once
   // into an empty workspace; real records entered after that remain intact.
@@ -84,6 +89,7 @@ const localSnapshot = state => ({
 })
 
 const persistLocalSnapshot = state => {
+  if (datastore.dbEnabled()) return
   try { localStorage.setItem(KEY, JSON.stringify(localSnapshot(state))) }
   catch (e) { console.warn('Local save skipped — Supabase remains the source of truth:', e?.message) }
 }

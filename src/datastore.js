@@ -284,6 +284,14 @@ export async function saveSlices(dirty) {
       console.warn('Protected rule save skipped — business data was saved:', e?.message)
     }
   }
+  // Do not fall back to the legacy JSON app_state row for settings when the
+  // authenticated rule/settings path is unavailable. That row is a large
+  // compatibility snapshot and can time out or overwrite normalized data.
+  if (!canWriteProtectedConfig) {
+    for (const key of Object.keys(normalizedDirty)) {
+      if (!BUSINESS_KEYS.has(key)) delete normalizedDirty[key]
+    }
+  }
   const rows = Object.entries(normalizedDirty).map(([key, value]) => ({
     key, value, updated_at: new Date().toISOString(),
   }))
