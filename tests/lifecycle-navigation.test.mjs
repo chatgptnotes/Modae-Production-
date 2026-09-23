@@ -36,6 +36,26 @@ test('milestone changes open their lifecycle workspace', () => {
   assert.match(workbench, /'--progress-step-count': steps\.length/)
 })
 
+test('Service workflow pages can be opened before their persisted phase', () => {
+  assert.match(workbench, /allowFutureNavigation = false/)
+  assert.match(workbench, /disabled=\{!allowFutureNavigation && index > completedThrough\}/)
+  assert.match(workbench, /const serviceOpenNavigation = opp\.route === 'Service'/)
+  assert.match(workbench, /if \(index < 0 \|\| \(!serviceOpenNavigation && index > persistedStepIndex\)\) return/)
+  assert.match(workbench, /allowFutureNavigation=\{serviceOpenNavigation\}/)
+  assert.match(workbench, /if \(serviceOpenNavigation\) \{\s*const serviceBlockers = servicePhaseBlockers\(step\)/)
+  assert.match(workbench, /setTransition\(\{ kind: 'blocked', target: step\.label, blockers: serviceBlockers \}\)/)
+  assert.match(workbench, /selectStep\(step\.slug\)/)
+})
+
+test('Service work areas group the audit phases into five operator outcomes', () => {
+  for (const label of ['Intake & enquiry', 'Scope & survey', 'Offer & approval', 'Customer decision', 'Delivery & close']) {
+    assert.match(workbench, new RegExp(label.replace(/[&]/g, '\\&')))
+  }
+  assert.match(workbench, /function ServiceWorkAreaBar/)
+  assert.match(workbench, /Current work area/)
+  assert.match(workbench, /Next audit stage/)
+})
+
 test('Spares workflow has eight grouped industry-standard stages', () => {
   const labels = [
     'Opportunity Intake', 'Customer Verification', 'Requirement Validation',

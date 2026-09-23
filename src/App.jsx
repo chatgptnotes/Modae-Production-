@@ -34,6 +34,7 @@ import ProposalSent from './pages/ProposalSent.jsx'
 import Portal from './pages/Portal.jsx'
 import Opportunities from './pages/Opportunities.jsx'
 import TabletApp from './tablet/TabletApp.jsx'
+import { supabaseProjectRef } from './supabase.js'
 
 function PageGate({ page, children }) {
   const store = useStore()
@@ -222,6 +223,31 @@ const NAV = [
   { section: 'Admin & more', to: '/users', label: 'Users and roles', icon: 'shield', page: 'users' },
 ]
 
+function SyncNotice({ status, diagnostics }) {
+  if (!['config-error', 'error', 'live', 'connecting', 'reconnecting'].includes(status)) return null
+  const config = status === 'config-error'
+  const legacyOnly = status === 'live' && diagnostics?.normalizedOpportunityCount === 0 && diagnostics?.legacyOpportunityCount > 0
+  const emptyWorkspace = status === 'live' && diagnostics?.normalizedOpportunityCount === 0 && diagnostics?.legacyOpportunityCount === 0
+  const healthy = status === 'live' && !legacyOnly && !emptyWorkspace
+  const stateLabel = healthy ? 'Shared workspace' : legacyOnly ? 'Migration required' : emptyWorkspace ? 'Shared workspace is empty' : status === 'connecting' ? 'Connecting to shared workspace' : status === 'reconnecting' ? 'Reconnecting to shared workspace' : config ? 'Supabase configuration mismatch' : 'Supabase sync unavailable'
+  return (
+    <div className={`workspace-sync-notice workspace-sync-notice-${healthy ? 'live' : 'warning'}`} role={healthy ? 'status' : 'alert'} title={supabaseProjectRef ? `Supabase project: ${supabaseProjectRef}` : undefined}>
+      <strong>{stateLabel}</strong>
+      <span>{healthy
+        ? `Project ${supabaseProjectRef || 'not configured'} · active rows are loaded from Supabase.`
+        : legacyOnly
+          ? `Project ${supabaseProjectRef} · ${diagnostics.legacyOpportunityCount} legacy opportunity rows exist in app_state, but normalized opportunities are empty. Run the business-table migration.`
+          : emptyWorkspace
+            ? `Project ${supabaseProjectRef} · Supabase returned no active opportunities.`
+            : config
+              ? 'The URL and anon key point to different projects. This browser is showing local data only.'
+              : status === 'connecting' || status === 'reconnecting'
+                ? `Project ${supabaseProjectRef || 'not configured'} · waiting for the shared data connection.`
+                : 'The shared workspace could not be loaded. This browser may be showing local data only.'}</span>
+    </div>
+  )
+}
+
 export default function App() {
   const store = useStore()
   const nav = useNavigate()
@@ -372,6 +398,7 @@ export default function App() {
           <Icon name="menu" size={20} />
         </button>
         <NotificationBell store={store} nav={nav} />
+        <SyncNotice status={store.liveSyncStatus} diagnostics={store.syncDiagnostics} />
         {/* The shell is viewport-locked, so this is the app's single scroll
             region — pages that want their own internal scroller (the pipeline
             sheet, the mailbox list) size themselves to 100% of it. */}

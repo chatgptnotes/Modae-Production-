@@ -1406,6 +1406,22 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
   const eucLocationSearchState = useGlobalLocationSearch(eucLocationQuery)
   const eucLocationMatches = eucLocationSearchState.matches
 
+  // Repair legacy/imported leads that stored the fallback Blue class even
+  // though the matched Customer Master account is classified Red. This keeps
+  // the saved lead, approval routing and visible decision form consistent.
+  useEffect(() => {
+    const masterStatus = matchCustomer(store.customers, lead)?.status
+    if (!masterStatus) return
+    if (lead.customerStatus === masterStatus
+      && !lead.customerStatusOverride
+      && lead.redFlag === (masterStatus === 'Red')) return
+    store.updateLeadDraft(lead.id, {
+      customerStatus: masterStatus,
+      customerStatusOverride: '',
+      redFlag: masterStatus === 'Red',
+    })
+  }, [lead.id, lead.sellTo, lead.customerStatus, lead.customerStatusOverride, lead.redFlag, store.customers])
+
   // Re-read the mail (plus whatever documents are now on the lead).
   // `keepDecisions` is the automatic path taken after a document is added: the
   // human did not ask to throw their decisions away, they asked the AI to read
@@ -1482,7 +1498,8 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
 
   const customer = matchCustomer(store.customers, lead)
   const leadCustomerStatus = customerStatusForLead(lead, store.customers)
-  const previewCustomerStatus = decisionDraft.customerStatus || leadCustomerStatus
+  const previewCustomer = matchCustomer(store.customers, { ...lead, sellTo: decisionDraft.sellTo })
+  const previewCustomerStatus = previewCustomer?.status || leadCustomerStatus
   const previewLead = { ...lead, customerStatus: previewCustomerStatus, redFlag: previewCustomerStatus === 'Red' }
   const isRed = previewCustomerStatus === 'Red'
   const redApproval = redClearanceFor(store.approvals, lead.id, store.config)
@@ -1824,7 +1841,9 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
       'BU / Segment', `${draft.bu} / ${draft.segment}`), 'Equipment / Product Family', productDisplayLabel(draft.product))
     const scopedFields = updateLeadField(nextFields, 'Opportunity scope', draft.scope, 'RFQ')
     const nextMissing = reconcileMissingWithDecisions(ai.missing, draft, scopedFields, ai.lineItems)
-    const fastTrack = isFastTrackLead({ ...lead, customerStatus: draft.customerStatus }, store.config, customer)
+    const matchedCustomer = matchCustomer(store.customers, { ...lead, sellTo: draft.sellTo })
+    const resolvedCustomerStatus = matchedCustomer?.status || draft.customerStatus
+    const fastTrack = isFastTrackLead({ ...lead, customerStatus: resolvedCustomerStatus }, store.config, matchedCustomer || customer)
     const routedOwner = routeOwner(draft.region, store.config, draft.owner)
     const isOverride = routedOwner && draft.owner !== routedOwner
     const overrideReason = isOverride ? (lead.ownerOverrideReason || '').trim() : ''
@@ -1845,16 +1864,13 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
       fastTrackStartedAt: fastTrack ? (lead.fastTrackStartedAt || nowIST()) : lead.fastTrackStartedAt,
       oppType: draft.oppType,
       route: routeForType(draft.oppType),
-      customerStatus: draft.customerStatus,
-      customerStatusOverride: (() => {
-        const masterStatus = matchCustomer(store.customers, { ...lead, sellTo: draft.sellTo })?.status || ''
-        return masterStatus && draft.customerStatus === masterStatus ? '' : draft.customerStatus
-      })(),
+      customerStatus: resolvedCustomerStatus,
+      customerStatusOverride: '',
       customerClassifiedAt: lead.customerClassifiedAt || nowIST(),
-      verification: ['Blue', 'Amber'].includes(draft.customerStatus)
-        ? { ...(lead.verification || {}), requestedAt: lead.verification?.requestedAt || nowIST(), requestedFor: draft.customerStatus }
+      verification: ['Blue', 'Amber'].includes(resolvedCustomerStatus)
+        ? { ...(lead.verification || {}), requestedAt: lead.verification?.requestedAt || nowIST(), requestedFor: resolvedCustomerStatus }
         : (lead.verification || {}),
-      redFlag: draft.customerStatus === 'Red',
+      redFlag: resolvedCustomerStatus === 'Red',
       ai: { ...ai, route: routeForType(draft.oppType), fields: scopedFields, missing: nextMissing },
     }
   }

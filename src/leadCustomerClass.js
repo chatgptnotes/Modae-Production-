@@ -13,10 +13,11 @@ export function matchCustomer(customers, lead) {
 }
 
 export const customerStatusForLead = (lead, customers) => {
-  // An explicit decision is the only lead-level value that may override the
-  // Customer Master. Older/AI-created leads can carry a default Blue status
-  // before the exact customer match is resolved, so that value must not mask a
+  // The Customer Master is authoritative for a matched account. Older/AI-
+  // created leads can carry a default Blue status (or a stale override) before
+  // the exact customer match is resolved, so those values must not mask a
   // known Red account such as Vedanta (Lanjigarh).
-  if (lead?.customerStatusOverride) return lead.customerStatusOverride
-  return matchCustomer(customers, lead)?.status || lead?.customerStatus || (lead?.redFlag ? 'Red' : 'Blue')
+  const masterStatus = matchCustomer(customers, lead)?.status
+  if (masterStatus) return masterStatus
+  return lead?.customerStatus || (lead?.redFlag ? 'Red' : 'Blue')
 }

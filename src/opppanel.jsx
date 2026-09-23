@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from './store.jsx'
-import { useDrawer } from './drawer.jsx'
 import {
   SUBFOLDERS,
 } from './seed.js'
@@ -33,8 +32,6 @@ const SyncPill = ({ sync }) => {
 export default function OppPanel({ oppId }) {
   const store = useStore()
   const nav = useNavigate()
-  const drawer = useDrawer()
-  const [deleteArmed, setDeleteArmed] = useState(false)
 
   const opp = store.opportunities.find(o => o.id === oppId)
   const files = store.files[oppId] || Object.fromEntries(SUBFOLDERS.map(f => [f, []]))
@@ -55,7 +52,6 @@ export default function OppPanel({ oppId }) {
   const [tab, setTab] = useState(DETAILS_TAB)
   useEffect(() => {
     setTab(DETAILS_TAB)
-    setDeleteArmed(false)
   }, [oppId])
 
   if (!opp) return <div className="drawer-body"><p className="hint">This opportunity no longer exists.</p></div>
@@ -196,26 +192,6 @@ export default function OppPanel({ oppId }) {
           <div className="fgroup">Remarks</div>
           <div className="ro drawer-read-only-remarks">{opp.remarks || '—'}</div>
 
-          <div className="opportunity-delete-actions">
-            <button
-              type="button"
-              className={`danger ${deleteArmed ? 'delete-armed' : ''}`}
-              title={deleteArmed
-                ? `Delete ${opp.id} and remove it from the opportunities list`
-                : 'Delete this opportunity'}
-              onClick={() => {
-                if (!deleteArmed) {
-                  setDeleteArmed(true)
-                  return
-                }
-                store.deleteOpportunity(opp.id)
-                drawer.close()
-              }}
-            >
-              <Icon name="trash" size={13} /> {deleteArmed ? 'Delete opportunity?' : 'Delete opportunity'}
-            </button>
-            {deleteArmed && <button type="button" onClick={() => setDeleteArmed(false)}>Cancel</button>}
-          </div>
         </div>
       )}
     </div>

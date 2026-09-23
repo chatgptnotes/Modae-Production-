@@ -123,9 +123,17 @@ test('Won and Lost closure paths keep terminal milestones and reason notes align
 test('tracker offers all, mine, and specific-owner filtering', () => {
   assert.match(tracker, /const owners = \[\.\.\.\(isSalesRep \? \['Mine'\] : \[\]\), 'All'/)
   assert.match(tracker, /ownerFilter === 'Mine' \? o\.owner === store\.role/)
+  assert.match(tracker, /ownerFilter === 'All' \|\| o\.owner === ownerFilter/)
   assert.match(tracker, /My Opportunities/)
   assert.match(tracker, /All Opportunities/)
   assert.match(tracker, /sortVal = \(o, key\) => \(DATE_KEYS\.includes\(key\) \? \(o\[key\] \|\| ''\)/)
+})
+
+test('tracker makes the loaded-row count and empty-view cause explicit', () => {
+  assert.match(tracker, /const resultCountLabel = rows\.length === base\.length/)
+  assert.match(tracker, /className="tracker-result-count" aria-live="polite"/)
+  assert.match(tracker, /No opportunities are loaded for this view\./)
+  assert.match(tracker, /All Opportunities is selected; the workspace currently contains no rows to display\./)
 })
 
 test('tracker column controls compose filters and support select-all toggling', () => {
@@ -178,6 +186,12 @@ test('My Opportunities shows the same working columns', () => {
 test('opportunity IDs open the full opportunity workspace', () => {
   assert.match(tracker, /<Link to=\{`\/opp\/\$\{o\.id\}`\} title="Open opportunity workspace">\{o\.id\}<\/Link>/)
   assert.doesNotMatch(tracker, /<Link to=\{`\/folders\/\$\{o\.id\}`\}>\{o\.id\}<\/Link>/)
+})
+
+test('opportunity rows do not expose a delete action', () => {
+  assert.doesNotMatch(tracker, /tracker-row-delete|Delete opportunity|deleteArmedId|store\.deleteOpportunity/)
+  assert.doesNotMatch(read('src/opppanel.jsx'), /Delete opportunity|deleteArmed|store\.deleteOpportunity/)
+  assert.doesNotMatch(read('src/pages/Folders.jsx'), /<DeleteButton id=\{o\.id\}/)
 })
 
 // --------------------------------------------------- next action pending owner

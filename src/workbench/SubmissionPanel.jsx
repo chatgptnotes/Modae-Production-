@@ -33,8 +33,8 @@ const validProposalFilename = value => {
 }
 
 // Customer send is unlocked only by an approved release for the current
-// revision. To, CC, Subject, the covering message and the attachment list stay
-// editable before Gmail opens a draft.
+// revision. Before release, the same mail surface remains visible as a locked
+// preview so the customer-send step has one consistent shape.
 export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) {
   const store = useStore()
   const p = store.getProposal(opp.id)
@@ -108,32 +108,18 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
   const submission = latestSubmissionForRevision(store.communications[opp.id], p.revision)
   const alreadySent = submission?.status === 'sent'
   const draftOpened = sentNow || submission?.status === 'draft'
-
-  if (!release) {
-    const requestRelease = () => store.requestApproval({
-      oppId: opp.id,
-      type: 'Final quote release',
-      rev: String(p.revision ?? ''),
-      approver: 'LJS',
-      needed: ['LJS', 'AH'],
-      detail: 'Final quote release is required before the customer quote can be sent.',
-      blockingReason: 'The customer-facing quote cannot be sent until LJS + AH approve its final release.',
-      opportunitySummary: `${opp.oppName || 'This opportunity'} is a ${opp.route || 'sales'} opportunity for ${opp.sellTo || 'the customer'}.`,
-    })
-    return (
-      <div className="form-card wide">
-          <div className="section-title">Customer submission (simulated)</div>
-        {releaseReason && <p className="hint"><b>Why the release gate is closed:</b> {releaseReason}</p>}
-        <p className="hint">
-          {opp.route === 'Service' ? 'Service Review pending — submission opens once AH + LJS approve the offer.' : "Release approval pending — submission opens once a 'Final quote release' is approved."}
-          Prepare the proposal in the builder and submit it for approval first.
-        </p>
-        {opp.route !== 'Service' && !pendingRelease && (
-          <button className="exception-action" onClick={requestRelease}>Request final quote release from LJS + AH</button>
-        )}
-      </div>
-    )
-  }
+  const releasePending = !release
+  const mailboxLocked = readOnly || releasePending
+  const requestRelease = () => store.requestApproval({
+    oppId: opp.id,
+    type: 'Final quote release',
+    rev: String(p.revision ?? ''),
+    approver: 'LJS',
+    needed: ['LJS', 'AH'],
+    detail: 'Final quote release is required before the customer quote can be sent.',
+    blockingReason: 'The customer-facing quote cannot be sent until LJS + AH approve its final release.',
+    opportunitySummary: `${opp.oppName || 'This opportunity'} is a ${opp.route || 'sales'} opportunity for ${opp.sellTo || 'the customer'}.`,
+  })
 
   const doc = docModel(p, opp, { files: [], config: store.config })
   const { totalQty, lineQuoted, lineCost, linePrice, computeTotals } = buildPricing(store, p)
@@ -144,7 +130,7 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
   const toValid = recipientsValid(emailTo)
   const ccValid = splitRecipients(emailCc).length === 0 || recipientsValid(emailCc)
   const filenameValid = !attachProposal || validProposalFilename(proposalFilename)
-  const canSend = !pendingConds.length && (!attachProposal || proposalValidated) && filenameValid && fromValid && toValid && ccValid && Boolean(emailSubject.trim()) && Boolean(emailBody.trim()) && !readingFiles && !readOnly
+  const canSend = !!release && !pendingConds.length && (!attachProposal || proposalValidated) && filenameValid && fromValid && toValid && ccValid && Boolean(emailSubject.trim()) && Boolean(emailBody.trim()) && !readingFiles && !readOnly
 
   const removeExtraFile = filename => setExtraFiles(files => files.filter(f => f.filename !== filename))
 
@@ -380,14 +366,14 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
     ...extraFiles.map(f => f.filename),
   ]
   const rows = [
-    ['From', <input type="email" value={emailFrom} disabled={readOnly} onChange={e => setEmailFrom(e.target.value)} placeholder="sales@company.com" style={{ width: '100%' }} />],
-    ['To', <input id="customer-email-to" type="text" value={emailTo} disabled={readOnly} onChange={e => setEmailTo(e.target.value)} placeholder="customer@company.com, second@company.com" style={{ width: '100%' }} />],
-    ['CC', <input type="text" value={emailCc} disabled={readOnly} onChange={e => setEmailCc(e.target.value)} placeholder="name@company.com" style={{ width: '100%' }} />],
-    ['Subject', <input type="text" value={emailSubject} disabled={readOnly} onChange={e => setEmailSubject(e.target.value)} placeholder="Proposal subject" style={{ width: '100%' }} />],
+    ['From', <input type="email" value={emailFrom} disabled={mailboxLocked} onChange={e => setEmailFrom(e.target.value)} placeholder="sales@company.com" />],
+    ['To', <input id="customer-email-to" type="text" value={emailTo} disabled={mailboxLocked} onChange={e => setEmailTo(e.target.value)} placeholder="customer@company.com, second@company.com" />],
+    ['CC', <input type="text" value={emailCc} disabled={mailboxLocked} onChange={e => setEmailCc(e.target.value)} placeholder="name@company.com" />],
+    ['Subject', <input type="text" value={emailSubject} disabled={mailboxLocked} onChange={e => setEmailSubject(e.target.value)} placeholder="Proposal subject" />],
     ['Attachments', <div className="submission-attachment-editor">
       {attachProposal && <label className="submission-attachment-name">
         <span>Proposal workbook filename</span>
-        <input type="text" value={proposalFilename} disabled={readOnly} onChange={event => setProposalFilename(event.target.value)}
+        <input type="text" value={proposalFilename} disabled={mailboxLocked} onChange={event => setProposalFilename(event.target.value)}
           aria-invalid={!filenameValid} aria-describedby={!filenameValid ? 'proposal-filename-error' : undefined} />
       </label>}
       {!filenameValid && <span id="proposal-filename-error" className="err-text">Use a valid filename ending in .xlsx.</span>}
@@ -401,31 +387,53 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
   ]
 
   return (
-    <div className="form-card wide">
-      <div className="section-title">Customer email submission</div>
-      <table className="cost-table" style={{ width: '100%' }}>
-        <tbody>
-          {rows.map(([k, v]) => <tr key={k}><td style={{ width: 90 }}><b>{k}</b></td><td>{v}</td></tr>)}
-        </tbody>
-      </table>
+    <div className={`submission-mailbox ${mailboxLocked ? 'is-locked' : 'is-ready'}`}>
+      <div className="submission-mailbox-head">
+        <div>
+          <div className="section-title">Customer email submission</div>
+          <div className="hint">Prepare and review the approved offer before sending it to the customer.</div>
+        </div>
+        <span className={`submission-status ${releasePending ? 'is-pending' : alreadySent ? 'is-sent' : 'is-ready'}`}>
+          {releasePending ? 'Awaiting approval' : alreadySent ? 'Sent' : 'Ready to send'}
+        </span>
+      </div>
 
-      <label className="afield" style={{ display: 'block', marginTop: 8 }}>Message draft</label>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '4px 0' }}>
-        <button type="button" onClick={createMessage} disabled={readOnly || messageBusy || proofreadBusy}>
+      {releasePending && (
+        <div className="submission-approval-banner" role="status">
+          <div>
+            <b>{opp.route === 'Service' ? 'Service Review pending' : 'Final quote release pending'}</b>
+            <span>{releaseReason || 'AH + LJS must approve the current proposal revision before it can be sent.'}</span>
+          </div>
+          {opp.route !== 'Service' && !pendingRelease && (
+            <button className="exception-action" type="button" onClick={requestRelease}>Request approval</button>
+          )}
+        </div>
+      )}
+
+      <div className="submission-mail-fields">
+        {rows.slice(0, 4).map(([k, v]) => <label key={k} className="submission-mail-field"><b>{k}</b>{v}</label>)}
+      </div>
+      <div className="submission-mail-attachments">
+        <b>Attachments</b>
+        {rows[4][1]}
+      </div>
+
+      <label className="submission-mail-body-label">Message draft</label>
+      <div className="submission-mail-toolbar">
+        <button type="button" onClick={createMessage} disabled={mailboxLocked || messageBusy || proofreadBusy}>
           <Icon name="sparkles" size={13} /> {messageBusy ? 'Improving draft…' : 'Improve with AI'}
         </button>
-        <button type="button" onClick={proofreadMessage} disabled={readOnly || proofreadBusy || messageBusy}>
+        <button type="button" onClick={proofreadMessage} disabled={mailboxLocked || proofreadBusy || messageBusy}>
           <Icon name="check" size={13} /> {proofreadBusy ? 'Proofreading…' : 'Proofread with AI'}
         </button>
         <span className="hint">Optional professional review</span>
       </div>
-      <textarea className="submission-message-draft" value={emailBody} disabled={readOnly} onChange={e => { aiRequestRef.current += 1; setEmailBody(e.target.value) }} rows={9}
-        style={{ width: '100%', resize: 'vertical' }} />
+      <textarea className="submission-message-draft" value={emailBody} disabled={mailboxLocked} onChange={e => { aiRequestRef.current += 1; setEmailBody(e.target.value) }} rows={9} />
       {messageNotice && <WarnBox>{messageNotice}</WarnBox>}
       {proofreadError && <ErrBox>{proofreadError}</ErrBox>}
 
       <div className="check-row" style={{ marginTop: 8 }}>
-        <input type="checkbox" checked={attachProposal} disabled={readOnly} onChange={e => setAttachProposal(e.target.checked)} />
+        <input type="checkbox" checked={attachProposal} disabled={mailboxLocked} onChange={e => setAttachProposal(e.target.checked)} />
         <span><b>Attach validated proposal</b><span className="hint"> — generated Rev {p.revision} workbook</span></span>
       </div>
       {attachProposal && !proposalValidated && (
@@ -434,7 +442,7 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
 
       <div className="submission-actions">
         <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={onFilesPicked} />
-        <button className="secondary" type="button" disabled={readOnly || readingFiles}
+        <button className="secondary" type="button" disabled={mailboxLocked || readingFiles}
           onClick={() => fileInputRef.current?.click()}>
           <Icon name="upload" size={13} /> {readingFiles ? 'Reading files…' : `Attach files${extraFiles.length ? ` (${extraFiles.length})` : ''}`}
         </button>
@@ -447,7 +455,7 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
             : !filenameValid ? 'Enter a valid proposal filename ending in .xlsx'
             : !emailSubject.trim() ? 'Enter a subject'
             : !emailBody.trim() ? 'Enter a message'
-            : ''}
+            : !release ? 'Awaiting AH + LJS approval before sending' : ''}
           onClick={send}>
           <Icon name="send" size={13} /> {sending ? 'Opening Gmail…' : 'Draft email'}
         </button>
@@ -455,7 +463,7 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
           <div key={f.filename} className="check-row">
             <Icon name="fileText" size={13} />
             <span>{f.filename}</span>
-            <button className="secondary" type="button" disabled={readOnly} style={{ marginLeft: 'auto', padding: '2px 8px' }}
+            <button className="secondary" type="button" disabled={mailboxLocked} style={{ marginLeft: 'auto', padding: '2px 8px' }}
               onClick={() => removeExtraFile(f.filename)}>
               <Icon name="x" size={11} /> Remove
             </button>
@@ -483,9 +491,9 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
         </div>
       )}
 
-      <div className="okbox" style={{ marginTop: 10 }}>
+      {release && <div className="okbox" style={{ marginTop: 10 }}>
         Current proposal revision is approved for customer submission.
-      </div>
+      </div>}
 
       {sendError && <ErrBox>{sendError}</ErrBox>}
       {gmailDraftHref && !draftOpened && (
@@ -496,7 +504,7 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
       {draftOpened && !alreadySent && (
         <div className="errbox">
           Gmail draft opened — attach the downloaded files and send it in Gmail.
-          <button type="button" className="secondary" disabled={readOnly} style={{ marginLeft: 8 }} onClick={markAsSent}>
+            <button type="button" className="secondary" disabled={mailboxLocked} style={{ marginLeft: 8 }} onClick={markAsSent}>
             Mark as sent
           </button>
         </div>

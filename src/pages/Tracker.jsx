@@ -194,7 +194,6 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const [closePending, setClosePending] = useState(null) // { id, stage } awaiting outcome and reason
   const [closeReason, setCloseReason] = useState('')
   const [closeReasonNote, setCloseReasonNote] = useState('')
-  const [deleteArmedId, setDeleteArmedId] = useState(null)
   const sheetWrapRef = useRef(null)
   const lastSheetScrollLeft = useRef(0)
   const horizontalGestureNudged = useRef(false)
@@ -326,6 +325,9 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   }
 
   const totals = rows.reduce((t, o) => ({ v: t.v + (+o.valueK || 0), c: t.c + (+o.cogsK || 0) }), { v: 0, c: 0 })
+  const resultCountLabel = rows.length === base.length
+    ? `${base.length} loaded`
+    : `${rows.length} of ${base.length} shown`
   const activeFilterCount = Object.values(filters).filter(value => value instanceof Set).length
     + (dateFilterActive || dateFilterState.error ? 1 : 0)
     + (searchTerm.trim() ? 1 : 0)
@@ -645,7 +647,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
 
   return (
     <div className="page tracker-page">
-      <h2>Opportunities {sheet === 'Old Closed Opps' && '— Old Closed Opps'}</h2>
+      <h2>Opportunities {sheet === 'Old Closed Opps' && '— Old Closed Opps'} <span className="tracker-result-count" aria-live="polite">{resultCountLabel}</span></h2>
       <div className="toolbar">
         <div className="tracker-toolbar-filters">
           <select id="opportunities-owner-filter" aria-label="Opportunity owner" value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)}>
@@ -765,23 +767,6 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                 <td onClick={selectCell(o, COLS[0])} className={`oppid ${customerStatusFor(o)} ${stageClass(o) === 'open' ? '' : stageClass(o)} ${isSel(o, COLS[0]) ? 'cell-sel' : ''}`}>
                   <span className="tracker-oppid-actions">
                     <Link to={`/opp/${o.id}`} title="Open opportunity workspace">{o.id}</Link>
-                    <button
-                      type="button"
-                      className={`tracker-row-delete${deleteArmedId === o.id ? ' armed' : ''}`}
-                      aria-label={deleteArmedId === o.id ? `Confirm delete ${o.id}` : `Delete ${o.id}`}
-                      title={deleteArmedId === o.id ? 'Click again to delete this opportunity' : 'Delete this opportunity'}
-                      onClick={e => {
-                        e.stopPropagation()
-                        if (deleteArmedId !== o.id) {
-                          setDeleteArmedId(o.id)
-                          return
-                        }
-                        store.deleteOpportunity(o.id)
-                        setDeleteArmedId(null)
-                      }}
-                    >
-                      <Icon name="trash" size={12} />
-                    </button>
                   </span>
                 </td>
                 <td onClick={selectCell(o, COLS[1])} className={isSel(o, COLS[1]) ? 'cell-sel' : ''} title={o.sellTo}>{['Intake', 'Registration'].includes(o.milestone) ? <WrapInput value={o.sellTo} onChange={upd(o.id, 'sellTo')} title={o.sellTo} /> : <div className="ro" title="Locked after registration">{o.sellTo || '—'}</div>}</td>
@@ -926,9 +911,17 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
             {!rows.length && (
               <tr>
                 <td colSpan={COLS.length + 1} className="tracker-empty-state">
-                  <strong>No opportunities match these filters.</strong>
-                  <span>Try changing the search or removing an active filter.</span>
-                  <button type="button" onClick={clearAllTableState}>Clear all filters</button>
+                  <strong>{base.length ? 'No opportunities match these filters.' : 'No opportunities are loaded for this view.'}</strong>
+                  <span>{base.length
+                    ? 'Try changing the search or removing an active filter.'
+                    : sheet === 'Old Closed Opps'
+                      ? 'Closed history is empty in the current workspace.'
+                      : ownerFilter === 'All'
+                        ? 'All Opportunities is selected; the workspace currently contains no rows to display.'
+                        : 'Switch the owner filter to All Opportunities to view the full loaded workspace.'}</span>
+                  {(base.length > 0 || activeFilterCount > 0 || ownerFilter !== 'All') && (
+                    <button type="button" onClick={clearAllTableState}>Clear all filters</button>
+                  )}
                 </td>
               </tr>
             )}

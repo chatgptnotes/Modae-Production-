@@ -5,7 +5,7 @@ import fs from 'node:fs'
 const source = fs.readFileSync('src/pages/Inbox.jsx', 'utf8')
 
 test('customer class draft previews workflow and blockers before save', () => {
-  assert.match(source, /const previewCustomerStatus = decisionDraft\.customerStatus \|\| leadCustomerStatus/)
+  assert.match(source, /const previewCustomerStatus = previewCustomer\?\.status \|\| leadCustomerStatus/)
   assert.match(source, /<LeadWorkflowBar lead=\{lead\} customerStatus=\{previewCustomerStatus\}/)
   assert.match(source, /<LeadVerification lead=\{lead\} customerStatus=\{previewCustomerStatus\}/)
   assert.match(source, /const isRed = previewCustomerStatus === 'Red'/)

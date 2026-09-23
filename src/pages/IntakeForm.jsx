@@ -205,7 +205,9 @@ export default function IntakeForm({ destinationPicker = null }) {
     // A lead qualified from the inbox converts only on actual submit.
     if (loc.state?.leadId) store.updateLead(loc.state.leadId, { status: 'Qualified', oppId: id })
     setAiNotice(`Opportunity ${id} created. A row was added to the Sales Pipeline sheet and its Customer Specs, Partner Docs and Proposal folders were created.`)
-    nav(`/folders/${id}`)
+    // Open the newly created opportunity in its route-aware workspace. The
+    // workspace consumes `created=1` to show the first-run handoff panel.
+    nav(`/opp/${id}?created=1`)
   }
 
   const resetForm = () => {

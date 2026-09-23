@@ -11,8 +11,33 @@ import { createClient } from '@supabase/supabase-js'
 const env = import.meta.env || {}
 const url = (env.VITE_SUPABASE_URL || '').trim()
 const anonKey = (env.VITE_SUPABASE_ANON_KEY || '').trim()
+const projectRefFromUrl = url.match(/^https?:\/\/([^.]+)\.supabase\.co(?:\/|$)/i)?.[1] || ''
+export const supabaseProjectRef = projectRefFromUrl
+
+function keyProjectRef(token) {
+  try {
+    const encoded = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    const payload = JSON.parse(atob(encoded.padEnd(Math.ceil(encoded.length / 4) * 4, '=')))
+    return payload.ref || (/^[a-z0-9]{10,}$/i.test(payload.iss || '') ? payload.iss : '')
+  } catch {
+    return ''
+  }
+}
+
+export const supabaseConfigError = (() => {
+  if (!url || !anonKey || !projectRefFromUrl) return ''
+  const keyRef = keyProjectRef(anonKey)
+  return keyRef && keyRef !== projectRefFromUrl
+    ? `Supabase URL and anon key reference different projects (${projectRefFromUrl} vs ${keyRef}).`
+    : ''
+})()
+
 function makeClient() {
   if (!/^https?:\/\/.+/i.test(url) || !anonKey) return null
+  if (supabaseConfigError) {
+    console.warn(`Supabase disabled — ${supabaseConfigError}`)
+    return null
+  }
   try {
     // This app has its own role/login layer and uses Supabase only as a
     // shared-data and storage backend. Do not persist or reuse a browser

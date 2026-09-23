@@ -124,7 +124,7 @@ test('proposal attachment is opt-in and requires validated review', () => {
 })
 
 test('approved releases replace redundant self-attestation checks before Gmail opens', () => {
-  assert.match(submission, /const canSend = !pendingConds\.length/)
+  assert.match(submission, /const canSend = !!release && !pendingConds\.length/)
   assert.match(submission, /Current proposal revision is approved for customer submission\./)
   assert.doesNotMatch(submission, /Customer-facing prices and validity verified/)
   assert.doesNotMatch(submission, /No restricted commercial data in the document/)
@@ -133,7 +133,17 @@ test('approved releases replace redundant self-attestation checks before Gmail o
 })
 
 test('customer submission uses the available communications-card width', () => {
-  assert.equal((submission.match(/className="form-card wide"/g) || []).length, 2)
+  assert.match(submission, /className=\{`submission-mailbox/)
+  assert.match(read('src/styles.css'), /\.submission-mailbox \{/)
+})
+
+test('pending approval keeps the customer submission visible as a locked mailbox preview', () => {
+  assert.match(submission, /const releasePending = !release/)
+  assert.match(submission, /const mailboxLocked = readOnly \|\| releasePending/)
+  assert.match(submission, /Awaiting approval/)
+  assert.match(submission, /disabled=\{mailboxLocked\}/)
+  assert.match(submission, /Awaiting AH \+ LJS approval before sending/)
+  assert.doesNotMatch(submission, /Customer submission \(simulated\)/)
 })
 
 test('submission panel provides a direct proposal view', () => {

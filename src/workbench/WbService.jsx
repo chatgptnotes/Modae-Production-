@@ -37,20 +37,24 @@ const offerForSources = sources =>
 
 // The AI's opening guess, from the enquiry text. It seeds the checkboxes; the
 // confirmed field is what the rest of the flow reads.
-const aiSourcesFor = opp => {
+export const aiSourcesFor = opp => {
   const text = serviceText(opp)
   const sources = []
-  if (/amc|annual maintenance|recurring maintenance/.test(text)) sources.push('AMC')
-  if (/statement of work|\bsow\b|\bboq\b|complex|diagnostic|long[- ]duration|negotiat/.test(text)) sources.push('SoW / Proposal')
-  if (/survey|site visit|inspection|troubleshoot/.test(text)) sources.push('Site visit')
+  if (/\bamc\b|annual maintenance|recurring maintenance/.test(text)) sources.push('AMC')
+  if (/statement of work|\bsow\b|\bboq\b|method statement|detailed scope|complex|diagnostic|health assessment|loop checks?|signal validation|replacement supervision|probe replacement|replacement of .*probe|recommission(?:ing)?|service report|long[- ]duration|negotiat/.test(text)) {
+    sources.push('SoW / Proposal')
+  }
+  if (/survey|site visit|site inspection|on[- ]site|field service|inspection|troubleshoot|commissioning|recommission(?:ing)?|turbine.*probe.*replacement|probe replacement/.test(text)) {
+    sources.push('Site visit')
+  }
   return sources
 }
 
-const suggestedOfferFor = opp => offerForSources(aiSourcesFor(opp))
+export const suggestedOfferFor = opp => offerForSources(aiSourcesFor(opp))
 
 // Reactive-service workbench: rate-sheet driven cost build-up with the manual
 // travel-estimate confirmation gate.
-export default function WbService({ opp, openBuilder }) {
+export default function WbService({ opp, openBuilder, focus = 'scope' }) {
   const store = useStore()
   const comm = canPriceProposal(store.role)
   const est = store.svcEstimates.find(e => e.oppId === opp.id) || { oppId: opp.id, ...DEFAULT_EST }
@@ -58,11 +62,18 @@ export default function WbService({ opp, openBuilder }) {
   // for the cases the address does not settle.
   const sheet = sheetFor(opp, est)
   const rs = store.rateSheets[sheet]
-  const suggestedOffer = est.aiOfferMode || suggestedOfferFor(opp)
-  const offerMode = est.offerMode || suggestedOffer
-  // Until it is confirmed the field shows the AI's reading of the enquiry.
-  const requirementSource = est.requirementSource || aiSourcesFor(opp)
   const scopeConfirmed = !!est.scopeConfirmed
+  const inferredSources = aiSourcesFor(opp)
+  // Before confirmation, a legacy saved suggestion must not hide a newer AI
+  // reading of the enquiry. Once the salesperson changes a field manually,
+  // preserve that choice until they confirm the scope.
+  const suggestedOffer = scopeConfirmed ? (est.aiOfferMode || suggestedOfferFor(opp)) : suggestedOfferFor(opp)
+  const offerMode = scopeConfirmed || est.offerPathSource === 'manual'
+    ? (est.offerMode || suggestedOffer)
+    : suggestedOffer
+  const requirementSource = scopeConfirmed || est.requirementSourceSource === 'manual'
+    ? (est.requirementSource || inferredSources)
+    : inferredSources
   // Three approval regimes meet here. A published-rate Path A offer needs none;
   // an opportunity raised before 22 Sep still runs its single combined review;
   // everything else is approved as a proposal under §5.
@@ -118,10 +129,13 @@ export default function WbService({ opp, openBuilder }) {
   }
 
   return (
-    <div className="ana-grid">
-      <div className="ana-card c-12 service-flow-summary">
-        <div className="ana-title">Simplified Service flow</div>
-        <div className="check-row" style={{ flexWrap: 'wrap' }}>
+    <div className="ana-grid service-scope-grid">
+      <div className="ana-card c-12 service-flow-summary service-status-strip">
+        <div>
+          <div className="service-panel-kicker">Service Scope &amp; Survey</div>
+          <div className="ana-title">{focus === 'scope' ? 'Confirm the commercial lane before estimating' : 'Prepare the accepted service offer'}</div>
+        </div>
+        <div className="service-status-steps" aria-label="Service flow status">
           {['1 AI identifies', '2 Confirm scope', approvalStep, '4 Customer decision'].map((step, i) => (
             <Chip key={step} tone={i === 0 || (i === 1 && scopeConfirmed) || (i === 2 && approvalCleared) || (i === 3 && est.customerDecision) ? 'state-Accepted' : 'grey'}>{step}</Chip>
           ))}
@@ -133,48 +147,75 @@ export default function WbService({ opp, openBuilder }) {
             : onLegacyReview
               ? 'This opportunity runs on its single combined review.'
               : 'Approvals are raised on the proposal.'}{' '}
-          A change from the customer creates a revision rather than restarting the workflow.
+          Customer changes create a revision rather than restarting intake.
         </p>
       </div>
-      <div className="ana-card c-6">
-        <div className="ana-title">AI service identification <AiBadge label="AI suggestion" /></div>
-        <p style={{ fontSize: 12.5 }}>AI identified this opportunity as <b>Service</b>.</p>
-        <label style={{ fontSize: 12, display: 'block' }}>
-          Suggested offer path
-          <select value={offerMode} style={{ width: '100%' }} onChange={e => upd({ offerMode: e.target.value })}>
-            <option>Standard Rate Sheet</option>
-            <option>Customized Proposal</option>
-          </select>
-        </label>
-        <p className="hint">AI suggestion: {suggestedOffer}. Change it only if the scope requires another path.</p>
-
-        <div className="section-title" style={{ marginTop: 10 }}>What does this enquiry need?</div>
-        {REQUIREMENT_SOURCES.map(source => (
-          <div className="check-row" key={source}>
-            <input type="checkbox" checked={requirementSource.includes(source)} disabled={scopeConfirmed}
-              onChange={e => {
-                const next = e.target.checked
-                  ? [...requirementSource, source]
-                  : requirementSource.filter(item => item !== source)
-                upd({ requirementSource: next, offerMode: offerForSources(next) })
-              }} />
-            <span>{source}</span>
+      {focus === 'scope' && <>
+      <div className="ana-card c-8 service-decision-panel">
+        <div className="service-panel-heading">
+          <div><div className="service-panel-kicker">Decision required</div><div className="ana-title">AI service identification</div></div>
+          <AiBadge label="AI suggestion" />
+        </div>
+        <div className="service-decision-intro"><span className="service-decision-icon"><Icon name="sparkles" size={15} /></span><span>AI identified this opportunity as <b>Service</b>. Confirm the path that matches the customer’s actual scope.</span></div>
+        <div className="service-scope-controls">
+          <label className="service-field-label">Offer path
+            <select value={offerMode} disabled={scopeConfirmed} onChange={e => upd({ offerMode: e.target.value, offerPathSource: 'manual' })}>
+              <option>Standard Rate Sheet</option>
+              <option>Customized Proposal</option>
+            </select>
+          </label>
+          <div className="service-suggestion-note">AI suggestion: <b>{suggestedOffer}</b>. Change it only when the confirmed scope requires another path.</div>
+        </div>
+        <div className="service-requirement-block">
+          <div className="service-field-label">What does this enquiry need?</div>
+          <div className="service-requirement-options">
+            {REQUIREMENT_SOURCES.map(source => (
+              <label className={`service-requirement-option ${requirementSource.includes(source) ? 'is-selected' : ''}`} key={source}>
+                <input type="checkbox" checked={requirementSource.includes(source)} disabled={scopeConfirmed}
+                  onChange={e => {
+                    const next = e.target.checked
+                      ? [...requirementSource, source]
+                      : requirementSource.filter(item => item !== source)
+                    upd({ requirementSource: next, requirementSourceSource: 'manual', offerMode: offerForSources(next), offerPathSource: 'manual' })
+                  }} />
+                <span>{source}</span>
+              </label>
+            ))}
           </div>
-        ))}
-        <p className="hint">
-          A Statement of Work or an AMC is priced as a customised proposal; a plain site
-          visit is still rate-sheet work. Ticking a site visit or SoW raises the survey below.
-        </p>
-        <button className="primary" disabled={scopeConfirmed} onClick={confirmScope}>{scopeConfirmed ? 'Scope confirmed' : 'Confirm scope and offer path'}</button>
+          <p className="hint">SoW or AMC requires a customised proposal. A plain site visit remains rate-sheet work; selecting Site visit or SoW raises the survey below.</p>
+        </div>
+        <div className="service-decision-footer">
+          <span className={scopeConfirmed ? 'service-confirmed-copy' : 'hint'}>{scopeConfirmed ? 'Scope and offer path confirmed.' : 'Review the selection before locking the scope.'}</span>
+          <button className="primary" disabled={scopeConfirmed} onClick={confirmScope}>{scopeConfirmed ? 'Scope confirmed' : 'Confirm scope and offer path'}</button>
+        </div>
       </div>
-      {/* Diagram 02 §4 decides the lane before anything is priced: a standard
-          service comes off the rate sheet, a survey-led one off the SoW. */}
-      <SurveyPanel opp={opp} est={est} />
-      {/* Path A issues the published schedule on its own, pre-visit. Path B
-          prices a customised proposal instead and carries the same PDF as an
-          enclosure when that proposal is submitted. */}
-      {scopeConfirmed && offerMode === 'Standard Rate Sheet' && <RateSheetPanel opp={opp} est={est} />}
-      <div className="ana-card c-6">
+      <div className="ana-card c-4 service-lane-card">
+        <div className="service-panel-kicker">Current lane</div>
+        <div className="service-lane-value">{offerMode}</div>
+        <div className="service-lane-row"><span>Survey</span><Chip tone={est.surveyRequired ? 'state-Review' : 'grey'}>{est.surveyRequired ? 'Required' : 'Not raised'}</Chip></div>
+        <div className="service-lane-row"><span>Approval</span><Chip tone={exempt ? 'state-Accepted' : 'state-Review'}>{exempt ? 'Not required' : onLegacyReview ? 'Service Review' : '§5 proposal'}</Chip></div>
+        <p className="hint">This summary updates from the confirmed scope and stays visible while the estimate is prepared.</p>
+      </div>
+      </>}
+      {focus === 'scope' && scopeConfirmed && <SurveyPanel opp={opp} est={est} />}
+      {focus === 'offer' && <>
+        <div className="ana-card c-12 service-offer-context">
+          <div className="service-panel-kicker">Confirmed scope</div>
+          <div className="service-offer-context-row">
+            <div><b>{offerMode}</b><span>{requirementSource.length ? requirementSource.join(' · ') : 'No additional requirement source selected'}</span></div>
+            <Chip tone={est.surveyRequired ? 'state-Review' : 'state-Accepted'}>{est.surveyRequired ? 'Survey evidence required' : 'No survey required'}</Chip>
+          </div>
+          <p className="hint">Scope is locked. Complete the service estimate below, then prepare the rate schedule or proposal for this revision.</p>
+        </div>
+        {offerMode === 'Standard Rate Sheet' && <RateSheetPanel opp={opp} est={est} />}
+      </>}
+      {focus === 'offer' && scopeConfirmed && <>
+        {/* Diagram 02 §4 decides the lane before anything is priced: a standard
+            service comes off the rate sheet, a survey-led one off the SoW. */}
+        {/* Path A issues the published schedule on its own, pre-visit. Path B
+            prices a customised proposal instead and carries the same PDF as an
+            enclosure when that proposal is submitted. */}
+      <div className="ana-card c-6 service-estimate-panel">
         <div className="ana-title">Service estimate — inputs</div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 10 }}>
           <span className="hint">Rate sheet</span>
@@ -235,7 +276,7 @@ export default function WbService({ opp, openBuilder }) {
         )}
       </div>
 
-      <div className="ana-card c-6">
+      <div className="ana-card c-6 service-cost-panel">
         <div className="ana-title">Cost build-up ({rs.currency})</div>
         {comm ? (
           <table className="cost-table" style={{ width: '100%' }}>
@@ -268,6 +309,12 @@ export default function WbService({ opp, openBuilder }) {
           </div>
         )}
       </div>
+      </>}
+      {((focus === 'scope' && !scopeConfirmed) || (focus === 'offer' && !scopeConfirmed)) && <div className="ana-card c-12 service-next-step-card">
+        <div className="service-panel-kicker">Next step locked</div>
+        <div className="ana-title">Confirm the scope before preparing evidence or pricing</div>
+        <p className="hint">Return to Scope &amp; Survey and confirm the offer path before this work area can be completed.</p>
+      </div>}
     </div>
   )
 }

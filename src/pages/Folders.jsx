@@ -179,8 +179,8 @@ export default function Folders() {
           <span className="hint">
             One folder per opportunity, created automatically on intake submit.
             {spConnected
-              ? ' Deleting removes the tracker row — the SharePoint folder is moved to Not In Opp List, never deleted.'
-              : ' Deleting a folder also removes its tracker row.'}
+              ? ' SharePoint folders are retained as workspace records.'
+              : ' Opportunity records are retained in the workspace.'}
           </span>
         </div>
         {sections.map(({ label, opps, cls, pathStyle }) => (
@@ -191,15 +191,6 @@ export default function Folders() {
                 <div className="folder-card" key={o.id} onClick={() => nav(`/folders/${o.id}`)}
                   onMouseLeave={disarm(o.id)} title={o.oppName}>
                   <SyncPill sync={(store.spSync || {})[o.id]} style={{ position: 'absolute', top: 3, left: 3 }} />
-                  <DeleteButton id={o.id} armed={confirmDel === o.id} onArm={setConfirmDel}
-                    onDelete={() => {
-                      setConfirmDel(null)
-                      if (backend === 'supabase') cloud(() => filestore.removeOppPrefix(o.id))
-                      store.deleteOpportunity(o.id)
-                    }}
-                    title={spConnected
-                      ? `Delete ${o.id} — tracker row, proposal and local cache; its SharePoint folder is MOVED to 'Not In Opp List', never deleted`
-                      : `Permanently delete ${o.id} — folder, files, proposal AND its tracker row`} />
                   <FolderIcon cls={cls} pathStyle={pathStyle} />
                   <div className="fname">{o.id}</div>
                   <div className="fmeta">{o.sellTo}</div>

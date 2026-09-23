@@ -12,14 +12,16 @@ const fields = [
   ['Scope', 'opportunityScope'],
 ]
 
-export default function OpportunityComingSoon({ opp }) {
+export default function OpportunityComingSoon({ opp, created = false, onDismiss }) {
   return (
     <div className="page opportunity-coming-soon">
       <div className="opportunity-coming-soon-card" role="status" aria-live="polite">
         <span className="opportunity-coming-soon-kicker">{opp.oppType} opportunity</span>
-        <h1>Coming soon</h1>
+        <h1>{created ? 'Opportunity created' : 'Coming soon'}</h1>
         <p className="opportunity-coming-soon-message">
-          The workflow for this opportunity type is not available yet. This record is retained for pipeline visibility and will be enabled when the workflow is released.
+          {created
+            ? `The ${opp.oppType || opp.route || 'opportunity'} record is ready. Its workflow is not available yet, but the record is retained for pipeline visibility.`
+            : 'The workflow for this opportunity type is not available yet. This record is retained for pipeline visibility and will be enabled when the workflow is released.'}
         </p>
         <div className="opportunity-coming-soon-details">
           {fields.map(([label, key]) => (
@@ -29,7 +31,10 @@ export default function OpportunityComingSoon({ opp }) {
             </div>
           ))}
         </div>
-        <Link className="btn-secondary" to="/opportunities">Back to opportunities</Link>
+        <div className="opportunity-coming-soon-actions">
+          {created && onDismiss && <button className="btn-secondary" type="button" onClick={onDismiss}>Dismiss</button>}
+          <Link className="btn-secondary" to="/opportunities">Back to opportunities</Link>
+        </div>
       </div>
     </div>
   )

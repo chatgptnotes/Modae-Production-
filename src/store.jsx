@@ -29,6 +29,7 @@ import {
   orderedSparesProposalBom,
 } from './proposal/sparesBoq.js'
 import { releaseState, transitionBlockers } from './gates.js'
+import { supabaseConfigError } from './supabase.js'
 
 const StoreCtx = createContext(null)
 const CLARIFICATION_FIELD_KEYS = new Set([
@@ -182,7 +183,8 @@ function reconcileApprovedSubmissions(s) {
 
 export function StoreProvider({ children }) {
   const [state, setState] = useState(initialState)
-  const [liveSyncStatus, setLiveSyncStatus] = useState(() => datastore.dbEnabled() ? 'connecting' : 'offline')
+  const [liveSyncStatus, setLiveSyncStatus] = useState(() => supabaseConfigError ? 'config-error' : datastore.dbEnabled() ? 'connecting' : 'offline')
+  const [syncDiagnostics, setSyncDiagnostics] = useState({ normalizedOpportunityCount: null, legacyOpportunityCount: null })
   setRoleNameConfig(state.config)
   // Ref mirror so read APIs (getProposal) see same-tick mutations, not the render closure.
   const stateRef = useRef(state)
@@ -237,7 +239,10 @@ export function StoreProvider({ children }) {
           }))
         }
       })
-      .catch(e => console.warn('Supabase save failed — will retry on next change/focus:', e?.message))
+      .catch(e => {
+        setLiveSyncStatus('error')
+        console.warn('Supabase save failed — will retry on next change/focus:', e?.message)
+      })
   }
 
   // Boot fetch: server slices replace local synced ones (through migrate, so
@@ -252,7 +257,13 @@ export function StoreProvider({ children }) {
   // bootRef instead of lastSavedRef because we have not saved anything yet.
   const hydrate = async () => {
     const res = await datastore.loadAll()
-    if (!res || hydratedRef.current) return
+    if (!res) {
+      if (!supabaseConfigError) setLiveSyncStatus('error')
+      return
+    }
+    if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
+    setLiveSyncStatus('live')
+    if (hydratedRef.current) return
     if (res.empty) {
       const snap = syncedOf(stateRef.current)
       try {
@@ -331,7 +342,8 @@ export function StoreProvider({ children }) {
 
   // Focus refetch: pull server slices where this device has no unsaved edits.
   // Dirty local slices win until their debounced save lands.
-  const applyServer = slices => {
+  const applyServer = (slices, diagnostics = null) => {
+    if (diagnostics) setSyncDiagnostics(diagnostics)
     const s = stateRef.current
     const updates = {}
     const nextBaseline = { ...(s.leadSyncBaseline || {}) }
@@ -386,7 +398,13 @@ export function StoreProvider({ children }) {
       if (Date.now() - lastFetch < 10000) return
       lastFetch = Date.now()
       if (!hydratedRef.current) { hydrate(); return }
-      datastore.loadAll({ force: true }).then(res => { if (res && !res.empty) applyServer(res.slices) })
+      datastore.loadAll({ force: true })
+        .then(res => {
+          if (!res) { setLiveSyncStatus('error'); return }
+          if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
+          if (!res.empty) applyServer(res.slices, res.diagnostics)
+        })
+        .catch(() => setLiveSyncStatus('error'))
     }
     const onVisibility = () => { if (document.visibilityState === 'hidden') flushSaves() }
     // visibilitychange is not reliably delivered when the page is being torn
@@ -418,7 +436,10 @@ export function StoreProvider({ children }) {
         // Realtime means the database changed after the normal load cache was
         // populated, so this read must bypass the short-lived cache.
         datastore.loadAll({ force: true })
-          .then(res => { if (res && !res.empty) applyServer(res.slices) })
+          .then(res => {
+            if (res?.diagnostics) setSyncDiagnostics(res.diagnostics)
+            if (res && !res.empty) applyServer(res.slices, res.diagnostics)
+          })
           .catch(() => setLiveSyncStatus('reconnecting'))
       }, 80)
     }
@@ -2004,8 +2025,10 @@ export function StoreProvider({ children }) {
     async refreshSharedData() {
       if (!datastore.dbEnabled()) return false
       const res = await datastore.loadAll({ force: true })
+      if (!res) { setLiveSyncStatus('error'); return false }
       if (!res || res.empty) return false
-      applyServer(res.slices)
+      if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
+      applyServer(res.slices, res.diagnostics)
       return true
     },
 
@@ -2129,7 +2152,7 @@ export function StoreProvider({ children }) {
     return () => window.removeEventListener('focus', onFocus)
   }, [])
 
-  return <StoreCtx.Provider value={{ ...api, liveSyncStatus }}>{children}</StoreCtx.Provider>
+  return <StoreCtx.Provider value={{ ...api, liveSyncStatus, syncDiagnostics }}>{children}</StoreCtx.Provider>
 }
 
 export const useStore = () => useContext(StoreCtx)

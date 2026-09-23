@@ -7,10 +7,21 @@ const store = fs.readFileSync('src/store.jsx', 'utf8')
 
 test('Service flow uses one AI suggestion and one human confirmation', () => {
   assert.match(service, /AI service identification/)
-  assert.match(service, /Suggested offer path/)
+  assert.match(service, /Offer path/)
   assert.match(service, /Confirm scope and offer path/)
   assert.match(service, /Standard Rate Sheet/)
   assert.match(service, /Customized Proposal/)
+})
+
+test('Service Scope uses a decision-first operational layout', () => {
+  assert.match(service, /service-scope-grid/)
+  assert.match(service, /service-status-strip/)
+  assert.match(service, /service-decision-panel/)
+  assert.match(service, /service-lane-card/)
+  assert.match(service, /service-requirement-option/)
+  assert.match(service, /Customer changes create a revision/)
+  assert.match(service, /service-next-step-card/)
+  assert.match(service, /scopeConfirmed && <>/)
 })
 
 test('Service flow combines internal review and records one customer decision', () => {
@@ -268,6 +279,24 @@ test('the requirement source decides the lane, not the opportunity name', async 
   // Confirming the scope persists the field and derives the survey requirement.
   assert.match(wb, /requirementSource, scopeConfirmed: true/)
   assert.match(wb, /s === 'Site visit' \|\| s === 'SoW \/ Proposal'/)
+})
+
+test('CPP turbine service language preselects the site visit and customised scope', () => {
+  const wb = fs.readFileSync('src/workbench/WbService.jsx', 'utf8')
+  assert.match(wb, /method statement\|detailed scope\|complex\|diagnostic\|health assessment/)
+  assert.match(wb, /(loop checks\?|signal validation|replacement supervision|probe replacement|recommission)/)
+  assert.match(wb, /(site inspection|field service|inspection|turbine\.\*probe\.\*replacement)/)
+  assert.match(wb, /export const aiSourcesFor = opp =>/)
+  assert.match(wb, /export const suggestedOfferFor = opp => offerForSources\(aiSourcesFor\(opp\)\)/)
+})
+
+test('fresh AI scope replaces stale unconfirmed suggestions but preserves manual edits', () => {
+  const wb = fs.readFileSync('src/workbench/WbService.jsx', 'utf8')
+  assert.match(wb, /const inferredSources = aiSourcesFor\(opp\)/)
+  assert.match(wb, /est\.requirementSourceSource === 'manual'/)
+  assert.match(wb, /est\.offerPathSource === 'manual'/)
+  assert.match(wb, /requirementSourceSource: 'manual'/)
+  assert.match(wb, /offerPathSource: 'manual'/)
 })
 
 test('the site location picks the rate sheet', async () => {

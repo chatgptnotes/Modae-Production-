@@ -139,7 +139,8 @@ test('an exact Customer Master match overrides a stale inferred Blue lead class'
     ai: { fields: [{ k: 'Sell-to customer', v: 'Vedanta (Lanjigarh)' }] },
   }
   assert.equal(customerStatusForLead(lead, customers), 'Red')
-  assert.equal(customerStatusForLead({ ...lead, customerStatusOverride: 'Blue' }, customers), 'Blue')
+  assert.equal(customerStatusForLead({ ...lead, customerStatusOverride: 'Blue' }, customers), 'Red')
+  assert.equal(customerStatusForLead({ ...lead, sellTo: 'Vedanta', customerStatusOverride: 'Blue' }, customers), 'Red')
 })
 
 test('Register no longer stacks an unclearable duplicate blocker', () => {

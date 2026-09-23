@@ -122,6 +122,14 @@ async function fetchAll() {
     for (const [key, value] of Object.entries(business)) {
       if (value != null) slices[key] = value
     }
+    // Read legacy opportunities only for diagnostics. The normalized table
+    // remains authoritative; this never merges old rows back into the app.
+    const legacyOpportunities = await supabase
+      .from(TABLE)
+      .select('value')
+      .eq('key', 'opportunities')
+      .maybeSingle()
+    const legacyRows = Array.isArray(legacyOpportunities.data?.value) ? legacyOpportunities.data.value : []
     // Currency rates are normalized data, not part of the legacy app_state
     // blob. Keep a graceful fallback while the SQL migration is being run.
     const rates = await supabase.from('currency_rates').select('currency_code, rate_to_inr').eq('is_active', true)
@@ -167,9 +175,22 @@ async function fetchAll() {
       }))
     }
     const hasBusinessData = Object.values(business).some(value => Array.isArray(value) ? value.length > 0 : Object.keys(value || {}).length > 0)
-    return { empty: (!data || data.length === 0) && !settings.data?.length && !rates.data?.length && !priceLists.data?.length && !hasBusinessData, slices }
+    return {
+      empty: (!data || data.length === 0) && !settings.data?.length && !rates.data?.length && !priceLists.data?.length && !hasBusinessData,
+      slices,
+      diagnostics: {
+        normalizedOpportunityCount: Array.isArray(business.opportunities) ? business.opportunities.length : 0,
+        legacyOpportunityCount: legacyRows.length,
+      },
+    }
   } catch (e) {
-    console.warn('Supabase load failed — staying on localStorage:', e?.message)
+    console.warn('Supabase load failed — staying on localStorage:', {
+      message: e?.message,
+      code: e?.code,
+      details: e?.details,
+      hint: e?.hint,
+      status: e?.status,
+    })
     return null
   }
 }
@@ -270,7 +291,19 @@ async function loadBusinessTables() {
     supabase.from('approvals').select('id, data, rev').is('deleted_at', null),
     supabase.from('records').select('entity, id, data, rev').is('deleted_at', null).in('entity', ['proposals', 'spares_lines', 'clarifications', 'audit']),
   ])
-  if (tables.some(result => result.error)) return {}
+  const failedTables = tables
+    .map((result, index) => result.error ? { index, error: result.error } : null)
+    .filter(Boolean)
+  if (failedTables.length) {
+    console.warn('Supabase normalized table load failed:', failedTables.map(({ index, error }) => ({
+      table: ['leads', 'opportunities', 'approvals', 'records'][index],
+      message: error?.message,
+      code: error?.code,
+      details: error?.details,
+      hint: error?.hint,
+    })))
+    return {}
+  }
   const records = tables[3].data || []
   opportunityRevisions.clear()
   opportunityRecords.clear()

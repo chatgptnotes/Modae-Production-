@@ -11,6 +11,7 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8')
 const source = read('src/pages/IntakeForm.jsx')
 const editor = read('src/OpportunityDetailsEditor.jsx')
 const styles = read('src/styles.css')
+const workbench = read('src/pages/Workbench.jsx')
 const bodyStart = source.indexOf('export default function IntakeForm')
 
 // A component declared inside the render body is a new element type on every
@@ -95,4 +96,11 @@ test('opportunity editor supports multi-select solutions and legacy values', () 
 test('opportunity checkbox controls are not stretched into full-size fields', () => {
   assert.match(styles, /opportunity-details-grid input:not\(\[type=checkbox\]\)/)
   assert.doesNotMatch(styles, /\.opportunity-details-grid input, \.opportunity-details-grid select/)
+})
+
+test('new opportunities open the route-aware workspace with a creation handoff', () => {
+  assert.match(source, /nav\(`\/opp\/\$\{id\}\?created=1`\)/)
+  assert.match(workbench, /CreatedOpportunityPanel/)
+  assert.match(workbench, /searchParams\.get\('created'\) === '1'/)
+  assert.match(workbench, /createdNotice && <CreatedOpportunityPanel/)
 })
