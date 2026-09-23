@@ -3,7 +3,7 @@ import { effectiveRate } from '../utils.js'
 import { currencySymbol } from '../currency.js'
 import { BUILT_IN_PROPOSAL_TEMPLATES, proposalTemplateLane } from './templateRegistry.js'
 import { customerLocationValue, isPlaceholderLocation } from '../locations.js'
-import { MODAE_COLORS, MODAE_DOCUMENT_STANDARDS } from '../branding/modae.js'
+import { MODAE_DOCUMENT_STANDARDS } from '../branding/modae.js'
 
 const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 const LOGO_URL = new URL('../../branding/mod-ae/assets/modae-official-logo.png', import.meta.url).href
@@ -84,7 +84,7 @@ function clearPlaceholderLocations(worksheet) {
 
 function applyTaglineBranding(workbook) {
   const tagline = MODAE_DOCUMENT_STANDARDS.header.tagline
-  const argb = `FF${MODAE_COLORS.primary.slice(1).toUpperCase()}`
+  const argb = 'FF3333FF'
   for (const worksheet of workbook.worksheets) worksheet.eachRow(row => row.eachCell(cell => {
     if (cellText(cell.value).trim() !== tagline) return
     cell.font = { ...(cell.font || {}), color: { type: 'argb', argb } }

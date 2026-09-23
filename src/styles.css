@@ -5396,7 +5396,7 @@ button.install:hover { background: var(--primary-hover); }
 .doc-pagehead .ph-brand { display: inline-flex; align-items: center; gap: 6px; }
 .doc-pagehead .ph-brand .modae-image-logo { height: 20px; max-width: 86px; }
 .doc-pagehead .ph-meta { display: inline-flex; align-items: center; gap: 14px; text-align: right; }
-.doc-pagehead .ph-tagline { font-size: 11px; font-weight: 600; color: var(--color-primary); }
+.doc-pagehead .ph-tagline { font-size: 11px; font-weight: 600; color: #3333FF; }
 .doc-pagefoot {
   display: flex; justify-content: space-between; gap: 12px;
   border-top: 1px solid var(--border-soft); padding-top: 5px; margin-top: 18px;
@@ -5408,7 +5408,7 @@ button.install:hover { background: var(--primary-hover); }
 .doc-lh-brand { display: inline-flex; align-items: center; gap: 10px; line-height: 1.15; }
 .doc-lh-brand i { font-style: italic; font-size: 11px; font-weight: 600; color: var(--primary-deep); }
 .doc-lh-right { text-align: right; font-size: 9.5px; color: var(--text-muted); line-height: 1.5; }
-.doc-lh-right i { font-style: normal; font-size: 11px; font-weight: 600; color: var(--color-primary); }
+.doc-lh-right i { font-style: normal; font-size: 11px; font-weight: 600; color: #3333FF; }
 .doc-lh-right b { display: block; font-size: 11.5px; color: var(--text-main); margin-bottom: 1px; }
 .doc-official-footer {
   display: flex; flex-direction: column; gap: 1px; margin-top: 18px; padding-top: 7px;
