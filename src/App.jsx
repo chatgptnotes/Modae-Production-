@@ -229,6 +229,7 @@ function SyncNotice({ status, diagnostics }) {
   const legacyOnly = status === 'live' && diagnostics?.normalizedOpportunityCount === 0 && diagnostics?.legacyOpportunityCount > 0
   const emptyWorkspace = status === 'live' && diagnostics?.normalizedOpportunityCount === 0 && diagnostics?.legacyOpportunityCount === 0
   const healthy = status === 'live' && !legacyOnly && !emptyWorkspace
+  if (healthy) return null
   const stateLabel = healthy ? 'Shared workspace' : legacyOnly ? 'Migration required' : emptyWorkspace ? 'Shared workspace is empty' : status === 'connecting' ? 'Connecting to shared workspace' : status === 'reconnecting' ? 'Reconnecting to shared workspace' : config ? 'Supabase configuration mismatch' : 'Supabase sync unavailable'
   return (
     <div className={`workspace-sync-notice workspace-sync-notice-${healthy ? 'live' : 'warning'}`} role={healthy ? 'status' : 'alert'} title={supabaseProjectRef ? `Supabase project: ${supabaseProjectRef}` : undefined}>
