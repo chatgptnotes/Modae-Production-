@@ -1,11 +1,10 @@
 import React, { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { OWNERS, AI_PROVIDERS, MILESTONES } from '../seed.js'
+import { OWNERS, MILESTONES } from '../seed.js'
 import { isAdminRole, canSeePage, displayRoleLabel } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { Chip, WarnBox, Modal, DemoDataControls } from '../ui.jsx'
-import { saveAiKey, testConnection, usesVercelAi } from '../ai.js'
 import * as sp from '../sharepoint.js'
 import { uploadAdminTemplate } from '../filestore.js'
 import { putFiles } from '../leadBlobs.js'
@@ -340,18 +339,12 @@ export default function Admin() {
   const canEdit = isAdminRole(role) || role === 'LJS'
   const config = store.config || {}
   const uploads = config.uploads || {}
-  const ai = config.aiModel || {}
+  // Manual AI model selection is not exposed in Admin yet. Template mapping
+  // still receives the routine model hint; the server applies its own routing.
+  const provider = 'Google'
+  const model = 'gemini-3.1-flash-lite'
+  const customModel = ''
 
-  // AI model card — local draft, committed via saveAiModel.
-  const [provider, setProvider] = useState(ai.provider || 'Google')
-  const [model, setModel] = useState(ai.model || 'gemini-3.6-flash')
-  const [customModel, setCustomModel] = useState(ai.customModel || '')
-  const [endpoint, setEndpoint] = useState(ai.endpoint || '')
-  const [apiKey, setApiKey] = useState('')
-  const [testing, setTesting] = useState(false)
-  const [testResult, setTestResult] = useState(null) // null | { ok, model, ms }
-  const [savingAi, setSavingAi] = useState(false)
-  const [saveResult, setSaveResult] = useState(null)
 
   // Uploads card drafts.
   const [supplier, setSupplier] = useState('')
@@ -383,31 +376,6 @@ export default function Admin() {
         </div>
       </div>
     )
-  }
-
-  const saveAi = async () => {
-    setSaveResult(null)
-    setTestResult(null)
-    setSavingAi(true)
-    try {
-      if (provider !== FALLBACK_PROVIDER && apiKey && !usesVercelAi()) await saveAiKey(apiKey, role)
-      store.saveAiModel({ provider, model: provider === FALLBACK_PROVIDER ? '' : model, customModel, endpoint,
-        configured: provider === FALLBACK_PROVIDER || ai.configured || Boolean(apiKey) })
-      setApiKey('')
-      setSaveResult({ ok: true, message: 'AI configuration saved securely.' })
-    } catch (e) {
-      setSaveResult({ ok: false, message: String((e && e.message) || e) })
-    } finally {
-      setSavingAi(false)
-    }
-  }
-  // Real round-trip through the Vercel /api/ai proxy to the model.
-  const testAi = async () => {
-    setTesting(true); setTestResult(null)
-    const res = await testConnection(isCustomModel(model) ? customModel : model)
-    setTesting(false)
-    setTestResult(res)
-    if (res.ok) store.saveAiModel({ ...ai, provider, model, customModel, endpoint, configured: true })
   }
 
   const patchList = (listKey, i, itemPatch) =>
@@ -523,7 +491,7 @@ export default function Admin() {
   const amber = config.amberFee || {}
   const healthyConnectors = (config.connectors || []).filter(item => item.state === 'Healthy' || item.state === 'Connected').length
   const configuredTemplates = proposalTemplates.filter(item => item.status === 'Current').length
-  const aiStatus = provider === FALLBACK_PROVIDER ? 'Built-in fallback' : ai.configured ? 'Proxy configured' : 'Not configured'
+  const aiStatus = 'Automatic routing'
 
   const unlockDemoControls = event => {
     event.preventDefault()
@@ -1045,65 +1013,27 @@ export default function Admin() {
         <div className="admin-card admin-card-wide">
           <h3>
             <Icon name="sparkles" size={14} /> AI model configuration
-            <span className="h3-end">
-              {provider === FALLBACK_PROVIDER
-                ? <Chip tone="state-Review">Built-in fallback</Chip>
-                : testResult?.ok
-                ? <Chip tone="state-Accepted">Proxy reachable</Chip>
-                : ai.configured
-                  ? <Chip tone="state-Accepted">Proxy configured</Chip>
-                  : <Chip tone="grey">Proxy not configured</Chip>}
-            </span>
+            <span className="h3-end"><Chip tone="grey">Coming soon</Chip></span>
           </h3>
           <p className="hint">
-            Chooses which model powers lead extraction, tender parsing, clarification suggestions and
-            email drafting. Calls go through the server-side Vercel <code>/api/ai</code> proxy — the API
-            key lives in Vercel's environment and never reaches this browser.
-            {ai.updatedBy ? <> Active: <b>{ai.provider} — {isCustomModel(ai.model) ? (ai.customModel || '(model id not set)') : ai.model}</b> · set by {ai.updatedBy} on {ai.updatedOn}</> : null}
+            Manual model selection is coming soon. AI is currently managed automatically through the
+            server-side Vercel <code>/api/ai</code> proxy; the API key never reaches this browser.
           </p>
           <div className="admin-field-grid">
-            <label className="afield">Provider
-              <select value={provider} disabled={!canEdit}
-                onChange={e => { setProvider(e.target.value); setModel('') }}>
-                <option value="">Select a provider…</option>
-                {Object.keys(AI_PROVIDERS).map(p => <option key={p}>{p}</option>)}
-              </select>
+            <label className="afield">Routine model
+              <input value="gemini-3.1-flash-lite" disabled readOnly />
             </label>
-            <label className="afield">Model
-              <select value={model} disabled={!canEdit || !provider} onChange={e => setModel(e.target.value)}>
-                <option value="">{provider === FALLBACK_PROVIDER ? 'Not used with fallback' : provider ? 'Select a model…' : 'Choose a provider first'}</option>
-                {(AI_PROVIDERS[provider] || []).map(m => <option key={m}>{m}</option>)}
-              </select>
+            <label className="afield">Complex-task model
+              <input value="gemini-2.5-flash" disabled readOnly />
             </label>
-            {!usesVercelAi() && <label className="afield">Gemini API key
-              <input type="password" value={apiKey} disabled={!canEdit || savingAi || provider === FALLBACK_PROVIDER}
-                autoComplete="new-password" placeholder={ai.configured ? 'Saved securely' : 'Paste Gemini API key'}
-                onChange={e => setApiKey(e.target.value)} />
-            </label>}
           </div>
           <div className="admin-actions admin-actions-end">
-            <button className="primary" disabled={!canEdit || savingAi} onClick={saveAi}>Save configuration</button>
-            <button disabled={!canEdit || testing || savingAi || provider === FALLBACK_PROVIDER} onClick={testAi}>
-              <Icon name="play" size={11} /> Test connection
-            </button>
+            <button className="primary" disabled>Save configuration</button>
+            <button disabled><Icon name="play" size={11} /> Test connection</button>
           </div>
-          {savingAi && <p className="hint">Saving AI configuration securely…</p>}
-          {saveResult?.ok && <div className="okbox">{saveResult.message}</div>}
-          {saveResult && !saveResult.ok && <div className="errbox">{saveResult.message}</div>}
-          {testing && <p className="hint">Calling the model through the proxy…</p>}
-          {testResult?.ok && (
-            <div className="okbox">
-              Connection OK — <b>{testResult.model}</b> responded in {testResult.ms} ms.
-            </div>
-          )}
-          {testResult && !testResult.ok && (
-            <div className="errbox">
-              {testResult.error || 'No response.'} {usesVercelAi() ? <>Check the Vercel Production <code>GEMINI_API_KEY</code> and redeploy.</> : <>Check that the configured AI function is deployed.</>}
-              <code> GEMINI_API_KEY</code> is set in its secrets — details are in the browser console.
-            </div>
-          )}
           <WarnBox>
-            For Built-in fallback, no key is required. AI credentials are stored server-side and are never returned to this page.
+            Routine tasks use <b>gemini-3.1-flash-lite</b>. Complex proposal, tender, template, and
+            approval-evidence tasks use <b>gemini-2.5-flash</b> automatically.
           </WarnBox>
         </div>
 

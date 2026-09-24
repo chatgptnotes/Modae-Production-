@@ -1,16 +1,20 @@
+import { createClient } from '@supabase/supabase-js'
+
 // Vercel Gemini proxy for the browser AI contract.
 // GEMINI_API_KEY is read only on the server. Never expose it through VITE_.
 
 const API = 'https://generativelanguage.googleapis.com/v1beta/models'
-const DEFAULT_MODEL = 'gemini-3.6-flash'
+const DEFAULT_MODEL = 'gemini-3.1-flash-lite'
+const COMPLEX_MODEL = 'gemini-2.5-flash'
+const COMPLEX_TASKS = new Set(['approval.condition-evidence', 'proposal.review', 'template.map', 'tender.extract'])
 const MODEL_ALIASES = {
-  'gemini-pro': DEFAULT_MODEL,
-  'gemini-pro-latest': DEFAULT_MODEL,
+  'gemini-pro': COMPLEX_MODEL,
+  'gemini-pro-latest': COMPLEX_MODEL,
 }
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'content-type',
+  'Access-Control-Allow-Headers': 'content-type, authorization',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
@@ -25,6 +29,46 @@ const fail = (res, status, errorCode, error) =>
   send(res, status, { ok: false, errorCode, error })
 
 const cap = (value, max) => String(value ?? '').slice(0, max)
+const MAX_REQUEST_CHARS = 350000
+const RATE_WINDOW_MS = 10 * 60 * 1000
+const RATE_LIMIT = 40
+const rateBuckets = new Map()
+
+const authClient = () => {
+  const url = String(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim()
+  const key = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim()
+  if (!/^https?:\/\/.+/i.test(url) || !key) return null
+  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
+}
+
+async function authenticate(req) {
+  const token = String(req.headers?.authorization || '').replace(/^Bearer\s+/i, '').trim()
+  if (!token) return { error: [401, 'AI_AUTH_REQUIRED', 'A signed-in application session is required.'] }
+  if (process.env.NODE_ENV === 'test' && token === 'test-token') return { user: { id: 'test-user' } }
+  const client = authClient()
+  if (!client) return { error: [503, 'AI_AUTH_UNAVAILABLE', 'AI authentication is not configured on the server.'] }
+  try {
+    const { data, error } = await client.auth.getUser(token)
+    if (error || !data?.user?.id) return { error: [401, 'AI_AUTH_INVALID', 'The application session is invalid or expired.'] }
+    return { user: data.user }
+  } catch (error) {
+    console.error('AI session verification failed', error?.message || error)
+    return { error: [502, 'AI_AUTH_FAILED', 'The application session could not be verified.'] }
+  }
+}
+
+function allowRequest(userId, ip) {
+  const now = Date.now()
+  const key = `${userId}:${ip || 'unknown'}`
+  const current = rateBuckets.get(key)
+  if (!current || now - current.startedAt >= RATE_WINDOW_MS) {
+    rateBuckets.set(key, { startedAt: now, count: 1 })
+    return true
+  }
+  if (current.count >= RATE_LIMIT) return false
+  current.count += 1
+  return true
+}
 
 const HOUSE = `
 You are the extraction and drafting engine inside WinTrack, the sales system of
@@ -785,6 +829,11 @@ export default async function handler(req, res) {
   }
   if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'POST only' })
 
+  const auth = await authenticate(req)
+  if (auth.error) return fail(res, ...auth.error)
+  const ip = String(req.headers?.['x-forwarded-for'] || req.headers?.['x-real-ip'] || '').split(',')[0].trim()
+  if (!allowRequest(auth.user.id, ip)) return fail(res, 429, 'AI_RATE_LIMITED', 'Too many AI requests. Please wait a few minutes and try again.')
+
   const key = String(process.env.GEMINI_API_KEY || '').trim()
   if (!key) return fail(res, 503, 'AI_KEY_MISSING', 'Gemini is not configured for this Vercel environment')
 
@@ -793,11 +842,17 @@ export default async function handler(req, res) {
   catch { return fail(res, 400, 'AI_BAD_REQUEST', 'Malformed request body') }
   const task = String(input.task || '')
   const payload = input.payload || {}
+  if (JSON.stringify(input).length > MAX_REQUEST_CHARS) {
+    return fail(res, 413, 'AI_PAYLOAD_TOO_LARGE', 'The document or request is too large for AI processing.')
+  }
   const structuredTasks = new Set(['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'reply.classify', 'tender.extract', 'location.search'])
   const requestedModel = String(input.model || '')
-  const model = /^gemini-[\w.-]+$/.test(requestedModel)
+  const requested = /^gemini-[\w.-]+$/.test(requestedModel)
     ? (MODEL_ALIASES[requestedModel] || requestedModel)
     : DEFAULT_MODEL
+  // Routine high-volume work always uses the budget model. Complex document
+  // reasoning is routed to the stronger model regardless of the client picker.
+  const model = task === 'health' ? requested : COMPLEX_TASKS.has(task) ? COMPLEX_MODEL : DEFAULT_MODEL
   if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'lead.clarify', 'email.clarification', 'email.followup', 'reply.classify', 'tender.extract', 'location.search'].includes(task)) {
     return fail(res, 400, 'AI_BAD_REQUEST', `Unsupported task: ${task}`)
   }
@@ -827,6 +882,7 @@ export default async function handler(req, res) {
     contents: [{ parts: [{ text: prompt }, ...(['lead.extract', 'approval.condition-evidence', 'kyc.extract'].includes(task) ? inlineParts(payload) : [])] }],
     generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'reply.classify', 'tender.extract', 'location.search'].includes(task)
       ? {
+          maxOutputTokens: task === 'health' ? 8 : 2048,
           responseMimeType: 'application/json',
           responseSchema: task === 'lead.fill' ? fillSchema
             : task === 'vendor.quote' ? vendorQuoteSchema
@@ -846,7 +902,7 @@ export default async function handler(req, res) {
                               : task === 'location.search' ? locationSearchSchema
                 : leadSchema,
         }
-      : {},
+      : { maxOutputTokens: 8 },
   }
 
   try {

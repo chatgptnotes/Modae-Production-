@@ -248,7 +248,9 @@ export function migrate(s) {
     const { keySet, keyMasked, ...rest } = s.config.aiModel
     s.config.aiModel = rest
   }
-  if (!s.config.aiModel.model || /^gemini-(pro|flash)$/.test(s.config.aiModel.model) || s.config.aiModel.model === 'gemini-3.6-flash') {
+  if (!s.config.aiModel.model
+    || /^gemini-(pro|flash)$/.test(s.config.aiModel.model)
+    || ['gemini-2.5-flash-lite', 'gemini-3.6-flash'].includes(s.config.aiModel.model)) {
     s.config.aiModel = { ...seedConfig.aiModel, ...s.config.aiModel, ...{ provider: 'Google', model: seedConfig.aiModel.model } }
   }
   if (!s.kyc) s.kyc = demo ? seedKyc : {}

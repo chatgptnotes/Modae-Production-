@@ -9,6 +9,8 @@
 //   const ai = await runTask('lead.extract', payload)
 //   const result = ai ?? deterministicParse(...)
 
+import { supabaseAuth } from './supabase.js'
+
 // AI always goes through the same-origin Vercel function. Never add a
 // browser-side Gemini key or an alternate Supabase function URL.
 const AI_URL = '/api/ai'
@@ -17,17 +19,30 @@ export const usesVercelAi = () => true
 export const aiEnabled = () => !!AI_URL
 
 const DEFAULT_TIMEOUT = 45000
+const inflight = new Map()
+const requestKey = (task, payload, model) => {
+  try { return `${task}:${model || ''}:${JSON.stringify(payload)}` }
+  catch { return `${task}:${model || ''}:${String(payload)}` }
+}
 
 // → { data } | { text } from the function, or null. Never throws.
 export async function runTaskResult(task, payload = {}, { timeoutMs = DEFAULT_TIMEOUT, model, fallback = false } = {}) {
   if (fallback) return { data: null, errorCode: 'AI_FALLBACK_ENABLED', error: 'Built-in fallback is selected' }
+  const key = requestKey(task, payload, model)
+  if (inflight.has(key)) return inflight.get(key)
+  const request = (async () => {
   const ctl = new AbortController()
   const timer = setTimeout(() => ctl.abort(), timeoutMs)
   try {
     const body = { task, payload, model }
+    const { data: session } = await supabaseAuth?.getSession?.() || { data: null }
+    const accessToken = session?.session?.access_token
     const { data, error, errorCode } = await fetch(AI_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
       body: JSON.stringify(body),
       signal: ctl.signal,
     }).then(async response => {
@@ -46,6 +61,10 @@ export async function runTaskResult(task, payload = {}, { timeoutMs = DEFAULT_TI
   } finally {
     clearTimeout(timer)
   }
+  })()
+  inflight.set(key, request)
+  request.finally(() => inflight.delete(key)).catch(() => {})
+  return request
 }
 
 export async function runTask(task, payload = {}, options = {}) {

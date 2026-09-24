@@ -7,6 +7,11 @@ This is an implementation and release log, not a dump of every commit.
 
 - Continue recording meaningful schema, workflow, deployment, and architectural
   changes before they are pushed.
+- Protected the Gemini proxy with Supabase Auth, added request-size and rate
+  limits, deduplicated concurrent browser requests, and removed the example
+  Gemini credential from `.env.example`.
+- Routed routine AI work to `gemini-3.1-flash-lite` and reserved
+  `gemini-2.5-flash` for complex document reasoning tasks.
 
 ## [2026-09-24]
 

@@ -53,6 +53,15 @@ GEMINI_API_KEY=...           # Vercel server-side variable
 # The SPA calls the same-origin Vercel route; no AI URL override is required.
 ```
 
+The /api/ai route requires a valid Supabase Auth session, so the server must
+also have SUPABASE_SERVICE_ROLE_KEY configured. The browser sends only the
+short-lived Supabase access token; it never receives the Gemini key. The route
+also rejects oversized requests and applies a per-user rate limit to control
+unexpected document-processing spend.
+
+Routine tasks use `gemini-3.1-flash-lite`; complex proposal, tender, template,
+and approval-evidence tasks are automatically routed to `gemini-2.5-flash`.
+
 With no key the function returns 503 and the app falls back to its deterministic
 parsers rather than erroring — fine for a preview, not for the client's build.
 
@@ -61,6 +70,10 @@ applies environment-variable changes only to new deployments. On the deployed
 app, use **Admin → AI model configuration → Test connection**. It must report
 a model and response time before lead extraction is expected to scan email
 bodies or attachments.
+
+Add a replacement GEMINI_API_KEY separately to Production and Staging/Preview
+as needed. Never place it in .env.example, a VITE_ variable, source code, or
+chat.
 
 ### Customer quote email
 
