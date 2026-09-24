@@ -12,6 +12,10 @@ This is an implementation and release log, not a dump of every commit.
 
 ### Changed
 
+- Rebuilt the B&K and Metrix catalogue modules from the supplied workbooks;
+  sourcing now tolerates harmless part-number formatting differences, keeps
+  AI alternatives unconfirmed until a human accepts them, and consolidates
+  duplicate customer-reference rows.
 - Locked runtime Supabase access to the six production tables:
   `ai_secrets`, `approvals`, `leads`, `opportunities`, `records`, and `user_files`.
 - Updated admin user loading to use the `records` state row instead of the old

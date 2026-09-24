@@ -282,7 +282,7 @@ export const seedFiles = {
 // migrate() compares this against the saved state's `catalogRev` and folds in
 // the new rows once, so an existing browser session picks up catalogue
 // additions without a full "Reset demo data" wipe.
-export const seedCatalogRev = 2
+export const seedCatalogRev = 3
 
 // B&K (BNK) price list — base parts plus configurable adders (EUR).
 // Catalogue rows converted from the supplier workbooks by
@@ -301,7 +301,7 @@ const withImported = (curated, imported) => {
 
 export const seedPriceLists = {
   BNK: {
-    currency: 'EUR', version: '2026-01', uploaded: '2026-01-05',
+    currency: 'EUR', version: 'Imported-2026-09', uploaded: '2026-09-24',
     parts: withImported([
       { pn: 'RK16-BASE', desc: '16-slot base rack chassis', price: 2000, adders: [
         { code: 'CE', desc: 'CE mark', price: 110 },
@@ -311,7 +311,6 @@ export const seedPriceLists = {
         { code: 'L-EXT', desc: 'Extended length >110mm', price: 98 },
       ]},
       { pn: 'AGSC-51-4-CAB', desc: 'Air gap sensor w/ cable', price: 1300, adders: [] },
-      { pn: 'EC-05', desc: 'Extension cable 5m', price: 105, adders: [] },
       { pn: 'EC-10', desc: 'Extension cable 10m', price: 148, adders: [] },
       { pn: 'VC-8000/RCK', desc: 'VC-8000 rack', price: 2175, adders: [] },
       { pn: 'VC-8000/RCM', desc: 'VC-8000 rack condition monitor', price: 950, adders: [] },
@@ -322,15 +321,7 @@ export const seedPriceLists = {
       { pn: 'CMS-TAG-5000', desc: 'CMS software license — 5000 tags', price: 31900, adders: [] },
       { pn: 'CMS-PI-IF', desc: 'AVEVA PI interface', price: 3300, adders: [] },
       { pn: 'CMS-VIS', desc: 'Visualization license (per seat)', price: 1100, adders: [] },
-      { pn: 'VC-8000/DSM', desc: 'VC-8000 dynamic signal module, 4-channel', price: 3950, adders: [
-        { code: 'ISO', desc: 'Channel isolation option', price: 240 },
-      ]},
-      { pn: 'VC-8000/PSU', desc: 'VC-8000 redundant power supply, 24 VDC', price: 1480, adders: [] },
       { pn: 'RK16-DR', desc: '16-slot rack door w/ viewing window', price: 620, adders: [] },
-      { pn: 'DS-1000-PROX', desc: '8mm proximity probe, 5m integral cable', price: 745, adders: [
-        { code: 'ARM', desc: 'Armoured cable variant', price: 120 },
-      ]},
-      { pn: 'DS-1000-DRV', desc: 'Proximity driver / oscillator-demodulator', price: 690, adders: [] },
       { pn: 'AGSC-51-8-CAB', desc: 'Air gap sensor w/ cable, 8m', price: 1520, adders: [] },
       { pn: 'MMS-6210', desc: 'Dual-channel axial displacement monitor', price: 2340, adders: [] },
       { pn: 'MMS-6350', desc: 'Shaft speed / key phasor monitor module', price: 1980, adders: [] },
@@ -392,8 +383,8 @@ export const seedPriceLists = {
   // Metrix Instrument Co. machinery-protection range (USD list, ex-Houston).
   // ⚠ PLACEHOLDER PRICES — demo data only; confirm against the current
   // Metrix distributor price file before quoting.
-  Metrics: {
-    currency: 'USD', version: '2026-03', uploaded: '2026-03-12',
+  Metrix: {
+    currency: 'USD', version: 'Imported-2026-09', uploaded: '2026-09-24',
     parts: withImported([
       { pn: 'MX-2110', price: 640, adders: [
         { code: 'API', desc: 'API 670 certification pack', price: 95 },
@@ -428,79 +419,31 @@ export const seedPriceLists = {
         keywords: ['calibration', 'certificate', 'nist'] },
     ], METRIX_IMPORTED_PARTS),
   },
-  // Meggitt Sensing Systems (Vibro-Meter + Wilcoxon) — the retrofit spares most
-  // state-utility tenders ask for against an installed Meggitt system.
-  //
-  // ⚠ PLACEHOLDER PRICES. These are plausible net dealer figures used so the
-  // demo produces a coherent priced BoQ; replace every `price` here with the
-  // real supplier quote before any of this goes to a customer.
-  //
-  // `keywords` feed matchParts' tier-4 description match, for tender lines that
-  // carry a specification but no part number.
+  // Meggitt remains available for opportunities whose installed system is
+  // explicitly Meggitt. It is not an active replacement source for B&K lines;
+  // the supplied B&K and Metrix workbooks are the active imported catalogues.
   Meggitt: {
     currency: 'EUR', version: '2026-02', uploaded: '2026-02-14',
     parts: [
-      { pn: '786A', price: 210, adders: [],
-        desc: 'Wilcoxon 786A general-purpose accelerometer, 100 mV/g ±5%, top-exit MIL-C-5015 connector, 100 Ω, −50…+150 °C',
-        keywords: ['accelerometer', '100 mv/g', 'mil-c-5015'] },
-      { pn: 'J9T2A-A2A-050', price: 78, adders: [],
-        desc: 'Armoured cable assembly, 5 m, moisture-resistant MIL-C-5015 socket to blunt cut',
-        keywords: ['armoured', 'cable', '5015', 'moisture'] },
-      { pn: 'XPR04-5.0-U-S-1-0-0-0-70', price: 430, adders: [],
-        desc: 'Vibro-Meter XPR04 key phasor / proximity probe, 8 mm tip, 5 m integral cable, standard version',
-        keywords: ['key phasor', 'keyphasor', 'proximity probe', 'xpr04'] },
-      { pn: 'XED04-U-0-0', price: 360, adders: [],
-        desc: 'Vibro-Meter XED04 driver / signal conditioner, 7.87 mV/µm, 5 m system, standard version',
-        keywords: ['driver', 'signal conditioner', 'xed04'] },
-      { pn: '786A-M12', price: 235, adders: [],
-        desc: 'Wilcoxon 786A accelerometer, 100 mV/g, M12 side-exit connector variant',
-        keywords: ['accelerometer', 'm12', '100 mv/g'] },
-      { pn: '793L-3', price: 340, adders: [],
-        desc: 'Wilcoxon 793L low-frequency accelerometer, 500 mV/g, hydro / slow-speed machines',
-        keywords: ['accelerometer', 'low frequency', '500 mv/g', 'hydro'] },
-      { pn: 'PC420VP-10', price: 395, adders: [],
-        desc: 'Wilcoxon PC420 loop-powered vibration transmitter, 4-20 mA, 0-1 in/s RMS',
-        keywords: ['transmitter', '4-20ma', 'loop powered'] },
-      { pn: 'J9T2A-A2A-100', price: 124, adders: [],
-        desc: 'Armoured cable assembly, 10 m, moisture-resistant MIL-C-5015 socket to blunt cut',
-        keywords: ['armoured', 'cable', '10m', '5015'] },
-      { pn: 'J9T2A-A2A-200', price: 196, adders: [],
-        desc: 'Armoured cable assembly, 20 m, moisture-resistant MIL-C-5015 socket to blunt cut',
-        keywords: ['armoured', 'cable', '20m'] },
-      { pn: 'CA134', price: 88, adders: [],
-        desc: 'Vibro-Meter CA134 extension cable, 5 m, for XPR/XED probe systems',
-        keywords: ['extension cable', 'ca134'] },
-      { pn: 'XPR04-1.0-U-S-1-0-0-0-70', price: 385, adders: [],
-        desc: 'Vibro-Meter XPR04 proximity probe, 8 mm tip, 1 m integral cable, standard version',
-        keywords: ['proximity probe', 'xpr04', '1m'] },
-      { pn: 'TQ402-A', price: 620, adders: [],
-        aliases: ['TQ402'],
-        desc: 'Vibro-Meter TQ402 signal conditioner for piezo accelerometers, DIN-rail',
-        keywords: ['signal conditioner', 'tq402', 'charge amplifier'] },
-      { pn: 'CE680-A-0-0', price: 1450, adders: [],
-        desc: 'Vibro-Meter CE680 charge amplifier, high-temperature turbine service',
-        keywords: ['charge amplifier', 'ce680', 'high temperature'] },
-      { pn: 'VM600-MPC4', price: 4750, adders: [
-        { code: 'IOC', desc: 'IOC4T I/O card', price: 980 },
-      ],
-        aliases: ['MPC4', 'MPC 4'],
-        desc: 'VM600 MPC4 machinery protection card, 4-channel, API 670',
-        keywords: ['vm600', 'mpc4', 'protection card'] },
-      { pn: 'VM600-CPUM', price: 3900, adders: [],
-        desc: 'VM600 CPUM communication / CPU card for ABE04x rack',
-        keywords: ['vm600', 'cpum', 'cpu card'] },
-      { pn: 'VM600-ABE042', price: 2650, adders: [],
-        desc: 'VM600 ABE042 19" rack, 6U, w/ backplane and power supply',
-        keywords: ['vm600', 'rack', 'abe042'] },
-      { pn: 'VSIGHT-VIBRO-STD', price: 12800, adders: [],
-        desc: 'VibroSight condition monitoring software — standard analysis package, single server',
-        keywords: ['vibrosight', 'software', 'condition monitoring'] },
-      { pn: 'VSIGHT-CLIENT', price: 1850, adders: [],
-        desc: 'VibroSight client seat license',
-        keywords: ['vibrosight', 'client', 'seat license'] },
-      { pn: 'MSS-MTG-KIT', price: 72, adders: [],
-        desc: 'Sensor mounting kit — stud, adhesive pad and swivel base',
-        keywords: ['mounting kit', 'stud'] },
+      { pn: '786A', price: 210, adders: [], desc: 'Wilcoxon 786A general-purpose accelerometer, 100 mV/g ±5%, top-exit MIL-C-5015 connector, 100 Ω, −50…+150 °C', keywords: ['accelerometer', '100 mv/g', 'mil-c-5015'] },
+      { pn: 'J9T2A-A2A-050', price: 78, adders: [], desc: 'Armoured cable assembly, 5 m, moisture-resistant MIL-C-5015 socket to blunt cut', keywords: ['armoured', 'cable', '5015', 'moisture'] },
+      { pn: 'XPR04-5.0-U-S-1-0-0-0-70', price: 430, adders: [], desc: 'Vibro-Meter XPR04 key phasor / proximity probe, 8 mm tip, 5 m integral cable, standard version', keywords: ['key phasor', 'keyphasor', 'proximity probe', 'xpr04'] },
+      { pn: 'XED04-U-0-0', price: 360, adders: [], desc: 'Vibro-Meter XED04 driver / signal conditioner, 7.87 mV/µm, 5 m system, standard version', keywords: ['driver', 'signal conditioner', 'xed04'] },
+      { pn: '786A-M12', price: 235, adders: [], desc: 'Wilcoxon 786A accelerometer, 100 mV/g, M12 side-exit connector variant', keywords: ['accelerometer', 'm12', '100 mv/g'] },
+      { pn: '793L-3', price: 340, adders: [], desc: 'Wilcoxon 793L low-frequency accelerometer, 500 mV/g, hydro / slow-speed machines', keywords: ['accelerometer', 'low frequency', '500 mV/g', 'hydro'] },
+      { pn: 'PC420VP-10', price: 395, adders: [], desc: 'Wilcoxon PC420 loop-powered vibration transmitter, 4-20 mA, 0-1 in/s RMS', keywords: ['transmitter', '4-20ma', 'loop powered'] },
+      { pn: 'J9T2A-A2A-100', price: 124, adders: [], desc: 'Armoured cable assembly, 10 m, moisture-resistant MIL-C-5015 socket to blunt cut', keywords: ['armoured', 'cable', '10m', '5015'] },
+      { pn: 'J9T2A-A2A-200', price: 196, adders: [], desc: 'Armoured cable assembly, 20 m, moisture-resistant MIL-C-5015 socket to blunt cut', keywords: ['armoured', 'cable', '20m'] },
+      { pn: 'CA134', price: 88, adders: [], desc: 'Vibro-Meter CA134 extension cable, 5 m, for XPR/XED probe systems', keywords: ['extension cable', 'ca134'] },
+      { pn: 'XPR04-1.0-U-S-1-0-0-0-70', price: 385, adders: [], desc: 'Vibro-Meter XPR04 proximity probe, 8 mm tip, 1 m integral cable, standard version', keywords: ['proximity probe', 'xpr04', '1m'] },
+      { pn: 'TQ402-A', price: 620, adders: [], aliases: ['TQ402'], desc: 'Vibro-Meter TQ402 signal conditioner for piezo accelerometers, DIN-rail', keywords: ['signal conditioner', 'tq402', 'charge amplifier'] },
+      { pn: 'CE680-A-0-0', price: 1450, adders: [], desc: 'Vibro-Meter CE680 charge amplifier, high-temperature turbine service', keywords: ['charge amplifier', 'ce680', 'high temperature'] },
+      { pn: 'VM600-MPC4', price: 4750, adders: [{ code: 'IOC', desc: 'IOC4T I/O card', price: 980 }], aliases: ['MPC4', 'MPC 4'], desc: 'VM600 MPC4 machinery protection card, 4-channel, API 670', keywords: ['vm600', 'mpc4', 'protection card'] },
+      { pn: 'VM600-CPUM', price: 3900, adders: [], desc: 'VM600 CPUM communication / CPU card for ABE04x rack', keywords: ['vm600', 'cpum', 'cpu card'] },
+      { pn: 'VM600-ABE042', price: 2650, adders: [], desc: 'VM600 ABE042 19" rack, 6U, w/ backplane and power supply', keywords: ['vm600', 'rack', 'abe042'] },
+      { pn: 'VSIGHT-VIBRO-STD', price: 12800, adders: [], desc: 'VibroSight condition monitoring software — standard analysis package, single server', keywords: ['vibrosight', 'software', 'condition monitoring'] },
+      { pn: 'VSIGHT-CLIENT', price: 1850, adders: [], desc: 'VibroSight client seat license', keywords: ['vibrosight', 'client', 'seat license'] },
+      { pn: 'MSS-MTG-KIT', price: 72, adders: [], desc: 'Sensor mounting kit — stud, adhesive pad and swivel base', keywords: ['mounting kit', 'stud'] },
     ],
   },
 }
@@ -819,7 +762,8 @@ export const seedConfig = {
   // Admin document uploads (metadata only — content stays with the file's home).
   uploads: {
     priceLists: [
-      { supplier: 'B&K (dummy)', name: 'BNK_Price_List_2026Q2_DUMMY.xlsx', version: '2026-Q2', uploaded: '2026-08-11', status: 'Current', dummy: true },
+      { supplier: 'B&K Vibro', name: 'B&K Vibro Dummy Price List (1).xlsx', version: 'Imported-2026-09', uploaded: '2026-09-24', status: 'Current', dummy: true },
+      { supplier: 'Metrix', name: 'Metrix Dummy Price List - Copy (2).xlsx', version: 'Imported-2026-09', uploaded: '2026-09-24', status: 'Current', dummy: true },
     ],
     interchangeability: null,
     customerClassification: null,

@@ -1,6 +1,8 @@
 const clean = value => String(value ?? '').trim()
 
 const normalizePart = value => clean(value).toUpperCase().replace(/[\u2013\u2014]/g, '-')
+const canonicalPart = value => clean(value).toUpperCase().replace(/[^A-Z0-9]/g, '')
+export const customerReferenceKey = row => canonicalPart(row?.custRef || row?.customerReference || row?.pn)
 
 const quantityFrom = value => {
   const match = String(value ?? '').match(/(?:^|\s)(\d+(?:\.\d+)?)\s*(?:nos?|pcs?|pieces?|units?|ea|each)?\b/i)
@@ -18,9 +20,9 @@ function knownPartNames(priceLists = {}) {
 }
 
 function catalogPart(partNumber, priceLists = {}) {
-  const key = normalizePart(partNumber)
+  const key = canonicalPart(partNumber)
   for (const [list, data] of Object.entries(priceLists || {})) {
-    const part = (data?.parts || []).find(item => normalizePart(item.pn) === key)
+    const part = (data?.parts || []).find(item => canonicalPart(item.pn) === key)
     if (part) return { ...part, list, version: data.version || '', currency: data.currency || 'INR' }
   }
   return null
@@ -75,15 +77,47 @@ function consolidate(rows) {
 }
 
 export function reconcileSparesLines(existing = [], requested = [], { priceLists = {}, clarificationId = '', answeredAt = '', answerSource = '' } = {}) {
-  const lines = existing.map(line => ({ ...line }))
-  const byPart = new Map(lines.map(line => [normalizePart(line.pn || line.custRef), line]))
+  const lines = []
+  const byReference = new Map()
+  let duplicateCount = 0
+  const preference = line => {
+    const customerRef = canonicalPart(line.custRef || line.customerReference)
+    const part = canonicalPart(line.pn)
+    const isCustomerPart = customerRef && part && customerRef === part
+    const isUnconfirmedSuggestion = Boolean(line.priceSourceSuggested) || /^suggested/i.test(String(line.match || ''))
+    return (line.confirmed ? 100 : 0) + (isCustomerPart ? 40 : 0) + (isUnconfirmedSuggestion ? -30 : 0)
+  }
+  existing.forEach(source => {
+    const line = { ...source }
+    const key = customerReferenceKey(line)
+    const previous = key ? byReference.get(key) : null
+    if (!previous) {
+      if (key) byReference.set(key, line)
+      lines.push(line)
+      return
+    }
+    duplicateCount += 1
+    const winner = preference(line) > preference(previous) ? line : previous
+    const loser = winner === line ? previous : line
+    winner.qty = Math.max(Number(winner.qty) || 0, Number(loser.qty) || 0)
+    if (!winner.desc && loser.desc) winner.desc = loser.desc
+    byReference.set(key, winner)
+    const index = lines.indexOf(previous)
+    if (index >= 0 && winner !== previous) lines[index] = winner
+  })
+  const byPart = new Map()
+  lines.forEach(line => {
+    for (const key of [canonicalPart(line.pn), canonicalPart(line.custRef), canonicalPart(line.customerReference)].filter(Boolean)) {
+      if (!byPart.has(key)) byPart.set(key, line)
+    }
+  })
   const changes = []
   const unmatched = []
 
   requested.forEach(row => {
     const pn = normalizePart(row.pn)
     if (!pn || !(Number(row.qty) > 0)) return
-    const current = byPart.get(pn)
+    const current = byPart.get(canonicalPart(pn))
     if (current) {
       const previousQty = current.qty
       const previousDesc = current.desc
@@ -117,14 +151,16 @@ export function reconcileSparesLines(existing = [], requested = [], { priceLists
       customerConfirmationEvidence: row.evidence || '',
     }
     lines.push(line)
-    byPart.set(pn, line)
+    byPart.set(canonicalPart(pn), line)
+    byReference.set(customerReferenceKey(line), line)
     changes.push({ pn, added: true })
   })
 
   const requestedParts = new Set(requested.map(row => normalizePart(row.pn)).filter(Boolean))
   existing.forEach(line => {
-    const pn = normalizePart(line.pn || line.custRef)
+    const pn = canonicalPart(line.custRef || line.pn)
     if (pn && !requestedParts.has(pn) && !line.removedFromSourcing) unmatched.push(pn)
   })
+  if (duplicateCount) changes.push({ deduplicated: duplicateCount })
   return { lines, changes, unmatched }
 }

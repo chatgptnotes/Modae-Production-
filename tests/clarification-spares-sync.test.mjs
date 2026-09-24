@@ -43,3 +43,14 @@ test('reconciliation adds missing exact catalogue parts without inventing a pric
   assert.equal(result.lines[0].priceState, 'Current')
   assert.equal(result.lines[1].priceState, 'Needs pricing')
 })
+
+test('reconciliation tolerates formatted part numbers and removes duplicate suggestions', () => {
+  const result = reconcileSparesLines([
+    { id: 'SL-1', custRef: 'VC8000-SETPOINT/CHASSIS', pn: 'VC8000-SETPOINT/CHASSIS', desc: 'Chassis', qty: 1, confirmed: false },
+    { id: 'SL-2', custRef: 'VC8000-SETPOINT/CHASSIS', pn: 'VC8000 SETPOINT CHASSIS', desc: 'AI alternative', qty: 1, confirmed: false, priceSourceSuggested: true, match: 'Suggested price-list match' },
+  ], [{ pn: 'VC8000 SETPOINT CHASSIS', desc: 'Chassis', qty: 2 }], { priceLists: seedPriceLists })
+  assert.equal(result.lines.length, 1)
+  assert.equal(result.lines[0].pn, 'VC8000-SETPOINT/CHASSIS')
+  assert.equal(result.lines[0].qty, 2)
+  assert.ok(result.changes.some(change => change.deduplicated === 1))
+})

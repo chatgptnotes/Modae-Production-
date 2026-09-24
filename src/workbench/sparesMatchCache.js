@@ -7,7 +7,7 @@ const MAX_CANDIDATES = 160
 const text = value => String(value ?? '').trim()
 const tokens = value => text(value).toLowerCase().split(/[^a-z0-9]+/).filter(word => word.length > 2)
 const detailsFor = item => item?.structured || item?.details || {
-  manufacturer: item?.manufacturer || item?.maker || '',
+  manufacturer: item?.manufacturer || item?.maker || item?.oem || '',
   model: item?.model || item?.series || '',
   productType: item?.productType || item?.type || '',
   size: item?.size || '',

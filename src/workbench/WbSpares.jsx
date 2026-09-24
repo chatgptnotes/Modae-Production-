@@ -144,6 +144,12 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
   const [pendingRemove, setPendingRemove] = useState(null)
   const sourcingSheetWrapRef = useRef(null)
   const compareRequestRef = useRef(0)
+  const dedupedOppRef = useRef('')
+  useEffect(() => {
+    if (!comm || dedupedOppRef.current === opp.id || !lines.length) return
+    dedupedOppRef.current = opp.id
+    store.dedupeSparesLines(opp.id)
+  }, [comm, opp.id, lines.length])
   useEffect(() => {
     lines.forEach(line => {
       const reconciled = reconcileCatalogueMatch(line, store.priceLists)
@@ -507,7 +513,10 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     setCompareAiBusy(true)
     const result = await requestSparesMatch({
       oppId: opp.id,
-      line,
+      line: {
+        ...line,
+        manufacturer: opp.product || opp.manufacturer || line.oem || '',
+      },
       priceLists: store.priceLists,
       model: store.config?.aiModel?.model,
       fallback: store.config?.aiModel?.provider === 'Built-in fallback',
@@ -524,13 +533,27 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
   }
   const useAlternative = (line, alt) => {
     const resolved = resolvePriceSource({ pn: alt.pn }, store.priceLists, [], [])
+    const isDifferentPart = String(alt.pn || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+      !== String(line.custRef || line.pn || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
     const priced = resolved && resolved.price > 0 ? {
       listPrice: resolved.price, listUnitPrice: resolved.price, currency: resolved.currency,
       priceList: `${resolved.sourceName} ${resolved.sourceVersion}`.trim(),
       priceSource: resolved.source, priceSourceName: resolved.sourceName, priceSourceVersion: resolved.sourceVersion,
     } : null
     const nextLine = { ...line, pn: alt.pn, desc: alt.desc, ...(priced || {}), priceState: priced ? (alt.priceState || 'Current') : 'Needs pricing' }
-    store.updateSparesLine(line.id, { pn: alt.pn, desc: alt.desc, confirmed: isConfirmableSparesLine(nextLine), ...(priced || {}), priceState: nextLine.priceState })
+    store.updateSparesLine(line.id, {
+      pn: alt.pn,
+      desc: alt.desc,
+      confirmed: isDifferentPart ? false : isConfirmableSparesLine(nextLine),
+      match: isDifferentPart ? 'Suggested price-list match' : 'Exact',
+      priceSourceSuggested: isDifferentPart,
+      priceSourceSuggestedPart: isDifferentPart ? alt.pn : '',
+      priceSourceSuggestedDescription: isDifferentPart ? alt.desc : '',
+      priceSourceSuggestedList: isDifferentPart ? (alt.priceList || resolved?.sourceName || '') : '',
+      priceSourceSuggestedVersion: isDifferentPart ? (alt.priceListVersion || resolved?.sourceVersion || '') : '',
+      ...(priced || {}),
+      priceState: nextLine.priceState,
+    })
     setCompareFor(null)
     setCompareSearch('')
   }
@@ -584,7 +607,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
             <td className="num"><b>{comm ? displayMoney(row.adjustedUnitPrice) : <span className="restricted"><Icon name="lock" size={11} /></span>}</b></td>
             <td className="num"><EditableNumber prefix={currencySymbol(displayCurrency)} className={`sourcing-base-cost-input ${line.baseCost == null || n(line.baseCost) <= 0 || row.adjustedUnitPrice < row.baseCost ? 'is-warning' : ''}`} value={fmt(displayValue(row.baseCost), displayDigits)} label={`Base cost for ${line.pn || line.id} in ${displayCurrency}`} disabled={!comm} onChange={value => store.updateSparesLine(line.id, { baseCost: Math.max(0, convertCurrency(value, displayCurrency, 'INR', costing.currencyRates)) })} /></td>
             <td className="num">{comm ? displayMoney(row.listTotal) : '—'}</td><td className="num"><b>{comm ? displayMoney(row.lineTotal) : '—'}</b></td>
-            <td className="sourcing-cell-actions align-top p-2">{comm && <div className="sourcing-row-actions">{line.confirmed && confirmable ? <Chip tone="state-Accepted" title="Sourcing line confirmed"><Icon name="check" size={11} /> Confirmed</Chip> : confirmable ? <button type="button" className="primary sourcing-row-action sourcing-row-action--confirm" title="Confirm catalogue match" aria-label={`Confirm match for ${line.pn || line.custRef || line.id}`} onClick={() => store.updateSparesLine(line.id, { confirmed: true })}>{line.priceSourceSuggested ? 'Confirm match' : 'Confirm'}</button> : <button type="button" className="sourcing-row-action sourcing-row-action--confirm sourcing-row-action--disabled" disabled title={`${invalidState}: enter a positive ${row.qty <= 0 ? 'quantity' : 'list price'}`} aria-label={`${invalidState} for ${line.pn || line.id}`}><Icon name="lock" size={12} /> {invalidState}</button>}<button type="button" className="sourcing-row-action sourcing-row-action--compare" title="Compare sourcing alternatives" aria-label={`Compare alternatives for ${line.pn || line.id}`} onClick={() => openCompare(line)}><Icon name="gitCompare" size={14} /></button></div>}</td>
+            <td className="sourcing-cell-actions align-top p-2">{comm && <div className="sourcing-row-actions">{line.confirmed && confirmable ? <Chip tone="state-Accepted" title="Sourcing line confirmed"><Icon name="check" size={11} /> Confirmed</Chip> : confirmable ? <button type="button" className="primary sourcing-row-action sourcing-row-action--confirm" title="Confirm catalogue match" aria-label={`Confirm match for ${line.pn || line.custRef || line.id}`} onClick={() => store.updateSparesLine(line.id, { confirmed: true, match: line.priceSourceSuggested ? 'Confirmed equivalent' : (line.match || 'Exact'), priceSourceSuggested: false, priceSourceSuggestedPart: '', priceSourceSuggestedDescription: '', priceSourceSuggestedList: '', priceSourceSuggestedVersion: '' })}>{line.priceSourceSuggested ? 'Confirm match' : 'Confirm'}</button> : <button type="button" className="sourcing-row-action sourcing-row-action--confirm sourcing-row-action--disabled" disabled title={`${invalidState}: enter a positive ${row.qty <= 0 ? 'quantity' : 'list price'}`} aria-label={`${invalidState} for ${line.pn || line.id}`}><Icon name="lock" size={12} /> {invalidState}</button>}<button type="button" className="sourcing-row-action sourcing-row-action--compare" title="Compare sourcing alternatives" aria-label={`Compare alternatives for ${line.pn || line.id}`} onClick={() => openCompare(line)}><Icon name="gitCompare" size={14} /></button></div>}</td>
           </tr> })}
         </tbody>
         {comm && <tfoot className="sourcing-total-row"><tr>

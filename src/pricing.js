@@ -67,8 +67,8 @@ export function formatPriceSource(line = {}) {
 }
 
 const samePart = (a, b) => {
-  const left = String(a || '').trim().toUpperCase()
-  const right = String(b || '').trim().toUpperCase()
+  const left = String(a || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+  const right = String(b || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
   return left && right && left === right
 }
 

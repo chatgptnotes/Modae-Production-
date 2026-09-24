@@ -1693,7 +1693,9 @@ export function StoreProvider({ children }) {
         report = { changes: result.changes, unmatched: result.unmatched }
         if (!result.changes.length) return s
         const byId = new Map(result.lines.map(line => [line.id, line]))
-        const nextLines = s.sparesLines.map(line => byId.get(line.id) || line)
+        const nextLines = s.sparesLines
+          .filter(line => line.oppId !== oppId || byId.has(line.id))
+          .map(line => byId.get(line.id) || line)
         const added = result.lines.filter(line => !line.id)
         const withIds = added.map(line => normalizePriceFields({ ...line, id: mintId('SL', [...nextLines, ...added]), oppId }))
         return withAudit({ ...s, sparesLines: [...nextLines, ...withIds] }, 'Customer clarification synced to sourcing', oppId,
@@ -1812,11 +1814,19 @@ export function StoreProvider({ children }) {
         const byKey = new Map()
         const order = []
         let duplicateCount = 0
+        const canonical = value => String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+        const preference = line => {
+          const customerRef = canonical(line.custRef || line.customerReference)
+          const part = canonical(line.pn)
+          const isCustomerPart = customerRef && part && customerRef === part
+          const isSuggestion = Boolean(line.priceSourceSuggested) || /^suggested/i.test(String(line.match || ''))
+          return (line.confirmed ? 100 : 0) + (isCustomerPart ? 40 : 0) - (isSuggestion ? 30 : 0)
+        }
         s.sparesLines.filter(line => line.oppId === oppId).forEach(line => {
           const identity = line.sparesSupport
             ? `support:${String(line.desc || '').trim().toLowerCase()}`
-            : String(line.pn || '').trim()
-              ? `pn:${String(line.pn).trim().toLowerCase()}`
+            : String(line.custRef || line.customerReference || line.pn || '').trim()
+              ? `ref:${canonical(line.custRef || line.customerReference || line.pn)}`
               : `desc:${String(line.desc || '').trim().toLowerCase()}`
           const current = byKey.get(identity)
           if (!current) {
@@ -1827,7 +1837,7 @@ export function StoreProvider({ children }) {
           duplicateCount += 1
           const currentPrice = Number(current.listUnitPrice ?? current.listPrice) || 0
           const nextPrice = Number(line.listUnitPrice ?? line.listPrice) || 0
-          const winner = line.confirmed && !current.confirmed || nextPrice > currentPrice ? line : current
+          const winner = preference(line) > preference(current) || (preference(line) === preference(current) && nextPrice > currentPrice) ? line : current
           byKey.set(identity, { ...winner, qty: Math.max(Number(current.qty) || 0, Number(line.qty) || 0) })
         })
         if (!duplicateCount) return s
