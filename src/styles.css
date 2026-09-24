@@ -13134,3 +13134,4 @@ table.sheet tbody tr:hover td {
     padding: .3rem .2rem;
   }
 }
+.auth-loading { color: var(--palette-4843938); font-size: 14px; font-weight: 600; }

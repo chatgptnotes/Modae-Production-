@@ -243,6 +243,7 @@ function reconcileApprovedSubmissions(s) {
 
 export function StoreProvider({ children }) {
   const [state, setState] = useState(initialState)
+  const [authReady, setAuthReady] = useState(() => !supabase)
   const [liveSyncStatus, setLiveSyncStatus] = useState(() => supabaseConfigError ? 'config-error' : datastore.dbEnabled() ? 'connecting' : 'offline')
   const [syncDiagnostics, setSyncDiagnostics] = useState({ normalizedOpportunityCount: null, legacyOpportunityCount: null })
   setRoleNameConfig(state.config)
@@ -2224,12 +2225,18 @@ export function StoreProvider({ children }) {
     let active = true
 
     const restoreSession = async () => {
-      const { data, error } = await supabase.auth.getSession()
-      if (!active || error || !data?.session?.user || stateRef.current.auth?.user) return
-      api.loginExternal(data.session.user)
+      try {
+        const { data, error } = await supabase.auth.getSession()
+        if (!active || error || !data?.session?.user || stateRef.current.auth?.user) return
+        api.loginExternal(data.session.user)
+      } catch (e) {
+        console.warn('Supabase session restore failed:', e?.message || e)
+      } finally {
+        if (active) setAuthReady(true)
+      }
     }
 
-    restoreSession().catch(e => console.warn('Supabase session restore failed:', e?.message || e))
+    restoreSession()
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       if (!active) return
@@ -2256,7 +2263,7 @@ export function StoreProvider({ children }) {
     return () => window.removeEventListener('focus', onFocus)
   }, [])
 
-  return <StoreCtx.Provider value={{ ...api, liveSyncStatus, syncDiagnostics }}>{children}</StoreCtx.Provider>
+  return <StoreCtx.Provider value={{ ...api, authReady, liveSyncStatus, syncDiagnostics }}>{children}</StoreCtx.Provider>
 }
 
 export const useStore = () => useContext(StoreCtx)

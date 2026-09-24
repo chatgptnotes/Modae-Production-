@@ -154,6 +154,7 @@ export default function Login() {
 
 export function RequireAuth({ children }) {
   const store = useStore()
+  if (!store.authReady) return <div className="login-bg auth-loading" role="status">Checking your session…</div>
   if (!store.auth?.user) return <Login />
   return children
 }
