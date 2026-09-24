@@ -20,7 +20,15 @@ test('approved approval requests notify the person who raised them', () => {
   assert.match(app, /const approvalOwner = \(approval, store\) =>/)
   assert.match(app, /lead\?\.assignedOwner \|\| lead\?\.suggestedOwner \|\| approval\.requestedBy/)
   assert.match(app, /title: `Approval \$\{a\.status\.toLowerCase\(\)\}`/)
-  assert.match(app, /id: `approval-result-\$\{a\.id\}-\$\{a\.status\}-\$\{a\.decisionTs \|\| a\.ts \|\| ''\}`/)
+  assert.match(app, /const approvalNotificationKey = approval => \[/)
+  assert.match(app, /const latestApprovalByOutcome = approvals => \{/)
+  assert.match(app, /latestApprovalByOutcome\(\(store\.approvals \|\| \[\]\)\.filter\(a => \['Approved', 'Approved with conditions', 'Returned', 'Rejected'\]\.includes\(a\.status\)/)
+  assert.match(app, /id: `approval-result-\$\{approvalNotificationKey\(a\)\}`/)
+  assert.doesNotMatch(app, /approvalNotificationKey = approval => \[[\s\S]*?approval\.rev/)
+  assert.match(app, /const visibleNotifications = unseenNotifications/)
+  assert.match(app, /visibleNotifications\.map\(item =>/)
+  assert.match(app, /onClick=\{\(\) => markSeen\(visibleNotifications\)\}/)
+  assert.match(app, /You have no unread notifications\./)
 })
 
 test('follow-up alerts choose one actionable condition per opportunity', () => {

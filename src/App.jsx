@@ -139,6 +139,27 @@ const uniqueApproval = (approval, all) => all.findIndex(item =>
   item.oppId === approval.oppId && item.type === approval.type && item.status === approval.status
   && (item.requestedBy || item.approver) === (approval.requestedBy || approval.approver)) === all.indexOf(approval)
 
+// Joint approval decisions can exist as multiple rows when each approver's
+// decision was persisted separately. The approval workspace should keep those
+// rows, but the bell represents the business outcome, not each signer.
+const approvalNotificationKey = approval => [
+  approval.oppId || approval.leadId || approval.id,
+  approval.type || '',
+  approval.status || '',
+].join('|')
+
+const latestApprovalByOutcome = approvals => {
+  const latest = new Map()
+  for (const approval of approvals) {
+    const key = approvalNotificationKey(approval)
+    const previous = latest.get(key)
+    const stamp = approval.decisionTs || approval.ts || ''
+    const previousStamp = previous?.decisionTs || previous?.ts || ''
+    if (!previous || stamp >= previousStamp) latest.set(key, approval)
+  }
+  return [...latest.values()]
+}
+
 const alertPriority = alert => {
   const typeRank = {
     'overdue-kyc': 50,
@@ -187,16 +208,17 @@ function NotificationBell({ store, nav }) {
     ...(store.approvals || []).filter(a => uniqueApproval(a, store.approvals || []) && a.status === 'Pending' && ([...(a.needed || []), a.approver, a.requestedBy].filter(Boolean).includes(role))).map(a => ({
       id: `approval-${a.id}`, tone: 'critical', icon: 'checkCircle', title: 'Approval waiting', text: safeText([approvalSubject(a), a.detail].filter(Boolean).join(' — ')), to: approvalNotificationPath(a), date: a.ts,
     })),
-    ...(store.approvals || []).filter(a => uniqueApproval(a, store.approvals || []) && ['Approved', 'Approved with conditions', 'Returned', 'Rejected'].includes(a.status) && approvalAudience(a, store).includes(role)).map(a => ({
+    ...latestApprovalByOutcome((store.approvals || []).filter(a => ['Approved', 'Approved with conditions', 'Returned', 'Rejected'].includes(a.status) && approvalAudience(a, store).includes(role))).map(a => ({
       // Lead with what it was about. a.detail is frozen at request time, so a
       // resolved row built from it reads "Approval approved / … is required".
-      id: `approval-result-${a.id}-${a.status}-${a.decisionTs || a.ts || ''}`, tone: a.status === 'Rejected' || a.status === 'Returned' ? 'critical' : 'success', icon: 'checkCircle', title: `Approval ${a.status.toLowerCase()}`, text: safeText([approvalSubject(a), meaningfulNote(a.decisionNote)].filter(Boolean).join(' — ')), to: approvalNotificationPath(a), date: a.decisionTs || a.ts,
+      id: `approval-result-${approvalNotificationKey(a)}`, tone: a.status === 'Rejected' || a.status === 'Returned' ? 'critical' : 'success', icon: 'checkCircle', title: `Approval ${a.status.toLowerCase()}`, text: safeText([approvalSubject(a), meaningfulNote(a.decisionNote)].filter(Boolean).join(' — ')), to: approvalNotificationPath(a), date: a.decisionTs || a.ts,
     })),
     ...[...monitoringAlerts.values()].map(alert => ({
       id: `${alert.id}-${alert.createdAt || ''}`, tone: alert.severity === 'high' ? 'critical' : 'warning', icon: alert.type === 'stale-opportunity' ? 'clock' : 'alert', title: sentenceCase(alert.type), text: alert.message, to: `/opp/${alert.objectId}`, date: alert.createdAt,
     })),
   ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
   const unseenNotifications = notifications.filter(item => !seenIds.includes(item.id))
+  const visibleNotifications = unseenNotifications
   const liveNotificationKey = notifications.map(item => item.id).join('|')
   useEffect(() => {
     setSeenIds(previous => {
@@ -250,16 +272,16 @@ function NotificationBell({ store, nav }) {
           <div className="notification-overlay" onClick={closeNotifications} />
           <div id="notification-popover" className="notification-popover" role="dialog" aria-modal="false" aria-label="Notifications" tabIndex="-1">
             <div className="notification-heading">
-              <div><b>Notifications</b><span>{unseenNotifications.length} unread · {notifications.length} active</span></div>
-              {unseenNotifications.length > 0 && <button type="button" className="notification-mark-read" onClick={() => markSeen(notifications)}>Mark all read</button>}
+              <div><b>Notifications</b><span>{visibleNotifications.length ? `${visibleNotifications.length} unread` : 'No unread notifications'}</span></div>
+              {visibleNotifications.length > 0 && <button type="button" className="notification-mark-read" onClick={() => markSeen(visibleNotifications)}>Mark all read</button>}
             </div>
-            {notifications.length ? notifications.map(item => (
+            {visibleNotifications.length ? visibleNotifications.map(item => (
               <button key={item.id} className={`notification-item tone-${item.tone || 'warning'}${!seenIds.includes(item.id) ? ' unseen' : ''}`} type="button" onClick={() => { markSeen([item]); setOpen(false); nav(item.to) }}>
                 <span className="notification-signal"><Icon name={item.icon} size={15} /><i aria-hidden="true" /></span>
                 <span><b>{item.title}</b><small>{item.text}</small></span>
                 {item.date && <time className="notification-date">{ddMmmYY(String(item.date).slice(0, 10))}</time>}
               </button>
-            )) : <p className="hint notification-empty">You are all caught up.</p>}
+            )) : <p className="hint notification-empty">You have no unread notifications.</p>}
           </div>
         </>
       )}

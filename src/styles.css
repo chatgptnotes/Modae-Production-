@@ -832,7 +832,7 @@ table.sheet td.cell-sel { outline: 2px solid var(--xl-green); outline-offset: -2
 /* justify-content is restated on every full-width button that reads as a list
    row: the base button rule centres its content, which is right for a toolbar
    button and wrong for a row of text. */
-.notification-item { display: flex; align-items: flex-start; justify-content: flex-start; width: 100%; gap: 10px; padding: 11px 13px; border: 0; border-bottom: 1px solid var(--border-soft); background: transparent; color: var(--text-main); text-align: left; cursor: pointer; }
+.notification-item { display: flex; align-items: flex-start; justify-content: flex-start; width: 100%; min-height: 0; gap: 9px; padding: 8px 13px; border: 0; border-bottom: 1px solid var(--border-soft); background: transparent; color: var(--text-main); text-align: left; cursor: pointer; }
 .notification-item:hover { background: var(--header-fill); }
 /* Unread items carry a subtle surface tint and a small dot; reading does not
    remove the active item from the panel. */
@@ -846,7 +846,7 @@ table.sheet td.cell-sel { outline: 2px solid var(--xl-green); outline-offset: -2
 .notification-item.tone-warning .notification-signal { color: #B45309; }
 .notification-date { flex: 0 0 auto; align-self: flex-start; color: var(--text-subtle); font-size: 10.5px; white-space: nowrap; }
 .notification-item > .ic { flex: 0 0 auto; margin-top: 2px; }
-.notification-item span { display: grid; flex: 1; min-width: 0; gap: 3px; }
+.notification-item > span:not(.notification-signal) { display: grid; flex: 1; min-width: 0; gap: 2px; }
 .notification-item b, .notification-item small { overflow-wrap: anywhere; white-space: normal; }
 .notification-item b { line-height: 1.25; }
 .notification-item small { color: var(--text-muted); line-height: 1.35; }

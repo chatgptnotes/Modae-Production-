@@ -34,6 +34,8 @@ test('destructive and input flows use shared in-app dialogs', () => {
 test('custom popup surfaces expose dialog or popup semantics', () => {
   assert.match(read('src/drawer.jsx'), /role=\{sel \? 'dialog' : undefined\}/)
   assert.match(read('src/App.jsx'), /id="notification-popover" className="notification-popover" role="dialog"/)
+  assert.match(styles, /\.notification-item \{[\s\S]*min-height: 0;[\s\S]*padding: 8px 13px;/)
+  assert.match(styles, /\.notification-item > span:not\(\.notification-signal\) \{[\s\S]*flex: 1;/)
   assert.match(read('src/pages/Tracker.jsx'), /role="dialog" aria-label=\{`\$\{col\.label\} sort and filter`\}/)
   assert.match(read('src/OpportunityDetailsEditor.jsx'), /role="listbox" aria-label="Solutions"/)
 })
