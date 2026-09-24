@@ -1,6 +1,6 @@
-const daysSince = value => {
+const daysSince = (value, now = Date.now()) => {
   const time = new Date(value || 0).getTime()
-  return Number.isFinite(time) && time > 0 ? Math.floor((Date.now() - time) / 86400000) : 0
+  return Number.isFinite(time) && time > 0 ? Math.floor((now - time) / 86400000) : 0
 }
 
 // An alert is addressed to one person. Without these two predicates every role
@@ -22,9 +22,15 @@ export function computeAlerts(state, today = new Date()) {
     const when = opp.lastUpdated
     if (opp.kycDue && new Date(opp.kycDue).getTime() < now) add('overdue-kyc', 'high', opp.id, `${opp.id} has overdue KYC`, 'Open Customer/KYC', opp.kycDue)
     if (opp.amberFeeDue && new Date(opp.amberFeeDue).getTime() < now) add('amber-fee-expiry', 'high', opp.id, `${opp.id} Amber fee has expired`, 'Review Amber fee', opp.amberFeeDue)
-    if (daysSince(opp.lastUpdated) >= 7) add('stale-opportunity', 'medium', opp.id, `${opp.id} is stale`, 'Record a follow-up', when)
     if (opp.proposalExpiry && new Date(opp.proposalExpiry).getTime() < now) add('proposal-expiry', 'high', opp.id, `${opp.id} proposal has expired`, 'Revise proposal', opp.proposalExpiry)
-    if (!opp.nextAction && daysSince(opp.lastUpdated) >= 3) add('missing-follow-up', 'medium', opp.id, `${opp.id} has no follow-up recorded`, 'Add next action', when)
+    // One actionable follow-up alert per opportunity. Missing a next action is
+    // the more useful explanation, so it takes precedence over inactivity.
+    // Once a next action exists, inactivity becomes a stale follow-up alert.
+    if (!opp.nextActionOwner && daysSince(opp.lastUpdated, now) >= 3) {
+      add('missing-follow-up', 'medium', opp.id, `${opp.id} has no follow-up recorded`, 'Add next action', when)
+    } else if (daysSince(opp.lastUpdated, now) >= 7) {
+      add('stale-opportunity', 'medium', opp.id, `${opp.id} is stale`, 'Record a follow-up', when)
+    }
   }
   // Spec Scenario 6 — a customer goes quiet after the rate schedule, then comes
   // back weeks later. The schedule has a validity, so it is chased while it is
@@ -34,7 +40,7 @@ export function computeAlerts(state, today = new Date()) {
     if (!est.rateSheetSentOn || est.customerDecision) continue
     const opp = (state?.opportunities || []).find(o => o.id === est.oppId)
     if (!opp || opp.status !== 'Open' || !ownsOpportunity(opp, role)) continue
-    const age = daysSince(est.rateSheetSentOn)
+    const age = daysSince(est.rateSheetSentOn, now)
     if (age >= validityDays) {
       add('rate-sheet-expiry', 'high', opp.id,
         `${opp.id} rate schedule has passed its ${validityDays}-day validity`,

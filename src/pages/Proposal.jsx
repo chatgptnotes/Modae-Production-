@@ -37,9 +37,9 @@ import { customerProposalArtifact } from '../proposal/emailAttachments.js'
 import { latestSubmissionForRevision, submissionStatusLabel } from '../submissionStatus.js'
 
 const ROUTE_TABS = {
-  Project: ['Cover Letter', 'Edit Sheet', 'Signal List', 'Rack Layout', 'Priced BoQ'],
-  Services: ['Cover Letter', 'Edit Sheet', 'Scope of Work', 'Issues List', 'Proposal', 'Service Rate Schedule'],
-  Spares: ['Cover Letter', 'Edit Sheet', 'Firm Offer', 'Clarifications', 'Sensor Comparison', 'Priced BoQ'],
+  Project: ['Cover Letter', 'Edit Sheet', 'Document', 'Signal List', 'Rack Layout', 'Priced BoQ'],
+  Services: ['Cover Letter', 'Edit Sheet', 'Document', 'Scope of Work', 'Issues List', 'Proposal', 'Service Rate Schedule'],
+  Spares: ['Cover Letter', 'Edit Sheet', 'Document', 'Firm Offer', 'Clarifications', 'Sensor Comparison', 'Priced BoQ'],
 }
 
 const MEGGITT_ITEM_LIST_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-2 With Different Make (Not yet won)/Meggitt Item List.xlsx', import.meta.url).href

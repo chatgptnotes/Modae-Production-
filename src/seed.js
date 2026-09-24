@@ -70,8 +70,6 @@ export const LEAD_SOURCES = [
 
 // Opportunities are loaded from Supabase or created through the intake flow.
 export const seedOpportunities = []
-// Personas for the header role switcher (from the WinTrack Ver 1.1 wireframe's
-// Users & Roles). `commercial` gates Value/COGS/GM, forecasts and pricing.
 export const ROLES = {
   SUPER: { name: 'System Owner', label: 'Super Admin — Platform Owner', commercial: true, admin: true },
   ADMIN: { name: 'Admin', label: 'Admin — System Administrator', commercial: true, admin: true },

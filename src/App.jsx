@@ -139,6 +139,19 @@ const uniqueApproval = (approval, all) => all.findIndex(item =>
   item.oppId === approval.oppId && item.type === approval.type && item.status === approval.status
   && (item.requestedBy || item.approver) === (approval.requestedBy || approval.approver)) === all.indexOf(approval)
 
+const alertPriority = alert => {
+  const typeRank = {
+    'overdue-kyc': 50,
+    'amber-fee-expiry': 45,
+    'proposal-expiry': 40,
+    'rate-sheet-expiry': 35,
+    'missing-follow-up': 25,
+    'stale-opportunity': 20,
+    'rate-sheet-idle': 15,
+  }
+  return (alert.severity === 'high' ? 100 : 0) + (typeRank[alert.type] || 0)
+}
+
 function NotificationBell({ store, nav }) {
   const [open, setOpen] = useState(false)
   const role = store.role
@@ -150,27 +163,50 @@ function NotificationBell({ store, nav }) {
       return Array.isArray(saved) ? saved : []
     } catch { return [] }
   })
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(seenStorageKey) || '[]')
+      setSeenIds(Array.isArray(saved) ? saved : [])
+    } catch {
+      setSeenIds([])
+    }
+    setOpen(false)
+  }, [seenStorageKey])
   // detail can quote pricing. The approvals page hides that from roles that may
   // not see commercial figures; a notification must not be the way around it.
   const safeText = value => (COMMERCIAL_RX.test(value || '') && !canPriceProposal(role) ? 'Restricted' : value)
+  const monitoringAlerts = computeAlerts(store)
+    .filter(alert => alert.type !== 'pending-approval')
+    .reduce((selected, alert) => {
+      const previous = selected.get(alert.objectId)
+      if (!previous || alertPriority(alert) > alertPriority(previous)) selected.set(alert.objectId, alert)
+      return selected
+    }, new Map())
   const notifications = [
     ...(store.approvals || []).filter(a => uniqueApproval(a, store.approvals || []) && a.status === 'Pending' && ([...(a.needed || []), a.approver, a.requestedBy].filter(Boolean).includes(role))).map(a => ({
-      id: `approval-${a.id}`, icon: 'checkCircle', title: 'Approval waiting', text: safeText([approvalSubject(a), a.detail].filter(Boolean).join(' — ')), to: approvalNotificationPath(a), date: a.ts,
+      id: `approval-${a.id}`, tone: 'critical', icon: 'checkCircle', title: 'Approval waiting', text: safeText([approvalSubject(a), a.detail].filter(Boolean).join(' — ')), to: approvalNotificationPath(a), date: a.ts,
     })),
     ...(store.approvals || []).filter(a => uniqueApproval(a, store.approvals || []) && ['Approved', 'Approved with conditions', 'Returned', 'Rejected'].includes(a.status) && approvalAudience(a, store).includes(role)).map(a => ({
       // Lead with what it was about. a.detail is frozen at request time, so a
       // resolved row built from it reads "Approval approved / … is required".
-      id: `approval-result-${a.id}`, icon: 'checkCircle', title: `Approval ${a.status.toLowerCase()}`, text: safeText([approvalSubject(a), meaningfulNote(a.decisionNote)].filter(Boolean).join(' — ')), to: approvalNotificationPath(a), date: a.decisionTs || a.ts,
+      id: `approval-result-${a.id}-${a.status}-${a.decisionTs || a.ts || ''}`, tone: a.status === 'Rejected' || a.status === 'Returned' ? 'critical' : 'success', icon: 'checkCircle', title: `Approval ${a.status.toLowerCase()}`, text: safeText([approvalSubject(a), meaningfulNote(a.decisionNote)].filter(Boolean).join(' — ')), to: approvalNotificationPath(a), date: a.decisionTs || a.ts,
     })),
-    ...(store.opportunities || []).filter(o => o.status === 'Open' && o.owner === role && o.lastUpdated && ((Date.now() - new Date(o.lastUpdated).getTime()) / 86400000) >= 7).map(o => ({
-      id: `stale-${o.id}`, icon: 'clock', title: 'Follow-up overdue', text: `${o.id} has not been updated for 7 days`, to: `/opp/${o.id}`, date: o.lastUpdated,
-    })),
-    // stale-opportunity and pending-approval both restate a source above.
-    ...computeAlerts(store).filter(alert => !['stale-opportunity', 'pending-approval'].includes(alert.type)).map(alert => ({
-      id: alert.id, icon: 'alert', title: sentenceCase(alert.type), text: alert.message, to: `/opp/${alert.objectId}`, date: alert.createdAt,
+    ...[...monitoringAlerts.values()].map(alert => ({
+      id: `${alert.id}-${alert.createdAt || ''}`, tone: alert.severity === 'high' ? 'critical' : 'warning', icon: alert.type === 'stale-opportunity' ? 'clock' : 'alert', title: sentenceCase(alert.type), text: alert.message, to: `/opp/${alert.objectId}`, date: alert.createdAt,
     })),
   ].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0))
   const unseenNotifications = notifications.filter(item => !seenIds.includes(item.id))
+  const liveNotificationKey = notifications.map(item => item.id).join('|')
+  useEffect(() => {
+    setSeenIds(previous => {
+      const live = new Set(notifications.map(item => item.id))
+      const next = previous.filter(id => live.has(id))
+      if (next.length === previous.length) return previous
+      try { window.localStorage.setItem(seenStorageKey, JSON.stringify(next)) } catch { /* best effort */ }
+      return next
+    })
+  }, [liveNotificationKey, seenStorageKey])
   const markSeen = items => {
     const ids = items.map(item => item.id)
     if (!ids.length) return
@@ -183,16 +219,9 @@ function NotificationBell({ store, nav }) {
       return next
     })
   }
-  // What was new at the moment the panel opened. Marking seen on open instead
-  // meant the header always said "All seen" and nothing was ever highlighted.
-  const [unseenOnOpen, setUnseenOnOpen] = useState([])
-  const closeNotifications = () => {
-    setOpen(false)
-    markSeen(notifications)
-  }
+  const closeNotifications = () => setOpen(false)
   const toggleNotifications = () => {
     if (open) { closeNotifications(); return }
-    setUnseenOnOpen(unseenNotifications.map(item => item.id))
     setOpen(true)
   }
   useEffect(() => {
@@ -220,10 +249,13 @@ function NotificationBell({ store, nav }) {
         <>
           <div className="notification-overlay" onClick={closeNotifications} />
           <div id="notification-popover" className="notification-popover" role="dialog" aria-modal="false" aria-label="Notifications" tabIndex="-1">
-            <div className="notification-heading"><b>Notifications</b><span>{unseenOnOpen.length ? `${unseenOnOpen.length} new` : 'All seen'}</span></div>
+            <div className="notification-heading">
+              <div><b>Notifications</b><span>{unseenNotifications.length} unread · {notifications.length} active</span></div>
+              {unseenNotifications.length > 0 && <button type="button" className="notification-mark-read" onClick={() => markSeen(notifications)}>Mark all read</button>}
+            </div>
             {notifications.length ? notifications.map(item => (
-              <button key={item.id} className={`notification-item${unseenOnOpen.includes(item.id) ? ' unseen' : ''}`} type="button" onClick={() => { markSeen([item]); setOpen(false); nav(item.to) }}>
-                <Icon name={item.icon} size={15} />
+              <button key={item.id} className={`notification-item tone-${item.tone || 'warning'}${!seenIds.includes(item.id) ? ' unseen' : ''}`} type="button" onClick={() => { markSeen([item]); setOpen(false); nav(item.to) }}>
+                <span className="notification-signal"><Icon name={item.icon} size={15} /><i aria-hidden="true" /></span>
                 <span><b>{item.title}</b><small>{item.text}</small></span>
                 {item.date && <time className="notification-date">{ddMmmYY(String(item.date).slice(0, 10))}</time>}
               </button>

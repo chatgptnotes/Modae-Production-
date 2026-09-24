@@ -824,17 +824,26 @@ table.sheet td.cell-sel { outline: 2px solid var(--xl-green); outline-offset: -2
 .notification-count { position: absolute; top: -4px; right: -4px; display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 5px; border: 0; border-radius: 999px; background: #DC2626; color: #FFF; font-size: 11px; font-weight: 800; line-height: 1; text-align: center; box-shadow: 0 0 0 2px #FFF; }
 .notification-overlay { position: fixed; inset: 0; z-index: -1; }
 .notification-popover { position: absolute; top: 52px; right: 0; width: min(400px, calc(100vw - 28px)); max-height: min(520px, calc(100vh - 78px)); border: 1px solid var(--border-color); border-radius: 9px; background: var(--palette-4843938); box-shadow: 0 10px 30px rgba(0,0,0,.16); overflow-y: auto; overflow-x: hidden; }
-.notification-heading { display: flex; justify-content: space-between; padding: 11px 13px; border-bottom: 1px solid var(--border-soft); }
-.notification-heading span { color: var(--text-muted); font-size: 12px; }
+.notification-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 12px 13px; border-bottom: 1px solid var(--border-soft); }
+.notification-heading > div { display: grid; gap: 3px; }
+.notification-heading span { color: var(--text-muted); font-size: 11px; }
+.notification-mark-read { padding: 0; border: 0; background: transparent; color: var(--primary-accent); font-size: 11px; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.notification-mark-read:hover { text-decoration: underline; }
 /* justify-content is restated on every full-width button that reads as a list
    row: the base button rule centres its content, which is right for a toolbar
    button and wrong for a row of text. */
 .notification-item { display: flex; align-items: flex-start; justify-content: flex-start; width: 100%; gap: 10px; padding: 11px 13px; border: 0; border-bottom: 1px solid var(--border-soft); background: transparent; color: var(--text-main); text-align: left; cursor: pointer; }
 .notification-item:hover { background: var(--header-fill); }
-/* New since the panel was last opened — the dot is the only thing that says so,
-   since everything is marked seen on close. */
+/* Unread items carry a subtle surface tint and a small dot; reading does not
+   remove the active item from the panel. */
 .notification-item.unseen { background: var(--primary-soft); }
-.notification-item.unseen > .ic { color: var(--primary-accent); }
+.notification-item.unseen > .notification-signal { color: var(--primary-accent); }
+.notification-signal { position: relative; display: grid; flex: 0 0 auto; margin-top: 2px; color: var(--text-muted); }
+.notification-signal i { display: none; position: absolute; top: -3px; right: -4px; width: 6px; height: 6px; border: 1px solid var(--palette-4843938); border-radius: 50%; background: var(--primary-accent); }
+.notification-item.unseen .notification-signal i { display: block; }
+.notification-item.tone-critical .notification-signal { color: #B42318; }
+.notification-item.tone-success .notification-signal { color: #15803D; }
+.notification-item.tone-warning .notification-signal { color: #B45309; }
 .notification-date { flex: 0 0 auto; align-self: flex-start; color: var(--text-subtle); font-size: 10.5px; white-space: nowrap; }
 .notification-item > .ic { flex: 0 0 auto; margin-top: 2px; }
 .notification-item span { display: grid; flex: 1; min-width: 0; gap: 3px; }
