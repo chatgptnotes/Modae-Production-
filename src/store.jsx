@@ -73,19 +73,61 @@ const initialState = () => {
 }
 
 // Supabase is the authoritative store for catalogues, files, and the full
-// audit trail. Keeping those large slices in localStorage makes the browser
-// snapshot exceed its quota after a price-list import. Retain the compact
-// working state locally so the shell can still start while Supabase loads.
+// audit trail. Cache only the compact slices needed to paint the workspace;
+// spreading the whole state here eventually exceeds localStorage quota after
+// proposals, communications, or sourcing payloads accumulate.
+const CACHE_VERSION = 2
 const localSnapshot = state => ({
-  ...state,
-  priceLists: {},
-  files: {},
-  audit: Array.isArray(state.audit) ? state.audit.slice(0, 100) : [],
+  cacheVersion: CACHE_VERSION,
+  demoData: state.demoData,
+  opportunities: state.opportunities,
+  opportunitySyncBaseline: state.opportunitySyncBaseline,
+  deletedOpportunityIds: state.deletedOpportunityIds,
+  leads: state.leads,
+  leadArchive: state.leadArchive,
+  leadDeadlines: state.leadDeadlines,
+  leadSyncBaseline: state.leadSyncBaseline,
+  deletedLeadIds: state.deletedLeadIds,
+  approvals: state.approvals,
+  customers: state.customers,
+  users: state.users,
+  config: state.config,
+  auth: state.auth,
+  role: state.role,
+  viewMode: state.viewMode,
+  viewModePinned: state.viewModePinned,
+  tabletTheme: state.tabletTheme,
+  inboxShowAll: state.inboxShowAll,
 })
 
+const essentialLocalSnapshot = state => ({
+  cacheVersion: CACHE_VERSION,
+  demoData: state.demoData,
+  opportunities: state.opportunities,
+  opportunitySyncBaseline: state.opportunitySyncBaseline,
+  auth: state.auth,
+  role: state.role,
+  users: state.users,
+})
+
+let localCacheWarningShown = false
+
 const persistLocalSnapshot = state => {
-  try { localStorage.setItem(KEY, JSON.stringify(localSnapshot(state))) }
-  catch (e) { console.warn('Local save skipped — Supabase remains the source of truth:', e?.message) }
+  try {
+    localStorage.setItem(KEY, JSON.stringify(localSnapshot(state)))
+  } catch (e) {
+    // Replace any legacy oversized snapshot and retain only what is needed
+    // for an instant opportunity/auth boot. Supabase remains authoritative.
+    try {
+      localStorage.removeItem(KEY)
+      localStorage.setItem(KEY, JSON.stringify(essentialLocalSnapshot(state)))
+    } catch (fallbackError) {
+      if (!localCacheWarningShown) {
+        localCacheWarningShown = true
+        console.warn('Local cache unavailable — Supabase remains the source of truth:', fallbackError?.message || e?.message)
+      }
+    }
+  }
 }
 
 // Append-only event log, newest first. Every mutation gets its own entry: audit
