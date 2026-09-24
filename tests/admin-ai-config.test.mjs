@@ -22,3 +22,10 @@ test('Admin header does not render the redundant workflow configuration action',
   assert.doesNotMatch(admin, /Configure workflow/)
   assert.doesNotMatch(admin, /nav\('\/admin\/workflow'\)/)
 })
+
+test('Admin KYC validation explains defaults before exposing advanced regex rules', () => {
+  assert.match(admin, /Expected format:/)
+  assert.match(admin, /Advanced validation rule/)
+  assert.match(admin, /Regular expression/)
+  assert.match(admin, /Custom validation rule/)
+})

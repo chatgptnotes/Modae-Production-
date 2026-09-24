@@ -10,9 +10,21 @@ export const CIN_PATTERN = '^[LU][0-9]{5}[A-Z]{2}[0-9]{4}[A-Z]{3}[0-9]{6}$'
 export const LEGACY_CIN_PATTERN = '^[A-Z0-9]{21}$'
 
 export const DEFAULT_KYC_VALIDATION = {
-  GST: { enabled: true, required: true, pattern: GSTIN_PATTERN, label: 'GST number', message: 'Enter a valid 15-character GST number.' },
-  PAN: { enabled: true, required: true, pattern: PAN_PATTERN, label: 'PAN number', message: 'Enter a valid 10-character PAN number.' },
-  CIN: { enabled: true, required: false, pattern: CIN_PATTERN, label: 'CIN number', message: 'Enter a valid 21-character CIN.' },
+  GST: {
+    enabled: true, required: true, pattern: GSTIN_PATTERN, label: 'GST number',
+    format: '2 digits + 5 uppercase letters + 4 digits + 1 letter + 1 alphanumeric + Z + 1 alphanumeric',
+    example: '27ABCDE1234F1Z5', message: 'Enter a valid 15-character GST number.',
+  },
+  PAN: {
+    enabled: true, required: true, pattern: PAN_PATTERN, label: 'PAN number',
+    format: '3 uppercase letters + status letter + 1 uppercase letter + 4 digits + 1 uppercase letter',
+    example: 'ABCPD1234F', message: 'Enter a valid 10-character PAN number.',
+  },
+  CIN: {
+    enabled: true, required: false, pattern: CIN_PATTERN, label: 'CIN number',
+    format: 'L/U + 5 digits + 2 state letters + 4-digit year + 3 type letters + 6 digits',
+    example: 'L12345MH2020PLC123456', message: 'Enter a valid 21-character CIN.',
+  },
 }
 
 export const kycValidationConfig = config => Object.fromEntries(

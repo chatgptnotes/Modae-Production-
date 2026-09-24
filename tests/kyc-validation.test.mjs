@@ -17,6 +17,15 @@ test('default KYC rules identify and validate GST, PAN, and CIN', () => {
   assert.equal(validateKycValue('CIN reference', 'L12345MH2020PLC123456').ok, true)
 })
 
+test('default KYC rules expose human-readable formats and examples', () => {
+  assert.match(DEFAULT_KYC_VALIDATION.GST.format, /2 digits.*5 uppercase letters/)
+  assert.equal(DEFAULT_KYC_VALIDATION.GST.example, '27ABCDE1234F1Z5')
+  assert.match(DEFAULT_KYC_VALIDATION.PAN.format, /status letter.*4 digits/)
+  assert.equal(DEFAULT_KYC_VALIDATION.PAN.example, 'ABCPD1234F')
+  assert.match(DEFAULT_KYC_VALIDATION.CIN.format, /2 state letters.*4-digit year/)
+  assert.equal(DEFAULT_KYC_VALIDATION.CIN.example, 'L12345MH2020PLC123456')
+})
+
 test('invalid required identity values are rejected with an explanation', () => {
   const gst = validateKycValue('GST certificate', 'bad')
   assert.equal(gst.ok, false)

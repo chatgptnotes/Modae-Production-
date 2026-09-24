@@ -12872,6 +12872,39 @@ table.sheet tbody tr:hover td {
   min-width: 0;
 }
 
+.admin-page .admin-kyc-rule-row {
+  grid-template-columns: minmax(260px, 1fr) auto auto;
+  align-items: start;
+}
+
+.admin-page .admin-kyc-rule-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.admin-page .admin-kyc-rule-copy .hint {
+  line-height: 1.35;
+}
+
+.admin-page .admin-kyc-advanced {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--admin-border-subtle);
+}
+
+.admin-page .admin-kyc-advanced summary {
+  color: var(--action-primary-hover);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.admin-page .admin-kyc-advanced .afield {
+  margin-top: 8px;
+}
+
 .admin-page .admin-card button,
 .admin-page .admin-page-actions button {
   min-height: 36px;
@@ -12977,6 +13010,14 @@ table.sheet tbody tr:hover td {
     grid-template-columns: 1fr 1fr;
   }
 
+  .admin-page .admin-kyc-rule-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .admin-page .admin-kyc-rule-copy {
+    grid-column: 1 / -1;
+  }
+
   .admin-page .admin-clause-library .clause-library-row textarea {
     grid-column: 1 / -1;
   }
@@ -13043,6 +13084,14 @@ table.sheet tbody tr:hover td {
 
   .admin-page .admin-clause-library .clause-library-row {
     grid-template-columns: 1fr;
+  }
+
+  .admin-page .admin-kyc-rule-row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-page .admin-kyc-rule-row .check-row {
+    justify-self: start;
   }
 
   .admin-page .admin-clause-library .clause-library-row textarea {

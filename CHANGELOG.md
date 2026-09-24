@@ -5,6 +5,8 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Made Admin GST, PAN, and CIN validation rules readable with plain-language
+  formats and examples while retaining regex editing under an advanced control.
 - Tightened default GSTIN, PAN, and CIN validation to enforce their standard
   segment structures and migrated only the old built-in patterns, preserving
   custom Admin rules.

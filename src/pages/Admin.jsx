@@ -14,7 +14,7 @@ import { DEFAULT_COMMON_MAILBOX } from '../leadClarification.js'
 import { DEFAULT_CUSTOMER_CLASSES } from '../customerClasses.js'
 import { parsePriceListFile } from '../priceListImport.js'
 import { normalizedCurrencyRates } from '../currency.js'
-import { kycValidationConfig } from '../kycValidation.js'
+import { DEFAULT_KYC_VALIDATION, kycValidationConfig } from '../kycValidation.js'
 import { DEFAULT_CLAUSES } from '../clauses.js'
 import { BUILT_IN_PROPOSAL_TEMPLATES, loadProposalTemplateBuffer, resolveProposalTemplate } from '../proposal/templateRegistry.js'
 
@@ -684,17 +684,29 @@ export default function Admin() {
         <div className="admin-card admin-card--list">
           <h3><Icon name="shield" size={14} /> KYC number validation</h3>
           <p className="hint">Choose which GST, PAN, and CIN numbers are checked during KYC. The pattern uses a regular expression.</p>
-          {Object.entries(kycValidation).map(([key, rule]) => (
-            <div key={key} className="admin-card-row">
-              <div><b>{key}</b><div className="hint">{rule.label}</div></div>
+          {Object.entries(kycValidation).map(([key, rule]) => {
+            const builtIn = DEFAULT_KYC_VALIDATION[key]
+            const usesBuiltInFormat = rule.pattern === builtIn?.pattern
+            return <div key={key} className="admin-card-row admin-kyc-rule-row">
+              <div className="admin-kyc-rule-copy">
+                <b>{key}</b>
+                <div className="hint">{rule.label}</div>
+                <div className="hint"><b>Expected format:</b> {usesBuiltInFormat ? rule.format : 'Custom validation rule'}</div>
+                <div className="hint"><b>Example:</b> {usesBuiltInFormat ? rule.example : 'Defined by the advanced rule below'}</div>
+              </div>
               <label className="check-row"><input type="checkbox" checked={rule.enabled !== false} disabled={!canEdit}
                 onChange={e => store.updateConfig({ kycValidation: { ...kycValidation, [key]: { ...rule, enabled: e.target.checked } } })} /> Validate</label>
               <label className="check-row"><input type="checkbox" checked={!!rule.required} disabled={!canEdit || rule.enabled === false}
                 onChange={e => store.updateConfig({ kycValidation: { ...kycValidation, [key]: { ...rule, required: e.target.checked } } })} /> Required</label>
-              <input type="text" value={rule.pattern || ''} disabled={!canEdit || rule.enabled === false} aria-label={`${key} validation pattern`}
-                onChange={e => store.updateConfig({ kycValidation: { ...kycValidation, [key]: { ...rule, pattern: e.target.value } } })} />
+              <details className="admin-kyc-advanced" open={!usesBuiltInFormat}>
+                <summary>Advanced validation rule</summary>
+                <label className="afield">Regular expression
+                  <input type="text" value={rule.pattern || ''} disabled={!canEdit || rule.enabled === false} aria-label={`${key} validation pattern`}
+                    onChange={e => store.updateConfig({ kycValidation: { ...kycValidation, [key]: { ...rule, pattern: e.target.value } } })} />
+                </label>
+              </details>
             </div>
-          ))}
+          })}
           <p className="hint">Changing these settings affects new KYC checks; previously verified documents remain recorded.</p>
         </div>
 
