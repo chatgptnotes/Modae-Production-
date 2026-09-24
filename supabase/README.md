@@ -1,5 +1,8 @@
 # Supabase production schema
 
+For project setup and the complete application architecture, start with the
+[root README](../README.md) and [agent/developer guide](../AGENTS.md).
+
 The application is locked to these six production tables:
 
 - `ai_secrets`
@@ -23,3 +26,7 @@ where table_schema = 'public'
   and table_name in ('ai_secrets', 'approvals', 'leads', 'opportunities', 'records', 'user_files')
 order by table_name;
 ```
+
+When changing database access, update `AGENTS.md` and `CHANGELOG.md` with the
+new contract or migration decision. Runtime code and active migrations must not
+introduce any table outside the six-table allowlist above.
