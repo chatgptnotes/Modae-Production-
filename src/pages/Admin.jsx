@@ -4,8 +4,7 @@ import { useStore } from '../store.jsx'
 import { OWNERS, MILESTONES } from '../seed.js'
 import { isAdminRole, canSeePage, displayRoleLabel } from '../utils.js'
 import { Icon } from '../icons.jsx'
-import { Chip, WarnBox, Modal, DemoDataControls } from '../ui.jsx'
-import * as sp from '../sharepoint.js'
+import { Chip, Modal, DemoDataControls } from '../ui.jsx'
 import { uploadAdminTemplate } from '../filestore.js'
 import { putFiles } from '../leadBlobs.js'
 import WorkbookPreview from '../proposal/WorkbookPreview.jsx'
@@ -26,17 +25,6 @@ const CLASS_ORDER = ['Green', 'Blue', 'Amber', 'Red']
 const REGION_OPTIONS = ['North & West India', 'South & East India', 'Unclassified leads']
 const PRICING_APPROVER_OPTIONS = ['AH', 'LJS', 'AN']
 
-const CONNECTOR_CYCLE = {
-  'Healthy': 'Degraded (read-only)',
-  'Degraded (read-only)': 'Unavailable',
-  'Unavailable': 'Healthy',
-}
-
-const connDotClass = state =>
-  state?.startsWith('Degraded') ? 'Degraded'
-    : state === 'Healthy' || state === 'Unavailable' || state === 'Connected' || state === 'Error' ? state
-      : 'NotConnected'
-
 const isCustomModel = m => {
   const s = (m || '').toLowerCase()
   return s.includes('enter below') || s.includes('deployment')
@@ -47,7 +35,6 @@ const TEMPLATE_LANES = BUILT_IN_PROPOSAL_TEMPLATES
 const ADMIN_TABS = [
   { id: 'workflow', label: 'Workflow & governance', icon: 'shield' },
   { id: 'documents', label: 'Documents & templates', icon: 'upload' },
-  { id: 'integrations', label: 'Integrations & AI', icon: 'cloud' },
 ]
 
 function NumField({ label, value, disabled, onChange }) {
@@ -113,98 +100,6 @@ function FileButton({ label, disabled, onFile, variant = 'secondary', accept }) 
     </>
   )
 }
-
-function SharePointCard({ canEdit }) {
-  const call = (fn, fallback) => { try { return fn() } catch { return fallback } }
-  const [cfg, setCfg] = useState(() => call(() => ({ ...sp.getConfig() }), {}))
-  const [account, setAccount] = useState(() => call(() => sp.getAccount(), null))
-  const [test, setTest] = useState(null)
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState('')
-  const [savedMsg, setSavedMsg] = useState(false)
-  const configured = call(() => sp.isConfigured(), false)
-
-  const set = (k, v) => setCfg(c => ({ ...c, [k]: v }))
-  const save = () => {
-    setErr('')
-    try { sp.configure(cfg); setSavedMsg(true); setTimeout(() => setSavedMsg(false), 2500) }
-    catch (e) { setErr(String((e && e.message) || e)) }
-  }
-  const connect = async () => {
-    setErr(''); setBusy(true)
-    try { setAccount(await sp.signIn()) }
-    catch (e) { setErr(String((e && e.message) || e)) }
-    setBusy(false)
-  }
-  const runTest = async () => {
-    setErr(''); setTest(null); setBusy(true)
-    try { setTest(await sp.testConnection()) }
-    catch (e) { setTest({ ok: false, message: String((e && e.message) || e) }) }
-    setBusy(false)
-  }
-  const disconnect = () => {
-    setErr('')
-    try { sp.signOut() } catch { /* stays local */ }
-    setAccount(null); setTest(null)
-  }
-
-  const health = err || (test && !test.ok)
-    ? <Chip tone="state-Rejected">Error</Chip>
-    : account
-      ? <Chip tone="state-Accepted">Connected</Chip>
-      : <Chip tone="grey">Local demo mode</Chip>
-
-  const fields = [
-    ['clientId', 'Client ID', 'Application (client) ID from Azure'],
-    ['tenantId', 'Tenant ID', 'blank = any organisation'],
-    ['siteHostname', 'Site hostname', 'e.g. contoso.sharepoint.com'],
-    ['sitePath', 'Site path', '/sites/Sales'],
-    ['library', 'Library', 'Documents'],
-    ['rootFolder', 'Root folder', 'Opportunities'],
-  ]
-
-  return (
-    <div className="admin-card admin-card-wide">
-      <h3><Icon name="cloud" size={14} /> SharePoint connector <span className="h3-end">{health}</span></h3>
-      <p className="hint">
-        Files stay in SharePoint; the app only links to them. Opportunity folders move between
-        Open / WON / Closed / Not In Opp List as the status changes. {configured ? 'Connector configured.' : 'Unconfigured — file flows fall back to local demo mode.'}
-      </p>
-      <div className="admin-field-grid">
-        {fields.map(([k, label, ph]) => (
-          <label key={k} className="afield">{label}
-            <input type="text" value={cfg[k] || ''} placeholder={ph} disabled={!canEdit}
-              onChange={e => set(k, e.target.value)} />
-          </label>
-        ))}
-      </div>
-      <div className="admin-actions admin-actions-end">
-        <button className="primary" disabled={!canEdit} onClick={save}>Save configuration</button>
-        <button disabled={!canEdit || busy} onClick={connect}><Icon name="key" size={11} /> Connect</button>
-        <button disabled={busy} onClick={runTest}><Icon name="refresh" size={11} /> Test connection</button>
-        {account && <button disabled={!canEdit} onClick={disconnect}><Icon name="logout" size={11} /> Disconnect</button>}
-      </div>
-      {savedMsg && <div className="okbox">SharePoint configuration saved.</div>}
-      {account && <p className="hint">Signed in as <b>{account.username || account.name || 'connected account'}</b></p>}
-      {busy && <p className="hint">Working…</p>}
-      {err && <div className="errbox">{err}</div>}
-      {test && (test.ok
-        ? <div className="okbox">Connection OK — site <b>{test.siteName || '—'}</b>, drive <b>{test.driveName || '—'}</b>{test.webUrl ? <> · {test.webUrl}</> : null}</div>
-        : <div className="errbox">{test.message || 'Connection failed.'}</div>)}
-      <details style={{ marginTop: 8 }}>
-        <summary style={{ cursor: 'pointer', fontSize: '12.5px' }}>Azure app registration — setup steps</summary>
-        <ol className="hint" style={{ margin: '6px 0 0 18px', lineHeight: 1.7 }}>
-          <li>Azure Portal → App registrations → New registration</li>
-          <li>Supported account types: multitenant (accounts in any organisational directory)</li>
-          <li>Authentication → add a Single-page application platform with the deployed staging and production URLs</li>
-          <li>API permissions → Microsoft Graph → delegated: <b>User.Read</b>, <b>Files.ReadWrite.All</b>, <b>Sites.ReadWrite.All</b></li>
-          <li>Copy the Application (client) ID into this card</li>
-        </ol>
-      </details>
-    </div>
-  )
-}
-
 
 const REQUIRES_OPTIONS = [
   ['none', 'Nothing — cleared on sight'],
@@ -489,7 +384,6 @@ export default function Admin() {
   const aiTh = config.aiThresholds || {}
   const kycValidation = kycValidationConfig(config)
   const amber = config.amberFee || {}
-  const healthyConnectors = (config.connectors || []).filter(item => item.state === 'Healthy' || item.state === 'Connected').length
   const configuredTemplates = proposalTemplates.filter(item => item.status === 'Current').length
   const aiStatus = 'Automatic routing'
 
@@ -510,7 +404,7 @@ export default function Admin() {
         <div>
           <p className="admin-eyebrow">Workspace settings</p>
           <h2>Admin configuration</h2>
-          <p className="admin-page-lede">Manage the rules, documents, integrations, and automation that shape the sales workspace.</p>
+          <p className="admin-page-lede">Manage the rules, documents, and automation that shape the sales workspace.</p>
         </div>
         <div className="admin-page-actions">
           <DemoDataControls className="secondary" />
@@ -526,7 +420,6 @@ export default function Admin() {
         <div className="admin-status-item"><span className="admin-status-label">AI model</span><b>{aiStatus}</b></div>
         <div className="admin-status-item"><span className="admin-status-label">Reporting currency</span><b>INR</b><span className="hint">source lists keep their currency</span></div>
         <div className="admin-status-item"><span className="admin-status-label">Active templates</span><b>{configuredTemplates || 'Built-in defaults'}</b><span className="hint">current proposal versions</span></div>
-        <div className="admin-status-item"><span className="admin-status-label">Connectors healthy</span><b>{healthyConnectors} / {(config.connectors || []).length}</b></div>
       </div>
 
       <nav className="admin-tabs" role="tablist" aria-label="Admin settings categories">
@@ -969,72 +862,6 @@ export default function Admin() {
               {r.label || r.name}
             </label>
           ))}
-        </div>
-
-        </div>
-        </section>
-
-        <section id="admin-panel-integrations" className={`admin-panel ${adminView === 'integrations' ? 'is-active' : ''}`}
-          role="tabpanel" aria-labelledby="admin-tab-integrations" hidden={adminView !== 'integrations'}>
-        <div className="admin-section-heading">
-          <div><h3>Integrations &amp; automation</h3><p>Monitor connected systems and configure the services behind the workspace.</p></div>
-        </div>
-        <div className="admin-bottom-grid">
-
-        {/* 10 — Connector state */}
-        <div className="admin-card admin-card--compact admin-connector-state-card">
-          <h3><Icon name="globe" size={14} /> Connector state</h3>
-          {(config.connectors || []).map(c => (
-            <div key={c.id} className="arow">
-              <span><span className={`conn-dot ${connDotClass(c.state)}`} />{c.label || c.name}</span>
-              {c.id === 'sharepoint' ? (
-                <span className="hint">Configured on the SharePoint card</span>
-              ) : (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <span className="hint">{c.state}</span>
-                  <button disabled={!canEdit} title="Cycle health state"
-                    onClick={() => store.setConnectorState(c.id, CONNECTOR_CYCLE[c.state] || 'Healthy')}>
-                    <Icon name="refresh" size={10} />
-                  </button>
-                </span>
-              )}
-            </div>
-          ))}
-        </div>
-
-        </div>
-
-        <div className="admin-wide-grid">
-
-        {/* 11 — SharePoint connector */}
-        <SharePointCard canEdit={canEdit} />
-
-        {/* 12 — AI model configuration */}
-        <div className="admin-card admin-card-wide">
-          <h3>
-            <Icon name="sparkles" size={14} /> AI model configuration
-            <span className="h3-end"><Chip tone="grey">Coming soon</Chip></span>
-          </h3>
-          <p className="hint">
-            Manual model selection is coming soon. AI is currently managed automatically through the
-            server-side Vercel <code>/api/ai</code> proxy; the API key never reaches this browser.
-          </p>
-          <div className="admin-field-grid">
-            <label className="afield">Routine model
-              <input value="gemini-3.1-flash-lite" disabled readOnly />
-            </label>
-            <label className="afield">Complex-task model
-              <input value="gemini-2.5-flash" disabled readOnly />
-            </label>
-          </div>
-          <div className="admin-actions admin-actions-end">
-            <button className="primary" disabled>Save configuration</button>
-            <button disabled><Icon name="play" size={11} /> Test connection</button>
-          </div>
-          <WarnBox>
-            Routine tasks use <b>gemini-3.1-flash-lite</b>. Complex proposal, tender, template, and
-            approval-evidence tasks use <b>gemini-2.5-flash</b> automatically.
-          </WarnBox>
         </div>
 
         </div>

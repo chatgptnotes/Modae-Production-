@@ -5,6 +5,8 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Removed the Admin Integrations & AI tab and its SharePoint/AI configuration
+  panels while keeping the underlying integration and model-routing code intact.
 - Continue recording meaningful schema, workflow, deployment, and architectural
   changes before they are pushed.
 - Protected the Gemini proxy with Supabase Auth, added request-size and rate
