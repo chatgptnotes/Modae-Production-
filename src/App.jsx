@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Routes, Route, NavLink, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from './store.jsx'
 import { PORTAL_ENABLED } from './seed.js'
@@ -10,31 +10,37 @@ import { counts } from './kpi.js'
 import BrandWatermark from './branding/BrandWatermark.jsx'
 import { startAutoTitle } from './autoTitle.js'
 import { computeAlerts } from './monitoring.js'
-import Tracker from './pages/Tracker.jsx'
-import IntakeForm from './pages/IntakeForm.jsx'
-import Folders from './pages/Folders.jsx'
-import Proposal from './pages/Proposal.jsx'
-import PriceLists from './pages/PriceLists.jsx'
-import MyDashboard from './pages/MyDashboard.jsx'
-import Customers from './pages/Customers.jsx'
-import Users from './pages/Users.jsx'
-import TenderIntake from './pages/TenderIntake.jsx'
-import MyOpps from './pages/MyOpps.jsx'
-import Inbox from './pages/Inbox.jsx'
-import Approvals, { COMMERCIAL_RX } from './pages/Approvals.jsx'
-import Audit from './pages/Audit.jsx'
-import VoiceUpdate from './pages/VoiceUpdate.jsx'
-import AiMap from './pages/AiMap.jsx'
-import Admin from './pages/Admin.jsx'
-import WorkflowAdmin from './pages/WorkflowAdmin.jsx'
 import { RequireAuth } from './pages/Login.jsx'
-import Register from './pages/Register.jsx'
-import Workbench from './pages/Workbench.jsx'
-import ProposalSent from './pages/ProposalSent.jsx'
-import Portal from './pages/Portal.jsx'
-import Opportunities from './pages/Opportunities.jsx'
-import TabletApp from './tablet/TabletApp.jsx'
 import { supabaseProjectRef } from './supabase.js'
+
+const Opportunities = lazy(() => import('./pages/Opportunities.jsx'))
+const IntakeForm = lazy(() => import('./pages/IntakeForm.jsx'))
+const Folders = lazy(() => import('./pages/Folders.jsx'))
+const Proposal = lazy(() => import('./pages/Proposal.jsx'))
+const PriceLists = lazy(() => import('./pages/PriceLists.jsx'))
+const MyDashboard = lazy(() => import('./pages/MyDashboard.jsx'))
+const Customers = lazy(() => import('./pages/Customers.jsx'))
+const Users = lazy(() => import('./pages/Users.jsx'))
+const TenderIntake = lazy(() => import('./pages/TenderIntake.jsx'))
+const MyOpps = lazy(() => import('./pages/MyOpps.jsx'))
+const Inbox = lazy(() => import('./pages/Inbox.jsx'))
+const Approvals = lazy(() => import('./pages/Approvals.jsx'))
+const Audit = lazy(() => import('./pages/Audit.jsx'))
+const VoiceUpdate = lazy(() => import('./pages/VoiceUpdate.jsx'))
+const AiMap = lazy(() => import('./pages/AiMap.jsx'))
+const Admin = lazy(() => import('./pages/Admin.jsx'))
+const WorkflowAdmin = lazy(() => import('./pages/WorkflowAdmin.jsx'))
+const Register = lazy(() => import('./pages/Register.jsx'))
+const Workbench = lazy(() => import('./pages/Workbench.jsx'))
+const ProposalSent = lazy(() => import('./pages/ProposalSent.jsx'))
+const Portal = lazy(() => import('./pages/Portal.jsx'))
+const TabletApp = lazy(() => import('./tablet/TabletApp.jsx'))
+
+const COMMERCIAL_RX = /GM\s*%|\bGM\b|discount|₹|\bvalue\b|\bmargin\b/i
+
+const LoadingScreen = ({ label = 'Loading workspace…' }) => (
+  <div className="login-bg auth-loading" role="status">{label}</div>
+)
 
 function PageGate({ page, children }) {
   const store = useStore()
@@ -297,7 +303,7 @@ export default function App() {
   // tablet branch, so both shells are covered by the one guard.
   if (!PORTAL_ENABLED && (role === 'CUST' || custAccount)) return <PortalParked />
 
-  if (tablet) return <RequireAuth><TabletApp /></RequireAuth>
+  if (tablet) return <RequireAuth><Suspense fallback={<LoadingScreen />}><TabletApp /></Suspense></RequireAuth>
 
   // Customer accounts/persona only ever see the portal. Route-level, not a
   // post-render effect — internal pages must never mount for a customer.
@@ -314,7 +320,7 @@ export default function App() {
     </Routes>
   ) : (
     <Routes>
-      <Route path="/" element={<PageGate page="tracker"><Tracker /></PageGate>} />
+      <Route path="/" element={<PageGate page="tracker"><Opportunities /></PageGate>} />
       <Route path="/opportunities" element={<PageGate page="tracker"><Opportunities /></PageGate>} />
       <Route path="/home" element={<Navigate to="/opportunities" replace />} />
       <Route path="/my" element={<PageGate page="my"><MyOpps /></PageGate>} />
@@ -406,7 +412,9 @@ export default function App() {
         {/* The shell is viewport-locked, so this is the app's single scroll
             region — pages that want their own internal scroller (the pipeline
             sheet, the mailbox list) size themselves to 100% of it. */}
-        <main id="main-content" className="main-scroll" ref={mainRef}>{routes}</main>
+        <main id="main-content" className="main-scroll" ref={mainRef}>
+          <Suspense fallback={<LoadingScreen />}>{routes}</Suspense>
+        </main>
       </div>
       <DrawerHost />
     </div>

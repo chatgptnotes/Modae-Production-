@@ -121,16 +121,17 @@ async function fetchCore() {
     const [stateResult, settings, business] = await Promise.all([
       supabase.from(TABLE).select('key, value').not('key', 'in', legacyKeys),
       supabase.from('app_settings').select('key, value'),
-      loadBusinessTables(),
+      loadBusinessTables({ includeRecords: false }),
     ])
     if (stateResult.error) throw stateResult.error
     const slices = {}
     for (const row of stateResult.data || []) slices[row.key] = row.value
     if (!settings.error) for (const row of settings.data || []) slices[row.key] = row.value
     for (const [key, value] of Object.entries(business)) {
-      if (value != null) slices[key] = value
+      if (key !== 'recordCount' && value != null) slices[key] = value
     }
-    const hasBusinessData = Object.values(business).some(value => Array.isArray(value) ? value.length > 0 : Object.keys(value || {}).length > 0)
+    const hasBusinessData = [business.leads, business.opportunities, business.approvals].some(value => Array.isArray(value) && value.length > 0)
+      || Number(business.recordCount) > 0
     return {
       empty: (!stateResult.data || stateResult.data.length === 0) && !settings.data?.length && !hasBusinessData,
       slices,
@@ -165,11 +166,11 @@ async function fetchAll() {
       const cached = readCachedRules()
       if (cached) slices.config = cached
     }
-    const business = await loadBusinessTables()
+    const business = await loadBusinessTables({ includeRecords: true })
     // Apply empty normalized arrays too. This prevents stale local/demo rows
     // from surviving when the server intentionally has no active rows.
     for (const [key, value] of Object.entries(business)) {
-      if (value != null) slices[key] = value
+      if (key !== 'recordCount' && value != null) slices[key] = value
     }
     // Read legacy opportunities only for diagnostics. The normalized table
     // remains authoritative; this never merges old rows back into the app.
@@ -224,6 +225,7 @@ async function fetchAll() {
       }))
     }
     const hasBusinessData = Object.values(business).some(value => Array.isArray(value) ? value.length > 0 : Object.keys(value || {}).length > 0)
+      || Number(business.recordCount) > 0
     return {
       empty: (!data || data.length === 0) && !settings.data?.length && !rates.data?.length && !priceLists.data?.length && !hasBusinessData,
       slices,
@@ -364,12 +366,19 @@ async function saveSettings(dirty = {}, { includeConfig = true } = {}) {
   return result.error ? [] : rows.map(row => row.key)
 }
 
-async function loadBusinessTables() {
+async function loadBusinessTables({ includeRecords = true } = {}) {
+  // The records table contains large proposal, audit, clarification, and
+  // sourcing JSON payloads. Do not transfer it during the critical startup
+  // path; a count is enough to distinguish an empty workspace from one whose
+  // secondary records are still loading.
+  const recordsQuery = includeRecords
+    ? supabase.from('records').select('entity, id, data, rev').is('deleted_at', null).in('entity', ['proposals', 'spares_lines', 'clarifications', 'audit'])
+    : supabase.from('records').select('entity', { count: 'exact', head: true }).is('deleted_at', null)
   const tables = await Promise.all([
     supabase.from('leads').select('id, data, rev').is('deleted_at', null),
     supabase.from('opportunities').select('id, data, rev').is('deleted_at', null),
     supabase.from('approvals').select('id, data, rev').is('deleted_at', null),
-    supabase.from('records').select('entity, id, data, rev').is('deleted_at', null).in('entity', ['proposals', 'spares_lines', 'clarifications', 'audit']),
+    recordsQuery,
   ])
   const failedTables = tables
     .map((result, index) => result.error ? { index, error: result.error } : null)
@@ -385,9 +394,11 @@ async function loadBusinessTables() {
     return {}
   }
   const records = tables[3].data || []
-  opportunityRevisions.clear()
-  opportunityRecords.clear()
-  for (const entity of ['leads', 'approvals', 'proposals', 'spares_lines', 'clarifications', 'audit']) clearNormalizedEntity(entity)
+  if (includeRecords) {
+    opportunityRevisions.clear()
+    opportunityRecords.clear()
+    for (const entity of ['leads', 'approvals', 'proposals', 'spares_lines', 'clarifications', 'audit']) clearNormalizedEntity(entity)
+  }
   for (const row of tables[1].data || []) {
     opportunityRevisions.set(row.id, Number(row.rev) || 0)
     opportunityRecords.set(row.id, { data: row.data, rev: Number(row.rev) || 0 })
@@ -415,6 +426,7 @@ async function loadBusinessTables() {
     sparesLines: records.filter(row => row.entity === 'spares_lines').map(row => row.data),
     clarifications: records.filter(row => row.entity === 'clarifications').map(row => row.data),
     audit: records.filter(row => row.entity === 'audit').map(row => row.data),
+    recordCount: includeRecords ? records.length : (Number(tables[3].count) || 0),
   }
 }
 

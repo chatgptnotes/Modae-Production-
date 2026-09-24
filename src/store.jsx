@@ -66,11 +66,6 @@ const initialState = () => {
   // browser quota even though v5 no longer reads it.
   try { localStorage.removeItem('wintrack-modae-v4') } catch { /* private mode */ }
   const saved = localStorage.getItem(KEY)
-  // When Supabase is configured it is authoritative; remove the old local
-  // snapshot after reading it once so it cannot consume quota indefinitely.
-  if (datastore.dbEnabled()) {
-    try { localStorage.removeItem(KEY) } catch { /* private mode */ }
-  }
   const state = stateFromSaved(saved)
   // Production starts clean. Existing demo-mode snapshots are migrated once
   // into an empty workspace; real records entered after that remain intact.
@@ -89,7 +84,6 @@ const localSnapshot = state => ({
 })
 
 const persistLocalSnapshot = state => {
-  if (datastore.dbEnabled()) return
   try { localStorage.setItem(KEY, JSON.stringify(localSnapshot(state))) }
   catch (e) { console.warn('Local save skipped — Supabase remains the source of truth:', e?.message) }
 }
@@ -243,7 +237,7 @@ function reconcileApprovedSubmissions(s) {
 
 export function StoreProvider({ children }) {
   const [state, setState] = useState(initialState)
-  const [authReady, setAuthReady] = useState(() => !supabase)
+  const [authReady, setAuthReady] = useState(() => !supabase || !!state.auth?.user)
   const [liveSyncStatus, setLiveSyncStatus] = useState(() => supabaseConfigError ? 'config-error' : datastore.dbEnabled() ? 'connecting' : 'offline')
   const [syncDiagnostics, setSyncDiagnostics] = useState({ normalizedOpportunityCount: null, legacyOpportunityCount: null })
   setRoleNameConfig(state.config)
@@ -446,7 +440,14 @@ export function StoreProvider({ children }) {
         nextOpportunityBaseline = mergedOpportunities.baseline
         continue
       }
-      const dirty = k in s && s[k] !== lastSavedRef.current[k]
+      // A background slice may not have a server baseline yet because the
+      // fast boot path intentionally skips large records. Compare those
+      // slices with the boot cache instead of mistaking every cached value
+      // for an unsaved edit. Once a baseline exists, the normal save-aware
+      // comparison protects edits made while the request was in flight.
+      const hasSavedBaseline = Object.prototype.hasOwnProperty.call(lastSavedRef.current, k)
+      const baseline = hasSavedBaseline ? lastSavedRef.current[k] : bootRef.current[k]
+      const dirty = k in s && JSON.stringify(s[k]) !== JSON.stringify(baseline)
       if (dirty) continue
       if (JSON.stringify(s[k]) === JSON.stringify(v)) continue
       updates[k] = v
@@ -2227,8 +2228,15 @@ export function StoreProvider({ children }) {
     const restoreSession = async () => {
       try {
         const { data, error } = await supabase.auth.getSession()
-        if (!active || error || !data?.session?.user || stateRef.current.auth?.user) return
-        api.loginExternal(data.session.user)
+        if (!active || error) return
+        if (data?.session?.user) {
+          const current = stateRef.current.auth?.user
+          if (!current || current.email?.toLowerCase() !== data.session.user.email?.toLowerCase()) {
+            api.loginExternal(data.session.user)
+          }
+        } else if (stateRef.current.auth?.user) {
+          setState(st => ({ ...st, auth: { user: null } }))
+        }
       } catch (e) {
         console.warn('Supabase session restore failed:', e?.message || e)
       } finally {
