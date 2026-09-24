@@ -206,9 +206,9 @@ function ApprovalBoqModal({ opp, proposal, store, onClose }) {
 }
 
 // Inline decision form shown on a pending card when the acting role can decide.
-function DecisionForm({ a, role, onDecide }) {
-  const [d, setD] = useState('')
-  const [comment, setComment] = useState('')
+function DecisionForm({ a, role, draft = {}, onDraftChange, onDecide }) {
+  const d = draft.d || ''
+  const comment = draft.comment || ''
   const [err, setErr] = useState('')
   const [checking, setChecking] = useState(false)
 
@@ -235,13 +235,13 @@ function DecisionForm({ a, role, onDecide }) {
       <div className="approval-decision-options">
         {DECISIONS.map(v => (
           <label key={v}>
-            <input type="radio" name={`dec-${a.id}`} checked={d === v} onChange={() => setD(v)} />
+            <input type="radio" name={`dec-${a.id}`} checked={d === v} onChange={() => onDraftChange({ d: v })} />
             {DECISION_LABELS[v]}
           </label>
         ))}
       </div>
       {d && <textarea
-          rows={2} value={comment} onChange={e => setComment(e.target.value)}
+          rows={2} value={comment} onChange={e => onDraftChange({ comment: e.target.value })}
           placeholder="Decision note (required)"
           className="approval-decision-input"
         />}
@@ -263,9 +263,20 @@ export default function Approvals() {
   const [statusF, setStatusF] = useState('')
   const [typeF, setTypeF] = useState('')
   const [boqOppId, setBoqOppId] = useState('')
+  const [decisionDrafts, setDecisionDrafts] = useState({})
   // Approver workbench for LJS/AH/admins, plus any role named on a joint gate.
   const approverView = isApprover(role) || store.approvals.some(a => neededOf(a).includes(role))
   const canDecide = a => neededOf(a).includes(role)
+  const updateDecisionDraft = (id, patch) => setDecisionDrafts(current => ({
+    ...current,
+    [id]: { ...(current[id] || {}), ...patch },
+  }))
+  const clearDecisionDraft = id => setDecisionDrafts(current => {
+    if (!current[id]) return current
+    const next = { ...current }
+    delete next[id]
+    return next
+  })
 
   const oppName = id => (store.opportunities.find(o => o.id === id) || {}).oppName || ''
   const pricingRowsFor = a => {
@@ -478,7 +489,16 @@ export default function Approvals() {
         <div className="approval-approvers"><span>Approvers</span><RoleChips a={a} /></div>
         <QuickLinks a={a} />
         {myTurn(a)
-          ? <DecisionForm a={a} role={role} onDecide={dec => store.recordDecision(a.id, dec)} />
+          ? <DecisionForm
+              a={a}
+              role={role}
+              draft={decisionDrafts[a.id]}
+              onDraftChange={patch => updateDecisionDraft(a.id, patch)}
+              onDecide={dec => {
+                clearDecisionDraft(a.id)
+                store.recordDecision(a.id, dec)
+              }}
+            />
           : myDecision
             ? (
               <div className="approval-awaiting hint">

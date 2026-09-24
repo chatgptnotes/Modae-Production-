@@ -115,7 +115,8 @@ test('approval queue copy explains the decision required', () => {
 
 test('approval decisions require an explicit choice before showing notes', () => {
   const approvals = read('src/pages/Approvals.jsx')
-  assert.match(approvals, /const \[d, setD\] = useState\(''\)/)
+  assert.match(approvals, /const d = draft\.d \|\| ''/)
+  assert.match(approvals, /onDraftChange\(\{ d: v \}\)/)
   assert.match(approvals, /if \(!d\) \{ setErr\('Choose a decision before continuing\.'/)
   assert.match(approvals, /\{d && <textarea/)
   assert.match(approvals, /A note is required for every decision/)
