@@ -17,3 +17,8 @@ test('Admin workflow and documents tabs remain available', () => {
   assert.match(admin, /id="admin-panel-workflow"/)
   assert.match(admin, /id="admin-panel-documents"/)
 })
+
+test('Admin header does not render the redundant workflow configuration action', () => {
+  assert.doesNotMatch(admin, /Configure workflow/)
+  assert.doesNotMatch(admin, /nav\('\/admin\/workflow'\)/)
+})

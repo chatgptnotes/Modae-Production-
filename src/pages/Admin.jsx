@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { OWNERS, MILESTONES } from '../seed.js'
+import { OWNERS, MILESTONES, seedConfig } from '../seed.js'
 import { isAdminRole, canSeePage, displayRoleLabel } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { Chip, Modal, DemoDataControls } from '../ui.jsx'
@@ -381,7 +381,7 @@ export default function Admin() {
   })
 
   const thresholds = config.approvalThresholds || {}
-  const aiTh = config.aiThresholds || {}
+  const aiTh = { ...seedConfig.aiThresholds, ...(config.aiThresholds || {}) }
   const kycValidation = kycValidationConfig(config)
   const amber = config.amberFee || {}
   const configuredTemplates = proposalTemplates.filter(item => item.status === 'Current').length
@@ -408,7 +408,6 @@ export default function Admin() {
         </div>
         <div className="admin-page-actions">
           <DemoDataControls className="secondary" />
-          <button type="button" className="secondary" onClick={() => nav('/admin/workflow')}><Icon name="list" size={11} /> Configure workflow</button>
         </div>
       </header>
 

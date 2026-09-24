@@ -5,6 +5,12 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Tightened default GSTIN, PAN, and CIN validation to enforce their standard
+  segment structures and migrated only the old built-in patterns, preserving
+  custom Admin rules.
+- Backfilled missing Admin routing, KYC, and AI-threshold configuration when
+  loading legacy saved workspace state, preventing empty Admin cards and zeroed
+  threshold values.
 - Removed the Admin Integrations & AI tab and its SharePoint/AI configuration
   panels while keeping the underlying integration and model-routing code intact.
 - Continue recording meaningful schema, workflow, deployment, and architectural

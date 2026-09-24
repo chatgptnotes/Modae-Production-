@@ -14,6 +14,14 @@ import { DEFAULT_CLAUSES } from './clauses.js'
 import { modaeStandardCommercialTerms } from './commercialTerms.js'
 import { isLegacyAutoSparesSupportRow } from './proposal/sparesBoq.js'
 import { proposalApprovalSnapshot } from './approvalMemory.js'
+import {
+  CIN_PATTERN,
+  GSTIN_PATTERN,
+  LEGACY_CIN_PATTERN,
+  LEGACY_GSTIN_PATTERN,
+  LEGACY_PAN_PATTERN,
+  PAN_PATTERN,
+} from './kycValidation.js'
 
 // The store's pure state layer, lifted out of store.jsx so it can be imported
 // and *run* by the tests — store.jsx is JSX and node --test cannot parse it,
@@ -226,8 +234,20 @@ export function migrate(s) {
   s.config.kycValidation = Object.fromEntries(Object.entries(seedConfig.kycValidation || {}).map(([key, rule]) => [
     key, { ...rule, ...(s.config.kycValidation?.[key] || {}) },
   ]))
+  if (s.config.kycValidation.GST?.pattern === LEGACY_GSTIN_PATTERN) {
+    s.config.kycValidation.GST = { ...s.config.kycValidation.GST, pattern: GSTIN_PATTERN }
+  }
+  if (s.config.kycValidation.PAN?.pattern === LEGACY_PAN_PATTERN) {
+    s.config.kycValidation.PAN = { ...s.config.kycValidation.PAN, pattern: PAN_PATTERN }
+  }
+  if (s.config.kycValidation.CIN?.pattern === LEGACY_CIN_PATTERN) {
+    s.config.kycValidation.CIN = { ...s.config.kycValidation.CIN, pattern: CIN_PATTERN }
+  }
+  s.config.aiThresholds = { ...seedConfig.aiThresholds, ...(s.config.aiThresholds || {}) }
+  if (!Array.isArray(s.config.ownershipRules)) s.config.ownershipRules = seedConfig.ownershipRules
   if (!Array.isArray(s.config.stateRegions)) s.config.stateRegions = seedConfig.stateRegions
   if (!Array.isArray(s.config.ownerRules)) s.config.ownerRules = seedConfig.ownerRules
+  if (!Array.isArray(s.config.kycItems)) s.config.kycItems = seedConfig.kycItems
   s.config.roleNames = { ...seedConfig.roleNames, ...(s.config.roleNames || {}) }
   if (!Array.isArray(s.config.workflow) || !s.config.workflow.length) s.config.workflow = DEFAULT_WORKFLOW.map(x => ({ ...x }))
   s.config.workflow = s.config.workflow.map((stage, i) => ({

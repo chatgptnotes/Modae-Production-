@@ -12750,7 +12750,7 @@ table.sheet tbody tr:hover td {
   column-count: initial;
   column-gap: initial;
   gap: var(--admin-grid-gap);
-  align-items: stretch;
+  align-items: start;
 }
 
 .admin-page .admin-setting-grid > .admin-card,
@@ -12792,7 +12792,7 @@ table.sheet tbody tr:hover td {
 .admin-page .admin-card {
   display: flex;
   flex-direction: column;
-  min-height: 224px;
+  min-height: 0;
   padding: var(--admin-card-padding);
   border: 1px solid var(--admin-border);
   border-top: 1px solid var(--admin-border);
@@ -12802,7 +12802,7 @@ table.sheet tbody tr:hover td {
 }
 
 .admin-page .admin-card--featured {
-  min-height: 288px;
+  min-height: 0;
   border-top: 3px solid var(--action-primary);
 }
 

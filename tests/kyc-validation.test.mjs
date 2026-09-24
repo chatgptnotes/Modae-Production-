@@ -13,7 +13,7 @@ test('default KYC rules identify and validate GST, PAN, and CIN', () => {
   assert.equal(kycIdentityKey('PAN certificate'), 'PAN')
   assert.equal(kycIdentityKey('CIN reference'), 'CIN')
   assert.equal(validateKycValue('GST certificate', '27ABCDE1234F1Z5').ok, true)
-  assert.equal(validateKycValue('PAN certificate', 'ABCDE1234F').ok, true)
+  assert.equal(validateKycValue('PAN certificate', 'ABCPD1234F').ok, true)
   assert.equal(validateKycValue('CIN reference', 'L12345MH2020PLC123456').ok, true)
 })
 
@@ -22,6 +22,27 @@ test('invalid required identity values are rejected with an explanation', () => 
   assert.equal(gst.ok, false)
   assert.match(gst.message, /valid/i)
   assert.equal(validateKycValue('PAN certificate', '').ok, false)
+})
+
+test('GST validation enforces the standard segment structure', () => {
+  for (const value of [
+    'A7ABCDE1234F1Z5',
+    '27AB1DE1234F1Z5',
+    '27ABCDE1234F1Y5',
+    '27ABCDE1234F1Z',
+  ]) {
+    assert.equal(validateKycValue('GST certificate', value).ok, false, value)
+  }
+})
+
+test('PAN and CIN validation enforce their identifier structures', () => {
+  assert.equal(validateKycValue('PAN certificate', 'ABCPD1234F').ok, true)
+  assert.equal(validateKycValue('PAN certificate', 'ABCDX1234F').ok, false)
+  assert.equal(validateKycValue('PAN certificate', 'ABCPD123F').ok, false)
+
+  assert.equal(validateKycValue('CIN reference', 'L12345MH2020PLC123456').ok, true)
+  assert.equal(validateKycValue('CIN reference', 'X12345MH2020PLC123456').ok, false)
+  assert.equal(validateKycValue('CIN reference', 'L12345M12020PLC123456').ok, false)
 })
 
 test('simulated KYC verification supplies valid demo identifiers', () => {
