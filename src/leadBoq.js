@@ -51,6 +51,10 @@ const consolidateItems = items => {
 
 export function lineItemsFromLead(lead) {
   const aiItems = Array.isArray(lead?.ai?.lineItems) ? lead.ai.lineItems : []
+  const structuredLeadItems = [
+    ...(Array.isArray(lead?.parse?.items) ? lead.parse.items : []),
+    ...(Array.isArray(lead?.requestedItems) ? lead.requestedItems : []),
+  ]
   const attachmentItems = (lead?.attachments || []).flatMap(attachment => {
     const parsed = parseLeadLineItems(attachment?.text || '')
     const document = attachment?.name || attachment?.fileName || attachment?.path || 'Original attachment'
@@ -82,11 +86,15 @@ export function lineItemsFromLead(lead) {
         sourceDocument: candidate.sourceDocument || item.sourceDocument,
       } : item
     })
-    return consolidateItems(enriched)
+    // AI extraction is a useful interpretation layer, not a complete source
+    // of truth. Keep structured parser/request rows and attachment rows too;
+    // otherwise one incomplete AI response can silently hide customer lines.
+    return consolidateItems([...enriched, ...structuredLeadItems, ...attachmentItems])
   }
 
   const sources = [
     lead?.body || '',
+    ...structuredLeadItems,
     ...attachmentItems,
     ...(lead?.ai?.fields || []).filter(f => relevantField.test(f.k || '')).map(f => f.v || ''),
   ].filter(Boolean)

@@ -38,6 +38,27 @@ test('structured AI line items take precedence over unrelated lead prose', () =>
   assert.equal(items[0].partNumber, 'IN081-3-110-50')
 })
 
+test('AI rows do not hide structured parser and attachment rows', () => {
+  const items = lineItemsFromLead({
+    ai: { lineItems: [{ description: 'Probe', partNumber: 'P-1', qty: 1 }] },
+    parse: { items: [{ description: 'Extension cable', partNumber: 'C-1', qty: 2 }] },
+    attachments: [{ name: 'bom.xlsx', text: '3. Mounting kit — 4 nos' }],
+  })
+  assert.deepEqual(items.map(item => [item.partNumber, item.description, item.qty]), [
+    ['P-1', 'Probe', 1],
+    ['C-1', 'Extension cable', 2],
+    ['', 'Mounting kit —', 4],
+  ])
+})
+
+test('source rows merge with duplicate AI rows instead of duplicating quantity', () => {
+  const items = lineItemsFromLead({
+    ai: { lineItems: [{ description: 'Probe', partNumber: 'P-1', qty: 1 }] },
+    parse: { items: [{ description: 'Probe', partNumber: 'P-1', qty: 2 }] },
+  })
+  assert.deepEqual(items.map(item => [item.partNumber, item.qty]), [['P-1', 3]])
+})
+
 test('extraction keeps customer reference separate from the real description', () => {
   const items = lineItemsFromLead({ ai: { lineItems: [
     { description: 'Shielded signal cable', customerRef: '2', qty: 2 },

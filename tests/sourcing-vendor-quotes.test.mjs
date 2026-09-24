@@ -58,6 +58,13 @@ test('support rows are not created automatically', () => {
   assert.match(store, /sparesLines: s\.sparesLines\.map\(l => \(l\.id === id \? updated : l\)\)/)
 })
 
+test('Sourcing reconciles missing structured lead rows for existing opportunities', () => {
+  assert.match(sparesWorkbench, /reconciledOppRef/, 'reconciliation must run once per opportunity mount')
+  assert.match(sparesWorkbench, /Sourcing lines restored from lead/, 'restored rows must be auditable')
+  assert.match(sparesWorkbench, /store\.addSparesLinesFromLead\(opp\.id, workbenchRows/, 'missing lead rows must be added to sourcing')
+  assert.match(store, /addSparesLinesFromLead\(oppId, rows, \{ auditAction = 'Lead lines imported' \}/)
+})
+
 test('vendor quote support remains in shared store modules after Sourcing panels are removed', () => {
   assert.doesNotMatch(workbench, /Vendor \/ price-list versions|Vendor actions \(Coming soon\)|Manufacturer quotes \(Coming soon\)/)
   assert.doesNotMatch(workbench, /Draft manufacturer RFQ|Upload \/ apply response/)

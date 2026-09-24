@@ -145,6 +145,18 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
   const sourcingSheetWrapRef = useRef(null)
   const compareRequestRef = useRef(0)
   const dedupedOppRef = useRef('')
+  const reconciledOppRef = useRef('')
+  useEffect(() => {
+    if (reconciledOppRef.current === opp.id) return
+    const linkedLead = [...(store.leads || []), ...(store.leadArchive || [])]
+      .find(lead => lead.id === opp.sourceLeadId || lead.oppId === opp.id)
+    if (!linkedLead) return
+    reconciledOppRef.current = opp.id
+    const { workbenchRows } = buildLeadProposalData(linkedLead, store.priceLists, store.adhocParts)
+    if (workbenchRows.length) {
+      store.addSparesLinesFromLead(opp.id, workbenchRows, { auditAction: 'Sourcing lines restored from lead' })
+    }
+  }, [opp.id, opp.sourceLeadId, store.leads, store.leadArchive, store.priceLists, store.adhocParts])
   useEffect(() => {
     if (!comm || dedupedOppRef.current === opp.id || !lines.length) return
     dedupedOppRef.current = opp.id

@@ -1845,7 +1845,7 @@ export function StoreProvider({ children }) {
         return withAudit({ ...s, sparesLines: [...nextLines, ...order.map(identity => byKey.get(identity))] }, 'Duplicate spares lines removed', oppId, `${duplicateCount} duplicate line(s)`)
       })
     },
-    addSparesLinesFromLead(oppId, rows) {
+    addSparesLinesFromLead(oppId, rows, { auditAction = 'Lead lines imported' } = {}) {
       setState(s => {
         const existing = s.sparesLines.filter(l => l.oppId === oppId)
         const key = l => `${String(l.pn || l.custRef || '').toUpperCase()}|${String(l.desc || '').toLowerCase()}`
@@ -1866,7 +1866,7 @@ export function StoreProvider({ children }) {
           }))
         })
         if (!additions.length) return s
-        return withAudit({ ...s, sparesLines: [...s.sparesLines, ...additions] }, 'Lead lines imported', oppId, `${additions.length} line(s)`)
+        return withAudit({ ...s, sparesLines: [...s.sparesLines, ...additions] }, auditAction, oppId, `${additions.length} line(s)`)
       })
     },
     removeSparesLine(id) {
