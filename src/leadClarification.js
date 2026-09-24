@@ -13,7 +13,7 @@ import { displayRole } from './utils.js'
 // src/pages/Inbox.jsx.
 //
 // The wording below is ported from the client's own templates
-// (`modae doc/Sample Docs.zip` → `CLARIFICATION & QUOTE FEE MAIL.docx`), not
+// (`.local/documents/modae-doc/modae doc/Sample Docs.zip` → `CLARIFICATION & QUOTE FEE MAIL.docx`), not
 // invented, so an AI draft that is unavailable or refused degrades to the mail
 // ModAE already sends by hand.
 //

@@ -4,9 +4,9 @@ WinTrack / ModAE sales platform, measured against the two official process diagr
 
 | | |
 |---|---|
-| **Reference 01** | `branding/Official Lead Management Workflow (2).pdf` — *Expected Lead Management Workflow Post Implementation* |
-| **Reference 02** | `branding/Opportunity Workflow 7 Jun 2026.jpeg` — *02 – Opportunity Management Workflow (FINAL)* |
-| **Presentation copy** | `branding/Workflow Conformance Review.pdf` (8 pages, ModAE letterhead) |
+| **Reference 01** | `.local/documents/workflow-reference/Official Lead Management Workflow (2).pdf` — *Expected Lead Management Workflow Post Implementation* |
+| **Reference 02** | `.local/documents/workflow-reference/Opportunity Workflow 7 Jun 2026.jpeg` — *02 – Opportunity Management Workflow (FINAL)* |
+| **Presentation copy** | `.local/documents/workflow-reference/Workflow Conformance Review.pdf` (8 pages, ModAE letterhead) |
 | **Date** | 18 August 2026 · Diagram 02 re-reviewed 19 August · §5 closed 19 August · **Diagram 01 re-reviewed and the service flow re-reviewed 22 September 2026** |
 | **Scope** | Full source review — pages, state store, gating rules, approval logic, AI tasks, integrations |
 

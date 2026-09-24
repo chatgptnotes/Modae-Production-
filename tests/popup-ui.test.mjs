@@ -7,7 +7,7 @@ const ui = read('src/ui.jsx')
 const styles = read('src/styles.css')
 const sourceFiles = [
   'src/App.jsx', 'src/drawer.jsx', 'src/install.jsx', 'src/pages/Folders.jsx',
-  'src/pages/Home.jsx', 'src/pages/Inbox.jsx', 'src/pages/Proposal.jsx',
+  'src/pages/Inbox.jsx', 'src/pages/Proposal.jsx',
   'src/pages/Users.jsx', 'src/workbench/WbSpares.jsx',
 ]
 

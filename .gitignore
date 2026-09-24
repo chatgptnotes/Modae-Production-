@@ -16,3 +16,6 @@ doc/
 # Local skill symlinks — absolute paths are machine-specific, not portable
 .claude/
 .env*.local
+
+# Local-only archive for prototypes, backups, generated files, and retired migrations.
+.local/

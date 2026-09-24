@@ -183,9 +183,6 @@ test('the branding sources no longer say the opposite', () => {
   assert.match(profile, /Superseded 20 Aug 2026/)
   JSON.parse(profile)  // and it must still parse
 
-  const readme = read('branding/mod-ae/README.md')
-  assert.equal(/should remain unchanged; website colors are reference-only/.test(readme), false)
-  assert.match(readme, /Changed 20 August 2026/)
 })
 
 test('the misleading placeholder mark is gone', () => {

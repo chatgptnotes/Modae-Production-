@@ -18,12 +18,23 @@ function adminClient() {
   return createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
 }
 
+async function loadUserProfiles(client) {
+  const { data, error } = await client
+    .from('records')
+    .select('data')
+    .eq('entity', 'state')
+    .eq('id', 'users')
+    .is('deleted_at', null)
+    .maybeSingle()
+  if (error) throw error
+  return Array.isArray(data?.data) ? data.data : []
+}
+
 async function currentAdmin(client, token) {
   const { data: authData, error: authError } = await client.auth.getUser(token)
   if (authError || !authData?.user?.email) return null
-  const { data, error } = await client.from('app_state').select('value').eq('key', 'users').maybeSingle()
-  if (error) throw error
-  const profile = (data?.value || []).find(user => String(user.email || '').toLowerCase() === authData.user.email.toLowerCase())
+  const profiles = await loadUserProfiles(client)
+  const profile = profiles.find(user => String(user.email || '').toLowerCase() === authData.user.email.toLowerCase())
   return profile && ADMIN_ROLES.has(profile.role) ? { auth: authData.user, profile } : null
 }
 
@@ -89,13 +100,9 @@ export default async function handler(req, res) {
 
   if (action === 'status') {
     try {
-      const [{ data, error }, authUsers] = await Promise.all([
-        client.from('app_state').select('value').eq('key', 'users').maybeSingle(),
-        listAuthUsers(client),
-      ])
-      if (error) throw error
+      const [profiles, authUsers] = await Promise.all([loadUserProfiles(client), listAuthUsers(client)])
       const byEmail = new Map(authUsers.filter(user => user.email).map(user => [user.email.toLowerCase(), user]))
-      const users = (data?.value || []).map(profile => {
+      const users = profiles.map(profile => {
         const auth = byEmail.get(String(profile.email || '').toLowerCase())
         return {
           id: profile.id,
@@ -115,14 +122,10 @@ export default async function handler(req, res) {
     const passwordError = validatePassword(String(body.password || ''))
     if (passwordError) return res.status(400).json({ ok: false, error: passwordError })
     try {
-      const [{ data, error }, authUsers] = await Promise.all([
-        client.from('app_state').select('value').eq('key', 'users').maybeSingle(),
-        listAuthUsers(client),
-      ])
-      if (error) throw error
+      const [profiles, authUsers] = await Promise.all([loadUserProfiles(client), listAuthUsers(client)])
       const byEmail = new Map(authUsers.filter(user => user.email).map(user => [user.email.toLowerCase(), user]))
       const results = []
-      for (const profile of data?.value || []) {
+      for (const profile of profiles) {
         const email = clean(profile.email).toLowerCase()
         const base = { id: profile.id, email: profile.email, name: profile.name, role: profile.role }
         if (!EMAIL_RE.test(email)) {

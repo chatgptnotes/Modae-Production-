@@ -994,7 +994,7 @@ export function buildHandover() {
 export const seedHandover = {}
 
 // ---------------------------------------------------------------------------
-// AI-parsed leads modeled on the client's REAL sample emails (modae doc/*.eml,
+// AI-parsed leads modeled on the client's REAL sample emails (.local/documents/modae-doc/modae doc/*.eml,
 // 8 Aug 2026): retrofit RFQ w/ Meggitt BOM, project RFQ (VAMS), green customer
 // after site visit, product obsoletion, GeM bid clarification, plus one
 // Red-class lead to drive the AP-1 joint-approval demo.

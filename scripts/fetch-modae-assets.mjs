@@ -70,6 +70,8 @@ const CONSUMED_BY_APP = new Set([
   'Our-Producs-banner-2.jpg', 'Turbine-Control-System-1.jpg',
 ])
 
+fs.mkdirSync(RAW, { recursive: true })
+
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 const jitter = () => THROTTLE_MS[0] + Math.random() * (THROTTLE_MS[1] - THROTTLE_MS[0])
 const sha1 = buf => crypto.createHash('sha1').update(buf).digest('hex')

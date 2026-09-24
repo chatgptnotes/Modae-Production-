@@ -33,7 +33,7 @@ test('the extracted sender becomes the proposal recipient', () => {
   assert.match(intake, /updates\.contactEmail = header\.senderEmail/)
 })
 
-// The sample enquiries in "modae doc/" are all .eml; the form rejected anything
+  // The local sample enquiries in ".local/documents/modae-doc/" are all .eml; the form rejected anything
 // that was not a PDF, so the salesperson retyped every field by hand.
 test('saved emails are accepted alongside tender PDFs', () => {
   assert.match(intake, /name\.endsWith\('\.eml'\)/)

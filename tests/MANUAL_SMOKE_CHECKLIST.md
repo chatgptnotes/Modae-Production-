@@ -42,7 +42,7 @@ browser prompt, no localhost URL.
 
 ## Extraction
 
-- Upload a tender PDF **and** a `.eml` from `modae doc/`. Both are accepted.
+- Upload a tender PDF **and** a `.eml` from `.local/documents/modae-doc/`. Both are accepted.
 - RFQ number and date land in the form; with no reference, RFQ Number reads
   "Email dated …".
 - Fields the document did not contain are outlined amber on the field.

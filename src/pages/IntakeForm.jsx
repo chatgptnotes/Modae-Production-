@@ -227,7 +227,7 @@ export default function IntakeForm({ destinationPicker = null }) {
     if (!file) return
 
     // PDF or a saved email. Enquiries reach the common mailbox as .eml far more
-    // often than as a tender PDF (see the sample set in "modae doc/"), and
+    // often than as a tender PDF (see the local sample set in ".local/documents/modae-doc/"), and
     // rejecting them sent the salesperson back to typing everything by hand.
     const name = file.name.toLowerCase()
     const isPdf = file.type.includes('pdf') || name.endsWith('.pdf')
