@@ -29,7 +29,7 @@ import {
   orderedSparesProposalBom,
 } from './proposal/sparesBoq.js'
 import { releaseState, transitionBlockers } from './gates.js'
-import { supabaseConfigError } from './supabase.js'
+import { supabase, supabaseConfigError } from './supabase.js'
 
 const StoreCtx = createContext(null)
 const CLARIFICATION_FIELD_KEYS = new Set([
@@ -2134,6 +2134,13 @@ export function StoreProvider({ children }) {
       return { ok: true }
     },
     logout() {
+      if (supabase) {
+        // The app auth state is local-only, but the Supabase session must also
+        // be cleared or the next boot will immediately restore the account.
+        supabase.auth.signOut().catch(e => {
+          console.warn('Supabase sign-out failed:', e?.message || e)
+        })
+      }
       setState(st => ({ ...withAudit(st, 'Signed out', st.auth?.user?.email || ''), auth: { user: null } }))
     },
     registerUser({ name, email, pw, role }) {
@@ -2208,6 +2215,36 @@ export function StoreProvider({ children }) {
       window.location.reload()
     },
   }
+
+  // Supabase persists its browser session independently from the app store.
+  // Rehydrate the app-specific identity on boot so a page refresh does not
+  // send an otherwise valid Supabase user back to the login screen.
+  useEffect(() => {
+    if (!supabase) return
+    let active = true
+
+    const restoreSession = async () => {
+      const { data, error } = await supabase.auth.getSession()
+      if (!active || error || !data?.session?.user || stateRef.current.auth?.user) return
+      api.loginExternal(data.session.user)
+    }
+
+    restoreSession().catch(e => console.warn('Supabase session restore failed:', e?.message || e))
+
+    const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!active) return
+      if (event === 'SIGNED_OUT') {
+        setState(st => ({ ...st, auth: { user: null } }))
+      } else if (event === 'SIGNED_IN' && session?.user && !stateRef.current.auth?.user) {
+        api.loginExternal(session.user)
+      }
+    })
+
+    return () => {
+      active = false
+      listener?.subscription?.unsubscribe()
+    }
+  }, [])
 
   // Deadline processing is idempotent and runs on boot/focus so the browser
   // remains responsive while Supabase-backed state is synchronised. A hosted
