@@ -11,10 +11,15 @@ test('the shared workspace subscribes to the rows that can resolve a release', (
   assert.match(datastore, /table: 'approvals'/)
   assert.match(datastore, /table: 'opportunities'/)
   assert.match(datastore, /filter: 'entity=eq\.proposals'/)
+  assert.match(datastore, /loadChangedRows/)
+  assert.match(datastore, /select\('id, data, rev, deleted_at'\)/)
 
   const store = read('src/store.jsx')
   assert.match(store, /datastore\.subscribeBusinessChanges\(reload/)
-  assert.match(store, /datastore\.loadAll\(\{ force: true \}\)\.then/)
+  assert.match(store, /datastore\.loadChangedRows\(events\)/)
+  assert.match(store, /events\.length > 12/)
+  assert.match(store, /setTimeout\(.*1000\)/s)
+  assert.match(store, /Date\.now\(\) - lastFetch < 45000/)
   assert.match(store, /async refreshSharedData\(\)/)
   assert.match(store, /setTimeout\(flushSaves, 0\)/,
     'approval decisions must bypass the ordinary draft-save debounce')
@@ -62,9 +67,9 @@ test('forced realtime reads wait out an older request before fetching fresh data
 test('the store exposes live sync state for dashboard status', () => {
   const store = read('src/store.jsx')
   const dashboard = read('src/pages/MyDashboard.jsx')
-  assert.match(store, /useState\(\(\) => datastore\.dbEnabled\(\) \? 'connecting' : 'offline'\)/)
+  assert.match(store, /useState\(\(\) => supabaseConfigError \? 'config-error' : datastore\.dbEnabled\(\) \? 'connecting' : 'offline'\)/)
   assert.match(store, /setLiveSyncStatus\('live'\)/)
-  assert.match(store, /value=\{\{ \.\.\.api, liveSyncStatus \}\}/)
+  assert.match(store, /StoreCtx\.Provider value=\{\{ \.\.\.api, authReady, liveSyncStatus, syncDiagnostics \}\}/)
   assert.match(dashboard, /LiveSyncBadge/)
   assert.match(dashboard, /store\.liveSyncStatus/)
 })

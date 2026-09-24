@@ -13,13 +13,13 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 })
 
 const getSlice = async (key: string, fallback: any) => {
-  const { data, error } = await client.from('app_state').select('value').eq('key', key).maybeSingle()
+  const { data, error } = await client.from('records').select('data').eq('entity', 'state').eq('id', key).is('deleted_at', null).maybeSingle()
   if (error) throw error
-  return data?.value ?? fallback
+  return data?.data ?? fallback
 }
 
 const saveSlice = async (key: string, value: unknown) => {
-  const { error } = await client.from('app_state').upsert({ key, value, updated_at: new Date().toISOString() })
+  const { error } = await client.from('records').upsert({ entity: 'state', id: key, data: value, updated_at: new Date().toISOString() })
   if (error) throw error
 }
 

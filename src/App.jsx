@@ -314,19 +314,16 @@ function SyncNotice({ status, diagnostics }) {
   // but do not cover the production workspace with a persistent red banner.
   if (['config-error', 'error', 'reconnecting'].includes(status)) return null
   const config = status === 'config-error'
-  const legacyOnly = status === 'live' && diagnostics?.normalizedOpportunityCount === 0 && diagnostics?.legacyOpportunityCount > 0
-  const emptyWorkspace = status === 'live' && diagnostics?.normalizedOpportunityCount === 0 && diagnostics?.legacyOpportunityCount === 0
-  const healthy = status === 'live' && !legacyOnly && !emptyWorkspace
+  const emptyWorkspace = status === 'live' && diagnostics?.normalizedOpportunityCount === 0
+  const healthy = status === 'live' && !emptyWorkspace
   if (healthy) return null
-  const stateLabel = healthy ? 'Shared workspace' : legacyOnly ? 'Migration required' : emptyWorkspace ? 'Shared workspace is empty' : status === 'connecting' ? 'Connecting to shared workspace' : status === 'reconnecting' ? 'Reconnecting to shared workspace' : config ? 'Supabase configuration mismatch' : 'Supabase sync unavailable'
+  const stateLabel = healthy ? 'Shared workspace' : emptyWorkspace ? 'Shared workspace is empty' : status === 'connecting' ? 'Connecting to shared workspace' : status === 'reconnecting' ? 'Reconnecting to shared workspace' : config ? 'Supabase configuration mismatch' : 'Supabase sync unavailable'
   return (
     <div className={`workspace-sync-notice workspace-sync-notice-${healthy ? 'live' : 'warning'}`} role={healthy ? 'status' : 'alert'} title={supabaseProjectRef ? `Supabase project: ${supabaseProjectRef}` : undefined}>
       <strong>{stateLabel}</strong>
       <span>{healthy
         ? `Project ${supabaseProjectRef || 'not configured'} · active rows are loaded from Supabase.`
-        : legacyOnly
-          ? `Project ${supabaseProjectRef} · ${diagnostics.legacyOpportunityCount} legacy opportunity rows exist in app_state, but normalized opportunities are empty. Run the business-table migration.`
-          : emptyWorkspace
+        : emptyWorkspace
             ? `Project ${supabaseProjectRef} · Supabase returned no active opportunities.`
             : config
               ? 'The URL and anon key point to different projects. This browser is showing local data only.'

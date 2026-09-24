@@ -1,8 +1,8 @@
 import { supabase } from './supabase.js'
-import { applyRuleRows, readCachedRules, writeCachedRules } from './rules.js'
+import { writeCachedRules } from './rules.js'
 
-// Server persistence for the store: one JSONB row per top-level state slice in
-// public.app_state (see supabase-setup.sql). Mirrors the filestore facade —
+// Server persistence for the store: normalized business rows plus JSONB state
+// records. Mirrors the filestore facade —
 // every function no-ops when Supabase isn't configured, so the app keeps its
 // original localStorage-only behavior without env vars.
 
@@ -13,13 +13,9 @@ export const LOCAL_ONLY = ['viewMode', 'viewModePinned', 'tabletTheme', 'spSync'
 
 export const dbEnabled = () => !!supabase
 
-// Shared business records are normally refreshed on focus.  That is not
-// enough for approvals or leads: a salesperson can be staring at the inbox on
-// one device while another user creates, assigns, or advances a lead. Postgres
-// Changes gives the store a small, authoritative nudge; it deliberately
-// reloads through loadAll() so the existing merge/version rules remain the
-// single source of truth rather than trying to reconstruct a complete
-// workspace from a single event payload.
+// Shared business records are normally refreshed on focus. Postgres Changes
+// provides a small, authoritative nudge while the row-level loader below
+// keeps that nudge from downloading the entire workspace.
 export function subscribeBusinessChanges(onChange, onStatus = () => {}) {
   if (!supabase) return () => {}
   const channel = supabase
@@ -33,16 +29,41 @@ export function subscribeBusinessChanges(onChange, onStatus = () => {}) {
   return () => { supabase.removeChannel(channel) }
 }
 
-const TABLE = 'app_state'
+const realtimeEntityFor = table => table === 'proposals' ? 'proposals' : table
 
-// These slices have dedicated normalized tables. Loading their legacy JSON
-// copies as well doubles the database response without adding information.
-// Keep the legacy rows in place for migration/rollback, but do not transfer
-// them during normal hydration.
-const NORMALIZED_BUSINESS_KEYS = [
-  'leads', 'opportunities', 'approvals', 'proposals',
-  'sparesLines', 'clarifications', 'audit', 'priceLists',
-]
+// Resolve realtime events to only the affected row. The event payload is not
+// used as the source of truth because projects without REPLICA IDENTITY FULL
+// may omit the complete row, especially for updates and deletes.
+export async function loadChangedRows(events = []) {
+  if (!supabase) return []
+  const unique = new Map()
+  for (const event of events) {
+    const payload = event?.payload || {}
+    const source = payload.new || payload.old || {}
+    const recordEvent = event.table === 'records' || event.table === 'proposals'
+    const entity = recordEvent ? (source.entity || 'proposals') : realtimeEntityFor(event.table)
+    const id = source.id
+    if (entity && id != null) unique.set(`${entity}|${id}`, { table: recordEvent ? 'records' : event.table, entity, id: String(id) })
+  }
+  const rows = await Promise.all([...unique.values()].map(async target => {
+    let query = supabase.from(target.table === 'records' ? 'records' : target.table)
+      .select('id, data, rev, deleted_at')
+      .eq('id', target.id)
+    if (target.table === 'records') query = query.eq('entity', target.entity)
+    const result = await query.maybeSingle()
+    if (result.error) throw result.error
+    const row = result.data
+    return {
+      table: target.table,
+      entity: target.entity,
+      id: target.id,
+      data: row?.data || null,
+      rev: Number(row?.rev) || 0,
+      deleted: !row || !!row.deleted_at,
+    }
+  }))
+  return rows
+}
 
 // Focus/live-sync events can arrive close together. Reusing a short-lived
 // read avoids transferring the same workspace payload repeatedly while still
@@ -53,6 +74,11 @@ let loadCacheAt = 0
 let loadInFlight = null
 let coreLoadInFlight = null
 const PRICE_LIST_CACHE_KEY = 'wintrack-modae-approved-price-lists-v1'
+const CONSOLIDATED_SETTINGS_ENTITY = 'settings'
+const CONSOLIDATED_SETTINGS_ID = 'config'
+const CONSOLIDATED_PRICE_LIST_ENTITY = 'price_lists'
+const CONSOLIDATED_PRICE_VERSION_ENTITY = 'price_list_versions'
+const CONSOLIDATED_STATE_ENTITY = 'state'
 let priceListCache = null
 let priceListCacheAt = 0
 let priceListInFlight = null
@@ -72,6 +98,76 @@ const clearNormalizedEntity = entity => {
     normalizedRecords.delete(key)
     normalizedRevisions.delete(key)
   }
+}
+
+// Configuration is stored behind the existing JSONB records store, keeping
+// runtime reads on the consolidated path after the migration.
+async function loadConsolidatedConfig() {
+  const result = await supabase.from('records')
+    .select('id, data, rev')
+    .eq('entity', CONSOLIDATED_SETTINGS_ENTITY)
+    .eq('id', CONSOLIDATED_SETTINGS_ID)
+    .is('deleted_at', null)
+    .maybeSingle()
+  if (result.error || !result.data?.data || typeof result.data.data !== 'object') return null
+  const key = normalizedKey(CONSOLIDATED_SETTINGS_ENTITY, CONSOLIDATED_SETTINGS_ID)
+  normalizedRevisions.set(key, Number(result.data.rev) || 0)
+  normalizedRecords.set(key, { data: result.data.data, rev: Number(result.data.rev) || 0 })
+  return result.data.data
+}
+
+async function saveConsolidatedConfig(config = {}) {
+  const key = normalizedKey(CONSOLIDATED_SETTINGS_ENTITY, CONSOLIDATED_SETTINGS_ID)
+  const rev = normalizedRevisions.get(key) ?? 0
+  const result = await supabase.rpc('save_rows', {
+    p_entity: CONSOLIDATED_SETTINGS_ENTITY,
+    p_rows: [{ id: CONSOLIDATED_SETTINGS_ID, data: config, rev }],
+  })
+  if (result.error) throw result.error
+  const conflicts = Array.isArray(result.data?.conflicts) ? result.data.conflicts : []
+  if (conflicts.length) throw new Error('Consolidated configuration changed on another device; retrying on next save')
+  normalizedRevisions.set(key, rev + 1)
+  normalizedRecords.set(key, { data: config, rev: rev + 1 })
+  writeCachedRules(config)
+  return true
+}
+
+async function loadConsolidatedState() {
+  const result = await supabase.from('records')
+    .select('id, data, rev')
+    .eq('entity', CONSOLIDATED_STATE_ENTITY)
+    .is('deleted_at', null)
+  if (result.error) return null
+  const state = {}
+  for (const row of result.data || []) {
+    state[row.id] = row.data
+    const key = normalizedKey(CONSOLIDATED_STATE_ENTITY, row.id)
+    normalizedRevisions.set(key, Number(row.rev) || 0)
+    normalizedRecords.set(key, { data: row.data, rev: Number(row.rev) || 0 })
+  }
+  return state
+}
+
+async function saveConsolidatedState(dirty = {}) {
+  const rows = Object.entries(dirty)
+    .filter(([key]) => !BUSINESS_KEYS.has(key) && key !== 'config')
+    .map(([id, data]) => ({
+      id,
+      data,
+      rev: normalizedRevisions.get(normalizedKey(CONSOLIDATED_STATE_ENTITY, id)) ?? 0,
+    }))
+  if (!rows.length) return []
+  const result = await supabase.rpc('save_rows', {
+    p_entity: CONSOLIDATED_STATE_ENTITY,
+    p_rows: rows,
+  })
+  if (result.error || (result.data?.conflicts || []).length) throw result.error || new Error('Consolidated state save conflict')
+  for (const row of rows) {
+    const key = normalizedKey(CONSOLIDATED_STATE_ENTITY, row.id)
+    normalizedRevisions.set(key, row.rev + 1)
+    normalizedRecords.set(key, { data: row.data, rev: row.rev + 1 })
+  }
+  return rows.map(row => row.id)
 }
 
 export function invalidateLoadCache() {
@@ -99,21 +195,73 @@ const writePriceListsCache = priceLists => {
   } catch { /* the main local snapshot remains unaffected */ }
 }
 
-const mapPriceListParts = (parts = [], adders = []) => {
-  const addersByPart = new Map()
-  for (const adder of adders) {
-    const rows = addersByPart.get(adder.part_id) || []
-    rows.push({ code: adder.code, desc: adder.description, price: Number(adder.unit_price) || 0 })
-    addersByPart.set(adder.part_id, rows)
-  }
-  return parts.map(part => ({
-    pn: part.part_number,
-    desc: part.description,
-    price: Number(part.unit_price) || 0,
-    currency: part.currency,
-    keywords: part.keywords || [],
-    adders: addersByPart.get(part.id) || [],
+const priceVersionRecordId = (listCode, versionCode) => `${listCode}::${versionCode}`
+
+const mapConsolidatedVersion = data => ({
+  id: data.id || priceVersionRecordId(data.listCode, data.version),
+  version: data.version || 'Initial',
+  currency: data.currency || 'INR',
+  uploaded: data.uploaded || '',
+  filename: data.filename || '',
+  parts: Array.isArray(data.parts) ? data.parts : [],
+})
+
+async function loadConsolidatedPriceLists() {
+  const listsResult = await supabase.from('records')
+    .select('id, data, rev')
+    .eq('entity', CONSOLIDATED_PRICE_LIST_ENTITY)
+    .is('deleted_at', null)
+  if (listsResult.error || !listsResult.data?.length) return null
+
+  const listRows = listsResult.data
+  const activeVersionIds = listRows
+    .map(row => row.data?.activeVersionId || priceVersionRecordId(row.id, row.data?.currentVersion || ''))
+    .filter(Boolean)
+  const versionsResult = activeVersionIds.length
+    ? await supabase.from('records')
+      .select('id, data, rev')
+      .eq('entity', CONSOLIDATED_PRICE_VERSION_ENTITY)
+      .in('id', activeVersionIds)
+      .is('deleted_at', null)
+    : { data: [], error: null }
+  if (versionsResult.error) return null
+  if (versionsResult.data?.length !== activeVersionIds.length) return null
+
+  const versionsById = new Map((versionsResult.data || []).map(row => [row.id, row]))
+  const result = Object.fromEntries(listRows.map(row => {
+    const data = row.data || {}
+    const activeId = data.activeVersionId || priceVersionRecordId(row.id, data.currentVersion || '')
+    const active = versionsById.get(activeId)
+    const versions = Array.isArray(data.versions) ? data.versions.map(version => ({
+      id: version.id || priceVersionRecordId(row.id, version.version),
+      version: version.version || 'Initial',
+      currency: version.currency || data.sourceCurrency || 'INR',
+      uploaded: version.uploaded || '',
+      filename: version.filename || '',
+      parts: version.id === activeId || priceVersionRecordId(row.id, version.version) === activeId
+        ? (active?.data?.parts || [])
+        : [],
+    })) : []
+    return [row.id, {
+      parts: active?.data?.parts || [],
+      version: data.currentVersion || active?.data?.version || 'Initial',
+      currency: data.sourceCurrency || active?.data?.currency || 'INR',
+      uploaded: data.uploaded || active?.data?.uploaded || '',
+      activeVersionId: activeId,
+      versions,
+    }]
   }))
+  for (const row of listRows) {
+    const key = normalizedKey(CONSOLIDATED_PRICE_LIST_ENTITY, row.id)
+    normalizedRevisions.set(key, Number(row.rev) || 0)
+    normalizedRecords.set(key, { data: row.data, rev: Number(row.rev) || 0 })
+  }
+  for (const row of versionsResult.data || []) {
+    const key = normalizedKey(CONSOLIDATED_PRICE_VERSION_ENTITY, row.id)
+    normalizedRevisions.set(key, Number(row.rev) || 0)
+    normalizedRecords.set(key, { data: row.data, rev: Number(row.rev) || 0 })
+  }
+  return result
 }
 
 export async function loadPriceLists({ force = false } = {}) {
@@ -121,75 +269,25 @@ export async function loadPriceLists({ force = false } = {}) {
   if (!force && priceListCache && Date.now() - priceListCacheAt < LOAD_CACHE_MS) return { priceLists: priceListCache, cached: true }
   if (priceListInFlight) return priceListInFlight
   priceListInFlight = (async () => {
-    const listsResult = await supabase.from('price_lists').select('id, list_code, source_currency, current_version, uploaded_at')
-    if (listsResult.error) throw listsResult.error
-    const lists = listsResult.data || []
-    if (!lists.length) {
-      writePriceListsCache({})
-      return { priceLists: {} }
-    }
-    const listIds = lists.map(list => list.id)
-    const versionsResult = await supabase.from('price_list_versions')
-      .select('id, price_list_id, version_code, source_currency, filename, uploaded_at, is_active')
-      .in('price_list_id', listIds)
-    if (versionsResult.error) throw versionsResult.error
-    const versions = versionsResult.data || []
-    const activeVersions = lists.map(list => {
-      const rows = versions.filter(version => version.price_list_id === list.id)
-      return rows.find(version => version.version_code === list.current_version) || rows.find(version => version.is_active) || rows[rows.length - 1]
-    }).filter(Boolean)
-    const activeIds = activeVersions.map(version => version.id)
-    const partsResult = activeIds.length
-      ? await supabase.from('price_list_parts').select('id, version_id, part_number, description, unit_price, currency, keywords').in('version_id', activeIds)
-      : { data: [], error: null }
-    if (partsResult.error) throw partsResult.error
-    const partIds = (partsResult.data || []).map(part => part.id)
-    const addersResult = partIds.length
-      ? await supabase.from('price_list_adders').select('part_id, code, description, unit_price').in('part_id', partIds)
-      : { data: [], error: null }
-    if (addersResult.error) throw addersResult.error
-    const result = Object.fromEntries(lists.map(list => {
-      const listVersions = versions.filter(version => version.price_list_id === list.id)
-      const active = activeVersions.find(version => version.price_list_id === list.id)
-      const activeParts = (partsResult.data || []).filter(part => part.version_id === active?.id)
-      return [list.list_code, {
-        parts: mapPriceListParts(activeParts, addersResult.data || []),
-        version: active?.version_code || list.current_version || 'Initial',
-        currency: list.source_currency,
-        uploaded: list.uploaded_at || '',
-        activeVersionId: active ? `${list.list_code}-${active.version_code}` : '',
-        versions: listVersions.map(version => ({
-          id: `${list.list_code}-${version.version_code}`,
-          version: version.version_code,
-          currency: version.source_currency,
-          uploaded: version.uploaded_at || '',
-          filename: version.filename || '',
-          parts: version.id === active?.id ? mapPriceListParts(activeParts, addersResult.data || []) : [],
-        })),
-      }]
-    }))
-    writePriceListsCache(result)
-    return { priceLists: result }
+    const consolidated = await loadConsolidatedPriceLists()
+    if (!consolidated) throw new Error('Consolidated price-list records are unavailable')
+    writePriceListsCache(consolidated)
+    return { priceLists: consolidated }
   })()
   try { return await priceListInFlight } finally { priceListInFlight = null }
 }
 
 export async function loadPriceListVersion(listCode, versionCode) {
   if (!supabase) return null
-  const listResult = await supabase.from('price_lists').select('id').eq('list_code', listCode).maybeSingle()
-  if (listResult.error || !listResult.data) throw listResult.error || new Error(`Price list ${listCode} was not found`)
-  const versionResult = await supabase.from('price_list_versions')
-    .select('id, source_currency, filename, uploaded_at').eq('price_list_id', listResult.data.id).eq('version_code', versionCode).maybeSingle()
-  if (versionResult.error || !versionResult.data) throw versionResult.error || new Error(`Price list version ${versionCode} was not found`)
-  const partsResult = await supabase.from('price_list_parts')
-    .select('id, part_number, description, unit_price, currency, keywords').eq('version_id', versionResult.data.id)
-  if (partsResult.error) throw partsResult.error
-  const partIds = (partsResult.data || []).map(part => part.id)
-  const addersResult = partIds.length
-    ? await supabase.from('price_list_adders').select('part_id, code, description, unit_price').in('part_id', partIds)
-    : { data: [], error: null }
-  if (addersResult.error) throw addersResult.error
-  return { ...versionResult.data, version: versionCode, parts: mapPriceListParts(partsResult.data || [], addersResult.data || []) }
+  const consolidatedId = priceVersionRecordId(listCode, versionCode)
+  const consolidated = await supabase.from('records')
+    .select('id, data')
+    .eq('entity', CONSOLIDATED_PRICE_VERSION_ENTITY)
+    .eq('id', consolidatedId)
+    .is('deleted_at', null)
+    .maybeSingle()
+  if (!consolidated.error && consolidated.data?.data) return mapConsolidatedVersion({ id: consolidated.data.id, ...consolidated.data.data })
+  throw consolidated.error || new Error(`Price list version ${listCode} ${versionCode} was not found`)
 }
 
 // → { empty, slices: {key: value} } | null when disabled or on error
@@ -234,27 +332,24 @@ export async function loadBackground() {
 
 async function fetchCore() {
   try {
-    const legacyKeys = `(${NORMALIZED_BUSINESS_KEYS.join(',')})`
-    const [stateResult, settings, business] = await Promise.all([
-      supabase.from(TABLE).select('key, value').not('key', 'in', legacyKeys),
-      supabase.from('app_settings').select('key, value'),
+    const [consolidatedConfig, consolidatedState, business] = await Promise.all([
+      loadConsolidatedConfig(),
+      loadConsolidatedState(),
       loadBusinessTables({ includeRecords: false }),
     ])
-    if (stateResult.error) throw stateResult.error
     const slices = {}
-    for (const row of stateResult.data || []) slices[row.key] = row.value
-    if (!settings.error) for (const row of settings.data || []) slices[row.key] = row.value
+    if (consolidatedState) Object.assign(slices, consolidatedState)
+    if (consolidatedConfig) slices.config = consolidatedConfig
     for (const [key, value] of Object.entries(business)) {
       if (key !== 'recordCount' && value != null) slices[key] = value
     }
     const hasBusinessData = [business.leads, business.opportunities, business.approvals].some(value => Array.isArray(value) && value.length > 0)
       || Number(business.recordCount) > 0
     return {
-      empty: (!stateResult.data || stateResult.data.length === 0) && !settings.data?.length && !hasBusinessData,
+      empty: !consolidatedConfig && !consolidatedState && !hasBusinessData,
       slices,
       diagnostics: {
         normalizedOpportunityCount: Array.isArray(business.opportunities) ? business.opportunities.length : 0,
-        legacyOpportunityCount: null,
       },
     }
   } catch (e) {
@@ -265,52 +360,27 @@ async function fetchCore() {
 
 async function fetchAll() {
   try {
-    const legacyKeys = `(${NORMALIZED_BUSINESS_KEYS.join(',')})`
-    const { data, error } = await supabase
-      .from(TABLE)
-      .select('key, value')
-      .not('key', 'in', legacyKeys)
-    if (error) throw error
     const slices = {}
-    for (const row of data || []) slices[row.key] = row.value
-    const settings = await supabase.from('app_settings').select('key, value')
-    if (!settings.error) for (const row of settings.data || []) slices[row.key] = row.value
-    const rules = await loadRuleTables()
-    if (rules) {
-      slices.config = applyRuleRows(slices.config || {}, rules)
-      writeCachedRules(slices.config)
-    } else if (!slices.config) {
-      const cached = readCachedRules()
-      if (cached) slices.config = cached
-    }
+    const [consolidatedConfig, consolidatedState] = await Promise.all([
+      loadConsolidatedConfig(),
+      loadConsolidatedState(),
+    ])
+    if (consolidatedState) Object.assign(slices, consolidatedState)
+    if (consolidatedConfig) slices.config = consolidatedConfig
+    if (consolidatedConfig) writeCachedRules(consolidatedConfig)
     const business = await loadBusinessTables({ includeRecords: true })
     // Apply empty normalized arrays too. This prevents stale local/demo rows
     // from surviving when the server intentionally has no active rows.
     for (const [key, value] of Object.entries(business)) {
       if (key !== 'recordCount' && value != null) slices[key] = value
     }
-    // Read legacy opportunities only for diagnostics. The normalized table
-    // remains authoritative; this never merges old rows back into the app.
-    const legacyOpportunities = await supabase
-      .from(TABLE)
-      .select('value')
-      .eq('key', 'opportunities')
-      .maybeSingle()
-    const legacyRows = Array.isArray(legacyOpportunities.data?.value) ? legacyOpportunities.data.value : []
-    // Currency rates are normalized data, not part of the legacy app_state
-    // blob. Keep a graceful fallback while the SQL migration is being run.
-    const rates = await supabase.from('currency_rates').select('currency_code, rate_to_inr').eq('is_active', true)
-    if (!rates.error && rates.data?.length) {
-      slices.config = { ...(slices.config || {}), currencyRates: Object.fromEntries(rates.data.map(row => [row.currency_code, Number(row.rate_to_inr)])) }
-    }
     const hasBusinessData = Object.values(business).some(value => Array.isArray(value) ? value.length > 0 : Object.keys(value || {}).length > 0)
       || Number(business.recordCount) > 0
     return {
-      empty: (!data || data.length === 0) && !settings.data?.length && !rates.data?.length && !hasBusinessData,
+      empty: !consolidatedConfig && !consolidatedState && !hasBusinessData,
       slices,
       diagnostics: {
         normalizedOpportunityCount: Array.isArray(business.opportunities) ? business.opportunities.length : 0,
-        legacyOpportunityCount: legacyRows.length,
       },
     }
   } catch (e) {
@@ -330,10 +400,19 @@ export async function saveSlices(dirty) {
   if (!supabase) return
   invalidateLoadCache()
   let normalizedDirty = dirty
-    const savedBusiness = await saveBusinessTables(dirty)
+  const savedBusiness = await saveBusinessTables(dirty)
   if (savedBusiness.length) {
     normalizedDirty = { ...normalizedDirty }
     for (const key of savedBusiness) delete normalizedDirty[key]
+  }
+  if (dirty.config) {
+    try {
+      await saveConsolidatedConfig(dirty.config)
+      normalizedDirty = { ...normalizedDirty }
+      delete normalizedDirty.config
+    } catch (e) {
+      throw e
+    }
   }
   if (dirty.priceLists) {
     const savedPriceLists = await savePriceLists(dirty.priceLists)
@@ -342,108 +421,17 @@ export async function saveSlices(dirty) {
       normalizedDirty = rest
     }
   }
-  if (dirty.config?.currencyRates) {
-    const rateRows = Object.entries(dirty.config.currencyRates).map(([currency_code, rate_to_inr]) => ({
-      currency_code, rate_to_inr: Number(rate_to_inr), is_active: true, updated_at: new Date().toISOString(),
-    }))
-    const rateResult = await supabase.from('currency_rates').upsert(rateRows, { onConflict: 'currency_code' })
-    if (!rateResult.error) {
-      const { currencyRates, ...configWithoutRates } = dirty.config
-      normalizedDirty = { ...normalizedDirty, config: configWithoutRates }
-    }
+  const savedState = await saveConsolidatedState(normalizedDirty)
+  if (savedState.length) {
+    normalizedDirty = { ...normalizedDirty }
+    for (const key of savedState) delete normalizedDirty[key]
   }
-  // Rule/settings tables use Supabase Auth RLS. Business rows can still be
-  // saved by the shared client when the browser has no Supabase session;
-  // protected configuration writes must not make those saves fail.
-  const canWriteProtectedConfig = dirty.config ? await canWriteProtectedConfigForSession() : false
-  const savedSettings = await saveSettings(normalizedDirty, { includeConfig: canWriteProtectedConfig })
-  for (const key of savedSettings) delete normalizedDirty[key]
-  if (dirty.config && canWriteProtectedConfig) {
-    try {
-      await saveRuleTables(dirty.config)
-    } catch (e) {
-      console.warn('Protected rule save skipped — business data was saved:', e?.message)
-    }
-  }
-  // Do not fall back to the legacy JSON app_state row for settings when the
-  // authenticated rule/settings path is unavailable. That row is a large
-  // compatibility snapshot and can time out or overwrite normalized data.
-  if (!canWriteProtectedConfig) {
-    for (const key of Object.keys(normalizedDirty)) {
-      if (!BUSINESS_KEYS.has(key)) delete normalizedDirty[key]
-    }
-  }
-  const rows = Object.entries(normalizedDirty).map(([key, value]) => ({
-    key, value, updated_at: new Date().toISOString(),
-  }))
-  if (!rows.length) return
-  const { error } = await supabase.from(TABLE).upsert(rows)
-  if (error) throw error
-}
-
-async function loadRuleTables() {
-  const [workflow, approval, lead] = await Promise.all([
-    supabase.from('workflow_rules').select('rule_key, label, definition, enabled, updated_at'),
-    supabase.from('approval_rules').select('rule_key, label, definition, enabled, updated_at'),
-    supabase.from('lead_rules').select('rule_key, label, definition, enabled, updated_at'),
-  ])
-  if (workflow.error || approval.error || lead.error) return null
-  return { workflow: workflow.data || [], approval: approval.data || [], lead: lead.data || [] }
-}
-
-async function saveRuleTables(config = {}) {
-  const writes = [
-    supabase.from('approval_rules').upsert({
-      rule_key: 'approval-thresholds', label: 'Approval thresholds', definition: {
-        thresholds: config.approvalThresholds || {}, gates: config.approvalRules || [],
-      }, enabled: true,
-    }, { onConflict: 'rule_key' }),
-    supabase.from('lead_rules').upsert({
-      rule_key: 'lead-routing-and-deadlines', label: 'Lead routing and deadlines', definition: {
-        ownershipRules: config.ownershipRules || [], ownerRules: config.ownerRules || [], stateRegions: config.stateRegions || [],
-        leadDeadlines: config.leadDeadlines || {}, fastTrack: config.fastTrack || {},
-      }, enabled: true,
-    }, { onConflict: 'rule_key' }),
-    supabase.from('workflow_rules').upsert({
-      rule_key: 'workflow-and-gates', label: 'Workflow and gate definitions', definition: {
-        workflow: config.workflow || {}, customerClasses: config.customerClasses || {}, documentChecklists: config.documentChecklists || {},
-        kycItems: config.kycItems || [], kycValidation: config.kycValidation || {}, classRules: config.classRules || {}, amberFee: config.amberFee || {},
-        requiredFields: config.workflowRequiredFields || [], routeRules: config.workflowRouteRules || [],
-      }, enabled: true,
-    }, { onConflict: 'rule_key' }),
-  ]
-  const results = await Promise.all(writes)
-  if (results.some(result => result.error)) throw results.find(result => result.error).error
-  writeCachedRules(config)
-}
-
-async function canWriteProtectedConfigForSession() {
-  try {
-    const { data: session } = await supabase.auth.getSession()
-    if (!session?.session?.user?.id) return false
-    const { data: profile, error } = await supabase.from('user_profiles')
-      .select('role').eq('id', session.session.user.id).maybeSingle()
-    return !error && ['SUPER', 'LJS'].includes(profile?.role)
-  } catch {
-    return false
+  if (Object.keys(normalizedDirty).some(key => !BUSINESS_KEYS.has(key))) {
+    throw new Error('Unsupported unsaved state remains after consolidated persistence')
   }
 }
 
 const BUSINESS_KEYS = new Set(['leads', 'opportunities', 'approvals', 'proposals', 'sparesLines', 'clarifications', 'audit', 'priceLists'])
-
-async function saveSettings(dirty = {}, { includeConfig = true } = {}) {
-  if (!includeConfig) return []
-  const rows = Object.entries(dirty)
-    .filter(([key]) => !BUSINESS_KEYS.has(key) && key !== 'config')
-    .map(([key, value]) => ({ key, value, updated_at: new Date().toISOString() }))
-  if (dirty.config && includeConfig) {
-    const { currencyRates, ...configWithoutRates } = dirty.config
-    rows.push({ key: 'config', value: configWithoutRates, updated_at: new Date().toISOString() })
-  }
-  if (!rows.length) return []
-  const result = await supabase.from('app_settings').upsert(rows, { onConflict: 'key' })
-  return result.error ? [] : rows.map(row => row.key)
-}
 
 async function loadBusinessTables({ includeRecords = true } = {}) {
   // The records table contains large proposal, audit, clarification, and
@@ -659,66 +647,49 @@ export async function savePriceLists(priceLists = {}) {
   if (!supabase) return false
   priceListCache = null
   priceListCacheAt = 0
-  const listRows = Object.entries(priceLists).map(([list_code, list]) => ({
-    list_code,
-    supplier_name: list_code,
-    source_currency: String(list.currency || 'INR').toUpperCase(),
-    current_version: list.version || null,
-    uploaded_at: list.uploaded || null,
-    updated_at: new Date().toISOString(),
-  }))
-  if (!listRows.length) return true
-  const { data: savedLists, error: listError } = await supabase
-    .from('price_lists').upsert(listRows, { onConflict: 'list_code' }).select('id, list_code')
-  if (listError) return false
-  for (const [listCode, list] of Object.entries(priceLists)) {
-    const listId = savedLists.find(row => row.list_code === listCode)?.id
-    if (!listId) continue
-    const versions = Array.isArray(list.versions) && list.versions.length
-      ? list.versions
-      : [{ version: list.version || 'Initial', currency: list.currency || 'INR', uploaded: list.uploaded || '', parts: list.parts || [] }]
-    for (const version of versions) {
-      const { data: savedVersion, error: versionError } = await supabase.from('price_list_versions')
-        .upsert({
-          price_list_id: listId,
-          version_code: version.version || 'Initial',
-          source_currency: String(version.currency || list.currency || 'INR').toUpperCase(),
+  try {
+    const listRows = Object.entries(priceLists).map(([listCode, list]) => {
+      const versions = Array.isArray(list.versions) && list.versions.length
+        ? list.versions
+        : [{ version: list.version || 'Initial', currency: list.currency || 'INR', uploaded: list.uploaded || '', parts: list.parts || [] }]
+      return {
+        id: listCode,
+        listCode,
+        supplierName: listCode,
+        sourceCurrency: String(list.currency || 'INR').toUpperCase(),
+        currentVersion: list.version || versions[0]?.version || 'Initial',
+        uploaded: list.uploaded || '',
+        activeVersionId: list.activeVersionId || priceVersionRecordId(listCode, list.version || versions[0]?.version || 'Initial'),
+        versions: versions.map(version => ({
+          id: version.id || priceVersionRecordId(listCode, version.version || 'Initial'),
+          version: version.version || 'Initial',
+          currency: String(version.currency || list.currency || 'INR').toUpperCase(),
+          uploaded: version.uploaded || '',
           filename: version.filename || '',
-          uploaded_at: version.uploaded || null,
-          is_active: `${listCode}-${version.version}` === list.activeVersionId || version.version === list.version,
-        }, { onConflict: 'price_list_id,version_code' }).select('id').single()
-      if (versionError || !savedVersion) return false
-      const parts = (version.parts || []).map(part => ({
-        version_id: savedVersion.id,
-        part_number: part.pn,
-        description: part.desc || '',
-        unit_price: Number(part.price) || 0,
-        currency: String(part.currency || version.currency || list.currency || 'INR').toUpperCase(),
-        keywords: part.keywords || [],
-      }))
-      if (parts.length) {
-        const { data: savedParts, error: partError } = await supabase.from('price_list_parts')
-          .upsert(parts, { onConflict: 'version_id,part_number' }).select('id, part_number')
-        if (partError) return false
-        const adders = parts.flatMap(part => {
-          const source = (version.parts || []).find(row => row.pn === part.part_number)
-          const saved = savedParts?.find(row => row.part_number === part.part_number)
-          return (source?.adders || []).filter(() => saved?.id).map(adder => ({
-            part_id: saved.id,
-            code: adder.code,
-            description: adder.desc || '',
-            unit_price: Number(adder.price) || 0,
-          }))
-        })
-        const uniqueAdders = [...new Map(adders.map(adder => [`${adder.part_id}|${adder.code}`, adder])).values()]
-        if (uniqueAdders.length) {
-          const { error: adderError } = await supabase.from('price_list_adders').upsert(uniqueAdders, { onConflict: 'part_id,code' })
-          if (adderError) console.warn('Price-list adders were not saved; list and parts remain available:', adderError.message)
-        }
+        })),
       }
-    }
+    })
+    const versionRows = Object.entries(priceLists).flatMap(([listCode, list]) => {
+      const versions = Array.isArray(list.versions) && list.versions.length
+        ? list.versions
+        : [{ version: list.version || 'Initial', currency: list.currency || 'INR', uploaded: list.uploaded || '', parts: list.parts || [] }]
+      return versions.map(version => ({
+        id: version.id || priceVersionRecordId(listCode, version.version || 'Initial'),
+        listCode,
+        version: version.version || 'Initial',
+        currency: String(version.currency || list.currency || 'INR').toUpperCase(),
+        uploaded: version.uploaded || '',
+        filename: version.filename || '',
+        parts: Array.isArray(version.parts) ? version.parts : [],
+      }))
+    })
+    await saveNormalizedRowsNow(CONSOLIDATED_PRICE_LIST_ENTITY, listRows)
+    await saveNormalizedRowsNow(CONSOLIDATED_PRICE_VERSION_ENTITY, versionRows)
+    return true
+  } catch (e) {
+    console.warn('Consolidated price-list save failed:', e?.message)
+    return false
   }
-  return true
 }
 
 // Reset Demo: overwrite every slice with seeds and drop stray rows. Upserting
@@ -727,7 +698,9 @@ export async function savePriceLists(priceLists = {}) {
 export async function resetAll(seedMap) {
   if (!supabase) return
   await saveSlices(seedMap)
-  const { error } = await supabase.from(TABLE).delete()
-    .not('key', 'in', `(${Object.keys(seedMap).join(',')})`)
+  const stateKeys = Object.keys(seedMap).filter(key => !BUSINESS_KEYS.has(key) && key !== 'config')
+  const { error } = await supabase.from('records').delete()
+    .eq('entity', CONSOLIDATED_STATE_ENTITY)
+    .not('id', 'in', `(${stateKeys.join(',') || '__none__'})`)
   if (error) throw error
 }

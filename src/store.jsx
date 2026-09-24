@@ -287,13 +287,13 @@ export function StoreProvider({ children }) {
   const [authReady, setAuthReady] = useState(() => !supabase || !!state.auth?.user)
   const [liveSyncStatus, setLiveSyncStatus] = useState(() => supabaseConfigError ? 'config-error' : datastore.dbEnabled() ? 'connecting' : 'offline')
   const [priceListsStatus, setPriceListsStatus] = useState(() => Object.keys(state.priceLists || {}).length ? 'ready' : 'loading')
-  const [syncDiagnostics, setSyncDiagnostics] = useState({ normalizedOpportunityCount: null, legacyOpportunityCount: null })
+  const [syncDiagnostics, setSyncDiagnostics] = useState({ normalizedOpportunityCount: null })
   setRoleNameConfig(state.config)
   // Ref mirror so read APIs (getProposal) see same-tick mutations, not the render closure.
   const stateRef = useRef(state)
   stateRef.current = state
 
-  // ---- Supabase app_state sync (see datastore.js). localStorage stays the
+  // ---- Supabase records-state sync (see datastore.js). localStorage stays the
   // instant source of truth; the server holds one JSONB row per synced slice.
   // hydratedRef gates server saves until the boot fetch resolves, so a fresh
   // device can't clobber good server data with its local seeds.
@@ -510,6 +510,34 @@ export function StoreProvider({ children }) {
     setState(merged)
   }
 
+  const applyRealtimeRows = rows => {
+    if (!Array.isArray(rows) || !rows.length) return
+    const current = stateRef.current
+    const slices = {}
+    const arrays = {}
+    const objects = {}
+    const arrayKeyFor = table => ['leads', 'opportunities', 'approvals'].includes(table) ? table : null
+    const recordArrayKey = entity => ({ spares_lines: 'sparesLines', clarifications: 'clarifications', audit: 'audit' })[entity]
+
+    for (const row of rows) {
+      const directKey = arrayKeyFor(row.table)
+      const arrayKey = directKey || recordArrayKey(row.entity)
+      if (arrayKey) {
+        if (!arrays[arrayKey]) arrays[arrayKey] = [...(current[arrayKey] || [])]
+        arrays[arrayKey] = arrays[arrayKey].filter(item => item?.id !== row.id)
+        if (!row.deleted && row.data) arrays[arrayKey].push(row.data)
+        continue
+      }
+      if (row.entity === 'proposals') {
+        if (!objects.proposals) objects.proposals = { ...(current.proposals || {}) }
+        if (row.deleted) delete objects.proposals[row.id]
+        else if (row.data) objects.proposals[row.id] = row.data
+      }
+    }
+    Object.assign(slices, arrays, objects)
+    if (Object.keys(slices).length) applyServer(slices)
+  }
+
   const loadApprovedPriceLists = async ({ force = false } = {}) => {
     const cached = datastore.readPriceListsCache()
     if (cached && !Object.keys(stateRef.current.priceLists || {}).length) {
@@ -546,7 +574,7 @@ export function StoreProvider({ children }) {
     loadApprovedPriceLists()
     let lastFetch = Date.now()
     const onFocus = () => {
-      if (Date.now() - lastFetch < 10000) return
+      if (Date.now() - lastFetch < 45000) return
       lastFetch = Date.now()
       if (!hydratedRef.current) { hydrate(); return }
       datastore.loadAll({ force: true })
@@ -571,28 +599,41 @@ export function StoreProvider({ children }) {
     }
   }, [])
 
-  // Keep open devices in step without waiting for a focus event.  Several
-  // database events can arrive for one approval (approval, proposal and the
-  // automatic milestone update), so coalesce them into one authoritative
-  // fetch.  applyServer performs the timestamp-aware row merge and preserves
-  // local work that has not been saved yet.
+  // Keep open devices in step without downloading the whole workspace for
+  // every database event. Several events can arrive for one approval, so
+  // coalesce them and fetch only the affected rows. A burst falls back to one
+  // full refresh so correctness remains stronger than the egress optimization.
   useEffect(() => {
     if (!datastore.dbEnabled()) return
     let reloadTimer = null
-    const reload = () => {
+    let pendingEvents = []
+    let lastFullRefresh = 0
+    const fullRefresh = () => {
+      if (Date.now() - lastFullRefresh < 15000) return
+      lastFullRefresh = Date.now()
+      datastore.loadAll({ force: true })
+        .then(res => {
+          if (res?.diagnostics) setSyncDiagnostics(res.diagnostics)
+          if (res && !res.empty) applyServer(res.slices, res.diagnostics)
+        })
+        .catch(() => setLiveSyncStatus('reconnecting'))
+    }
+    const reload = event => {
+      pendingEvents.push(event)
       if (reloadTimer) return
       reloadTimer = setTimeout(() => {
         reloadTimer = null
+        const events = pendingEvents
+        pendingEvents = []
         if (!hydratedRef.current) { hydrate(); return }
-        // Realtime means the database changed after the normal load cache was
-        // populated, so this read must bypass the short-lived cache.
-        datastore.loadAll({ force: true })
-          .then(res => {
-            if (res?.diagnostics) setSyncDiagnostics(res.diagnostics)
-            if (res && !res.empty) applyServer(res.slices, res.diagnostics)
-          })
-          .catch(() => setLiveSyncStatus('reconnecting'))
-      }, 80)
+        if (events.length > 12) {
+          fullRefresh()
+          return
+        }
+        datastore.loadChangedRows(events)
+          .then(rows => applyRealtimeRows(rows))
+          .catch(() => fullRefresh())
+      }, 1000)
     }
     const unsubscribe = datastore.subscribeBusinessChanges(reload, status => {
       if (status === 'SUBSCRIBED') {
@@ -604,6 +645,7 @@ export function StoreProvider({ children }) {
     })
     return () => {
       if (reloadTimer) clearTimeout(reloadTimer)
+      pendingEvents = []
       unsubscribe()
     }
   }, [])
