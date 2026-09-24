@@ -225,6 +225,9 @@ const NAV = [
 
 function SyncNotice({ status, diagnostics }) {
   if (!['config-error', 'error', 'live', 'connecting', 'reconnecting'].includes(status)) return null
+  // Keep sync failures available through the store and console diagnostics,
+  // but do not cover the production workspace with a persistent red banner.
+  if (['config-error', 'error', 'reconnecting'].includes(status)) return null
   const config = status === 'config-error'
   const legacyOnly = status === 'live' && diagnostics?.normalizedOpportunityCount === 0 && diagnostics?.legacyOpportunityCount > 0
   const emptyWorkspace = status === 'live' && diagnostics?.normalizedOpportunityCount === 0 && diagnostics?.legacyOpportunityCount === 0
