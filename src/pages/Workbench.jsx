@@ -832,14 +832,25 @@ function CommercialDecisionPanel({ opp }) {
   const [approvalNotice, setApprovalNotice] = useState('')
   const deviations = (proposal.terms || []).filter(term => term.status === 'Deviation')
   if (!deviations.length) return null
+  const matchingTerms = deviations.filter(needsCommercialApproval)
+  const currentApprovalDetails = commercialApprovalDetails(proposal.terms)
+  const approvalDetailsMatch = approval => JSON.stringify(approval?.deviationDetails || []) === JSON.stringify(currentApprovalDetails)
+  const currentCommercialApproval = (store.approvals || [])
+    .filter(approval => approval.oppId === opp.id
+      && approval.type === 'Commercial deviation'
+      && ['Pending', 'Approved', 'Approved with conditions'].includes(approval.status)
+      && (approval.rev == null || String(approval.rev) === String(proposal?.revision ?? ''))
+      && approvalDetailsMatch(approval))
+    .sort((a, b) => (b.decisionTs || b.ts || '').localeCompare(a.decisionTs || a.ts || ''))[0]
 
   const saveTerms = terms => store.saveProposal(opp.id, { ...proposal, terms })
-  const requestCommercialApproval = terms => {
-    const deviationDetails = commercialApprovalDetails(terms)
+  const requestCommercialApproval = () => {
+    const deviationDetails = commercialApprovalDetails(proposal.terms)
     if (!deviationDetails.length) return
     const lead = (store.leads || []).find(item => item.oppId === opp.id)
     const aiSummary = lead?.ai?.summary?.trim() || ''
     const opportunitySummary = aiSummary || `${opp.oppName || 'This opportunity'} is a ${opp.route || 'sales'} opportunity for ${opp.sellTo || 'the customer'}${opp.product ? ` covering ${productDisplayLabel(opp.product)}` : ''}.`
+    const requestSummary = deviationDetails.map(item => `${item.term}: customer asked “${item.customerAsk}”; ModAE response “${item.ourResponse}”`).join(' · ')
     store.requestApproval({
       oppId: opp.id,
       type: 'Commercial deviation',
@@ -847,8 +858,8 @@ function CommercialDecisionPanel({ opp }) {
       approver: 'AH',
       needed: ['AH'],
       anyOf: false,
-      detail: 'Customer-requested commercial terms matched. AH approval is required before quotation submission.',
-      blockingReason: 'The proposal matches one or more customer-requested commercial terms that differ from ModAE standard terms and require AH approval.',
+      detail: `AH approval requested for: ${requestSummary}.`,
+      blockingReason: `The proposal matches these customer-requested commercial terms and requires AH approval: ${requestSummary}.`,
       opportunitySummary,
       summarySource: aiSummary ? 'ai' : 'opportunity',
       opportunitySnapshot: {
@@ -859,7 +870,7 @@ function CommercialDecisionPanel({ opp }) {
       deviationDetails,
       refreshPendingContext: true,
     })
-    setApprovalNotice('AH approval was requested automatically and is now in the internal Approvals queue.')
+    setApprovalNotice(`AH approval requested for ${deviationDetails.map(item => item.term).join(' and ')}. The request now appears in the internal Approvals queue.`)
   }
   const setDecision = (index, decision) => {
     const nextTerms = (proposal.terms || []).map((term, termIndex) => termIndex === index
@@ -871,7 +882,6 @@ function CommercialDecisionPanel({ opp }) {
       })
       : term)
     saveTerms(nextTerms)
-    if (decision === 'Match customer terms') requestCommercialApproval(nextTerms)
   }
   const setConfirmation = (index, status) => saveTerms((proposal.terms || []).map((term, termIndex) => termIndex === index
     ? normalizeCommercialTerm({ ...term, customerConfirmationStatus: status })
@@ -897,7 +907,7 @@ function CommercialDecisionPanel({ opp }) {
             <label className="commercial-decision-choice">Decision <select value={term.decision || 'Decision pending'} onChange={e => setDecision(index, e.target.value)}>
               {COMMERCIAL_DECISIONS.map(option => <option key={option}>{option}</option>)}
             </select>
-              {term.decision === 'Match customer terms' && <span className="hint">AH approval requested automatically — quotation submission remains blocked until approval.</span>}
+              {term.decision === 'Match customer terms' && <span className="hint">Save this decision, then request one grouped AH approval for the matched terms.</span>}
               {(!term.decision || term.decision === 'Decision pending') && <span className="err">Choose Match customer terms or Counter-offer with ModAE standard terms.</span>}
             </label>
             {term.decision === 'Counter-offer with ModAE standard terms' && <div className="commercial-decision-followup">
@@ -910,7 +920,15 @@ function CommercialDecisionPanel({ opp }) {
           </div>
         })}
       </div>
-      {deviations.some(needsCommercialApproval) && <div className="warnbox">One or more requested terms need internal approval before the quotation can be submitted.</div>}
+      {matchingTerms.length > 0 && !currentCommercialApproval && (
+        <div className="commercial-approval-request">
+          <div className="hint">AH will review: {matchingTerms.map(term => `${term.term} — customer asked “${term.customerAsk || 'Not recorded'}”; ModAE response “${term.customerAsk || term.ourResponse || 'Not recorded'}”`).join(' · ')}</div>
+          <button type="button" className="primary" onClick={requestCommercialApproval}>Request AH approval for {matchingTerms.map(term => term.term).join(' and ')}</button>
+        </div>
+      )}
+      {currentCommercialApproval?.status === 'Pending' && <div className="warnbox">AH approval is pending for {matchingTerms.map(term => term.term).join(' and ')}. The request includes the customer terms shown above.</div>}
+      {currentCommercialApproval && ['Approved', 'Approved with conditions'].includes(currentCommercialApproval.status) && <div className="okbox">AH approval is {currentCommercialApproval.status.toLowerCase()} for {matchingTerms.map(term => term.term).join(' and ')}.</div>}
+      {matchingTerms.length > 0 && <div className="warnbox">One or more requested terms need internal approval before the quotation can be submitted.</div>}
     </section>
   )
 }

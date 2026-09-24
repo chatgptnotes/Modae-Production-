@@ -442,8 +442,8 @@ export default function Approvals() {
         </div>
         {deviations.length > 0 && (
           <div className="approval-context-deviations">
-            <div className="approval-context-deviation-head"><span></span><b>Customer asked</b><b>ModAE standard</b></div>
-            {deviations.map((d, i) => <div key={`${d.term}-${i}`}><b>{d.term}</b><span>{d.customerAsk}</span><span>{d.ourResponse}</span></div>)}
+            <div className="approval-context-deviation-head"><span></span><b>Customer asked</b><b>ModAE standard</b><b>Requested response</b></div>
+            {deviations.map((d, i) => <div key={`${d.term}-${i}`}><b>{d.term}</b><span>{d.customerAsk}</span><span>{d.standardTerm || 'Not recorded'}</span><span>{d.ourResponse}</span></div>)}
           </div>
         )}
         {boqOppId === opp?.id && opp && (

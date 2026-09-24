@@ -105,15 +105,18 @@ test('commercial decision terms use separate readable labels and values', () => 
   assert.match(workbench, /commercial-decision-request[\s\S]*<b>ModAE standard:<\/b><span>/)
 })
 
-test('matching customer terms automatically requests one internal AH approval', () => {
+test('matching customer terms offer one descriptive manual AH approval request', () => {
   const panel = workbench.slice(workbench.indexOf('function CommercialDecisionPanel'))
   const decisionHandler = panel.slice(panel.indexOf('const setDecision'), panel.indexOf('const setConfirmation'))
-  assert.match(decisionHandler, /if \(decision === 'Match customer terms'\) requestCommercialApproval\(nextTerms\)/)
+  assert.doesNotMatch(decisionHandler, /requestCommercialApproval\(/)
   assert.match(panel, /type: 'Commercial deviation'/)
   assert.match(panel, /approver: 'AH'/)
   assert.match(panel, /deviationDetails/)
   assert.match(panel, /refreshPendingContext: true/)
-  assert.match(panel, /AH approval was requested automatically/)
+  assert.match(panel, /Request AH approval for/)
+  assert.match(panel, /AH approval requested for: \$\{requestSummary\}/)
+  assert.match(panel, /customer asked/)
+  assert.match(panel, /ModAE response/)
   assert.doesNotMatch(decisionHandler, /requestCommercialApproval\(nextTerms\)[\s\S]*Counter-offer with ModAE standard terms/)
 })
 

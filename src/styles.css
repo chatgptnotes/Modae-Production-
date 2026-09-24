@@ -3164,7 +3164,7 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .approval-context-findings ul { display: grid; gap: 3px; margin: 0; padding-left: 18px; }
 .approval-context-findings li { overflow-wrap: anywhere; }
 .approval-context-deviations { display: grid; gap: 5px; margin-top: 8px; font-size: 11.5px; }
-.approval-context-deviations > div { display: grid; grid-template-columns: 90px 1fr 1fr; gap: 7px; padding-top: 5px; border-top: 1px solid var(--border-soft); }
+.approval-context-deviations > div { display: grid; grid-template-columns: 90px repeat(3, minmax(0, 1fr)); gap: 7px; padding-top: 5px; border-top: 1px solid var(--border-soft); }
 .approval-context-deviations .approval-context-deviation-head { padding-top: 0; border-top: 0; color: var(--text-subtle); font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
 .approval-context-deviations span { color: var(--text-muted); }
 .approval-approver-summary { margin-top: 6px; color: var(--text-main); font-size: 12px; font-weight: 650; }

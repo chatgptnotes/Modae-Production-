@@ -107,6 +107,7 @@ test('approval queue copy explains the decision required', () => {
   assert.match(approvals, /What you're approving/)
   assert.match(approvals, /Customer asked/)
   assert.match(approvals, /ModAE standard/)
+  assert.match(approvals, /Requested response/)
   assert.match(approvals, /You are the only approver/)
   assert.match(approvals, /approval-card-top-redesigned/)
   assert.match(approvals, /approval-wait-chip/)
