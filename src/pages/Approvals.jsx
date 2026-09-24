@@ -253,6 +253,66 @@ function DecisionForm({ a, role, draft = {}, onDraftChange, onDecide }) {
   )
 }
 
+// Keep this component at module scope. Defining it inside Approvals creates a
+// new component type on every parent render, which remounts the decision form
+// and steals focus from the note textarea while the user is typing.
+function PendingCard({
+  a,
+  role,
+  store,
+  myTurn,
+  renderRef,
+  renderDetail,
+  renderRoleChips,
+  renderQuickLinks,
+  draft,
+  onDraftChange,
+  onDecide,
+}) {
+  const remaining = neededOf(a).filter(r => !(a.decisions || {})[r])
+  const myDecision = (a.decisions || {})[role]
+  const opp = store.opportunities.find(o => o.id === a.oppId)
+  return (
+    <div className={cardClass(a, 'form-card approval-pending-card')}>
+      <div className="approval-card-top approval-card-top-redesigned">
+        <div className="approval-card-identity">
+          <b>{approvalTitle(opp)}</b>
+          <span>{opp?.sellTo || a.customerName || 'Customer account not recorded'} · {opp?.valueK != null ? `₹${opp.valueK}K` : 'Proposal value not recorded'} · {a.id}</span>
+        </div>
+        <div className="approval-card-status">
+          <NewMarker a={a} />
+          <span className="approval-wait-chip">{waitingLabel(a.ts)}</span>
+          <span className="hint">raised by {displayRole(a.requestedBy)} on {shortDate(a.ts)}</span>
+        </div>
+      </div>
+      {renderRef(a)}
+      {renderDetail(a)}
+      <RejectionRequirements approval={a} pending />
+      <div className="approval-approvers"><span>Approvers</span>{renderRoleChips(a)}</div>
+      {renderQuickLinks(a)}
+      {myTurn(a)
+        ? <DecisionForm
+            a={a}
+            role={role}
+            draft={draft}
+            onDraftChange={onDraftChange}
+            onDecide={onDecide}
+          />
+        : myDecision
+          ? (
+            <div className="approval-awaiting hint">
+              You decided <b>{myDecision.d}</b> — "{myDecision.c}" · waiting on {displayRoles(remaining) || 'no one'}
+            </div>
+          )
+          : (
+            <div className="approval-awaiting hint">
+              Awaiting {displayRoles(remaining)}
+            </div>
+          )}
+    </div>
+  )
+}
+
 export default function Approvals() {
   const store = useStore()
   const nav = useNavigate()
@@ -466,54 +526,6 @@ export default function Approvals() {
     .sort((a, b) => (b.decisionTs || '').localeCompare(a.decisionTs || ''))
   const oldestForMe = [...forMe].sort((a, b) => (a.ts || '').localeCompare(b.ts || ''))[0]
 
-  const PendingCard = ({ a }) => {
-    const remaining = neededOf(a).filter(r => !(a.decisions || {})[r])
-    const myDecision = (a.decisions || {})[role]
-    const opp = store.opportunities.find(o => o.id === a.oppId)
-    return (
-      <div className={cardClass(a, 'form-card approval-pending-card')}>
-        <div className="approval-card-top approval-card-top-redesigned">
-          <div className="approval-card-identity">
-            <b>{approvalTitle(opp)}</b>
-            <span>{opp?.sellTo || a.customerName || 'Customer account not recorded'} · {opp?.valueK != null ? `₹${opp.valueK}K` : 'Proposal value not recorded'} · {a.id}</span>
-          </div>
-          <div className="approval-card-status">
-            <NewMarker a={a} />
-            <span className="approval-wait-chip">{waitingLabel(a.ts)}</span>
-            <span className="hint">raised by {displayRole(a.requestedBy)} on {shortDate(a.ts)}</span>
-          </div>
-        </div>
-        <div className="approval-ref"><RefLink a={a} /></div>
-        <Detail a={a} />
-        <RejectionRequirements approval={a} pending />
-        <div className="approval-approvers"><span>Approvers</span><RoleChips a={a} /></div>
-        <QuickLinks a={a} />
-        {myTurn(a)
-          ? <DecisionForm
-              a={a}
-              role={role}
-              draft={decisionDrafts[a.id]}
-              onDraftChange={patch => updateDecisionDraft(a.id, patch)}
-              onDecide={dec => {
-                clearDecisionDraft(a.id)
-                store.recordDecision(a.id, dec)
-              }}
-            />
-          : myDecision
-            ? (
-              <div className="approval-awaiting hint">
-                You decided <b>{myDecision.d}</b> — "{myDecision.c}" · waiting on {displayRoles(remaining) || 'no one'}
-              </div>
-            )
-            : (
-              <div className="approval-awaiting hint">
-                Awaiting {displayRoles(remaining)}
-              </div>
-            )}
-      </div>
-    )
-  }
-
   return (
     <div className="page approvals-page">
       <div className="approval-head"><div><div className="approval-eyebrow">DECISION WORKSPACE</div><h2><Icon name="checkCircle" size={18} /> Approvals — {displayRole(role)}</h2><p className="hint">Resolve requests, inspect linked records, and keep the pipeline moving.</p></div></div>
@@ -530,13 +542,45 @@ export default function Approvals() {
           <p className="approval-section-subtitle">{oldestForMe ? `Oldest has been waiting since ${shortDate(oldestForMe.ts)}. Review each one and record a decision.` : 'Nothing is waiting on you right now.'}</p>
         </div>
       </div>
-      {forMe.map(a => <PendingCard key={a.id} a={a} />)}
+      {forMe.map(a => <PendingCard
+        key={a.id}
+        a={a}
+        role={role}
+        store={store}
+        myTurn={myTurn}
+        renderRef={item => <div className="approval-ref"><RefLink a={item} /></div>}
+        renderDetail={item => <Detail a={item} />}
+        renderRoleChips={item => <RoleChips a={item} />}
+        renderQuickLinks={item => <QuickLinks a={item} />}
+        draft={decisionDrafts[a.id]}
+        onDraftChange={patch => updateDecisionDraft(a.id, patch)}
+        onDecide={dec => {
+          clearDecisionDraft(a.id)
+          store.recordDecision(a.id, dec)
+        }}
+      />)}
       {!forMe.length && <p className="hint">Nothing pending for you — all clear.</p>}
 
       {others.length > 0 && (
         <>
           <div className="approval-section-heading"><div><span className="approval-section-kicker">IN PROGRESS</span><h3>Awaiting other approvers <span>{others.length}</span></h3></div></div>
-          {others.map(a => <PendingCard key={a.id} a={a} />)}
+          {others.map(a => <PendingCard
+            key={a.id}
+            a={a}
+            role={role}
+            store={store}
+            myTurn={myTurn}
+            renderRef={item => <div className="approval-ref"><RefLink a={item} /></div>}
+            renderDetail={item => <Detail a={item} />}
+            renderRoleChips={item => <RoleChips a={item} />}
+            renderQuickLinks={item => <QuickLinks a={item} />}
+            draft={decisionDrafts[a.id]}
+            onDraftChange={patch => updateDecisionDraft(a.id, patch)}
+            onDecide={dec => {
+              clearDecisionDraft(a.id)
+              store.recordDecision(a.id, dec)
+            }}
+          />)}
         </>
       )}
 

@@ -117,6 +117,8 @@ test('approval decisions require an explicit choice before showing notes', () =>
   const approvals = read('src/pages/Approvals.jsx')
   assert.match(approvals, /const d = draft\.d \|\| ''/)
   assert.match(approvals, /onDraftChange\(\{ d: v \}\)/)
+  assert.match(approvals, /function PendingCard\(\{[\s\S]*?\n\}\n\nexport default function Approvals/)
+  assert.doesNotMatch(approvals, /export default function Approvals[\s\S]*const PendingCard/)
   assert.match(approvals, /if \(!d\) \{ setErr\('Choose a decision before continuing\.'/)
   assert.match(approvals, /\{d && <textarea/)
   assert.match(approvals, /A note is required for every decision/)
