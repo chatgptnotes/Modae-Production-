@@ -30,7 +30,8 @@ import { clausesFor, clauseWarnings } from '../clauses.js'
 import { fromInr, toInr, currencySymbol } from '../currency.js'
 import { reviewFindingKey } from '../approvalMemory.js'
 import OpportunityComingSoon from '../workbench/OpportunityComingSoon.jsx'
-import { modaeStandardCommercialTerms, normalizeCommercialTerm } from '../commercialTerms.js'
+import { COMMERCIAL_DECISIONS, CUSTOMER_CONFIRMATION_STATUSES, commercialApprovalDetails, modaeStandardCommercialTerms, normalizeCommercialTerm } from '../commercialTerms.js'
+import { proposalApprovalSnapshot } from '../approvalMemory.js'
 import { loadProposalTemplateBuffer, resolveProposalTemplate } from '../proposal/templateRegistry.js'
 import { customerProposalArtifact } from '../proposal/emailAttachments.js'
 import { latestSubmissionForRevision, submissionStatusLabel } from '../submissionStatus.js'
@@ -898,6 +899,57 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     save(next, { preserveReview: true })
     setReviewMessage('ModAE standard commercial terms added.')
   }
+  const commercialDecisionTerms = (p.terms || []).filter(term => term.status === 'Deviation')
+  const requestCommercialApproval = terms => {
+    const deviationDetails = commercialApprovalDetails(terms)
+    if (!deviationDetails.length) return
+    const lead = (store.leads || []).find(item => item.oppId === oppId)
+    const aiSummary = lead?.ai?.summary?.trim() || ''
+    store.requestApproval({
+      oppId,
+      type: 'Commercial deviation',
+      rev: String(pRef.current.revision ?? ''),
+      approver: 'AH',
+      needed: ['AH'],
+      anyOf: false,
+      detail: 'Customer-requested commercial terms matched. AH approval is required before quotation submission.',
+      blockingReason: 'The proposal matches one or more customer-requested commercial terms that differ from ModAE standard terms and require AH approval.',
+      opportunitySummary: aiSummary || `${opp.oppName || 'This opportunity'} is a ${opp.route || 'sales'} opportunity for ${opp.sellTo || 'the customer'}.`,
+      deviationDetails,
+      approvalSnapshot: proposalApprovalSnapshot({ ...pRef.current, terms }, opp),
+      refreshPendingContext: true,
+    })
+    setReviewMessage('AH approval was requested for the matched customer terms.')
+  }
+  const setCommercialDecision = (index, decision) => {
+    const current = pRef.current
+    const nextTerms = (current.terms || []).map((term, termIndex) => termIndex === index
+      ? normalizeCommercialTerm({
+        ...term,
+        decision,
+        ourResponse: decision === 'Match customer terms'
+          ? term.customerAsk
+          : (term.proposedTerm || term.standardTerm || term.ourResponse),
+        customerConfirmationStatus: decision === 'Counter-offer with ModAE standard terms'
+          ? 'Awaiting reply'
+          : 'Not required',
+      })
+      : term)
+    save({ ...current, terms: nextTerms })
+    if (decision === 'Match customer terms') requestCommercialApproval(nextTerms)
+  }
+  const setCounterOffer = (index, value) => {
+    const current = pRef.current
+    save({ ...current, terms: current.terms.map((term, termIndex) => termIndex === index
+      ? normalizeCommercialTerm({ ...term, proposedTerm: value, ourResponse: value })
+      : term) })
+  }
+  const setCustomerConfirmation = (index, status) => {
+    const current = pRef.current
+    save({ ...current, terms: current.terms.map((term, termIndex) => termIndex === index
+      ? normalizeCommercialTerm({ ...term, customerConfirmationStatus: status })
+      : term) })
+  }
   const routeScope = opp.international || opp.location === 'International' ? 'international' : 'domestic'
   const availableClauses = clausesFor(store.config?.clauses, route === 'Service' ? 'Services' : route, routeScope)
   const selectedClauses = (p.clauseIds || []).map(id => availableClauses.find(clause => clause.id === id)).filter(Boolean)
@@ -1510,6 +1562,41 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
             <span className="proposal-alert-toggle">Readiness &amp; approval</span>
           </summary>
           <div className="proposal-alert-drawer-body">
+        {(commercialDecisionTerms.length > 0 || !(p.terms || []).length) && (
+          <section className="proposal-commercial-decision" aria-label="Commercial terms decision">
+            <div className="proposal-commercial-decision-head">
+              <div>
+                <b>Commercial terms decision</b>
+                <p className="hint">Resolve customer-requested Payment or Delivery terms here before moving to Approval.</p>
+              </div>
+              {!(p.terms || []).length && <button className="btn-secondary" type="button" onClick={useModaeStandardTerms} disabled={!canEditProposal}>Use ModAE standard terms</button>}
+            </div>
+            {commercialDecisionTerms.map(term => {
+              const index = p.terms.indexOf(term)
+              return <div className="route-template-row commercial-decision-row" key={`proposal-commercial-decision-${index}`}>
+                <b className="commercial-decision-term">{term.term || `Term ${index + 1}`}</b>
+                <div className="commercial-decision-request">
+                  <div><b>Customer requested</b><span>{term.customerAsk || 'Not recorded'}</span></div>
+                  <div><b>ModAE standard</b><span>{term.standardTerm || term.ourResponse || 'Not recorded'}</span></div>
+                </div>
+                <label className="commercial-decision-choice">Decision
+                  <select value={term.decision || 'Decision pending'} onChange={e => setCommercialDecision(index, e.target.value)} disabled={!canEditProposal}>
+                    {COMMERCIAL_DECISIONS.map(option => <option key={option}>{option}</option>)}
+                  </select>
+                  {term.decision === 'Match customer terms' && <span className="hint">AH approval requested — quotation submission remains blocked until approval.</span>}
+                  {(!term.decision || term.decision === 'Decision pending') && <span className="err">Choose Match customer terms or Counter-offer with ModAE standard terms.</span>}
+                </label>
+                {term.decision === 'Counter-offer with ModAE standard terms' && <div className="commercial-decision-followup">
+                  <label>Counter offer <input value={term.proposedTerm || term.ourResponse || ''} onChange={e => setCounterOffer(index, e.target.value)} disabled={!canEditProposal} /></label>
+                  <label>Customer response <select value={term.customerConfirmationStatus || 'Awaiting reply'} onChange={e => setCustomerConfirmation(index, e.target.value)} disabled={!canEditProposal}>
+                    {CUSTOMER_CONFIRMATION_STATUSES.filter(status => status !== 'Not required').map(status => <option key={status}>{status}</option>)}
+                  </select></label>
+                  <span className="hint">Customer confirmation is tracked in Follow-up.</span>
+                </div>}
+              </div>
+            })}
+          </section>
+        )}
         <div className={`gate-strip ${blocked ? 'blocked' : 'ready'}`}>
           {blockers.length === 0 && (
             <div className="gate-row">

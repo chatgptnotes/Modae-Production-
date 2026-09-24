@@ -4,7 +4,7 @@ import { useStore } from './store.jsx'
 import { PORTAL_ENABLED } from './seed.js'
 import { isSalesOwner, canSeePage, displayRole, canPriceProposal, ddMmmYY } from './utils.js'
 import { DrawerHost } from './drawer.jsx'
-import { Icon, ModaeLogo } from './icons.jsx'
+import { Icon, ModaeImageLogo, ModaeLogo } from './icons.jsx'
 import { DemoDataControls } from './ui.jsx'
 import { counts } from './kpi.js'
 import BrandWatermark from './branding/BrandWatermark.jsx'
@@ -39,8 +39,55 @@ const TabletApp = lazy(() => import('./tablet/TabletApp.jsx'))
 const COMMERCIAL_RX = /GM\s*%|\bGM\b|discount|₹|\bvalue\b|\bmargin\b/i
 
 const LoadingScreen = ({ label = 'Loading workspace…' }) => (
-  <div className="login-bg auth-loading" role="status">{label}</div>
+  <div className="login-bg auth-loading" role="status" aria-live="polite">
+    <div className="auth-loading__content">
+      <ModaeImageLogo height={42} className="auth-loading__logo" />
+      <span className="auth-loading__spinner" aria-hidden="true" />
+      <span>{label}</span>
+    </div>
+  </div>
 )
+
+function ConnectivityNotice() {
+  const [online, setOnline] = useState(() => typeof navigator === 'undefined' ? true : navigator.onLine)
+  const [reconnected, setReconnected] = useState(false)
+
+  useEffect(() => {
+    let reconnectTimer = null
+    const onOffline = () => {
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      setReconnected(false)
+      setOnline(false)
+    }
+    const onOnline = () => {
+      setOnline(true)
+      setReconnected(true)
+      reconnectTimer = setTimeout(() => setReconnected(false), 4500)
+    }
+    window.addEventListener('offline', onOffline)
+    window.addEventListener('online', onOnline)
+    return () => {
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      window.removeEventListener('offline', onOffline)
+      window.removeEventListener('online', onOnline)
+    }
+  }, [])
+
+  if (online && !reconnected) return null
+  const restored = online && reconnected
+  return (
+    <div className={`connectivity-notice ${restored ? 'connectivity-notice-online' : 'connectivity-notice-offline'}`} role="status" aria-live="polite" aria-atomic="true">
+      <ModaeImageLogo height={20} className="connectivity-notice__logo" />
+      <span className="connectivity-notice__status-icon" aria-hidden="true"><Icon name="wifi" size={14} /></span>
+      <div className="connectivity-notice__copy">
+        <strong>{restored ? 'Back online' : 'Offline mode'}</strong>
+        <span>{restored
+          ? 'Reconnecting to the shared workspace…'
+          : 'Changes are saved locally and will sync when you’re back online.'}</span>
+      </div>
+    </div>
+  )
+}
 
 function PageGate({ page, children }) {
   const store = useStore()
@@ -278,6 +325,7 @@ export default function App() {
   const items = NAV
     .filter(t => canSeePage(role, t.page) && (typeof t.show !== 'function' || t.show(role)))
     .map(t => t.to === '/po' && isSalesOwner(role) ? { ...t, label: 'My Purchase Orders' } : t)
+  const withConnectivity = content => <><ConnectivityNotice />{content}</>
 
   // Off-canvas nav closes on navigation in the responsive desktop shell.
   useEffect(() => { setNavOpen(false) }, [loc.pathname])
@@ -301,9 +349,9 @@ export default function App() {
   // before it was switched off still has role CUST, so it gets a plain notice
   // and a way out rather than an app with every page denied. Ahead of the
   // tablet branch, so both shells are covered by the one guard.
-  if (!PORTAL_ENABLED && (role === 'CUST' || custAccount)) return <PortalParked />
+  if (!PORTAL_ENABLED && (role === 'CUST' || custAccount)) return withConnectivity(<PortalParked />)
 
-  if (tablet) return <RequireAuth><Suspense fallback={<LoadingScreen />}><TabletApp /></Suspense></RequireAuth>
+  if (tablet) return withConnectivity(<RequireAuth><Suspense fallback={<LoadingScreen />}><TabletApp /></Suspense></RequireAuth>)
 
   // Customer accounts/persona only ever see the portal. Route-level, not a
   // post-render effect — internal pages must never mount for a customer.
@@ -420,5 +468,5 @@ export default function App() {
     </div>
   )
 
-  return <RequireAuth>{shell}</RequireAuth>
+  return withConnectivity(<RequireAuth>{shell}</RequireAuth>)
 }

@@ -20,7 +20,7 @@ export default function PriceLists() {
   const [list, setList] = useState(initialList)
   const [highlightedPart, setHighlightedPart] = useState('')
   const [rateSheetName, setRateSheetName] = useState('India')
-  const rateSheet = store.rateSheets[normalizeSheet(rateSheetName)]
+  const rateSheet = store.rateSheets?.[normalizeSheet(rateSheetName)] || {}
   const [uploadOpen, setUploadOpen] = useState(false)
   const [uploadFile, setUploadFile] = useState(null)
   const [uploadVersion, setUploadVersion] = useState('')
@@ -33,13 +33,14 @@ export default function PriceLists() {
   const [editVersion, setEditVersion] = useState('')
   const [rateDraft, setRateDraft] = useState({})
   const [partQuery, setPartQuery] = useState('')
+  const [versionLoading, setVersionLoading] = useState(false)
   const rowRefs = useRef({})
   const pl = store.priceLists[list]
   const selectedVersion = pl?.versions?.find(item => item.id === versionId)
   const displayList = selectedVersion || pl
   const currencies = [...new Set(['EUR', 'USD', ...Object.values(store.priceLists || {}).map(item => item.currency), ...Object.keys(store.config?.currencyRates || {})].filter(currency => currency && currency !== 'GBP'))]
   const currencyRates = normalizedCurrencyRates(store.config?.currencyRates)
-  const requestedPartMatch = displayList?.parts.find(part => String(part.pn).trim().toUpperCase() === requestedPart.trim().toUpperCase())
+  const requestedPartMatch = (displayList?.parts || []).find(part => String(part.pn).trim().toUpperCase() === requestedPart.trim().toUpperCase())
   const partFilter = partQuery.trim().toLowerCase()
   const numberedParts = (displayList?.parts || []).map((part, index) => ({ ...part, srNo: index + 1 }))
   const visibleParts = !partFilter ? numberedParts : numberedParts.filter(part =>
@@ -51,8 +52,19 @@ export default function PriceLists() {
   }, [list, requestedList, store.priceLists])
 
   useEffect(() => {
+    const selected = pl?.versions?.find(item => item.id === versionId)
+    if (!selected || selected.parts?.length || selected.id === pl?.activeVersionId || !store.loadPriceListVersion) return
+    let mounted = true
+    setVersionLoading(true)
+    store.loadPriceListVersion(list, selected.version)
+      .catch(error => console.warn('Archived price-list version load failed:', error?.message || error))
+      .finally(() => { if (mounted) setVersionLoading(false) })
+    return () => { mounted = false }
+  }, [list, pl, versionId])
+
+  useEffect(() => {
     if (!requestedPart || !pl) return
-    const match = displayList.parts.find(part => String(part.pn).trim().toUpperCase() === requestedPart.trim().toUpperCase())
+    const match = (displayList.parts || []).find(part => String(part.pn).trim().toUpperCase() === requestedPart.trim().toUpperCase())
     setHighlightedPart(match?.pn || '')
     if (!match) return
     const timer = window.setTimeout(() => rowRefs.current[match.pn]?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 0)
@@ -144,7 +156,11 @@ export default function PriceLists() {
     return (
       <div className="page">
         <h2>Price Lists</h2>
-        <p className="hint">No price lists have been set up yet.{canUpload ? ' Use Admin to add a supplier price list.' : ''}</p>
+        {store.priceListsStatus === 'loading' || store.priceListsStatus === 'refreshing'
+          ? <p className="hint price-list-loading" role="status"><span className="auth-loading__spinner" aria-hidden="true" /> Loading approved price lists…</p>
+          : store.priceListsStatus === 'error'
+            ? <div className="errbox" role="alert">Approved price lists could not be loaded. <button onClick={store.reloadPriceLists}>Retry</button></div>
+            : <p className="hint">No approved price lists are configured in the shared workspace.{canUpload ? ' Ask an administrator to upload a supplier price list.' : ''}</p>}
       </div>
     )
   }
@@ -163,7 +179,7 @@ export default function PriceLists() {
         ))}
         <span className="hint">Current version {pl.version} · uploaded {pl.uploaded} · {pl.currency}. Current approved pricing reference.</span>
         <span className="spacer" />
-        <button onClick={() => exportCSV(`${list}_${displayList.version}_pricelist.csv`, ['Part Number','Description',`Price (${displayList.currency})`,'Adders'], displayList.parts.map(x => [x.pn, x.desc, x.price, x.adders.map(a => `${a.desc} +${a.price}`).join('; ')]))}>Extract to Excel</button>
+        <button onClick={() => exportCSV(`${list}_${displayList.version}_pricelist.csv`, ['Part Number','Description',`Price (${displayList.currency})`,'Adders'], (displayList.parts || []).map(x => [x.pn, x.desc, x.price, (x.adders || []).map(a => `${a.desc} +${a.price}`).join('; ')]))}>Extract to Excel</button>
         {canEdit && <button onClick={() => downloadPriceListTemplate(list, displayList.currency)}>Download template</button>}
         {canUpload && <>
           <button onClick={openUpload}>Upload new version</button>
@@ -190,6 +206,7 @@ export default function PriceLists() {
           {versionId && versionId !== pl.activeVersionId && <button onClick={() => { store.restorePriceListVersion(list, versionId); setVersionId(null) }}>Restore selected version</button>}
         </>}
         {selectedVersion && selectedVersion.id !== pl.activeVersionId && <span className="hint">Viewing an archived version. It is not used for new proposal pricing.</span>}
+        {versionLoading && <span className="hint price-list-loading"><span className="auth-loading__spinner" aria-hidden="true" /> Loading version…</span>}
       </div>
 
       {uploadOpen && (
@@ -301,7 +318,7 @@ export default function PriceLists() {
               // hundred characters and parts with a dozen options. Summarise the
               // options so the row stays readable and the price column stays on
               // screen; the full list is on the cell's tooltip.
-              const adders = x.adders.map(a => `${a.desc} (+${a.price})`)
+              const adders = (x.adders || []).map(a => `${a.desc} (+${a.price})`)
               return (
                 <tr key={x.pn} ref={row => { rowRefs.current[x.pn] = row }} className={highlightedPart === x.pn ? 'price-list-highlight' : undefined}>
                   <td className="pl-sr-no">{x.srNo}</td>
@@ -328,7 +345,7 @@ export default function PriceLists() {
         <table className="sheet">
           <thead><tr><th>Part Number</th><th>Supplier</th><th>Price</th><th>Currency</th><th>Quoted On</th><th>Note</th></tr></thead>
           <tbody>
-            {store.adhocParts.map((x, i) => (
+            {(store.adhocParts || []).map((x, i) => (
               <tr key={i}><td>{x.pn}</td><td>{x.supplier}</td><td className="num">{fmt(x.price)}</td><td>{x.currency}</td><td>{x.date}</td><td>{x.note}</td></tr>
             ))}
           </tbody>

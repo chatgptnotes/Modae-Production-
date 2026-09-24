@@ -154,7 +154,15 @@ export default function Login() {
 
 export function RequireAuth({ children }) {
   const store = useStore()
-  if (!store.authReady) return <div className="login-bg auth-loading" role="status">Checking your session…</div>
+  if (!store.authReady) return (
+    <div className="login-bg auth-loading" role="status" aria-live="polite">
+      <div className="auth-loading__content">
+        <ModaeImageLogo height={42} className="auth-loading__logo" />
+        <span className="auth-loading__spinner" aria-hidden="true" />
+        <span>Checking your session…</span>
+      </div>
+    </div>
+  )
   if (!store.auth?.user) return <Login />
   return children
 }

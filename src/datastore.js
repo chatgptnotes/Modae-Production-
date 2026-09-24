@@ -52,6 +52,10 @@ let loadCache = null
 let loadCacheAt = 0
 let loadInFlight = null
 let coreLoadInFlight = null
+const PRICE_LIST_CACHE_KEY = 'wintrack-modae-approved-price-lists-v1'
+let priceListCache = null
+let priceListCacheAt = 0
+let priceListInFlight = null
 // Normalized opportunity rows carry their revision outside the application
 // state. Keeping sync metadata out of state means it cannot leak into exports,
 // localStorage, or business rules.
@@ -73,6 +77,119 @@ const clearNormalizedEntity = entity => {
 export function invalidateLoadCache() {
   loadCache = null
   loadCacheAt = 0
+}
+
+export function readPriceListsCache() {
+  if (priceListCache) return priceListCache
+  try {
+    const saved = JSON.parse(localStorage.getItem(PRICE_LIST_CACHE_KEY) || 'null')
+    if (saved?.priceLists && typeof saved.priceLists === 'object') {
+      priceListCache = saved.priceLists
+      return priceListCache
+    }
+  } catch { /* cache is optional */ }
+  return null
+}
+
+const writePriceListsCache = priceLists => {
+  priceListCache = priceLists
+  priceListCacheAt = Date.now()
+  try {
+    localStorage.setItem(PRICE_LIST_CACHE_KEY, JSON.stringify({ version: 1, savedAt: priceListCacheAt, priceLists }))
+  } catch { /* the main local snapshot remains unaffected */ }
+}
+
+const mapPriceListParts = (parts = [], adders = []) => {
+  const addersByPart = new Map()
+  for (const adder of adders) {
+    const rows = addersByPart.get(adder.part_id) || []
+    rows.push({ code: adder.code, desc: adder.description, price: Number(adder.unit_price) || 0 })
+    addersByPart.set(adder.part_id, rows)
+  }
+  return parts.map(part => ({
+    pn: part.part_number,
+    desc: part.description,
+    price: Number(part.unit_price) || 0,
+    currency: part.currency,
+    keywords: part.keywords || [],
+    adders: addersByPart.get(part.id) || [],
+  }))
+}
+
+export async function loadPriceLists({ force = false } = {}) {
+  if (!supabase) return readPriceListsCache() ? { priceLists: readPriceListsCache(), cached: true } : null
+  if (!force && priceListCache && Date.now() - priceListCacheAt < LOAD_CACHE_MS) return { priceLists: priceListCache, cached: true }
+  if (priceListInFlight) return priceListInFlight
+  priceListInFlight = (async () => {
+    const listsResult = await supabase.from('price_lists').select('id, list_code, source_currency, current_version, uploaded_at')
+    if (listsResult.error) throw listsResult.error
+    const lists = listsResult.data || []
+    if (!lists.length) {
+      writePriceListsCache({})
+      return { priceLists: {} }
+    }
+    const listIds = lists.map(list => list.id)
+    const versionsResult = await supabase.from('price_list_versions')
+      .select('id, price_list_id, version_code, source_currency, filename, uploaded_at, is_active')
+      .in('price_list_id', listIds)
+    if (versionsResult.error) throw versionsResult.error
+    const versions = versionsResult.data || []
+    const activeVersions = lists.map(list => {
+      const rows = versions.filter(version => version.price_list_id === list.id)
+      return rows.find(version => version.version_code === list.current_version) || rows.find(version => version.is_active) || rows[rows.length - 1]
+    }).filter(Boolean)
+    const activeIds = activeVersions.map(version => version.id)
+    const partsResult = activeIds.length
+      ? await supabase.from('price_list_parts').select('id, version_id, part_number, description, unit_price, currency, keywords').in('version_id', activeIds)
+      : { data: [], error: null }
+    if (partsResult.error) throw partsResult.error
+    const partIds = (partsResult.data || []).map(part => part.id)
+    const addersResult = partIds.length
+      ? await supabase.from('price_list_adders').select('part_id, code, description, unit_price').in('part_id', partIds)
+      : { data: [], error: null }
+    if (addersResult.error) throw addersResult.error
+    const result = Object.fromEntries(lists.map(list => {
+      const listVersions = versions.filter(version => version.price_list_id === list.id)
+      const active = activeVersions.find(version => version.price_list_id === list.id)
+      const activeParts = (partsResult.data || []).filter(part => part.version_id === active?.id)
+      return [list.list_code, {
+        parts: mapPriceListParts(activeParts, addersResult.data || []),
+        version: active?.version_code || list.current_version || 'Initial',
+        currency: list.source_currency,
+        uploaded: list.uploaded_at || '',
+        activeVersionId: active ? `${list.list_code}-${active.version_code}` : '',
+        versions: listVersions.map(version => ({
+          id: `${list.list_code}-${version.version_code}`,
+          version: version.version_code,
+          currency: version.source_currency,
+          uploaded: version.uploaded_at || '',
+          filename: version.filename || '',
+          parts: version.id === active?.id ? mapPriceListParts(activeParts, addersResult.data || []) : [],
+        })),
+      }]
+    }))
+    writePriceListsCache(result)
+    return { priceLists: result }
+  })()
+  try { return await priceListInFlight } finally { priceListInFlight = null }
+}
+
+export async function loadPriceListVersion(listCode, versionCode) {
+  if (!supabase) return null
+  const listResult = await supabase.from('price_lists').select('id').eq('list_code', listCode).maybeSingle()
+  if (listResult.error || !listResult.data) throw listResult.error || new Error(`Price list ${listCode} was not found`)
+  const versionResult = await supabase.from('price_list_versions')
+    .select('id, source_currency, filename, uploaded_at').eq('price_list_id', listResult.data.id).eq('version_code', versionCode).maybeSingle()
+  if (versionResult.error || !versionResult.data) throw versionResult.error || new Error(`Price list version ${versionCode} was not found`)
+  const partsResult = await supabase.from('price_list_parts')
+    .select('id, part_number, description, unit_price, currency, keywords').eq('version_id', versionResult.data.id)
+  if (partsResult.error) throw partsResult.error
+  const partIds = (partsResult.data || []).map(part => part.id)
+  const addersResult = partIds.length
+    ? await supabase.from('price_list_adders').select('part_id, code, description, unit_price').in('part_id', partIds)
+    : { data: [], error: null }
+  if (addersResult.error) throw addersResult.error
+  return { ...versionResult.data, version: versionCode, parts: mapPriceListParts(partsResult.data || [], addersResult.data || []) }
 }
 
 // → { empty, slices: {key: value} } | null when disabled or on error
@@ -186,48 +303,10 @@ async function fetchAll() {
     if (!rates.error && rates.data?.length) {
       slices.config = { ...(slices.config || {}), currencyRates: Object.fromEntries(rates.data.map(row => [row.currency_code, Number(row.rate_to_inr)])) }
     }
-    const priceLists = await supabase.from('price_lists').select(`
-      list_code, supplier_name, source_currency, current_version, uploaded_at,
-      price_list_versions (
-        id, version_code, source_currency, filename, uploaded_at, is_active,
-        price_list_parts (
-          id, part_number, description, unit_price, currency, keywords,
-          price_list_adders (code, description, unit_price)
-        )
-      )
-    `)
-    if (!priceLists.error && priceLists.data?.length) {
-      slices.priceLists = Object.fromEntries(priceLists.data.map(list => {
-        const versions = (list.price_list_versions || []).map(version => ({
-          id: `${list.list_code}-${version.version_code}`,
-          version: version.version_code,
-          currency: version.source_currency,
-          uploaded: version.uploaded_at || '',
-          filename: version.filename || '',
-          parts: (version.price_list_parts || []).map(part => ({
-            pn: part.part_number,
-            desc: part.description,
-            price: Number(part.unit_price) || 0,
-            currency: part.currency,
-            keywords: part.keywords || [],
-            adders: (part.price_list_adders || []).map(adder => ({ code: adder.code, desc: adder.description, price: Number(adder.unit_price) || 0 })),
-          })),
-        }))
-        const active = versions.find(version => version.version === list.current_version) || versions[versions.length - 1]
-        return [list.list_code, {
-          parts: active?.parts || [],
-          version: active?.version || list.current_version || 'Initial',
-          currency: list.source_currency,
-          uploaded: list.uploaded_at || '',
-          versions,
-          activeVersionId: active?.id || '',
-        }]
-      }))
-    }
     const hasBusinessData = Object.values(business).some(value => Array.isArray(value) ? value.length > 0 : Object.keys(value || {}).length > 0)
       || Number(business.recordCount) > 0
     return {
-      empty: (!data || data.length === 0) && !settings.data?.length && !rates.data?.length && !priceLists.data?.length && !hasBusinessData,
+      empty: (!data || data.length === 0) && !settings.data?.length && !rates.data?.length && !hasBusinessData,
       slices,
       diagnostics: {
         normalizedOpportunityCount: Array.isArray(business.opportunities) ? business.opportunities.length : 0,
@@ -578,6 +657,8 @@ function saveOpportunityRows(rows) {
 
 export async function savePriceLists(priceLists = {}) {
   if (!supabase) return false
+  priceListCache = null
+  priceListCacheAt = 0
   const listRows = Object.entries(priceLists).map(([list_code, list]) => ({
     list_code,
     supplier_name: list_code,

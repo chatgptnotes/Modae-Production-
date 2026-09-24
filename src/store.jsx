@@ -69,7 +69,12 @@ const initialState = () => {
   const state = stateFromSaved(saved)
   // Production starts clean. Existing demo-mode snapshots are migrated once
   // into an empty workspace; real records entered after that remain intact.
-  return reconcileApprovedSubmissions(state.demoData === true ? emptyState(state) : state)
+  const next = reconcileApprovedSubmissions(state.demoData === true ? emptyState(state) : state)
+  if (next.demoData !== true && !Object.keys(next.priceLists || {}).length) {
+    const cachedPriceLists = datastore.readPriceListsCache()
+    if (cachedPriceLists && Object.keys(cachedPriceLists).length) next.priceLists = cachedPriceLists
+  }
+  return next
 }
 
 // Supabase is the authoritative store for catalogues, files, and the full
@@ -281,6 +286,7 @@ export function StoreProvider({ children }) {
   const [state, setState] = useState(initialState)
   const [authReady, setAuthReady] = useState(() => !supabase || !!state.auth?.user)
   const [liveSyncStatus, setLiveSyncStatus] = useState(() => supabaseConfigError ? 'config-error' : datastore.dbEnabled() ? 'connecting' : 'offline')
+  const [priceListsStatus, setPriceListsStatus] = useState(() => Object.keys(state.priceLists || {}).length ? 'ready' : 'loading')
   const [syncDiagnostics, setSyncDiagnostics] = useState({ normalizedOpportunityCount: null, legacyOpportunityCount: null })
   setRoleNameConfig(state.config)
   // Ref mirror so read APIs (getProposal) see same-tick mutations, not the render closure.
@@ -504,9 +510,40 @@ export function StoreProvider({ children }) {
     setState(merged)
   }
 
+  const loadApprovedPriceLists = async ({ force = false } = {}) => {
+    const cached = datastore.readPriceListsCache()
+    if (cached && !Object.keys(stateRef.current.priceLists || {}).length) {
+      setState(s => ({ ...s, priceLists: cached }))
+      lastSavedRef.current = { ...lastSavedRef.current, priceLists: cached }
+      setPriceListsStatus(Object.keys(cached).length ? 'ready' : 'empty')
+    }
+    if (!datastore.dbEnabled()) {
+      setPriceListsStatus(Object.keys(stateRef.current.priceLists || {}).length ? 'ready' : 'empty')
+      return
+    }
+    setPriceListsStatus(Object.keys(stateRef.current.priceLists || {}).length ? 'refreshing' : 'loading')
+    try {
+      const result = await datastore.loadPriceLists({ force })
+      if (!result) throw new Error('Approved price lists could not be loaded')
+      const next = result.priceLists || {}
+      const current = stateRef.current.priceLists || {}
+      const baseline = lastSavedRef.current.priceLists
+      const dirty = baseline && JSON.stringify(current) !== JSON.stringify(baseline)
+      if (!dirty) {
+        lastSavedRef.current = { ...lastSavedRef.current, priceLists: next }
+        setState(s => ({ ...s, priceLists: next }))
+      }
+      setPriceListsStatus(Object.keys(next).length ? 'ready' : 'empty')
+    } catch (error) {
+      console.warn('Approved price-list load failed:', error?.message || error)
+      setPriceListsStatus(Object.keys(stateRef.current.priceLists || {}).length ? 'ready' : 'error')
+    }
+  }
+
   useEffect(() => {
     if (!datastore.dbEnabled()) return
     hydrate()
+    loadApprovedPriceLists()
     let lastFetch = Date.now()
     const onFocus = () => {
       if (Date.now() - lastFetch < 10000) return
@@ -595,6 +632,22 @@ export function StoreProvider({ children }) {
 
   const api = {
     ...state,
+    priceListsStatus,
+    reloadPriceLists: () => loadApprovedPriceLists({ force: true }),
+    async loadPriceListVersion(listCode, versionCode) {
+      const loaded = await datastore.loadPriceListVersion(listCode, versionCode)
+      if (!loaded) return
+      setState(s => {
+        const current = s.priceLists?.[listCode]
+        if (!current) return s
+        const versions = (current.versions || []).map(version => version.version === versionCode
+          ? { ...version, currency: loaded.source_currency, uploaded: loaded.uploaded_at || '', filename: loaded.filename || '', parts: loaded.parts }
+          : version)
+        const next = { ...s.priceLists, [listCode]: { ...current, versions } }
+        persistLocalSnapshot({ ...s, priceLists: next })
+        return { ...s, priceLists: next }
+      })
+    },
 
     addOpportunity(opp) {
       // Normalize here so every creator (IntakeForm, TenderIntake, Register)
