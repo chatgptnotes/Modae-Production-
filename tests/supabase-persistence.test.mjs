@@ -98,3 +98,18 @@ test('admin user management reads profiles from records state', () => {
   assert.match(adminUsers, /\.eq\('id', 'users'\)/)
   assert.doesNotMatch(adminUsers, /from\('app_state'\)/)
 })
+
+test('relational workspace migration defines typed business tables and indexes', () => {
+  const migration = fs.readFileSync(path.join(root, 'supabase/009_relational_workspace_data.sql'), 'utf8')
+  for (const table of ['customers', 'customer_contacts', 'lead_items', 'opportunity_items', 'proposal_items', 'catalogue_versions', 'catalogue_parts', 'communications', 'audit_events', 'workspace_settings']) {
+    assert.match(migration, new RegExp(`create table if not exists public\\.${table}`))
+  }
+  assert.match(migration, /references public\.customers\(id\)/)
+  assert.match(migration, /references public\.opportunities\(id\)/)
+  assert.match(migration, /proposal_items_proposal_idx/)
+  assert.match(migration, /catalogue_parts_version_part_idx/)
+  assert.match(migration, /enable row level security/)
+  assert.match(migration, /create policy app_select_%1\$s/)
+  assert.match(migration, /alter publication supabase_realtime add table/)
+  assert.match(migration, /Legacy JSONB rows remain available|legacy JSONB rows remain available/i)
+})

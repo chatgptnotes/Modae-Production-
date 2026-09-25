@@ -5,6 +5,10 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Added the additive relational workspace migration with typed customer,
+  opportunity-item, proposal-item, catalogue, communication, audit, and
+  settings tables plus indexed backfill paths. Legacy JSONB data remains
+  available for rollback during verification.
 - Split proposals, sourcing lines, clarifications, audit rows, settings, and
   price-list records into dedicated Supabase JSONB tables with a compatibility
   backfill from `records`. Also fixed startup persistence deleting the active
