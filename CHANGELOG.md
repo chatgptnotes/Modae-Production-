@@ -5,9 +5,22 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
-- Made proposal validation start directly from the Validate review action and
-  show staged loading progress before local and AI review work begins; removed
-  the page-level reviewed-workbook upload choice.
+- Refined the Admin card grid and ownership controls so category labels,
+  routing regions, descriptions, and form controls keep readable widths and
+  reflow cleanly across desktop, tablet, and mobile layouts.
+- Fixed Admin ownership rows so region fields and owner controls stay aligned
+  on one line on desktop and stack cleanly only on narrow screens.
+- Added an on-demand AI advisory review for Admin ownership rules and
+  state-to-region mappings; deterministic routing remains authoritative and AI
+  suggestions never change configuration automatically.
+- Uploaded proposal workbooks now compare Payment, Delivery, Warranty, Freight,
+  and Validity terms against the original proposal. Changed terms are shown as
+  red, non-blocking human-review findings with original/uploaded values and
+  workbook evidence; saved internal approval terms remain unchanged.
+- Consolidated ownership routing to the regional Ownership rules and removed
+  the separate opportunity-type owner fallback from Admin and runtime state.
+- Restored reviewed-workbook upload validation with staged loading progress from
+  file selection through workbook import, local checks, and AI review.
 - Rebuilt the Admin T&C clause library as a structured editable data table with
   inline title/text fields, add/remove actions, and responsive overflow.
 - Added visible staged AI scan progress to proposal validation and enabled

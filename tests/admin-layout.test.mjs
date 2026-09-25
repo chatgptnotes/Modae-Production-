@@ -19,6 +19,8 @@ test('Admin text keeps natural word wrapping', () => {
 
 test('Admin workflow exposes nested category navigation', () => {
   assert.match(admin, /className="admin-section-rail admin-workflow-tabs"/)
+  assert.doesNotMatch(admin, /Workflow &amp; governance/)
+  assert.doesNotMatch(admin, /admin-section-rail-label/)
   assert.match(admin, /id: 'access', label: 'Access & routing'/)
   assert.match(admin, /id: 'clauses', label: 'T&C Clause Library'/)
   assert.match(admin, /id: 'commercial', label: 'Commercial & automation'/)
@@ -38,16 +40,18 @@ test('Admin workflow includes region filtering, visual owner/risk badges, and sa
   assert.match(app, /notification-save-status/)
 })
 
-test('Admin access controls merge the three ownership cards into one panel', () => {
+test('Admin access controls keep users and regional ownership in one panel', () => {
   assert.match(admin, /className="admin-access-controls-panel"/)
   assert.match(admin, /Access &amp; Routing Controls/)
   assert.match(admin, /Configure user permissions, regional routing, and opportunity ownership\./)
   assert.match(admin, /className="admin-access-controls-grid"/)
   assert.match(admin, /className="admin-access-column"/)
   assert.match(styles, /\.admin-access-controls-panel \{[\s\S]*?border: 1px solid var\(--admin-border-subtle\);[\s\S]*?border-radius: 12px;[\s\S]*?overflow: hidden;/)
-  assert.match(styles, /\.admin-access-controls-grid \{[\s\S]*?grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/)
+  assert.match(styles, /\.admin-access-controls-grid \{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/)
   assert.match(styles, /\.admin-access-column \+ \.admin-access-column \{[\s\S]*?border-left: 1px solid var\(--admin-border-subtle\);/)
   assert.match(styles, /@media \(max-width: 900px\) \{[\s\S]*?\.admin-access-controls-grid \{[\s\S]*?grid-template-columns: 1fr;/)
+  assert.doesNotMatch(admin, /Owner by opportunity type/)
+  assert.doesNotMatch(admin, /ownerRules/)
 })
 
 test('Admin clause library uses a responsive editable data table', () => {
@@ -80,4 +84,33 @@ test('Admin settings use a landscape adaptive grid before stacking', () => {
   assert.match(styles, /\.admin-page \.admin-workflow-layout \{[\s\S]*?display: block;/)
   assert.match(styles, /\.admin-page \.admin-workflow-tabs \{[\s\S]*?grid-template-columns: repeat\(4, minmax\(0, 1fr\)\);/)
   assert.match(styles, /\.admin-page \.admin-setting-grid > \.admin-card,[\s\S]*?grid-column: span 1;/)
+})
+
+test('Admin card labels and ownership controls keep readable widths', () => {
+  assert.match(styles, /\.admin-page \.admin-workflow-tabs \{[\s\S]*?grid-template-columns: repeat\(4, minmax\(180px, 1fr\)\);/)
+  assert.match(styles, /\.admin-page \.admin-workflow-tabs button > span:last-child \{[\s\S]*?overflow-wrap: normal;[\s\S]*?word-break: normal;/)
+  assert.match(styles, /\.admin-page \.admin-setting-grid > \.admin-card,[\s\S]*?height: auto;[\s\S]*?align-self: start;/)
+  assert.match(styles, /\.admin-page \.admin-access-controls-grid \{[\s\S]*?minmax\(460px, 1\.22fr\)/)
+  assert.match(styles, /\.admin-page \.admin-access-column \.arow \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\) minmax\(150px, auto\);/)
+  assert.match(styles, /@media \(max-width: 560px\) \{[\s\S]*?\.admin-page \.admin-access-column \.arow \{[\s\S]*?grid-template-columns: 1fr;/)
+})
+
+test('Admin ownership rows keep the region and owner controls on one line', () => {
+  assert.match(admin, /className="arow admin-ownership-row"/)
+  assert.match(styles, /\.admin-page \.admin-access-column \.admin-ownership-row \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\) 156px;[\s\S]*?align-items: center;/)
+  assert.match(styles, /\.admin-page \.admin-access-column \.admin-ownership-row \.admin-select-with-badge \{[\s\S]*?flex-wrap: nowrap;[\s\S]*?white-space: nowrap;/)
+  assert.match(styles, /@media \(max-width: 560px\) \{[\s\S]*?\.admin-page \.admin-access-column \.admin-ownership-row \{[\s\S]*?grid-template-columns: 1fr;/)
+})
+
+test('Admin routing review is advisory and uses the server AI task', () => {
+  const ai = fs.readFileSync('api/ai.js', 'utf8')
+  assert.match(admin, /runTaskResult\('admin\.routing-review'/)
+  assert.match(admin, /Review routing with AI/)
+  assert.match(admin, /ownershipRules: config\.ownershipRules/)
+  assert.match(admin, /stateRegions: config\.stateRegions/)
+  assert.match(admin, /routingReview\.findings/)
+  assert.match(ai, /admin\.routing-review/)
+  assert.match(ai, /routingReviewSchema/)
+  assert.match(ai, /Deterministic[\s\S]*authoritative/)
+  assert.doesNotMatch(admin, /updateConfig\(.*routingReview/)
 })

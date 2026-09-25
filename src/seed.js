@@ -258,19 +258,6 @@ export const REVISION_TYPES = [
   { id: 'Other', label: 'Other changes (documents / SoW / compliance)' },
 ]
 
-// Ownership is driven by the opportunity type, while routeForType controls
-// which document workbench is shown. These are intentionally separate rules.
-// The mapping is editable from Admin (config.ownerRules); this is only the
-// seed default and the safety-net fallback if config is missing a row.
-const DEFAULT_OWNER_FOR_OPP_TYPE = {
-  Project: 'LJS', Upgrade: 'PP', Retrofit: 'RS', Service: 'SS',
-  Spares: 'PJS', Flow: 'RJS',
-}
-export function ownerForOppType(oppType, config) {
-  const found = (config?.ownerRules || []).find(r => r.oppType === oppType)
-  return found?.owner || DEFAULT_OWNER_FOR_OPP_TYPE[oppType] || 'LJS'
-}
-
 // Proposal template flavour, derived from the same route the workbench uses.
 // Deriving it here rather than re-testing oppType keeps Service, Spares and
 // Retrofit off the heavy project template — they used to fall through to it.
@@ -747,9 +734,6 @@ export const seedConfig = {
     { region: 'Aerospace / DCS / automation opportunities', owner: 'LJS' },
     { region: 'Unclassified leads', owner: 'LJS', unclassified: true, approvalNeeded: true },
   ],
-  // Fallback owner by opportunity type, used when no regional rule above
-  // applies (e.g. Spares leads route to PJS by default).
-  ownerRules: OPP_TYPES.map(t => ({ oppType: t, owner: DEFAULT_OWNER_FOR_OPP_TYPE[t] })),
   leadDeadlines: { kycDays: 7, amberFeeDays: 7, clarificationDays: 7 },
   proposalValidityDays: 30,
   // How long a published service rate schedule stands before it is re-validated.

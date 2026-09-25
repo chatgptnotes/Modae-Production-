@@ -133,7 +133,7 @@ const alertPriority = alert => {
   return (alert.severity === 'high' ? 100 : 0) + (typeRank[alert.type] || 0)
 }
 
-function NotificationBell({ store, nav }) {
+function NotificationBell({ store, nav, showAdminSaveStatus = false }) {
   const [open, setOpen] = useState(false)
   const role = store.role
   const seenStorageKey = `wintrack-notifications-seen-${role}`
@@ -227,6 +227,12 @@ function NotificationBell({ store, nav }) {
         <Icon name="bell" size={24} />
         {unseenNotifications.length > 0 && <span className="notification-count">{unseenNotifications.length > 99 ? '99+' : unseenNotifications.length}</span>}
       </button>
+      {showAdminSaveStatus && (
+        <div className={`admin-save-status admin-save-status--${store.adminSaveState || 'saved'} notification-save-status`} role="status" aria-live="polite">
+          <span className="admin-save-dot" aria-hidden="true" />
+          {store.adminSaveState === 'saving' ? 'Saving…' : store.adminSaveState === 'error' ? 'Save failed — retrying' : 'Saved'}
+        </div>
+      )}
       {open && (
         <>
           <div className="notification-overlay" onClick={closeNotifications} />
@@ -440,7 +446,7 @@ export default function App() {
         <button className="shell-nav-burger" onClick={() => setNavOpen(true)} title="Menu" aria-label="Open navigation">
           <Icon name="menu" size={20} />
         </button>
-        <NotificationBell store={store} nav={nav} />
+        <NotificationBell store={store} nav={nav} showAdminSaveStatus={loc.pathname === '/admin'} />
         {/* The shell is viewport-locked, so this is the app's single scroll
             region — pages that want their own internal scroller (the pipeline
             sheet, the mailbox list) size themselves to 100% of it. */}

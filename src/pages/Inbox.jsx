@@ -6,7 +6,7 @@ import { Icon } from '../icons.jsx'
 import ScanProgress from '../ScanProgress.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { Chip, ConfChip, ConfirmModal, WarnBox, ErrBox, Modal } from '../ui.jsx'
-import { ROLES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, CUSTOMER_STATUSES, LEAD_SOURCES, ownerForOppType, routeForType, newProposal } from '../seed.js'
+import { ROLES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, CUSTOMER_STATUSES, LEAD_SOURCES, routeForType, newProposal } from '../seed.js'
 import { isAdminRole, isApprover } from '../utils.js'
 import { aiEnabled, runTaskResult, runText } from '../ai.js'
 import { extractDocText } from '../docText.js'
@@ -20,7 +20,7 @@ import { leadWorkflow } from '../leadWorkflow.js'
 import { parseLeadLineItems } from '../tenderParse.js'
 import { deterministicLeadRoute, leadTextChunks, mergeLeadResults, cleanDisplayValue, extractLeadIdentityFacts } from '../leadExtraction.js'
 import { scanAttachment, parsedToLeadFields, deterministicPromptContext, mergeDeterministicIntoAi } from '../docScan.js'
-import { customerContactFromText, customerCompanyFromText, customerPhoneFromText, hardenLeadExtraction, isFastTrackLead, isInternalSender, isRegistrationCriticalField, normalizeLeadContactFields, routeOwner, supplyMissing } from '../leadRules.js'
+import { customerContactFromText, customerCompanyFromText, customerPhoneFromText, hardenLeadExtraction, isFastTrackLead, isInternalSender, isRegistrationCriticalField, normalizeLeadContactFields, routeOwner, routeOwnerForLocation, supplyMissing } from '../leadRules.js'
 import { indiaLocation, indiaRegionForLocation } from '../indiaLocations.js'
 import {
   QUOTE_FEE_DOCUMENTS, answeredPatch, clarificationItems, clarificationKindFor,
@@ -315,7 +315,7 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
       oppType: route,
       urgency: 'Normal',
       completeness: fields.length ? 20 : 0,
-      suggestedOwner: ownerForOppType(route === 'Spares' ? 'Spares' : route === 'Service' ? 'Service' : 'Project', store.config),
+      suggestedOwner: routeOwnerForLocation(eucLocation, store.config, ''),
       ai: {
         summary: `AI extraction was unavailable${aiResult.error ? `: ${aiResult.error}` : ''}. The original enquiry was saved for manual structuring.`,
         fields: fields.map(f => ({ ...f, v: cleanDisplayValue(f.v), state: 'pending' })),
@@ -329,9 +329,8 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
   }
   const sourceRoute = deterministicLeadRoute(body, attachments)
   const resolvedRoute = sourceRoute || ai.route || 'Spares'
-  const owner = ROLES[ai.suggestedOwner]?.sales
-    ? ai.suggestedOwner
-    : ownerForOppType(resolvedRoute === 'Spares' ? 'Spares' : resolvedRoute === 'Service' ? 'Service' : 'Project', store.config)
+  const extractedLocation = ai.fields?.find(field => /location|region/i.test(String(field?.k || '')))?.v || ''
+  const owner = routeOwnerForLocation(extractedLocation, store.config, '')
   let oppTypeFieldMatched = false
   const resolvedFields = normalizeLeadContactFields(ai.fields, { from, text: sourceText, config: store.config }).map(f => {
     if (!/^(opp type|opportunity type)$/i.test(f.k) || !sourceRoute) return f
@@ -1473,7 +1472,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
     : lead.contactPerson || leadFieldValue(ai.fields, /contact\s*person|contact/i) || lead.parse?.contactPerson || ''
   const initialLocation = lead.location || (lead.region && !indiaRegionForLocation(lead.region, store.config) ? lead.region : '') || mappedLeadFieldValue(ai.fields, 'eucLocation')
   const initialRegion = lead.region || indiaRegionForLocation(initialLocation, store.config) || initialLocation
-  const regionalOwner = routeOwner(initialRegion, store.config, lead.suggestedOwner || ownerForOppType(lead.route || 'Spares', store.config))
+  const regionalOwner = routeOwner(initialRegion, store.config, '')
   const savedOverride = lead.assignedOwner && lead.assignedOwner !== regionalOwner && (lead.ownerOverrideReason || '').trim()
   const initialDecisions = () => {
     const identity = leadIdentity(lead, ai.fields)
@@ -1551,7 +1550,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
     // Re-reading a document must not silently move the lead out of the
     // salesperson's inbox. Human assignment wins over a fresh AI suggestion;
     // an unassigned lead keeps its prior suggested owner until a user changes it.
-    next.suggestedOwner = routeOwner(source.region || source.location, store.config, next.suggestedOwner || source.suggestedOwner)
+    next.suggestedOwner = routeOwnerForLocation(source.region || source.location, store.config, next.suggestedOwner || source.suggestedOwner)
     store.updateLead(lead.id, next, detail || '')
     store.recordAiAction(lead.id, { provider: store.config?.aiModel?.provider, model: store.config?.aiModel?.model, action: 'lead.re-extract', result: { completeness: next.completeness, missing: next.ai?.missing || [], route: next.route } })
     setReNote('Extraction updated.')
@@ -1768,10 +1767,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
   }
 
   const rule = (store.config.ownershipRules || []).find(r => r.owner === regionalOwner)
-  const oppTypeRule = !rule && (store.config.ownerRules || []).find(r => r.oppType === decisionDraft.oppType && r.owner === regionalOwner)
-  const ownerRuleLabel = rule ? `${rule.region} rule`
-    : oppTypeRule ? `${oppTypeRule.oppType} opportunity-type rule`
-    : `${decisionDraft.oppType} opportunity-type rule`
+  const ownerRuleLabel = rule ? `${rule.region} rule` : 'Ownership rule'
 
   const qualifyBlocked = isRed && !redCleared
   const verificationBlocked = !leadVerificationComplete(lead, previewCustomerStatus, { redCleared, config: store.config })
@@ -1936,7 +1932,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
     .filter(d => !(lead.dismissedDuplicates || []).includes(d.leadId))
 
   const reassign = () => {
-    const routedOwner = routeOwner(lead.region || lead.location, store.config, reassignTo)
+    const routedOwner = routeOwnerForLocation(lead.region || lead.location, store.config, reassignTo)
     if (routedOwner && reassignTo !== routedOwner && !['LJS', 'AH'].includes(store.role)) {
       setDecisionErr(`Region routing assigns this lead to ${routedOwner}. Only LJS or AH can override the owner.`)
       return

@@ -18,6 +18,7 @@ import { DEFAULT_KYC_VALIDATION, kycValidationConfig } from '../kycValidation.js
 import { DEFAULT_CLAUSES } from '../clauses.js'
 import { mintId } from '../ids.js'
 import { BUILT_IN_PROPOSAL_TEMPLATES, loadProposalTemplateBuffer, resolveProposalTemplate } from '../proposal/templateRegistry.js'
+import { runTaskResult } from '../ai.js'
 
 // Admin — every runtime rule the app obeys, in one card grid. Data lives in
 // store.config; all changes are audited by the store mutators.
@@ -267,6 +268,8 @@ export default function Admin() {
   const [adminView, setAdminView] = useState('workflow')
   const [workflowView, setWorkflowView] = useState('access')
   const [regionSearch, setRegionSearch] = useState('')
+  const [routingReview, setRoutingReview] = useState(null)
+  const [routingReviewBusy, setRoutingReviewBusy] = useState(false)
 
   // Route-level gate AFTER the hooks (an early return before them would change
   // the hook count when the persona flips while /admin is mounted). Approval
@@ -393,13 +396,29 @@ export default function Admin() {
   const aiTh = { ...seedConfig.aiThresholds, ...(config.aiThresholds || {}) }
   const kycValidation = kycValidationConfig(config)
   const amber = config.amberFee || {}
-  const configuredTemplates = proposalTemplates.filter(item => item.status === 'Current').length
-  const aiStatus = 'Automatic routing'
   const filteredStateRegions = (config.stateRegions || []).filter(item => {
     const query = regionSearch.trim().toLowerCase()
     if (!query) return true
     return `${item.name || ''} ${item.code || ''}`.toLowerCase().includes(query)
   })
+
+  const reviewRouting = async () => {
+    if (routingReviewBusy) return
+    setRoutingReviewBusy(true)
+    setRoutingReview(null)
+    const result = await runTaskResult('admin.routing-review', {
+      owners: OWNERS,
+      regions: REGION_OPTIONS,
+      ownershipRules: config.ownershipRules || [],
+      stateRegions: config.stateRegions || [],
+    }, { timeoutMs: 30000 })
+    if (result.data?.data) {
+      setRoutingReview({ ...result.data.data, model: result.data.model || result.model })
+    } else {
+      setRoutingReview({ status: 'unavailable', summary: result.error || 'AI routing review is unavailable. The deterministic routing rules remain active.' })
+    }
+    setRoutingReviewBusy(false)
+  }
 
   const addClause = () => {
     if (!canEdit) return
@@ -443,12 +462,6 @@ export default function Admin() {
         <div className="warn-box">Read-only — sign in as an administrator to change configuration</div>
       )}
 
-      <div className="admin-status-strip" aria-label="Configuration overview">
-        <div className="admin-status-item"><span className="admin-status-label">AI model</span><b>{aiStatus}</b></div>
-        <div className="admin-status-item"><span className="admin-status-label">Reporting currency</span><b>INR</b><span className="hint">source lists keep their currency</span></div>
-        <div className="admin-status-item"><span className="admin-status-label">Active templates</span><b>{configuredTemplates || 'Built-in defaults'}</b><span className="hint">current proposal versions</span></div>
-      </div>
-
       <nav className="admin-tabs" role="tablist" aria-label="Admin settings categories">
         {ADMIN_TABS.map(tab => (
           <button key={tab.id} type="button" role="tab" className={adminView === tab.id ? 'active' : ''}
@@ -463,8 +476,8 @@ export default function Admin() {
         <section id="admin-panel-workflow" className={`admin-panel ${adminView === 'workflow' ? 'is-active' : ''}`}
           role="tabpanel" aria-labelledby="admin-tab-workflow" hidden={adminView !== 'workflow'}>
         <div className="admin-workflow-layout">
+        <div className="admin-workflow-main">
         <nav className="admin-section-rail admin-workflow-tabs" aria-label="Workflow settings sections" role="tablist">
-          <p className="admin-section-rail-label">Workflow settings</p>
           {WORKFLOW_SUB_TABS.map(tab => (
             <button key={tab.id} type="button" role="tab"
               className={workflowView === tab.id ? 'active' : ''}
@@ -477,7 +490,6 @@ export default function Admin() {
             </button>
           ))}
         </nav>
-        <div className="admin-workflow-main">
         <div id="admin-subpanel-clauses" className="admin-subpanel" role="tabpanel" aria-labelledby="admin-subtab-clauses" hidden={workflowView !== 'clauses'}>
         <section className="clause-library-section" id="admin-clauses">
           <h3><Icon name="fileText" size={14} /> Terms &amp; conditions clause library</h3>
@@ -530,7 +542,30 @@ export default function Admin() {
                 <h3 id="admin-access-controls-title">Access &amp; Routing Controls</h3>
                 <p>Configure user permissions, regional routing, and opportunity ownership.</p>
               </div>
+              <button type="button" className="secondary admin-routing-review-button" disabled={!canEdit || routingReviewBusy}
+                onClick={reviewRouting}>
+                <Icon name="bot" size={12} /> {routingReviewBusy ? 'Reviewing routing…' : 'Review routing with AI'}
+              </button>
             </header>
+            {routingReview && (
+              <div className={`admin-routing-review admin-routing-review--${routingReview.status || 'review'}`} role="status">
+                <div className="admin-routing-review-head">
+                  <strong>{routingReview.status === 'ok' ? 'AI found no routing issues' : routingReview.status === 'unavailable' ? 'AI routing review unavailable' : 'AI routing review'}</strong>
+                  {routingReview.model && <span className="hint">{routingReview.model}</span>}
+                </div>
+                <p>{routingReview.summary}</p>
+                {!!routingReview.findings?.length && (
+                  <ul>
+                    {routingReview.findings.map((finding, index) => (
+                      <li key={`${finding.code || finding.item || 'finding'}-${index}`}>
+                        <b>{finding.severity || 'review'}:</b> {finding.item || 'Routing configuration'} — {finding.reason}
+                        {finding.suggestion && <span> Suggested: {finding.suggestion}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
             <div className="admin-access-controls-grid">
 
         {/* 1 — Users & roles */}
@@ -549,7 +584,7 @@ export default function Admin() {
         <div className="admin-access-column">
           <h3><Icon name="target" size={14} /> Ownership rules</h3>
           {(config.ownershipRules || []).map((r, i) => (
-            <div key={i} className="arow">
+            <div key={i} className="arow admin-ownership-row">
               <input type="text" value={r.region || ''} disabled={!canEdit}
                 onChange={e => patchList('ownershipRules', i, { region: e.target.value })} />
               <label className="admin-select-with-badge">
@@ -564,23 +599,6 @@ export default function Admin() {
           <p className="hint">Suggested owner on intake. Overriding a routed owner requires LJS or AH with a mandatory reason.</p>
         </div>
 
-        {/* 2a — Owner by opportunity type */}
-        <div className="admin-access-column">
-          <h3><Icon name="target" size={14} /> Owner by opportunity type</h3>
-          {(config.ownerRules || []).map((r, i) => (
-            <div key={r.oppType} className="arow">
-              <span>{r.oppType}</span>
-              <label className="admin-select-with-badge">
-                <span className={`admin-owner-badge owner-${String(r.owner || '').toLowerCase()}`}>{r.owner}</span>
-                <select aria-label={`Owner for ${r.oppType}`} value={r.owner} disabled={!canEdit}
-                  onChange={e => patchList('ownerRules', i, { owner: e.target.value })}>
-                  {OWNERS.map(o => <option key={o}>{o}</option>)}
-                </select>
-              </label>
-            </div>
-          ))}
-          <p className="hint">Fallback owner used when no regional rule matches (e.g. Spares leads → PJS by default).</p>
-        </div>
             </div>
           </section>
 

@@ -1008,7 +1008,6 @@ table.sheet td.cell-sel { outline: 2px solid var(--xl-green); outline-offset: -2
 
 @media (max-width: 900px) {
   .admin-page .admin-workflow-tabs { position: static; display: flex; overflow-x: auto; padding: 5px; }
-  .admin-page .admin-workflow-tabs .admin-section-rail-label { flex: 0 0 auto; }
   .admin-page .admin-workflow-tabs button { grid-template-columns: 24px max-content; width: auto; min-width: 172px; }
   .admin-page .admin-workflow-tabs button small { white-space: normal; }
 }
@@ -13053,9 +13052,32 @@ table.sheet tbody tr:hover td {
   color: var(--text-secondary);
   font-size: 11px;
 }
+.admin-page .admin-access-controls-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.admin-routing-review-button { flex: 0 0 auto; white-space: nowrap; }
+.admin-routing-review {
+  margin: 0 20px 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-size: 11px;
+}
+.admin-routing-review--ok { border-color: var(--status-success); background: var(--status-success-soft); }
+.admin-routing-review--review { border-color: var(--status-warning); background: var(--status-warning-soft); }
+.admin-routing-review--unavailable { border-color: var(--border-subtle); background: var(--surface-sunken); }
+.admin-routing-review-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.admin-routing-review p { margin: 4px 0 0; }
+.admin-routing-review ul { display: grid; gap: 4px; margin: 7px 0 0; padding-left: 18px; }
+.admin-routing-review li { line-height: 1.4; }
 .admin-page .admin-access-controls-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
 }
 .admin-page .admin-access-column {
@@ -13084,6 +13106,8 @@ table.sheet tbody tr:hover td {
   min-height: 34px;
 }
 @media (max-width: 900px) {
+  .admin-page .admin-access-controls-head { display: block; }
+  .admin-routing-review-button { margin-top: 10px; }
   .admin-page .admin-access-controls-grid {
     grid-template-columns: 1fr;
   }
@@ -13709,11 +13733,10 @@ table.sheet tbody tr:hover td {
   }
 }
 /* Admin workflow navigation and readable settings rhythm. */
-.admin-page .admin-workflow-layout { display: grid; grid-template-columns: 174px minmax(0, 1fr); align-items: start; gap: 24px; }
+.admin-page .admin-workflow-layout { display: block; }
 .admin-page .admin-workflow-main { min-width: 0; }
 .admin-page .admin-setting-group { scroll-margin-top: 24px; }
-.admin-page .admin-section-rail { position: sticky; top: 20px; display: grid; gap: 3px; min-width: 0; padding: 10px; border: 1px solid var(--admin-border-subtle); border-radius: 12px; background: var(--surface-raised); }
-.admin-page .admin-section-rail-label { margin: 0 4px 6px; color: var(--admin-muted); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.admin-page .admin-section-rail { display: grid; gap: 3px; min-width: 0; padding: 10px; border: 1px solid var(--admin-border-subtle); border-radius: 12px; background: var(--surface-raised); }
 .admin-page .admin-section-rail a { display: block; padding: 8px 9px; border-left: 2px solid transparent; border-radius: 6px; color: var(--text-secondary); font-size: 11px; line-height: 1.35; text-decoration: none; }
 .admin-page .admin-section-rail a:hover, .admin-page .admin-section-rail a:focus-visible { border-left-color: var(--action-primary); background: var(--action-primary-soft); color: var(--action-primary-hover); outline: 0; }
 .admin-page .admin-setting-grid, .admin-page .admin-wide-grid, .admin-page .admin-bottom-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -13729,11 +13752,7 @@ table.sheet tbody tr:hover td {
 .admin-page .admin-card input[type='email'], .admin-page .admin-card input[aria-label*='pattern'] { overflow-wrap: anywhere; }
 
 @media (max-width: 900px) {
-  .admin-page .admin-workflow-layout { grid-template-columns: 1fr; gap: 16px; }
-  .admin-page .admin-section-rail { position: static; display: flex; align-items: center; gap: 4px; overflow-x: auto; padding: 5px; scrollbar-width: thin; }
-  .admin-page .admin-section-rail-label { flex: 0 0 auto; margin: 0 6px 0 5px; }
-  .admin-page .admin-section-rail a { flex: 0 0 auto; border-left: 0; border-bottom: 2px solid transparent; white-space: nowrap; }
-  .admin-page .admin-section-rail a:hover, .admin-page .admin-section-rail a:focus-visible { border-left-color: transparent; border-bottom-color: var(--action-primary); }
+  .admin-page .admin-section-rail { grid-template-columns: 1fr; }
   .admin-page .admin-setting-grid, .admin-page .admin-wide-grid, .admin-page .admin-bottom-grid { grid-template-columns: 1fr; }
   .admin-page .admin-setting-grid > .admin-card, .admin-page .admin-wide-grid > .admin-card, .admin-page .admin-bottom-grid > .admin-card, .admin-page .admin-setting-grid > .admin-card--featured, .admin-page .admin-wide-grid > .admin-card-wide, .admin-page .admin-bottom-grid > .admin-card-wide { grid-column: 1 / -1; }
 }
@@ -13756,10 +13775,6 @@ table.sheet tbody tr:hover td {
   width: 100%;
   margin-bottom: 20px;
   padding: 6px;
-}
-.admin-page .admin-workflow-tabs .admin-section-rail-label {
-  grid-column: 1 / -1;
-  margin: 2px 5px 0;
 }
 .admin-page .admin-workflow-tabs button {
   width: auto;
@@ -13791,18 +13806,11 @@ table.sheet tbody tr:hover td {
 
 @media (max-width: 900px) {
   .admin-page .admin-workflow-tabs {
-    display: flex;
-    align-items: stretch;
-    overflow-x: auto;
+    display: grid;
+    grid-template-columns: 1fr;
     padding: 5px;
   }
-  .admin-page .admin-workflow-tabs .admin-section-rail-label {
-    flex: 0 0 auto;
-    align-self: center;
-    margin: 0 6px 0 5px;
-  }
   .admin-page .admin-workflow-tabs button {
-    flex: 1 0 180px;
     min-height: 58px;
   }
   .admin-page .admin-setting-grid {
@@ -13811,5 +13819,137 @@ table.sheet tbody tr:hover td {
   .admin-page .admin-setting-grid > .admin-card,
   .admin-page .admin-setting-grid > .admin-card--featured {
     grid-column: 1 / -1;
+  }
+}
+
+/* Final Admin card geometry: keep controls stable while labels use normal
+   word wrapping. These rules intentionally sit last because the Admin page
+   has legacy card-grid rules above that otherwise compete at desktop widths. */
+.admin-page .admin-workflow-tabs {
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+}
+
+.admin-page .admin-workflow-tabs button > span:last-child {
+  min-width: 0;
+  overflow: visible;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+  text-wrap: pretty;
+}
+
+.admin-page .admin-workflow-tabs b,
+.admin-page .admin-workflow-tabs small {
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+
+.admin-page .admin-setting-grid {
+  align-items: start;
+}
+
+.admin-page .admin-setting-grid > .admin-card,
+.admin-page .admin-setting-grid > .admin-card--featured {
+  height: auto;
+  align-self: start;
+}
+
+.admin-page .admin-access-controls-grid {
+  grid-template-columns: minmax(280px, .78fr) minmax(460px, 1.22fr);
+}
+
+.admin-page .admin-access-column .arow {
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, auto);
+}
+
+.admin-page .admin-access-column .arow > input[type='text'] {
+  width: 100%;
+  min-width: 0;
+}
+
+.admin-page .admin-access-column .admin-ownership-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 156px;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-page .admin-access-column .admin-ownership-row > input[type='text'] {
+  box-sizing: border-box;
+}
+
+.admin-page .admin-access-column .admin-ownership-row .admin-select-with-badge {
+  display: inline-flex;
+  width: 156px;
+  min-width: 156px;
+  flex: 0 0 156px;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+
+.admin-page .admin-access-column .arow > span,
+.admin-page .admin-access-column .hint,
+.admin-page .admin-card p,
+.admin-page .admin-card h3 {
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+  text-wrap: pretty;
+}
+
+.admin-page .admin-select-with-badge {
+  min-width: 150px;
+  justify-content: end;
+}
+
+.admin-page .admin-select-with-badge select {
+  min-width: 92px;
+}
+
+@media (max-width: 1280px) {
+  .admin-page .admin-workflow-tabs {
+    grid-template-columns: repeat(2, minmax(240px, 1fr));
+  }
+
+  .admin-page .admin-access-controls-grid {
+    grid-template-columns: minmax(240px, .7fr) minmax(360px, 1.3fr);
+  }
+}
+
+@media (max-width: 900px) {
+  .admin-page .admin-workflow-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-page .admin-access-controls-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-page .admin-access-column .arow {
+    grid-template-columns: minmax(0, 1fr) minmax(150px, auto);
+  }
+}
+
+@media (max-width: 560px) {
+  .admin-page .admin-access-column .arow,
+  .admin-page .admin-access-column .admin-ownership-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+    gap: 6px;
+  }
+
+  .admin-page .admin-access-column .admin-ownership-row .admin-select-with-badge {
+    justify-content: stretch;
+    width: 100%;
+    min-width: 0;
+    flex-basis: auto;
+  }
+
+  .admin-page .admin-access-column .admin-ownership-row .admin-select-with-badge select {
+    flex: 1 1 auto;
+    min-width: 0;
   }
 }

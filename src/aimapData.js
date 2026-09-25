@@ -21,6 +21,7 @@ export const AI_MAP = [
       { t: 'Customer classification (Green / Blue / Amber / Red)', phase: 1, kind: 'rule', d: 'Suggests the customer class that drives KYC, fees and approval routing.', to: '/customers' },
       { t: 'Duplicate lead detection', phase: 1, kind: 'rule', d: 'Flags likely-duplicate leads before they become separate opportunities — same buyer reference, or same sender with an overlapping subject.', to: '/inbox/LD-207' },
       { t: 'Opportunity ID & owner suggestion', phase: 1, kind: 'rule', d: 'Suggests the opportunity owner from region/type rules and generates the ID on registration.', to: '/register/LD-203' },
+      { t: 'Admin routing configuration review', phase: 1, kind: 'ai', d: 'Advisory review of ownership rules and state-to-region mappings; flags inconsistencies for an administrator without changing routing.', to: '/admin' },
       { t: 'Customer health score', phase: 1, kind: 'rule', d: 'Indicative relationship-health score with supporting evidence, editable by the sales team.', to: '/customers' },
       { t: 'Win-probability / risk suggestion', phase: 1, kind: 'rule', d: 'Suggested win percentage shown per opportunity, always human-editable.', to: '/' },
       { t: 'Stale-opportunity detection', phase: 1, kind: 'rule', d: 'Flags opportunities that have passed their due date with no closure.', to: '/' },

@@ -49,6 +49,11 @@ export function regionForState(stateCode, config) {
 }
 
 export function indiaRegionForLocation(value, config) {
+  const text = String(value || '').trim()
   const loc = indiaLocation(value)
-  return loc ? regionForState(loc.stateCode, config) : ''
+  if (loc) return regionForState(loc.stateCode, config)
+  const normalized = text.toLowerCase().replace(/[.,]+$/, '')
+  const state = Object.entries(STATES).find(([code, name]) =>
+    normalized === code.toLowerCase() || normalized === name.toLowerCase())
+  return state ? regionForState(state[0], config) : ''
 }

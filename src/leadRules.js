@@ -1,5 +1,6 @@
 import { classRule, classDeadlineDays } from './customerClasses.js'
 import { LEAD_LABELS, cleanExtractedValue, extractLabeledValue } from './leadLabels.js'
+import { indiaRegionForLocation } from './indiaLocations.js'
 
 export const DEFAULT_LEAD_DEADLINES = {
   kycDays: 7,
@@ -153,6 +154,15 @@ export function routeOwner(region, config = {}, fallback = '') {
     return label && (value.includes(label) || label.split(/[,/&]/).some(part => part.trim() && value.includes(part.trim())))
   })
   return rule?.owner || catchAll?.owner || fallback
+}
+
+// Normalize city/state input before applying the configured ownership rules.
+// Callers may also pass an already-normalized region such as "North & West
+// India", which falls through to routeOwner unchanged.
+export function routeOwnerForLocation(location, config = {}, fallback = '') {
+  const value = String(location || '').trim()
+  const region = indiaRegionForLocation(value, config) || value
+  return routeOwner(region, config, fallback)
 }
 
 export function isFastTrackLead(lead, config = {}, customer = null) {

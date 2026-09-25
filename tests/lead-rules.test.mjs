@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { customerCompanyFromText, customerContactFromText, deadlineForLead, expiredLeadDeadline, hardenLeadExtraction, isFastTrackLead, isInternalSender, normalizeLeadContactFields, routeOwner, supplyMissing } from '../src/leadRules.js'
+import { customerCompanyFromText, customerContactFromText, deadlineForLead, expiredLeadDeadline, hardenLeadExtraction, isFastTrackLead, isInternalSender, normalizeLeadContactFields, routeOwner, routeOwnerForLocation, supplyMissing } from '../src/leadRules.js'
+import { indiaRegionForLocation } from '../src/indiaLocations.js'
 
 const config = {
   ownershipRules: [
@@ -14,6 +15,38 @@ const config = {
 test('region routing uses the configured owner', () => {
   assert.equal(routeOwner('North India — Noida', config), 'RS')
   assert.equal(routeOwner('South India — Chennai', config), 'PP')
+})
+
+test('unmatched nonblank regions use the unclassified ownership rule', () => {
+  const withCatchAll = {
+    ...config,
+    ownershipRules: [...config.ownershipRules, { region: 'Unclassified leads', owner: 'LJS', unclassified: true }],
+  }
+  assert.equal(routeOwner('Unknown international site', withCatchAll, 'PJS'), 'LJS')
+})
+
+test('city and state locations resolve through the configured state mapping', () => {
+  const config = {
+    ownershipRules: [
+      { region: 'North & West India', owner: 'RS' },
+      { region: 'South & East India', owner: 'PP' },
+      { region: 'Unclassified leads', owner: 'LJS', unclassified: true },
+    ],
+    stateRegions: [{ code: 'MH', name: 'Maharashtra', region: 'South & East India' }],
+  }
+  assert.equal(indiaRegionForLocation('Pune', config), 'South & East India')
+  assert.equal(indiaRegionForLocation('Maharashtra', config), 'South & East India')
+  assert.equal(routeOwnerForLocation('Pune', config, 'FALLBACK'), 'PP')
+  assert.equal(routeOwnerForLocation('North & West India', config, 'FALLBACK'), 'RS')
+})
+
+test('location routing preserves blank fallback and uses catch-all for unknown locations', () => {
+  const withCatchAll = {
+    ...config,
+    ownershipRules: [...config.ownershipRules, { region: 'Unclassified leads', owner: 'LJS', unclassified: true }],
+  }
+  assert.equal(routeOwnerForLocation('', withCatchAll, ''), '')
+  assert.equal(routeOwnerForLocation('Unknown site', withCatchAll, 'PJS'), 'LJS')
 })
 
 test('fast-track is configurable and limited to the configured class', () => {

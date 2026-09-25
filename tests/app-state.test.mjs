@@ -63,7 +63,7 @@ test('migrate backfills Admin configuration added after a saved state', () => {
   const migrated = migrate({ ...state, config })
 
   assert.ok(migrated.config.ownershipRules.length > 0)
-  assert.ok(migrated.config.ownerRules.length > 0)
+  assert.equal(migrated.config.ownerRules, undefined)
   assert.ok(migrated.config.stateRegions.length > 0)
   assert.ok(migrated.config.kycItems.length > 0)
   assert.deepEqual(migrated.config.aiThresholds, { high: 90, med: 75 })
@@ -72,12 +72,11 @@ test('migrate backfills Admin configuration added after a saved state', () => {
 test('migrate preserves configured Admin values and intentional empty lists', () => {
   const state = seedState()
   const customOwnership = [{ region: 'Custom region', owner: 'RS' }]
-  const customOwners = [{ oppType: 'Project', owner: 'AN' }]
   const customStates = [{ code: 'XX', name: 'Custom state', region: 'Unclassified leads' }]
   const config = {
     ...state.config,
     ownershipRules: customOwnership,
-    ownerRules: customOwners,
+    ownerRules: [{ oppType: 'Project', owner: 'AN' }],
     stateRegions: customStates,
     kycItems: [],
     aiThresholds: { high: 88 },
@@ -86,7 +85,7 @@ test('migrate preserves configured Admin values and intentional empty lists', ()
   const migrated = migrate({ ...state, config })
 
   assert.deepEqual(migrated.config.ownershipRules, customOwnership)
-  assert.deepEqual(migrated.config.ownerRules, customOwners)
+  assert.equal(migrated.config.ownerRules, undefined)
   assert.deepEqual(migrated.config.stateRegions, customStates)
   assert.deepEqual(migrated.config.kycItems, [])
   assert.deepEqual(migrated.config.aiThresholds, { high: 88, med: 75 })

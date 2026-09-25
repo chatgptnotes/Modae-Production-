@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useStore, nextOppId } from '../store.jsx'
-import { OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, SUBFOLDERS, routeForType, ownerForOppType, newProposal } from '../seed.js'
+import { OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, SUBFOLDERS, routeForType, newProposal } from '../seed.js'
 import { Icon } from '../icons.jsx'
 import { ErrBox } from '../ui.jsx'
 import { matchCustomer, customerStatusForLead } from './Inbox.jsx'
@@ -10,7 +10,7 @@ import { take } from '../leadFiles.js'
 import { leadVerificationBlockers, verificationSnapshot, redClearanceFor, isRedCleared } from '../leadVerification.js'
 import { buildLeadProposalData } from '../leadBoq.js'
 import { displayRole } from '../utils.js'
-import { isInternalSender, isRegistrationCriticalField, routeOwner } from '../leadRules.js'
+import { isInternalSender, isRegistrationCriticalField, routeOwnerForLocation } from '../leadRules.js'
 import { leadFieldValue, splitBuSegment, leadIdentity } from '../leadFieldMapping.js'
 
 // Registration — the moment a qualified lead becomes an opportunity and the
@@ -49,13 +49,12 @@ export default function Register() {
   const med = store.config.aiThresholds?.med ?? 75
 
   // Prefills derived from the AI extraction.
-  const ownerFieldV = fields.find(f => /owner/i.test(f.k) && f.state === 'accepted')?.v || ''
   const oppTypeSeed = OPP_TYPES.includes(lead?.oppType)
     ? lead.oppType
     : (lead?.route === 'Service' ? 'Service' : lead?.route === 'Project' ? 'Project' : 'Spares')
   const routingRegion = lead?.region || lead?.location || fieldVal(fields, /location|region/i)
-  const regionalOwner = routeOwner(routingRegion, store.config, '')
-  const suggested = regionalOwner || guessFromList(ownerFieldV, OWNERS) || lead?.suggestedOwner || ownerForOppType(oppTypeSeed, store.config)
+  const regionalOwner = routeOwnerForLocation(routingRegion, store.config, '')
+  const suggested = regionalOwner || OWNERS[0]
   const typeV = fieldVal(fields, /opp type/i)
   const buSegment = splitBuSegment(fields)
   const allText = fields.map(f => f.v).join(' ') + ' ' + (lead?.subject || '')

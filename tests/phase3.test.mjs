@@ -6,15 +6,15 @@ import { fileURLToPath } from 'node:url'
 
 import { AI_MAP } from '../src/aimapData.js'
 import { parseTender } from '../src/tenderParse.js'
-import { newProposal, PERMS, ROLES, OWNERS, ownerForOppType, seedAiLeads, seedOpportunities } from '../src/seed.js'
+import { newProposal, PERMS, ROLES, OWNERS, seedAiLeads, seedOpportunities } from '../src/seed.js'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
 
-test('AI automation map has the agreed 23 + 5 coverage', () => {
+test('AI automation map has the agreed 24 + 5 coverage', () => {
   const items = AI_MAP.flatMap(group => group.items)
-  assert.equal(items.length, 28)
-  assert.equal(items.filter(item => item.phase === 1).length, 23)
+  assert.equal(items.length, 29)
+  assert.equal(items.filter(item => item.phase === 1).length, 24)
   assert.equal(items.filter(item => item.phase === 2).length, 5)
   // `live` was replaced by `kind` — see tests/aimap.test.mjs for the coverage.
   for (const item of items) assert.match(item.to, /^\//, `${item.t} must have a demo route`)
@@ -41,15 +41,8 @@ test('proposal type defaults follow the opportunity route', () => {
   assert.equal(newProposal('V', { oppType: 'Service' }).proposalType, 'Services')
 })
 
-test('client owner catalogue and type routing are complete', () => {
+test('client owner catalogue remains complete', () => {
   assert.deepEqual(OWNERS, ['LJS', 'PP', 'RS', 'SS', 'PJS', 'RJS', 'SR'])
-  assert.equal(ownerForOppType('Project'), 'LJS')
-  assert.equal(ownerForOppType('Upgrade'), 'PP')
-  assert.equal(ownerForOppType('Retrofit'), 'RS')
-  assert.equal(ownerForOppType('Service'), 'SS')
-  assert.equal(ownerForOppType('Spares'), 'PJS')
-  assert.equal(ownerForOppType('Flow'), 'RJS')
-  assert.equal(ownerForOppType('Unknown'), 'LJS')
   for (const owner of OWNERS) assert.ok(ROLES[owner], `${owner} must be a configured role`)
   for (const owner of OWNERS.filter(owner => owner !== 'LJS')) assert.equal(ROLES[owner].sales, true, `${owner} must be a sales role`)
 })

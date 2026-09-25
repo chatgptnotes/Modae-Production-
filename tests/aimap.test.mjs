@@ -31,6 +31,8 @@ test('only the tasks the Vercel function implements are labelled Live AI', () =>
   // Each live claim needs a task in the function to back it.
   const tasks = ['lead.extract', 'clarification.suggest', 'email.followup', 'tender.extract']
   for (const t of tasks) assert.ok(aiFn.includes(t), `${t} must exist in the Vercel function`)
+  assert.ok(items.find(i => i.t === 'Admin routing configuration review' && i.kind === 'ai'))
+  assert.ok(aiFn.includes('admin.routing-review'))
 })
 
 test('opportunity ID and owner suggestion is not sold as a model call', () => {

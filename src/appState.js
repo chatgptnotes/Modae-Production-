@@ -295,7 +295,9 @@ export function migrate(s) {
   s.config.aiThresholds = { ...seedConfig.aiThresholds, ...(s.config.aiThresholds || {}) }
   if (!Array.isArray(s.config.ownershipRules)) s.config.ownershipRules = seedConfig.ownershipRules
   if (!Array.isArray(s.config.stateRegions)) s.config.stateRegions = seedConfig.stateRegions
-  if (!Array.isArray(s.config.ownerRules)) s.config.ownerRules = seedConfig.ownerRules
+  // Ownership is regional only. Remove the retired opportunity-type fallback
+  // so old local snapshots cannot keep a second source of truth alive.
+  delete s.config.ownerRules
   if (!Array.isArray(s.config.kycItems)) s.config.kycItems = seedConfig.kycItems
   s.config.roleNames = { ...seedConfig.roleNames, ...(s.config.roleNames || {}) }
   const canonicalOwner = value => ownerIdFor(value, s.config.roleNames)

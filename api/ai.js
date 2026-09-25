@@ -6,7 +6,7 @@ import { createClient } from '@supabase/supabase-js'
 const API = 'https://generativelanguage.googleapis.com/v1beta/models'
 const DEFAULT_MODEL = 'gemini-3.1-flash-lite'
 const COMPLEX_MODEL = 'gemini-2.5-flash'
-const COMPLEX_TASKS = new Set(['approval.condition-evidence', 'proposal.review', 'template.map', 'tender.extract'])
+const COMPLEX_TASKS = new Set(['approval.condition-evidence', 'proposal.review', 'template.map', 'tender.extract', 'admin.routing-review'])
 const MODEL_ALIASES = {
   'gemini-pro': COMPLEX_MODEL,
   'gemini-pro-latest': COMPLEX_MODEL,
@@ -223,6 +223,19 @@ const locationSearchSchema = {
   required: ['locations'],
 }
 
+const routingReviewSchema = {
+  type: 'OBJECT',
+  properties: {
+    status: { type: 'STRING', enum: ['ok', 'review'] },
+    summary: { type: 'STRING' },
+    findings: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
+      code: { type: 'STRING' }, severity: { type: 'STRING', enum: ['error', 'warning', 'info'] },
+      item: { type: 'STRING' }, reason: { type: 'STRING' }, suggestion: { type: 'STRING' },
+    }, required: ['code', 'severity', 'item', 'reason', 'suggestion'] } },
+  },
+  required: ['status', 'summary', 'findings'],
+}
+
 const conditionEvidenceSchema = {
   type: 'OBJECT',
   properties: {
@@ -330,6 +343,35 @@ LOCAL FINDINGS:
 ${cap(JSON.stringify(p.localIssues || []), 12000)}
 WORKBOOK:
 ${cap(JSON.stringify(p.workbook || []), 60000)}`
+}
+
+function routingReviewPrompt(p) {
+  return `${HOUSE}
+
+Review the Admin routing configuration as an advisory QA check. Deterministic
+application rules remain authoritative; do not rewrite, normalize, or apply any
+configuration. Look only for concrete configuration risks:
+- ownership rules with missing, duplicate, or unknown regions or owners;
+- state/UT rows with missing or duplicate codes, missing names, or unknown regions;
+- states mapped to a region that appears geographically inconsistent;
+- missing coverage for an unclassified/catch-all route;
+- a state mapping that cannot be resolved by its code.
+
+Do not treat business-specific regional choices as errors merely because another
+geographic split is possible. Use warning or info when the configuration is
+plausible but worth human review, and error only for a broken or unusable row.
+If there are no concrete issues, return status ok, an empty findings array, and
+say that the deterministic routing configuration passed the advisory review.
+Every suggestion must be advisory and must not claim that AI changed anything.
+
+ALLOWED OWNERS:
+${cap(JSON.stringify(p.owners || []), 1000)}
+ALLOWED REGIONS:
+${cap(JSON.stringify(p.regions || []), 2000)}
+OWNERSHIP RULES:
+${cap(JSON.stringify(p.ownershipRules || []), 12000)}
+STATE / UT MAPPINGS:
+${cap(JSON.stringify(p.stateRegions || []), 50000)}`
 }
 
 function leadPrompt(p) {
@@ -848,7 +890,7 @@ export default async function handler(req, res) {
   if (JSON.stringify(input).length > MAX_REQUEST_CHARS) {
     return fail(res, 413, 'AI_PAYLOAD_TOO_LARGE', 'The document or request is too large for AI processing.')
   }
-  const structuredTasks = new Set(['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'reply.classify', 'tender.extract', 'location.search'])
+  const structuredTasks = new Set(['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'reply.classify', 'tender.extract', 'location.search', 'admin.routing-review'])
   const requestedModel = String(input.model || '')
   const requested = /^gemini-[\w.-]+$/.test(requestedModel)
     ? (MODEL_ALIASES[requestedModel] || requestedModel)
@@ -856,7 +898,7 @@ export default async function handler(req, res) {
   // Routine high-volume work always uses the budget model. Complex document
   // reasoning is routed to the stronger model regardless of the client picker.
   const model = task === 'health' ? requested : COMPLEX_TASKS.has(task) ? COMPLEX_MODEL : DEFAULT_MODEL
-  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'lead.clarify', 'email.clarification', 'email.followup', 'reply.classify', 'tender.extract', 'location.search'].includes(task)) {
+  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'lead.clarify', 'email.clarification', 'email.followup', 'reply.classify', 'tender.extract', 'location.search', 'admin.routing-review'].includes(task)) {
     return fail(res, 400, 'AI_BAD_REQUEST', `Unsupported task: ${task}`)
   }
 
@@ -880,10 +922,11 @@ export default async function handler(req, res) {
                               : task === 'reply.classify' ? replyClassifyPrompt(payload)
                                 : task === 'tender.extract' ? tenderExtractPrompt(payload)
                                   : task === 'location.search' ? locationSearchPrompt(payload)
+                                    : task === 'admin.routing-review' ? routingReviewPrompt(payload)
                   : leadPrompt(payload)
   const requestBody = {
     contents: [{ parts: [{ text: prompt }, ...(['lead.extract', 'approval.condition-evidence', 'kyc.extract'].includes(task) ? inlineParts(payload) : [])] }],
-    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'reply.classify', 'tender.extract', 'location.search'].includes(task)
+    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'reply.classify', 'tender.extract', 'location.search', 'admin.routing-review'].includes(task)
       ? {
           maxOutputTokens: task === 'health' ? 8 : 2048,
           responseMimeType: 'application/json',
@@ -903,6 +946,7 @@ export default async function handler(req, res) {
                           : task === 'reply.classify' ? replyClassifySchema
                             : task === 'tender.extract' ? tenderExtractSchema
                               : task === 'location.search' ? locationSearchSchema
+                                : task === 'admin.routing-review' ? routingReviewSchema
                 : leadSchema,
         }
       : { maxOutputTokens: 8 },

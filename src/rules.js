@@ -16,7 +16,7 @@ export function applyRuleRows(config = {}, { approval = [], workflow = [], lead 
     next.approvalThresholds = approvalDef.thresholds || approvalDef
     if (Array.isArray(approvalDef.gates)) next.approvalRules = approvalDef.gates
   }
-  for (const key of ['ownershipRules', 'ownerRules', 'stateRegions', 'leadDeadlines', 'fastTrack']) {
+  for (const key of ['ownershipRules', 'stateRegions', 'leadDeadlines', 'fastTrack']) {
     if (workflowDef[key] !== undefined) continue
     if (leadDef[key] !== undefined) next[key] = leadDef[key]
   }
