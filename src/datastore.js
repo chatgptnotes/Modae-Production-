@@ -656,8 +656,19 @@ function opportunityPayload(rows, deletedIds = []) {
 }
 
 async function saveOpportunityRowsNow(rows) {
-  const localById = new Map(rows.map(row => [row.id, row]))
+  const changedRows = rows.filter(row => {
+    const previous = opportunityRecords.get(row.id)
+    return !previous || JSON.stringify(previous.data) !== JSON.stringify(row)
+  })
+  const localById = new Map(changedRows.map(row => [row.id, row]))
   const deletedIds = [...opportunityRecords.keys()].filter(id => !localById.has(id))
+    .filter(id => !rows.some(row => row.id === id))
+
+  // A normal state flush carries the complete local list, but only changed
+  // rows belong in the optimistic write. Rewriting every opportunity makes
+  // unrelated browsers conflict with one another and can starve a new row.
+  if (!changedRows.length && !deletedIds.length) return
+
   const write = async payload => {
     const result = await supabase.rpc('save_rows', { p_entity: 'opportunities', p_rows: payload })
     if (result.error) throw result.error
@@ -676,7 +687,7 @@ async function saveOpportunityRowsNow(rows) {
 
   // Latest-save-wins: rebase only rows rejected by the revision guard onto
   // the newest server revision, preserving the local row being saved.
-  let pending = opportunityPayload(rows, deletedIds)
+  let pending = opportunityPayload(changedRows, deletedIds)
   for (let attempt = 0; attempt <= MAX_CONFLICT_RETRIES; attempt += 1) {
     const result = await write(pending)
     const conflicts = Array.isArray(result.conflicts) ? result.conflicts : []
