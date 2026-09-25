@@ -304,6 +304,37 @@ test('commercial approval reopens when a matched customer request changes', () =
   assert.ok(blockers.some(item => item.key === 'commercial-approval'))
 })
 
+test('commercial deviation approval survives unrelated sourcing pricing changes', () => {
+  const opp = { ...baseOpp, route: 'Spares', milestone: 'Sourcing' }
+  const proposal = {
+    revision: '01',
+    sourceRate: 92,
+    markupPct: 13,
+    bom: [{ pn: 'DS-1000-PROX', qty: 1, listPrice: 125, quoted: 180, currency: 'INR' }],
+    terms: [{
+      term: 'Payment', status: 'Deviation', decision: 'Match customer terms',
+      customerAsk: '90 days credit', standardTerm: '30 days from invoice',
+    }],
+  }
+  const approval = {
+    id: 'AP-COMM-BOQ-EDIT', oppId: opp.id, type: 'Commercial deviation', rev: '01', status: 'Approved',
+    deviationDetails: [{ term: 'Payment', customerAsk: '90 days credit', ourResponse: '90 days credit', standardTerm: '30 days from invoice' }],
+    approvalSnapshot: {
+      commercial: {
+        bom: [{ pn: 'DS-1000-PROX', qty: 1, listPrice: 100, quoted: 160, currency: 'INR' }],
+        terms: [{ term: 'payment', status: 'deviation', text: '90 days credit' }],
+        discountPct: 0, markupPct: 10, financeCostK: 0, sourceRate: 90,
+      },
+      customer: { sellTo: 'ACME', route: 'spares', proposalType: '', currency: 'inr' },
+    },
+  }
+  const blockers = transitionBlockers(opp, 'Proposal', proposal, {
+    approvals: [approval], clarifications: [], sparesLines: [], config: {},
+  })
+  assert.equal(blockers.some(item => item.key === 'dev'), false)
+  assert.equal(blockers.some(item => item.key === 'commercial-approval'), false)
+})
+
 test('approval checklist omits commercial approval for standard terms', () => {
   const gates = approvalSet(releasedProposal, [], 'OP-1', baseOpp)
   assert.deepEqual(gates.map(g => g.type), ['Technical approval', 'Final quote release'])

@@ -371,10 +371,22 @@ export function oppBlockers(opp, proposal, approvals, config = null) {
   const currentApproval = (approval, type) => approval.approvalSnapshot
     ? !approvalAffectedByProposal(approval, type, proposal, opp)
     : true
+  // Commercial-deviation approvals sign off the matched customer terms, not
+  // the complete commercial snapshot. Sourcing can legitimately add confirmed
+  // BOQ prices or update costing after AH approves Payment/Delivery; those
+  // changes must not make the Requirement Validation approval appear missing.
+  // Keep the broader snapshot check for the other approval families.
+  const commercialTerms = (proposal?.terms || []).filter(needsCommercialApproval)
+  const commercialApprovalCurrent = approval => commercialTerms.length
+    ? (approval.rev == null || String(approval.rev) === String(proposal?.revision ?? ''))
+      && commercialApprovalCoversTerms(approval, commercialTerms)
+    : currentApproval(approval, 'Commercial deviation')
   const hasApproved = type => mine.some(a => a.type === type
-    && currentApproval(a, type)
+    && (type === 'Commercial deviation' ? commercialApprovalCurrent(a) : currentApproval(a, type))
     && (a.status === 'Approved' || a.status === 'Approved with conditions'))
-  const hasOpen = type => mine.some(a => a.type === type && currentApproval(a, type) && a.status === 'Pending')
+  const hasOpen = type => mine.some(a => a.type === type
+    && (type === 'Commercial deviation' ? commercialApprovalCurrent(a) : currentApproval(a, type))
+    && a.status === 'Pending')
 
   // The customer-class advisory row. `needed` matters on a joint gate: without
   // it, requestBlockerApproval builds the gate from `approver` alone, and a Red
