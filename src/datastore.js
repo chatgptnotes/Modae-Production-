@@ -55,7 +55,9 @@ let opportunitySaveQueue = Promise.resolve()
 const normalizedRevisions = new Map()
 const normalizedRecords = new Map()
 const normalizedSaveQueues = new Map()
-let saveSlicesQueue = Promise.resolve()
+let saveSlicesActive = false
+let pendingDirtySlices = null
+let pendingSaveWaiters = []
 const MAX_CONFLICT_RETRIES = 3
 const normalizedKey = (entity, id) => `${entity}|${id}`
 
@@ -466,14 +468,35 @@ async function saveSlicesNow(dirty) {
   }
 }
 
-// A page-hide flush can overlap a debounced save, and a focus refresh can
-// trigger another save before either has finished. Keep all slice writes in a
-// single queue so revision maps cannot be observed halfway through a write.
+const mergeDirtySlices = (current, incoming) => ({ ...(current || {}), ...incoming })
+
+async function drainSaveSlices() {
+  if (saveSlicesActive || !pendingDirtySlices) return
+  saveSlicesActive = true
+  const dirty = pendingDirtySlices
+  const waiters = pendingSaveWaiters
+  pendingDirtySlices = null
+  pendingSaveWaiters = []
+  try {
+    await saveSlicesNow(dirty)
+    waiters.forEach(waiter => waiter.resolve())
+  } catch (error) {
+    waiters.forEach(waiter => waiter.reject(error))
+  } finally {
+    saveSlicesActive = false
+    if (pendingDirtySlices) void drainSaveSlices()
+  }
+}
+
+// Coalesce rapid state changes into the newest snapshot per slice. This keeps
+// a burst from becoming a long chain of stale save_rows calls while preserving
+// the promise-based API used by immediate approval/pagehide flushes.
 export function saveSlices(dirty) {
-  saveSlicesQueue = saveSlicesQueue
-    .catch(() => {})
-    .then(() => saveSlicesNow(dirty))
-  return saveSlicesQueue
+  if (!dirty || !Object.keys(dirty).length) return Promise.resolve()
+  pendingDirtySlices = mergeDirtySlices(pendingDirtySlices, dirty)
+  const promise = new Promise((resolve, reject) => pendingSaveWaiters.push({ resolve, reject }))
+  void drainSaveSlices()
+  return promise
 }
 
 const BUSINESS_KEYS = new Set(['leads', 'opportunities', 'approvals', 'proposals', 'sparesLines', 'clarifications', 'audit', 'priceLists'])
@@ -559,16 +582,19 @@ async function loadBusinessTables({ includeRecords = true } = {}) {
 }
 
 async function saveBusinessTables(dirty = {}) {
+  // Keep one save batch's RPCs sequential. Starting one save_rows transaction
+  // per dirty entity at once creates avoidable CPU and lock pressure during a
+  // state-change burst.
   const writes = []
-  if (dirty.leads) writes.push(['leads', saveNormalizedRows('leads', dirty.leads)])
-  if (dirty.approvals) writes.push(['approvals', saveNormalizedRows('approvals', dirty.approvals)])
-  if (dirty.sparesLines) writes.push(['sparesLines', saveNormalizedRows('spares_lines', dirty.sparesLines)])
-  if (dirty.clarifications) writes.push(['clarifications', saveNormalizedRows('clarifications', dirty.clarifications)])
-  if (dirty.audit) writes.push(['audit', saveNormalizedRows('audit', dirty.audit)])
-  if (dirty.proposals) writes.push(['proposals', saveNormalizedRows('proposals', Object.entries(dirty.proposals).map(([id, data]) => ({ id, ...data })))])
-  await Promise.all(writes.map(([, promise]) => promise))
+  if (dirty.leads) writes.push(['leads', () => saveNormalizedRows('leads', dirty.leads)])
+  if (dirty.approvals) writes.push(['approvals', () => saveNormalizedRows('approvals', dirty.approvals)])
+  if (dirty.sparesLines) writes.push(['sparesLines', () => saveNormalizedRows('spares_lines', dirty.sparesLines)])
+  if (dirty.clarifications) writes.push(['clarifications', () => saveNormalizedRows('clarifications', dirty.clarifications)])
+  if (dirty.audit) writes.push(['audit', () => saveNormalizedRows('audit', dirty.audit)])
+  if (dirty.proposals) writes.push(['proposals', () => saveNormalizedRows('proposals', Object.entries(dirty.proposals).map(([id, data]) => ({ id, ...data })))])
+  for (const [, write] of writes) await write()
   if (dirty.opportunities) await saveOpportunityRows(dirty.opportunities)
-  return [...writes.map(([key]) => key === 'sparesLines' ? 'sparesLines' : key === 'proposals' ? 'proposals' : key), ...(dirty.opportunities ? ['opportunities'] : [])]
+  return [...writes.map(([key]) => key), ...(dirty.opportunities ? ['opportunities'] : [])]
 }
 
 function normalizedPayload(entity, rows, deletedIds = []) {

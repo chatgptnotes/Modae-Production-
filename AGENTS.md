@@ -97,9 +97,11 @@ Use the existing `save_rows` RPC and datastore helpers for bulk state changes.
 Do not bypass revision handling with ad hoc writes unless the change is for one
 of the dedicated tables and follows its existing helper pattern.
 
-The active repository migrations are `supabase/007_live_workspace_sync.sql` and
-`supabase/008_dedicated_workspace_tables.sql` and
-`supabase/009_relational_workspace_data.sql`.
+The active repository migrations are `supabase/007_live_workspace_sync.sql`,
+`supabase/008_dedicated_workspace_tables.sql`,
+`supabase/009_relational_workspace_data.sql`,
+`supabase/010_workspace_contract_verification.sql`, and
+`supabase/011_save_rows_lock_order.sql`.
 Historical migrations and backups are local-only under `.local/backups/`.
 
 ## Change rules

@@ -326,6 +326,7 @@ export function StoreProvider({ children }) {
   const lastSavedRef = useRef({}) // per-slice snapshot of what the server has
   const saveTimerRef = useRef(null)
   const localCacheTimerRef = useRef(null)
+  const saveRetryRef = useRef({ attempts: 0, retryAt: 0, timer: null })
   const authInvalidRef = useRef(false)
   const authRecoveryRef = useRef(null)
   // What this device booted from. The boot fetch resolves *after* the app is
@@ -372,6 +373,8 @@ export function StoreProvider({ children }) {
     saveTimerRef.current = null
     if (!hydratedRef.current) return Promise.resolve()
     if (authInvalidRef.current) return Promise.resolve()
+    const retry = saveRetryRef.current
+    if (retry.retryAt > Date.now()) return Promise.resolve()
     const dirty = dirtySlices()
     if (!Object.keys(dirty).length) {
       setAdminSaveState('saved')
@@ -380,6 +383,10 @@ export function StoreProvider({ children }) {
     setAdminSaveState('saving')
     return datastore.saveSlices(dirty)
       .then(() => {
+        retry.attempts = 0
+        retry.retryAt = 0
+        clearTimeout(retry.timer)
+        retry.timer = null
         setLiveSyncStatus('live')
         setAdminSaveState('saved')
         const current = stateRef.current
@@ -422,7 +429,16 @@ export function StoreProvider({ children }) {
           console.warn('Supabase session expired or was rejected; local changes are retained until sign-in succeeds.', saveError)
           return
         }
-        console.warn('Supabase save failed — will retry on next change/focus:', saveError)
+        retry.attempts += 1
+        const delay = Math.min(30000, 2000 * (2 ** Math.min(retry.attempts - 1, 4)))
+        retry.retryAt = Date.now() + delay
+        clearTimeout(retry.timer)
+        retry.timer = setTimeout(() => {
+          retry.timer = null
+          retry.retryAt = 0
+          flushSaves()
+        }, delay)
+        console.warn(`Supabase save failed — retrying in ${Math.round(delay / 1000)}s:`, saveError)
       })
   }
 

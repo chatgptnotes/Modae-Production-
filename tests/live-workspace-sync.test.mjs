@@ -57,8 +57,10 @@ test('opportunity saves are serialized across debounce and pagehide flushes', ()
   const datastore = read('src/datastore.js')
   assert.match(datastore, /let opportunitySaveQueue = Promise\.resolve\(\)/)
   assert.match(datastore, /opportunitySaveQueue = opportunitySaveQueue[\s\S]*saveOpportunityRowsNow\(rows\)/)
-  assert.match(datastore, /let saveSlicesQueue = Promise\.resolve\(\)/)
-  assert.match(datastore, /saveSlicesQueue = saveSlicesQueue[\s\S]*saveSlicesNow\(dirty\)/)
+  assert.match(datastore, /let saveSlicesActive = false/)
+  assert.match(datastore, /pendingDirtySlices/)
+  assert.match(datastore, /const mergeDirtySlices = /)
+  assert.match(datastore, /for \(const \[, write\] of writes\) await write\(\)/)
 })
 
 test('opportunity creation flushes before immediate workbench navigation', () => {
@@ -159,6 +161,21 @@ test('price-list loading keeps a usable cached catalogue when the shared copy is
 test('forced pull reads reuse an older request instead of queuing another fetch', () => {
   const datastore = read('src/datastore.js')
   assert.match(datastore, /if \(loadInFlight\) \{[\s\S]*return loadInFlight/)
+})
+
+test('save failures use backoff instead of immediate retry storms', () => {
+  const store = read('src/store.jsx')
+  assert.match(store, /const saveRetryRef = useRef\(\{ attempts: 0, retryAt: 0, timer: null \}\)/)
+  assert.match(store, /if \(retry\.retryAt > Date\.now\(\)\) return Promise\.resolve\(\)/)
+  assert.match(store, /Math\.min\(30000, 2000 \* /)
+  assert.match(store, /retrying in/)
+})
+
+test('save_rows migration orders incoming ids before upserting', () => {
+  const migration = read('supabase/011_save_rows_lock_order.sql')
+  assert.match(migration, /create or replace function public\.save_rows\(p_entity text, p_rows jsonb\)/)
+  assert.equal((migration.match(/order by r->>'id'/g) || []).length, 2)
+  assert.match(migration, /grant execute on function public\.save_rows\(text, jsonb\)/)
 })
 
 test('the store retains internal sync state without rendering status messaging', () => {

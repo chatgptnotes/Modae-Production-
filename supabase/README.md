@@ -19,17 +19,21 @@ The application uses these production tables:
 - `price_lists`
 - `price_list_versions`
 The active repository migrations are `007_live_workspace_sync.sql`,
-`008_dedicated_workspace_tables.sql`, `009_relational_workspace_data.sql`, and
-`010_workspace_contract_verification.sql`.
+`008_dedicated_workspace_tables.sql`, `009_relational_workspace_data.sql`,
+`010_workspace_contract_verification.sql`, and
+`011_save_rows_lock_order.sql`.
 Migration 008 moves large JSONB entities out of `records`; migration 009 adds
 typed relational business tables and indexes while keeping legacy rows as a
 rollback copy. Historical setup and
 backfill scripts are kept locally under `.local/backups/supabase/` and are not
 part of the application deployment path.
 
-Run `010_workspace_contract_verification.sql` after the active migrations on
-existing projects. It verifies the two browser-critical objects (`user_files`
-and `save_rows`) and reapplies their authenticated access contract.
+Run `010_workspace_contract_verification.sql` and then
+`011_save_rows_lock_order.sql` after the active migrations on existing
+projects. Migration 010 verifies the two browser-critical objects
+(`user_files` and `save_rows`) and reapplies their authenticated access
+contract. Migration 011 keeps the `save_rows` contract unchanged while making
+concurrent row locking deterministic.
 
 The browser uses pull-based synchronization only. Runtime code refreshes the
 active workspace on boot, route changes, focus/visibility restoration,
