@@ -6,7 +6,7 @@ import {
   seedRateSheets, seedSvcEstimates, seedClarifications, seedHandover,
   seedAiLeads, seedJointApprovals, seedCatalogRev,
   seedPoCompare, milestoneForStage, routeForType, contextForType,
-  ROLES, B_STEPS, defaultBStepOwners, DEFAULT_WORKFLOW,
+  ROLES, B_STEPS, defaultBStepOwners, DEFAULT_WORKFLOW, ownerIdFor,
 } from './seed.js'
 import { normalizePriceFields, reconcileCatalogueMatch, reconcilePriceSource } from './pricing.js'
 import { DEFAULT_CURRENCY_RATES, normalizedCurrencyRates } from './currency.js'
@@ -292,6 +292,12 @@ export function migrate(s) {
   if (!Array.isArray(s.config.ownerRules)) s.config.ownerRules = seedConfig.ownerRules
   if (!Array.isArray(s.config.kycItems)) s.config.kycItems = seedConfig.kycItems
   s.config.roleNames = { ...seedConfig.roleNames, ...(s.config.roleNames || {}) }
+  const canonicalOwner = value => ownerIdFor(value, s.config.roleNames)
+  s.leads = s.leads.map(lead => ({
+    ...lead,
+    suggestedOwner: canonicalOwner(lead.suggestedOwner),
+    assignedOwner: canonicalOwner(lead.assignedOwner),
+  }))
   if (!Array.isArray(s.config.workflow) || !s.config.workflow.length) s.config.workflow = DEFAULT_WORKFLOW.map(x => ({ ...x }))
   s.config.workflow = s.config.workflow.map((stage, i) => ({
     ...DEFAULT_WORKFLOW[i], ...stage,
@@ -477,7 +483,8 @@ export function migrate(s) {
       // workbench, and a saved Service into its own lane.
       route: routeForType(oppType),
       context: contextForType(oppType),
-      nextActionOwner: o.nextActionOwner || '',
+      owner: canonicalOwner(o.owner),
+      nextActionOwner: canonicalOwner(o.nextActionOwner || ''),
     }
   })
   for (const opp of s.opportunities) {
@@ -492,13 +499,15 @@ export function migrate(s) {
     // Type-aware, deliberately. These gates are joint even when an older
     // persisted row was created with only `approver` or `anyOf`.
     const joint = a.type === 'Red customer clearance' || a.type === 'Final quote release'
-    const needed = joint
+    const needed = (joint
       ? ['LJS', 'AH']
-      : a.needed || [a.approver].filter(Boolean)
-    const decisions = a.decisions
+      : a.needed || [a.approver].filter(Boolean)).map(canonicalOwner)
+    const rawDecisions = a.decisions
       || (a.status && a.status !== 'Pending' && a.approver
         ? { [a.approver]: { d: a.status, c: a.decisionNote || '', when: a.decisionTs || '' } }
         : {})
+    const decisions = Object.fromEntries(Object.entries(rawDecisions)
+      .map(([key, value]) => [canonicalOwner(key), value]))
     const decided = (a.anyOf && !joint)
       ? needed.some(r => decisions[r])
       : needed.every(r => decisions[r])
@@ -539,6 +548,7 @@ export function migrate(s) {
     return {
       ...a,
       needed,
+      approver: canonicalOwner(a.approver || needed[0] || ''),
       ...(joint ? { anyOf: false } : {}),
       decisions,
       status,

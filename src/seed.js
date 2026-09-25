@@ -110,6 +110,20 @@ export const ROLES = {
   CUST: { name: 'Customer contact', label: 'Customer — External portal', commercial: false, external: true },
 }
 
+// Stable role ids are persisted in business records. Admin-editable names are
+// display labels and must never become ownership keys.
+export function ownerIdFor(value, roleNames = {}) {
+  const raw = String(value || '').trim()
+  if (!raw || ROLES[raw]) return raw
+  const wanted = raw.toLowerCase()
+  const configured = Object.entries(roleNames || {})
+    .find(([, name]) => String(name || '').trim().toLowerCase() === wanted)
+  if (configured) return configured[0]
+  const defaults = Object.entries(ROLES)
+    .find(([, role]) => String(role.name || '').trim().toLowerCase() === wanted)
+  return defaults ? defaults[0] : raw
+}
+
 // The customer-facing portal is parked for now. The page, its routes and the
 // CUST persona all stay in the code — this single flag is what takes them out
 // of the app and what puts them back. Flipping it to true restores the persona

@@ -1,5 +1,4 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { CLOSE_REASONS, WON_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES } from '../seed.js'
@@ -9,7 +8,7 @@ import { useFormulaBar } from '../formulabar.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { nextActionWith } from '../gates.js'
 import { suggestProbability } from '../insights.js'
-import { MarkWonControl, Modal } from '../ui.jsx'
+import { MarkWonControl, Modal, Portal } from '../ui.jsx'
 import { Icon, ModaeImageLogo } from '../icons.jsx'
 import { workflowStageLabelFor } from '../workflowStage.js'
 import {
@@ -325,7 +324,10 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   }
 
   const totals = rows.reduce((t, o) => ({ v: t.v + (+o.valueK || 0), c: t.c + (+o.cogsK || 0) }), { v: 0, c: 0 })
-  const resultCountLabel = rows.length === base.length
+  const workspaceLoading = ['connecting', 'reconnecting'].includes(store.liveSyncStatus)
+  const resultCountLabel = workspaceLoading
+    ? 'Loading shared data…'
+    : rows.length === base.length
     ? `${base.length} loaded`
     : `${rows.length} of ${base.length} shown`
   const activeFilterCount = Object.values(filters).filter(value => value instanceof Set).length
@@ -569,7 +571,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
         </div>
       </>
     )
-    return createPortal(menu, document.body)
+    return <Portal>{menu}</Portal>
   }
 
   const renderDateFilterPop = pos => {
@@ -624,7 +626,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
         </div>
       </>
     )
-    return createPortal(menu, document.body)
+    return <Portal>{menu}</Portal>
   }
 
   const dateFilterSummary = dateFilterActive && dateFilterState.range

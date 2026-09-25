@@ -396,7 +396,12 @@ async function fetchCore() {
     }
   } catch (e) {
     console.warn('Supabase core load failed — staying on localStorage:', e?.message)
-    return null
+    return {
+      empty: false,
+      error: { message: e?.message || 'Supabase core load failed', code: e?.code || '', status: e?.status || null },
+      slices: {},
+      diagnostics: { normalizedOpportunityCount: null, lastLoadError: { message: e?.message || 'Supabase core load failed', code: e?.code || '', status: e?.status || null } },
+    }
   }
 }
 
@@ -433,7 +438,12 @@ async function fetchAll() {
       hint: e?.hint,
       status: e?.status,
     })
-    return null
+    return {
+      empty: false,
+      error: { message: e?.message || 'Supabase load failed', code: e?.code || '', status: e?.status || null },
+      slices: {},
+      diagnostics: { normalizedOpportunityCount: null, lastLoadError: { message: e?.message || 'Supabase load failed', code: e?.code || '', status: e?.status || null } },
+    }
   }
 }
 

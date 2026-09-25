@@ -332,27 +332,28 @@ const NAV = [
 ]
 
 function SyncNotice({ status, diagnostics, onRefresh }) {
-  if (!['config-error', 'error', 'live', 'connecting', 'reconnecting', 'offline'].includes(status)) return null
+  if (!['config-error', 'error', 'degraded', 'live', 'connecting', 'reconnecting', 'offline'].includes(status)) return null
   const config = status === 'config-error'
   const offline = status === 'offline'
-  const emptyWorkspace = status === 'live' && diagnostics?.normalizedOpportunityCount === 0
+  const emptyWorkspace = status === 'degraded' || (status === 'live' && diagnostics?.normalizedOpportunityCount === 0)
   const healthy = status === 'live' && !emptyWorkspace
   if (healthy) return null
-  const stateLabel = emptyWorkspace ? 'Shared workspace is empty' : status === 'connecting' ? 'Connecting to shared workspace' : status === 'reconnecting' ? 'Reconnecting to shared workspace' : offline ? 'Local-only workspace' : config ? 'Supabase configuration mismatch' : 'Supabase sync unavailable'
+  const stateLabel = emptyWorkspace ? 'Shared workspace returned no active records' : status === 'connecting' ? 'Connecting to shared workspace' : status === 'reconnecting' ? 'Reconnecting to shared workspace' : offline ? 'Local-only workspace' : config ? 'Supabase configuration mismatch' : 'Supabase sync unavailable'
+  const detail = diagnostics?.lastLoadError
   return (
     <div className={`workspace-sync-notice workspace-sync-notice-${healthy ? 'live' : 'warning'}`} role={healthy ? 'status' : 'alert'} title={supabaseProjectRef ? `Supabase project: ${supabaseProjectRef}` : undefined}>
       <strong>{stateLabel}</strong>
       <span>{healthy
         ? `Project ${supabaseProjectRef || 'not configured'} · active rows are loaded from Supabase.`
         : emptyWorkspace
-            ? `Project ${supabaseProjectRef} · Supabase returned no active opportunities.`
+            ? `Project ${supabaseProjectRef || 'unknown'} · check the Vercel Supabase variables, project, and RLS policies.`
             : offline
               ? 'This browser cannot share changes until Supabase is configured.'
               : config
               ? 'The URL and anon key point to different projects. This browser is showing local data only.'
               : status === 'connecting' || status === 'reconnecting'
                 ? `Project ${supabaseProjectRef || 'not configured'} · waiting for the shared data connection.`
-                : 'The shared workspace could not be loaded. This browser may be showing local data only.'}</span>
+                : `The shared workspace could not be loaded. ${detail ? `${detail.message || detail.code || 'Request failed'}. ` : ''}This browser may be showing local data only.`}</span>
       {onRefresh && !offline && !config && <button type="button" className="workspace-sync-refresh" onClick={onRefresh}>Refresh shared data</button>}
     </div>
   )

@@ -375,6 +375,10 @@ export function StoreProvider({ children }) {
       return
     }
     if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
+    if (res.error) {
+      setLiveSyncStatus('error')
+      return
+    }
     setLiveSyncStatus('live')
     if (hydratedRef.current) return
     if (res.empty) {
@@ -470,7 +474,11 @@ export function StoreProvider({ children }) {
       .then(background => {
         if (!background) return
         if (background.diagnostics) setSyncDiagnostics(background.diagnostics)
-        if (hydratedRef.current && !background.empty) applyServer(background.slices, background.diagnostics)
+        if (background.error) { setLiveSyncStatus('error'); return }
+        if (hydratedRef.current && !background.empty) {
+          applyServer(background.slices, background.diagnostics)
+          setLiveSyncStatus('live')
+        }
       })
       .catch(() => setLiveSyncStatus('error'))
   }
@@ -619,6 +627,7 @@ export function StoreProvider({ children }) {
         .then(res => {
           if (!res) { setLiveSyncStatus('error'); return }
           if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
+          if (res.error) { setLiveSyncStatus('error'); return }
           if (!res.empty) applyServer(res.slices, res.diagnostics)
         })
         .catch(() => setLiveSyncStatus('error'))
@@ -631,6 +640,7 @@ export function StoreProvider({ children }) {
         .then(res => {
           if (!res) { setLiveSyncStatus('error'); return }
           if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
+          if (res.error) { setLiveSyncStatus('error'); return }
           if (!res.empty) { applyServer(res.slices, res.diagnostics); setLiveSyncStatus('live') }
         })
         .catch(() => setLiveSyncStatus('error'))
@@ -665,6 +675,7 @@ export function StoreProvider({ children }) {
       datastore.loadAll({ force: true })
         .then(res => {
           if (res?.diagnostics) setSyncDiagnostics(res.diagnostics)
+          if (res?.error) { setLiveSyncStatus('reconnecting'); return }
           if (res && !res.empty) applyServer(res.slices, res.diagnostics)
         })
         .catch(() => setLiveSyncStatus('reconnecting'))
@@ -2352,8 +2363,10 @@ export function StoreProvider({ children }) {
       if (!datastore.dbEnabled()) return false
       const res = await datastore.loadAll({ force: true })
       if (!res) { setLiveSyncStatus('error'); return false }
-      if (!res || res.empty) return false
       if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
+      if (res.error) { setLiveSyncStatus('error'); return false }
+      if (res.empty) { setLiveSyncStatus('degraded'); return false }
+      setLiveSyncStatus('live')
       applyServer(res.slices, res.diagnostics)
       return true
     },

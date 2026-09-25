@@ -4,6 +4,28 @@ import { MILESTONES, WON_REASONS } from './seed.js'
 import { Icon } from './icons.jsx'
 import { useStore } from './store.jsx'
 
+let portalRoot = null
+
+function getPortalRoot() {
+  if (typeof document === 'undefined') return null
+  if (portalRoot?.isConnected) return portalRoot
+  portalRoot = document.querySelector('[data-modae-portal-root]')
+  if (!portalRoot) {
+    portalRoot = document.createElement('div')
+    portalRoot.dataset.modaePortalRoot = 'true'
+    document.body.appendChild(portalRoot)
+  }
+  return portalRoot
+}
+
+// Keep one portal host for the lifetime of the page. Leaving the host in place
+// avoids React trying to remove a node that a browser extension or a fast route
+// change has already detached.
+export function Portal({ children }) {
+  const root = getPortalRoot()
+  return root ? createPortal(children, root) : null
+}
+
 // Shared chips/badges/steppers for the BT-prototype port. All styling lives in
 // styles.css — these are the only markup shapes the pages should use.
 
@@ -115,7 +137,7 @@ export function Modal({ title, onClose, children, wide, className = '', initialF
   const titleId = useId()
   useDialogBehavior({ onClose, dialogRef, initialFocusRef })
 
-  return createPortal((
+  return <Portal>
     <>
       <div className="filter-overlay modal-overlay" onClick={onClose} aria-hidden="true" />
       <div className={`modal form-card ${wide ? 'wide' : ''} ${className}`.trim()} ref={dialogRef}
@@ -128,7 +150,7 @@ export function Modal({ title, onClose, children, wide, className = '', initialF
         {children}
       </div>
     </>
-  ), document.body)
+  </Portal>
 }
 
 export function ConfirmModal({ title = 'Confirm action', message, children, confirmLabel = 'Confirm', cancelLabel = 'Cancel', tone = '', onConfirm, onClose }) {
