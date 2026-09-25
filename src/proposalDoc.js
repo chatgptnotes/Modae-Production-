@@ -135,6 +135,43 @@ export function defaultDocTerms(p, opp) {
   return rows
 }
 
+// The compliance grid (p.terms) is the workflow source of truth for
+// negotiated commercial deviations, while docTerms is the customer-facing
+// numbered T&C block. Only a resolved deviation is allowed to replace the
+// matching standard clause; every unrelated clause remains unchanged.
+const docTermKey = label => {
+  const text = String(label || '').toLowerCase()
+  if (/payment/.test(text)) return 'payment'
+  if (/delivery|incoterm/.test(text)) return 'delivery'
+  if (/warranty/.test(text)) return 'warranty'
+  if (/freight|insurance/.test(text)) return 'freight'
+  if (/validity/.test(text)) return 'validity'
+  return ''
+}
+
+const resolvedCommercialText = term => {
+  if (term?.status !== 'Deviation') return ''
+  if (term.decision === 'Match customer terms') return String(term.customerAsk || '').trim()
+  if (term.decision === 'Counter-offer with ModAE standard terms'
+    && term.customerConfirmationStatus === 'Accepted') {
+    return String(term.proposedTerm || term.ourResponse || '').trim()
+  }
+  return ''
+}
+
+export function applyResolvedCommercialTerms(docTerms, terms = []) {
+  const replacements = new Map()
+  for (const term of terms || []) {
+    const text = resolvedCommercialText(term)
+    const key = term?.key || docTermKey(term?.term)
+    if (key && text) replacements.set(key, text)
+  }
+  return (docTerms || []).map(row => {
+    const replacement = replacements.get(docTermKey(row.label))
+    return replacement ? { ...row, text: replacement } : row
+  })
+}
+
 // The heading the samples put above that block.
 export const docTermsHeading = (p, opp) =>
   (docRoute(p, opp) === 'Project'
@@ -524,9 +561,9 @@ export function docModel(p, opp, ctx = {}) {
     deviations,
     offerTerms: p.offerTerms ?? recommendTerms(opp || {}, ctx.config),
     // The numbered T&C block the samples print under the pricing sheet.
-    docTerms: selectedClauses.length
+    docTerms: applyResolvedCommercialTerms(selectedClauses.length
       ? selectedClauses.map(clause => ({ label: clause.label || clause.id, text: clause.text || '' }))
-      : p.docTerms ?? defaultDocTerms(p, opp),
+      : p.docTerms ?? defaultDocTerms(p, opp), p.terms),
     docTermsHeading: p.docTermsHeading ?? docTermsHeading(p, opp),
     // --- annexe content ---
     // The compliance grid projected into the sample's seven columns. `status`

@@ -78,6 +78,56 @@ test('a stored terms list still wins over the sample default', () => {
   assert.deepEqual(doc.docTerms, [{ label: 'Mine', text: 'Only this.' }])
 })
 
+test('an accepted customer deviation replaces only its matching customer clause', () => {
+  const opp = { id: 'X', oppType: 'Spares', route: 'Spares' }
+  const p = {
+    ...newProposal('X', opp),
+    terms: [
+      { key: 'payment', term: 'Payment', status: 'Deviation', decision: 'Match customer terms', customerAsk: '90 days credit' },
+      { key: 'delivery', term: 'Delivery', status: 'Deviation', decision: 'Decision pending', customerAsk: '8 weeks' },
+    ],
+  }
+  const doc = docModel(p, opp)
+  const payment = doc.docTerms.find(term => term.label === 'Payment Terms')
+  const delivery = doc.docTerms.find(term => term.label === 'Delivery Period')
+  const warranty = doc.docTerms.find(term => term.label === 'Warranty')
+  assert.equal(payment.text, '90 days credit')
+  assert.match(delivery.text, /16 weeks|delivery/i)
+  assert.match(warranty.text, /12 months/i)
+})
+
+test('an accepted counter-offer replaces the clause with the agreed counter-offer', () => {
+  const opp = { id: 'X', oppType: 'Spares', route: 'Spares' }
+  const p = {
+    ...newProposal('X', opp),
+    terms: [{
+      key: 'delivery', term: 'Delivery', status: 'Deviation',
+      decision: 'Counter-offer with ModAE standard terms',
+      customerAsk: '8 weeks', proposedTerm: '10 weeks ex-works',
+      ourResponse: '10 weeks ex-works', customerConfirmationStatus: 'Accepted',
+    }],
+  }
+  const doc = docModel(p, opp)
+  assert.equal(doc.docTerms.find(term => term.label === 'Delivery Period').text, '10 weeks ex-works')
+})
+
+test('an unaccepted counter-offer does not alter the customer terms block', () => {
+  const opp = { id: 'X', oppType: 'Spares', route: 'Spares' }
+  const baseline = docModel(newProposal('X', opp), opp)
+  const p = {
+    ...newProposal('X', opp),
+    terms: [{
+      key: 'payment', term: 'Payment', status: 'Deviation',
+      decision: 'Counter-offer with ModAE standard terms',
+      customerAsk: '90 days credit', proposedTerm: '30 days from invoice',
+      customerConfirmationStatus: 'Awaiting reply',
+    }],
+  }
+  const doc = docModel(p, opp)
+  assert.equal(doc.docTerms.find(term => term.label === 'Payment Terms').text,
+    baseline.docTerms.find(term => term.label === 'Payment Terms').text)
+})
+
 // The printed T&C list and the clause-by-clause compliance grid are different
 // things — the samples keep them apart, and only the grid drives approvals.
 // Pushing ten prose clauses into p.terms would invent deviations to approve.

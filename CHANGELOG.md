@@ -5,6 +5,10 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Customer-facing proposal Excel Terms & Conditions now replace only the
+  matching clause for a resolved commercial deviation: accepted customer terms
+  or accepted counter-offers are carried through, while unrelated ModAE
+  standard terms remain unchanged.
 - Added the additive relational workspace migration with typed customer,
   opportunity-item, proposal-item, catalogue, communication, audit, and
   settings tables plus indexed backfill paths. Legacy JSONB data remains
