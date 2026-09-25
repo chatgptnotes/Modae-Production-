@@ -5,6 +5,10 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Split proposals, sourcing lines, clarifications, audit rows, settings, and
+  price-list records into dedicated Supabase JSONB tables with a compatibility
+  backfill from `records`. Also fixed startup persistence deleting the active
+  browser snapshot before it could be read.
 - Clarified the validated-proposal status when Payment or Delivery decisions
   are still unresolved, and added a direct action from the workflow blocker
   dialog to the commercial-decision section.

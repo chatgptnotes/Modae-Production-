@@ -59,7 +59,7 @@ Never expose server secrets through `VITE_` variables or browser source code.
 
 ## Supabase contract
 
-The only permitted production tables are:
+The permitted production tables are:
 
 ```text
 ai_secrets
@@ -68,9 +68,16 @@ leads
 opportunities
 records
 user_files
+proposals
+spares_lines
+clarifications
+audit
+settings
+price_lists
+price_list_versions
 ```
 
-Any new `.from()` query must target one of those six names. Do not reintroduce
+Any new `.from()` query must target one of those allowlisted names. Do not reintroduce
 deprecated, demo, temporary, or migration-only table names into runtime code,
 tests, API routes, or active migrations.
 
@@ -90,7 +97,8 @@ Use the existing `save_rows` RPC and datastore helpers for bulk state changes.
 Do not bypass revision handling with ad hoc writes unless the change is for one
 of the dedicated tables and follows its existing helper pattern.
 
-The active repository migration is `supabase/007_live_workspace_sync.sql`.
+The active repository migrations are `supabase/007_live_workspace_sync.sql` and
+`supabase/008_dedicated_workspace_tables.sql`.
 Historical migrations and backups are local-only under `.local/backups/`.
 
 ## Change rules
@@ -117,7 +125,7 @@ git diff --check
 ```
 
 For persistence changes, verify that all active Supabase table references are
-inside the six-table allowlist and run the Supabase persistence tests. For
+inside the table allowlist and run the Supabase persistence tests. For
 proposal or branding changes, run the relevant proposal and brand identity
 tests. Before release, walk `tests/MANUAL_SMOKE_CHECKLIST.md` at both mobile and
 desktop viewport sizes.

@@ -29,6 +29,9 @@ test('the shared workspace subscribes to the rows that can resolve a release', (
   assert.match(store, /async refreshSharedData\(\)/)
   assert.match(store, /setTimeout\(flushSaves, 0\)/,
     'approval decisions must bypass the ordinary draft-save debounce')
+  for (const table of ['proposals', 'spares_lines', 'clarifications', 'audit', 'settings', 'price_lists', 'price_list_versions']) {
+    assert.match(datastore, new RegExp(`${table}: '${table}'`))
+  }
 })
 
 test('the live-sync migration publishes only shared business tables', () => {
@@ -178,6 +181,11 @@ test('refresh safety retains local data on quota failures and empty full respons
   assert.match(store, /Ignoring empty \$\{k\} refresh response/)
   assert.match(store, /Supabase returned an empty workspace; local data was preserved/)
   assert.match(store, /allowEmptyBusinessSlices: true/)
+})
+
+test('boot does not delete the active browser snapshot before reading it', () => {
+  const store = read('src/store.jsx')
+  assert.doesNotMatch(store, /localStorage\.removeItem\(['"]wintrack-modae-v4['"]\)/)
 })
 
 test('session restoration cannot leave the login screen waiting forever', () => {

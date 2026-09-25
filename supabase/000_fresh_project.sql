@@ -1,8 +1,8 @@
 -- WinTrack ModAE — fresh Supabase project schema
 --
 -- Run this entire file once in Supabase Dashboard -> SQL Editor.
--- It is safe to re-run. This schema intentionally contains only the six
--- production tables used by the application:
+-- It is safe to re-run. This schema creates the base production tables; run
+-- 008_dedicated_workspace_tables.sql afterwards for the full current schema:
 --   ai_secrets, approvals, leads, opportunities, records, user_files
 --
 -- Workspace rows use the current app-compatible access model: the browser
@@ -297,7 +297,7 @@ begin
 end;
 $$;
 
--- Verification: should return exactly these six table names.
+-- Verification: the base schema should return these table names.
 select table_name
 from information_schema.tables
 where table_schema = 'public'

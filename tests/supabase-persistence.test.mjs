@@ -32,8 +32,8 @@ test('file persistence uses the canonical user_files table', () => {
   assert.doesNotMatch(userFiles, /app_state|app_settings|workflow_rules|approval_rules|lead_rules/)
 })
 
-test('active Supabase requests use only the six production tables', () => {
-  const allowed = new Set(['ai_secrets', 'approvals', 'leads', 'opportunities', 'records', 'user_files'])
+test('active Supabase requests use only the production table allowlist', () => {
+  const allowed = new Set(['ai_secrets', 'approvals', 'leads', 'opportunities', 'records', 'user_files', 'proposals', 'spares_lines', 'clarifications', 'audit', 'settings', 'price_lists', 'price_list_versions'])
   const roots = ['src', 'api', 'supabase/functions'].map(directory => path.join(root, directory))
   const files = []
   const walk = directory => {
@@ -67,7 +67,8 @@ test('normalized business hydration uses canonical rows and consolidated state',
 test('consolidated configuration uses the records JSONB path', () => {
   const datastore = fs.readFileSync(path.join(root, 'src/datastore.js'), 'utf8')
   assert.match(datastore, /CONSOLIDATED_SETTINGS_ENTITY = 'settings'/)
-  assert.match(datastore, /eq\('entity', CONSOLIDATED_SETTINGS_ENTITY\)/)
+  assert.match(datastore, /dedicatedTableFor\(entity\)/)
+  assert.match(datastore, /legacy records rows remain readable/)
   assert.match(datastore, /saveConsolidatedConfig\(dirty\.config\)/)
   assert.match(datastore, /slices\.config = consolidatedConfig/)
 })

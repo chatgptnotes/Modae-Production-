@@ -71,7 +71,7 @@ Shared state and persistence are primarily handled by `src/store.jsx` and
 
 ## Production database
 
-The production database is intentionally limited to exactly six Supabase tables:
+The production database uses a controlled Supabase table allowlist:
 
 1. `ai_secrets`
 2. `approvals`
@@ -79,10 +79,17 @@ The production database is intentionally limited to exactly six Supabase tables:
 4. `opportunities`
 5. `records`
 6. `user_files`
+7. `proposals`
+8. `spares_lines`
+9. `clarifications`
+10. `audit`
+11. `settings`
+12. `price_lists`
+13. `price_list_versions`
 
-The application stores most domain rows in the JSON-backed `records` table,
-while leads, opportunities, approvals, secrets, and files use their dedicated
-tables. Do not add queries for another table. See
+The application stores remaining compact state in the JSON-backed `records`
+table, while large workflow collections use dedicated JSONB tables. Do not add
+queries for another table. See
 [supabase/README.md](./supabase/README.md) for the schema policy and verification
 query.
 

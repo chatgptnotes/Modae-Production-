@@ -1,8 +1,8 @@
 import { supabase } from './supabase.js'
 import { writeCachedRules } from './rules.js'
 
-// Server persistence for the store: normalized business rows plus JSONB state
-// records. Mirrors the filestore facade —
+// Server persistence for the store: normalized business rows plus dedicated
+// JSONB entity tables. Mirrors the filestore facade —
 // every function no-ops when Supabase isn't configured, so the app keeps its
 // original localStorage-only behavior without env vars.
 
@@ -17,6 +17,18 @@ export const LOCAL_ONLY = ['viewMode', 'viewModePinned', 'tabletTheme', 'spSync'
 
 export const dbEnabled = () => !!supabase
 
+export const DEDICATED_ENTITIES = {
+  proposals: 'proposals',
+  spares_lines: 'spares_lines',
+  clarifications: 'clarifications',
+  audit: 'audit',
+  settings: 'settings',
+  price_lists: 'price_lists',
+  price_list_versions: 'price_list_versions',
+}
+
+const dedicatedTableFor = entity => DEDICATED_ENTITIES[entity] || null
+
 // Shared business records are normally refreshed on focus. Postgres Changes
 // provides a small, authoritative nudge while the row-level loader below
 // keeps that nudge from downloading the entire workspace. Subscribe to the
@@ -24,21 +36,20 @@ export const dbEnabled = () => !!supabase
 // proposals); the row loader and store decide how each entity is applied.
 export function subscribeBusinessChanges(onChange, onStatus = () => {}) {
   if (!supabase) return () => {}
-  const channel = supabase
+  let channel = supabase
     .channel('modae-workspace-business')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, payload => onChange({ table: 'leads', payload }))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'approvals' }, payload => onChange({ table: 'approvals', payload }))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'opportunities' }, payload => onChange({ table: 'opportunities', payload }))
-    // Release effects update the proposal row as well as the approval itself.
-    // Other shared slices also live in records, so do not narrow this to
-    // proposals: state, settings, price lists, clarifications, spare lines,
-    // and audit rows must reach other open browsers too.
     .on('postgres_changes', { event: '*', schema: 'public', table: 'records' }, payload => onChange({ table: 'records', payload }))
-    .subscribe(status => onStatus(status))
+  Object.values(DEDICATED_ENTITIES).forEach(table => {
+    channel = channel.on('postgres_changes', { event: '*', schema: 'public', table }, payload => onChange({ table, payload }))
+  })
+  channel = channel.subscribe(status => onStatus(status))
   return () => { supabase.removeChannel(channel) }
 }
 
-const realtimeEntityFor = table => table === 'proposals' ? 'proposals' : table
+const realtimeEntityFor = table => table
 
 // Resolve realtime events to only the affected row. The event payload is not
 // used as the source of truth because projects without REPLICA IDENTITY FULL
@@ -49,10 +60,10 @@ export async function loadChangedRows(events = []) {
   for (const event of events) {
     const payload = event?.payload || {}
     const source = payload.new || payload.old || {}
-    const recordEvent = event.table === 'records' || event.table === 'proposals'
+    const recordEvent = event.table === 'records'
     const entity = recordEvent ? (source.entity || 'proposals') : realtimeEntityFor(event.table)
     const id = source.id
-    if (entity && id != null) unique.set(`${entity}|${id}`, { table: recordEvent ? 'records' : event.table, entity, id: String(id) })
+    if (entity && id != null) unique.set(`${entity}|${id}`, { table: recordEvent ? 'records' : (dedicatedTableFor(entity) || event.table), entity, id: String(id) })
   }
   const rows = await Promise.all([...unique.values()].map(async target => {
     let query = supabase.from(target.table === 'records' ? 'records' : target.table)
@@ -111,20 +122,32 @@ const clearNormalizedEntity = entity => {
   }
 }
 
-// Configuration is stored behind the existing JSONB records store, keeping
-// runtime reads on the consolidated path after the migration.
+// Configuration and catalogue metadata use dedicated JSONB tables while the
+// legacy records rows remain readable during rollout.
+async function loadEntityRows(entity, { ids = null } = {}) {
+  const table = dedicatedTableFor(entity)
+  if (!table) return { data: [], error: new Error(`Unknown dedicated entity: ${entity}`) }
+  let query = supabase.from(table).select('id, data, rev').is('deleted_at', null)
+  if (ids?.length) query = query.in('id', ids)
+  const dedicated = await query
+  if (!dedicated.error) return { ...dedicated, legacy: false }
+
+  // Keep old deployments readable while migration 008 is being applied.
+  let legacy = supabase.from('records').select('id, data, rev').eq('entity', entity).is('deleted_at', null)
+  if (ids?.length) legacy = legacy.in('id', ids)
+  const fallback = await legacy
+  if (!fallback.error) return { ...fallback, legacy: true }
+  return dedicated.error ? dedicated : fallback
+}
+
 async function loadConsolidatedConfig() {
-  const result = await supabase.from('records')
-    .select('id, data, rev')
-    .eq('entity', CONSOLIDATED_SETTINGS_ENTITY)
-    .eq('id', CONSOLIDATED_SETTINGS_ID)
-    .is('deleted_at', null)
-    .maybeSingle()
-  if (result.error || !result.data?.data || typeof result.data.data !== 'object') return null
+  const result = await loadEntityRows(CONSOLIDATED_SETTINGS_ENTITY, { ids: [CONSOLIDATED_SETTINGS_ID] })
+  const row = result.data?.[0]
+  if (result.error || !row?.data || typeof row.data !== 'object') return null
   const key = normalizedKey(CONSOLIDATED_SETTINGS_ENTITY, CONSOLIDATED_SETTINGS_ID)
-  normalizedRevisions.set(key, Number(result.data.rev) || 0)
-  normalizedRecords.set(key, { data: result.data.data, rev: Number(result.data.rev) || 0 })
-  return result.data.data
+  normalizedRevisions.set(key, Number(row.rev) || 0)
+  normalizedRecords.set(key, { data: row.data, rev: Number(row.rev) || 0 })
+  return row.data
 }
 
 async function saveConsolidatedConfig(config = {}) {
@@ -235,10 +258,7 @@ const mapConsolidatedVersion = data => ({
 })
 
 async function loadConsolidatedPriceLists() {
-  const listsResult = await supabase.from('records')
-    .select('id, data, rev')
-    .eq('entity', CONSOLIDATED_PRICE_LIST_ENTITY)
-    .is('deleted_at', null)
+  const listsResult = await loadEntityRows(CONSOLIDATED_PRICE_LIST_ENTITY)
   if (listsResult.error || !listsResult.data?.length) return null
 
   const listRows = listsResult.data
@@ -246,11 +266,7 @@ async function loadConsolidatedPriceLists() {
     .map(row => row.data?.activeVersionId || priceVersionRecordId(row.id, row.data?.currentVersion || ''))
     .filter(Boolean)
   const versionsResult = activeVersionIds.length
-    ? await supabase.from('records')
-      .select('id, data, rev')
-      .eq('entity', CONSOLIDATED_PRICE_VERSION_ENTITY)
-      .in('id', activeVersionIds)
-      .is('deleted_at', null)
+    ? await loadEntityRows(CONSOLIDATED_PRICE_VERSION_ENTITY, { ids: activeVersionIds })
     : { data: [], error: null }
   if (versionsResult.error) return null
   if (versionsResult.data?.length !== activeVersionIds.length) return null
@@ -314,13 +330,9 @@ export async function loadPriceLists({ force = false } = {}) {
 export async function loadPriceListVersion(listCode, versionCode) {
   if (!supabase) return null
   const consolidatedId = priceVersionRecordId(listCode, versionCode)
-  const consolidated = await supabase.from('records')
-    .select('id, data')
-    .eq('entity', CONSOLIDATED_PRICE_VERSION_ENTITY)
-    .eq('id', consolidatedId)
-    .is('deleted_at', null)
-    .maybeSingle()
-  if (!consolidated.error && consolidated.data?.data) return mapConsolidatedVersion({ id: consolidated.data.id, ...consolidated.data.data })
+  const consolidated = await loadEntityRows(CONSOLIDATED_PRICE_VERSION_ENTITY, { ids: [consolidatedId] })
+  const row = consolidated.data?.[0]
+  if (!consolidated.error && row?.data) return mapConsolidatedVersion({ id: row.id, ...row.data })
   throw consolidated.error || new Error(`Price list version ${listCode} ${versionCode} was not found`)
 }
 
@@ -506,20 +518,23 @@ export function saveSlices(dirty) {
 const BUSINESS_KEYS = new Set(['leads', 'opportunities', 'approvals', 'proposals', 'sparesLines', 'clarifications', 'audit', 'priceLists'])
 
 async function loadBusinessTables({ includeRecords = true } = {}) {
-  // The records table contains large proposal, audit, clarification, and
-  // sourcing JSON payloads. Do not transfer it during the critical startup
-  // path; a count is enough to distinguish an empty workspace from one whose
-  // secondary records are still loading.
-  const recordsQuery = includeRecords
+  const legacyQuery = includeRecords
     ? supabase.from('records').select('entity, id, data, rev').is('deleted_at', null).in('entity', ['proposals', 'spares_lines', 'clarifications', 'audit'])
     : supabase.from('records').select('entity', { count: 'exact', head: true }).is('deleted_at', null)
-  const tables = await Promise.all([
+  const baseTables = await Promise.all([
     supabase.from('leads').select('id, data, rev').is('deleted_at', null),
     supabase.from('opportunities').select('id, data, rev').is('deleted_at', null),
     supabase.from('approvals').select('id, data, rev').is('deleted_at', null),
-    recordsQuery,
+    legacyQuery,
   ])
-  const failedTables = tables
+  const dedicatedEntities = ['proposals', 'spares_lines', 'clarifications', 'audit']
+  const dedicated = includeRecords
+    ? await Promise.all(dedicatedEntities.map(async entity => ({ entity, result: await loadEntityRows(entity) })))
+    : await Promise.all(dedicatedEntities.map(async entity => ({
+      entity,
+      result: await supabase.from(dedicatedTableFor(entity)).select('id', { count: 'exact', head: true }).is('deleted_at', null),
+    })))
+  const failedTables = baseTables
     .map((result, index) => result.error ? { index, error: result.error } : null)
     .filter(Boolean)
   if (failedTables.length) {
@@ -538,34 +553,47 @@ async function loadBusinessTables({ includeRecords = true } = {}) {
     opportunityRecords.clear()
     for (const entity of ['leads', 'approvals', 'proposals', 'spares_lines', 'clarifications', 'audit']) clearNormalizedEntity(entity)
   }
-  for (const row of tables[1].data || []) {
+  for (const row of baseTables[1].data || []) {
     opportunityRevisions.set(row.id, Number(row.rev) || 0)
     opportunityRecords.set(row.id, { data: row.data, rev: Number(row.rev) || 0 })
   }
-  for (const row of tables[0].data || []) {
+  for (const row of baseTables[0].data || []) {
     const key = normalizedKey('leads', row.id)
     normalizedRevisions.set(key, Number(row.rev) || 0)
     normalizedRecords.set(key, { data: row.data, rev: Number(row.rev) || 0 })
   }
-  for (const row of tables[2].data || []) {
+  for (const row of baseTables[2].data || []) {
     const key = normalizedKey('approvals', row.id)
     normalizedRevisions.set(key, Number(row.rev) || 0)
     normalizedRecords.set(key, { data: row.data, rev: Number(row.rev) || 0 })
   }
-  for (const row of records) {
+  const legacyRows = includeRecords ? (baseTables[3].data || []) : []
+  for (const row of legacyRows) {
     const key = normalizedKey(row.entity, row.id)
     normalizedRevisions.set(key, Number(row.rev) || 0)
     normalizedRecords.set(key, { data: row.data, rev: Number(row.rev) || 0 })
   }
+  const rowsFor = entity => {
+    const dedicatedResult = dedicated.find(item => item.entity === entity)?.result
+    const dedicatedRows = dedicatedResult?.error ? [] : (dedicatedResult?.data || [])
+    const legacyRowsForEntity = dedicatedResult?.legacy
+      ? legacyRows.filter(row => row.entity === entity)
+      : []
+    const byId = new Map(legacyRowsForEntity.map(row => [row.id, row]))
+    dedicatedRows.forEach(row => byId.set(row.id, row))
+    return [...byId.values()]
+  }
+  const dedicatedCount = dedicated.reduce((sum, item) => sum + (Number(item.result?.count) || (includeRecords ? item.result?.data?.length || 0 : 0)), 0)
+  const legacyCount = includeRecords ? legacyRows.length : (Number(baseTables[3].count) || 0)
   return {
-    leads: tables[0].data.map(row => row.data),
-    opportunities: tables[1].data.map(row => row.data),
-    approvals: tables[2].data.map(row => row.data),
-    proposals: Object.fromEntries(records.filter(row => row.entity === 'proposals').map(row => [row.id, row.data])),
-    sparesLines: records.filter(row => row.entity === 'spares_lines').map(row => row.data),
-    clarifications: records.filter(row => row.entity === 'clarifications').map(row => row.data),
-    audit: records.filter(row => row.entity === 'audit').map(row => row.data),
-    recordCount: includeRecords ? records.length : (Number(tables[3].count) || 0),
+    leads: baseTables[0].data.map(row => row.data),
+    opportunities: baseTables[1].data.map(row => row.data),
+    approvals: baseTables[2].data.map(row => row.data),
+    proposals: Object.fromEntries(rowsFor('proposals').map(row => [row.id, row.data])),
+    sparesLines: rowsFor('spares_lines').map(row => row.data),
+    clarifications: rowsFor('clarifications').map(row => row.data),
+    audit: rowsFor('audit').map(row => row.data),
+    recordCount: includeRecords ? dedicatedCount + legacyCount : dedicatedCount + legacyCount,
   }
 }
 

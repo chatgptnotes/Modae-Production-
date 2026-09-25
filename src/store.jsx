@@ -85,9 +85,9 @@ export function snapshotProposal(p) {
 // The localStorage read is all that is left here; the decision itself lives in
 // appState.js so the tests can drive the boot path directly.
 const initialState = () => {
-  // v4 stored the full catalogue locally and can consume the remaining
-  // browser quota even though v5 no longer reads it.
-  try { localStorage.removeItem('wintrack-modae-v4') } catch { /* private mode */ }
+  // Keep the active snapshot intact. Removing the v4 key here also removes
+  // the key currently used by appState.js, which made every offline reload
+  // reseed an empty workspace when Supabase was unavailable.
   const saved = localStorage.getItem(KEY)
   const state = stateFromSaved(saved)
   // Production starts clean. Existing demo-mode snapshots are migrated once
