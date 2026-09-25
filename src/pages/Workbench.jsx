@@ -735,7 +735,7 @@ export default function Workbench() {
       {workflowReadOnly && <div className="workflow-readonly-notice" role="status">
         <span>Reviewing completed stage: <b>{activeStepConfig?.label || 'this stage'}</b>. Current workflow stage: <b>{workflowSteps[persistedStepIndex]?.label || opp.milestone}</b>.</span>
         <button type="button" className="secondary" onClick={() => openBackwardTransition(activeStepConfig)}>
-          Return to {activeStepConfig?.label || 'this stage'} to edit
+          Move back to {activeStepConfig?.label || 'this stage'} to edit
         </button>
       </div>}
       <fieldset className={`wb-body workflow-edit-boundary ${workflowReadOnly ? 'workflow-edit-boundary--readonly' : ''}`} disabled={workflowReadOnly && viewTab !== 'comms'} aria-readonly={workflowReadOnly || undefined}>

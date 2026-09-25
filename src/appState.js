@@ -684,6 +684,21 @@ export function mergeOpportunitySlice(local = [], server = [], baseline = [], de
   return mergeLeadSlice(local, server, baseline, [...new Set([...(deletedIds || []), ...remotelyDeleted])])
 }
 
+// Sourcing rows are editable business data, but they can be created locally
+// while the secondary records fetch is still in flight. Merge them like leads
+// so an empty or stale server slice cannot make the BOQ visibly disappear.
+// A local deletion still wins against the last known server baseline.
+export function mergeSparesLineSlice(local = [], server = [], baseline = []) {
+  // An empty records response is the known failure mode this slice must
+  // recover from. Preserve populated local sourcing rows even when an older
+  // baseline exists; the save loop will repopulate the server. An explicitly
+  // emptied local slice still wins and can issue the normal row deletions.
+  if (Array.isArray(local) && local.length && Array.isArray(server) && !server.length) {
+    return { rows: local, baseline: [] }
+  }
+  return mergeLeadSlice(local, server, baseline)
+}
+
 // Clarifications are stored as one synced slice, but questions can be created
 // while a browser is waiting for hydration or while another device still has
 // an older snapshot. Merge them like leads so a stale empty slice cannot erase

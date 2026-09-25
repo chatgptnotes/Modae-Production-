@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
-import { migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLeadSlice, mergeOpportunitySlice, mergeClarificationSlice, KEY } from '../src/appState.js'
+import { migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLeadSlice, mergeOpportunitySlice, mergeSparesLineSlice, mergeClarificationSlice, KEY } from '../src/appState.js'
 import { seedAiLeads, seedJointApprovals } from '../src/seed.js'
 
 // The app ships full of seeded demo records, and until now there was no way out
@@ -40,6 +40,25 @@ test('opportunity hydration keeps local edits and deletions against a stale serv
   const server = [...baseline]
   const merged = mergeOpportunitySlice(local, server, baseline)
   assert.deepEqual(merged.rows, [{ id: 'OP-edit', oppName: 'After' }])
+})
+
+test('spares hydration preserves local rows against an empty server slice', () => {
+  const local = [{ id: 'SL-local', oppId: 'O-1', pn: 'RK16-BASE', qty: 1 }]
+  const merged = mergeSparesLineSlice(local, [], [])
+  assert.deepEqual(merged.rows, local)
+})
+
+test('spares hydration preserves local rows when an older baseline exists', () => {
+  const local = [{ id: 'SL-local', oppId: 'O-1', pn: 'RK16-BASE', qty: 1, listPrice: 100 }]
+  const merged = mergeSparesLineSlice(local, [], local)
+  assert.deepEqual(merged.rows, local)
+  assert.deepEqual(merged.baseline, [])
+})
+
+test('spares hydration keeps an intentional local deletion against a stale server slice', () => {
+  const baseline = [{ id: 'SL-delete', oppId: 'O-1', pn: 'OLD-PART', qty: 1 }]
+  const merged = mergeSparesLineSlice([], baseline, baseline)
+  assert.deepEqual(merged.rows, [])
 })
 
 test('lead hydration preserves local edits and deletes against a stale server snapshot', () => {

@@ -13,7 +13,7 @@ import {
 } from './seed.js'
 import { leadConfig, routeOwner, expiredLeadDeadline, aiAuditDetail } from './leadRules.js'
 import { withoutSimulated, simulatedCount } from './simulatedLeads.js'
-import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLeadSlice, mergeOpportunitySlice, mergeClarificationSlice, mergeApprovalRows, defaultViewMode } from './appState.js'
+import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLeadSlice, mergeOpportunitySlice, mergeSparesLineSlice, mergeClarificationSlice, mergeApprovalRows, defaultViewMode } from './appState.js'
 import { unitCostINR, unitSellINR, setRoleNameConfig, nowIST, toISTISOString, canManagePriceLists } from './utils.js'
 import { PRICE_SOURCES, isConfirmableSparesLine, normalizePriceFields, sparesLineFinancials } from './pricing.js'
 import { clarificationTopic } from './leadClarification.js'
@@ -93,6 +93,10 @@ const localSnapshot = state => ({
   leadDeadlines: state.leadDeadlines,
   leadSyncBaseline: state.leadSyncBaseline,
   deletedLeadIds: state.deletedLeadIds,
+  // Keep sourcing rows in the compact browser cache so a stale/empty server
+  // response cannot blank an otherwise populated BOQ during hydration.
+  sparesLines: state.sparesLines,
+  sparesLinesSyncBaseline: state.sparesLinesSyncBaseline,
   approvals: state.approvals,
   customers: state.customers,
   users: state.users,
@@ -375,7 +379,7 @@ export function StoreProvider({ children }) {
         hydratedRef.current = true
         setState(s => ({ ...s, leadSyncBaseline: {
           ...(s.leadSyncBaseline || {}), leads: s.leads, leadArchive: s.leadArchive || [],
-        }, clarificationSyncBaseline: s.clarifications || [], opportunitySyncBaseline: s.opportunities || [] }))
+        }, clarificationSyncBaseline: s.clarifications || [], opportunitySyncBaseline: s.opportunities || [], sparesLinesSyncBaseline: s.sparesLines || [] }))
       } catch (e) {
         console.warn('Supabase seed failed — retrying on next focus:', e?.message)
       }
@@ -398,6 +402,7 @@ export function StoreProvider({ children }) {
       const nextBaseline = { ...(s.leadSyncBaseline || {}) }
       let nextClarificationBaseline = s.clarificationSyncBaseline || []
       let nextOpportunityBaseline = s.opportunitySyncBaseline || []
+      let nextSparesLinesBaseline = s.sparesLinesSyncBaseline || []
       for (const [k, v] of Object.entries(serverSlices)) {
         if (k === 'leads' || k === 'leadArchive') {
           const deletedLeadIds = [...new Set([...(s.deletedLeadIds || []), ...(serverSlices.deletedLeadIds || [])])]
@@ -425,10 +430,16 @@ export function StoreProvider({ children }) {
           nextOpportunityBaseline = mergedOpportunities.baseline
           continue
         }
+        if (k === 'sparesLines') {
+          const mergedSparesLines = mergeSparesLineSlice(s.sparesLines || [], v, s.sparesLinesSyncBaseline || [])
+          accepted[k] = mergedSparesLines.rows
+          nextSparesLinesBaseline = mergedSparesLines.baseline
+          continue
+        }
         if (k in s && s[k] !== bootRef.current[k]) continue // edited this session — keep local
         accepted[k] = v
       }
-      const merged = reconcileApprovedSubmissions(migrate({ ...s, ...accepted, leadSyncBaseline: nextBaseline, clarificationSyncBaseline: nextClarificationBaseline, opportunitySyncBaseline: nextOpportunityBaseline }))
+      const merged = reconcileApprovedSubmissions(migrate({ ...s, ...accepted, leadSyncBaseline: nextBaseline, clarificationSyncBaseline: nextClarificationBaseline, opportunitySyncBaseline: nextOpportunityBaseline, sparesLinesSyncBaseline: nextSparesLinesBaseline }))
       // Only the slices we took from the server are known to match it. A slice
       // we kept is still unsaved, so it must stay dirty for the flush below.
       lastSavedRef.current = Object.fromEntries(
@@ -462,6 +473,7 @@ export function StoreProvider({ children }) {
     const nextBaseline = { ...(s.leadSyncBaseline || {}) }
     let nextClarificationBaseline = s.clarificationSyncBaseline || []
     let nextOpportunityBaseline = s.opportunitySyncBaseline || []
+    let nextSparesLinesBaseline = s.sparesLinesSyncBaseline || []
     for (const [k, v] of Object.entries(syncedOf(slices))) {
       // Approvals merge per row by sync stamp — a stale server snapshot must
       // never downgrade a decision that was just recorded locally.
@@ -488,6 +500,12 @@ export function StoreProvider({ children }) {
         nextOpportunityBaseline = mergedOpportunities.baseline
         continue
       }
+      if (k === 'sparesLines') {
+        const mergedSparesLines = mergeSparesLineSlice(s.sparesLines || [], v, s.sparesLinesSyncBaseline || [])
+        if (JSON.stringify(s.sparesLines || []) !== JSON.stringify(mergedSparesLines.rows)) updates.sparesLines = mergedSparesLines.rows
+        nextSparesLinesBaseline = mergedSparesLines.baseline
+        continue
+      }
       // A background slice may not have a server baseline yet because the
       // fast boot path intentionally skips large records. Compare those
       // slices with the boot cache instead of mistaking every cached value
@@ -501,8 +519,9 @@ export function StoreProvider({ children }) {
       updates[k] = v
       if (k === 'leads' || k === 'leadArchive') nextBaseline[k] = v
     }
-    if (!Object.keys(updates).length) return
-    const merged = reconcileApprovedSubmissions(migrate({ ...s, ...updates, leadSyncBaseline: nextBaseline, clarificationSyncBaseline: nextClarificationBaseline, opportunitySyncBaseline: nextOpportunityBaseline }))
+    const sparesBaselineChanged = JSON.stringify(s.sparesLinesSyncBaseline || []) !== JSON.stringify(nextSparesLinesBaseline)
+    if (!Object.keys(updates).length && !sparesBaselineChanged) return
+    const merged = reconcileApprovedSubmissions(migrate({ ...s, ...updates, leadSyncBaseline: nextBaseline, clarificationSyncBaseline: nextClarificationBaseline, opportunitySyncBaseline: nextOpportunityBaseline, sparesLinesSyncBaseline: nextSparesLinesBaseline }))
     // Keep the server snapshot as the dirty baseline. If the merge preserved
     // a local question over stale server data, the next debounced save must
     // still upload that local row instead of treating it as already synced.
