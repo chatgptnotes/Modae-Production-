@@ -5205,84 +5205,7 @@ button.install:hover { background: var(--primary-hover); }
 .home-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .home-head h2 { margin: 4px 0 10px; }
 .home-head-actions { display: flex; align-items: center; gap: 10px; }
-.dashboard-sync {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 30px;
-  padding: 0 9px;
-  border: 1px solid var(--border-soft);
-  border-radius: 999px;
-  color: var(--text-subtle);
-  background: var(--card-bg);
-  font-size: 11px;
-  font-weight: 750;
-}
-.dashboard-sync-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-subtle); }
-.dashboard-sync-live { color: var(--status-success); border-color: var(--status-success-soft); }
-.dashboard-sync-live .dashboard-sync-dot { background: var(--status-success); }
-.dashboard-sync-reconnecting { color: var(--status-warning); border-color: var(--status-warning-soft); }
-.dashboard-sync-reconnecting .dashboard-sync-dot { background: var(--status-warning); }
-.dashboard-sync-error, .dashboard-sync-config-error { color: var(--status-danger); border-color: var(--status-danger-soft); }
-.dashboard-sync-error .dashboard-sync-dot, .dashboard-sync-config-error .dashboard-sync-dot { background: var(--status-danger); }
-.workspace-sync-notice {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin: 10px 18px 0;
-  padding: 9px 12px;
-  border: 1px solid var(--status-danger);
-  border-radius: 8px;
-  background: var(--status-danger-soft);
-  color: var(--status-danger);
-  font-size: 12px;
-}
-.workspace-sync-notice strong { white-space: nowrap; }
-.workspace-sync-notice span { color: var(--text-subtle); }
-.workspace-sync-refresh { margin-left: auto; border: 1px solid currentColor; border-radius: 6px; background: transparent; color: inherit; padding: 5px 9px; font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
-.workspace-sync-refresh:hover { background: color-mix(in srgb, currentColor 10%, transparent); }
-.workspace-sync-notice-live { border-color: var(--status-success); background: var(--status-success-soft); color: var(--status-success); }
-.workspace-sync-notice-live span { color: var(--text-subtle); }
-.connectivity-notice {
-  position: fixed;
-  top: 12px;
-  right: 18px;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  max-width: min(440px, calc(100vw - 36px));
-  padding: 8px 11px;
-  border: 1px solid var(--status-warning);
-  border-radius: 9px;
-  background: var(--card-bg);
-  color: var(--status-warning);
-  box-shadow: 0 6px 18px rgb(0 0 0 / 14%);
-  font-size: 12px;
-}
-.connectivity-notice__logo { flex: 0 0 auto; width: auto; object-fit: contain; }
-.connectivity-notice__status-icon {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  background: rgb(255 255 255 / 58%);
-}
-.connectivity-notice__copy { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.connectivity-notice__copy strong { font-size: 11px; letter-spacing: .01em; }
-.connectivity-notice__copy span { color: var(--text-subtle); line-height: 1.35; }
-.connectivity-notice-online { border-color: var(--status-success); color: var(--status-success); }
-.connectivity-notice-offline { background: var(--status-warning-soft); }
 .price-list-loading { display: inline-flex; align-items: center; gap: 8px; }
-@media (max-width: 700px) {
-  .connectivity-notice { top: 8px; right: 8px; left: 8px; max-width: none; }
-}
-@media (max-width: 700px) {
-  .workspace-sync-notice { align-items: flex-start; flex-direction: column; gap: 2px; }
-}
 @media (max-width: 560px) {
   .home-head { align-items: flex-start; }
   .home-head-actions { align-items: flex-end; flex-direction: column; gap: 6px; }
@@ -5533,11 +5456,15 @@ button.install:hover { background: var(--primary-hover); }
 .commercial-decision-followup {
   grid-column: 2 / -1;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, .8fr);
+  /* Keep the follow-up controls under the same columns as the decision row:
+     Counter offer under ModAE standard, Customer response under Decision. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(260px, 30%);
   gap: 10px 12px;
   min-width: 0;
   padding-top: 2px;
 }
+.commercial-decision-followup label:first-child { grid-column: 2; }
+.commercial-decision-followup label:nth-child(2) { grid-column: 3; }
 .commercial-decision-followup .hint { grid-column: 1 / -1; }
 @media (max-width: 760px) {
   .proposal-commercial-decision-head { flex-direction: column; }
@@ -5546,6 +5473,8 @@ button.install:hover { background: var(--primary-hover); }
   .commercial-decision-request { padding-top: 0; }
   .commercial-decision-request { grid-template-columns: 1fr; gap: 8px; }
   .commercial-decision-followup { grid-column: 1; grid-template-columns: 1fr; }
+  .commercial-decision-followup label:first-child,
+  .commercial-decision-followup label:nth-child(2) { grid-column: 1; }
   .commercial-decision-followup .hint { grid-column: 1; }
 }
 .doc-rule {

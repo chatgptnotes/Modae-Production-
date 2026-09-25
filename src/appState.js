@@ -726,7 +726,7 @@ export function mergeLeadSlice(local = [], server = [], baseline = [], deletedId
 
 // Opportunities are shared workspace rows, but a browser can render a local
 // row before the normalized server read finishes. Merge the two snapshots so
-// hydration and realtime refreshes do not make the tracker visibly jump
+// hydration and pull refreshes do not make the tracker visibly jump
 // between different row sets. A local edit wins until it has been persisted;
 // a local delete remains a delete against the last known baseline.
 export function mergeOpportunitySlice(local = [], server = [], baseline = [], deletedIds = [], pendingIds = []) {

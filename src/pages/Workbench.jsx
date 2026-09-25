@@ -296,16 +296,6 @@ function OpportunityNotFound({ oppId }) {
   )
 }
 
-function OpportunitySyncUnavailable({ oppId }) {
-  return (
-    <div className="page">
-      <h2>Opportunity sync unavailable</h2>
-      <p className="hint">The shared workspace could not confirm opportunity <b>{oppId}</b>. Check the connection and try refreshing again.</p>
-      <Link to="/opportunities">Back to opportunities</Link>
-    </div>
-  )
-}
-
 export default function Workbench() {
   const { oppId, tab = 'overview' } = useParams()
   const store = useStore()
@@ -326,7 +316,7 @@ export default function Workbench() {
 
   if (!opp) {
     if (!store.authReady || store.liveSyncStatus === 'connecting' || store.liveSyncStatus === 'reconnecting' || recovery === 'loading' || recovery === 'idle') return <OpportunityLoading />
-    if (store.liveSyncStatus === 'error' || recovery === 'error') return <OpportunitySyncUnavailable oppId={oppId} />
+    if (store.liveSyncStatus === 'error' || recovery === 'error') return <OpportunityNotFound oppId={oppId} />
     return <OpportunityNotFound oppId={oppId} />
   }
 

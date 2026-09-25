@@ -17,8 +17,9 @@ const proposal = read('src/pages/Proposal.jsx')
 // COGS and GM — a summary of the document, never the document. The salesperson
 // and the approver both have to read what the customer will read.
 test('the Preview sub-tab renders the real document', () => {
-  assert.match(workbench, /<div className="proposal-preview-scroll">\s*<PrintDoc/,
+  assert.match(workbench, /<div className="proposal-preview-scroll">[\s\S]*<PrintDoc/,
     'Preview must render PrintDoc')
+  assert.match(workbench, /function PreviewPane\(\{ opp, openBuilder, openEditSheet \}\)/)
   assert.doesNotMatch(workbench, /<div className="section-title">Workbook preview<\/div>/,
     'the old stat card must be gone')
 })
@@ -81,7 +82,7 @@ test('an empty proposal still builds a document', () => {
   }
   const props = buildDocProps(store, 'X')
   assert.ok(props.doc, 'a document model is produced')
-  assert.deepEqual(props.totals, { cost: 0, target: 0 })
+  assert.deepEqual(props.totals, { cost: 0, listValue: 0, target: 0 })
 })
 
 // An unpriced technical bid prints no prices; selling rates on a priced bid are

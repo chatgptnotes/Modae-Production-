@@ -98,7 +98,7 @@ test('vendor quote state is backfilled and cleared with demo business records', 
 test('proposal imports PDF/enquiry line items for project and spares routes', () => {
   assert.match(proposal, /store\.leadArchive/, 'archived source enquiries must also be discoverable')
   assert.match(proposal, /opp\.rfqNumber.*l\.ref/, 'the source enquiry can be matched by reference')
-  assert.match(proposal, /routeForType\(opp\.oppType\) === 'Service'/, 'service proposals keep their separate scope flow')
+  assert.match(proposal, /\['Service', 'Spares'\]\.includes\(routeForType\(opp\.oppType\)\)/, 'service and spares proposals keep their separate workflow flows')
   assert.match(register, /routeForType\(oppType\) !== 'Service'/, 'registered project/spares proposals must carry extracted lines')
   assert.match(inbox, /routeForType\(resolvedOppType\) !== 'Service'/, 'converted project/spares proposals must carry extracted lines')
   assert.match(editor, /Bill of quantities/, 'the imported lines must appear in the editable BOQ')

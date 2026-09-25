@@ -184,7 +184,7 @@ test('Compare loads AI-ranked candidates without auto-applying them', () => {
   assert.match(spares, /runJson\('spares\.match'/)
   assert.match(spares, /onClick=\{\(\) => openCompare\(line\)\}/)
   assert.match(spares, /suggestedBy: 'AI'/)
-  assert.match(spares, /const part = byPartNumber\.get/)
+  assert.match(spares, /byPartNumber\.set\(line\.pn, result\)/)
   assert.match(spares, /onClick=\{\(\) => useAlternative\(line, a\)\}/)
   assert.match(api, /'spares\.match'/)
   assert.match(api, /function sparesMatchPrompt/)

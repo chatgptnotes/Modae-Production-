@@ -137,9 +137,9 @@ test('communications tabs stack the full-width submission form above the full-wi
   const comms = workbench.slice(commsStart, commsEnd)
 
   assert.ok(legacy.indexOf('<SubmissionPanel opp={opp} />') < legacy.indexOf('Communication log'))
-  assert.ok(comms.indexOf('<SubmissionPanel opp={opp} />') < comms.indexOf('Communication log'))
+  assert.ok(comms.indexOf('<SubmissionPanel opp={opp} readOnly={readOnly} />') < comms.indexOf('Communication log'))
   assert.match(legacy, /<div className="ana-card c-12">\s*<SubmissionPanel opp=\{opp\} \/>\s*<\/div>\s*<div className="ana-card c-12">\s*<div className="ana-title">Communication log<\/div>/s)
-  assert.match(comms, /<div className="ana-card c-12">\s*<SubmissionPanel opp=\{opp\} \/>\s*<\/div>\s*<div className="ana-card c-12">\s*<div className="ana-title">Communication log<\/div>/s)
+  assert.match(comms, /<div className="ana-card c-12">\s*<SubmissionPanel opp=\{opp\} readOnly=\{readOnly\} \/>\s*<\/div>\s*<div className="ana-card c-12">\s*<div className="ana-title">Communication log<\/div>/s)
 })
 
 test('commercial decisions appear before sourcing, not inside the proposal editor', () => {
@@ -177,8 +177,9 @@ test('approval is shown in an opportunity rail only while its request is pending
   assert.match(workbench, /step\.milestone !== 'Approval' \|\| approvalPending/)
   assert.match(workbench, /hiddenApprovalRequested/)
   assert.match(workbench, /replace: true/)
-  assert.match(workbench, /workflowBySlug\[WORKFLOW_STEP_BY_TAB\[tab\]\] \? WORKFLOW_STEP_BY_TAB\[tab\] : null/)
-  assert.match(workbench, /const hiddenApprovalTab = tab === 'approval'/)
+  assert.match(workbench, /const requestedWorkflowStep = workflowBySlug\[requestedStep\]/)
+  assert.match(workbench, /const activeStepConfig = workflowBySlug\[activeStep\]/)
+  assert.match(workbench, /!activeStepConfig && viewTab === 'approvals'/)
 })
 
 test('the compact lifecycle stepper exposes every displayed stage as selectable', () => {

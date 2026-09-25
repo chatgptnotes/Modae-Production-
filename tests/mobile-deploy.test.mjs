@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
+import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 import { seedPoCompare } from '../src/seed.js'
@@ -89,7 +90,9 @@ test('approval BOQ opens a read-only details popup without navigation', () => {
   assert.match(approvals, /<table className="approval-boq-table" aria-readonly="true">/)
   assert.match(approvals, /className="approval-boq-group-row"/)
   assert.match(approvals, /<th colSpan=\{5\}>Specification<\/th>/)
-  assert.match(approvals, /<th scope="col">COGS \(₹\)<\/th><th scope="col">GM \(₹\)<\/th><th scope="col">Price source<\/th>/)
+  assert.match(approvals, /<th scope="col" className="num">COGS \(₹\)<\/th>/)
+  assert.match(approvals, /<th scope="col" className="num">GM \(₹\)<\/th>/)
+  assert.match(approvals, /<th scope="col">Price source<\/th>/)
   assert.match(approvals, /No BOQ lines are available for this opportunity\./)
   assert.match(approvals, /onClose=\{\(\) => setBoqOppId\('\'\)\}/)
   assert.doesNotMatch(approvals, /approval-boq-link" onClick=\{\(\) => nav\('\/proposal\//)
@@ -224,7 +227,7 @@ test('compact sidebar keeps the official logo and expand control visible', () =>
   assert.match(css, /\.sidebar-compact \.brand {[^}]*min-height: 64px/)
   assert.match(css, /\.sidebar-compact \.brand \.modae-logo {[^}]*width: 36px/)
   assert.match(css, /\.sidebar-compact \.sidebar-toggle {[^}]*position: absolute/)
-  assert.match(css, /\.sidebar-compact \.sidebar-toggle {[^}]*right: 4px/)
+  assert.match(css, /\.shell\.sidebar-compact:not\(\.tablet-mode\) > \.sidenav \.sidebar-toggle \{[\s\S]*right: -1\.45rem/)
 })
 
 // Scenario 6 opened on "no PO received" and needed a Simulate click first.
@@ -266,7 +269,8 @@ test('env files stay out of the repository', () => {
   const ignored = read('.gitignore')
   assert.match(ignored, /^\.env$/m)
   assert.match(ignored, /^\.env\.\*$/m)
-  assert.ok(!fs.existsSync(path.join(root, '.env')), 'a real .env must not be committed')
+  const tracked = spawnSync('git', ['ls-files', '--error-unmatch', '.env'], { cwd: root, encoding: 'utf8' })
+  assert.notEqual(tracked.status, 0, 'a real .env must not be tracked; local ignored files are allowed')
 })
 
 test('the SPA rewrite is in place for deep-link refreshes', () => {

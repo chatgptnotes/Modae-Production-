@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import * as filestore from './filestore.js'
 import * as datastore from './datastore.js'
 import * as leadBlobs from './leadBlobs.js'
@@ -258,7 +259,7 @@ function applyApprovalEffects(s, appr) {
 // Submitted, and later milestones must never move backward.
 function reconcileApprovedSubmissions(s) {
   // Approval and proposal rows are persisted separately in Supabase. A
-  // realtime/focus refresh can therefore briefly deliver the approved
+  // pull/focus refresh can therefore briefly deliver the approved
   // decision without the proposal mutation written by applyApprovalEffects
   // (and older clients may never have written that mutation at all). Rebuild
   // the release marker from the authoritative approval row so the submission
@@ -305,6 +306,7 @@ function reconcileApprovedSubmissions(s) {
 }
 
 export function StoreProvider({ children }) {
+  const location = useLocation()
   const [state, setState] = useState(initialState)
   const [authReady, setAuthReady] = useState(() => !supabase || !!state.auth?.user)
   const [liveSyncStatus, setLiveSyncStatus] = useState(() => supabaseConfigError ? 'config-error' : datastore.dbEnabled() ? 'connecting' : 'offline')
@@ -343,10 +345,10 @@ export function StoreProvider({ children }) {
     persistLocalSnapshot(stateRef.current)
     clearTimeout(saveTimerRef.current)
     saveTimerRef.current = null
-    if (!hydratedRef.current) return
+    if (!hydratedRef.current) return Promise.resolve()
     const dirty = dirtySlices()
-    if (!Object.keys(dirty).length) return
-    datastore.saveSlices(dirty)
+    if (!Object.keys(dirty).length) return Promise.resolve()
+    return datastore.saveSlices(dirty)
       .then(() => {
         setLiveSyncStatus('live')
         const current = stateRef.current
@@ -604,58 +606,6 @@ export function StoreProvider({ children }) {
     setState(merged)
   }
 
-  const applyRealtimeRows = rows => {
-    if (!Array.isArray(rows) || !rows.length) return { refreshRequired: false, priceListsChanged: false }
-    const current = stateRef.current
-    const slices = {}
-    const arrays = {}
-    const objects = {}
-    let refreshRequired = false
-    let priceListsChanged = false
-    const arrayKeyFor = table => ['leads', 'opportunities', 'approvals'].includes(table) ? table : null
-    const recordArrayKey = entity => ({ spares_lines: 'sparesLines', clarifications: 'clarifications', audit: 'audit' })[entity]
-
-    for (const row of rows) {
-      const directKey = arrayKeyFor(row.table)
-      const arrayKey = directKey || recordArrayKey(row.entity)
-      if (arrayKey) {
-        if (!arrays[arrayKey]) arrays[arrayKey] = [...(current[arrayKey] || [])]
-        arrays[arrayKey] = arrays[arrayKey].filter(item => item?.id !== row.id)
-        if (!row.deleted && row.data) arrays[arrayKey].push(row.data)
-        continue
-      }
-      if (row.entity === 'proposals') {
-        if (!objects.proposals) objects.proposals = { ...(current.proposals || {}) }
-        if (row.deleted) delete objects.proposals[row.id]
-        else if (row.data) objects.proposals[row.id] = row.data
-        continue
-      }
-      if (row.entity === 'state') {
-        // State rows are one shared slice per records.id. A deleted state row
-        // has no reliable type information, so use the authoritative loader
-        // instead of guessing whether its value was an array or object.
-        if (row.deleted) refreshRequired = true
-        else if (row.data && row.id) slices[row.id] = row.data
-        continue
-      }
-      if (row.entity === 'settings' && row.id === 'config') {
-        if (row.deleted) refreshRequired = true
-        else if (row.data) slices.config = row.data
-        continue
-      }
-      if (row.entity === 'price_lists' || row.entity === 'price_list_versions') {
-        priceListsChanged = true
-        continue
-      }
-      // Keep a correctness-first fallback for a newly introduced records
-      // entity or a deletion whose shape cannot be applied locally.
-      refreshRequired = true
-    }
-    Object.assign(slices, arrays, objects)
-    if (Object.keys(slices).length) applyServer(slices, null, { allowEmptyBusinessSlices: true })
-    return { refreshRequired, priceListsChanged }
-  }
-
   const loadApprovedPriceLists = async ({ force = false } = {}) => {
     const cached = datastore.readPriceListsCache()
     if (cached && !Object.keys(stateRef.current.priceLists || {}).length) {
@@ -686,6 +636,19 @@ export function StoreProvider({ children }) {
     }
   }
 
+  const pullSharedData = async () => {
+    if (!datastore.dbEnabled()) return false
+    await flushSaves()
+    const res = await datastore.loadAll({ force: true })
+    if (!res) { setLiveSyncStatus('error'); return false }
+    if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
+    if (res.error) { setLiveSyncStatus('error'); return false }
+    if (res.empty) { setLiveSyncStatus('degraded'); return false }
+    setLiveSyncStatus('live')
+    applyServer(res.slices, res.diagnostics)
+    return true
+  }
+
   useEffect(() => {
     if (!datastore.dbEnabled()) return
     hydrate()
@@ -699,26 +662,21 @@ export function StoreProvider({ children }) {
       // pulling a newer server snapshot. The dirty local slice remains
       // protected by lastSavedRef until this succeeds.
       flushSaves()
-      datastore.loadAll({ force: true })
-        .then(res => {
-          if (!res) { setLiveSyncStatus('error'); return }
-          if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
-          if (res.error) { setLiveSyncStatus('error'); return }
-          if (!res.empty) applyServer(res.slices, res.diagnostics)
-        })
+      pullSharedData()
         .catch(() => setLiveSyncStatus('error'))
     }
-    const onVisibility = () => { if (document.visibilityState === 'hidden') { flushLocalCache(); flushSaves() } }
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        flushLocalCache(); flushSaves()
+      } else if (hydratedRef.current) {
+        flushSaves()
+        pullSharedData().catch(() => setLiveSyncStatus('error'))
+      }
+    }
     const onOnline = () => {
       if (!hydratedRef.current) { hydrate(); return }
       flushSaves()
-      datastore.loadAll({ force: true })
-        .then(res => {
-          if (!res) { setLiveSyncStatus('error'); return }
-          if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
-          if (res.error) { setLiveSyncStatus('error'); return }
-          if (!res.empty) { applyServer(res.slices, res.diagnostics); setLiveSyncStatus('live') }
-        })
+      pullSharedData()
         .catch(() => setLiveSyncStatus('error'))
     }
     // visibilitychange is not reliably delivered when the page is being torn
@@ -736,61 +694,14 @@ export function StoreProvider({ children }) {
     }
   }, [])
 
-  // Keep open devices in step without downloading the whole workspace for
-  // every database event. Several events can arrive for one approval, so
-  // coalesce them and fetch only the affected rows. A burst falls back to one
-  // full refresh so correctness remains stronger than the egress optimization.
+  // Pull the shared snapshot after route navigation. The store remains the
+  // single merge/conflict boundary, so page components do not need separate
+  // Supabase loaders or their own offline/error handling.
   useEffect(() => {
-    if (!datastore.dbEnabled()) return
-    let reloadTimer = null
-    let pendingEvents = []
-    let lastFullRefresh = 0
-    const fullRefresh = () => {
-      if (Date.now() - lastFullRefresh < 15000) return
-      lastFullRefresh = Date.now()
-      datastore.loadAll({ force: true })
-        .then(res => {
-          if (res?.diagnostics) setSyncDiagnostics(res.diagnostics)
-          if (res?.error) { setLiveSyncStatus('reconnecting'); return }
-          if (res && !res.empty) applyServer(res.slices, res.diagnostics)
-        })
-        .catch(() => setLiveSyncStatus('reconnecting'))
-    }
-    const reload = event => {
-      pendingEvents.push(event)
-      if (reloadTimer) return
-      reloadTimer = setTimeout(() => {
-        reloadTimer = null
-        const events = pendingEvents
-        pendingEvents = []
-        if (!hydratedRef.current) { hydrate(); return }
-        if (events.length > 12) {
-          fullRefresh()
-          return
-        }
-        datastore.loadChangedRows(events)
-          .then(rows => {
-            const result = applyRealtimeRows(rows)
-            if (result?.priceListsChanged) loadApprovedPriceLists({ force: true })
-            if (result?.refreshRequired) fullRefresh()
-          })
-          .catch(() => fullRefresh())
-      }, 1000)
-    }
-    const unsubscribe = datastore.subscribeBusinessChanges(reload, status => {
-      if (status === 'SUBSCRIBED') {
-        setLiveSyncStatus('live')
-      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-        setLiveSyncStatus('reconnecting')
-        console.warn(`Live workspace sync unavailable (${status}); changes will refresh on focus.`)
-      }
-    })
-    return () => {
-      if (reloadTimer) clearTimeout(reloadTimer)
-      pendingEvents = []
-      unsubscribe()
-    }
-  }, [])
+    if (!datastore.dbEnabled() || !hydratedRef.current) return
+    flushSaves()
+    pullSharedData().catch(() => setLiveSyncStatus('error'))
+  }, [location.pathname])
 
   useEffect(() => {
     // An uncaught throw here (quota, storage disabled) would kill persistence
@@ -1644,8 +1555,8 @@ export function StoreProvider({ children }) {
       })
       // Decisions are coordination events, not ordinary draft edits.  Start
       // persistence on the next turn (after React has committed state) instead
-      // of waiting for the normal 1.5s debounce; realtime then updates every
-      // other open device immediately.
+      // of waiting for the normal 1.5s debounce; other devices pull the update
+      // on their next route, focus, visibility, reconnect, or manual refresh.
       setTimeout(flushSaves, 0)
     },
 

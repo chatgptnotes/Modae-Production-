@@ -11,7 +11,6 @@ import BrandWatermark from './branding/BrandWatermark.jsx'
 import { startAutoTitle } from './autoTitle.js'
 import { computeAlerts } from './monitoring.js'
 import { RequireAuth } from './pages/Login.jsx'
-import { supabaseProjectRef } from './supabase.js'
 import { lazyWithRecovery } from './lazyImport.js'
 
 const Opportunities = lazyWithRecovery(() => import('./pages/Opportunities.jsx'))
@@ -49,47 +48,6 @@ const LoadingScreen = ({ label = 'Loading workspace…' }) => (
     </div>
   </div>
 )
-
-function ConnectivityNotice() {
-  const [online, setOnline] = useState(() => typeof navigator === 'undefined' ? true : navigator.onLine)
-  const [reconnected, setReconnected] = useState(false)
-
-  useEffect(() => {
-    let reconnectTimer = null
-    const onOffline = () => {
-      if (reconnectTimer) clearTimeout(reconnectTimer)
-      setReconnected(false)
-      setOnline(false)
-    }
-    const onOnline = () => {
-      setOnline(true)
-      setReconnected(true)
-      reconnectTimer = setTimeout(() => setReconnected(false), 4500)
-    }
-    window.addEventListener('offline', onOffline)
-    window.addEventListener('online', onOnline)
-    return () => {
-      if (reconnectTimer) clearTimeout(reconnectTimer)
-      window.removeEventListener('offline', onOffline)
-      window.removeEventListener('online', onOnline)
-    }
-  }, [])
-
-  if (online && !reconnected) return null
-  const restored = online && reconnected
-  return (
-    <div className={`connectivity-notice ${restored ? 'connectivity-notice-online' : 'connectivity-notice-offline'}`} role="status" aria-live="polite" aria-atomic="true">
-      <ModaeImageLogo height={20} className="connectivity-notice__logo" />
-      <span className="connectivity-notice__status-icon" aria-hidden="true"><Icon name="wifi" size={14} /></span>
-      <div className="connectivity-notice__copy">
-        <strong>{restored ? 'Back online' : 'Offline mode'}</strong>
-        <span>{restored
-          ? 'Reconnecting to the shared workspace…'
-          : 'Changes are saved locally and will sync when you’re back online.'}</span>
-      </div>
-    </div>
-  )
-}
 
 function PageGate({ page, children }) {
   const store = useStore()
@@ -332,34 +290,6 @@ const NAV = [
   { section: 'Admin & more', to: '/users', label: 'Users and roles', icon: 'shield', page: 'users' },
 ]
 
-function SyncNotice({ status, diagnostics, onRefresh }) {
-  if (!['config-error', 'error', 'degraded', 'live', 'connecting', 'reconnecting', 'offline'].includes(status)) return null
-  const config = status === 'config-error'
-  const offline = status === 'offline'
-  const emptyWorkspace = status === 'degraded' || (status === 'live' && diagnostics?.normalizedOpportunityCount === 0)
-  const healthy = status === 'live' && !emptyWorkspace
-  if (healthy) return null
-  const stateLabel = emptyWorkspace ? 'Shared workspace returned no active records' : status === 'connecting' ? 'Connecting to shared workspace' : status === 'reconnecting' ? 'Reconnecting to shared workspace' : offline ? 'Local-only workspace' : config ? 'Supabase configuration mismatch' : 'Supabase sync unavailable'
-  const detail = diagnostics?.lastLoadError || diagnostics?.lastSaveError
-  return (
-    <div className={`workspace-sync-notice workspace-sync-notice-${healthy ? 'live' : 'warning'}`} role={healthy ? 'status' : 'alert'} title={supabaseProjectRef ? `Supabase project: ${supabaseProjectRef}` : undefined}>
-      <strong>{stateLabel}</strong>
-      <span>{healthy
-        ? `Project ${supabaseProjectRef || 'not configured'} · active rows are loaded from Supabase.`
-        : emptyWorkspace
-            ? `Project ${supabaseProjectRef || 'unknown'} · check the Vercel Supabase variables, project, and RLS policies.`
-            : offline
-              ? 'This browser cannot share changes until Supabase is configured.'
-              : config
-              ? 'The URL and anon key point to different projects. This browser is showing local data only.'
-              : status === 'connecting' || status === 'reconnecting'
-                ? `Project ${supabaseProjectRef || 'not configured'} · loading the shared workspace in the background.`
-                : `The shared workspace could not be loaded. ${detail ? `${detail.message || detail.code || 'Request failed'}. ` : ''}This browser may be showing local data only.`}</span>
-      {onRefresh && !offline && !config && <button type="button" className="workspace-sync-refresh" onClick={onRefresh}>Refresh shared data</button>}
-    </div>
-  )
-}
-
 export default function App() {
   const store = useStore()
   const nav = useNavigate()
@@ -380,7 +310,7 @@ export default function App() {
   const items = NAV
     .filter(t => canSeePage(role, t.page) && (typeof t.show !== 'function' || t.show(role)))
     .map(t => t.to === '/po' && isSalesOwner(role) ? { ...t, label: 'My Purchase Orders' } : t)
-  const withConnectivity = content => <><ConnectivityNotice />{content}</>
+  const withConnectivity = content => content
 
   // Off-canvas nav closes on navigation in the responsive desktop shell.
   useEffect(() => { setNavOpen(false) }, [loc.pathname])
@@ -511,7 +441,6 @@ export default function App() {
           <Icon name="menu" size={20} />
         </button>
         <NotificationBell store={store} nav={nav} />
-        <SyncNotice status={store.liveSyncStatus} diagnostics={store.syncDiagnostics} onRefresh={store.refreshSharedData} />
         {/* The shell is viewport-locked, so this is the app's single scroll
             region — pages that want their own internal scroller (the pipeline
             sheet, the mailbox list) size themselves to 100% of it. */}

@@ -130,7 +130,7 @@ test('tracker offers all, mine, and specific-owner filtering', () => {
 })
 
 test('tracker makes the loaded-row count and empty-view cause explicit', () => {
-  assert.match(tracker, /const resultCountLabel = rows\.length === base\.length/)
+  assert.match(tracker, /const resultCountLabel = workspaceLoading[\s\S]*rows\.length === base\.length/)
   assert.match(tracker, /className="tracker-result-count" aria-live="polite"/)
   assert.match(tracker, /No opportunities are loaded for this view\./)
   assert.match(tracker, /All Opportunities is selected; the workspace currently contains no rows to display\./)

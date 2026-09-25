@@ -29,62 +29,6 @@ export const DEDICATED_ENTITIES = {
 
 const dedicatedTableFor = entity => DEDICATED_ENTITIES[entity] || null
 
-// Shared business records are normally refreshed on focus. Postgres Changes
-// provides a small, authoritative nudge while the row-level loader below
-// keeps that nudge from downloading the entire workspace. Subscribe to the
-// whole records table because it contains several shared entities (not just
-// proposals); the row loader and store decide how each entity is applied.
-export function subscribeBusinessChanges(onChange, onStatus = () => {}) {
-  if (!supabase) return () => {}
-  let channel = supabase
-    .channel('modae-workspace-business')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, payload => onChange({ table: 'leads', payload }))
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'approvals' }, payload => onChange({ table: 'approvals', payload }))
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'opportunities' }, payload => onChange({ table: 'opportunities', payload }))
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'records' }, payload => onChange({ table: 'records', payload }))
-  Object.values(DEDICATED_ENTITIES).forEach(table => {
-    channel = channel.on('postgres_changes', { event: '*', schema: 'public', table }, payload => onChange({ table, payload }))
-  })
-  channel = channel.subscribe(status => onStatus(status))
-  return () => { supabase.removeChannel(channel) }
-}
-
-const realtimeEntityFor = table => table
-
-// Resolve realtime events to only the affected row. The event payload is not
-// used as the source of truth because projects without REPLICA IDENTITY FULL
-// may omit the complete row, especially for updates and deletes.
-export async function loadChangedRows(events = []) {
-  if (!supabase) return []
-  const unique = new Map()
-  for (const event of events) {
-    const payload = event?.payload || {}
-    const source = payload.new || payload.old || {}
-    const recordEvent = event.table === 'records'
-    const entity = recordEvent ? (source.entity || 'proposals') : realtimeEntityFor(event.table)
-    const id = source.id
-    if (entity && id != null) unique.set(`${entity}|${id}`, { table: recordEvent ? 'records' : (dedicatedTableFor(entity) || event.table), entity, id: String(id) })
-  }
-  const rows = await Promise.all([...unique.values()].map(async target => {
-    let query = supabase.from(target.table === 'records' ? 'records' : target.table)
-      .select('id, data, rev, deleted_at')
-      .eq('id', target.id)
-    if (target.table === 'records') query = query.eq('entity', target.entity)
-    const result = await query.maybeSingle()
-    if (result.error) throw result.error
-    const row = result.data
-    return {
-      table: target.table,
-      entity: target.entity,
-      id: target.id,
-      data: row?.data || null,
-      rev: Number(row?.rev) || 0,
-      deleted: !row || !!row.deleted_at,
-    }
-  }))
-  return rows
-}
-
 // Focus/live-sync events can arrive close together. Reusing a short-lived
 // read avoids transferring the same workspace payload repeatedly while still
 // refreshing promptly after a save or the next focus interval.
@@ -114,6 +58,16 @@ const normalizedSaveQueues = new Map()
 let saveSlicesQueue = Promise.resolve()
 const MAX_CONFLICT_RETRIES = 3
 const normalizedKey = (entity, id) => `${entity}|${id}`
+
+async function currentActorId() {
+  if (!supabase?.auth) return null
+  try {
+    const { data } = await supabase.auth.getUser()
+    return data?.user?.id || null
+  } catch {
+    return null
+  }
+}
 const clearNormalizedEntity = entity => {
   const prefix = `${entity}|`
   for (const key of normalizedRecords.keys()) if (key.startsWith(prefix)) {
@@ -180,12 +134,13 @@ async function loadConsolidatedState() {
 
 async function saveConsolidatedRows(entity, rows, label) {
   if (!rows.length) return []
+  const actor = await currentActorId()
   const localById = new Map(rows.map(row => [row.id, row]))
   let pending = rows
   for (let attempt = 0; attempt <= MAX_CONFLICT_RETRIES; attempt += 1) {
     const result = await supabase.rpc('save_rows', {
       p_entity: entity,
-      p_rows: pending,
+      p_rows: pending.map(row => ({ ...row, by: actor })),
     })
     if (result.error) throw result.error
     const conflicts = Array.isArray(result.data?.conflicts) ? result.data.conflicts : []
@@ -341,7 +296,7 @@ export async function loadPriceListVersion(listCode, versionCode) {
 export async function loadAll({ force = false } = {}) {
   if (!supabase) return null
   if (!force && loadCache && Date.now() - loadCacheAt < LOAD_CACHE_MS) return loadCache
-  // A realtime event must not settle for a request that started before the
+  // A forced pull must not settle for a request that started before the
   // event arrived. Wait for that request, then issue a fresh read so the
   // dashboard cannot render a stale snapshot after a remote opportunity edit.
   if (loadInFlight) {
@@ -388,7 +343,7 @@ export async function loadOpportunity(id) {
 }
 
 // Secondary startup path. This deliberately reuses the complete loader so
-// focus/realtime refreshes continue to have one authoritative code path.
+// focus and route refreshes continue to have one authoritative code path.
 export async function loadBackground() {
   return loadAll({ force: true })
 }
@@ -624,6 +579,7 @@ function normalizedPayload(entity, rows, deletedIds = []) {
 }
 
 async function saveNormalizedRowsNow(entity, rows) {
+  const actor = await currentActorId()
   const localById = new Map(rows.map(row => [row.id, row]))
   const prefix = `${entity}|`
   const deletedIds = [...normalizedRecords.keys()]
@@ -631,7 +587,7 @@ async function saveNormalizedRowsNow(entity, rows) {
     .map(key => key.slice(prefix.length))
     .filter(id => !localById.has(id))
   const write = async payload => {
-    const result = await supabase.rpc('save_rows', { p_entity: entity, p_rows: payload })
+    const result = await supabase.rpc('save_rows', { p_entity: entity, p_rows: payload.map(row => ({ ...row, by: actor })) })
     if (result.error) throw result.error
     return result.data || { conflicts: [] }
   }
@@ -689,6 +645,7 @@ function opportunityPayload(rows, deletedIds = []) {
 }
 
 async function saveOpportunityRowsNow(rows) {
+  const actor = await currentActorId()
   const changedRows = rows.filter(row => {
     const previous = opportunityRecords.get(row.id)
     return !previous || JSON.stringify(previous.data) !== JSON.stringify(row)
@@ -703,7 +660,7 @@ async function saveOpportunityRowsNow(rows) {
   if (!changedRows.length && !deletedIds.length) return
 
   const write = async payload => {
-    const result = await supabase.rpc('save_rows', { p_entity: 'opportunities', p_rows: payload })
+    const result = await supabase.rpc('save_rows', { p_entity: 'opportunities', p_rows: payload.map(row => ({ ...row, by: actor })) })
     if (result.error) throw result.error
     return result.data || { accepted: [], conflicts: [] }
   }

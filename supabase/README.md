@@ -26,6 +26,10 @@ rollback copy. Historical setup and
 backfill scripts are kept locally under `.local/backups/supabase/` and are not
 part of the application deployment path.
 
+The browser uses pull-based synchronization only. Runtime code refreshes the
+active workspace on boot, route changes, focus/visibility restoration,
+reconnect, and explicit refresh; it does not subscribe to Supabase Realtime.
+
 For a completely new Supabase project, run [`000_fresh_project.sql`](./000_fresh_project.sql)
 first, then run `007_live_workspace_sync.sql`, `008_dedicated_workspace_tables.sql`,
 and `009_relational_workspace_data.sql`. Migration 009 includes the relational

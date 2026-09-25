@@ -75,7 +75,8 @@ test('the folder panels are read-only and never take gated decisions', () => {
   assert.doesNotMatch(panelSource, /store\.updateOpportunity\(/,
     'panels must not update opportunities directly')
   // Each panel instead routes to the workbench tab that owns the action.
-  assert.match(panelSource, /\/opp\/\$\{opp\.id\}\/approvals/)
+  assert.match(panelSource, /Approvals on this opportunity/)
+  assert.match(panelSource, /<table className="sheet">/)
   assert.match(panelSource, /\/opp\/\$\{opp\.id\}\/customer/)
 })
 

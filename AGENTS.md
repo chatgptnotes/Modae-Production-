@@ -155,6 +155,9 @@ directory convention, or validation requirement changes.
 ## Current known boundaries
 
 - Some AI and automation entries intentionally remain deterministic previews.
+- Shared database synchronization is pull-based only: boot, route changes,
+  focus/visibility restoration, reconnect, and explicit refresh. Do not add
+  Supabase Realtime or WebSocket subscriptions for workspace synchronization.
 - Proposal PDF generation currently uses the browser print flow.
 - Server-side email sending is available through the Vercel route and remains
   approval-gated in the UI.

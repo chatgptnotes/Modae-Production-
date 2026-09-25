@@ -154,6 +154,6 @@ test('signal list and rack layout tabs are hidden off the project route', () => 
   assert.match(proposal, /Project: \['Cover Letter', 'Edit Sheet', 'Document', 'Signal List', 'Rack Layout', 'Priced BoQ'\]/)
   assert.match(proposal, /Services: \['Cover Letter', 'Edit Sheet', 'Document', 'Scope of Work', 'Issues List', 'Proposal', 'Service Rate Schedule'\]/)
   assert.match(proposal, /Spares: \['Cover Letter', 'Edit Sheet', 'Document', 'Firm Offer', 'Clarifications', 'Sensor Comparison', 'Priced BoQ'\]/)
-  assert.match(proposal, /const visibleTabs = ROUTE_TABS\[route\]/)
+  assert.match(proposal, /const visibleTabs = \(ROUTE_TABS\[route\] \|\| ROUTE_TABS\.Project\)/)
   assert.match(proposal, /visibleTabs\.map/, 'the tab bar must render the filtered list')
 })

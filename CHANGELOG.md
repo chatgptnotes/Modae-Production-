@@ -5,6 +5,11 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Replaced runtime Supabase Realtime synchronization with pull-based refreshes
+  on boot, route changes, focus/visibility restoration, reconnect, and explicit
+  refresh. Shared writes now include the authenticated Supabase user ID as
+  `updated_by` where available.
+
 - Customer-facing proposal Excel Terms & Conditions now replace only the
   matching clause for a resolved commercial deviation: accepted customer terms
   or accepted counter-offers are carried through, while unrelated ModAE

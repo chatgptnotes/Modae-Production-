@@ -4,28 +4,17 @@ import test from 'node:test'
 
 const read = file => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
 
-test('the shared workspace subscribes to the rows that can resolve a release', () => {
+test('the shared workspace uses pull-based refreshes for all shared slices', () => {
   const datastore = read('src/datastore.js')
-  assert.match(datastore, /subscribeBusinessChanges/)
-  assert.match(datastore, /table: 'leads'/)
-  assert.match(datastore, /table: 'approvals'/)
-  assert.match(datastore, /table: 'opportunities'/)
-  assert.match(datastore, /table: 'records'/)
-  assert.doesNotMatch(datastore, /filter: 'entity=eq\.proposals'/)
-  assert.match(datastore, /loadChangedRows/)
-  assert.match(datastore, /select\('id, data, rev, deleted_at'\)/)
+  assert.doesNotMatch(datastore, /postgres_changes|subscribeBusinessChanges|loadChangedRows|\.channel\(/)
+  assert.match(datastore, /loadAll\(\{ force = false \} = \{\}\)/)
+  assert.match(datastore, /\.is\('deleted_at', null\)/)
 
   const store = read('src/store.jsx')
-  assert.match(store, /datastore\.subscribeBusinessChanges\(reload/)
-  assert.match(store, /datastore\.loadChangedRows\(events\)/)
-  assert.match(store, /events\.length > 12/)
-  assert.match(store, /setTimeout\(.*1000\)/s)
-  assert.match(store, /entity === 'state'/)
-  assert.match(store, /entity === 'settings' && row\.id === 'config'/)
-  assert.match(store, /price_list_versions/)
-  assert.match(store, /refreshRequired/)
-  assert.match(store, /loadApprovedPriceLists\(\{ force: true \}\)/)
-  assert.match(store, /Date\.now\(\) - lastFetch < 45000/)
+  assert.match(store, /const location = useLocation\(\)/)
+  assert.match(store, /useEffect\(\(\) => \{[\s\S]*pullSharedData\(\)[\s\S]*\}, \[location\.pathname\]\)/)
+  assert.match(store, /window\.addEventListener\('focus'/)
+  assert.match(store, /document\.addEventListener\('visibilitychange'/)
   assert.match(store, /async refreshSharedData\(\)/)
   assert.match(store, /setTimeout\(flushSaves, 0\)/,
     'approval decisions must bypass the ordinary draft-save debounce')
@@ -47,6 +36,8 @@ test('normalized opportunity writes fail loudly instead of falling back to ignor
   const datastore = read('src/datastore.js')
   assert.match(datastore, /function saveNormalizedRowsNow\(entity, rows\)/)
   assert.match(datastore, /supabase\.rpc\('save_rows'/)
+  assert.match(datastore, /currentActorId\(\)/)
+  assert.match(datastore, /p_rows: payload\.map\(row => \(\{ \.\.\.row, by: actor \}\)\)/)
   assert.match(datastore, /if \(result\.error\) throw result\.error/)
 })
 
@@ -92,10 +83,8 @@ test('empty workspace hydration flushes leads created during startup', () => {
 
 test('save failures expose the Supabase error in sync diagnostics', () => {
   const store = read('src/store.jsx')
-  const app = read('src/App.jsx')
   assert.match(store, /lastSaveError: saveError/)
   assert.match(store, /message: e\?\.message \|\| 'Supabase save failed'/)
-  assert.match(app, /diagnostics\?\.lastLoadError \|\| diagnostics\?\.lastSaveError/)
 })
 
 test('focus retries dirty writes before refreshing shared data', () => {
@@ -103,7 +92,7 @@ test('focus retries dirty writes before refreshing shared data', () => {
   const focus = store.slice(store.indexOf('const onFocus = () => {'), store.indexOf('const onVisibility = () =>'))
   assert.match(focus, /if \(!hydratedRef\.current\) \{ hydrate\(\); return \}/)
   assert.match(focus, /flushSaves\(\)/)
-  assert.match(focus, /datastore\.loadAll\(\{ force: true \}\)/)
+  assert.match(focus, /pullSharedData\(\)/)
 })
 
 test('pending opportunity IDs stay local-only and are persisted in the browser snapshot', () => {
@@ -126,7 +115,7 @@ test('deep-link opportunity recovery reads the normalized opportunity row direct
   assert.match(store, /async recoverOpportunity\(id\)/)
   assert.match(store, /datastore\.loadOpportunity\(id\)/)
   assert.match(workbench, /store\.recoverOpportunity\(oppId\)/)
-  assert.match(workbench, /Opportunity sync unavailable/)
+  assert.match(workbench, /OpportunityNotFound/)
 })
 
 test('row conflicts use bounded latest-save-wins retries', () => {
@@ -158,19 +147,22 @@ test('price-list loading keeps a usable cached catalogue when the shared copy is
   assert.match(priceLists, /showing the last cached copy/)
 })
 
-test('forced realtime reads wait out an older request before fetching fresh data', () => {
+test('forced pull reads wait out an older request before fetching fresh data', () => {
   const datastore = read('src/datastore.js')
   assert.match(datastore, /if \(loadInFlight\) \{[\s\S]*const pending = loadInFlight[\s\S]*return force \? pending\.then\(\(\) => loadAll\(\{ force: true \}\)\)/)
 })
 
-test('the store exposes live sync state for dashboard status', () => {
+test('the store retains internal sync state without rendering status messaging', () => {
   const store = read('src/store.jsx')
   const dashboard = read('src/pages/MyDashboard.jsx')
   assert.match(store, /useState\(\(\) => supabaseConfigError \? 'config-error' : datastore\.dbEnabled\(\) \? 'connecting' : 'offline'\)/)
   assert.match(store, /setLiveSyncStatus\('live'\)/)
   assert.match(store, /StoreCtx\.Provider value=\{\{ \.\.\.api, authReady, liveSyncStatus, syncDiagnostics \}\}/)
-  assert.match(dashboard, /LiveSyncBadge/)
-  assert.match(dashboard, /store\.liveSyncStatus/)
+  assert.doesNotMatch(dashboard, /LiveSyncBadge|store\.liveSyncStatus|Local only|Sync error|Reconnecting/)
+  const app = read('src/App.jsx')
+  assert.doesNotMatch(app, /SyncNotice|workspace-sync-notice|Supabase sync unavailable|local data only/)
+  const workbench = read('src/pages/Workbench.jsx')
+  assert.doesNotMatch(workbench, /OpportunitySyncUnavailable|shared workspace could not confirm/)
 })
 
 test('refresh safety retains local data on quota failures and empty full responses', () => {
@@ -180,7 +172,6 @@ test('refresh safety retains local data on quota failures and empty full respons
   assert.match(store, /const unexpectedEmptyBusinessSlice/)
   assert.match(store, /Ignoring empty \$\{k\} refresh response/)
   assert.match(store, /Supabase returned an empty workspace; local data was preserved/)
-  assert.match(store, /allowEmptyBusinessSlices: true/)
 })
 
 test('boot does not delete the active browser snapshot before reading it', () => {

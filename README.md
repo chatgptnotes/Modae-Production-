@@ -19,11 +19,13 @@ submission, and follow-up.
 
 - React 18 and Vite
 - React Router
-- Supabase Auth, realtime sync, and database persistence
+- Supabase Auth, pull-based database synchronization, and persistence
 - Vercel serverless API routes
 - ExcelJS, PDF.js, and XLSX utilities for proposal and document workflows
 
-The application can run locally without Supabase. In that mode it uses the
+The application pulls shared state from Supabase on boot, route changes,
+window focus/visibility restoration, reconnect, and explicit refresh. It does
+not use Supabase Realtime or WebSockets. The application can run locally without Supabase. In that mode it uses the
 local demo state and does not write to a database. A configured Supabase
 environment enables authentication and cloud persistence.
 

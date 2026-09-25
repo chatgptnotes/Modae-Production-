@@ -186,14 +186,40 @@ from public.records r
 where r.entity = 'lead_items' and r.deleted_at is null
 on conflict (id) do nothing;
 
-insert into public.opportunity_items (id, opportunity_id, item_type, part_number, description, quantity, unit_price, currency, metadata)
-select coalesce(nullif(data->>'id', ''), md5(data::text)), data->>'oppId',
-       coalesce(data->>'itemType', 'spares'), data->>'pn', data->>'desc',
-       case when data->>'qty' ~ '^-?[0-9]+(\\.[0-9]+)?$' then (data->>'qty')::numeric end,
-       case when data->>'listUnitPrice' ~ '^-?[0-9]+(\\.[0-9]+)?$' then (data->>'listUnitPrice')::numeric end,
-       data->>'currency', data
-from public.spares_lines
-where deleted_at is null
+insert into public.opportunity_items (
+  id,
+  opportunity_id,
+  item_type,
+  part_number,
+  description,
+  quantity,
+  unit_price,
+  currency,
+  metadata
+)
+select
+  coalesce(nullif(sl.data->>'id', ''), md5(sl.data::text)),
+  sl.data->>'oppId',
+  coalesce(sl.data->>'itemType', 'spares'),
+  sl.data->>'pn',
+  sl.data->>'desc',
+  case
+    when sl.data->>'qty' ~ '^-?[0-9]+(\\.[0-9]+)?$'
+    then (sl.data->>'qty')::numeric
+  end,
+  case
+    when sl.data->>'listUnitPrice' ~ '^-?[0-9]+(\\.[0-9]+)?$'
+    then (sl.data->>'listUnitPrice')::numeric
+  end,
+  sl.data->>'currency',
+  sl.data
+from public.spares_lines sl
+where sl.deleted_at is null
+  and exists (
+    select 1
+    from public.opportunities o
+    where o.id = sl.data->>'oppId'
+  )
 on conflict (id) do nothing;
 
 insert into public.audit_events (id, entity_type, entity_id, action, actor, detail, occurred_at, metadata)
@@ -204,7 +230,17 @@ where deleted_at is null
 on conflict (id) do nothing;
 
 insert into public.proposal_items (id, proposal_id, opportunity_id, item_type, part_number, description, quantity, unit_price, total_price, currency, metadata)
-select concat(p.id, ':', item.ordinality), p.id, p.data->>'oppId', coalesce(item.value->>'itemType', 'line'),
+select concat(p.id, ':', item.ordinality),
+       p.id,
+       case
+         when exists (
+           select 1
+           from public.opportunities o
+           where o.id = p.data->>'oppId'
+         ) then p.data->>'oppId'
+         else null
+       end,
+       coalesce(item.value->>'itemType', 'line'),
        item.value->>'pn', item.value->>'desc',
        case when item.value->>'qty' ~ '^-?[0-9]+(\\.[0-9]+)?$' then (item.value->>'qty')::numeric end,
        case when item.value->>'unitPrice' ~ '^-?[0-9]+(\\.[0-9]+)?$' then (item.value->>'unitPrice')::numeric end,
