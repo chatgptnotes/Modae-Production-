@@ -306,18 +306,21 @@ const templateMappingSchema = {
 const proposalReviewSchema = {
   type: 'OBJECT',
   properties: {
+    summary: { type: 'STRING' },
     findings: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
       severity: { type: 'STRING', enum: ['block', 'warning', 'info'] },
       code: { type: 'STRING' }, text: { type: 'STRING' }, evidence: { type: 'STRING' },
     }, required: ['severity', 'code', 'text', 'evidence'] } },
   },
-  required: ['findings'],
+  required: ['summary', 'findings'],
 }
 
 function proposalReviewPrompt(p) {
   return `${HOUSE}
 
 Review the supplied ${p.artifactType === 'uploaded-workbook' ? 'manually reviewed proposal workbook' : 'generated proposal'} against the opportunity and proposal data. Find semantic inconsistencies only; arithmetic and required field checks are already supplied as LOCAL FINDINGS. Do not invent facts or change values. Use block only for a clear identity or scope contradiction, warning for a concern requiring human review, and info for a useful observation. Return concise findings with evidence from a sheet name and row when possible; for a generated proposal, cite the relevant proposal line or term instead.
+
+Also return a concise approval summary in 1-3 sentences. Summarize material changes found in LOCAL FINDINGS, especially price, quantity, part-number, payment, delivery, warranty, freight, and validity changes. Include original and uploaded values when available. If there are no material changes, say that the reviewed proposal matches the saved proposal. Never invent a change that is not present in the supplied data.
 
 OPPORTUNITY:
 ${cap(JSON.stringify(p.opportunity || {}), 5000)}

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { importReviewedWorkbook, normalizeAiReview } from '../src/proposal/reviewWorkbook.js'
+import { extractCommercialTerms, importReviewedWorkbook, normalizeAiReview } from '../src/proposal/reviewWorkbook.js'
 
 const proposal = {
   units: 7,
@@ -56,6 +56,37 @@ test('reports invalid quantities, totals, and unmatched workbook rows', () => {
   assert.ok(result.issues.some(issue => issue.code === 'line.total'))
   assert.ok(result.issues.some(issue => issue.code === 'line.unmatched'))
   assert.equal(result.proposal.bom.length, 2)
+})
+
+test('compares uploaded commercial terms with the original proposal without blocking', () => {
+  const workbook = { sheets: [{ name: 'Firm Offer Rev-04', rows: [
+    ['Description', 'Part Number', 'Quantity', 'Unit Price', 'Total Price'],
+    ['Proximity probe, 8 mm', 'PRB-8', 1, 1250, 1250],
+    [],
+    ['Terms & Conditions:'],
+    ['1. Payment Terms:'],
+    ['30 days from invoice'],
+    ['2. Delivery Period:'],
+    ['8 weeks ex-works'],
+  ] }] }
+  const original = {
+    ...proposal,
+    units: 1,
+    terms: [
+      { key: 'payment', term: 'Payment', ourResponse: '50% advance and balance on material readiness' },
+      { key: 'delivery', term: 'Delivery', ourResponse: '10–12 weeks ex-works' },
+    ],
+    bom: [{ ...proposal.bom[0], qtyPerUnit: 0, common: 1, quoted: 1250 }],
+  }
+  const extracted = extractCommercialTerms(workbook)
+  assert.deepEqual(extracted.map(term => term.key), ['payment', 'delivery'])
+  const result = importReviewedWorkbook(workbook, original, { sellTo: '' })
+  const termIssues = result.issues.filter(issue => issue.code === 'term.value-changed')
+  assert.equal(termIssues.length, 2)
+  assert.ok(termIssues.every(issue => issue.severity === 'info' && issue.humanReview))
+  assert.match(termIssues[0].text, /50% advance.*30 days from invoice/)
+  assert.equal(termIssues[0].evidence, 'Firm Offer Rev-04, Row 5')
+  assert.deepEqual(result.termChanges.map(change => change.label), ['Payment', 'Delivery'])
 })
 
 test('normalizes AI findings without allowing arbitrary severities', () => {

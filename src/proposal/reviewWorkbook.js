@@ -14,6 +14,14 @@ const aliases = {
   totalPrice: ['total price', 'total price inr', 'quoted total'],
 }
 
+const commercialTermPatterns = [
+  { key: 'payment', label: 'Payment', pattern: /payment(?:\s+terms?)?/i, start: /^payment(?:\s+terms?)?\s*:?\s*/i },
+  { key: 'delivery', label: 'Delivery', pattern: /delivery(?:\s+period|\s+terms?)?/i, start: /^delivery(?:\s+period|\s+terms?)?\s*:?\s*/i },
+  { key: 'warranty', label: 'Warranty', pattern: /warranty/i, start: /^warranty(?:\s+certificate)?\s*:?\s*/i },
+  { key: 'freight', label: 'Freight', pattern: /freight(?:\s*&\s*insurance)?/i, start: /^freight(?:\s*&\s*insurance)?\s*:?\s*/i },
+  { key: 'validity', label: 'Proposal validity', pattern: /proposal\s+validity|offer\s+validity/i, start: /^proposal\s+validity(?:\s*&\s*price\s+escalation\s+clause)?\s*:?\s*/i },
+]
+
 const matches = (value, candidates) => candidates.some(candidate => key(value) === key(candidate))
 
 function findTable(workbook) {
@@ -37,6 +45,83 @@ function findTable(workbook) {
 
 const valueAt = (row, index) => index == null ? '' : row[index]
 const rowIsTotal = row => row.some(value => /total/i.test(clean(value)))
+
+const compactTermText = value => clean(value).replace(/\s+/g, ' ').trim()
+const comparableTermText = value => compactTermText(value).toLowerCase().replace(/[“”‘’]/g, "'")
+const termForKey = keyValue => commercialTermPatterns.find(term => term.key === keyValue)
+const termKeyForText = value => commercialTermPatterns.find(term => term.pattern.test(compactTermText(value)))?.key || ''
+
+const termTextWithoutLabel = (value, term) => {
+  let text = compactTermText(value).replace(/^\d+\s*[.)-]?\s*/, '')
+  return compactTermText(text.replace(term.start, ''))
+}
+
+const proposalTermValue = term => compactTermText(
+  term?.ourResponse || term?.proposedTerm || term?.customerAsk || term?.standardTerm || '',
+)
+
+// Customer-facing proposal workbooks print terms as a heading followed by one
+// or more prose rows. Keep the rows grouped until the next recognised term so
+// split/wrapped Excel cells still produce one comparable value.
+export function extractCommercialTerms(workbook) {
+  const found = new Map()
+  for (const sheet of workbook?.sheets || []) {
+    let termsStarted = false
+    let current = null
+    for (let rowIndex = 0; rowIndex < (sheet.rows || []).length; rowIndex++) {
+      const row = sheet.rows[rowIndex] || []
+      const text = compactTermText(row.filter(value => compactTermText(value)).join(' '))
+      if (!text) continue
+      if (!termsStarted) {
+        if (/terms\s*&?\s*conditions?/i.test(text)) termsStarted = true
+        continue
+      }
+      const termKey = termKeyForText(text)
+      if (termKey) {
+        const definition = termForKey(termKey)
+        current = found.get(termKey) || {
+          key: termKey,
+          label: definition.label,
+          sheet: sheet.name,
+          row: rowIndex + 1,
+          text: '',
+        }
+        const value = termTextWithoutLabel(text, definition)
+        if (value) current.text = compactTermText([current.text, value].filter(Boolean).join(' '))
+        found.set(termKey, current)
+      } else if (current) {
+        current.text = compactTermText([current.text, text].filter(Boolean).join(' '))
+      }
+    }
+  }
+  return [...found.values()].filter(term => term.text)
+}
+
+const commercialTermChanges = (workbook, proposal) => {
+  const uploaded = extractCommercialTerms(workbook)
+  const original = new Map((proposal?.terms || []).flatMap(term => {
+    const keyValue = term?.key || termKeyForText(term?.term)
+    const value = proposalTermValue(term)
+    return keyValue && value ? [[keyValue, { key: keyValue, label: termForKey(keyValue)?.label || term.term, text: value }]] : []
+  }))
+  const changes = []
+  const issues = []
+  for (const term of uploaded) {
+    const before = original.get(term.key)
+    if (!before || comparableTermText(before.text) === comparableTermText(term.text)) continue
+    const change = { field: 'commercialTerm', label: term.label, before: before.text, after: term.text, line: term.label, row: term.row }
+    changes.push(change)
+    issues.push({
+      severity: 'info',
+      code: 'term.value-changed',
+      humanReview: true,
+      text: `${term.label} changed from ${displayValue(before.text)} to ${displayValue(term.text)}.`,
+      evidence: `${term.sheet}, Row ${term.row}`,
+      change,
+    })
+  }
+  return { changes, issues }
+}
 
 const displayValue = value => `"${value == null || value === '' ? 'blank' : String(value)}"`
 const sameNumber = (left, right) => Number(left) === Number(right)
@@ -77,9 +162,10 @@ const valueChangeIssue = (row, change, sheetName) => ({
 export function importReviewedWorkbook(workbook, proposal, opportunity) {
   const issues = []
   const changes = []
+  const termReview = commercialTermChanges(workbook, proposal)
   const table = findTable(workbook)
   if (!table) {
-    return { proposal, issues: [{ severity: 'block', code: 'workbook.table', text: 'No proposal BoQ table with description and quantity columns was found.' }], changes, table: null }
+    return { proposal, issues: [{ severity: 'block', code: 'workbook.table', text: 'No proposal BoQ table with description and quantity columns was found.' }, ...termReview.issues], changes, termChanges: termReview.changes, table: null }
   }
 
   const importedRows = (table.sheet.rows || []).slice(table.headerRow + 1)
@@ -150,7 +236,8 @@ export function importReviewedWorkbook(workbook, proposal, opportunity) {
   if (opportunity?.sellTo && customerText && !customerText.toLowerCase().includes(clean(opportunity.sellTo).toLowerCase())) {
     issues.push({ severity: 'warning', code: 'customer.mismatch', text: 'The uploaded workbook does not clearly contain the opportunity customer name.' })
   }
-  return { proposal: { ...proposal, bom: nextBom }, issues, changes, table: { sheet: table.sheet.name, headerRow: table.headerRow, columns: table.columns } }
+  issues.push(...termReview.issues)
+  return { proposal: { ...proposal, bom: nextBom }, issues, changes, termChanges: termReview.changes, table: { sheet: table.sheet.name, headerRow: table.headerRow, columns: table.columns } }
 }
 
 export function reviewWorkbookPayload(workbook, proposal, opportunity, localIssues) {

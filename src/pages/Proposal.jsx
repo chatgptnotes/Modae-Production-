@@ -39,6 +39,13 @@ import { latestSubmissionForRevision, submissionStatusLabel } from '../submissio
 import { hasValidatedUploadedWorkbook, validatedWorkbookPreview } from '../proposal/validatedWorkbook.js'
 import ScanProgress from '../ScanProgress.jsx'
 
+const GENERATED_REVIEW_STAGES = ['Preparing proposal…', 'Running local checks…', 'AI semantic review in progress…', 'Applying review results…']
+const UPLOAD_REVIEW_STAGES = ['Reading workbook…', 'Importing proposal values…', 'Running local checks…', 'AI semantic review in progress…', 'Applying review results…']
+const yieldToPaint = () => new Promise(resolve => {
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(resolve)
+  else setTimeout(resolve, 0)
+})
+
 // Approved customer proposals use the server-side SMTP route so the browser
 // never handles mailbox credentials and every generated attachment is sent in
 // one governed message.
@@ -164,6 +171,7 @@ const reviewFindingTitle = issue => {
   const code = String(issue?.code || '')
   if (code === 'line.unmatched') return 'Workbook line needs review'
   if (code === 'line.value-changed') return 'Workbook value changed'
+  if (code === 'term.value-changed') return 'Commercial term changed'
   if (code === 'line.part') return 'Part number is missing'
   if (code === 'line.quantity') return 'Quantity is invalid'
   if (code === 'line.price') return 'Quoted price is invalid'
@@ -190,8 +198,8 @@ const reviewIssueSummary = (issue, change) => change
   : issue.text
 
 function ReviewIssue({ issue, overridden = false, onUseStandardTerms }) {
-  const change = issue.code === 'line.value-changed' ? issue.change : null
-  return <details className={`proposal-review-issue ${overridden ? 'info' : issue.severity}`}>
+  const change = ['line.value-changed', 'term.value-changed'].includes(issue.code) ? issue.change : null
+  return <details className={`proposal-review-issue ${overridden ? 'info' : issue.severity} ${issue.humanReview ? 'human-review' : ''}`}>
     <summary className="proposal-review-issue-summary">
       <div className="proposal-review-issue-head"><span className="proposal-review-severity">{overridden ? 'Overridden' : reviewSeverityLabel(issue.severity)}</span><strong>{reviewFindingTitle(issue)}</strong>{issue.source === 'AI' && <span className="proposal-review-source">AI review</span>}</div>
       <span className="proposal-review-issue-summary-text">{reviewIssueSummary(issue, change)}</span>
@@ -199,7 +207,7 @@ function ReviewIssue({ issue, overridden = false, onUseStandardTerms }) {
     <div className="proposal-review-issue-body">
       {change
         ? <div className="proposal-review-value-change">
-            <div className="proposal-review-value-change-item"><span>Item</span><strong>{change.line || 'Proposal line'}</strong></div>
+            <div className="proposal-review-value-change-item"><span>{issue.code === 'term.value-changed' ? 'Term' : 'Item'}</span><strong>{change.line || 'Proposal line'}</strong></div>
             <div className="proposal-review-value-change-field"><span>{change.label || 'Changed value'}</span></div>
             <div className="proposal-review-value-change-values">
               <div><span>Previous</span><code>{reviewValue(change.field, change.before)}</code></div>
@@ -595,7 +603,12 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   const [templateError, setTemplateError] = useState('')
   const [reviewBusy, setReviewBusy] = useState(false)
   const [reviewStage, setReviewStage] = useState(0)
+  const [reviewProgressTitle, setReviewProgressTitle] = useState('Scanning proposal with AI')
+  const [reviewProgressStages, setReviewProgressStages] = useState(GENERATED_REVIEW_STAGES)
+  const [reviewFileName, setReviewFileName] = useState('')
+  const [validateChoice, setValidateChoice] = useState(false)
   const [reviewedUploadViewing, setReviewedUploadViewing] = useState(false)
+  const uploadInputRef = useRef(null)
   const [reviewMessage, setReviewMessage] = useState('')
   const [reviewError, setReviewError] = useState('')
   const [overrideConfirmOpen, setOverrideConfirmOpen] = useState(false)
@@ -948,12 +961,18 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     setReviewMessage('ModAE standard commercial terms added.')
   }
   const commercialDecisionTerms = (p.terms || []).filter(term => term.status === 'Deviation')
-  const requestCommercialApproval = terms => {
+  const requestCommercialApproval = async terms => {
     if (store.config?.requireCommercialDeviationApproval === false) return
     const deviationDetails = commercialApprovalDetails(terms)
     if (!deviationDetails.length) return
     const lead = (store.leads || []).find(item => item.oppId === oppId)
     const aiSummary = lead?.ai?.summary?.trim() || ''
+    const reviewSummary = await ensureApprovalSummary({
+      ...pRef.current,
+      terms,
+      reviewStatus: 'Needs review',
+      reviewNeedsRevision: true,
+    })
     store.requestApproval({
       oppId,
       type: 'Commercial deviation',
@@ -963,7 +982,8 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       anyOf: false,
       detail: 'Customer-requested commercial terms matched. AH approval is required before quotation submission.',
       blockingReason: 'The proposal matches one or more customer-requested commercial terms that differ from ModAE standard terms and require AH approval.',
-      opportunitySummary: aiSummary || `${opp.oppName || 'This opportunity'} is a ${opp.route || 'sales'} opportunity for ${opp.sellTo || 'the customer'}.`,
+      opportunitySummary: reviewSummary.text || aiSummary || `${opp.oppName || 'This opportunity'} is a ${opp.route || 'sales'} opportunity for ${opp.sellTo || 'the customer'}.`,
+      summarySource: reviewSummary.source || (aiSummary ? 'ai' : 'fallback'),
       deviationDetails,
       approvalSnapshot: proposalApprovalSnapshot({ ...pRef.current, terms }, opp),
       refreshPendingContext: true,
@@ -1035,8 +1055,8 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     : issue)
   const reviewIssuesAreInformational = displayReviewIssues.length > 0
     && displayReviewIssues.every(issue => issue.severity === 'info')
-  const workbookChangeIssues = displayReviewIssues.filter(issue => issue.code === 'line.value-changed')
-  const otherReviewIssues = displayReviewIssues.filter(issue => issue.code !== 'line.value-changed')
+  const workbookChangeIssues = displayReviewIssues.filter(issue => ['line.value-changed', 'term.value-changed'].includes(issue.code))
+  const otherReviewIssues = displayReviewIssues.filter(issue => !['line.value-changed', 'term.value-changed'].includes(issue.code))
   const blockingReviewIssues = otherReviewIssues.filter(issue => issue.severity === 'block')
   const warningReviewIssues = otherReviewIssues.filter(issue => issue.severity === 'warning')
   const informationalReviewIssues = otherReviewIssues.filter(issue => issue.severity === 'info')
@@ -1045,11 +1065,13 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   const reviewBanner = reviewStatus === 'Needs attention'
     ? { tone: 'warning', title: 'Validation needs attention', text: 'Fix the issues listed below before requesting approval.' }
     : reviewStatus === 'Validated'
-      ? workflowBlocked
-        ? { tone: 'warning', title: 'Review complete — action required', text: 'Resolve the remaining readiness items before moving to Approval.' }
-        : approvalRequired
-          ? { tone: 'success', title: 'Review complete', text: 'Approval is required before the quote can be released.' }
-          : { tone: 'success', title: 'Review complete', text: 'This proposal is ready for approval.' }
+      ? p.reviewedUpload
+        ? { tone: 'warning', title: 'Human-uploaded proposal — manual review', text: workflowBlocked ? 'The workbook was checked. Resolve the remaining readiness items before moving to Approval.' : 'The workbook was checked. Review the red changes below before approval; this notice does not block the workflow.' }
+        : workflowBlocked
+          ? { tone: 'warning', title: 'Review complete — action required', text: 'Resolve the remaining readiness items before moving to Approval.' }
+          : approvalRequired
+            ? { tone: 'success', title: 'Review complete', text: 'Approval is required before the quote can be released.' }
+            : { tone: 'success', title: 'Review complete', text: 'This proposal is ready for approval.' }
       : reviewStatus === 'Override accepted'
         ? { tone: 'override', title: 'Review override accepted', text: 'The findings were saved and the proposal can continue through approval.' }
         : p.reviewedUpload
@@ -1069,18 +1091,62 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       : bl.text
   }
 
-  // Forward `needed` and `anyOf`. Dropping them let recordDecision fall back to
-  // [approver], so a joint LJS+AH gate raised from this page — the Red customer
-  // clearance among them — cleared on LJS alone. Workbench.jsx and PropBuilder
-  // already forward both; this call site was the odd one out.
-  const requestApproval = bl => () => store.requestApproval({
-    oppId, type: bl.approvalType, approver: bl.approver, rev: bl.rev || String(p.revision ?? ''), detail: approvalDetail(bl),
+  // Approval cards should lead with a concise AI summary, while the proposal
+  // page keeps the complete structured findings. Reuse the validated summary
+  // when it is current; only make another AI call when an older saved review
+  // has no usable summary for this revision.
+  const ensureApprovalSummary = async (proposalOverride = null) => {
+    const current = proposalOverride || pRef.current
+    const revision = String(current.revision ?? '')
+    const fallback = {
+      text: 'AI summary unavailable. Review the detailed validation findings on the proposal before approval.',
+      source: 'fallback',
+    }
+    if (!current.reviewNeedsRevision
+      && ['Validated', 'Override accepted'].includes(current.reviewStatus)
+      && String(current.reviewSummaryRevision ?? '') === revision
+      && String(current.reviewSummary || '').trim()) {
+      return { text: current.reviewSummary.trim(), source: current.reviewSummarySource || 'ai' }
+    }
+    try {
+      const result = await runTaskResult(
+        'proposal.review',
+        reviewWorkbookPayload(current.reviewedUpload, current, opp, current.reviewIssues || []),
+        { model: store.config?.aiModel?.model },
+      )
+      const data = result.data?.data || result.data || {}
+      const summary = String(data.summary || '').trim()
+      if (summary) {
+        const next = { ...current, reviewSummary: summary, reviewSummaryRevision: revision, reviewSummarySource: 'ai' }
+        setP(next)
+        store.saveProposal(oppId, next)
+        return { text: summary, source: 'ai' }
+      }
+    } catch (error) {
+      console.warn('Approval summary generation failed; continuing with fallback.', error)
+    }
+    return fallback
+  }
+
+  const approvalRequest = (bl, summary) => store.requestApproval({
+    oppId, type: bl.approvalType, approver: bl.approver, rev: bl.rev || String(pRef.current.revision ?? ''), detail: approvalDetail(bl),
+    opportunitySummary: summary.text,
+    summarySource: summary.source,
     ...(bl.needed ? { needed: bl.needed } : {}),
     ...(bl.anyOf ? { anyOf: bl.anyOf } : {}),
     ...(bl.deviationDetails ? { deviationDetails: bl.deviationDetails } : {}),
     // Pricing approvals remember the offending rows, not the whole quote.
     ...(bl.pricingRows?.length ? { pricingRows: bl.pricingRows } : {}),
   })
+
+  // Forward `needed` and `anyOf`. Dropping them let recordDecision fall back to
+  // [approver], so a joint LJS+AH gate raised from this page — the Red customer
+  // clearance among them — cleared on LJS alone. Workbench.jsx and PropBuilder
+  // already forward both; this call site was the odd one out.
+  const requestApproval = bl => async () => {
+    const summary = await ensureApprovalSummary()
+    approvalRequest(bl, summary)
+  }
   const confirmCond = bl => () => {
     setConditionTarget(bl)
     setConditionNote('')
@@ -1104,17 +1170,18 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   // Phase-one human-in-the-loop checkpoint. This is intentionally deterministic
   // in the local demo: production AI can replace the implementation while the
   // proposal state and UX remain the same.
-  const validateReviewedProposal = async (proposal = p, { automatic = false, preserveRevision = false } = {}) => {
+  const validateReviewedProposal = async (proposal = p, { automatic = false, preserveRevision = false, retainProgress = false } = {}) => {
     setReviewBusy(true)
-    setReviewStage(0)
+    if (!retainProgress) {
+      setReviewProgressTitle(automatic ? 'Reviewing uploaded proposal' : 'Scanning proposal with AI')
+      setReviewProgressStages(automatic ? UPLOAD_REVIEW_STAGES : GENERATED_REVIEW_STAGES)
+      setReviewStage(0)
+    }
     setReviewMessage('')
     setReviewError('')
     // Let React paint the visible loading state before local checks and the
     // network request occupy the event loop.
-    await new Promise(resolve => {
-      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(resolve)
-      else setTimeout(resolve, 0)
-    })
+    await yieldToPaint()
     try {
       const review = proposal
       setReviewStage(1)
@@ -1131,6 +1198,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
         reviewedUpload = {
           ...reviewedUpload,
           importedChanges: recomputed.changes,
+          termChanges: recomputed.termChanges,
           validationIssues: recomputed.issues,
           comparisonAvailable: true,
         }
@@ -1163,8 +1231,10 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
 
       setReviewStage(2)
       const aiResult = await runTaskResult('proposal.review', reviewWorkbookPayload(reviewedUpload, review, opp, issues), { model: store.config?.aiModel?.model })
-      const aiIssues = normalizeAiReview(aiResult.data?.data || aiResult.data)
+      const aiReview = aiResult.data?.data || aiResult.data || {}
+      const aiIssues = normalizeAiReview(aiReview)
       if (!aiResult.data && aiResult.error) aiIssues.push({ severity: 'info', code: 'ai.unavailable', source: 'AI', text: `AI semantic review was unavailable: ${aiResult.error}. Local checks were still completed.` })
+      const aiSummary = String(aiReview.summary || '').trim()
       setReviewStage(3)
       const allIssues = rememberOverriddenFindings(
         rememberApprovedFindings([...issues, ...aiIssues], store.approvals, oppId, nextRevision),
@@ -1180,6 +1250,9 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
         revisions: nextRevisionLog,
         reviewStatus: hasActiveBlock ? 'Needs attention' : hasRememberedOverride ? 'Override accepted' : 'Validated',
         reviewIssues: allIssues,
+        reviewSummary: aiSummary,
+        reviewSummaryRevision: aiSummary ? String(nextRevision ?? '') : '',
+        reviewSummarySource: aiSummary ? 'ai' : '',
         reviewCompletedAt: new Date().toISOString(),
         reviewNeedsRevision: false,
         reviewOverride: hasRememberedOverride
@@ -1208,6 +1281,8 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   }
 
   const validateAiDraft = async () => {
+    setValidateChoice(false)
+    setReviewFileName('')
     const uploaded = p.reviewedUpload
     const { reviewedUpload, ...withoutUpload } = p
     const next = {
@@ -1222,6 +1297,58 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     setP(next)
     store.saveProposal(oppId, next)
     await validateReviewedProposal(next)
+  }
+
+  const uploadReviewedProposal = async event => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    if (!/\.xlsx?$/i.test(file.name)) {
+      setReviewError('Upload the reviewed proposal as an XLSX file.')
+      return
+    }
+    setValidateChoice(false)
+    setReviewBusy(true)
+    setReviewStage(0)
+    setReviewProgressTitle('Uploading reviewed proposal')
+    setReviewProgressStages(UPLOAD_REVIEW_STAGES)
+    setReviewFileName(file.name)
+    setReviewMessage('')
+    setReviewError('')
+    await yieldToPaint()
+    try {
+      setReviewStage(1)
+      const parsed = parseRenderedWorkbook(await file.arrayBuffer(), file.name)
+      const imported = importReviewedWorkbook(parsed, p, opp)
+      // Keep each uploaded artifact addressable. Re-uploading a workbook must
+      // not overwrite the bytes referenced by an older revision snapshot.
+      const blobKey = `proposal-review-${opp.id}-rev-${String(p.revision || '00').padStart(2, '0')}-${Date.now()}`
+      await putFiles(blobKey, [file])
+      let cloud = {}
+      try {
+        const uploaded = await uploadOppFile(opp, 'Proposal', file)
+        cloud = { webUrl: uploaded.webUrl, url: uploaded.url, path: uploaded.path, itemId: uploaded.itemId }
+      } catch (error) {
+        cloud = { cloudErr: error?.message || String(error) }
+      }
+      const next = {
+        ...imported.proposal,
+        reviewedUpload: { filename: file.name, type: file.type, size: file.size, uploadedAt: new Date().toISOString(), blobKey, ...cloud, sheets: parsed.sheets, importedChanges: imported.changes, termChanges: imported.termChanges, validationIssues: imported.issues, table: imported.table, baseProposal: snapshotProposal(p) },
+        reviewStatus: 'Ready for validation',
+        reviewIssues: imported.issues,
+        reviewNeedsRevision: false,
+        reviewOverride: null,
+      }
+      setP(next)
+      store.saveProposal(oppId, next)
+      setReviewStage(3)
+      setReviewProgressTitle('Reviewing uploaded proposal')
+      setReviewMessage(`${file.name} uploaded and imported. Validating…`)
+      await validateReviewedProposal(next, { automatic: true, preserveRevision: true, retainProgress: true })
+    } catch (error) {
+      setReviewError(error?.message || 'The reviewed proposal could not be read')
+      setReviewBusy(false)
+    }
   }
 
   const continueAnyway = () => {
@@ -1264,15 +1391,18 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       setReviewError(`The proposal workbook could not be downloaded: ${error?.message || 'unknown export error'}`)
     }
   }
-  const submitForApproval = () => {
+  const submitForApproval = async () => {
     if (!reviewReady) {
       setReviewError('Run validation after reviewing the proposal before requesting approval.')
       return
     }
     const pendingTypes = new Set(pendingForOpp.map(item => item.type))
     const actionable = blockers.filter(bl => bl.approvalType && bl.severity !== 'wait' && !pendingTypes.has(bl.approvalType))
+    const summary = await ensureApprovalSummary()
     actionable.forEach(bl => store.requestApproval({
-      oppId, type: bl.approvalType, approver: bl.approver, rev: bl.rev || String(p.revision ?? ''), detail: approvalDetail(bl),
+      oppId, type: bl.approvalType, approver: bl.approver, rev: bl.rev || String(pRef.current.revision ?? ''), detail: approvalDetail(bl),
+      opportunitySummary: summary.text,
+      summarySource: summary.source,
       ...(bl.needed ? { needed: bl.needed } : {}),
       ...(bl.anyOf ? { anyOf: bl.anyOf } : {}),
       ...(bl.deviationDetails ? { deviationDetails: bl.deviationDetails } : {}),
@@ -1503,13 +1633,23 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
           {reviewReady && approvalRequired && !pendingForOpp.length && (
             <button className="btn-secondary" onClick={submitForApproval}><Icon name="send" size={13} /> Request approval</button>
           )}
-          <button className="primary" onClick={validateAiDraft} disabled={reviewBusy}>
+          <button className="primary" onClick={() => setValidateChoice(true)} disabled={reviewBusy}>
             {reviewBusy
               ? <><span className="auth-loading__spinner auth-loading__spinner-inline" aria-hidden="true" /> Scanning…</>
               : <><Icon name="checkCircle" size={13} /> Validate review</>}
           </button>
         </div>
       </header>
+
+      <input
+        className="visually-hidden"
+        type="file"
+        accept=".xlsx,.xls"
+        ref={uploadInputRef}
+        onChange={uploadReviewedProposal}
+        tabIndex={-1}
+        aria-hidden="true"
+      />
 
       <section className={`proposal-review-strip proposal-review-strip-${reviewBanner.tone}`} aria-label="Human review checkpoint">
         <div>
@@ -1518,8 +1658,9 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
         </div>
       </section>
       {reviewBusy && <ScanProgress
-        title="Scanning proposal with AI"
-        stages={['Preparing proposal…', 'Running local checks…', 'AI semantic review in progress…', 'Applying review results…']}
+        title={reviewProgressTitle}
+        fileName={reviewFileName}
+        stages={reviewProgressStages}
         active={reviewStage}
       />}
       {p.reviewedUpload && (
@@ -1555,6 +1696,19 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
           }}
           onClose={() => setReviewedUploadViewing(false)}
         />
+      )}
+      {validateChoice && (
+        <Modal title="Validate review" onClose={() => setValidateChoice(false)}>
+          <p className="hint">Validate the current AI-generated draft as-is, or upload a workbook that's already been reviewed outside the app.</p>
+          <div className="forms-actions proposal-review-actions">
+            <button className="primary" onClick={validateAiDraft}>
+              <Icon name="checkCircle" size={13} /> Continue with AI draft
+            </button>
+            <button onClick={() => uploadInputRef.current?.click()}>
+              <Icon name="upload" size={13} /> Upload reviewed workbook
+            </button>
+          </div>
+        </Modal>
       )}
       {(reviewError || reviewMessage || p.reviewIssues?.length > 0 || p.reviewCompletedAt) && (
         <section className="proposal-review-results" aria-live="polite">

@@ -8499,6 +8499,7 @@ body {
 .proposal-review-workbook-changes { display: grid; gap: 5px; padding: 7px; border: 1px solid var(--palette-9c482213); border-radius: 6px; background: var(--palette-f07f705); }
 .proposal-review-workbook-changes > strong { padding: 0 2px 2px; color: var(--palette-8784f8b3); font-size: 11px; }
 .proposal-review-workbook-changes .proposal-review-issue { background: var(--palette-95bf2caf); }
+.proposal-review-workbook-changes .proposal-review-issue.human-review { color: var(--palette-8784f8b3); background: var(--palette-f07f705); }
 .proposal-review-issues.is-overridden > strong { color: var(--status-good); }
 .proposal-review-approval { display: inline-flex; margin-left: 8px; padding: 2px 6px; border: 1px solid var(--palette-1fb54521); border-radius: 4px; color: var(--status-good); background: var(--palette-4843938); font-size: 10.5px; font-weight: 700; }
 .proposal-sheet-editor .form-card { border: 1px solid var(--border-soft); border-radius: 6px; box-shadow: none; padding: 16px; }
