@@ -36,7 +36,10 @@ export default function PriceLists() {
   const [versionLoading, setVersionLoading] = useState(false)
   const rowRefs = useRef({})
   const pl = store.priceLists[list]
-  const selectedVersion = pl?.versions?.find(item => item.id === versionId)
+  // Archived versions are an administrator/commercial-manager concern. Keep
+  // regular users pinned to the active catalogue even if this component was
+  // previously mounted under a manager account.
+  const selectedVersion = canUpload ? pl?.versions?.find(item => item.id === versionId) : null
   const displayList = selectedVersion || pl
   const currencies = [...new Set(['EUR', 'USD', ...Object.values(store.priceLists || {}).map(item => item.currency), ...Object.keys(store.config?.currencyRates || {})].filter(currency => currency && currency !== 'GBP'))]
   const currencyRates = normalizedCurrencyRates(store.config?.currencyRates)
@@ -52,7 +55,7 @@ export default function PriceLists() {
   }, [list, requestedList, store.priceLists])
 
   useEffect(() => {
-    const selected = pl?.versions?.find(item => item.id === versionId)
+    const selected = canUpload ? pl?.versions?.find(item => item.id === versionId) : null
     if (!selected || selected.parts?.length || selected.id === pl?.activeVersionId || !store.loadPriceListVersion) return
     let mounted = true
     setVersionLoading(true)
@@ -60,7 +63,7 @@ export default function PriceLists() {
       .catch(error => console.warn('Archived price-list version load failed:', error?.message || error))
       .finally(() => { if (mounted) setVersionLoading(false) })
     return () => { mounted = false }
-  }, [list, pl, versionId])
+  }, [canUpload, list, pl, versionId])
 
   useEffect(() => {
     if (!requestedPart || !pl) return
@@ -196,18 +199,18 @@ export default function PriceLists() {
         </div>
       </div>
 
-      <div className="toolbar price-list-version-bar">
+      {canUpload && <div className="toolbar price-list-version-bar">
         <label className="hint">View saved version</label>
         <select value={versionId || pl.activeVersionId || ''} onChange={e => setVersionId(e.target.value || null)}>
           {(pl.versions || []).slice().reverse().map(version => <option key={version.id} value={version.id}>{version.version}{version.id === pl.activeVersionId ? ' · Current' : ''} · {version.uploaded || '—'}</option>)}
         </select>
-        {canUpload && <>
+        <>
           <button onClick={openEditor}>Edit selected version</button>
           {versionId && versionId !== pl.activeVersionId && <button onClick={() => { store.restorePriceListVersion(list, versionId); setVersionId(null) }}>Restore selected version</button>}
-        </>}
+        </>
         {selectedVersion && selectedVersion.id !== pl.activeVersionId && <span className="hint">Viewing an archived version. It is not used for new proposal pricing.</span>}
         {versionLoading && <span className="hint price-list-loading"><span className="auth-loading__spinner" aria-hidden="true" /> Loading version…</span>}
-      </div>
+      </div>}
 
       {uploadOpen && (
         <Modal title={`Upload ${list} price list`} wide onClose={() => setUploadOpen(false)}>
