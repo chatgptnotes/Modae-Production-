@@ -1,7 +1,6 @@
-// Bumped to v5 for the Inter UI font: a returning tablet holding a v4 cache
-// would otherwise keep serving the old shell and render the app in the system
-// font until the cache happened to turn over.
-const CACHE = 'wintrack-v5'
+// Bumped when the cache policy changes so existing clients do not retain a
+// shell or asset cache created by the previous deployment strategy.
+const CACHE = 'wintrack-v6'
 const FONTS = [
   '/fonts/inter-latin.woff2',
   '/fonts/inter-latin-ext.woff2',
@@ -59,7 +58,9 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // Static assets + icons: cache-first with background revalidate
+  // Static assets + icons: network-first with cache fallback. Hashed assets
+  // remain available offline, while a deployment can immediately replace a
+  // stale chunk instead of serving an old copy indefinitely.
   const cacheable = url.pathname.startsWith('/assets/') ||
     url.pathname.startsWith('/fonts/') ||
     /\/(icon-192|icon-512|apple-touch-icon)\.png$/.test(url.pathname) ||
@@ -68,16 +69,12 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith((async () => {
     const cache = await caches.open(CACHE)
-    const cached = await cache.match(req)
-    const revalidate = fetch(req).then((res) => {
-      if (res && res.ok) cache.put(req, res.clone()).catch(() => {})
-      return res
-    }).catch(() => null)
-    if (cached) {
-      event.waitUntil(revalidate)
-      return cached
+    try {
+      const fresh = await fetch(req)
+      if (fresh.ok) cache.put(req, fresh.clone()).catch(() => {})
+      return fresh.ok ? fresh : (await cache.match(req)) || fresh
+    } catch (e) {
+      return (await cache.match(req)) || Response.error()
     }
-    const fresh = await revalidate
-    return fresh || Response.error()
   })())
 })

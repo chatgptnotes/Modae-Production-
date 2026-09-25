@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import React, { Suspense, useEffect, useRef, useState } from 'react'
 import { Routes, Route, NavLink, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from './store.jsx'
 import { PORTAL_ENABLED, selectableRoles } from './seed.js'
@@ -12,29 +12,30 @@ import { startAutoTitle } from './autoTitle.js'
 import { computeAlerts } from './monitoring.js'
 import { RequireAuth } from './pages/Login.jsx'
 import { supabaseProjectRef } from './supabase.js'
+import { lazyWithRecovery } from './lazyImport.js'
 
-const Opportunities = lazy(() => import('./pages/Opportunities.jsx'))
-const IntakeForm = lazy(() => import('./pages/IntakeForm.jsx'))
-const Folders = lazy(() => import('./pages/Folders.jsx'))
-const Proposal = lazy(() => import('./pages/Proposal.jsx'))
-const PriceLists = lazy(() => import('./pages/PriceLists.jsx'))
-const MyDashboard = lazy(() => import('./pages/MyDashboard.jsx'))
-const Customers = lazy(() => import('./pages/Customers.jsx'))
-const Users = lazy(() => import('./pages/Users.jsx'))
-const TenderIntake = lazy(() => import('./pages/TenderIntake.jsx'))
-const MyOpps = lazy(() => import('./pages/MyOpps.jsx'))
-const Inbox = lazy(() => import('./pages/Inbox.jsx'))
-const Approvals = lazy(() => import('./pages/Approvals.jsx'))
-const Audit = lazy(() => import('./pages/Audit.jsx'))
-const VoiceUpdate = lazy(() => import('./pages/VoiceUpdate.jsx'))
-const AiMap = lazy(() => import('./pages/AiMap.jsx'))
-const Admin = lazy(() => import('./pages/Admin.jsx'))
-const WorkflowAdmin = lazy(() => import('./pages/WorkflowAdmin.jsx'))
-const Register = lazy(() => import('./pages/Register.jsx'))
-const Workbench = lazy(() => import('./pages/Workbench.jsx'))
-const ProposalSent = lazy(() => import('./pages/ProposalSent.jsx'))
-const Portal = lazy(() => import('./pages/Portal.jsx'))
-const TabletApp = lazy(() => import('./tablet/TabletApp.jsx'))
+const Opportunities = lazyWithRecovery(() => import('./pages/Opportunities.jsx'))
+const IntakeForm = lazyWithRecovery(() => import('./pages/IntakeForm.jsx'))
+const Folders = lazyWithRecovery(() => import('./pages/Folders.jsx'))
+const Proposal = lazyWithRecovery(() => import('./pages/Proposal.jsx'))
+const PriceLists = lazyWithRecovery(() => import('./pages/PriceLists.jsx'))
+const MyDashboard = lazyWithRecovery(() => import('./pages/MyDashboard.jsx'))
+const Customers = lazyWithRecovery(() => import('./pages/Customers.jsx'))
+const Users = lazyWithRecovery(() => import('./pages/Users.jsx'))
+const TenderIntake = lazyWithRecovery(() => import('./pages/TenderIntake.jsx'))
+const MyOpps = lazyWithRecovery(() => import('./pages/MyOpps.jsx'))
+const Inbox = lazyWithRecovery(() => import('./pages/Inbox.jsx'))
+const Approvals = lazyWithRecovery(() => import('./pages/Approvals.jsx'))
+const Audit = lazyWithRecovery(() => import('./pages/Audit.jsx'))
+const VoiceUpdate = lazyWithRecovery(() => import('./pages/VoiceUpdate.jsx'))
+const AiMap = lazyWithRecovery(() => import('./pages/AiMap.jsx'))
+const Admin = lazyWithRecovery(() => import('./pages/Admin.jsx'))
+const WorkflowAdmin = lazyWithRecovery(() => import('./pages/WorkflowAdmin.jsx'))
+const Register = lazyWithRecovery(() => import('./pages/Register.jsx'))
+const Workbench = lazyWithRecovery(() => import('./pages/Workbench.jsx'))
+const ProposalSent = lazyWithRecovery(() => import('./pages/ProposalSent.jsx'))
+const Portal = lazyWithRecovery(() => import('./pages/Portal.jsx'))
+const TabletApp = lazyWithRecovery(() => import('./tablet/TabletApp.jsx'))
 // import TabletApp from './tablet/TabletApp.jsx'
 
 const COMMERCIAL_RX = /GM\s*%|\bGM\b|discount|₹|\bvalue\b|\bmargin\b/i

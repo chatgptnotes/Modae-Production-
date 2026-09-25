@@ -30,6 +30,9 @@ test('validated uploaded workbooks remain the active proposal source', () => {
   assert.match(proposal, /Uploaded workbook validated and set as the active proposal/)
   assert.match(proposal, /const next = \{[\s\S]*reviewedUpload,[\s\S]*reviewStatus: hasActiveBlock/)
   assert.match(proposal, /Use AI draft instead/)
+  assert.match(proposal, /validateReviewedProposal\(next, \{ automatic: true, preserveRevision: true \}\)/)
+  assert.match(proposal, /validatedWorkbookPreview\(previewModel\.p\)/)
+  assert.match(read('src/store.jsx'), /reviewedUpload,\n    reviewStatus: p\.reviewStatus/)
 })
 
 test('proposal readiness drawer exposes a useful collapsed summary', () => {

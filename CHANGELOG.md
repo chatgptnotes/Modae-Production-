@@ -5,6 +5,24 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Persisted reviewed proposal workbook snapshots with revision-scoped file keys;
+  validation no longer increments the quote revision, and current or historical
+  revision previews use the exact uploaded workbook that was reviewed. Customer
+  submission continues to attach that same validated workbook.
+- Added guarded recovery for stale or missing Vite route chunks, including
+  service-worker cache cleanup and a one-time reload instead of leaving pages
+  on a dynamic-import crash screen.
+- Made a successfully validated uploaded proposal workbook the active artifact
+  for Workbench previews, submission previews, and customer attachments instead
+  of regenerating an older template-based proposal.
+- Fixed Requirement Validation commercial-deviation approvals so approved
+  Payment and Delivery terms are recognized by the Sourcing hand-off gate,
+  including older approvals with snapshot-only deviation details.
+- Extended the Supabase Realtime WebSocket subscription from proposal-only
+  records to all shared record entities, so configuration, clarifications,
+  spare lines, audit history, and price-list changes reach other open browsers
+  without waiting for focus refresh; unsupported or ambiguous changes still
+  fall back to an authoritative full refresh.
 - Opportunity saves now send only new, edited, or deleted rows instead of
   rewriting the complete opportunity list, reducing revision conflicts between
   open browsers.

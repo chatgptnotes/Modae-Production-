@@ -143,8 +143,8 @@ test('the web fonts are self-hosted and offline-cached', () => {
   assert.match(sw, /'\/fonts\/inter-latin\.woff2'/)
   assert.match(sw, /url\.pathname\.startsWith\('\/fonts\/'\)/)
   // A stale cache would keep serving the old shell in the system font.
-  assert.match(sw, /const CACHE = 'wintrack-v5'/)
-  assert.doesNotMatch(sw, /wintrack-v4/)
+  assert.match(sw, /const CACHE = 'wintrack-v6'/)
+  assert.doesNotMatch(sw, /wintrack-v[1-5]/)
 })
 
 test('nothing renders a hardcoded sky hex any more', () => {

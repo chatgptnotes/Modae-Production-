@@ -36,7 +36,7 @@ import { proposalApprovalSnapshot } from '../approvalMemory.js'
 import { loadProposalTemplateBuffer, resolveProposalTemplate } from '../proposal/templateRegistry.js'
 import { customerProposalArtifact } from '../proposal/emailAttachments.js'
 import { latestSubmissionForRevision, submissionStatusLabel } from '../submissionStatus.js'
-import { hasValidatedUploadedWorkbook } from '../proposal/validatedWorkbook.js'
+import { hasValidatedUploadedWorkbook, validatedWorkbookPreview } from '../proposal/validatedWorkbook.js'
 
 // Approved customer proposals use the server-side SMTP route so the browser
 // never handles mailbox credentials and every generated attachment is sent in
@@ -1069,7 +1069,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   // Phase-one human-in-the-loop checkpoint. This is intentionally deterministic
   // in the local demo: production AI can replace the implementation while the
   // proposal state and UX remain the same.
-  const validateReviewedProposal = async (proposal = p, { automatic = false } = {}) => {
+  const validateReviewedProposal = async (proposal = p, { automatic = false, preserveRevision = false } = {}) => {
     setReviewBusy(true)
     setReviewMessage('')
     setReviewError('')
@@ -1092,7 +1092,10 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
           comparisonAvailable: true,
         }
       }
-      const revisionChanged = !!review.reviewNeedsRevision
+      // Uploading a reviewed workbook replaces the artifact for the current
+      // quote. Only the explicit “open revision” workflow should bump Rev-00
+      // to Rev-01; validation itself must not change the customer revision.
+      const revisionChanged = !preserveRevision && !!review.reviewNeedsRevision
       const nextRevision = revisionChanged ? String((Number(review.revision) || 0) + 1).padStart(2, '0') : review.revision
       const nextRevisionLog = revisionChanged ? [...(review.revisions || []), {
         rev: `Rev-${nextRevision}`,
@@ -1210,7 +1213,9 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     try {
       const parsed = parseProposalWorkbook(await file.arrayBuffer(), file.name)
       const imported = importReviewedWorkbook(parsed, p, opp)
-      const blobKey = `proposal-review-${opp.id}`
+      // Keep each uploaded artifact addressable. Re-uploading a workbook must
+      // not overwrite the bytes referenced by an older revision snapshot.
+      const blobKey = `proposal-review-${opp.id}-rev-${String(p.revision || '00').padStart(2, '0')}-${Date.now()}`
       await putFiles(blobKey, [file])
       let cloud = {}
       try {
@@ -1224,14 +1229,14 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
         reviewedUpload: { filename: file.name, type: file.type, size: file.size, uploadedAt: new Date().toISOString(), blobKey, ...cloud, sheets: parsed.sheets, importedChanges: imported.changes, validationIssues: imported.issues, table: imported.table, baseProposal: snapshotProposal(p) },
         reviewStatus: 'Ready for validation',
         reviewIssues: imported.issues,
-        reviewNeedsRevision: true,
+        reviewNeedsRevision: false,
         reviewOverride: null,
       }
       setP(next)
       store.saveProposal(oppId, next)
       setReviewError('')
       setReviewMessage(`${file.name} uploaded and imported. Validating…`)
-      await validateReviewedProposal(next, { automatic: true })
+      await validateReviewedProposal(next, { automatic: true, preserveRevision: true })
     } catch (error) {
       setReviewError(error?.message || 'The reviewed proposal could not be read')
     }
@@ -1348,6 +1353,14 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       return () => { cancelled = true }
     }
     const previewRoute = docRoute(previewModel.p, opp)
+    if (hasValidatedUploadedWorkbook(previewModel.p)) {
+      // Historical and current validated uploads already contain the exact
+      // parsed workbook that was reviewed. Do not regenerate a template here:
+      // that would make the revision popup disagree with the saved upload.
+      setPreviewWorkbook(validatedWorkbookPreview(previewModel.p))
+      setPreviewWorkbookBusy(false)
+      return () => { cancelled = true }
+    }
     const selectedTemplate = resolveProposalTemplate(store.config, previewRoute)
     const pricing = buildPricing(store, previewModel.p)
     setPreviewWorkbook(null)
@@ -2021,6 +2034,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
           <div className="proposal-preview-toolbar">
             <span className="hint">
               {previewModel.historical ? 'Historical customer-facing Excel workbook' : 'Customer-facing Excel workbook'} · Rev-{previewModel.p.revision}
+              {previewModel.p.reviewedUpload?.filename ? ` · ${previewModel.p.reviewedUpload.filename}` : ''}
               {previewModel.historical ? ' · read-only historical snapshot' : ' · read-only customer-facing preview'}
             </span>
             <div className="forms-actions">
