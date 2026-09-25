@@ -36,6 +36,7 @@ import { buildLeadProposalData } from '../leadBoq.js'
 import { leadFieldValue as mappedLeadFieldValue, splitBuSegment, leadIdentity } from '../leadFieldMapping.js'
 import { normalizeLocationValue, useGlobalLocationSearch } from '../locations.js'
 import { matchCustomer, customerStatusForLead } from '../leadCustomerClass.js'
+import { LEAD_LABELS, extractLabeledValue } from '../leadLabels.js'
 export { matchCustomer, customerStatusForLead } from '../leadCustomerClass.js'
 // Common-mailbox lead inbox: AI parses each inquiry, a human decides whether it
 // becomes an opportunity (Qualify → registration / intake form) or is dropped.
@@ -256,16 +257,13 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
           : 'Project'
     )
     const fields = []
-    const labeled = labels => {
-      const match = text.match(new RegExp(`(?:${labels})\\s*[:\\-]\\s*([^\\n;]+)`, 'i'))
-      return match ? match[1].trim() : ''
-    }
+    const labeled = labels => extractLabeledValue(text, labels)
     const customerName = customerCompanyFromText(text)
     const identityFacts = extractLeadIdentityFacts(text)
     const eucName = identityFacts.eucName || customerName
     const eucLocation = identityFacts.eucLocation
       || identityFacts.fields.find(field => /location$/i.test(field.k))?.v
-      || labeled('deliver(?:y|ed)\\s+to|location|address')
+      || labeled(String.raw`deliver(?:y|ed)\\s+to|${LEAD_LABELS.eucLocation}`)
     const phone = customerPhoneFromText(text)
     const contactPerson = customerContactFromText(text)
     const scopeValue = cleanDisplayValue(body)

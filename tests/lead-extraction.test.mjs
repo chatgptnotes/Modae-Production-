@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import { deterministicLeadRoute, extractLeadIdentityFacts, leadTextChunks, mergeLeadResults, pageAwareChunks, textChunks } from '../src/leadExtraction.js'
+import { customerCompanyFromText, customerContactFromText, customerPhoneFromText } from '../src/leadRules.js'
 
 test('long email and attachment text are split into complete labelled chunks', () => {
   const body = 'B'.repeat(12001)
@@ -77,6 +78,16 @@ test('identity extraction captures EUC/EUN and multiple supporting site facts', 
   assert.equal(found.fields.length, 4)
   assert.equal(found.fields.some(field => field.k === 'Site / Plant Name' && field.v === 'Salal Power Station'), true)
   assert.equal(found.fields.some(field => field.k === 'Delivery / Site Location' && field.v === 'Reasi plant'), true)
+})
+
+test('collapsed inline labels stay in their own customer and EUC fields', () => {
+  const text = 'Sell To Customer: Eastern Alloy WorksEnd User / EUC Name: Eastern Alloy WorksEUC Location: JamshedpurContact Person: Ankit VermaContact Phone: +91 98765 43210'
+  const identity = extractLeadIdentityFacts(text)
+  assert.equal(customerCompanyFromText(text), 'Eastern Alloy Works')
+  assert.equal(identity.eucName, 'Eastern Alloy Works')
+  assert.equal(identity.eucLocation, 'Jamshedpur')
+  assert.equal(customerContactFromText(text), 'Ankit Verma')
+  assert.equal(customerPhoneFromText(text), '+91 98765 43210')
 })
 
 test('equivalent site labels merge while differing site values remain in alternatives', () => {

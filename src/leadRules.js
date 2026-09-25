@@ -1,4 +1,5 @@
 import { classRule, classDeadlineDays } from './customerClasses.js'
+import { LEAD_LABELS, cleanExtractedValue, extractLabeledValue } from './leadLabels.js'
 
 export const DEFAULT_LEAD_DEADLINES = {
   kycDays: 7,
@@ -35,18 +36,15 @@ export const isInternalSender = (email, config = {}) => {
 // person from an internal forward. Do not use a closing "Regards" signature:
 // on an outbound ModAE mail that signature belongs to ModAE.
 export const customerContactFromText = text => {
-  const match = String(text || '').match(/(?:customer\s+)?(?:contact\s+person|contact|attn\.?|kind\s+attention)\s*[:\-]\s*([^\n;]+?)(?=\s+(?:contact\s+)?(?:phone|mobile|telephone)\s*[:\-]|$)/i)
-  return match ? match[1].trim() : ''
+  return extractLabeledValue(text, LEAD_LABELS.contactPerson)
 }
 
 export const customerPhoneFromText = text => {
-  const match = String(text || '').match(/(?:contact\s+phone|phone|mobile|telephone)\s*[:\-]\s*([+()\d][\d\s().-]{6,})/i)
-  return match ? match[1].trim().replace(/[.,;]+$/, '') : ''
+  return extractLabeledValue(text, LEAD_LABELS.contactPhone)
 }
 
 export const customerCompanyFromText = text => {
-  const match = String(text || '').match(/(?:sell[-\s]?to\s+customer|customer|buyer|company)\s*[:\-]\s*([^\n,;]+)/i)
-  return match ? match[1].trim().replace(/[.]+$/, '') : ''
+  return extractLabeledValue(text, LEAD_LABELS.sellTo).replace(/[,]+$/, '')
 }
 
 export const normalizeLeadContactFields = (fields, { from = '', text = '', config = {} } = {}) => {
@@ -82,7 +80,7 @@ export const hardenLeadExtraction = (ai, { from = '', text = '', config = {} } =
       const customerRequest = /^requested by customer$/i.test(value)
       return {
         ...field,
-        v: value,
+        v: cleanExtractedValue(value),
         factType: customerRequest ? 'customer_request' : (field?.factType || 'fact'),
         ev: evidence || 'Evidence not supplied — verify against the original enquiry',
         conf: customerRequest || missingEvidence
