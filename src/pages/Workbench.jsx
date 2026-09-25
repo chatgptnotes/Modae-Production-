@@ -593,13 +593,15 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
     // the same deviation terms commercialApprovalCoversProposal checks (raw
     // status 'Deviation', any decision) — otherwise the Approved row is voided
     // the moment the quote has a deviation term, and the dialog re-asks forever.
-    const wantsDeviationDetails = blocker.key === 'dev' || blocker.key === 'comm-approval'
+    const wantsDeviationDetails = blocker.key === 'dev' || blocker.key === 'comm-approval' || blocker.key === 'commercial-approval'
     const deviations = wantsDeviationDetails
-      ? (proposal?.terms || []).filter(t => t.status === 'Deviation').map(t => ({
-        term: t.term,
-        customerAsk: t.customerAsk || 'Not recorded',
-        ourResponse: t.ourResponse || 'Pending review',
-      }))
+      ? blocker.key === 'commercial-approval'
+        ? commercialApprovalDetails((proposal?.terms || []).filter(needsCommercialApproval))
+        : (proposal?.terms || []).filter(t => t.status === 'Deviation').map(t => ({
+          term: t.term,
+          customerAsk: t.customerAsk || 'Not recorded',
+          ourResponse: t.ourResponse || 'Pending review',
+        }))
       : []
     const blockingReason = blocker.key === 'dev'
       ? `${blocker.text} This blocks Proposal because the customer-requested terms differ from ModAE’s offered terms and require AH approval.`

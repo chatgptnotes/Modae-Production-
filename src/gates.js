@@ -486,6 +486,30 @@ const commercialApprovalCoversProposal = (approval, proposal) => {
 // concession one approver can sign away.
 export const NO_EXCEPTION = noExceptionKeys()
 
+const commercialDetailValue = value => String(value ?? '')
+  .toLowerCase()
+  .replace(/\s+/g, ' ')
+  .trim()
+
+// Requirement Validation approvals created before the commercial-detail fix
+// may have an empty deviationDetails array. Their approvalSnapshot still
+// records the signed commercial terms, so use it as a compatibility source.
+const recordedCommercialDetails = approval => {
+  if (approval?.deviationDetails?.length) return approval.deviationDetails
+  return (approval?.approvalSnapshot?.commercial?.terms || [])
+    .filter(term => commercialDetailValue(term.status) === 'deviation')
+    .map(term => ({ term: term.term, customerAsk: term.text }))
+}
+
+const commercialApprovalCoversTerms = (approval, terms) => {
+  const expected = commercialApprovalDetails(terms)
+  const recorded = recordedCommercialDetails(approval)
+  return expected.length > 0 && expected.every(item => recorded.some(saved =>
+    commercialDetailValue(saved.term) === commercialDetailValue(item.term)
+    && (!commercialDetailValue(item.customerAsk)
+      || commercialDetailValue(saved.customerAsk) === commercialDetailValue(item.customerAsk))))
+}
+
 export function approvalForRev(type, proposal, approvals, oppId, opportunity) {
   const rev = String(proposal?.revision ?? '')
   const mine = (approvals || []).filter(a =>
@@ -629,12 +653,11 @@ export function transitionBlockers(opp, target, proposal, state) {
       // a full proposal snapshot, so comparing that snapshot to only matched
       // terms would incorrectly reopen approval when an accepted counter-offer
       // is also present.
-      const expectedDetails = JSON.stringify(commercialApprovalDetails(matched))
       const matchingApproval = approvals
         .filter(approval => approval.oppId === opp.id
           && (approval.type === APPROVAL_5B || approval.type === 'Commercial deviation')
           && (approval.rev == null || String(approval.rev) === String(proposal?.revision ?? ''))
-          && JSON.stringify(approval.deviationDetails || []) === expectedDetails)
+          && commercialApprovalCoversTerms(approval, matched))
       const approved = matchingApproval.find(approval => ['Approved', 'Approved with conditions'].includes(approval.status))
       const waiting = matchingApproval.find(approval => approval.status === 'Pending')
       if (!approved) {

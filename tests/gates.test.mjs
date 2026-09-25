@@ -267,6 +267,43 @@ test('matched commercial terms require AH approval before Sourcing, per term', (
   assert.equal(approved.some(item => item.key === 'commercial-decision' || item.key === 'commercial-approval'), false)
 })
 
+test('Requirement Validation approval with legacy empty details clears Sourcing', () => {
+  const opp = { ...baseOpp, route: 'Spares', milestone: 'Screening' }
+  const proposal = {
+    revision: '01', bom: [{ qty: 1, listPrice: 100 }],
+    terms: [
+      { term: 'Payment', status: 'Deviation', decision: 'Match customer terms', customerAsk: '60 days', standardTerm: '30 days' },
+      { term: 'Delivery', status: 'Deviation', decision: 'Match customer terms', customerAsk: '6 weeks', standardTerm: '10–12 weeks' },
+    ],
+  }
+  const blockers = transitionBlockers(opp, 'Sourcing', proposal, {
+    approvals: [{
+      id: 'AP-LEGACY-COMM', oppId: opp.id, type: 'Commercial deviation', rev: '01', status: 'Approved',
+      deviationDetails: [],
+      approvalSnapshot: { commercial: { terms: [
+        { term: 'Payment', status: 'deviation', text: '60 days' },
+        { term: 'Delivery', status: 'deviation', text: '6 weeks' },
+      ] } },
+    }],
+    clarifications: [], sparesLines: [], config: {},
+  })
+  assert.equal(blockers.some(item => item.key === 'commercial-approval'), false)
+})
+
+test('commercial approval reopens when a matched customer request changes', () => {
+  const opp = { ...baseOpp, route: 'Spares', milestone: 'Screening' }
+  const proposal = {
+    revision: '01', bom: [{ qty: 1, listPrice: 100 }],
+    terms: [{ term: 'Payment', status: 'Deviation', decision: 'Match customer terms', customerAsk: '90 days', standardTerm: '30 days' }],
+  }
+  const approval = {
+    id: 'AP-COMM-CHANGE', oppId: opp.id, type: 'Commercial deviation', rev: '01', status: 'Approved',
+    deviationDetails: [{ term: 'Payment', customerAsk: '60 days', ourResponse: '60 days' }],
+  }
+  const blockers = transitionBlockers(opp, 'Sourcing', proposal, { approvals: [approval], clarifications: [], sparesLines: [], config: {} })
+  assert.ok(blockers.some(item => item.key === 'commercial-approval'))
+})
+
 test('approval checklist omits commercial approval for standard terms', () => {
   const gates = approvalSet(releasedProposal, [], 'OP-1', baseOpp)
   assert.deepEqual(gates.map(g => g.type), ['Technical approval', 'Final quote release'])

@@ -315,6 +315,10 @@ test('the transition dialog stamps deviation details on §5B requests', () => {
   const source = read('src/pages/Workbench.jsx')
   assert.match(source, /blocker\.key === 'comm-approval'/,
     'approvalContextFor must record deviation details for the comm-approval blocker')
+  assert.match(source, /blocker\.key === 'commercial-approval'/,
+    'Requirement Validation commercial blockers must record canonical deviation details')
+  assert.match(source, /commercialApprovalDetails\(\(proposal\?\.terms \|\| \[\]\)\.filter\(needsCommercialApproval\)\)/,
+    'Requirement Validation approvals must cover only the matched customer terms')
 })
 
 test('a System Owner decision on an AH-only gate is discarded loudly, not silently', () => {
