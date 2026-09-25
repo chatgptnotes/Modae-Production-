@@ -27,6 +27,27 @@ test('stored workbook reviews are recomputed from the pre-import snapshot and sh
   assert.match(proposal, /const otherReviewIssues = displayReviewIssues\.filter\(issue => issue\.code !== 'line\.value-changed'\)/)
 })
 
+test('validation findings are grouped with a readable summary', () => {
+  assert.match(proposal, /proposal-review-issues-header/)
+  assert.match(proposal, /proposal-review-counts/)
+  assert.match(proposal, /const blockingReviewIssues = otherReviewIssues\.filter\(issue => issue\.severity === 'block'\)/)
+  assert.match(proposal, /const warningReviewIssues = otherReviewIssues\.filter\(issue => issue\.severity === 'warning'\)/)
+  assert.match(proposal, /const informationalReviewIssues = otherReviewIssues\.filter\(issue => issue\.severity === 'info'\)/)
+  assert.match(proposal, /Blocking findings/)
+  assert.match(proposal, /Needs review/)
+  assert.match(proposal, /Informational/)
+})
+
+test('AI findings and extracted value changes use structured display formatting', () => {
+  assert.match(proposal, /if \(code === 'ai\.unavailable'\) return 'AI review unavailable'/)
+  assert.match(proposal, /const aiLabel = code\.replace\(\/\^ai\[-_\.\]\?\/i/)
+  assert.match(proposal, /const reviewNumber = new Intl\.NumberFormat\('en-IN'/)
+  assert.match(proposal, /const change = issue\.code === 'line\.value-changed' \? issue\.change : null/)
+  assert.match(proposal, /Previous/)
+  assert.match(proposal, /Uploaded value/)
+  assert.match(proposal, /proposal-review-ai-text/)
+})
+
 test('ModAE standard commercial terms are complete and non-blocking', () => {
   const terms = modaeStandardCommercialTerms()
   assert.deepEqual(terms.map(term => term.key), ['payment', 'delivery', 'warranty', 'freight', 'validity'])

@@ -169,16 +169,36 @@ const reviewFindingTitle = issue => {
   if (code === 'line.total') return 'Line total does not reconcile'
   if (/contradict/i.test(issue?.text)) return 'Commercial term mismatch'
   if (/upload received/i.test(issue?.text)) return 'Reviewed workbook received'
-  if (issue?.source === 'AI') return 'AI review finding'
+  if (issue?.source === 'AI') {
+    if (code === 'ai.unavailable') return 'AI review unavailable'
+    const aiLabel = code.replace(/^ai[-_.]?/i, '').replace(/[-_.]+/g, ' ').trim()
+    return aiLabel ? `${aiLabel.charAt(0).toUpperCase()}${aiLabel.slice(1)} review` : 'AI review finding'
+  }
   return 'Review finding'
 }
 
 const reviewSeverityLabel = severity => ({ block: 'Blocking', warning: 'Needs review', info: 'Information' }[severity] || 'Needs review')
+const reviewNumber = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 })
+const reviewValue = (field, value) => {
+  if (value == null || String(value).trim() === '') return 'Blank'
+  if (['quantity', 'unitPrice', 'totalPrice'].includes(field) && Number.isFinite(Number(value))) return reviewNumber.format(Number(value))
+  return String(value)
+}
 
 function ReviewIssue({ issue, overridden = false, onUseStandardTerms }) {
+  const change = issue.code === 'line.value-changed' ? issue.change : null
   return <div className={`proposal-review-issue ${overridden ? 'info' : issue.severity}`}>
     <div className="proposal-review-issue-head"><span className="proposal-review-severity">{overridden ? 'Overridden' : reviewSeverityLabel(issue.severity)}</span><strong>{reviewFindingTitle(issue)}</strong>{issue.source === 'AI' && <span className="proposal-review-source">AI review</span>}</div>
-    <p className="proposal-review-issue-text">{issue.text}</p>
+    {change
+      ? <div className="proposal-review-value-change">
+          <div className="proposal-review-value-change-item"><span>Item</span><strong>{change.line || 'Proposal line'}</strong></div>
+          <div className="proposal-review-value-change-field"><span>{change.label || 'Changed value'}</span></div>
+          <div className="proposal-review-value-change-values">
+            <div><span>Previous</span><code>{reviewValue(change.field, change.before)}</code></div>
+            <div><span>Uploaded value</span><code>{reviewValue(change.field, change.after)}</code></div>
+          </div>
+        </div>
+      : <p className={`proposal-review-issue-text ${issue.source === 'AI' ? 'proposal-review-ai-text' : ''}`}>{issue.text}</p>}
     {issue.evidence && <div className="proposal-review-evidence"><span>Evidence</span><code>{issue.evidence}</code></div>}
     {issue.approval && <span className="proposal-review-approval">Already approved{issue.approval.approver ? ` by ${issue.approval.approver}` : ''}{issue.approval.date ? ` on ${issue.approval.date}` : ''}</span>}
     {!overridden && issue.code === 'terms.missing' && onUseStandardTerms && <button type="button" className="btn-secondary proposal-review-action" onClick={onUseStandardTerms}>Use ModAE standard terms</button>}
@@ -921,6 +941,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   }
   const commercialDecisionTerms = (p.terms || []).filter(term => term.status === 'Deviation')
   const requestCommercialApproval = terms => {
+    if (store.config?.requireCommercialDeviationApproval === false) return
     const deviationDetails = commercialApprovalDetails(terms)
     if (!deviationDetails.length) return
     const lead = (store.leads || []).find(item => item.oppId === oppId)
@@ -1008,6 +1029,9 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     && displayReviewIssues.every(issue => issue.severity === 'info')
   const workbookChangeIssues = displayReviewIssues.filter(issue => issue.code === 'line.value-changed')
   const otherReviewIssues = displayReviewIssues.filter(issue => issue.code !== 'line.value-changed')
+  const blockingReviewIssues = otherReviewIssues.filter(issue => issue.severity === 'block')
+  const warningReviewIssues = otherReviewIssues.filter(issue => issue.severity === 'warning')
+  const informationalReviewIssues = otherReviewIssues.filter(issue => issue.severity === 'info')
   const workflowBlocked = blockers.some(bl => bl.severity === 'block' || bl.severity === 'wait')
   const approvalRequired = blockers.some(bl => bl.approvalType && bl.severity !== 'wait') || pendingForOpp.length > 0
   const reviewBanner = reviewStatus === 'Needs attention'
@@ -1579,16 +1603,35 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
           {reviewError && <div className="errbox">{reviewError}</div>}
           {reviewMessage && <div className="okbox">{reviewMessage}</div>}
           {p.reviewCompletedAt && <div className={`proposal-review-issues ${overrideAccepted ? 'is-overridden' : ''}`}>
-            <strong>{overrideAccepted ? 'Previously reviewed findings' : reviewIssuesAreInformational ? 'Validation notes' : 'Validation findings'}</strong>
+            <div className="proposal-review-issues-header">
+              <div>
+                <strong>{overrideAccepted ? 'Previously reviewed findings' : reviewIssuesAreInformational ? 'Validation notes' : 'Validation findings'}</strong>
+                <span>{displayReviewIssues.length ? 'Review each item before moving this proposal forward.' : 'The validation pass completed without findings.'}</span>
+              </div>
+              {!!displayReviewIssues.length && <div className="proposal-review-counts" aria-label="Finding summary">
+                {!!blockingReviewIssues.length && <span className="proposal-review-count proposal-review-count-block">{blockingReviewIssues.length} blocking</span>}
+                {!!warningReviewIssues.length && <span className="proposal-review-count proposal-review-count-warning">{warningReviewIssues.length} needs review</span>}
+                {!!informationalReviewIssues.length && <span className="proposal-review-count proposal-review-count-info">{informationalReviewIssues.length} informational</span>}
+                {!!workbookChangeIssues.length && <span className="proposal-review-count proposal-review-count-change">{workbookChangeIssues.length} workbook change{workbookChangeIssues.length === 1 ? '' : 's'}</span>}
+              </div>}
+            </div>
             {overrideAccepted && <div className="proposal-review-memory-summary">{displayReviewIssues.length} finding{displayReviewIssues.length === 1 ? '' : 's'} overridden by {displayRole(p.reviewOverride.by)}{p.reviewOverride.at ? ` on ${approvalDate(p.reviewOverride.at)}` : ''}. These findings are retained for audit and no longer block this proposal.</div>}
             {!!workbookChangeIssues.length && <div className="proposal-review-workbook-changes">
-              <strong>Workbook changes detected</strong>
-              {workbookChangeIssues.map((issue, index) => <ReviewIssue key={`change-${index}`} issue={issue} overridden={overrideAccepted} />)}
+              <div className="proposal-review-group-head"><strong>Workbook changes detected</strong><span>{workbookChangeIssues.length} item{workbookChangeIssues.length === 1 ? '' : 's'}</span></div>
+              <div className="proposal-review-group-list">{workbookChangeIssues.map((issue, index) => <ReviewIssue key={`change-${index}`} issue={issue} overridden={overrideAccepted} />)}</div>
             </div>}
             {!!otherReviewIssues.length
               ? overrideAccepted
-                ? <details className="proposal-review-history"><summary>Show finding details</summary>{otherReviewIssues.map((issue, index) => <ReviewIssue key={index} issue={issue} overridden />)}</details>
-                : otherReviewIssues.map((issue, index) => <ReviewIssue key={index} issue={issue} onUseStandardTerms={useModaeStandardTerms} />)
+                ? <details className="proposal-review-history"><summary>Show finding details</summary>
+                    {!!blockingReviewIssues.length && <div className="proposal-review-group proposal-review-group-block"><div className="proposal-review-group-head"><strong>Blocking findings</strong><span>{blockingReviewIssues.length} item{blockingReviewIssues.length === 1 ? '' : 's'}</span></div><div className="proposal-review-group-list">{blockingReviewIssues.map((issue, index) => <ReviewIssue key={`block-${index}`} issue={issue} overridden />)}</div></div>}
+                    {!!warningReviewIssues.length && <div className="proposal-review-group proposal-review-group-warning"><div className="proposal-review-group-head"><strong>Needs review</strong><span>{warningReviewIssues.length} item{warningReviewIssues.length === 1 ? '' : 's'}</span></div><div className="proposal-review-group-list">{warningReviewIssues.map((issue, index) => <ReviewIssue key={`warning-${index}`} issue={issue} overridden />)}</div></div>}
+                    {!!informationalReviewIssues.length && <div className="proposal-review-group proposal-review-group-info"><div className="proposal-review-group-head"><strong>Informational</strong><span>{informationalReviewIssues.length} item{informationalReviewIssues.length === 1 ? '' : 's'}</span></div><div className="proposal-review-group-list">{informationalReviewIssues.map((issue, index) => <ReviewIssue key={`info-${index}`} issue={issue} overridden />)}</div></div>}
+                  </details>
+                : <>
+                    {!!blockingReviewIssues.length && <div className="proposal-review-group proposal-review-group-block"><div className="proposal-review-group-head"><strong>Blocking findings</strong><span>{blockingReviewIssues.length} item{blockingReviewIssues.length === 1 ? '' : 's'}</span></div><div className="proposal-review-group-list">{blockingReviewIssues.map((issue, index) => <ReviewIssue key={`block-${index}`} issue={issue} onUseStandardTerms={useModaeStandardTerms} />)}</div></div>}
+                    {!!warningReviewIssues.length && <div className="proposal-review-group proposal-review-group-warning"><div className="proposal-review-group-head"><strong>Needs review</strong><span>{warningReviewIssues.length} item{warningReviewIssues.length === 1 ? '' : 's'}</span></div><div className="proposal-review-group-list">{warningReviewIssues.map((issue, index) => <ReviewIssue key={`warning-${index}`} issue={issue} onUseStandardTerms={useModaeStandardTerms} />)}</div></div>}
+                    {!!informationalReviewIssues.length && <div className="proposal-review-group proposal-review-group-info"><div className="proposal-review-group-head"><strong>Informational</strong><span>{informationalReviewIssues.length} item{informationalReviewIssues.length === 1 ? '' : 's'}</span></div><div className="proposal-review-group-list">{informationalReviewIssues.map((issue, index) => <ReviewIssue key={`info-${index}`} issue={issue} onUseStandardTerms={useModaeStandardTerms} />)}</div></div>}
+                  </>
               : !workbookChangeIssues.length && <div className="proposal-review-issue info">Review complete — proposal is ready to proceed.</div>}
             {reviewStatus === 'Needs attention' && <button className="btn-secondary" onClick={() => setOverrideConfirmOpen(true)}>Continue anyway</button>}
           </div>}

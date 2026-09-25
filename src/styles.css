@@ -79,6 +79,46 @@
   --font-document: 'Candara', 'Optima', 'Segoe UI', system-ui, sans-serif;
 }
 
+/* Long-running document work gets its own stable surface so route changes and
+   async extraction do not leave the user staring at an apparently idle page. */
+.scan-progress {
+  max-width: 560px;
+  margin: 12px 0;
+}
+.scan-progress-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.scan-progress-spinner {
+  display: inline-flex;
+  color: var(--color-primary-hover);
+  animation: scan-progress-pulse 1.2s ease-in-out infinite;
+}
+.scan-progress-file {
+  overflow-wrap: anywhere;
+}
+.scan-progress-stages {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+}
+.scan-progress-stage {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-subtle);
+  font-size: 13px;
+}
+.scan-progress-stage.active { color: var(--color-primary-hover); font-weight: 600; }
+.scan-progress-stage.complete { color: var(--status-success); }
+.scan-progress-stage-icon { width: 14px; display: inline-flex; justify-content: center; }
+.scan-progress-track { margin-top: 12px; }
+.scan-progress-error { margin-top: 10px; }
+@keyframes scan-progress-pulse {
+  50% { opacity: .45; transform: rotate(45deg); }
+}
+
 /* Accessible dark roles: light text is never placed on a light surface and
    the red action is lifted for AA contrast on dark surfaces. */
 .theme-dark {
@@ -9475,17 +9515,105 @@ button.install, .btn.install,
   margin-top: 0;
 }
 .proposal-review-issues {
-  gap: 8px;
-  padding: 14px;
+  gap: 14px;
+  padding: 18px;
 }
-.proposal-review-issues > strong {
-  display: block;
-  padding: 0 2px 2px;
+.proposal-review-issues-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 0 2px 4px;
+}
+.proposal-review-issues-header > div:first-child {
+  display: grid;
+  gap: 5px;
+}
+.proposal-review-issues-header strong {
+  color: var(--text-main);
+  font-size: 16px;
+  line-height: 1.2;
+}
+.proposal-review-issues-header span {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.proposal-review-counts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.proposal-review-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 25px;
+  padding: 4px 8px;
+  border: 1px solid currentColor;
+  border-radius: 5px;
+  font-size: 10px !important;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+.proposal-review-count-block { color: var(--palette-8784f8b3) !important; background: var(--palette-f07f705); }
+.proposal-review-count-warning { color: var(--palette-3f67030b) !important; background: var(--palette-95bf2caf); }
+.proposal-review-count-info { color: var(--palette-de19fed9) !important; background: var(--palette-8765e122); }
+.proposal-review-count-change { color: var(--palette-8784f8b3) !important; background: var(--palette-f07f705); }
+.proposal-review-group,
+.proposal-review-workbook-changes {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border-soft);
+  border-left: 3px solid var(--border-default);
+  border-radius: 8px;
+  background: var(--surface-default, var(--palette-4843938));
+}
+.proposal-review-group-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 1px 2px;
+}
+.proposal-review-group-head strong {
   color: var(--text-main);
   font-size: 13px;
+  line-height: 1.25;
+}
+.proposal-review-group-head span {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.proposal-review-group-list {
+  display: grid;
+  gap: 8px;
+}
+.proposal-review-group-block { border-left-color: var(--palette-9c482213); }
+.proposal-review-group-warning { border-left-color: var(--palette-bcd85701); }
+.proposal-review-group-info { border-left-color: var(--palette-1fb54521); }
+.proposal-review-workbook-changes {
+  border-color: var(--palette-9c482213);
+  border-left-color: var(--palette-9c482213);
+  background: var(--palette-f07f705);
+}
+.proposal-review-workbook-changes .proposal-review-issue { background: var(--palette-95bf2caf); }
+.proposal-review-issues.is-overridden .proposal-review-group,
+.proposal-review-issues.is-overridden .proposal-review-workbook-changes {
+  border-left-color: var(--status-good);
+}
+.proposal-review-issues.is-overridden .proposal-review-group-head strong,
+.proposal-review-issues.is-overridden .proposal-review-workbook-changes .proposal-review-group-head strong {
+  color: var(--status-good);
 }
 .proposal-review-issue {
-  padding: 10px 12px;
+  padding: 13px 14px;
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  border-radius: 6px;
 }
 .proposal-review-issue-head {
   min-height: 20px;
@@ -9496,14 +9624,69 @@ button.install, .btn.install,
 }
 .proposal-review-issue-text {
   max-width: 92ch;
-  margin-top: 6px;
-  line-height: 1.45;
+  margin-top: 7px;
+  line-height: 1.55;
+}
+.proposal-review-ai-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.proposal-review-value-change {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  max-width: 760px;
+}
+.proposal-review-value-change-item {
+  display: grid;
+  gap: 3px;
+}
+.proposal-review-value-change-item span,
+.proposal-review-value-change-field,
+.proposal-review-value-change-values span {
+  color: currentColor;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  opacity: .78;
+  text-transform: uppercase;
+}
+.proposal-review-value-change-item strong {
+  color: inherit;
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.proposal-review-value-change-field {
+  padding-top: 7px;
+  border-top: 1px solid color-mix(in srgb, currentColor 16%, transparent);
+}
+.proposal-review-value-change-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.proposal-review-value-change-values > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
+  border-radius: 5px;
+  background: color-mix(in srgb, currentColor 6%, transparent);
+}
+.proposal-review-value-change-values code {
+  min-width: 0;
+  color: inherit;
+  font: 600 12px/1.3 var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
 }
 .proposal-review-evidence {
   grid-template-columns: 68px minmax(0, 1fr);
   align-items: baseline;
-  margin-top: 8px;
-  padding-top: 7px;
+  margin-top: 10px;
+  padding-top: 9px;
 }
 .proposal-review-issues > .btn-secondary {
   justify-self: end;
@@ -9544,6 +9727,17 @@ button.install, .btn.install,
   .proposal-review-issues {
     padding: 10px;
   }
+  .proposal-review-issues-header {
+    display: grid;
+    gap: 12px;
+  }
+  .proposal-review-counts {
+    justify-content: flex-start;
+  }
+  .proposal-review-group,
+  .proposal-review-workbook-changes {
+    padding: 11px;
+  }
   .proposal-review-issues > .btn-secondary {
     width: 100%;
   }
@@ -9559,6 +9753,9 @@ button.install, .btn.install,
   }
   .proposal-review-evidence > span {
     font-size: 9px;
+  }
+  .proposal-review-value-change-values {
+    grid-template-columns: 1fr;
   }
 }
 
