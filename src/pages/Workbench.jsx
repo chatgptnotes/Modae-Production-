@@ -275,25 +275,44 @@ const activeStepConfigLabel = step => {
 
 const activeStepForNotice = opp => opp.route === 'Service' ? 'service-intake' : 'intake'
 
+function OpportunityLoading() {
+  return (
+    <div className="page" role="status" aria-live="polite">
+      <h2>Loading opportunity</h2>
+      <p className="hint">Restoring the workspace from the shared sales data. This should only take a moment.</p>
+    </div>
+  )
+}
+
+function OpportunityNotFound({ oppId }) {
+  return (
+    <div className="page">
+      <h2>Opportunity not found</h2>
+      <p className="hint">No opportunity with ID <b>{oppId}</b> — it may have been deleted or the link is stale.</p>
+      <Link to="/">Back to the tracker</Link>
+    </div>
+  )
+}
+
 export default function Workbench() {
   const { oppId, tab = 'overview' } = useParams()
   const store = useStore()
-  const nav = useNavigate()
   const [searchParams] = useSearchParams()
-  const [transition, setTransition] = useState(null)
-  const [createdNotice, setCreatedNotice] = useState(() => searchParams.get('created') === '1')
-  const detailsRef = useRef(null)
   const opp = store.opportunities.find(o => o.id === oppId)
 
   if (!opp) {
-    return (
-      <div className="page">
-        <h2>Opportunity not found</h2>
-        <p className="hint">No opportunity with ID <b>{oppId}</b> — it may have been deleted or the link is stale.</p>
-        <Link to="/">Back to the tracker</Link>
-      </div>
-    )
+    if (!store.authReady || store.liveSyncStatus === 'connecting') return <OpportunityLoading />
+    return <OpportunityNotFound oppId={oppId} />
   }
+
+  return <WorkbenchWorkspace oppId={oppId} tab={tab} store={store} searchParams={searchParams} opp={opp} />
+}
+
+function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp }) {
+  const nav = useNavigate()
+  const [transition, setTransition] = useState(null)
+  const [createdNotice, setCreatedNotice] = useState(() => searchParams.get('created') === '1')
+  const detailsRef = useRef(null)
 
   const dismissCreatedNotice = () => {
     setCreatedNotice(false)
