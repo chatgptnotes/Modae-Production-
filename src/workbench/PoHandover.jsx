@@ -12,8 +12,8 @@ const stateTone = s =>
 export default function PoHandover({ opp }) {
   const store = useStore()
   const role = store.role
-  const pc = store.poCompare[opp.id]
-  const ho = store.handover[opp.id]
+  const pc = store.poCompare?.[opp.id]
+  const ho = store.handover?.[opp.id]
   const [reasons, setReasons] = useState({})
   const [acctSim, setAcctSim] = useState(false)
 

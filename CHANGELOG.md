@@ -5,6 +5,10 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Hardened workspace rendering against incomplete hydrated state by normalizing
+  map-shaped slices and guarding opportunity-scoped lookups. Supabase save
+  diagnostics now retain the failed entity and HTTP status, and the active
+  `save_rows` migration explicitly grants browser execution.
 - Hardened modal, workspace, proposal, price-list, attachment, and inline-editor
   DOM interactions so delayed focus and scrolling skip nodes detached during
   route changes, state updates, or hydration.

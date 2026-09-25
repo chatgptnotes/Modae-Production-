@@ -211,7 +211,11 @@ export function migrate(s) {
     })
   }
   if (!ROLES[s.role]) s.role = 'SUPER'
-  if (!s.communications) s.communications = {}
+  // Hydration can combine a newer server slice with an older local snapshot.
+  // Keep map-shaped slices usable before route components render.
+  for (const key of ['files', 'proposals', 'communications']) {
+    if (!s[key] || typeof s[key] !== 'object' || Array.isArray(s[key])) s[key] = {}
+  }
   if (!s.oneTimeCleanups || typeof s.oneTimeCleanups !== 'object' || Array.isArray(s.oneTimeCleanups)) s.oneTimeCleanups = {}
   if (!Array.isArray(s.leads)) s.leads = demo ? seedLeads : []
   if (!Array.isArray(s.deletedLeadIds)) s.deletedLeadIds = []
@@ -322,7 +326,7 @@ export function migrate(s) {
     || ['gemini-2.5-flash-lite', 'gemini-3.6-flash'].includes(s.config.aiModel.model)) {
     s.config.aiModel = { ...seedConfig.aiModel, ...s.config.aiModel, ...{ provider: 'Google', model: seedConfig.aiModel.model } }
   }
-  if (!s.kyc) s.kyc = demo ? seedKyc : {}
+  if (!s.kyc || typeof s.kyc !== 'object' || Array.isArray(s.kyc)) s.kyc = demo ? seedKyc : {}
   if (!Array.isArray(s.leadArchive)) s.leadArchive = []
   if (!Array.isArray(s.leadDeadlines)) s.leadDeadlines = []
   if (!s.sales) s.sales = demo ? seedSales : emptySales()
@@ -357,13 +361,13 @@ export function migrate(s) {
   // Demo Launcher scenario 6 needs a PO already in review to open onto. Backfill
   // by key so a saved state that predates the seed picks it up, without ever
   // overwriting a PO the user has been working on.
-  if (!s.poCompare) s.poCompare = {}
+  if (!s.poCompare || typeof s.poCompare !== 'object' || Array.isArray(s.poCompare)) s.poCompare = {}
   if (demo) {
     for (const [oppId, po] of Object.entries(seedPoCompare)) {
       if (!s.poCompare[oppId]) s.poCompare = { ...s.poCompare, [oppId]: po }
     }
   }
-  if (!s.handover) s.handover = demo && seedHandover && Object.keys(seedHandover).length ? seedHandover : {}
+  if (!s.handover || typeof s.handover !== 'object' || Array.isArray(s.handover)) s.handover = demo && seedHandover && Object.keys(seedHandover).length ? seedHandover : {}
   if (s.viewMode !== 'tablet' && s.viewMode !== 'full') s.viewMode = defaultViewMode()
   if (s.viewModeRestoreRev === 1) {
     s.viewMode = defaultViewMode()
@@ -381,11 +385,11 @@ export function migrate(s) {
   if (!Array.isArray(s.opportunitySyncBaseline)) s.opportunitySyncBaseline = []
   // Diagram 02 workflow objects: the Brownfield B-01..B-05 sign-off ledger,
   // the §4 service site surveys, and §8 competitor tracking.
-  if (!s.bSteps) s.bSteps = {}
-  if (!s.bStepOwners) s.bStepOwners = {}
+  if (!s.bSteps || typeof s.bSteps !== 'object' || Array.isArray(s.bSteps)) s.bSteps = {}
+  if (!s.bStepOwners || typeof s.bStepOwners !== 'object' || Array.isArray(s.bStepOwners)) s.bStepOwners = {}
   if (!Array.isArray(s.surveys)) s.surveys = []
   if (!Array.isArray(s.competitors)) s.competitors = []
-  if (!s.spSync) s.spSync = {}
+  if (!s.spSync || typeof s.spSync !== 'object' || Array.isArray(s.spSync)) s.spSync = {}
   if (!s.auth) s.auth = { user: null }
   // Price lists added to the seed after a state was saved (e.g. Meggitt) land
   // by name — existing lists are the user's data and are never overwritten.

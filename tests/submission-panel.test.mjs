@@ -195,7 +195,7 @@ test('Gmail compose failures surface a useful message', () => {
 test('the page distinguishes an opened Gmail draft from a confirmed sent email', () => {
   assert.match(submission, /status: 'draft'/)
   assert.match(submission, /revision: String\(p\.revision \?\? ''\)/)
-  assert.match(submission, /latestSubmissionForRevision\(store\.communications\[opp\.id\], p\.revision\)/)
+  assert.match(submission, /latestSubmissionForRevision\(store\.communications\?\.\[opp\.id\], p\.revision\)/)
   assert.match(submission, /Mark as sent/)
   assert.match(submission, /status: 'sent'/)
   assert.match(submission, /Proposal email marked as sent/)

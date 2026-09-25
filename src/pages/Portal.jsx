@@ -41,7 +41,7 @@ export default function Portal() {
     .flatMap(([oppId, rows]) => (rows || []).filter(r => r.kind === 'submission').map(r => ({ ...r, oppId })))
     .sort((a, b) => (b.ts || '').localeCompare(a.ts || ''))
   const latestSub = submissions[0]
-  const acked = latestSub && (store.communications[latestSub.oppId] || []).some(r => r.kind === 'ack')
+  const acked = latestSub && (store.communications?.[latestSub.oppId] || []).some(r => r.kind === 'ack')
 
   const sendAnswer = c => {
     const response = (answers[c.id] || '').trim()

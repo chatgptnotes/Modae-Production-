@@ -85,6 +85,15 @@ test('save failures expose the Supabase error in sync diagnostics', () => {
   const store = read('src/store.jsx')
   assert.match(store, /lastSaveError: saveError/)
   assert.match(store, /message: e\?\.message \|\| 'Supabase save failed'/)
+  assert.match(store, /entity: e\?\.entity \|\| ''/)
+  assert.match(store, /status: e\?\.status \|\| e\?\.statusCode \|\| null/)
+})
+
+test('save RPC errors retain the entity that failed', () => {
+  const datastore = read('src/datastore.js')
+  assert.match(datastore, /const annotateRpcError = \(entity, error\)/)
+  assert.match(datastore, /throw annotateRpcError\(entity, result\.error\)/)
+  assert.match(datastore, /throw annotateRpcError\('opportunities', result\.error\)/)
 })
 
 test('focus retries dirty writes before refreshing shared data', () => {

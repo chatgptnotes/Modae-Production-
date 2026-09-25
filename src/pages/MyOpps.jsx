@@ -34,7 +34,7 @@ export default function MyOpps() {
   const isAdmin = ROLES[role]?.admin || ROLES[role]?.commercial
   if (mine && !isAdmin && !showAll) rows = rows.filter(o => o.owner === role)
 
-  const devCount = o => ((store.proposals[o.id] || {}).terms || []).filter(t => t.status === 'Deviation').length
+  const devCount = o => ((store.proposals?.[o.id] || {}).terms || []).filter(t => t.status === 'Deviation').length
 
   const fullCell = (o, key) => {
     if (['cogsK', 'gmK', 'gmPct'].includes(key) && !canSeeCommercial) return <Icon name="lock" size={12} />

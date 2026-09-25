@@ -47,8 +47,8 @@ test('Spares skips the Brownfield sign-off UI', () => {
 
 test('legacy Brownfield records remain loadable without active sign-off behavior', () => {
   const state = read('src/appState.js')
-  assert.match(state, /if \(!s\.bSteps\) s\.bSteps = \{\}/)
-  assert.match(state, /if \(!s\.bStepOwners\) s\.bStepOwners = \{\}/)
+  assert.match(state, /if \(!s\.bSteps \|\| typeof s\.bSteps !== 'object' \|\| Array\.isArray\(s\.bSteps\)\) s\.bSteps = \{\}/)
+  assert.match(state, /if \(!s\.bStepOwners \|\| typeof s\.bStepOwners !== 'object' \|\| Array\.isArray\(s\.bStepOwners\)\) s\.bStepOwners = \{\}/)
   const store = read('src/store.jsx')
   assert.match(store, /assignBStep\(/)
   assert.match(store, /signBStep\(/)

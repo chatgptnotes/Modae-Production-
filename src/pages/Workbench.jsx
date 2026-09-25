@@ -1143,7 +1143,7 @@ function CustomerKycTab({ opp }) {
   const [details, setDetails] = useState(detailSeed)
   const [detailSaved, setDetailSaved] = useState(false)
   const [dirtyDetailKeys, setDirtyDetailKeys] = useState(() => new Set())
-  const items = (customer && store.kyc[customer.name])
+  const items = (customer && store.kyc?.[customer.name])
     || (store.config?.kycItems || []).map(n => ({ name: n, state: 'Missing', when: '' }))
   const leadKycVerified = opp.leadVerification?.status === 'Verified'
   const displayedKycStatus = leadKycVerified ? 'Valid' : (customer?.kyc || '—')
@@ -2738,8 +2738,8 @@ function CommsTab({ opp, readOnly = false }) {
 
 function FilesTab({ opp }) {
   const store = useStore()
-  const folders = store.files[opp.id] || Object.fromEntries(SUBFOLDERS.map(f => [f, []]))
-  const sp = store.spSync[opp.id]
+  const folders = store.files?.[opp.id] || Object.fromEntries(SUBFOLDERS.map(f => [f, []]))
+  const sp = store.spSync?.[opp.id]
   const syncPill = sp?.error
     ? <span className="pill Red">SP error</span>
     : sp

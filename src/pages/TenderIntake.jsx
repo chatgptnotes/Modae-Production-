@@ -159,7 +159,7 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
   const setCompRow = (i, k) => e => setComp(comp.map((c, j) => (j === i ? { ...c, [k]: e.target.value } : c)))
 
   const attachTarget = target !== 'new' ? store.opportunities.find(o => o.id === target) : null
-  const attachHasBoq = attachTarget && ((store.proposals[target] || {}).bom || []).length > 0
+  const attachHasBoq = attachTarget && ((store.proposals?.[target] || {}).bom || []).length > 0
   const includedCount = include.filter(Boolean).length
   const requiredOk = includedCount > 0 && (target !== 'new'
     ? true

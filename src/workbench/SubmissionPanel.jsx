@@ -107,7 +107,7 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
     .flatMap(a => (a.conditions || []).filter(c => !c.incorporated)
       .map(c => ({ ...c, approver: a.approver, type: a.type })))
   const pendingCommercialConfirmations = (p.terms || []).filter(isCounterAwaitingCustomer)
-  const submission = latestSubmissionForRevision(store.communications[opp.id], p.revision)
+  const submission = latestSubmissionForRevision(store.communications?.[opp.id], p.revision)
   const alreadySent = submission?.status === 'sent'
   const draftOpened = sentNow || submission?.status === 'draft'
   const releasePending = !release

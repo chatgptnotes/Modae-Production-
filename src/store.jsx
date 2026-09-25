@@ -376,6 +376,8 @@ export function StoreProvider({ children }) {
           code: e?.code || '',
           details: e?.details || '',
           hint: e?.hint || '',
+          entity: e?.entity || '',
+          status: e?.status || e?.statusCode || null,
         }
         setSyncDiagnostics(diagnostics => ({
           ...diagnostics,
@@ -893,8 +895,8 @@ export function StoreProvider({ children }) {
 
     getProposal(oppId) {
       const s = stateRef.current
-      if (s.proposals[oppId]) return s.proposals[oppId]
-      const opp = s.opportunities.find(o => o.id === oppId)
+      if (s.proposals?.[oppId]) return s.proposals[oppId]
+      const opp = (s.opportunities || []).find(o => o.id === oppId)
       return newProposal(oppId, opp, { validityDays: s.config?.proposalValidityDays, currencyRates: s.config?.currencyRates, costingDefaults: s.config?.costingDefaults })
     },
 

@@ -36,6 +36,10 @@ test('the key-column set includes Proposal Send Date instead of Expected Order D
   assert.ok(!keys.includes('lastUpdated'), 'Updated is not required for a sales owner')
 })
 
+test('opportunity proposal lookups tolerate incomplete hydration state', () => {
+  assert.match(myOpps, /store\.proposals\?\.\[o\.id\]/)
+})
+
 test('sales owners open on the key columns, everyone else on the full sheet', () => {
   assert.match(tracker, /const \[colView, setColView\] = useState\(\(\) =>/)
   assert.match(tracker, /\? 'key' : 'all'/)

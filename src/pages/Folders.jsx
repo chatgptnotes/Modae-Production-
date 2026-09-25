@@ -55,7 +55,7 @@ export default function Folders() {
   useEffect(() => { setConfirmDel(null) }, [oppId, sub])
 
   const opp = oppId ? store.opportunities.find(o => o.id === oppId) : null
-  const files = opp ? (store.files[opp.id] || Object.fromEntries(SUBFOLDERS.map(f => [f, []]))) : null
+  const files = opp ? (store.files?.[opp.id] || Object.fromEntries(SUBFOLDERS.map(f => [f, []]))) : null
   const subNames = files ? Object.keys(files) : []
   const subfolder = sub && subNames.includes(sub) ? sub : null
 
@@ -79,7 +79,7 @@ export default function Folders() {
     filestore.listOppFiles(opp).then(map => {
       if (!alive || !map) return
       Object.entries(map).forEach(([sf, rows]) => {
-        const have = ((store.files[opp.id] || {})[sf] || []).map(f => f.name)
+        const have = ((store.files?.[opp.id] || {})[sf] || []).map(f => f.name)
         rows.forEach(r => { if (!have.includes(r.name)) store.addFile(opp.id, sf, r) })
       })
     }).catch(e => { if (alive) setCloudErr(e.message) })

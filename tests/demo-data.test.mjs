@@ -146,6 +146,13 @@ test('the seeded state is flagged as demo data', () => {
   assert.equal(seedState().demoData, true)
 })
 
+test('migrate repairs missing map-shaped slices before rendering', () => {
+  const migrated = migrate({ demoData: false, opportunities: [], leads: [], approvals: [] })
+  for (const key of ['files', 'proposals', 'communications', 'kyc', 'poCompare', 'handover', 'bSteps', 'bStepOwners', 'spSync']) {
+    assert.deepEqual(migrated[key], {}, `${key} should default to an empty map`)
+  }
+})
+
 test('an emptied state has no business records left', () => {
   const s = empty()
   assert.equal(s.demoData, false)

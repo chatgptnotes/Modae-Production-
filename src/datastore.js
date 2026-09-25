@@ -68,6 +68,8 @@ async function currentActorId() {
     return null
   }
 }
+
+const annotateRpcError = (entity, error) => Object.assign(error, { entity })
 const clearNormalizedEntity = entity => {
   const prefix = `${entity}|`
   for (const key of normalizedRecords.keys()) if (key.startsWith(prefix)) {
@@ -142,7 +144,7 @@ async function saveConsolidatedRows(entity, rows, label) {
       p_entity: entity,
       p_rows: pending.map(row => ({ ...row, by: actor })),
     })
-    if (result.error) throw result.error
+    if (result.error) throw annotateRpcError(entity, result.error)
     const conflicts = Array.isArray(result.data?.conflicts) ? result.data.conflicts : []
     const conflictIds = new Set(conflicts.map(conflict => conflict.id))
     for (const row of pending) {
@@ -588,7 +590,7 @@ async function saveNormalizedRowsNow(entity, rows) {
     .filter(id => !localById.has(id))
   const write = async payload => {
     const result = await supabase.rpc('save_rows', { p_entity: entity, p_rows: payload.map(row => ({ ...row, by: actor })) })
-    if (result.error) throw result.error
+    if (result.error) throw annotateRpcError(entity, result.error)
     return result.data || { conflicts: [] }
   }
   const applyAccepted = (payload, conflicts) => {
@@ -661,7 +663,7 @@ async function saveOpportunityRowsNow(rows) {
 
   const write = async payload => {
     const result = await supabase.rpc('save_rows', { p_entity: 'opportunities', p_rows: payload.map(row => ({ ...row, by: actor })) })
-    if (result.error) throw result.error
+    if (result.error) throw annotateRpcError('opportunities', result.error)
     return result.data || { accepted: [], conflicts: [] }
   }
 

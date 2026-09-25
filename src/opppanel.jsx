@@ -35,7 +35,7 @@ export default function OppPanel({ oppId }) {
   const nav = useNavigate()
 
   const opp = store.opportunities.find(o => o.id === oppId)
-  const files = store.files[oppId] || Object.fromEntries(SUBFOLDERS.map(f => [f, []]))
+  const files = store.files?.[oppId] || Object.fromEntries(SUBFOLDERS.map(f => [f, []]))
   const subNames = Object.keys(files)
   const tabItems = [
     { id: DETAILS_TAB, label: DETAILS_TAB },
@@ -289,7 +289,7 @@ const kycTone = s => (s === 'Verified' ? 'state-Accepted' : s === 'Uploaded' ? '
 
 function KycPanel({ opp, store, nav }) {
   const customer = (store.customers || []).find(c => c.name === opp.sellTo)
-  const items = (customer && store.kyc[customer.name])
+  const items = (customer && store.kyc?.[customer.name])
     || (store.config?.kycItems || []).map(n => ({ name: n, state: 'Missing', when: '' }))
   const verifiedAtLead = opp.leadVerification?.status === 'Verified'
   const displayedKycStatus = verifiedAtLead ? 'Valid' : (customer?.kyc || '—')

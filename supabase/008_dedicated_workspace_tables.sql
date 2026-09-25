@@ -124,6 +124,10 @@ begin
 end;
 $$;
 
+-- Keep this grant explicit in the active migration so projects upgrading from
+-- an older or partial baseline can still call the browser persistence RPC.
+grant execute on function public.save_rows(text, jsonb) to anon, authenticated;
+
 do $$
 declare table_name text;
 begin
