@@ -2508,6 +2508,11 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
         {missingIdentity.length > 0 && lead.status !== 'Dropped' && (
           <div className="warnbox" style={{ marginTop: 8 }}>
             <b>Required before registration:</b> {missingIdentity.join(', ')}.
+            {clarificationAvailable && (
+              <button type="button" className="compact-missing-email-action" disabled={clarBusy} onClick={draftClarificationMail}>
+                <Icon name="mail" size={12} /> {clarBusy ? 'Drafting email…' : 'Draft clarification email'}
+              </button>
+            )}
           </div>
         )}
         {decisionErr && <div className="errbox" style={{ marginTop: 8 }}>{decisionErr}</div>}
@@ -2881,6 +2886,11 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
             {missingIdentity.length > 0 && lead.status !== 'Dropped' && (
               <div className="warnbox" style={{ marginTop: 8 }}>
                 <b>Required before registration:</b> {missingIdentity.join(', ')}.
+                {clarificationAvailable && (
+                  <button type="button" className="compact-missing-email-action" disabled={clarBusy} onClick={draftClarificationMail}>
+                    <Icon name="mail" size={12} /> {clarBusy ? 'Drafting email…' : 'Draft clarification email'}
+                  </button>
+                )}
               </div>
             )}
             {decisionErr && <div className="errbox" style={{ marginTop: 8 }}>{decisionErr}</div>}
@@ -3363,6 +3373,7 @@ export default function Inbox() {
 
   const rows = listSource.filter(l => ownerVisible(l) && matchesFilters(l))
   const mailboxRows = rows.filter(matchesTab).sort(compareInboxRows)
+  const dateFilterActive = !!receivedF || !!ageF
   const staleAiLeads = (store.leads || []).filter(isUnavailableAiSummary)
   // Rows this tab would show if they were yours. Surfaced rather than dropped.
   const hiddenByOwner = listSource.filter(l => !ownerVisible(l) && matchesFilters(l) && matchesTab(l)).length
@@ -3585,7 +3596,9 @@ export default function Inbox() {
         <select value={routeF} onChange={e => setRouteF(e.target.value)} aria-label="Filter by route">
           <option value="">All routes</option>{ROUTE_OPTIONS.map(r => <option key={r}>{r}</option>)}
         </select>
-        {!seesAll && <label className="mail-show-all"><input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)} /> Show all</label>}
+        {seesAll
+          ? <span className="mail-show-all mail-show-all-static" title="Your role already has access to every lead">All leads visible</span>
+          : <label className="mail-show-all"><input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)} /> Show all</label>}
       </div>
       {pasteOpen && <PasteLeadModal onClose={() => setPasteOpen(false)} />}
       {simulationOpen && (
@@ -3761,6 +3774,7 @@ export default function Inbox() {
              </> : <>
               <b>{receivedF === 'today' || ageF === 'today' ? 'No messages received today' : 'No messages here'}</b>
               <span>{receivedF === 'today' || ageF === 'today' ? 'No inbox records match the current India business date.' : 'Try another mailbox tab or change your filters.'}</span>
+              {dateFilterActive && <button className="primary" type="button" onClick={() => { setReceivedF(''); setAgeF('') }}>Clear date filter</button>}
             </>}
           </div>
         )}

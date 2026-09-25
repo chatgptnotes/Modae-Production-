@@ -65,6 +65,18 @@ test('the inbox reads the toggle from the store', () => {
   assert.match(read('src/store.jsx'), /setInboxShowAll\(on\)/)
 })
 
+test('the inbox explains when a role already sees every lead', () => {
+  assert.match(inbox, /className="mail-show-all mail-show-all-static"/)
+  assert.match(inbox, /All leads visible/)
+  assert.match(inbox, /Your role already has access to every lead/)
+})
+
+test('an empty date-filtered inbox offers a direct recovery action', () => {
+  assert.match(inbox, /const dateFilterActive = !!receivedF \|\| !!ageF/)
+  assert.match(inbox, /Clear date filter/)
+  assert.match(inbox, /setReceivedF\(''\); setAgeF\(''\)/)
+})
+
 test('inbox rows are ordered by newest received enquiry first', () => {
   assert.match(inbox, /const inboxReceivedAt = lead => lead\?\.ts \|\| lead\?\.receivedAt/)
   assert.match(inbox, /const compareInboxRows = \(a, b\) =>/)

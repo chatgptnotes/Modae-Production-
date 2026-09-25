@@ -3320,6 +3320,7 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .mail-search input { flex: 1; min-width: 0; padding: 0; border: 0; outline: 0; font-size: 13px; background: transparent; }
 .mail-search-row select { padding: 7px 9px; border-radius: 5px; }
 .mail-show-all { display: inline-flex; align-items: center; gap: 5px; color: var(--text-muted); white-space: nowrap; }
+.mail-show-all-static { padding: 7px 9px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--surface-sunken); font-size: 12px; font-weight: 650; }
 .mailbox-list { container-type: inline-size; overflow-x: auto; background: var(--palette-4843938); border: 1px solid var(--border-color); border-top: 0; box-shadow: 0 2px 8px var(--palette-9c5f15c9); }
 .mail-list-toolbar { display: flex; align-items: center; gap: 5px; min-height: 44px; padding: 5px 10px; border-bottom: 1px solid var(--border-soft); color: var(--text-muted); }
 .mail-check { display: inline-flex; align-items: center; justify-content: center; width: 30px; flex: 0 0 30px; cursor: pointer; }
