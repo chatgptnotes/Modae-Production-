@@ -65,11 +65,12 @@ function createOpportunityFromLeadPage({ store, lead, fields, decision, customer
   const category = fields.find(f => /category/i.test(f.k))?.v || lead.category || customer?.category || '—'
   const acceptedFields = fields.filter(f => f.state === 'accepted' && String(f.v || '').trim())
     .map(f => ({ key: f.k, value: String(f.v).trim(), confidence: f.conf, evidence: f.ev || '', note: f.note || '' }))
+  const leadVerification = verificationSnapshot(lead, customerStatus, { config: store.config })
   const opp = {
     id, sourceLeadId: lead.id,
     sl: Math.max(0, ...store.opportunities.map(o => o.sl || 0)) + 1,
     sellTo, category, location: decision.location || eucLocation,
-    customerStatus, leadVerification: verificationSnapshot(lead, customerStatus, { config: store.config }),
+    customerStatus, leadVerification,
     eucName, eucLocation,
     oppName: lead.subject, opportunityScope: decision.scope,
     owner, oppType: decision.oppType, bu: decision.bu, segment: decision.segment, product: decision.product,
@@ -92,7 +93,13 @@ function createOpportunityFromLeadPage({ store, lead, fields, decision, customer
       ...(bom.length ? { leadImportId: lead.id } : {}), bom, extractedItems: extracted })
   }
   store.linkLeadApprovals(lead.id, id)
-  if (!customer) store.addCustomer({ name: sellTo, category, status: customerStatus, kyc: 'Pending', payment: '—' })
+  if (!customer) store.addCustomer({
+    name: sellTo,
+    category,
+    status: customerStatus,
+    kyc: leadVerification.status === 'Verified' ? 'Valid' : 'Pending',
+    payment: '—',
+  })
   store.updateLead(lead.id, { ...decision, status: 'Converted', oppId: id }, 'Opportunity created from lead')
   return id
 }

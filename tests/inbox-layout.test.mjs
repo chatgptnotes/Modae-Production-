@@ -187,6 +187,7 @@ test('converted lead decisions expose the extracted BOQ as a quick preview', () 
 test('customer KYC display honors verified lead-stage data and simulated mode', () => {
   const workbench = fs.readFileSync(new URL('../src/pages/Workbench.jsx', import.meta.url), 'utf8')
   const register = fs.readFileSync(new URL('../src/pages/Register.jsx', import.meta.url), 'utf8')
+  const inbox = fs.readFileSync(new URL('../src/pages/Inbox.jsx', import.meta.url), 'utf8')
   assert.match(workbench, /const leadKycVerified = opp\.leadVerification\?\.status === 'Verified'/)
   assert.match(workbench, /const displayedKycStatus = leadKycVerified \? 'Valid'/)
   assert.match(workbench, /import \{ verificationItem \} from '\.\.\/leadVerification\.js'/)
@@ -194,6 +195,8 @@ test('customer KYC display honors verified lead-stage data and simulated mode', 
   assert.match(workbench, /item\.value \|\| .*verificationItem\(sourceLead\.verification, name\)\.value/)
   assert.match(workbench, /ID: \{item\.value \|\| verificationItem\(sourceLead\.verification, name\)\.value\}/)
   assert.match(register, /kyc: leadVerification\.status === 'Verified' \? 'Valid' : 'Pending'/)
+  assert.match(inbox, /const leadVerification = verificationSnapshot\(lead, customerStatus, \{ config: store\.config \}\)/)
+  assert.match(inbox, /kyc: leadVerification\.status === 'Verified' \? 'Valid' : 'Pending'/)
 })
 
 test('lead KYC upload scans before verification and keeps user confirmation', () => {

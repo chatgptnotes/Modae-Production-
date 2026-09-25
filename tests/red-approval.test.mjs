@@ -143,6 +143,22 @@ test('an exact Customer Master match overrides a stale inferred Blue lead class'
   assert.equal(customerStatusForLead({ ...lead, sellTo: 'Vedanta', customerStatusOverride: 'Blue' }, customers), 'Red')
 })
 
+test('a Customer Master Red status governs future leads without rewriting opportunity snapshots', () => {
+  const customers = [{ name: 'Eastern Alloy Works', status: 'Red' }]
+  const futureLead = {
+    sellTo: 'Eastern Alloy Works',
+    customerStatus: 'Blue',
+    redFlag: false,
+  }
+  const existingOpportunity = {
+    sellTo: 'Eastern Alloy Works',
+    customerStatus: 'Blue',
+  }
+
+  assert.equal(customerStatusForLead(futureLead, customers), 'Red')
+  assert.equal(existingOpportunity.customerStatus, 'Blue')
+})
+
 test('Register no longer stacks an unclearable duplicate blocker', () => {
   const source = read('src/pages/Register.jsx')
   assert.match(source, /leadVerificationBlockers\(lead, leadCustomerStatus, \{ redCleared[^}]*\}\)/)

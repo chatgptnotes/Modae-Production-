@@ -17,6 +17,12 @@ configures realtime for the approved business tables. Historical setup and
 backfill scripts are kept locally under `.local/backups/supabase/` and are not
 part of the application deployment path.
 
+For a completely new Supabase project, run [`000_fresh_project.sql`](./000_fresh_project.sql)
+first. It creates the six approved tables, the `save_rows` RPC, row-level
+policies, indexes, and realtime publication entries. Do not use the retired
+root-level `supabase-tables.sql` for a new project because it references the
+legacy `app_state` migration model.
+
 Verify the active schema with:
 
 ```sql
