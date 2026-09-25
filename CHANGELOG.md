@@ -5,6 +5,8 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Kept deleted-lead recovery markers local to the browser so they cannot block
+  shared lead and opportunity saves.
 - Prevented hydration from marking unchanged browser-cached state as dirty;
   this stops every browser from repeatedly rewriting the consolidated state
   and causing optimistic save conflicts.

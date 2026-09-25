@@ -9,7 +9,7 @@ import { writeCachedRules } from './rules.js'
 // Per-device/session state that must never be shared across browsers.
 export const LOCAL_ONLY = ['viewMode', 'viewModePinned', 'tabletTheme', 'spSync', 'auth', 'role',
   'inboxShowAll', 'leadSyncBaseline', 'clarificationSyncBaseline', 'opportunitySyncBaseline',
-  'sparesLinesSyncBaseline', 'deletedOpportunityIds', 'pendingOpportunitySyncIds',
+  'sparesLinesSyncBaseline', 'deletedLeadIds', 'deletedOpportunityIds', 'pendingOpportunitySyncIds',
   // Migration markers and derived deadline timers belong to this browser.
   // Persisting them as shared state makes every device dirty immediately
   // after hydration, even though they are not authoritative business rows.
