@@ -136,8 +136,9 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
   useImperativeHandle(ref, () => ({
     focusField(field) {
       const target = field === 'contactPhone' ? contactPhoneRef.current : contactPersonRef.current
-      target?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      target?.focus()
+      if (!target?.isConnected) return
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      if (target.isConnected) target.focus()
     },
   }), [])
 

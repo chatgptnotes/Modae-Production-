@@ -15,7 +15,7 @@ test('shared modal contract includes accessible labelling and keyboard containme
   assert.match(ui, /role="dialog" aria-modal="true" aria-labelledby=\{title \? titleId : undefined\}/)
   assert.match(ui, /event\.key === 'Escape'/)
   assert.match(ui, /event\.key !== 'Tab'/)
-  assert.match(ui, /restoreRef\.current\?\.focus/)
+  assert.match(ui, /focusConnectedNode\(restoreRef\.current\)/)
   assert.match(ui, /className="modal-close"/)
   assert.match(styles, /\.modal-header \.section-title/)
   assert.match(styles, /\.modal-close:focus-visible/)

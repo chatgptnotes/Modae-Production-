@@ -70,7 +70,10 @@ export default function PriceLists() {
     const match = (displayList.parts || []).find(part => String(part.pn).trim().toUpperCase() === requestedPart.trim().toUpperCase())
     setHighlightedPart(match?.pn || '')
     if (!match) return
-    const timer = window.setTimeout(() => rowRefs.current[match.pn]?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 0)
+    const timer = window.setTimeout(() => {
+      const row = rowRefs.current[match.pn]
+      if (row?.isConnected) row.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }, 0)
     return () => window.clearTimeout(timer)
   }, [list, displayList, requestedPart])
 

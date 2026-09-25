@@ -6,16 +6,25 @@ import { useStore } from './store.jsx'
 
 let portalRoot = null
 
+const isConnectedNode = node => !!node?.isConnected
+
+const focusConnectedNode = node => {
+  if (!isConnectedNode(node) || typeof node.focus !== 'function') return false
+  node.focus()
+  return true
+}
+
 function getPortalRoot() {
   if (typeof document === 'undefined') return null
   if (portalRoot?.isConnected) return portalRoot
   portalRoot = document.querySelector('[data-modae-portal-root]')
   if (!portalRoot) {
+    if (!document.body?.isConnected) return null
     portalRoot = document.createElement('div')
     portalRoot.dataset.modaePortalRoot = 'true'
     document.body.appendChild(portalRoot)
   }
-  return portalRoot
+  return isConnectedNode(portalRoot) ? portalRoot : null
 }
 
 // Keep one portal host for the lifetime of the page. Leaving the host in place
@@ -92,9 +101,9 @@ function useDialogBehavior({ onClose, dialogRef, initialFocusRef }) {
     restoreRef.current = document.activeElement
     const dialog = dialogRef.current
     const focusInitial = () => {
-      const target = initialFocusRef?.current || dialog?.querySelector(FOCUSABLE)
-      if (target) target.focus()
-      else dialog?.focus()
+      if (!isConnectedNode(dialog)) return
+      const target = initialFocusRef?.current || dialog.querySelector(FOCUSABLE)
+      if (!focusConnectedNode(target)) focusConnectedNode(dialog)
     }
     const previousOverflow = document.body.style.overflow
     document.body.style.overflow = 'hidden'
@@ -105,21 +114,21 @@ function useDialogBehavior({ onClose, dialogRef, initialFocusRef }) {
         onCloseRef.current()
         return
       }
-      if (event.key !== 'Tab' || !dialog) return
-      const items = [...dialog.querySelectorAll(FOCUSABLE)]
+      if (event.key !== 'Tab' || !isConnectedNode(dialog)) return
+      const items = [...dialog.querySelectorAll(FOCUSABLE)].filter(isConnectedNode)
       if (!items.length) {
         event.preventDefault()
-        dialog.focus()
+        focusConnectedNode(dialog)
         return
       }
       const first = items[0]
       const last = items[items.length - 1]
       if (event.shiftKey && document.activeElement === first) {
         event.preventDefault()
-        last.focus()
+        focusConnectedNode(last)
       } else if (!event.shiftKey && document.activeElement === last) {
         event.preventDefault()
-        first.focus()
+        focusConnectedNode(first)
       }
     }
     document.addEventListener('keydown', onKeyDown)
@@ -127,7 +136,7 @@ function useDialogBehavior({ onClose, dialogRef, initialFocusRef }) {
       window.cancelAnimationFrame(raf)
       document.removeEventListener('keydown', onKeyDown)
       document.body.style.overflow = previousOverflow
-      if (restoreRef.current?.focus) restoreRef.current.focus()
+      focusConnectedNode(restoreRef.current)
     }
   }, [dialogRef, initialFocusRef])
 }

@@ -36,7 +36,9 @@ function isClipped(el) {
 }
 
 function sync(root) {
+  if (!root?.isConnected) return
   for (const el of root.querySelectorAll(SELECTOR)) {
+    if (!el.isConnected) continue
     const own = el.getAttribute('title')
     // An author-written title wins, always.
     if (own != null && !el.hasAttribute(MARK)) continue
@@ -64,6 +66,7 @@ export function startAutoTitle(root) {
     if (writing || frame) return
     frame = requestAnimationFrame(() => {
       frame = 0
+      if (!root?.isConnected) return
       writing = true
       try { sync(root) } finally { writing = false }
     })

@@ -705,7 +705,12 @@ function EditableNumber({ value, label, disabled, onChange, prefix = '', suffix 
     if (disabled) return
     setDraft(String(value ?? 0))
     setEditing(true)
-    window.requestAnimationFrame(() => event.currentTarget?.querySelector('input')?.focus())
+    const editor = event.currentTarget
+    window.requestAnimationFrame(() => {
+      if (!editor?.isConnected) return
+      const input = editor.querySelector('input')
+      if (input?.isConnected) input.focus()
+    })
   }
   const commit = () => {
     if (!editing) return

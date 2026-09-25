@@ -639,7 +639,10 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
   const openCommercialDecisions = () => {
     setTransition(null)
     goTab('proposal')
-    window.setTimeout(() => document.querySelector('[aria-label="Commercial terms decision"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0)
+    window.setTimeout(() => {
+      const target = document.querySelector('[aria-label="Commercial terms decision"]')
+      if (target?.isConnected) target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 0)
   }
   const clarificationRows = actionableClarifications(opp, store)
     .filter(c => !isClarificationResolved(c))

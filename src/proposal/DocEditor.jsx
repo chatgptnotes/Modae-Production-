@@ -36,13 +36,21 @@ function Section({ title, p, field, onReset, children }) {
   const [open, setOpen] = useState(initiallyOpen)
 
   useEffect(() => {
+    let frame = 0
     const openFromNavigator = event => {
       if (event.detail !== id) return
       setOpen(true)
-      requestAnimationFrame(() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+      if (frame) cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        const target = document.getElementById(id)
+        if (target?.isConnected) target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      })
     }
     window.addEventListener('proposal-doc-open', openFromNavigator)
-    return () => window.removeEventListener('proposal-doc-open', openFromNavigator)
+    return () => {
+      window.removeEventListener('proposal-doc-open', openFromNavigator)
+      if (frame) cancelAnimationFrame(frame)
+    }
   }, [id])
 
   return (

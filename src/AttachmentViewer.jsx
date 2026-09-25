@@ -120,10 +120,10 @@ function PdfPreview({ blob }) {
     ;(async () => {
       const doc = docRef.current
       const canvas = canvasRef.current
-      if (!doc || !canvas) return
+      if (!doc || !canvas?.isConnected || !canvas.parentElement?.isConnected) return
       try {
         const pg = await doc.getPage(page)
-        if (dead) return
+        if (dead || !canvas.isConnected || !canvas.parentElement?.isConnected) return
         // Fit the modal's content width, then honour the device pixel ratio so
         // the text stays sharp on a retina screen.
         const base = pg.getViewport({ scale: 1 })
@@ -133,7 +133,9 @@ function PdfPreview({ blob }) {
         canvas.height = viewport.height
         canvas.style.width = viewport.width / ratio + 'px'
         canvas.style.height = viewport.height / ratio + 'px'
-        await pg.render({ canvasContext: canvas.getContext('2d'), viewport }).promise
+        const context = canvas.getContext('2d')
+        if (!context || !canvas.isConnected) return
+        await pg.render({ canvasContext: context, viewport }).promise
       } catch (e) {
         if (!dead) setErr('Could not render page ' + page + '.')
       }
