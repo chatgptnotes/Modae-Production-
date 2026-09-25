@@ -4,6 +4,7 @@ const number = value => {
   const parsed = Number(String(value ?? '').replace(/[^\d.-]/g, ''))
   return Number.isFinite(parsed) ? parsed : 0
 }
+const money = value => Math.round((Number(value) || 0) * 100) / 100
 
 const aliases = {
   description: ['item description', 'description', 'item scope', 'scope', 'scope / equipment description'],
@@ -125,6 +126,8 @@ const commercialTermChanges = (workbook, proposal) => {
 
 const displayValue = value => `"${value == null || value === '' ? 'blank' : String(value)}"`
 const sameNumber = (left, right) => Number(left) === Number(right)
+const sameMoney = (left, right) => money(left) === money(right)
+const normalizedMoney = value => value == null || String(value).trim() === '' ? value : money(value)
 
 const changedField = (field, label, before, after, equal = (left, right) => clean(left) === clean(right)) => {
   if (equal(before, after)) return null
@@ -141,13 +144,13 @@ const changesForRow = (old, row, units) => [
   changedField('partNumber', 'Part number', old.pn, row.pn),
   changedField('quantity', 'Quantity', totalQuantity(old, units), row.qty, sameNumber),
   changedField('uom', 'UOM', old.uom || 'EA', row.uom),
-  row.unitPrice == null ? null : changedField('unitPrice', 'Unit price', old.quoted, row.unitPrice, sameNumber),
+  row.unitPrice == null ? null : changedField('unitPrice', 'Unit price', normalizedMoney(old.quoted), money(row.unitPrice), sameMoney),
   row.totalPrice == null ? null : changedField(
     'totalPrice',
     'Total price',
-    Number(old.quoted) * totalQuantity(old, units),
-    row.totalPrice,
-    sameNumber,
+    money(money(old.quoted) * totalQuantity(old, units)),
+    money(row.totalPrice),
+    sameMoney,
   ),
 ].filter(Boolean)
 
@@ -197,7 +200,7 @@ export function importReviewedWorkbook(workbook, proposal, opportunity) {
     if (!row.pn) issues.push({ severity: 'warning', code: 'line.part', text: `Workbook row ${row.index} is missing a model or part number.` })
     if (row.qty <= 0) issues.push({ severity: 'block', code: 'line.quantity', text: `Workbook row ${row.index} must have a quantity greater than zero.` })
     if (row.unitPrice != null && row.unitPrice < 0) issues.push({ severity: 'block', code: 'line.price', text: `Workbook row ${row.index} has a negative unit price.` })
-    if (row.unitPrice != null && row.totalPrice != null && Math.abs(row.unitPrice * row.qty - row.totalPrice) > 0.01) {
+    if (row.unitPrice != null && row.totalPrice != null && Math.abs(money(row.unitPrice) * row.qty - money(row.totalPrice)) > 0.01) {
       issues.push({ severity: 'block', code: 'line.total', text: `Workbook row ${row.index} total price does not equal unit price × quantity.` })
     }
     const existingIndex = findExisting(row)
@@ -216,13 +219,13 @@ export function importReviewedWorkbook(workbook, proposal, opportunity) {
         qtyPerUnit: 0,
         common: row.qty,
         spares: 0,
-        ...(row.unitPrice != null ? { quoted: row.unitPrice } : {}),
+        ...(row.unitPrice != null ? { quoted: money(row.unitPrice) } : {}),
       }
       nextBom[existingIndex] = updated
       changes.push({ type: 'updated', line: row.description || row.pn, fields: fieldChanges })
       issues.push(...fieldChanges.map(change => valueChangeIssue(row, change, table.sheet.name)))
     } else {
-      nextBom.push({ itemCategory: 'Imported', desc: row.description, pn: row.pn, custRef: '', adders: [], qtyPerUnit: 0, common: row.qty, spares: 0, quoted: row.unitPrice == null ? '' : row.unitPrice, uom: row.uom, currency: 'INR' })
+      nextBom.push({ itemCategory: 'Imported', desc: row.description, pn: row.pn, custRef: '', adders: [], qtyPerUnit: 0, common: row.qty, spares: 0, quoted: row.unitPrice == null ? '' : money(row.unitPrice), uom: row.uom, currency: 'INR' })
       changes.push({ type: 'added', line: row.description || row.pn })
       issues.push({ severity: 'warning', code: 'line.unmatched', text: `Workbook row ${row.index} did not match an existing proposal line and was added for review.` })
     }

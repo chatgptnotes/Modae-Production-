@@ -47,6 +47,31 @@ test('does not report value changes when the uploaded workbook is unchanged', ()
   assert.deepEqual(result.changes[0].fields, [])
 })
 
+test('matches the rounded downloaded draft despite hidden source precision', () => {
+  const result = importReviewedWorkbook({ sheets: [{ name: 'Priced BoQ', rows: [
+    ['Description', 'Part Number', 'Total Quantity', 'UOM', 'Unit Price', 'Total Price'],
+    ['Precision item', 'P-2', 10, 'EA', 72755.20, 727552.00],
+  ] }] }, {
+    units: 1,
+    bom: [{ desc: 'Precision item', pn: 'P-2', qtyPerUnit: 10, common: 0, spares: 0, quoted: 72755.196, uom: 'EA' }],
+  }, { sellTo: '' })
+  assert.equal(result.issues.some(issue => issue.code === 'line.value-changed'), false)
+  assert.equal(result.proposal.bom[0].quoted, 72755.2)
+})
+
+test('keeps genuine uploaded price changes visible after normalization', () => {
+  const result = importReviewedWorkbook({ sheets: [{ name: 'Priced BoQ', rows: [
+    ['Description', 'Part Number', 'Total Quantity', 'UOM', 'Unit Price', 'Total Price'],
+    ['Changed item', 'P-3', 10, 'EA', 33, 330],
+  ] }] }, {
+    units: 1,
+    bom: [{ desc: 'Changed item', pn: 'P-3', qtyPerUnit: 10, common: 0, spares: 0, quoted: 72755.2, uom: 'EA' }],
+  }, { sellTo: '' })
+  const changes = result.issues.filter(issue => issue.code === 'line.value-changed')
+  assert.ok(changes.some(issue => issue.change.field === 'unitPrice' && issue.change.before === 72755.2 && issue.change.after === 33))
+  assert.ok(changes.some(issue => issue.change.field === 'totalPrice' && issue.change.before === 727552 && issue.change.after === 330))
+})
+
 test('reports invalid quantities, totals, and unmatched workbook rows', () => {
   const result = importReviewedWorkbook({ sheets: [{ name: 'Proposal', rows: [
     ['Description', 'Part Number', 'Quantity', 'Unit Price', 'Total Price'],

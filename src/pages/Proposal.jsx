@@ -188,9 +188,11 @@ const reviewFindingTitle = issue => {
 
 const reviewSeverityLabel = severity => ({ block: 'Blocking', warning: 'Needs review', info: 'Information' }[severity] || 'Needs review')
 const reviewNumber = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 })
+const reviewCurrencyNumber = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const reviewValue = (field, value) => {
   if (value == null || String(value).trim() === '') return 'Blank'
-  if (['quantity', 'unitPrice', 'totalPrice'].includes(field) && Number.isFinite(Number(value))) return reviewNumber.format(Number(value))
+  if (['unitPrice', 'totalPrice'].includes(field) && Number.isFinite(Number(value))) return reviewCurrencyNumber.format(Number(value))
+  if (field === 'quantity' && Number.isFinite(Number(value))) return reviewNumber.format(Number(value))
   return String(value)
 }
 const reviewIssueSummary = (issue, change) => change
