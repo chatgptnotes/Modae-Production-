@@ -424,6 +424,10 @@ export function StoreProvider({ children }) {
       setLiveSyncStatus('degraded')
       setSyncDiagnostics(diagnostics => ({ ...diagnostics, emptyWorkspaceAt: new Date().toISOString() }))
       console.warn('Supabase returned an empty workspace; local data was preserved and no automatic seed was written.')
+      // A lead created while the initial request was in flight was preserved
+      // locally, but its earlier flush was gated on hydration. Publish that
+      // pending local change now that the empty-workspace decision is complete.
+      setTimeout(flushSaves, 0)
     } else {
       const s = stateRef.current
       const accepted = {}

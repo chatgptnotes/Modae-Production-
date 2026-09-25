@@ -79,6 +79,14 @@ test('lead creation flushes before immediate inbox navigation', () => {
   assert.match(store, /'Lead received',[\s\S]*setTimeout\(flushSaves, 0\)/)
 })
 
+test('empty workspace hydration flushes leads created during startup', () => {
+  const store = read('src/store.jsx')
+  const emptyHydration = store.slice(store.indexOf('if (res.empty) {'), store.indexOf('} else {', store.indexOf('if (res.empty) {')))
+  assert.match(emptyHydration, /hydratedRef\.current = true/)
+  assert.match(emptyHydration, /setTimeout\(flushSaves, 0\)/,
+    'a lead created before hydration must be uploaded after an empty workspace response')
+})
+
 test('save failures expose the Supabase error in sync diagnostics', () => {
   const store = read('src/store.jsx')
   const app = read('src/App.jsx')
