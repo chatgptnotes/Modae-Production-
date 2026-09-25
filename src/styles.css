@@ -2455,6 +2455,7 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
   background: var(--surface-sunken, var(--palette-d973c5da)); border: 1px solid var(--border-soft); box-sizing: border-box;
 }
 .proposal-preview-scroll .propdoc { max-width: 820px; margin: 0 auto; }
+.proposal-pdf-preview-scroll { background: var(--surface-sunken, var(--palette-d973c5da)); }
 /* ModAE-internal costing shown under the customer document in the preview.
    Visually separated so it can never be mistaken for part of the document. */
 .proposal-preview-internal {

@@ -549,6 +549,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   const [tab, setTab] = useState(initialTab)
   const [workbook, setWorkbook] = useState('proposal')
   const [printingModel, setPrintingModel] = useState(null)
+  const [pdfPreviewTarget, setPdfPreviewTarget] = useState(null)
   const [previewTarget, setPreviewTarget] = useState(null)
   const [previewWorkbook, setPreviewWorkbook] = useState(null)
   const [previewWorkbookBusy, setPreviewWorkbookBusy] = useState(false)
@@ -1320,6 +1321,20 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     })()
     : null
 
+  const pdfPreviewModel = pdfPreviewTarget
+    ? (() => {
+      const previewP = normalize(pdfPreviewTarget.proposal, opp)
+      const previewPricing = buildPricing(store, previewP)
+      return {
+        p: previewP,
+        doc: docModel(previewP, opp, { files: specFiles.map(f => f.name).filter(Boolean), config: store.config }),
+        priced: previewP.bidType !== 'Unpriced (Technical)',
+        totals: previewPricing.computeTotals(previewP),
+        lineQuoted: previewPricing.lineQuoted,
+      }
+    })()
+    : null
+
   // Revision previews use the same customer-safe workbook artifact that is
   // attached during submission, keeping the preview faithful to the Excel
   // file the customer will receive for every proposal route.
@@ -1462,7 +1477,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
             <Icon name="download" size={13} /> Draft
           </button>
           <PreviewMenu
-            onPreviewProposal={() => setPreviewTarget({
+            onPreviewProposal={() => setPdfPreviewTarget({
               key: 'current', revision: String(p.revision || '00'), proposal: p, current: true, available: true,
             })}
             onPreviewTemplate={['Project', 'Spares', 'Services'].includes(route) ? openTemplatePreview : null}
@@ -1981,6 +1996,23 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
           </div>
           <div className="costing-note">Grey columns are the internal costing block (never shown to the customer); the white columns are the customer-facing BoQ, quoted in ₹ only.</div>
         </>
+      )}
+
+      {pdfPreviewModel && (
+        <Modal title={`PDF preview — ${oppId}`} onClose={() => setPdfPreviewTarget(null)} wide className="proposal-preview-modal proposal-pdf-preview-modal">
+          <div className="proposal-preview-toolbar">
+            <span className="hint">Customer-facing PDF document · Rev-{pdfPreviewModel.p.revision} · Read-only preview</span>
+            <div className="forms-actions">
+              <button onClick={() => setPdfPreviewTarget(null)}>Close</button>
+              <button className="primary" onClick={() => { setPdfPreviewTarget(null); setPrintingModel(pdfPreviewModel) }}>
+                <Icon name="printer" size={13} /> Print / Save PDF
+              </button>
+            </div>
+          </div>
+          <div className="proposal-preview-scroll proposal-pdf-preview-scroll">
+            <PrintDoc p={pdfPreviewModel.p} opp={opp} doc={pdfPreviewModel.doc} priced={pdfPreviewModel.priced} totals={pdfPreviewModel.totals} lineQuoted={pdfPreviewModel.lineQuoted} />
+          </div>
+        </Modal>
       )}
 
       {previewModel && (
