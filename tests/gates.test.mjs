@@ -228,6 +228,45 @@ test('matching a customer commercial deviation still requires AH approval', () =
   assert.deepEqual(commercial.needed, ['AH'])
 })
 
+test('Requirement Validation blocks unresolved commercial terms before Sourcing', () => {
+  const opp = { ...baseOpp, route: 'Spares', milestone: 'Screening' }
+  const state = { approvals: [], clarifications: [], sparesLines: [], config: {} }
+  const makeProposal = term => ({ revision: '01', bom: [{ qty: 1, listPrice: 100 }], terms: [term] })
+
+  for (const term of [
+    { term: 'Payment', status: 'Deviation', customerAsk: '90 days', standardTerm: '30 days', decision: 'Decision pending' },
+    { term: 'Delivery', status: 'Deviation', customerAsk: '8 weeks', standardTerm: '10–12 weeks', decision: 'Counter-offer with ModAE standard terms', customerConfirmationStatus: 'Awaiting reply' },
+  ]) {
+    const blockers = transitionBlockers(opp, 'Sourcing', makeProposal(term), state)
+    assert.ok(blockers.some(item => item.key === 'commercial-decision'), `unresolved ${term.term} must block Sourcing`)
+  }
+})
+
+test('matched commercial terms require AH approval before Sourcing, per term', () => {
+  const opp = { ...baseOpp, route: 'Spares', milestone: 'Screening' }
+  const proposal = {
+    revision: '01', bom: [{ qty: 1, listPrice: 100 }],
+    terms: [
+      { term: 'Payment', status: 'Deviation', customerAsk: '90 days', standardTerm: '30 days', decision: 'Match customer terms' },
+      { term: 'Delivery', status: 'Deviation', customerAsk: '8 weeks', standardTerm: '10–12 weeks', decision: 'Counter-offer with ModAE standard terms', customerConfirmationStatus: 'Accepted' },
+    ],
+  }
+  const state = { approvals: [], clarifications: [], sparesLines: [], config: {} }
+  const blocked = transitionBlockers(opp, 'Sourcing', proposal, state)
+  assert.equal(blocked.some(item => item.key === 'commercial-decision'), false, 'accepted counter-offer must be resolved')
+  assert.equal(blocked.find(item => item.key === 'commercial-approval')?.text, 'AH commercial approval is required for Payment before moving to Sourcing')
+
+  const approved = transitionBlockers(opp, 'Sourcing', proposal, {
+    ...state,
+    approvals: [{
+      id: 'AP-COMM-SOURCE', oppId: opp.id, type: 'Commercial deviation', rev: '01', status: 'Approved',
+      approvalSnapshot: { revision: '01', terms: proposal.terms },
+      deviationDetails: [{ term: 'Payment', customerAsk: '90 days', ourResponse: '90 days', standardTerm: '30 days' }],
+    }],
+  })
+  assert.equal(approved.some(item => item.key === 'commercial-decision' || item.key === 'commercial-approval'), false)
+})
+
 test('approval checklist omits commercial approval for standard terms', () => {
   const gates = approvalSet(releasedProposal, [], 'OP-1', baseOpp)
   assert.deepEqual(gates.map(g => g.type), ['Technical approval', 'Final quote release'])

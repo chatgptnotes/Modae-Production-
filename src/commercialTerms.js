@@ -53,6 +53,11 @@ export const needsCommercialApproval = term => isCommercialDeviation(term) && te
 export const isCounterAwaitingCustomer = term => isCommercialDeviation(term)
   && term.decision === 'Counter-offer with ModAE standard terms'
   && (term.customerConfirmationStatus || 'Awaiting reply') === 'Awaiting reply'
+// Requirement Validation cannot hand off a commercial deviation while the
+// customer is still waiting on a response. Accepted counter-offers are clear;
+// rejected/countered offers remain covered by needsCommercialDecision().
+export const needsCommercialResolution = term => isCommercialDeviation(term)
+  && (needsCommercialDecision(term) || isCounterAwaitingCustomer(term))
 
 // Rows created by the old implementation are retained for audit, but must not
 // continue to behave as customer clarifications or block the sourcing gate.

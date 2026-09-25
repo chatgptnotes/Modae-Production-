@@ -5,6 +5,17 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Enforced commercial hand-off in Requirement Validation: every Payment,
+  Delivery, or other deviation must be resolved before Sourcing, counter-offers
+  wait for customer acceptance, and matched customer terms require AH approval;
+  corrected the AH review preview to show ModAE's response.
+- Restored separate proposal previews: Preview PDF now shows the customer-facing
+  ModAE document, while Draft workbook remains the Excel reference preview.
+- Stabilized Supabase workspace saves by serializing overlapping writes and
+  retrying optimistic revision conflicts with bounded local latest-save-wins
+  rebases. Approved price lists now remain usable from the browser cache when
+  the consolidated shared records are temporarily unavailable, with degraded
+  sync status shown in the Price Lists workspace.
 - Made Admin GST, PAN, and CIN validation rules readable with plain-language
   formats and examples while retaining regex editing under an advanced control.
 - Restored missing structured spare lines by merging AI, parser, and attachment

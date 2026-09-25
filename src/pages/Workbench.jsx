@@ -950,7 +950,7 @@ function CommercialDecisionPanel({ opp }) {
       </div>
       {matchingTerms.length > 0 && !currentCommercialApproval && (
         <div className="commercial-approval-request">
-          <div className="hint">AH will review: {matchingTerms.map(term => `${term.term} — customer asked “${term.customerAsk || 'Not recorded'}”; ModAE response “${term.customerAsk || term.ourResponse || 'Not recorded'}”`).join(' · ')}</div>
+          <div className="hint">AH will review: {matchingTerms.map(term => `${term.term} — customer asked “${term.customerAsk || 'Not recorded'}”; ModAE response “${term.ourResponse || term.proposedTerm || term.standardTerm || 'Not recorded'}”`).join(' · ')}</div>
           <button type="button" className="primary" onClick={requestCommercialApproval}>Request AH approval for {matchingTerms.map(term => term.term).join(' and ')}</button>
         </div>
       )}

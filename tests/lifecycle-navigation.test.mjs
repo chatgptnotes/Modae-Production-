@@ -118,6 +118,7 @@ test('matching customer terms offer one descriptive manual AH approval request',
   assert.match(panel, /customer asked/)
   assert.match(panel, /ModAE response/)
   assert.doesNotMatch(decisionHandler, /requestCommercialApproval\(nextTerms\)[\s\S]*Counter-offer with ModAE standard terms/)
+  assert.match(panel, /ModAE response “\$\{term\.ourResponse \|\| term\.proposedTerm \|\| term\.standardTerm/)
 })
 
 test('transition modal shows pending approvals without approval-navigation shortcuts', () => {

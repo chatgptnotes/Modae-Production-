@@ -11,7 +11,7 @@ import { defaultCosting, MILESTONES } from './seed.js'
 import { applyAdjustment, normalizeMarkupPct, sparesLineFinancials } from './pricing.js'
 import { isPlaceholderSparesLine } from './proposal/sparesBoq.js'
 import { classRule, classOrder, noExceptionKeys } from './customerClasses.js'
-import { needsCommercialApproval, needsCommercialDecision, commercialApprovalDetails, isLegacyCommercialClarification, isCommercialConfirmationRow, isDeliveryBasisClarification, sourceContainsDeliveryRequirement } from './commercialTerms.js'
+import { needsCommercialApproval, needsCommercialDecision, needsCommercialResolution, commercialApprovalDetails, isLegacyCommercialClarification, isCommercialConfirmationRow, isDeliveryBasisClarification, sourceContainsDeliveryRequirement } from './commercialTerms.js'
 import { clarificationTopic } from './leadClarification.js'
 import { approvalAffectedByProposal, pricingExceptionSignature, proposalImpact } from './approvalMemory.js'
 
@@ -465,8 +465,8 @@ const deviationTermKey = value => {
 
 const commercialApprovalCoversProposal = (approval, proposal) => {
   // Raw status filter, deliberately: §5B signs off the whole commercial
-  // position, including counter-offers, so any term still marked 'Deviation'
-  // must be covered by the recorded deviationDetails.
+  // position for its legacy/submission compatibility path. Requirement
+  // Validation scopes the comparison to matched terms separately above.
   const currentTerms = (proposal?.terms || [])
     .filter(term => term.status === 'Deviation')
     .map(term => deviationTermKey(term.term))
@@ -608,6 +608,45 @@ export function transitionBlockers(opp, target, proposal, state) {
   const clarifications = actionableClarifications(opp, state)
   if (next >= MILESTONES.indexOf('Sourcing') && clarifications.some(c => !isClarificationResolved(c))) {
     b.push({ key: 'clarifications', severity: 'block', text: `All customer clarifications must be resolved before moving to ${target}` })
+  }
+
+  // Requirement Validation owns the commercial hand-off. Every deviation must
+  // have a resolved customer-facing position before Sourcing; a counter-offer
+  // is not resolved until the customer accepts it. Matching customer terms is
+  // additionally an AH decision and must be approved before the hand-off.
+  if (next >= MILESTONES.indexOf('Sourcing')) {
+    const commercialTerms = proposal?.terms || []
+    const unresolved = commercialTerms.filter(needsCommercialResolution)
+    if (unresolved.length) {
+      b.push({
+        key: 'commercial-decision', severity: 'block',
+        text: `Resolve commercial decisions for ${unresolved.map(term => term.term).join(', ')} before moving to ${target}`,
+      })
+    }
+    const matched = commercialTerms.filter(needsCommercialApproval)
+    if (matched.length) {
+      // Scope the hand-off check to the matched terms. Approval requests carry
+      // a full proposal snapshot, so comparing that snapshot to only matched
+      // terms would incorrectly reopen approval when an accepted counter-offer
+      // is also present.
+      const expectedDetails = JSON.stringify(commercialApprovalDetails(matched))
+      const matchingApproval = approvals
+        .filter(approval => approval.oppId === opp.id
+          && (approval.type === APPROVAL_5B || approval.type === 'Commercial deviation')
+          && (approval.rev == null || String(approval.rev) === String(proposal?.revision ?? ''))
+          && JSON.stringify(approval.deviationDetails || []) === expectedDetails)
+      const approved = matchingApproval.find(approval => ['Approved', 'Approved with conditions'].includes(approval.status))
+      const waiting = matchingApproval.find(approval => approval.status === 'Pending')
+      if (!approved) {
+        b.push({
+          key: 'commercial-approval', severity: waiting ? 'wait' : 'block',
+          approvalType: 'Commercial deviation', approver: 'AH', needed: ['AH'], anyOf: false,
+          text: waiting
+            ? `AH commercial approval is awaiting a decision for ${matched.map(term => term.term).join(', ')}`
+            : `AH commercial approval is required for ${matched.map(term => term.term).join(', ')} before moving to ${target}`,
+        })
+      }
+    }
   }
 
   // Diagram 02 §2: Greenfield Phase 1 is registration, follow-up and monitoring
