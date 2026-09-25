@@ -279,7 +279,7 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
               onDragOver={e => { e.preventDefault(); setDrag(true) }}
               onDragLeave={() => setDrag(false)}
               onDrop={onDrop}
-              onClick={() => fileInput.current.click()}>
+              onClick={() => fileInput.current?.click()}>
               <input ref={fileInput} type="file" accept="application/pdf,.pdf" style={{ display: 'none' }} onChange={onPick} />
               <div className="tender-drop-icon"><Icon name="fileText" size={40} /></div>
               <b>Drop the tender / RFQ PDF here</b>

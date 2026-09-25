@@ -233,7 +233,7 @@ export default function Folders() {
           {backend !== 'mock' ? (
             <>
               <input ref={fileInput} type="file" multiple style={{ display: 'none' }} onChange={onUpload} />
-              <button onClick={() => fileInput.current.click()} disabled={busy}>
+              <button onClick={() => fileInput.current?.click()} disabled={busy}>
                 <Icon name="upload" size={13} /> {busy ? 'Uploading…' : 'Upload'}
               </button>
             </>

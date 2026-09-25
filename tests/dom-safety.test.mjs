@@ -33,6 +33,19 @@ test('async attachment rendering stops before touching a detached canvas', () =>
   assert.match(viewer, /if \(dead \|\| !canvas\.isConnected \|\| !canvas\.parentElement\?\.isConnected\) return/)
 })
 
+test('file-input refs are optional before triggering native pickers', () => {
+  for (const file of ['src/pages/Inbox.jsx', 'src/pages/TenderIntake.jsx', 'src/pages/Folders.jsx']) {
+    const source = read(file)
+    assert.doesNotMatch(source, /(?:fileInput|docInput|responseInput)\.current\.click\(\)/, `${file} has an unguarded file-input click`)
+  }
+  const inbox = read('src/pages/Inbox.jsx')
+  assert.match(inbox, /fileInput\.current\?\.click\(\)/)
+  assert.match(inbox, /docInput\.current\?\.click\(\)/)
+  assert.match(inbox, /responseInput\.current\?\.click\(\)/)
+  assert.match(read('src/pages/TenderIntake.jsx'), /fileInput\.current\?\.click\(\)/)
+  assert.match(read('src/pages/Folders.jsx'), /fileInput\.current\?\.click\(\)/)
+})
+
 test('empty Supabase hydration still preserves populated local slices', () => {
   const store = read('src/store.jsx')
   assert.match(store, /if \(unexpectedEmptyBusinessSlice\(k, s\[k\], v\)\)/)

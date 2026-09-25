@@ -935,7 +935,7 @@ function PasteLeadModal({ onClose }) {
           onDragOver={e => { e.preventDefault(); setDrag(true) }}
           onDragLeave={() => setDrag(false)}
           onDrop={onDrop}
-          onClick={() => fileInput.current.click()}>
+          onClick={() => fileInput.current?.click()}>
           <input ref={fileInput} type="file" multiple style={{ display: 'none' }}
             onChange={e => { addFiles(e.target.files); e.target.value = '' }} />
           <div className="tender-drop-icon"><Icon name="fileText" size={22} /></div>
@@ -2262,7 +2262,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
                 onDragOver={e => { e.preventDefault(); setDocDrag(true) }}
                 onDragLeave={() => setDocDrag(false)}
                 onDrop={e => { e.preventDefault(); setDocDrag(false); addDocuments(e.dataTransfer.files) }}
-                onClick={() => docInput.current.click()}>
+                onClick={() => docInput.current?.click()}>
                 <input ref={docInput} type="file" multiple style={{ display: 'none' }}
                   onChange={e => { addDocuments(e.target.files); e.target.value = '' }} />
                 <div className="tender-drop-icon"><Icon name="upload" size={20} /></div>
@@ -2297,7 +2297,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
                     <div className="mail-attachments">
                       <label>Reply attachments</label>
                       <input ref={responseInput} type="file" multiple style={{ display: 'none' }} onChange={e => { addResponseFiles(e.target.files); e.target.value = '' }} />
-                      <button type="button" onClick={() => responseInput.current.click()}><Icon name="upload" size={12} /> Add files</button>
+                      <button type="button" onClick={() => responseInput.current?.click()}><Icon name="upload" size={12} /> Add files</button>
                     </div>
                     {responseFiles.map((file, i) => <div className="attach-row" key={`${file.name}-${i}`}><Icon name="fileText" size={13} /><span className="attach-name" style={{ flex: 1 }}>{file.name}</span><button type="button" onClick={() => setResponseFiles(responseFiles.filter((_, j) => j !== i))}>×</button></div>)}
                     {responseErr && <ErrBox>{responseErr}</ErrBox>}
