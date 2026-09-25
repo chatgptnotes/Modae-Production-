@@ -547,7 +547,7 @@ async function loadBusinessTables({ includeRecords = true } = {}) {
     })))
     throw failedTables[0].error
   }
-  const records = tables[3].data || []
+  const records = baseTables[3].data || []
   if (includeRecords) {
     opportunityRevisions.clear()
     opportunityRecords.clear()

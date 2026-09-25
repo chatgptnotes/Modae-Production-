@@ -1,4 +1,4 @@
--- Verify migration 009 relational workspace tables and RLS.
+-- Verify the complete workspace schema from migrations 000, 007, 008 and 009.
 
 select
   c.relname as table_name,
@@ -8,6 +8,19 @@ join pg_namespace n on n.oid = c.relnamespace
 where n.nspname = 'public'
   and c.relkind = 'r'
   and c.relname in (
+    'ai_secrets',
+    'approvals',
+    'leads',
+    'opportunities',
+    'records',
+    'user_files',
+    'proposals',
+    'spares_lines',
+    'clarifications',
+    'audit',
+    'settings',
+    'price_lists',
+    'price_list_versions',
     'customers',
     'customer_contacts',
     'lead_items',
@@ -21,14 +34,24 @@ where n.nspname = 'public'
   )
 order by c.relname;
 
-select 'customers' as table_name, count(*) from public.customers
-union all select 'customer_contacts', count(*) from public.customer_contacts
-union all select 'lead_items', count(*) from public.lead_items
-union all select 'opportunity_items', count(*) from public.opportunity_items
-union all select 'proposal_items', count(*) from public.proposal_items
-union all select 'catalogue_versions', count(*) from public.catalogue_versions
-union all select 'catalogue_parts', count(*) from public.catalogue_parts
-union all select 'communications', count(*) from public.communications
-union all select 'audit_events', count(*) from public.audit_events
-union all select 'workspace_settings', count(*) from public.workspace_settings
-order by table_name;
+with expected(table_name) as (
+  values
+    ('ai_secrets'), ('approvals'), ('leads'), ('opportunities'), ('records'),
+    ('user_files'), ('proposals'), ('spares_lines'), ('clarifications'),
+    ('audit'), ('settings'), ('price_lists'), ('price_list_versions'),
+    ('customers'), ('customer_contacts'), ('lead_items'), ('opportunity_items'),
+    ('proposal_items'), ('catalogue_versions'), ('catalogue_parts'),
+    ('communications'), ('audit_events'), ('workspace_settings')
+)
+select
+  e.table_name,
+  (c.oid is not null) as exists,
+  coalesce(c.relrowsecurity, false) as row_security,
+  coalesce(s.n_live_tup, 0)::bigint as estimated_rows
+from expected e
+left join pg_class c
+  on c.relname = e.table_name
+ and c.relnamespace = 'public'::regnamespace
+ and c.relkind = 'r'
+left join pg_stat_user_tables s on s.relid = c.oid
+order by e.table_name;
