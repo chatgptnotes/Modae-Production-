@@ -425,7 +425,7 @@ export function StoreProvider({ children }) {
       hydratedRef.current = true
       setLiveSyncStatus('degraded')
       setSyncDiagnostics(diagnostics => ({ ...diagnostics, emptyWorkspaceAt: new Date().toISOString() }))
-      console.warn('Supabase returned an empty workspace; local data was preserved and no automatic seed was written.')
+      console.debug('Supabase returned an empty workspace; local data was preserved and no automatic seed was written.')
       // A lead created while the initial request was in flight was preserved
       // locally, but its earlier flush was gated on hydration. Publish that
       // pending local change now that the empty-workspace decision is complete.
@@ -452,7 +452,7 @@ export function StoreProvider({ children }) {
       let nextSparesLinesBaseline = s.sparesLinesSyncBaseline || []
       for (const [k, v] of Object.entries(serverSlices)) {
         if (unexpectedEmptyBusinessSlice(k, s[k], v)) {
-          console.warn(`Ignoring empty ${k} hydration response because this browser has populated data.`)
+          console.debug(`Ignoring empty ${k} hydration response because this browser has populated data.`)
           continue
         }
         if (k === 'leads' || k === 'leadArchive') {
@@ -545,7 +545,7 @@ export function StoreProvider({ children }) {
     let nextSparesLinesBaseline = s.sparesLinesSyncBaseline || []
     for (const [k, v] of Object.entries(syncedOf(slices))) {
       if (!allowEmptyBusinessSlices && unexpectedEmptyBusinessSlice(k, s[k], v)) {
-        console.warn(`Ignoring empty ${k} refresh response because this browser has populated data.`)
+        console.debug(`Ignoring empty ${k} refresh response because this browser has populated data.`)
         setSyncDiagnostics(current => ({ ...current, protectedEmptyRefreshAt: new Date().toISOString(), protectedEmptySlice: k }))
         continue
       }

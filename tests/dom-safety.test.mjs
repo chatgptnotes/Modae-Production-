@@ -36,6 +36,7 @@ test('async attachment rendering stops before touching a detached canvas', () =>
 test('empty Supabase hydration still preserves populated local slices', () => {
   const store = read('src/store.jsx')
   assert.match(store, /if \(unexpectedEmptyBusinessSlice\(k, s\[k\], v\)\)/)
-  assert.match(store, /Ignoring empty \$\{k\} hydration response because this browser has populated data/)
+  assert.match(store, /console\.debug\(`Ignoring empty \$\{k\} hydration response because this browser has populated data/)
+  assert.doesNotMatch(store, /console\.warn\(`Ignoring empty \$\{k\} hydration response/)
   assert.match(store, /if \(res\.empty\) \{[\s\S]*local data was preserved and no automatic seed was written/)
 })

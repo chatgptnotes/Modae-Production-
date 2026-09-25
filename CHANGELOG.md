@@ -8,6 +8,8 @@ This is an implementation and release log, not a dump of every commit.
 - Hardened modal, workspace, proposal, price-list, attachment, and inline-editor
   DOM interactions so delayed focus and scrolling skip nodes detached during
   route changes, state updates, or hydration.
+- Downgraded expected empty-workspace hydration and refresh-protection messages
+  to debug-level logging while retaining the local-state fallback.
 - Replaced runtime Supabase Realtime synchronization with pull-based refreshes
   on boot, route changes, focus/visibility restoration, reconnect, and explicit
   refresh. Shared writes now include the authenticated Supabase user ID as

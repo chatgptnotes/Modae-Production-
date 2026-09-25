@@ -170,8 +170,10 @@ test('refresh safety retains local data on quota failures and empty full respons
   assert.match(store, /Local cache was not updated; keeping the last known-good browser snapshot/)
   assert.doesNotMatch(store, /localStorage\.removeItem\(KEY\)\n\s*localStorage\.setItem\(KEY/)
   assert.match(store, /const unexpectedEmptyBusinessSlice/)
-  assert.match(store, /Ignoring empty \$\{k\} refresh response/)
-  assert.match(store, /Supabase returned an empty workspace; local data was preserved/)
+  assert.match(store, /console\.debug\(`Ignoring empty \$\{k\} refresh response/)
+  assert.match(store, /console\.debug\('Supabase returned an empty workspace; local data was preserved/)
+  assert.doesNotMatch(store, /console\.warn\(`Ignoring empty \$\{k\} refresh response/)
+  assert.doesNotMatch(store, /console\.warn\('Supabase returned an empty workspace; local data was preserved/)
 })
 
 test('boot does not delete the active browser snapshot before reading it', () => {
