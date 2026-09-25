@@ -45,6 +45,24 @@ export { isPlaceholderSparesLine, sparesProposalBom }
 // who/when/why metadata. Deep-cloned so later edits to the live proposal
 // can't mutate an already-logged revision's snapshot.
 export function snapshotProposal(p) {
+  const reviewedUpload = p.reviewedUpload
+    ? {
+      filename: p.reviewedUpload.filename,
+      type: p.reviewedUpload.type,
+      size: p.reviewedUpload.size,
+      uploadedAt: p.reviewedUpload.uploadedAt,
+      blobKey: p.reviewedUpload.blobKey,
+      webUrl: p.reviewedUpload.webUrl,
+      url: p.reviewedUpload.url,
+      path: p.reviewedUpload.path,
+      itemId: p.reviewedUpload.itemId,
+      sheets: p.reviewedUpload.sheets,
+      importedChanges: p.reviewedUpload.importedChanges,
+      validationIssues: p.reviewedUpload.validationIssues,
+      comparisonAvailable: p.reviewedUpload.comparisonAvailable,
+      table: p.reviewedUpload.table,
+    }
+    : null
   return JSON.parse(JSON.stringify({
     revision: p.revision, bom: p.bom, terms: p.terms, signals: p.signals, costing: p.costing,
     pricingMode: p.pricingMode, discountPct: p.discountPct, markupPct: p.markupPct,
@@ -56,6 +74,11 @@ export function snapshotProposal(p) {
     clauses: p.clauses, docTerms: p.docTerms, docTermsHeading: p.docTermsHeading,
     letterSalutation: p.letterSalutation, letterBody: p.letterBody, letterClose: p.letterClose,
     ourRef: p.ourRef,
+    reviewedUpload,
+    reviewStatus: p.reviewStatus,
+    reviewIssues: p.reviewIssues,
+    reviewCompletedAt: p.reviewCompletedAt,
+    reviewOverride: p.reviewOverride,
   }))
 }
 
@@ -578,11 +601,13 @@ export function StoreProvider({ children }) {
   }
 
   const applyRealtimeRows = rows => {
-    if (!Array.isArray(rows) || !rows.length) return
+    if (!Array.isArray(rows) || !rows.length) return { refreshRequired: false, priceListsChanged: false }
     const current = stateRef.current
     const slices = {}
     const arrays = {}
     const objects = {}
+    let refreshRequired = false
+    let priceListsChanged = false
     const arrayKeyFor = table => ['leads', 'opportunities', 'approvals'].includes(table) ? table : null
     const recordArrayKey = entity => ({ spares_lines: 'sparesLines', clarifications: 'clarifications', audit: 'audit' })[entity]
 
@@ -599,10 +624,32 @@ export function StoreProvider({ children }) {
         if (!objects.proposals) objects.proposals = { ...(current.proposals || {}) }
         if (row.deleted) delete objects.proposals[row.id]
         else if (row.data) objects.proposals[row.id] = row.data
+        continue
       }
+      if (row.entity === 'state') {
+        // State rows are one shared slice per records.id. A deleted state row
+        // has no reliable type information, so use the authoritative loader
+        // instead of guessing whether its value was an array or object.
+        if (row.deleted) refreshRequired = true
+        else if (row.data && row.id) slices[row.id] = row.data
+        continue
+      }
+      if (row.entity === 'settings' && row.id === 'config') {
+        if (row.deleted) refreshRequired = true
+        else if (row.data) slices.config = row.data
+        continue
+      }
+      if (row.entity === 'price_lists' || row.entity === 'price_list_versions') {
+        priceListsChanged = true
+        continue
+      }
+      // Keep a correctness-first fallback for a newly introduced records
+      // entity or a deletion whose shape cannot be applied locally.
+      refreshRequired = true
     }
     Object.assign(slices, arrays, objects)
     if (Object.keys(slices).length) applyServer(slices, null, { allowEmptyBusinessSlices: true })
+    return { refreshRequired, priceListsChanged }
   }
 
   const loadApprovedPriceLists = async ({ force = false } = {}) => {
@@ -718,7 +765,11 @@ export function StoreProvider({ children }) {
           return
         }
         datastore.loadChangedRows(events)
-          .then(rows => applyRealtimeRows(rows))
+          .then(rows => {
+            const result = applyRealtimeRows(rows)
+            if (result?.priceListsChanged) loadApprovedPriceLists({ force: true })
+            if (result?.refreshRequired) fullRefresh()
+          })
           .catch(() => fullRefresh())
       }, 1000)
     }

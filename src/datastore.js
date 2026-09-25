@@ -19,7 +19,9 @@ export const dbEnabled = () => !!supabase
 
 // Shared business records are normally refreshed on focus. Postgres Changes
 // provides a small, authoritative nudge while the row-level loader below
-// keeps that nudge from downloading the entire workspace.
+// keeps that nudge from downloading the entire workspace. Subscribe to the
+// whole records table because it contains several shared entities (not just
+// proposals); the row loader and store decide how each entity is applied.
 export function subscribeBusinessChanges(onChange, onStatus = () => {}) {
   if (!supabase) return () => {}
   const channel = supabase
@@ -28,7 +30,10 @@ export function subscribeBusinessChanges(onChange, onStatus = () => {}) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'approvals' }, payload => onChange({ table: 'approvals', payload }))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'opportunities' }, payload => onChange({ table: 'opportunities', payload }))
     // Release effects update the proposal row as well as the approval itself.
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'records', filter: 'entity=eq.proposals' }, payload => onChange({ table: 'proposals', payload }))
+    // Other shared slices also live in records, so do not narrow this to
+    // proposals: state, settings, price lists, clarifications, spare lines,
+    // and audit rows must reach other open browsers too.
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'records' }, payload => onChange({ table: 'records', payload }))
     .subscribe(status => onStatus(status))
   return () => { supabase.removeChannel(channel) }
 }

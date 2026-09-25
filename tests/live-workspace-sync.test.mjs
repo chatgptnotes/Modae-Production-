@@ -10,7 +10,8 @@ test('the shared workspace subscribes to the rows that can resolve a release', (
   assert.match(datastore, /table: 'leads'/)
   assert.match(datastore, /table: 'approvals'/)
   assert.match(datastore, /table: 'opportunities'/)
-  assert.match(datastore, /filter: 'entity=eq\.proposals'/)
+  assert.match(datastore, /table: 'records'/)
+  assert.doesNotMatch(datastore, /filter: 'entity=eq\.proposals'/)
   assert.match(datastore, /loadChangedRows/)
   assert.match(datastore, /select\('id, data, rev, deleted_at'\)/)
 
@@ -19,6 +20,11 @@ test('the shared workspace subscribes to the rows that can resolve a release', (
   assert.match(store, /datastore\.loadChangedRows\(events\)/)
   assert.match(store, /events\.length > 12/)
   assert.match(store, /setTimeout\(.*1000\)/s)
+  assert.match(store, /entity === 'state'/)
+  assert.match(store, /entity === 'settings' && row\.id === 'config'/)
+  assert.match(store, /price_list_versions/)
+  assert.match(store, /refreshRequired/)
+  assert.match(store, /loadApprovedPriceLists\(\{ force: true \}\)/)
   assert.match(store, /Date\.now\(\) - lastFetch < 45000/)
   assert.match(store, /async refreshSharedData\(\)/)
   assert.match(store, /setTimeout\(flushSaves, 0\)/,
