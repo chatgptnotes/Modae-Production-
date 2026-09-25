@@ -646,6 +646,11 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
       anyOf: !!blocker.anyOf,
     })
   }
+  const openCommercialDecisions = () => {
+    setTransition(null)
+    goTab('proposal')
+    window.setTimeout(() => document.querySelector('[aria-label="Commercial terms decision"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 0)
+  }
   const clarificationRows = actionableClarifications(opp, store)
     .filter(c => !isClarificationResolved(c))
   const deviationRows = (proposal?.terms || []).filter(t => t.status === 'Deviation')
@@ -760,6 +765,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
                     || item.key.startsWith('sp-conf-') || item.key.startsWith('sp-price-')
                     ? <span className="hint">Resolve this requirement from the current workflow stage.</span>
                     : null}
+                  {item.key === 'commercial-decision' && <button type="button" className="exception-action" onClick={openCommercialDecisions}>Review commercial decisions</button>}
                   {approvable && openRequest && <span>{item.approvalType === 'Commercial deviation' ? 'AH approval for commercial deviations' : item.approvalType} <b>{openRequest.id}</b> is pending with {openRequest.needed?.join(openRequest.anyOf ? ' or ' : ' + ') || openRequest.approver}.</span>}
                   {approvable && !openRequest && <button className="exception-action" onClick={() => requestBlockerApproval(item)}>{item.approvalType === 'Commercial deviation' ? 'Request AH approval for commercial deviations' : `Request ${item.approvalType.toLowerCase()} from ${blockerOwner(item)}`}</button>}
                   {requestable && exception?.status === 'Pending' && <span>Exception approval <b>{exception.id}</b> is pending.</span>}

@@ -5,6 +5,9 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Clarified the validated-proposal status when Payment or Delivery decisions
+  are still unresolved, and added a direct action from the workflow blocker
+  dialog to the commercial-decision section.
 - Persisted reviewed proposal workbook snapshots with revision-scoped file keys;
   validation no longer increments the quote revision, and current or historical
   revision previews use the exact uploaded workbook that was reviewed. Customer

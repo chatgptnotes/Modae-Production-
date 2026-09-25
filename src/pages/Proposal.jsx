@@ -31,7 +31,7 @@ import { clausesFor, clauseWarnings } from '../clauses.js'
 import { fromInr, toInr, currencySymbol } from '../currency.js'
 import { reviewFindingKey } from '../approvalMemory.js'
 import OpportunityComingSoon from '../workbench/OpportunityComingSoon.jsx'
-import { COMMERCIAL_DECISIONS, CUSTOMER_CONFIRMATION_STATUSES, commercialApprovalDetails, modaeStandardCommercialTerms, normalizeCommercialTerm } from '../commercialTerms.js'
+import { COMMERCIAL_DECISIONS, CUSTOMER_CONFIRMATION_STATUSES, commercialApprovalDetails, modaeStandardCommercialTerms, needsCommercialResolution, normalizeCommercialTerm } from '../commercialTerms.js'
 import { proposalApprovalSnapshot } from '../approvalMemory.js'
 import { loadProposalTemplateBuffer, resolveProposalTemplate } from '../proposal/templateRegistry.js'
 import { customerProposalArtifact } from '../proposal/emailAttachments.js'
@@ -1008,13 +1008,16 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     && displayReviewIssues.every(issue => issue.severity === 'info')
   const workbookChangeIssues = displayReviewIssues.filter(issue => issue.code === 'line.value-changed')
   const otherReviewIssues = displayReviewIssues.filter(issue => issue.code !== 'line.value-changed')
+  const workflowBlocked = blockers.some(bl => bl.severity === 'block' || bl.severity === 'wait')
   const approvalRequired = blockers.some(bl => bl.approvalType && bl.severity !== 'wait') || pendingForOpp.length > 0
   const reviewBanner = reviewStatus === 'Needs attention'
     ? { tone: 'warning', title: 'Validation needs attention', text: 'Fix the issues listed below before requesting approval.' }
     : reviewStatus === 'Validated'
-      ? approvalRequired
-        ? { tone: 'success', title: 'Review complete', text: 'Approval is required before the quote can be released.' }
-        : { tone: 'success', title: 'Review complete', text: 'This proposal is ready for approval.' }
+      ? workflowBlocked
+        ? { tone: 'warning', title: 'Review complete — action required', text: 'Resolve the remaining readiness items before moving to Approval.' }
+        : approvalRequired
+          ? { tone: 'success', title: 'Review complete', text: 'Approval is required before the quote can be released.' }
+          : { tone: 'success', title: 'Review complete', text: 'This proposal is ready for approval.' }
       : reviewStatus === 'Override accepted'
         ? { tone: 'override', title: 'Review override accepted', text: 'The findings were saved and the proposal can continue through approval.' }
         : p.reviewedUpload
@@ -1147,8 +1150,11 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       setP(next)
       store.saveProposal(oppId, next)
       if (next.reviewStatus === 'Validated') {
+        const unresolvedCommercialTerms = (next.terms || []).filter(needsCommercialResolution)
         setReviewMessage(allIssues.length === 0
-          ? 'Review complete — proposal is ready to proceed.'
+          ? unresolvedCommercialTerms.length
+            ? `Review complete — resolve commercial decisions for ${unresolvedCommercialTerms.map(term => term.term).join(', ')} before moving to Approval.`
+            : 'Review complete — proposal is ready to proceed.'
           : automatic
             ? 'Uploaded workbook validated and set as the active proposal. Review the findings before proceeding.'
             : 'Review complete. The proposal can now move to approval or customer send.')
