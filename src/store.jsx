@@ -455,10 +455,21 @@ export function StoreProvider({ children }) {
         accepted[k] = v
       }
       const merged = reconcileApprovedSubmissions(migrate({ ...s, ...accepted, leadSyncBaseline: nextBaseline, clarificationSyncBaseline: nextClarificationBaseline, opportunitySyncBaseline: nextOpportunityBaseline, sparesLinesSyncBaseline: nextSparesLinesBaseline }))
-      // Only the slices we took from the server are known to match it. A slice
-      // we kept is still unsaved, so it must stay dirty for the flush below.
-      lastSavedRef.current = Object.fromEntries(
-        Object.keys(accepted).map(k => [k, serverSlices[k] ?? merged[k]]))
+      // Only user changes made during the boot request should be dirty. A
+      // cached state slice that the server has never stored is not an edit;
+      // treating every such slice as dirty makes every browser push its whole
+      // local snapshot and causes consolidated state conflicts between tabs.
+      const acceptedKeys = new Set(Object.keys(accepted))
+      const serverKeys = new Set(Object.keys(serverSlices))
+      const savedBaseline = {}
+      for (const key of acceptedKeys) savedBaseline[key] = serverSlices[key] ?? merged[key]
+      for (const [key, value] of Object.entries(syncedOf(merged))) {
+        if (acceptedKeys.has(key) || serverKeys.has(key)) continue
+        if (JSON.stringify(s[key]) === JSON.stringify(bootRef.current[key])) {
+          savedBaseline[key] = value
+        }
+      }
+      lastSavedRef.current = savedBaseline
       hydratedRef.current = true
       setState(merged)
       // Push whatever the user did during the boot window now, rather than

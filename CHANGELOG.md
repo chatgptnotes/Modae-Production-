@@ -5,6 +5,9 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Prevented hydration from marking unchanged browser-cached state as dirty;
+  this stops every browser from repeatedly rewriting the consolidated state
+  and causing optimistic save conflicts.
 - Kept migration markers and derived lead-deadline timers local to the browser
   so they no longer create false shared-workspace save failures; persistence
   errors now include the exact remaining state keys.
