@@ -52,6 +52,42 @@ export const QUOTE_FEE_DOCUMENTS = [
   'End-user details (including project / application information, wherever applicable)',
 ]
 
+export function kycRejectionBody(lead, {
+  customer = null, sender, item = '', reason = '', aiBody = '', correction = '',
+} = {}) {
+  if (clean(aiBody)) return clean(aiBody)
+  const contact = clean(customer?.contactPerson)
+  return [
+    contact ? `Dear ${contact},` : 'Dear Sir,',
+    '',
+    `Thank you for submitting the ${clean(item) || 'KYC document'} for review.`,
+    '',
+    'We are unable to approve the document at this stage for the following reason:',
+    '',
+    clean(reason),
+    '',
+    clean(correction) || 'Please provide a corrected or updated copy of the document so that we can complete the KYC verification process.',
+    '',
+    'If you have any questions, please contact us.',
+    '',
+    signature(sender),
+  ].join('\n')
+}
+
+export function draftKycRejection(lead, {
+  customer = null, users = [], config = {}, item = '', reason = '', aiBody = '', correction = '',
+} = {}) {
+  const sender = clarificationSender(lead, users, config)
+  return {
+    kind: 'kyc-rejection', item, reason, correction,
+    from: sender.address, fromRule: sender.rule, fromLabel: senderLabel(sender),
+    to: recipientFor(lead), cc: sender.cc,
+    subject: `${subjectFor(lead)} — ${item || 'KYC document'} requires resubmission`,
+    body: kycRejectionBody(lead, { customer, sender, item, reason, correction, aiBody }),
+    draftedBy: clean(aiBody) ? 'AI' : 'Template',
+  }
+}
+
 const clean = v => String(v ?? '').trim()
 
 // ---------------------------------------------------------------- the sender

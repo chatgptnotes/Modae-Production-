@@ -663,13 +663,16 @@ function leadClarifyPrompt(p) {
   return `${HOUSE}
 
 Drafting only. The model never sends this email. Write a plain-text email to a
-prospective customer asking for the listed missing information. Do not invent
-part numbers, prices, dates, specifications, or commitments. Open with the
-supplied salutation and close with the supplied sender block.
+prospective customer. ${p.kind === 'kyc-rejection'
+    ? 'Explain that the submitted KYC document cannot be approved at this stage, use only the supplied rejection reason, and request a corrected or updated document. Do not invent legal, compliance, authenticity, deadline, or other factual claims.'
+    : 'Ask for the listed missing information before preparing the offer. Do not invent part numbers, prices, dates, specifications, or commitments.'} Open with the supplied salutation and close with the supplied sender block.
 
-PURPOSE: ${cap(p.kind === 'quote-fee' ? 'Request the pre-quote fee confirmation and compliance documents.' : 'Request the missing information before preparing the offer.', 300)}
+PURPOSE: ${cap(p.kind === 'kyc-rejection' ? 'Request a corrected KYC document after human rejection.' : p.kind === 'quote-fee' ? 'Request the pre-quote fee confirmation and compliance documents.' : 'Request the missing information before preparing the offer.', 300)}
 CUSTOMER: ${cap(p.sellTo, 200)} · contact: ${cap(p.contactPerson, 200)}
 SUBJECT: ${cap(p.subject, 300)}
+DOCUMENT: ${cap(p.item, 200)}
+REJECTION REASON: ${cap(p.reason, 1000)}
+CORRECTION REQUEST: ${cap(p.correction, 1000)}
 ITEMS:
 ${cap((p.items || []).map((item, i) => `${i + 1}. ${item}`).join('\n'), 6000)}
 BODY:

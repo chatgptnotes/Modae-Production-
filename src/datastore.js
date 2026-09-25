@@ -9,7 +9,7 @@ import { writeCachedRules } from './rules.js'
 // Per-device/session state that must never be shared across browsers.
 export const LOCAL_ONLY = ['viewMode', 'viewModePinned', 'tabletTheme', 'spSync', 'auth', 'role',
   'inboxShowAll', 'leadSyncBaseline', 'clarificationSyncBaseline', 'opportunitySyncBaseline',
-  'sparesLinesSyncBaseline', 'deletedOpportunityIds']
+  'sparesLinesSyncBaseline', 'deletedOpportunityIds', 'pendingOpportunitySyncIds']
 
 export const dbEnabled = () => !!supabase
 
@@ -91,6 +91,8 @@ let opportunitySaveQueue = Promise.resolve()
 const normalizedRevisions = new Map()
 const normalizedRecords = new Map()
 const normalizedSaveQueues = new Map()
+let saveSlicesQueue = Promise.resolve()
+const MAX_CONFLICT_RETRIES = 3
 const normalizedKey = (entity, id) => `${entity}|${id}`
 const clearNormalizedEntity = entity => {
   const prefix = `${entity}|`
@@ -270,7 +272,13 @@ export async function loadPriceLists({ force = false } = {}) {
   if (priceListInFlight) return priceListInFlight
   priceListInFlight = (async () => {
     const consolidated = await loadConsolidatedPriceLists()
-    if (!consolidated) throw new Error('Consolidated price-list records are unavailable')
+    if (!consolidated) {
+      const fallback = readPriceListsCache()
+      if (fallback && Object.keys(fallback).length) {
+        return { priceLists: fallback, cached: true, degraded: true }
+      }
+      throw new Error('Consolidated price-list records are unavailable')
+    }
     writePriceListsCache(consolidated)
     return { priceLists: consolidated }
   })()
@@ -322,6 +330,23 @@ export async function loadCore() {
   } finally {
     coreLoadInFlight = null
   }
+}
+
+// Deep links need a narrow recovery read when the fast workspace list is
+// stale or omitted a row that is still present in the normalized table.
+export async function loadOpportunity(id) {
+  if (!supabase || !id) return null
+  const result = await supabase.from('opportunities')
+    .select('id, data, rev')
+    .eq('id', id)
+    .is('deleted_at', null)
+    .maybeSingle()
+  if (result.error) throw result.error
+  const row = result.data
+  if (!row) return null
+  opportunityRevisions.set(row.id, Number(row.rev) || 0)
+  opportunityRecords.set(row.id, { data: row.data, rev: Number(row.rev) || 0 })
+  return row.data
 }
 
 // Secondary startup path. This deliberately reuses the complete loader so
@@ -396,7 +421,7 @@ async function fetchAll() {
 }
 
 // dirty: {key: value}. Throws on error so the caller can keep the keys dirty.
-export async function saveSlices(dirty) {
+async function saveSlicesNow(dirty) {
   if (!supabase) return
   invalidateLoadCache()
   let normalizedDirty = dirty
@@ -431,6 +456,16 @@ export async function saveSlices(dirty) {
   }
 }
 
+// A page-hide flush can overlap a debounced save, and a focus refresh can
+// trigger another save before either has finished. Keep all slice writes in a
+// single queue so revision maps cannot be observed halfway through a write.
+export function saveSlices(dirty) {
+  saveSlicesQueue = saveSlicesQueue
+    .catch(() => {})
+    .then(() => saveSlicesNow(dirty))
+  return saveSlicesQueue
+}
+
 const BUSINESS_KEYS = new Set(['leads', 'opportunities', 'approvals', 'proposals', 'sparesLines', 'clarifications', 'audit', 'priceLists'])
 
 async function loadBusinessTables({ includeRecords = true } = {}) {
@@ -458,7 +493,7 @@ async function loadBusinessTables({ includeRecords = true } = {}) {
       details: error?.details,
       hint: error?.hint,
     })))
-    return {}
+    throw failedTables[0].error
   }
   const records = tables[3].data || []
   if (includeRecords) {
@@ -535,32 +570,32 @@ async function saveNormalizedRowsNow(entity, rows) {
     if (result.error) throw result.error
     return result.data || { conflicts: [] }
   }
-  const firstPayload = normalizedPayload(entity, rows, deletedIds)
-  const first = await write(firstPayload)
-  const conflicts = Array.isArray(first.conflicts) ? first.conflicts : []
-  if (conflicts.length) {
-    const retry = conflicts.map(serverRow => ({
-      id: serverRow.id,
-      data: localById.get(serverRow.id) || serverRow.data,
-      rev: Number(serverRow.rev) || 0,
-      deleted: !localById.has(serverRow.id),
-    }))
-    const second = await write(retry)
-    const remaining = Array.isArray(second.conflicts) ? second.conflicts : []
-    if (remaining.length) throw new Error(`${entity} save conflict for ${remaining.map(row => row.id).join(', ')}`)
-    for (const row of retry) {
+  const applyAccepted = (payload, conflicts) => {
+    const conflictIds = new Set(conflicts.map(conflict => conflict.id))
+    for (const row of payload) {
+      if (conflictIds.has(row.id)) continue
       const key = normalizedKey(entity, row.id)
       normalizedRevisions.set(key, row.rev + 1)
       if (row.deleted) normalizedRecords.delete(key)
       else normalizedRecords.set(key, { data: row.data, rev: row.rev + 1 })
     }
   }
-  for (const row of firstPayload) {
-    if (conflicts.some(conflict => conflict.id === row.id)) continue
-    const key = normalizedKey(entity, row.id)
-    normalizedRevisions.set(key, row.rev + 1)
-    if (row.deleted) normalizedRecords.delete(key)
-    else normalizedRecords.set(key, { data: row.data, rev: row.rev + 1 })
+
+  let pending = normalizedPayload(entity, rows, deletedIds)
+  for (let attempt = 0; attempt <= MAX_CONFLICT_RETRIES; attempt += 1) {
+    const result = await write(pending)
+    const conflicts = Array.isArray(result.conflicts) ? result.conflicts : []
+    applyAccepted(pending, conflicts)
+    if (!conflicts.length) return
+    pending = conflicts.map(serverRow => ({
+      id: serverRow.id,
+      data: localById.get(serverRow.id) || serverRow.data,
+      rev: Number(serverRow.rev) || 0,
+      deleted: !localById.has(serverRow.id),
+    }))
+  }
+  if (pending.length) {
+    throw new Error(`${entity} save conflict for ${pending.map(row => row.id).join(', ')}`)
   }
 }
 
@@ -597,40 +632,36 @@ async function saveOpportunityRowsNow(rows) {
     return result.data || { accepted: [], conflicts: [] }
   }
 
-  const firstPayload = opportunityPayload(rows, deletedIds)
-  const first = await write(firstPayload)
-  const conflicts = Array.isArray(first.conflicts) ? first.conflicts : []
-  if (conflicts.length) {
-    // Latest-save-wins: rebase only the rows rejected by the revision guard
-    // onto the server revision, while preserving the local row being saved.
-    const retry = conflicts
-      .map(serverRow => {
-        const local = localById.get(serverRow.id)
-        return {
-          id: serverRow.id,
-          data: local || serverRow.data,
-          rev: Number(serverRow.rev) || 0,
-          deleted: !local,
-        }
-      })
-      .filter(Boolean)
-    if (retry.length) {
-      const second = await write(retry)
-      const remaining = Array.isArray(second.conflicts) ? second.conflicts : []
-      if (remaining.length) throw new Error(`Opportunity save conflict for ${remaining.map(row => row.id).join(', ')}`)
-      for (const row of retry) {
-        opportunityRevisions.set(row.id, row.rev + 1)
-        if (row.deleted) opportunityRecords.delete(row.id)
-        else opportunityRecords.set(row.id, { data: row.data, rev: row.rev + 1 })
-      }
+  const applyAccepted = (payload, conflicts) => {
+    const conflictIds = new Set(conflicts.map(conflict => conflict.id))
+    for (const row of payload) {
+      if (conflictIds.has(row.id)) continue
+      opportunityRevisions.set(row.id, row.rev + 1)
+      if (row.deleted) opportunityRecords.delete(row.id)
+      else opportunityRecords.set(row.id, { data: row.data, rev: row.rev + 1 })
     }
   }
 
-  for (const row of firstPayload) {
-    if (conflicts.some(conflict => conflict.id === row.id)) continue
-    opportunityRevisions.set(row.id, row.rev + 1)
-    if (row.deleted) opportunityRecords.delete(row.id)
-    else opportunityRecords.set(row.id, { data: row.data, rev: row.rev + 1 })
+  // Latest-save-wins: rebase only rows rejected by the revision guard onto
+  // the newest server revision, preserving the local row being saved.
+  let pending = opportunityPayload(rows, deletedIds)
+  for (let attempt = 0; attempt <= MAX_CONFLICT_RETRIES; attempt += 1) {
+    const result = await write(pending)
+    const conflicts = Array.isArray(result.conflicts) ? result.conflicts : []
+    applyAccepted(pending, conflicts)
+    if (!conflicts.length) return
+    pending = conflicts.map(serverRow => {
+      const local = localById.get(serverRow.id)
+      return {
+        id: serverRow.id,
+        data: local || serverRow.data,
+        rev: Number(serverRow.rev) || 0,
+        deleted: !local,
+      }
+    }).filter(Boolean)
+  }
+  if (pending.length) {
+    throw new Error(`Opportunity save conflict for ${pending.map(row => row.id).join(', ')}`)
   }
 }
 
@@ -688,7 +719,7 @@ export async function savePriceLists(priceLists = {}) {
     return true
   } catch (e) {
     console.warn('Consolidated price-list save failed:', e?.message)
-    return false
+    throw e
   }
 }
 

@@ -42,6 +42,46 @@ test('opportunity hydration keeps local edits and deletions against a stale serv
   assert.deepEqual(merged.rows, [{ id: 'OP-edit', oppName: 'After' }])
 })
 
+test('pending opportunity hydration preserves a locally created row until the server confirms it', () => {
+  const baseline = [{ id: 'OP-pending', oppName: 'New opportunity' }]
+  const merged = mergeOpportunitySlice(baseline, [], baseline, [], ['OP-pending'])
+  assert.deepEqual(merged.rows, baseline)
+})
+
+test('pending opportunity hydration clears protection once the server returns the row', () => {
+  const local = [{ id: 'OP-pending', oppName: 'New opportunity' }]
+  const server = [{ id: 'OP-pending', oppName: 'New opportunity' }]
+  const merged = mergeOpportunitySlice(local, server, local, [], ['OP-pending'])
+  assert.deepEqual(merged.rows, server)
+})
+
+test('an explicit opportunity deletion overrides pending sync protection', () => {
+  const local = [{ id: 'OP-pending', oppName: 'New opportunity' }]
+  const merged = mergeOpportunitySlice(local, [], local, ['OP-pending'], ['OP-pending'])
+  assert.deepEqual(merged.rows, [])
+})
+
+test('legacy cached opportunities without a baseline are marked pending for recovery', () => {
+  const saved = JSON.stringify({
+    demoData: false,
+    opportunities: [{ id: 'OP-legacy', sellTo: 'Customer' }],
+    opportunitySyncBaseline: [],
+  })
+  const restored = stateFromSaved(saved)
+  assert.deepEqual(restored.pendingOpportunitySyncIds, ['OP-legacy'])
+})
+
+test('legacy recovery also repairs an existing empty pending marker', () => {
+  const saved = JSON.stringify({
+    demoData: false,
+    opportunities: [{ id: 'OP-legacy', sellTo: 'Customer' }],
+    opportunitySyncBaseline: [],
+    pendingOpportunitySyncIds: [],
+  })
+  const restored = stateFromSaved(saved)
+  assert.deepEqual(restored.pendingOpportunitySyncIds, ['OP-legacy'])
+})
+
 test('spares hydration preserves local rows against an empty server slice', () => {
   const local = [{ id: 'SL-local', oppId: 'O-1', pn: 'RK16-BASE', qty: 1 }]
   const merged = mergeSparesLineSlice(local, [], [])

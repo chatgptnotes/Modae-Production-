@@ -5,6 +5,21 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Hardened production refresh and login recovery: browser storage quota errors
+  now retain the last known-good workspace cache, empty Supabase refreshes no
+  longer erase populated local business records, and session restoration times
+  out safely instead of leaving the login screen loading indefinitely.
+- Persisted proposal decisions immediately to Supabase and retained a compact
+  browser fallback, preventing commercial terms from reverting after refresh.
+- Protected newly created opportunities from disappearing during refresh while
+  their normalized Supabase row is still awaiting confirmation; explicit
+  deletions and confirmed remote deletions retain their existing behavior.
+- Added direct deep-link recovery and explicit sync-error messaging when an
+  opportunity is omitted from the initial shared workspace response.
+- Added lead-stage KYC document review with professional **Approve**, **Reject**,
+  and **Pending Review** outcomes. Rejections require a reason and generate an
+  AI-assisted customer email draft for human review before sending; legacy
+  `Verified` records remain readable.
 - Enforced commercial hand-off in Requirement Validation: every Payment,
   Delivery, or other deviation must be resolved before Sourcing, counter-offers
   wait for customer acceptance, and matched customer terms require AH approval;

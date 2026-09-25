@@ -53,6 +53,11 @@ export function verificationDeadline(lead, customerStatus, config = {}, now = ne
 export const verificationItem = (verification, item) =>
   verification?.kyc?.[item] || { state: 'Missing', mode: '', file: '', verifiedAt: '' }
 
+// `Verified` is retained as a read-compatible legacy value for seeded and
+// already-approved records. New human decisions use the clearer `Approved`
+// label so the UI can distinguish approval from extraction/format validation.
+export const kycItemApproved = item => ['Approved', 'Verified'].includes(item?.state)
+
 export function amberPaymentComplete(verification) {
   return verification?.payment?.state === 'Confirmed'
 }
@@ -65,7 +70,7 @@ export function leadVerificationComplete(lead, customerStatus = lead?.customerSt
   switch (v.requires) {
     case 'none': return true
     case 'documents': return checklistFor(config, customerStatus)
-      .every(item => verificationItem(lead?.verification, item).state === 'Verified')
+      .every(item => kycItemApproved(verificationItem(lead?.verification, item)))
       && lead?.verification?.kycRequestStatus !== 'cancelled'
     case 'fee': return amberPaymentComplete(lead?.verification)
     // Red used to return false here unconditionally, with no way to pass the
@@ -81,7 +86,7 @@ export function leadVerificationBlockers(lead, customerStatus = lead?.customerSt
   if (v.requires === 'documents') {
     const template = v.itemBlockerText || '{item} verification is required'
     return checklistFor(config, customerStatus)
-      .filter(item => verificationItem(lead?.verification, item).state !== 'Verified')
+      .filter(item => !kycItemApproved(verificationItem(lead?.verification, item)))
       .map(item => template.replace('{item}', item))
   }
   if (v.requires === 'fee') {

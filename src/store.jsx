@@ -88,6 +88,7 @@ const localSnapshot = state => ({
   opportunities: state.opportunities,
   opportunitySyncBaseline: state.opportunitySyncBaseline,
   deletedOpportunityIds: state.deletedOpportunityIds,
+  pendingOpportunitySyncIds: state.pendingOpportunitySyncIds,
   leads: state.leads,
   leadArchive: state.leadArchive,
   leadDeadlines: state.leadDeadlines,
@@ -97,6 +98,9 @@ const localSnapshot = state => ({
   // response cannot blank an otherwise populated BOQ during hydration.
   sparesLines: state.sparesLines,
   sparesLinesSyncBaseline: state.sparesLinesSyncBaseline,
+  // Keep proposals in the browser fallback too. Supabase remains authoritative
+  // when available, but a local/offline refresh must not reset saved terms.
+  proposals: state.proposals,
   approvals: state.approvals,
   customers: state.customers,
   users: state.users,
@@ -109,35 +113,26 @@ const localSnapshot = state => ({
   inboxShowAll: state.inboxShowAll,
 })
 
-const essentialLocalSnapshot = state => ({
-  cacheVersion: CACHE_VERSION,
-  demoData: state.demoData,
-  opportunities: state.opportunities,
-  opportunitySyncBaseline: state.opportunitySyncBaseline,
-  auth: state.auth,
-  role: state.role,
-  users: state.users,
-})
-
 let localCacheWarningShown = false
 
 const persistLocalSnapshot = state => {
   try {
     localStorage.setItem(KEY, JSON.stringify(localSnapshot(state)))
   } catch (e) {
-    // Replace any legacy oversized snapshot and retain only what is needed
-    // for an instant opportunity/auth boot. Supabase remains authoritative.
-    try {
-      localStorage.removeItem(KEY)
-      localStorage.setItem(KEY, JSON.stringify(essentialLocalSnapshot(state)))
-    } catch (fallbackError) {
-      if (!localCacheWarningShown) {
-        localCacheWarningShown = true
-        console.warn('Local cache unavailable — Supabase remains the source of truth:', fallbackError?.message || e?.message)
-      }
+    // localStorage.setItem is atomic: if it throws (usually quota exceeded),
+    // the previously valid snapshot remains. Never remove it before trying a
+    // smaller replacement — that old recovery path could turn a full browser
+    // cache into an incomplete one and make records appear to vanish on reload.
+    if (!localCacheWarningShown) {
+      localCacheWarningShown = true
+      console.warn('Local cache was not updated; keeping the last known-good browser snapshot:', e?.message || e)
     }
   }
 }
+
+const BUSINESS_SLICE_KEYS = new Set(['leads', 'leadArchive', 'approvals', 'opportunities', 'proposals', 'sparesLines', 'clarifications', 'audit'])
+const populated = value => Array.isArray(value) ? value.length > 0 : !!value && typeof value === 'object' && Object.keys(value).length > 0
+const unexpectedEmptyBusinessSlice = (key, local, server) => BUSINESS_SLICE_KEYS.has(key) && populated(local) && !populated(server)
 
 // Append-only event log, newest first. Every mutation gets its own entry: audit
 // history is business data and must not be compacted or capped away.
@@ -304,6 +299,7 @@ export function StoreProvider({ children }) {
   const hydratedRef = useRef(!datastore.dbEnabled())
   const lastSavedRef = useRef({}) // per-slice snapshot of what the server has
   const saveTimerRef = useRef(null)
+  const localCacheTimerRef = useRef(null)
   // What this device booted from. The boot fetch resolves *after* the app is
   // interactive, so a lead created in that window exists locally but has not
   // been saved yet (flushSaves is gated on hydratedRef). Comparing against this
@@ -321,6 +317,7 @@ export function StoreProvider({ children }) {
   }
 
   const flushSaves = () => {
+    persistLocalSnapshot(stateRef.current)
     clearTimeout(saveTimerRef.current)
     saveTimerRef.current = null
     if (!hydratedRef.current) return
@@ -348,12 +345,20 @@ export function StoreProvider({ children }) {
       })
       .catch(e => {
         setLiveSyncStatus('error')
+        setSyncDiagnostics(diagnostics => ({ ...diagnostics, lastSaveErrorAt: new Date().toISOString() }))
         console.warn('Supabase save failed — will retry on next change/focus:', e?.message)
       })
   }
 
+  const flushLocalCache = () => {
+    clearTimeout(localCacheTimerRef.current)
+    localCacheTimerRef.current = null
+    persistLocalSnapshot(stateRef.current)
+  }
+
   // Boot fetch: server slices replace local synced ones (through migrate, so
-  // schema backfills apply); an empty table is first-run — seed it from local.
+  // schema backfills apply). An empty response is treated as degraded until an
+  // operator explicitly initializes the shared workspace.
   //
   // "Replace" is deliberately limited to slices this device has not touched
   // since boot. The fetch resolves after the app is already interactive, and
@@ -372,17 +377,15 @@ export function StoreProvider({ children }) {
     setLiveSyncStatus('live')
     if (hydratedRef.current) return
     if (res.empty) {
-      const snap = syncedOf(stateRef.current)
-      try {
-        await datastore.saveSlices(snap)
-        lastSavedRef.current = snap
-        hydratedRef.current = true
-        setState(s => ({ ...s, leadSyncBaseline: {
-          ...(s.leadSyncBaseline || {}), leads: s.leads, leadArchive: s.leadArchive || [],
-        }, clarificationSyncBaseline: s.clarifications || [], opportunitySyncBaseline: s.opportunities || [], sparesLinesSyncBaseline: s.sparesLines || [] }))
-      } catch (e) {
-        console.warn('Supabase seed failed — retrying on next focus:', e?.message)
-      }
+      // An empty response can be a genuinely new workspace, but it is also
+      // what an RLS/configuration mistake looks like in the browser. Never
+      // auto-seed production from a browser snapshot: that can overwrite a
+      // shared workspace with stale demo/local data. Explicit clear/reset
+      // actions remain the only code paths allowed to initialise the server.
+      hydratedRef.current = true
+      setLiveSyncStatus('degraded')
+      setSyncDiagnostics(diagnostics => ({ ...diagnostics, emptyWorkspaceAt: new Date().toISOString() }))
+      console.warn('Supabase returned an empty workspace; local data was preserved and no automatic seed was written.')
     } else {
       const s = stateRef.current
       const accepted = {}
@@ -404,6 +407,10 @@ export function StoreProvider({ children }) {
       let nextOpportunityBaseline = s.opportunitySyncBaseline || []
       let nextSparesLinesBaseline = s.sparesLinesSyncBaseline || []
       for (const [k, v] of Object.entries(serverSlices)) {
+        if (unexpectedEmptyBusinessSlice(k, s[k], v)) {
+          console.warn(`Ignoring empty ${k} hydration response because this browser has populated data.`)
+          continue
+        }
         if (k === 'leads' || k === 'leadArchive') {
           const deletedLeadIds = [...new Set([...(s.deletedLeadIds || []), ...(serverSlices.deletedLeadIds || [])])]
           accepted.deletedLeadIds = deletedLeadIds
@@ -425,9 +432,12 @@ export function StoreProvider({ children }) {
           continue
         }
         if (k === 'opportunities') {
-          const mergedOpportunities = mergeOpportunitySlice(s.opportunities || [], v, s.opportunitySyncBaseline || [], s.deletedOpportunityIds || [])
+          const serverOpportunityIds = new Set((v || []).map(row => row?.id).filter(Boolean))
+          const pendingOpportunitySyncIds = (s.pendingOpportunitySyncIds || []).filter(id => !serverOpportunityIds.has(id))
+          const mergedOpportunities = mergeOpportunitySlice(s.opportunities || [], v, s.opportunitySyncBaseline || [], s.deletedOpportunityIds || [], pendingOpportunitySyncIds)
           accepted[k] = mergedOpportunities.rows
           nextOpportunityBaseline = mergedOpportunities.baseline
+          accepted.pendingOpportunitySyncIds = pendingOpportunitySyncIds
           continue
         }
         if (k === 'sparesLines') {
@@ -466,7 +476,7 @@ export function StoreProvider({ children }) {
 
   // Focus refetch: pull server slices where this device has no unsaved edits.
   // Dirty local slices win until their debounced save lands.
-  const applyServer = (slices, diagnostics = null) => {
+  const applyServer = (slices, diagnostics = null, { allowEmptyBusinessSlices = false } = {}) => {
     if (diagnostics) setSyncDiagnostics(diagnostics)
     const s = stateRef.current
     const updates = {}
@@ -475,6 +485,11 @@ export function StoreProvider({ children }) {
     let nextOpportunityBaseline = s.opportunitySyncBaseline || []
     let nextSparesLinesBaseline = s.sparesLinesSyncBaseline || []
     for (const [k, v] of Object.entries(syncedOf(slices))) {
+      if (!allowEmptyBusinessSlices && unexpectedEmptyBusinessSlice(k, s[k], v)) {
+        console.warn(`Ignoring empty ${k} refresh response because this browser has populated data.`)
+        setSyncDiagnostics(current => ({ ...current, protectedEmptyRefreshAt: new Date().toISOString(), protectedEmptySlice: k }))
+        continue
+      }
       // Approvals merge per row by sync stamp — a stale server snapshot must
       // never downgrade a decision that was just recorded locally.
       if (k === 'approvals') {
@@ -495,9 +510,12 @@ export function StoreProvider({ children }) {
         continue
       }
       if (k === 'opportunities') {
-        const mergedOpportunities = mergeOpportunitySlice(s.opportunities || [], v, s.opportunitySyncBaseline || [], s.deletedOpportunityIds || [])
+        const serverOpportunityIds = new Set((v || []).map(row => row?.id).filter(Boolean))
+        const pendingOpportunitySyncIds = (s.pendingOpportunitySyncIds || []).filter(id => !serverOpportunityIds.has(id))
+        const mergedOpportunities = mergeOpportunitySlice(s.opportunities || [], v, s.opportunitySyncBaseline || [], s.deletedOpportunityIds || [], pendingOpportunitySyncIds)
         if (JSON.stringify(s.opportunities || []) !== JSON.stringify(mergedOpportunities.rows)) updates.opportunities = mergedOpportunities.rows
         nextOpportunityBaseline = mergedOpportunities.baseline
+        if (JSON.stringify(s.pendingOpportunitySyncIds || []) !== JSON.stringify(pendingOpportunitySyncIds)) updates.pendingOpportunitySyncIds = pendingOpportunitySyncIds
         continue
       }
       if (k === 'sparesLines') {
@@ -554,7 +572,7 @@ export function StoreProvider({ children }) {
       }
     }
     Object.assign(slices, arrays, objects)
-    if (Object.keys(slices).length) applyServer(slices)
+    if (Object.keys(slices).length) applyServer(slices, null, { allowEmptyBusinessSlices: true })
   }
 
   const loadApprovedPriceLists = async ({ force = false } = {}) => {
@@ -580,7 +598,7 @@ export function StoreProvider({ children }) {
         lastSavedRef.current = { ...lastSavedRef.current, priceLists: next }
         setState(s => ({ ...s, priceLists: next }))
       }
-      setPriceListsStatus(Object.keys(next).length ? 'ready' : 'empty')
+      setPriceListsStatus(Object.keys(next).length ? (result.degraded ? 'degraded' : 'ready') : 'empty')
     } catch (error) {
       console.warn('Approved price-list load failed:', error?.message || error)
       setPriceListsStatus(Object.keys(stateRef.current.priceLists || {}).length ? 'ready' : 'error')
@@ -604,10 +622,10 @@ export function StoreProvider({ children }) {
         })
         .catch(() => setLiveSyncStatus('error'))
     }
-    const onVisibility = () => { if (document.visibilityState === 'hidden') flushSaves() }
+    const onVisibility = () => { if (document.visibilityState === 'hidden') { flushLocalCache(); flushSaves() } }
     // visibilitychange is not reliably delivered when the page is being torn
     // down, which is exactly the reload-right-after-editing case. pagehide is.
-    const onPageHide = () => flushSaves()
+    const onPageHide = () => { flushLocalCache(); flushSaves() }
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('pagehide', onPageHide)
@@ -674,12 +692,15 @@ export function StoreProvider({ children }) {
     // silently while the app carried on looking normal — seed data is rebuilt
     // by migrate() on every boot, so only the records the user created would
     // go missing. Fail loudly in the console instead.
-    persistLocalSnapshot(state)
+    clearTimeout(localCacheTimerRef.current)
+    localCacheTimerRef.current = setTimeout(flushLocalCache, 300)
     if (!datastore.dbEnabled() || !hydratedRef.current) return
     if (!Object.keys(dirtySlices()).length) return
     clearTimeout(saveTimerRef.current)
     saveTimerRef.current = setTimeout(flushSaves, 1500)
   }, [state])
+
+  useEffect(() => () => clearTimeout(localCacheTimerRef.current), [])
 
   // Fire-and-forget SharePoint folder side effects: localStorage stays the
   // instant source of truth; Graph results land in spSync for the pills.
@@ -723,8 +744,14 @@ export function StoreProvider({ children }) {
         ...s,
         opportunities: [...s.opportunities, opp],
         deletedOpportunityIds: (s.deletedOpportunityIds || []).filter(id => id !== opp.id),
+        pendingOpportunitySyncIds: [...new Set([...(s.pendingOpportunitySyncIds || []), opp.id])],
         files: { ...s.files, [opp.id]: Object.fromEntries(SUBFOLDERS.map(f => [f, []])) },
       }, 'Opportunity registered', opp.id, opp.oppName))
+      // Opportunity creation is immediately followed by navigation to the
+      // workbench. Do not make the first refresh depend on the ordinary draft
+      // debounce or on an asynchronous pagehide event; the next turn gives
+      // React time to publish the new state through stateRef before saving it.
+      setTimeout(flushSaves, 0)
       spTrack(opp.id, 'Open', () => filestore.ensureOppFolder(opp))
     },
 
@@ -794,6 +821,7 @@ export function StoreProvider({ children }) {
           {
             ...s, opportunities: s.opportunities.filter(o => o.id !== id), files, proposals, communications,
             deletedOpportunityIds: [...new Set([...(s.deletedOpportunityIds || []), id])],
+            pendingOpportunitySyncIds: (s.pendingOpportunitySyncIds || []).filter(pendingId => pendingId !== id),
             // Ghost approvals would inflate pending counts forever.
             approvals: (s.approvals || []).filter(a => a.oppId !== id),
           },
@@ -854,10 +882,16 @@ export function StoreProvider({ children }) {
       return newProposal(oppId, opp, { validityDays: s.config?.proposalValidityDays, currencyRates: s.config?.currencyRates, costingDefaults: s.config?.costingDefaults })
     },
 
-    saveProposal(oppId, proposal) {
+    saveProposal(oppId, proposal, { immediate = false } = {}) {
       setState(s => withAudit(
         { ...s, proposals: { ...s.proposals, [oppId]: proposal } },
         'Proposal saved', oppId, `Rev ${proposal.revision}`))
+      if (immediate) {
+        // Commercial decisions are workflow-critical. Publish the state
+        // change through React, then flush on the next turn so stateRef sees
+        // the new proposal instead of waiting for the ordinary debounce.
+        setTimeout(flushSaves, 0)
+      }
     },
 
     updateProposalCosting(oppId, patch) {
@@ -1547,12 +1581,12 @@ export function StoreProvider({ children }) {
         if (!lead || !itemName) return s
         const verification = lead.verification || {}
         const current = verification.kyc?.[itemName]
-        if (!current || current.state !== 'Verified') return s
+        if (!current || !['Approved', 'Verified', 'Rejected', 'Pending Review'].includes(current.state)) return s
         const kyc = {
           ...(verification.kyc || {}),
           [itemName]: { ...current, state: 'Missing', mode: '', file: '', size: '', pages: 0, verifiedAt: '' },
         }
-        const complete = Object.values(kyc).length > 0 && Object.values(kyc).every(item => item.state === 'Verified')
+        const complete = Object.values(kyc).length > 0 && Object.values(kyc).every(item => ['Approved', 'Verified'].includes(item.state))
         const attachments = (lead.attachments || []).filter(file => file.kycItem !== itemName)
         const next = {
           ...s,
@@ -1569,6 +1603,43 @@ export function StoreProvider({ children }) {
           } : l),
         }
         return withAudit(next, 'KYC document cancelled', leadId, itemName)
+      })
+    },
+    reviewLeadKycItem(leadId, itemName, state, details = {}) {
+      const allowed = new Set(['Approved', 'Rejected', 'Pending Review'])
+      if (!allowed.has(state) || !itemName) return
+      setState(s => {
+        const lead = s.leads.find(l => l.id === leadId)
+        if (!lead) return s
+        const verification = lead.verification || {}
+        const current = verification.kyc?.[itemName]
+        if (!current) return s
+        const kyc = {
+          ...(verification.kyc || {}),
+          [itemName]: {
+            ...current,
+            state,
+            reviewedAt: nowIST(),
+            reviewedBy: s.role,
+            ...(state === 'Rejected' ? { rejectionReason: String(details.reason || '').trim() } : { rejectionReason: '' }),
+          },
+        }
+        const complete = Object.values(kyc).length > 0 && Object.values(kyc).every(item => ['Approved', 'Verified'].includes(item.state))
+        const next = {
+          ...s,
+          leads: s.leads.map(l => l.id === leadId ? {
+            ...l,
+            kycCompletedAt: complete ? (verification.kycVerifiedAt || nowIST()) : null,
+            verification: {
+              ...verification,
+              kyc,
+              kycVerifiedAt: complete ? (verification.kycVerifiedAt || nowIST()) : '',
+              kycRequestStatus: 'pending',
+            },
+          } : l),
+        }
+        return withAudit(next, `KYC document ${state.toLowerCase()}`, leadId,
+          `${itemName}${state === 'Rejected' ? ` — ${String(details.reason || '').trim()}` : ''}`)
       })
     },
     setKycState(customerName, itemName, state, file, mode = '') {
@@ -2273,6 +2344,28 @@ export function StoreProvider({ children }) {
       return true
     },
 
+    async recoverOpportunity(id) {
+      if (!datastore.dbEnabled() || !id) return false
+      try {
+        const opportunity = await datastore.loadOpportunity(id)
+        if (!opportunity) return false
+        setState(s => {
+          if (s.opportunities.some(item => item.id === id)) return s
+          return {
+            ...s,
+            opportunities: [...s.opportunities, opportunity],
+            opportunitySyncBaseline: [...(s.opportunitySyncBaseline || []), opportunity],
+            pendingOpportunitySyncIds: (s.pendingOpportunitySyncIds || []).filter(itemId => itemId !== id),
+          }
+        })
+        return true
+      } catch (e) {
+        setLiveSyncStatus('error')
+        console.warn('Opportunity recovery failed:', e?.message || e)
+        return false
+      }
+    },
+
     // ---- Auth (demo login — plaintext by design, disclaimed on screen) ----
     login(email, pw) {
       const s = stateRef.current
@@ -2394,10 +2487,10 @@ export function StoreProvider({ children }) {
   useEffect(() => {
     if (!supabase) return
     let active = true
+    const SESSION_RESTORE_TIMEOUT_MS = 8000
 
     const restoreSession = async () => {
-      try {
-        const { data, error } = await supabase.auth.getSession()
+      const applySession = ({ data, error }) => {
         if (!active || error) return
         if (data?.session?.user) {
           const current = stateRef.current.auth?.user
@@ -2406,6 +2499,22 @@ export function StoreProvider({ children }) {
           }
         } else if (stateRef.current.auth?.user) {
           setState(st => ({ ...st, auth: { user: null } }))
+        }
+      }
+      const sessionRequest = supabase.auth.getSession()
+      try {
+        const result = await Promise.race([
+          sessionRequest,
+          new Promise(resolve => setTimeout(() => resolve({ timedOut: true }), SESSION_RESTORE_TIMEOUT_MS)),
+        ])
+        if (result?.timedOut) {
+          // Do not keep the entire application behind a loading screen when a
+          // network/session read stalls. Apply the result if it arrives later.
+          console.warn('Supabase session restore timed out; continuing to the sign-in screen.')
+          setSyncDiagnostics(diagnostics => ({ ...diagnostics, authRestoreTimedOutAt: new Date().toISOString() }))
+          sessionRequest.then(applySession).catch(e => console.warn('Supabase session restore failed:', e?.message || e))
+        } else {
+          applySession(result)
         }
       } catch (e) {
         console.warn('Supabase session restore failed:', e?.message || e)

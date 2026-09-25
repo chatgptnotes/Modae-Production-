@@ -23,6 +23,44 @@ import {
   PAN_PATTERN,
 } from './kycValidation.js'
 
+// Proposal rows normally live in Supabase, but localStorage is the fallback
+// when the browser is offline or the database is unavailable. Keep the
+// workflow-critical fields in the compact fallback so commercial decisions do
+// not revert to the default proposal after a refresh.
+export const essentialProposalSnapshot = proposal => {
+  if (!proposal || typeof proposal !== 'object') return proposal
+  return {
+    oppId: proposal.oppId,
+    proposalType: proposal.proposalType,
+    route: proposal.route,
+    revision: proposal.revision,
+    revisionDate: proposal.revisionDate,
+    validityDays: proposal.validityDays,
+    units: proposal.units,
+    addressee: proposal.addressee,
+    kindAttn: proposal.kindAttn,
+    attnPhone: proposal.attnPhone,
+    rfqNumber: proposal.rfqNumber,
+    subject: proposal.subject,
+    project: proposal.project,
+    bom: proposal.bom || [],
+    pricingMode: proposal.pricingMode,
+    discountPct: proposal.discountPct,
+    markupPct: proposal.markupPct,
+    costing: proposal.costing,
+    sourceCurrency: proposal.sourceCurrency,
+    sourceRate: proposal.sourceRate,
+    sourceRateDate: proposal.sourceRateDate,
+    signals: proposal.signals,
+    terms: proposal.terms || [],
+    releaseStatus: proposal.releaseStatus,
+    approvedPricing: proposal.approvedPricing,
+    reviewStatus: proposal.reviewStatus,
+    reviewIssues: proposal.reviewIssues,
+    reviewNeedsRevision: proposal.reviewNeedsRevision,
+  }
+}
+
 // The store's pure state layer, lifted out of store.jsx so it can be imported
 // and *run* by the tests — store.jsx is JSX and node --test cannot parse it,
 // which would have left the demo-data gating below covered only by regexes.
@@ -178,6 +216,13 @@ export function migrate(s) {
   if (!Array.isArray(s.leads)) s.leads = demo ? seedLeads : []
   if (!Array.isArray(s.deletedLeadIds)) s.deletedLeadIds = []
   if (!Array.isArray(s.deletedOpportunityIds)) s.deletedOpportunityIds = []
+  const baselineIds = new Set((s.opportunitySyncBaseline || []).map(row => row?.id).filter(Boolean))
+  const deletedOpportunityIds = new Set(s.deletedOpportunityIds || [])
+  const pendingOpportunitySyncIds = Array.isArray(s.pendingOpportunitySyncIds) ? s.pendingOpportunitySyncIds : []
+  const legacyPendingIds = (s.opportunities || [])
+    .map(row => row?.id)
+    .filter(id => id && !baselineIds.has(id) && !deletedOpportunityIds.has(id))
+  s.pendingOpportunitySyncIds = [...new Set([...pendingOpportunitySyncIds, ...legacyPendingIds])]
   if (!Array.isArray(s.approvals)) s.approvals = demo ? seedApprovals : []
   if (!Array.isArray(s.audit)) s.audit = []
   // ---- phase 2 slices ----
@@ -542,6 +587,7 @@ export function emptyState(prev) {
     ...prev,
     demoData: false,
     opportunities: [], leads: [], leadArchive: [], leadDeadlines: [],
+    pendingOpportunitySyncIds: [],
     // Keep reference catalogues after a business-data wipe. They are Admin
     // configuration, not demo transactions, and are required to price the
     // first real opportunity entered after the wipe.
@@ -584,6 +630,7 @@ export function seedState() {
     leadDeadlines: [],
     deletedLeadIds: [],
     deletedOpportunityIds: [],
+    pendingOpportunitySyncIds: [],
     users: seedUsers,
     role: 'SUPER',
   })
@@ -672,16 +719,22 @@ export function mergeLeadSlice(local = [], server = [], baseline = [], deletedId
 // hydration and realtime refreshes do not make the tracker visibly jump
 // between different row sets. A local edit wins until it has been persisted;
 // a local delete remains a delete against the last known baseline.
-export function mergeOpportunitySlice(local = [], server = [], baseline = [], deletedIds = []) {
+export function mergeOpportunitySlice(local = [], server = [], baseline = [], deletedIds = [], pendingIds = []) {
   // An opportunity missing from the authoritative server snapshot is a
   // remote deletion. Treat it as deleted even when an older browser still
   // carries a locally edited copy; otherwise that browser can save the stale
   // row back after someone removes it in Supabase.
   const serverIds = new Set((server || []).map(row => row?.id).filter(Boolean))
+  const deleted = new Set(deletedIds || [])
+  // A pending row may already be present in the local sync baseline if the
+  // browser was refreshed after a save started but before the server read
+  // could confirm it. Treat it as a local create until the server returns it.
+  const pending = new Set((pendingIds || []).filter(id => !deleted.has(id)))
   const remotelyDeleted = (baseline || [])
     .map(row => row?.id)
-    .filter(id => id && !serverIds.has(id))
-  return mergeLeadSlice(local, server, baseline, [...new Set([...(deletedIds || []), ...remotelyDeleted])])
+    .filter(id => id && !serverIds.has(id) && !pending.has(id))
+  const protectedBaseline = (baseline || []).filter(row => !pending.has(row?.id))
+  return mergeLeadSlice(local, server, protectedBaseline, [...new Set([...deleted, ...remotelyDeleted])])
 }
 
 // Sourcing rows are editable business data, but they can be created locally

@@ -17,6 +17,13 @@ test('Blue leads are blocked until every KYC item is verified', () => {
   assert.equal(leadVerificationComplete({ customerStatus: 'Blue', verification: { kyc: verifiedKyc } }, 'Blue'), true)
 })
 
+test('Blue leads clear only when every document is explicitly approved', () => {
+  const approved = Object.fromEntries(BLUE_KYC_ITEMS.map(item => [item, { state: 'Approved', mode: 'uploaded' }]))
+  assert.equal(leadVerificationComplete({ customerStatus: 'Blue', verification: { kyc: approved } }, 'Blue'), true)
+  assert.equal(leadVerificationComplete({ customerStatus: 'Blue', verification: { kyc: { ...approved, [BLUE_KYC_ITEMS[0]]: { state: 'Pending Review' } } } }, 'Blue'), false)
+  assert.equal(leadVerificationComplete({ customerStatus: 'Blue', verification: { kyc: { ...approved, [BLUE_KYC_ITEMS[0]]: { state: 'Rejected', rejectionReason: 'Unreadable' } } } }, 'Blue'), false)
+})
+
 test('Amber leads require payment confirmation', () => {
   assert.deepEqual(leadVerificationBlockers({ customerStatus: 'Amber' }, 'Amber'), ['Amber processing-fee payment confirmation is required'])
   assert.equal(leadVerificationComplete({ verification: { payment: { state: 'Confirmed' } } }, 'Amber'), true)

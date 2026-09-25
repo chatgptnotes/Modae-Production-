@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { migrate, seedState } from '../src/appState.js'
+import { essentialProposalSnapshot, migrate, seedState } from '../src/appState.js'
 import { newProposal } from '../src/seed.js'
 import { proposalApprovalSnapshot } from '../src/approvalMemory.js'
 import {
@@ -11,6 +11,22 @@ import {
   LEGACY_PAN_PATTERN,
   PAN_PATTERN,
 } from '../src/kycValidation.js'
+
+test('the compact local proposal snapshot preserves commercial decisions', () => {
+  const proposal = {
+    oppId: 'OP-LOCAL', revision: '03', terms: [
+      { term: 'Payment', status: 'Deviation', customerAsk: '90 days credit', decision: 'Match customer terms', ourResponse: '90 days credit' },
+      { term: 'Delivery', status: 'Deviation', customerAsk: '8 weeks', decision: 'Counter-offer with ModAE standard terms', customerConfirmationStatus: 'Awaiting reply' },
+    ],
+    bom: [{ pn: 'CMS-RPT', qty: 1 }], costing: { customsDutyPct: 8.5 },
+    letterBody: 'This field is intentionally excluded from the compact recovery snapshot.',
+  }
+  const compact = essentialProposalSnapshot(proposal)
+  assert.deepEqual(compact.terms, proposal.terms)
+  assert.deepEqual(compact.bom, proposal.bom)
+  assert.equal(compact.revision, '03')
+  assert.equal(compact.letterBody, undefined)
+})
 
 test('migrate repairs an approved release created before the proposal was persisted', () => {
   const state = seedState()

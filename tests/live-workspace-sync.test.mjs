@@ -57,6 +57,55 @@ test('opportunity saves are serialized across debounce and pagehide flushes', ()
   const datastore = read('src/datastore.js')
   assert.match(datastore, /let opportunitySaveQueue = Promise\.resolve\(\)/)
   assert.match(datastore, /opportunitySaveQueue = opportunitySaveQueue[\s\S]*saveOpportunityRowsNow\(rows\)/)
+  assert.match(datastore, /let saveSlicesQueue = Promise\.resolve\(\)/)
+  assert.match(datastore, /saveSlicesQueue = saveSlicesQueue[\s\S]*saveSlicesNow\(dirty\)/)
+})
+
+test('opportunity creation flushes before immediate workbench navigation', () => {
+  const store = read('src/store.jsx')
+  assert.match(store, /Opportunity creation is immediately followed by navigation/)
+  assert.match(store, /setTimeout\(flushSaves, 0\)\n      spTrack\(opp\.id, 'Open'/)
+})
+
+test('pending opportunity IDs stay local-only and are persisted in the browser snapshot', () => {
+  const datastore = read('src/datastore.js')
+  const store = read('src/store.jsx')
+  const appState = read('src/appState.js')
+  assert.match(datastore, /'pendingOpportunitySyncIds'/)
+  assert.match(store, /pendingOpportunitySyncIds: state\.pendingOpportunitySyncIds/)
+  assert.match(store, /pendingOpportunitySyncIds: \[\.\.\.new Set\(/)
+  assert.match(appState, /const pendingOpportunitySyncIds = Array\.isArray\(s\.pendingOpportunitySyncIds\)/)
+  assert.match(appState, /s\.pendingOpportunitySyncIds = \[\.\.\.new Set\(/)
+})
+
+test('deep-link opportunity recovery reads the normalized opportunity row directly', () => {
+  const datastore = read('src/datastore.js')
+  const store = read('src/store.jsx')
+  const workbench = read('src/pages/Workbench.jsx')
+  assert.match(datastore, /export async function loadOpportunity\(id\)/)
+  assert.match(datastore, /\.eq\('id', id\)/)
+  assert.match(store, /async recoverOpportunity\(id\)/)
+  assert.match(store, /datastore\.loadOpportunity\(id\)/)
+  assert.match(workbench, /store\.recoverOpportunity\(oppId\)/)
+  assert.match(workbench, /Opportunity sync unavailable/)
+})
+
+test('row conflicts use bounded latest-save-wins retries', () => {
+  const datastore = read('src/datastore.js')
+  assert.match(datastore, /const MAX_CONFLICT_RETRIES = 3/)
+  assert.match(datastore, /attempt <= MAX_CONFLICT_RETRIES/)
+  assert.match(datastore, /serverRow\.rev/)
+  assert.match(datastore, /preserving the local row being saved/)
+})
+
+test('price-list loading keeps a usable cached catalogue when the shared copy is unavailable', () => {
+  const datastore = read('src/datastore.js')
+  const store = read('src/store.jsx')
+  const priceLists = read('src/pages/PriceLists.jsx')
+  assert.match(datastore, /const fallback = readPriceListsCache\(\)/)
+  assert.match(datastore, /degraded: true/)
+  assert.match(store, /result\.degraded \? 'degraded' : 'ready'/)
+  assert.match(priceLists, /showing the last cached copy/)
 })
 
 test('forced realtime reads wait out an older request before fetching fresh data', () => {
@@ -72,6 +121,23 @@ test('the store exposes live sync state for dashboard status', () => {
   assert.match(store, /StoreCtx\.Provider value=\{\{ \.\.\.api, authReady, liveSyncStatus, syncDiagnostics \}\}/)
   assert.match(dashboard, /LiveSyncBadge/)
   assert.match(dashboard, /store\.liveSyncStatus/)
+})
+
+test('refresh safety retains local data on quota failures and empty full responses', () => {
+  const store = read('src/store.jsx')
+  assert.match(store, /Local cache was not updated; keeping the last known-good browser snapshot/)
+  assert.doesNotMatch(store, /localStorage\.removeItem\(KEY\)\n\s*localStorage\.setItem\(KEY/)
+  assert.match(store, /const unexpectedEmptyBusinessSlice/)
+  assert.match(store, /Ignoring empty \$\{k\} refresh response/)
+  assert.match(store, /Supabase returned an empty workspace; local data was preserved/)
+  assert.match(store, /allowEmptyBusinessSlices: true/)
+})
+
+test('session restoration cannot leave the login screen waiting forever', () => {
+  const store = read('src/store.jsx')
+  assert.match(store, /const SESSION_RESTORE_TIMEOUT_MS = 8000/)
+  assert.match(store, /Promise\.race\(/)
+  assert.match(store, /Supabase session restore timed out; continuing to the sign-in screen/)
 })
 
 test('workflow stage changes are gated and use the India business date', () => {

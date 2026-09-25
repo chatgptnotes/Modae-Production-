@@ -294,14 +294,37 @@ function OpportunityNotFound({ oppId }) {
   )
 }
 
+function OpportunitySyncUnavailable({ oppId }) {
+  return (
+    <div className="page">
+      <h2>Opportunity sync unavailable</h2>
+      <p className="hint">The shared workspace could not confirm opportunity <b>{oppId}</b>. Check the connection and try refreshing again.</p>
+      <Link to="/opportunities">Back to opportunities</Link>
+    </div>
+  )
+}
+
 export default function Workbench() {
   const { oppId, tab = 'overview' } = useParams()
   const store = useStore()
   const [searchParams] = useSearchParams()
   const opp = store.opportunities.find(o => o.id === oppId)
+  const [recovery, setRecovery] = useState('idle')
+
+  useEffect(() => {
+    if (opp || !store.authReady || store.liveSyncStatus === 'connecting' || store.liveSyncStatus === 'reconnecting') return undefined
+    let active = true
+    setRecovery('loading')
+    store.recoverOpportunity(oppId).then(found => {
+      if (active) setRecovery(found ? 'found' : 'missing')
+    })
+      .catch(() => { if (active) setRecovery('error') })
+    return () => { active = false }
+  }, [oppId, !!opp, store.authReady, store.liveSyncStatus])
 
   if (!opp) {
-    if (!store.authReady || store.liveSyncStatus === 'connecting') return <OpportunityLoading />
+    if (!store.authReady || store.liveSyncStatus === 'connecting' || store.liveSyncStatus === 'reconnecting' || recovery === 'loading' || recovery === 'idle') return <OpportunityLoading />
+    if (store.liveSyncStatus === 'error' || recovery === 'error') return <OpportunitySyncUnavailable oppId={oppId} />
     return <OpportunityNotFound oppId={oppId} />
   }
 
@@ -871,7 +894,7 @@ function CommercialDecisionPanel({ opp }) {
     .sort((a, b) => (b.decisionTs || b.ts || '').localeCompare(a.decisionTs || a.ts || ''))[0]
   const commercialApprovalCleared = currentCommercialApproval && ['Approved', 'Approved with conditions'].includes(currentCommercialApproval.status)
 
-  const saveTerms = terms => store.saveProposal(opp.id, { ...proposal, terms })
+  const saveTerms = terms => store.saveProposal(opp.id, { ...proposal, terms }, { immediate: true })
   const requestCommercialApproval = () => {
     const deviationDetails = commercialApprovalDetails(proposal.terms)
     if (!deviationDetails.length) return

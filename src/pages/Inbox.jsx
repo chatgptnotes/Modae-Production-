@@ -23,9 +23,9 @@ import { customerContactFromText, customerCompanyFromText, customerPhoneFromText
 import { indiaLocation, indiaRegionForLocation } from '../indiaLocations.js'
 import {
   QUOTE_FEE_DOCUMENTS, answeredPatch, clarificationItems, clarificationKindFor,
-  clarificationSender, draftClarification, draftPatch, senderLabel, sentPatch,
+  clarificationSender, draftClarification, draftKycRejection, draftPatch, senderLabel, sentPatch,
 } from '../leadClarification.js'
-import { leadVerificationComplete, verificationDeadline, verificationItem, verificationSnapshot, redClearanceFor, isRedCleared } from '../leadVerification.js'
+import { kycItemApproved, leadVerificationComplete, verificationDeadline, verificationItem, verificationSnapshot, redClearanceFor, isRedCleared } from '../leadVerification.js'
 import { checklistFor } from '../customerClasses.js'
 import { kycIdentityKey, simulatedKycValue, validateKycValue } from '../kycValidation.js'
 import { extractKycIdentityCandidate, normalizeKycCandidate } from '../kycExtraction.js'
@@ -378,6 +378,57 @@ const TEXT_TOTAL = 150000
 const AI_FILE_BYTES = 4 * 1024 * 1024
 const AI_TOTAL_BYTES = 8 * 1024 * 1024
 
+function KycReviewModal({ item, row, onClose, onDecision }) {
+  const [reason, setReason] = useState(row?.rejectionReason || '')
+  const [error, setError] = useState('')
+  const submit = state => {
+    if (state === 'Rejected' && !reason.trim()) {
+      setError('Enter a reason before rejecting this document.')
+      return
+    }
+    onDecision(state, reason.trim())
+  }
+  return (
+    <Modal title={`Review ${item}`} onClose={onClose} className="kyc-review-modal">
+      <p className="modal-message">Review the uploaded document and choose the appropriate outcome.</p>
+      <div className="kyc-review-summary">
+        <b>{row?.file || 'Document uploaded'}</b>
+        {row?.scan?.value && <span>Detected {row.scan.key}: {row.scan.value}</span>}
+        {row?.scan?.evidence && <span>Evidence: {row.scan.evidence}</span>}
+        {row?.scan?.warnings?.length > 0 && <span className="hint">{row.scan.warnings.join(' ')}</span>}
+      </div>
+      <label className="modal-prompt-field">Rejection reason <span className="hint">required only for Reject</span>
+        <textarea rows={3} value={reason} onChange={event => { setReason(event.target.value); setError('') }} placeholder="Explain what must be corrected" />
+      </label>
+      {error && <ErrBox>{error}</ErrBox>}
+      <div className="forms-actions modal-actions kyc-review-actions">
+        <button type="button" onClick={() => submit('Pending Review')}>Pending Review</button>
+        <button type="button" className="danger" onClick={() => submit('Rejected')}>Reject</button>
+        <button type="button" className="primary" onClick={() => submit('Approved')}>Approve</button>
+      </div>
+    </Modal>
+  )
+}
+
+function KycRejectionEmailModal({ draft, busy, error, onChange, onSend, onClose }) {
+  return (
+    <Modal title="Review KYC rejection email" onClose={onClose} wide className="kyc-email-modal">
+      <p className="modal-message">AI drafted this message from the recorded rejection reason. Review it before opening your email composer.</p>
+      {error && <ErrBox>{error}</ErrBox>}
+      <div className="proposal-email-fields">
+        <label>To<input value={draft.to || ''} onChange={event => onChange({ ...draft, to: event.target.value })} /></label>
+        <label>CC<input value={draft.cc || ''} onChange={event => onChange({ ...draft, cc: event.target.value })} /></label>
+        <label>Subject<input value={draft.subject || ''} onChange={event => onChange({ ...draft, subject: event.target.value })} /></label>
+        <label>Message<textarea rows={14} value={draft.body || ''} onChange={event => onChange({ ...draft, body: event.target.value })} /></label>
+      </div>
+      <div className="forms-actions modal-actions">
+        <button type="button" onClick={onClose} disabled={busy}>Close</button>
+        <button type="button" className="primary" onClick={onSend} disabled={busy || !draft.to?.trim()}>{busy ? 'Opening email…' : 'Review and send email'}</button>
+      </div>
+    </Modal>
+  )
+}
+
 function LeadVerification({ lead, customerStatus, store }) {
   const [busy, setBusy] = useState('')
   const [pendingUpload, setPendingUpload] = useState(null)
@@ -386,8 +437,13 @@ function LeadVerification({ lead, customerStatus, store }) {
   const [kycValues, setKycValues] = useState({})
   const [kycError, setKycError] = useState('')
   const [pendingCancel, setPendingCancel] = useState(null)
+  const [reviewFor, setReviewFor] = useState(null)
+  const [kycMailDraft, setKycMailDraft] = useState(null)
+  const [kycMailBusy, setKycMailBusy] = useState(false)
+  const [kycMailError, setKycMailError] = useState('')
   const menuRef = useRef(null)
   const verification = lead.verification || {}
+  const customer = (store.customers || []).find(item => item.name === (lead.customerName || lead.sellTo))
   useEffect(() => {
     const values = {}
     for (const item of checklistFor(store.config, customerStatus)) values[item] = verificationItem(verification, item).value || ''
@@ -492,10 +548,10 @@ function LeadVerification({ lead, customerStatus, store }) {
       }, `KYC document attached: ${item}`)
     }
     const itemRecord = {
-      state: 'Verified', mode, verifiedAt: nowIST(), ...(identity.key ? { value: identity.value } : {}), ...fileMeta,
+      state: mode === 'simulated' ? 'Verified' : 'Pending Review', mode, verifiedAt: mode === 'simulated' ? nowIST() : '', ...(identity.key ? { value: identity.value } : {}), ...fileMeta,
     }
     const nextKyc = { ...(verification.kyc || {}), [item]: itemRecord }
-    const complete = checklistFor(store.config, customerStatus).every(name => nextKyc[name]?.state === 'Verified')
+    const complete = mode === 'simulated' && checklistFor(store.config, customerStatus).every(name => ['Approved', 'Verified'].includes(nextKyc[name]?.state))
     store.updateLead(lead.id, {
       verification: {
         ...verification,
@@ -505,7 +561,41 @@ function LeadVerification({ lead, customerStatus, store }) {
       },
       ...(complete ? { kycCompletedAt: verification.kycVerifiedAt || nowIST() } : {}),
     }, `${item} ${mode === 'simulated' ? 'marked verified (simulated)' : 'verified'}`)
+    if (mode !== 'simulated') setReviewFor({ item, row: itemRecord })
     setBusy('')
+  }
+
+  const draftKycRejectionMail = async (item, reason) => {
+    setKycMailError('')
+    setKycMailBusy(true)
+    const sender = clarificationSender(lead, store.users, store.config)
+    const correction = 'Please provide a corrected or updated copy of the document so that we can complete the KYC verification process.'
+    const fallback = draftKycRejection(lead, { customer, users: store.users, config: store.config, item, reason, correction })
+    setKycMailDraft(fallback)
+    store.updateLead(lead.id, { kycRejectionEmail: { ...fallback, status: 'Draft', draftedAt: nowIST(), sentAt: '', sentBy: '' } }, `KYC rejection email drafted for ${item}`)
+    try {
+      const aiBody = await runText('lead.clarify', {
+        kind: 'kyc-rejection', item, reason, correction, subject: lead.subject,
+        sellTo: customer?.name || lead.customerName || lead.sellTo, contactPerson: customer?.contactPerson || '',
+        body: '', items: [], senderBlock: [sender.name, 'ModAE India Pvt Ltd'].filter(Boolean).join('\n'),
+      }, { timeoutMs: 8000 })
+      const draft = draftKycRejection(lead, { customer, users: store.users, config: store.config, item, reason, correction, aiBody })
+      setKycMailDraft(draft)
+      store.updateLead(lead.id, { kycRejectionEmail: { ...draft, status: 'Draft', draftedAt: nowIST(), sentAt: '', sentBy: '' } }, `KYC rejection email drafted by ${draft.draftedBy}`)
+    } catch (error) {
+      setKycMailError(error?.message || 'The email draft could not be improved by AI. The standard template is ready to review.')
+    } finally {
+      setKycMailBusy(false)
+    }
+  }
+
+  const sendKycRejectionMail = () => {
+    if (!kycMailDraft?.to?.trim()) { setKycMailError('Add a recipient address before sending.'); return }
+    const href = gmailComposeHref(kycMailDraft)
+    if (!href) { setKycMailError('Add a recipient address before sending.'); return }
+    window.open(href, '_blank', 'noopener')
+    store.updateLead(lead.id, { kycRejectionEmail: { ...kycMailDraft, status: 'Sent', sentAt: nowIST(), sentBy: store.role } }, `KYC rejection email sent to ${kycMailDraft.to}`)
+    setKycMailDraft(null)
   }
 
   const simulateAllKyc = () => {
@@ -564,8 +654,8 @@ function LeadVerification({ lead, customerStatus, store }) {
     <div className="lead-decision-card" style={{ marginTop: 12 }}>
       <div className="lead-decision-head"><div><b>Blue customer — KYC request</b><span>Customer shares KYC documents {windowLabel}</span></div>
         <div className="lead-decision-head-actions">
-          <span className={verification.kycRequestStatus === 'cancelled' ? 'lead-decision-note' : leadVerificationComplete(lead, customerStatus, { config: store.config }) ? 'lead-decision-saved' : 'lead-decision-note'}>
-            {verification.kycRequestStatus === 'cancelled' ? 'Cancelled' : leadVerificationComplete(lead, customerStatus, { config: store.config }) ? 'Verified' : 'Pending'}
+        <span className={verification.kycRequestStatus === 'cancelled' ? 'lead-decision-note' : leadVerificationComplete(lead, customerStatus, { config: store.config }) ? 'lead-decision-saved' : 'lead-decision-note'}>
+            {verification.kycRequestStatus === 'cancelled' ? 'Cancelled' : leadVerificationComplete(lead, customerStatus, { config: store.config }) ? 'KYC Approved' : 'Pending Review'}
           </span>
           {editable && verification.kycRequestStatus !== 'cancelled' && !leadVerificationComplete(lead, customerStatus, { config: store.config }) && (
             <button type="button" onClick={simulateAllKyc}>Simulate all KYC done</button>
@@ -591,15 +681,16 @@ function LeadVerification({ lead, customerStatus, store }) {
           const row = verificationItem(verification, item)
           const pending = pendingUpload?.item === item
           return <div key={item} className="check-row">
-            <Icon name={row.state === 'Verified' ? 'check' : 'fileText'} size={14} />
-            <span style={{ flex: 1 }}>{item} — <b>{row.state === 'Verified' ? `Verified (${row.mode === 'simulated' ? 'simulated' : 'uploaded'})` : 'Missing'}</b>
-              {kycIdentityKey(item) && <input className="kyc-identity-value" value={kycValues[item] || ''} disabled={!editable || row.state === 'Verified'} placeholder={`Enter ${kycIdentityKey(item)}`} aria-label={`${item} value`}
+            <Icon name={kycItemApproved(row) ? 'check' : row.state === 'Rejected' ? 'alert' : 'fileText'} size={14} />
+            <span style={{ flex: 1 }}>{item} — <b>{kycItemApproved(row) ? `Approved (${row.mode === 'simulated' ? 'simulated' : 'uploaded'})` : row.state}</b>
+              {kycIdentityKey(item) && <input className="kyc-identity-value" value={kycValues[item] || ''} disabled={!editable || kycItemApproved(row)} placeholder={`Enter ${kycIdentityKey(item)}`} aria-label={`${item} value`}
                 onChange={e => setKycValues(values => ({ ...values, [item]: e.target.value.toUpperCase() }))} />}
             </span>
             {editable && verification.kycRequestStatus !== 'cancelled' && (
-              row.state === 'Verified'
+              kycItemApproved(row)
                 ? <button type="button" className="icon-action" aria-label={`Remove ${item}`} title={`Remove ${item}`} disabled={busy === item} onClick={() => setPendingCancel({ item, row })}><Icon name="x" size={14} /></button>
                 : <>
+              {(row.state === 'Pending Review' || row.state === 'Rejected') && row.file && <button type="button" className="primary icon-action" aria-label={`Review ${item}`} title={`Review ${item}`} onClick={() => setReviewFor({ item, row })}><Icon name="eye" size={14} /></button>}
               {pending
                 ? <>
                   <span className="hint" title={pendingUpload.file.name}>{pendingUpload.file.name}</span>
@@ -644,7 +735,7 @@ function LeadVerification({ lead, customerStatus, store }) {
                 </span>}
                 </>
             )}
-            {downloadedFor === item && row.state !== 'Verified' && (
+            {downloadedFor === item && !kycItemApproved(row) && (
               <span className="kyc-template-note">Template downloaded — upload the completed form when ready.</span>
             )}
           </div>
@@ -656,6 +747,14 @@ function LeadVerification({ lead, customerStatus, store }) {
         message={`Cancel the ${pendingCancel.item} file only? Other KYC documents and the KYC request will remain unchanged.`}
         confirmLabel="Remove file" onClose={() => setPendingCancel(null)}
         onConfirm={() => cancelVerifiedFile(pendingCancel.item, pendingCancel.row)} />}
+      {reviewFor && <KycReviewModal item={reviewFor.item} row={reviewFor.row} onClose={() => setReviewFor(null)} onDecision={async (state, reason) => {
+        const item = reviewFor.item
+        store.reviewLeadKycItem(lead.id, item, state, { reason })
+        setReviewFor(null)
+        if (state === 'Rejected') await draftKycRejectionMail(item, reason)
+      }} />}
+      {kycMailDraft && <KycRejectionEmailModal draft={kycMailDraft} busy={kycMailBusy} error={kycMailError}
+        onChange={setKycMailDraft} onSend={sendKycRejectionMail} onClose={() => setKycMailDraft(null)} />}
     </div>
   )
 

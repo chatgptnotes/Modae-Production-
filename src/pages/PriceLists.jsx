@@ -177,7 +177,7 @@ export default function PriceLists() {
             setSearchParams({ list: k })
           }}>{k}</button>
         ))}
-        <span className="hint">Current version {pl.version} · uploaded {pl.uploaded} · {pl.currency}. Current approved pricing reference.</span>
+        <span className="hint">Current version {pl.version} · uploaded {pl.uploaded} · {pl.currency}. Current approved pricing reference.{store.priceListsStatus === 'degraded' ? ' Shared catalogue refresh is unavailable; showing the last cached copy.' : ''}</span>
         <span className="spacer" />
         <button onClick={() => exportCSV(`${list}_${displayList.version}_pricelist.csv`, ['Part Number','Description',`Price (${displayList.currency})`,'Adders'], (displayList.parts || []).map(x => [x.pn, x.desc, x.price, (x.adders || []).map(a => `${a.desc} +${a.price}`).join('; ')]))}>Extract to Excel</button>
         {canEdit && <button onClick={() => downloadPriceListTemplate(list, displayList.currency)}>Download template</button>}

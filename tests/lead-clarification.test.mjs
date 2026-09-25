@@ -14,6 +14,7 @@ import {
   clarificationSender,
   clarificationTopic,
   draftClarification,
+  draftKycRejection,
   draftPatch,
   senderLabel,
   sentPatch,
@@ -76,6 +77,19 @@ test('the draft asks for every missing item', () => {
     assert.ok(draft.body.includes(item), `the body must ask for "${item}"`)
     assert.ok(draft.items.includes(item))
   }
+})
+
+test('KYC rejection email uses the recorded reason and remains a human-reviewed draft', () => {
+  const draft = draftKycRejection(lead, {
+    users: seedUsers, config: seedConfig, item: 'GST registration certificate',
+    reason: 'The certificate is not legible.',
+  })
+  assert.equal(draft.kind, 'kyc-rejection')
+  assert.equal(draft.draftedBy, 'Template')
+  assert.match(draft.subject, /GST registration certificate/)
+  assert.match(draft.body, /The certificate is not legible\./)
+  assert.match(draft.body, /corrected or updated copy/i)
+  assert.doesNotMatch(draft.body, /automatically sent/i)
 })
 
 test('the standard questions top up a thin extraction without duplicating it', () => {
