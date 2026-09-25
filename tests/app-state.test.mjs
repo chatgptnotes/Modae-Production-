@@ -91,6 +91,35 @@ test('migrate preserves configured Admin values and intentional empty lists', ()
   assert.deepEqual(migrated.config.aiThresholds, { high: 88, med: 75 })
 })
 
+test('migrate repairs blank opportunity owners without changing assigned owners', () => {
+  const state = seedState()
+  const blank = {
+    ...state.opportunities[0],
+    id: 'OWNERLESS-1',
+    owner: '',
+    eucLocation: 'Kolkata',
+    location: 'Kolkata',
+  }
+  const assigned = { ...state.opportunities[1], owner: 'RS' }
+  const migrated = migrate({
+    ...state,
+    opportunities: [blank, assigned],
+    config: {
+      ...state.config,
+      stateRegions: [{ code: 'WB', name: 'West Bengal', region: 'South & East India' }],
+      ownershipRules: [
+        { region: 'South & East India', owner: 'PP' },
+        { region: 'Unclassified leads', owner: 'LJS', unclassified: true },
+      ],
+    },
+  })
+
+  assert.equal(migrated.opportunities[0].owner, 'PP')
+  assert.equal(migrated.opportunities[1].owner, 'RS')
+  assert.equal(migrated.audit[0].action, 'Opportunity owner backfilled')
+  assert.equal(migrated.audit[0].objectId, 'OWNERLESS-1')
+})
+
 test('migrate defaults approval switches on for older saved workspaces', () => {
   const state = seedState()
   const config = { ...state.config }

@@ -5,6 +5,9 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Fixed blank opportunity ownership during lead conversion and state hydration;
+  known locations now use regional routing, while missing or unclassified data
+  falls back to LJS, including existing ownerless opportunities.
 - Refined the Admin card grid and ownership controls so category labels,
   routing regions, descriptions, and form controls keep readable widths and
   reflow cleanly across desktop, tablet, and mobile layouts.

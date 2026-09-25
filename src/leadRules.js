@@ -165,6 +165,18 @@ export function routeOwnerForLocation(location, config = {}, fallback = '') {
   return routeOwner(region, config, fallback)
 }
 
+// Opportunity rows must always have an owner. Lead previews may legitimately
+// keep ownership blank while location is still being collected, but that is
+// not valid once a lead becomes an opportunity. Resolve a known location or
+// region first, then use the configured unclassified rule and finally the
+// canonical LJS fallback when no routing data exists at all.
+export function opportunityOwnerFor({ location = '', region = '', config = {}, fallback = 'LJS' } = {}) {
+  const routed = routeOwnerForLocation(location, config, '') || routeOwner(region, config, '')
+  if (routed) return routed
+  const catchAll = leadConfig(config).ownershipRules.find(item => item.unclassified)
+  return catchAll?.owner || fallback
+}
+
 export function isFastTrackLead(lead, config = {}, customer = null) {
   const cfg = leadConfig(config).fastTrack
   if (!cfg.enabled) return false

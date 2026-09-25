@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { customerCompanyFromText, customerContactFromText, deadlineForLead, expiredLeadDeadline, hardenLeadExtraction, isFastTrackLead, isInternalSender, normalizeLeadContactFields, routeOwner, routeOwnerForLocation, supplyMissing } from '../src/leadRules.js'
+import { customerCompanyFromText, customerContactFromText, deadlineForLead, expiredLeadDeadline, hardenLeadExtraction, isFastTrackLead, isInternalSender, normalizeLeadContactFields, opportunityOwnerFor, routeOwner, routeOwnerForLocation, supplyMissing } from '../src/leadRules.js'
 import { indiaRegionForLocation } from '../src/indiaLocations.js'
 
 const config = {
@@ -47,6 +47,19 @@ test('location routing preserves blank fallback and uses catch-all for unknown l
   }
   assert.equal(routeOwnerForLocation('', withCatchAll, ''), '')
   assert.equal(routeOwnerForLocation('Unknown site', withCatchAll, 'PJS'), 'LJS')
+})
+
+test('opportunity ownership never remains blank', () => {
+  const withCatchAll = {
+    ...config,
+    ownershipRules: [...config.ownershipRules, { region: 'Unclassified leads', owner: 'LJS', unclassified: true }],
+  }
+  assert.equal(opportunityOwnerFor({ location: 'Kolkata', config: {
+    ...withCatchAll,
+    stateRegions: [{ code: 'WB', name: 'West Bengal', region: 'South, East & Central India' }],
+  }}), 'PP')
+  assert.equal(opportunityOwnerFor({ location: 'Unknown site', config: withCatchAll }), 'LJS')
+  assert.equal(opportunityOwnerFor({ config: withCatchAll }), 'LJS')
 })
 
 test('fast-track is configurable and limited to the configured class', () => {

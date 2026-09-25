@@ -14,6 +14,7 @@ import { DEFAULT_CLAUSES } from './clauses.js'
 import { modaeStandardCommercialTerms } from './commercialTerms.js'
 import { isLegacyAutoSparesSupportRow } from './proposal/sparesBoq.js'
 import { proposalApprovalSnapshot } from './approvalMemory.js'
+import { opportunityOwnerFor } from './leadRules.js'
 import {
   CIN_PATTERN,
   GSTIN_PATTERN,
@@ -480,6 +481,19 @@ export function migrate(s) {
     // source of truth. Both were always Service work, so saved rows are
     // retyped rather than dropped off the dropdown.
     const oppType = o.oppType === 'AMC' || o.oppType === 'Training' ? 'Service' : o.oppType
+    const owner = canonicalOwner(o.owner)
+      || opportunityOwnerFor({ location: o.eucLocation || o.location, region: o.region, config: s.config })
+    const ownerWasBlank = !canonicalOwner(o.owner)
+    if (ownerWasBlank && owner) {
+      s.audit = [{
+        id: `AUD-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        ts: new Date().toISOString(),
+        role: s.role,
+        action: 'Opportunity owner backfilled',
+        objectId: String(o.id || ''),
+        detail: `Assigned ${owner} from opportunity routing${o.eucLocation || o.location || o.region ? ` (${o.eucLocation || o.location || o.region})` : ' (Unclassified leads fallback)'}`,
+      }, ...(s.audit || [])]
+    }
     return {
       milestone: milestoneForStage(o.stage, o.status),
       revisions: [], validityDays: 30, followUps: [],
@@ -491,7 +505,7 @@ export function migrate(s) {
       // workbench, and a saved Service into its own lane.
       route: routeForType(oppType),
       context: contextForType(oppType),
-      owner: canonicalOwner(o.owner),
+      owner,
       nextActionOwner: canonicalOwner(o.nextActionOwner || ''),
     }
   })

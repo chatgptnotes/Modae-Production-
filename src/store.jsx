@@ -12,7 +12,7 @@ import {
   ROLES, SUBFOLDERS, MILESTONES, newProposal, PORTAL_ENABLED, defaultBStepOwners,
   canSignBStep,
 } from './seed.js'
-import { leadConfig, routeOwner, expiredLeadDeadline, aiAuditDetail } from './leadRules.js'
+import { leadConfig, opportunityOwnerFor, routeOwner, expiredLeadDeadline, aiAuditDetail } from './leadRules.js'
 import { withoutSimulated, simulatedCount } from './simulatedLeads.js'
 import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLeadSlice, mergeOpportunitySlice, mergeSparesLineSlice, mergeClarificationSlice, mergeApprovalRows, defaultViewMode } from './appState.js'
 import { unitCostINR, unitSellINR, setRoleNameConfig, nowIST, toISTISOString, canManagePriceLists } from './utils.js'
@@ -799,12 +799,18 @@ export function StoreProvider({ children }) {
     addOpportunity(opp) {
       // Normalize here so every creator (IntakeForm, TenderIntake, Register)
       // yields workbench-ready rows — migrate() only backfills on reload.
+      const owner = String(opp.owner || '').trim()
+        || opportunityOwnerFor({ location: opp.eucLocation || opp.location, region: opp.region, config: stateRef.current.config })
       opp = {
         milestone: milestoneForStage(opp.stage, opp.status),
         route: routeForType(opp.oppType),
         context: contextForType(opp.oppType),
+        owner,
         ...opp,
       }
+      // The spread above preserves an explicit owner; the resolver only fills
+      // a blank one. This keeps authorized owner overrides unchanged.
+      if (!String(opp.owner || '').trim()) opp.owner = owner
       setState(s => withAudit({
         ...s,
         opportunities: [...s.opportunities, opp],
