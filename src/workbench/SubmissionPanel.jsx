@@ -14,6 +14,8 @@ import { isCounterAwaitingCustomer } from '../commercialTerms.js'
 import { snapshotProposal } from '../store.jsx'
 import { loadProposalTemplateBuffer, resolveProposalTemplate } from '../proposal/templateRegistry.js'
 import { latestSubmissionForRevision } from '../submissionStatus.js'
+import { getFile } from '../leadBlobs.js'
+import { hasValidatedUploadedWorkbook, validatedWorkbookFilename, validatedWorkbookPreview, validatedWorkbookStorageKey } from '../proposal/validatedWorkbook.js'
 
 const proposalEmailFallback = ({ greeting, oppName, oppId, revision, validityDays, senderName, attachments }) =>
   `${greeting}\n\nWith reference to your request for quotation for ${oppName}, we are pleased to submit our approved Techno-Commercial Proposal for Opportunity ${oppId}, Revision ${revision}.\n\nPlease find enclosed ${attachments.join(' and ')} for your review and records.\n\nOur offer is valid for ${validityDays} days from the date of submission. Kindly review the attached documents and confirm whether the offer meets your technical and commercial requirements.\n\nShould you require any additional information or clarification regarding the scope, technical specifications, or commercial terms, please feel free to contact us.\n\nWe look forward to your response.\n\nBest regards,\n${senderName}\nModAE India Pvt. Ltd.`
@@ -153,6 +155,10 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
 
   const artifactKey = JSON.stringify({
     proposal: snapshotProposal(p),
+    reviewStatus: p.reviewStatus,
+    reviewedUpload: p.reviewedUpload
+      ? { filename: p.reviewedUpload.filename, uploadedAt: p.reviewedUpload.uploadedAt, blobKey: p.reviewedUpload.blobKey }
+      : null,
     opportunity: { id: opp.id, name: opp.oppName, customer: opp.sellTo, route },
     template: {
       source: proposalTemplate?.source,
@@ -165,13 +171,22 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
   })
   const getCustomerArtifact = async () => {
     if (customerArtifactRef.current.key !== artifactKey || !customerArtifactRef.current.promise) {
-      const promise = loadProposalTemplateBuffer(proposalTemplate).then(templateBuffer => customerProposalArtifact({
-        templateBuffer,
-        mapping: proposalTemplate?.mapping,
-        mappingWarnings: proposalTemplate?.mappingWarnings,
-        filename: proposalFilename.trim(),
-        p, opp, doc, priced, totalQty, lineQuoted, lineCost, linePrice, totals, route,
-      }))
+      const promise = hasValidatedUploadedWorkbook(p)
+        ? getFile(validatedWorkbookStorageKey(p, opp.id), validatedWorkbookFilename(p)).then(file => {
+          if (!file) throw new Error('The validated proposal workbook is unavailable. Please upload it again from the Proposal page.')
+          return blobAttachment(file, proposalFilename.trim(), file.type || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            .then(attachment => ({
+              workbookPreview: validatedWorkbookPreview(p),
+              attachment,
+            }))
+        })
+        : loadProposalTemplateBuffer(proposalTemplate).then(templateBuffer => customerProposalArtifact({
+          templateBuffer,
+          mapping: proposalTemplate?.mapping,
+          mappingWarnings: proposalTemplate?.mappingWarnings,
+          filename: proposalFilename.trim(),
+          p, opp, doc, priced, totalQty, lineQuoted, lineCost, linePrice, totals, route,
+        }))
       customerArtifactRef.current = { key: artifactKey, promise }
     }
     try {

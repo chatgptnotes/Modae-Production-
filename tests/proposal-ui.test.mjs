@@ -24,7 +24,8 @@ test('proposal review and context panels use distinct, descriptive labels', () =
 test('validated uploaded workbooks remain the active proposal source', () => {
   const proposal = read('src/pages/Proposal.jsx')
 
-  assert.match(proposal, /const validatedUploadActive = reviewReady && !!p\.reviewedUpload\?\.sheets\?\.length/)
+  assert.match(proposal, /const validatedUploadActive = hasValidatedUploadedWorkbook\(p\)/)
+  assert.match(read('src/proposal/validatedWorkbook.js'), /VALIDATED_REVIEW_STATUSES = new Set\(\['Validated', 'Override accepted'\]\)/)
   assert.match(proposal, /Validated uploaded proposal/)
   assert.match(proposal, /Uploaded workbook validated and set as the active proposal/)
   assert.match(proposal, /const next = \{[\s\S]*reviewedUpload,[\s\S]*reviewStatus: hasActiveBlock/)

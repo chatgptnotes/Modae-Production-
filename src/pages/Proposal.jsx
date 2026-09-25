@@ -36,6 +36,7 @@ import { proposalApprovalSnapshot } from '../approvalMemory.js'
 import { loadProposalTemplateBuffer, resolveProposalTemplate } from '../proposal/templateRegistry.js'
 import { customerProposalArtifact } from '../proposal/emailAttachments.js'
 import { latestSubmissionForRevision, submissionStatusLabel } from '../submissionStatus.js'
+import { hasValidatedUploadedWorkbook } from '../proposal/validatedWorkbook.js'
 
 // Approved customer proposals use the server-side SMTP route so the browser
 // never handles mailbox credentials and every generated attachment is sent in
@@ -997,7 +998,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   const submitted = comms.some(c => c.kind === 'submission' || c.kind === 'proposal-email')
   const reviewStatus = p.reviewStatus || 'Not reviewed'
   const reviewReady = reviewStatus === 'Validated' || reviewStatus === 'Override accepted'
-  const validatedUploadActive = reviewReady && !!p.reviewedUpload?.sheets?.length
+  const validatedUploadActive = hasValidatedUploadedWorkbook(p)
   const overrideAccepted = reviewStatus === 'Override accepted' && p.reviewOverride?.accepted
   const normalizedReviewIssues = (p.reviewIssues || []).map(informationalReviewFinding)
   const displayReviewIssues = normalizedReviewIssues.map(issue => overrideAccepted

@@ -158,6 +158,14 @@ test('submission panel provides a direct proposal view', () => {
   assert.match(submission, /View proposal/)
 })
 
+test('validated uploaded workbooks remain the active preview and attachment', () => {
+  assert.match(submission, /hasValidatedUploadedWorkbook\(p\)/)
+  assert.match(submission, /validatedWorkbookStorageKey\(p, opp\.id\)/)
+  assert.match(submission, /getFile\(validatedWorkbookStorageKey\(p, opp\.id\), validatedWorkbookFilename\(p\)\)/)
+  assert.match(submission, /The validated proposal workbook is unavailable/)
+  assert.match(submission, /validatedWorkbookPreview\(p\)/)
+})
+
 test('Excel workbook preview carries the approved document branding', () => {
   const preview = read('src/proposal/WorkbookPreview.jsx')
   const css = read('src/styles.css')

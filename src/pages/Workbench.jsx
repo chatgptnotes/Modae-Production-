@@ -39,6 +39,8 @@ import ServiceInvoicePanel from '../workbench/ServiceInvoicePanel.jsx'
 import { COMMERCIAL_DECISIONS, CUSTOMER_CONFIRMATION_STATUSES, commercialApprovalDetails, isCommercialConfirmationRow, isDeliveryBasisClarification, isLegacyCommercialClarification, needsCommercialApproval, normalizeCommercialTerm, sourceContainsDeliveryRequirement } from '../commercialTerms.js'
 import { latestSubmissionForRevision, submissionStatusLabel } from '../submissionStatus.js'
 import { prefetchSparesMatches } from '../workbench/sparesMatchCache.js'
+import WorkbookPreview from '../proposal/WorkbookPreview.jsx'
+import { hasValidatedUploadedWorkbook, validatedWorkbookPreview } from '../proposal/validatedWorkbook.js'
 
 const statusPill = s =>
   s === 'Approved' ? 'Green' : s === 'Rejected' ? 'Red' : s === 'Approved with conditions' ? 'Amber' : 'Blue'
@@ -2061,27 +2063,31 @@ function ProposalTab({ opp, goTab }) {
   )
 }
 
-// The real customer document, not a summary of it. Same component, same props
-// and same data the Builder's "Preview proposal" modal and the printer use — a
-// preview that showed anything else would be worth less than no preview at all.
+// The real customer document, not a summary of it. A successfully validated
+// upload is the authoritative workbook; otherwise this uses the generated
+// document model shared by the Builder and printer.
 function PreviewPane({ opp, openBuilder, openEditSheet }) {
   const store = useStore()
   const props = buildDocProps(store, opp.id)
   if (!props) return <div className="form-card">Unknown opportunity.</div>
   const { p, doc, priced, totals, lineQuoted } = props
+  const uploadedWorkbook = validatedWorkbookPreview(p)
   return (
     <div className="proposal-preview-pane">
       <div className="proposal-preview-toolbar">
         <span className="hint">
-          Customer-facing document · Rev-{p.revision} · Read-only preview
-          {!priced && ' · prices hidden'}
+          {hasValidatedUploadedWorkbook(p)
+            ? `Validated uploaded workbook · Rev-${p.revision} · Read-only preview`
+            : <>Customer-facing document · Rev-{p.revision} · Read-only preview{!priced && ' · prices hidden'}</>}
         </span>
         <button className="linklike" onClick={openEditSheet}>
           <Icon name="fileSheet" size={13} /> Edit in the Sheet
         </button>
       </div>
       <div className="proposal-preview-scroll">
-        <PrintDoc p={p} opp={opp} doc={doc} priced={priced} totals={totals} lineQuoted={lineQuoted} />
+        {uploadedWorkbook
+          ? <WorkbookPreview workbook={uploadedWorkbook} />
+          : <PrintDoc p={p} opp={opp} doc={doc} priced={priced} totals={totals} lineQuoted={lineQuoted} />}
       </div>
     </div>
   )
