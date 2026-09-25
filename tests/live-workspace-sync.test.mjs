@@ -98,6 +98,17 @@ test('row conflicts use bounded latest-save-wins retries', () => {
   assert.match(datastore, /preserving the local row being saved/)
 })
 
+test('consolidated state and configuration conflicts use bounded latest-save-wins retries', () => {
+  const datastore = read('src/datastore.js')
+  assert.match(datastore, /async function saveConsolidatedRows\(entity, rows, label\)/)
+  assert.match(datastore, /p_entity: entity/)
+  assert.match(datastore, /const conflicts = Array\.isArray\(result\.data\?\.conflicts\)/)
+  assert.match(datastore, /data: local\?\.data \?\? serverRow\.data/)
+  assert.match(datastore, /Consolidated \$\{label\} save conflict after/)
+  assert.match(datastore, /return saveConsolidatedRows\(CONSOLIDATED_STATE_ENTITY, rows, 'state'\)/)
+  assert.match(datastore, /saveConsolidatedRows\(CONSOLIDATED_SETTINGS_ENTITY/)
+})
+
 test('price-list loading keeps a usable cached catalogue when the shared copy is unavailable', () => {
   const datastore = read('src/datastore.js')
   const store = read('src/store.jsx')

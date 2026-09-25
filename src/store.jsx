@@ -325,6 +325,7 @@ export function StoreProvider({ children }) {
     if (!Object.keys(dirty).length) return
     datastore.saveSlices(dirty)
       .then(() => {
+        setLiveSyncStatus('live')
         const current = stateRef.current
         const saved = { ...lastSavedRef.current }
       const confirmed = {}
@@ -623,14 +624,27 @@ export function StoreProvider({ children }) {
         .catch(() => setLiveSyncStatus('error'))
     }
     const onVisibility = () => { if (document.visibilityState === 'hidden') { flushLocalCache(); flushSaves() } }
+    const onOnline = () => {
+      if (!hydratedRef.current) { hydrate(); return }
+      flushSaves()
+      datastore.loadAll({ force: true })
+        .then(res => {
+          if (!res) { setLiveSyncStatus('error'); return }
+          if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
+          if (!res.empty) { applyServer(res.slices, res.diagnostics); setLiveSyncStatus('live') }
+        })
+        .catch(() => setLiveSyncStatus('error'))
+    }
     // visibilitychange is not reliably delivered when the page is being torn
     // down, which is exactly the reload-right-after-editing case. pagehide is.
     const onPageHide = () => { flushLocalCache(); flushSaves() }
     window.addEventListener('focus', onFocus)
+    window.addEventListener('online', onOnline)
     document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('pagehide', onPageHide)
     return () => {
       window.removeEventListener('focus', onFocus)
+      window.removeEventListener('online', onOnline)
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('pagehide', onPageHide)
     }

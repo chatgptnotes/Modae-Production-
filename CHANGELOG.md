@@ -5,6 +5,13 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Made cross-browser sync failures visible in the workspace shell, added an
+  explicit shared-data refresh action, and retried pending saves when the
+  browser reconnects so locally completed commercial decisions do not remain
+  silently isolated to one browser.
+- Added bounded latest-local-wins retries for consolidated state and
+  configuration writes so simultaneous browser sessions no longer leave the
+  workspace stuck on revision-conflict errors.
 - Hardened production refresh and login recovery: browser storage quota errors
   now retain the last known-good workspace cache, empty Supabase refreshes no
   longer erase populated local business records, and session restoration times

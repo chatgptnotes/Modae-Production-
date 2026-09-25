@@ -5232,6 +5232,8 @@ button.install:hover { background: var(--primary-hover); }
 }
 .workspace-sync-notice strong { white-space: nowrap; }
 .workspace-sync-notice span { color: var(--text-subtle); }
+.workspace-sync-refresh { margin-left: auto; border: 1px solid currentColor; border-radius: 6px; background: transparent; color: inherit; padding: 5px 9px; font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.workspace-sync-refresh:hover { background: color-mix(in srgb, currentColor 10%, transparent); }
 .workspace-sync-notice-live { border-color: var(--status-success); background: var(--status-success-soft); color: var(--status-success); }
 .workspace-sync-notice-live span { color: var(--text-subtle); }
 .connectivity-notice {

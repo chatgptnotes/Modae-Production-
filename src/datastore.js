@@ -120,16 +120,12 @@ async function loadConsolidatedConfig() {
 
 async function saveConsolidatedConfig(config = {}) {
   const key = normalizedKey(CONSOLIDATED_SETTINGS_ENTITY, CONSOLIDATED_SETTINGS_ID)
-  const rev = normalizedRevisions.get(key) ?? 0
-  const result = await supabase.rpc('save_rows', {
-    p_entity: CONSOLIDATED_SETTINGS_ENTITY,
-    p_rows: [{ id: CONSOLIDATED_SETTINGS_ID, data: config, rev }],
-  })
-  if (result.error) throw result.error
-  const conflicts = Array.isArray(result.data?.conflicts) ? result.data.conflicts : []
-  if (conflicts.length) throw new Error('Consolidated configuration changed on another device; retrying on next save')
-  normalizedRevisions.set(key, rev + 1)
-  normalizedRecords.set(key, { data: config, rev: rev + 1 })
+  const accepted = await saveConsolidatedRows(CONSOLIDATED_SETTINGS_ENTITY, [{
+    id: CONSOLIDATED_SETTINGS_ID,
+    data: config,
+    rev: normalizedRevisions.get(key) ?? 0,
+  }], 'configuration')
+  if (!accepted.length) throw new Error('Consolidated configuration could not be saved')
   writeCachedRules(config)
   return true
 }
@@ -150,6 +146,37 @@ async function loadConsolidatedState() {
   return state
 }
 
+async function saveConsolidatedRows(entity, rows, label) {
+  if (!rows.length) return []
+  const localById = new Map(rows.map(row => [row.id, row]))
+  let pending = rows
+  for (let attempt = 0; attempt <= MAX_CONFLICT_RETRIES; attempt += 1) {
+    const result = await supabase.rpc('save_rows', {
+      p_entity: entity,
+      p_rows: pending,
+    })
+    if (result.error) throw result.error
+    const conflicts = Array.isArray(result.data?.conflicts) ? result.data.conflicts : []
+    const conflictIds = new Set(conflicts.map(conflict => conflict.id))
+    for (const row of pending) {
+      if (conflictIds.has(row.id)) continue
+      const key = normalizedKey(entity, row.id)
+      normalizedRevisions.set(key, row.rev + 1)
+      normalizedRecords.set(key, { data: row.data, rev: row.rev + 1 })
+    }
+    if (!conflicts.length) return pending.map(row => row.id)
+    pending = conflicts.map(serverRow => {
+      const local = localById.get(serverRow.id)
+      return {
+        id: serverRow.id,
+        data: local?.data ?? serverRow.data,
+        rev: Number(serverRow.rev) || 0,
+      }
+    })
+  }
+  throw new Error(`Consolidated ${label} save conflict after ${MAX_CONFLICT_RETRIES + 1} attempts`)
+}
+
 async function saveConsolidatedState(dirty = {}) {
   const rows = Object.entries(dirty)
     .filter(([key]) => !BUSINESS_KEYS.has(key) && key !== 'config')
@@ -159,17 +186,7 @@ async function saveConsolidatedState(dirty = {}) {
       rev: normalizedRevisions.get(normalizedKey(CONSOLIDATED_STATE_ENTITY, id)) ?? 0,
     }))
   if (!rows.length) return []
-  const result = await supabase.rpc('save_rows', {
-    p_entity: CONSOLIDATED_STATE_ENTITY,
-    p_rows: rows,
-  })
-  if (result.error || (result.data?.conflicts || []).length) throw result.error || new Error('Consolidated state save conflict')
-  for (const row of rows) {
-    const key = normalizedKey(CONSOLIDATED_STATE_ENTITY, row.id)
-    normalizedRevisions.set(key, row.rev + 1)
-    normalizedRecords.set(key, { data: row.data, rev: row.rev + 1 })
-  }
-  return rows.map(row => row.id)
+  return saveConsolidatedRows(CONSOLIDATED_STATE_ENTITY, rows, 'state')
 }
 
 export function invalidateLoadCache() {

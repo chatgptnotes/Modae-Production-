@@ -331,16 +331,14 @@ const NAV = [
   { section: 'Admin & more', to: '/users', label: 'Users and roles', icon: 'shield', page: 'users' },
 ]
 
-function SyncNotice({ status, diagnostics }) {
-  if (!['config-error', 'error', 'live', 'connecting', 'reconnecting'].includes(status)) return null
-  // Keep sync failures available through the store and console diagnostics,
-  // but do not cover the production workspace with a persistent red banner.
-  if (['config-error', 'error', 'reconnecting'].includes(status)) return null
+function SyncNotice({ status, diagnostics, onRefresh }) {
+  if (!['config-error', 'error', 'live', 'connecting', 'reconnecting', 'offline'].includes(status)) return null
   const config = status === 'config-error'
+  const offline = status === 'offline'
   const emptyWorkspace = status === 'live' && diagnostics?.normalizedOpportunityCount === 0
   const healthy = status === 'live' && !emptyWorkspace
   if (healthy) return null
-  const stateLabel = healthy ? 'Shared workspace' : emptyWorkspace ? 'Shared workspace is empty' : status === 'connecting' ? 'Connecting to shared workspace' : status === 'reconnecting' ? 'Reconnecting to shared workspace' : config ? 'Supabase configuration mismatch' : 'Supabase sync unavailable'
+  const stateLabel = emptyWorkspace ? 'Shared workspace is empty' : status === 'connecting' ? 'Connecting to shared workspace' : status === 'reconnecting' ? 'Reconnecting to shared workspace' : offline ? 'Local-only workspace' : config ? 'Supabase configuration mismatch' : 'Supabase sync unavailable'
   return (
     <div className={`workspace-sync-notice workspace-sync-notice-${healthy ? 'live' : 'warning'}`} role={healthy ? 'status' : 'alert'} title={supabaseProjectRef ? `Supabase project: ${supabaseProjectRef}` : undefined}>
       <strong>{stateLabel}</strong>
@@ -348,11 +346,14 @@ function SyncNotice({ status, diagnostics }) {
         ? `Project ${supabaseProjectRef || 'not configured'} · active rows are loaded from Supabase.`
         : emptyWorkspace
             ? `Project ${supabaseProjectRef} · Supabase returned no active opportunities.`
-            : config
+            : offline
+              ? 'This browser cannot share changes until Supabase is configured.'
+              : config
               ? 'The URL and anon key point to different projects. This browser is showing local data only.'
               : status === 'connecting' || status === 'reconnecting'
                 ? `Project ${supabaseProjectRef || 'not configured'} · waiting for the shared data connection.`
                 : 'The shared workspace could not be loaded. This browser may be showing local data only.'}</span>
+      {onRefresh && !offline && !config && <button type="button" className="workspace-sync-refresh" onClick={onRefresh}>Refresh shared data</button>}
     </div>
   )
 }
@@ -508,7 +509,7 @@ export default function App() {
           <Icon name="menu" size={20} />
         </button>
         <NotificationBell store={store} nav={nav} />
-        <SyncNotice status={store.liveSyncStatus} diagnostics={store.syncDiagnostics} />
+        <SyncNotice status={store.liveSyncStatus} diagnostics={store.syncDiagnostics} onRefresh={store.refreshSharedData} />
         {/* The shell is viewport-locked, so this is the app's single scroll
             region — pages that want their own internal scroller (the pipeline
             sheet, the mailbox list) size themselves to 100% of it. */}
