@@ -339,7 +339,7 @@ function SyncNotice({ status, diagnostics, onRefresh }) {
   const healthy = status === 'live' && !emptyWorkspace
   if (healthy) return null
   const stateLabel = emptyWorkspace ? 'Shared workspace returned no active records' : status === 'connecting' ? 'Connecting to shared workspace' : status === 'reconnecting' ? 'Reconnecting to shared workspace' : offline ? 'Local-only workspace' : config ? 'Supabase configuration mismatch' : 'Supabase sync unavailable'
-  const detail = diagnostics?.lastLoadError
+  const detail = diagnostics?.lastLoadError || diagnostics?.lastSaveError
   return (
     <div className={`workspace-sync-notice workspace-sync-notice-${healthy ? 'live' : 'warning'}`} role={healthy ? 'status' : 'alert'} title={supabaseProjectRef ? `Supabase project: ${supabaseProjectRef}` : undefined}>
       <strong>{stateLabel}</strong>

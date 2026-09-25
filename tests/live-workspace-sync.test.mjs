@@ -67,6 +67,28 @@ test('opportunity creation flushes before immediate workbench navigation', () =>
   assert.match(store, /setTimeout\(flushSaves, 0\)\n      spTrack\(opp\.id, 'Open'/)
 })
 
+test('lead creation flushes before immediate inbox navigation', () => {
+  const store = read('src/store.jsx')
+  assert.match(store, /A new enquiry is immediately followed by navigation/)
+  assert.match(store, /'Lead received',[\s\S]*setTimeout\(flushSaves, 0\)/)
+})
+
+test('save failures expose the Supabase error in sync diagnostics', () => {
+  const store = read('src/store.jsx')
+  const app = read('src/App.jsx')
+  assert.match(store, /lastSaveError: saveError/)
+  assert.match(store, /message: e\?\.message \|\| 'Supabase save failed'/)
+  assert.match(app, /diagnostics\?\.lastLoadError \|\| diagnostics\?\.lastSaveError/)
+})
+
+test('focus retries dirty writes before refreshing shared data', () => {
+  const store = read('src/store.jsx')
+  const focus = store.slice(store.indexOf('const onFocus = () => {'), store.indexOf('const onVisibility = () =>'))
+  assert.match(focus, /if \(!hydratedRef\.current\) \{ hydrate\(\); return \}/)
+  assert.match(focus, /flushSaves\(\)/)
+  assert.match(focus, /datastore\.loadAll\(\{ force: true \}\)/)
+})
+
 test('pending opportunity IDs stay local-only and are persisted in the browser snapshot', () => {
   const datastore = read('src/datastore.js')
   const store = read('src/store.jsx')

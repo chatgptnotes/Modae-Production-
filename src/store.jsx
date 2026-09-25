@@ -346,8 +346,18 @@ export function StoreProvider({ children }) {
       })
       .catch(e => {
         setLiveSyncStatus('error')
-        setSyncDiagnostics(diagnostics => ({ ...diagnostics, lastSaveErrorAt: new Date().toISOString() }))
-        console.warn('Supabase save failed — will retry on next change/focus:', e?.message)
+        const saveError = {
+          message: e?.message || 'Supabase save failed',
+          code: e?.code || '',
+          details: e?.details || '',
+          hint: e?.hint || '',
+        }
+        setSyncDiagnostics(diagnostics => ({
+          ...diagnostics,
+          lastSaveErrorAt: new Date().toISOString(),
+          lastSaveError: saveError,
+        }))
+        console.warn('Supabase save failed — will retry on next change/focus:', saveError)
       })
   }
 
@@ -634,6 +644,10 @@ export function StoreProvider({ children }) {
       if (Date.now() - lastFetch < 45000) return
       lastFetch = Date.now()
       if (!hydratedRef.current) { hydrate(); return }
+      // Retry any write that failed while the browser was reconnecting before
+      // pulling a newer server snapshot. The dirty local slice remains
+      // protected by lastSavedRef until this succeeds.
+      flushSaves()
       datastore.loadAll({ force: true })
         .then(res => {
           if (!res) { setLiveSyncStatus('error'); return }
@@ -1146,6 +1160,10 @@ export function StoreProvider({ children }) {
       setState(s => withAudit(
         { ...s, leads: [{ ...lead, ts: toISTISOString(lead.ts || new Date()) }, ...s.leads] },
         'Lead received', lead.id, lead.subject))
+      // A new enquiry is immediately followed by navigation. Publish it after
+      // React commits the state update so a quick refresh cannot lose the row
+      // before the ordinary draft-save debounce runs.
+      setTimeout(flushSaves, 0)
     },
 
     // Throw away the rows the inbox simulator generated, without the blunt
