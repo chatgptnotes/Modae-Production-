@@ -310,6 +310,7 @@ export function StoreProvider({ children }) {
   const [state, setState] = useState(initialState)
   const [authReady, setAuthReady] = useState(() => !supabase || !!state.auth?.user)
   const [liveSyncStatus, setLiveSyncStatus] = useState(() => supabaseConfigError ? 'config-error' : datastore.dbEnabled() ? 'connecting' : 'offline')
+  const [adminSaveState, setAdminSaveState] = useState('saved')
   const [priceListsStatus, setPriceListsStatus] = useState(() => Object.keys(state.priceLists || {}).length ? 'ready' : 'loading')
   const [syncDiagnostics, setSyncDiagnostics] = useState({ normalizedOpportunityCount: null })
   setRoleNameConfig(state.config)
@@ -372,10 +373,15 @@ export function StoreProvider({ children }) {
     if (!hydratedRef.current) return Promise.resolve()
     if (authInvalidRef.current) return Promise.resolve()
     const dirty = dirtySlices()
-    if (!Object.keys(dirty).length) return Promise.resolve()
+    if (!Object.keys(dirty).length) {
+      setAdminSaveState('saved')
+      return Promise.resolve()
+    }
+    setAdminSaveState('saving')
     return datastore.saveSlices(dirty)
       .then(() => {
         setLiveSyncStatus('live')
+        setAdminSaveState('saved')
         const current = stateRef.current
         const saved = { ...lastSavedRef.current }
       const confirmed = {}
@@ -395,6 +401,7 @@ export function StoreProvider({ children }) {
         }
       })
       .catch(e => {
+        setAdminSaveState('error')
         const authError = invalidateSupabaseAuth(e)
         if (!authError) setLiveSyncStatus('error')
         const saveError = {
@@ -748,8 +755,12 @@ export function StoreProvider({ children }) {
     // go missing. Fail loudly in the console instead.
     clearTimeout(localCacheTimerRef.current)
     localCacheTimerRef.current = setTimeout(flushLocalCache, 300)
-    if (!datastore.dbEnabled() || !hydratedRef.current) return
+    if (!datastore.dbEnabled() || !hydratedRef.current) {
+      if (Object.keys(dirtySlices()).length) setAdminSaveState('saved')
+      return
+    }
     if (!Object.keys(dirtySlices()).length) return
+    setAdminSaveState('saving')
     clearTimeout(saveTimerRef.current)
     saveTimerRef.current = setTimeout(flushSaves, 1500)
   }, [state])
@@ -2615,7 +2626,7 @@ export function StoreProvider({ children }) {
     return () => window.removeEventListener('focus', onFocus)
   }, [])
 
-  return <StoreCtx.Provider value={{ ...api, authReady, liveSyncStatus, syncDiagnostics }}>{children}</StoreCtx.Provider>
+  return <StoreCtx.Provider value={{ ...api, authReady, liveSyncStatus, syncDiagnostics, adminSaveState }}>{children}</StoreCtx.Provider>
 }
 
 export const useStore = () => useContext(StoreCtx)

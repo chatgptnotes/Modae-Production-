@@ -30,10 +30,9 @@ test('active vendor/manufacturer sourcing actions are removed while history rema
 test('uploaded proposal review has a stored file and no longer presents the old AI-draft instruction', () => {
   const proposal = read('src/pages/Proposal.jsx')
   assert.doesNotMatch(proposal, /Review the AI draft before approval/)
-  assert.match(proposal, /const blobKey = `proposal-review-\$\{opp\.id\}-rev-/)
-  assert.match(proposal, /uploadOppFile\(opp, 'Proposal', file\)/)
   assert.match(proposal, /Uploaded proposal/)
   assert.match(proposal, /Open uploaded file/)
+  assert.doesNotMatch(proposal, /Upload reviewed workbook/)
 })
 
 test('uploaded proposal viewer normalizes reviewed-upload filenames', () => {

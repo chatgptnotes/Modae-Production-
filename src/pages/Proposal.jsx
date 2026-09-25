@@ -185,25 +185,33 @@ const reviewValue = (field, value) => {
   if (['quantity', 'unitPrice', 'totalPrice'].includes(field) && Number.isFinite(Number(value))) return reviewNumber.format(Number(value))
   return String(value)
 }
+const reviewIssueSummary = (issue, change) => change
+  ? `${change.line || 'Proposal line'} · ${change.label || 'Changed value'} · ${reviewValue(change.field, change.before)} → ${reviewValue(change.field, change.after)}`
+  : issue.text
 
 function ReviewIssue({ issue, overridden = false, onUseStandardTerms }) {
   const change = issue.code === 'line.value-changed' ? issue.change : null
-  return <div className={`proposal-review-issue ${overridden ? 'info' : issue.severity}`}>
-    <div className="proposal-review-issue-head"><span className="proposal-review-severity">{overridden ? 'Overridden' : reviewSeverityLabel(issue.severity)}</span><strong>{reviewFindingTitle(issue)}</strong>{issue.source === 'AI' && <span className="proposal-review-source">AI review</span>}</div>
-    {change
-      ? <div className="proposal-review-value-change">
-          <div className="proposal-review-value-change-item"><span>Item</span><strong>{change.line || 'Proposal line'}</strong></div>
-          <div className="proposal-review-value-change-field"><span>{change.label || 'Changed value'}</span></div>
-          <div className="proposal-review-value-change-values">
-            <div><span>Previous</span><code>{reviewValue(change.field, change.before)}</code></div>
-            <div><span>Uploaded value</span><code>{reviewValue(change.field, change.after)}</code></div>
+  return <details className={`proposal-review-issue ${overridden ? 'info' : issue.severity}`}>
+    <summary className="proposal-review-issue-summary">
+      <div className="proposal-review-issue-head"><span className="proposal-review-severity">{overridden ? 'Overridden' : reviewSeverityLabel(issue.severity)}</span><strong>{reviewFindingTitle(issue)}</strong>{issue.source === 'AI' && <span className="proposal-review-source">AI review</span>}</div>
+      <span className="proposal-review-issue-summary-text">{reviewIssueSummary(issue, change)}</span>
+    </summary>
+    <div className="proposal-review-issue-body">
+      {change
+        ? <div className="proposal-review-value-change">
+            <div className="proposal-review-value-change-item"><span>Item</span><strong>{change.line || 'Proposal line'}</strong></div>
+            <div className="proposal-review-value-change-field"><span>{change.label || 'Changed value'}</span></div>
+            <div className="proposal-review-value-change-values">
+              <div><span>Previous</span><code>{reviewValue(change.field, change.before)}</code></div>
+              <div><span>Uploaded value</span><code>{reviewValue(change.field, change.after)}</code></div>
+            </div>
           </div>
-        </div>
-      : <p className={`proposal-review-issue-text ${issue.source === 'AI' ? 'proposal-review-ai-text' : ''}`}>{issue.text}</p>}
-    {issue.evidence && <div className="proposal-review-evidence"><span>Evidence</span><code>{issue.evidence}</code></div>}
-    {issue.approval && <span className="proposal-review-approval">Already approved{issue.approval.approver ? ` by ${issue.approval.approver}` : ''}{issue.approval.date ? ` on ${issue.approval.date}` : ''}</span>}
-    {!overridden && issue.code === 'terms.missing' && onUseStandardTerms && <button type="button" className="btn-secondary proposal-review-action" onClick={onUseStandardTerms}>Use ModAE standard terms</button>}
-  </div>
+        : <p className={`proposal-review-issue-text ${issue.source === 'AI' ? 'proposal-review-ai-text' : ''}`}>{issue.text}</p>}
+      {issue.evidence && <div className="proposal-review-evidence"><span>Evidence</span><code>{issue.evidence}</code></div>}
+      {issue.approval && <span className="proposal-review-approval">Already approved{issue.approval.approver ? ` by ${issue.approval.approver}` : ''}{issue.approval.date ? ` on ${issue.approval.date}` : ''}</span>}
+      {!overridden && issue.code === 'terms.missing' && onUseStandardTerms && <button type="button" className="btn-secondary proposal-review-action" onClick={onUseStandardTerms}>Use ModAE standard terms</button>}
+    </div>
+  </details>
 }
 
 function ProposalDatasheets({ opp, p, save, store }) {
@@ -587,9 +595,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   const [templateError, setTemplateError] = useState('')
   const [reviewBusy, setReviewBusy] = useState(false)
   const [reviewStage, setReviewStage] = useState(0)
-  const [validateChoice, setValidateChoice] = useState(false)
   const [reviewedUploadViewing, setReviewedUploadViewing] = useState(false)
-  const uploadInputRef = useRef(null)
   const [reviewMessage, setReviewMessage] = useState('')
   const [reviewError, setReviewError] = useState('')
   const [overrideConfirmOpen, setOverrideConfirmOpen] = useState(false)
@@ -1103,6 +1109,12 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     setReviewStage(0)
     setReviewMessage('')
     setReviewError('')
+    // Let React paint the visible loading state before local checks and the
+    // network request occupy the event loop.
+    await new Promise(resolve => {
+      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(resolve)
+      else setTimeout(resolve, 0)
+    })
     try {
       const review = proposal
       setReviewStage(1)
@@ -1196,7 +1208,6 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   }
 
   const validateAiDraft = async () => {
-    setValidateChoice(false)
     const uploaded = p.reviewedUpload
     const { reviewedUpload, ...withoutUpload } = p
     const next = {
@@ -1233,46 +1244,6 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     store.saveProposal(oppId, next)
     setReviewError('')
     setReviewMessage('Validation findings were stored. You chose to continue anyway; this override was recorded in the audit trail.')
-  }
-
-  const uploadReviewedProposal = async event => {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) return
-    if (!/\.xlsx?$/i.test(file.name)) {
-      setReviewError('Upload the reviewed proposal as an XLSX file.')
-      return
-    }
-    try {
-      const parsed = parseProposalWorkbook(await file.arrayBuffer(), file.name)
-      const imported = importReviewedWorkbook(parsed, p, opp)
-      // Keep each uploaded artifact addressable. Re-uploading a workbook must
-      // not overwrite the bytes referenced by an older revision snapshot.
-      const blobKey = `proposal-review-${opp.id}-rev-${String(p.revision || '00').padStart(2, '0')}-${Date.now()}`
-      await putFiles(blobKey, [file])
-      let cloud = {}
-      try {
-        const uploaded = await uploadOppFile(opp, 'Proposal', file)
-        cloud = { webUrl: uploaded.webUrl, url: uploaded.url, path: uploaded.path, itemId: uploaded.itemId }
-      } catch (error) {
-        cloud = { cloudErr: error?.message || String(error) }
-      }
-      const next = {
-        ...imported.proposal,
-        reviewedUpload: { filename: file.name, type: file.type, size: file.size, uploadedAt: new Date().toISOString(), blobKey, ...cloud, sheets: parsed.sheets, importedChanges: imported.changes, validationIssues: imported.issues, table: imported.table, baseProposal: snapshotProposal(p) },
-        reviewStatus: 'Ready for validation',
-        reviewIssues: imported.issues,
-        reviewNeedsRevision: false,
-        reviewOverride: null,
-      }
-      setP(next)
-      store.saveProposal(oppId, next)
-      setReviewError('')
-      setReviewMessage(`${file.name} uploaded and imported. Validating…`)
-      await validateReviewedProposal(next, { automatic: true, preserveRevision: true })
-    } catch (error) {
-      setReviewError(error?.message || 'The reviewed proposal could not be read')
-    }
   }
 
   const exportBoQ = () => exportCSV(
@@ -1532,23 +1503,13 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
           {reviewReady && approvalRequired && !pendingForOpp.length && (
             <button className="btn-secondary" onClick={submitForApproval}><Icon name="send" size={13} /> Request approval</button>
           )}
-          <button className="primary" onClick={() => setValidateChoice(true)} disabled={reviewBusy}>
+          <button className="primary" onClick={validateAiDraft} disabled={reviewBusy}>
             {reviewBusy
               ? <><span className="auth-loading__spinner auth-loading__spinner-inline" aria-hidden="true" /> Scanning…</>
               : <><Icon name="checkCircle" size={13} /> Validate review</>}
           </button>
         </div>
       </header>
-
-      <input
-        className="visually-hidden"
-        type="file"
-        accept=".xlsx,.xls"
-        ref={uploadInputRef}
-        onChange={uploadReviewedProposal}
-        tabIndex={-1}
-        aria-hidden="true"
-      />
 
       <section className={`proposal-review-strip proposal-review-strip-${reviewBanner.tone}`} aria-label="Human review checkpoint">
         <div>
@@ -1594,19 +1555,6 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
           }}
           onClose={() => setReviewedUploadViewing(false)}
         />
-      )}
-      {validateChoice && (
-        <Modal title="Validate review" onClose={() => setValidateChoice(false)}>
-          <p className="hint">Validate the current AI-generated draft as-is, or upload a workbook that's already been reviewed outside the app.</p>
-          <div className="forms-actions proposal-review-actions">
-            <button className="primary" onClick={validateAiDraft}>
-              <Icon name="checkCircle" size={13} /> Continue with AI draft
-            </button>
-            <button onClick={() => { setValidateChoice(false); uploadInputRef.current?.click() }}>
-              <Icon name="upload" size={13} /> Upload reviewed workbook
-            </button>
-          </div>
-        </Modal>
       )}
       {(reviewError || reviewMessage || p.reviewIssues?.length > 0 || p.reviewCompletedAt) && (
         <section className="proposal-review-results" aria-live="polite">

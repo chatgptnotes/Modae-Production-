@@ -16,6 +16,7 @@ import { parsePriceListFile } from '../priceListImport.js'
 import { normalizedCurrencyRates } from '../currency.js'
 import { DEFAULT_KYC_VALIDATION, kycValidationConfig } from '../kycValidation.js'
 import { DEFAULT_CLAUSES } from '../clauses.js'
+import { mintId } from '../ids.js'
 import { BUILT_IN_PROPOSAL_TEMPLATES, loadProposalTemplateBuffer, resolveProposalTemplate } from '../proposal/templateRegistry.js'
 
 // Admin — every runtime rule the app obeys, in one card grid. Data lives in
@@ -35,6 +36,12 @@ const TEMPLATE_LANES = BUILT_IN_PROPOSAL_TEMPLATES
 const ADMIN_TABS = [
   { id: 'workflow', label: 'Workflow & governance', icon: 'shield' },
   { id: 'documents', label: 'Documents & templates', icon: 'upload' },
+]
+const WORKFLOW_SUB_TABS = [
+  { id: 'access', label: 'Access & routing', description: 'Users, ownership rules, and region mappings', icon: 'target' },
+  { id: 'clauses', label: 'T&C Clause Library', description: 'Proposal validity, payment terms, and guarantees', icon: 'fileText' },
+  { id: 'commercial', label: 'Commercial & automation', description: 'Guided margins, lead controls, and mailbox', icon: 'gear' },
+  { id: 'customer', label: 'Customer governance', description: 'Customer class rules and KYC checklist', icon: 'flag' },
 ]
 
 function NumField({ label, value, disabled, onChange }) {
@@ -126,7 +133,7 @@ function ClassRuleRow({ cls, rule, canEdit, open, onToggle, checklistNames, onPa
   return (
     <div className="class-rule">
       <button type="button" className="class-rule-head" aria-expanded={open} onClick={onToggle}>
-        <span className={`pill ${cls}`}>{cls}</span>
+        <span className={`pill risk-badge ${cls}`} aria-label={`${cls} customer risk level`}>{cls}</span>
         <span className="class-rule-summary">{summary}</span>
         <Icon name={open ? 'chevronUp' : 'chevronDown'} size={11} />
       </button>
@@ -258,6 +265,8 @@ export default function Admin() {
   const [templateDirty, setTemplateDirty] = useState(false)
   const [currencyRateDraft, setCurrencyRateDraft] = useState({})
   const [adminView, setAdminView] = useState('workflow')
+  const [workflowView, setWorkflowView] = useState('access')
+  const [regionSearch, setRegionSearch] = useState('')
 
   // Route-level gate AFTER the hooks (an early return before them would change
   // the hook count when the persona flips while /admin is mounted). Approval
@@ -386,6 +395,25 @@ export default function Admin() {
   const amber = config.amberFee || {}
   const configuredTemplates = proposalTemplates.filter(item => item.status === 'Current').length
   const aiStatus = 'Automatic routing'
+  const filteredStateRegions = (config.stateRegions || []).filter(item => {
+    const query = regionSearch.trim().toLowerCase()
+    if (!query) return true
+    return `${item.name || ''} ${item.code || ''}`.toLowerCase().includes(query)
+  })
+
+  const addClause = () => {
+    if (!canEdit) return
+    const existing = config.clauses || DEFAULT_CLAUSES
+    store.saveClause({
+      id: mintId('CL', existing),
+      label: '',
+      text: '',
+      category: 'legal',
+      routes: ['Project', 'Spares', 'Services'],
+      scopes: ['domestic', 'international'],
+      required: false,
+    })
+  }
 
   const unlockDemoControls = event => {
     event.preventDefault()
@@ -434,27 +462,79 @@ export default function Admin() {
       <div className="admin-layout">
         <section id="admin-panel-workflow" className={`admin-panel ${adminView === 'workflow' ? 'is-active' : ''}`}
           role="tabpanel" aria-labelledby="admin-tab-workflow" hidden={adminView !== 'workflow'}>
-        <div className="admin-section-heading">
-          <div><h3>Workflow &amp; governance</h3><p>Ownership, approvals, customer rules, and intake controls.</p></div>
-        </div>
-        <div className="admin-card admin-clause-library" id="admin-clauses">
+        <div className="admin-workflow-layout">
+        <nav className="admin-section-rail admin-workflow-tabs" aria-label="Workflow settings sections" role="tablist">
+          <p className="admin-section-rail-label">Workflow settings</p>
+          {WORKFLOW_SUB_TABS.map(tab => (
+            <button key={tab.id} type="button" role="tab"
+              className={workflowView === tab.id ? 'active' : ''}
+              aria-selected={workflowView === tab.id}
+              aria-controls={`admin-subpanel-${tab.id}`}
+              id={`admin-subtab-${tab.id}`}
+              onClick={() => setWorkflowView(tab.id)}>
+              <span className="admin-workflow-tab-icon"><Icon name={tab.icon} size={13} /></span>
+              <span><b>{tab.label}</b><small>{tab.description}</small></span>
+            </button>
+          ))}
+        </nav>
+        <div className="admin-workflow-main">
+        <div id="admin-subpanel-clauses" className="admin-subpanel" role="tabpanel" aria-labelledby="admin-subtab-clauses" hidden={workflowView !== 'clauses'}>
+        <section className="clause-library-section" id="admin-clauses">
           <h3><Icon name="fileText" size={14} /> Terms &amp; conditions clause library</h3>
           <p className="hint">Maintain reusable clauses. Changes are versioned through the normal audit log.</p>
-          {(config.clauses || DEFAULT_CLAUSES).map(clause => <div className="admin-card-row clause-library-row" key={clause.id}>
-            <input aria-label={`${clause.id} clause title`} value={clause.label} disabled={!canEdit} onChange={e => store.updateClause(clause.id, { label: e.target.value })} />
-            <textarea aria-label={`${clause.id} clause text`} value={clause.text} disabled={!canEdit} onChange={e => store.updateClause(clause.id, { text: e.target.value })} rows={2} />
-            <button type="button" className="secondary" disabled={!canEdit} onClick={() => store.removeClause(clause.id)}>Remove</button>
-          </div>)}
+          <div className="clause-library-table-wrap">
+          <table className="clause-library-table">
+            <colgroup>
+              <col className="clause-library-title-col" />
+              <col />
+              <col className="clause-library-actions-col" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col">Clause title</th>
+                <th scope="col">Clause text</th>
+                <th scope="col" className="clause-library-actions-heading">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+            {(config.clauses || DEFAULT_CLAUSES).map(clause => (
+              <tr key={clause.id}>
+                <td className="clause-library-title-cell">
+                  <label className="sr-only" htmlFor={`clause-title-${clause.id}`}>Clause title</label>
+                  <input id={`clause-title-${clause.id}`} className="clause-library-title-field" aria-label={`${clause.id} clause title`} value={clause.label} disabled={!canEdit}
+                    onChange={e => store.updateClause(clause.id, { label: e.target.value })} />
+                </td>
+                <td className="clause-library-text-cell">
+                  <label className="sr-only" htmlFor={`clause-text-${clause.id}`}>Clause text</label>
+                  <textarea aria-label={`${clause.id} clause text`} value={clause.text} disabled={!canEdit}
+                    id={`clause-text-${clause.id}`} className="clause-library-text-field" onChange={e => store.updateClause(clause.id, { text: e.target.value })} rows={3} />
+                </td>
+                <td className="clause-library-actions-cell">
+                  <button type="button" className="secondary clause-library-remove" disabled={!canEdit}
+                    onClick={() => store.removeClause(clause.id)}>Remove</button>
+                </td>
+              </tr>
+            ))}
+            </tbody>
+          </table>
+          </div>
+          <button type="button" className="secondary clause-library-add" disabled={!canEdit} onClick={addClause}>+ Add New Clause</button>
+        </section>
         </div>
         <div className="admin-setting-groups">
-        <section className="admin-setting-group" aria-labelledby="admin-group-routing">
-          <header className="admin-setting-group-head">
-            <div><h4 id="admin-group-routing">Access, routing &amp; ownership</h4><p>Manage workspace access and route incoming work to the right owner and region.</p></div>
-          </header>
-          <div className="admin-setting-grid">
+        <section id="admin-subpanel-access" className="admin-setting-group" role="tabpanel" aria-labelledby="admin-subtab-access" hidden={workflowView !== 'access'}>
+          <div className="admin-setting-grid admin-access-layout">
+          <section className="admin-access-controls-panel" aria-labelledby="admin-access-controls-title">
+            <header className="admin-access-controls-head">
+              <div>
+                <h3 id="admin-access-controls-title">Access &amp; Routing Controls</h3>
+                <p>Configure user permissions, regional routing, and opportunity ownership.</p>
+              </div>
+            </header>
+            <div className="admin-access-controls-grid">
 
         {/* 1 — Users & roles */}
-        <div className="admin-card admin-card--list">
+        <div className="admin-access-column">
           <h3><Icon name="shield" size={14} /> Users &amp; roles</h3>
           {userCounts.map(([st, n]) => (
             <div key={st} className="arow"><span>{st} accounts</span><b>{n}</b></div>
@@ -466,42 +546,58 @@ export default function Admin() {
         </div>
 
         {/* 2 — Ownership rules */}
-        <div className="admin-card admin-card--form">
+        <div className="admin-access-column">
           <h3><Icon name="target" size={14} /> Ownership rules</h3>
           {(config.ownershipRules || []).map((r, i) => (
             <div key={i} className="arow">
               <input type="text" value={r.region || ''} disabled={!canEdit}
                 onChange={e => patchList('ownershipRules', i, { region: e.target.value })} />
-              <select value={r.owner} disabled={!canEdit}
-                onChange={e => patchList('ownershipRules', i, { owner: e.target.value })}>
-                {OWNERS.map(o => <option key={o}>{o}</option>)}
-              </select>
+              <label className="admin-select-with-badge">
+                <span className={`admin-owner-badge owner-${String(r.owner || '').toLowerCase()}`}>{r.owner}</span>
+                <select aria-label={`Owner for ${r.region || 'region'}`} value={r.owner} disabled={!canEdit}
+                  onChange={e => patchList('ownershipRules', i, { owner: e.target.value })}>
+                  {OWNERS.map(o => <option key={o}>{o}</option>)}
+                </select>
+              </label>
             </div>
           ))}
           <p className="hint">Suggested owner on intake. Overriding a routed owner requires LJS or AH with a mandatory reason.</p>
         </div>
 
         {/* 2a — Owner by opportunity type */}
-        <div className="admin-card admin-card--list">
+        <div className="admin-access-column">
           <h3><Icon name="target" size={14} /> Owner by opportunity type</h3>
           {(config.ownerRules || []).map((r, i) => (
             <div key={r.oppType} className="arow">
               <span>{r.oppType}</span>
-              <select value={r.owner} disabled={!canEdit}
-                onChange={e => patchList('ownerRules', i, { owner: e.target.value })}>
-                {OWNERS.map(o => <option key={o}>{o}</option>)}
-              </select>
+              <label className="admin-select-with-badge">
+                <span className={`admin-owner-badge owner-${String(r.owner || '').toLowerCase()}`}>{r.owner}</span>
+                <select aria-label={`Owner for ${r.oppType}`} value={r.owner} disabled={!canEdit}
+                  onChange={e => patchList('ownerRules', i, { owner: e.target.value })}>
+                  {OWNERS.map(o => <option key={o}>{o}</option>)}
+                </select>
+              </label>
             </div>
           ))}
           <p className="hint">Fallback owner used when no regional rule matches (e.g. Spares leads → PJS by default).</p>
         </div>
+            </div>
+          </section>
 
         {/* 2b — State → region mapping */}
         <div className="admin-card admin-card--list admin-state-map-card">
           <h3><Icon name="target" size={14} /> State → region mapping</h3>
           <p className="hint">Which Ownership-rules region each Indian state/UT feeds into. Location text typed on lead intake is matched to a state, then routed here.</p>
+          <label className="admin-region-search">
+            <span className="sr-only">Search states and Union Territories</span>
+            <Icon name="search" size={12} />
+            <input type="search" value={regionSearch} placeholder="Search state or UT"
+              onChange={e => setRegionSearch(e.target.value)} />
+          </label>
           <div className="admin-scroll-list">
-            {(config.stateRegions || []).map((r, i) => (
+            {filteredStateRegions.map(r => {
+              const i = (config.stateRegions || []).findIndex(item => item.code === r.code)
+              return (
               <div key={r.code} className="arow">
                 <span>{r.name}</span>
                 <select value={r.region} disabled={!canEdit}
@@ -509,16 +605,18 @@ export default function Admin() {
                   {REGION_OPTIONS.map(o => <option key={o}>{o}</option>)}
                 </select>
               </div>
-            ))}
+              )
+            })}
+            {!filteredStateRegions.length && <p className="admin-empty-filter">No states or UTs match “{regionSearch}”.</p>}
           </div>
         </div>
 
           </div>
         </section>
 
-        <section className="admin-setting-group" aria-labelledby="admin-group-commercial">
+        <section id="admin-subpanel-commercial" className="admin-setting-group" role="tabpanel" aria-labelledby="admin-subtab-commercial" hidden={workflowView !== 'commercial'}>
           <header className="admin-setting-group-head">
-            <div><h4 id="admin-group-commercial">Commercial &amp; automation</h4><p>Thresholds, conversion rates, and automated decision rules.</p></div>
+            <div><h4 id="admin-group-commercial-title">Commercial &amp; automation</h4><p>Thresholds, conversion rates, and automated decision rules.</p></div>
           </header>
           <div className="admin-setting-grid">
 
@@ -605,32 +703,6 @@ export default function Admin() {
             onChange={v => store.updateConfig({ costingDefaults: { ...(config.costingDefaults || {}), cdErvHandlingMaxPct: v } })} />
         </div>
 
-          </div>
-        </section>
-
-        <section className="admin-setting-group" aria-labelledby="admin-group-customer">
-          <header className="admin-setting-group-head">
-            <div><h4 id="admin-group-customer">Customer governance</h4><p>Verification, lead controls, and customer-facing registries.</p></div>
-          </header>
-          <div className="admin-setting-grid">
-
-        {/* 5 — Customer-class rules & Amber fee */}
-        <div className="admin-card admin-card--featured">
-          <h3><Icon name="flag" size={14} /> Customer-class rules &amp; Amber fee</h3>
-          <p className="hint">What each class must verify, who signs it off and where it gates. Open a class to edit it.</p>
-          {CLASS_ORDER.map(cls => (
-            <ClassRuleRow key={cls} cls={cls} rule={classes[cls]} canEdit={canEdit}
-              open={openClass === cls} onToggle={() => setOpenClass(openClass === cls ? '' : cls)}
-              checklistNames={checklistNames}
-              onPatch={patch => patchClass(cls, patch)}
-              onPatchVerification={patch => patchClass(cls, { verification: { ...classes[cls]?.verification, ...patch } })}
-              onPatchGate={patch => patchClass(cls, { gate: { ...classes[cls]?.gate, ...patch } })} />
-          ))}
-          <NumField label="Amber pre-quote processing fee (INR)" value={amber.amount} disabled={!canEdit}
-            onChange={v => store.updateConfig({ amberFee: { ...amber, amount: v } })} />
-          <p className="hint">Fee is adjustable against the order value once the PO lands. The Amber timer is on the Amber row above.</p>
-        </div>
-
         {/* Lead workflow controls */}
         <div className="admin-card admin-card--form">
           <h3><Icon name="clock" size={14} /> Lead workflow controls</h3>
@@ -640,8 +712,6 @@ export default function Admin() {
           <NumField label="Proposal validity (days)" value={config.proposalValidityDays ?? 30} disabled={!canEdit}
             onChange={v => store.updateConfig({ proposalValidityDays: Math.max(1, v) })} />
           <p className="hint">Default validity used when creating new proposals. Existing proposals keep their saved terms.</p>
-          {/* Clarification mail goes out from here until a lead is assigned,
-              and from the assigned salesperson once it is. */}
           <label className="afield">Common mailbox
             <input type="email" value={config.commonMailbox || ''} disabled={!canEdit}
               placeholder={DEFAULT_COMMON_MAILBOX}
@@ -662,6 +732,32 @@ export default function Admin() {
               {['Green', 'Blue', 'Amber', 'Red'].map(v => <option key={v}>{v}</option>)}
             </select>
           </label>
+        </div>
+
+          </div>
+        </section>
+
+        <section id="admin-subpanel-customer" className="admin-setting-group" role="tabpanel" aria-labelledby="admin-subtab-customer" hidden={workflowView !== 'customer'}>
+          <header className="admin-setting-group-head">
+            <div><h4 id="admin-group-customer-title">Customer governance</h4><p>Verification, lead controls, and customer-facing registries.</p></div>
+          </header>
+          <div className="admin-setting-grid">
+
+        {/* 5 — Customer-class rules & Amber fee */}
+        <div className="admin-card admin-card--featured">
+          <h3><Icon name="flag" size={14} /> Customer-class rules &amp; Amber fee</h3>
+          <p className="hint">What each class must verify, who signs it off and where it gates. Open a class to edit it.</p>
+          {CLASS_ORDER.map(cls => (
+            <ClassRuleRow key={cls} cls={cls} rule={classes[cls]} canEdit={canEdit}
+              open={openClass === cls} onToggle={() => setOpenClass(openClass === cls ? '' : cls)}
+              checklistNames={checklistNames}
+              onPatch={patch => patchClass(cls, patch)}
+              onPatchVerification={patch => patchClass(cls, { verification: { ...classes[cls]?.verification, ...patch } })}
+              onPatchGate={patch => patchClass(cls, { gate: { ...classes[cls]?.gate, ...patch } })} />
+          ))}
+          <NumField label="Amber pre-quote processing fee (INR)" value={amber.amount} disabled={!canEdit}
+            onChange={v => store.updateConfig({ amberFee: { ...amber, amount: v } })} />
+          <p className="hint">Fee is adjustable against the order value once the PO lands. The Amber timer is on the Amber row above.</p>
         </div>
 
         {/* 6 — KYC checklist */}
@@ -738,6 +834,8 @@ export default function Admin() {
           </div>
         </section>
 
+        </div>
+        </div>
         </div>
         </section>
 

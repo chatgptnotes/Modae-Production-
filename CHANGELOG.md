@@ -5,6 +5,30 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Made proposal validation start directly from the Validate review action and
+  show staged loading progress before local and AI review work begins; removed
+  the page-level reviewed-workbook upload choice.
+- Rebuilt the Admin T&C clause library as a structured editable data table with
+  inline title/text fields, add/remove actions, and responsive overflow.
+- Added visible staged AI scan progress to proposal validation and enabled
+  semantic AI review for system-generated proposals as well as uploaded workbooks.
+- Changed T&C clause editing to full-width aligned rows with title, text, and
+  remove controls on one clean editable line.
+- Reworked T&C clause entries into responsive editable cards with flexible
+  titles, full-width wrapped text areas, and compact danger-styled remove
+  actions.
+- Simplified the Admin T&C clause library into an always-visible, aligned
+  editor grid instead of expandable rows.
+- Reworked Admin workflow navigation into a horizontal landscape layout with
+  adaptive two- and three-column card alignment on desktop.
+- Added nested Admin workflow categories for access and routing, T&C clauses,
+  commercial automation, and customer governance, with region search, owner
+  and customer-risk badges, and visible save feedback.
+- Made the Terms & Conditions clause library compact and single-open: clauses
+  now expand into their editor only when selected.
+- Reworked the Admin workflow settings presentation with anchored section
+  navigation, readable two-column cards, and responsive wrapping for long
+  labels, ownership rows, approval controls, and clause editors.
 - Added independent Admin switches for final AH + LJS quote-release approval
   and AH approval of special customer commercial terms; both default to on.
 - Added scan-progress surfaces for tender and KYC document work, structured
