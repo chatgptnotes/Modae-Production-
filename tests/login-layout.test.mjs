@@ -19,3 +19,10 @@ test('short login view remains reachable and preserves existing auth actions', (
   assert.match(login, /onSubmit=\{submitRegister\}/)
   assert.match(login, /quickLogin/)
 })
+
+test('sign-in gives feedback and prevents duplicate submissions while Supabase responds', () => {
+  assert.match(login, /const \[signingIn, setSigningIn\] = useState\(false\)/)
+  assert.match(login, /if \(signingIn\) return/)
+  assert.match(login, /disabled=\{signingIn\} aria-busy=\{signingIn\}/)
+  assert.match(login, /Signing in…/)
+})

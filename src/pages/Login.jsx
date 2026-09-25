@@ -24,6 +24,7 @@ export default function Login() {
   const [err, setErr] = useState('')
   const [ok, setOk] = useState('')
   const [msNotice, setMsNotice] = useState(false)
+  const [signingIn, setSigningIn] = useState(false)
 
   const switchMode = m => { setMode(m); setErr(''); setOk(''); setMsNotice(false) }
   const microsoftSignIn = () => setMsNotice(true)
@@ -41,19 +42,25 @@ export default function Login() {
 
   const submitSignIn = async e => {
     e.preventDefault()
+    if (signingIn) return
     setErr('')
-    if (supabase) {
-      const { data, error } = await signInWithPassword(email.trim(), pw)
-      if (error) { setErr(error.message || 'Supabase sign-in failed.'); return }
-      const res = store.loginExternal(data?.user)
-      if (!res.ok) { setErr(res.err); return }
-      nav('/my-dashboard', { replace: true })
-      return
+    setSigningIn(true)
+    try {
+      if (supabase) {
+        const { data, error } = await signInWithPassword(email.trim(), pw)
+        if (error) { setErr(error.message || 'Supabase sign-in failed.'); return }
+        const res = store.loginExternal(data?.user)
+        if (!res.ok) { setErr(res.err); return }
+        nav('/my-dashboard', { replace: true })
+        return
+      }
+      const res = store.login(email, pw)
+      if (!res.ok) setErr(res.err)
+      else nav('/my-dashboard', { replace: true })
+      // on ok the integrator's App reacts to store.auth.user
+    } finally {
+      setSigningIn(false)
     }
-    const res = store.login(email, pw)
-    if (!res.ok) setErr(res.err)
-    else nav('/my-dashboard', { replace: true })
-    // on ok the integrator's App reacts to store.auth.user
   }
 
   const submitRegister = async e => {
@@ -92,16 +99,18 @@ export default function Login() {
         {mode === 'signin' ? (
           <form onSubmit={submitSignIn}>
             <label htmlFor="lg-email">Work email</label>
-            <input id="lg-email" type="email" autoComplete="username" autoFocus
+            <input id="lg-email" type="email" autoComplete="username" autoFocus disabled={signingIn}
               value={email} onChange={e => setEmail(e.target.value)} placeholder="you@modae.demo" />
             <label htmlFor="lg-pw">Password</label>
-            <input id="lg-pw" type="password" autoComplete="current-password"
+            <input id="lg-pw" type="password" autoComplete="current-password" disabled={signingIn}
               value={pw} onChange={e => setPw(e.target.value)} placeholder="Password" />
             <div className="login-actions">
-              <button className="primary" type="submit">Sign in</button>
+              <button className="primary" type="submit" disabled={signingIn} aria-busy={signingIn}>
+                {signingIn ? <><span className="auth-loading__spinner auth-loading__spinner-inline" aria-hidden="true" /> Signing in…</> : 'Sign in'}
+              </button>
             </div>
             <div className="login-divider"><span>or</span></div>
-            <button type="button" className="btn-microsoft" onClick={microsoftSignIn}>
+            <button type="button" className="btn-microsoft" onClick={microsoftSignIn} disabled={signingIn}>
               <MicrosoftLogo size={16} /> Sign in with Microsoft
             </button>
             {msNotice && <WarnBox>Microsoft sign-in isn't configured in this demo yet — use a quick-login account below or sign in with email/password.</WarnBox>}

@@ -59,9 +59,23 @@ export const supabase = makeClient()
 
 export const supabaseAuth = supabase?.auth || null
 
+export const SUPABASE_AUTH_TIMEOUT_MS = 15000
+
+function withTimeout(request, label, timeoutMs = SUPABASE_AUTH_TIMEOUT_MS) {
+  let timer
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out. Check your connection and try again.`)), timeoutMs)
+  })
+  return Promise.race([request, timeout]).finally(() => clearTimeout(timer))
+}
+
 export async function signInWithPassword(email, password) {
   if (!supabase) return { data: null, error: new Error('Supabase is not configured.') }
-  return supabase.auth.signInWithPassword({ email, password })
+  try {
+    return await withTimeout(supabase.auth.signInWithPassword({ email, password }), 'Sign-in')
+  } catch (error) {
+    return { data: null, error }
+  }
 }
 
 export async function signUpWithPassword(email, password, metadata = {}) {

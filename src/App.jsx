@@ -353,7 +353,7 @@ function SyncNotice({ status, diagnostics, onRefresh }) {
               : config
               ? 'The URL and anon key point to different projects. This browser is showing local data only.'
               : status === 'connecting' || status === 'reconnecting'
-                ? `Project ${supabaseProjectRef || 'not configured'} · waiting for the shared data connection.`
+                ? `Project ${supabaseProjectRef || 'not configured'} · loading the shared workspace in the background.`
                 : `The shared workspace could not be loaded. ${detail ? `${detail.message || detail.code || 'Request failed'}. ` : ''}This browser may be showing local data only.`}</span>
       {onRefresh && !offline && !config && <button type="button" className="workspace-sync-refresh" onClick={onRefresh}>Refresh shared data</button>}
     </div>
