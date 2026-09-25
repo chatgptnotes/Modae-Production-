@@ -5,6 +5,9 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Kept migration markers and derived lead-deadline timers local to the browser
+  so they no longer create false shared-workspace save failures; persistence
+  errors now include the exact remaining state keys.
 - Made cross-browser sync failures visible in the workspace shell, added an
   explicit shared-data refresh action, and retried pending saves when the
   browser reconnects so locally completed commercial decisions do not remain

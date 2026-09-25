@@ -9,7 +9,11 @@ import { writeCachedRules } from './rules.js'
 // Per-device/session state that must never be shared across browsers.
 export const LOCAL_ONLY = ['viewMode', 'viewModePinned', 'tabletTheme', 'spSync', 'auth', 'role',
   'inboxShowAll', 'leadSyncBaseline', 'clarificationSyncBaseline', 'opportunitySyncBaseline',
-  'sparesLinesSyncBaseline', 'deletedOpportunityIds', 'pendingOpportunitySyncIds']
+  'sparesLinesSyncBaseline', 'deletedOpportunityIds', 'pendingOpportunitySyncIds',
+  // Migration markers and derived deadline timers belong to this browser.
+  // Persisting them as shared state makes every device dirty immediately
+  // after hydration, even though they are not authoritative business rows.
+  'catalogRev', 'oneTimeCleanups', 'leadDeadlines']
 
 export const dbEnabled = () => !!supabase
 
@@ -478,8 +482,9 @@ async function saveSlicesNow(dirty) {
     normalizedDirty = { ...normalizedDirty }
     for (const key of savedState) delete normalizedDirty[key]
   }
-  if (Object.keys(normalizedDirty).some(key => !BUSINESS_KEYS.has(key))) {
-    throw new Error('Unsupported unsaved state remains after consolidated persistence')
+  const unsavedKeys = Object.keys(normalizedDirty)
+  if (unsavedKeys.length) {
+    throw new Error(`Unsupported unsaved state remains after consolidated persistence: ${unsavedKeys.join(', ')}`)
   }
 }
 
