@@ -317,12 +317,7 @@ const proposalReviewSchema = {
 function proposalReviewPrompt(p) {
   return `${HOUSE}
 
-Review a manually reviewed proposal workbook against the opportunity and the
-proposal data. Find semantic inconsistencies only; arithmetic and required
-field checks are already supplied as LOCAL FINDINGS. Do not invent facts or
-change values. Use block only for a clear identity or scope contradiction,
-warning for a concern requiring human review, and info for a useful observation.
-Return concise findings with evidence from a sheet name and row when possible.
+Review the supplied ${p.artifactType === 'uploaded-workbook' ? 'manually reviewed proposal workbook' : 'generated proposal'} against the opportunity and proposal data. Find semantic inconsistencies only; arithmetic and required field checks are already supplied as LOCAL FINDINGS. Do not invent facts or change values. Use block only for a clear identity or scope contradiction, warning for a concern requiring human review, and info for a useful observation. Return concise findings with evidence from a sheet name and row when possible; for a generated proposal, cite the relevant proposal line or term instead.
 
 OPPORTUNITY:
 ${cap(JSON.stringify(p.opportunity || {}), 5000)}

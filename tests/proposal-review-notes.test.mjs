@@ -4,6 +4,8 @@ import fs from 'node:fs'
 import { modaeStandardCommercialTerms } from '../src/commercialTerms.js'
 
 const proposal = fs.readFileSync(new URL('../src/pages/Proposal.jsx', import.meta.url), 'utf8')
+const reviewWorkbook = fs.readFileSync(new URL('../src/proposal/reviewWorkbook.js', import.meta.url), 'utf8')
+const aiRoute = fs.readFileSync(new URL('../api/ai.js', import.meta.url), 'utf8')
 
 test('missing part numbers and terms are informational validation notes', () => {
   assert.match(proposal, /severity: 'info', code: 'line\.part-number-missing'/)
@@ -16,6 +18,18 @@ test('missing part numbers and terms are informational validation notes', () => 
 test('only blocking findings prevent proposal validation', () => {
   assert.match(proposal, /const hasActiveBlock = allIssues\.some\(issue => issue\.severity === 'block'\)/)
   assert.match(proposal, /reviewStatus: hasActiveBlock \? 'Needs attention'/)
+})
+
+test('proposal validation shows staged scan progress and reviews generated proposals with AI', () => {
+  assert.match(proposal, /import ScanProgress from '\.\.\/ScanProgress\.jsx'/)
+  assert.match(proposal, /const \[reviewStage, setReviewStage\] = useState\(0\)/)
+  assert.match(proposal, /<ScanProgress[\s\S]*title="Scanning proposal with AI"/)
+  assert.match(proposal, /reviewBusy\s*\?\s*<><span className="auth-loading__spinner/)
+  assert.match(proposal, /Scanning…/)
+  assert.match(proposal, /const aiResult = await runTaskResult\('proposal\.review'/)
+  assert.doesNotMatch(proposal, /if \(reviewedUpload\?\.sheets\?\.length\) \{\s*const aiResult/)
+  assert.match(reviewWorkbook, /artifactType: workbook\?\.sheets\?\.length \? 'uploaded-workbook' : 'generated-proposal'/)
+  assert.match(aiRoute, /supplied \$\{p\.artifactType === 'uploaded-workbook'/)
 })
 
 test('stored workbook reviews are recomputed from the pre-import snapshot and shown first', () => {

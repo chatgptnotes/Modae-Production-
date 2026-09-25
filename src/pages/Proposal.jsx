@@ -37,6 +37,7 @@ import { loadProposalTemplateBuffer, resolveProposalTemplate } from '../proposal
 import { customerProposalArtifact } from '../proposal/emailAttachments.js'
 import { latestSubmissionForRevision, submissionStatusLabel } from '../submissionStatus.js'
 import { hasValidatedUploadedWorkbook, validatedWorkbookPreview } from '../proposal/validatedWorkbook.js'
+import ScanProgress from '../ScanProgress.jsx'
 
 // Approved customer proposals use the server-side SMTP route so the browser
 // never handles mailbox credentials and every generated attachment is sent in
@@ -585,6 +586,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   const [templateLoading, setTemplateLoading] = useState(false)
   const [templateError, setTemplateError] = useState('')
   const [reviewBusy, setReviewBusy] = useState(false)
+  const [reviewStage, setReviewStage] = useState(0)
   const [validateChoice, setValidateChoice] = useState(false)
   const [reviewedUploadViewing, setReviewedUploadViewing] = useState(false)
   const uploadInputRef = useRef(null)
@@ -1098,10 +1100,12 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   // proposal state and UX remain the same.
   const validateReviewedProposal = async (proposal = p, { automatic = false, preserveRevision = false } = {}) => {
     setReviewBusy(true)
+    setReviewStage(0)
     setReviewMessage('')
     setReviewError('')
     try {
       const review = proposal
+      setReviewStage(1)
       const issues = []
       let reviewedUpload = review.reviewedUpload
       // Re-run the deterministic comparison from the pre-import snapshot so
@@ -1145,12 +1149,11 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
         })
       }
 
-      let aiIssues = []
-      if (reviewedUpload?.sheets?.length) {
-        const aiResult = await runTaskResult('proposal.review', reviewWorkbookPayload(reviewedUpload, review, opp, issues), { model: store.config?.aiModel?.model })
-        aiIssues = normalizeAiReview(aiResult.data?.data || aiResult.data)
-        if (!aiResult.data && aiResult.error) aiIssues.push({ severity: 'info', code: 'ai.unavailable', source: 'AI', text: `AI semantic review was unavailable: ${aiResult.error}. Local checks were still completed.` })
-      }
+      setReviewStage(2)
+      const aiResult = await runTaskResult('proposal.review', reviewWorkbookPayload(reviewedUpload, review, opp, issues), { model: store.config?.aiModel?.model })
+      const aiIssues = normalizeAiReview(aiResult.data?.data || aiResult.data)
+      if (!aiResult.data && aiResult.error) aiIssues.push({ severity: 'info', code: 'ai.unavailable', source: 'AI', text: `AI semantic review was unavailable: ${aiResult.error}. Local checks were still completed.` })
+      setReviewStage(3)
       const allIssues = rememberOverriddenFindings(
         rememberApprovedFindings([...issues, ...aiIssues], store.approvals, oppId, nextRevision),
         review.reviewOverride,
@@ -1530,7 +1533,9 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
             <button className="btn-secondary" onClick={submitForApproval}><Icon name="send" size={13} /> Request approval</button>
           )}
           <button className="primary" onClick={() => setValidateChoice(true)} disabled={reviewBusy}>
-            <Icon name="checkCircle" size={13} /> {reviewBusy ? 'Checking…' : 'Validate review'}
+            {reviewBusy
+              ? <><span className="auth-loading__spinner auth-loading__spinner-inline" aria-hidden="true" /> Scanning…</>
+              : <><Icon name="checkCircle" size={13} /> Validate review</>}
           </button>
         </div>
       </header>
@@ -1551,6 +1556,11 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
           <span>{reviewBanner.text}</span>
         </div>
       </section>
+      {reviewBusy && <ScanProgress
+        title="Scanning proposal with AI"
+        stages={['Preparing proposal…', 'Running local checks…', 'AI semantic review in progress…', 'Applying review results…']}
+        active={reviewStage}
+      />}
       {p.reviewedUpload && (
         <section className="proposal-uploaded-file-card" aria-label="Uploaded proposal">
           <div>

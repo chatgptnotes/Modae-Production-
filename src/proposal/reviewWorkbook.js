@@ -155,6 +155,7 @@ export function importReviewedWorkbook(workbook, proposal, opportunity) {
 
 export function reviewWorkbookPayload(workbook, proposal, opportunity, localIssues) {
   return {
+    artifactType: workbook?.sheets?.length ? 'uploaded-workbook' : 'generated-proposal',
     opportunity: { id: opportunity?.id, customer: opportunity?.sellTo, name: opportunity?.oppName, route: opportunity?.oppType },
     proposal: { revision: proposal?.revision, terms: proposal?.terms || [], lines: (proposal?.bom || []).map(line => ({ description: line.desc, partNumber: line.pn, quantity: line.qtyPerUnit, common: line.common, spares: line.spares, quoted: line.quoted, uom: line.uom })) },
     workbook: (workbook?.sheets || []).map(sheet => ({ name: sheet.name, rows: (sheet.rows || []).slice(0, 160) })),
