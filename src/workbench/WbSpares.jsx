@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { isPlaceholderSparesLine, useStore } from '../store.jsx'
 import { defaultCosting } from '../seed.js'
 import { canPriceProposal, clampCosting, unitCostINR, fmt, ddMmmYY } from '../utils.js'
@@ -132,7 +131,6 @@ function PricingApprovalCard({ approval, approvers, role, canRequest, onRequest,
 
 export default function WbSpares({ opp, openBuilder, onContinue }) {
   const store = useStore()
-  const navigate = useNavigate()
   const comm = canPriceProposal(store.role)
   const lines = store.sparesLines.filter(l => l.oppId === opp.id && !isPlaceholderSparesLine(l) && !isLegacyAutoSparesSupportRow(l))
   const proposal = store.getProposal(opp.id)
@@ -440,7 +438,6 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     const part = String(line.pn || line.custRef || '').trim()
     const list = priceListNameFor(line)
     if (!part || !list) return
-    navigate(`/pricelists?list=${encodeURIComponent(list)}&part=${encodeURIComponent(part)}`)
     const priceList = store.priceLists?.[list]
     const requestedVersion = String(line.priceSourceVersion || '').trim()
     const version = requestedVersion
