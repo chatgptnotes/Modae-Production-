@@ -850,6 +850,7 @@ function CommercialDecisionPanel({ opp }) {
       && (approval.rev == null || String(approval.rev) === String(proposal?.revision ?? ''))
       && approvalDetailsMatch(approval))
     .sort((a, b) => (b.decisionTs || b.ts || '').localeCompare(a.decisionTs || a.ts || ''))[0]
+  const commercialApprovalCleared = currentCommercialApproval && ['Approved', 'Approved with conditions'].includes(currentCommercialApproval.status)
 
   const saveTerms = terms => store.saveProposal(opp.id, { ...proposal, terms })
   const requestCommercialApproval = () => {
@@ -936,7 +937,7 @@ function CommercialDecisionPanel({ opp }) {
       )}
       {currentCommercialApproval?.status === 'Pending' && <div className="warnbox">AH approval is pending for {matchingTerms.map(term => term.term).join(' and ')}. The request includes the customer terms shown above.</div>}
       {currentCommercialApproval && ['Approved', 'Approved with conditions'].includes(currentCommercialApproval.status) && <div className="okbox">AH approval is {currentCommercialApproval.status.toLowerCase()} for {matchingTerms.map(term => term.term).join(' and ')}.</div>}
-      {matchingTerms.length > 0 && <div className="warnbox">One or more requested terms need internal approval before the quotation can be submitted.</div>}
+      {matchingTerms.length > 0 && !commercialApprovalCleared && <div className="warnbox">One or more requested terms need internal approval before the quotation can be submitted.</div>}
     </section>
   )
 }
