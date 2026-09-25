@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useStore, nextOppId } from '../store.jsx'
 import { ddMmmYY, ageDays, isTodayIST, gmailComposeHref, displayRole, formatISTTime, formatISTDate, nowIST, productDisplayLabel } from '../utils.js'
 import { Icon } from '../icons.jsx'
+import ScanProgress from '../ScanProgress.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { Chip, ConfChip, ConfirmModal, WarnBox, ErrBox, Modal } from '../ui.jsx'
 import { ROLES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, CUSTOMER_STATUSES, LEAD_SOURCES, ownerForOppType, routeForType, newProposal } from '../seed.js'
@@ -436,6 +437,7 @@ function KycRejectionEmailModal({ draft, busy, error, onChange, onSend, onClose 
 
 function LeadVerification({ lead, customerStatus, store }) {
   const [busy, setBusy] = useState('')
+  const [scanStage, setScanStage] = useState(0)
   const [pendingUpload, setPendingUpload] = useState(null)
   const [menuFor, setMenuFor] = useState('')
   const [downloadedFor, setDownloadedFor] = useState('')
@@ -514,10 +516,13 @@ function LeadVerification({ lead, customerStatus, store }) {
   const scanPendingUpload = async item => {
     if (pendingUpload?.item !== item || !pendingUpload.file) return
     setBusy(item)
+    setScanStage(0)
     setKycError('')
     try {
       const rec = await readAttachment(pendingUpload.file)
+      setScanStage(1)
       const scan = await scanKycDocument(item, pendingUpload.file, rec)
+      setScanStage(2)
       if (scan.value && kycIdentityKey(item)) setKycValues(values => ({ ...values, [item]: scan.value }))
       setPendingUpload(previous => previous?.item === item ? { ...previous, rec, scan } : previous)
     } catch (error) {
@@ -699,6 +704,7 @@ function LeadVerification({ lead, customerStatus, store }) {
               {pending
                 ? <>
                   <span className="hint" title={pendingUpload.file.name}>{pendingUpload.file.name}</span>
+                  {busy === item && <ScanProgress title={`Scanning ${item}`} fileName={pendingUpload.file.name} active={scanStage} stages={['Reading document…', 'Extracting identity value…', 'Ready for human review']} />}
                   {pendingUpload.scan && <div className="kyc-scan-review">
                     <span>Review the extracted result before confirming.</span>
                     <b>{pendingUpload.scan.value ? `Detected ${pendingUpload.scan.key}: ${pendingUpload.scan.value}` : 'No identity value detected'}</b>

@@ -234,6 +234,8 @@ export function migrate(s) {
   s.config.currencyRates = normalizedCurrencyRates(s.config.currencyRates || DEFAULT_CURRENCY_RATES)
   s.config.costingDefaults = { ...seedConfig.costingDefaults, ...(s.config.costingDefaults || {}) }
   s.config.approvalThresholds = { ...seedConfig.approvalThresholds, ...(s.config.approvalThresholds || {}) }
+  s.config.requireFinalQuoteApproval = s.config.requireFinalQuoteApproval !== false
+  s.config.requireCommercialDeviationApproval = s.config.requireCommercialDeviationApproval !== false
   if (!Array.isArray(s.config.approvalThresholds.pricingApprovers) || !s.config.approvalThresholds.pricingApprovers.length) {
     s.config.approvalThresholds.pricingApprovers = [...seedConfig.approvalThresholds.pricingApprovers]
   }

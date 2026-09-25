@@ -761,6 +761,8 @@ export const seedConfig = {
   aiThresholds: { high: 90, med: 75 },
   // Diagram 02 §5C margin matrix: order value against ₹10 Lakh, margin against 50%.
   approvalThresholds: { valueBreak: 1000000, marginBreak: 50, discountPct: 5, markupPct: 10, pricingApprovers: ['AH', 'LJS'] },
+  requireFinalQuoteApproval: true,
+  requireCommercialDeviationApproval: true,
   amberFee: { amount: 25000, cur: 'INR', days: 7 },
   classRules: {
     Green: '30 days credit from invoice',

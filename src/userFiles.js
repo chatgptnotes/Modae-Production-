@@ -1,4 +1,4 @@
-import { supabase } from './supabase.js'
+import { describeSupabaseError, supabase } from './supabase.js'
 
 export const MAX_FILE_BYTES = 10 * 1024 * 1024
 const APP_STATE_KEY = 'wintrack-modae-v5'
@@ -15,10 +15,15 @@ const requireClient = () => {
   return supabase
 }
 
+const fileError = (operation, error) => Object.assign(error || new Error('Supabase file request failed'), {
+  ...describeSupabaseError(error, `user_files.${operation}`),
+  operation: `user_files.${operation}`,
+})
+
 async function currentUserId() {
   const client = requireClient()
   const { data, error } = await client.auth.getUser()
-  if (error) throw error
+  if (error) throw fileError('insert', error)
   if (!data?.user?.id) throw new Error('Sign in with Supabase Auth before saving files.')
   return data.user.id
 }
@@ -94,7 +99,7 @@ export async function replaceUserFile(scope) {
     .eq('record_id', String(scope.recordId || ''))
     .eq('folder', String(scope.folder || ''))
     .eq('file_name', String(scope.file?.name || ''))
-  if (deleteError) throw deleteError
+  if (deleteError) throw fileError('replace-delete', deleteError)
   return insertUserFile(scope)
 }
 
@@ -107,7 +112,7 @@ export async function listUserFiles({ recordType, recordId, folder = '' }) {
   if (!isDemoMode()) query = query.eq('is_demo', false)
   if (folder !== null) query = query.eq('folder', String(folder || ''))
   const { data, error } = await query.order('created_at', { ascending: true })
-  if (error) throw error
+  if (error) throw fileError('list', error)
   return (data || []).map(meta)
 }
 
@@ -121,7 +126,7 @@ export async function getUserFile({ recordType, recordId, folder = '', fileName 
     .eq('file_name', String(fileName || ''))
   if (!isDemoMode()) query = query.eq('is_demo', false)
   const { data, error } = await query.maybeSingle()
-  if (error) throw error
+  if (error) throw fileError('get', error)
   if (!data) return null
   const bytes = fromBytea(data.file_data)
   const blob = new Blob([bytes], { type: data.file_type || 'application/octet-stream' })
@@ -137,7 +142,7 @@ export async function deleteUserFile({ recordType, recordId, folder = '', fileNa
     .eq('record_id', String(recordId || ''))
     .eq('folder', String(folder || ''))
     .eq('file_name', String(fileName || ''))
-  if (error) throw error
+  if (error) throw fileError('delete', error)
 }
 
 export async function deleteUserFiles({ recordType, recordId, folder = null } = {}) {
@@ -148,7 +153,7 @@ export async function deleteUserFiles({ recordType, recordId, folder = null } = 
     .eq('record_id', String(recordId || ''))
   if (folder !== null) query = query.eq('folder', String(folder || ''))
   const { error } = await query
-  if (error) throw error
+  if (error) throw fileError('delete-scope', error)
 }
 
 export async function deleteDemoUserFiles() {
@@ -157,5 +162,5 @@ export async function deleteDemoUserFiles() {
   const { error } = await client.from('user_files').delete()
     .eq('user_id', userId)
     .eq('is_demo', true)
-  if (error) throw error
+  if (error) throw fileError('delete-demo', error)
 }

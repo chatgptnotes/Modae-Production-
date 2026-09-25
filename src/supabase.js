@@ -61,6 +61,34 @@ export const supabaseAuth = supabase?.auth || null
 
 export const SUPABASE_AUTH_TIMEOUT_MS = 15000
 
+export const isSupabaseAuthError = error => {
+  const status = Number(error?.status || error?.statusCode)
+  const code = String(error?.code || '').toUpperCase()
+  return [401, 403].includes(status)
+    || ['401', '403', 'INVALID_JWT', 'JWT_EXPIRED', 'INVALID_TOKEN', 'PGRST301'].includes(code)
+}
+
+export const describeSupabaseError = (error, operation = '') => ({
+  message: error?.message || 'Supabase request failed',
+  code: error?.code || '',
+  details: error?.details || '',
+  hint: error?.hint || '',
+  status: error?.status || error?.statusCode || null,
+  operation,
+})
+
+export async function clearSupabaseSession() {
+  if (!supabase?.auth) return
+  try {
+    await supabase.auth.signOut({ scope: 'local' })
+  } catch {
+    // A rejected auth request must not keep the app stuck behind the same
+    // invalid token. The SDK normally removes this key; the fallback handles
+    // a broken/expired session when signOut itself cannot reach Supabase.
+    try { localStorage.removeItem(`sb-${supabaseProjectRef}-auth-token`) } catch { /* storage is optional */ }
+  }
+}
+
 function withTimeout(request, label, timeoutMs = SUPABASE_AUTH_TIMEOUT_MS) {
   let timer
   const timeout = new Promise((_, reject) => {
@@ -72,8 +100,11 @@ function withTimeout(request, label, timeoutMs = SUPABASE_AUTH_TIMEOUT_MS) {
 export async function signInWithPassword(email, password) {
   if (!supabase) return { data: null, error: new Error('Supabase is not configured.') }
   try {
-    return await withTimeout(supabase.auth.signInWithPassword({ email, password }), 'Sign-in')
+    const result = await withTimeout(supabase.auth.signInWithPassword({ email, password }), 'Sign-in')
+    if (result.error && isSupabaseAuthError(result.error)) await clearSupabaseSession()
+    return result
   } catch (error) {
+    if (isSupabaseAuthError(error)) await clearSupabaseSession()
     return { data: null, error }
   }
 }

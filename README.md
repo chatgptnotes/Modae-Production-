@@ -14,6 +14,8 @@ submission, and follow-up.
 - Routes technical, commercial, and release approvals.
 - Stores opportunity files and supports SharePoint integration.
 - Provides dashboards, audit history, user administration, and workflow tools.
+- Admins can independently require final quote-release approval and approval of
+  special customer commercial terms.
 
 ## Technology
 

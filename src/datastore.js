@@ -1,4 +1,4 @@
-import { supabase } from './supabase.js'
+import { describeSupabaseError, isSupabaseAuthError, supabase } from './supabase.js'
 import { writeCachedRules } from './rules.js'
 
 // Server persistence for the store: normalized business rows plus dedicated
@@ -62,14 +62,19 @@ const normalizedKey = (entity, id) => `${entity}|${id}`
 async function currentActorId() {
   if (!supabase?.auth) return null
   try {
-    const { data } = await supabase.auth.getUser()
+    const { data, error } = await supabase.auth.getUser()
+    if (error && isSupabaseAuthError(error)) throw error
     return data?.user?.id || null
-  } catch {
+  } catch (error) {
+    if (isSupabaseAuthError(error)) throw error
     return null
   }
 }
 
-const annotateRpcError = (entity, error) => Object.assign(error, { entity })
+const annotateRpcError = (entity, error) => Object.assign(error, {
+  entity,
+  ...describeSupabaseError(error, `save_rows.${entity}`),
+})
 const clearNormalizedEntity = entity => {
   const prefix = `${entity}|`
   for (const key of normalizedRecords.keys()) if (key.startsWith(prefix)) {

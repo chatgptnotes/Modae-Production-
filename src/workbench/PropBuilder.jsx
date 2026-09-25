@@ -42,8 +42,9 @@ export default function PropBuilder({ opp, onRevision }) {
   const serviceReview = onLegacyReview ? serviceApprovalSet(store.approvals, opp.id, p, opp)[0] : null
   const { pending: pendingRelease, release } = onLegacyReview
     ? { pending: serviceReview?.pending, release: serviceReview?.approved }
-    : releaseState(p, store.approvals, opp.id, opp)
-  const released = !!release
+    : releaseState(p, store.approvals, opp.id, opp, store.config)
+  const finalQuoteApprovalRequired = onLegacyReview || store.config?.requireFinalQuoteApproval !== false
+  const released = !finalQuoteApprovalRequired || !!release
   // Diagram 02 §5 — applicable technical, commercial and margin approvals are
   // drawn as one checkpoint feeding "All Approvals Completed → Quote Ready for
   // Dispatch", so they are shown together rather than discovered one blocker
@@ -51,7 +52,7 @@ export default function PropBuilder({ opp, onRevision }) {
   // Each approval is evaluated against the current proposal snapshot.
   const gates5 = onLegacyReview
     ? serviceApprovalSet(store.approvals, opp.id, p, opp)
-    : approvalSet(p, store.approvals, opp.id, opp)
+    : approvalSet(p, store.approvals, opp.id, opp, store.config)
   const allApproved = gates5.every(g => !!g.approved)
 
   // Content sections come from the workbook; the rest are auto-drafted by

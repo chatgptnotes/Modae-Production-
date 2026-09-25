@@ -5,6 +5,14 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Added independent Admin switches for final AH + LJS quote-release approval
+  and AH approval of special customer commercial terms; both default to on.
+- Added scan-progress surfaces for tender and KYC document work, structured
+  Supabase file/RPC diagnostics, and an idempotent migration that verifies the
+  `user_files` and `save_rows` browser persistence contract.
+- Added recovery for rejected or expired Supabase sessions: invalid persisted
+  auth is cleared, the app returns to login, and local save retries pause until
+  a successful sign-in instead of repeatedly flooding Auth and `save_rows`.
 - Hardened workspace rendering against incomplete hydrated state by normalizing
   map-shaped slices and guarding opportunity-scoped lookups. Supabase save
   diagnostics now retain the failed entity and HTTP status, and the active

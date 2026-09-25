@@ -7,6 +7,7 @@ import { uploadOppFile } from '../filestore.js'
 import { fmt, sameCustomer } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { runJson } from '../ai.js'
+import ScanProgress from '../ScanProgress.jsx'
 
 const STAGES_MSG = [
   'Reading document…',
@@ -311,17 +312,7 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
       )}
 
       {step === 'parsing' && (
-        <div className="form-card" style={{ maxWidth: 560 }}>
-          <div className="section-title">Extracting {file?.name}</div>
-          {STAGES_MSG.map((m, i) => (
-            <div key={m} className="hint" style={{ padding: '3px 0', color: i <= stage ? 'var(--primary-hover)' : 'var(--text-subtle)' }}>
-              {i < stage ? <Icon name="check" size={12} /> : i === stage ? <Icon name="clock" size={12} /> : '·'} {m}
-            </div>
-          ))}
-          <div className="mb-track" style={{ marginTop: 10 }}>
-            <span className="mb-fill class-Green" style={{ width: `${((stage + 1) / STAGES_MSG.length) * 100}%` }} />
-          </div>
-        </div>
+        <ScanProgress title="Scanning tender" fileName={file?.name} stages={STAGES_MSG} active={stage} />
       )}
 
       {step === 'review' && parse && (

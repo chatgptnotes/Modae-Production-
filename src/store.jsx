@@ -30,7 +30,7 @@ import {
   orderedSparesProposalBom,
 } from './proposal/sparesBoq.js'
 import { releaseState, transitionBlockers } from './gates.js'
-import { supabase, supabaseConfigError } from './supabase.js'
+import { clearSupabaseSession, isSupabaseAuthError, supabase, supabaseConfigError } from './supabase.js'
 
 const StoreCtx = createContext(null)
 const CLARIFICATION_FIELD_KEYS = new Set([
@@ -271,7 +271,7 @@ function reconcileApprovedSubmissions(s) {
       || !['Approved', 'Approved with conditions'].includes(approval.status)) continue
     const proposal = proposals[approval.oppId]
     const opportunity = (s.opportunities || []).find(opp => opp.id === approval.oppId)
-    if (!proposal || !opportunity || !releaseState(proposal, s.approvals, approval.oppId, opportunity).release) continue
+    if (!proposal || !opportunity || !releaseState(proposal, s.approvals, approval.oppId, opportunity, s.config).release) continue
     if (proposal.releaseStatus === 'Released' && proposal.approvedPricing?.approvalId === approval.id) continue
     proposals = {
       ...proposals,
@@ -296,7 +296,7 @@ function reconcileApprovedSubmissions(s) {
   const opportunities = (s.opportunities || []).map(opp => {
     if (opp.milestone !== 'Approval') return opp
     const proposal = proposals[opp.id]
-    if (!proposal || !releaseState(proposal, s.approvals, opp.id, opp).release) return opp
+    if (!proposal || !releaseState(proposal, s.approvals, opp.id, opp, s.config).release) return opp
     if (transitionBlockers(opp, 'Submitted', proposal, s).length) return opp
     changed = true
     return { ...opp, milestone: 'Submitted', lastUpdated: nowIST().slice(0, 10) }
@@ -325,12 +325,36 @@ export function StoreProvider({ children }) {
   const lastSavedRef = useRef({}) // per-slice snapshot of what the server has
   const saveTimerRef = useRef(null)
   const localCacheTimerRef = useRef(null)
+  const authInvalidRef = useRef(false)
+  const authRecoveryRef = useRef(null)
   // What this device booted from. The boot fetch resolves *after* the app is
   // interactive, so a lead created in that window exists locally but has not
   // been saved yet (flushSaves is gated on hydratedRef). Comparing against this
   // is how hydrate() tells "untouched since boot, safe to replace" apart from
   // "the user already changed this, keep it" — the same rule applyServer uses.
   const bootRef = useRef(syncedOf(stateRef.current))
+
+  const invalidateSupabaseAuth = error => {
+    if (!isSupabaseAuthError(error)) return false
+    authInvalidRef.current = true
+    setLiveSyncStatus('auth-error')
+    setSyncDiagnostics(diagnostics => ({
+      ...diagnostics,
+      authErrorAt: new Date().toISOString(),
+      authError: {
+        message: error?.message || 'Supabase authentication is no longer valid',
+        code: error?.code || '',
+        status: error?.status || error?.statusCode || null,
+      },
+    }))
+    setState(s => s.auth?.user ? { ...s, auth: { user: null } } : s)
+    if (!authRecoveryRef.current) {
+      authRecoveryRef.current = clearSupabaseSession().finally(() => {
+        authRecoveryRef.current = null
+      })
+    }
+    return true
+  }
 
   const dirtySlices = () => {
     const s = stateRef.current
@@ -346,6 +370,7 @@ export function StoreProvider({ children }) {
     clearTimeout(saveTimerRef.current)
     saveTimerRef.current = null
     if (!hydratedRef.current) return Promise.resolve()
+    if (authInvalidRef.current) return Promise.resolve()
     const dirty = dirtySlices()
     if (!Object.keys(dirty).length) return Promise.resolve()
     return datastore.saveSlices(dirty)
@@ -370,13 +395,15 @@ export function StoreProvider({ children }) {
         }
       })
       .catch(e => {
-        setLiveSyncStatus('error')
+        const authError = invalidateSupabaseAuth(e)
+        if (!authError) setLiveSyncStatus('error')
         const saveError = {
           message: e?.message || 'Supabase save failed',
           code: e?.code || '',
           details: e?.details || '',
           hint: e?.hint || '',
           entity: e?.entity || '',
+          operation: e?.operation || '',
           status: e?.status || e?.statusCode || null,
         }
         setSyncDiagnostics(diagnostics => ({
@@ -384,6 +411,10 @@ export function StoreProvider({ children }) {
           lastSaveErrorAt: new Date().toISOString(),
           lastSaveError: saveError,
         }))
+        if (authError) {
+          console.warn('Supabase session expired or was rejected; local changes are retained until sign-in succeeds.', saveError)
+          return
+        }
         console.warn('Supabase save failed — will retry on next change/focus:', saveError)
       })
   }
@@ -407,13 +438,14 @@ export function StoreProvider({ children }) {
   // bootRef instead of lastSavedRef because we have not saved anything yet.
   const hydrate = async () => {
     const res = await datastore.loadCore()
-    if (!res) {
+      if (!res) {
       if (!supabaseConfigError) setLiveSyncStatus('error')
       return
     }
     if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
     if (res.error) {
-      setLiveSyncStatus('error')
+      invalidateSupabaseAuth(res.error)
+      if (!isSupabaseAuthError(res.error)) setLiveSyncStatus('error')
       return
     }
     setLiveSyncStatus('live')
@@ -644,7 +676,11 @@ export function StoreProvider({ children }) {
     const res = await datastore.loadAll({ force: true })
     if (!res) { setLiveSyncStatus('error'); return false }
     if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
-    if (res.error) { setLiveSyncStatus('error'); return false }
+    if (res.error) {
+      const authError = invalidateSupabaseAuth(res.error)
+      if (!authError) setLiveSyncStatus('error')
+      return false
+    }
     if (res.empty) { setLiveSyncStatus('degraded'); return false }
     setLiveSyncStatus('live')
     applyServer(res.slices, res.diagnostics)
@@ -2413,6 +2449,7 @@ export function StoreProvider({ children }) {
     },
     loginExternal(user, fallbackRole = 'RS') {
       if (!user?.id || !user.email) return { ok: false, err: 'Supabase did not return a valid user.' }
+      authInvalidRef.current = false
       const local = stateRef.current.users.find(item => item.email.toLowerCase() === user.email.toLowerCase())
       const role = local?.role || user.user_metadata?.role || fallbackRole
       setState(st => ({
@@ -2514,8 +2551,12 @@ export function StoreProvider({ children }) {
     const SESSION_RESTORE_TIMEOUT_MS = 8000
 
     const restoreSession = async () => {
-      const applySession = ({ data, error }) => {
-        if (!active || error) return
+      const applySession = async ({ data, error }) => {
+        if (!active) return
+        if (error) {
+          invalidateSupabaseAuth(error)
+          return
+        }
         if (data?.session?.user) {
           const current = stateRef.current.auth?.user
           if (!current || current.email?.toLowerCase() !== data.session.user.email?.toLowerCase()) {
@@ -2538,7 +2579,7 @@ export function StoreProvider({ children }) {
           setSyncDiagnostics(diagnostics => ({ ...diagnostics, authRestoreTimedOutAt: new Date().toISOString() }))
           sessionRequest.then(applySession).catch(e => console.warn('Supabase session restore failed:', e?.message || e))
         } else {
-          applySession(result)
+          await applySession(result)
         }
       } catch (e) {
         console.warn('Supabase session restore failed:', e?.message || e)

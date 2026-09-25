@@ -124,7 +124,7 @@ test('proposal attachment is opt-in and requires validated review', () => {
 })
 
 test('approved releases replace redundant self-attestation checks before Gmail opens', () => {
-  assert.match(submission, /const canSend = !!release && !pendingConds\.length/)
+  assert.match(submission, /const canSend = \(!finalQuoteApprovalRequired \|\| !!release\) && !pendingConds\.length/)
   assert.match(submission, /Current proposal revision is approved for customer submission\./)
   assert.doesNotMatch(submission, /Customer-facing prices and validity verified/)
   assert.doesNotMatch(submission, /No restricted commercial data in the document/)
@@ -138,7 +138,7 @@ test('customer submission uses the available communications-card width', () => {
 })
 
 test('pending approval keeps the customer submission visible as a locked mailbox preview', () => {
-  assert.match(submission, /const releasePending = !release/)
+  assert.match(submission, /const releasePending = finalQuoteApprovalRequired && !release/)
   assert.match(submission, /const mailboxLocked = readOnly \|\| releasePending/)
   assert.match(submission, /Awaiting approval/)
   assert.match(submission, /disabled=\{mailboxLocked\}/)

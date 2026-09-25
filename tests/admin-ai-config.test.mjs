@@ -29,3 +29,10 @@ test('Admin KYC validation explains defaults before exposing advanced regex rule
   assert.match(admin, /Regular expression/)
   assert.match(admin, /Custom validation rule/)
 })
+
+test('Admin exposes independent final-release and commercial-term approval switches', () => {
+  assert.match(admin, /requireFinalQuoteApproval/)
+  assert.match(admin, /Require AH \+ LJS approval before final proposal send/)
+  assert.match(admin, /requireCommercialDeviationApproval/)
+  assert.match(admin, /Require AH approval for special customer terms/)
+})

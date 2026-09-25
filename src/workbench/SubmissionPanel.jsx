@@ -100,8 +100,9 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
   // the rest release through §5 like any other quote.
   const onLegacyReview = !!legacyServiceReview(opp, store.approvals)
   const serviceRelease = onLegacyReview ? serviceApprovalSet(store.approvals, opp.id, p, opp)[0].approved : null
-  const { release: genericRelease, reason: releaseReason, pending: pendingRelease } = releaseState(p, store.approvals, opp.id, opp)
+  const { release: genericRelease, reason: releaseReason, pending: pendingRelease } = releaseState(p, store.approvals, opp.id, opp, store.config)
   const release = onLegacyReview ? serviceRelease : genericRelease
+  const finalQuoteApprovalRequired = onLegacyReview || store.config?.requireFinalQuoteApproval !== false
   const pendingConds = store.approvals
     .filter(a => a.oppId === opp.id && a.status === 'Approved with conditions')
     .flatMap(a => (a.conditions || []).filter(c => !c.incorporated)
@@ -110,7 +111,7 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
   const submission = latestSubmissionForRevision(store.communications?.[opp.id], p.revision)
   const alreadySent = submission?.status === 'sent'
   const draftOpened = sentNow || submission?.status === 'draft'
-  const releasePending = !release
+  const releasePending = finalQuoteApprovalRequired && !release
   const mailboxLocked = readOnly || releasePending
   const requestRelease = () => store.requestApproval({
     oppId: opp.id,
@@ -132,7 +133,7 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
   const toValid = recipientsValid(emailTo)
   const ccValid = splitRecipients(emailCc).length === 0 || recipientsValid(emailCc)
   const filenameValid = !attachProposal || validProposalFilename(proposalFilename)
-  const canSend = !!release && !pendingConds.length && (!attachProposal || proposalValidated) && filenameValid && fromValid && toValid && ccValid && Boolean(emailSubject.trim()) && Boolean(emailBody.trim()) && !readingFiles && !readOnly
+  const canSend = (!finalQuoteApprovalRequired || !!release) && !pendingConds.length && (!attachProposal || proposalValidated) && filenameValid && fromValid && toValid && ccValid && Boolean(emailSubject.trim()) && Boolean(emailBody.trim()) && !readingFiles && !readOnly
 
   const removeExtraFile = filename => setExtraFiles(files => files.filter(f => f.filename !== filename))
 

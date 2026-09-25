@@ -38,7 +38,7 @@ test('normalized opportunity writes fail loudly instead of falling back to ignor
   assert.match(datastore, /supabase\.rpc\('save_rows'/)
   assert.match(datastore, /currentActorId\(\)/)
   assert.match(datastore, /p_rows: payload\.map\(row => \(\{ \.\.\.row, by: actor \}\)\)/)
-  assert.match(datastore, /if \(result\.error\) throw result\.error/)
+  assert.match(datastore, /if \(result\.error\) throw annotateRpcError\(entity, result\.error\)/)
 })
 
 test('opportunity writes use revision-safe latest-save-wins persistence', () => {
@@ -195,6 +195,18 @@ test('session restoration cannot leave the login screen waiting forever', () => 
   assert.match(store, /const SESSION_RESTORE_TIMEOUT_MS = 8000/)
   assert.match(store, /Promise\.race\(/)
   assert.match(store, /Supabase session restore timed out; continuing to the sign-in screen/)
+})
+
+test('invalid Supabase auth clears the session and pauses save retries', () => {
+  const store = read('src/store.jsx')
+  const supabase = read('src/supabase.js')
+  assert.match(supabase, /export const isSupabaseAuthError = error =>/)
+  assert.match(supabase, /export async function clearSupabaseSession\(\)/)
+  assert.match(store, /const authInvalidRef = useRef\(false\)/)
+  assert.match(store, /if \(authInvalidRef\.current\) return Promise\.resolve\(\)/)
+  assert.match(store, /invalidateSupabaseAuth\(error\)/)
+  assert.match(store, /clearSupabaseSession\(\)/)
+  assert.match(store, /authInvalidRef\.current = false/)
 })
 
 test('workflow stage changes are gated and use the India business date', () => {

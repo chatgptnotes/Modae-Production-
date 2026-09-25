@@ -205,7 +205,7 @@ export function serviceOfferCleared(opp, proposal, state) {
   if (serviceMatrixExempt(opp, state)) return true
   const legacy = legacyServiceReview(opp, state?.approvals)
   if (legacy) return ['Approved', 'Approved with conditions'].includes(legacy.status)
-  return !!releaseState(proposal, state?.approvals, opp?.id, opp).release
+  return !!releaseState(proposal, state?.approvals, opp?.id, opp, state?.config).release
 }
 
 // Diagram 02 §5C — the margin approval matrix. Routing is on *order value*
@@ -376,7 +376,10 @@ export function oppBlockers(opp, proposal, approvals, config = null) {
   // BOQ prices or update costing after AH approves Payment/Delivery; those
   // changes must not make the Requirement Validation approval appear missing.
   // Keep the broader snapshot check for the other approval families.
-  const commercialTerms = (proposal?.terms || []).filter(needsCommercialApproval)
+  const commercialApprovalRequired = config?.requireCommercialDeviationApproval !== false
+  const commercialTerms = commercialApprovalRequired
+    ? (proposal?.terms || []).filter(needsCommercialApproval)
+    : []
   const commercialApprovalCurrent = approval => commercialTerms.length
     ? (approval.rev == null || String(approval.rev) === String(proposal?.revision ?? ''))
       && commercialApprovalCoversTerms(approval, commercialTerms)
@@ -413,7 +416,9 @@ export function oppBlockers(opp, proposal, approvals, config = null) {
   // Legacy proposal rows used status=Deviation without the newer decision
   // field; keep those rows on the same AH approval path while new rows use the
   // explicit Match/Counter-offer decision.
-  const devs = (proposal?.terms || []).filter(term => needsCommercialApproval(term) || (term?.status === 'Deviation' && !term?.decision))
+  const devs = commercialApprovalRequired
+    ? (proposal?.terms || []).filter(term => needsCommercialApproval(term) || (term?.status === 'Deviation' && !term?.decision))
+    : []
   const undecided = (proposal?.terms || []).filter(needsCommercialDecision)
   if (undecided.length) {
     b.push({ key: 'commercial-decision', severity: 'block', text: `Choose Match customer terms or Counter-offer with ModAE standard terms for ${undecided.map(d => d.term).join(', ')} before approval.` })
@@ -545,9 +550,10 @@ export function approvalForRev(type, proposal, approvals, oppId, opportunity) {
 
 // The §5C release, kept under its original name — it is the gate the
 // submission panel and the proposal builder read.
-export function releaseState(proposal, approvals, oppId, opportunity) {
+export function releaseState(proposal, approvals, oppId, opportunity, config = {}) {
+  if (config?.requireFinalQuoteApproval === false) return { pending: null, release: null, required: false, reason: '' }
   const { pending, approved } = approvalForRev(APPROVAL_5C, proposal, approvals, oppId, opportunity)
-  return { pending, release: approved, reason: approved ? '' : releaseVoidReason(proposal, approvals, oppId, opportunity) }
+  return { pending, release: approved, required: true, reason: approved ? '' : releaseVoidReason(proposal, approvals, oppId, opportunity) }
 }
 
 // Why the customer-submission gate is still closed. Returns '' when there is
@@ -573,10 +579,10 @@ export function releaseVoidReason(proposal, approvals, oppId, opportunity) {
 }
 
 // All three §5 gates in one call, for the "All Approvals Completed" box.
-export function approvalSet(proposal, approvals, oppId, opportunity) {
+export function approvalSet(proposal, approvals, oppId, opportunity, config = {}) {
   const types = [APPROVAL_5A]
-  if ((proposal?.terms || []).some(needsCommercialApproval)) types.push(APPROVAL_5B)
-  types.push(APPROVAL_5C)
+  if (config.requireCommercialDeviationApproval !== false && (proposal?.terms || []).some(needsCommercialApproval)) types.push(APPROVAL_5B)
+  if (config.requireFinalQuoteApproval !== false) types.push(APPROVAL_5C)
   return types.map(type => ({
     type, ...approvalForRev(type, proposal, approvals, oppId, opportunity),
   }))
@@ -659,7 +665,9 @@ export function transitionBlockers(opp, target, proposal, state) {
         text: `Resolve commercial decisions for ${unresolved.map(term => term.term).join(', ')} before moving to ${target}`,
       })
     }
-    const matched = commercialTerms.filter(needsCommercialApproval)
+    const matched = state.config?.requireCommercialDeviationApproval === false
+      ? []
+      : commercialTerms.filter(needsCommercialApproval)
     if (matched.length) {
       // Scope the hand-off check to the matched terms. Approval requests carry
       // a full proposal snapshot, so comparing that snapshot to only matched
@@ -718,13 +726,15 @@ export function transitionBlockers(opp, target, proposal, state) {
   if (next >= MILESTONES.indexOf('Submitted')) {
     // §5A is drawn as "LJS OR AN" and §5B as "AH ONLY", so 5A names both roles
     // and marks itself `anyOf` — either technical approver alone clears it.
-    const hasCommercialDeviation = (proposal?.terms || []).some(needsCommercialApproval)
+    const hasCommercialDeviation = state.config?.requireCommercialDeviationApproval !== false
+      && (proposal?.terms || []).some(needsCommercialApproval)
     const configuredGates = (state.config?.approvalRules || [])
       .filter(rule => !rule.routes?.length || rule.routes.includes(opp?.route))
       .filter(rule => rule.enabled !== false)
       // Section 5B is an exception approval for customer terms that ModAE has
       // agreed to match. Standard ModAE terms do not need a separate AH gate.
       .filter(rule => rule.type !== APPROVAL_5B || hasCommercialDeviation)
+      .filter(rule => rule.type !== APPROVAL_5C || state.config?.requireFinalQuoteApproval !== false)
       .map(rule => ({
         type: rule.type, key: rule.key, label: rule.label || rule.type,
         approver: rule.approver, needed: rule.needed || [], anyOf: !!rule.anyOf,
@@ -745,7 +755,9 @@ export function transitionBlockers(opp, target, proposal, state) {
         ...(hasCommercialDeviation ? [
           { type: APPROVAL_5B, key: 'comm-approval', label: 'Commercial approval (AH)', approver: 'AH', needed: ['AH'] },
         ] : []),
-        { type: APPROVAL_5C, key: 'release', label: 'Final quote release', approver: 'LJS', needed: ['LJS', 'AH'] },
+        ...(state.config?.requireFinalQuoteApproval !== false ? [
+          { type: APPROVAL_5C, key: 'release', label: 'Final quote release', approver: 'LJS', needed: ['LJS', 'AH'] },
+        ] : []),
       ]
     for (const g of gates) {
       const { approved, pending: waiting } = approvalForRev(g.type, proposal, approvals, opp.id, opp)

@@ -885,6 +885,7 @@ function CommercialDecisionPanel({ opp }) {
   const [approvalNotice, setApprovalNotice] = useState('')
   const deviations = (proposal.terms || []).filter(term => term.status === 'Deviation')
   if (!deviations.length) return null
+  const commercialApprovalRequired = store.config?.requireCommercialDeviationApproval !== false
   const matchingTerms = deviations.filter(needsCommercialApproval)
   const currentApprovalDetails = commercialApprovalDetails(proposal.terms)
   const approvalDetailsMatch = approval => JSON.stringify(approval?.deviationDetails || []) === JSON.stringify(currentApprovalDetails)
@@ -895,7 +896,8 @@ function CommercialDecisionPanel({ opp }) {
       && (approval.rev == null || String(approval.rev) === String(proposal?.revision ?? ''))
       && approvalDetailsMatch(approval))
     .sort((a, b) => (b.decisionTs || b.ts || '').localeCompare(a.decisionTs || a.ts || ''))[0]
-  const commercialApprovalCleared = currentCommercialApproval && ['Approved', 'Approved with conditions'].includes(currentCommercialApproval.status)
+  const commercialApprovalCleared = !commercialApprovalRequired
+    || (currentCommercialApproval && ['Approved', 'Approved with conditions'].includes(currentCommercialApproval.status))
 
   const saveTerms = terms => store.saveProposal(opp.id, { ...proposal, terms }, { immediate: true })
   const requestCommercialApproval = () => {
@@ -974,15 +976,15 @@ function CommercialDecisionPanel({ opp }) {
           </div>
         })}
       </div>
-      {matchingTerms.length > 0 && !currentCommercialApproval && (
+      {commercialApprovalRequired && matchingTerms.length > 0 && !currentCommercialApproval && (
         <div className="commercial-approval-request">
           <div className="hint">AH will review: {matchingTerms.map(term => `${term.term} — customer asked “${term.customerAsk || 'Not recorded'}”; ModAE response “${term.ourResponse || term.proposedTerm || term.standardTerm || 'Not recorded'}”`).join(' · ')}</div>
           <button type="button" className="primary" onClick={requestCommercialApproval}>Request AH approval for {matchingTerms.map(term => term.term).join(' and ')}</button>
         </div>
       )}
-      {currentCommercialApproval?.status === 'Pending' && <div className="warnbox">AH approval is pending for {matchingTerms.map(term => term.term).join(' and ')}. The request includes the customer terms shown above.</div>}
-      {currentCommercialApproval && ['Approved', 'Approved with conditions'].includes(currentCommercialApproval.status) && <div className="okbox">AH approval is {currentCommercialApproval.status.toLowerCase()} for {matchingTerms.map(term => term.term).join(' and ')}.</div>}
-      {matchingTerms.length > 0 && !commercialApprovalCleared && <div className="warnbox">One or more requested terms need internal approval before the quotation can be submitted.</div>}
+      {commercialApprovalRequired && currentCommercialApproval?.status === 'Pending' && <div className="warnbox">AH approval is pending for {matchingTerms.map(term => term.term).join(' and ')}. The request includes the customer terms shown above.</div>}
+      {commercialApprovalRequired && currentCommercialApproval && ['Approved', 'Approved with conditions'].includes(currentCommercialApproval.status) && <div className="okbox">AH approval is {currentCommercialApproval.status.toLowerCase()} for {matchingTerms.map(term => term.term).join(' and ')}.</div>}
+      {commercialApprovalRequired && matchingTerms.length > 0 && !commercialApprovalCleared && <div className="warnbox">One or more requested terms need internal approval before the quotation can be submitted.</div>}
     </section>
   )
 }

@@ -340,6 +340,20 @@ test('approval checklist omits commercial approval for standard terms', () => {
   assert.deepEqual(gates.map(g => g.type), ['Technical approval', 'Final quote release'])
 })
 
+test('Admin switches can disable final release and commercial-deviation gates independently', () => {
+  const opp = { ...baseOpp, route: 'Spares', milestone: 'Sourcing' }
+  const proposal = {
+    ...releasedProposal,
+    revision: '01',
+    terms: [{ term: 'Payment', status: 'Deviation', decision: 'Match customer terms', customerAsk: '90 days', standardTerm: '30 days' }],
+  }
+  const config = { requireFinalQuoteApproval: false, requireCommercialDeviationApproval: false }
+  const state = { approvals: [], clarifications: [], sparesLines: [], config }
+  assert.equal(approvalSet(proposal, [], opp.id, opp, config).some(g => g.type === 'Final quote release'), false)
+  assert.equal(transitionBlockers(opp, 'Sourcing', proposal, state).some(b => b.key === 'commercial-approval'), false)
+  assert.equal(transitionBlockers({ ...opp, milestone: 'Approval' }, 'Submitted', proposal, state).some(b => b.key === 'release'), false)
+})
+
 test('revising a released quote re-blocks the Submitted milestone', () => {
   const state = poState({})
   const submitted = proposal => transitionBlockers(
@@ -550,7 +564,7 @@ test('transition approval blockers explain why approval is requested', () => {
 // ever met one blocked transition at a time.
 test('the three §5 gates are shown together as one status', () => {
   const builder = read('src/workbench/PropBuilder.jsx')
-  assert.match(builder, /approvalSet\(p, store\.approvals, opp\.id(?:, opp)?\)/, 'PropBuilder must call approvalSet')
+  assert.match(builder, /approvalSet\(p, store\.approvals, opp\.id(?:, opp)?(?:, store\.config)?\)/, 'PropBuilder must call approvalSet')
   assert.match(builder, /allApproved/, 'the panel must resolve a single all-clear state')
   assert.match(builder, /All approvals completed/, 'the all-clear must name the diagram\'s outcome')
 })

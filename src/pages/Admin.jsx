@@ -559,6 +559,16 @@ export default function Admin() {
               })}
             </div>
           </div>
+          <label className="check-row">
+            <input type="checkbox" checked={config.requireFinalQuoteApproval !== false} disabled={!canEdit}
+              onChange={e => store.updateConfig({ requireFinalQuoteApproval: e.target.checked })} />
+            Require AH + LJS approval before final proposal send
+          </label>
+          <label className="check-row">
+            <input type="checkbox" checked={config.requireCommercialDeviationApproval !== false} disabled={!canEdit}
+              onChange={e => store.updateConfig({ requireCommercialDeviationApproval: e.target.checked })} />
+            Require AH approval for special customer terms
+          </label>
           <p className="hint">Values above the discount or markup limits require one approval from the selected role(s). Existing value/margin routing remains unchanged.</p>
         </div>
 

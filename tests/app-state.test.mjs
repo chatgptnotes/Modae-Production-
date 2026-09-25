@@ -92,6 +92,16 @@ test('migrate preserves configured Admin values and intentional empty lists', ()
   assert.deepEqual(migrated.config.aiThresholds, { high: 88, med: 75 })
 })
 
+test('migrate defaults approval switches on for older saved workspaces', () => {
+  const state = seedState()
+  const config = { ...state.config }
+  delete config.requireFinalQuoteApproval
+  delete config.requireCommercialDeviationApproval
+  const migrated = migrate({ ...state, config })
+  assert.equal(migrated.config.requireFinalQuoteApproval, true)
+  assert.equal(migrated.config.requireCommercialDeviationApproval, true)
+})
+
 test('migrate upgrades legacy identity defaults without overwriting custom patterns', () => {
   const state = seedState()
   const legacy = migrate({
