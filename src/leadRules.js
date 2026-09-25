@@ -185,8 +185,16 @@ export function deadlineForLead(lead, config = {}, now = new Date()) {
         verification.requires === 'fee' ? 'Amber processing fee not received' : 'KYC documents not received'))
     }
   }
-  // AI missing items are optional follow-up after opportunity creation. They
-  // must not create a deadline that looks like a registration prerequisite.
+  // Before registration, unanswered extraction gaps still need a follow-up
+  // deadline. Once the lead is converted they become optional opportunity
+  // follow-up and must not create a second registration prerequisite.
+  const isReceivedUnsimulatedLead = !lead?.simulated && Boolean(lead?.from || lead?.subject || lead?.body)
+  if (isReceivedUnsimulatedLead && lead?.status !== 'Converted' && (lead?.ai?.missing || []).length) {
+    const clarificationDays = Number(cfg.leadDeadlines?.clarificationDays || DEFAULT_LEAD_DEADLINES.clarificationDays)
+    if (clarificationDays > 0 && !lead?.clarificationCompletedAt) {
+      rows.push(add(clarificationDays, 'clarification', 'Customer clarification is still outstanding'))
+    }
+  }
   return rows
 }
 

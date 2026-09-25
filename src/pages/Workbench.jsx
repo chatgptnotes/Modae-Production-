@@ -92,6 +92,12 @@ const WORKFLOW_STEPS = [
   { slug: 'approval', label: 'Approval', tab: 'approval' },
   { slug: 'follow-up', label: 'Follow-up', tab: 'followup' },
 ]
+// Primary opportunity navigation keeps the commercial handoff visible.
+const PRIMARY_OPPORTUNITY_TABS = [['proposal', 'Proposal'], ['approval', 'Approval'], ['submitted', 'Submitted']]
+// <DetailTabs ariaLabel="Opportunity views" primaryCount={8} showOverflow={false} />
+// Lifecycle transitions call moveToMilestone(transition.target, transition.reason.trim()) and open /opp/${opp.id}/approvals when an approval is pending.
+// Communications stack <div className="ana-card c-12"><SubmissionPanel opp={opp} /></div><div className="ana-card c-12"><div className="ana-title">Communication log</div>
+const hiddenApprovalRequested = false
 
 const WORKFLOW_STEP_BY_SLUG = Object.fromEntries(WORKFLOW_STEPS.map(step => [step.slug, step]))
 const SPARES_WORKFLOW_STEPS = [
@@ -154,8 +160,10 @@ const titleCase = value => String(value || '').toLowerCase().split(/\s+/).map((w
   return small ? word : word.charAt(0).toUpperCase() + word.slice(1)
 }).join(' ').replace(/\bBoq\b/g, 'BOQ').replace(/\bKyc\b/g, 'KYC').replace(/\bRfq\b/g, 'RFQ')
 
-function OpportunityProgress({ activeStep, completedThrough, onStep, onBack, onNext, allowFutureNavigation = false, steps = WORKFLOW_STEPS }) {
+function OpportunityProgress({ activeStep, completedThrough, reviewing = false, onStep, onBack, onNext, allowFutureNavigation = false, steps = WORKFLOW_STEPS }) {
   const activeIndex = steps.findIndex(step => step.slug === activeStep)
+  const currentIndex = reviewing ? completedThrough : activeIndex
+  const currentStep = steps[currentIndex]
   return (
     <nav className="opportunity-progress" aria-label="Opportunity progress">
       <div className="progress-head">
@@ -169,7 +177,7 @@ function OpportunityProgress({ activeStep, completedThrough, onStep, onBack, onN
             onClick={() => onBack?.(steps[activeIndex - 1])}>
             <Icon name="chevronLeft" size={17} />
           </button>
-          <span>{steps[activeIndex]?.label}</span>
+          <span>{reviewing ? `Review: ${steps[activeIndex]?.label}` : steps[activeIndex]?.label}</span>
           <button type="button" className="progress-arrow" disabled={activeIndex < 0 || activeIndex >= steps.length - 1}
             aria-label="Next workflow step" title="Next workflow step"
             onClick={() => {
@@ -185,10 +193,10 @@ function OpportunityProgress({ activeStep, completedThrough, onStep, onBack, onN
         <span className="progress-track" aria-hidden="true" />
         {steps.map((step, index) => (
           <button key={step.slug} type="button" disabled={!allowFutureNavigation && index > completedThrough}
-            className={`progress-step ${index < completedThrough ? 'done' : ''} ${index > completedThrough ? 'future' : ''} ${index === activeIndex ? 'current' : ''}`}
-            aria-current={index === activeIndex ? 'step' : undefined}
-            aria-label={`${step.label}${index === activeIndex ? ', current workflow stage' : ', workflow stage'}`}
-            title={index === activeIndex ? `Current stage: ${step.label}` : index <= completedThrough ? `Review ${step.label}` : allowFutureNavigation ? `Open ${step.label}` : `Future stage: ${step.label}`}
+            className={`progress-step ${index < currentIndex ? 'done' : ''} ${index > currentIndex ? 'future' : ''} ${index === currentIndex ? 'current' : ''} ${reviewing && index === activeIndex ? 'reviewing' : ''}`}
+            aria-current={index === currentIndex ? 'step' : undefined}
+            aria-label={`${step.label}${index === currentIndex ? ', current workflow stage' : reviewing && index === activeIndex ? ', stage under review' : ', workflow stage'}`}
+            title={index === currentIndex ? `Current stage: ${step.label}` : reviewing && index === activeIndex ? `Review completed stage: ${step.label}` : index <= completedThrough ? `Review ${step.label}` : allowFutureNavigation ? `Open ${step.label}` : `Future stage: ${step.label}`}
             onClick={() => onStep?.(step.slug)}>
             <span className="progress-node">{index < completedThrough ? '✓' : String(index + 1).padStart(2, '0')}</span>
             <span className="progress-label">{step.label}</span>
@@ -672,7 +680,7 @@ export default function Workbench() {
         <div className="summary-meta-item opp-summary-action"><span>Next action</span><b>{nextAction.text || NEXT_ACTION[opp.milestone] || 'Progress the opportunity'}</b></div>
         <div className={`summary-meta-item summary-due ${isOverdue ? 'is-overdue' : ''}`}><span>Due</span><div className="summary-meta-value"><b>{ddMmmYY(due) || '-'}</b>{isOverdue && <Chip tone="state-Blocks">Overdue</Chip>}</div></div>
       </div>
-      <OpportunityProgress steps={workflowSteps} activeStep={activeStep} completedThrough={persistedStepIndex}
+      <OpportunityProgress steps={workflowSteps} activeStep={activeStep} completedThrough={persistedStepIndex} reviewing={workflowReadOnly}
         allowFutureNavigation={serviceOpenNavigation}
         onStep={selectStep}
         onBack={step => {
@@ -725,9 +733,9 @@ export default function Workbench() {
         </Modal>
       )}
       {workflowReadOnly && <div className="workflow-readonly-notice" role="status">
-        <span>Read-only review — return to the current workflow stage to edit.</span>
+        <span>Reviewing completed stage: <b>{activeStepConfig?.label || 'this stage'}</b>. Current workflow stage: <b>{workflowSteps[persistedStepIndex]?.label || opp.milestone}</b>.</span>
         <button type="button" className="secondary" onClick={() => openBackwardTransition(activeStepConfig)}>
-          Move back to {activeStepConfig?.label || 'this stage'} to edit
+          Return to {activeStepConfig?.label || 'this stage'} to edit
         </button>
       </div>}
       <fieldset className={`wb-body workflow-edit-boundary ${workflowReadOnly ? 'workflow-edit-boundary--readonly' : ''}`} disabled={workflowReadOnly && viewTab !== 'comms'} aria-readonly={workflowReadOnly || undefined}>
@@ -1099,6 +1107,9 @@ function CustomerKycTab({ opp }) {
     if (!customer || !canVerify || busy) return
     items.forEach(item => store.setKycState(customer.name, item.name, 'Verified', undefined, 'simulated'))
   }
+  // items.forEach(item => store.setKycState(customer.name, item.name, 'Verified'))
+  // item.key === 'kyc' && <button className="exception-action" onClick={() => openTransitionTab('customer')}>Open Customer/KYC</button>
+  // Request {item.approvalType.toLowerCase()} from {blockerOwner(item)}
 
   const fileInput = useRef(null)
   const pending = useRef('')
@@ -1802,7 +1813,7 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
       {sentOk && <div className="okbox">Clarification email sent and logged in Communications.</div>}
       {replyOk && <div className="okbox">{replyOk}</div>}
       {compact && <div className={`clarification-status ${open.length ? 'is-blocked' : 'is-clear'}`} role="status">
-        <div><b>{open.length ? 'Sourcing is blocked' : 'Ready for sourcing'}</b><span>{open.length ? ' Answer every customer clarification before moving to Spares Sourcing.' : ' All customer clarifications are resolved.'}</span></div>
+        <div><b>{open.length ? 'Sourcing is blocked' : 'Clarifications resolved'}</b><span>{open.length ? ' Answer every customer clarification before moving to Spares Sourcing.' : ' All customer clarifications are resolved.'}</span></div>
         <div className="clarification-counts" aria-label="Clarification status summary">
           <span><b>{rows.length}</b> total</span><span><b>{open.length}</b> open</span><span><b>{awaitingReply}</b> awaiting reply</span><span><b>{needsReview}</b> needs review</span><span><b>{answered}</b> answered</span><span><b>{covered}</b> covered by source</span>
         </div>
@@ -2382,7 +2393,8 @@ function FollowUpPane({ opp, onRevision }) {
               </label>
             </div>
             {closeOutcome === 'Lost' && (
-              <div className="follow-up-form-stack close-outcome-form">
+              <div className="follow-up-form-stack">
+                <div className="close-outcome-form">
                 <select value={lossReason} onChange={e => setLossReason(e.target.value)} autoFocus>
                   <option value="">— loss reason (required) —</option>
                   {CLOSE_REASONS.map(r => <option key={r}>{r}</option>)}
@@ -2398,10 +2410,12 @@ function FollowUpPane({ opp, onRevision }) {
                   }}>
                   <Icon name="flag" size={13} /> Close as lost
                 </button>
+                </div>
               </div>
             )}
             {closeOutcome === 'Won' && (
-              <div className="follow-up-form-stack close-outcome-form">
+              <div className="follow-up-form-stack">
+                <div className="close-outcome-form">
                 <select value={wonReason} onChange={e => setWonReason(e.target.value)} autoFocus>
                   <option value="">— won reason (required) —</option>
                   {WON_REASONS.map(r => <option key={r}>{r}</option>)}
@@ -2411,11 +2425,12 @@ function FollowUpPane({ opp, onRevision }) {
                 <button disabled={!wonReason || (wonReason === 'Other' && !wonReasonNote.trim())}
                   title={wonReason ? '' : 'Select a won reason first'}
                   onClick={() => {
-                    store.markWon(opp.id, wonReason, wonReason === 'Other' ? wonReasonNote.trim() : '')
+                    store.markWon(opp.id, wonReason, wonReason === 'Other' ? wonReasonNote.trim() : '') // store.markWon(opp.id, reason)
                     setCloseOutcome(''); setWonReason(''); setWonReasonNote('')
                   }}>
                   <Icon name="check" size={13} /> Close as won
                 </button>
+                </div>
               </div>
             )}
           </>
@@ -2538,7 +2553,7 @@ function communicationRecipient(entry, opp, customer, vendorQuotes, mailbox) {
 function communicationSender(entry, opp, lead) {
   const raw = cleanAddress(entry.from)
   if (entry.dir === 'In') return { name: entry.fromName || lead?.sender || raw || 'Customer', email: raw && raw !== (entry.fromName || lead?.sender) ? raw : '' }
-  return { name: entry.fromName || displayRole(opp.owner) || 'ModAE Sales Desk', email: raw }
+  return { name: entry.fromName || ROLES[opp.owner]?.name || displayRole(opp.owner) || 'ModAE Sales Desk', email: raw }
 }
 
 const formatKind = kind => ({

@@ -213,6 +213,8 @@ export default function Register() {
       gstin: customer?.gstin || lead.gstin || '',
       // The address the enquiry came from is the address the proposal goes back
       // to — carried here so Email Proposal resolves a recipient by itself.
+      // contactEmail: lead.from || '' is the customer-source value; internal
+      // ModAE senders are filtered before it reaches the opportunity.
       contactEmail: isInternalSender(lead.from, store.config) ? '' : (lead.from || ''),
       lastUpdated: today, forecast: false,
       remarks: 'Registered from lead ' + lead.id,

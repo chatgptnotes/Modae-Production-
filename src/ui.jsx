@@ -181,7 +181,7 @@ export function MarkWonControl({ opp, store, className = '' }) {
     event.preventDefault()
     const value = reason.trim()
     if (!value) return
-    store.markWon(opp.id, value, value === 'Other' ? reasonNote.trim() : '')
+    store.markWon(opp.id, value, value === 'Other' ? reasonNote.trim() : '') // store.markWon(opp.id, value)
     setOpen(false)
   }
 

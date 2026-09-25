@@ -51,7 +51,8 @@ export function catalogueDescriptionForLine(line, priceLists = {}) {
   return ''
 }
 
-export function sparesProposalBom(lines = [], priceLists = {}, costing = defaultCosting) {
+export function sparesProposalBom(lines = [], priceLists = {}) {
+  const costing = arguments[2] || defaultCosting
   return lines
     .filter(line => line?.confirmed && !line.removedFromSourcing && Number(line.qty) > 0 && !isPlaceholderSparesLine(line) && !isMissingSparesDescription(line))
     .map(line => {

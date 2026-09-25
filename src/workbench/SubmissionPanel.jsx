@@ -298,8 +298,7 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
 
     // Reserve the tab while the click is still trusted. Generating the
     // workbook and reading enclosures are asynchronous; opening Gmail after
-    // those awaits makes Chrome treat the popup as unsolicited and can leave
-    // the user with a blank tab instead of the compose screen.
+    // those awaits makes Chrome treat the popup as unsolicited.
     const draftWindow = window.open('', '_blank')
     setGmailDraftHref(href)
     if (!draftWindow) {

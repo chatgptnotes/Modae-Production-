@@ -15,6 +15,7 @@ import DetailTabs from './DetailTabs.jsx'
 // three of the four folders are usually empty, so a shared footer left every
 // tab looking identical and the folder tabs read as decoration.
 const DETAILS_TAB = 'Details'
+// Lost drawer edits must use store.closeLost(oppId, reason), never save a Lost stage directly.
 
 const Field = ({ label, children }) => (
   <div><label>{label}</label>{children}</div>
@@ -53,6 +54,7 @@ export default function OppPanel({ oppId }) {
   useEffect(() => {
     setTab(DETAILS_TAB)
   }, [oppId])
+  // useEffect(() => { setTab(DETAILS_TAB) }, [oppId])
 
   if (!opp) return <div className="drawer-body"><p className="hint">This opportunity no longer exists.</p></div>
 
@@ -336,3 +338,4 @@ function KycPanel({ opp, store, nav }) {
     </section>
   )
 }
+// Lost is a close-out action, not a free-form stage edit: patch.stage === 'Lost' && !opp.closedReason must route through closeLost.

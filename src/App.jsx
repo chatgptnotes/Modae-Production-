@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Routes, Route, NavLink, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from './store.jsx'
-import { PORTAL_ENABLED } from './seed.js'
+import { PORTAL_ENABLED, selectableRoles } from './seed.js'
 import { isSalesOwner, canSeePage, displayRole, canPriceProposal, ddMmmYY } from './utils.js'
 import { DrawerHost } from './drawer.jsx'
 import { Icon, ModaeImageLogo, ModaeLogo } from './icons.jsx'
@@ -35,6 +35,7 @@ const Workbench = lazy(() => import('./pages/Workbench.jsx'))
 const ProposalSent = lazy(() => import('./pages/ProposalSent.jsx'))
 const Portal = lazy(() => import('./pages/Portal.jsx'))
 const TabletApp = lazy(() => import('./tablet/TabletApp.jsx'))
+// import TabletApp from './tablet/TabletApp.jsx'
 
 const COMMERCIAL_RX = /GM\s*%|\bGM\b|discount|₹|\bvalue\b|\bmargin\b/i
 
@@ -402,7 +403,7 @@ export default function App() {
   // tablet branch, so both shells are covered by the one guard.
   if (!PORTAL_ENABLED && (role === 'CUST' || custAccount)) return withConnectivity(<PortalParked />)
 
-  if (tablet) return withConnectivity(<RequireAuth><Suspense fallback={<LoadingScreen />}><TabletApp /></Suspense></RequireAuth>)
+  if (tablet) return withConnectivity(<RequireAuth><Suspense fallback={<LoadingScreen />}><TabletApp /></Suspense></RequireAuth>) // if (tablet) return <RequireAuth><TabletApp /></RequireAuth>
 
   // Customer accounts/persona only ever see the portal. Route-level, not a
   // post-render effect — internal pages must never mount for a customer.
@@ -521,3 +522,4 @@ export default function App() {
 
   return withConnectivity(<RequireAuth>{shell}</RequireAuth>)
 }
+// selectableRoles().map(([id, label]) => ({ id, label }))

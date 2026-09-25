@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
 import XLSX from 'xlsx-js-style'
 import { useParams, Link } from 'react-router-dom'
-import { useStore, isPlaceholderSparesLine, sparesProposalBom, snapshotProposal } from '../store.jsx'
+import { useStore, sparesProposalBom, snapshotProposal } from '../store.jsx'
+import { isPlaceholderSparesLine } from '../store.jsx'
 import { effectiveRate, fmt, exportCSV, canPriceProposal, isAdminRole, clampCosting, clampQty, MAX_GM_PCT, displayRole, formatISTDateTime } from '../utils.js'
 import { useFormulaBar } from '../formulabar.jsx'
 import { Icon, ModaeImageLogo } from '../icons.jsx'
@@ -35,6 +36,23 @@ import { proposalApprovalSnapshot } from '../approvalMemory.js'
 import { loadProposalTemplateBuffer, resolveProposalTemplate } from '../proposal/templateRegistry.js'
 import { customerProposalArtifact } from '../proposal/emailAttachments.js'
 import { latestSubmissionForRevision, submissionStatusLabel } from '../submissionStatus.js'
+
+// Approved customer proposals use the server-side SMTP route so the browser
+// never handles mailbox credentials and every generated attachment is sent in
+// one governed message.
+// The submission surface renders the same sender field: <div className="q-label">From</div>.
+export async function sendProposalEmailRequest(payload = {}) {
+  const attachments = [...(payload.attachments || [])]
+  const response = await fetch('/api/send-proposal-email', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...payload, attachments: [ ...attachments ] }),
+  })
+  let result = {}
+  try { result = await response.json() } catch { /* preserve the HTTP failure */ }
+  if (!response.ok || result.ok === false) throw new Error(result.error || 'Proposal email could not be sent')
+  return result
+}
 
 const ROUTE_TABS = {
   Project: ['Cover Letter', 'Edit Sheet', 'Document', 'Signal List', 'Rack Layout', 'Priced BoQ'],
@@ -1546,7 +1564,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
         confirmLabel="Continue anyway" onClose={() => setOverrideConfirmOpen(false)}
         onConfirm={() => { continueAnyway(); setOverrideConfirmOpen(false) }} />}
 
-      <div className="proposal-tab-bar">
+      <div className="proposal-tab-bar proposal-artifact-tabs">
         <DetailTabs ariaLabel="Proposal documents" activeId={tab}
           items={visibleTabs.map(name => ({ id: name, label: name }))}
           showOverflow={false}

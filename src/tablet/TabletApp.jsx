@@ -2,6 +2,7 @@ import React, { useEffect } from 'react'
 import { Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { PORTAL_ENABLED } from '../seed.js'
+// selectableRoles().map(([id, label]) => ({ id, label }))
 import { canSeePage } from '../utils.js'
 import { DrawerHost } from '../drawer.jsx'
 import { Icon, ModaeLogo } from '../icons.jsx'

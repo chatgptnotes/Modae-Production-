@@ -38,6 +38,15 @@ const BLOCKED_ATTACHMENT_MIME = new Set([
   'text/javascript',
 ])
 
+const mimeMessage = ({ from, to, cc, subject, body, attachments }) => ({
+  from, to, cc: cc || undefined, subject, text: body,
+  attachments: attachments.map(a => ({
+    filename: a.filename,
+    content: Buffer.from(a.contentBase64, 'base64'),
+    contentType: a.mimeType,
+  })),
+})
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'POST only' })
 
@@ -95,12 +104,8 @@ export default async function handler(req, res) {
       auth: { user: account, pass: appPassword },
     })
     const info = await transporter.sendMail({
-      from, to, cc: cc || undefined, subject, text: body,
-      attachments: attachments.map(a => ({
-        filename: a.filename,
-        content: Buffer.from(a.contentBase64, 'base64'),
-        contentType: a.mimeType,
-      })),
+      ...mimeMessage({ from: account, to, cc, subject, body, attachments }),
+      from,
     })
     return res.status(200).json({ ok: true, messageId: info.messageId })
   } catch (error) {

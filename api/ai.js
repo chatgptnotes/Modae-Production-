@@ -81,6 +81,8 @@ Customer categories are: OEM, EUC, EUC/OEM, ACP, SI, RE/TR, EPC.
 Extract only what the email or attached documents support. Never invent a part
 number, price, quantity, date or company name. Confidence is an honest integer
 from 0 to 100. Evidence must identify the exact email or attachment source.
+RFQ date is the date carried by the enquiry/document, not the date the file was
+uploaded. Sender email is the customer's original enquiry address when present.
 Write in plain, direct Indian industrial B2B language.
 `.trim()
 

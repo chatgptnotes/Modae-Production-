@@ -253,11 +253,12 @@ export function draftClarification(lead, {
 // sentPatch(), which the inbox calls after the compose window has been opened
 // by a human click.
 export function draftPatch(draft, { now = new Date() } = {}) {
+  const at = now instanceof Date ? now.toISOString() : new Date(now).toISOString()
   return {
     clarification: {
       status: 'Draft',
       kind: draft.kind,
-      draftedAt: toISTISOString(now),
+      draftedAt: at,
       draftedBy: draft.draftedBy,
       from: draft.from,
       fromRule: draft.fromRule,
@@ -273,11 +274,12 @@ export function draftPatch(draft, { now = new Date() } = {}) {
 }
 
 export function sentPatch(record, { sentBy = '', now = new Date() } = {}) {
+  const at = now instanceof Date ? now.toISOString() : new Date(now).toISOString()
   return {
     clarification: {
       ...(record || {}),
       status: 'Sent',
-      sentAt: toISTISOString(now),
+      sentAt: at,
       sentBy,
     },
   }
@@ -286,7 +288,7 @@ export function sentPatch(record, { sentBy = '', now = new Date() } = {}) {
 // The customer answered — close the clarification so processLeadDeadlines stops
 // counting down towards an automatic drop.
 export function answeredPatch(record, { now = new Date() } = {}) {
-  const at = toISTISOString(now)
+  const at = now instanceof Date ? now.toISOString() : new Date(now).toISOString()
   return {
     clarification: { ...(record || {}), status: 'Answered', answeredAt: at },
     clarificationCompletedAt: at,

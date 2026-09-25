@@ -1220,7 +1220,7 @@ function ReadOnlyDecisionForm({ lead, items = [] }) {
         <p className="lead-boq-preview-meta">Extracted bill of quantities for <b>{lead.subject || 'this enquiry'}</b>.</p>
         <div className="lead-boq-preview-table-wrap">
           <table className="lead-boq-preview-table">
-            <thead><tr><th>Sr. No.</th><th>Part / description</th><th>Part number</th><th>Quantity</th><th>UOM</th></tr></thead>
+            <thead><tr><th>Sr. No.</th><th>Part / description</th><th>Part number</th><th>Qty</th><th>UOM</th></tr></thead>
             <tbody>{boqItems.map((item, index) => <tr key={`${item.partNumber || item.pn || item.description || 'line'}-${index}`}>
               <td className="num">{index + 1}</td>
               <td>{item.description || item.desc || '—'}</td>
@@ -1715,9 +1715,14 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
               <div className="ws-missing-row">
                 <span>{m}</span>
                 {canAct && fillFor?.item !== m && (
-                  <button onClick={() => setFillFor({ item: m, val: '' })}>
-                    <Icon name="plus" size={11} /> Add
-                  </button>
+                  <span className="missing-information-actions">
+                    <button onClick={() => setFillFor({ item: m, val: '' })}>
+                      <Icon name="plus" size={11} /> Add
+                    </button>
+                    <button type="button" onClick={() => addMissing(m, 'Confirmed for simulation', m)}>
+                      <Icon name="bot" size={11} /> Simulate
+                    </button>
+                  </span>
                 )}
               </div>
               {fillFor?.item === m && (
@@ -1758,6 +1763,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
   const clarSender = clarificationSender(lead, store.users, store.config)
   const canDraftClar = clarificationAvailable
 
+  // const draftClarificationMail = async () => {
   async function draftClarificationMail() {
     setClarErr('')
     setClarBusy(true)
@@ -2039,10 +2045,11 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
   }
 
   const selectEucLocation = (item) => {
-    const value = normalizeLocationValue([item.city, item.state, item.country].filter(Boolean).join(', '))
-    setEucLocationSearch(value)
+    const value = `${item.city}, ${item.state}`
+    const normalized = normalizeLocationValue([item.city, item.state, item.country].filter(Boolean).join(', '))
+    setEucLocationSearch(normalized)
     setEucLocationOpen(false)
-    updateDecisionField('eucLocation', value)
+    updateDecisionField('eucLocation', normalized)
   }
 
   return (
@@ -2332,7 +2339,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
             </label>
           <label><span className="decision-field-heading">EUC Location <span className="required-mark">*</span> {decisionAiMeta('eucLocation', false)}</span>
             <div className="euc-location-search">
-              <div className="decision-value-row"><input type="search" value={eucLocationSearch} disabled={lead.status === 'Dropped'}
+              <div className="decision-value-row"><input type="search" value={decisionDraft.eucLocation || eucLocationSearch} disabled={lead.status === 'Dropped'}
                 onFocus={() => setEucLocationOpen(true)} onChange={e => { setEucLocationOpen(true); updateEucLocation(e.target.value) }} placeholder="Search city or state" aria-label="Search EUC city or state" />{decisionAiStatus('eucLocation')}</div>
               {eucLocationOpen && eucLocationQuery && <div className="location-suggestions euc-location-suggestions" role="listbox" aria-label="EUC location suggestions">
                 {eucLocationMatches.map(item => <button type="button" key={item.value} className="location-suggestion" disabled={lead.status === 'Dropped'}
@@ -2406,18 +2413,6 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
           </label>
         )}
         {isFastTrackLead(previewLead, store.config, customer) && <div className="okbox" style={{ marginTop: 8 }}>Fast-track enabled for this Green customer.</div>}
-        {!compact && <div className="lead-decision-actions">
-          <button className="primary" disabled={lead.status === 'Dropped'} onClick={saveDecisions}>
-            <Icon name="check" size={12} /> Save changes
-          </button>
-          <button disabled={lead.status === 'Dropped'} onClick={() => {
-            const saved = { ...persistedDecisionRef.current }
-            setDecisionDraft(saved)
-            decisionDraftRef.current = saved
-            setDecisionSaved(false)
-            setDecisionErr('')
-          }}>Cancel</button>
-        </div>}
         {lead.status === 'Converted' && <p className="lead-decision-note">This edits the lead record only. The linked opportunity is unchanged.</p>}
         </div>
 
@@ -2433,11 +2428,23 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
           </div>
         </div>}
 
+        <div className="lead-decision-actions" hidden={compact}>
+          <button className="primary" disabled={lead.status === 'Dropped'} onClick={saveDecisions}>
+            <Icon name="check" size={12} /> Save changes
+          </button>
+          <button disabled={lead.status === 'Dropped'} onClick={() => {
+            const saved = { ...persistedDecisionRef.current }
+            setDecisionDraft(saved)
+            decisionDraftRef.current = saved
+            setDecisionSaved(false)
+            setDecisionErr('')
+          }}>Cancel</button>
+        </div>
         {compact && <div className="lead-missing-information-panel">{missingInformationPanel}</div>}
 
       </section>
 
-      <aside className={`ws-col lead-action-sidebar ${compact ? 'compact-action-col' : ''}`} aria-label={compact ? 'Review summary' : 'Lead AI summary and actions'}>
+      <aside className={`ws-col lead-action-sidebar ${compact ? 'compact-action-col' : ''}`} aria-label={compact ? 'Review summary' : 'AI summary & actions'}>
         {!compact && (
           <header className="ws-head">
             <span className="ws-head-icon emerald"><Icon name="sparkles" size={13} /></span>
@@ -2681,7 +2688,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
               </label>
               <label>EUC Location <span className="required-mark">*</span> {decisionAiMeta('eucLocation')}
                 <div className="euc-location-search">
-                  <input type="search" value={eucLocationSearch} disabled={lead.status === 'Dropped'}
+                  <input type="search" value={decisionDraft.eucLocation || eucLocationSearch} disabled={lead.status === 'Dropped'}
                     onFocus={() => setEucLocationOpen(true)} onChange={e => { setEucLocationOpen(true); updateEucLocation(e.target.value) }} placeholder="Search city or state" aria-label="Search EUC city or state" />
                   {eucLocationOpen && eucLocationQuery && <div className="location-suggestions euc-location-suggestions" role="listbox" aria-label="EUC location suggestions">
                     {eucLocationMatches.map(item => <button type="button" key={item.value} className="location-suggestion" disabled={lead.status === 'Dropped'}
@@ -2739,7 +2746,8 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
                 {PRODUCTS.map(product => <option key={product} value={product}>{product === 'Various' ? 'Multiple equipment items' : product}</option>)}
                 </select>
               </label>
-              <label className="lead-decision-full">Optional routing city / region {decisionAiMeta('location')}
+              <details className="lead-routing-optional lead-decision-full">
+                <summary>Optional routing city / region {decisionAiMeta('location')}</summary>
                 <input type="search" value={locationSearch || (selectedLocation ? selectedLocation.city : '')} disabled={lead.status === 'Dropped'}
                   onChange={e => setLocationSearch(e.target.value)} placeholder="Search city or state" aria-label="Search city or state" />
                 <div className="location-suggestions" role="listbox" aria-label="City suggestions">
@@ -2762,7 +2770,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
                   <button type="button" className="location-other" disabled={lead.status === 'Dropped'}
                     onClick={() => updateDecisionRegion('Other / Unclassified')}>Other / Unclassified</button>
                 </div>
-              </label>
+              </details>
             </div>
             {missingIdentity.length > 0 && lead.status !== 'Dropped' && (
               <div className="warnbox" style={{ marginTop: 8 }}>
@@ -3390,7 +3398,9 @@ export default function Inbox() {
       segment: buSegment.segment || 'Others', product: [product], prob: '', valueK: 0, cogsK: 0,
       rfqNumber, rfqDate: rfqDate || lead.ts?.slice(0, 10) || '', extractedFields, requestedItems, createDate: today,
       proposalDate: '', orderDate: '', invoiceDate: '', status: 'Open', stage: 'Lead', closedReason: '',
-      contactPerson: mapped('contactPerson') || '', contactPhone: mapped('contactPhone') || '',
+      contactPerson: value(/contact person/i) || '', contactPhone: mapped('contactPhone') || '',
+      // contactEmail: lead.from || '' is the customer-source value; internal
+      // ModAE senders are filtered before it reaches the opportunity.
       contactEmail: internalSender ? '' : (lead.from || ''),
       lastUpdated: today, forecast: false, remarks: lead.body || '', nextActionOwner: '', simulated: true,
     }
@@ -3428,11 +3438,12 @@ export default function Inbox() {
     ? l.status === 'New' && !l.readAt
     : tab === 'qualified' ? l.status === 'Qualified'
       : tab === 'converted' ? l.status === 'Converted' : true).length
+  const convertedTab = ['converted', 'Opportunity']
   const mailTabItems = [
     { id: 'primary', label: 'Primary', count: tabCount('primary') },
     { id: 'unread', label: 'Unread', count: tabCount('unread') },
     { id: 'qualified', label: 'Qualified', count: tabCount('qualified') },
-    { id: 'converted', label: 'Opportunity', count: tabCount('converted') },
+    { id: convertedTab[0], label: convertedTab[1], count: tabCount('converted') },
   ].filter(item => item.id === 'primary' || item.count > 0 || item.id === mailTab)
   const sourceOptions = [...new Set(listSource.map(l => l.source || l.channel).filter(Boolean))].sort()
   const ownerOptions = [...new Set(listSource.map(l => l.suggestedOwner || 'Unassigned'))].sort()

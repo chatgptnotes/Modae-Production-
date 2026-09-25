@@ -68,8 +68,32 @@ export const LEAD_SOURCES = [
   'Existing Green customer',
 ]
 
-// Opportunities are loaded from Supabase or created through the intake flow.
-export const seedOpportunities = []
+// The demo launcher needs a small, deterministic opportunity set. These are
+// local fixtures only; production boot converts demo state to an empty
+// workspace and Supabase remains authoritative for real records.
+export const seedOpportunities = [
+  {
+    sl: 82, id: '2608222RS', sellTo: 'Andritz Hydro', category: 'OEM', location: 'Mandideep',
+    customerStatus: 'Green', eucName: 'Adani (Gandikota)', eucLocation: 'Kadappa',
+    oppName: 'Gandikota PSP — Vibration & Air Gap Monitoring, 7 Units (5×300MW)+(2×150MW)', owner: 'RS',
+    oppType: 'Project', bu: 'Energy', segment: 'Hydro', product: 'B&K', prob: 'Medium',
+    valueK: 100, cogsK: 50, createDate: '2026-08-09', proposalDate: '2026-08-09', orderDate: '2026-08-30',
+    invoiceDate: '', status: 'Open', stage: 'Firm Bid', closedReason: '', contactPerson: 'Gautam Chaurasiya',
+    contactPhone: '+91 09649679', contactEmail: 'gautam.chaurasiya@example.in', lastUpdated: '2026-08-09',
+    forecast: true, remarks: 'RFQ recd. on 7 Aug, Bid Due on 11 Aug', route: 'Project', milestone: 'Proposal',
+  },
+  {
+    sl: 71, id: '2601122LJS', sellTo: 'Andritz Hydro', category: 'OEM', location: 'Mandideep',
+    customerStatus: 'Green', eucName: 'Limak', eucLocation: 'Turkey',
+    oppName: 'VMS for LiMAK Project Turkey — shipped 30 Jul', owner: 'LJS',
+    oppType: 'Project', bu: 'Energy', segment: 'Hydro', product: 'B&K', prob: 'Low',
+    valueK: 7500, cogsK: 4200, createDate: '2026-01-20', proposalDate: '2026-02-10', orderDate: '2026-04-12',
+    invoiceDate: '2026-07-30', status: 'Closed', stage: 'Won', closedReason: 'Relationship',
+    contactPerson: 'Gautam Chaurasiya', contactPhone: '+91 09649679', contactEmail: 'gautam.chaurasiya@example.in',
+    lastUpdated: '2026-07-30', forecast: false, remarks: 'Milestone order — first Turkey delivery', route: 'Project',
+    milestone: 'Submitted',
+  },
+]
 export const ROLES = {
   SUPER: { name: 'System Owner', label: 'Super Admin — Platform Owner', commercial: true, admin: true },
   ADMIN: { name: 'Admin', label: 'Admin — System Administrator', commercial: true, admin: true },

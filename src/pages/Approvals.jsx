@@ -18,7 +18,7 @@ const time = ts => {
 }
 const stamp = ts => {
   const d = day(ts)
-  const t = time(ts)
+  const t = time(ts) || (ts ? new Date(ts).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false }) : '')
   return t ? `${d} at ${t}` : d
 }
 const shortDate = ts => {

@@ -157,6 +157,7 @@ function PdfPreview({ blob }) {
 }
 
 export default function AttachmentViewer({ leadId, attachment, onClose, dialogTitle = 'Attachment preview' }) {
+  // Default popup title: title="Attachment preview"
   const [blob, setBlob] = useState(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')

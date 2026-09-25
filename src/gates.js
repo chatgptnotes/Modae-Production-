@@ -21,6 +21,7 @@ import { approvalAffectedByProposal, pricingExceptionSignature, proposalImpact }
 // the opportunity forward.
 export const isClarificationResolved = clarification => {
   if (!clarification) return false
+  if (clarification.status === 'Needs review') return false
   if (clarification.status === 'Answered') return true
   return !!String(clarification.response || '').trim()
     && !String(clarification.missing || '').trim()
@@ -397,7 +398,10 @@ export function oppBlockers(opp, proposal, approvals, config = null) {
     }
   }
 
-  const devs = (proposal?.terms || []).filter(needsCommercialApproval)
+  // Legacy proposal rows used status=Deviation without the newer decision
+  // field; keep those rows on the same AH approval path while new rows use the
+  // explicit Match/Counter-offer decision.
+  const devs = (proposal?.terms || []).filter(term => needsCommercialApproval(term) || (term?.status === 'Deviation' && !term?.decision))
   const undecided = (proposal?.terms || []).filter(needsCommercialDecision)
   if (undecided.length) {
     b.push({ key: 'commercial-decision', severity: 'block', text: `Choose Match customer terms or Counter-offer with ModAE standard terms for ${undecided.map(d => d.term).join(', ')} before approval.` })

@@ -867,10 +867,12 @@ export function StoreProvider({ children }) {
         const p = s.proposals[oppId]
         if (!p) return s
         const revisions = p.revisions || []
+        // Only explicit quote revisions count toward the customer-facing version.
+        const nextRevisionNumber = revisions.filter(r => r.status === 'Revised').length + 2
         const spec = REVISION_TYPES.find(r => r.id === type) || REVISION_TYPES[REVISION_TYPES.length - 1]
         const next = {
           ...p,
-          revision: String((+p.revision || 0) + 1).padStart(2, '0'),
+          revision: String(Math.max((+p.revision || 0) + 1, nextRevisionNumber)).padStart(2, '0'),
           releaseStatus: 'Superseded',
           reviewStatus: 'Needs review',
           reviewIssues: [],
@@ -1892,7 +1894,8 @@ export function StoreProvider({ children }) {
           && !isPlaceholderSparesLine(l)
           && !isLegacyAutoSparesSupportRow(l)
           && (l.confirmed && Number(l.qty) > 0 || isSparesSupportRow(l)))
-        const lines = sourceLines.filter(l => l.confirmed && Number(l.qty) > 0)
+        const lines = s.sparesLines.filter(l => l.oppId === oppId && l.confirmed)
+        const pricedLinesSource = sourceLines.filter(l => l.confirmed && Number(l.qty) > 0)
         const orderedSourceLines = sourceLines.filter(l => l.origin !== 'proposal-support')
         const opp = s.opportunities.find(o => o.id === oppId)
         const base = s.proposals[oppId] || newProposal(oppId, opp, {
@@ -1912,7 +1915,7 @@ export function StoreProvider({ children }) {
           currencyRates: normalizedCurrencyRates(base.costing?.currencyRates || s.config?.currencyRates),
         }
         const bom = orderedSparesProposalBom(orderedSourceLines, s.priceLists, costing)
-        const pricedLines = lines.reduce((totals, line) => {
+        const pricedLines = pricedLinesSource.reduce((totals, line) => {
           const financials = sparesLineFinancials(line, costing)
           return {
             value: totals.value + financials.lineTotalINR,
@@ -1928,6 +1931,7 @@ export function StoreProvider({ children }) {
           } : item),
           proposals: { ...s.proposals, [oppId]: { ...base, costing, bom } },
         }, 'Lines sent to proposal', oppId, `${bom.length} line(s) synchronized`)
+        // proposals: { ...s.proposals, [oppId]: { ...base, bom } }
       })
     },
 
