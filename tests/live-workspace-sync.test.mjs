@@ -156,9 +156,9 @@ test('price-list loading keeps a usable cached catalogue when the shared copy is
   assert.match(priceLists, /showing the last cached copy/)
 })
 
-test('forced pull reads wait out an older request before fetching fresh data', () => {
+test('forced pull reads reuse an older request instead of queuing another fetch', () => {
   const datastore = read('src/datastore.js')
-  assert.match(datastore, /if \(loadInFlight\) \{[\s\S]*const pending = loadInFlight[\s\S]*return force \? pending\.then\(\(\) => loadAll\(\{ force: true \}\)\)/)
+  assert.match(datastore, /if \(loadInFlight\) \{[\s\S]*return loadInFlight/)
 })
 
 test('the store retains internal sync state without rendering status messaging', () => {

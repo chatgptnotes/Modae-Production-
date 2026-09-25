@@ -303,12 +303,11 @@ export async function loadPriceListVersion(listCode, versionCode) {
 export async function loadAll({ force = false } = {}) {
   if (!supabase) return null
   if (!force && loadCache && Date.now() - loadCacheAt < LOAD_CACHE_MS) return loadCache
-  // A forced pull must not settle for a request that started before the
-  // event arrived. Wait for that request, then issue a fresh read so the
-  // dashboard cannot render a stale snapshot after a remote opportunity edit.
+  // Focus/live-sync events can arrive while a pull is running. Reuse the
+  // current request instead of chaining another full database read behind it;
+  // the next explicit refresh can start a new request after this one settles.
   if (loadInFlight) {
-    const pending = loadInFlight
-    return force ? pending.then(() => loadAll({ force: true })) : pending
+    return loadInFlight
   }
   loadInFlight = fetchAll()
   try {

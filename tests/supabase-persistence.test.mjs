@@ -63,7 +63,7 @@ test('normalized business hydration uses canonical rows and consolidated state',
   assert.match(datastore, /LOAD_CACHE_MS = 15000/)
   assert.match(datastore, /const records = baseTables\[3\]\.data \|\| \[\]/)
   assert.doesNotMatch(datastore, /const records = tables\[3\]/)
-  assert.match(datastore, /if \(loadInFlight\) \{[\s\S]*return force \? pending\.then/)
+  assert.match(datastore, /if \(loadInFlight\) \{[\s\S]*return loadInFlight/)
 })
 
 test('consolidated configuration uses the records JSONB path', () => {
