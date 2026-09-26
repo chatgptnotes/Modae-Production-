@@ -46,10 +46,9 @@ test('file-input refs are optional before triggering native pickers', () => {
   assert.match(read('src/pages/Folders.jsx'), /fileInput\.current\?\.click\(\)/)
 })
 
-test('empty Supabase hydration still preserves populated local slices', () => {
+test('empty Supabase hydration clears stale local slices', () => {
   const store = read('src/store.jsx')
-  assert.match(store, /if \(unexpectedEmptyBusinessSlice\(k, s\[k\], v\)\)/)
-  assert.match(store, /console\.debug\(`Ignoring empty \$\{k\} hydration response because this browser has populated data/)
-  assert.doesNotMatch(store, /console\.warn\(`Ignoring empty \$\{k\} hydration response/)
-  assert.match(store, /if \(res\.empty\) \{[\s\S]*local data was preserved and no automatic seed was written/)
+  assert.match(store, /if \(res\.empty\) \{[\s\S]*priceLists: \{\}/)
+  assert.match(store, /if \(res\.empty\) \{[\s\S]*users: \[\]/)
+  assert.doesNotMatch(store, /unexpectedEmptyBusinessSlice/)
 })

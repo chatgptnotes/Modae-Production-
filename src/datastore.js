@@ -37,7 +37,6 @@ let loadCache = null
 let loadCacheAt = 0
 let loadInFlight = null
 let coreLoadInFlight = null
-const PRICE_LIST_CACHE_KEY = 'wintrack-modae-approved-price-lists-v1'
 const CONSOLIDATED_SETTINGS_ENTITY = 'settings'
 const CONSOLIDATED_SETTINGS_ID = 'config'
 const CONSOLIDATED_PRICE_LIST_ENTITY = 'price_lists'
@@ -190,24 +189,9 @@ export function invalidateLoadCache() {
   loadCacheAt = 0
 }
 
-export function readPriceListsCache() {
-  if (priceListCache) return priceListCache
-  try {
-    const saved = JSON.parse(localStorage.getItem(PRICE_LIST_CACHE_KEY) || 'null')
-    if (saved?.priceLists && typeof saved.priceLists === 'object') {
-      priceListCache = saved.priceLists
-      return priceListCache
-    }
-  } catch { /* cache is optional */ }
-  return null
-}
-
 const writePriceListsCache = priceLists => {
   priceListCache = priceLists
   priceListCacheAt = Date.now()
-  try {
-    localStorage.setItem(PRICE_LIST_CACHE_KEY, JSON.stringify({ version: 1, savedAt: priceListCacheAt, priceLists }))
-  } catch { /* the main local snapshot remains unaffected */ }
 }
 
 const priceVersionRecordId = (listCode, versionCode) => `${listCode}::${versionCode}`
@@ -273,18 +257,12 @@ async function loadConsolidatedPriceLists() {
 }
 
 export async function loadPriceLists({ force = false } = {}) {
-  if (!supabase) return readPriceListsCache() ? { priceLists: readPriceListsCache(), cached: true } : null
+  if (!supabase) return null
   if (!force && priceListCache && Date.now() - priceListCacheAt < LOAD_CACHE_MS) return { priceLists: priceListCache, cached: true }
   if (priceListInFlight) return priceListInFlight
   priceListInFlight = (async () => {
     const consolidated = await loadConsolidatedPriceLists()
-    if (!consolidated) {
-      const fallback = readPriceListsCache()
-      if (fallback && Object.keys(fallback).length) {
-        return { priceLists: fallback, cached: true, degraded: true }
-      }
-      throw new Error('Consolidated price-list records are unavailable')
-    }
+    if (!consolidated) throw new Error('Consolidated price-list records are unavailable')
     writePriceListsCache(consolidated)
     return { priceLists: consolidated }
   })()

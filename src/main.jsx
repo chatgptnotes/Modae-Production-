@@ -7,9 +7,16 @@ import { StoreProvider } from './store.jsx'
 import { FormulaBarProvider } from './formulabar.jsx'
 import { DrawerProvider } from './drawer.jsx'
 import { registerSW } from './pwa.js'
+import { deploymentNeedsReset, resetAndReload, watchDeployment } from './deployment.js'
 import './styles.css'
 
-registerSW()
+async function boot() {
+  if (deploymentNeedsReset()) {
+    await resetAndReload()
+    return
+  }
+  registerSW()
+  watchDeployment()
 
 // Migrate links created by the previous hash-routing implementation. A route
 // hash starts with "#/"; ordinary in-page anchors such as "#forecast-details"
@@ -17,18 +24,21 @@ registerSW()
 const legacyRoute = window.location.hash.match(/^#(\/.*)$/)?.[1]
 if (legacyRoute) window.history.replaceState(null, '', legacyRoute)
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <BrowserRouter>
-        <StoreProvider>
-          <FormulaBarProvider>
-            <DrawerProvider>
-              <App />
-            </DrawerProvider>
-          </FormulaBarProvider>
-        </StoreProvider>
-      </BrowserRouter>
-    </ErrorBoundary>
-  </React.StrictMode>,
-)
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <React.StrictMode>
+      <ErrorBoundary>
+        <BrowserRouter>
+          <StoreProvider>
+            <FormulaBarProvider>
+              <DrawerProvider>
+                <App />
+              </DrawerProvider>
+            </FormulaBarProvider>
+          </StoreProvider>
+        </BrowserRouter>
+      </ErrorBoundary>
+    </React.StrictMode>,
+  )
+}
+
+void boot()

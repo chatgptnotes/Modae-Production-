@@ -129,6 +129,10 @@ demo data and can never write to either real database.
 - `public/sw.js` is network-first for navigations, so a new deploy is picked up
   on the next load rather than being pinned by the service worker.
 - State is held in `localStorage` under `wintrack-modae-v4` and mirrored to
-  Supabase when configured. Bumping that key in `src/store.jsx` forces every
-  browser to reseed — never bump it on production without telling the client,
-  it discards what they have entered.
+-  Supabase when configured. Supabase is authoritative for shared state; a
+  deleted server row is not recreated from a browser snapshot. Every Vercel
+  deployment exposes a no-cache `/api/app-version` identity. Active browsers
+  check it on startup, focus, reconnect, visibility restoration, and once per
+  minute; a mismatch signs out, clears app-owned storage/cache and IndexedDB,
+  and reloads the login screen. This intentionally discards unsaved browser
+  changes. The app has no automatic browser-cache restore path.

@@ -60,4 +60,9 @@ function vercelApiDevServer() {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), vercelApiDevServer()],
+  define: {
+    __APP_DEPLOYMENT_ID__: JSON.stringify(
+      process.env.VERCEL_DEPLOYMENT_ID || process.env.VERCEL_GIT_COMMIT_SHA || 'local'
+    ),
+  },
 })

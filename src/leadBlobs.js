@@ -125,7 +125,16 @@ export function deleteFile(leadId, name) {
 }
 
 export function clearAll() {
-  const local = tx('readwrite', store => { store.clear() })
+  const local = clearLocalAll()
   const remote = supabase ? deleteDemoUserFiles().catch(() => null) : Promise.resolve()
   return Promise.all([local, remote]).then(() => undefined)
+}
+
+// Deployment invalidation must not delete files from Supabase. This local-only
+// variant is intentionally separate from the user-requested workspace reset.
+export function clearLocalAll() {
+  const local = tx('readwrite', store => { store.clear() })
+  return local.then(() => {
+    dbPromise = null
+  })
 }

@@ -161,6 +161,13 @@ directory convention, or validation requirement changes.
 - Shared database synchronization is pull-based only: boot, route changes,
   focus/visibility restoration, reconnect, and explicit refresh. Do not add
   Supabase Realtime or WebSocket subscriptions for workspace synchronization.
+- Supabase is authoritative for shared state, including empty/deleted slices.
+  Never write a browser snapshot back to Supabase merely because it exists in
+  localStorage; only edits made after an authoritative pull may be saved.
+- Every Vercel deployment invalidates active browser sessions. The client must
+  clear app-owned local/session storage, Cache Storage, service-worker state,
+  and local IndexedDB file data, sign out locally, and reload to login. Do not
+  use the remote file-deletion reset path for deployment cleanup.
 - Proposal PDF generation currently uses the browser print flow.
 - Server-side email sending is available through the Vercel route and remains
   approval-gated in the UI.

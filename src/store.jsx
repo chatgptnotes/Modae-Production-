@@ -14,7 +14,7 @@ import {
 } from './seed.js'
 import { leadConfig, opportunityOwnerFor, routeOwner, expiredLeadDeadline, aiAuditDetail } from './leadRules.js'
 import { withoutSimulated, simulatedCount } from './simulatedLeads.js'
-import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLeadSlice, mergeOpportunitySlice, mergeSparesLineSlice, mergeClarificationSlice, mergeApprovalRows, defaultViewMode } from './appState.js'
+import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, defaultViewMode } from './appState.js'
 import { unitCostINR, unitSellINR, setRoleNameConfig, nowIST, toISTISOString, canManagePriceLists } from './utils.js'
 import { PRICE_SOURCES, isConfirmableSparesLine, normalizePriceFields, sparesLineFinancials } from './pricing.js'
 import { clarificationTopic } from './leadClarification.js'
@@ -95,10 +95,6 @@ const initialState = () => {
   // Production starts clean. Existing demo-mode snapshots are migrated once
   // into an empty workspace; real records entered after that remain intact.
   const next = reconcileApprovedSubmissions(state.demoData === true ? emptyState(state) : state)
-  if (next.demoData !== true && !Object.keys(next.priceLists || {}).length) {
-    const cachedPriceLists = datastore.readPriceListsCache()
-    if (cachedPriceLists && Object.keys(cachedPriceLists).length) next.priceLists = cachedPriceLists
-  }
   return next
 }
 
@@ -119,12 +115,12 @@ const localSnapshot = state => ({
   leadDeadlines: state.leadDeadlines,
   leadSyncBaseline: state.leadSyncBaseline,
   deletedLeadIds: state.deletedLeadIds,
-  // Keep sourcing rows in the compact browser cache so a stale/empty server
-  // response cannot blank an otherwise populated BOQ during hydration.
+  // Keep sourcing rows in the compact browser snapshot for offline editing;
+  // an authoritative Supabase pull replaces them before any save is allowed.
   sparesLines: state.sparesLines,
   sparesLinesSyncBaseline: state.sparesLinesSyncBaseline,
-  // Keep proposals in the browser fallback too. Supabase remains authoritative
-  // when available, but a local/offline refresh must not reset saved terms.
+  // Keep proposals in the browser snapshot for offline editing. The snapshot
+  // is never imported into Supabase merely because it exists on disk.
   proposals: state.proposals,
   approvals: state.approvals,
   customers: state.customers,
@@ -171,10 +167,6 @@ const permanentPurgeState = state => migrate({
   deletedOpportunityIds: [],
   pendingOpportunitySyncIds: [],
 })
-
-const BUSINESS_SLICE_KEYS = new Set(['leads', 'leadArchive', 'approvals', 'opportunities', 'proposals', 'sparesLines', 'clarifications', 'audit'])
-const populated = value => Array.isArray(value) ? value.length > 0 : !!value && typeof value === 'object' && Object.keys(value).length > 0
-const unexpectedEmptyBusinessSlice = (key, local, server) => BUSINESS_SLICE_KEYS.has(key) && populated(local) && !populated(server)
 
 // Append-only event log, newest first. Every mutation gets its own entry: audit
 // history is business data and must not be compacted or capped away.
@@ -336,8 +328,8 @@ export function StoreProvider({ children }) {
   const stateRef = useRef(state)
   stateRef.current = state
 
-  // ---- Supabase records-state sync (see datastore.js). localStorage stays the
-  // instant source of truth; the server holds one JSONB row per synced slice.
+  // ---- Supabase records-state sync (see datastore.js). localStorage is an
+  // offline working snapshot; Supabase is authoritative for shared slices.
   // hydratedRef gates server saves until the boot fetch resolves, so a fresh
   // device can't clobber good server data with its local seeds.
   const hydratedRef = useRef(!datastore.dbEnabled())
@@ -468,9 +460,8 @@ export function StoreProvider({ children }) {
     persistLocalSnapshot(stateRef.current)
   }
 
-  // Boot fetch: server slices replace local synced ones (through migrate, so
-  // schema backfills apply). An empty response is treated as degraded until an
-  // operator explicitly initializes the shared workspace.
+  // Boot fetch: Supabase is authoritative. The browser snapshot is only an
+  // offline working copy and is never allowed to repopulate a server response.
   //
   // "Replace" is deliberately limited to slices this device has not touched
   // since boot. The fetch resolves after the app is already interactive, and
@@ -493,105 +484,48 @@ export function StoreProvider({ children }) {
     }
     setLiveSyncStatus('live')
     if (hydratedRef.current) return
+    const s = stateRef.current
     if (res.empty) {
-      // An empty response can be a genuinely new workspace, but it is also
-      // what an RLS/configuration mistake looks like in the browser. Never
-      // auto-seed production from a browser snapshot: that can overwrite a
-      // shared workspace with stale demo/local data. Explicit clear/reset
-      // actions remain the only code paths allowed to initialise the server.
+      const clean = migrate({
+        ...emptyState(s),
+        demoData: false,
+        priceLists: {},
+        adhocParts: [],
+        rateSheets: {},
+        users: [],
+        audit: [],
+      })
+      lastSavedRef.current = syncedOf(clean)
       hydratedRef.current = true
-      setLiveSyncStatus('degraded')
+      setLiveSyncStatus('live')
       setSyncDiagnostics(diagnostics => ({ ...diagnostics, emptyWorkspaceAt: new Date().toISOString() }))
-      console.debug('Supabase returned an empty workspace; local data was preserved and no automatic seed was written.')
-      // A lead created while the initial request was in flight was preserved
-      // locally, but its earlier flush was gated on hydration. Publish that
-      // pending local change now that the empty-workspace decision is complete.
-      setTimeout(flushSaves, 0)
+      setState(clean)
     } else {
-      const s = stateRef.current
-      const accepted = {}
       const serverSlices = syncedOf(res.slices)
-      // Existing deployments may still contain the old seeded dataset. Once
-      // this browser is in production mode, purge that server snapshot before
-      // accepting hydration so demo customers cannot reappear after refresh.
-      if (s.demoData === false && serverSlices.demoData === true) {
-        const clean = emptyState(s)
-        try { await datastore.resetAll(syncedOf(clean)) }
-        catch (e) { console.warn('Demo data purge could not be synced:', e?.message) }
-        hydratedRef.current = true
-        lastSavedRef.current = syncedOf(clean)
-        setState(clean)
-        return
+      const accepted = {}
+      for (const [key, value] of Object.entries(serverSlices)) {
+        // Preserve only a real edit made while the request was in flight. A
+        // browser snapshot that merely existed before boot is not an edit.
+        if (key in s && JSON.stringify(s[key]) !== JSON.stringify(bootRef.current[key])) continue
+        accepted[key] = value
       }
-      const nextBaseline = { ...(s.leadSyncBaseline || {}) }
-      let nextClarificationBaseline = s.clarificationSyncBaseline || []
-      let nextOpportunityBaseline = s.opportunitySyncBaseline || []
-      let nextSparesLinesBaseline = s.sparesLinesSyncBaseline || []
-      for (const [k, v] of Object.entries(serverSlices)) {
-        if (unexpectedEmptyBusinessSlice(k, s[k], v)) {
-          console.debug(`Ignoring empty ${k} hydration response because this browser has populated data.`)
-          continue
-        }
-        if (k === 'leads' || k === 'leadArchive') {
-          const deletedLeadIds = [...new Set([...(s.deletedLeadIds || []), ...(serverSlices.deletedLeadIds || [])])]
-          accepted.deletedLeadIds = deletedLeadIds
-          const mergedLead = mergeLeadSlice(s[k], v, nextBaseline[k], deletedLeadIds)
-          accepted[k] = mergedLead.rows
-          nextBaseline[k] = mergedLead.baseline
-          continue
-        }
-        // Approvals merge per row by sync stamp: a stale server snapshot must
-        // never downgrade a local decision (this re-locked approved releases).
-        if (k === 'approvals') {
-          accepted[k] = mergeApprovalRows(s.approvals || [], v)
-          continue
-        }
-        if (k === 'clarifications') {
-          const mergedClarifications = mergeClarificationSlice(s.clarifications || [], v, s.clarificationSyncBaseline || [])
-          accepted[k] = mergedClarifications.rows
-          nextClarificationBaseline = mergedClarifications.baseline
-          continue
-        }
-        if (k === 'opportunities') {
-          const serverOpportunityIds = new Set((v || []).map(row => row?.id).filter(Boolean))
-          const pendingOpportunitySyncIds = (s.pendingOpportunitySyncIds || []).filter(id => !serverOpportunityIds.has(id))
-          const mergedOpportunities = mergeOpportunitySlice(s.opportunities || [], v, s.opportunitySyncBaseline || [], s.deletedOpportunityIds || [], pendingOpportunitySyncIds)
-          accepted[k] = mergedOpportunities.rows
-          nextOpportunityBaseline = mergedOpportunities.baseline
-          accepted.pendingOpportunitySyncIds = pendingOpportunitySyncIds
-          continue
-        }
-        if (k === 'sparesLines') {
-          const mergedSparesLines = mergeSparesLineSlice(s.sparesLines || [], v, s.sparesLinesSyncBaseline || [])
-          accepted[k] = mergedSparesLines.rows
-          nextSparesLinesBaseline = mergedSparesLines.baseline
-          continue
-        }
-        if (k in s && s[k] !== bootRef.current[k]) continue // edited this session — keep local
-        accepted[k] = v
-      }
-      const merged = reconcileApprovedSubmissions(migrate({ ...s, ...accepted, leadSyncBaseline: nextBaseline, clarificationSyncBaseline: nextClarificationBaseline, opportunitySyncBaseline: nextOpportunityBaseline, sparesLinesSyncBaseline: nextSparesLinesBaseline }))
-      // Only user changes made during the boot request should be dirty. A
-      // cached state slice that the server has never stored is not an edit;
-      // treating every such slice as dirty makes every browser push its whole
-      // local snapshot and causes consolidated state conflicts between tabs.
-      const acceptedKeys = new Set(Object.keys(accepted))
-      const serverKeys = new Set(Object.keys(serverSlices))
-      const savedBaseline = {}
-      for (const key of acceptedKeys) savedBaseline[key] = serverSlices[key] ?? merged[key]
-      for (const [key, value] of Object.entries(syncedOf(merged))) {
-        if (acceptedKeys.has(key) || serverKeys.has(key)) continue
-        if (JSON.stringify(s[key]) === JSON.stringify(bootRef.current[key])) {
-          savedBaseline[key] = value
-        }
-      }
-      lastSavedRef.current = savedBaseline
+      const merged = reconcileApprovedSubmissions(migrate({
+        ...s,
+        ...accepted,
+        deletedLeadIds: [],
+        deletedOpportunityIds: [],
+        pendingOpportunitySyncIds: [],
+        leadSyncBaseline: accepted.leads || [],
+        clarificationSyncBaseline: accepted.clarifications || [],
+        opportunitySyncBaseline: accepted.opportunities || [],
+        sparesLinesSyncBaseline: accepted.sparesLines || [],
+      }))
+      // Every server slice is the baseline, including an explicitly empty
+      // slice. This prevents stale local values from becoming dirty and being
+      // written back on the next debounce or pagehide.
+      lastSavedRef.current = { ...syncedOf(merged), ...serverSlices }
       hydratedRef.current = true
       setState(merged)
-      // Push whatever the user did during the boot window now, rather than
-      // leaving it to depend on them making another change. Deferred by a tick
-      // because flushSaves reads stateRef, which only catches up on the render
-      // setState above has just scheduled.
       setTimeout(flushSaves, 0)
     }
     // Non-critical configuration and catalogues must not delay the first
@@ -611,89 +545,56 @@ export function StoreProvider({ children }) {
   }
 
   // Focus refetch: pull server slices where this device has no unsaved edits.
-  // Dirty local slices win until their debounced save lands.
-  const applyServer = (slices, diagnostics = null, { allowEmptyBusinessSlices = false } = {}) => {
+  // Dirty local slices win only for the duration of their current save. Empty
+  // server slices are authoritative and must not be protected by old cache.
+  const applyServer = (slices, diagnostics = null) => {
     if (diagnostics) setSyncDiagnostics(diagnostics)
     const s = stateRef.current
     const updates = {}
-    const nextBaseline = { ...(s.leadSyncBaseline || {}) }
-    let nextClarificationBaseline = s.clarificationSyncBaseline || []
-    let nextOpportunityBaseline = s.opportunitySyncBaseline || []
-    let nextSparesLinesBaseline = s.sparesLinesSyncBaseline || []
     for (const [k, v] of Object.entries(syncedOf(slices))) {
-      if (!allowEmptyBusinessSlices && unexpectedEmptyBusinessSlice(k, s[k], v)) {
-        console.debug(`Ignoring empty ${k} refresh response because this browser has populated data.`)
-        setSyncDiagnostics(current => ({ ...current, protectedEmptyRefreshAt: new Date().toISOString(), protectedEmptySlice: k }))
-        continue
-      }
-      // Approvals merge per row by sync stamp — a stale server snapshot must
-      // never downgrade a decision that was just recorded locally.
-      if (k === 'approvals') {
-        const mergedApprovals = mergeApprovalRows(s.approvals || [], v)
-        if (JSON.stringify(s.approvals) !== JSON.stringify(mergedApprovals)) {
-          updates.approvals = mergedApprovals
-          nextBaseline.approvals = mergedApprovals
-        }
-        continue
-      }
-      if (k === 'clarifications') {
-        const mergedClarifications = mergeClarificationSlice(s.clarifications || [], v, s.clarificationSyncBaseline || [])
-        // Even when the rendered rows stay local, a differing server snapshot
-        // must update the dirty baseline so the preserved questions are pushed
-        // back instead of silently accepted as synced.
-        if (JSON.stringify(s.clarifications || []) !== JSON.stringify(v)) updates.clarifications = mergedClarifications.rows
-        nextClarificationBaseline = mergedClarifications.baseline
-        continue
-      }
-      if (k === 'opportunities') {
-        const serverOpportunityIds = new Set((v || []).map(row => row?.id).filter(Boolean))
-        const pendingOpportunitySyncIds = (s.pendingOpportunitySyncIds || []).filter(id => !serverOpportunityIds.has(id))
-        const mergedOpportunities = mergeOpportunitySlice(s.opportunities || [], v, s.opportunitySyncBaseline || [], s.deletedOpportunityIds || [], pendingOpportunitySyncIds)
-        if (JSON.stringify(s.opportunities || []) !== JSON.stringify(mergedOpportunities.rows)) updates.opportunities = mergedOpportunities.rows
-        nextOpportunityBaseline = mergedOpportunities.baseline
-        if (JSON.stringify(s.pendingOpportunitySyncIds || []) !== JSON.stringify(pendingOpportunitySyncIds)) updates.pendingOpportunitySyncIds = pendingOpportunitySyncIds
-        continue
-      }
-      if (k === 'sparesLines') {
-        const mergedSparesLines = mergeSparesLineSlice(s.sparesLines || [], v, s.sparesLinesSyncBaseline || [])
-        if (JSON.stringify(s.sparesLines || []) !== JSON.stringify(mergedSparesLines.rows)) updates.sparesLines = mergedSparesLines.rows
-        nextSparesLinesBaseline = mergedSparesLines.baseline
-        continue
-      }
       // A background slice may not have a server baseline yet because the
       // fast boot path intentionally skips large records. Compare those
-      // slices with the boot cache instead of mistaking every cached value
-      // for an unsaved edit. Once a baseline exists, the normal save-aware
-      // comparison protects edits made while the request was in flight.
+      // slices with the boot cache instead of mistaking every cached value for
+      // an unsaved edit. Once a baseline exists, only an actual local edit is
+      // protected while its save is pending.
       const hasSavedBaseline = Object.prototype.hasOwnProperty.call(lastSavedRef.current, k)
       const baseline = hasSavedBaseline ? lastSavedRef.current[k] : bootRef.current[k]
       const dirty = k in s && JSON.stringify(s[k]) !== JSON.stringify(baseline)
       if (dirty) continue
       if (JSON.stringify(s[k]) === JSON.stringify(v)) continue
       updates[k] = v
-      if (k === 'leads' || k === 'leadArchive') nextBaseline[k] = v
     }
-    const sparesBaselineChanged = JSON.stringify(s.sparesLinesSyncBaseline || []) !== JSON.stringify(nextSparesLinesBaseline)
-    if (!Object.keys(updates).length && !sparesBaselineChanged) return
-    const merged = reconcileApprovedSubmissions(migrate({ ...s, ...updates, leadSyncBaseline: nextBaseline, clarificationSyncBaseline: nextClarificationBaseline, opportunitySyncBaseline: nextOpportunityBaseline, sparesLinesSyncBaseline: nextSparesLinesBaseline }))
-    // Keep the server snapshot as the dirty baseline. If the merge preserved
-    // a local question over stale server data, the next debounced save must
-    // still upload that local row instead of treating it as already synced.
-    lastSavedRef.current = { ...lastSavedRef.current, ...Object.fromEntries(Object.entries(syncedOf(slices))) }
+    const serverSlices = syncedOf(slices)
+    const baselineUpdates = {
+      ...Object.fromEntries(Object.entries(serverSlices)),
+      ...(serverSlices.leads ? { leadSyncBaseline: serverSlices.leads } : {}),
+      ...(serverSlices.clarifications ? { clarificationSyncBaseline: serverSlices.clarifications } : {}),
+      ...(serverSlices.opportunities ? { opportunitySyncBaseline: serverSlices.opportunities } : {}),
+      ...(serverSlices.sparesLines ? { sparesLinesSyncBaseline: serverSlices.sparesLines } : {}),
+    }
+    if (!Object.keys(updates).length && !Object.keys(baselineUpdates).length) return
+    const merged = reconcileApprovedSubmissions(migrate({
+      ...s,
+      ...updates,
+      deletedLeadIds: [],
+      deletedOpportunityIds: [],
+      pendingOpportunitySyncIds: [],
+      ...baselineUpdates,
+    }))
+    lastSavedRef.current = { ...lastSavedRef.current, ...Object.fromEntries(Object.entries(serverSlices)) }
     setState(merged)
   }
 
   const loadApprovedPriceLists = async ({ force = false } = {}) => {
-    const cached = datastore.readPriceListsCache()
-    if (cached && !Object.keys(stateRef.current.priceLists || {}).length) {
-      setState(s => ({ ...s, priceLists: cached }))
-      lastSavedRef.current = { ...lastSavedRef.current, priceLists: cached }
-      setPriceListsStatus(Object.keys(cached).length ? 'ready' : 'empty')
-    }
     if (!datastore.dbEnabled()) {
       setPriceListsStatus(Object.keys(stateRef.current.priceLists || {}).length ? 'ready' : 'empty')
       return
     }
+    // A configured Supabase project is authoritative. Do not display or
+    // republish a catalogue left behind in the browser while the server read
+    // is pending or unavailable.
+    lastSavedRef.current = { ...lastSavedRef.current, priceLists: {} }
+    setState(s => Object.keys(s.priceLists || {}).length ? { ...s, priceLists: {} } : s)
     setPriceListsStatus(Object.keys(stateRef.current.priceLists || {}).length ? 'refreshing' : 'loading')
     try {
       const result = await datastore.loadPriceLists({ force })
@@ -706,10 +607,10 @@ export function StoreProvider({ children }) {
         lastSavedRef.current = { ...lastSavedRef.current, priceLists: next }
         setState(s => ({ ...s, priceLists: next }))
       }
-      setPriceListsStatus(Object.keys(next).length ? (result.degraded ? 'degraded' : 'ready') : 'empty')
+      setPriceListsStatus(Object.keys(next).length ? 'ready' : 'empty')
     } catch (error) {
       console.warn('Approved price-list load failed:', error?.message || error)
-      setPriceListsStatus(Object.keys(stateRef.current.priceLists || {}).length ? 'ready' : 'error')
+      setPriceListsStatus('error')
     }
   }
 
@@ -724,7 +625,13 @@ export function StoreProvider({ children }) {
       if (!authError) setLiveSyncStatus('error')
       return false
     }
-    if (res.empty) { setLiveSyncStatus('degraded'); return false }
+    if (res.empty) {
+      const clean = migrate({ ...emptyState(stateRef.current), demoData: false, priceLists: {}, adhocParts: [], rateSheets: {}, users: [], audit: [] })
+      lastSavedRef.current = syncedOf(clean)
+      setState(clean)
+      setLiveSyncStatus('live')
+      return true
+    }
     setLiveSyncStatus('live')
     applyServer(res.slices, res.diagnostics)
     return true

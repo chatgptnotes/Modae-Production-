@@ -75,12 +75,13 @@ test('lead creation flushes before immediate inbox navigation', () => {
   assert.match(store, /'Lead received',[\s\S]*setTimeout\(flushSaves, 0\)/)
 })
 
-test('empty workspace hydration flushes leads created during startup', () => {
+test('empty workspace hydration does not republish the browser snapshot', () => {
   const store = read('src/store.jsx')
   const emptyHydration = store.slice(store.indexOf('if (res.empty) {'), store.indexOf('} else {', store.indexOf('if (res.empty) {')))
   assert.match(emptyHydration, /hydratedRef\.current = true/)
-  assert.match(emptyHydration, /setTimeout\(flushSaves, 0\)/,
-    'a lead created before hydration must be uploaded after an empty workspace response')
+  assert.match(emptyHydration, /priceLists: \{\}/)
+  assert.doesNotMatch(emptyHydration, /setTimeout\(flushSaves, 0\)/,
+    'an empty authoritative workspace must not republish cached rows')
 })
 
 test('save failures expose the Supabase error in sync diagnostics', () => {
@@ -148,14 +149,12 @@ test('consolidated state and configuration conflicts use bounded latest-save-win
   assert.match(datastore, /saveConsolidatedRows\(CONSOLIDATED_SETTINGS_ENTITY/)
 })
 
-test('price-list loading keeps a usable cached catalogue when the shared copy is unavailable', () => {
+test('price-list loading requires the shared catalogue', () => {
   const datastore = read('src/datastore.js')
   const store = read('src/store.jsx')
-  const priceLists = read('src/pages/PriceLists.jsx')
-  assert.match(datastore, /const fallback = readPriceListsCache\(\)/)
-  assert.match(datastore, /degraded: true/)
-  assert.match(store, /result\.degraded \? 'degraded' : 'ready'/)
-  assert.match(priceLists, /showing the last cached copy/)
+  assert.doesNotMatch(datastore, /readPriceListsCache/)
+  assert.doesNotMatch(datastore, /degraded: true/)
+  assert.doesNotMatch(store, /result\.degraded \? 'degraded' : 'ready'/)
 })
 
 test('forced pull reads reuse an older request instead of queuing another fetch', () => {
@@ -191,15 +190,13 @@ test('the store retains internal sync state without rendering status messaging',
   assert.doesNotMatch(workbench, /OpportunitySyncUnavailable|shared workspace could not confirm/)
 })
 
-test('refresh safety retains local data on quota failures and empty full responses', () => {
+test('refresh safety keeps quota recovery but accepts empty server responses', () => {
   const store = read('src/store.jsx')
   assert.match(store, /Local cache was not updated; keeping the last known-good browser snapshot/)
   assert.doesNotMatch(store, /localStorage\.removeItem\(KEY\)\n\s*localStorage\.setItem\(KEY/)
-  assert.match(store, /const unexpectedEmptyBusinessSlice/)
-  assert.match(store, /console\.debug\(`Ignoring empty \$\{k\} refresh response/)
-  assert.match(store, /console\.debug\('Supabase returned an empty workspace; local data was preserved/)
-  assert.doesNotMatch(store, /console\.warn\(`Ignoring empty \$\{k\} refresh response/)
-  assert.doesNotMatch(store, /console\.warn\('Supabase returned an empty workspace; local data was preserved/)
+  assert.doesNotMatch(store, /unexpectedEmptyBusinessSlice/)
+  assert.match(store, /const serverSlices = syncedOf\(slices\)/)
+  assert.match(store, /deletedOpportunityIds: \[\]/)
 })
 
 test('boot does not delete the active browser snapshot before reading it', () => {

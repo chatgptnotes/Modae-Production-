@@ -27,9 +27,14 @@ submission, and follow-up.
 
 The application pulls shared state from Supabase on boot, route changes,
 window focus/visibility restoration, reconnect, and explicit refresh. It does
-not use Supabase Realtime or WebSockets. The application can run locally without Supabase. In that mode it uses the
-local demo state and does not write to a database. A configured Supabase
-environment enables authentication and cloud persistence.
+not use Supabase Realtime or WebSockets. Supabase is authoritative for shared
+data, including deletions; browser snapshots are offline working copies and
+are never republished merely because they exist locally. Each new Vercel
+deployment invalidates active browser sessions, clears app-owned browser
+storage/cache, and returns users to sign-in. The application can run locally
+without Supabase. In that mode it uses the local demo state and does not write
+to a database. A configured Supabase environment enables authentication and
+cloud persistence.
 
 ## Getting started
 
