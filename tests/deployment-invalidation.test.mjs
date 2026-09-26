@@ -8,13 +8,15 @@ import { fileURLToPath } from 'node:url'
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
 
-test('deployment invalidation has a no-cache Railway version endpoint and unique build identity', () => {
+test('deployment invalidation uses the same stable Git commit at build and runtime', () => {
   const api = read('api/app-version.js')
   const vite = read('vite.config.js')
   assert.match(api, /Cache-Control.*no-store/)
-  assert.match(api, /RAILWAY_DEPLOYMENT_ID/)
+  assert.match(api, /RAILWAY_GIT_COMMIT_SHA/)
+  assert.doesNotMatch(api, /RAILWAY_DEPLOYMENT_ID/)
   assert.match(vite, /__APP_DEPLOYMENT_ID__/)
-  assert.match(vite, /RAILWAY_DEPLOYMENT_ID/)
+  assert.match(vite, /RAILWAY_GIT_COMMIT_SHA/)
+  assert.doesNotMatch(vite, /RAILWAY_DEPLOYMENT_ID/)
 })
 
 function memoryStorage(entries = []) {
