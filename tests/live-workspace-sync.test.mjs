@@ -4,7 +4,7 @@ import test from 'node:test'
 
 const read = file => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
 
-test('the shared workspace uses pull-based refreshes for all shared slices', () => {
+test('the shared workspace loads normally once and uses targeted Railway live updates', () => {
   const datastore = read('src/datastore.js')
   assert.doesNotMatch(datastore, /postgres_changes|subscribeBusinessChanges|loadChangedRows|\.channel\(/)
   assert.match(datastore, /loadAll\(\{ force = false \} = \{\}\)/)
@@ -12,7 +12,11 @@ test('the shared workspace uses pull-based refreshes for all shared slices', () 
 
   const store = read('src/store.jsx')
   assert.match(store, /const location = useLocation\(\)/)
-  assert.match(store, /useEffect\(\(\) => \{[\s\S]*pullSharedData\(\)[\s\S]*\}, \[location\.pathname\]\)/)
+  assert.match(store, /import \{ readLiveData, startLiveEvents \} from '\.\/liveSync\.js'/)
+  assert.match(datastore, /saveWorkspaceToRailway\(collaborativeDirty\)/)
+  assert.match(store, /return startLiveEvents\(/)
+  assert.doesNotMatch(store, /publishLiveChanges\(/)
+  assert.doesNotMatch(store, /pullSharedData\(\)\.catch\(\(\) => setLiveSyncStatus\('error'\)\)/)
   assert.match(store, /window\.addEventListener\('focus'/)
   assert.match(store, /document\.addEventListener\('visibilitychange'/)
   assert.match(store, /async refreshSharedData\(\)/)
@@ -99,12 +103,12 @@ test('save RPC errors retain the entity that failed', () => {
   assert.match(datastore, /throw annotateRpcError\('opportunities', result\.error\)/)
 })
 
-test('focus retries dirty writes before refreshing shared data', () => {
+test('focus retries dirty writes without reloading the whole shared workspace', () => {
   const store = read('src/store.jsx')
   const focus = store.slice(store.indexOf('const onFocus = () => {'), store.indexOf('const onVisibility = () =>'))
   assert.match(focus, /if \(!hydratedRef\.current\) \{ hydrate\(\); return \}/)
   assert.match(focus, /flushSaves\(\)/)
-  assert.match(focus, /pullSharedData\(\)/)
+  assert.doesNotMatch(focus, /pullSharedData\(\)/)
 })
 
 test('pending opportunity IDs stay local-only and are persisted in the browser snapshot', () => {

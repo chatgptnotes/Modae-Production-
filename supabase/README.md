@@ -22,6 +22,9 @@ The active repository migrations are `007_live_workspace_sync.sql`,
 `008_dedicated_workspace_tables.sql`, `009_relational_workspace_data.sql`,
 `010_workspace_contract_verification.sql`, and
 `011_save_rows_lock_order.sql`, and `012_permanent_workspace_purge.sql`.
+`013_railway_free_tier_security.sql` is the Railway-first Free-plan migration:
+it removes anonymous business-data access and adds small active-row indexes for
+the shared Railway cache.
 Migration 008 moves large JSONB entities out of `records`; migration 009 adds
 typed relational business tables and indexes while keeping legacy rows as a
 rollback copy. Historical setup and
@@ -40,15 +43,17 @@ It deletes all workspace data except price lists, price-list versions, and the
 user-profile state needed for authorized users to sign in. The browser invokes
 it only through `api/purge-workspace.js` after session and role verification.
 
-The browser uses pull-based synchronization only. Runtime code refreshes the
-active workspace on boot, route changes, focus/visibility restoration,
-reconnect, and explicit refresh; it does not subscribe to Supabase Realtime.
+The browser loads the workspace on boot and on explicit refresh. It does not
+reload the complete workspace for route changes, focus, visibility restoration,
+or reconnect. Railway sends lightweight live events for approvals, leads, and
+opportunities; receiving browsers selectively read only those changed tables
+with their own Supabase bearer token. This is not Supabase Realtime.
 
 For a completely new Supabase project, run [`000_fresh_project.sql`](./000_fresh_project.sql)
-first, then run `007_live_workspace_sync.sql`, `008_dedicated_workspace_tables.sql`,
-and `009_relational_workspace_data.sql`. Migration 009 includes the relational
-tables, typed backfill, RLS policies, grants, indexes, and realtime publication
-entries. Do not use the retired
+first, then run every migration from `007_live_workspace_sync.sql` through
+`013_railway_free_tier_security.sql` in numeric order. Migration 009 includes
+the relational tables, typed backfill, RLS policies, grants, indexes, and
+realtime publication entries. Do not use the retired
 root-level `supabase-tables.sql` for a new project because it references the
 legacy `app_state` migration model.
 

@@ -31,6 +31,7 @@ import {
 } from './proposal/sparesBoq.js'
 import { releaseState, transitionBlockers } from './gates.js'
 import { clearSupabaseSession, isSupabaseAuthError, supabase, supabaseConfigError } from './supabase.js'
+import { readLiveData, startLiveEvents } from './liveSync.js'
 import { purgeWorkspace } from './workspacePurge.js'
 
 const StoreCtx = createContext(null)
@@ -544,9 +545,8 @@ export function StoreProvider({ children }) {
       .catch(() => setLiveSyncStatus('error'))
   }
 
-  // Focus refetch: pull server slices where this device has no unsaved edits.
-  // Dirty local slices win only for the duration of their current save. Empty
-  // server slices are authoritative and must not be protected by old cache.
+  // A server slice replaces only a clean local slice. This protects edits that
+  // are still being saved while accepting a live update from another browser.
   const applyServer = (slices, diagnostics = null) => {
     if (diagnostics) setSyncDiagnostics(diagnostics)
     const s = stateRef.current
@@ -638,34 +638,43 @@ export function StoreProvider({ children }) {
   }
 
   useEffect(() => {
+    if (!datastore.dbEnabled() || !hydratedRef.current || !state.auth?.user?.id) return
+    return startLiveEvents({
+      onChange: async entities => {
+        try {
+          const slices = await readLiveData(entities)
+          if (slices) applyServer(slices)
+          setLiveSyncStatus('live')
+        } catch (error) {
+          if (!invalidateSupabaseAuth(error)) setLiveSyncStatus('error')
+        }
+      },
+      onError: error => {
+        // The helper reconnects automatically. Retain the visible diagnostic
+        // without forcing a broad Supabase refresh on every reconnect.
+        if (!isSupabaseAuthError(error)) setLiveSyncStatus('error')
+      },
+    })
+  }, [state.auth?.user?.id])
+
+  useEffect(() => {
     if (!datastore.dbEnabled()) return
     hydrate()
     loadApprovedPriceLists()
-    let lastFetch = Date.now()
     const onFocus = () => {
-      if (Date.now() - lastFetch < 45000) return
-      lastFetch = Date.now()
       if (!hydratedRef.current) { hydrate(); return }
-      // Retry any write that failed while the browser was reconnecting before
-      // pulling a newer server snapshot. The dirty local slice remains
-      // protected by lastSavedRef until this succeeds.
       flushSaves()
-      pullSharedData()
-        .catch(() => setLiveSyncStatus('error'))
     }
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') {
         flushLocalCache(); flushSaves()
       } else if (hydratedRef.current) {
         flushSaves()
-        pullSharedData().catch(() => setLiveSyncStatus('error'))
       }
     }
     const onOnline = () => {
       if (!hydratedRef.current) { hydrate(); return }
       flushSaves()
-      pullSharedData()
-        .catch(() => setLiveSyncStatus('error'))
     }
     // visibilitychange is not reliably delivered when the page is being torn
     // down, which is exactly the reload-right-after-editing case. pagehide is.
@@ -682,13 +691,11 @@ export function StoreProvider({ children }) {
     }
   }, [])
 
-  // Pull the shared snapshot after route navigation. The store remains the
-  // single merge/conflict boundary, so page components do not need separate
-  // Supabase loaders or their own offline/error handling.
+  // Navigation saves pending edits but does not reload the whole workspace.
+  // Collaborative records arrive through the targeted live event channel.
   useEffect(() => {
     if (!datastore.dbEnabled() || !hydratedRef.current) return
     flushSaves()
-    pullSharedData().catch(() => setLiveSyncStatus('error'))
   }, [location.pathname])
 
   useEffect(() => {

@@ -1,5 +1,6 @@
 import { describeSupabaseError, isSupabaseAuthError, supabase } from './supabase.js'
 import { writeCachedRules } from './rules.js'
+import { loadWorkspaceFromRailway, saveWorkspaceToRailway } from './workspaceApi.js'
 
 // Server persistence for the store: normalized business rows plus dedicated
 // JSONB entity tables. Mirrors the filestore facade —
@@ -315,6 +316,8 @@ export async function loadCore() {
 // stale or omitted a row that is still present in the normalized table.
 export async function loadOpportunity(id) {
   if (!supabase || !id) return null
+  const railway = await loadWorkspaceFromRailway()
+  if (railway) return (railway.opportunities || []).find(row => row?.id === id) || null
   const result = await supabase.from('opportunities')
     .select('id, data, rev')
     .eq('id', id)
@@ -336,10 +339,11 @@ export async function loadBackground() {
 
 async function fetchCore() {
   try {
+    const railway = await loadWorkspaceFromRailway()
     const [consolidatedConfig, consolidatedState, business] = await Promise.all([
       loadConsolidatedConfig(),
       loadConsolidatedState(),
-      loadBusinessTables({ includeRecords: false }),
+      loadBusinessTables({ includeRecords: false, collaborative: railway || {} }),
     ])
     const slices = {}
     if (consolidatedState) Object.assign(slices, consolidatedState)
@@ -369,6 +373,7 @@ async function fetchCore() {
 
 async function fetchAll() {
   try {
+    const railway = await loadWorkspaceFromRailway()
     const slices = {}
     const [consolidatedConfig, consolidatedState] = await Promise.all([
       loadConsolidatedConfig(),
@@ -377,7 +382,7 @@ async function fetchAll() {
     if (consolidatedState) Object.assign(slices, consolidatedState)
     if (consolidatedConfig) slices.config = consolidatedConfig
     if (consolidatedConfig) writeCachedRules(consolidatedConfig)
-    const business = await loadBusinessTables({ includeRecords: true })
+    const business = await loadBusinessTables({ includeRecords: true, collaborative: railway || {} })
     // Apply empty normalized arrays too. This prevents stale local/demo rows
     // from surviving when the server intentionally has no active rows.
     for (const [key, value] of Object.entries(business)) {
@@ -414,7 +419,15 @@ async function saveSlicesNow(dirty) {
   if (!supabase) return
   invalidateLoadCache()
   let normalizedDirty = dirty
-  const savedBusiness = await saveBusinessTables(dirty)
+  const collaborativeDirty = Object.fromEntries(Object.entries(dirty)
+    .filter(([key]) => key === 'leads' || key === 'opportunities' || key === 'approvals'))
+  if (Object.keys(collaborativeDirty).length) {
+    const savedByRailway = await saveWorkspaceToRailway(collaborativeDirty)
+    if (!savedByRailway) throw new Error('A signed-in Railway session is required to save shared leads, opportunities, and approvals.')
+    normalizedDirty = { ...normalizedDirty }
+    for (const key of Object.keys(collaborativeDirty)) delete normalizedDirty[key]
+  }
+  const savedBusiness = await saveBusinessTables(normalizedDirty)
   if (savedBusiness.length) {
     normalizedDirty = { ...normalizedDirty }
     for (const key of savedBusiness) delete normalizedDirty[key]
@@ -557,14 +570,14 @@ async function purgeActiveNormalizedRows(seedMap = {}) {
   return purged
 }
 
-async function loadBusinessTables({ includeRecords = true } = {}) {
+async function loadBusinessTables({ includeRecords = true, collaborative = {} } = {}) {
   const legacyQuery = includeRecords
     ? supabase.from('records').select('entity, id, data, rev').is('deleted_at', null).in('entity', ['proposals', 'spares_lines', 'clarifications', 'audit'])
     : supabase.from('records').select('entity', { count: 'exact', head: true }).is('deleted_at', null)
   const baseTables = await Promise.all([
-    supabase.from('leads').select('id, data, rev').is('deleted_at', null),
-    supabase.from('opportunities').select('id, data, rev').is('deleted_at', null),
-    supabase.from('approvals').select('id, data, rev').is('deleted_at', null),
+    Array.isArray(collaborative.leads) ? Promise.resolve({ data: collaborative.leads.map(data => ({ id: data.id, data, rev: 0 })), error: null }) : supabase.from('leads').select('id, data, rev').is('deleted_at', null),
+    Array.isArray(collaborative.opportunities) ? Promise.resolve({ data: collaborative.opportunities.map(data => ({ id: data.id, data, rev: 0 })), error: null }) : supabase.from('opportunities').select('id, data, rev').is('deleted_at', null),
+    Array.isArray(collaborative.approvals) ? Promise.resolve({ data: collaborative.approvals.map(data => ({ id: data.id, data, rev: 0 })), error: null }) : supabase.from('approvals').select('id, data, rev').is('deleted_at', null),
     legacyQuery,
   ])
   const dedicatedEntities = ['proposals', 'spares_lines', 'clarifications', 'audit']
