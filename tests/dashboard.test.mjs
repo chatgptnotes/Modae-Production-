@@ -64,6 +64,18 @@ test('every internal role can open detailed reporting', () => {
   assert.ok(!PERMS.CUST.includes('analytics'))
 })
 
+test('annual attainment gauge fills its card area above the figures', () => {
+  const dashboard = read('src/pages/MyDashboard.jsx')
+  const styles = read('src/styles.css')
+  const card = dashboard.slice(dashboard.indexOf('title="Annual attainment"'), dashboard.indexOf('title="Quarterly target vs actual"'))
+
+  assert.match(card, /<ArcGauge[^>]*fluid/)
+  assert.ok(card.indexOf('<ArcGauge') < card.indexOf('annual-attainment-table'),
+    'the figures table remains below the gauge')
+  assert.match(styles, /\.annual-attainment-gauge\s*\{[^}]*flex:\s*1 1 auto/s)
+  assert.match(styles, /\.annual-attainment-gauge \.gauge-fluid \.gauge-svg\s*\{[^}]*width:\s*100%[^}]*height:\s*100%/s)
+})
+
 test('ADMIN and LJS are co-equal application authorities', () => {
   assert.equal(isAdminRole('ADMIN'), true)
   assert.equal(isAdminRole('LJS'), true)

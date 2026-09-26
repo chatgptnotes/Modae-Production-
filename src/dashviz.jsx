@@ -49,12 +49,13 @@ export function DonutGauge({ pct = 0, size = 74, caption }) {
 }
 
 // Half-circle gauge, same pathLength trick on an arc path.
-export function ArcGauge({ pct = 0, size = 116, caption, value }) {
+export function ArcGauge({ pct = 0, size = 116, caption, value, fluid = false }) {
   const p = Math.max(0, Math.min(100, Math.round(pct)))
   const arc = 'M 6 34 A 28 28 0 0 1 62 34'
   return (
-    <div className="gauge arc" style={{ width: size }}>
-      <svg viewBox="0 0 68 40" width={size} height={size * 0.6} className="gauge-svg">
+    <div className={`gauge arc${fluid ? ' gauge-fluid' : ''}`} style={fluid ? undefined : { width: size }}>
+      <svg viewBox="0 0 68 40" width={fluid ? '100%' : size} height={fluid ? '100%' : size * 0.6}
+        className="gauge-svg" preserveAspectRatio="xMidYMid meet">
         <path className="gauge-track" d={arc} pathLength="100" />
         <path className="gauge-value" d={arc} pathLength="100" strokeDasharray={`${p} 100`} />
         <text className="gauge-text arc-text" x="34" y="32" textAnchor="middle">{value ?? `${p}%`}</text>
