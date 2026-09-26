@@ -1,9 +1,15 @@
 import { createClient } from '@supabase/supabase-js'
+import { randomUUID } from 'node:crypto'
 
 const PURGE_CONFIRMATION = 'DELETE ALL LEADS AND OPPORTUNITIES'
 const PURGE_ROLES = new Set(['SUPER', 'ADMIN', 'LJS'])
 
 const clean = value => String(value || '').trim()
+const requestIdFor = req => clean(req.headers?.['x-request-id']) || randomUUID()
+const failure = (res, requestId, error) => {
+  res.setHeader('x-purge-request-id', requestId)
+  return res.status(502).json({ ok: false, error, requestId })
+}
 const jsonBody = req => {
   try { return typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {}) }
   catch { return null }
@@ -32,6 +38,7 @@ async function currentPurgeAdmin(client, token) {
 }
 
 export default async function handler(req, res) {
+  const requestId = requestIdFor(req)
   if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'POST only' })
   const client = adminClient()
   if (!client) return res.status(503).json({ ok: false, error: 'Server-side Supabase administration is not configured.' })
@@ -42,8 +49,8 @@ export default async function handler(req, res) {
   let admin
   try { admin = await currentPurgeAdmin(client, token) }
   catch (error) {
-    console.error('Workspace purge authorization failed:', error?.message || error)
-    return res.status(502).json({ ok: false, error: 'Could not verify the administrator account.' })
+    console.error('Workspace purge authorization failed:', { requestId, message: error?.message || String(error), code: error?.code || '', status: error?.status || '' })
+    return failure(res, requestId, 'Could not verify the administrator account.')
   }
   if (!admin) return res.status(403).json({ ok: false, error: 'Only SUPER, ADMIN, or LJS users can permanently purge the workspace.' })
 
@@ -57,7 +64,7 @@ export default async function handler(req, res) {
     if (error) throw error
     return res.status(200).json({ ok: true, counts: data || {} })
   } catch (error) {
-    console.error('Workspace purge failed:', error?.message || error)
-    return res.status(502).json({ ok: false, error: 'The workspace purge did not complete. No browser data was cleared.' })
+    console.error('Workspace purge failed:', { requestId, message: error?.message || String(error), code: error?.code || '', details: error?.details || '', hint: error?.hint || '' })
+    return failure(res, requestId, 'The workspace purge did not complete. No browser data was cleared.')
   }
 }

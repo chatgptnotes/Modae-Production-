@@ -7,6 +7,10 @@ This is an implementation and release log, not a dump of every commit.
 
 - Fixed Section 5B commercial approvals reappearing after AH approval. The
   dispatch gate now recognizes current and legacy commercial approval records
+- Added request IDs and safe server-side Supabase error metadata to workspace
+  purge failures so an unapplied or broken purge RPC can be diagnosed without
+  exposing service credentials in the browser.
+
   by their signed customer terms, repairs missing legacy term details, and
   avoids duplicate pending requests.
   `R. Sundaram` during state migration.

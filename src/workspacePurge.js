@@ -12,6 +12,9 @@ export async function purgeWorkspace(confirmation) {
     body: JSON.stringify({ confirmation }),
   })
   const result = await response.json().catch(() => ({}))
-  if (!response.ok) throw new Error(result.error || 'Workspace purge failed.')
+  if (!response.ok) {
+    const reference = result.requestId || response.headers.get('x-purge-request-id')
+    throw new Error([result.error || 'Workspace purge failed.', reference && `Reference: ${reference}`].filter(Boolean).join(' '))
+  }
   return result
 }

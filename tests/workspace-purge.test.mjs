@@ -11,7 +11,16 @@ test('permanent workspace purge is server-authorized and confirmation-gated', ()
   assert.match(api, /client\.auth\.getUser\(token\)/)
   assert.match(api, /client\.rpc\('purge_workspace_data'\)/)
   assert.match(api, /body\.confirmation !== PURGE_CONFIRMATION/)
+  assert.match(api, /x-purge-request-id/)
+  assert.match(api, /requestId/)
+  assert.match(api, /error\?\.details/)
   assert.doesNotMatch(api, /VITE_SUPABASE_SERVICE_ROLE_KEY/)
+})
+
+test('the browser includes a purge reference when the server rejects the RPC', () => {
+  const client = read('src/workspacePurge.js')
+  assert.match(client, /x-purge-request-id/)
+  assert.match(client, /Reference: \$\{reference\}/)
 })
 
 test('the purge procedure retains only price lists and required user profiles', () => {
