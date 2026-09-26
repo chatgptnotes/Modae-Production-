@@ -131,7 +131,7 @@ test('leadTextChunks prefers page-aware chunking when structPages is present', (
   assert.ok(chunks.every(c => c.pageStart != null && c.pageEnd != null))
 })
 
-test('SPA rewrite excludes serverless API paths', () => {
-  const config = fs.readFileSync(new URL('../vercel.json', import.meta.url), 'utf8')
-  assert.match(config, /\(\?\!api\//)
+test('Express keeps API routes ahead of the SPA fallback', () => {
+  const app = fs.readFileSync(new URL('../src/server/app.ts', import.meta.url), 'utf8')
+  assert.ok(app.indexOf("app.use('/api'") < app.indexOf('express.static(staticDir)'))
 })

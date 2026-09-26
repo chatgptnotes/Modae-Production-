@@ -43,6 +43,7 @@ test('server deployment documentation keeps the service key server-side', () => 
   const env = read('.env.example')
   const deploy = read('DEPLOYMENT.md')
   assert.match(env, /SUPABASE_SERVICE_ROLE_KEY=/)
-  assert.match(deploy, /vercel env add SUPABASE_SERVICE_ROLE_KEY production/)
+  assert.match(deploy, /Railway's service Variables page/)
+  assert.match(deploy, /SUPABASE_SERVICE_ROLE_KEY=/)
   assert.match(env, /Never prefix this with VITE_/)
 })

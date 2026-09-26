@@ -1,138 +1,52 @@
-# Deploying WinTrack — staging and production
+# Deploying WinTrack on Railway
 
-Two Vercel projects off one repository, per the 13 Aug review: *"we need to have
-the code base for us in the staging, and on the production. And the customer will
-be using the one on production, and giving us continuous feedback, while we are
-developing further on the staging."*
+WinTrack is deployed as one Railway service: Express serves the built React
+application and its same-origin `/api/*` endpoints.
 
-| | Staging | Production |
-|---|---|---|
-| Vercel project | `wintrack-staging` | `wintrack` |
-| Deploys from | `staging` branch | `main` |
-| Audience | us | the client |
-| Supabase project | its own | its own |
+## Railway service setup
 
-The two must not share a Supabase project. The client is entering real
-opportunities in production while staging is still being changed; one shared
-database would let a staging migration or a reseed destroy their data.
+1. Create a new GitHub repository from this local project, then connect that
+   repository to a new Railway service.
+2. Set the Railway build command to `npm run build`, the start command to
+   `npm start`, and the health check path to `/healthz`.
+3. Configure the service's generated Railway domain or a custom domain. A
+   connected GitHub branch automatically redeploys when changes are pushed.
 
-## One-time setup
+Use separate Railway staging and production environments, each with its own
+Supabase project. They must not share a Supabase project: staging work must
+never be able to alter customer production records.
 
-The Vercel CLI is not installed in this repo's toolchain:
+Railway makes its deployment ID and Git commit SHA available to the service.
+WinTrack uses those values to invalidate old browser sessions after a deploy.
 
-```bash
-npm i -g vercel
-vercel login
-```
+## Environment variables
 
-### Production
-
-```bash
-vercel link                      # choose/create the "wintrack" project
-vercel env add VITE_SUPABASE_URL production
-vercel env add VITE_SUPABASE_ANON_KEY production
-vercel env add SUPABASE_SERVICE_ROLE_KEY production
-```
-
-Set the project's Production Branch to `main` in Vercel → Settings → Git.
-
-### Staging
-
-Create a second Vercel project from the same repository, set its Production
-Branch to `staging`, then add the same four variables pointed at the **staging**
-Supabase project.
-
-### The AI key
-
-`GEMINI_API_KEY` is never a `VITE_` variable — anything so prefixed is compiled
-into the browser bundle. The Vercel deployment reads it from the server-side
-Vercel environment and exposes only the `/api/ai` proxy to the SPA:
+Set these in Railway's service Variables page; never commit their real values:
 
 ```text
-GEMINI_API_KEY=...           # Vercel server-side variable
-# The SPA calls the same-origin Vercel route; no AI URL override is required.
-```
-
-The /api/ai route requires a valid Supabase Auth session, so the server must
-also have SUPABASE_SERVICE_ROLE_KEY configured. The browser sends only the
-short-lived Supabase access token; it never receives the Gemini key. The route
-also rejects oversized requests and applies a per-user rate limit to control
-unexpected document-processing spend.
-
-Routine tasks use `gemini-3.1-flash-lite`; complex proposal, tender, template,
-and approval-evidence tasks are automatically routed to `gemini-2.5-flash`.
-
-With no key the function returns 503 and the app falls back to its deterministic
-parsers rather than erroring — fine for a preview, not for the client's build.
-
-After adding or replacing either variable, redeploy that environment; Vercel
-applies environment-variable changes only to new deployments. On the deployed
-app, use **Admin → AI model configuration → Test connection**. It must report
-a model and response time before lead extraction is expected to scan email
-bodies or attachments.
-
-Add a replacement GEMINI_API_KEY separately to Production and Staging/Preview
-as needed. Never place it in .env.example, a VITE_ variable, source code, or
-chat.
-
-### Customer quote email
-
-The approval decision stays inside WinTrack. After the final release approval,
-the Submission panel calls the Vercel `/api/send-proposal-email` function,
-which logs into Gmail directly over SMTP (no Google Cloud OAuth app) using
-the mailbox address and an app password. Add these as **server-side** Vercel
-variables (never `VITE_` variables):
-
-```bash
+VITE_SUPABASE_URL=...
+VITE_SUPABASE_ANON_KEY=...
+SUPABASE_URL=...
+SUPABASE_SERVICE_ROLE_KEY=...
+GEMINI_API_KEY=...
+GEONAMES_USERNAME=...
 GMAIL_ACCOUNT=...
 GMAIL_APP_PASSWORD=...
 ```
 
-Generate the app password from the sending Google account at
-https://myaccount.google.com/apppasswords (requires 2-Step Verification).
+`SUPABASE_URL` and `VITE_SUPABASE_URL` normally name the same Supabase project.
+The `VITE_` values are public browser configuration; the service role, Gemini,
+GeoNames, and Gmail credentials must remain server-only. The production server
+will not start if `SUPABASE_URL` or `SUPABASE_SERVICE_ROLE_KEY` is missing.
 
-The sender requires a customer email and a PDF selected in the Submission
-panel. A successful Gmail response is then logged in the opportunity's
-Supabase-backed Communications history and advances the opportunity to
-`Submitted`; a failure leaves its stage unchanged.
+## Before production
 
-## Day to day
+- Run `npm test` and `npm run build` locally.
+- Confirm `GET /healthz` returns `{ "ok": true }` on the Railway domain.
+- Test login, AI extraction, location search, proposal email, user management,
+  workspace purge, and a refreshed deep link.
+- Confirm a new deployment signs an active browser session out and clears its
+  local working cache as intended.
 
-```bash
-git checkout staging && git merge main     # or work directly on staging
-git push origin staging                    # → staging deploy
-```
-
-Promote when the client has signed off on what staging shows:
-
-```bash
-git checkout main && git merge staging && git push origin main
-```
-
-Every other branch gets a Vercel preview URL automatically. Previews inherit the
-Preview environment variables — leave those unset so a preview runs on seeded
-demo data and can never write to either real database.
-
-## Before promoting to production
-
-- `npm test` green.
-- `npm run build` clean.
-- `tests/MANUAL_SMOKE_CHECKLIST.md` walked at 390×844 and 1440×900.
-- Demo Launcher scenarios 1, 2, 3, 5 from a clean **Reset demo data**.
-- Sign in as RS and walk lead → opportunity → proposal → approval → email; the
-  salesperson must see prices end to end.
-
-## Notes
-
-- `vercel.json` rewrites everything to `/index.html`; the app is a browser-router
-  SPA, so a deep link refresh works without further config.
-- `public/sw.js` is network-first for navigations, so a new deploy is picked up
-  on the next load rather than being pinned by the service worker.
-- State is held in `localStorage` under `wintrack-modae-v4` and mirrored to
--  Supabase when configured. Supabase is authoritative for shared state; a
-  deleted server row is not recreated from a browser snapshot. Every Vercel
-  deployment exposes a no-cache `/api/app-version` identity. Active browsers
-  check it on startup, focus, reconnect, visibility restoration, and once per
-  minute; a mismatch signs out, clears app-owned storage/cache and IndexedDB,
-  and reloads the login screen. This intentionally discards unsaved browser
-  changes. The app has no automatic browser-cache restore path.
+No Vercel project or Vercel environment variables are required for this
+deployment model.

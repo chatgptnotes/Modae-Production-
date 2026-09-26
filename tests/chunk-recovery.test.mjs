@@ -33,12 +33,9 @@ test('service worker revalidates assets while retaining offline fallback', () =>
   assert.doesNotMatch(sw, /const revalidate = fetch\(req\)/)
 })
 
-test('HTML shell and service worker are revalidated by Vercel', () => {
-  const config = JSON.parse(read('vercel.json'))
-  const sources = config.headers.map(header => header.source)
-  assert.deepEqual(sources, ['/((?!api/|assets/|fonts/).*)'])
-  for (const header of config.headers) {
-    assert.equal(header.headers[0].key, 'Cache-Control')
-    assert.match(header.headers[0].value, /no-cache/)
-  }
+test('Express owns the SPA fallback while the service worker handles cache revalidation', () => {
+  const app = read('src/server/app.ts')
+  assert.match(app, /express\.static\(staticDir\)/)
+  assert.match(app, /app\.use\('\/api'/)
+  assert.match(app, /sendFile\(path\.join\(staticDir, 'index\.html'\)\)/)
 })

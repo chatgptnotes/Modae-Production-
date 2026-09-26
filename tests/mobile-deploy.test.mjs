@@ -253,7 +253,7 @@ test('the seeded PO is backfilled into saved state without clobbering work', () 
 // --------------------------------------------------------------- deployment
 test('deployment is documented with staging and production separated', () => {
   const doc = read('DEPLOYMENT.md')
-  assert.match(doc, /wintrack-staging/)
+  assert.match(doc, /Railway staging and production environments/)
   assert.match(doc, /must not share a Supabase project/)
   assert.match(doc, /GEMINI_API_KEY` is never a `VITE_` variable|GEMINI_API_KEY/)
 })
@@ -273,7 +273,7 @@ test('env files stay out of the repository', () => {
   assert.notEqual(tracked.status, 0, 'a real .env must not be tracked; local ignored files are allowed')
 })
 
-test('the SPA rewrite is in place for deep-link refreshes', () => {
-  const cfg = JSON.parse(read('vercel.json'))
-  assert.equal(cfg.rewrites[0].destination, '/index.html')
+test('Express serves the SPA shell for deep-link refreshes', () => {
+  const app = read('src/server/app.ts')
+  assert.match(app, /sendFile\(path\.join\(staticDir, 'index\.html'\)\)/)
 })

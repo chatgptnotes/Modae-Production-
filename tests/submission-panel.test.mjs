@@ -243,9 +243,8 @@ test('the mail API accepts business documents and rejects executables', () => {
   assert.match(api, /One to eight attachments/)
 })
 
-test('the vite dev server serves the mail API locally', () => {
+test('the Vite dev server proxies the mail API to local Express', () => {
   const viteConfig = read('vite.config.js')
-  assert.match(viteConfig, /vercelApiDevServer/)
-  assert.match(viteConfig, /routes\.get\(url\)/)
-  assert.match(viteConfig, /loadEnv/)
+  assert.match(viteConfig, /server: \{ proxy:/)
+  assert.match(viteConfig, /'\/api': 'http:\/\/localhost:3000'/)
 })

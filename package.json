@@ -4,17 +4,22 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "concurrently -k \"npm run dev:client\" \"npm run dev:server\"",
+    "dev:client": "vite",
+    "dev:server": "tsx watch src/server/index.ts",
+    "build": "tsc -p tsconfig.server.json && vite build",
+    "start": "node dist-server/src/server/index.js",
     "preview": "vite preview",
-    "test": "node --test",
+    "test": "tsx --test tests/*.test.mjs tests/*.test.ts",
     "render:proposal": "esbuild scripts/render-proposal.jsx --bundle --platform=node --format=cjs --outfile=node_modules/.cache/render-proposal.cjs --loader:.js=jsx --loader:.png=text --loader:.jpg=text --define:import.meta.url='\"file:///stub/\"' --log-level=error && node node_modules/.cache/render-proposal.cjs"
   },
   "dependencies": {
     "@azure/msal-browser": "^3.26.1",
     "@supabase/supabase-js": "^2.112.2",
     "codex": "^0.2.3",
+    "cors": "^2.8.6",
     "exceljs": "^4.4.0",
+    "express": "^5.2.1",
     "install": "^0.13.0",
     "nodemailer": "^10.0.0",
     "pdfjs-dist": "^4.10.38",
@@ -25,10 +30,18 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^26.6.3",
+    "@types/supertest": "^7.2.1",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.6.1",
+    "concurrently": "^10.0.5",
     "postcss": "^8.5.28",
+    "supertest": "^7.3.0",
     "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
     "vite": "^5.4.0"
   }
 }
