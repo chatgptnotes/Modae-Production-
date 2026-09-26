@@ -518,7 +518,7 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
         <Card title="Annual attainment" icon="target" tone="tone-green" span={4} className="annual-attainment-card">
           <div className="annual-attainment-body">
             <div className="annual-attainment-gauge">
-              <ArcGauge pct={perf.attainPct} value={`${Math.round(perf.attainPct)}%`} caption={`of ${fmtLakh(perf.annual)}`} />
+              <ArcGauge pct={perf.attainPct} size={220} value={`${Math.round(perf.attainPct)}%`} caption={`of ${fmtLakh(perf.annual)}`} />
             </div>
             <table className="cost-table annual-attainment-table" style={{ width: '100%' }}>
               <tbody>
