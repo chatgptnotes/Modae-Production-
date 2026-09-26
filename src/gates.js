@@ -22,7 +22,6 @@ import { approvalAffectedByProposal, pricingExceptionSignature, proposalImpact }
 export const isClarificationResolved = clarification => {
   if (!clarification) return false
   if (clarification.status === 'Needs review') return false
-  if (clarification.status === 'Answered') return true
   return !!String(clarification.response || '').trim()
     && !String(clarification.missing || '').trim()
 }
@@ -56,6 +55,22 @@ export function displayClarifications(opp, state = {}) {
 export function actionableClarifications(opp, state = {}) {
   return clarificationRows(opp, state, true)
 }
+
+// Repeated suggestions remain visible in the audit list, but an answered
+// equivalent resolves the same customer fact and must not keep the workflow
+// blocked. An unanswered sibling remains independently actionable until then.
+export const isClarificationCoveredByAnswer = (opp, clarification, clarifications = []) => {
+  if (!clarification || isClarificationResolved(clarification)) return false
+  const topic = clarificationTopic(clarification.q)
+  return (clarifications || []).some(other => other?.id !== clarification.id
+    && other?.oppId === opp?.id
+    && clarificationTopic(other.q) === topic
+    && isClarificationResolved(other))
+}
+
+const clarificationResolvedForOpportunity = (opp, clarification, clarifications) =>
+  isClarificationResolved(clarification)
+  || isClarificationCoveredByAnswer(opp, clarification, clarifications)
 
 // A lead-stage verification snapshot of the shape this class records satisfies
 // the opportunity-stage gate — the salesperson is not asked to verify twice.
@@ -261,8 +276,9 @@ export function readiness(opp, proposal, state) {
   // Proposal transition and readiness must agree about customer clarifications.
   // Keep unanswered, sent, and review-needed questions visible as blockers so
   // the green readiness summary cannot contradict the transition dialog.
-  const openClarifications = actionableClarifications(opp, state)
-    .filter(c => !isClarificationResolved(c))
+  const clarifications = actionableClarifications(opp, state)
+  const openClarifications = clarifications
+    .filter(c => !clarificationResolvedForOpportunity(opp, c, clarifications))
   if (openClarifications.length) {
     b.push({
       key: 'clarifications', severity: 'block',
@@ -652,7 +668,7 @@ export function transitionBlockers(opp, target, proposal, state) {
   }
 
   const clarifications = actionableClarifications(opp, state)
-  if (next >= MILESTONES.indexOf('Sourcing') && clarifications.some(c => !isClarificationResolved(c))) {
+  if (next >= MILESTONES.indexOf('Sourcing') && clarifications.some(c => !clarificationResolvedForOpportunity(opp, c, clarifications))) {
     b.push({ key: 'clarifications', severity: 'block', text: `All customer clarifications must be resolved before moving to ${target}` })
   }
 

@@ -221,6 +221,18 @@ export function clarificationItems(lead, extra = []) {
 // normalized words so exact duplicates are still collapsed.
 export function clarificationTopic(question = '') {
   const text = clean(question)
+  // Training scope and on-site service scope are commonly rephrased or split
+  // across repeated AI suggestions. Keep this topic separate from site access,
+  // permits, and the technical cable questions.
+  if (/training/.test(text.toLowerCase())
+    && /scope/.test(text.toLowerCase())
+    && /on[- ]?site|site service/.test(text.toLowerCase())) {
+    return 'service:training-and-onsite-scope'
+  }
+  if (/on[- ]?site|site service/.test(text.toLowerCase())
+    && /access|permit|induction|installation|commissioning|troubleshooting/.test(text.toLowerCase())) {
+    return 'service:site-work-and-access'
+  }
   const standardIndex = STANDARD_MATCHERS.findIndex(matcher => matcher.test(text))
   if (standardIndex >= 0) return `standard:${standardIndex}`
   return `custom:${text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()}`

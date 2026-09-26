@@ -11,7 +11,7 @@ const opp = {
 const proposal = { bom: [], terms: [], revision: '00' }
 const technicalQuestion = 'Please confirm nameplate part numbers, quantities and any legacy references for each line item.'
 
-test('each saved clarification row remains independently actionable', () => {
+test('a saved answer resolves an equivalent duplicate clarification without deleting either row', () => {
   const state = {
     approvals: [],
     clarifications: [
@@ -21,8 +21,30 @@ test('each saved clarification row remains independently actionable', () => {
   }
   const topics = actionableClarifications(opp, state)
   assert.deepEqual(topics.map(row => row.id), ['CL-1', 'CL-2'])
+  assert.equal(readiness(opp, proposal, state).some(blocker => blocker.key === 'clarifications'), false)
+  assert.equal(transitionBlockers(opp, 'Proposal', proposal, state).some(blocker => blocker.key === 'clarifications'), false)
+})
+
+test('answered training and service scope resolves the matching duplicate but not site access', () => {
+  const clarifications = [
+    { id: 'CL-3-open', oppId: opp.id, status: 'Open', category: 'Technical', q: 'Could you provide details on the training requirements (e.g., number of participants, duration) and the scope of work for the requested on-site services?' },
+    { id: 'CL-5-answered', oppId: opp.id, status: 'Answered', response: 'Training for two participants; standard commissioning scope.', category: 'Technical', q: 'Could you provide a brief outline of the training requirements and the specific scope of work for the requested on-site services?' },
+    { id: 'CL-site-open', oppId: opp.id, status: 'Open', category: 'Site data', q: 'Will the on-site services involve installation, commissioning, or troubleshooting, and are there site access or permit requirements?' },
+  ]
+  const state = { approvals: [], clarifications }
   assert.equal(readiness(opp, proposal, state).some(blocker => blocker.key === 'clarifications'), true)
   assert.equal(transitionBlockers(opp, 'Proposal', proposal, state).some(blocker => blocker.key === 'clarifications'), true)
+})
+
+test('an answer needing review or carrying missing information does not resolve a duplicate', () => {
+  const open = { id: 'CL-open', oppId: opp.id, category: 'Technical', q: 'Could you provide details on the training requirements and scope of work for the requested on-site services?', status: 'Open' }
+  for (const answered of [
+    { id: 'CL-review', oppId: opp.id, category: 'Technical', q: 'Please outline the training requirements and on-site service scope.', status: 'Needs review', response: 'Training for two people' },
+    { id: 'CL-missing', oppId: opp.id, category: 'Technical', q: 'Please outline the training requirements and on-site service scope.', status: 'Answered', response: 'Training for two people', missing: 'Confirm the duration' },
+  ]) {
+    const state = { approvals: [], clarifications: [open, answered] }
+    assert.equal(transitionBlockers(opp, 'Proposal', proposal, state).some(blocker => blocker.key === 'clarifications'), true)
+  }
 })
 
 test('a different unanswered clarification still blocks Proposal', () => {
