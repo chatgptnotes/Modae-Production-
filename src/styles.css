@@ -3575,6 +3575,9 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .transition-pricing-details > div { display: flex; gap: 12px; flex-wrap: wrap; }
 .transition-pricing-details span { color: var(--text-muted); }
 .approval-pending-card { border-left: 3px solid var(--primary-accent); }
+.approval-pending-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 10px 0; padding: 10px 12px; border: 1px solid var(--palette-c8de3e70); border-left: 4px solid var(--amber-text); border-radius: 3px; background: var(--palette-c9fb3389); color: var(--palette-a01c73fe); font-size: 12.5px; }
+.approval-pending-banner div { display: grid; gap: 3px; }
+.approval-pending-banner span { color: inherit; }
 .approval-awaiting { margin-top: 9px; padding: 8px 10px; border-radius: 4px; background: var(--palette-f58d7116); }
 .approval-rejection-requirements { margin-top: 9px; padding: 9px 11px; border-left: 3px solid var(--primary-accent); border-radius: 4px; background: var(--palette-f58d7116); color: var(--text-main); font-size: 12px; }
 .approval-rejection-requirements b { display: block; margin-bottom: 5px; }

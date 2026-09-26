@@ -182,6 +182,16 @@ test('approval is shown in an opportunity rail only while its request is pending
   assert.match(workbench, /!activeStepConfig && viewTab === 'approvals'/)
 })
 
+test('retrying a transition with only pending approvals keeps a visible waiting banner', () => {
+  assert.match(workbench, /const \[pendingTransition, setPendingTransition\] = useState\(null\)/)
+  assert.match(workbench, /const pendingRequestsFor = blockersForMove\.map\(approvalRequestFor\)/)
+  assert.match(workbench, /pendingRequestsFor\.length === blockersForMove\.length/)
+  assert.match(workbench, /setPendingTransition\(\{ target: milestone, requests: pendingRequestsFor \}\)/)
+  assert.match(workbench, /if \(!currentBlockers\.length \|\| currentRequests\.length !== currentBlockers\.length\)/)
+  assert.match(workbench, /approval-pending-banner/)
+  assert.match(workbench, /Open approvals/)
+})
+
 test('the compact lifecycle stepper exposes every displayed stage as selectable', () => {
   const ui = fs.readFileSync(path.join(root, 'src/ui.jsx'), 'utf8')
   assert.match(ui, /aria-label="Opportunity lifecycle"/)

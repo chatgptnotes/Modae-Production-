@@ -326,6 +326,7 @@ export default function Workbench() {
 function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp }) {
   const nav = useNavigate()
   const [transition, setTransition] = useState(null)
+  const [pendingTransition, setPendingTransition] = useState(null)
   const [createdNotice, setCreatedNotice] = useState(() => searchParams.get('created') === '1')
   const detailsRef = useRef(null)
 
@@ -502,9 +503,16 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
     // older proposal snapshot when evaluating the transition gate.
     const blockersForMove = transitionBlockers(opp, milestone, store.getProposal(opp.id), store)
     if (blockersForMove.length) {
+      const pendingRequestsFor = blockersForMove.map(approvalRequestFor).filter(Boolean)
+      if (pendingRequestsFor.length === blockersForMove.length) {
+        setPendingTransition({ target: milestone, requests: pendingRequestsFor })
+        return false
+      }
+      setPendingTransition(null)
       setTransition({ kind: 'blocked', target: milestone, blockers: blockersForMove })
       return false
     }
+    setPendingTransition(null)
     moveToMilestone(milestone, '', tabOverride)
     return true
   }
@@ -578,6 +586,18 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
     && a.status === 'Pending'
     && (a.type === blocker.approvalType
       || (blocker.approvalType === APPROVAL_5B && a.type === 'Commercial deviation')))
+  useEffect(() => {
+    if (!pendingTransition) return
+    const currentBlockers = transitionBlockers(opp, pendingTransition.target, store.getProposal(opp.id), store)
+    const currentRequests = currentBlockers.map(approvalRequestFor).filter(Boolean)
+    if (!currentBlockers.length || currentRequests.length !== currentBlockers.length) {
+      setPendingTransition(null)
+      return
+    }
+    const currentIds = currentRequests.map(request => request.id).join('|')
+    const rememberedIds = pendingTransition.requests.map(request => request.id).join('|')
+    if (currentIds !== rememberedIds) setPendingTransition({ target: pendingTransition.target, requests: currentRequests })
+  }, [pendingTransition, opp, store.approvals, store.proposals, store.clarifications])
   const approvalContextFor = blocker => {
     const lead = (store.leads || []).find(l => l.oppId === opp.id)
     const aiSummary = lead?.ai?.summary?.trim() || ''
@@ -699,6 +719,13 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
           <Chip tone={blockers.length ? 'state-Review' : 'state-Accepted'}>{blockers.length ? 'At risk' : 'On track'}</Chip>
         </div>
       </div>
+      {pendingTransition && <section className="approval-pending-banner" role="status">
+        <div>
+          <b>Awaiting approval before moving to {pendingTransition.target}.</b>
+          <span>{pendingTransition.requests.map(request => `${request.id} (${request.needed?.join(request.anyOf ? ' or ' : ' + ') || request.approver})`).join(' · ')}</span>
+        </div>
+        <button type="button" className="secondary" onClick={() => goTab('approvals')}>Open approvals</button>
+      </section>}
       {createdNotice && <CreatedOpportunityPanel opp={opp} activeStep={activeStep} onDismiss={dismissCreatedNotice} onContinue={continueFromCreatedNotice} />}
       {activeServiceArea && (
         <>

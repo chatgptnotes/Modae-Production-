@@ -1326,6 +1326,11 @@ export function StoreProvider({ children }) {
             ] },
           'Approval requested', appr.id, `${appr.type} — ${appr.oppId} → ${appr.approver}`)
       })
+      // Approval requests gate workflow transitions and must survive an
+      // immediate reload. Publish through React, then save on the next turn so
+      // stateRef contains the newly requested approval instead of waiting for
+      // the ordinary draft-save debounce.
+      setTimeout(flushSaves, 0)
     },
 
     cancelApproval(id, reason = '') {

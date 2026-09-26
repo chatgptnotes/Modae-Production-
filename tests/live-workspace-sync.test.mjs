@@ -73,6 +73,13 @@ test('opportunity creation flushes before immediate workbench navigation', () =>
   assert.match(store, /setTimeout\(flushSaves, 0\)\n      spTrack\(opp\.id, 'Open'/)
 })
 
+test('approval requests flush before a reload can discard the pending gate', () => {
+  const store = read('src/store.jsx')
+  const requestApproval = store.slice(store.indexOf('    requestApproval(req) {'), store.indexOf('    cancelApproval(', store.indexOf('    requestApproval(req) {')))
+  assert.match(requestApproval, /Approval requests gate workflow transitions[\s\S]*must survive an[\s\S]*immediate reload/)
+  assert.match(requestApproval, /setTimeout\(flushSaves, 0\)/)
+})
+
 test('lead creation flushes before immediate inbox navigation', () => {
   const store = read('src/store.jsx')
   assert.match(store, /A new enquiry is immediately followed by navigation/)
