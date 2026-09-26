@@ -1,5 +1,6 @@
 import { clearSupabaseSession } from './supabase.js'
 import { clearLocalAll as clearLocalLeadBlobs } from './leadBlobs.js'
+import { DEPLOYMENT_MARKER_KEY, recordDeploymentMarker, shouldResetForDeployment } from './deploymentMarker.js'
 
 // Vite replaces this at build time. Local development deliberately uses a
 // stable identity so the dev server does not invalidate the browser on every
@@ -8,31 +9,20 @@ export const DEPLOYMENT_ID = typeof __APP_DEPLOYMENT_ID__ === 'string'
   ? __APP_DEPLOYMENT_ID__
   : 'local'
 
-const DEPLOYMENT_KEY = 'wintrack-modae-deployment-id'
 const RESET_SIGNAL_KEY = 'wintrack-modae-deployment-reset'
 const CHECK_INTERVAL_MS = 60_000
 let resetInProgress = false
 let intervalId = null
 
-function storageHasData(storage) {
-  try { return !!storage && storage.length > 0 } catch { return false }
-}
-
-function storedDeploymentId() {
-  try { return localStorage.getItem(DEPLOYMENT_KEY) || '' } catch { return '' }
-}
-
-function recordDeploymentId() {
-  try { localStorage.setItem(DEPLOYMENT_KEY, DEPLOYMENT_ID) } catch { /* storage is optional */ }
-}
-
 // The first deployment carrying this feature must also clean browsers that
 // predate the marker. A browser with no existing state is already clean.
 export function deploymentNeedsReset() {
-  if (typeof window === 'undefined') return false
-  const saved = storedDeploymentId()
-  if (!saved) return storageHasData(localStorage) || storageHasData(sessionStorage)
-  return saved !== DEPLOYMENT_ID
+  if (typeof window === 'undefined' || DEPLOYMENT_ID === 'local') return false
+  let local = null
+  let session = null
+  try { local = window.localStorage } catch { /* storage may be blocked */ }
+  try { session = window.sessionStorage } catch { /* storage may be blocked */ }
+  return shouldResetForDeployment(DEPLOYMENT_ID, local, session)
 }
 
 async function clearOriginCaches() {
@@ -70,7 +60,7 @@ export async function resetBrowserForDeployment() {
   try { localStorage.clear() } catch { /* storage is optional */ }
   try { sessionStorage.clear() } catch { /* storage is optional */ }
   try {
-    localStorage.setItem(DEPLOYMENT_KEY, DEPLOYMENT_ID)
+    recordDeploymentMarker(localStorage, DEPLOYMENT_ID)
     localStorage.setItem(RESET_SIGNAL_KEY, String(Date.now()))
   } catch { /* storage is optional */ }
 }
@@ -116,4 +106,4 @@ export function watchDeployment() {
   }
 }
 
-export const deploymentStorageKeys = { DEPLOYMENT_KEY, RESET_SIGNAL_KEY }
+export const deploymentStorageKeys = { DEPLOYMENT_KEY: DEPLOYMENT_MARKER_KEY, RESET_SIGNAL_KEY }

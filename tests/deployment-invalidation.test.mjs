@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import test from 'node:test'
+import { DEPLOYMENT_MARKER_KEY, shouldResetForDeployment } from '../src/deploymentMarker.js'
 import { fileURLToPath } from 'node:url'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
@@ -14,6 +15,47 @@ test('deployment invalidation has a no-cache version endpoint and unique build i
   assert.match(api, /VERCEL_DEPLOYMENT_ID/)
   assert.match(vite, /__APP_DEPLOYMENT_ID__/)
   assert.match(vite, /VERCEL_DEPLOYMENT_ID/)
+})
+
+function memoryStorage(entries = []) {
+  const values = new Map(entries)
+  return {
+    get length() { return values.size },
+    getItem: key => values.get(key) ?? null,
+    setItem: (key, value) => values.set(key, String(value)),
+    removeItem: key => values.delete(key),
+  }
+}
+
+test('a clean first visit records the deployment and same-deployment reloads do not reset', () => {
+  const local = memoryStorage()
+  const session = memoryStorage()
+
+  assert.equal(shouldResetForDeployment('deploy-a', local, session), false)
+  assert.equal(local.getItem(DEPLOYMENT_MARKER_KEY), 'deploy-a')
+
+  local.setItem('wintrack-modae-v4', 'saved workspace')
+  assert.equal(shouldResetForDeployment('deploy-a', local, session), false)
+})
+
+test('legacy state is cleared once, then remains valid for the same deployment', () => {
+  const local = memoryStorage([['wintrack-modae-v4', 'old workspace']])
+  const session = memoryStorage()
+
+  assert.equal(shouldResetForDeployment('deploy-a', local, session), true)
+  local.removeItem('wintrack-modae-v4')
+  assert.equal(shouldResetForDeployment('deploy-a', local, session), false)
+  assert.equal(local.getItem(DEPLOYMENT_MARKER_KEY), 'deploy-a')
+})
+
+test('a changed deployment resets once and accepts the new marker afterward', () => {
+  const local = memoryStorage([[DEPLOYMENT_MARKER_KEY, 'deploy-a'], ['wintrack-modae-v4', 'workspace']])
+  const session = memoryStorage()
+
+  assert.equal(shouldResetForDeployment('deploy-b', local, session), true)
+  local.removeItem('wintrack-modae-v4')
+  local.setItem(DEPLOYMENT_MARKER_KEY, 'deploy-b')
+  assert.equal(shouldResetForDeployment('deploy-b', local, session), false)
 })
 
 test('deployment invalidation clears local browser state without remote file deletion', () => {
