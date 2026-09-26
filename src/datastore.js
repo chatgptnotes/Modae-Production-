@@ -208,7 +208,7 @@ const mapConsolidatedVersion = data => ({
 
 async function loadConsolidatedPriceLists() {
   const listsResult = await loadEntityRows(CONSOLIDATED_PRICE_LIST_ENTITY)
-  if (listsResult.error || !listsResult.data?.length) return null
+  if (listsResult.error || !Array.isArray(listsResult.data)) return null
 
   const listRows = listsResult.data
   const activeVersionIds = listRows

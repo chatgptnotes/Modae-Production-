@@ -83,6 +83,11 @@ test('price lists use one metadata record per list and one JSONB record per vers
   assert.match(datastore, /saveNormalizedRowsNow\(CONSOLIDATED_PRICE_VERSION_ENTITY, versionRows\)/)
 })
 
+test('an empty consolidated price-list table is a valid empty catalogue', () => {
+  const datastore = fs.readFileSync(path.join(root, 'src/datastore.js'), 'utf8')
+  assert.match(datastore, /if \(listsResult\.error \|\| !Array\.isArray\(listsResult\.data\)\) return null/)
+})
+
 test('reset clears active normalized rows even before browser revision hydration', () => {
   const datastore = fs.readFileSync(path.join(root, 'src/datastore.js'), 'utf8')
   assert.match(datastore, /const RESETTABLE_ENTITIES = \[/)
