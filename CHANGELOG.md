@@ -5,6 +5,19 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Coalesced overlapping Supabase workspace refreshes so rapid focus, route,
+  reconnect, and visibility events reuse one in-flight read instead of queuing
+  duplicate full database loads.
+- Coalesced pending workspace saves, serialized entity writes, backed off failed
+  retries, and ordered `save_rows` IDs to reduce write spikes and deadlocks.
+- Normalized reviewed-workbook currency comparisons to the same two-decimal
+  rounding used by downloaded proposal workbooks, preserved blank previous
+  prices, and made review currency values display with two decimals so an
+  unchanged draft does not produce false price changes.
+- Reduced reviewed-workbook scan latency by starting local and AI validation
+  immediately after import while storage uploads continue in the background;
+  customer submission remains gated until the validated workbook is stored,
+  with visible upload failure and retry states.
 - Fixed blank opportunity ownership during lead conversion and state hydration;
   known locations now use regional routing, while missing or unclassified data
   falls back to LJS, including existing ownerless opportunities.

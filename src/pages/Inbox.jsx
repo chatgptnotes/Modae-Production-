@@ -1825,9 +1825,6 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
                     <button onClick={() => setFillFor({ item: m, val: '' })}>
                       <Icon name="plus" size={11} /> Add
                     </button>
-                    <button type="button" onClick={() => addMissing(m, 'Confirmed for simulation', m)}>
-                      <Icon name="bot" size={11} /> Simulate
-                    </button>
                   </span>
                 )}
               </div>

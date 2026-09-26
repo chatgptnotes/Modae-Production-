@@ -50,6 +50,12 @@ test('extra files can be attached, listed and removed before sending', () => {
   assert.match(submission, /Attach files/)
 })
 
+test('customer submission waits for a validated uploaded workbook to finish storage', () => {
+  assert.match(submission, /isValidatedUploadStorageReady/)
+  assert.match(submission, /!uploadStorageReady/)
+  assert.match(submission, /validated workbook upload to finish/)
+})
+
 // The Gmail compose draft records the governed documents that the salesperson
 // must attach before submitting the message.
 test('sending opens Gmail with the proposal and governed enclosure list', () => {

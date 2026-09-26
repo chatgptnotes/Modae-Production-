@@ -111,8 +111,8 @@ test('converted leads have a dedicated tab and linked opportunity marker', () =>
   assert.match(inbox, /<span className="pill Green">Opportunity<\/span>/)
 })
 
-test('every missing-information row offers manual and simulation actions', () => {
-  assert.match(inbox, /fillFor\?\.item !== m[\s\S]{0,500}Simulate/)
-  assert.doesNotMatch(inbox, /isSimulationLead\s*&&[\s\S]{0,100}Simulate/)
-  assert.doesNotMatch(inbox, /Simulated Customer Pvt Ltd|Demo information confirmed for testing/)
+test('every missing-information row offers a manual add action', () => {
+  assert.match(inbox, /fillFor\?\.item !== m[\s\S]{0,300}setFillFor\(\{ item: m, val: '' \}\)/)
+  assert.doesNotMatch(inbox, /addMissing\(m, 'Confirmed for simulation', m\)/)
+  assert.doesNotMatch(inbox, /fillFor\?\.item !== m[\s\S]{0,500}Simulate/)
 })

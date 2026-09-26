@@ -21,7 +21,7 @@ import { generateProposalWorkbook } from '../proposal/templateExcelExport.js'
 import { parseProposalWorkbook as parseRenderedWorkbook } from '../proposal/workbook.js'
 import { isWorkflowAvailable, routeForType } from '../seed.js'
 import { buildLeadProposalData } from '../leadBoq.js'
-import { putFiles } from '../leadBlobs.js'
+import { getFile, putFiles } from '../leadBlobs.js'
 import { fmtSize, uploadOppFile } from '../filestore.js'
 import DetailTabs from '../DetailTabs.jsx'
 import { isLegacyAutoSparesSupportRow, isSparesSupportRow, orderedSparesProposalBom, withSparesSupportRows } from '../proposal/sparesBoq.js'
@@ -622,6 +622,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   // never a click-time snapshot — a stale snapshot would silently revert edits.
   const pRef = React.useRef(p)
   pRef.current = p
+  const reviewedUploadStorageRef = React.useRef(new Map())
   const linkedLead = opp && [...(store.leads || []), ...(store.leadArchive || [])].find(l => l.id === opp.sourceLeadId
     || l.oppId === oppId
     || String(opp.remarks || '').includes(`lead ${l.id}`)
@@ -1172,6 +1173,59 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   // Phase-one human-in-the-loop checkpoint. This is intentionally deterministic
   // in the local demo: production AI can replace the implementation while the
   // proposal state and UX remain the same.
+  const updateReviewedUploadStorage = (blobKey, patch, fallbackProposal = null) => {
+    reviewedUploadStorageRef.current.set(blobKey, patch)
+    const current = pRef.current
+    const base = current.reviewedUpload?.blobKey === blobKey
+      ? current
+      : fallbackProposal?.reviewedUpload?.blobKey === blobKey ? fallbackProposal : null
+    if (!base) return false
+    const next = {
+      ...base,
+      reviewedUpload: { ...base.reviewedUpload, ...patch },
+    }
+    setP(next)
+    store.saveProposal(oppId, next)
+    return true
+  }
+
+  const startReviewedUploadStorage = ({ blobKey, file, proposal }) => {
+    const localUpload = putFiles(blobKey, [file])
+    const cloudUpload = uploadOppFile(opp, 'Proposal', file)
+    Promise.allSettled([localUpload, cloudUpload]).then(results => {
+      const cloud = results[1].status === 'fulfilled' ? results[1].value : null
+      const failures = results
+        .filter(result => result.status === 'rejected')
+        .map(result => result.reason?.message || 'Storage upload failed')
+      const storagePatch = failures.length
+        ? { storageStatus: 'failed', storageError: failures.join('; ') }
+        : {
+          storageStatus: 'uploaded', storageError: '',
+          ...(cloud ? { webUrl: cloud.webUrl, url: cloud.url, path: cloud.path, itemId: cloud.itemId } : {}),
+        }
+      updateReviewedUploadStorage(blobKey, storagePatch, proposal)
+    })
+  }
+
+  const retryReviewedUpload = async () => {
+    const upload = pRef.current.reviewedUpload
+    if (!upload?.blobKey || !upload.filename) return
+    setReviewError('')
+    updateReviewedUploadStorage(upload.blobKey, { storageStatus: 'pending', storageError: '' })
+    try {
+      const file = await getFile(upload.blobKey, upload.filename)
+      if (!file) throw new Error('The local workbook is unavailable. Upload the reviewed workbook again.')
+      const cloud = await uploadOppFile(opp, 'Proposal', file)
+      updateReviewedUploadStorage(upload.blobKey, {
+        storageStatus: 'uploaded', storageError: '',
+        webUrl: cloud.webUrl, url: cloud.url, path: cloud.path, itemId: cloud.itemId,
+      })
+    } catch (error) {
+      updateReviewedUploadStorage(upload.blobKey, { storageStatus: 'failed', storageError: error?.message || 'Storage upload failed' })
+      setReviewError(error?.message || 'The reviewed workbook could not be uploaded')
+    }
+  }
+
   const validateReviewedProposal = async (proposal = p, { automatic = false, preserveRevision = false, retainProgress = false } = {}) => {
     setReviewBusy(true)
     if (!retainProgress) {
@@ -1186,9 +1240,13 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     await yieldToPaint()
     try {
       const review = proposal
-      setReviewStage(1)
+      setReviewStage(retainProgress ? 2 : 1)
       const issues = []
       let reviewedUpload = review.reviewedUpload
+      const storagePatch = reviewedUpload?.blobKey
+        ? reviewedUploadStorageRef.current.get(reviewedUpload.blobKey)
+        : null
+      if (storagePatch) reviewedUpload = { ...reviewedUpload, ...storagePatch }
       // Re-run the deterministic comparison from the pre-import snapshot so
       // older uploads also receive the exact old-value → new-value findings.
       if (reviewedUpload?.sheets?.length && reviewedUpload.baseProposal) {
@@ -1231,13 +1289,13 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
         })
       }
 
-      setReviewStage(2)
+      setReviewStage(retainProgress ? 3 : 2)
       const aiResult = await runTaskResult('proposal.review', reviewWorkbookPayload(reviewedUpload, review, opp, issues), { model: store.config?.aiModel?.model })
       const aiReview = aiResult.data?.data || aiResult.data || {}
       const aiIssues = normalizeAiReview(aiReview)
       if (!aiResult.data && aiResult.error) aiIssues.push({ severity: 'info', code: 'ai.unavailable', source: 'AI', text: `AI semantic review was unavailable: ${aiResult.error}. Local checks were still completed.` })
       const aiSummary = String(aiReview.summary || '').trim()
-      setReviewStage(3)
+      setReviewStage(retainProgress ? 4 : 3)
       const allIssues = rememberOverriddenFindings(
         rememberApprovedFindings([...issues, ...aiIssues], store.approvals, oppId, nextRevision),
         review.reviewOverride,
@@ -1325,17 +1383,9 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       // Keep each uploaded artifact addressable. Re-uploading a workbook must
       // not overwrite the bytes referenced by an older revision snapshot.
       const blobKey = `proposal-review-${opp.id}-rev-${String(p.revision || '00').padStart(2, '0')}-${Date.now()}`
-      await putFiles(blobKey, [file])
-      let cloud = {}
-      try {
-        const uploaded = await uploadOppFile(opp, 'Proposal', file)
-        cloud = { webUrl: uploaded.webUrl, url: uploaded.url, path: uploaded.path, itemId: uploaded.itemId }
-      } catch (error) {
-        cloud = { cloudErr: error?.message || String(error) }
-      }
       const next = {
         ...imported.proposal,
-        reviewedUpload: { filename: file.name, type: file.type, size: file.size, uploadedAt: new Date().toISOString(), blobKey, ...cloud, sheets: parsed.sheets, importedChanges: imported.changes, termChanges: imported.termChanges, validationIssues: imported.issues, table: imported.table, baseProposal: snapshotProposal(p) },
+        reviewedUpload: { filename: file.name, type: file.type, size: file.size, uploadedAt: new Date().toISOString(), blobKey, storageStatus: 'pending', storageError: '', sheets: parsed.sheets, importedChanges: imported.changes, termChanges: imported.termChanges, validationIssues: imported.issues, table: imported.table, baseProposal: snapshotProposal(p) },
         reviewStatus: 'Ready for validation',
         reviewIssues: imported.issues,
         reviewNeedsRevision: false,
@@ -1343,7 +1393,11 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       }
       setP(next)
       store.saveProposal(oppId, next)
-      setReviewStage(3)
+      // Storage is independent from validation. The workbook is already
+      // parsed and available to local review, so AI does not wait for
+      // IndexedDB, Supabase, or SharePoint uploads.
+      startReviewedUploadStorage({ blobKey, file, proposal: next })
+      setReviewStage(2)
       setReviewProgressTitle('Reviewing uploaded proposal')
       setReviewMessage(`${file.name} uploaded and imported. Validating…`)
       await validateReviewedProposal(next, { automatic: true, preserveRevision: true, retainProgress: true })
@@ -1671,6 +1725,9 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
             <span className="eyebrow">{validatedUploadActive ? 'Active uploaded proposal' : 'Uploaded proposal'}</span>
             <strong>{p.reviewedUpload.filename}</strong>
             <span className="hint">Uploaded {approvalDate(p.reviewedUpload.uploadedAt)} · {fmtSize(p.reviewedUpload.size)}</span>
+            {p.reviewedUpload.storageStatus === 'pending' && <span className="hint">Storage upload in progress… validation can continue.</span>}
+            {p.reviewedUpload.storageStatus === 'uploaded' && <span className="hint">Storage upload complete.</span>}
+            {p.reviewedUpload.storageStatus === 'failed' && <span className="err-text">Storage upload failed: {p.reviewedUpload.storageError || 'retry required'}</span>}
           </div>
           <div className="proposal-uploaded-file-actions">
             <button type="button" className="btn-secondary" onClick={() => setReviewedUploadViewing(true)}>
@@ -1684,6 +1741,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
                 Open storage link
               </a>
             )}
+            {p.reviewedUpload.storageStatus === 'failed' && <button type="button" className="btn-secondary" onClick={retryReviewedUpload} disabled={reviewBusy}>Retry storage upload</button>}
           </div>
         </section>
       )}

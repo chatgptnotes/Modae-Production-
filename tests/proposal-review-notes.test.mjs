@@ -33,7 +33,9 @@ test('proposal validation shows staged scan progress and reviews generated propo
   assert.match(proposal, /setReviewProgressStages\(UPLOAD_REVIEW_STAGES\)/)
   assert.match(proposal, /setReviewFileName\(file\.name\)/)
   assert.match(proposal, /fileName=\{reviewFileName\}/)
-  assert.match(proposal, /setReviewStage\(3\)/)
+  assert.match(proposal, /startReviewedUploadStorage\(\{ blobKey, file, proposal: next \}\)/)
+  assert.match(proposal, /storageStatus: 'pending'/)
+  assert.match(proposal, /setReviewStage\(2\)/)
   assert.match(proposal, /await validateReviewedProposal\(next, \{ automatic: true, preserveRevision: true, retainProgress: true \}\)/)
   assert.match(proposal, /Upload reviewed workbook/)
   assert.match(proposal, /reviewBusy\s*\?\s*<><span className="auth-loading__spinner/)
@@ -44,6 +46,13 @@ test('proposal validation shows staged scan progress and reviews generated propo
   assert.match(aiRoute, /supplied \$\{p\.artifactType === 'uploaded-workbook'/)
   assert.match(aiRoute, /approval summary/i)
   assert.match(proposal, /reviewSummary: aiSummary/)
+})
+
+test('uploaded workbook storage does not block validation and has a retry state', () => {
+  assert.match(proposal, /Promise\.allSettled\(\[localUpload, cloudUpload\]\)/)
+  assert.match(proposal, /storageStatus: 'failed'/)
+  assert.match(proposal, /Retry storage upload/)
+  assert.match(proposal, /validation can continue/)
 })
 
 test('stored workbook reviews are recomputed from the pre-import snapshot and shown first', () => {

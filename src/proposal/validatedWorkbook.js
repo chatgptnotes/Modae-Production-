@@ -9,6 +9,14 @@ export const hasValidatedUploadedWorkbook = proposal =>
   && Array.isArray(proposal?.reviewedUpload?.sheets)
   && proposal.reviewedUpload.sheets.length > 0
 
+export const isValidatedUploadStorageReady = proposal => {
+  if (!hasValidatedUploadedWorkbook(proposal)) return true
+  const status = proposal?.reviewedUpload?.storageStatus
+  // Older validated uploads predate storageStatus and remain valid because
+  // their local blob key is already usable by the submission flow.
+  return !status || status === 'uploaded'
+}
+
 export const validatedWorkbookPreview = proposal =>
   hasValidatedUploadedWorkbook(proposal)
     ? { sheets: proposal.reviewedUpload.sheets }

@@ -15,7 +15,7 @@ import { snapshotProposal } from '../store.jsx'
 import { loadProposalTemplateBuffer, resolveProposalTemplate } from '../proposal/templateRegistry.js'
 import { latestSubmissionForRevision } from '../submissionStatus.js'
 import { getFile } from '../leadBlobs.js'
-import { hasValidatedUploadedWorkbook, validatedWorkbookFilename, validatedWorkbookPreview, validatedWorkbookStorageKey } from '../proposal/validatedWorkbook.js'
+import { hasValidatedUploadedWorkbook, isValidatedUploadStorageReady, validatedWorkbookFilename, validatedWorkbookPreview, validatedWorkbookStorageKey } from '../proposal/validatedWorkbook.js'
 
 const proposalEmailFallback = ({ greeting, oppName, oppId, revision, validityDays, senderName, attachments }) =>
   `${greeting}\n\nWith reference to your request for quotation for ${oppName}, we are pleased to submit our approved Techno-Commercial Proposal for Opportunity ${oppId}, Revision ${revision}.\n\nPlease find enclosed ${attachments.join(' and ')} for your review and records.\n\nOur offer is valid for ${validityDays} days from the date of submission. Kindly review the attached documents and confirm whether the offer meets your technical and commercial requirements.\n\nShould you require any additional information or clarification regarding the scope, technical specifications, or commercial terms, please feel free to contact us.\n\nWe look forward to your response.\n\nBest regards,\n${senderName}\nModAE India Pvt. Ltd.`
@@ -129,11 +129,12 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
   const totals = computeTotals(p)
   const priced = p.bidType !== 'Unpriced (Technical)'
   const proposalValidated = p.reviewStatus === 'Validated' || !!release || p.reviewStatus === 'Override accepted'
+  const uploadStorageReady = isValidatedUploadStorageReady(p)
   const fromValid = EMAIL_RE.test(emailFrom.trim())
   const toValid = recipientsValid(emailTo)
   const ccValid = splitRecipients(emailCc).length === 0 || recipientsValid(emailCc)
   const filenameValid = !attachProposal || validProposalFilename(proposalFilename)
-  const canSend = (!finalQuoteApprovalRequired || !!release) && !pendingConds.length && (!attachProposal || proposalValidated) && filenameValid && fromValid && toValid && ccValid && Boolean(emailSubject.trim()) && Boolean(emailBody.trim()) && !readingFiles && !readOnly
+  const canSend = (!finalQuoteApprovalRequired || !!release) && !pendingConds.length && (!attachProposal || proposalValidated) && (!attachProposal || uploadStorageReady) && filenameValid && fromValid && toValid && ccValid && Boolean(emailSubject.trim()) && Boolean(emailBody.trim()) && !readingFiles && !readOnly
 
   const removeExtraFile = filename => setExtraFiles(files => files.filter(f => f.filename !== filename))
 
@@ -454,6 +455,9 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
       {attachProposal && !proposalValidated && (
         <ErrBox>Validate the proposal from the Proposal tab before attaching it. You can uncheck this option to send only the standard enclosures and optional files.</ErrBox>
       )}
+      {attachProposal && proposalValidated && !uploadStorageReady && (
+        <ErrBox>The validated workbook is still uploading. Customer submission will unlock when storage is ready.</ErrBox>
+      )}
 
       <div className="submission-actions">
         <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={onFilesPicked} />
@@ -464,6 +468,7 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
         <button className="primary submission-draft-action" disabled={!canSend || sending}
           title={pendingConds.length ? 'Confirm all approval conditions first'
             : attachProposal && !proposalValidated ? 'Validate the proposal before attaching it'
+            : attachProposal && !uploadStorageReady ? 'Wait for the validated workbook upload to finish'
             : !fromValid ? 'Enter a valid sender email in the From field'
             : !toValid ? 'Enter a valid recipient email in the To field'
             : !ccValid ? 'The CC address is not valid'
