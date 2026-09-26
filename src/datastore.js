@@ -501,6 +501,84 @@ export function saveSlices(dirty) {
 
 const BUSINESS_KEYS = new Set(['leads', 'opportunities', 'approvals', 'proposals', 'sparesLines', 'clarifications', 'audit', 'priceLists'])
 
+// Reset actions are allowed to clear the active normalized workspace rows.
+// Keep this list explicit so a reset cannot accidentally touch consolidated
+// state, auth metadata, or any table outside the production contract.
+const RESETTABLE_ENTITIES = [
+  ['leads', 'leads'],
+  ['opportunities', 'opportunities'],
+  ['approvals', 'approvals'],
+  ['proposals', 'proposals'],
+  ['spares_lines', 'spares_lines'],
+  ['clarifications', 'clarifications'],
+  ['audit', 'audit'],
+  ['price_lists', 'price_lists'],
+  ['price_list_versions', 'price_list_versions'],
+]
+
+async function tombstoneActiveRows(entity, table, keepIds = new Set()) {
+  const result = await supabase.from(table)
+    .select('id, data, rev')
+    .is('deleted_at', null)
+  if (result.error) throw result.error
+  const rows = (result.data || []).filter(row => !keepIds.has(row.id))
+  if (!rows.length) return 0
+
+  const actor = await currentActorId()
+  let pending = rows.map(row => ({
+    id: row.id,
+    data: row.data,
+    rev: Number(row.rev) || 0,
+    deleted: true,
+  }))
+  for (let attempt = 0; attempt <= MAX_CONFLICT_RETRIES; attempt += 1) {
+    const saved = await supabase.rpc('save_rows', {
+      p_entity: entity,
+      p_rows: pending.map(row => ({ ...row, by: actor })),
+    })
+    if (saved.error) throw annotateRpcError(entity, saved.error)
+    const conflicts = Array.isArray(saved.data?.conflicts) ? saved.data.conflicts : []
+    if (!conflicts.length) return pending.length
+    pending = conflicts.map(row => ({
+      id: row.id,
+      data: row.data,
+      rev: Number(row.rev) || 0,
+      deleted: true,
+    }))
+  }
+  throw new Error(`${entity} reset conflict after ${MAX_CONFLICT_RETRIES + 1} attempts`)
+}
+
+const seedIdsForEntity = (entity, seedMap = {}) => {
+  const arrayKey = {
+    leads: 'leads',
+    opportunities: 'opportunities',
+    approvals: 'approvals',
+    spares_lines: 'sparesLines',
+    clarifications: 'clarifications',
+    audit: 'audit',
+  }[entity]
+  if (arrayKey) return new Set((Array.isArray(seedMap[arrayKey]) ? seedMap[arrayKey] : []).map(row => row?.id).filter(Boolean))
+  if (entity === 'proposals' || entity === 'price_lists') return new Set(Object.keys(seedMap[entity === 'proposals' ? 'proposals' : 'priceLists'] || {}))
+  if (entity === 'price_list_versions') {
+    return new Set(Object.entries(seedMap.priceLists || {}).flatMap(([listCode, list]) => {
+      const versions = Array.isArray(list?.versions) && list.versions.length
+        ? list.versions
+        : [{ version: list?.version || 'Initial' }]
+      return versions.map(version => version.id || priceVersionRecordId(listCode, version.version || 'Initial'))
+    }))
+  }
+  return new Set()
+}
+
+async function purgeActiveNormalizedRows(seedMap = {}) {
+  let purged = 0
+  for (const [entity, table] of RESETTABLE_ENTITIES) {
+    purged += await tombstoneActiveRows(entity, table, seedIdsForEntity(entity, seedMap))
+  }
+  return purged
+}
+
 async function loadBusinessTables({ includeRecords = true } = {}) {
   const legacyQuery = includeRecords
     ? supabase.from('records').select('entity, id, data, rev').is('deleted_at', null).in('entity', ['proposals', 'spares_lines', 'clarifications', 'audit'])
@@ -794,6 +872,11 @@ export async function savePriceLists(priceLists = {}) {
 export async function resetAll(seedMap) {
   if (!supabase) return
   await saveSlices(seedMap)
+  // saveSlices normally derives deletions from browser-side revision maps.
+  // A reset can run before hydration, however, so those maps may be empty even
+  // while Supabase still contains active rows. Read the canonical tables and
+  // tombstone anything left behind through the same RPC contract.
+  await purgeActiveNormalizedRows(seedMap)
   const stateKeys = Object.keys(seedMap).filter(key => !BUSINESS_KEYS.has(key) && key !== 'config')
   const { error } = await supabase.from('records').delete()
     .eq('entity', CONSOLIDATED_STATE_ENTITY)

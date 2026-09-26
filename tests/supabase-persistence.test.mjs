@@ -83,6 +83,16 @@ test('price lists use one metadata record per list and one JSONB record per vers
   assert.match(datastore, /saveNormalizedRowsNow\(CONSOLIDATED_PRICE_VERSION_ENTITY, versionRows\)/)
 })
 
+test('reset clears active normalized rows even before browser revision hydration', () => {
+  const datastore = fs.readFileSync(path.join(root, 'src/datastore.js'), 'utf8')
+  assert.match(datastore, /const RESETTABLE_ENTITIES = \[/)
+  assert.match(datastore, /async function tombstoneActiveRows\(entity, table, keepIds = new Set\(\)\)/)
+  assert.match(datastore, /supabase\.from\(table\)[\s\S]*\.select\('id, data, rev'\)[\s\S]*\.is\('deleted_at', null\)/)
+  assert.match(datastore, /p_entity: entity/)
+  assert.match(datastore, /deleted: true/)
+  assert.match(datastore, /await purgeActiveNormalizedRows\(seedMap\)/)
+})
+
 test('remaining application state uses records without duplicating normalized slices', () => {
   const datastore = fs.readFileSync(path.join(root, 'src/datastore.js'), 'utf8')
   assert.match(datastore, /CONSOLIDATED_STATE_ENTITY = 'state'/)

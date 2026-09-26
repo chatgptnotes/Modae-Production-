@@ -5,6 +5,9 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Fixed clear/reset actions leaving active normalized Supabase rows behind when
+  the browser had not populated its revision cache yet; reset now discovers and
+  soft-deletes remaining active workspace rows through `save_rows`.
 - Coalesced overlapping Supabase workspace refreshes so rapid focus, route,
   reconnect, and visibility events reuse one in-flight read instead of queuing
   duplicate full database loads.
