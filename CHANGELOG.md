@@ -5,6 +5,10 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Fixed Section 5B commercial approvals reappearing after AH approval. The
+  dispatch gate now recognizes current and legacy commercial approval records
+  by their signed customer terms, repairs missing legacy term details, and
+  avoids duplicate pending requests.
   `R. Sundaram` during state migration.
   server-authorized Supabase procedure to remove all workspace data and files
   except price lists, price-list versions, and required user profiles; browser

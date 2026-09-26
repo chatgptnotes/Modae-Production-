@@ -472,30 +472,6 @@ export const APPROVAL_5B = 'Commercial approval'
 export const APPROVAL_5C = 'Final quote release'
 const COMMERCIAL_DEVIATION = 'Commercial deviation'
 
-const deviationTermKey = value => {
-  const text = String(value || '').toLowerCase()
-  if (/payment|credit|advance/.test(text)) return 'payment'
-  if (/delivery|lead\s*time|schedule/.test(text)) return 'delivery'
-  if (/warranty|guarantee|defect/.test(text)) return 'warranty'
-  return ''
-}
-
-const commercialApprovalCoversProposal = (approval, proposal) => {
-  // Raw status filter, deliberately: §5B signs off the whole commercial
-  // position for its legacy/submission compatibility path. Requirement
-  // Validation scopes the comparison to matched terms separately above.
-  const currentTerms = (proposal?.terms || [])
-    .filter(term => term.status === 'Deviation')
-    .map(term => deviationTermKey(term.term))
-    .filter(Boolean)
-  if (!currentTerms.length) return true
-  const approvedTerms = (approval.deviationDetails || [])
-    .map(term => deviationTermKey(term.term))
-    .filter(Boolean)
-  if (!approvedTerms.length) return false
-  return currentTerms.every(term => approvedTerms.includes(term))
-}
-
 // The §5 blocker keys, which a milestone exception must never clear.
 // A milestone exception may never waive these. The §5 approvals were always
 // here; `red-clearance` joins them because the Red gate is a joint LJS + AH
@@ -520,11 +496,39 @@ const recordedCommercialDetails = approval => {
 
 const commercialApprovalCoversTerms = (approval, terms) => {
   const expected = commercialApprovalDetails(terms)
+  // Legacy Commercial-deviation records have no decision field, so their
+  // terms are not returned by commercialApprovalDetails. Compare the same
+  // minimal evidence shape when reading those rows.
+  const required = expected.length ? expected : (terms || [])
+    .filter(term => term?.status === 'Deviation')
+    .map(term => ({ term: term.term, customerAsk: term.customerAsk }))
   const recorded = recordedCommercialDetails(approval)
-  return expected.length > 0 && expected.every(item => recorded.some(saved =>
+  return required.length > 0 && required.every(item => recorded.some(saved =>
     commercialDetailValue(saved.term) === commercialDetailValue(item.term)
     && (!commercialDetailValue(item.customerAsk)
       || commercialDetailValue(saved.customerAsk) === commercialDetailValue(item.customerAsk))))
+}
+
+// Section 5B is an AH decision on the matched customer terms.  The request
+// records a complete proposal snapshot for audit, but unrelated commercial
+// edits must not make that decision disappear and repeatedly ask AH to approve
+// the same terms. A changed signed term reopens the gate; the legacy
+// Commercial-deviation record intentionally carries across revisions when
+// those signed terms remain unchanged.
+const commercialApprovalCurrent = (approval, proposal) => {
+  const matchedTerms = (proposal?.terms || []).filter(needsCommercialApproval)
+  // Older Commercial-deviation rows predate the explicit Match/Counter-offer
+  // choice. Their signed Deviation rows remain valid compatibility evidence.
+  const terms = matchedTerms.length
+    ? matchedTerms
+    : approval.type === COMMERCIAL_DEVIATION
+      ? (proposal?.terms || []).filter(term => term.status === 'Deviation')
+      : []
+  return terms.length > 0
+    && (approval.rev == null
+      || approval.type === COMMERCIAL_DEVIATION
+      || String(approval.rev) === String(proposal?.revision ?? ''))
+    && commercialApprovalCoversTerms(approval, terms)
 }
 
 export function approvalForRev(type, proposal, approvals, oppId, opportunity) {
@@ -535,13 +539,13 @@ export function approvalForRev(type, proposal, approvals, oppId, opportunity) {
     // Final release has one deliberately simple identity: opportunity plus
     // quote revision. Explanatory copy and snapshot bookkeeping must never
     // create a second gate for the same revision.
-    && (type === APPROVAL_5C
+    && (type === APPROVAL_5B
+      ? commercialApprovalCurrent(a, proposal)
+      : type === APPROVAL_5C
       ? (a.rev == null || String(a.rev) === rev)
       : a.approvalSnapshot
       ? !approvalAffectedByProposal(a, type, proposal, opportunity)
-      : (type === APPROVAL_5B
-        ? (a.rev == null || commercialApprovalCoversProposal(a, proposal))
-        : (a.rev == null || String(a.rev) === rev))))
+      : (a.rev == null || String(a.rev) === rev)))
   return {
     pending: mine.find(a => a.status === 'Pending') || null,
     approved: mine.find(a => ['Approved', 'Approved with conditions'].includes(a.status)) || null,

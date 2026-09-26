@@ -183,6 +183,27 @@ test('snapshot-backed commercial approval reopens when pricing changes', () => {
   assert.equal(approvalForRev('Commercial approval', { ...proposal, discountPct: 12, revision: '02' }, [approval], 'OP-1', baseOpp).approved, null)
 })
 
+test('Section 5B approval remains valid after unrelated commercial edits', () => {
+  const proposal = {
+    ...releasedProposal,
+    terms: [{
+      term: 'Payment', status: 'Deviation', decision: 'Match customer terms',
+      customerAsk: '60 days from invoice', standardTerm: '30 days from invoice',
+    }],
+  }
+  const approval = {
+    id: 'AP-5B', oppId: 'OP-1', type: 'Commercial approval', rev: '01', status: 'Approved',
+    approvalSnapshot: proposalApprovalSnapshot(proposal, baseOpp),
+    deviationDetails: [{ term: 'Payment', customerAsk: '60 days from invoice', ourResponse: '60 days from invoice' }],
+  }
+  const changedPricing = { ...proposal, discountPct: 8 }
+  assert.equal(approvalForRev('Commercial approval', changedPricing, [approval], 'OP-1', baseOpp).approved?.id, 'AP-5B')
+  assert.equal(approvalForRev('Commercial approval', {
+    ...changedPricing,
+    terms: [{ ...proposal.terms[0], customerAsk: '90 days from invoice' }],
+  }, [approval], 'OP-1', baseOpp).approved, null)
+})
+
 test('final quote release requires both AH and LJS', () => {
   const state = poState({})
   state.approvals = [

@@ -540,12 +540,10 @@ export function migrate(s) {
       : returned ? 'Returned'
       : (a.conditions || []).length ? 'Approved with conditions' : 'Approved'
     // Approvals granted before the dialog stamped deviationDetails carry an
-    // empty list, which commercialApprovalCoversProposal treats as "covers
-    // nothing" — permanently voiding an Approved §5B row. §5B signs off the
-    // whole commercial position of the revision it names, so backfill the
-    // missing details from that same revision's deviation terms.
+    // empty list, so a later Section 5B check cannot tell which customer terms
+    // AH signed off. Repair both names used by this approval family.
     let deviationDetails = a.deviationDetails
-    if (a.type === 'Commercial approval'
+    if (['Commercial approval', 'Commercial deviation'].includes(a.type)
       && ['Approved', 'Approved with conditions'].includes(status)
       && !(deviationDetails || []).length) {
       const p = (s.proposals || {})[a.oppId]

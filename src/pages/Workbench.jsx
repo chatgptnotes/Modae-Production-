@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, WON_REASONS, REVISION_TYPES, DEFAULT_WORKFLOW, isWorkflowAvailable } from '../seed.js'
 import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY, gmailComposeHref, displayRole, displayRoles, displayRoleLabel, formatISTDateTime, productDisplayLabel } from '../utils.js'
-import { pricingThresholdExceptions, readiness, isBlocked, nextActionWith, transitionBlockers, isClarificationResolved, actionableClarifications, displayClarifications, isClarificationCoveredBySource, releaseVoidReason, serviceOfferCleared } from '../gates.js'
+import { APPROVAL_5B, pricingThresholdExceptions, readiness, isBlocked, nextActionWith, transitionBlockers, isClarificationResolved, actionableClarifications, displayClarifications, isClarificationCoveredBySource, releaseVoidReason, serviceOfferCleared } from '../gates.js'
 import { COMMERCIAL_RX } from './Approvals.jsx'
 import { Chip, ClassChip, AiBadge, MarkWonControl, WarnBox, ErrBox, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
@@ -574,15 +574,16 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
     }
   }, [transition?.kind, transition?.target, transition?.blockers, opp.id, opp.milestone, store.clarifications, store.approvals, store.proposals])
   const approvalRequestFor = blocker => (store.approvals || []).find(a =>
-    a.oppId === opp.id && a.type === blocker.approvalType && a.status === 'Pending')
+    a.oppId === opp.id
+    && a.status === 'Pending'
+    && (a.type === blocker.approvalType
+      || (blocker.approvalType === APPROVAL_5B && a.type === 'Commercial deviation')))
   const approvalContextFor = blocker => {
     const lead = (store.leads || []).find(l => l.oppId === opp.id)
     const aiSummary = lead?.ai?.summary?.trim() || ''
     const fallbackSummary = `${opp.oppName || 'This opportunity'} is a ${opp.route || 'sales'} opportunity for ${opp.sellTo || 'the customer'}${opp.product ? ` covering ${productDisplayLabel(opp.product)}` : ''}.`
-    // §5B comm-approval signs off the commercial position, so it must record
-    // the same deviation terms commercialApprovalCoversProposal checks (raw
-    // status 'Deviation', any decision) — otherwise the Approved row is voided
-    // the moment the quote has a deviation term, and the dialog re-asks forever.
+    // §5B comm-approval signs off the matched customer terms. Keep those
+    // details on the request so the gate can recognize AH's decision later.
     const wantsDeviationDetails = blocker.key === 'dev' || blocker.key === 'comm-approval' || blocker.key === 'commercial-approval'
     const deviations = wantsDeviationDetails
       ? blocker.key === 'commercial-approval'

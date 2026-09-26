@@ -51,6 +51,30 @@ test('migrate repairs an approved release created before the proposal was persis
   assert.equal(repaired.snapshotRepair.reason, 'Approval was requested before the proposal was persisted')
 })
 
+test('migrate repairs legacy commercial-deviation approval details', () => {
+  const state = seedState()
+  const opportunity = state.opportunities[0]
+  state.proposals = {
+    [opportunity.id]: {
+      revision: '01',
+      terms: [{
+        term: 'Payment', status: 'Deviation', decision: 'Match customer terms',
+        customerAsk: '60 days from invoice', ourResponse: '60 days from invoice',
+      }],
+    },
+  }
+  state.approvals = [{
+    id: 'AP-legacy-commercial', oppId: opportunity.id, type: 'Commercial deviation',
+    rev: '01', status: 'Approved', approver: 'AH', deviationDetails: [],
+  }]
+
+  const repaired = migrate(state).approvals[0]
+  assert.equal(repaired.status, 'Approved')
+  assert.deepEqual(repaired.deviationDetails, [{
+    term: 'Payment', customerAsk: '60 days from invoice', ourResponse: '60 days from invoice',
+  }])
+})
+
 test('migrate backfills Admin configuration added after a saved state', () => {
   const state = seedState()
   const config = { ...state.config }
