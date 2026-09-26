@@ -5,6 +5,10 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+  `R. Sundaram` during state migration.
+  server-authorized Supabase procedure to remove all workspace data and files
+  except price lists, price-list versions, and required user profiles; browser
+  state is cleared before reload so deleted rows cannot be recreated locally.
 - Fixed clear/reset actions leaving active normalized Supabase rows behind when
   the browser had not populated its revision cache yet; reset now discovers and
   soft-deletes remaining active workspace rows through `save_rows`.

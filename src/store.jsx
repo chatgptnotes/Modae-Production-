@@ -9,7 +9,7 @@ import { statusFolderFor } from './sharepoint.js'
 import {
   buildPoCompare, buildHandover, milestoneForStage, routeForType,
   contextForType, B_STEPS, REVISION_TYPES,
-  ROLES, SUBFOLDERS, MILESTONES, newProposal, PORTAL_ENABLED, defaultBStepOwners,
+  ROLES, SUBFOLDERS, MILESTONES, newProposal, PORTAL_ENABLED, defaultBStepOwners, seedConfig,
   canSignBStep,
 } from './seed.js'
 import { leadConfig, opportunityOwnerFor, routeOwner, expiredLeadDeadline, aiAuditDetail } from './leadRules.js'
@@ -31,6 +31,7 @@ import {
 } from './proposal/sparesBoq.js'
 import { releaseState, transitionBlockers } from './gates.js'
 import { clearSupabaseSession, isSupabaseAuthError, supabase, supabaseConfigError } from './supabase.js'
+import { purgeWorkspace } from './workspacePurge.js'
 
 const StoreCtx = createContext(null)
 const CLARIFICATION_FIELD_KEYS = new Set([
@@ -153,6 +154,23 @@ const persistLocalSnapshot = state => {
     }
   }
 }
+
+// A permanent server-side purge removes all workspace configuration too. Keep
+// only price lists and the signed-in user profiles locally, and set a clean
+// non-demo snapshot before reloading so stale browser rows cannot be saved
+// back to Supabase while the page is closing.
+const permanentPurgeState = state => migrate({
+  ...emptyState(state),
+  demoData: false,
+  priceLists: state.priceLists || {},
+  adhocParts: [],
+  rateSheets: {},
+  config: { ...seedConfig, uploads: { ...(seedConfig.uploads || {}), priceLists: [] } },
+  audit: [],
+  deletedLeadIds: [],
+  deletedOpportunityIds: [],
+  pendingOpportunitySyncIds: [],
+})
 
 const BUSINESS_SLICE_KEYS = new Set(['leads', 'leadArchive', 'approvals', 'opportunities', 'proposals', 'sparesLines', 'clarifications', 'audit'])
 const populated = value => Array.isArray(value) ? value.length > 0 : !!value && typeof value === 'object' && Object.keys(value).length > 0
@@ -329,6 +347,7 @@ export function StoreProvider({ children }) {
   const saveRetryRef = useRef({ attempts: 0, retryAt: 0, timer: null })
   const authInvalidRef = useRef(false)
   const authRecoveryRef = useRef(null)
+  const permanentPurgeRef = useRef(false)
   // What this device booted from. The boot fetch resolves *after* the app is
   // interactive, so a lead created in that window exists locally but has not
   // been saved yet (flushSaves is gated on hydratedRef). Comparing against this
@@ -368,6 +387,7 @@ export function StoreProvider({ children }) {
   }
 
   const flushSaves = () => {
+    if (permanentPurgeRef.current) return Promise.resolve()
     persistLocalSnapshot(stateRef.current)
     clearTimeout(saveTimerRef.current)
     saveTimerRef.current = null
@@ -2572,6 +2592,26 @@ export function StoreProvider({ children }) {
       // seeds, which is the opposite of what this action means.
       persistLocalSnapshot(next)
       window.location.reload()
+    },
+
+    async permanentlyPurgeWorkspace(confirmation) {
+      if (permanentPurgeRef.current) return false
+      permanentPurgeRef.current = true
+      try {
+        await purgeWorkspace(confirmation)
+        const next = permanentPurgeState(stateRef.current)
+        lastSavedRef.current = syncedOf(next)
+        bootRef.current = syncedOf(next)
+        persistLocalSnapshot(next)
+        try { await leadBlobs.clearAll() }
+        catch (error) { console.warn('Local lead-file cleanup failed after workspace purge:', error?.message || error) }
+        setState(next)
+        window.location.reload()
+        return true
+      } catch (error) {
+        permanentPurgeRef.current = false
+        throw error
+      }
     },
   }
 

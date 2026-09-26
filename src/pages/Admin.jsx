@@ -19,6 +19,7 @@ import { DEFAULT_CLAUSES } from '../clauses.js'
 import { mintId } from '../ids.js'
 import { BUILT_IN_PROPOSAL_TEMPLATES, loadProposalTemplateBuffer, resolveProposalTemplate } from '../proposal/templateRegistry.js'
 import { runTaskResult } from '../ai.js'
+import { PURGE_CONFIRMATION } from '../workspacePurge.js'
 
 // Admin — every runtime rule the app obeys, in one card grid. Data lives in
 // store.config; all changes are audited by the store mutators.
@@ -270,6 +271,10 @@ export default function Admin() {
   const [regionSearch, setRegionSearch] = useState('')
   const [routingReview, setRoutingReview] = useState(null)
   const [routingReviewBusy, setRoutingReviewBusy] = useState(false)
+  const [purgeOpen, setPurgeOpen] = useState(false)
+  const [purgeConfirmation, setPurgeConfirmation] = useState('')
+  const [purgeBusy, setPurgeBusy] = useState(false)
+  const [purgeError, setPurgeError] = useState('')
 
   // Route-level gate AFTER the hooks (an early return before them would change
   // the hook count when the persona flips while /admin is mounted). Approval
@@ -445,6 +450,18 @@ export default function Admin() {
     setDemoPasswordError('Incorrect password.')
   }
 
+  const permanentlyPurgeWorkspace = async () => {
+    if (purgeConfirmation !== PURGE_CONFIRMATION || purgeBusy) return
+    setPurgeBusy(true)
+    setPurgeError('')
+    try {
+      await store.permanentlyPurgeWorkspace(purgeConfirmation)
+    } catch (error) {
+      setPurgeError(error?.message || 'Workspace purge failed.')
+      setPurgeBusy(false)
+    }
+  }
+
   return (
     <div className="page admin-page">
       <header className="admin-page-head">
@@ -455,8 +472,25 @@ export default function Admin() {
         </div>
         <div className="admin-page-actions">
           <DemoDataControls className="secondary" />
+          {canEdit && <button type="button" className="danger" onClick={() => { setPurgeOpen(true); setPurgeConfirmation(''); setPurgeError('') }}>
+            <Icon name="trash" size={13} /> Permanently delete workspace
+          </button>}
         </div>
       </header>
+
+      {purgeOpen && <Modal title="Permanently delete workspace" onClose={() => { if (!purgeBusy) setPurgeOpen(false) }} className="confirm-modal">
+        <p className="modal-message">This permanently deletes every lead, opportunity, customer, proposal, approval, attachment, audit entry, and Admin setting. Only price lists, price-list versions, and user accounts remain.</p>
+        <label className="modal-prompt-field">Type <b>{PURGE_CONFIRMATION}</b> to continue
+          <input value={purgeConfirmation} onChange={event => setPurgeConfirmation(event.target.value)} autoComplete="off" disabled={purgeBusy} />
+        </label>
+        {purgeError && <p className="warnbox">{purgeError}</p>}
+        <div className="forms-actions modal-actions">
+          <button type="button" onClick={() => setPurgeOpen(false)} disabled={purgeBusy}>Cancel</button>
+          <button type="button" className="danger" disabled={purgeBusy || purgeConfirmation !== PURGE_CONFIRMATION} onClick={permanentlyPurgeWorkspace}>
+            {purgeBusy ? 'Deleting…' : 'Delete permanently'}
+          </button>
+        </div>
+      </Modal>}
 
       {!canEdit && (
         <div className="warn-box">Read-only — sign in as an administrator to change configuration</div>

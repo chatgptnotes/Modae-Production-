@@ -101,7 +101,8 @@ The active repository migrations are `supabase/007_live_workspace_sync.sql`,
 `supabase/008_dedicated_workspace_tables.sql`,
 `supabase/009_relational_workspace_data.sql`,
 `supabase/010_workspace_contract_verification.sql`, and
-`supabase/011_save_rows_lock_order.sql`.
+`supabase/011_save_rows_lock_order.sql`, and
+`supabase/012_permanent_workspace_purge.sql`.
 Historical migrations and backups are local-only under `.local/backups/`.
 
 ## Change rules

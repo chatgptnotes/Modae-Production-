@@ -21,7 +21,7 @@ The application uses these production tables:
 The active repository migrations are `007_live_workspace_sync.sql`,
 `008_dedicated_workspace_tables.sql`, `009_relational_workspace_data.sql`,
 `010_workspace_contract_verification.sql`, and
-`011_save_rows_lock_order.sql`.
+`011_save_rows_lock_order.sql`, and `012_permanent_workspace_purge.sql`.
 Migration 008 moves large JSONB entities out of `records`; migration 009 adds
 typed relational business tables and indexes while keeping legacy rows as a
 rollback copy. Historical setup and
@@ -34,6 +34,11 @@ projects. Migration 010 verifies the two browser-critical objects
 (`user_files` and `save_rows`) and reapplies their authenticated access
 contract. Migration 011 keeps the `save_rows` contract unchanged while making
 concurrent row locking deterministic.
+
+Migration 012 adds the service-role-only permanent workspace purge procedure.
+It deletes all workspace data except price lists, price-list versions, and the
+user-profile state needed for authorized users to sign in. The browser invokes
+it only through `api/purge-workspace.js` after session and role verification.
 
 The browser uses pull-based synchronization only. Runtime code refreshes the
 active workspace on boot, route changes, focus/visibility restoration,
