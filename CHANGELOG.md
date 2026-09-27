@@ -9,6 +9,8 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Fixed Opportunities Excel export by using a browser-compatible workbook writer,
+  keeping exports to one compact filtered sheet without extra rows or columns.
 - Standardized generated Excel cleanup across proposal, pipeline, price-list,
   and editable-workbook exports: proposal print areas now stop at real customer
   content, unused template padding is hidden, table exports expose filters, and

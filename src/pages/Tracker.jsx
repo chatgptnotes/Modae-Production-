@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { CLOSE_REASONS, WON_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES } from '../seed.js'
 import { fmt, fmtRupeesFromK, rupeesToK, mmmYY, ddMmmYY, stageClass, productList, productLabel, productDisplayLabel, sameCustomer, displayRole, OPPORTUNITY_DATE_FIELDS, OPPORTUNITY_PERIODS, opportunityDateRange } from '../utils.js'
-import { downloadTableXlsx } from '../proposal/excelExport.js'
+import { downloadTableXlsx } from '../proposal/tableExcelExport.js'
 import { useFormulaBar } from '../formulabar.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { nextActionWith } from '../gates.js'
@@ -474,7 +474,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const exportCols = COLS
   // A real .xlsx rather than CSV: CSV carries no formatting, so long text
   // (opportunity names, remarks) landed unwrapped in one endless row.
-  const exportRows = () => downloadTableXlsx(
+  const exportRows = async () => downloadTableXlsx(
     'Sales_Pipeline_Report.xlsx',
     'Pipeline',
     ['Sl', ...exportCols.map(col => col.label)],

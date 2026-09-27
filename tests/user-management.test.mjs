@@ -42,8 +42,10 @@ test('admin user API provisions through server-only Supabase credentials', () =>
 test('server deployment documentation keeps the service key server-side', () => {
   const env = read('.env.example')
   const deploy = read('DEPLOYMENT.md')
+  assert.match(env, /VITE_SUPABASE_URL=/)
+  assert.match(env, /VITE_SUPABASE_ANON_KEY=/)
   assert.match(env, /SUPABASE_SERVICE_ROLE_KEY=/)
   assert.match(deploy, /Railway's service Variables page/)
   assert.match(deploy, /SUPABASE_SERVICE_ROLE_KEY=/)
-  assert.match(env, /Never prefix this with VITE_/)
+  assert.match(env, /Never put real secrets in this file or prefix them with VITE_/)
 })
