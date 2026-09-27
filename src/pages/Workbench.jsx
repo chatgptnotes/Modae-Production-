@@ -368,8 +368,8 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
     const communication = (store.communications?.[opp.id] || []).find(c => ['submission', 'rate-sheet'].includes(c.kind) && c.status === 'sent')
     const blockers = []
     if (step.servicePhase >= 2 && !est.scopeConfirmed) blockers.push({ key: 'service-scope', severity: 'block', text: 'Confirm the Service scope and offer path' })
-    if (step.servicePhase >= 3 && (!est.travelConfirmed || (est.surveyRequired && !survey?.sow))) blockers.push({ key: 'service-evidence', severity: 'block', text: est.surveyRequired ? 'Complete travel confirmation, survey report, and SoW before preparing the offer' : 'Confirm the manual travel estimate before preparing the offer' })
-    if (step.servicePhase >= 4 && !(est.offerPrepared || est.serviceLineAdded)) blockers.push({ key: 'service-offer', severity: 'block', text: 'Prepare the Standard Rate Sheet or Customized Proposal first' })
+    if (step.servicePhase >= 3 && (!est.travelConfirmed || (est.surveyRequired && !survey?.report))) blockers.push({ key: 'service-evidence', severity: 'block', text: est.surveyRequired ? 'Complete travel confirmation and the site survey report before preparing the offer' : 'Confirm the manual travel estimate before preparing the offer' })
+    if (step.servicePhase >= 4 && !est.offerPrepared) blockers.push({ key: 'service-offer', severity: 'block', text: 'Issue the Standard Rate Sheet first' })
     if (step.servicePhase >= 5 && !review) blockers.push({ key: 'service-review', severity: 'block', text: 'Approve the offer for release before sending it to the customer' })
     if (step.servicePhase >= 6 && !communication) blockers.push({ key: 'service-send', severity: 'block', text: 'Send the approved offer to the customer first' })
     if (step.servicePhase >= 7 && est.customerDecision !== 'Accepted') blockers.push({ key: 'service-decision', severity: 'block', text: 'Record customer acceptance before scheduling service execution' })
@@ -762,7 +762,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
         {viewTab === 'customer' && <CustomerKycTab opp={opp} />}
         {viewTab === 'registration' && <RegistrationTab opp={opp} goTab={goTab} />}
         {viewTab === 'clarifications' && <ClarificationsTab opp={opp} sourceText={sourceText} />}
-        {viewTab === 'sourcing' && <SourcingTab opp={opp} goTab={goTab} onOpenOffer={() => selectStep('service-offer')} onContinueToProposal={() => {
+        {viewTab === 'sourcing' && <SourcingTab opp={opp} goTab={goTab} onContinueToProposal={() => {
           const proposalStep = workflowSteps.find(step => step.milestone === 'Proposal')
           if (proposalStep) advanceStep(proposalStep.slug)
         }} />}
@@ -1978,7 +1978,7 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
 }
 
 // ---------------------------------------------------------------------------
-function SourcingTab({ opp, goTab, onOpenOffer, onContinueToProposal }) {
+function SourcingTab({ opp, goTab, onContinueToProposal }) {
   const store = useStore()
   const sourcingLines = store.sparesLines.filter(l => l.oppId === opp.id && !isPlaceholderSparesLine(l))
   const superseded = sourcingLines.some(l => String(l.match).toLowerCase().includes('superseded'))
@@ -1986,8 +1986,7 @@ function SourcingTab({ opp, goTab, onOpenOffer, onContinueToProposal }) {
   if (opp.route === 'Service') {
     return <div className="ana-grid service-sourcing-workbench">
       <div className="ana-card c-12">
-        <WbService opp={opp} focus="scope" openBuilder={() => goTab('proposal')}
-          onCarryToProposal={onOpenOffer} />
+        <WbService opp={opp} focus="scope" />
       </div>
     </div>
   }

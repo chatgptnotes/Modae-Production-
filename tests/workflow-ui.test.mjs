@@ -309,8 +309,9 @@ test('the service workbench can set surveyRequired and run the survey chain', ()
     'the "Site Survey Required?" decision must be settable — gates.js reads this flag')
   assert.match(panel, /store\.requestSurvey\(/)
   assert.match(panel, /store\.updateSurvey\(/)
-  assert.match(panel, /sow:/, 'the Statement of Work is part of the chain')
-  assert.match(read('src/workbench/WbService.jsx'), /<SurveyPanel opp=\{opp\} est=\{est\} onCarryToProposal=\{onCarryToProposal\} \/>/)
+  assert.match(panel, /report:/, 'the site survey report is part of the standard flow')
+  assert.doesNotMatch(panel, /Carry the SoW into the proposal scope/)
+  assert.match(read('src/workbench/WbService.jsx'), /<SurveyPanel opp=\{opp\} est=\{est\} \/>/)
 })
 
 test('the survey gates only bite once a survey is actually required', () => {

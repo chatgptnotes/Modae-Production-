@@ -4,47 +4,16 @@ import { displayRole } from '../utils.js'
 import { Chip } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 
-// Diagram 02 §4 — the service special flow. "Site Survey Required?" is the
-// decision diamond: No goes straight to the standard rate-sheet build-up
-// (WbService's own calculator), Yes runs survey request -> site visit ->
-// survey report -> Statement of Work, and only then service pricing.
-// `readiness()` already blocks the proposal on each of those, so this panel is
-// what makes those blockers reachable and clearable.
-export default function SurveyPanel({ opp, est, onCarryToProposal }) {
+// A site visit is optional evidence for the Standard Rate Sheet workflow.
+export default function SurveyPanel({ opp, est }) {
   const store = useStore()
   const survey = (store.surveys || []).find(v => v.oppId === opp.id)
   const required = !!est.surveyRequired
   const [detail, setDetail] = useState('')
   const [report, setReport] = useState('')
-  const [sow, setSow] = useState('')
-  const [sentToProposal, setSentToProposal] = useState(false)
-
-  // The SoW is what the service price is quoted against, so it is pushed into
-  // the document's Scope of Work note rather than left on the survey record.
-  // `scopeNote` is the editable block under that heading (proposalDoc.js:421);
-  // `scope` itself is derived from the BoQ and cannot be overwritten.
-  const sowToProposal = () => {
-    const p = store.getProposal(opp.id)
-    const requirementSource = Array.from(new Set([...(est.requirementSource || []), 'SoW / Proposal']))
-    store.saveProposal(opp.id, {
-      ...p,
-      scopeNote: [(p.scopeNote || '').trim(), `Statement of Work (survey ${survey.id}):`, survey.sow]
-        .filter(Boolean).join('\n\n'),
-    })
-    store.updateServiceFlow(opp.id, {
-      offerMode: 'Customized Proposal',
-      offerPathSource: 'manual',
-      requirementSource,
-      requirementSourceSource: 'manual',
-      surveyRequired: true,
-    })
-    setSentToProposal(true)
-    onCarryToProposal?.()
-  }
 
   const stageChip = () => {
     if (!survey) return <Chip tone="state-Blocks">Not raised</Chip>
-    if (survey.sow) return <Chip tone="state-Accepted">SoW ready</Chip>
     if (survey.report) return <Chip tone="state-Review">Report in</Chip>
     if (survey.visitOn) return <Chip tone="state-Review">Visit booked</Chip>
     return <Chip tone="state-Review">{survey.state}</Chip>
@@ -100,26 +69,7 @@ export default function SurveyPanel({ opp, est, onCarryToProposal }) {
             </div>
           )}
 
-          <div className="section-title" style={{ marginTop: 10 }}>Statement of Work</div>
-          {survey.sow ? (
-            <>
-              <div className="okbox" style={{ whiteSpace: 'pre-wrap' }}>{survey.sow}</div>
-              <button type="button" onClick={sowToProposal}>
-                <Icon name="arrowRight" size={13} /> Carry the SoW into the proposal scope
-              </button>
-              {sentToProposal && <div className="okbox">SoW added to the proposal scope — price the service against it below.</div>}
-            </>
-          ) : (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              <textarea rows={3} placeholder="Scope of work written up from the survey report" style={{ flex: 1, minWidth: 240 }}
-                value={sow} onChange={e => setSow(e.target.value)} />
-              <button className="primary" disabled={!sow.trim() || !survey.report}
-                title={!survey.report ? 'Submit the site survey report first' : ''}
-                onClick={() => store.updateSurvey(opp.id, { sow: sow.trim(), state: 'SoW ready' }, 'Statement of Work written')}>
-                Save Statement of Work
-              </button>
-            </div>
-          )}
+          <p className="hint">The survey report is evidence for the standard service rate schedule. No Statement of Work or proposal is required.</p>
         </>
       )}
     </div>

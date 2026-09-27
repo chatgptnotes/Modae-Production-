@@ -4,6 +4,7 @@
 
 - Reduced Supabase traffic by limiting workspace hydration to one initial session load, removing automatic focus/visibility/route pulls, disabling presence polling, and preventing non-changing sourcing reconciliation from triggering autosaves.
 - Fixed the Service SOW handoff so carrying the Statement of Work opens Prepare Offer, keeps the travel confirmation gate visible, and recognizes proposal and quotation language during service classification.
+- Simplified new Service opportunities to the Standard Rate Sheet workflow, keeping Site Visit optional and removing proposal-specific handoff controls from the Service UI.
 
 Important project changes are recorded here in reverse chronological order.
 This is an implementation and release log, not a dump of every commit.

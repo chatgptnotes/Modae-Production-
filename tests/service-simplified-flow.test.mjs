@@ -5,12 +5,12 @@ import fs from 'node:fs'
 const service = fs.readFileSync('src/workbench/WbService.jsx', 'utf8')
 const store = fs.readFileSync('src/store.jsx', 'utf8')
 
-test('Service flow uses one AI suggestion and one human confirmation', () => {
-  assert.match(service, /AI service identification/)
+test('Service flow uses the Standard Rate Sheet path', () => {
+  assert.match(service, /Standard service identification/)
   assert.match(service, /Offer path/)
-  assert.match(service, /Confirm scope and offer path/)
+  assert.match(service, /Confirm standard service scope/)
   assert.match(service, /Standard Rate Sheet/)
-  assert.match(service, /Customized Proposal/)
+  assert.doesNotMatch(service, /Customized Proposal/)
 })
 
 test('Service Scope uses a decision-first operational layout', () => {
@@ -24,14 +24,12 @@ test('Service Scope uses a decision-first operational layout', () => {
   assert.match(service, /scopeConfirmed && <>/)
 })
 
-test('carrying the SOW opens Prepare Offer and preserves the travel gate', () => {
+test('standard scope keeps the site survey optional and preserves the travel gate', () => {
   const survey = fs.readFileSync('src/workbench/SurveyPanel.jsx', 'utf8')
   const workbench = fs.readFileSync('src/pages/Workbench.jsx', 'utf8')
-  assert.match(survey, /onCarryToProposal\?\.\(\)/)
-  assert.match(survey, /saveProposal\(opp\.id,/)
-  assert.match(survey, /offerMode: 'Customized Proposal'/)
-  assert.match(survey, /'SoW \/ Proposal'/)
-  assert.match(workbench, /onOpenOffer=\{\(\) => selectStep\('service-offer'\)\}/)
+  assert.match(survey, /surveyRequired: e\.target\.checked/)
+  assert.doesNotMatch(survey, /Carry the SoW into the proposal scope/)
+  assert.doesNotMatch(workbench, /onOpenOffer=/)
   assert.match(service, /Confirm manual travel estimate/)
   assert.match(workbench, /servicePhaseBlockers\(step\)/)
 })
@@ -50,7 +48,7 @@ test('Service review still requires scope, travel, and required survey evidence'
   assert.match(service, /!scopeConfirmed \|\| !est\.travelConfirmed/)
   assert.match(service, /est\.surveyRequired && !\(\(store\.surveys \|\| \[\]\)\.find/)
   // The single review only gates the opportunities still carrying one.
-  assert.match(service, /onLegacyReview && reviewApproval\?\.status !== 'Approved'/)
+  assert.match(service, /!!reviewApproval/)
 })
 
 // Reversed on 22 Sep: Service now runs the same layered approval as a project.
@@ -110,12 +108,11 @@ test('the engineer logs weekday, weekend and overtime actuals', () => {
   assert.match(execution, /actualEngineerDays: engineerDaysFrom\(actualQuantities\(next\)\)/)
 })
 
-test('a site finding can escalate Path A onto the customised path', () => {
+test('Service report stays on the Standard Rate Sheet path', () => {
   const report = fs.readFileSync('src/workbench/ServiceReportPanel.jsx', 'utf8')
-  assert.match(report, /surveyRequired: true/)
-  assert.match(report, /offerMode: 'Customized Proposal'/)
-  assert.match(report, /store\.requestSurvey\(opp\.id/)
-  assert.match(report, /Detailed BOQ \/ SoW required/)
+  assert.match(report, /accepted rate sheet/)
+  assert.doesNotMatch(report, /Customized Proposal/)
+  assert.doesNotMatch(report, /Detailed BOQ \/ SoW required/)
 })
 
 test('the invoice bills the accepted rates against the actual deployment', async () => {
@@ -283,32 +280,19 @@ test('an admin rate revision survives a demo wipe', async () => {
 
 // ---- Tier 3: classification, region and follow-up --------------------------
 
-test('the requirement source decides the lane, not the opportunity name', async () => {
+test('the Standard Rate Sheet lane is fixed for new Service scope', async () => {
   const wb = fs.readFileSync('src/workbench/WbService.jsx', 'utf8')
-  assert.match(wb, /export const REQUIREMENT_SOURCES = \['Site visit', 'SoW \/ Proposal', 'AMC'\]/)
-  // AMC is a first-class classification again rather than free text in oppName.
-  assert.match(wb, /sources\.includes\('AMC'\) \|\| sources\.includes\('SoW \/ Proposal'\)/)
-  // Confirming the scope persists the field and derives the survey requirement.
-  assert.match(wb, /requirementSource, scopeConfirmed: true/)
-  assert.match(wb, /s === 'Site visit' \|\| s === 'SoW \/ Proposal'/)
+  assert.match(wb, /offerMode: 'Standard Rate Sheet', requirementSource, scopeConfirmed: true/)
+  assert.match(wb, /surveyRequired: siteVisitSelected/)
+  assert.doesNotMatch(wb, /SoW \/ Proposal/)
+  assert.doesNotMatch(wb, /AMC/)
 })
 
-test('CPP turbine service language preselects the site visit and customised scope', () => {
+test('Service no longer derives a customised lane from enquiry language', () => {
   const wb = fs.readFileSync('src/workbench/WbService.jsx', 'utf8')
-  assert.match(wb, /proposal\|quotation\|technical report\|method statement\|detailed scope\|complex\|diagnostic\|health assessment/)
-  assert.match(wb, /(loop checks\?|signal validation|replacement supervision|probe replacement|recommission)/)
-  assert.match(wb, /(site inspection|field service|inspection|turbine\.\*probe\.\*replacement)/)
-  assert.match(wb, /export const aiSourcesFor = opp =>/)
-  assert.match(wb, /export const suggestedOfferFor = opp => offerForSources\(aiSourcesFor\(opp\)\)/)
-})
-
-test('fresh AI scope replaces stale unconfirmed suggestions but preserves manual edits', () => {
-  const wb = fs.readFileSync('src/workbench/WbService.jsx', 'utf8')
-  assert.match(wb, /const inferredSources = aiSourcesFor\(opp\)/)
-  assert.match(wb, /est\.requirementSourceSource === 'manual'/)
-  assert.match(wb, /est\.offerPathSource === 'manual'/)
-  assert.match(wb, /requirementSourceSource: 'manual'/)
-  assert.match(wb, /offerPathSource: 'manual'/)
+  assert.match(wb, /offerMode = est\.offerMode \|\| 'Standard Rate Sheet'/)
+  assert.doesNotMatch(wb, /aiSourcesFor/)
+  assert.doesNotMatch(wb, /suggestedOfferFor/)
 })
 
 test('the site location picks the rate sheet', async () => {
@@ -347,4 +331,21 @@ test('a quiet customer and an expired schedule both raise an alert', async () =>
 
   // Once the customer has answered there is nothing to chase.
   assert.equal(run({ oppId: 'SVC-9', rateSheetSentOn: ago(45), customerDecision: 'Accepted' }).length, 0)
+})
+
+test('new Service scope exposes only the Standard Rate Sheet path', () => {
+  const wb = fs.readFileSync('src/workbench/WbService.jsx', 'utf8')
+  assert.match(wb, /Standard Rate Sheet/)
+  assert.match(wb, /Site visit/)
+  assert.doesNotMatch(wb, /<option>Customized Proposal<\/option>/)
+  assert.doesNotMatch(wb, /<span>SoW \/ Proposal<\/span>/)
+  assert.doesNotMatch(wb, /<span>AMC<\/span>/)
+  assert.doesNotMatch(wb, /Send scope to proposal/)
+})
+
+test('standard Service scope confirms a rate-sheet offer without proposal sources', () => {
+  const wb = fs.readFileSync('src/workbench/WbService.jsx', 'utf8')
+  assert.match(wb, /offerMode: 'Standard Rate Sheet'/)
+  assert.match(wb, /surveyRequired: siteVisitSelected/)
+  assert.doesNotMatch(wb, /offerMode: 'Customized Proposal'/)
 })
