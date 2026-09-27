@@ -10,7 +10,7 @@ import { Icon } from '../icons.jsx'
 // survey report -> Statement of Work, and only then service pricing.
 // `readiness()` already blocks the proposal on each of those, so this panel is
 // what makes those blockers reachable and clearable.
-export default function SurveyPanel({ opp, est }) {
+export default function SurveyPanel({ opp, est, onCarryToProposal }) {
   const store = useStore()
   const survey = (store.surveys || []).find(v => v.oppId === opp.id)
   const required = !!est.surveyRequired
@@ -25,12 +25,21 @@ export default function SurveyPanel({ opp, est }) {
   // `scope` itself is derived from the BoQ and cannot be overwritten.
   const sowToProposal = () => {
     const p = store.getProposal(opp.id)
+    const requirementSource = Array.from(new Set([...(est.requirementSource || []), 'SoW / Proposal']))
     store.saveProposal(opp.id, {
       ...p,
       scopeNote: [(p.scopeNote || '').trim(), `Statement of Work (survey ${survey.id}):`, survey.sow]
         .filter(Boolean).join('\n\n'),
     })
+    store.updateServiceFlow(opp.id, {
+      offerMode: 'Customized Proposal',
+      offerPathSource: 'manual',
+      requirementSource,
+      requirementSourceSource: 'manual',
+      surveyRequired: true,
+    })
     setSentToProposal(true)
+    onCarryToProposal?.()
   }
 
   const stageChip = () => {
@@ -95,7 +104,7 @@ export default function SurveyPanel({ opp, est }) {
           {survey.sow ? (
             <>
               <div className="okbox" style={{ whiteSpace: 'pre-wrap' }}>{survey.sow}</div>
-              <button onClick={sowToProposal}>
+              <button type="button" onClick={sowToProposal}>
                 <Icon name="arrowRight" size={13} /> Carry the SoW into the proposal scope
               </button>
               {sentToProposal && <div className="okbox">SoW added to the proposal scope — price the service against it below.</div>}

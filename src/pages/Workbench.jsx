@@ -762,7 +762,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
         {viewTab === 'customer' && <CustomerKycTab opp={opp} />}
         {viewTab === 'registration' && <RegistrationTab opp={opp} goTab={goTab} />}
         {viewTab === 'clarifications' && <ClarificationsTab opp={opp} sourceText={sourceText} />}
-        {viewTab === 'sourcing' && <SourcingTab opp={opp} goTab={goTab} onContinueToProposal={() => {
+        {viewTab === 'sourcing' && <SourcingTab opp={opp} goTab={goTab} onOpenOffer={() => selectStep('service-offer')} onContinueToProposal={() => {
           const proposalStep = workflowSteps.find(step => step.milestone === 'Proposal')
           if (proposalStep) advanceStep(proposalStep.slug)
         }} />}
@@ -1978,7 +1978,7 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
 }
 
 // ---------------------------------------------------------------------------
-function SourcingTab({ opp, goTab, onContinueToProposal }) {
+function SourcingTab({ opp, goTab, onOpenOffer, onContinueToProposal }) {
   const store = useStore()
   const sourcingLines = store.sparesLines.filter(l => l.oppId === opp.id && !isPlaceholderSparesLine(l))
   const superseded = sourcingLines.some(l => String(l.match).toLowerCase().includes('superseded'))
@@ -1986,7 +1986,8 @@ function SourcingTab({ opp, goTab, onContinueToProposal }) {
   if (opp.route === 'Service') {
     return <div className="ana-grid service-sourcing-workbench">
       <div className="ana-card c-12">
-        <WbService opp={opp} focus="scope" openBuilder={() => goTab('proposal')} />
+        <WbService opp={opp} focus="scope" openBuilder={() => goTab('proposal')}
+          onCarryToProposal={onOpenOffer} />
       </div>
     </div>
   }

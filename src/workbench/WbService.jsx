@@ -41,7 +41,7 @@ export const aiSourcesFor = opp => {
   const text = serviceText(opp)
   const sources = []
   if (/\bamc\b|annual maintenance|recurring maintenance/.test(text)) sources.push('AMC')
-  if (/statement of work|\bsow\b|\bboq\b|method statement|detailed scope|complex|diagnostic|health assessment|loop checks?|signal validation|replacement supervision|probe replacement|replacement of .*probe|recommission(?:ing)?|service report|long[- ]duration|negotiat/.test(text)) {
+  if (/statement of work|\bsow\b|\bboq\b|proposal|quotation|technical report|method statement|detailed scope|complex|diagnostic|health assessment|loop checks?|signal validation|replacement supervision|probe replacement|replacement of .*probe|recommission(?:ing)?|service report|long[- ]duration|negotiat/.test(text)) {
     sources.push('SoW / Proposal')
   }
   if (/survey|site visit|site inspection|on[- ]site|field service|inspection|troubleshoot|commissioning|recommission(?:ing)?|turbine.*probe.*replacement|probe replacement/.test(text)) {
@@ -54,7 +54,7 @@ export const suggestedOfferFor = opp => offerForSources(aiSourcesFor(opp))
 
 // Reactive-service workbench: rate-sheet driven cost build-up with the manual
 // travel-estimate confirmation gate.
-export default function WbService({ opp, openBuilder, focus = 'scope' }) {
+export default function WbService({ opp, openBuilder, onCarryToProposal, focus = 'scope' }) {
   const store = useStore()
   const comm = canPriceProposal(store.role)
   const est = store.svcEstimates.find(e => e.oppId === opp.id) || { oppId: opp.id, ...DEFAULT_EST }
@@ -197,7 +197,7 @@ export default function WbService({ opp, openBuilder, focus = 'scope' }) {
         <p className="hint">This summary updates from the confirmed scope and stays visible while the estimate is prepared.</p>
       </div>
       </>}
-      {focus === 'scope' && scopeConfirmed && <SurveyPanel opp={opp} est={est} />}
+      {focus === 'scope' && scopeConfirmed && <SurveyPanel opp={opp} est={est} onCarryToProposal={onCarryToProposal} />}
       {focus === 'offer' && <>
         <div className="ana-card c-12 service-offer-context">
           <div className="service-panel-kicker">Confirmed scope</div>
@@ -206,6 +206,9 @@ export default function WbService({ opp, openBuilder, focus = 'scope' }) {
             <Chip tone={est.surveyRequired ? 'state-Review' : 'state-Accepted'}>{est.surveyRequired ? 'Survey evidence required' : 'No survey required'}</Chip>
           </div>
           <p className="hint">Scope is locked. Complete the service estimate below, then prepare the rate schedule or proposal for this revision.</p>
+          {!est.travelConfirmed && <div className="warnbox service-offer-blocker" role="status">
+            <b>Next action required:</b> confirm the manual travel estimate below before the offer can be prepared or reviewed.
+          </div>}
         </div>
         {offerMode === 'Standard Rate Sheet' && <RateSheetPanel opp={opp} est={est} />}
       </>}

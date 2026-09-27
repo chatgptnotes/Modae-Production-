@@ -310,7 +310,7 @@ test('the service workbench can set surveyRequired and run the survey chain', ()
   assert.match(panel, /store\.requestSurvey\(/)
   assert.match(panel, /store\.updateSurvey\(/)
   assert.match(panel, /sow:/, 'the Statement of Work is part of the chain')
-  assert.match(read('src/workbench/WbService.jsx'), /<SurveyPanel opp={opp} est={est} \/>/)
+  assert.match(read('src/workbench/WbService.jsx'), /<SurveyPanel opp=\{opp\} est=\{est\} onCarryToProposal=\{onCarryToProposal\} \/>/)
 })
 
 test('the survey gates only bite once a survey is actually required', () => {

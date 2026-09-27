@@ -24,6 +24,18 @@ test('Service Scope uses a decision-first operational layout', () => {
   assert.match(service, /scopeConfirmed && <>/)
 })
 
+test('carrying the SOW opens Prepare Offer and preserves the travel gate', () => {
+  const survey = fs.readFileSync('src/workbench/SurveyPanel.jsx', 'utf8')
+  const workbench = fs.readFileSync('src/pages/Workbench.jsx', 'utf8')
+  assert.match(survey, /onCarryToProposal\?\.\(\)/)
+  assert.match(survey, /saveProposal\(opp\.id,/)
+  assert.match(survey, /offerMode: 'Customized Proposal'/)
+  assert.match(survey, /'SoW \/ Proposal'/)
+  assert.match(workbench, /onOpenOffer=\{\(\) => selectStep\('service-offer'\)\}/)
+  assert.match(service, /Confirm manual travel estimate/)
+  assert.match(workbench, /servicePhaseBlockers\(step\)/)
+})
+
 test('Service flow combines internal review and records one customer decision', () => {
   assert.match(service, /type: 'Service offer review'/)
   assert.match(service, /Request one Service Review/)
@@ -283,7 +295,7 @@ test('the requirement source decides the lane, not the opportunity name', async 
 
 test('CPP turbine service language preselects the site visit and customised scope', () => {
   const wb = fs.readFileSync('src/workbench/WbService.jsx', 'utf8')
-  assert.match(wb, /method statement\|detailed scope\|complex\|diagnostic\|health assessment/)
+  assert.match(wb, /proposal\|quotation\|technical report\|method statement\|detailed scope\|complex\|diagnostic\|health assessment/)
   assert.match(wb, /(loop checks\?|signal validation|replacement supervision|probe replacement|recommission)/)
   assert.match(wb, /(site inspection|field service|inspection|turbine\.\*probe\.\*replacement)/)
   assert.match(wb, /export const aiSourcesFor = opp =>/)
