@@ -14250,3 +14250,115 @@ table.sheet tbody tr:hover td {
   .proposal-status-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .proposal-status-footer { align-items: flex-start; flex-direction: column; }
 }
+
+/* Follow-up & Closure layout repair.
+   Keep the workbench information-dense, but give long opportunity names,
+   workflow labels, and card controls a real width budget so they wrap inside
+   their surfaces instead of pushing adjacent content off-screen. */
+.page .opp-summary-title { min-width: 0; }
+.page .opp-summary-title h1 {
+  flex: 1 1 520px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  text-wrap: balance;
+}
+.page .opp-summary-title .opp-id,
+.page .opp-summary-title .opp-title-separator { white-space: nowrap; }
+.page .opp-summary-grid.clean-summary-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.1fr) minmax(0, 2fr) minmax(0, .85fr);
+  align-items: stretch;
+}
+.page .clean-summary-grid .summary-meta-item,
+.page .clean-summary-grid .summary-meta-item > b,
+.page .clean-summary-grid .summary-meta-value { min-width: 0; }
+.page .clean-summary-grid .summary-meta-item > b { overflow-wrap: anywhere; }
+.page .progress-controls { min-width: 0; flex-wrap: wrap; }
+.page .progress-controls span { min-width: 0; max-width: min(240px, 100%); overflow-wrap: anywhere; }
+.page .progress-step .progress-label {
+  max-width: 13ch;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.page .follow-up-grid {
+  align-items: start;
+  gap: 16px;
+}
+.page .follow-up-panel {
+  height: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 18px;
+  border-radius: 10px;
+  border-top-width: 2px;
+  box-shadow: 0 5px 16px rgba(15, 23, 42, .06);
+}
+.page .follow-up-panel .ana-title {
+  margin-bottom: 12px;
+  line-height: 1.25;
+}
+.page .follow-up-panel .check-row {
+  align-items: flex-start;
+  min-width: 0;
+  line-height: 1.35;
+}
+.page .follow-up-panel .check-row > span:not(.chip) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.page .follow-up-panel .check-row > .chip { flex: 0 0 auto; }
+.page .revision-history-row > .hint {
+  min-width: 0;
+  margin-left: auto;
+  overflow-wrap: anywhere;
+  text-align: right;
+}
+.page .follow-up-control-row { min-width: 0; align-items: stretch; }
+.page .follow-up-control-row > input,
+.page .follow-up-control-row > select,
+.page .follow-up-control-row > button { min-width: 0; }
+.page .close-outcome-form {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.page .close-outcome-form > select,
+.page .close-outcome-form > textarea,
+.page .close-outcome-form > input { width: 100%; min-width: 0; }
+.page .close-outcome-form > button { justify-self: start; }
+.page .competitor-control-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) minmax(180px, 2fr) auto;
+  align-items: stretch;
+}
+.page .competitor-control-row > input,
+.page .competitor-control-row > button { width: 100%; min-width: 0; }
+
+@media (max-width: 1100px) {
+  .page .opp-summary-grid.clean-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .page .opp-summary-grid.clean-summary-grid { grid-template-columns: 1fr 1fr; }
+  .page .follow-up-panel { height: auto; }
+  .page .follow-up-control-row > input,
+  .page .follow-up-control-row > select,
+  .page .follow-up-control-row > button { flex: 1 1 100%; }
+  .page .competitor-control-row { grid-template-columns: 1fr; }
+  .page .revision-history-row > .hint { flex-basis: 100%; margin-left: 0; text-align: left; }
+}
+
+@media (max-width: 620px) {
+  .page .opp-summary-title h1 { flex-basis: 100%; font-size: 25px; line-height: 1.1; }
+  .page .opp-summary-grid.clean-summary-grid { grid-template-columns: 1fr; }
+  .page .clean-summary-grid .summary-meta-item { border-right: 0; }
+  .page .clean-summary-grid .summary-meta-item + .summary-meta-item { border-top: 1px solid var(--border-default); }
+  .page .clean-summary-grid .opp-summary-action { grid-column: auto; }
+  .page .progress-controls { width: 100%; justify-content: space-between; }
+  .page .progress-controls span { flex: 1 1 auto; }
+  .page .follow-up-panel { padding: 15px; }
+}
