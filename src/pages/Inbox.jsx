@@ -20,7 +20,7 @@ import { leadWorkflow } from '../leadWorkflow.js'
 import { parseLeadLineItems } from '../tenderParse.js'
 import { deterministicLeadRoute, leadTextChunks, mergeLeadResults, cleanDisplayValue, extractLeadIdentityFacts } from '../leadExtraction.js'
 import { scanAttachment, parsedToLeadFields, deterministicPromptContext, mergeDeterministicIntoAi } from '../docScan.js'
-import { customerContactFromText, customerCompanyFromText, customerPhoneFromText, hardenLeadExtraction, isFastTrackLead, isInternalSender, isRegistrationCriticalField, normalizeLeadContactFields, routeOwner, routeOwnerForLocation, supplyMissing } from '../leadRules.js'
+import { customerContactFromText, customerCompanyFromText, customerPhoneFromText, hardenLeadExtraction, isFastTrackLead, isInternalSender, isRegistrationCriticalField, normalizeLeadContactFields, opportunityOwnerFor, routeOwner, routeOwnerForLocation, supplyMissing } from '../leadRules.js'
 import { indiaLocation, indiaRegionForLocation } from '../indiaLocations.js'
 import {
   QUOTE_FEE_DOCUMENTS, answeredPatch, clarificationItems, clarificationKindFor,
@@ -55,7 +55,11 @@ export const isUnavailableAiSummary = lead => /^AI extraction was unavailable\b/
 // second registration screen just to create the opportunity.
 function createOpportunityFromLeadPage({ store, lead, fields, decision, customer, customerStatus, regionalOwner }) {
   const today = new Date().toISOString().slice(0, 10)
-  const owner = decision.owner
+  const owner = decision.owner || regionalOwner || opportunityOwnerFor({
+    location: decision.eucLocation || decision.location || lead.location || lead.region,
+    region: lead.region,
+    config: store.config,
+  })
   const id = nextOppId(store.opportunities, owner)
   const { extracted, workbenchRows, bom } = buildLeadProposalData(lead, store.priceLists, store.adhocParts)
   const identity = leadIdentity(lead, fields)
@@ -102,7 +106,14 @@ function createOpportunityFromLeadPage({ store, lead, fields, decision, customer
     kyc: leadVerification.status === 'Verified' ? 'Valid' : 'Pending',
     payment: '—',
   })
-  store.updateLead(lead.id, { ...decision, status: 'Converted', oppId: id }, 'Opportunity created from lead')
+  store.updateLead(lead.id, {
+    ...decision,
+    owner,
+    assignedOwner: owner,
+    suggestedOwner: owner,
+    status: 'Converted',
+    oppId: id,
+  }, 'Opportunity created from lead')
   return id
 }
 
@@ -3483,7 +3494,12 @@ export default function Inbox() {
     const value = pattern => leadFieldValue(lead.ai?.fields, pattern)
     const mapped = key => mappedLeadFieldValue(lead.ai?.fields, key)
     const buSegment = splitBuSegment(lead.ai?.fields)
-    const owner = lead.assignedOwner || lead.suggestedOwner || store.role
+    const owner = lead.assignedOwner || lead.suggestedOwner || opportunityOwnerFor({
+      location: lead.location,
+      region: lead.region,
+      config: store.config,
+      fallback: store.role || 'LJS',
+    })
     const internalSender = isInternalSender(lead.from, store.config)
     const sellTo = mapped('sellTo') || lead.sellTo || (internalSender ? 'Customer to confirm' : lead.sender) || 'Simulated customer'
     const category = mapped('category') || 'EUC'

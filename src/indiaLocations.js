@@ -34,6 +34,26 @@ for (const item of INDIA_LOCATIONS) {
   if (!byCity.has(item.city.toLowerCase())) byCity.set(item.city.toLowerCase(), item)
 }
 
+const searchableLocationText = value => String(value || '')
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, ' ')
+  .trim()
+  .replace(/\s+/g, ' ')
+
+const embeddedLocation = value => {
+  const text = searchableLocationText(value)
+  if (!text) return null
+  const padded = ` ${text} `
+  // Prefer the longest city name so "New Delhi" wins over the shorter
+  // "Delhi" when both appear in an address.
+  return [...byCity.values()]
+    .sort((left, right) => searchableLocationText(right.city).length - searchableLocationText(left.city).length)
+    .find(item => {
+      const city = searchableLocationText(item.city)
+      return city && padded.includes(` ${city} `)
+    }) || null
+}
+
 export function indiaLocation(value) {
   const text = String(value || '').trim()
   return byValue.get(text) || byCity.get(text.toLowerCase()) || null
@@ -50,10 +70,12 @@ export function regionForState(stateCode, config) {
 
 export function indiaRegionForLocation(value, config) {
   const text = String(value || '').trim()
-  const loc = indiaLocation(value)
+  const loc = indiaLocation(value) || embeddedLocation(value)
   if (loc) return regionForState(loc.stateCode, config)
-  const normalized = text.toLowerCase().replace(/[.,]+$/, '')
+  const normalized = searchableLocationText(text)
   const state = Object.entries(STATES).find(([code, name]) =>
-    normalized === code.toLowerCase() || normalized === name.toLowerCase())
+    normalized === searchableLocationText(code)
+      || normalized === searchableLocationText(name)
+      || ` ${normalized} `.includes(` ${searchableLocationText(name)} `))
   return state ? regionForState(state[0], config) : ''
 }

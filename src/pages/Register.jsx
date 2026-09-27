@@ -146,7 +146,14 @@ export default function Register() {
   verificationBlockers.forEach(item => blockers.push(item))
   const blocked = blockers.length > 0
 
-  const previewId = nextOppId(store.opportunities, owner)
+  // The registration identity is the final location entered before the
+  // permanent ID is minted. Re-route from it so a corrected city/state cannot
+  // leave the opportunity under the previous lead suggestion.
+  const creationRoutingRegion = identityDraft.eucLocation || routingRegion
+  const creationRegionalOwner = routeOwnerForLocation(creationRoutingRegion, store.config, '')
+  const creationOverride = creationRegionalOwner && owner !== creationRegionalOwner
+  const creationOwner = creationOverride ? owner : (creationRegionalOwner || owner)
+  const previewId = nextOppId(store.opportunities, creationOwner)
   const backend = activeBackend()
   const today = new Date().toISOString().slice(0, 10)
 
@@ -164,7 +171,7 @@ export default function Register() {
 
   const create = async () => {
     if (blocked || missingIdentity.length || creating) return
-    const isOverride = regionalOwner && owner !== regionalOwner
+    const isOverride = creationOverride
     if (isOverride && !['LJS', 'AH'].includes(store.role)) return
     if (isOverride && !ownerOverrideReason.trim()) return
     setCreating(true)
@@ -186,6 +193,7 @@ export default function Register() {
     const scope = String(lead.opportunityScope || leadFieldValue(fields, 'scope') || '').trim()
     const { extracted } = buildLeadProposalData(lead, store.priceLists, store.adhocParts)
     const leadVerification = verificationSnapshot(lead, leadCustomerStatus, { approval: redApproval, config: store.config })
+    const finalOwner = isOverride ? owner : creationOwner
     const opp = {
       id: previewId,
       sourceLeadId: lead.id,
@@ -194,8 +202,8 @@ export default function Register() {
       customerStatus: leadCustomerStatus,
       leadVerification,
       eucName, eucLocation,
-      oppName: lead.subject, opportunityScope: scope, owner, oppType, bu, segment, product,
-      suggestedOwner: regionalOwner || owner,
+      oppName: lead.subject, opportunityScope: scope, owner: finalOwner, oppType, bu, segment, product,
+      suggestedOwner: creationRegionalOwner || finalOwner,
       ownerOverrideReason: isOverride ? ownerOverrideReason.trim() : '',
       prob: 'Low', valueK: 0, cogsK: 0,
       rfqNumber, rfqDate,

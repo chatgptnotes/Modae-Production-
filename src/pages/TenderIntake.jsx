@@ -8,6 +8,7 @@ import { fmt, sameCustomer } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { runJson } from '../ai.js'
 import ScanProgress from '../ScanProgress.jsx'
+import { opportunityOwnerFor } from '../leadRules.js'
 
 const STAGES_MSG = [
   'Reading document…',
@@ -175,7 +176,14 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
     const today = new Date().toISOString().slice(0, 10)
     let opp, id
     if (target === 'new') {
-      id = nextOppId(store.opportunities, draft.owner)
+      // Resolve the owner before minting the ID so tender intake follows the
+      // same Admin city/state routing as inbox conversion.
+      const owner = opportunityOwnerFor({
+        location: draft.eucLocation || draft.location,
+        config: store.config,
+        fallback: draft.owner || store.role || 'LJS',
+      })
+      id = nextOppId(store.opportunities, owner)
       const maxSl = Math.max(0, ...store.opportunities.map(o => o.sl || 0))
       const sellTo = draft.sellTo.trim()
       // Tenders spell the buyer out in full ("MAHARASHTRA STATE POWER GENERATION
@@ -193,7 +201,7 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
         category: draft.category, location: draft.location,
         customerStatus: known ? known.status : 'Blue',
         eucName: draft.eucName, eucLocation: draft.eucLocation, oppName: draft.oppName,
-        owner: draft.owner, oppType: draft.oppType, bu: draft.bu, segment: draft.segment, product: draft.product,
+        owner, oppType: draft.oppType, bu: draft.bu, segment: draft.segment, product: draft.product,
         prob: '', valueK: +draft.valueK || 0, cogsK: 0,
         createDate: today, proposalDate: '', orderDate: '', invoiceDate: '',
         status: 'Open', stage: 'RFQ', closedReason: '',

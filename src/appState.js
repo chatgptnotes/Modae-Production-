@@ -509,6 +509,17 @@ export function migrate(s) {
       nextActionOwner: canonicalOwner(o.nextActionOwner || ''),
     }
   })
+  // A converted lead and its opportunity are one ownership decision. Repair
+  // older conversions where the opportunity was backfilled but the source
+  // lead still retained a blank assigned owner.
+  const opportunityOwners = new Map(s.opportunities.map(opp => [opp.id, opp.owner]))
+  s.leads = s.leads.map(lead => {
+    if (lead.status !== 'Converted' || !lead.oppId) return lead
+    const owner = canonicalOwner(lead.assignedOwner) || canonicalOwner(lead.suggestedOwner) || canonicalOwner(opportunityOwners.get(lead.oppId))
+    return owner
+      ? { ...lead, assignedOwner: owner, suggestedOwner: owner }
+      : lead
+  })
   for (const opp of s.opportunities) {
     if (opp.context !== 'Brownfield') continue
     const defaults = defaultBStepOwners(opp)

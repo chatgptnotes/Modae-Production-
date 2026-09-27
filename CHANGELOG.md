@@ -5,6 +5,14 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Opportunity IDs now use the Admin city/state ownership rules consistently
+  across lead conversion, registration, manual intake, tender intake, and
+  simulated leads; longer AI-extracted addresses also resolve their embedded
+  Indian city before applying the regional owner rule.
+- Loaded proposals and sourcing rows in the initial workspace hydration so
+  Spares Sourcing does not render a false empty BOQ while its background data
+  is still arriving. Pending pricing approvals now expose an explicit shared
+  status refresh and surface decision-save failures.
 - Added a localhost-only fallback to the seeded demo accounts when configured
   Supabase Auth rejects demo credentials; deployed environments remain
   Supabase-authenticated and local-demo sessions stay browser-only.

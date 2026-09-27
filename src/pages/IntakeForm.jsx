@@ -5,6 +5,7 @@ import { CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES } from '.
 import { runJson } from '../ai.js'
 import { extractPdfText, parseTender, buildOpportunityDraft } from '../tenderParse.js'
 import { displayRole } from '../utils.js'
+import { opportunityOwnerFor } from '../leadRules.js'
 
 const empty = {
   sellTo: '', category: '', location: '', eucName: '', eucLocation: '',
@@ -169,7 +170,14 @@ export default function IntakeForm({ destinationPicker = null }) {
     e.preventDefault()
     if (!validation.isComplete) return
     const today = new Date().toISOString().slice(0, 10)
-    const id = nextOppId(store.opportunities, f.owner)
+    // The permanent ID must use the same Admin city/state routing used by the
+    // lead inbox. Keep a manually selected owner only when no location exists.
+    const owner = opportunityOwnerFor({
+      location: f.eucLocation || f.location,
+      config: store.config,
+      fallback: f.owner || store.role || 'LJS',
+    })
+    const id = nextOppId(store.opportunities, owner)
     const maxSl = Math.max(0, ...store.opportunities.map(o => o.sl || 0))
     const extractedFields = [...aiFilledFields]
       .filter(key => f[key] !== undefined && f[key] !== '')
@@ -190,7 +198,7 @@ export default function IntakeForm({ destinationPicker = null }) {
       sellTo, category: f.category, location: f.location,
       customerStatus: knownCustomer ? knownCustomer.status : 'Blue',
       eucName: f.eucName, eucLocation: f.eucLocation, oppName: f.oppName,
-      owner: f.owner, oppType: f.oppType, bu: f.bu, segment: f.segment,
+      owner, oppType: f.oppType, bu: f.bu, segment: f.segment,
       product: selectedProducts,
       // prob is salesperson-set later — the form does not collect it (audio 00:24)
       prob: '',

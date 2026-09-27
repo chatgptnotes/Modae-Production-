@@ -144,6 +144,35 @@ test('migrate repairs blank opportunity owners without changing assigned owners'
   assert.equal(migrated.audit[0].objectId, 'OWNERLESS-1')
 })
 
+test('migrate repairs a converted lead owner from its linked opportunity', () => {
+  const state = seedState()
+  const opportunity = {
+    ...state.opportunities[0],
+    id: 'OWNERLESS-LEAD-1',
+    owner: '',
+    eucLocation: 'Unknown site, Korba',
+    location: 'Unknown site, Korba',
+  }
+  const lead = {
+    ...state.leads[0],
+    id: 'LEAD-OWNERLESS-1',
+    status: 'Converted',
+    oppId: opportunity.id,
+    assignedOwner: '',
+    suggestedOwner: '',
+  }
+  const migrated = migrate({
+    ...state,
+    opportunities: [opportunity],
+    leads: [lead],
+  })
+
+  const migratedLead = migrated.leads.find(item => item.id === lead.id)
+  assert.equal(migrated.opportunities.find(item => item.id === opportunity.id).owner, 'LJS')
+  assert.equal(migratedLead.assignedOwner, 'LJS')
+  assert.equal(migratedLead.suggestedOwner, 'LJS')
+})
+
 test('migrate defaults approval switches on for older saved workspaces', () => {
   const state = seedState()
   const config = { ...state.config }

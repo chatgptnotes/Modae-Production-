@@ -40,6 +40,18 @@ test('city and state locations resolve through the configured state mapping', ()
   assert.equal(routeOwnerForLocation('North & West India', config, 'FALLBACK'), 'RS')
 })
 
+test('location routing finds a known city inside a longer AI-extracted address', () => {
+  const config = {
+    ownershipRules: [
+      { region: 'North & West India', owner: 'RS' },
+      { region: 'South & East India', owner: 'PP' },
+      { region: 'Unclassified leads', owner: 'LJS', unclassified: true },
+    ],
+    stateRegions: [{ code: 'CT', name: 'Chhattisgarh', region: 'South & East India' }],
+  }
+  assert.equal(routeOwnerForLocation('Demo Power Station stores, Korba, Chhattisgarh', config, 'FALLBACK'), 'PP')
+})
+
 test('location routing preserves blank fallback and uses catch-all for unknown locations', () => {
   const withCatchAll = {
     ...config,

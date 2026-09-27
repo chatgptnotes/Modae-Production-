@@ -325,6 +325,7 @@ export function StoreProvider({ children }) {
   const [liveSyncStatus, setLiveSyncStatus] = useState(() => supabaseConfigError ? 'config-error' : datastore.dbEnabled() ? 'connecting' : 'offline')
   const [adminSaveState, setAdminSaveState] = useState('saved')
   const [priceListsStatus, setPriceListsStatus] = useState(() => Object.keys(state.priceLists || {}).length ? 'ready' : 'loading')
+  const [sourcingDataStatus, setSourcingDataStatus] = useState(() => datastore.dbEnabled() ? 'loading' : 'ready')
   const [syncDiagnostics, setSyncDiagnostics] = useState({ normalizedOpportunityCount: null })
   setRoleNameConfig(state.config)
   // Ref mirror so read APIs (getProposal) see same-tick mutations, not the render closure.
@@ -477,12 +478,14 @@ export function StoreProvider({ children }) {
   // bootRef instead of lastSavedRef because we have not saved anything yet.
   const hydrate = async () => {
     const res = await datastore.loadCore()
-      if (!res) {
+    if (!res) {
+      setSourcingDataStatus('error')
       if (!supabaseConfigError) setLiveSyncStatus('error')
       return
     }
     if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
     if (res.error) {
+      setSourcingDataStatus('error')
       invalidateSupabaseAuth(res.error)
       if (!isSupabaseAuthError(res.error)) setLiveSyncStatus('error')
       return
@@ -505,6 +508,7 @@ export function StoreProvider({ children }) {
       setLiveSyncStatus('live')
       setSyncDiagnostics(diagnostics => ({ ...diagnostics, emptyWorkspaceAt: new Date().toISOString() }))
       setState(clean)
+      setSourcingDataStatus('ready')
     } else {
       const serverSlices = syncedOf(res.slices)
       const accepted = {}
@@ -531,6 +535,7 @@ export function StoreProvider({ children }) {
       lastSavedRef.current = { ...syncedOf(merged), ...serverSlices }
       hydratedRef.current = true
       setState(merged)
+      setSourcingDataStatus('ready')
       setTimeout(flushSaves, 0)
     }
     // Non-critical configuration and catalogues must not delay the first
@@ -744,6 +749,7 @@ export function StoreProvider({ children }) {
   const api = {
     ...state,
     flushPersistence,
+    sourcingDataStatus,
     priceListsStatus,
     reloadPriceLists: () => loadApprovedPriceLists({ force: true }),
     async loadPriceListVersion(listCode, versionCode) {
@@ -764,18 +770,17 @@ export function StoreProvider({ children }) {
     addOpportunity(opp) {
       // Normalize here so every creator (IntakeForm, TenderIntake, Register)
       // yields workbench-ready rows — migrate() only backfills on reload.
-      const owner = String(opp.owner || '').trim()
-        || opportunityOwnerFor({ location: opp.eucLocation || opp.location, region: opp.region, config: stateRef.current.config })
-      opp = {
+      const normalized = {
         milestone: milestoneForStage(opp.stage, opp.status),
         route: routeForType(opp.oppType),
         context: contextForType(opp.oppType),
-        owner,
         ...opp,
       }
-      // The spread above preserves an explicit owner; the resolver only fills
-      // a blank one. This keeps authorized owner overrides unchanged.
-      if (!String(opp.owner || '').trim()) opp.owner = owner
+      const owner = String(normalized.owner || '').trim()
+        || opportunityOwnerFor({ location: normalized.eucLocation || normalized.location, region: normalized.region, config: stateRef.current.config })
+      // Resolve ownership after spreading the caller payload so a blank
+      // caller value cannot overwrite the fallback routing decision.
+      opp = { ...normalized, owner }
       setState(s => withAudit({
         ...s,
         opportunities: [...s.opportunities, opp],
@@ -1522,6 +1527,7 @@ export function StoreProvider({ children }) {
     // Records one approver's decision; overall status resolves when every
     // needed role has decided (any Reject → Rejected immediately).
     recordDecision(id, { d, comment = '', commentReview = null }) {
+      let accepted = false
       setState(s => {
         const appr = s.approvals.find(a => a.id === id)
         if (!appr) return s
@@ -1538,6 +1544,7 @@ export function StoreProvider({ children }) {
           console.warn(`Decision ignored: ${s.role} is not a required approver for "${appr.type}" (needs ${needed.join(' + ')})`)
           return s
         }
+        accepted = true
         const decisions = { ...(appr.decisions || {}), [s.role]: {
           d, c: comment, when: new Date().toISOString(), commentReview,
         } }
@@ -1582,7 +1589,10 @@ export function StoreProvider({ children }) {
       // persistence on the next turn (after React has committed state) instead
       // of waiting for the normal 1.5s debounce; other devices pull the update
       // on their next route, focus, visibility, reconnect, or manual refresh.
-      setTimeout(flushSaves, 0)
+      return new Promise(resolve => setTimeout(() => {
+        if (!accepted) { resolve(false); return }
+        flushPersistence().then(saved => resolve(saved !== false)).catch(() => resolve(false))
+      }, 0))
     },
 
     // ---- Customer KYC ------------------------------------------------------
@@ -2383,10 +2393,11 @@ export function StoreProvider({ children }) {
     async refreshSharedData() {
       if (!datastore.dbEnabled()) return false
       const res = await datastore.loadAll({ force: true })
-      if (!res) { setLiveSyncStatus('error'); return false }
+      if (!res) { setSourcingDataStatus('error'); setLiveSyncStatus('error'); return false }
       if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
-      if (res.error) { setLiveSyncStatus('error'); return false }
-      if (res.empty) { setLiveSyncStatus('degraded'); return false }
+      if (res.error) { setSourcingDataStatus('error'); setLiveSyncStatus('error'); return false }
+      if (res.empty) { setSourcingDataStatus('ready'); setLiveSyncStatus('degraded'); return false }
+      setSourcingDataStatus('ready')
       setLiveSyncStatus('live')
       applyServer(res.slices, res.diagnostics)
       return true
