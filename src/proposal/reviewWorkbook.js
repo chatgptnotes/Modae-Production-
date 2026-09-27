@@ -125,7 +125,7 @@ const commercialTermChanges = (workbook, proposal) => {
 }
 
 const displayValue = value => `"${value == null || value === '' ? 'blank' : String(value)}"`
-const LOGICAL_CHANGE_CODES = new Set(['line.value-changed', 'term.value-changed'])
+const LOGICAL_CHANGE_CODES = new Set(['line.value-changed', 'line.removed', 'term.value-changed'])
 
 // Local parsing identifies possible changes. The AI review is the second pass:
 // it confirms which candidates are meaningful business changes. Structural
@@ -210,7 +210,9 @@ export function importReviewedWorkbook(workbook, proposal, opportunity) {
 
   if (!importedRows.length) issues.push({ severity: 'block', code: 'workbook.empty', text: 'The reviewed workbook contains no proposal line items.' })
 
-  const nextBom = [...(proposal.bom || [])].map(line => ({ ...line }))
+  const originalBom = proposal.bom || []
+  const originalBomLength = originalBom.length
+  const nextBom = [...originalBom].map(line => ({ ...line }))
   const used = new Set()
   const normalized = value => key(value).replace(/ea|nos|pcs|sets?$/g, '')
   const findExisting = row => {
@@ -255,16 +257,35 @@ export function importReviewedWorkbook(workbook, proposal, opportunity) {
     }
   }
 
-  nextBom.forEach((line, index) => {
-    if (!used.has(index) && index < (proposal.bom || []).length) issues.push({ severity: 'warning', code: 'line.missing', text: `Existing proposal line ${index + 1} was not found in the uploaded workbook.` })
+  originalBom.forEach((line, index) => {
+    if (used.has(index)) return
+    const label = line.desc || line.pn || `line ${index + 1}`
+    const change = {
+      field: 'line',
+      before: { description: line.desc || '', partNumber: line.pn || '', quantity: totalQuantity(line, proposal.units), unitPrice: normalizedMoney(line.quoted) },
+      after: null,
+      line: label,
+    }
+    changes.push({ type: 'removed', line: label, fields: [change] })
+    issues.push({
+      severity: 'warning',
+      code: 'line.removed',
+      text: `Line "${label}" was removed from the uploaded workbook revision.`,
+      evidence: `Original proposal line ${index + 1}`,
+      change,
+    })
   })
+
+  // The uploaded workbook is authoritative for the active customer BoQ. Keep
+  // newly imported rows, but do not carry forward original rows absent from it.
+  const mergedBom = nextBom.filter((_, index) => index >= originalBomLength || used.has(index))
 
   const customerText = (workbook.sheets || []).flatMap(sheet => sheet.rows || []).flat().map(clean).join(' ')
   if (opportunity?.sellTo && customerText && !customerText.toLowerCase().includes(clean(opportunity.sellTo).toLowerCase())) {
     issues.push({ severity: 'warning', code: 'customer.mismatch', text: 'The uploaded workbook does not clearly contain the opportunity customer name.' })
   }
   issues.push(...termReview.issues)
-  return { proposal: { ...proposal, bom: nextBom }, issues, changes, termChanges: termReview.changes, table: { sheet: table.sheet.name, headerRow: table.headerRow, columns: table.columns } }
+  return { proposal: { ...proposal, bom: mergedBom }, issues, changes, termChanges: termReview.changes, table: { sheet: table.sheet.name, headerRow: table.headerRow, columns: table.columns } }
 }
 
 const proposalLineSnapshot = proposal => (proposal?.bom || []).map(line => ({

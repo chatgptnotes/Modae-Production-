@@ -57,6 +57,23 @@ test('does not report value changes when the uploaded workbook is unchanged', ()
   assert.deepEqual(result.changes[0].fields, [])
 })
 
+test('removes an original proposal line deleted from the uploaded workbook', () => {
+  const original = {
+    units: 1,
+    bom: [
+      { desc: 'Keep this item', pn: 'KEEP-1', qtyPerUnit: 0, common: 1, spares: 0, quoted: 100, uom: 'EA' },
+      { desc: 'Delete this item', pn: 'DELETE-1', qtyPerUnit: 0, common: 1, spares: 0, quoted: 200, uom: 'EA' },
+    ],
+  }
+  const result = importReviewedWorkbook({ sheets: [{ name: 'Priced BoQ', rows: [
+    ['Description', 'Part Number', 'Quantity', 'UOM', 'Unit Price', 'Total Price'],
+    ['Keep this item', 'KEEP-1', 1, 'EA', 100, 100],
+  ] }] }, original, { sellTo: '' })
+  assert.deepEqual(result.proposal.bom.map(line => line.pn), ['KEEP-1'])
+  assert.ok(result.issues.some(issue => issue.code === 'line.removed' && /Delete this item/.test(issue.text)))
+  assert.ok(result.changes.some(change => change.type === 'removed' && change.line === 'Delete this item'))
+})
+
 test('matches the rounded downloaded draft despite hidden source precision', () => {
   const result = importReviewedWorkbook({ sheets: [{ name: 'Priced BoQ', rows: [
     ['Description', 'Part Number', 'Total Quantity', 'UOM', 'Unit Price', 'Total Price'],
@@ -90,7 +107,7 @@ test('reports invalid quantities, totals, and unmatched workbook rows', () => {
   assert.ok(result.issues.some(issue => issue.code === 'line.quantity'))
   assert.ok(result.issues.some(issue => issue.code === 'line.total'))
   assert.ok(result.issues.some(issue => issue.code === 'line.unmatched'))
-  assert.equal(result.proposal.bom.length, 2)
+  assert.equal(result.proposal.bom.length, 1)
 })
 
 test('compares uploaded commercial terms with the original proposal without blocking', () => {

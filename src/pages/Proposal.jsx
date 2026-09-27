@@ -170,6 +170,7 @@ const informationalReviewFinding = issue => {
 const reviewFindingTitle = issue => {
   const code = String(issue?.code || '')
   if (code === 'line.unmatched') return 'Workbook line needs review'
+  if (code === 'line.removed') return 'Workbook line removed'
   if (code === 'line.value-changed') return 'Workbook value changed'
   if (code === 'term.value-changed') return 'Commercial term changed'
   if (code === 'line.part') return 'Part number is missing'
@@ -1059,8 +1060,8 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     : issue)
   const reviewIssuesAreInformational = displayReviewIssues.length > 0
     && displayReviewIssues.every(issue => issue.severity === 'info')
-  const workbookChangeIssues = displayReviewIssues.filter(issue => ['line.value-changed', 'term.value-changed'].includes(issue.code))
-  const otherReviewIssues = displayReviewIssues.filter(issue => !['line.value-changed', 'term.value-changed'].includes(issue.code))
+  const workbookChangeIssues = displayReviewIssues.filter(issue => ['line.value-changed', 'line.removed', 'term.value-changed'].includes(issue.code))
+  const otherReviewIssues = displayReviewIssues.filter(issue => !['line.value-changed', 'line.removed', 'term.value-changed'].includes(issue.code))
   const blockingReviewIssues = otherReviewIssues.filter(issue => issue.severity === 'block')
   const warningReviewIssues = otherReviewIssues.filter(issue => issue.severity === 'warning')
   const informationalReviewIssues = otherReviewIssues.filter(issue => issue.severity === 'info')

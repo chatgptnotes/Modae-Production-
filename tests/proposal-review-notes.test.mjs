@@ -60,8 +60,8 @@ test('stored workbook reviews are recomputed from the pre-import snapshot and sh
   assert.match(proposal, /comparisonAvailable: true/)
   assert.match(proposal, /review\.comparison-unavailable/)
   assert.match(proposal, /Workbook changes detected/)
-  assert.match(proposal, /const workbookChangeIssues = displayReviewIssues\.filter\(issue => \['line\.value-changed', 'term\.value-changed'\]\.includes\(issue\.code\)\)/)
-  assert.match(proposal, /const otherReviewIssues = displayReviewIssues\.filter\(issue => !\['line\.value-changed', 'term\.value-changed'\]\.includes\(issue\.code\)\)/)
+  assert.match(proposal, /const workbookChangeIssues = displayReviewIssues\.filter\(issue => \['line\.value-changed', 'line\.removed', 'term\.value-changed'\]\.includes\(issue\.code\)\)/)
+  assert.match(proposal, /const otherReviewIssues = displayReviewIssues\.filter\(issue => !\['line\.value-changed', 'line\.removed', 'term\.value-changed'\]\.includes\(issue\.code\)\)/)
 })
 
 test('uploaded validation preserves live proposal metadata from the reduced baseline snapshot', () => {
