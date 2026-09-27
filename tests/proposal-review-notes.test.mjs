@@ -64,6 +64,12 @@ test('stored workbook reviews are recomputed from the pre-import snapshot and sh
   assert.match(proposal, /const otherReviewIssues = displayReviewIssues\.filter\(issue => !\['line\.value-changed', 'term\.value-changed'\]\.includes\(issue\.code\)\)/)
 })
 
+test('uploaded validation preserves live proposal metadata from the reduced baseline snapshot', () => {
+  assert.match(proposal, /const next = \{[\s\S]*\.\.\.p,[\s\S]*\.\.\.imported\.proposal,[\s\S]*reviewedUpload:/)
+  assert.match(proposal, /artifactSheets: p\.artifactSheets \|\| imported\.proposal\.artifactSheets/)
+  assert.match(proposal, /const artifactSheets = p\.artifactSheets \|\| \[\]/)
+})
+
 test('uploaded human term changes are displayed as red non-blocking workbook changes', () => {
   assert.match(reviewWorkbook, /code: 'term\.value-changed'/)
   assert.match(reviewWorkbook, /severity: 'info'/)

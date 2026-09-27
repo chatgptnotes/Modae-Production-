@@ -713,6 +713,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   const proposalRate = store.config?.currencyRates
 
   const route = docRoute(p, opp)
+  const artifactSheets = p.artifactSheets || []
   const referenceRows = p.referenceWorkbook?.rows || []
   const proposalTemplate = route === 'Project' ? p.projectProposalWorkbook
     : route === 'Spares' ? p.sparesProposalWorkbook
@@ -1358,6 +1359,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     const next = {
       ...withoutUpload,
       ...(uploaded?.baseProposal || {}),
+      artifactSheets: p.artifactSheets || uploaded?.baseProposal?.artifactSheets || [],
       reviewStatus: 'Needs review',
       reviewIssues: [],
       reviewCompletedAt: null,
@@ -1395,7 +1397,9 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       // not overwrite the bytes referenced by an older revision snapshot.
       const blobKey = `proposal-review-${opp.id}-rev-${String(p.revision || '00').padStart(2, '0')}-${Date.now()}`
       const next = {
+        ...p,
         ...imported.proposal,
+        artifactSheets: p.artifactSheets || imported.proposal.artifactSheets || [],
         reviewedUpload: { filename: file.name, type: file.type, size: file.size, uploadedAt: new Date().toISOString(), blobKey, storageStatus: 'pending', storageError: '', sheets: parsed.sheets, importedChanges: imported.changes, termChanges: imported.termChanges, validationIssues: imported.issues, table: imported.table, baseProposal: baselineProposal },
         reviewStatus: 'Ready for validation',
         reviewIssues: imported.issues,
@@ -1942,7 +1946,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
           <b>{route} proposal route.</b> The printed document follows the{' '}
           {route.toLowerCase()} proposal template: a covering letter and one priced sheet,
           with no signal list, no rack layout and no project front matter. Optional annexes
-          ({p.artifactSheets.filter(x => !['Cover Letter', 'Priced BoQ'].includes(x)).join(' · ')}) are
+          ({artifactSheets.filter(x => !['Cover Letter', 'Priced BoQ'].includes(x)).join(' · ')}) are
           issued only when ticked on the Document tab.
         </div>
           </div>
