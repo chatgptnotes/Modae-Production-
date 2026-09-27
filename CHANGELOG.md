@@ -5,6 +5,9 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Added an admin-only Users online dashboard card backed by a protected,
+  two-minute Supabase presence heartbeat; business records and workflows are
+  not affected.
 - Reworked My Dashboard into role-specific cockpits: LJS now starts with the
   company-wide owner view, AH with commercial decisions, sales owners with
   daily execution and own-pipeline work, and TECH with technical review work;

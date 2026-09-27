@@ -33,7 +33,7 @@ test('file persistence uses the canonical user_files table', () => {
 })
 
 test('active Supabase requests use only the production table allowlist', () => {
-  const allowed = new Set(['ai_secrets', 'approvals', 'leads', 'opportunities', 'records', 'user_files', 'proposals', 'spares_lines', 'clarifications', 'audit', 'settings', 'price_lists', 'price_list_versions'])
+  const allowed = new Set(['ai_secrets', 'approvals', 'leads', 'opportunities', 'records', 'user_files', 'proposals', 'spares_lines', 'clarifications', 'audit', 'settings', 'price_lists', 'price_list_versions', 'user_presence'])
   const roots = ['src', 'api', 'supabase/functions'].map(directory => path.join(root, directory))
   const files = []
   const walk = directory => {

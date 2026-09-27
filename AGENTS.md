@@ -75,6 +75,7 @@ audit
 settings
 price_lists
 price_list_versions
+user_presence
 ```
 
 Any new `.from()` query must target one of those allowlisted names. Do not reintroduce
@@ -103,6 +104,8 @@ The active repository migrations are `supabase/007_live_workspace_sync.sql`,
 `supabase/010_workspace_contract_verification.sql`, and
 `supabase/011_save_rows_lock_order.sql`, and
 `supabase/012_permanent_workspace_purge.sql`.
+`supabase/014_user_presence.sql` stores the short-lived admin-only online
+indicator; browser code must access it only through `api/presence.js`.
 Historical migrations and backups are local-only under `.local/backups/`.
 
 ## Change rules

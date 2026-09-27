@@ -12,6 +12,7 @@ import { startAutoTitle } from './autoTitle.js'
 import { computeAlerts } from './monitoring.js'
 import { RequireAuth } from './pages/Login.jsx'
 import { lazyWithRecovery } from './lazyImport.js'
+import { usePresenceHeartbeat } from './presence.js'
 
 const Opportunities = lazyWithRecovery(() => import('./pages/Opportunities.jsx'))
 const IntakeForm = lazyWithRecovery(() => import('./pages/IntakeForm.jsx'))
@@ -299,6 +300,7 @@ const NAV = [
 
 export default function App() {
   const store = useStore()
+  usePresenceHeartbeat(Boolean(store.auth?.user))
   const nav = useNavigate()
   const loc = useLocation()
   const mainRef = useRef(null)

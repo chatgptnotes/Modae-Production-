@@ -8,6 +8,7 @@ import { analyticsSnapshot, counts, salesPerformance, winLossAnalysis, FY_QUARTE
 import { ArcGauge } from '../dashviz.jsx'
 import { Icon } from '../icons.jsx'
 import ForecastDashboard from './Dashboard.jsx'
+import { useOnlineUserCount } from '../presence.js'
 
 // My Dashboard — "there has to be something called My Dashboard… it will be
 // different for all the roles" (13 Aug review). The salesperson's version is
@@ -720,6 +721,9 @@ function ProposalStatusCard({ store, nav }) {
   ].slice(0, PREVIEW_LIMIT)
   const allStatusRows = Object.values(statusRows).flat()
   const filteredPriority = selectedStatus === 'all' ? priority : allStatusRows.filter(item => item.status === selectedStatus)
+  const filteredSummaryLabel = selectedStatus === 'all'
+    ? `priority proposal${filteredPriority.length === 1 ? '' : 's'}`
+    : `${selectedStatus.toLowerCase()} opportunit${filteredPriority.length === 1 ? 'y' : 'ies'}`
   const toggleStatus = status => setSelectedStatus(current => current === status ? 'all' : status)
   const selectedHeading = selectedStatus === 'all' ? 'Priority proposals' : `${selectedStatus} opportunities`
 
@@ -754,7 +758,7 @@ function ProposalStatusCard({ store, nav }) {
           </tbody>
         </table>
       </div>
-      <div className="proposal-status-footer"><span className="hint">Showing {filteredPriority.length} {selectedStatus === 'all' ? 'priority proposal' : selectedStatus.toLowerCase()} opportunit{filteredPriority.length === 1 ? 'y' : 'ies'}</span><button onClick={() => nav('/proposal-sent')}>View all proposals →</button></div>
+      <div className="proposal-status-footer"><span className="hint">Showing {filteredPriority.length} {filteredSummaryLabel}</span><button onClick={() => nav('/proposal-sent')}>View all proposals →</button></div>
     </Card>
   )
 }
@@ -889,6 +893,7 @@ function AdminDashboard({ store, nav, role, c, blocked, nextActions, head }) {
   const users = store.auth?.users || []
   const pendingUsers = users.filter(u => u.status === 'Pending')
   const perf = salesPerformance(store)
+  const onlineUserCount = useOnlineUserCount(true)
 
   return (
     <div className="page dashboard-page">
@@ -897,6 +902,7 @@ function AdminDashboard({ store, nav, role, c, blocked, nextActions, head }) {
         <Metric label="Awaiting approval" value={pendingUsers.length} tone={pendingUsers.length ? 'amber' : 'green'} onClick={() => nav('/users')} />
         <Metric label="Pending gates" value={c.pending} tone={c.pending ? 'amber' : 'green'} onClick={() => nav('/approvals')} />
         <Metric label="Blocked" value={blocked.length} tone={blocked.length ? 'red' : 'green'} onClick={() => nav('/')} />
+        <Metric label="Users online" value={onlineUserCount ?? '—'} hint={onlineUserCount == null ? 'Presence unavailable' : 'Active in last 2 min'} tone="teal" />
       </div>
 
       <div className="ana-grid">

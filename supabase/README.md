@@ -18,6 +18,7 @@ The application uses these production tables:
 - `settings`
 - `price_lists`
 - `price_list_versions`
+- `user_presence`
 The active repository migrations are `007_live_workspace_sync.sql`,
 `008_dedicated_workspace_tables.sql`, `009_relational_workspace_data.sql`,
 `010_workspace_contract_verification.sql`, and
@@ -25,6 +26,8 @@ The active repository migrations are `007_live_workspace_sync.sql`,
 `013_railway_free_tier_security.sql` is the Railway-first Free-plan migration:
 it removes anonymous business-data access and adds small active-row indexes for
 the shared Railway cache.
+`014_user_presence.sql` adds the isolated, service-role-only heartbeat table
+used by the administrator Users online dashboard card.
 Migration 008 moves large JSONB entities out of `records`; migration 009 adds
 typed relational business tables and indexes while keeping legacy rows as a
 rollback copy. Historical setup and
@@ -51,7 +54,7 @@ with their own Supabase bearer token. This is not Supabase Realtime.
 
 For a completely new Supabase project, run [`000_fresh_project.sql`](./000_fresh_project.sql)
 first, then run every migration from `007_live_workspace_sync.sql` through
-`013_railway_free_tier_security.sql` in numeric order. Migration 009 includes
+`014_user_presence.sql` in numeric order. Migration 009 includes
 the relational tables, typed backfill, RLS policies, grants, indexes, and
 realtime publication entries. Do not use the retired
 root-level `supabase-tables.sql` for a new project because it references the
@@ -63,7 +66,7 @@ Verify the active schema with:
 select table_name
 from information_schema.tables
 where table_schema = 'public'
-  and table_name in ('ai_secrets', 'approvals', 'leads', 'opportunities', 'records', 'user_files', 'proposals', 'spares_lines', 'clarifications', 'audit', 'settings', 'price_lists', 'price_list_versions', 'customers', 'customer_contacts', 'lead_items', 'opportunity_items', 'proposal_items', 'catalogue_versions', 'catalogue_parts', 'communications', 'audit_events', 'workspace_settings')
+  and table_name in ('ai_secrets', 'approvals', 'leads', 'opportunities', 'records', 'user_files', 'proposals', 'spares_lines', 'clarifications', 'audit', 'settings', 'price_lists', 'price_list_versions', 'user_presence', 'customers', 'customer_contacts', 'lead_items', 'opportunity_items', 'proposal_items', 'catalogue_versions', 'catalogue_parts', 'communications', 'audit_events', 'workspace_settings')
 order by table_name;
 ```
 
