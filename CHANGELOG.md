@@ -5,6 +5,11 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Added a localhost-only fallback to the seeded demo accounts when configured
+  Supabase Auth rejects demo credentials; deployed environments remain
+  Supabase-authenticated and local-demo sessions stay browser-only.
+- Added a dedicated Service Rates list to Price Lists with India and
+  International tabs showing the complete configured service charge schedule.
 - Added an admin-only Users online dashboard card backed by a protected,
   two-minute Supabase presence heartbeat; business records and workflows are
   not affected.

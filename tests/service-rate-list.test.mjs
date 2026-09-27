@@ -37,4 +37,7 @@ test('Price Lists exposes Service Rates as a top-level tab backed by live rate s
   assert.match(page, /serviceRateRows/)
   assert.match(page, /store\.rateSheets/)
   assert.match(page, /Extract to Excel/)
+  assert.match(page, /SERVICE_RATE_LIST_KEY/)
+  assert.match(page, /isServiceRates/)
+  assert.match(page, /serviceRateRows\(rateSheet, rateSheetName\)/)
 })

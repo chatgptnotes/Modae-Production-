@@ -5,8 +5,10 @@ import { fmt, exportCSV, canViewCommercial, canManagePriceLists } from '../utils
 import { Modal } from '../ui.jsx'
 import { buildPriceListInspectionPayload, downloadPriceListTemplate, parsePriceListFile } from '../priceListImport.js'
 import { normalizedCurrencyRates } from '../currency.js'
-import { roleRates, normalizeSheet } from '../serviceRates.js'
+import { serviceRateRows, normalizeSheet } from '../serviceRates.js'
 import { runTaskResult } from '../ai.js'
+
+const SERVICE_RATE_LIST_KEY = 'service-rates'
 
 export default function PriceLists() {
   const store = useStore()
@@ -16,7 +18,7 @@ export default function PriceLists() {
   const requestedList = searchParams.get('list') || ''
   const requestedPart = searchParams.get('part') || ''
   const firstList = Object.keys(store.priceLists || {})[0] || 'BNK'
-  const initialList = store.priceLists?.[requestedList] ? requestedList : firstList
+  const initialList = requestedList === SERVICE_RATE_LIST_KEY || store.priceLists?.[requestedList] ? requestedList : firstList
   const [list, setList] = useState(initialList)
   const [highlightedPart, setHighlightedPart] = useState('')
   const [rateSheetName, setRateSheetName] = useState('India')
@@ -35,6 +37,7 @@ export default function PriceLists() {
   const [partQuery, setPartQuery] = useState('')
   const [versionLoading, setVersionLoading] = useState(false)
   const rowRefs = useRef({})
+  const isServiceRates = list === SERVICE_RATE_LIST_KEY
   const pl = store.priceLists[list]
   // Archived versions are an administrator/commercial-manager concern. Keep
   // regular users pinned to the active catalogue even if this component was
@@ -48,10 +51,17 @@ export default function PriceLists() {
   const numberedParts = (displayList?.parts || []).map((part, index) => ({ ...part, srNo: index + 1 }))
   const visibleParts = !partFilter ? numberedParts : numberedParts.filter(part =>
     String(part.srNo).includes(partFilter) || String(part.pn).toLowerCase().includes(partFilter) || String(part.desc || '').toLowerCase().includes(partFilter))
-  const requestedListAvailable = !requestedList || !!store.priceLists?.[requestedList]
+  const requestedListAvailable = !requestedList || requestedList === SERVICE_RATE_LIST_KEY || !!store.priceLists?.[requestedList]
+
+  const selectList = key => {
+    setList(key)
+    setVersionId(null)
+    setHighlightedPart('')
+    setSearchParams({ list: key })
+  }
 
   useEffect(() => {
-    if (store.priceLists?.[requestedList] && requestedList !== list) setList(requestedList)
+    if ((requestedList === SERVICE_RATE_LIST_KEY || store.priceLists?.[requestedList]) && requestedList !== list) setList(requestedList)
   }, [list, requestedList, store.priceLists])
 
   useEffect(() => {
@@ -158,7 +168,7 @@ export default function PriceLists() {
     setEditOpen(false); setVersionId(null)
   }
 
-  if (!pl) {
+  if (!pl && !isServiceRates) {
     return (
       <div className="page">
         <h2>Price Lists</h2>
@@ -171,18 +181,49 @@ export default function PriceLists() {
     )
   }
 
+  const listButtons = (
+    <div className="toolbar">
+      {Object.keys(store.priceLists || {}).map(k => (
+        <button key={k} className={list === k ? 'primary' : ''} onClick={() => selectList(k)}>{k}</button>
+      ))}
+      <button className={isServiceRates ? 'primary' : ''} onClick={() => selectList(SERVICE_RATE_LIST_KEY)}>Service Rates</button>
+    </div>
+  )
+
+  if (isServiceRates) {
+    return (
+      <div className="page">
+        <h2>Price Lists</h2>
+        {listButtons}
+        <div className="section-title">Service Rate Sheet</div>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
+          {['India', 'International'].map(name => (
+            <button key={name} className={rateSheetName === name ? 'primary' : ''} onClick={() => setRateSheetName(name)}>{name}</button>
+          ))}
+          <span className="hint">{rateSheet.currency || '—'}, GST {rateSheet.gst ?? 0}%</span>
+        </div>
+        <div className="sheet-wrap sheet-wrap-fill">
+          <table className="sheet">
+            <thead><tr><th>Charge</th><th>Value</th><th>Unit</th></tr></thead>
+            <tbody>
+              {serviceRateRows(rateSheet, rateSheetName).map(row => (
+                <tr key={row.key}><td>{row.label}</td><td className="num">{fmt(row.value)}</td><td>{row.unit}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="costing-note">
+          Service quotes and invoices use this same rate sheet. Rates are edited in Admin.
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="page">
       <h2>Price Lists</h2>
+      {listButtons}
       <div className="toolbar">
-        {Object.keys(store.priceLists).map(k => (
-          <button key={k} className={list === k ? 'primary' : ''} onClick={() => {
-            setList(k)
-            setVersionId(null)
-            setHighlightedPart('')
-            setSearchParams({ list: k })
-          }}>{k}</button>
-        ))}
         <span className="hint">Current version {pl.version} · uploaded {pl.uploaded} · {pl.currency}. Current approved pricing reference.</span>
         <span className="spacer" />
         <button onClick={() => exportCSV(`${list}_${displayList.version}_pricelist.csv`, ['Part Number','Description',`Price (${displayList.currency})`,'Adders'], (displayList.parts || []).map(x => [x.pn, x.desc, x.price, (x.adders || []).map(a => `${a.desc} +${a.price}`).join('; ')]))}>Extract to Excel</button>
@@ -368,30 +409,6 @@ export default function PriceLists() {
         </form>
       )}
 
-      <div className="section-title">Service Rate Sheet</div>
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
-        {['India', 'International'].map(name => (
-          <button key={name} className={rateSheetName === name ? 'primary' : ''} onClick={() => setRateSheetName(name)}>{name}</button>
-        ))}
-        <span className="hint">{rateSheet.currency}, GST {rateSheet.gst}%</span>
-      </div>
-      <div className="sheet-wrap" style={{ maxWidth: 560 }}>
-        <table className="sheet">
-          <thead><tr><th>Role</th><th>Rate / day ({rateSheetName === 'India' ? 'K₹' : 'USD'})</th></tr></thead>
-          <tbody>
-            {roleRates(rateSheet).map(r => (
-              <tr key={r.role}>
-                <td>{r.role}</td>
-                <td className="num">{fmt(r.ratePerDay)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="costing-note">
-        Service quotes = rate sheet × number of days; this is the same sheet the service
-        workbench prices from and the invoice bills against. Rates are edited in Admin.
-      </div>
     </div>
   )
 }
