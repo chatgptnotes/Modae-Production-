@@ -302,3 +302,20 @@ test('generated Spares workbooks are editable and have no external Excel names',
   assert.notEqual(workbook.getWorksheet('Firm Rev-00').getCell('C10').protection?.locked, true)
   assert.ok(workbook.getWorksheet('Cover Letter').getCell('A3').value == null)
 })
+
+test('generated proposal keeps customer references out of the part number column', async () => {
+  const templateBuffer = fs.readFileSync('branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx')
+  const output = await generateProposalWorkbook({
+    templateBuffer,
+    logoBuffer: fs.readFileSync('branding/mod-ae/assets/modae-official-logo.png'),
+    route: 'Spares',
+    p: { revision: '00', bom: [{ pn: '', custRef: 'Vibration sensors', desc: 'Vibration sensors', common: 1 }] },
+    opp: { id: '2609002', sellTo: 'Customer' },
+    doc: { docTerms: [] },
+    totalQty: line => line.common,
+    lineQuoted: () => 10,
+  })
+  const workbook = new ExcelJS.Workbook()
+  await workbook.xlsx.load(output)
+  assert.equal(workbook.getWorksheet('Firm Rev-00').getCell('D10').value, '')
+})

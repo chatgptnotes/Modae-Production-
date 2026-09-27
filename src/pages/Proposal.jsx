@@ -1304,7 +1304,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       ), { model: store.config?.aiModel?.model })
       const aiReview = aiResult.data?.data || aiResult.data || {}
       const aiIssues = normalizeAiReview(aiReview)
-      if (!aiResult.data && aiResult.error) aiIssues.push({ severity: 'info', code: 'ai.unavailable', source: 'AI', text: `AI semantic review was unavailable: ${aiResult.error}. Local checks were still completed.` })
+      if (!aiResult.data && aiResult.error) aiIssues.push({ severity: 'info', code: 'ai.unavailable', source: 'AI', text: `AI semantic review was unavailable: ${aiResult.error}. Local comparison only; AI did not confirm these findings.` })
       const aiSummary = String(aiReview.summary || '').trim()
       setReviewStage(retainProgress ? 4 : 3)
       const logicalIssues = filterLogicalChangeIssues(issues, aiReview, { aiAvailable: Boolean(aiResult.data) })

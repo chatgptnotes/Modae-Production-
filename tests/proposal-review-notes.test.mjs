@@ -26,6 +26,7 @@ test('proposal validation shows staged scan progress and reviews generated propo
   assert.match(proposal, /<ScanProgress[\s\S]*title=\{reviewProgressTitle\}/)
   assert.match(proposal, /setReviewProgressStages\(automatic \? UPLOAD_REVIEW_STAGES : GENERATED_REVIEW_STAGES\)/)
   assert.match(proposal, /const UPLOAD_REVIEW_STAGES = \['Reading workbook…', 'Importing proposal values…', 'Running local checks…', 'AI semantic review in progress…', 'Applying review results…'\]/)
+  assert.match(proposal, /Local comparison only; AI did not confirm these findings/)
   assert.match(proposal, /<button className="primary" onClick=\{\(\) => setValidateChoice\(true\)\} disabled=\{reviewBusy\}>/)
   assert.match(proposal, /const yieldToPaint = \(\) => new Promise/)
   assert.match(proposal, /const uploadReviewedProposal = async event =>/)

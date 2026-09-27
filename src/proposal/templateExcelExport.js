@@ -387,7 +387,7 @@ function setCommercialSheet(workbook, worksheet, args) {
 
   lines.forEach((line, index) => {
     const row = firstRow + index
-    const templateProduct = templateProducts.get(clean(line.pn || line.custRef).trim().toLowerCase())
+    const templateProduct = templateProducts.get(clean(line.pn).trim().toLowerCase())
     const templateSupport = templateSupportRows.find(item => item.description.toLowerCase() === clean(line.desc).trim().toLowerCase())
     if (templateSupport) {
       worksheet.getRow(row).height = templateSupport.height
@@ -409,7 +409,7 @@ function setCommercialSheet(workbook, worksheet, args) {
     const unitEuro = linePrice ? number(linePrice(line)) : 0
     setValue(worksheet.getCell(`B${row}`), index + 1)
     setValue(worksheet.getCell(`C${row}`), line.desc || line.itemCategory || templateProduct?.description || '')
-    setValue(worksheet.getCell(`D${row}`), line.pn || line.custRef || '')
+    setValue(worksheet.getCell(`D${row}`), line.pn || '')
     setValue(worksheet.getCell(`E${row}`), qty)
     setValue(worksheet.getCell(`F${row}`), unitPrice)
     setValue(worksheet.getCell(`G${row}`), { formula: `F${row}*E${row}`, result: round2(unitPrice * qty) })
@@ -526,7 +526,7 @@ function setMappedCommercialSheet(worksheet, args) {
     const values = {
       serial: index + 1,
       itemCategory: line.itemCategory || '',
-      partNumber: line.pn || line.custRef || '',
+      partNumber: line.pn || '',
       description: line.desc || line.itemCategory || '',
       quantity: qty,
       unitPrice: unit,
