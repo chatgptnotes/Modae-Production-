@@ -65,6 +65,12 @@ test('Sourcing reconciles missing structured lead rows for existing opportunitie
   assert.match(store, /addSparesLinesFromLead\(oppId, rows, \{ auditAction = 'Lead lines imported' \}/)
 })
 
+test('a pending pricing approval can explicitly refresh its shared status', () => {
+  assert.match(sparesWorkbench, /Refresh approval status/)
+  assert.match(sparesWorkbench, /store\.refreshSharedData\(\)/)
+  assert.match(sparesWorkbench, /refreshingApproval/)
+})
+
 test('vendor quote support remains in shared store modules after Sourcing panels are removed', () => {
   assert.doesNotMatch(workbench, /Vendor \/ price-list versions|Vendor actions \(Coming soon\)|Manufacturer quotes \(Coming soon\)/)
   assert.doesNotMatch(workbench, /Draft manufacturer RFQ|Upload \/ apply response/)

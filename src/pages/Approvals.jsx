@@ -225,8 +225,9 @@ function DecisionForm({ a, role, draft = {}, onDraftChange, onDecide }) {
       setErr('This comment appears to contain a condition. Choose Reject and explain what must be corrected.')
       return
     }
+    const saved = await onDecide({ d, comment: comment.trim(), commentReview: review })
     setChecking(false)
-    onDecide({ d, comment: comment.trim(), commentReview: review })
+    if (!saved) setErr('Your decision could not be shared. Check your connection and try again.')
   }
 
   return (
@@ -583,9 +584,10 @@ export default function Approvals() {
         renderQuickLinks={item => <QuickLinks a={item} />}
         draft={decisionDrafts[a.id]}
         onDraftChange={patch => updateDecisionDraft(a.id, patch)}
-        onDecide={dec => {
-          clearDecisionDraft(a.id)
-          store.recordDecision(a.id, dec)
+        onDecide={async dec => {
+          const saved = await store.recordDecision(a.id, dec)
+          if (saved) clearDecisionDraft(a.id)
+          return saved
         }}
       />)}
       {!forMe.length && <p className="hint">Nothing pending for you — all clear.</p>}
@@ -605,9 +607,10 @@ export default function Approvals() {
             renderQuickLinks={item => <QuickLinks a={item} />}
             draft={decisionDrafts[a.id]}
             onDraftChange={patch => updateDecisionDraft(a.id, patch)}
-            onDecide={dec => {
-              clearDecisionDraft(a.id)
-              store.recordDecision(a.id, dec)
+            onDecide={async dec => {
+              const saved = await store.recordDecision(a.id, dec)
+              if (saved) clearDecisionDraft(a.id)
+              return saved
             }}
           />)}
         </>

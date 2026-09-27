@@ -27,6 +27,29 @@ test('the shared workspace loads normally once and uses targeted Railway live up
   }
 })
 
+test('fast workspace hydration includes the Sourcing data needed to avoid a false empty BOQ', () => {
+  const datastore = read('src/datastore.js')
+  const store = read('src/store.jsx')
+
+  assert.match(datastore, /loadBusinessTables\(\{ includeRecords: false, coreEntities: \['proposals', 'spares_lines'\], collaborative: railway \|\| \{\} \}\)/)
+  assert.match(datastore, /includeRecords = true, coreEntities = \[\], collaborative = \{\}/)
+  assert.match(datastore, /coreEntities\.includes\(entity\)/)
+  assert.match(store, /sourcingDataStatus/)
+})
+
+test('a successful shared refresh clears a transient Sourcing-load failure', () => {
+  const store = read('src/store.jsx')
+  const refresh = store.slice(store.indexOf('async refreshSharedData()'), store.indexOf('async recoverOpportunity'))
+
+  assert.match(refresh, /setSourcingDataStatus\('ready'\)/)
+})
+
+test('approval cancellation is persisted immediately instead of waiting for draft debounce', () => {
+  const store = read('src/store.jsx')
+  const cancellation = store.slice(store.indexOf('cancelApproval(id, reason = \'\')'), store.indexOf('decideApproval(id,'))
+  assert.match(cancellation, /setTimeout\(flushSaves, 0\)/)
+})
+
 test('the live-sync migration publishes only shared business tables', () => {
   const migration = read('supabase/007_live_workspace_sync.sql')
   for (const table of ['leads', 'approvals', 'opportunities', 'records']) {

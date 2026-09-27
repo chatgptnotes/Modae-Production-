@@ -82,7 +82,7 @@ const sourcingPartReference = line => {
   return vmReference?.[1] || description
 }
 
-function PricingApprovalCard({ approval, approvers, role, canRequest, onRequest, onDecide, pricingRows }) {
+function PricingApprovalCard({ approval, approvers, role, canRequest, onRequest, onDecide, onRefresh, refreshingApproval, pricingRows }) {
   const [decision, setDecision] = useState('Approved')
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
@@ -92,14 +92,18 @@ function PricingApprovalCard({ approval, approvers, role, canRequest, onRequest,
   const status = approval?.status || 'Required'
   const statusClass = status === 'Approved' || status === 'Approved with conditions' ? 'okbox' : status === 'Rejected' ? 'errbox' : 'warnbox'
 
-  const submitDecision = event => {
+  const submitDecision = async event => {
     event.preventDefault()
     if (!note.trim()) {
       setError('Add a decision note before submitting.')
       return
     }
     setError('')
-    onDecide({ d: decision, comment: note.trim() })
+    const saved = await onDecide({ d: decision, comment: note.trim() })
+    if (!saved) {
+      setError('The decision could not be saved. Check your connection and try again.')
+      return
+    }
     setNote('')
   }
 
@@ -116,6 +120,7 @@ function PricingApprovalCard({ approval, approvers, role, canRequest, onRequest,
     {approval?.status === 'Rejected' && approval.decisionNote && <div className="sourcing-approval-copy">Decision note: {approval.decisionNote}</div>}
     {approval && myDecision && <div className="sourcing-approval-copy">Your decision: <b>{myDecision.d}</b>{myDecision.c ? ` — ${myDecision.c}` : ''}</div>}
     {canRequest && <button type="button" className="sourcing-approval-action" onClick={onRequest}><Icon name="clipboardCheck" size={13} /> Request approval</button>}
+    {approval?.status === 'Pending' && <button type="button" className="sourcing-approval-action" disabled={refreshingApproval} onClick={onRefresh}><Icon name="refresh" size={13} /> {refreshingApproval ? 'Refreshing approval…' : 'Refresh approval status'}</button>}
     {canDecide && <form className="sourcing-approval-form" onSubmit={submitDecision}>
       <label>Decision note <textarea value={note} onChange={event => setNote(event.target.value)} placeholder="Explain the pricing decision" rows="2" /></label>
       <div className="sourcing-approval-decision-row">
@@ -132,6 +137,7 @@ function PricingApprovalCard({ approval, approvers, role, canRequest, onRequest,
 export default function WbSpares({ opp, openBuilder, onContinue }) {
   const store = useStore()
   const comm = canPriceProposal(store.role)
+  const sourcingDataStatus = store.sourcingDataStatus || 'ready'
   const lines = store.sparesLines.filter(l => l.oppId === opp.id && !isPlaceholderSparesLine(l) && !isLegacyAutoSparesSupportRow(l))
   const proposal = store.getProposal(opp.id)
   const [compareFor, setCompareFor] = useState(null)
@@ -146,11 +152,13 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
   const [manualLineError, setManualLineError] = useState('')
   const [newLine, setNewLine] = useState({ pn: '', desc: '', qty: '1', listPrice: '' })
   const [pendingRemove, setPendingRemove] = useState(null)
+  const [refreshingApproval, setRefreshingApproval] = useState(false)
   const sourcingSheetWrapRef = useRef(null)
   const compareRequestRef = useRef(0)
   const dedupedOppRef = useRef('')
   const reconciledOppRef = useRef('')
   useEffect(() => {
+    if (sourcingDataStatus !== 'ready') return
     if (reconciledOppRef.current === opp.id) return
     const linkedLead = [...(store.leads || []), ...(store.leadArchive || [])]
       .find(lead => lead.id === opp.sourceLeadId || lead.oppId === opp.id)
@@ -160,20 +168,23 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     if (workbenchRows.length) {
       store.addSparesLinesFromLead(opp.id, workbenchRows, { auditAction: 'Sourcing lines restored from lead' })
     }
-  }, [opp.id, opp.sourceLeadId, store.leads, store.leadArchive, store.priceLists, store.adhocParts])
+  }, [sourcingDataStatus, opp.id, opp.sourceLeadId, store.leads, store.leadArchive, store.priceLists, store.adhocParts])
   useEffect(() => {
+    if (sourcingDataStatus !== 'ready') return
     if (!comm || dedupedOppRef.current === opp.id || !lines.length) return
     dedupedOppRef.current = opp.id
     store.dedupeSparesLines(opp.id)
-  }, [comm, opp.id, lines.length])
+  }, [sourcingDataStatus, comm, opp.id, lines.length])
   useEffect(() => {
+    if (sourcingDataStatus !== 'ready') return
     lines.forEach(line => {
       const reconciled = reconcileCatalogueMatch(line, store.priceLists)
       const changed = ['pn', 'desc', 'priceState', 'listPrice', 'listUnitPrice', 'priceSourceSuggested'].some(key => reconciled[key] !== line[key])
       if (changed) store.updateSparesLine(line.id, reconciled)
     })
-  }, [lines, store.priceLists])
+  }, [sourcingDataStatus, lines, store.priceLists])
   useEffect(() => {
+    if (sourcingDataStatus !== 'ready') return
     // Existing opportunities may have been created before extraction learned
     // to keep a customer reference separate from its description. Reconcile
     // only blocked rows, using the matching source lead, and never overwrite
@@ -198,11 +209,12 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
         })
       }
     })
-  }, [opp.id, opp.sourceLeadId, lines, store.leads, store.leadArchive, store.priceLists, store.adhocParts])
+  }, [sourcingDataStatus, opp.id, opp.sourceLeadId, lines, store.leads, store.leadArchive, store.priceLists, store.adhocParts])
   useEffect(() => {
+    if (sourcingDataStatus !== 'ready') return
     store.dedupeSparesLines?.(opp.id)
     store.ensureSparesSupportLines?.(opp.id)
-  }, [opp.id, store.sparesLines.length])
+  }, [sourcingDataStatus, opp.id, store.sparesLines.length])
   const quoteValidityDays = Math.max(1, n(store.config?.proposalValidityDays ?? 30))
   const currencyRates = normalizedCurrencyRates(store.config?.currencyRates)
   const displayCurrencies = ['INR', ...Object.keys(currencyRates).filter(currency => currency !== 'INR')]
@@ -596,7 +608,10 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     {!!expiredLines.length && <div className="warnbox spares-price-warning"><b>{expiredLines.length} price source{expiredLines.length === 1 ? '' : 's'} expired.</b>{' '}Use <b>Compare</b> in the Actions column to select a current approved price-list part, or enter a manual price. <button type="button" onClick={() => openCompare(lines.find(line => line.priceState === 'Expired') || lines[0])}>Request price update</button></div>}
     {!!needsPricingLines.length && <div className="warnbox spares-price-warning"><b>{needsPricingLines.length} line{needsPricingLines.length === 1 ? '' : 's'} need pricing.</b>{' '}Use <b>Compare</b> to select a current approved price-list part or enter a manual price before continuing.</div>}
     {!!missingDescriptionLines.length && <div className="warnbox spares-price-warning"><b>{missingDescriptionLines.length} line{missingDescriptionLines.length === 1 ? '' : 's'} need{missingDescriptionLines.length === 1 ? 's' : ''} a description.</b>{' '}The customer reference alone is not enough to send this line to Proposal.</div>}
-    {!!pricingExceptions.rows.length && <PricingApprovalCard approval={pricingApproval} approvers={pricingApprovers} role={store.role} pricingRows={pricingExceptions.rows} canRequest={(comm || pricingApprovers.includes(store.role)) && (!pricingApproval || pricingApproval.status === 'Rejected')} onRequest={requestPricingApproval} onDecide={decision => pricingApproval && store.recordDecision(pricingApproval.id, decision)} />}
+    {sourcingDataStatus === 'loading' && <p className="hint" role="status">Loading saved sourcing lines…</p>}
+    {sourcingDataStatus === 'error' && <div className="errbox">Sourcing data could not be loaded. <button type="button" onClick={() => store.refreshSharedData()}>Retry</button></div>}
+    {sourcingDataStatus === 'ready' && <>
+    {!!pricingExceptions.rows.length && <PricingApprovalCard approval={pricingApproval} approvers={pricingApprovers} role={store.role} pricingRows={pricingExceptions.rows} canRequest={(comm || pricingApprovers.includes(store.role)) && (!pricingApproval || pricingApproval.status === 'Rejected')} onRequest={requestPricingApproval} onDecide={decision => pricingApproval && store.recordDecision(pricingApproval.id, decision)} onRefresh={async () => { setRefreshingApproval(true); try { await store.refreshSharedData() } finally { setRefreshingApproval(false) } }} refreshingApproval={refreshingApproval} />}
     {proposalOnlyMismatch && <div className="warnbox sourcing-flow-warning"><b>Proposal data is not linked to Sourcing.</b> Existing proposal rows are not imported automatically. Add or import the real parts here before continuing to Proposal.</div>}
     <div className="sourcing-table-card">
       <div className="sourcing-table-heading"><div><b>BOQ lines — review quantity, price source, and totals</b><span className="hint"> Each line shows whether the price came from an approved price list, supplier quotation, or manual pricing.</span></div><div className="sourcing-table-heading-actions"><span className="sourcing-currency-indicator" title={`All displayed amounts are in ${displayCurrency}`}>Currency: {displayCurrency} ({currencySymbol(displayCurrency)})</span>{comm && <label className="sourcing-currency-view">View amounts in <select value={displayCurrency} onChange={e => setDisplayCurrency(e.target.value)}>{displayCurrencies.map(currency => <option key={currency}>{currency}</option>)}</select></label>}{comm && <button type="button" className="sourcing-add-part-link" aria-expanded={showAddPart} onClick={openManualLine}>Add manual line</button>}{!comm && <span className="restricted"><Icon name="lock" size={12} /> Pricing restricted</span>}</div></div>
@@ -657,8 +672,9 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
         </form>
       </Modal>}
       {!comm && <div className="restricted sourcing-restricted-footer"><Icon name="lock" size={12} /> Totals and margin are restricted — sales owners, approvers and admin only</div>}
-      {sent && <div className="okbox">Proposal workbook BoM synchronized from the confirmed sourcing lines. <a style={{ cursor: 'pointer' }} onClick={openBuilder}>Open the proposal builder</a></div>}
+    {sent && <div className="okbox">Proposal workbook BoM synchronized from the confirmed sourcing lines. <a style={{ cursor: 'pointer' }} onClick={openBuilder}>Open the proposal builder</a></div>}
     </div>
+    </>}
     {compareFor && (() => {
       const line = lines.find(x => x.id === compareFor)
       if (!line) return null

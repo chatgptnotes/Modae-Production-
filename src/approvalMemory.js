@@ -4,6 +4,11 @@ const normalize = value => String(value ?? '')
   .trim()
 
 const json = value => JSON.stringify(value)
+
+// Approval IDs cross browser boundaries, so a per-tab sequence can collide
+// when two salespeople request different approvals at the same time.
+export const approvalRequestId = () => `AP-${globalThis.crypto?.randomUUID?.()
+  || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`}`
 const qtyOf = (line, units = 1) => line?.qtyPerUnit === undefined && line?.qty != null
   ? Number(line.qty) || 0
   : (Number(line?.qtyPerUnit) || 0) * (Number(units) || 1)

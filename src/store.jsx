@@ -20,7 +20,7 @@ import { PRICE_SOURCES, isConfirmableSparesLine, normalizePriceFields, sparesLin
 import { clarificationTopic } from './leadClarification.js'
 import { reconcileSparesLines } from './clarificationSparesSync.js'
 import { normalizedCurrencyRates } from './currency.js'
-import { approvalMemoryKey, pricingExceptionSignature, proposalApprovalSnapshot } from './approvalMemory.js'
+import { approvalMemoryKey, approvalRequestId, pricingExceptionSignature, proposalApprovalSnapshot } from './approvalMemory.js'
 import { shouldSyncProposalFromOpportunity, syncProposalFromOpportunity } from './proposal/opportunitySync.js'
 import {
   isPlaceholderSparesLine,
@@ -1298,7 +1298,7 @@ export function StoreProvider({ children }) {
               : existing),
           }, 'Approval request context updated', alreadyRemembered.id, `${alreadyRemembered.type} — ${alreadyRemembered.oppId}`)
         }
-        const id = mintId('AP', s.approvals, 100)
+        const id = approvalRequestId()
         const previous = s.approvals
           .filter(existing => existing.oppId === req.oppId
             && existing.type === req.type
@@ -1365,6 +1365,10 @@ export function StoreProvider({ children }) {
         }
         return withAudit(next, 'Approval cancelled', id, reason || 'No longer required')
       })
+      // Cancellation changes the active gate just like a request or decision;
+      // do not leave another browser looking at the stale pending row during
+      // the normal draft-save debounce.
+      setTimeout(flushSaves, 0)
     },
 
     decideApproval(id, { status, conditions = [], decisionNote = '' }) {
@@ -1591,7 +1595,19 @@ export function StoreProvider({ children }) {
       // on their next route, focus, visibility, reconnect, or manual refresh.
       return new Promise(resolve => setTimeout(() => {
         if (!accepted) { resolve(false); return }
-        flushPersistence().then(saved => resolve(saved !== false)).catch(() => resolve(false))
+        flushPersistence()
+          .then(async saved => {
+            if (saved === false) return false
+            // The Railway writer may have merged a second approver's decision
+            // into this same row. Pull that canonical row immediately so the
+            // final approval can advance the existing Submitted gate without
+            // waiting for a focus or route change.
+            await pullSharedData()
+            await new Promise(done => setTimeout(done, 0))
+            return (await flushPersistence()) !== false
+          })
+          .then(resolve)
+          .catch(() => resolve(false))
       }, 0))
     },
 

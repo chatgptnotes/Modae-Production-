@@ -5,8 +5,93 @@ import path from 'node:path'
 import test from 'node:test'
 import request from 'supertest'
 import { createApp } from '../src/server/app.ts'
+import * as workspace from '../src/server/workspace.ts'
 
 const app = createApp({ staticDir: '' })
+
+test('concurrent approval decisions are merged by approver role', () => {
+  const merge = (workspace as Record<string, unknown>).mergeConcurrentApprovalRows
+  assert.equal(typeof merge, 'function')
+  if (typeof merge !== 'function') return
+
+  const rows = merge([
+    {
+      id: 'AP-101', approvalKey: 'OP-1|Final quote release|01', status: 'Pending',
+      needed: ['LJS', 'AH'], decisions: { LJS: { d: 'Approved', when: '2026-09-27T10:00:00.000Z' } },
+      __sv: '2026-09-27T10:00:00.000Z',
+    },
+  ], [
+    {
+      id: 'AP-101', approvalKey: 'OP-1|Final quote release|01', status: 'Pending',
+      needed: ['LJS', 'AH'], decisions: { AH: { d: 'Approved', when: '2026-09-27T10:00:01.000Z' } },
+      __sv: '2026-09-27T10:00:01.000Z',
+    },
+  ]) as Array<Record<string, any>>
+
+  assert.equal(rows.length, 1)
+  assert.deepEqual(Object.keys(rows[0].decisions).sort(), ['AH', 'LJS'])
+  assert.equal(rows[0].status, 'Approved')
+})
+
+test('a concurrent rejection remains authoritative', () => {
+  const merge = (workspace as Record<string, unknown>).mergeConcurrentApprovalRows
+  assert.equal(typeof merge, 'function')
+  if (typeof merge !== 'function') return
+
+  const rows = merge([
+    {
+      id: 'AP-102', approvalKey: 'OP-1|Final quote release|01', status: 'Pending',
+      needed: ['LJS', 'AH'], decisions: { LJS: { d: 'Rejected', when: '2026-09-27T10:00:00.000Z' } },
+    },
+  ], [
+    {
+      id: 'AP-102', approvalKey: 'OP-1|Final quote release|01', status: 'Pending',
+      needed: ['LJS', 'AH'], decisions: { AH: { d: 'Approved', when: '2026-09-27T10:00:01.000Z' } },
+    },
+  ]) as Array<Record<string, any>>
+
+  assert.equal(rows[0].status, 'Rejected')
+  assert.deepEqual(Object.keys(rows[0].decisions).sort(), ['AH', 'LJS'])
+})
+
+test('parallel requests for one approval key converge to one pending request', () => {
+  const rows = workspace.mergeConcurrentApprovalRows([], [
+    { id: 'AP-first', approvalKey: 'OP-1|Commercial deviation|01|payment', status: 'Pending', needed: ['AH'], ts: '2026-09-27T10:00:00.000Z' },
+    { id: 'AP-second', approvalKey: 'OP-1|Commercial deviation|01|payment', status: 'Pending', needed: ['AH'], ts: '2026-09-27T10:00:01.000Z' },
+  ])
+
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].status, 'Pending')
+})
+
+test('approval requests from different proposal revisions stay separate', () => {
+  const rows = workspace.mergeConcurrentApprovalRows([], [
+    { id: 'AP-01', approvalKey: 'OP-1|Final quote release|01|', status: 'Pending', needed: ['LJS', 'AH'] },
+    { id: 'AP-02', approvalKey: 'OP-1|Final quote release|02|', status: 'Pending', needed: ['LJS', 'AH'] },
+  ])
+
+  assert.equal(rows.length, 2)
+})
+
+test('a stale pending copy cannot reopen an already approved request', () => {
+  const rows = workspace.mergeConcurrentApprovalRows([
+    {
+      id: 'AP-locked', approvalKey: 'OP-1|Final quote release|01|', status: 'Approved',
+      needed: ['LJS', 'AH'], decisions: {
+        LJS: { d: 'Approved', when: '2026-09-27T10:00:00.000Z' },
+        AH: { d: 'Approved', when: '2026-09-27T10:00:01.000Z' },
+      }, __sv: '2026-09-27T10:00:01.000Z',
+    },
+  ], [
+    {
+      id: 'AP-locked', approvalKey: 'OP-1|Final quote release|01|', status: 'Pending',
+      needed: ['LJS', 'AH'], decisions: {}, __sv: '2026-09-27T09:59:00.000Z',
+    },
+  ])
+
+  assert.equal(rows.length, 1)
+  assert.equal(rows[0].status, 'Approved')
+})
 
 test('health endpoint reports that the Railway service is ready', async () => {
   const response = await request(app).get('/healthz')

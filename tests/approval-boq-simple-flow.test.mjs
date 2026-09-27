@@ -20,6 +20,12 @@ test('approval decisions expose only approve and reject', () => {
   assert.doesNotMatch(store, /const anyReturned = Object\.values\(decisions\)/)
 })
 
+test('approval decisions stay editable and report a shared-save failure', () => {
+  const approvals = read('src/pages/Approvals.jsx')
+  assert.match(approvals, /const saved = await onDecide\(\{ d, comment: comment\.trim\(\), commentReview: review \}\)/)
+  assert.match(approvals, /Your decision could not be shared\. Check your connection and try again\./)
+})
+
 test('BOQ sourcing uses clear labels and removal confirmation', () => {
   const spares = read('src/workbench/WbSpares.jsx')
   const approvals = read('src/pages/Approvals.jsx')

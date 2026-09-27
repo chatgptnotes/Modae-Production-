@@ -1,6 +1,16 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { approvalMemoryKey, approvalAffectedByProposal, proposalApprovalSnapshot, reviewFindingKey } from '../src/approvalMemory.js'
+import * as approvalMemory from '../src/approvalMemory.js'
+
+test('approval requests use collision-resistant identifiers across browsers', () => {
+  const mint = approvalMemory.approvalRequestId
+  assert.equal(typeof mint, 'function')
+  if (typeof mint !== 'function') return
+  const ids = new Set(Array.from({ length: 20 }, () => mint()))
+  assert.equal(ids.size, 20)
+  assert.ok([...ids].every(id => /^AP-/.test(id)))
+})
 
 test('approval memory is stable for the same scoped decision', () => {
   const first = approvalMemoryKey({ oppId: 'OP-1', type: 'Pricing threshold exception', rev: '01', detail: 'Markup above 10%' })

@@ -5,6 +5,11 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Made proposal approval collaboration safe across browsers: approval request
+  IDs are collision-resistant, simultaneous requests converge by approval
+  key, and decisions from each required approver merge without overwriting
+  one another. Approval cancellations now save immediately and the decision
+  workspace keeps the form open with an error if a shared save fails.
 - Opportunity IDs now use the Admin city/state ownership rules consistently
   across lead conversion, registration, manual intake, tender intake, and
   simulated leads; longer AI-extracted addresses also resolve their embedded

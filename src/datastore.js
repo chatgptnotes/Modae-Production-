@@ -346,7 +346,7 @@ async function fetchCore() {
     const [consolidatedConfig, consolidatedState, business] = await Promise.all([
       loadConsolidatedConfig(),
       loadConsolidatedState(),
-      loadBusinessTables({ includeRecords: false, collaborative: railway || {} }),
+      loadBusinessTables({ includeRecords: false, coreEntities: ['proposals', 'spares_lines'], collaborative: railway || {} }),
     ])
     const slices = {}
     if (consolidatedState) Object.assign(slices, consolidatedState)
@@ -573,7 +573,7 @@ async function purgeActiveNormalizedRows(seedMap = {}) {
   return purged
 }
 
-async function loadBusinessTables({ includeRecords = true, collaborative = {} } = {}) {
+async function loadBusinessTables({ includeRecords = true, coreEntities = [], collaborative = {} } = {}) {
   const legacyQuery = includeRecords
     ? supabase.from('records').select('entity, id, data, rev').is('deleted_at', null).in('entity', ['proposals', 'spares_lines', 'clarifications', 'audit'])
     : supabase.from('records').select('entity', { count: 'exact', head: true }).is('deleted_at', null)
@@ -584,12 +584,13 @@ async function loadBusinessTables({ includeRecords = true, collaborative = {} } 
     legacyQuery,
   ])
   const dedicatedEntities = ['proposals', 'spares_lines', 'clarifications', 'audit']
-  const dedicated = includeRecords
-    ? await Promise.all(dedicatedEntities.map(async entity => ({ entity, result: await loadEntityRows(entity) })))
-    : await Promise.all(dedicatedEntities.map(async entity => ({
+  const dedicated = await Promise.all(dedicatedEntities.map(async entity => {
+    if (includeRecords || coreEntities.includes(entity)) return { entity, result: await loadEntityRows(entity) }
+    return {
       entity,
       result: await supabase.from(dedicatedTableFor(entity)).select('id', { count: 'exact', head: true }).is('deleted_at', null),
-    })))
+    }
+  }))
   const failedTables = baseTables
     .map((result, index) => result.error ? { index, error: result.error } : null)
     .filter(Boolean)
