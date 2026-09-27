@@ -71,6 +71,20 @@ test('AI route identifies a rejected server credential without exposing it', asy
   } finally { globalThis.fetch = oldFetch }
 })
 
+test('AI route explains when the configured Gemini model is unavailable', async () => {
+  const oldFetch = globalThis.fetch
+  globalThis.fetch = async () => ({ ok: false, status: 404 })
+  try {
+    await withEnv('server-side-only', async () => {
+      const res = response()
+      await handler({ method: 'POST', headers: { authorization: 'Bearer test-token' }, body: { task: 'health', model: 'gemini-3.5-flash-lite' } }, res)
+      assert.equal(res.out.status, 502)
+      assert.equal(res.out.body.errorCode, 'AI_MODEL_UNAVAILABLE')
+      assert.match(res.out.body.error, /model.*unavailable/i)
+    })
+  } finally { globalThis.fetch = oldFetch }
+})
+
 test('AI route health check returns the configured model on success', async () => {
   const oldFetch = globalThis.fetch
   globalThis.fetch = async () => ({ ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'ok' }] } }] }) })
@@ -106,7 +120,7 @@ test('AI route uses Flash for complex document reasoning', async () => {
       const res = response()
       await handler({ method: 'POST', headers: { authorization: 'Bearer test-token' }, body: { task: 'proposal.review', model: 'gemini-3.1-flash-lite', payload: { workbook: [] } } }, res)
       assert.equal(res.out.status, 200)
-      assert.equal(res.out.body.model, 'gemini-2.5-flash')
+      assert.equal(res.out.body.model, 'gemini-3.5-flash-lite')
     })
   } finally { globalThis.fetch = oldFetch }
 })
@@ -155,8 +169,8 @@ test('AI route maps the retired Gemini Pro alias to the supported Flash model', 
       const res = response()
       await handler({ method: 'POST', headers: { authorization: 'Bearer test-token' }, body: { task: 'health', model: 'gemini-pro-latest' } }, res)
       assert.equal(res.out.status, 200)
-      assert.equal(res.out.body.model, 'gemini-2.5-flash')
-      assert.match(requestedUrl, /gemini-2\.5-flash:generateContent/)
+      assert.equal(res.out.body.model, 'gemini-3.5-flash-lite')
+      assert.match(requestedUrl, /gemini-3\.5-flash-lite:generateContent/)
     })
   } finally { globalThis.fetch = oldFetch }
 })

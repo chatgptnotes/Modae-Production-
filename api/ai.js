@@ -5,7 +5,10 @@ import { createClient } from '@supabase/supabase-js'
 
 const API = 'https://generativelanguage.googleapis.com/v1beta/models'
 const DEFAULT_MODEL = 'gemini-3.1-flash-lite'
-const COMPLEX_MODEL = 'gemini-2.5-flash'
+// Gemini 2.5 access is restricted for some API projects. Use the cheaper
+// stable Flash-Lite model for complex JSON review so new deployments do not
+// fail with a model-not-found response.
+const COMPLEX_MODEL = 'gemini-3.5-flash-lite'
 const COMPLEX_TASKS = new Set(['approval.condition-evidence', 'proposal.review', 'template.map', 'tender.extract', 'admin.routing-review'])
 const MODEL_ALIASES = {
   'gemini-pro': COMPLEX_MODEL,
@@ -964,11 +967,15 @@ export default async function handler(req, res) {
     if (!upstream.ok) {
       const errorCode = [401, 403].includes(upstream.status)
         ? 'AI_KEY_REJECTED'
+        : upstream.status === 404
+          ? 'AI_MODEL_UNAVAILABLE'
         : upstream.status === 429
           ? 'AI_RATE_LIMITED'
           : 'AI_UPSTREAM_FAILED'
       const error = errorCode === 'AI_KEY_REJECTED'
         ? 'Gemini rejected the configured server credential'
+        : errorCode === 'AI_MODEL_UNAVAILABLE'
+          ? `The Gemini model ${model} is unavailable for this API key. Check the Railway AI configuration.`
         : errorCode === 'AI_RATE_LIMITED'
           ? 'Gemini is temporarily rate limited; try again shortly'
           : `Gemini service returned HTTP ${upstream.status}`

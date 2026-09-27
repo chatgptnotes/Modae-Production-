@@ -9,6 +9,8 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Switched complex AI review from restricted Gemini 2.5 Flash to the cheaper
+  Gemini 3.5 Flash-Lite model and added a clear model-access error.
 - Fixed Opportunities Excel export by using a browser-compatible workbook writer,
   keeping exports to one compact filtered sheet without extra rows or columns.
 - Standardized generated Excel cleanup across proposal, pipeline, price-list,
