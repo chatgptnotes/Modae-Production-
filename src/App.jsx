@@ -19,6 +19,7 @@ const Folders = lazyWithRecovery(() => import('./pages/Folders.jsx'))
 const Proposal = lazyWithRecovery(() => import('./pages/Proposal.jsx'))
 const PriceLists = lazyWithRecovery(() => import('./pages/PriceLists.jsx'))
 const MyDashboard = lazyWithRecovery(() => import('./pages/MyDashboard.jsx'))
+const Analytics = lazyWithRecovery(() => import('./pages/Analytics.jsx'))
 const Customers = lazyWithRecovery(() => import('./pages/Customers.jsx'))
 const Users = lazyWithRecovery(() => import('./pages/Users.jsx'))
 const TenderIntake = lazyWithRecovery(() => import('./pages/TenderIntake.jsx'))
@@ -379,9 +380,9 @@ export default function App() {
       <Route path="/folders/:oppId/:sub" element={<PageGate page="folders"><Folders /></PageGate>} />
       <Route path="/proposal/:oppId" element={<PageGate page="proposal"><Proposal /></PageGate>} />
       <Route path="/pricelists" element={<PageGate page="pricelists"><PriceLists /></PageGate>} />
-      <Route path="/dashboard" element={<Navigate to="/my-dashboard#forecast-details" replace />} />
+      <Route path="/dashboard" element={<Navigate to="/my-dashboard" replace />} />
       <Route path="/my-dashboard" element={<PageGate page="mydashboard"><MyDashboard /></PageGate>} />
-      <Route path="/analytics" element={<Navigate to="/my-dashboard#detailed-analytics" replace />} />
+      <Route path="/analytics" element={<PageGate page="analytics"><Analytics /></PageGate>} />
       <Route path="/customers" element={<PageGate page="customers"><Customers /></PageGate>} />
       <Route path="/users" element={<PageGate page="users"><Users /></PageGate>} />
       <Route path="/aimap" element={<PageGate page="aimap"><AiMap /></PageGate>} />

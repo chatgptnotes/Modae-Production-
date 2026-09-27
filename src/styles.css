@@ -53,7 +53,7 @@
   --status-danger-soft: #FBE9E9;
   --status-info: #2F80ED;
   --status-info-soft: #E5F1FB;
-  --focus-ring: #C7291B;
+  --focus-ring: #2F80ED;
   --shadow-color: rgba(40, 40, 40, .18);
   /* Brand source aliases retained for tooling and downstream integrations. */
   --primary-accent: #ed3f2f;
@@ -830,8 +830,12 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }
 .filter-pop hr { border: none; border-top: 1px solid var(--border-soft); margin: 4px 0; }
 .filter-pop input[type=checkbox] { margin-right: 6px; }
 
-/* Selected cell, like Excel's active-cell border */
-table.sheet td.cell-sel { outline: 2px solid var(--xl-green); outline-offset: -2px; }
+/* Selected cells use a quiet underline instead of a red Excel-style box. */
+table.sheet td.cell-sel {
+  outline: 0;
+  outline-offset: 0;
+  box-shadow: inset 0 -2px 0 var(--focus-ring);
+}
 
 .page { padding: 14px 16px 64px; }
 .page h2 { font-size: 15px; margin: 4px 0 10px; color: var(--xl-green-dark); }
@@ -1431,7 +1435,11 @@ table.sheet td.num { text-align: right; font-variant-numeric: tabular-nums; }
 table.sheet td input, table.sheet td select {
   border: none; background: transparent; width: 100%; font-size: 12px; padding: 1px 2px;
 }
-table.sheet td input:focus, table.sheet td select:focus { outline: 2px solid var(--xl-green); background: var(--palette-4843938); }
+table.sheet td input:focus, table.sheet td select:focus {
+  outline: 0;
+  background: transparent;
+  box-shadow: inset 0 -2px 0 var(--focus-ring);
+}
 table.sheet td.oppid { font-weight: 600; }
 table.sheet tbody tr td.oppid.won  { background: var(--won-fill) !important; color: var(--won-text); }
 table.sheet tbody tr td.oppid.lost { background: var(--lost-fill) !important; color: var(--lost-text); }
@@ -1562,23 +1570,6 @@ table.sheet td.internal { background: var(--border-soft) !important; color: var(
 .service-lane-card .hint { margin-top: 16px; }
 @media (max-width: 1050px) { .created-opportunity-panel { grid-template-columns: auto 1fr; } .created-opportunity-facts, .created-opportunity-actions { grid-column: 2; } .created-opportunity-actions { justify-content: flex-start; } }
 @media (max-width: 760px) { .created-opportunity-panel, .service-status-strip, .service-scope-controls { grid-template-columns: 1fr; } .created-opportunity-mark { align-self: start; } .created-opportunity-facts, .created-opportunity-actions, .service-status-strip > .hint { grid-column: auto; } .service-status-steps { justify-content: flex-start; } .service-requirement-options { grid-template-columns: 1fr; } .service-decision-footer { align-items: stretch; flex-direction: column; } }
-.service-work-area-bar { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 16px; align-items: stretch; margin-top: 16px; padding: 14px 16px 0; border: 1px solid var(--border-default); border-radius: 10px 10px 0 0; background: var(--card-bg); box-shadow: 0 3px 12px var(--shadow-color); }
-.service-work-area-heading { padding-top: 4px; }
-.service-work-area-heading strong { display: block; margin-top: 4px; color: var(--text-primary); font-size: 14px; }
-.service-work-area-list { display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)); gap: 4px; overflow-x: auto; }
-.service-work-area { display: flex; min-width: 130px; gap: 8px; align-items: flex-start; padding: 8px 9px 12px; border: 0; border-bottom: 3px solid transparent; border-radius: 6px 6px 0 0; background: transparent; color: var(--text-secondary); text-align: left; cursor: pointer; }
-.service-work-area:hover { background: var(--surface-raised); color: var(--text-primary); }
-.service-work-area.current { border-bottom-color: var(--action-accent); background: var(--action-accent-soft); color: var(--action-accent-ink); }
-.service-work-area.done .service-work-area-number { background: var(--status-success); color: var(--text-on-accent); }
-.service-work-area-number { display: grid; flex: 0 0 auto; place-items: center; width: 25px; height: 25px; border: 1px solid var(--border-default); border-radius: 50%; background: var(--card-bg); color: var(--text-secondary); font-size: 9px; font-weight: 800; }
-.service-work-area b, .service-work-area small { display: block; }
-.service-work-area b { font-size: 11px; line-height: 1.2; }
-.service-work-area small { margin-top: 4px; color: var(--text-secondary); font-size: 9px; line-height: 1.3; }
-.service-work-area-intro { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 12px; padding: 14px 16px; border: 1px solid var(--border-default); border-radius: 0 0 10px 10px; background: var(--surface-raised); }
-.service-work-area-intro h2 { margin: 3px 0 3px; color: var(--text-primary); font-size: 19px; letter-spacing: -.02em; }
-.service-work-area-intro p { margin: 0; color: var(--text-secondary); font-size: 12px; }
-.service-work-area-next { display: grid; gap: 7px; justify-items: end; }
-.service-work-area-next .primary { white-space: nowrap; }
 .service-next-step-card { border-style: dashed; border-top: 1px dashed var(--border-default); background: var(--surface-raised); }
 .service-next-step-card .ana-title { margin-top: 4px; }
 .service-offer-context { border-left: 3px solid var(--action-accent); }
@@ -1587,8 +1578,6 @@ table.sheet td.internal { background: var(--border-soft) !important; color: var(
 .service-offer-context-row b { color: var(--text-primary); font-size: 16px; }
 .service-offer-context-row span { color: var(--text-secondary); font-size: 11px; }
 .service-offer-context .hint { margin-bottom: 0; }
-@media (max-width: 900px) { .service-work-area-bar { grid-template-columns: 1fr; gap: 8px; } .service-work-area-list { grid-template-columns: repeat(5, minmax(150px, 1fr)); } }
-@media (max-width: 620px) { .service-work-area-intro { align-items: stretch; flex-direction: column; } .service-work-area-next { justify-items: stretch; } .service-work-area-next .primary { width: 100%; } }
 @media (max-width: 700px) {
   .opportunities-head { display: block; }
   .opportunities-actions { justify-content: flex-start; margin-top: 10px; }
@@ -1850,8 +1839,32 @@ section:first-of-type .folder-section-head { margin-top: 4px; }
 .b-step-current { border-color: var(--primary-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-accent) 18%, transparent); }
 @media (min-width: 1100px) { .product-options { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 
-/* Inline toolbar checkbox (lead inbox "Show all") */
-.cb-inline { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; cursor: pointer; }
+/* Compact scope control used for owner-filtered lists. A text state keeps the
+   toolbar quiet while aria-pressed preserves the binary filter semantics. */
+.scope-toggle {
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid var(--border-default);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.scope-toggle:hover { background: var(--surface-sunken); border-color: var(--border-default); color: var(--text-primary); filter: none; }
+.scope-toggle.active { background: var(--primary-soft); border-color: var(--action-accent-border); color: var(--primary-ink); }
+.scope-toggle:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.scope-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
 
 /* Progress indicator for form completion */
 .progress-indicator { margin-top: auto; }
@@ -2212,6 +2225,38 @@ a.oppid-link:hover { text-decoration: underline; }
 .ana-page .mb-fill { transition: width .3s ease; }
 .ana-page .mb-val { flex: 0 0 48px; }
 
+/* Operational reporting: dense tables make the decision path explicit instead
+   of scattering the same numbers across decorative cards. */
+.analysis-summary { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0; margin: 14px 0; border: 1px solid var(--border-default); background: var(--surface-raised); }
+.analysis-summary > div { min-width: 0; padding: 14px 16px; border-right: 1px solid var(--border-subtle); }
+.analysis-summary > div:last-child { border-right: 0; }
+.analysis-summary b, .analysis-summary span { display: block; }
+.analysis-summary b { color: var(--text-primary); font-size: 20px; line-height: 1.1; }
+.analysis-summary span { margin-top: 5px; color: var(--text-secondary); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.analysis-summary-won b { color: var(--status-success); }
+.analysis-summary-lost b { color: var(--status-danger); }
+.analysis-section { margin-top: 14px; border: 1px solid var(--border-default); background: var(--card-bg); }
+.analysis-section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 16px 18px 12px; border-bottom: 1px solid var(--border-subtle); }
+.analysis-section-head h3 { margin: 3px 0 4px; color: var(--text-primary); font-size: 18px; letter-spacing: -.02em; }
+.analysis-section-head p { margin: 0; color: var(--text-secondary); font-size: 12px; }
+.analysis-kicker { color: var(--text-secondary); font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.analysis-section-count { flex: 0 0 auto; color: var(--text-secondary); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.analysis-table-wrap { overflow-x: auto; }
+.analysis-table { width: 100%; min-width: 680px; border-collapse: collapse; table-layout: auto; }
+.analysis-table th, .analysis-table td { padding: 10px 12px; border-bottom: 1px solid var(--border-subtle); color: var(--text-primary); font-size: 12px; vertical-align: middle; }
+.analysis-table thead th { background: var(--surface-raised); color: var(--text-secondary); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-align: left; text-transform: uppercase; white-space: nowrap; }
+.analysis-table tbody tr:last-child th, .analysis-table tbody tr:last-child td { border-bottom: 0; }
+.analysis-table tbody tr:hover { background: var(--surface-raised); }
+.analysis-table tbody th { font-weight: 750; text-align: left; }
+.analysis-table .num { text-align: right; white-space: nowrap; }
+.analysis-table small { display: block; margin-top: 3px; color: var(--text-secondary); font-size: 10px; line-height: 1.3; }
+.analysis-table .result-won { color: var(--status-success); font-weight: 800; }
+.analysis-table .result-lost { color: var(--status-danger); font-weight: 800; }
+.analysis-table tr.stale { box-shadow: inset 3px 0 0 var(--status-warning); }
+.analysis-table .empty { padding: 22px 12px; color: var(--text-secondary); text-align: center; }
+@media (max-width: 900px) { .analysis-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); } .analysis-summary > div:nth-child(3) { border-right: 0; } }
+@media (max-width: 620px) { .analysis-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .analysis-summary > div { border-right: 0; border-bottom: 1px solid var(--border-subtle); } .analysis-summary > div:last-child, .analysis-summary > div:nth-last-child(2) { border-bottom: 0; } .analysis-section-head { display: block; } .analysis-section-count { display: block; margin-top: 8px; } }
+
 /* Row-based cards rendered as real tables */
 .ana-table { width: 100%; border-collapse: collapse; font-size: 12.5px; table-layout: fixed; }
 .ana-table thead th {
@@ -2549,6 +2594,55 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
   }
 }
 
+/* -------------------------------------------------------------------------
+   Flattened control surfaces
+   -------------------------------------------------------------------------
+   Keep the workspace light and editorial: editable controls carry a quiet
+   baseline instead of a pale rectangle. Semantic states and dark chrome are
+   restored below where a surface is part of the control's meaning. */
+.shell :where(input:not([type='checkbox']):not([type='radio']), select, textarea) {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0;
+  box-shadow: none;
+}
+.shell :where(input:not([type='checkbox']):not([type='radio']), select, textarea):focus-visible {
+  border-bottom-color: var(--action-accent);
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+.shell :where(.tracker-search, .mail-search, .approval-search, .proposal-sent-search, .admin-region-search, .tile-search) {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0;
+  box-shadow: none;
+}
+.shell :where(.tracker-search, .mail-search, .approval-search, .proposal-sent-search, .admin-region-search, .tile-search):focus-within {
+  border-bottom-color: var(--action-accent);
+  box-shadow: none;
+}
+.shell :where(.tracker-search, .mail-search, .approval-search, .proposal-sent-search, .admin-region-search, .tile-search) input,
+.shell :where(.tracker-search, .mail-search, .approval-search, .proposal-sent-search, .admin-region-search, .tile-search) input:focus,
+.shell :where(.tracker-search, .mail-search, .approval-search, .proposal-sent-search, .admin-region-search, .tile-search) input:focus-visible {
+  border: 0;
+  box-shadow: none;
+  outline: 0;
+}
+/* Dark chrome and semantic feedback need their own surface contrast. */
+.shell :where(.sidenav, .topbar, .tablet-bar) select,
+.shell :where(input, select, textarea):disabled,
+.shell :where(input, select, textarea).needs-input,
+.shell :where(select, input, textarea).error {
+  background: var(--surface-sunken);
+}
+.shell :where(input, select, textarea).needs-input,
+.shell :where(select, input, textarea).error {
+  border-bottom-color: var(--status-warning);
+}
+
 /* Clause library: dense, directly editable table with a clear reading order. */
 .admin-page .clause-library-section {
   width: 100%;
@@ -2618,12 +2712,13 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
   font-weight: 600;
 }
 .admin-page .clause-library-text-field {
-  min-height: 88px;
+  min-height: 1.5em;
   padding: 6px 8px;
   color: var(--text-secondary);
   font-size: 14px;
   line-height: 1.5;
-  resize: vertical;
+  resize: none;
+  overflow: hidden;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -3324,7 +3419,7 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .mailbox-list { container-type: inline-size; overflow-x: auto; background: var(--palette-4843938); border: 1px solid var(--border-color); border-top: 0; box-shadow: 0 2px 8px var(--palette-9c5f15c9); }
 .mail-list-toolbar { display: flex; align-items: center; gap: 5px; min-height: 44px; padding: 5px 10px; border-bottom: 1px solid var(--border-soft); color: var(--text-muted); }
 .mail-check { display: inline-flex; align-items: center; justify-content: center; width: 30px; flex: 0 0 30px; cursor: pointer; }
-.mail-check input, .mail-show-all input { accent-color: var(--primary-accent); }
+.mail-check input { accent-color: var(--primary-accent); }
 /* min-height:0 releases the base button's 40px floor, which would otherwise beat
    the 30px height and render this circle as an oval. */
 .mail-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; min-height: 0; padding: 0; border: 0; background: transparent; color: var(--text-muted); border-radius: 50%; }
@@ -3593,7 +3688,17 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .approval-decision-title { margin-bottom: 8px; color: var(--palette-ea2bdd67); font-size: 12px; font-weight: 800; }
 .approval-decision-options { display: flex; gap: 12px; flex-wrap: wrap; }
 .approval-decision-options label { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
-.approval-decision-input { display: block; width: 100%; max-width: 700px; margin-top: 7px; }
+.approval-decision-input {
+  display: block;
+  width: 100%;
+  max-width: 700px;
+  min-height: 32px;
+  margin-top: 7px;
+  padding: 4px 2px;
+  line-height: 1.45;
+  resize: none;
+  overflow: hidden;
+}
 .approval-decision-error { margin-top: 7px; }
 .approval-decision-submit { margin-top: 9px; }
 @keyframes approval-new-pulse {
@@ -4149,10 +4254,12 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .login-card input, .login-card select { width: 100%; padding: 8px 10px; font-size: 14px; }
 .login-card .login-actions { margin-top: 18px; display: flex; flex-direction: column; gap: 8px; }
 .login-card .login-actions button { min-height: 42px; font-size: 14px; }
-.login-divider { display: flex; align-items: center; gap: 10px; margin: 14px 0; color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
-.login-divider::before, .login-divider::after { content: ''; flex: 1; height: 1px; background: var(--border-soft); }
-.btn-microsoft { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 42px; padding: 8px 10px; border: 1px solid var(--border-soft); border-radius: 4px; background: var(--palette-4843938); color: var(--text-main); font-size: 14px; font-weight: 600; cursor: pointer; }
-.btn-microsoft:hover { border-color: var(--text-muted); background: var(--primary-soft); }
+.password-field { position: relative; display: flex; align-items: stretch; }
+.login-card .password-field input { padding-right: 42px; }
+.password-toggle { position: absolute; top: 0; right: 6px; bottom: 0; margin: auto 0; transform: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; min-height: 0; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--text-muted); cursor: pointer; }
+.password-toggle:hover:not(:disabled) { background: var(--primary-soft); color: var(--text-main); }
+.password-toggle:focus-visible { outline: 2px solid var(--primary-accent); outline-offset: 1px; }
+.password-toggle:disabled { cursor: not-allowed; opacity: .55; }
 .login-demo { background: var(--primary-soft); border: 1px solid var(--primary-border); border-radius: 4px; padding: 8px 10px; font-size: 11.5px; color: var(--text-muted); margin-top: 14px; }
 .login-switch { text-align: center; font-size: 12px; margin-top: 12px; }
 .login-switch a { color: var(--bg-sidebar); cursor: pointer; }
@@ -4273,15 +4380,6 @@ button.install:hover { background: var(--primary-hover); }
 /* Topbar acting-as dropdown (full-site header) */
 .topbar-user { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; white-space: nowrap; }
 .topbar-user select { max-width: 220px; font-size: 12px; padding: 3px 6px; text-transform: none; letter-spacing: 0; }
-
-/* Quick login (demo) — one-tap account buttons on the sign-in card */
-.quick-login { margin-top: 14px; }
-.ql-title { display: flex; align-items: center; gap: 5px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); margin-bottom: 7px; }
-.ql-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
-.ql-btn { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 7px 10px; border: 1px solid var(--border-soft); border-radius: 6px; background: var(--palette-d453b82a); cursor: pointer; text-align: left; min-height: 0; }
-.ql-btn:hover { border-color: var(--xl-green); background: var(--primary-soft); }
-.ql-btn b { font-size: 12px; color: var(--xl-green-dark); }
-.ql-btn span { font-size: 10.5px; color: var(--text-muted); }
 
 /* =========================================================================
    Lead review workspace — three-column enterprise layout (/inbox/:leadId)
@@ -6711,10 +6809,8 @@ html, body { overflow-x: hidden; max-width: 100%; }
   font-size: 12px;
   font-weight: 700;
 }
-.tracker-page > .toolbar .tracker-show-all {
-  gap: 8px;
-  margin-left: 2px;
-}
+.tracker-page > .toolbar .scope-toggle { margin-left: 2px; }
+.tracker-page > .toolbar .scope-status { margin-left: 2px; }
 .tracker-date-filter-button { white-space: nowrap; }
 .tracker-date-filter-button.active { border-color: var(--primary-accent); background: var(--primary-soft); color: var(--primary-deep); }
 
@@ -6731,7 +6827,8 @@ html, body { overflow-x: hidden; max-width: 100%; }
   .tracker-page .tracker-toolbar-filters > .tracker-search,
   .tracker-page .tracker-toolbar-filters > .tracker-quick-filter,
   .tracker-page .tracker-toolbar-filters > .tracker-date-filter-button,
-  .tracker-page .tracker-toolbar-filters > .tracker-show-all { flex: 1 1 100%; }
+  .tracker-page .tracker-toolbar-filters > .scope-toggle,
+  .tracker-page .tracker-toolbar-filters > .scope-status { flex: 1 1 100%; }
   .tracker-page .tracker-toolbar-actions > button,
   .tracker-page .tracker-toolbar-actions > .pill,
   .tracker-page .tracker-toolbar-actions > .tracker-create-logo { flex: 1 1 auto; }
@@ -6799,7 +6896,11 @@ table.sheet td .wrapcell {
   font: inherit; font-size: 12px; line-height: 1.3; padding: 1px 2px;
   resize: none; overflow: hidden;
 }
-table.sheet td .wrapcell:focus { outline: 2px solid var(--xl-green); background: var(--palette-4843938); }
+table.sheet td .wrapcell:focus {
+  outline: 0;
+  background: transparent;
+  box-shadow: inset 0 -2px 0 var(--focus-ring);
+}
 
 /* All-31 view — 31 columns sharing one viewport came to ~37px each at 1366px,
    which is narrower than most of the headers. Instead the sheet takes its
@@ -8041,7 +8142,6 @@ body {
 .progress-step.current { background: var(--action-accent-soft); }
 .progress-step.current .progress-node { border-color: var(--action-accent); box-shadow: 0 0 0 4px var(--action-accent-soft); color: var(--action-accent-ink); }
 .progress-step.current .progress-label { color: var(--action-accent-ink); font-weight: 800; }
-.progress-step.reviewing { outline: 1px dashed var(--action-accent); outline-offset: -2px; }
 .progress-step:hover { background: var(--surface-raised); color: var(--text-primary); filter: none; transform: scale(1.05); z-index: 2; }
 .progress-step.current:hover { background: var(--action-accent-soft); }
 .sourcing-source-link { max-width: 100%; padding: 0; border: 0; background: transparent; color: var(--action-accent-ink); font: inherit; text-align: left; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 45%, transparent); text-underline-offset: 2px; cursor: pointer; }
@@ -13981,4 +14081,110 @@ table.sheet tbody tr:hover td {
     flex: 1 1 auto;
     min-width: 0;
   }
+}
+
+/* Text-entry focus stays quiet: the field keeps its accent underline without
+   growing a red rectangle around the whole control while someone types. */
+.shell :where(input:not([type='checkbox']):not([type='radio']), select, textarea):focus,
+.shell :where(input:not([type='checkbox']):not([type='radio']), select, textarea):focus-visible,
+.approval-decision-input:focus,
+.approval-decision-input:focus-visible {
+  border-bottom-color: var(--action-accent);
+  outline: 0;
+  outline-offset: 0;
+  box-shadow: none;
+}
+
+/* Keep flattened controls readable after removing their heavy field boxes. */
+.shell :where(input:not([type='checkbox']):not([type='radio']), select, textarea) {
+  font-size: 14px;
+  line-height: 1.45;
+}
+.shell :where(input:not([type='checkbox']):not([type='radio']), select, textarea)::placeholder {
+  font-size: inherit;
+}
+
+/* Focus remains visible, but never inherits the brand-red action colour. */
+:where(*):focus-visible {
+  outline-color: var(--focus-ring) !important;
+}
+
+/* LJS proposal status card: four readable summary blocks and a wrapped,
+   purpose-built table. The generic dashboard table rules are optimized for
+   the eight-column opportunity table, so this six-column table needs its own
+   widths to keep long customer and opportunity names from colliding. */
+.proposal-status-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 14px 0 2px;
+}
+.proposal-status-summary__item {
+  --summary-color: var(--text-subtle);
+  --summary-bg: var(--surface-sunken);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: 'label value';
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: var(--summary-bg);
+  box-shadow: none;
+  text-align: left;
+}
+.proposal-status-summary__item--prepare { --summary-color: var(--status-warning); --summary-bg: var(--status-warning-soft); }
+.proposal-status-summary__item--approval { --summary-color: var(--status-info); --summary-bg: var(--status-info-soft); }
+.proposal-status-summary__item--sent { --summary-color: var(--status-success); --summary-bg: var(--status-success-soft); }
+.proposal-status-summary__item--follow-up { --summary-color: var(--status-danger); --summary-bg: var(--status-danger-soft); }
+.proposal-status-summary__item.is-empty { --summary-color: var(--text-subtle); --summary-bg: var(--surface-sunken); }
+.proposal-status-summary__item:hover { transform: none; border-color: var(--summary-color); box-shadow: none; }
+.proposal-status-summary__item.is-selected { border-color: var(--summary-color); box-shadow: 0 0 0 2px color-mix(in srgb, var(--summary-color) 28%, transparent); }
+.proposal-status-summary__item:focus-visible { outline: 2px solid var(--summary-color); outline-offset: 2px; }
+.proposal-status-summary .home-alert-value { grid-area: value; color: var(--summary-color); font-size: 20px; line-height: 1; text-align: right; }
+.proposal-status-summary__item > span:last-child {
+  grid-area: label;
+  color: var(--summary-color);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+.proposal-status-table { min-width: 920px; }
+.proposal-status-table th:nth-child(1) { width: 31%; }
+.proposal-status-table th:nth-child(2) { width: 20%; }
+.proposal-status-table th:nth-child(3) { width: 14%; }
+.proposal-status-table th:nth-child(4) { width: 18%; }
+.proposal-status-table th:nth-child(5) { width: 10%; }
+.proposal-status-table th:nth-child(6) { width: 96px; }
+.proposal-status-table td { vertical-align: middle; white-space: normal; }
+.proposal-status-table td:nth-child(3),
+.proposal-status-table td:nth-child(4),
+.proposal-status-table td:nth-child(5),
+.proposal-status-table td:nth-child(6) { white-space: nowrap; }
+.proposal-opportunity-id,
+.proposal-opportunity-name,
+.proposal-customer-name { display: block; min-width: 0; }
+.proposal-opportunity-id { color: var(--text-main); font-variant-numeric: tabular-nums; }
+.proposal-opportunity-name,
+.proposal-customer-name {
+  margin-top: 3px;
+  color: var(--text-subtle);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.proposal-status-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+}
+.proposal-status-footer button { flex: 0 0 auto; }
+@media (max-width: 700px) {
+  .proposal-status-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .proposal-status-footer { align-items: flex-start; flex-direction: column; }
 }

@@ -674,15 +674,14 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
             Date filter{dateFilterActive ? ' · Active' : ''}
           </button>
           {isSalesRep && (
-            <label className="mail-show-all tracker-show-all" title="Show all opportunities">
-              <input
-                type="checkbox"
-                aria-label="Show all opportunities"
-                checked={ownerFilter === 'All'}
-                onChange={e => setOwnerFilter(e.target.checked ? 'All' : 'Mine')}
-              />
-              Show all
-            </label>
+            <button
+              type="button"
+              className={`scope-toggle${ownerFilter === 'All' ? ' active' : ''}`}
+              aria-pressed={ownerFilter === 'All'}
+              title="Show all opportunities"
+              onClick={() => setOwnerFilter(ownerFilter === 'All' ? 'Mine' : 'All')}>
+              {ownerFilter === 'All' ? 'Showing all' : 'Show all'}
+            </button>
           )}
         </div>
         <div className="tracker-toolbar-actions">

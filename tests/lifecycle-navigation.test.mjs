@@ -47,13 +47,16 @@ test('Service workflow pages can be opened before their persisted phase', () => 
   assert.match(workbench, /selectStep\(step\.slug\)/)
 })
 
-test('Service work areas group the audit phases into five operator outcomes', () => {
-  for (const label of ['Intake & enquiry', 'Scope & survey', 'Offer & approval', 'Customer decision', 'Delivery & close']) {
+test('Service workflow uses the 10-step progress rail without duplicate work-area navigation', () => {
+  for (const label of ['Service Intake', 'Capture Enquiry', 'Scope & Survey', 'Prepare Offer', 'Internal Review', 'Send Offer', 'Customer Decision', 'Execute Service', 'Service Report', 'Invoice']) {
     assert.match(workbench, new RegExp(label.replace(/[&]/g, '\\&')))
   }
-  assert.match(workbench, /function ServiceWorkAreaBar/)
-  assert.match(workbench, /Current work area/)
-  assert.match(workbench, /Next audit stage/)
+  assert.doesNotMatch(workbench, /SERVICE_WORK_AREAS/)
+  assert.doesNotMatch(workbench, /ServiceWorkAreaBar/)
+  assert.doesNotMatch(workbench, /Current work area/)
+  assert.doesNotMatch(workbench, /Next audit stage/)
+  const styles = fs.readFileSync(path.join(root, 'src/styles.css'), 'utf8')
+  assert.doesNotMatch(styles, /\.service-work-area(?:-|\s|\{)/)
 })
 
 test('Spares workflow has eight grouped industry-standard stages', () => {
@@ -168,6 +171,11 @@ test('progress stepper grid follows visible workflow step count', () => {
   assert.match(styles, /grid-template-columns: repeat\(var\(--progress-step-count, 10\), minmax\(64px, 1fr\)\)/)
   assert.match(styles, /grid-template-columns: repeat\(var\(--progress-step-count, 10\), 86px\)/)
   assert.match(styles, /grid-template-columns: repeat\(var\(--progress-step-count, 10\), minmax\(82px, 1fr\)\)/)
+})
+
+test('reviewed workflow stages do not render a red dashed outline', () => {
+  const styles = fs.readFileSync(path.join(root, 'src/styles.css'), 'utf8')
+  assert.doesNotMatch(styles, /\.progress-step\.reviewing\s*\{[^}]*outline:\s*1px\s+dashed/i)
 })
 
 test('approval is shown in an opportunity rail only while its request is pending', () => {

@@ -130,7 +130,10 @@ export function pipelineSeries(store, comm, months = 6) {
 // detailed KPI formulas so Home and Analytics never tell different stories.
 export function analyticsSnapshot(store, role = store.role) {
   const comm = canViewCommercial(role)
-  const owner = OWNERS.includes(role) ? role : null
+  // LJS is the strategic owner, not a sales-owner scope. Their landing page
+  // must start with the complete company picture; individual sales owners
+  // remain scoped to their own pipeline.
+  const owner = isSalesOwner(role) ? role : null
   const scoped = (store.opportunities || []).filter(o => !owner || o.owner === owner)
   const open = scoped.filter(o => o.status === 'Open')
   const sum = rows => rows.reduce((total, o) => total + (+o.valueK || 0), 0)
@@ -171,6 +174,60 @@ export function winRate(store) {
   const lost = store.opportunities.filter(o => o.stage === 'Lost').length
   const decided = won + lost
   return { won, lost, decided, pct: decided ? Math.round((won / decided) * 100) : 0 }
+}
+
+// Closed-opportunity analysis. Keep the aggregation pure so Analytics, exports,
+// and future tablet reporting use one definition of a win, loss, and reason.
+export function winLossAnalysis(opportunities = [], competitors = [], { commercial = true } = {}) {
+  const competitorByOpp = new Map()
+  for (const competitor of competitors || []) {
+    if (competitor?.oppId && competitor?.name && !competitorByOpp.has(competitor.oppId)) {
+      competitorByOpp.set(competitor.oppId, competitor.name)
+    }
+  }
+  const closed = opportunities.filter(o => o?.stage === 'Won' || o?.stage === 'Lost')
+  const wonRows = closed.filter(o => o.stage === 'Won')
+  const lostRows = closed.filter(o => o.stage === 'Lost')
+  const valueOf = row => Number(row.valueK) || 0
+  const summary = {
+    total: closed.length,
+    won: wonRows.length,
+    lost: lostRows.length,
+    winRate: closed.length ? Math.round((wonRows.length / closed.length) * 100) : 0,
+    wonValueK: commercial ? wonRows.reduce((sum, row) => sum + valueOf(row), 0) : null,
+    lostValueK: commercial ? lostRows.reduce((sum, row) => sum + valueOf(row), 0) : null,
+  }
+  const grouped = new Map()
+  for (const row of closed) {
+    const reason = String(row.closedReason || '').trim() || 'Unspecified'
+    const current = grouped.get(reason) || {
+      reason, won: 0, lost: 0, total: 0, wonValueK: 0, lostValueK: 0,
+    }
+    current[row.stage === 'Won' ? 'won' : 'lost'] += 1
+    current.total += 1
+    if (row.stage === 'Won') current.wonValueK += valueOf(row)
+    else current.lostValueK += valueOf(row)
+    grouped.set(reason, current)
+  }
+  const byReason = [...grouped.values()]
+    .sort((a, b) => (commercial ? b.wonValueK + b.lostValueK - a.wonValueK - a.lostValueK : b.total - a.total)
+      || a.reason.localeCompare(b.reason))
+    .map(row => ({
+      ...row,
+      wonValueK: commercial ? row.wonValueK : null,
+      lostValueK: commercial ? row.lostValueK : null,
+      totalValueK: commercial ? row.wonValueK + row.lostValueK : null,
+      winRate: row.total ? Math.round((row.won / row.total) * 100) : 0,
+    }))
+  const rows = closed.map(row => ({
+    ...row,
+    result: row.stage,
+    reason: String(row.closedReason || '').trim() || 'Unspecified',
+    competitor: competitorByOpp.get(row.id) || '',
+    valueK: commercial ? valueOf(row) : null,
+    closeDate: row.lastUpdated || row.orderDate || row.createDate || '',
+  }))
+  return { summary, byReason, rows }
 }
 
 // Proposals sent within the route's target window — the metric Swami said he

@@ -124,18 +124,6 @@ const SERVICE_WORKFLOW_STEPS = [
   { slug: 'service-report', label: 'Service Report', milestone: 'Follow-up', tab: 'service-report', servicePhase: 8 },
   { slug: 'service-invoice', label: 'Invoice', milestone: 'Follow-up', tab: 'service-invoice', servicePhase: 9 },
 ]
-// The audit rail remains phase-level, but Service operators work in five
-// outcome-oriented areas. Keeping this mapping in one place prevents the
-// grouped navigation from becoming a second, competing workflow.
-const SERVICE_WORK_AREAS = [
-  { slug: 'intake-enquiry', label: 'Intake & enquiry', phases: [0, 1], entry: 'service-intake', next: 'service-scope', nextLabel: 'Next: Scope & Survey', copy: 'Capture the customer, source enquiry, and the service requirement.' },
-  { slug: 'scope-survey', label: 'Scope & survey', phases: [2], entry: 'service-scope', next: 'service-offer', nextLabel: 'Next: Prepare Offer', copy: 'Confirm the service lane and complete only the survey evidence this job needs.' },
-  { slug: 'offer-approval', label: 'Offer & approval', phases: [3, 4], entry: 'service-offer', next: 'service-send', nextLabel: 'Next: Customer Offer', copy: 'Build the accepted offer, then clear the approval path for this revision.' },
-  { slug: 'customer-decision', label: 'Customer decision', phases: [5, 6], entry: 'service-send', next: 'service-execution', nextLabel: 'Next: Schedule Service', copy: 'Send the approved offer and record the customer’s single response.' },
-  { slug: 'delivery-close', label: 'Delivery & close', phases: [7, 8, 9], entry: 'service-execution', next: null, nextLabel: 'Service complete', copy: 'Record execution, submit the report, and prepare the invoice.' },
-]
-const serviceWorkAreaForStep = step => SERVICE_WORK_AREAS.find(area => area.phases.includes(step?.servicePhase)) || SERVICE_WORK_AREAS[0]
-const serviceStepForPhase = phase => SERVICE_WORKFLOW_STEPS.find(step => step.servicePhase === phase)
 const workflowStepsFor = (config, route) => {
   if (route === 'Spares') return SPARES_WORKFLOW_STEPS
   if (route === 'Service') return SERVICE_WORKFLOW_STEPS
@@ -204,30 +192,6 @@ function OpportunityProgress({ activeStep, completedThrough, reviewing = false, 
             <span className="progress-label">{step.label}</span>
           </button>
         ))}
-      </div>
-    </nav>
-  )
-}
-
-function ServiceWorkAreaBar({ activeArea, persistedPhase, onArea }) {
-  return (
-    <nav className="service-work-area-bar" aria-label="Service work areas">
-      <div className="service-work-area-heading">
-        <span className="progress-kicker">Operator view</span>
-        <strong>Service work areas</strong>
-      </div>
-      <div className="service-work-area-list">
-        {SERVICE_WORK_AREAS.map((area, index) => {
-          const done = area.phases.every(phase => phase < persistedPhase)
-          const current = area.slug === activeArea.slug
-          return (
-            <button key={area.slug} type="button" className={`service-work-area ${current ? 'current' : ''} ${done ? 'done' : ''}`}
-              aria-current={current ? 'step' : undefined} onClick={() => onArea(area)}>
-              <span className="service-work-area-number">{done ? '✓' : String(index + 1).padStart(2, '0')}</span>
-              <span><b>{area.label}</b><small>{area.copy}</small></span>
-            </button>
-          )
-        })}
       </div>
     </nav>
   )
@@ -384,7 +348,6 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
   const activeStepConfig = workflowBySlug[activeStep]
   const viewTab = activeStepConfig?.tab || 'overview'
   const workflowReadOnly = reviewingCompletedStep
-  const activeServiceArea = opp.route === 'Service' ? serviceWorkAreaForStep(activeStepConfig) : null
   useEffect(() => {
     if (tab !== 'overview' || requestedStep !== activeStep) {
       nav(`/opp/${opp.id}?step=${encodeURIComponent(activeStep)}`, { replace: true })
@@ -394,10 +357,6 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
     const index = workflowSteps.findIndex(item => item.slug === step)
     if (index < 0 || (!serviceOpenNavigation && index > persistedStepIndex)) return
     nav(`/opp/${opp.id}?step=${encodeURIComponent(step)}`)
-  }
-  const selectServiceArea = area => {
-    const entry = serviceStepForPhase(area.phases[0])
-    if (entry) selectStep(entry.slug)
   }
   const servicePhaseBlockers = step => {
     if (opp.route !== 'Service' || step.servicePhase == null || step.servicePhase <= persistedStepIndex) return []
@@ -547,10 +506,6 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
     if (alreadyCompleted) selectStep(step.slug)
     else advanceStep(step.slug)
   }
-  const activeServicePhase = activeStepConfig?.servicePhase ?? 0
-  const nextServiceStep = activeServiceArea
-    ? workflowSteps.find(step => step.servicePhase != null && step.servicePhase > activeServicePhase)
-    : null
   const exceptionApprovalFor = blocker => (store.approvals || []).find(a =>
     a.type === 'Milestone exception' && a.oppId === opp.id
     && a.targetMilestone === transition?.target && a.blockerKey === blocker.key)
@@ -727,24 +682,6 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
         <button type="button" className="secondary" onClick={() => goTab('approvals')}>Open approvals</button>
       </section>}
       {createdNotice && <CreatedOpportunityPanel opp={opp} activeStep={activeStep} onDismiss={dismissCreatedNotice} onContinue={continueFromCreatedNotice} />}
-      {activeServiceArea && (
-        <>
-          <ServiceWorkAreaBar activeArea={activeServiceArea} persistedPhase={persistedServicePhase ?? 0} onArea={selectServiceArea} />
-          <section className="service-work-area-intro" aria-labelledby="service-work-area-title">
-            <div>
-              <span className="progress-kicker">Current work area</span>
-              <h2 id="service-work-area-title">{activeServiceArea.label}</h2>
-              <p>{activeServiceArea.copy}</p>
-            </div>
-            <div className="service-work-area-next">
-              <span className="hint">Next audit stage: {nextServiceStep?.label || 'Complete'}</span>
-              <button type="button" className="primary" disabled={!nextServiceStep} onClick={() => nextServiceStep && advanceStep(nextServiceStep.slug)}>
-                {activeServiceArea.nextLabel}
-              </button>
-            </div>
-          </section>
-        </>
-      )}
       <div className="opp-summary-grid clean-summary-grid summary-strip bg-gray-50 border border-gray-200 rounded-lg p-4 divide-x divide-gray-200" aria-label="Opportunity summary">
         <div className="summary-meta-item"><span>Owner</span><b>{displayRole(opp.owner)}</b></div>
         <div className="summary-meta-item"><span>Milestone</span><b>{opp.milestone || opp.stage}</b></div>

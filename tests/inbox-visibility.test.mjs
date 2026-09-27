@@ -71,6 +71,12 @@ test('the inbox explains when a role already sees every lead', () => {
   assert.match(inbox, /Your role already has access to every lead/)
 })
 
+test('the inbox show-all control uses a text toggle instead of a checkbox', () => {
+  assert.match(inbox, /className=\{`scope-toggle\$\{showAll \? ' active' : ''\}`\}/)
+  assert.match(inbox, /aria-pressed=\{showAll\}/)
+  assert.doesNotMatch(inbox, /<label className="mail-show-all"><input type="checkbox"/)
+})
+
 test('an empty date-filtered inbox offers a direct recovery action', () => {
   assert.match(inbox, /const dateFilterActive = !!receivedF \|\| !!ageF/)
   assert.match(inbox, /Clear date filter/)

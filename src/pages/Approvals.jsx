@@ -241,7 +241,12 @@ function DecisionForm({ a, role, draft = {}, onDraftChange, onDecide }) {
         ))}
       </div>
       {d && <textarea
-          rows={2} value={comment} onChange={e => onDraftChange({ comment: e.target.value })}
+          rows={1}
+          onInput={e => {
+            e.currentTarget.style.height = 'auto'
+            e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`
+          }}
+          value={comment} onChange={e => onDraftChange({ comment: e.target.value })}
           placeholder="Decision note (required)"
           className="approval-decision-input"
         />}
@@ -309,6 +314,30 @@ function PendingCard({
               Awaiting {displayRoles(remaining)}
             </div>
           )}
+    </div>
+  )
+}
+
+function FilterBar({
+  q,
+  statusF,
+  typeF,
+  typeOptions,
+  hasFilters,
+  onQueryChange,
+  onStatusChange,
+  onTypeChange,
+  onClearFilters,
+}) {
+  return (
+    <div className="approval-filters" role="search">
+      <label className="approval-search">
+        <Icon name="search" size={14} />
+        <input aria-label="Search approvals" placeholder="Search by request, opportunity, customer or type" value={q} onChange={onQueryChange} />
+      </label>
+      <select aria-label="Filter by status" value={statusF} onChange={onStatusChange}><option value="">All statuses</option>{['Pending', 'Approved', 'Rejected'].map(s => <option key={s}>{s}</option>)}</select>
+      <select aria-label="Filter by type" value={typeF} onChange={onTypeChange}><option value="">All types</option>{typeOptions.map(t => <option key={t}>{t}</option>)}</select>
+      {hasFilters && <button type="button" className="approval-clear" onClick={onClearFilters}>Clear filters</button>}
     </div>
   )
 }
@@ -487,17 +516,17 @@ export default function Approvals() {
   const typeOptions = [...new Set(store.approvals.map(a => a.type).filter(Boolean))].sort()
   const clearFilters = () => { setQ(''); setStatusF(''); setTypeF('') }
   const hasFilters = Boolean(q || statusF || typeF)
-  const FilterBar = () => (
-    <div className="approval-filters" role="search">
-      <label className="approval-search">
-        <Icon name="search" size={14} />
-        <input aria-label="Search approvals" placeholder="Search by request, opportunity, customer or type" value={q} onChange={e => setQ(e.target.value)} />
-      </label>
-      <select aria-label="Filter by status" value={statusF} onChange={e => setStatusF(e.target.value)}><option value="">All statuses</option>{['Pending', 'Approved', 'Rejected'].map(s => <option key={s}>{s}</option>)}</select>
-      <select aria-label="Filter by type" value={typeF} onChange={e => setTypeF(e.target.value)}><option value="">All types</option>{typeOptions.map(t => <option key={t}>{t}</option>)}</select>
-      {hasFilters && <button type="button" className="approval-clear" onClick={clearFilters}>Clear filters</button>}
-    </div>
-  )
+  const filterBarProps = {
+    q,
+    statusF,
+    typeF,
+    typeOptions,
+    hasFilters,
+    onQueryChange: e => setQ(e.target.value),
+    onStatusChange: e => setStatusF(e.target.value),
+    onTypeChange: e => setTypeF(e.target.value),
+    onClearFilters: clearFilters,
+  }
 
   // ---- Salespeople: read-only view of their own requests ------------------
   if (!approverView) {
@@ -506,7 +535,7 @@ export default function Approvals() {
       <div className="page approvals-page">
         <div className="approval-head"><div><div className="approval-eyebrow">REQUEST TRACKING</div><h2><Icon name="checkCircle" size={18} /> My approval requests</h2><p className="hint">Track decisions and approvers for requests raised by you.</p></div></div>
         <div className="approval-summary approval-summary-three"><div className="approval-summary-card summary-pending"><b>{store.approvals.filter(a => a.requestedBy === role && a.status === 'Pending').length}</b><span>Pending</span></div><div className="approval-summary-card summary-approved"><b>{store.approvals.filter(a => a.requestedBy === role && a.status === 'Approved').length}</b><span>Approved</span></div><div className="approval-summary-card summary-rejected"><b>{store.approvals.filter(a => a.requestedBy === role && a.status === 'Rejected').length}</b><span>Rejected</span></div></div>
-        <FilterBar />
+        <FilterBar {...filterBarProps} />
         <div className="approval-notice approval-notice-info">
           <Icon name="info" size={14} /> Approvals are decided by LJS / AH, and technical approvals by LJS or AN. Your requests remain visible here until resolved.
         </div>
@@ -530,7 +559,7 @@ export default function Approvals() {
     <div className="page approvals-page">
       <div className="approval-head"><div><div className="approval-eyebrow">DECISION WORKSPACE</div><h2><Icon name="checkCircle" size={18} /> Approvals — {displayRole(role)}</h2><p className="hint">Resolve requests, inspect linked records, and keep the pipeline moving.</p></div></div>
       <div className="approval-summary"><div className="approval-summary-card summary-pending"><b>{forMe.length}</b><span>Needs your decision</span></div><div className="approval-summary-card summary-waiting"><b>{others.length}</b><span>Awaiting others</span></div><div className="approval-summary-card summary-decided"><b>{decided.length}</b><span>Approved requests</span></div></div>
-      <FilterBar />
+      <FilterBar {...filterBarProps} />
       <div className="approval-explainer"><span className="hint">
           Approve moves the request forward. Reject stops it and allows the owner to submit a new request with a comment.
           Joint gates resolve once every named approver has decided.

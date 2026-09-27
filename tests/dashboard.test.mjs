@@ -5,7 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { seedSales, PERMS, ROLES } from '../src/seed.js'
-import { salesPerformance, FY_QUARTERS, FY_MONTHS, fyQuarter } from '../src/kpi.js'
+import { analyticsSnapshot, salesPerformance, FY_QUARTERS, FY_MONTHS, fyQuarter, winLossAnalysis } from '../src/kpi.js'
 import { canViewForecast, forecastOwnerScope, isAdminRole } from '../src/utils.js'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
@@ -13,18 +13,158 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8')
 
 const store = { sales: seedSales }
 
+test('win/loss analysis groups close reasons and joins optional competitors', () => {
+  const opportunities = [
+    { id: 'W-1', stage: 'Won', closedReason: 'Best Price', valueK: 100, owner: 'RS', sellTo: 'ACME', lastUpdated: '2026-08-01' },
+    { id: 'L-1', stage: 'Lost', closedReason: 'Best Price', valueK: 60, owner: 'RS', sellTo: 'ACME', lastUpdated: '2026-08-02' },
+    { id: 'L-2', stage: 'Lost', closedReason: '', valueK: 25, owner: 'PP', sellTo: 'BETA', lastUpdated: '2026-08-03' },
+  ]
+  const competitors = [{ id: 'CP-1', oppId: 'L-1', name: 'Acme Controls', outcome: 'Won against us' }]
+
+  const result = winLossAnalysis(opportunities, competitors, { commercial: true })
+  assert.deepEqual(result.summary, { total: 3, won: 1, lost: 2, winRate: 33, wonValueK: 100, lostValueK: 85 })
+  assert.deepEqual(result.byReason, [
+    { reason: 'Best Price', won: 1, lost: 1, total: 2, wonValueK: 100, lostValueK: 60, totalValueK: 160, winRate: 50 },
+    { reason: 'Unspecified', won: 0, lost: 1, total: 1, wonValueK: 0, lostValueK: 25, totalValueK: 25, winRate: 0 },
+  ])
+  assert.equal(result.rows[1].competitor, 'Acme Controls')
+})
+
+test('win/loss analysis hides commercial values for restricted roles', () => {
+  const result = winLossAnalysis([
+    { id: 'W-1', stage: 'Won', closedReason: 'Relationship', valueK: 100 },
+    { id: 'L-1', stage: 'Lost', closedReason: 'Relationship', valueK: 60 },
+  ], [], { commercial: false })
+  assert.deepEqual(result.summary, { total: 2, won: 1, lost: 1, winRate: 50, wonValueK: null, lostValueK: null })
+  assert.deepEqual(result.byReason[0], { reason: 'Relationship', won: 1, lost: 1, total: 2, wonValueK: null, lostValueK: null, totalValueK: null, winRate: 50 })
+})
+
+test('detailed analytics leads with operational win/loss tables instead of the old reason card', () => {
+  const analytics = read('src/pages/Analytics.jsx')
+  assert.match(analytics, /winLossAnalysis\(opps, store\.competitors, \{ commercial: comm \}\)/)
+  assert.match(analytics, /className="analysis-table analysis-reason-table"/)
+  assert.match(analytics, /className="analysis-table closed-opportunity-register"/)
+  assert.match(analytics, /className="analysis-table open-pipeline-register"/)
+  assert.doesNotMatch(analytics, /<CardHead icon="checkCircle" tone="tone-green" count=.*>Win \/ loss reasons/)
+})
+
 // Biji, 13 Aug: "there has to be something called My Dashboard… it will be
 // different for all the roles." The page previously split eight roles on one
 // boolean and showed everyone the same four cards.
 test('My Dashboard branches per role', () => {
   const source = read('src/pages/MyDashboard.jsx')
-  for (const fn of ['SalesDashboard', 'ApproverDashboard', 'AdminDashboard', 'TechDashboard']) {
+  for (const fn of ['SalesDashboard', 'OwnerDashboard', 'CommercialDashboard', 'ApproverDashboard', 'AdminDashboard', 'TechDashboard']) {
     assert.match(source, new RegExp(`function ${fn}\\(`), `${fn} must exist`)
   }
   assert.match(source, /const sales = isSalesOwner\(role\)/)
+  assert.match(source, /const owner = role === 'LJS'/)
+  assert.match(source, /const commercial = role === 'AH'/)
   assert.match(source, /const tech = role === 'TECH'/)
+  assert.ok(source.indexOf('if (owner) return <OwnerDashboard') > 0)
+  assert.ok(source.indexOf('if (commercial) return <CommercialDashboard') > 0)
   // TECH used to fall into the sales branch and see a near-empty page.
   assert.ok(source.indexOf('if (tech) return <TechDashboard') > 0)
+})
+
+test('dashboard cockpits keep broad analytics away from sales and technical users', () => {
+  const source = read('src/pages/MyDashboard.jsx')
+  const sales = source.slice(source.indexOf('function SalesDashboard'), source.indexOf('// ------------------------------------------------------------ team targets'))
+  const tech = source.slice(source.indexOf('function TechDashboard'))
+  assert.doesNotMatch(sales, /<AnalyticsOverview/)
+  assert.doesNotMatch(sales, /<ForecastReportCard \/>/)
+  assert.doesNotMatch(tech, /<AnalyticsOverview/)
+  assert.match(source, /function OwnerDashboard\([\s\S]*?<AnalyticsOverview/)
+  assert.match(source, /function CommercialDashboard\(props\)/)
+  assert.match(source, /function ApproverDashboard\([\s\S]*?<AnalyticsOverview/)
+  assert.match(source, /Commercial pipeline/)
+  assert.match(source, /Commercial posture/)
+})
+
+test('LJS sees pipeline overview before owner actions', () => {
+  const source = read('src/pages/MyDashboard.jsx')
+  const owner = source.slice(source.indexOf('function OwnerDashboard'), source.indexOf('// --------------------------------------------------------------- approvers'))
+  assert.ok(owner.indexOf('<AnalyticsOverview') < owner.indexOf('title="Owner priority queue"'))
+})
+
+test('LJS proposal status card has one bottom register link', () => {
+  const source = read('src/pages/MyDashboard.jsx')
+  const styles = read('src/styles.css')
+  const card = source.slice(source.indexOf('function ProposalStatusCard'), source.indexOf('// ------------------------------------------------------------- owner cockpit'))
+  assert.match(card, /title="Proposal status & follow-up"/)
+  assert.match(card, /View all proposals/)
+  assert.match(card, /nav\('\/proposal-sent'\)/)
+  assert.match(card, /To be prepared/)
+  assert.match(card, /Awaiting approval/)
+  assert.match(card, /Follow-up due/)
+  assert.doesNotMatch(card, /action=\{<button[^>]*>View all proposals/)
+  assert.match(card, /proposal-status-summary/)
+  assert.match(card, /proposal-status-table/)
+  assert.match(card, /proposal-opportunity-name/)
+  assert.match(card, /proposal-status-summary__item--prepare/)
+  assert.match(card, /proposal-status-summary__item--approval/)
+  assert.match(card, /proposal-status-summary__item--sent/)
+  assert.match(card, /proposal-status-summary__item--follow-up/)
+  assert.match(card, /is-empty/)
+  assert.match(styles, /\.proposal-status-summary__item--prepare \{ --summary-color: var\(--status-warning\);/)
+  assert.match(styles, /\.proposal-status-summary__item--approval \{ --summary-color: var\(--status-info\);/)
+  assert.match(styles, /\.proposal-status-summary__item--sent \{ --summary-color: var\(--status-success\);/)
+  assert.match(styles, /\.proposal-status-summary__item--follow-up \{ --summary-color: var\(--status-danger\);/)
+  assert.match(styles, /\.proposal-status-summary__item\.is-empty \{ --summary-color: var\(--text-subtle\);/)
+  assert.match(styles, /\.proposal-status-summary__item \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) auto;[\s\S]*grid-template-areas: 'label value';/)
+  assert.match(styles, /\.proposal-status-summary \.home-alert-value \{ grid-area: value;[\s\S]*text-align: right;/)
+  assert.match(styles, /\.proposal-status-summary__item > span:last-child \{\s*grid-area: label;/)
+  assert.match(card, /const \[selectedStatus, setSelectedStatus\] = useState\('all'\)/)
+  assert.match(card, /const filteredPriority = selectedStatus === 'all' \? priority : allStatusRows\.filter\(item => item\.status === selectedStatus\)/)
+  assert.match(card, /<button[^>]*aria-pressed=\{selectedStatus === 'To be prepared'\}/)
+  assert.match(card, /<button[^>]*aria-pressed=\{selectedStatus === 'Awaiting approval'\}/)
+  assert.match(card, /<button[^>]*aria-pressed=\{selectedStatus === 'Sent'\}/)
+  assert.match(card, /<button[^>]*aria-pressed=\{selectedStatus === 'Follow-up due'\}/)
+  assert.match(card, /filteredPriority\.map/)
+  assert.match(styles, /\.proposal-status-summary__item\.is-selected/)
+})
+
+test('LJS has company scope while sales owners remain owner-scoped', () => {
+  const opportunities = [
+    { id: 'LJS-1', owner: 'LJS', status: 'Open', stage: 'RFQ', valueK: 100 },
+    { id: 'RS-1', owner: 'RS', status: 'Open', stage: 'RFQ', valueK: 250 },
+  ]
+  const ljs = analyticsSnapshot({ opportunities, sales: { targets: {}, orders: [] } }, 'LJS')
+  const rs = analyticsSnapshot({ opportunities, sales: { targets: {}, orders: [] } }, 'RS')
+  assert.equal(ljs.owner, null)
+  assert.equal(ljs.openCount, 2)
+  assert.equal(rs.owner, 'RS')
+  assert.equal(rs.openCount, 1)
+})
+
+test('technical reviewers use the shared company work queue', () => {
+  const source = read('src/pages/MyDashboard.jsx')
+  assert.match(source, /useWorkQueue\(store, role, sales\)/)
+  assert.doesNotMatch(source, /useWorkQueue\(store, role, sales \|\| tech\)/)
+})
+
+test('clickable dashboard table rows support keyboard activation', () => {
+  const source = read('src/pages/MyDashboard.jsx')
+  assert.equal((source.match(/tabIndex=\{0\} role="link"/g) || []).length, 3,
+    'opportunity, customer, and proposal rows must be keyboard-focusable links')
+  assert.equal((source.match(/onKeyDown=\{event => activateDashboardRow\(event, go\)\}/g) || []).length, 3,
+    'opportunity, customer, and proposal rows must activate from the keyboard')
+})
+
+test('My Dashboard leads with a capped daily-work queue for every role', () => {
+  const source = read('src/pages/MyDashboard.jsx')
+  assert.match(source, /const PREVIEW_LIMIT = 5/)
+  assert.equal((source.match(/title="Priority queue"/g) || []).length, 4,
+    'sales, approver, admin, and technical dashboards each need one priority queue')
+  assert.equal((source.match(/title="Priority queue"[^>]+span=\{12\}/g) || []).length, 4,
+    'priority queues must use the full dashboard width')
+  assert.match(source, /\.slice\(0, PREVIEW_LIMIT\)/,
+    'dashboard record previews must be capped at five rows')
+  assert.doesNotMatch(source, /title="My funnel"/,
+    'the daily dashboard must not keep the secondary funnel card')
+  assert.match(source, /function SalesDashboard\(\{ store, nav, role, c, open, blocked, nextActions, head \}\)/,
+    'sales work summary needs the scoped dashboard counts')
+  assert.match(source, /Metric label="Needs update" value=\{c\.myStale\}/,
+    'sales needs-update count must reflect all stale opportunities, not the five-row preview')
 })
 
 // The page must be reachable without a sidebar — the tablet/phone shell has none,
@@ -53,11 +193,25 @@ test('every internal role can still open My Dashboard', () => {
   assert.ok(!PERMS.CUST.includes('mydashboard'))
 })
 
-test('every internal role can open detailed reporting', () => {
+test('every internal role can open detailed reporting from their reporting action', () => {
   const source = read('src/pages/MyDashboard.jsx')
+  const app = read('src/App.jsx')
+  const tabletApp = read('src/tablet/TabletApp.jsx')
   const overview = source.slice(source.indexOf('function AnalyticsOverview'))
-  assert.match(overview, /title="Detailed reporting"/)
-  assert.match(overview, /<Analytics embedded \/>/)
+  assert.match(overview, /className="home-analytics-link" onClick=\{\(\) => nav\('\/analytics'\)\}/)
+  assert.doesNotMatch(overview, /title="Detailed reporting"/)
+  assert.doesNotMatch(overview, /<Analytics embedded \/>/)
+  assert.equal((source.match(/Open detailed analytics/g) || []).length, 2,
+    'sales and shared reporting surfaces each expose one contextual analytics action')
+  assert.doesNotMatch(app, /#detailed-analytics/)
+  assert.doesNotMatch(tabletApp, /#detailed-analytics/)
+  assert.doesNotMatch(app, /path="\/dashboard"[^\n]*#forecast-details/)
+  assert.doesNotMatch(tabletApp, /path="\/dashboard"[^\n]*#forecast-details/)
+  assert.match(app, /<Route path="\/dashboard" element=\{<Navigate to="\/my-dashboard" replace \/>\} \/>/)
+  assert.match(tabletApp, /<Route path="\/dashboard" element=\{<Navigate to="\/my-dashboard" replace \/>\} \/>/)
+  assert.match(app, /<Route path="\/po" element=\{<Navigate to="\/proposal-sent" replace \/>\} \/>/)
+  assert.match(app, /<Route path="\/analytics" element=\{<PageGate page="analytics"><Analytics \/><\/PageGate>\}/)
+  assert.match(tabletApp, /<Route path="\/analytics" element=\{<TabletGate page="analytics"><Analytics \/><\/TabletGate>\}/)
   for (const role of Object.keys(ROLES).filter(r => r !== 'CUST')) {
     assert.ok(PERMS[role]?.includes('analytics'), `${role} must reach detailed reporting`)
   }
@@ -97,12 +251,13 @@ test('forecast reporting is available internally with sales-owner scoping', () =
   assert.doesNotMatch(source, /visible to approvers\/admin only/)
 })
 
-test('win and loss reasons are visible in the shared dashboard overview', () => {
+test('win and loss reasons are grouped in the owner dashboard overview', () => {
   const source = read('src/pages/MyDashboard.jsx')
   const overview = source.slice(source.indexOf('function AnalyticsOverview'))
-  assert.match(overview, /title="Win \/ loss reasons"/)
-  assert.match(overview, /o\.closedReason \|\| '—'/)
-  assert.match(overview, /nav\(`\/folders\/\$\{o\.id\}`\)/)
+  assert.match(overview, /winLossAnalysis\(/)
+  assert.match(overview, /Win \/ loss analysis/)
+  assert.match(overview, /row\.reason/)
+  assert.doesNotMatch(overview, /o\.closedReason \|\| '—'/)
 })
 
 // --------------------------------------------------------------- sales maths
@@ -317,15 +472,9 @@ test('the quarterly card pairs the column chart with the quarter cards', () => {
     'a quarter at or above target turns green')
 })
 
-test('my funnel walks the lead lifecycle with conversion captions', () => {
+test('the detailed analytics page owns the funnel instead of the daily dashboard', () => {
   const source = read('src/pages/MyDashboard.jsx')
-  for (const stage of ['Leads assigned', 'Qualified', 'Opportunities', 'Proposal sent', 'Won']) {
-    assert.ok(source.includes(`label: '${stage}'`), `funnel carries "${stage}"`)
-  }
-  assert.match(source, /<AnalyticsFunnel stages=\{funnelStages\} showValue=\{false\} conversion \/>/)
-  // Unlike the prototype, Qualified is owner-filtered — the team-wide count
-  // could exceed the stage above it (the demo's "400% of prior").
-  assert.match(source, /myLeads\.filter\(l => \['Qualified', 'Converted'\]\.includes\(l\.status\)\)/)
+  assert.doesNotMatch(source, /AnalyticsFunnel|funnelStages|title="My funnel"/)
 
   const analytics = read('src/pages/Analytics.jsx')
   assert.match(analytics, /conversion = false/)
@@ -336,9 +485,7 @@ test('my funnel walks the lead lifecycle with conversion captions', () => {
 test('the pipeline snapshot is bars plus a stat list, not a table', () => {
   const source = read('src/pages/MyDashboard.jsx')
   const start = source.indexOf('title="Pipeline snapshot"')
-  // The fallback dashboard has its own "Next best actions" card earlier in the
-  // file, so the end anchor must search from the snapshot card onward.
-  const card = source.slice(start, source.indexOf('title="Next best actions"', start))
+  const card = source.slice(start, source.indexOf('<ForecastReportCard />', start))
   for (const row of ['Open value', 'Weighted', 'Booked orders']) assert.ok(card.includes(`'${row}'`), row)
   assert.match(card, /className=\{`mb-fill \$\{row\.cls\}`\}/)
   assert.match(card, /className="stat-list"/)

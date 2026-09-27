@@ -5,6 +5,19 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Reworked My Dashboard into role-specific cockpits: LJS now starts with the
+  company-wide owner view, AH with commercial decisions, sales owners with
+  daily execution and own-pipeline work, and TECH with technical review work;
+  grouped win/loss analysis is shown only on broad internal cockpits.
+- Added LJS's single Proposal Status & Follow-up dashboard card with proposal
+  readiness, approval, sent, and follow-up counts plus clickable priority rows.
+- Fixed the LJS proposal card layout so long opportunity and customer names
+  wrap cleanly without colliding with status, value, or action columns.
+- Reworked detailed Analytics into an operational table-led workspace with
+  grouped win/loss analysis by close reason, supporting closed-opportunity
+  rows, competitor context, and a live open-pipeline register.
+- Removed the duplicate Service "Operator view" work-area navigation so the
+  10-step Service workflow rail is the single workflow navigation surface.
 - Fixed Section 5B commercial approvals reappearing after AH approval. The
   dispatch gate now recognizes current and legacy commercial approval records
 - Added request IDs and safe server-side Supabase error metadata to workspace

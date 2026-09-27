@@ -133,6 +133,38 @@ test('tracker offers all, mine, and specific-owner filtering', () => {
   assert.match(tracker, /sortVal = \(o, key\) => \(DATE_KEYS\.includes\(key\) \? \(o\[key\] \|\| ''\)/)
 })
 
+test('show-all opportunity controls use text toggles instead of checkboxes', () => {
+  assert.match(tracker, /className=\{`scope-toggle\$\{ownerFilter === 'All' \? ' active' : ''\}`\}/)
+  assert.match(tracker, /aria-pressed=\{ownerFilter === 'All'\}/)
+  assert.doesNotMatch(tracker, /className="mail-show-all tracker-show-all"[\s\S]*?type="checkbox"/)
+  assert.match(myOpps, /className=\{`scope-toggle\$\{showAll \? ' active' : ''\}`\}/)
+  assert.match(myOpps, /aria-pressed=\{showAll\}/)
+  assert.doesNotMatch(myOpps, /className="show-all-toggle"[\s\S]*?type="checkbox"/)
+})
+
+test('show-all text toggles have shared accessible active styling', () => {
+  assert.match(styles, /\.scope-toggle\s*\{[\s\S]*cursor: pointer/)
+  assert.match(styles, /\.scope-toggle\.active\s*\{[\s\S]*font-weight: 650/)
+  assert.match(styles, /\.scope-toggle:focus-visible\s*\{[\s\S]*outline/)
+})
+
+test('manager tracker views do not show a redundant all-opportunities status label', () => {
+  assert.doesNotMatch(tracker, /Showing all opportunities/)
+})
+
+test('editable controls use a flattened surface treatment', () => {
+  assert.match(styles, /\.shell :where\(input:not\(\[type='checkbox'\]\):not\(\[type='radio'\]\), select, textarea\)\s*\{[\s\S]*background: transparent;/)
+  assert.match(styles, /\.shell :where\(input:not\(\[type='checkbox'\]\):not\(\[type='radio'\]\), select, textarea\)\s*\{[\s\S]*box-shadow: none;/)
+  assert.match(styles, /\.shell :where\(input:not\(\[type='checkbox'\]\):not\(\[type='radio'\]\), select, textarea\)\s*\{[\s\S]*border-bottom: 1px solid var\(--border-subtle\)/)
+  assert.match(styles, /\.shell :where\(input:not\(\[type='checkbox'\]\):not\(\[type='radio'\]\), select, textarea\):focus-visible[\s\S]*outline: 2px solid var\(--focus-ring\)/)
+})
+
+test('spreadsheet focus does not render the red rectangular outline', () => {
+  assert.match(styles, /table\.sheet td\.cell-sel\s*\{[\s\S]*outline: 0;[\s\S]*box-shadow: inset 0 -2px 0 var\(--focus-ring\);/)
+  assert.match(styles, /table\.sheet td input:focus, table\.sheet td select:focus\s*\{[\s\S]*outline: 0;[\s\S]*box-shadow: inset 0 -2px 0 var\(--focus-ring\)/)
+  assert.match(styles, /table\.sheet td \.wrapcell:focus\s*\{[\s\S]*outline: 0;[\s\S]*box-shadow: inset 0 -2px 0 var\(--focus-ring\)/)
+})
+
 test('tracker makes the loaded-row count and empty-view cause explicit', () => {
   assert.match(tracker, /const resultCountLabel = workspaceLoading[\s\S]*rows\.length === base\.length/)
   assert.match(tracker, /className="tracker-result-count" aria-live="polite"/)

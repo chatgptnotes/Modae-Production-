@@ -3595,7 +3595,14 @@ export default function Inbox() {
         </select>
         {seesAll
           ? <span className="mail-show-all mail-show-all-static" title="Your role already has access to every lead">All leads visible</span>
-          : <label className="mail-show-all"><input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)} /> Show all</label>}
+          : <button
+              type="button"
+              className={`scope-toggle${showAll ? ' active' : ''}`}
+              aria-pressed={showAll}
+              title="Show all leads"
+              onClick={() => setShowAll(!showAll)}>
+              {showAll ? 'Showing all' : 'Show all'}
+            </button>}
       </div>
       {pasteOpen && <PasteLeadModal onClose={() => setPasteOpen(false)} />}
       {simulationOpen && (

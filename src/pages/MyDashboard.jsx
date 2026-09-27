@@ -3,11 +3,10 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS } from '../seed.js'
 import { readiness, isBlocked, nextActionWith } from '../gates.js'
-import { isApprover, isAdminRole, isSalesOwner, canViewCommercial, canPriceProposal, fmtLakh, ddMmmYY, displayRole, displayRoleLabel, isHiddenDashboardOpportunity } from '../utils.js'
-import { analyticsSnapshot, counts, salesPerformance, FY_QUARTERS, FY_MONTHS, PROB_WEIGHT } from '../kpi.js'
+import { ageDays, isApprover, isAdminRole, isSalesOwner, canPriceProposal, fmtLakh, ddMmmYY, displayRole, displayRoleLabel, isHiddenDashboardOpportunity } from '../utils.js'
+import { analyticsSnapshot, counts, salesPerformance, winLossAnalysis, FY_QUARTERS, FY_MONTHS, PROB_WEIGHT } from '../kpi.js'
 import { ArcGauge } from '../dashviz.jsx'
 import { Icon } from '../icons.jsx'
-import Analytics, { Funnel as AnalyticsFunnel } from './Analytics.jsx'
 import ForecastDashboard from './Dashboard.jsx'
 
 // My Dashboard — "there has to be something called My Dashboard… it will be
@@ -16,6 +15,7 @@ import ForecastDashboard from './Dashboard.jsx'
 // quarterly performance, then their own work queue.
 
 const roleLabel = role => displayRoleLabel(role) || role
+const PREVIEW_LIMIT = 5
 
 function Metric({ label, value, hint, tone = '', onClick, variant = '' }) {
   const El = onClick ? 'button' : 'div'
@@ -39,6 +39,12 @@ function Card({ title, icon, tone = '', span = 6, children, action, className = 
       {children}
     </section>
   )
+}
+
+function activateDashboardRow(event, action) {
+  if (event.key !== 'Enter' && event.key !== ' ') return
+  event.preventDefault()
+  action()
 }
 
 function ForecastReportCard() {
@@ -67,22 +73,17 @@ function ForecastReportCard() {
 
 function AnalyticsOverview({ store, role, nav }) {
   const snapshot = analyticsSnapshot(store, role)
-  const location = useLocation()
-  const [detailsOpen, setDetailsOpen] = useState(false)
   const metric = row => snapshot.comm ? fmtLakh(row.valueK) : row.count
   const max = Math.max(1, ...snapshot.funnel.map(row => snapshot.comm ? row.valueK : row.count))
   const scope = snapshot.owner ? `Your pipeline · ${snapshot.owner}` : 'Company pipeline'
-  const closed = store.opportunities
-    .filter(o => (!snapshot.owner || o.owner === snapshot.owner) && (o.stage === 'Won' || o.stage === 'Lost'))
-  React.useEffect(() => {
-    if (location.hash === '#detailed-analytics') setDetailsOpen(true)
-  }, [location.hash])
+  const scoped = store.opportunities.filter(o => !snapshot.owner || o.owner === snapshot.owner)
+  const winLoss = winLossAnalysis(scoped, store.competitors, { commercial: snapshot.comm })
   return (
     <section className="home-analytics dashboard-analytics" aria-labelledby="dashboard-analytics-title">
       <div className="home-analytics-head">
         <div>
           <div className="eyebrow">Live business view</div>
-          <h3 id="dashboard-analytics-title">Pipeline overview</h3>
+          <h3 id="dashboard-analytics-title">{role === 'AH' ? 'Commercial pipeline' : 'Pipeline overview'}</h3>
           <p>{scope} · Open opportunities and current stage distribution</p>
         </div>
         <button className="home-analytics-link" onClick={() => nav('/analytics')}>Open detailed analytics <span aria-hidden="true">↗</span></button>
@@ -117,29 +118,27 @@ function AnalyticsOverview({ store, role, nav }) {
         <button onClick={() => nav('/approvals')}><span className="home-alert-value">{snapshot.counts.forMe || snapshot.counts.myPending}</span><span>{snapshot.counts.forMe ? 'Awaiting your decision' : 'Your requests'}</span></button>
         <button onClick={() => nav('/my')}><span className="home-alert-value">{snapshot.counts.myStale}</span><span>Need an update</span></button>
       </div>
-      <Card title="Win / loss reasons" icon="checkCircle" tone="tone-green" span={12}>
-        {closed.length ? (
-          <div className="dashboard-win-loss-list" role="list" aria-label="Closed opportunities and reasons">
-            {closed.map(o => (
-              <div key={o.id} className="dashboard-win-loss-row" role="listitem">
-                <button className="oppid-link" onClick={() => nav(`/folders/${o.id}`)}>{o.id}</button>
-                <span className={`pill ${o.stage === 'Won' ? 'won' : 'lost'}`}>{o.stage}</span>
-                <span className="dashboard-win-loss-reason">{o.closedReason || '—'}</span>
-              </div>
-            ))}
-          </div>
+      <Card title="Win / loss analysis" icon="checkCircle" tone="tone-green" span={12}>
+        {winLoss.summary.total ? (
+          <>
+            <div className="home-alert-rail" aria-label="Win and loss summary">
+              <div><span className="home-alert-value">{winLoss.summary.won}</span><span>Won</span></div>
+              <div><span className="home-alert-value">{winLoss.summary.lost}</span><span>Lost</span></div>
+              <div><span className="home-alert-value">{winLoss.summary.winRate}%</span><span>Win rate</span></div>
+            </div>
+            <div className="dashboard-win-loss-list" role="list" aria-label="Win and loss reasons">
+              {winLoss.byReason.slice(0, PREVIEW_LIMIT).map(row => (
+                <div key={row.reason} className="dashboard-win-loss-row" role="listitem">
+                  <b className="dashboard-win-loss-reason">{row.reason}</b>
+                  <span className="pill won">{row.won} won</span>
+                  <span className="pill lost">{row.lost} lost</span>
+                  <span className="dashboard-win-loss-reason">{row.winRate}% win rate</span>
+                </div>
+              ))}
+            </div>
+          </>
         ) : <p className="hint">No closed opportunities yet.</p>}
       </Card>
-      <Card title="Detailed reporting" icon="chartLine" tone="tone-sky" span={12}>
-        <div className="dashboard-report-actions">
-          <button onClick={() => setDetailsOpen(value => !value)} aria-expanded={detailsOpen}>
-            {detailsOpen ? 'Hide detailed analytics' : 'Open detailed analytics'}
-            <span aria-hidden="true">{detailsOpen ? ' ↑' : ' ↓'}</span>
-          </button>
-        </div>
-        {!detailsOpen && <p className="hint">Use this view for filtered funnel analysis, win/loss detail, margins, and supporting records.</p>}
-      </Card>
-      {detailsOpen && <div id="detailed-analytics" className="dashboard-embedded-report"><Analytics embedded /></div>}
     </section>
   )
 }
@@ -358,10 +357,12 @@ function RunRateChart({ perf }) {
 function SalesOpportunitySection({ store, open, nav, money }) {
   const rows = open.filter(o => !isHiddenDashboardOpportunity(o))
     .sort((a, b) => (b.lastUpdated || '').localeCompare(a.lastUpdated || ''))
+    .slice(0, PREVIEW_LIMIT)
   const action = o => nextActionWith(o, store.getProposal(o.id), store)
   return (
-    <Card title="My opportunities" icon="sheet" tone="tone-sky" span={12}>
-      <div className="dashboard-table-scroll"><table className="dashboard-table"><thead><tr><th>ID</th><th>Opportunity</th><th>Customer</th><th>Stage</th><th>Value (₹)</th><th>Win %</th><th>Next action</th><th>Due</th></tr></thead><tbody>{rows.map(o => { const na = action(o); return <tr key={o.id} onClick={() => nav(`/opp/${o.id}`)}><td><b>{o.id}</b></td><td><span className="dashboard-cell-ellipsis">{o.oppName}</span></td><td><span className="dashboard-cell-ellipsis">{o.sellTo}</span></td><td><span className="pill open">{o.stage}</span></td><td>{money ? fmtLakh(o.valueK) : '—'}</td><td>{o.prob || '—'}</td><td title={na.text}><span className="dashboard-cell-clamp">{na.text || o.remarks || 'Review next step'}</span></td><td>{o.orderDate ? ddMmmYY(o.orderDate) : '—'}</td></tr>})}</tbody></table></div>
+    <Card title="My opportunities" icon="sheet" tone="tone-sky" span={12}
+      action={<button onClick={() => nav('/my')}>View all</button>}>
+      <div className="dashboard-table-scroll"><table className="dashboard-table"><thead><tr><th>ID</th><th>Opportunity</th><th>Customer</th><th>Stage</th><th>Value (₹)</th><th>Win %</th><th>Next action</th><th>Due</th></tr></thead><tbody>{rows.map(o => { const na = action(o); const go = () => nav(`/opp/${o.id}`); return <tr key={o.id} tabIndex={0} role="link" aria-label={`Open opportunity ${o.id}`} onClick={go} onKeyDown={event => activateDashboardRow(event, go)}><td><b>{o.id}</b></td><td><span className="dashboard-cell-ellipsis">{o.oppName}</span></td><td><span className="dashboard-cell-ellipsis">{o.sellTo}</span></td><td><span className="pill open">{o.stage}</span></td><td>{money ? fmtLakh(o.valueK) : '—'}</td><td>{o.prob || '—'}</td><td title={na.text}><span className="dashboard-cell-clamp">{na.text || o.remarks || 'Review next step'}</span></td><td>{o.orderDate ? ddMmmYY(o.orderDate) : '—'}</td></tr>})}</tbody></table></div>
       {!rows.length && <div className="dashboard-empty">No open opportunities are assigned to you.</div>}
     </Card>
   )
@@ -375,9 +376,9 @@ function SalesCustomerSection({ store, open, orders, nav, money }) {
     const booked = orders.filter(o => o.customer === name)
     const region = opps[0]?.location || '—'
     return { name, status: customer?.status || '—', region, open: opps.length, value: opps.reduce((s, o) => s + (+o.valueK || 0), 0), orders: booked.length }
-  }).sort((a, b) => b.value - a.value)
-  return <Card title="My customers" icon="users" tone="tone-green" span={12} action={<button onClick={() => nav('/customers')}>Open customer master</button>}>
-    <div className="dashboard-table-scroll"><table className="dashboard-table customer-table"><thead><tr><th>Customer</th><th>Class</th><th>Region</th><th>Open opportunities</th><th>Open value (₹)</th><th>Orders</th></tr></thead><tbody>{rows.map(row => <tr key={row.name} onClick={() => nav('/customers')}><td><b className="dashboard-cell-ellipsis">{row.name}</b></td><td><span className={`pill ${row.status}`}>{row.status}</span></td><td><span className="dashboard-cell-ellipsis">{row.region}</span></td><td>{row.open}</td><td>{money ? fmtLakh(row.value) : '—'}</td><td>{row.orders}</td></tr>)}</tbody></table></div>
+  }).sort((a, b) => b.value - a.value).slice(0, PREVIEW_LIMIT)
+  return <Card title="My customers" icon="users" tone="tone-green" span={12} action={<button onClick={() => nav('/customers')}>View all</button>}>
+    <div className="dashboard-table-scroll"><table className="dashboard-table customer-table"><thead><tr><th>Customer</th><th>Class</th><th>Region</th><th>Open opportunities</th><th>Open value (₹)</th><th>Orders</th></tr></thead><tbody>{rows.map(row => { const go = () => nav('/customers'); return <tr key={row.name} tabIndex={0} role="link" aria-label={`Open customer ${row.name}`} onClick={go} onKeyDown={event => activateDashboardRow(event, go)}><td><b className="dashboard-cell-ellipsis">{row.name}</b></td><td><span className={`pill ${row.status}`}>{row.status}</span></td><td><span className="dashboard-cell-ellipsis">{row.region}</span></td><td>{row.open}</td><td>{money ? fmtLakh(row.value) : '—'}</td><td>{row.orders}</td></tr>})}</tbody></table></div>
     {!rows.length && <div className="dashboard-empty">Customers will appear here when you have an opportunity or booked order.</div>}
   </Card>
 }
@@ -401,7 +402,7 @@ function useWorkQueue(store, role, mine) {
     // Blocked first, then oldest-touched — the ones going stale.
     .sort((a, b) => (a.severity === 'block' ? -1 : 1) - (b.severity === 'block' ? -1 : 1)
       || (a.opp.lastUpdated || '').localeCompare(b.opp.lastUpdated || ''))
-    .slice(0, 6)
+    .slice(0, PREVIEW_LIMIT)
   return { opportunities, open, blocked, nextActions }
 }
 
@@ -441,11 +442,13 @@ export default function MyDashboard() {
   const c = counts(store, role)
 
   const sales = isSalesOwner(role)
-  const approver = isApprover(role) && !isAdminRole(role)
-  const admin = isAdminRole(role)
+  const owner = role === 'LJS'
+  const commercial = role === 'AH'
+  const approver = isApprover(role) && !isAdminRole(role) && !owner && !commercial
+  const admin = isAdminRole(role) && !owner
   const tech = role === 'TECH'
 
-  const { open, blocked, nextActions } = useWorkQueue(store, role, sales || tech)
+  const { open, blocked, nextActions } = useWorkQueue(store, role, sales)
   const head = (
     <div className="home-head">
       <div>
@@ -459,6 +462,8 @@ export default function MyDashboard() {
   )
 
   if (sales) return <SalesDashboard {...{ store, nav, role, c, open, blocked, nextActions, head }} />
+  if (owner) return <OwnerDashboard {...{ store, nav, role, c, open, blocked, nextActions, head }} />
+  if (commercial) return <CommercialDashboard {...{ store, nav, role, c, open, blocked, nextActions, head }} />
   if (approver) return <ApproverDashboard {...{ store, nav, role, c, open, blocked, nextActions, head }} />
   if (admin) return <AdminDashboard {...{ store, nav, role, c, open, blocked, nextActions, head }} />
   if (tech) return <TechDashboard {...{ store, nav, role, c, open, blocked, nextActions, head }} />
@@ -482,38 +487,56 @@ export default function MyDashboard() {
 function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head }) {
   const perf = salesPerformance(store, role)
   const money = canPriceProposal(role)
-  const openValue = open.reduce((s, o) => s + (+o.valueK || 0), 0)
-  const weightedValue = open.reduce((s, o) => s + (+o.valueK || 0) * (PROB_WEIGHT[o.prob] ?? PROB_WEIGHT.Low), 0)
+  const visibleOpen = open.filter(o => !isHiddenDashboardOpportunity(o))
+  const visibleBlocked = blocked.filter(({ opp }) => !isHiddenDashboardOpportunity(opp))
+  const visibleNextActions = nextActions.filter(({ opp }) => !isHiddenDashboardOpportunity(opp))
+  const openValue = visibleOpen.reduce((s, o) => s + (+o.valueK || 0), 0)
+  const weightedValue = visibleOpen.reduce((s, o) => s + (+o.valueK || 0) * (PROB_WEIGHT[o.prob] ?? PROB_WEIGHT.Low), 0)
   const myLeads = store.leads.filter(l => (l.assignedOwner || l.suggestedOwner) === role)
   const leads = myLeads.filter(l => l.status === 'New')
-  const unproposed = open.filter(o => !o.proposalDate)
+  const unproposed = visibleOpen.filter(o => !o.proposalDate)
   const variance = perf.achieved - perf.expected
-  // The prototype's lead-lifecycle funnel (vSalesDashboard, Bt_html clickable
-  // prototype.html:4127), mapped to this data model: no "Submitted" milestone
-  // here, so proposalDate stands in for "proposal sent". Unlike the prototype,
-  // Qualified is owner-filtered — its team-wide count could exceed the stage
-  // above it, which is how the demo printed "400% of prior".
-  const wonCount = store.opportunities.filter(o => o.owner === role && o.stage === 'Won').length
-  const funnelStages = [
-    { label: 'Leads assigned', count: myLeads.length },
-    { label: 'Qualified', count: myLeads.filter(l => ['Qualified', 'Converted'].includes(l.status)).length },
-    { label: 'Opportunities', count: open.length },
-    { label: 'Proposal sent', count: open.filter(o => o.proposalDate).length },
-    { label: 'Won', count: wonCount + perf.orders.length },
-  ]
-
   return (
     <div className="page dashboard-page">
       {head}
 
       <div className="stat-cards">
-        <Metric label="Annual target" value={fmtLakh(perf.annual)} tone="slate" variant="dashboard-top-kpi" />
-        <Metric label="Achieved to date" value={fmtLakh(perf.achieved)} tone={variance >= 0 ? 'green' : 'amber'}
-          hint={`${variance >= 0 ? '+' : ''}${fmtLakh(variance)} vs pace`} variant="dashboard-top-kpi" />
-        <Metric label="Gap to target" value={fmtLakh(perf.gap)} tone="sky" variant="dashboard-top-kpi" />
-        <Metric label="Run rate, annualised" value={fmtLakh(perf.runRate)} tone={perf.runRate >= perf.annual ? 'green' : 'amber'} variant="dashboard-top-kpi" />
+        <Metric label="New leads" value={leads.length} tone={leads.length ? 'amber' : 'green'} onClick={() => nav('/inbox')} />
+        <Metric label="Blocked" value={visibleBlocked.length} tone={visibleBlocked.length ? 'red' : 'green'} onClick={() => nav('/my')} />
+        <Metric label="Needs update" value={c.myStale} tone={c.myStale ? 'amber' : 'green'} onClick={() => nav('/my')} />
       </div>
 
+      <div className="ana-grid">
+        <Card title="Priority queue" icon="target" tone="tone-amber" span={12}
+          action={<button onClick={() => nav('/my')}>View all</button>}>
+          <NextActions nextActions={visibleNextActions} nav={nav} />
+        </Card>
+
+        <Card title="My orders" icon="clipboardCheck" tone="tone-green" span={6}
+          action={<button onClick={() => nav('/po')}>View all</button>}>
+          <table className="ana-table">
+            <thead><tr><th>Order</th><th>Customer</th><th className="num">Value (₹)</th><th>Status</th></tr></thead>
+            <tbody>
+              {perf.orders.slice(0, PREVIEW_LIMIT).map(o => (
+                <tr key={o.id}>
+                  <td>{o.id}</td>
+                  <td title={o.title}>{o.customer}</td>
+                  <td className="num">{money ? fmtLakh(o.valueK) : '—'}</td>
+                  <td>{o.status}</td>
+                </tr>
+              ))}
+              {!perf.orders.length && <tr><td className="empty" colSpan={4}>No orders booked this year.</td></tr>}
+            </tbody>
+          </table>
+        </Card>
+      </div>
+
+      <div className="ana-grid sales-detail-grid">
+        <SalesOpportunitySection store={store} open={visibleOpen} nav={nav} money={money} />
+        <SalesCustomerSection store={store} open={visibleOpen} orders={perf.orders} nav={nav} money={money} />
+      </div>
+
+      <div className="section-title">Performance</div>
       <div className="ana-grid">
         <Card title="Annual attainment" icon="target" tone="tone-green" span={4} className="annual-attainment-card">
           <div className="annual-attainment-body">
@@ -539,7 +562,7 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
           <div className="hint" style={{ marginTop: 8 }}>Booked orders against your quarterly number.</div>
         </Card>
 
-        <Card title="Monthly performance against run rate" icon="chartLine" tone="tone-sky" span={8}>
+        <Card title="Monthly performance against run rate" icon="chartLine" tone="tone-sky" span={12}>
           <RunRateChart perf={perf} />
           <div className="hint" style={{ marginTop: 8 }}>
             {perf.fy} · {FY_MONTHS[0]}–{FY_MONTHS[FY_MONTHS.length - 1]} · actual against target run rate,
@@ -548,20 +571,8 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
           </div>
         </Card>
 
-        <Card title="My funnel" icon="layers" tone="tone-teal" span={4}>
-          <div className="funnel-stage-link" role="link" tabIndex={0} onClick={() => nav('/proposal-sent')} onKeyDown={event => event.key === 'Enter' && nav('/proposal-sent')} title="Open Proposal Sent workspace">
-            <AnalyticsFunnel stages={funnelStages} showValue={false} conversion />
-          </div>
-          <div className="hint" style={{ marginTop: 8 }}>Your leads through to won business, with the conversion from each stage to the next.</div>
-        </Card>
-
-        <ForecastReportCard />
-
-        {/* The "Monthly bookings" sparkline that used to sit here plotted the
-            same perf.monthly array as the chart above, with no target line, no
-            month labels and a distorted stroke. One chart, above. */}
-
-        <Card title="Pipeline snapshot" icon="chartBar" tone="tone-teal" span={12}>
+        <Card title="Pipeline snapshot" icon="chartBar" tone="tone-teal" span={8}
+          action={<button onClick={() => nav('/analytics')}>Open detailed analytics</button>}>
           {/* The prototype's chartBars rows (Bt_html clickable prototype.html:4170):
               open / weighted / booked as proportional bars, counts as a list. */}
           {money && (
@@ -583,44 +594,13 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
             </div>
           )}
           <ul className="stat-list" style={{ marginTop: money ? 10 : 0 }}>
-            <li>Open opportunities<b>{open.length}</b></li>
+            <li>Open opportunities<b>{visibleOpen.length}</b></li>
             <li>Without a proposal<b>{unproposed.length}</b></li>
             <li>New leads in your queue<b>{leads.length}</b></li>
-            <li>Blocked<b>{blocked.length}</b></li>
+            <li>Blocked<b>{visibleBlocked.length}</b></li>
           </ul>
-          <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button onClick={() => nav('/my')}>My opportunities</button>
-            <button onClick={() => nav('/inbox')}>Lead inbox</button>
-          </div>
         </Card>
 
-        <Card title="Next best actions" icon="target" tone="tone-amber" span={6}
-          action={c.myPending > 0 ? <span className="pill Amber">{c.myPending} approval{c.myPending === 1 ? '' : 's'} pending</span> : null}>
-          <NextActions {...{ nextActions, nav }} />
-        </Card>
-
-        <Card title="My orders" icon="clipboardCheck" tone="tone-green" span={6}>
-          <table className="ana-table">
-            <thead><tr><th>Order</th><th>Customer</th><th className="num">Value (₹)</th><th>Status</th></tr></thead>
-            <tbody>
-              {perf.orders.slice(0, 6).map(o => (
-                <tr key={o.id}>
-                  <td>{o.id}</td>
-                  <td title={o.title}>{o.customer}</td>
-                  <td className="num">{money ? fmtLakh(o.valueK) : '—'}</td>
-                  <td>{o.status}</td>
-                </tr>
-              ))}
-              {!perf.orders.length && <tr><td className="empty" colSpan={4}>No orders booked this year.</td></tr>}
-            </tbody>
-          </table>
-          {perf.orders.length > 6 && <button style={{ marginTop: 8 }} onClick={() => nav('/po')}>All {perf.orders.length} orders</button>}
-        </Card>
-      </div>
-
-      <div className="ana-grid sales-detail-grid">
-        <SalesOpportunitySection {...{ store, open, nav, money }} />
-        <SalesCustomerSection store={store} open={open} orders={perf.orders} nav={nav} money={money} />
       </div>
     </div>
   )
@@ -716,28 +696,149 @@ function TeamTargetsCard({ store, span = 12 }) {
   )
 }
 
-// --------------------------------------------------------------- approvers
-function ApproverDashboard({ store, nav, role, c, open, blocked, nextActions, head }) {
-  const perf = salesPerformance(store)   // whole company
+function ProposalStatusCard({ store, nav }) {
+  const [selectedStatus, setSelectedStatus] = useState('all')
+  const open = (store.opportunities || []).filter(o => o.status === 'Open')
+  const pendingApprovalIds = new Set((store.approvals || [])
+    .filter(a => a.status === 'Pending' && a.oppId)
+    .map(a => a.oppId))
+  const prepared = open.filter(o => o.proposalDate)
+  const toPrepare = open.filter(o => !o.proposalDate)
+  const awaitingApproval = prepared.filter(o => pendingApprovalIds.has(o.id))
+  const sent = prepared.filter(o => !pendingApprovalIds.has(o.id))
+  const followUpDue = sent.filter(o => (ageDays(o.proposalDate) || 0) >= 14)
+  const statusRows = {
+    'To be prepared': toPrepare.map(opp => ({ opp, status: 'To be prepared', action: 'Prepare', path: `/opp/${opp.id}/proposal` })),
+    'Awaiting approval': awaitingApproval.map(opp => ({ opp, status: 'Awaiting approval', action: 'Review', path: '/approvals' })),
+    Sent: sent.map(opp => ({ opp, status: 'Sent', action: 'View', path: '/proposal-sent' })),
+    'Follow-up due': followUpDue.map(opp => ({ opp, status: 'Follow-up due', action: 'Follow up', path: `/opp/${opp.id}/followup` })),
+  }
+  const priority = [
+    ...statusRows['Follow-up due'],
+    ...statusRows['Awaiting approval'],
+    ...statusRows['To be prepared'],
+  ].slice(0, PREVIEW_LIMIT)
+  const allStatusRows = Object.values(statusRows).flat()
+  const filteredPriority = selectedStatus === 'all' ? priority : allStatusRows.filter(item => item.status === selectedStatus)
+  const toggleStatus = status => setSelectedStatus(current => current === status ? 'all' : status)
+  const selectedHeading = selectedStatus === 'all' ? 'Priority proposals' : `${selectedStatus} opportunities`
+
+  return (
+    <Card title="Proposal status & follow-up" icon="fileText" tone="tone-sky" span={12}>
+      <p className="hint">Track what is ready, sent, waiting, and overdue.</p>
+      <div className="proposal-status-summary" aria-label="Proposal status summary">
+        <button type="button" className={`proposal-status-summary__item proposal-status-summary__item--prepare ${toPrepare.length ? '' : 'is-empty'} ${selectedStatus === 'To be prepared' ? 'is-selected' : ''}`} aria-pressed={selectedStatus === 'To be prepared'} onClick={() => toggleStatus('To be prepared')}><span className="home-alert-value">{toPrepare.length}</span><span>To be prepared</span></button>
+        <button type="button" className={`proposal-status-summary__item proposal-status-summary__item--approval ${awaitingApproval.length ? '' : 'is-empty'} ${selectedStatus === 'Awaiting approval' ? 'is-selected' : ''}`} aria-pressed={selectedStatus === 'Awaiting approval'} onClick={() => toggleStatus('Awaiting approval')}><span className="home-alert-value">{awaitingApproval.length}</span><span>Awaiting approval</span></button>
+        <button type="button" className={`proposal-status-summary__item proposal-status-summary__item--sent ${sent.length ? '' : 'is-empty'} ${selectedStatus === 'Sent' ? 'is-selected' : ''}`} aria-pressed={selectedStatus === 'Sent'} onClick={() => toggleStatus('Sent')}><span className="home-alert-value">{sent.length}</span><span>Sent</span></button>
+        <button type="button" className={`proposal-status-summary__item proposal-status-summary__item--follow-up ${followUpDue.length ? '' : 'is-empty'} ${selectedStatus === 'Follow-up due' ? 'is-selected' : ''}`} aria-pressed={selectedStatus === 'Follow-up due'} onClick={() => toggleStatus('Follow-up due')}><span className="home-alert-value">{followUpDue.length}</span><span>Follow-up due</span></button>
+      </div>
+      <div className="section-title" style={{ marginTop: 18 }}>{selectedHeading}</div>
+      <div className="dashboard-table-scroll">
+        <table className="dashboard-table proposal-status-table">
+          <thead><tr><th>Opportunity</th><th>Customer</th><th>Owner</th><th>Status</th><th>Value (₹)</th><th>Action</th></tr></thead>
+          <tbody>
+            {filteredPriority.map(({ opp, status, action, path }) => {
+              const go = () => nav(path)
+              return (
+                <tr key={opp.id} tabIndex={0} role="link" aria-label={`${action} ${opp.id}`} onClick={go} onKeyDown={event => activateDashboardRow(event, go)}>
+                  <td><b className="proposal-opportunity-id">{opp.id}</b><span className="proposal-opportunity-name">{opp.oppName}</span></td>
+                  <td><span className="proposal-customer-name">{opp.sellTo}</span></td>
+                  <td>{displayRole(opp.owner)}</td>
+                  <td><span className={`pill ${status === 'Follow-up due' ? 'lost' : status === 'Awaiting approval' ? 'open' : 'won'}`}>{status}</span></td>
+                  <td>{fmtLakh(opp.valueK)}</td>
+                  <td><span className="hint">{action} →</span></td>
+                </tr>
+              )
+            })}
+            {!filteredPriority.length && <tr><td className="empty" colSpan={6}>No {selectedStatus === 'all' ? 'proposal action is' : `${selectedStatus.toLowerCase()} opportunities are`} waiting right now.</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      <div className="proposal-status-footer"><span className="hint">Showing {filteredPriority.length} {selectedStatus === 'all' ? 'priority proposal' : selectedStatus.toLowerCase()} opportunit{filteredPriority.length === 1 ? 'y' : 'ies'}</span><button onClick={() => nav('/proposal-sent')}>View all proposals →</button></div>
+    </Card>
+  )
+}
+
+// ------------------------------------------------------------- owner cockpit
+// LJS is the strategic owner: start with the whole company picture, then move
+// into approvals, risk, attainment, and team targets.
+function OwnerDashboard({ store, nav, role, c, blocked, nextActions, head }) {
+  const perf = salesPerformance(store)
   const mine = (store.approvals || []).filter(a => a.status === 'Pending'
     && (a.needed?.length ? a.needed : [a.approver]).includes(role) && !(a.decisions || {})[role])
-  const openValue = open.reduce((s, o) => s + (+o.valueK || 0), 0)
+
+  return (
+    <div className="page dashboard-page">
+      {head}
+      <div className="stat-cards">
+        <Metric label="Company pipeline" value={analyticsSnapshot(store, role).openCount} tone="sky" onClick={() => nav('/analytics')} />
+        <Metric label="Waiting on you" value={mine.length} tone={mine.length ? 'red' : 'green'} onClick={() => nav('/approvals')} />
+        <Metric label="Blocked" value={blocked.length} tone={blocked.length ? 'red' : 'green'} onClick={() => nav('/')} />
+      </div>
+      <AnalyticsOverview {...{ store, role, nav }} />
+      <div className="ana-grid"><ProposalStatusCard {...{ store, nav }} /></div>
+      <div className="ana-grid">
+        <Card title="Owner priority queue" icon="target" tone="tone-amber" span={12}
+          action={<button onClick={() => nav('/approvals')}>Review all</button>}>
+          <NextActions {...{ nextActions, nav }} />
+        </Card>
+        <Card title="Decisions waiting on you" icon="checkCircle" tone="tone-green" span={6}
+          action={<button onClick={() => nav('/approvals')}>View all</button>}>
+          {mine.slice(0, PREVIEW_LIMIT).map(a => (
+            <button key={a.id} className="dashboard-action" onClick={() => nav('/approvals')}>
+              <span><b>{a.id}</b> — {a.type}</span>
+              <span className="hint">{a.oppId || '—'} · requested by {displayRole(a.requestedBy)}</span>
+            </button>
+          ))}
+          {!mine.length && <p className="hint">Nothing is waiting on you right now.</p>}
+        </Card>
+        <Card title="Company attainment" icon="target" tone="tone-sky" span={6}>
+          <QuarterBars perf={perf} />
+          <div className="hint" style={{ marginTop: 8 }}>
+            {fmtLakh(perf.achieved)} booked of {fmtLakh(perf.annual)} · {Math.round(perf.attainPct)}% attained
+          </div>
+        </Card>
+      </div>
+      <div className="ana-grid">
+        <TeamTargetsCard store={store} />
+        <ForecastReportCard />
+      </div>
+    </div>
+  )
+}
+
+// AH's route remains approval-aware, but is intentionally presented as a
+// commercial cockpit rather than an application-owner dashboard.
+function CommercialDashboard(props) {
+  return <ApproverDashboard {...props} commercial />
+}
+
+// --------------------------------------------------------------- approvers
+function ApproverDashboard({ store, nav, role, c, blocked, nextActions, head, commercial = false }) {
+  const perf = salesPerformance(store)   // whole company
+  const snapshot = analyticsSnapshot(store, role)
+  const mine = (store.approvals || []).filter(a => a.status === 'Pending'
+    && (a.needed?.length ? a.needed : [a.approver]).includes(role) && !(a.decisions || {})[role])
 
   return (
     <div className="page dashboard-page">
       {head}
       <div className="stat-cards">
         <Metric label="Waiting on you" value={mine.length} tone={mine.length ? 'red' : 'green'} onClick={() => nav('/approvals')} />
-        <Metric label="All pending gates" value={c.pending} tone="amber" onClick={() => nav('/approvals')} />
-        <Metric label="Open opportunities" value={open.length} tone="sky" onClick={() => nav('/')} />
-        {canViewCommercial(role) && <Metric label="Open pipeline" value={fmtLakh(openValue)} tone="slate" />}
+        {commercial && <Metric label="Commercial pipeline" value={fmtLakh(snapshot.pipelineK)} tone="sky" onClick={() => nav('/analytics')} />}
+        <Metric label="Blocked" value={blocked.length} tone={blocked.length ? 'red' : 'green'} onClick={() => nav('/')} />
+        {!commercial && <Metric label="Needs update" value={c.stale} tone={c.stale ? 'amber' : 'green'} onClick={() => nav('/my')} />}
       </div>
 
-      <AnalyticsOverview {...{ store, role, nav }} />
-
       <div className="ana-grid">
-        <Card title="Your approval queue" icon="checkCircle" tone="tone-green" span={6}>
-          {mine.map(a => (
+        <Card title="Priority queue" icon="target" tone="tone-amber" span={12}
+          action={<button onClick={() => nav('/approvals')}>View all</button>}>
+          <NextActions {...{ nextActions, nav }} />
+        </Card>
+
+        <Card title={commercial ? 'Commercial decisions' : 'Your approval queue'} icon="checkCircle" tone="tone-green" span={6}
+          action={<button onClick={() => nav('/approvals')}>View all</button>}>
+          {mine.slice(0, PREVIEW_LIMIT).map(a => (
             <button key={a.id} className="dashboard-action" onClick={() => nav('/approvals')}>
               <span><b>{a.id}</b> — {a.type}</span>
               <span className="hint">{a.oppId || '—'} · requested by {displayRole(a.requestedBy)}</span>
@@ -746,18 +847,9 @@ function ApproverDashboard({ store, nav, role, c, open, blocked, nextActions, he
           {!mine.length && <p className="hint">Nothing is waiting on you right now.</p>}
         </Card>
 
-        <Card title="Company attainment" icon="target" tone="tone-sky" span={6}>
-          <QuarterBars perf={perf} />
-          <div className="hint" style={{ marginTop: 8 }}>
-            {fmtLakh(perf.achieved)} booked of {fmtLakh(perf.annual)} · {Math.round(perf.attainPct)}% attained
-          </div>
-        </Card>
-
-        <TeamTargetsCard store={store} />
-
         <Card title="Blocked opportunities" icon="alert" tone="tone-red" span={6}
-          action={<span className="pill Red">{blocked.length}</span>}>
-          {blocked.slice(0, 6).map(({ opp }) => (
+          action={<button onClick={() => nav('/')}>View all</button>}>
+          {blocked.slice(0, PREVIEW_LIMIT).map(({ opp }) => (
             <button key={opp.id} className="dashboard-action" onClick={() => nav(`/opp/${opp.id}`)}>
               <span><b>{opp.id}</b> — {opp.oppName}</span>
               <span className="hint">{displayRole(opp.owner)} · {opp.stage}</span>
@@ -766,10 +858,26 @@ function ApproverDashboard({ store, nav, role, c, open, blocked, nextActions, he
           {!blocked.length && <p className="hint">No opportunity is currently blocked.</p>}
         </Card>
 
-        <Card title="Next best actions" icon="target" tone="tone-amber" span={6}>
-          <NextActions {...{ nextActions, nav }} />
-        </Card>
+      </div>
 
+      <AnalyticsOverview {...{ store, role, nav }} />
+      <div className="ana-grid">
+        {commercial && (
+          <Card title="Commercial posture" icon="chartLine" tone="tone-sky" span={12}>
+            <ul className="stat-list">
+              <li>Weighted forecast <b>{fmtLakh(snapshot.weightedK)}</b></li>
+              <li>Open opportunities <b>{snapshot.openCount}</b></li>
+              <li>Win rate <b>{snapshot.decided ? `${snapshot.winPct}%` : '—'}</b></li>
+            </ul>
+          </Card>
+        )}
+        <Card title="Company attainment" icon="target" tone="tone-sky" span={12}>
+          <QuarterBars perf={perf} />
+          <div className="hint" style={{ marginTop: 8 }}>
+            {fmtLakh(perf.achieved)} booked of {fmtLakh(perf.annual)} · {Math.round(perf.attainPct)}% attained
+          </div>
+        </Card>
+        <TeamTargetsCard store={store} />
         <ForecastReportCard />
       </div>
     </div>
@@ -777,7 +885,7 @@ function ApproverDashboard({ store, nav, role, c, open, blocked, nextActions, he
 }
 
 // ------------------------------------------------------------------- admin
-function AdminDashboard({ store, nav, role, c, open, blocked, head }) {
+function AdminDashboard({ store, nav, role, c, blocked, nextActions, head }) {
   const users = store.auth?.users || []
   const pendingUsers = users.filter(u => u.status === 'Pending')
   const perf = salesPerformance(store)
@@ -786,17 +894,20 @@ function AdminDashboard({ store, nav, role, c, open, blocked, head }) {
     <div className="page dashboard-page">
       {head}
       <div className="stat-cards">
-        <Metric label="User accounts" value={users.length} tone="slate" onClick={() => nav('/users')} />
         <Metric label="Awaiting approval" value={pendingUsers.length} tone={pendingUsers.length ? 'amber' : 'green'} onClick={() => nav('/users')} />
-        <Metric label="Audit entries" value={(store.audit || []).length} tone="sky" onClick={() => nav('/audit')} />
-        <Metric label="Open opportunities" value={open.length} tone="violet" onClick={() => nav('/')} />
+        <Metric label="Pending gates" value={c.pending} tone={c.pending ? 'amber' : 'green'} onClick={() => nav('/approvals')} />
+        <Metric label="Blocked" value={blocked.length} tone={blocked.length ? 'red' : 'green'} onClick={() => nav('/')} />
       </div>
 
-      <AnalyticsOverview {...{ store, role, nav }} />
-
       <div className="ana-grid">
-        <Card title="Registrations awaiting a decision" icon="shield" tone="tone-violet" span={6}>
-          {pendingUsers.slice(0, 6).map(u => (
+        <Card title="Priority queue" icon="target" tone="tone-amber" span={12}
+          action={<button onClick={() => nav('/approvals')}>View all</button>}>
+          <NextActions {...{ nextActions, nav }} />
+        </Card>
+
+        <Card title="Registrations awaiting a decision" icon="shield" tone="tone-violet" span={6}
+          action={<button onClick={() => nav('/users')}>View all</button>}>
+          {pendingUsers.slice(0, PREVIEW_LIMIT).map(u => (
             <button key={u.id || u.email} className="dashboard-action" onClick={() => nav('/users')}>
               <span><b>{u.name || u.email}</b></span>
               <span className="hint">{u.email} · requested {u.role || 'no role'}</span>
@@ -821,6 +932,10 @@ function AdminDashboard({ store, nav, role, c, open, blocked, head }) {
           </div>
         </Card>
 
+      </div>
+
+      <AnalyticsOverview {...{ store, role, nav }} />
+      <div className="ana-grid">
         <Card title="Company attainment" icon="target" tone="tone-sky" span={12}>
           <QuarterBars perf={perf} />
           <div className="hint" style={{ marginTop: 8 }}>
@@ -836,10 +951,9 @@ function AdminDashboard({ store, nav, role, c, open, blocked, head }) {
 }
 
 // --------------------------------------------------- technical reviewer
-function TechDashboard({ store, nav, open, blocked, nextActions, head }) {
+function TechDashboard({ store, nav, blocked, nextActions, head }) {
   // The reviewer works the technical content of live proposals, not a pipeline
   // of their own — so this is scoped by what needs review, not by ownership.
-  const projects = store.opportunities.filter(o => o.status === 'Open' && o.route === 'Project')
   const forReview = store.opportunities.filter(o => o.status === 'Open')
     .map(o => ({ opp: o, p: store.getProposal(o.id) }))
     .filter(({ p }) => (p?.bom || []).length > 0)
@@ -851,15 +965,17 @@ function TechDashboard({ store, nav, open, blocked, nextActions, head }) {
       <div className="stat-cards">
         <Metric label="Proposals with a BoQ" value={forReview.length} tone="sky" />
         <Metric label="Open deviations" value={deviations} tone={deviations ? 'amber' : 'green'} />
-        <Metric label="Project opportunities" value={projects.length} tone="violet" onClick={() => nav('/')} />
         <Metric label="Blocked" value={blocked.length} tone={blocked.length ? 'red' : 'green'} />
       </div>
 
-      <AnalyticsOverview {...{ store, role: store.role, nav }} />
-
       <div className="ana-grid">
-        <Card title="Proposals to review" icon="fileText" tone="tone-sky" span={6}>
-          {forReview.slice(0, 8).map(({ opp, p }) => (
+        <Card title="Priority queue" icon="target" tone="tone-amber" span={12}
+          action={<button onClick={() => nav('/')}>View all</button>}>
+          <NextActions {...{ nextActions, nav }} />
+        </Card>
+
+        <Card title="Proposals to review" icon="fileText" tone="tone-sky" span={12}>
+          {forReview.slice(0, PREVIEW_LIMIT).map(({ opp, p }) => (
             <button key={opp.id} className="dashboard-action" onClick={() => nav(`/proposal/${opp.id}`)}>
               <span><b>{opp.id}</b> — {opp.oppName}</span>
               <span className="hint">{(p.bom || []).length} BoQ line(s) · Rev-{p.revision} · {opp.route}</span>
@@ -868,10 +984,17 @@ function TechDashboard({ store, nav, open, blocked, nextActions, head }) {
           {!forReview.length && <p className="hint">No proposal has a BoQ to review yet.</p>}
         </Card>
 
-        <Card title="Next best actions" icon="target" tone="tone-amber" span={6}>
-          <NextActions {...{ nextActions, nav }} />
+      </div>
+
+      <div className="ana-grid">
+        <Card title="Technical review focus" icon="gear" tone="tone-sky" span={12}>
+          <p className="hint">Review proposal BoQs and resolve technical deviations before commercial approval.</p>
+          <div className="home-alert-rail" aria-label="Technical review summary">
+            <div><span className="home-alert-value">{forReview.length}</span><span>BoQs to review</span></div>
+            <div><span className="home-alert-value">{deviations}</span><span>Open deviations</span></div>
+            <div><span className="home-alert-value">{blocked.length}</span><span>Blocked opportunities</span></div>
+          </div>
         </Card>
-        <ForecastReportCard />
       </div>
     </div>
   )

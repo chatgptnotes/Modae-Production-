@@ -76,6 +76,32 @@ export const roleRates = (sheetObj = {}) => (sheetObj.roles || []).map(row => ({
   derived: !!row.rateKey,
 }))
 
+// A single, labelled representation of every commercial input on a service
+// rate sheet. Price Lists uses this for the customer-facing reference view,
+// while the workbench and invoice continue to consume the raw rate keys.
+export function serviceRateRows(sheetObj = {}, sheetName = 'India') {
+  const unit = normalizeSheet(sheetName) === 'India' ? 'K₹' : 'USD'
+  const rates = sheetObj.rates || {}
+  const fields = [
+    ['engineerDay', 'Service Engineer / day', `${unit} / day`],
+    ['seniorDay', 'Senior Engineer / Commissioning / day', `${unit} / day`],
+    ['travelDay', 'Travel / day', `${unit} / day`],
+    ['otHour', 'Overtime / hour', `${unit} / hour`],
+    ['weekendPct', 'Weekend premium', '%'],
+    ['standbyDay', 'Standby / day', `${unit} / day`],
+    ['minCallout', 'Minimum callout', unit],
+    ['flight', 'Flight (each way)', unit],
+    ['hotelNight', 'Hotel / night', `${unit} / night`],
+    ['transportDay', 'Local transport / day', `${unit} / day`],
+    ['perDiem', 'Per diem', `${unit} / day`],
+    ['tools', 'Tools & consumables', unit],
+  ]
+  return [
+    ...fields.map(([key, label, rowUnit]) => ({ key, label, value: Number(rates[key]) || 0, unit: rowUnit })),
+    { key: 'gst', label: 'GST', value: Number(sheetObj.gst) || 0, unit: '%' },
+  ]
+}
+
 export function serviceCost(rateSheets, sheetName, q) {
   const sheet = normalizeSheet(sheetName)
   const rs = rateSheets[sheet]

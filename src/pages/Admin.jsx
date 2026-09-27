@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react'
+import React, { useLayoutEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { OWNERS, MILESTONES, seedConfig } from '../seed.js'
@@ -53,6 +53,20 @@ function NumField({ label, value, disabled, onChange }) {
         onChange={e => onChange(Number(e.target.value) || 0)} />
     </label>
   )
+}
+
+function AutoSizingTextarea({ onChange, value, ...props }) {
+  const ref = useRef(null)
+  const resize = element => {
+    if (!element) return
+    element.style.height = 'auto'
+    element.style.height = `${element.scrollHeight}px`
+  }
+
+  useLayoutEffect(() => resize(ref.current))
+
+  return <textarea {...props} ref={ref} rows={1} value={value}
+    onChange={event => { resize(event.currentTarget); onChange(event) }} />
 }
 
 // The service day rates every service quote and invoice is priced from. These
@@ -552,8 +566,8 @@ export default function Admin() {
                 </td>
                 <td className="clause-library-text-cell">
                   <label className="sr-only" htmlFor={`clause-text-${clause.id}`}>Clause text</label>
-                  <textarea aria-label={`${clause.id} clause text`} value={clause.text} disabled={!canEdit}
-                    id={`clause-text-${clause.id}`} className="clause-library-text-field" onChange={e => store.updateClause(clause.id, { text: e.target.value })} rows={3} />
+                  <AutoSizingTextarea aria-label={`${clause.id} clause text`} value={clause.text} disabled={!canEdit}
+                    id={`clause-text-${clause.id}`} className="clause-library-text-field" onChange={e => store.updateClause(clause.id, { text: e.target.value })} />
                 </td>
                 <td className="clause-library-actions-cell">
                   <button type="button" className="secondary clause-library-remove" disabled={!canEdit}

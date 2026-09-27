@@ -56,10 +56,14 @@ export default function MyOpps() {
       <h2>{mine ? `My Opportunities — ${displayRole(role)}` : 'Opportunities'}</h2>
       <div className="toolbar">
         {mine && !isAdmin && (
-          <label className="show-all-toggle">
-            <input type="checkbox" checked={showAll} onChange={e => setShowAll(e.target.checked)} />
-            Show All Opportunities
-          </label>
+          <button
+            type="button"
+            className={`scope-toggle${showAll ? ' active' : ''}`}
+            aria-pressed={showAll}
+            title="Show all opportunities"
+            onClick={() => setShowAll(value => !value)}>
+            {showAll ? 'Showing all' : 'Show all'}
+          </button>
         )}
         <span className="hint">{mine
           ? 'Your pipeline — click a row to view and edit every field.'

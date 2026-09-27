@@ -1,19 +1,16 @@
 import React, { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { STAGES, CUSTOMER_STATUSES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, PROB_LEVELS, ROLES } from '../seed.js'
+import { STAGES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, PROB_LEVELS } from '../seed.js'
 import { fmtLakh, ageDays, canViewCommercial, isAdminRole, isApprover, isSalesOwner, sameCustomer, productList, displayRoleLabel, displayRole } from '../utils.js'
-import { PROB_WEIGHT } from '../kpi.js'
+import { PROB_WEIGHT, winLossAnalysis } from '../kpi.js'
 import { Icon } from '../icons.jsx'
-import { ArcGauge } from '../dashviz.jsx'
 import { MODAE_COLORS } from '../branding/modae.js'
 
 // Funnel ramp validated with the dataviz palette checker (ordinal, light
 // surface): monotone lightness, ≥0.06 step gaps, light end ≥2:1 on white.
 // Now brand-anchored — see MODAE_COLORS.ramp for the validation note.
 const FUNNEL_RAMP = MODAE_COLORS.ramp
-// The funnel only holds live enquiries — Won and Lost have left it.
-const OPEN_STAGES = STAGES.filter(s => s !== 'Won' && s !== 'Lost')
 // Weighting lives in src/kpi.js so the dashboard and this page agree.
 
 // ---- Filter model -------------------------------------------------------
@@ -79,75 +76,6 @@ function Field({ label, value, onChange, options, disabled, title }) {
 
 function Restricted() {
   return <div className="restricted">Restricted — commercial data (approvers/admin only)</div>
-}
-
-// Card header: icon chip + label + optional count pill. Icons come from the
-// shared registry in icons.jsx — no one-off inline SVG, no emoji.
-function CardHead({ icon, tone = '', children, count }) {
-  return (
-    <div className="ana-title">
-      <span className={`ana-ico ${tone}`}><Icon name={icon} size={15} /></span>
-      {children}
-      {count != null && <span className="ana-count">{count}</span>}
-    </div>
-  )
-}
-
-// Compact data table for the row-based cards. cols: [{key, label, align, width}]
-// — fixed widths keep the numeric columns aligned and truncate long customer
-// names with an ellipsis instead of wrapping to a second line.
-function StatTable({ cols, rows, empty }) {
-  return (
-    <div className="ana-scroll">
-      <table className="ana-table">
-        <colgroup>{cols.map(c => <col key={c.key} style={{ width: c.width }} />)}</colgroup>
-        <thead>
-          <tr>{cols.map(c => (
-            <th key={c.key} style={c.align === 'right' ? { textAlign: 'right' } : undefined}>{c.label}</th>
-          ))}</tr>
-        </thead>
-        <tbody>
-          {rows.map(r => (
-            <tr key={r.key} className={r.className || ''}>
-              {cols.map(c => (
-                <td key={c.key} className={[c.align === 'right' ? 'num' : '', c.muted ? 'muted' : ''].join(' ').trim()}
-                  title={r.titles?.[c.key]}>{r.cells[c.key]}</td>
-              ))}
-            </tr>
-          ))}
-          {!rows.length && <tr><td className="empty" colSpan={cols.length}>{empty}</td></tr>}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-// Single-hue horizontal bars by category. The bar length and the trailing figure
-// follow the money on those opportunities (summed Value K₹) whenever the role may
-// see commercials; otherwise both fall back to the row count. Clicking a bar opens
-// the supporting records.
-function BarCard({ title, icon, tone, span = 4, entries, color, onPick, hint, showValue }) {
-  const metric = ([, valueK, count]) => (showValue ? valueK : count)
-  const max = Math.max(1, ...entries.map(metric))
-  return (
-    <div className={`ana-card c-${span}`}>
-      <CardHead icon={icon} tone={tone}>{title}</CardHead>
-      {entries.length === 0 && <div className="hint">No records.</div>}
-      {entries.map(e => (
-        <div key={e[0]} className={`mbar ${onPick ? 'clickable' : ''}`} role={onPick ? 'button' : undefined}
-          tabIndex={onPick ? 0 : undefined} title={onPick ? 'Open the supporting records' : undefined}
-          onClick={onPick ? () => onPick(e[0]) : undefined}
-          onKeyDown={onPick ? ev => { if (ev.key === 'Enter') onPick(e[0]) } : undefined}>
-          <span className="mb-lbl">{e[0]}</span>
-          <span className="mb-track"><span className="mb-fill" style={{ width: `${Math.max(3, (metric(e) / max) * 100)}%`, background: color }} /></span>
-          <span className="mb-val" style={showValue ? { flexBasis: 120 } : undefined}>
-            {showValue ? <>{fmtLakh(e[1])} <span className="hint">· {e[2]}</span></> : e[2]}
-          </span>
-        </div>
-      ))}
-      {hint && <div className="hint" style={{ marginTop: 6 }}>{hint}</div>}
-    </div>
-  )
 }
 
 // Stage funnel. A snapshot of where the live enquiries are sitting right now, so
@@ -226,7 +154,6 @@ export function Funnel({ stages, showValue, conversion = false, onStageClick }) 
 
 export default function Analytics({ embedded = false }) {
   const store = useStore()
-  const nav = useNavigate()
   // Sales owners may see commercial analytics for their locked own-owner scope;
   // team-wide commercial reporting remains limited to approvers/admins.
   const comm = canViewCommercial(store.role) || isSalesOwner(store.role)
@@ -264,7 +191,7 @@ export default function Analytics({ embedded = false }) {
     inRange(o.createDate, dateRange))
 
   const open = opps.filter(o => o.status === 'Open')
-  const closed = opps.filter(o => o.stage === 'Won' || o.stage === 'Lost')
+  const winLoss = winLossAnalysis(opps, store.competitors, { commercial: comm })
 
   // Every card reports the money on the records rather than how many rows there
   // are; roles without commercial access fall back to the count instead.
@@ -288,93 +215,11 @@ export default function Analytics({ embedded = false }) {
     ? setF(p => ({ ...p, range: 'all', from: '', to: '' }))
     : set(k, 'All'))
 
-  // Live snapshot: each band holds only the enquiries sitting in that stage right
-  // now. Won and Lost have left the funnel and are counted nowhere.
-  const funnel = OPEN_STAGES.map(s => {
-    const rows = opps.filter(o => o.stage === s)
-    return { label: s, count: rows.length, valueK: sumK(rows) }
-  })
-
-  // [label, valueK, count][], ordered by whichever metric is on display.
-  const groupBy = (rows, key) => {
-    const m = {}
-    rows.forEach(r => {
-      const k = r[key] || '—'
-      if (!m[k]) m[k] = { valueK: 0, count: 0 }
-      m[k].valueK += +r.valueK || 0
-      m[k].count += 1
-    })
-    return Object.entries(m)
-      .map(([k, v]) => [k, v.valueK, v.count])
-      .sort((a, b) => (comm ? b[1] - a[1] : b[2] - a[2]))
-  }
-
-  // With filters on, the customer card follows the visible opportunities;
-  // unfiltered it stays the full master list.
-  const custRows = chips.length
-    ? store.customers.filter(c => opps.some(o => sameCustomer(o.sellTo, c.name)))
-    : store.customers
-
-  // Opportunity value rolled up by the class of the customer it sells to. An opp
-  // whose customer isn't on the master list contributes to no class.
-  const classOf = name => custRows.find(c => sameCustomer(name, c.name))?.status
-  const byClass = Object.fromEntries(CUSTOMER_STATUSES.map(cls => [cls, { valueK: 0, n: 0 }]))
-  opps.forEach(o => {
-    const b = byClass[classOf(o.sellTo)]
-    if (b) { b.valueK += +o.valueK || 0; b.n += 1 }
-  })
-
-  const pipelineK = open.reduce((s, o) => s + (+o.valueK || 0), 0)
   const weightedK = open.reduce((s, o) => s + (+o.valueK || 0) * (PROB_WEIGHT[o.prob] ?? PROB_WEIGHT.Low), 0)
 
   const ageing = open
     .map(o => ({ ...o, age: ageDays(o.createDate) }))
     .sort((a, b) => b.age - a.age)
-
-  const margins = open
-    .filter(o => o.valueK > 0)
-    .map(o => ({ ...o, gm: Math.round(((o.valueK - o.cogsK) / o.valueK) * 100) }))
-    .sort((a, b) => a.gm - b.gm)
-
-  // Bar click-throughs land on the Tracker pre-filtered via query params —
-  // carrying the filters the Tracker understands so the two views agree.
-  const toTracker = (key, val) => {
-    const p = new URLSearchParams({ [key]: val })
-    if (key !== 'owner' && ownerSel !== 'All') p.set('owner', ownerSel)
-    for (const k of ['oppType', 'bu']) if (k !== key && f[k] !== 'All') p.set(k, f[k])
-    nav(`/?${p}`)
-  }
-
-  // ---- Sales targets vs booked orders (Indian FY, quarters start April) ----
-  const sales = store.sales || { fy: '', targets: {}, orders: [] }
-  const fyQuarter = dateStr => {
-    const m = parseInt((dateStr || '').split('-')[1], 10)
-    if (!m) return -1
-    return m >= 4 ? Math.floor((m - 4) / 3) : 3
-  }
-  const Q_LABELS = ['Q1 Apr-Jun', 'Q2 Jul-Sep', 'Q3 Oct-Dec', 'Q4 Jan-Mar']
-  // Booked orders honour owner, customer and the date range (always on the
-  // booking date — an order has no create/proposal column of its own).
-  const orders = (sales.orders || []).filter(o =>
-    (ownerSel === 'All' || o.owner === ownerSel) &&
-    (f.customer === 'All' || sameCustomer(o.customer, f.customer)) &&
-    inRange(o.booked, dateRange))
-  const targetOwners = Object.keys(sales.targets || {})
-    .filter(o => ownerSel === 'All' || o === ownerSel)
-  const teamQ = [0, 1, 2, 3].map(i => ({
-    label: Q_LABELS[i],
-    target: targetOwners.reduce((s, o) => s + (sales.targets[o].q?.[i] || 0), 0),
-    actual: orders.filter(o => fyQuarter(o.booked) === i)
-      .reduce((s, o) => s + (+o.valueK || 0), 0),
-  }))
-  const attainment = Object.entries(sales.targets || {})
-    .filter(([owner, t]) => (t.annual || 0) > 0 && targetOwners.includes(owner))
-    .map(([owner, t]) => {
-      const booked = orders.filter(o => o.owner === owner)
-        .reduce((s, o) => s + (+o.valueK || 0), 0)
-      return { owner, booked, annual: t.annual, pct: Math.round((booked / t.annual) * 100) }
-    })
-    .sort((a, b) => b.pct - a.pct)
 
   return (
     <div className={`page ana-page${embedded ? ' embedded-analytics' : ''}`}>
@@ -433,179 +278,62 @@ export default function Analytics({ embedded = false }) {
         </div>
       </div>
 
-      <div className="ana-grid">
-        <div className="ana-card c-8">
-          <CardHead icon="layers">Funnel by stage</CardHead>
-          <Funnel stages={funnel} showValue={comm} />
-          <div className="legend">
-            <span><span style={{ width: 12, height: 12, background: `linear-gradient(${FUNNEL_RAMP[1]}, ${FUNNEL_RAMP[4]})`, borderRadius: 3, display: 'inline-block' }} /> Enquiries currently in each stage (Won/Lost excluded)</span>
-          </div>
-        </div>
+      <section className="analysis-summary" aria-label="Win and loss summary">
+        <div><b>{winLoss.summary.total}</b><span>Closed opportunities</span></div>
+        <div className="analysis-summary-won"><b>{winLoss.summary.won}</b><span>Won</span></div>
+        <div className="analysis-summary-lost"><b>{winLoss.summary.lost}</b><span>Lost</span></div>
+        <div><b>{winLoss.summary.winRate}%</b><span>Win rate</span></div>
+        {comm && <><div><b>{fmtLakh(winLoss.summary.wonValueK)}</b><span>Won value</span></div><div><b>{fmtLakh(winLoss.summary.lostValueK)}</b><span>Lost value</span></div></>}
+      </section>
 
-        <div className="ana-card c-4">
-          <CardHead icon="wallet" tone="tone-teal">Pipeline &amp; weighted forecast</CardHead>
-          {comm ? (
-            <>
-              <div className="ana-headline">
-                <div>
-                  <div className="ah-value">{fmtLakh(pipelineK)}</div>
-                  <div className="ah-label">Pipeline (sum of value)</div>
-                </div>
-                <ArcGauge size={104} caption="weighted share"
-                  pct={pipelineK ? (weightedK / pipelineK) * 100 : 0}
-                  value={pipelineK ? `${Math.round((weightedK / pipelineK) * 100)}%` : '—'} />
-              </div>
-              <div className="ana-splits">
-                <div><b>{open.length}</b><span>Open opportunities</span></div>
-                <div><b>{fmtLakh(weightedK)}</b><span>Weighted forecast</span></div>
-              </div>
-              <div className="hint" style={{ marginTop: 10 }}>
-                Weights: Low 25% · Medium 50% · High 75% of Value (₹); unset probability counts as Low.
-              </div>
-            </>
-          ) : <Restricted />}
+      <section className="analysis-section">
+        <div className="analysis-section-head">
+          <div><span className="analysis-kicker">Decision analysis</span><h3>Win / loss by reason</h3><p>Use the comparison to identify which close reasons are costing value and where the team is winning.</p></div>
+          <span className="analysis-section-count">{winLoss.byReason.length} reasons</span>
         </div>
-
-        <BarCard title="Owner" icon="users" entries={groupBy(open, 'owner')} color="var(--primary-accent)" showValue={comm}
-          onPick={v => toTracker('owner', v)}
-          hint={comm ? 'Open opportunity value per owner · opportunity count.' : 'Open opportunities per owner.'} />
-        <BarCard title="Opp type" icon="tag" tone="tone-teal" entries={groupBy(open, 'oppType')} color="var(--primary-accent)"
-          showValue={comm} onPick={v => toTracker('oppType', v)} />
-        <BarCard title="BU / business area" icon="building" tone="tone-slate" entries={groupBy(open, 'bu')} color="var(--text-muted)"
-          showValue={comm} onPick={v => toTracker('bu', v)} />
-
-        <div className="ana-card c-4">
-          <CardHead icon="flag" tone="tone-green" count={comm ? fmtLakh(sumK(opps)) : custRows.length}>Customer classes</CardHead>
-          {CUSTOMER_STATUSES.map(cls => {
-            const b = byClass[cls]
-            const share = comm
-              ? b.valueK / Math.max(1, sumK(opps))
-              : custRows.filter(c => c.status === cls).length / Math.max(1, custRows.length)
-            return (
-              <div key={cls} className="mbar clickable" role="button" tabIndex={0}
-                onClick={() => nav('/customers')} onKeyDown={e => { if (e.key === 'Enter') nav('/customers') }}>
-                <span className="mb-lbl"><span className={`pill ${cls}`}>{cls}</span></span>
-                <span className="mb-track"><span className={`mb-fill class-${cls}`} style={{ width: `${Math.max(3, share * 100)}%` }} /></span>
-                <span className="mb-val" style={comm ? { flexBasis: 120 } : undefined}>
-                  {comm ? <>{fmtLakh(b.valueK)} <span className="hint">· {b.n}</span></> : custRows.filter(c => c.status === cls).length}
-                </span>
-              </div>
-            )
-          })}
-          <div className="hint" style={{ marginTop: 6 }}>
-            {comm && 'Opportunity value by the class of the customer it sells to. '}
-            Blue = new customer pending admin verification.
-            {chips.length > 0 && ' Scoped to the customers in the filtered opportunities.'}
-          </div>
+        <div className="analysis-table-wrap">
+          <table className="analysis-table analysis-reason-table">
+            <thead><tr><th>Reason</th><th className="num">Won</th><th className="num">Lost</th><th className="num">Win rate</th>{comm && <><th className="num">Won value</th><th className="num">Lost value</th><th className="num">Total value</th></>}</tr></thead>
+            <tbody>
+              {winLoss.byReason.map(row => <tr key={row.reason}>
+                <th scope="row">{row.reason}</th><td className="num result-won">{row.won}</td><td className="num result-lost">{row.lost}</td><td className="num"><b>{row.winRate}%</b></td>
+                {comm && <><td className="num">{fmtLakh(row.wonValueK)}</td><td className="num">{fmtLakh(row.lostValueK)}</td><td className="num"><b>{fmtLakh(row.totalValueK)}</b></td></>}
+              </tr>)}
+              {!winLoss.byReason.length && <tr><td colSpan={comm ? 7 : 4} className="empty">No closed opportunities match the current filters.</td></tr>}
+            </tbody>
+          </table>
         </div>
+      </section>
 
-        <div className="ana-card c-4">
-          <CardHead icon="clock" tone="tone-amber" count={comm ? fmtLakh(sumK(ageing)) : ageing.length}>Quote ageing / validity</CardHead>
-          <StatTable
-            empty="No open opportunities."
-            cols={[
-              { key: 'id', label: 'Opp', width: '30%' },
-              { key: 'cust', label: 'Customer', width: '34%', muted: true },
-              { key: 'age', label: 'Age', width: '16%', align: 'right' },
-              { key: 'status', label: 'Status', width: '20%', align: 'right' },
-            ]}
-            rows={ageing.map(o => ({
-              key: o.id,
-              className: o.age > 30 ? 'stale' : '',
-              titles: { cust: o.sellTo },
-              cells: {
-                id: <Link className="oppid-link" to={`/proposal/${o.id}`}>{o.id}</Link>,
-                cust: o.sellTo,
-                age: `${o.age} d`,
-                status: <span className={`pill ${o.proposalDate ? 'won' : 'Amber'}`}>{o.proposalDate ? 'Sent' : 'Draft'}</span>,
-              },
-            }))}
-          />
-          <div className="hint" style={{ marginTop: 6 }}>Amber edge = open more than 30 days.</div>
+      <section className="analysis-section">
+        <div className="analysis-section-head"><div><span className="analysis-kicker">Supporting register</span><h3>Closed opportunities</h3><p>Every row behind the reason summary, with direct links back to the opportunity folder.</p></div><span className="analysis-section-count">{winLoss.rows.length} rows</span></div>
+        <div className="analysis-table-wrap">
+          <table className="analysis-table closed-opportunity-register">
+            <thead><tr><th>Opportunity</th><th>Customer</th><th>Result</th><th>Reason</th>{comm && <th className="num">Value</th>}<th>Owner</th><th>Close date</th><th>Competitor</th></tr></thead>
+            <tbody>
+              {winLoss.rows.map(row => <tr key={row.id}>
+                <td><Link className="oppid-link" to={`/folders/${row.id}`}>{row.id}</Link><small>{row.oppName || '—'}</small></td><td>{row.sellTo || '—'}</td><td><span className={`pill ${row.result === 'Won' ? 'won' : 'lost'}`}>{row.result}</span></td><td>{row.reason}{row.closedReasonNote && <small>{row.closedReasonNote}</small>}</td>{comm && <td className="num">{fmtLakh(row.valueK)}</td>}<td>{displayRole(row.owner) || '—'}</td><td>{row.closeDate || '—'}</td><td>{row.competitor || '—'}</td>
+              </tr>)}
+              {!winLoss.rows.length && <tr><td colSpan={comm ? 8 : 7} className="empty">No closed opportunities match the current filters.</td></tr>}
+            </tbody>
+          </table>
         </div>
+      </section>
 
-        <div className="ana-card c-4">
-          <CardHead icon="checkCircle" tone="tone-green" count={comm ? fmtLakh(sumK(closed)) : closed.length}>Win / loss reasons</CardHead>
-          <StatTable
-            empty="No closed opportunities yet."
-            cols={[
-              { key: 'id', label: 'Opp', width: '32%' },
-              { key: 'result', label: 'Result', width: '24%' },
-              { key: 'reason', label: 'Reason', width: '44%', align: 'right' },
-            ]}
-            rows={closed.map(o => ({
-              key: o.id,
-              titles: { reason: o.closedReason || '—' },
-              cells: {
-                id: <Link className="oppid-link" to={`/folders/${o.id}`}>{o.id}</Link>,
-                result: <span className={`pill ${o.stage === 'Won' ? 'won' : 'lost'}`}>{o.stage}</span>,
-                reason: o.closedReason || '—',
-              },
-            }))}
-          />
+      <section className="analysis-section">
+        <div className="analysis-section-head"><div><span className="analysis-kicker">Live pipeline</span><h3>Open opportunity register</h3><p>Prioritize the active records that can change the next win/loss result.</p></div><span className="analysis-section-count">{open.length} open · {comm ? fmtLakh(weightedK) : 'count'} weighted</span></div>
+        <div className="analysis-table-wrap">
+          <table className="analysis-table open-pipeline-register">
+            <thead><tr><th>Opportunity</th><th>Customer</th><th>Stage</th><th>Owner</th><th>Probability</th>{comm && <><th className="num">Value</th><th className="num">Weighted</th></>}<th>Age</th></tr></thead>
+            <tbody>
+              {ageing.map(row => <tr key={row.id} className={row.age > 30 ? 'stale' : ''}>
+                <td><Link className="oppid-link" to={`/proposal/${row.id}`}>{row.id}</Link><small>{row.oppName || '—'}</small></td><td>{row.sellTo || '—'}</td><td>{row.stage || '—'}</td><td>{displayRole(row.owner) || '—'}</td><td>{row.prob || 'Low'}</td>{comm && <><td className="num">{fmtLakh(row.valueK)}</td><td className="num">{fmtLakh((Number(row.valueK) || 0) * (PROB_WEIGHT[row.prob] ?? PROB_WEIGHT.Low))}</td></>}<td>{row.age} d</td>
+              </tr>)}
+              {!ageing.length && <tr><td colSpan={comm ? 8 : 6} className="empty">No open opportunities match the current filters.</td></tr>}
+            </tbody>
+          </table>
         </div>
-
-        <div className="ana-card c-12">
-          <CardHead icon="chartBar">Margin view — GM% by opportunity</CardHead>
-          {comm ? (
-            <>
-              {margins.map(o => (
-                <div key={o.id} className="mbar clickable" role="button" tabIndex={0}
-                  onClick={() => nav(`/proposal/${o.id}`)} onKeyDown={e => { if (e.key === 'Enter') nav(`/proposal/${o.id}`) }}>
-                  <span className="mb-lbl wide"><span className="oppid-link">{o.id}</span> <span className="hint">{fmtLakh(o.valueK)}</span></span>
-                  <span className="mb-track">
-                    <span className="mb-fill" style={{ width: `${Math.min(100, Math.max(4, o.gm))}%`, background: o.gm >= 25 ? 'var(--status-good)' : o.gm >= 20 ? 'var(--status-warn)' : 'var(--status-bad)' }} />
-                  </span>
-                  <span className="mb-val">{o.gm}%</span>
-                </div>
-              ))}
-              {!margins.length && <div className="hint">No open opportunities with a value yet.</div>}
-              <div className="hint" style={{ marginTop: 6 }}>Green ≥ 25% · amber ≥ 20% · red below 20% (Net GM heuristic; the Priced BoQ holds the exact number).</div>
-            </>
-          ) : <Restricted />}
-        </div>
-
-        <div className="ana-card c-6">
-          <CardHead icon="target" tone="tone-teal">Team target vs actual — {sales.fy}</CardHead>
-          {comm ? (
-            <>
-              {teamQ.map(q => (
-                <div key={q.label} className="mbar">
-                  <span className="mb-lbl wide">{q.label}</span>
-                  <span className="mb-track">
-                    <span className="mb-fill" style={{ width: `${Math.min(100, Math.max(2, q.target ? (q.actual / q.target) * 100 : 0))}%`, background: 'var(--primary-accent)' }} />
-                  </span>
-                  <span className="mb-val" style={{ flexBasis: 140 }}>{fmtLakh(q.actual)} / {fmtLakh(q.target)}</span>
-                </div>
-              ))}
-              <div className="hint" style={{ marginTop: 6 }}>
-                Booked orders vs the summed owner targets per quarter (Indian FY, April start).
-              </div>
-            </>
-          ) : <Restricted />}
-        </div>
-
-        <div className="ana-card c-6">
-          <CardHead icon="trendUp" tone="tone-green">Attainment by owner</CardHead>
-          {comm ? (
-            <>
-              {attainment.map(a => (
-                <div key={a.owner} className="mbar">
-                  <span className="mb-lbl">{displayRole(a.owner)}</span>
-                  <span className="mb-track">
-                    <span className="mb-fill" style={{ width: `${Math.min(100, Math.max(2, a.pct))}%`, background: a.pct >= 50 ? 'var(--status-good)' : a.pct >= 25 ? 'var(--status-warn)' : 'var(--status-bad)' }} />
-                  </span>
-                  <span className="mb-val" style={{ flexBasis: 140 }}>{a.pct}% · {fmtLakh(a.booked)}</span>
-                </div>
-              ))}
-              {!attainment.length && <div className="hint">No sales targets configured.</div>}
-              <div className="hint" style={{ marginTop: 6 }}>
-                Booked order value as a share of each owner's annual target, best first.
-              </div>
-            </>
-          ) : <Restricted />}
-        </div>
-      </div>
+      </section>
     </div>
   )
 }

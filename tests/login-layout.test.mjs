@@ -14,11 +14,26 @@ test('login card is centered on a viewport-sized layout', () => {
   assert.match(styles, /\.login-card \{ box-sizing: border-box;/)
 })
 
-test('short login view remains reachable and preserves existing auth actions', () => {
+test('short login view remains reachable and preserves email/password auth actions', () => {
   assert.match(styles, /@media \(max-height: 720px\) \{\s*\.login-bg \{ align-items: flex-start; \}/)
   assert.match(login, /onSubmit=\{submitSignIn\}/)
   assert.match(login, /onSubmit=\{submitRegister\}/)
-  assert.match(login, /quickLogin/)
+  assert.doesNotMatch(login, /Quick login|quickLogin|quickAccounts|ql-title|ql-grid|ql-btn/)
+  assert.doesNotMatch(login, /Sign in with Microsoft|microsoftSignIn|msNotice/)
+})
+
+test('password fields provide an accessible visibility toggle', () => {
+  assert.match(login, /const \[showPassword, setShowPassword\] = useState\(false\)/)
+  assert.match(login, /type=\{showPassword \? 'text' : 'password'\}/)
+  assert.match(login, /aria-label=\{showPassword \? 'Hide password' : 'Show password'\}/)
+  assert.match(login, /aria-pressed=\{showPassword\}/)
+  assert.match(login, /id="lg-pw"[\s\S]*type=\{showPassword \? 'text' : 'password'\}/)
+  assert.match(login, /id="rg-pw"[\s\S]*type=\{showPassword \? 'text' : 'password'\}/)
+})
+
+test('password visibility control remains inside the password field boundary', () => {
+  assert.match(styles, /\.password-field \{ position: relative; display: flex; align-items: stretch; \}/)
+  assert.match(styles, /\.password-toggle \{ position: absolute; top: 0; right: 6px; bottom: 0; margin: auto 0; transform: none;/)
 })
 
 test('sign-in gives feedback and prevents duplicate submissions while Supabase responds', () => {

@@ -77,6 +77,14 @@ test('Admin clause library uses a responsive editable data table', () => {
   assert.doesNotMatch(styles, /clause-library-entry/)
 })
 
+test('Admin clause text editors size to content instead of reserving an oversized box', () => {
+  assert.match(admin, /function AutoSizingTextarea\(/)
+  assert.match(admin, /<AutoSizingTextarea[\s\S]*?className="clause-library-text-field"/)
+  assert.match(styles, /\.admin-page \.clause-library-text-field \{[\s\S]*?min-height: 1\.5em;[\s\S]*?resize: none;/)
+  assert.doesNotMatch(admin, /className="clause-library-text-field"[\s\S]*?rows=\{3\}/)
+  assert.doesNotMatch(admin, /useLayoutEffect\(\(\) => resize\(ref\.current\), \[value\]\)/)
+})
+
 test('Admin settings use a landscape adaptive grid before stacking', () => {
   assert.match(styles, /\.admin-page \.admin-setting-grid,[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/)
   assert.match(styles, /@media \(min-width: 1280px\) \{[\s\S]*?\.admin-page \.admin-setting-grid[\s\S]*?grid-template-columns: repeat\(3, minmax\(0, 1fr\)\);/)
