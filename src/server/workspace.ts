@@ -1,4 +1,5 @@
 import { createServiceClient } from './supabase.js'
+import { mergeConcurrentOpportunityRows as mergeOpportunityRows } from '../workflowTransitions.js'
 
 export type WorkspaceSlices = Record<string, unknown>
 export type WorkspaceReader = () => Promise<WorkspaceSlices>
@@ -68,6 +69,8 @@ export function mergeConcurrentApprovalRows(currentRows: ApprovalRow[] = [], des
   }
   return [...finalRows, ...[...pendingByKey.values()].map(mergeApprovalGroup)]
 }
+
+export const mergeConcurrentOpportunityRows = mergeOpportunityRows
 
 export class WorkspaceCache {
   private value: WorkspaceSlices | null = null
@@ -156,7 +159,9 @@ export function createWorkspaceWriter(): WorkspaceWriter | null {
       const desiredRows = desired as ApprovalRow[]
       let wanted = new Map((entity === 'approvals'
         ? mergeConcurrentApprovalRows((current.data || []).map((row: any) => row.data), desiredRows)
-        : desiredRows
+        : entity === 'opportunities'
+          ? mergeConcurrentOpportunityRows((current.data || []).map((row: any) => row.data), desiredRows)
+          : desiredRows
       ).map(row => [String(row.id), row]))
       for (let attempt = 0; attempt < 4; attempt += 1) {
         const existing = new Map<string, any>((current.data || []).map((row: any) => [row.id, row]))
@@ -181,6 +186,11 @@ export function createWorkspaceWriter(): WorkspaceWriter | null {
         if (current.error) throw current.error
         if (entity === 'approvals') {
           wanted = new Map(mergeConcurrentApprovalRows(
+            (current.data || []).map((row: any) => row.data),
+            desiredRows,
+          ).map(row => [String(row.id), row]))
+        } else if (entity === 'opportunities') {
+          wanted = new Map(mergeConcurrentOpportunityRows(
             (current.data || []).map((row: any) => row.data),
             desiredRows,
           ).map(row => [String(row.id), row]))

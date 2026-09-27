@@ -141,6 +141,20 @@ test('focus retries dirty writes and refreshes shared workflow state', () => {
   assert.match(focus, /pullSharedData\(\)/)
 })
 
+test('bursts of browser lifecycle events share one full workspace pull', () => {
+  const store = read('src/store.jsx')
+  assert.match(store, /const SHARED_PULL_DEDUP_MS = 5000/)
+  assert.match(store, /const lastSharedPullAtRef = useRef\(0\)/)
+  assert.match(store, /if \(!force && Date\.now\(\) - lastSharedPullAtRef\.current < SHARED_PULL_DEDUP_MS\) return true/)
+})
+
+test('approval decisions refresh only approvals and opportunities', () => {
+  const store = read('src/store.jsx')
+  const decision = store.slice(store.indexOf('    recordDecision(id,'), store.indexOf('    clearApprovals(', store.indexOf('    recordDecision(id,')))
+  assert.match(decision, /await readLiveData\(\['approvals', 'opportunities'\]\)/)
+  assert.doesNotMatch(decision, /await pullSharedData\(\)/)
+})
+
 test('pending opportunity IDs stay local-only and are persisted in the browser snapshot', () => {
   const datastore = read('src/datastore.js')
   const store = read('src/store.jsx')
@@ -264,12 +278,19 @@ test('workflow stage changes are gated and use the India business date', () => {
   assert.match(store, /const today = nowIST\(\)\.slice\(0, 10\)/)
 })
 
+test('generic opportunity updates attach a transition intent when they change workflow stage', () => {
+  const store = read('src/store.jsx')
+  const update = store.slice(store.indexOf('    updateOpportunity(id, patch)'), store.indexOf('    // Folder-wall delete', store.indexOf('    updateOpportunity(id, patch)')))
+  assert.match(update, /patch\.milestone !== before\.milestone/)
+  assert.match(update, /workflowTransition\(\s*before\.milestone,\s*patch\.milestone/)
+})
+
 test('the second final-release decision uses the normal transition gate before auto-advancing', () => {
   const store = read('src/store.jsx')
   assert.match(store, /transitionBlockers\(releasedOpp, 'Submitted', releasedProposal, next\)/)
   assert.match(store, /milestone: 'Submitted'/)
-  assert.match(store, /releasedOpp\.milestone !== 'Submitted'/,
-    'duplicate realtime events must not advance an already submitted quote again')
+  assert.match(store, /releasedOpp\.milestone === 'Approval'/,
+    'an old approval event must not move a later workflow stage back to Submitted')
 })
 
 test('an already-approved current release is reconciled after boot or live refresh', () => {

@@ -5,6 +5,12 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Protected shared opportunity workflows from stale browser snapshots. A
+  newer saved milestone now wins over an old tab's retry in both server and
+  direct persistence paths; intentional backward corrections still work only
+  with a recorded reason tied to the current server milestone. Approval side
+  effects now advance only from Approval, lifecycle refresh bursts share one
+  full pull, and approval decisions refresh only their affected rows.
 - Made proposal approval collaboration safe across browsers: approval request
   IDs are collision-resistant, simultaneous requests converge by approval
   key, and decisions from each required approver merge without overwriting
