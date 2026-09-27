@@ -335,12 +335,6 @@ export async function loadOpportunity(id) {
   return row.data
 }
 
-// Secondary startup path. This deliberately reuses the complete loader so
-// focus and route refreshes continue to have one authoritative code path.
-export async function loadBackground() {
-  return loadAll({ force: true })
-}
-
 async function fetchCore() {
   try {
     const railway = await loadWorkspaceFromRailway()

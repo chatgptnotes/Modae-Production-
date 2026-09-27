@@ -138,7 +138,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
   const store = useStore()
   const comm = canPriceProposal(store.role)
   const sourcingDataStatus = store.sourcingDataStatus || 'ready'
-  const lines = store.sparesLines.filter(l => l.oppId === opp.id && !isPlaceholderSparesLine(l) && !isLegacyAutoSparesSupportRow(l))
+  const lines = useMemo(() => store.sparesLines.filter(l => l.oppId === opp.id && !isPlaceholderSparesLine(l) && !isLegacyAutoSparesSupportRow(l)), [store.sparesLines, opp.id])
   const proposal = store.getProposal(opp.id)
   const [compareFor, setCompareFor] = useState(null)
   const [compareSearch, setCompareSearch] = useState('')
@@ -179,7 +179,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     if (sourcingDataStatus !== 'ready') return
     lines.forEach(line => {
       const reconciled = reconcileCatalogueMatch(line, store.priceLists)
-      const changed = ['pn', 'desc', 'priceState', 'listPrice', 'listUnitPrice', 'priceSourceSuggested'].some(key => reconciled[key] !== line[key])
+      const changed = Object.keys(reconciled).some(key => reconciled[key] !== line[key])
       if (changed) store.updateSparesLine(line.id, reconciled)
     })
   }, [sourcingDataStatus, lines, store.priceLists])

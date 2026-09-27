@@ -4,21 +4,22 @@ import test from 'node:test'
 
 const read = file => readFileSync(new URL(`../${file}`, import.meta.url), 'utf8')
 
-test('the shared workspace loads normally once and uses targeted Railway live updates', () => {
+test('the shared workspace loads once per session and saves only explicit edits', () => {
   const datastore = read('src/datastore.js')
   assert.doesNotMatch(datastore, /postgres_changes|subscribeBusinessChanges|loadChangedRows|\.channel\(/)
   assert.match(datastore, /loadAll\(\{ force = false \} = \{\}\)/)
   assert.match(datastore, /\.is\('deleted_at', null\)/)
 
   const store = read('src/store.jsx')
-  assert.match(store, /const location = useLocation\(\)/)
-  assert.match(store, /import \{ readLiveData, startLiveEvents \} from '\.\/liveSync\.js'/)
+  assert.match(store, /import \{ readLiveData \} from '\.\/liveSync\.js'/)
   assert.match(datastore, /saveWorkspaceToRailway\(collaborativeDirty\)/)
-  assert.match(store, /return startLiveEvents\(/)
-  assert.doesNotMatch(store, /publishLiveChanges\(/)
-  assert.doesNotMatch(store, /pullSharedData\(\)\.catch\(\(\) => setLiveSyncStatus\('error'\)\)/)
-  assert.match(store, /window\.addEventListener\('focus'/)
-  assert.match(store, /document\.addEventListener\('visibilitychange'/)
+  assert.doesNotMatch(store, /return startLiveEvents\(/)
+  assert.doesNotMatch(store, /document\.addEventListener\('visibilitychange'/)
+  assert.doesNotMatch(store, /useEffect\(\(\) => \{\n    if \(!datastore\.dbEnabled\(\) \|\| !hydratedRef\.current\) return\n    void pullSharedData\(\)/)
+  assert.match(store, /const initialHydrationRef = useRef\(null\)/)
+  assert.match(store, /const userId = state\.auth\?\.user\?\.id \|\| ''/)
+  assert.match(store, /initialHydrationRef\.current === userId/)
+  assert.doesNotMatch(store, /datastore\.loadBackground\(\)/)
   assert.match(store, /async refreshSharedData\(\)/)
   assert.match(store, /setTimeout\(flushSaves, 0\)/,
     'approval decisions must bypass the ordinary draft-save debounce')
@@ -133,19 +134,18 @@ test('save RPC errors retain the entity that failed', () => {
   assert.match(datastore, /throw annotateRpcError\('opportunities', result\.error\)/)
 })
 
-test('focus retries dirty writes and refreshes shared workflow state', () => {
+test('lifecycle events do not trigger repeated full workspace pulls', () => {
   const store = read('src/store.jsx')
-  const focus = store.slice(store.indexOf('const onFocus = () => {'), store.indexOf('const onVisibility = () =>'))
-  assert.match(focus, /if \(!hydratedRef\.current\) \{ hydrate\(\); return \}/)
-  assert.match(focus, /flushSaves\(\)/)
-  assert.match(focus, /pullSharedData\(\)/)
+  assert.doesNotMatch(store, /window\.addEventListener\('online'/)
+  assert.doesNotMatch(store, /document\.addEventListener\('visibilitychange'/)
+  assert.doesNotMatch(store, /pullSharedData\(/)
 })
 
-test('bursts of browser lifecycle events share one full workspace pull', () => {
+test('manual refresh remains the only full workspace pull after initial hydration', () => {
   const store = read('src/store.jsx')
-  assert.match(store, /const SHARED_PULL_DEDUP_MS = 5000/)
-  assert.match(store, /const lastSharedPullAtRef = useRef\(0\)/)
-  assert.match(store, /if \(!force && Date\.now\(\) - lastSharedPullAtRef\.current < SHARED_PULL_DEDUP_MS\) return true/)
+  assert.match(store, /async refreshSharedData\(\)/)
+  assert.match(store, /datastore\.loadAll\(\{ force: true \}\)/)
+  assert.doesNotMatch(store, /location\.pathname/)
 })
 
 test('approval decisions refresh only approvals and opportunities', () => {

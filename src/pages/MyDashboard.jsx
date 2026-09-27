@@ -8,7 +8,6 @@ import { analyticsSnapshot, counts, salesPerformance, winLossAnalysis, FY_QUARTE
 import { ArcGauge } from '../dashviz.jsx'
 import { Icon } from '../icons.jsx'
 import ForecastDashboard from './Dashboard.jsx'
-import { useOnlineUserCount } from '../presence.js'
 import WinLossFlow from '../WinLossFlow.jsx'
 
 // My Dashboard — "there has to be something called My Dashboard… it will be
@@ -779,7 +778,6 @@ function ProposalStatusCard({ store, nav }) {
 // into approvals, risk, attainment, and team targets.
 function OwnerDashboard({ store, nav, role, c, blocked, nextActions, head }) {
   const perf = salesPerformance(store)
-  const onlineUserCount = useOnlineUserCount(true)
   const mine = (store.approvals || []).filter(a => a.status === 'Pending'
     && (a.needed?.length ? a.needed : [a.approver]).includes(role) && !(a.decisions || {})[role])
 
@@ -790,7 +788,6 @@ function OwnerDashboard({ store, nav, role, c, blocked, nextActions, head }) {
         <Metric label="Company pipeline" value={analyticsSnapshot(store, role).openCount} tone="sky" onClick={() => nav('/analytics')} />
         <Metric label="Waiting on you" value={mine.length} tone={mine.length ? 'red' : 'green'} onClick={() => nav('/approvals')} />
         <Metric label="Blocked" value={blocked.length} tone={blocked.length ? 'red' : 'green'} onClick={() => nav('/')} />
-        <Metric label="Users online" value={onlineUserCount ?? '—'} hint={onlineUserCount == null ? 'Presence unavailable' : 'Active in last 2 min'} tone="teal" />
       </div>
       <AnalyticsOverview {...{ store, role, nav }} />
       <div className="ana-grid"><ProposalStatusCard {...{ store, nav }} /></div>
@@ -908,7 +905,6 @@ function AdminDashboard({ store, nav, role, c, blocked, nextActions, head }) {
   const users = store.auth?.users || []
   const pendingUsers = users.filter(u => u.status === 'Pending')
   const perf = salesPerformance(store)
-  const onlineUserCount = useOnlineUserCount(true)
 
   return (
     <div className="page dashboard-page">
@@ -917,7 +913,6 @@ function AdminDashboard({ store, nav, role, c, blocked, nextActions, head }) {
         <Metric label="Awaiting approval" value={pendingUsers.length} tone={pendingUsers.length ? 'amber' : 'green'} onClick={() => nav('/users')} />
         <Metric label="Pending gates" value={c.pending} tone={c.pending ? 'amber' : 'green'} onClick={() => nav('/approvals')} />
         <Metric label="Blocked" value={blocked.length} tone={blocked.length ? 'red' : 'green'} onClick={() => nav('/')} />
-        <Metric label="Users online" value={onlineUserCount ?? '—'} hint={onlineUserCount == null ? 'Presence unavailable' : 'Active in last 2 min'} tone="teal" />
       </div>
 
       <div className="ana-grid">

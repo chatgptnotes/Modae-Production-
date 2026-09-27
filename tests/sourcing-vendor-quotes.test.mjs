@@ -65,6 +65,13 @@ test('Sourcing reconciles missing structured lead rows for existing opportunitie
   assert.match(store, /addSparesLinesFromLead\(oppId, rows, \{ auditAction = 'Lead lines imported' \}/)
 })
 
+test('Sourcing catalogue reconciliation is stable and does not autosave on render', () => {
+  assert.match(sparesWorkbench, /const lines = useMemo\(\(\) => store\.sparesLines\.filter\(/)
+  assert.match(sparesWorkbench, /\), \[store\.sparesLines, opp\.id\]\)/)
+  assert.match(sparesWorkbench, /const changed = Object\.keys\(reconciled\)\.some\(key => reconciled\[key\] !== line\[key\]\)/)
+  assert.match(sparesWorkbench, /\}, \[sourcingDataStatus, lines, store\.priceLists\]\)/)
+})
+
 test('a pending pricing approval can explicitly refresh its shared status', () => {
   assert.match(sparesWorkbench, /Refresh approval status/)
   assert.match(sparesWorkbench, /store\.refreshSharedData\(\)/)

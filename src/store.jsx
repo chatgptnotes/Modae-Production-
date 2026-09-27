@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
-import { useLocation } from 'react-router-dom'
 import * as filestore from './filestore.js'
 import * as datastore from './datastore.js'
 import * as leadBlobs from './leadBlobs.js'
@@ -32,11 +31,10 @@ import {
 import { releaseState, transitionBlockers } from './gates.js'
 import { clearSupabaseSession, isSupabaseAuthError, supabase, supabaseConfigError } from './supabase.js'
 import { isLocalDemoSession } from './authMode.js'
-import { readLiveData, startLiveEvents } from './liveSync.js'
+import { readLiveData } from './liveSync.js'
 import { purgeWorkspace } from './workspacePurge.js'
 
 const StoreCtx = createContext(null)
-const SHARED_PULL_DEDUP_MS = 5000
 const workflowTransition = (from, to, reason = '', id = null) => ({
   id: id || `WFT-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`,
   from, to, reason: String(reason || ''),
@@ -329,10 +327,8 @@ function reconcileApprovedSubmissions(s) {
 }
 
 export function StoreProvider({ children }) {
-  const location = useLocation()
   const [state, setState] = useState(initialState)
-  const lastSharedPullAtRef = useRef(0)
-  const sharedPullInFlightRef = useRef(null)
+  const initialHydrationRef = useRef(null)
   datastore.setLocalDemoMode(isLocalDemoSession(state))
   const [authReady, setAuthReady] = useState(() => !supabase || !!state.auth?.user)
   const [liveSyncStatus, setLiveSyncStatus] = useState(() => supabaseConfigError ? 'config-error' : datastore.dbEnabled() ? 'connecting' : 'offline')
@@ -390,7 +386,7 @@ export function StoreProvider({ children }) {
     const s = stateRef.current
     const dirty = {}
     for (const [k, v] of Object.entries(syncedOf(s))) {
-      if (v !== lastSavedRef.current[k]) dirty[k] = v
+      if (JSON.stringify(v) !== JSON.stringify(lastSavedRef.current[k])) dirty[k] = v
     }
     return dirty
   }
@@ -551,20 +547,6 @@ export function StoreProvider({ children }) {
       setSourcingDataStatus('ready')
       setTimeout(flushSaves, 0)
     }
-    // Non-critical configuration and catalogues must not delay the first
-    // opportunity render. They still flow through applyServer so dirty local
-    // edits and the normal merge rules remain protected.
-    datastore.loadBackground()
-      .then(background => {
-        if (!background) return
-        if (background.diagnostics) setSyncDiagnostics(background.diagnostics)
-        if (background.error) { setLiveSyncStatus('error'); return }
-        if (hydratedRef.current && !background.empty) {
-          applyServer(background.slices, background.diagnostics)
-          setLiveSyncStatus('live')
-        }
-      })
-      .catch(() => setLiveSyncStatus('error'))
   }
 
   // A server slice replaces only a clean local slice. This protects edits that
@@ -636,36 +618,6 @@ export function StoreProvider({ children }) {
     }
   }
 
-  const pullSharedData = ({ force = false } = {}) => {
-    if (!datastore.dbEnabled()) return false
-    if (!force && sharedPullInFlightRef.current) return sharedPullInFlightRef.current
-    if (!force && Date.now() - lastSharedPullAtRef.current < SHARED_PULL_DEDUP_MS) return true
-    lastSharedPullAtRef.current = Date.now()
-    const pull = (async () => {
-      await flushSaves()
-      const res = await datastore.loadAll({ force: true })
-      if (!res) { setLiveSyncStatus('error'); return false }
-      if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
-      if (res.error) {
-        const authError = invalidateSupabaseAuth(res.error)
-        if (!authError) setLiveSyncStatus('error')
-        return false
-      }
-      if (res.empty) {
-        const clean = migrate({ ...emptyState(stateRef.current), demoData: false, priceLists: {}, adhocParts: [], rateSheets: {}, users: [], audit: [] })
-        lastSavedRef.current = syncedOf(clean)
-        setState(clean)
-        setLiveSyncStatus('live')
-        return true
-      }
-      setLiveSyncStatus('live')
-      applyServer(res.slices, res.diagnostics)
-      return true
-    })()
-    sharedPullInFlightRef.current = pull
-    return pull.finally(() => { sharedPullInFlightRef.current = null })
-  }
-
   // React state updates and the stateRef mirror are committed on the next
   // turn. Wait for that commit before a workflow transition claims that its
   // persistence completed, otherwise navigation can race the save.
@@ -675,67 +627,18 @@ export function StoreProvider({ children }) {
   }
 
   useEffect(() => {
-    if (!datastore.dbEnabled() || !hydratedRef.current || !state.auth?.user?.id) return
-    return startLiveEvents({
-      onChange: async entities => {
-        try {
-          const slices = await readLiveData(entities)
-          if (slices) applyServer(slices)
-          setLiveSyncStatus('live')
-        } catch (error) {
-          if (!invalidateSupabaseAuth(error)) setLiveSyncStatus('error')
-        }
-      },
-      onError: error => {
-        // The helper reconnects automatically. Retain the visible diagnostic
-        // without forcing a broad Supabase refresh on every reconnect.
-        if (!isSupabaseAuthError(error)) setLiveSyncStatus('error')
-      },
-    })
-  }, [state.auth?.user?.id])
-
-  useEffect(() => {
-    if (!datastore.dbEnabled()) return
+    const userId = state.auth?.user?.id || ''
+    if (!datastore.dbEnabled() || !userId) return
+    if (initialHydrationRef.current === userId) return
+    initialHydrationRef.current = userId
     hydrate()
     loadApprovedPriceLists()
-    const onFocus = () => {
-      if (!hydratedRef.current) { hydrate(); return }
-      flushSaves()
-      void pullSharedData()
-    }
-    const onVisibility = () => {
-      if (document.visibilityState === 'hidden') {
-        flushLocalCache(); flushSaves()
-      } else if (hydratedRef.current) {
-        void pullSharedData()
-      }
-    }
-    const onOnline = () => {
-      if (!hydratedRef.current) { hydrate(); return }
-      void pullSharedData()
-    }
-    // visibilitychange is not reliably delivered when the page is being torn
-    // down, which is exactly the reload-right-after-editing case. pagehide is.
     const onPageHide = () => { flushLocalCache(); flushSaves() }
-    window.addEventListener('focus', onFocus)
-    window.addEventListener('online', onOnline)
-    document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('pagehide', onPageHide)
     return () => {
-      window.removeEventListener('focus', onFocus)
-      window.removeEventListener('online', onOnline)
-      document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('pagehide', onPageHide)
     }
-  }, [])
-
-  // Navigation saves pending edits and refreshes the authoritative workspace.
-  // This also brings proposal and approval changes from another browser into
-  // the current page without adding a realtime subscription.
-  useEffect(() => {
-    if (!datastore.dbEnabled() || !hydratedRef.current) return
-    void pullSharedData()
-  }, [location.pathname])
+  }, [state.auth?.user?.id])
 
   useEffect(() => {
     // An uncaught throw here (quota, storage disabled) would kill persistence
