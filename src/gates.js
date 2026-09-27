@@ -744,6 +744,9 @@ export function transitionBlockers(opp, target, proposal, state) {
   // and repeated for every revision. All applicable gates must clear before a
   // quote is "Ready for Dispatch".
   if (next >= MILESTONES.indexOf('Submitted')) {
+    if (proposal?.reviewedUpload && !['Validated', 'Override accepted'].includes(proposal.reviewStatus)) {
+      b.push({ key: 'proposal-review', severity: 'block', text: 'Validate the uploaded proposal revision before moving to Submitted' })
+    }
     // §5A is drawn as "LJS OR AN" and §5B as "AH ONLY", so 5A names both roles
     // and marks itself `anyOf` — either technical approver alone clears it.
     const hasCommercialDeviation = state.config?.requireCommercialDeviationApproval !== false

@@ -123,7 +123,7 @@ test('the draft action keeps the primary orange appearance when disabled', () =>
 
 test('proposal attachment is opt-in and requires validated review', () => {
   assert.match(submission, /const \[attachProposal, setAttachProposal\]/)
-  assert.match(submission, /p\.reviewStatus === 'Validated' \|\| !!release/)
+  assert.match(submission, /p\.reviewStatus === 'Validated' \|\| p\.reviewStatus === 'Override accepted' \|\| \(!p\.reviewedUpload && !!release\)/)
   assert.match(submission, /Attach validated proposal/)
   assert.match(submission, /attachProposal && !proposalValidated/)
   assert.match(submission, /\.\.\.\(attachProposal \? \[/)

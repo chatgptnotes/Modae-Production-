@@ -26,7 +26,7 @@ import { fmtSize, uploadOppFile } from '../filestore.js'
 import DetailTabs from '../DetailTabs.jsx'
 import { isLegacyAutoSparesSupportRow, isSparesSupportRow, orderedSparesProposalBom, withSparesSupportRows } from '../proposal/sparesBoq.js'
 import { runTaskResult } from '../ai.js'
-import { importReviewedWorkbook, normalizeAiReview, reviewWorkbookPayload } from '../proposal/reviewWorkbook.js'
+import { filterLogicalChangeIssues, importReviewedWorkbook, normalizeAiReview, reviewWorkbookPayload } from '../proposal/reviewWorkbook.js'
 import { clausesFor, clauseWarnings } from '../clauses.js'
 import { fromInr, toInr, currencySymbol } from '../currency.js'
 import { reviewFindingKey } from '../approvalMemory.js'
@@ -1280,7 +1280,6 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       if (review.bom?.some(line => Number(totalQty(line)) <= 0)) issues.push({ severity: 'block', text: 'Every proposal line must have a quantity greater than zero.' })
       if (review.bom?.some(line => line.quoted !== '' && Number(line.quoted) < 0)) issues.push({ severity: 'block', text: 'Negative quoted prices are not allowed.' })
       if (!review.terms?.length) issues.push({ severity: 'info', code: 'terms.missing', text: 'Commercial terms have not been added yet.' })
-      if (reviewedUpload) issues.push({ severity: 'info', text: `Reviewed upload received: ${reviewedUpload.filename}` })
       if (reviewedUpload?.validationIssues?.length) issues.unshift(...reviewedUpload.validationIssues)
       if (reviewedUpload?.sheets?.length && !reviewedUpload.baseProposal) {
         issues.unshift({
@@ -1307,8 +1306,9 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       if (!aiResult.data && aiResult.error) aiIssues.push({ severity: 'info', code: 'ai.unavailable', source: 'AI', text: `AI semantic review was unavailable: ${aiResult.error}. Local checks were still completed.` })
       const aiSummary = String(aiReview.summary || '').trim()
       setReviewStage(retainProgress ? 4 : 3)
+      const logicalIssues = filterLogicalChangeIssues(issues, aiReview, { aiAvailable: Boolean(aiResult.data) })
       const allIssues = rememberOverriddenFindings(
-        rememberApprovedFindings([...issues, ...aiIssues], store.approvals, oppId, nextRevision),
+        rememberApprovedFindings([...logicalIssues, ...aiIssues], store.approvals, oppId, nextRevision),
         review.reviewOverride,
       )
       const hasActiveBlock = allIssues.some(issue => issue.severity === 'block')
@@ -1797,6 +1797,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
         <section className="proposal-review-results" aria-live="polite">
           {reviewError && <div className="errbox">{reviewError}</div>}
           {reviewMessage && <div className="okbox">{reviewMessage}</div>}
+          {p.reviewedUpload && !p.reviewCompletedAt && <div className="proposal-review-issue info">The uploaded revision is being compared with the AI draft. Only meaningful business changes will be shown after validation.</div>}
           {p.reviewCompletedAt && <div className={`proposal-review-issues ${overrideAccepted ? 'is-overridden' : ''}`}>
             <div className="proposal-review-issues-header">
               <div>
@@ -1811,6 +1812,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
               </div>}
             </div>
             {overrideAccepted && <div className="proposal-review-memory-summary">{displayReviewIssues.length} finding{displayReviewIssues.length === 1 ? '' : 's'} overridden by {displayRole(p.reviewOverride.by)}{p.reviewOverride.at ? ` on ${approvalDate(p.reviewOverride.at)}` : ''}. These findings are retained for audit and no longer block this proposal.</div>}
+            {p.reviewedUpload?.comparisonAvailable && !workbookChangeIssues.length && <div className="proposal-review-issue info">No meaningful workbook changes found in uploaded {p.reviewedUpload.filename || `Rev-${p.revision || '00'}`}.</div>}
             {!!workbookChangeIssues.length && <div className="proposal-review-workbook-changes">
               <div className="proposal-review-group-head"><strong>Workbook changes detected</strong><span>{workbookChangeIssues.length} item{workbookChangeIssues.length === 1 ? '' : 's'}</span></div>
               <div className="proposal-review-group-list">{workbookChangeIssues.map((issue, index) => <ReviewIssue key={`change-${index}`} issue={issue} overridden={overrideAccepted} />)}</div>

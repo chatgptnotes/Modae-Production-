@@ -125,6 +125,23 @@ const commercialTermChanges = (workbook, proposal) => {
 }
 
 const displayValue = value => `"${value == null || value === '' ? 'blank' : String(value)}"`
+const LOGICAL_CHANGE_CODES = new Set(['line.value-changed', 'term.value-changed'])
+
+// Local parsing identifies possible changes. The AI review is the second pass:
+// it confirms which candidates are meaningful business changes. Structural
+// validation findings remain visible regardless of the AI decision.
+export function filterLogicalChangeIssues(issues = [], aiReview = {}, { aiAvailable = false } = {}) {
+  if (!aiAvailable || !Array.isArray(aiReview?.confirmedChangeIndexes)) return issues
+  const confirmed = new Set(aiReview.confirmedChangeIndexes.filter(index => Number.isInteger(index)))
+  let candidateIndex = 0
+  return issues.filter(issue => {
+    if (!LOGICAL_CHANGE_CODES.has(issue?.code) || !issue?.change) return true
+    const keep = confirmed.has(candidateIndex)
+    candidateIndex += 1
+    return keep
+  })
+}
+
 const sameNumber = (left, right) => Number(left) === Number(right)
 const sameMoney = (left, right) => money(left) === money(right)
 const normalizedMoney = value => value == null || String(value).trim() === '' ? value : money(value)
@@ -262,6 +279,15 @@ const proposalLineSnapshot = proposal => (proposal?.bom || []).map(line => ({
 }))
 
 export function reviewWorkbookPayload(workbook, proposal, opportunity, localIssues, comparison = {}) {
+  const candidateChanges = localIssues
+    .filter(issue => LOGICAL_CHANGE_CODES.has(issue?.code) && issue?.change)
+    .map((issue, index) => ({
+      index,
+      code: issue.code,
+      text: issue.text,
+      change: issue.change,
+      evidence: issue.evidence,
+    }))
   return {
     artifactType: workbook?.sheets?.length ? 'uploaded-workbook' : 'generated-proposal',
     opportunity: { id: opportunity?.id, customer: opportunity?.sellTo, name: opportunity?.oppName, route: opportunity?.oppType },
@@ -271,6 +297,7 @@ export function reviewWorkbookPayload(workbook, proposal, opportunity, localIssu
       baselineLines: proposalLineSnapshot(comparison.baseline),
       deterministicChanges: comparison.deterministicChanges || [],
       deterministicTermChanges: comparison.deterministicTermChanges || [],
+      candidateChanges,
     },
     workbook: (workbook?.sheets || []).map(sheet => ({ name: sheet.name, rows: (sheet.rows || []).slice(0, 160) })),
     localIssues: localIssues.map(issue => ({ severity: issue.severity, code: issue.code, text: issue.text })),

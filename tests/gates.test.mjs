@@ -219,6 +219,19 @@ test('final quote release requires both AH and LJS', () => {
   assert.equal(release.anyOf, false)
 })
 
+test('an uploaded proposal revision must pass logical review before Submitted', () => {
+  const uploaded = { ...releasedProposal, reviewedUpload: { filename: 'edited.xlsx', sheets: [{ name: 'Firm Offer', rows: [] }] }, reviewStatus: 'Ready for validation' }
+  const state = poState({})
+  assert.equal(
+    transitionBlockers({ ...baseOpp, milestone: 'Approval' }, 'Submitted', uploaded, state).some(item => item.key === 'proposal-review'),
+    true,
+  )
+  assert.equal(
+    transitionBlockers({ ...baseOpp, milestone: 'Approval' }, 'Submitted', { ...uploaded, reviewStatus: 'Validated' }, state).some(item => item.key === 'proposal-review'),
+    false,
+  )
+})
+
 test('standard ModAE terms do not require commercial AH approval', () => {
   const blockers = transitionBlockers(
     { ...baseOpp, milestone: 'Approval' }, 'Submitted', releasedProposal,

@@ -67,9 +67,11 @@ export function snapshotProposal(p) {
       itemId: p.reviewedUpload.itemId,
       sheets: p.reviewedUpload.sheets,
       importedChanges: p.reviewedUpload.importedChanges,
+      termChanges: p.reviewedUpload.termChanges,
       validationIssues: p.reviewedUpload.validationIssues,
       comparisonAvailable: p.reviewedUpload.comparisonAvailable,
       table: p.reviewedUpload.table,
+      baseProposal: p.reviewedUpload.baseProposal,
     }
     : null
   return JSON.parse(JSON.stringify({

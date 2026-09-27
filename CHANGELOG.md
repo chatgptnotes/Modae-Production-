@@ -5,6 +5,14 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Standardized generated Excel cleanup across proposal, pipeline, price-list,
+  and editable-workbook exports: proposal print areas now stop at real customer
+  content, unused template padding is hidden, table exports expose filters, and
+  price-list templates use the ModAE document styling.
+- Proposal revision review now asks AI to confirm only meaningful workbook
+  changes, ignores harmless unit/formatting differences, preserves uploaded
+  comparison data across navigation, and blocks an unvalidated uploaded
+  revision from customer submission.
 - Protected shared opportunity workflows from stale browser snapshots. A
   newer saved milestone now wins over an old tab's retry in both server and
   direct persistence paths; intentional backward corrections still work only

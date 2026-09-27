@@ -132,7 +132,7 @@ test('proposal review remembers matching approved deviations', () => {
   const proposal = read('src/pages/Proposal.jsx')
   assert.match(proposal, /const approvalTermMatches = \(term, value\) =>/)
   assert.match(proposal, /approval\.type !== 'Commercial deviation'/)
-  assert.match(proposal, /rememberApprovedFindings\(\[\.\.\.issues, \.\.\.aiIssues\]/)
+  assert.match(proposal, /rememberApprovedFindings\(\[\.\.\.logicalIssues, \.\.\.aiIssues\]/)
   assert.match(proposal, /severity: 'info'/)
   assert.match(proposal, /Already approved/)
   assert.match(proposal, /displayRole\(approval\.approver\)/)

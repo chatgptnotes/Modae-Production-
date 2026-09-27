@@ -79,6 +79,13 @@ test('uploaded human term changes are displayed as red non-blocking workbook cha
   assert.match(proposal, /this notice does not block the workflow/)
 })
 
+test('uploaded revision reports no meaningful changes when AI confirms no candidates', () => {
+  assert.match(reviewWorkbook, /candidateChanges/)
+  assert.match(reviewWorkbook, /confirmedChangeIndexes/)
+  assert.match(proposal, /filterLogicalChangeIssues\(issues, aiReview, \{ aiAvailable: Boolean\(aiResult\.data\) \}\)/)
+  assert.match(proposal, /No meaningful workbook changes found in uploaded/)
+})
+
 test('validation findings are grouped with a readable summary', () => {
   assert.match(proposal, /proposal-review-issues-header/)
   assert.match(proposal, /proposal-review-counts/)

@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { extractCommercialTerms, importReviewedWorkbook, normalizeAiReview } from '../src/proposal/reviewWorkbook.js'
+import { extractCommercialTerms, filterLogicalChangeIssues, importReviewedWorkbook, normalizeAiReview } from '../src/proposal/reviewWorkbook.js'
 
 const proposal = {
   units: 7,
@@ -128,4 +128,19 @@ test('normalizes AI findings without allowing arbitrary severities', () => {
   const findings = normalizeAiReview({ findings: [{ severity: 'block', code: 'scope', text: 'Scope differs', evidence: 'Proposal row 4' }, { severity: 'danger', finding: 'Review this' }] })
   assert.deepEqual(findings.map(item => item.severity), ['block', 'warning'])
   assert.equal(findings[0].source, 'AI')
+})
+
+test('AI confirmation keeps only meaningful uploaded workbook changes', () => {
+  const issues = [
+    { severity: 'warning', code: 'line.value-changed', text: 'Unit price changed', change: { field: 'unitPrice', before: 10, after: 12 } },
+    { severity: 'info', code: 'term.value-changed', text: 'Payment changed', change: { field: 'commercialTerm', before: '30 days', after: '60 days' } },
+    { severity: 'info', code: 'line.part-number-missing', text: 'A part number is missing' },
+  ]
+  const filtered = filterLogicalChangeIssues(issues, { confirmedChangeIndexes: [1] }, { aiAvailable: true })
+  assert.deepEqual(filtered.map(issue => issue.code), ['term.value-changed', 'line.part-number-missing'])
+})
+
+test('AI-unavailable review keeps deterministic candidates for human review', () => {
+  const issues = [{ severity: 'warning', code: 'line.value-changed', text: 'Unit price changed', change: { field: 'unitPrice', before: 10, after: 12 } }]
+  assert.deepEqual(filterLogicalChangeIssues(issues, {}, { aiAvailable: false }), issues)
 })

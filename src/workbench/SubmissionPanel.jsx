@@ -128,7 +128,7 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
   const { totalQty, lineQuoted, lineCost, linePrice, computeTotals } = buildPricing(store, p)
   const totals = computeTotals(p)
   const priced = p.bidType !== 'Unpriced (Technical)'
-  const proposalValidated = p.reviewStatus === 'Validated' || !!release || p.reviewStatus === 'Override accepted'
+  const proposalValidated = p.reviewStatus === 'Validated' || p.reviewStatus === 'Override accepted' || (!p.reviewedUpload && !!release)
   const uploadStorageReady = isValidatedUploadStorageReady(p)
   const fromValid = EMAIL_RE.test(emailFrom.trim())
   const toValid = recipientsValid(emailTo)
