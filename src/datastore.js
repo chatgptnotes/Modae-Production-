@@ -1,6 +1,7 @@
 import { describeSupabaseError, isSupabaseAuthError, supabase } from './supabase.js'
 import { writeCachedRules } from './rules.js'
 import { loadWorkspaceFromRailway, saveWorkspaceToRailway } from './workspaceApi.js'
+import { mergeOpportunityRow } from './workflowTransitions.js'
 
 // Server persistence for the store: normalized business rows plus dedicated
 // JSONB entity tables. Mirrors the filestore facade —
@@ -780,8 +781,9 @@ async function saveOpportunityRowsNow(rows) {
     }
   }
 
-  // Latest-save-wins: rebase only rows rejected by the revision guard onto
-  // the newest server revision, preserving the local row being saved.
+  // Latest-save-wins for ordinary fields: rebase only rows rejected by the
+  // revision guard, preserving the local row being saved while the shared
+  // transition merger keeps an old browser from lowering a newer milestone.
   let pending = opportunityPayload(changedRows, deletedIds)
   for (let attempt = 0; attempt <= MAX_CONFLICT_RETRIES; attempt += 1) {
     const result = await write(pending)
@@ -792,7 +794,7 @@ async function saveOpportunityRowsNow(rows) {
       const local = localById.get(serverRow.id)
       return {
         id: serverRow.id,
-        data: local || serverRow.data,
+        data: local ? mergeOpportunityRow(serverRow.data, local) : serverRow.data,
         rev: Number(serverRow.rev) || 0,
         deleted: !local,
       }

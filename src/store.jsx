@@ -36,6 +36,11 @@ import { readLiveData, startLiveEvents } from './liveSync.js'
 import { purgeWorkspace } from './workspacePurge.js'
 
 const StoreCtx = createContext(null)
+const SHARED_PULL_DEDUP_MS = 5000
+const workflowTransition = (from, to, reason = '', id = null) => ({
+  id: id || `WFT-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`,
+  from, to, reason: String(reason || ''),
+})
 const CLARIFICATION_FIELD_KEYS = new Set([
   'oppName', 'rfqNumber', 'sellTo', 'category', 'location', 'customerStatus',
   'eucName', 'eucLocation', 'oppType', 'bu', 'segment', 'solution',
@@ -245,17 +250,20 @@ function applyApprovalEffects(s, appr) {
       // still-pending technical/commercial gate or another lifecycle rule.
       const releasedProposal = next.proposals[appr.oppId]
       const releasedOpp = next.opportunities.find(o => o.id === appr.oppId)
-      if (releasedProposal && releasedOpp && releasedOpp.milestone !== 'Submitted'
+      if (releasedProposal && releasedOpp && releasedOpp.milestone === 'Approval'
         && !transitionBlockers(releasedOpp, 'Submitted', releasedProposal, next).length) {
         next = {
           ...next,
           opportunities: next.opportunities.map(o => o.id === appr.oppId
-            ? { ...o, milestone: 'Submitted', lastUpdated: nowIST().slice(0, 10) }
+            ? { ...o, milestone: 'Submitted', lastUpdated: nowIST().slice(0, 10),
+                workflowTransition: workflowTransition(o.milestone, 'Submitted', 'Final quote release approved', `WFT-${appr.id}-approved`) }
             : o),
         }
       }
     } else if (appr.status === 'Returned') {
-      next = { ...next, opportunities: next.opportunities.map(o => (o.id === appr.oppId ? { ...o, milestone: 'Proposal' } : o)) }
+      next = { ...next, opportunities: next.opportunities.map(o => (o.id === appr.oppId && o.milestone === 'Approval'
+        ? { ...o, milestone: 'Proposal', workflowTransition: workflowTransition(o.milestone, 'Proposal', appr.decisionNote || 'Approval returned', `WFT-${appr.id}-returned`) }
+        : o)) }
     } else if (appr.status === 'Rejected') {
       next = { ...next, opportunities: next.opportunities.map(o => (o.id === appr.oppId ? { ...o, health: 'Blocked' } : o)) }
     }
@@ -311,7 +319,8 @@ function reconcileApprovedSubmissions(s) {
     if (!proposal || !releaseState(proposal, s.approvals, opp.id, opp, s.config).release) return opp
     if (transitionBlockers(opp, 'Submitted', proposal, s).length) return opp
     changed = true
-    return { ...opp, milestone: 'Submitted', lastUpdated: nowIST().slice(0, 10) }
+    return { ...opp, milestone: 'Submitted', lastUpdated: nowIST().slice(0, 10),
+      workflowTransition: workflowTransition(opp.milestone, 'Submitted', 'Final quote release approved', `WFT-${approval.id}-approved`) }
   })
   const proposalsChanged = proposals !== s.proposals
   return changed || proposalsChanged ? { ...s, proposals, opportunities } : s
@@ -320,6 +329,8 @@ function reconcileApprovedSubmissions(s) {
 export function StoreProvider({ children }) {
   const location = useLocation()
   const [state, setState] = useState(initialState)
+  const lastSharedPullAtRef = useRef(0)
+  const sharedPullInFlightRef = useRef(null)
   datastore.setLocalDemoMode(isLocalDemoSession(state))
   const [authReady, setAuthReady] = useState(() => !supabase || !!state.auth?.user)
   const [liveSyncStatus, setLiveSyncStatus] = useState(() => supabaseConfigError ? 'config-error' : datastore.dbEnabled() ? 'connecting' : 'offline')
@@ -623,27 +634,34 @@ export function StoreProvider({ children }) {
     }
   }
 
-  const pullSharedData = async () => {
+  const pullSharedData = ({ force = false } = {}) => {
     if (!datastore.dbEnabled()) return false
-    await flushSaves()
-    const res = await datastore.loadAll({ force: true })
-    if (!res) { setLiveSyncStatus('error'); return false }
-    if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
-    if (res.error) {
-      const authError = invalidateSupabaseAuth(res.error)
-      if (!authError) setLiveSyncStatus('error')
-      return false
-    }
-    if (res.empty) {
-      const clean = migrate({ ...emptyState(stateRef.current), demoData: false, priceLists: {}, adhocParts: [], rateSheets: {}, users: [], audit: [] })
-      lastSavedRef.current = syncedOf(clean)
-      setState(clean)
+    if (!force && sharedPullInFlightRef.current) return sharedPullInFlightRef.current
+    if (!force && Date.now() - lastSharedPullAtRef.current < SHARED_PULL_DEDUP_MS) return true
+    lastSharedPullAtRef.current = Date.now()
+    const pull = (async () => {
+      await flushSaves()
+      const res = await datastore.loadAll({ force: true })
+      if (!res) { setLiveSyncStatus('error'); return false }
+      if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
+      if (res.error) {
+        const authError = invalidateSupabaseAuth(res.error)
+        if (!authError) setLiveSyncStatus('error')
+        return false
+      }
+      if (res.empty) {
+        const clean = migrate({ ...emptyState(stateRef.current), demoData: false, priceLists: {}, adhocParts: [], rateSheets: {}, users: [], audit: [] })
+        lastSavedRef.current = syncedOf(clean)
+        setState(clean)
+        setLiveSyncStatus('live')
+        return true
+      }
       setLiveSyncStatus('live')
+      applyServer(res.slices, res.diagnostics)
       return true
-    }
-    setLiveSyncStatus('live')
-    applyServer(res.slices, res.diagnostics)
-    return true
+    })()
+    sharedPullInFlightRef.current = pull
+    return pull.finally(() => { sharedPullInFlightRef.current = null })
   }
 
   // React state updates and the stateRef mirror are committed on the next
@@ -819,6 +837,20 @@ export function StoreProvider({ children }) {
       if (patch.stage && !patch.milestone) {
         patch = { ...patch, milestone: milestoneForStage(patch.stage, patch.status || before?.status) }
       }
+      // Older screens use this general update action to enter Approval. Give
+      // that transition the same server-verifiable source and target as the
+      // workbench stepper so an old browser cannot replay it later.
+      if (before && patch.milestone && patch.milestone !== before.milestone) {
+        const movingBackward = MILESTONES.indexOf(patch.milestone) < MILESTONES.indexOf(before.milestone)
+        patch = {
+          ...patch,
+          workflowTransition: patch.workflowTransition || workflowTransition(
+            before.milestone,
+            patch.milestone,
+            movingBackward ? String(patch.reason || '') : 'Workflow step updated',
+          ),
+        }
+      }
       // A type change re-derives both branching axes — leaving a Retrofit on
       // the Greenfield lane would silently skip the B-01..B-05 chain.
       if (patch.oppType) {
@@ -981,7 +1013,10 @@ export function StoreProvider({ children }) {
         return withAudit({
           ...s,
           proposals: { ...s.proposals, [oppId]: next },
-          opportunities: s.opportunities.map(o => (o.id === oppId ? { ...o, milestone: 'Sourcing' } : o)),
+          opportunities: s.opportunities.map(o => (o.id === oppId ? {
+            ...o, milestone: 'Sourcing',
+            workflowTransition: workflowTransition(o.milestone, 'Sourcing', note || 'Quote revision opened'),
+          } : o)),
         }, 'Quote revision opened', oppId,
         `Rev ${next.revision} - ${spec.id} change, re-approval required - ${note || 'no reason given'}`)
       })
@@ -1082,7 +1117,8 @@ export function StoreProvider({ children }) {
         const next = withAudit({
           ...s,
           opportunities: s.opportunities.map(o => (o.id === oppId
-            ? { ...o, stage: 'Lost', status: 'Closed', closedReason: reason, closedReasonNote: reason === 'Others' ? reasonNote : '', milestone: 'Follow-up', lastUpdated: nowIST().slice(0, 10) }
+            ? { ...o, stage: 'Lost', status: 'Closed', closedReason: reason, closedReasonNote: reason === 'Others' ? reasonNote : '', milestone: 'Follow-up', lastUpdated: nowIST().slice(0, 10),
+                workflowTransition: workflowTransition(o.milestone, 'Follow-up', reason) }
             : o)),
         }, 'Opportunity lost', oppId, reason)
         return competitor?.name
@@ -1105,7 +1141,8 @@ export function StoreProvider({ children }) {
       setState(s => withAudit({
         ...s,
         opportunities: s.opportunities.map(o => (o.id === oppId
-          ? { ...o, stage: 'Won', status: 'Closed', closedReason: reason, closedReasonNote: reason === 'Other' ? reasonNote : '', milestone: 'Handover', lastUpdated: today }
+          ? { ...o, stage: 'Won', status: 'Closed', closedReason: reason, closedReasonNote: reason === 'Other' ? reasonNote : '', milestone: 'Handover', lastUpdated: today,
+              workflowTransition: workflowTransition(o.milestone, 'Handover', reason) }
           : o)),
       }, 'Opportunity won', oppId, reason))
       const after = { ...before, stage: 'Won', status: 'Closed', milestone: 'Handover' }
@@ -1602,7 +1639,8 @@ export function StoreProvider({ children }) {
             // into this same row. Pull that canonical row immediately so the
             // final approval can advance the existing Submitted gate without
             // waiting for a focus or route change.
-            await pullSharedData()
+            const slices = await readLiveData(['approvals', 'opportunities'])
+            if (slices) applyServer(slices)
             await new Promise(done => setTimeout(done, 0))
             return (await flushPersistence()) !== false
           })
@@ -2142,7 +2180,7 @@ export function StoreProvider({ children }) {
       setState(s => withAudit({
         ...s,
         poCompare: { ...s.poCompare, [oppId]: { ...buildPoCompare(oppId), received: new Date().toISOString().slice(0, 10), status: 'In review' } },
-        opportunities: s.opportunities.map(o => (o.id === oppId ? { ...o, milestone: 'PO Validation' } : o)),
+        opportunities: s.opportunities.map(o => (o.id === oppId ? { ...o, milestone: 'PO Validation', workflowTransition: workflowTransition(o.milestone, 'PO Validation', 'PO received') } : o)),
       }, 'PO received (simulated)', oppId))
     },
     resolvePoLine(oppId, idx, resolution) {
@@ -2171,7 +2209,7 @@ export function StoreProvider({ children }) {
         if (both) {
           next = {
             ...next,
-            opportunities: next.opportunities.map(o => (o.id === oppId ? { ...o, milestone: 'Handover' } : o)),
+            opportunities: next.opportunities.map(o => (o.id === oppId ? { ...o, milestone: 'Handover', workflowTransition: workflowTransition(o.milestone, 'Handover', 'PO jointly accepted') } : o)),
             handover: { ...next.handover, [oppId]: next.handover[oppId] || buildHandover() },
           }
         }
@@ -2203,7 +2241,8 @@ export function StoreProvider({ children }) {
           ...s,
           handover: { ...s.handover, [oppId]: { ...s.handover[oppId], approved: true, approvedBy: s.role, approvedOn: today } },
           opportunities: s.opportunities.map(o => (o.id === oppId
-            ? { ...o, stage: 'Won', status: 'Closed', milestone: 'Handover', orderDate: o.orderDate || today, lastUpdated: today }
+            ? { ...o, stage: 'Won', status: 'Closed', milestone: 'Handover', orderDate: o.orderDate || today, lastUpdated: today,
+                workflowTransition: workflowTransition(o.milestone, 'Handover', 'Handover approved') }
             : o)),
         }, 'Handover approved', oppId, s.role)
       })
@@ -2212,16 +2251,21 @@ export function StoreProvider({ children }) {
     setMilestone(oppId, milestone, reason = '', { alreadyGated = false } = {}) {
       const before = stateRef.current.opportunities.find(o => o.id === oppId)
       if (!before) return false
+      const currentIndex = MILESTONES.indexOf(before.milestone)
+      const targetIndex = MILESTONES.indexOf(milestone)
       if (!alreadyGated) {
-        const currentIndex = MILESTONES.indexOf(before.milestone)
-        const targetIndex = MILESTONES.indexOf(milestone)
         if (targetIndex >= 0 && currentIndex >= 0 && targetIndex < currentIndex && !reason.trim()) return false
         if (targetIndex > currentIndex && transitionBlockers(before, milestone, stateRef.current.proposals?.[oppId], stateRef.current).length) return false
       }
       const today = nowIST().slice(0, 10)
       setState(s => withAudit({
         ...s,
-        opportunities: s.opportunities.map(o => (o.id === oppId ? { ...o, milestone, lastUpdated: today } : o)),
+        opportunities: s.opportunities.map(o => (o.id === oppId ? {
+          ...o,
+          milestone,
+          lastUpdated: today,
+          workflowTransition: targetIndex === currentIndex ? null : workflowTransition(o.milestone, milestone, reason.trim()),
+        } : o)),
       }, 'Milestone moved', oppId, reason ? `${milestone} — ${reason}` : milestone))
       setTimeout(flushSaves, 0)
       return true
