@@ -128,6 +128,13 @@ const displayValue = value => `"${value == null || value === '' ? 'blank' : Stri
 const sameNumber = (left, right) => Number(left) === Number(right)
 const sameMoney = (left, right) => money(left) === money(right)
 const normalizedMoney = value => value == null || String(value).trim() === '' ? value : money(value)
+const normalizedUom = value => {
+  const normalized = clean(value).toLowerCase().replace(/[.\s_-]+/g, '')
+  if (['ea', 'no', 'nos', 'pc', 'pcs', 'piece', 'pieces'].includes(normalized)) return 'EA'
+  if (['set', 'sets'].includes(normalized)) return 'SET'
+  if (['m', 'meter', 'meters', 'mtr', 'mtrs'].includes(normalized)) return 'M'
+  return normalized.toUpperCase()
+}
 
 const changedField = (field, label, before, after, equal = (left, right) => clean(left) === clean(right)) => {
   if (equal(before, after)) return null
@@ -143,7 +150,7 @@ const changesForRow = (old, row, units) => [
   changedField('description', 'Description', old.desc, row.description),
   changedField('partNumber', 'Part number', old.pn, row.pn),
   changedField('quantity', 'Quantity', totalQuantity(old, units), row.qty, sameNumber),
-  changedField('uom', 'UOM', old.uom || 'EA', row.uom),
+  changedField('uom', 'UOM', old.uom || 'EA', row.uom, (left, right) => normalizedUom(left) === normalizedUom(right)),
   row.unitPrice == null ? null : changedField('unitPrice', 'Unit price', normalizedMoney(old.quoted), money(row.unitPrice), sameMoney),
   row.totalPrice == null ? null : changedField(
     'totalPrice',
@@ -243,11 +250,28 @@ export function importReviewedWorkbook(workbook, proposal, opportunity) {
   return { proposal: { ...proposal, bom: nextBom }, issues, changes, termChanges: termReview.changes, table: { sheet: table.sheet.name, headerRow: table.headerRow, columns: table.columns } }
 }
 
-export function reviewWorkbookPayload(workbook, proposal, opportunity, localIssues) {
+const proposalLineSnapshot = proposal => (proposal?.bom || []).map(line => ({
+  description: line.desc,
+  partNumber: line.pn,
+  quantity: totalQuantity(line, proposal.units),
+  quantityPerUnit: line.qtyPerUnit,
+  common: line.common,
+  spares: line.spares,
+  quoted: line.quoted,
+  uom: line.uom,
+}))
+
+export function reviewWorkbookPayload(workbook, proposal, opportunity, localIssues, comparison = {}) {
   return {
     artifactType: workbook?.sheets?.length ? 'uploaded-workbook' : 'generated-proposal',
     opportunity: { id: opportunity?.id, customer: opportunity?.sellTo, name: opportunity?.oppName, route: opportunity?.oppType },
-    proposal: { revision: proposal?.revision, terms: proposal?.terms || [], lines: (proposal?.bom || []).map(line => ({ description: line.desc, partNumber: line.pn, quantity: line.qtyPerUnit, common: line.common, spares: line.spares, quoted: line.quoted, uom: line.uom })) },
+    proposal: { revision: proposal?.revision, terms: proposal?.terms || [], lines: proposalLineSnapshot(proposal) },
+    comparison: {
+      method: 'deterministic-local-parse-before-ai',
+      baselineLines: proposalLineSnapshot(comparison.baseline),
+      deterministicChanges: comparison.deterministicChanges || [],
+      deterministicTermChanges: comparison.deterministicTermChanges || [],
+    },
     workbook: (workbook?.sheets || []).map(sheet => ({ name: sheet.name, rows: (sheet.rows || []).slice(0, 160) })),
     localIssues: localIssues.map(issue => ({ severity: issue.severity, code: issue.code, text: issue.text })),
   }

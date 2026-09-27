@@ -1185,7 +1185,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       reviewedUpload: { ...base.reviewedUpload, ...patch },
     }
     setP(next)
-    store.saveProposal(oppId, next)
+    store.saveProposal(oppId, next, { immediate: true })
     return true
   }
 
@@ -1290,7 +1290,17 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       }
 
       setReviewStage(retainProgress ? 3 : 2)
-      const aiResult = await runTaskResult('proposal.review', reviewWorkbookPayload(reviewedUpload, review, opp, issues), { model: store.config?.aiModel?.model })
+      const aiResult = await runTaskResult('proposal.review', reviewWorkbookPayload(
+        reviewedUpload,
+        review,
+        opp,
+        issues,
+        {
+          baseline: reviewedUpload?.baseProposal,
+          deterministicChanges: reviewedUpload?.importedChanges,
+          deterministicTermChanges: reviewedUpload?.termChanges,
+        },
+      ), { model: store.config?.aiModel?.model })
       const aiReview = aiResult.data?.data || aiResult.data || {}
       const aiIssues = normalizeAiReview(aiReview)
       if (!aiResult.data && aiResult.error) aiIssues.push({ severity: 'info', code: 'ai.unavailable', source: 'AI', text: `AI semantic review was unavailable: ${aiResult.error}. Local checks were still completed.` })
@@ -1320,7 +1330,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
           : null,
       }
       setP(next)
-      store.saveProposal(oppId, next)
+      store.saveProposal(oppId, next, { immediate: true })
       if (next.reviewStatus === 'Validated') {
         const unresolvedCommercialTerms = (next.terms || []).filter(needsCommercialResolution)
         setReviewMessage(allIssues.length === 0
@@ -1355,7 +1365,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       reviewOverride: null,
     }
     setP(next)
-    store.saveProposal(oppId, next)
+    store.saveProposal(oppId, next, { immediate: true })
     await validateReviewedProposal(next)
   }
 
@@ -1379,20 +1389,21 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     try {
       setReviewStage(1)
       const parsed = parseRenderedWorkbook(await file.arrayBuffer(), file.name)
-      const imported = importReviewedWorkbook(parsed, p, opp)
+      const baselineProposal = p.draftBaseline || snapshotProposal(p)
+      const imported = importReviewedWorkbook(parsed, baselineProposal, opp)
       // Keep each uploaded artifact addressable. Re-uploading a workbook must
       // not overwrite the bytes referenced by an older revision snapshot.
       const blobKey = `proposal-review-${opp.id}-rev-${String(p.revision || '00').padStart(2, '0')}-${Date.now()}`
       const next = {
         ...imported.proposal,
-        reviewedUpload: { filename: file.name, type: file.type, size: file.size, uploadedAt: new Date().toISOString(), blobKey, storageStatus: 'pending', storageError: '', sheets: parsed.sheets, importedChanges: imported.changes, termChanges: imported.termChanges, validationIssues: imported.issues, table: imported.table, baseProposal: snapshotProposal(p) },
+        reviewedUpload: { filename: file.name, type: file.type, size: file.size, uploadedAt: new Date().toISOString(), blobKey, storageStatus: 'pending', storageError: '', sheets: parsed.sheets, importedChanges: imported.changes, termChanges: imported.termChanges, validationIssues: imported.issues, table: imported.table, baseProposal: baselineProposal },
         reviewStatus: 'Ready for validation',
         reviewIssues: imported.issues,
         reviewNeedsRevision: false,
         reviewOverride: null,
       }
       setP(next)
-      store.saveProposal(oppId, next)
+      store.saveProposal(oppId, next, { immediate: true })
       // Storage is independent from validation. The workbook is already
       // parsed and available to local review, so AI does not wait for
       // IndexedDB, Supabase, or SharePoint uploads.
@@ -1424,7 +1435,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       reviewNeedsRevision: false,
     }
     setP(next)
-    store.saveProposal(oppId, next)
+    store.saveProposal(oppId, next, { immediate: true })
     setReviewError('')
     setReviewMessage('Validation findings were stored. You chose to continue anyway; this override was recorded in the audit trail.')
   }
@@ -1436,6 +1447,14 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   )
   const exportExcel = async () => {
     try {
+      // Treat the downloaded AI draft as the authoritative comparison
+      // baseline for the workbook that the user may edit and upload later.
+      const draftBaseline = snapshotProposal(p)
+      store.saveProposal(oppId, {
+        ...p,
+        draftBaseline,
+        draftBaselineAt: new Date().toISOString(),
+      }, { immediate: true })
       const templateBuffer = await loadProposalTemplateBuffer(configuredProposalTemplate)
       await downloadProposalXlsx({
         templateBuffer, p, opp, doc, priced, totalQty, lineQuoted, lineCost, linePrice, totals, route,

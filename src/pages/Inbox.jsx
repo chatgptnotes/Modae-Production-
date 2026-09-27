@@ -35,6 +35,7 @@ import { downloadKycTemplate } from '../kycTemplate.js'
 import { PROJECT_TYPES, oppTypesForProjectType, templatesForSelection, simulatedLead, simulatedCount, SIMULATED_CUSTOMER_SCENARIOS } from '../simulatedLeads.js'
 import { buildLeadProposalData } from '../leadBoq.js'
 import { leadFieldValue as mappedLeadFieldValue, splitBuSegment, leadIdentity } from '../leadFieldMapping.js'
+import { deriveOpportunityScope } from '../leadScope.js'
 import { normalizeLocationValue, useGlobalLocationSearch } from '../locations.js'
 import { matchCustomer, customerStatusForLead } from '../leadCustomerClass.js'
 import { LEAD_LABELS, extractLabeledValue } from '../leadLabels.js'
@@ -351,24 +352,27 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
       note: `Resolved as ${sourceRoute} from the source scope.`,
     })
   }
+  const lineItems = (Array.isArray(ai.lineItems) && ai.lineItems.length
+    ? ai.lineItems
+    : parseLeadLineItems(`${body || ''}\n${attachmentText}`)).map(x => ({
+      description: x.description || x.desc || '',
+      partNumber: x.partNumber || x.pn || '',
+      customerRef: x.customerRef || x.partNumber || x.pn || '',
+      qty: Number(x.qty) || 1, uom: x.uom || 'EA',
+      confidence: Math.max(0, Math.min(100, Math.round(x.confidence ?? x.conf ?? 0))),
+      evidence: x.evidence || 'Inbound email or attachment',
+    }))
+  const explicitScope = resolvedFields.find(field => /^(?:opportunity )?scope$|^requested scope$|^requirement$/i.test(String(field.k || '').trim()))?.v
   return {
     route: resolvedRoute,
     urgency: ai.urgency || 'Normal',
     completeness: Math.max(0, Math.min(100, Math.round(ai.completeness ?? 0))),
     suggestedOwner: owner,
+    opportunityScope: deriveOpportunityScope(lineItems, explicitScope || cleanDisplayValue(body)),
     ai: {
       summary: ai.summary || '',
       fields: resolvedFields.map(f => ({ ...f, v: cleanDisplayValue(f.v), conf: Math.max(0, Math.min(100, Math.round(f.conf ?? 0))), state: 'pending' })),
-      lineItems: (Array.isArray(ai.lineItems) && ai.lineItems.length
-        ? ai.lineItems
-        : parseLeadLineItems(`${body || ''}\n${attachmentText}`)).map(x => ({
-          description: x.description || x.desc || '',
-          partNumber: x.partNumber || x.pn || '',
-          customerRef: x.customerRef || x.partNumber || x.pn || '',
-          qty: Number(x.qty) || 1, uom: x.uom || 'EA',
-          confidence: Math.max(0, Math.min(100, Math.round(x.confidence ?? x.conf ?? 0))),
-          evidence: x.evidence || 'Inbound email or attachment',
-        })),
+      lineItems,
       missing: ai.missing || [],
       duplicates: [],
       next: ai.next || [],

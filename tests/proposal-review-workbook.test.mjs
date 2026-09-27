@@ -22,7 +22,7 @@ test('imports reviewed workbook quantities and prices into matching proposal lin
   assert.ok(result.issues.some(issue => issue.code === 'customer.mismatch'))
 })
 
-test('formats UOM changes with explicit old and new values', () => {
+test('treats No. and EA as equivalent UOM values', () => {
   const result = importReviewedWorkbook({ sheets: [{ name: 'Priced BoQ', rows: [
     ['Description', 'Part Number', 'Quantity', 'UOM'],
     ['VC-8000 universal monitoring module', 'VC-8000/UMM', 1, 'EA'],
@@ -30,8 +30,18 @@ test('formats UOM changes with explicit old and new values', () => {
     units: 1,
     bom: [{ desc: 'VC-8000 universal monitoring module', pn: 'VC-8000/UMM', qtyPerUnit: 0, common: 1, spares: 0, uom: 'No.' }],
   }, { sellTo: '' })
-  assert.ok(result.issues.some(issue => issue.code === 'line.value-changed'
-    && issue.text === 'UOM for "VC-8000 universal monitoring module" changed from "No." to "EA".'))
+  assert.equal(result.issues.some(issue => issue.change?.field === 'uom'), false)
+})
+
+test('does not report equivalent spare-part UOM values as workbook changes', () => {
+  const result = importReviewedWorkbook({ sheets: [{ name: 'Priced BoQ', rows: [
+    ['Description', 'Part Number', 'Quantity', 'UOM'],
+    ['Equivalent unit item', 'EA-1', 1, 'EA'],
+  ] }] }, {
+    units: 1,
+    bom: [{ desc: 'Equivalent unit item', pn: 'EA-1', qtyPerUnit: 0, common: 1, spares: 0, uom: 'Nos.' }],
+  }, { sellTo: '' })
+  assert.equal(result.issues.some(issue => issue.change?.field === 'uom'), false)
 })
 
 test('does not report value changes when the uploaded workbook is unchanged', () => {

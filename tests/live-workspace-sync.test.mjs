@@ -110,12 +110,12 @@ test('save RPC errors retain the entity that failed', () => {
   assert.match(datastore, /throw annotateRpcError\('opportunities', result\.error\)/)
 })
 
-test('focus retries dirty writes without reloading the whole shared workspace', () => {
+test('focus retries dirty writes and refreshes shared workflow state', () => {
   const store = read('src/store.jsx')
   const focus = store.slice(store.indexOf('const onFocus = () => {'), store.indexOf('const onVisibility = () =>'))
   assert.match(focus, /if \(!hydratedRef\.current\) \{ hydrate\(\); return \}/)
   assert.match(focus, /flushSaves\(\)/)
-  assert.doesNotMatch(focus, /pullSharedData\(\)/)
+  assert.match(focus, /pullSharedData\(\)/)
 })
 
 test('pending opportunity IDs stay local-only and are persisted in the browser snapshot', () => {

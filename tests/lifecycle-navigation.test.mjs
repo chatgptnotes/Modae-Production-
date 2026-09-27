@@ -20,6 +20,8 @@ test('milestone changes open their lifecycle workspace', () => {
     assert.match(workbench, new RegExp(`['"]?${milestone}['"]?: '${tab}'`))
   }
   assert.match(workbench, /goTab\(tabOverride \|\| LIFECYCLE_TABS\[milestone\] \|\| 'overview'\)/)
+  assert.match(workbench, /const saved = await store\.flushPersistence\(\)/)
+  assert.match(workbench, /if \(saved === false\)/)
   assert.match(workbench, /moveToMilestone\(transition\.target, transition\.reason\.trim\(\)\)/)
   assert.match(workbench, /viewTab === 'registration' && <RegistrationTab opp=\{opp\} goTab=\{goTab\} \/>/)
   assert.match(workbench, /function RegistrationTab\(\{ opp, goTab, detailsRef, spares = false \}\)/)

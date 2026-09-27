@@ -31,6 +31,7 @@ import {
 } from './proposal/sparesBoq.js'
 import { releaseState, transitionBlockers } from './gates.js'
 import { clearSupabaseSession, isSupabaseAuthError, supabase, supabaseConfigError } from './supabase.js'
+import { isLocalDemoSession } from './authMode.js'
 import { readLiveData, startLiveEvents } from './liveSync.js'
 import { purgeWorkspace } from './workspacePurge.js'
 
@@ -319,6 +320,7 @@ function reconcileApprovedSubmissions(s) {
 export function StoreProvider({ children }) {
   const location = useLocation()
   const [state, setState] = useState(initialState)
+  datastore.setLocalDemoMode(isLocalDemoSession(state))
   const [authReady, setAuthReady] = useState(() => !supabase || !!state.auth?.user)
   const [liveSyncStatus, setLiveSyncStatus] = useState(() => supabaseConfigError ? 'config-error' : datastore.dbEnabled() ? 'connecting' : 'offline')
   const [adminSaveState, setAdminSaveState] = useState('saved')
@@ -391,7 +393,7 @@ export function StoreProvider({ children }) {
     const dirty = dirtySlices()
     if (!Object.keys(dirty).length) {
       setAdminSaveState('saved')
-      return Promise.resolve()
+      return Promise.resolve(true)
     }
     setAdminSaveState('saving')
     return datastore.saveSlices(dirty)
@@ -419,6 +421,7 @@ export function StoreProvider({ children }) {
             opportunitySyncBaseline: confirmed.opportunities || s.opportunitySyncBaseline || [],
           }))
         }
+        return true
       })
       .catch(e => {
         setAdminSaveState('error')
@@ -440,7 +443,7 @@ export function StoreProvider({ children }) {
         }))
         if (authError) {
           console.warn('Supabase session expired or was rejected; local changes are retained until sign-in succeeds.', saveError)
-          return
+          return false
         }
         retry.attempts += 1
         const delay = Math.min(30000, 2000 * (2 ** Math.min(retry.attempts - 1, 4)))
@@ -452,6 +455,7 @@ export function StoreProvider({ children }) {
           flushSaves()
         }, delay)
         console.warn(`Supabase save failed — retrying in ${Math.round(delay / 1000)}s:`, saveError)
+        return false
       })
   }
 
@@ -637,6 +641,14 @@ export function StoreProvider({ children }) {
     return true
   }
 
+  // React state updates and the stateRef mirror are committed on the next
+  // turn. Wait for that commit before a workflow transition claims that its
+  // persistence completed, otherwise navigation can race the save.
+  const flushPersistence = async () => {
+    await new Promise(resolve => setTimeout(resolve, 0))
+    return flushSaves()
+  }
+
   useEffect(() => {
     if (!datastore.dbEnabled() || !hydratedRef.current || !state.auth?.user?.id) return
     return startLiveEvents({
@@ -664,17 +676,18 @@ export function StoreProvider({ children }) {
     const onFocus = () => {
       if (!hydratedRef.current) { hydrate(); return }
       flushSaves()
+      void pullSharedData()
     }
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') {
         flushLocalCache(); flushSaves()
       } else if (hydratedRef.current) {
-        flushSaves()
+        void pullSharedData()
       }
     }
     const onOnline = () => {
       if (!hydratedRef.current) { hydrate(); return }
-      flushSaves()
+      void pullSharedData()
     }
     // visibilitychange is not reliably delivered when the page is being torn
     // down, which is exactly the reload-right-after-editing case. pagehide is.
@@ -691,11 +704,12 @@ export function StoreProvider({ children }) {
     }
   }, [])
 
-  // Navigation saves pending edits but does not reload the whole workspace.
-  // Collaborative records arrive through the targeted live event channel.
+  // Navigation saves pending edits and refreshes the authoritative workspace.
+  // This also brings proposal and approval changes from another browser into
+  // the current page without adding a realtime subscription.
   useEffect(() => {
     if (!datastore.dbEnabled() || !hydratedRef.current) return
-    flushSaves()
+    void pullSharedData()
   }, [location.pathname])
 
   useEffect(() => {
@@ -729,6 +743,7 @@ export function StoreProvider({ children }) {
 
   const api = {
     ...state,
+    flushPersistence,
     priceListsStatus,
     reloadPriceLists: () => loadApprovedPriceLists({ force: true }),
     async loadPriceListVersion(listCode, versionCode) {
@@ -2182,6 +2197,7 @@ export function StoreProvider({ children }) {
         ...s,
         opportunities: s.opportunities.map(o => (o.id === oppId ? { ...o, milestone, lastUpdated: today } : o)),
       }, 'Milestone moved', oppId, reason ? `${milestone} — ${reason}` : milestone))
+      setTimeout(flushSaves, 0)
       return true
     },
 
@@ -2399,7 +2415,7 @@ export function StoreProvider({ children }) {
     },
 
     // ---- Auth (demo login — plaintext by design, disclaimed on screen) ----
-    login(email, pw) {
+    login(email, pw, source = 'local') {
       const s = stateRef.current
       const u = s.users.find(x => x.email.toLowerCase() === email.trim().toLowerCase())
       if (!u) return { ok: false, err: 'No account with that email.' }
@@ -2412,9 +2428,10 @@ export function StoreProvider({ children }) {
         return { ok: false, err: 'The customer portal is unavailable at the moment.' }
       }
       if (u.pw !== pw) return { ok: false, err: 'Incorrect password.' }
+      datastore.setLocalDemoMode(source === 'local-demo')
       setState(st => ({
         ...withAudit(st, 'Signed in', u.email),
-        auth: { user: { id: u.id, name: u.name, email: u.email, role: u.role } },
+        auth: { source, user: { id: u.id, name: u.name, email: u.email, role: u.role } },
         role: ROLES[u.role] ? u.role : st.role,
       }))
       return { ok: true }
@@ -2422,16 +2439,18 @@ export function StoreProvider({ children }) {
     loginExternal(user, fallbackRole = 'RS') {
       if (!user?.id || !user.email) return { ok: false, err: 'Supabase did not return a valid user.' }
       authInvalidRef.current = false
+      datastore.setLocalDemoMode(false)
       const local = stateRef.current.users.find(item => item.email.toLowerCase() === user.email.toLowerCase())
       const role = local?.role || user.user_metadata?.role || fallbackRole
       setState(st => ({
         ...withAudit(st, 'Signed in', user.email),
-        auth: { user: { id: user.id, name: local?.name || user.user_metadata?.name || user.email, email: user.email, role } },
+        auth: { source: 'supabase', user: { id: user.id, name: local?.name || user.user_metadata?.name || user.email, email: user.email, role } },
         role: ROLES[role] ? role : st.role,
       }))
       return { ok: true }
     },
     logout() {
+      datastore.setLocalDemoMode(false)
       if (supabase) {
         // The app auth state is local-only, but the Supabase session must also
         // be cleared or the next boot will immediately restore the account.
@@ -2554,7 +2573,7 @@ export function StoreProvider({ children }) {
           if (!current || current.email?.toLowerCase() !== data.session.user.email?.toLowerCase()) {
             api.loginExternal(data.session.user)
           }
-        } else if (stateRef.current.auth?.user) {
+        } else if (stateRef.current.auth?.user && !isLocalDemoSession(stateRef.current)) {
           setState(st => ({ ...st, auth: { user: null } }))
         }
       }

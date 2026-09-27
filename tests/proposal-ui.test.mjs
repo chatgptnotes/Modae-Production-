@@ -34,6 +34,7 @@ test('validated uploaded workbooks remain the active proposal source', () => {
   assert.match(proposal, /await validateReviewedProposal\(next, \{ automatic: true, preserveRevision: true, retainProgress: true \}\)/)
   assert.match(proposal, /validatedWorkbookPreview\(previewModel\.p\)/)
   assert.match(read('src/store.jsx'), /reviewedUpload,\n    reviewStatus: p\.reviewStatus/)
+  assert.match(proposal, /store\.saveProposal\(oppId, next, \{ immediate: true \}\)/)
 })
 
 test('proposal readiness drawer exposes a useful collapsed summary', () => {

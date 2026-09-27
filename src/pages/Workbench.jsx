@@ -422,9 +422,16 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
     })
     return undefined
   }, [opp.id, opp.route, store.sparesLines, store.priceLists, store.config?.aiModel?.model, store.config?.aiModel?.provider])
-  const moveToMilestone = (milestone, reason = '', tabOverride = '') => {
-    store.setMilestone(opp.id, milestone, reason, { alreadyGated: true })
+  const moveToMilestone = async (milestone, reason = '', tabOverride = '') => {
+    const moved = store.setMilestone(opp.id, milestone, reason, { alreadyGated: true })
+    if (!moved) return false
+    const saved = await store.flushPersistence()
+    if (saved === false) {
+      setTransition({ kind: 'blocked', target: milestone, blockers: [{ key: 'persistence', severity: 'block', text: 'The workflow change could not be saved. Check your connection and try again.' }] })
+      return false
+    }
     goTab(tabOverride || LIFECYCLE_TABS[milestone] || 'overview')
+    return true
   }
   const workflowPosition = step => opp.route === 'Service' && Number.isInteger(step?.servicePhase)
     ? step.servicePhase
@@ -435,11 +442,11 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
     if (!step || targetIndex < 0 || currentIndex < 0 || targetIndex >= currentIndex) return
     setTransition({ kind: 'backward', target: step.milestone, targetStep: step, reason: '' })
   }
-  const moveBackwardToStep = (step, reason) => {
+  const moveBackwardToStep = async (step, reason) => {
     const currentIndex = workflowPosition({ milestone: opp.milestone, servicePhase: opp.servicePhase })
     const targetIndex = workflowPosition(step)
     if (!step || !reason?.trim() || targetIndex < 0 || currentIndex < 0 || targetIndex >= currentIndex) return false
-    moveToMilestone(step.milestone, reason, step.tab)
+    await moveToMilestone(step.milestone, reason, step.tab)
     if (opp.route === 'Service' && step.servicePhase != null) {
       store.updateServiceFlow(opp.id, { servicePhase: step.servicePhase })
     }
@@ -451,7 +458,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
   const due = opp.orderDate || opp.proposalDate || opp.lastUpdated
   const isOverdue = !!due && new Date(`${due}T23:59:59`) < new Date()
   const milestoneIndex = MILESTONES.indexOf(opp.milestone)
-  const moveMilestone = (milestone, tabOverride = '') => {
+  const moveMilestone = async (milestone, tabOverride = '') => {
     if (milestone === opp.milestone) return true
     if (MILESTONES.indexOf(milestone) < milestoneIndex) {
       setTransition({ kind: 'backward', target: milestone, reason: '' })
@@ -472,10 +479,9 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
       return false
     }
     setPendingTransition(null)
-    moveToMilestone(milestone, '', tabOverride)
-    return true
+    return moveToMilestone(milestone, '', tabOverride)
   }
-  const advanceStep = slug => {
+  const advanceStep = async slug => {
     const step = workflowBySlug[slug]
     if (!step) return
     if (serviceOpenNavigation) {
@@ -498,7 +504,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
         return
       }
     }
-    const moved = moveMilestone(step.milestone, step.tab)
+    const moved = await moveMilestone(step.milestone, step.tab)
     if (opp.route === 'Service' && moved) store.updateServiceFlow(opp.id, { servicePhase: step.servicePhase })
   }
   const nextWorkflowStep = (step, alreadyCompleted) => {
