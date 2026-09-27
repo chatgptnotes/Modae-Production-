@@ -169,6 +169,12 @@ test('sourcing row actions stay compact and accessible', () => {
     'row actions should use compact control sizing')
 })
 
+test('sourcing table fills wide cards so Actions stays at the right edge', () => {
+  const styles = read('src/styles.css')
+  assert.match(styles, /\.sourcing-workbench \.sheet\.sourcing-sheet--fixed \{[\s\S]*?width: 100%;[\s\S]*?min-width: 1500px;/,
+    'the sourcing table should fill available wide-card space while retaining its minimum width')
+})
+
 test('sourcing alternatives explain AI suggestions and zero-value confirmation is blocked', () => {
   const spares = read('src/workbench/WbSpares.jsx')
   assert.match(spares, /AiBadge label="AI suggested"/)

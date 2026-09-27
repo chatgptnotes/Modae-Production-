@@ -11005,7 +11005,7 @@ table.sheet th {
    spreadsheet-like column widths. */
 .sourcing-workbench .sheet.sourcing-sheet--fixed {
   table-layout: fixed;
-  width: max-content;
+  width: 100%;
   min-width: 1500px;
   max-width: none;
 }
