@@ -16,7 +16,10 @@ export const LOCAL_ONLY = ['viewMode', 'viewModePinned', 'tabletTheme', 'spSync'
   // after hydration, even though they are not authoritative business rows.
   'catalogRev', 'oneTimeCleanups', 'leadDeadlines']
 
-export const dbEnabled = () => !!supabase
+let localDemoMode = false
+
+export const setLocalDemoMode = enabled => { localDemoMode = Boolean(enabled) }
+export const dbEnabled = () => !!supabase && !localDemoMode
 
 export const DEDICATED_ENTITIES = {
   proposals: 'proposals',

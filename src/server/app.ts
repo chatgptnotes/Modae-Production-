@@ -8,6 +8,7 @@ import {
 import { createWorkspaceReader, createWorkspaceWriter, WorkspaceCache, type WorkspaceReader, type WorkspaceWriter } from './workspace.js'
 import {
   adminUsers, ai, appVersion, locations, purgeWorkspace, sendProposalEmail,
+  presence,
 } from './controllers/legacy.js'
 
 type AppOptions = {
@@ -87,6 +88,7 @@ export function createApp({
   app.get('/api/locations', locations)
   app.post('/api/purge-workspace', purgeWorkspace)
   app.post('/api/send-proposal-email', sendProposalEmail)
+  app.post('/api/presence', presence)
   app.get('/api/approvals', async (req, res, next) => {
     const token = authorizationToken(req)
     if (!token) return res.status(401).json({ ok: false, error: 'A signed-in session is required.' })

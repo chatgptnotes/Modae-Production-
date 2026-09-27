@@ -9,6 +9,7 @@ import { ArcGauge } from '../dashviz.jsx'
 import { Icon } from '../icons.jsx'
 import ForecastDashboard from './Dashboard.jsx'
 import { useOnlineUserCount } from '../presence.js'
+import WinLossFlow from '../WinLossFlow.jsx'
 
 // My Dashboard — "there has to be something called My Dashboard… it will be
 // different for all the roles" (13 Aug review). The salesperson's version is
@@ -79,6 +80,7 @@ function AnalyticsOverview({ store, role, nav }) {
   const scope = snapshot.owner ? `Your pipeline · ${snapshot.owner}` : 'Company pipeline'
   const scoped = store.opportunities.filter(o => !snapshot.owner || o.owner === snapshot.owner)
   const winLoss = winLossAnalysis(scoped, store.competitors, { commercial: snapshot.comm })
+  const outcomeShare = snapshot.comm ? winLoss.insights.wonValueShare : winLoss.summary.winRate
   return (
     <section className="home-analytics dashboard-analytics" aria-labelledby="dashboard-analytics-title">
       <div className="home-analytics-head">
@@ -119,26 +121,35 @@ function AnalyticsOverview({ store, role, nav }) {
         <button onClick={() => nav('/approvals')}><span className="home-alert-value">{snapshot.counts.forMe || snapshot.counts.myPending}</span><span>{snapshot.counts.forMe ? 'Awaiting your decision' : 'Your requests'}</span></button>
         <button onClick={() => nav('/my')}><span className="home-alert-value">{snapshot.counts.myStale}</span><span>Need an update</span></button>
       </div>
-      <Card title="Win / loss analysis" icon="checkCircle" tone="tone-green" span={12}>
+      <Card title="Win / loss analysis" icon="checkCircle" tone="tone-green" span={12}
+        action={<button className="dashboard-card-link" onClick={() => nav('/analytics')}>View detailed analysis <span aria-hidden="true">↗</span></button>}>
+        <WinLossFlow openCount={snapshot.openCount} closedCount={winLoss.summary.total} wonCount={winLoss.summary.won} lostCount={winLoss.summary.lost}
+          commercial={snapshot.comm} wonValueK={winLoss.summary.wonValueK} lostValueK={winLoss.summary.lostValueK} />
         {winLoss.summary.total ? (
-          <>
-            <div className="home-alert-rail" aria-label="Win and loss summary">
-              <div><span className="home-alert-value">{winLoss.summary.won}</span><span>Won</span></div>
-              <div><span className="home-alert-value">{winLoss.summary.lost}</span><span>Lost</span></div>
-              <div><span className="home-alert-value">{winLoss.summary.winRate}%</span><span>Win rate</span></div>
+          <div className="dashboard-win-loss-hero">
+            <div className="dashboard-win-loss-rate">
+              <span className="analysis-kicker">Win rate</span>
+              <strong>{winLoss.summary.winRate}%</strong>
+              <span>of {winLoss.summary.total} closed opportunities</span>
             </div>
-            <div className="dashboard-win-loss-list" role="list" aria-label="Win and loss reasons">
-              {winLoss.byReason.slice(0, PREVIEW_LIMIT).map(row => (
-                <div key={row.reason} className="dashboard-win-loss-row" role="listitem">
-                  <b className="dashboard-win-loss-reason">{row.reason}</b>
-                  <span className="pill won">{row.won} won</span>
-                  <span className="pill lost">{row.lost} lost</span>
-                  <span className="dashboard-win-loss-reason">{row.winRate}% win rate</span>
-                </div>
-              ))}
+            <div className="dashboard-win-loss-compare" aria-label="Won versus lost outcomes">
+              <div className="dashboard-win-loss-compare-head"><span>Outcome mix</span><span>{snapshot.comm ? 'Commercial value' : 'Opportunity count'}</span></div>
+              <div className="dashboard-win-loss-compare-track" aria-hidden="true">
+                <i className="won" style={{ width: `${Math.max(5, outcomeShare)}%` }} />
+                <i className="lost" style={{ width: `${Math.max(5, 100 - outcomeShare)}%` }} />
+              </div>
+              <div className="dashboard-win-loss-compare-legend">
+                <span><b className="result-won">{winLoss.summary.won} won</b>{snapshot.comm && ` · ${fmtLakh(winLoss.summary.wonValueK)}`}</span>
+                <span><b className="result-lost">{winLoss.summary.lost} lost</b>{snapshot.comm && ` · ${fmtLakh(winLoss.summary.lostValueK)}`}</span>
+              </div>
             </div>
-          </>
-        ) : <p className="hint">No closed opportunities yet.</p>}
+            <div className="dashboard-win-loss-insight">
+              <span className="analysis-kicker">Signal</span>
+              <b>{winLoss.insights.topWinReason}</b>
+              <span>Leading win reason{snapshot.comm ? ` · ${fmtLakh(winLoss.insights.topWinReasonValueK)}` : ''}</span>
+            </div>
+          </div>
+        ) : <div className="dashboard-win-loss-empty"><b>Build your first win/loss signal</b><span>Close an opportunity with a reason to see win rate, value mix, and the strongest commercial drivers here.</span><button onClick={() => nav('/analytics')}>Open analytics <span aria-hidden="true">↗</span></button></div>}
       </Card>
     </section>
   )
@@ -768,6 +779,7 @@ function ProposalStatusCard({ store, nav }) {
 // into approvals, risk, attainment, and team targets.
 function OwnerDashboard({ store, nav, role, c, blocked, nextActions, head }) {
   const perf = salesPerformance(store)
+  const onlineUserCount = useOnlineUserCount(true)
   const mine = (store.approvals || []).filter(a => a.status === 'Pending'
     && (a.needed?.length ? a.needed : [a.approver]).includes(role) && !(a.decisions || {})[role])
 
@@ -778,6 +790,7 @@ function OwnerDashboard({ store, nav, role, c, blocked, nextActions, head }) {
         <Metric label="Company pipeline" value={analyticsSnapshot(store, role).openCount} tone="sky" onClick={() => nav('/analytics')} />
         <Metric label="Waiting on you" value={mine.length} tone={mine.length ? 'red' : 'green'} onClick={() => nav('/approvals')} />
         <Metric label="Blocked" value={blocked.length} tone={blocked.length ? 'red' : 'green'} onClick={() => nav('/')} />
+        <Metric label="Users online" value={onlineUserCount ?? '—'} hint={onlineUserCount == null ? 'Presence unavailable' : 'Active in last 2 min'} tone="teal" />
       </div>
       <AnalyticsOverview {...{ store, role, nav }} />
       <div className="ana-grid"><ProposalStatusCard {...{ store, nav }} /></div>
@@ -834,6 +847,8 @@ function ApproverDashboard({ store, nav, role, c, blocked, nextActions, head, co
         {!commercial && <Metric label="Needs update" value={c.stale} tone={c.stale ? 'amber' : 'green'} onClick={() => nav('/my')} />}
       </div>
 
+      {commercial && <AnalyticsOverview {...{ store, role, nav }} />}
+
       <div className="ana-grid">
         <Card title="Priority queue" icon="target" tone="tone-amber" span={12}
           action={<button onClick={() => nav('/approvals')}>View all</button>}>
@@ -864,7 +879,7 @@ function ApproverDashboard({ store, nav, role, c, blocked, nextActions, head, co
 
       </div>
 
-      <AnalyticsOverview {...{ store, role, nav }} />
+      {!commercial && <AnalyticsOverview {...{ store, role, nav }} />}
       <div className="ana-grid">
         {commercial && (
           <Card title="Commercial posture" icon="chartLine" tone="tone-sky" span={12}>

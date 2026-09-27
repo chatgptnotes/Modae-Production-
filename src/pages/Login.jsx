@@ -7,6 +7,7 @@ import { Icon, ModaeImageLogo } from '../icons.jsx'
 import { InstallBanner } from '../install.jsx'
 import BrandWatermark from '../branding/BrandWatermark.jsx'
 import { supabase, signInWithPassword, signUpWithPassword } from '../supabase.js'
+import { canUseLocalDemoAuth } from '../authMode.js'
 
 // Roles a new registrant may request: the sales owners plus the technical
 // reviewer. Approvers/admin accounts are provisioned by a super admin.
@@ -35,7 +36,17 @@ export default function Login() {
     try {
       if (supabase) {
         const { data, error } = await signInWithPassword(email.trim(), pw)
-        if (error) { setErr(error.message || 'Supabase sign-in failed.'); return }
+        if (error) {
+          if (canUseLocalDemoAuth(window.location.hostname, supabase, error)) {
+            const local = store.login(email, pw, 'local-demo')
+            if (local.ok) {
+              nav('/my-dashboard', { replace: true })
+              return
+            }
+          }
+          setErr(error.message || 'Supabase sign-in failed.')
+          return
+        }
         const res = store.loginExternal(data?.user)
         if (!res.ok) { setErr(res.err); return }
         nav('/my-dashboard', { replace: true })

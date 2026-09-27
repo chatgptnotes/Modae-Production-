@@ -54,7 +54,7 @@ Before pointing Railway at a new Supabase project, run the SQL files in this
 order from the Supabase SQL Editor:
 
 1. `supabase/000_fresh_project.sql`
-2. `supabase/007_live_workspace_sync.sql` through `supabase/013_railway_free_tier_security.sql`, in numeric order
+2. `supabase/007_live_workspace_sync.sql` through `supabase/014_user_presence.sql`, in numeric order
 
 Then copy the new project's URL, anon key, and service-role key into Railway's
 Variables page. Rebuild Railway after changing either `VITE_SUPABASE_*` value,
@@ -70,6 +70,8 @@ because Vite places those two public values in the browser build.
   the relevant list should update in the other without reloading the page.
 - Confirm a new deployment signs an active browser session out and clears its
   local working cache as intended.
+- With two signed-in browsers, confirm the admin dashboard shows both users
+  online and removes a user after the two-minute heartbeat window expires.
 
 No Vercel project or Vercel environment variables are required for this
 deployment model.

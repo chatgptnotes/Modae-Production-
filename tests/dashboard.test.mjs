@@ -28,6 +28,13 @@ test('win/loss analysis groups close reasons and joins optional competitors', ()
     { reason: 'Unspecified', won: 0, lost: 1, total: 1, wonValueK: 0, lostValueK: 25, totalValueK: 25, winRate: 0 },
   ])
   assert.equal(result.rows[1].competitor, 'Acme Controls')
+  assert.deepEqual(result.insights, {
+    topWinReason: 'Best Price',
+    topLossReason: 'Best Price',
+    topWinReasonValueK: 100,
+    topLossReasonValueK: 60,
+    wonValueShare: 54,
+  })
 })
 
 test('win/loss analysis hides commercial values for restricted roles', () => {
@@ -37,6 +44,24 @@ test('win/loss analysis hides commercial values for restricted roles', () => {
   ], [], { commercial: false })
   assert.deepEqual(result.summary, { total: 2, won: 1, lost: 1, winRate: 50, wonValueK: null, lostValueK: null })
   assert.deepEqual(result.byReason[0], { reason: 'Relationship', won: 1, lost: 1, total: 2, wonValueK: null, lostValueK: null, totalValueK: null, winRate: 50 })
+  assert.deepEqual(result.insights, {
+    topWinReason: 'Relationship',
+    topLossReason: 'Relationship',
+    topWinReasonValueK: null,
+    topLossReasonValueK: null,
+    wonValueShare: null,
+  })
+})
+
+test('win/loss analysis provides an intentional empty-state insight model', () => {
+  const result = winLossAnalysis([], [], { commercial: true })
+  assert.deepEqual(result.insights, {
+    topWinReason: '',
+    topLossReason: '',
+    topWinReasonValueK: 0,
+    topLossReasonValueK: 0,
+    wonValueShare: 0,
+  })
 })
 
 test('detailed analytics leads with operational win/loss tables instead of the old reason card', () => {
@@ -46,6 +71,31 @@ test('detailed analytics leads with operational win/loss tables instead of the o
   assert.match(analytics, /className="analysis-table closed-opportunity-register"/)
   assert.match(analytics, /className="analysis-table open-pipeline-register"/)
   assert.doesNotMatch(analytics, /<CardHead icon="checkCircle" tone="tone-green" count=.*>Win \/ loss reasons/)
+  assert.match(analytics, /analysis-hero/)
+  assert.match(analytics, /analysis-value-compare/)
+  assert.match(analytics, /topWinReason/)
+})
+
+test('dashboard win/loss card presents a visual value comparison and actionable detail link', () => {
+  const dashboard = read('src/pages/MyDashboard.jsx')
+  assert.match(dashboard, /dashboard-win-loss-hero/)
+  assert.match(dashboard, /dashboard-win-loss-compare/)
+  assert.match(dashboard, /View detailed analysis/)
+  assert.match(dashboard, /topWinReason/)
+  assert.match(dashboard, /<WinLossFlow/)
+})
+
+test('dashboard and analytics share the outcome flow with an intentional empty state', () => {
+  const dashboard = read('src/pages/MyDashboard.jsx')
+  const analytics = read('src/pages/Analytics.jsx')
+  const flow = read('src/WinLossFlow.jsx')
+  assert.match(dashboard, /import WinLossFlow from ['"]\.\.\/WinLossFlow\.jsx['"]|import WinLossFlow from ['"]\.\.\/\.\.\/WinLossFlow\.jsx['"]|import WinLossFlow from ['"]\.\/WinLossFlow\.jsx['"]/)
+  assert.match(analytics, /<WinLossFlow/)
+  assert.match(flow, /Open opportunities/)
+  assert.match(flow, /Closed/)
+  assert.match(flow, /Won/)
+  assert.match(flow, /Lost/)
+  assert.match(flow, /No closed data yet/)
 })
 
 // Biji, 13 Aug: "there has to be something called My Dashboard… it will be
@@ -86,6 +136,14 @@ test('LJS sees pipeline overview before owner actions', () => {
   assert.ok(owner.indexOf('<AnalyticsOverview') < owner.indexOf('title="Owner priority queue"'))
 })
 
+test('commercial approvers see the pipeline before their priority queue', () => {
+  const source = read('src/pages/MyDashboard.jsx')
+  const approver = source.slice(source.indexOf('function ApproverDashboard'), source.indexOf('function AdminDashboard'))
+  const commercialPipeline = approver.indexOf('{commercial && <AnalyticsOverview')
+  assert.notEqual(commercialPipeline, -1)
+  assert.ok(commercialPipeline < approver.indexOf('title="Priority queue"'))
+})
+
 test('LJS proposal status card has one bottom register link', () => {
   const source = read('src/pages/MyDashboard.jsx')
   const styles = read('src/styles.css')
@@ -120,6 +178,8 @@ test('LJS proposal status card has one bottom register link', () => {
   assert.match(card, /<button[^>]*aria-pressed=\{selectedStatus === 'Sent'\}/)
   assert.match(card, /<button[^>]*aria-pressed=\{selectedStatus === 'Follow-up due'\}/)
   assert.match(card, /filteredPriority\.map/)
+  assert.match(card, /const filteredSummaryLabel = selectedStatus === 'all'/)
+  assert.match(card, /\{filteredSummaryLabel\}/)
   assert.match(styles, /\.proposal-status-summary__item\.is-selected/)
 })
 
@@ -256,7 +316,8 @@ test('win and loss reasons are grouped in the owner dashboard overview', () => {
   const overview = source.slice(source.indexOf('function AnalyticsOverview'))
   assert.match(overview, /winLossAnalysis\(/)
   assert.match(overview, /Win \/ loss analysis/)
-  assert.match(overview, /row\.reason/)
+  assert.match(overview, /topWinReason/)
+  assert.match(overview, /dashboard-win-loss-compare/)
   assert.doesNotMatch(overview, /o\.closedReason \|\| '—'/)
 })
 

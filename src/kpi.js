@@ -219,6 +219,23 @@ export function winLossAnalysis(opportunities = [], competitors = [], { commerci
       totalValueK: commercial ? row.wonValueK + row.lostValueK : null,
       winRate: row.total ? Math.round((row.won / row.total) * 100) : 0,
     }))
+  const bestReason = (field, valueField) => {
+    const candidates = byReason.filter(row => row[field] > 0)
+    if (!candidates.length) return null
+    return candidates.slice().sort((a, b) => (commercial
+      ? (b[valueField] - a[valueField]) || (b[field] - a[field])
+      : (b[field] - a[field]) || a.reason.localeCompare(b.reason)))[0]
+  }
+  const topWinReason = bestReason('won', 'wonValueK')
+  const topLossReason = bestReason('lost', 'lostValueK')
+  const totalClosedValue = commercial ? summary.wonValueK + summary.lostValueK : 0
+  const insights = {
+    topWinReason: topWinReason?.reason || '',
+    topLossReason: topLossReason?.reason || '',
+    topWinReasonValueK: commercial ? (topWinReason?.wonValueK || 0) : null,
+    topLossReasonValueK: commercial ? (topLossReason?.lostValueK || 0) : null,
+    wonValueShare: commercial && totalClosedValue ? Math.round((summary.wonValueK / totalClosedValue) * 100) : (commercial ? 0 : null),
+  }
   const rows = closed.map(row => ({
     ...row,
     result: row.stage,
@@ -227,7 +244,7 @@ export function winLossAnalysis(opportunities = [], competitors = [], { commerci
     valueK: commercial ? valueOf(row) : null,
     closeDate: row.lastUpdated || row.orderDate || row.createDate || '',
   }))
-  return { summary, byReason, rows }
+  return { summary, byReason, insights, rows }
 }
 
 // Proposals sent within the route's target window — the metric Swami said he

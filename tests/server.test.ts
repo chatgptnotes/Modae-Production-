@@ -14,6 +14,12 @@ test('health endpoint reports that the Railway service is ready', async () => {
   assert.deepEqual(response.body, { ok: true })
 })
 
+test('presence endpoint is registered in the Railway Express app', async () => {
+  const response = await request(app).post('/api/presence')
+  assert.equal(response.status, 503)
+  assert.equal(response.body.ok, false)
+})
+
 test('API errors are JSON and unknown API routes do not reach the SPA fallback', async () => {
   const response = await request(app).get('/api/not-a-route')
   assert.equal(response.status, 404)

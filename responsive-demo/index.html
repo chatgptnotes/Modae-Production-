@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <meta
+      name="description"
+      content="A framework-free responsive layout example built with semantic HTML and fluid CSS."
+    />
+    <title>Responsive Layout Starter</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+
+  <body>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="#top" aria-label="Responsive Layout Starter home">
+          <span class="brand-mark" aria-hidden="true">R</span>
+          <span>Responsive Starter</span>
+        </a>
+
+        <nav class="site-nav" aria-label="Primary navigation">
+          <a href="#features">Features</a>
+          <a href="#principles">Principles</a>
+          <a class="button button-small button-dark" href="#get-started">Get started</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main-content">
+      <section class="hero" id="top" aria-labelledby="hero-title">
+        <div class="container hero-grid">
+          <div class="hero-copy">
+            <p class="eyebrow">Built for every viewport</p>
+            <h1 id="hero-title">A layout that flexes with your screen.</h1>
+            <p class="hero-text">
+              Fluid type, flexible grids, and resilient spacing combine to keep
+              every section balanced from compact phones to ultra-wide monitors.
+            </p>
+            <div class="hero-actions" id="get-started">
+              <a class="button button-primary" href="#features">Explore the system</a>
+              <a class="button button-secondary" href="#principles">View principles</a>
+            </div>
+          </div>
+
+          <figure class="hero-media media-frame">
+            <img
+              src="https://images.unsplash.com/photo-1497366811353-6870744d04b2?auto=format&fit=crop&w=1400&q=85"
+              alt="Bright modern workspace with desks and large windows"
+              width="1400"
+              height="1050"
+            />
+          </figure>
+        </div>
+      </section>
+
+      <section class="section" id="features" aria-labelledby="features-title">
+        <div class="container">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">The building blocks</p>
+              <h2 id="features-title">Responsive by default</h2>
+            </div>
+            <p>
+              Each component is sized with constraints instead of fixed
+              assumptions, so the design can adapt without breaking its rhythm.
+            </p>
+          </div>
+
+          <div class="card-grid">
+            <article class="card">
+              <div class="card-icon" aria-hidden="true">↔</div>
+              <h3>Fluid containers</h3>
+              <p>
+                A centered container grows with the viewport while retaining
+                readable line lengths and comfortable gutters.
+              </p>
+              <a class="text-link" href="#principles">See the approach <span aria-hidden="true">→</span></a>
+            </article>
+
+            <article class="card">
+              <div class="card-icon" aria-hidden="true">Aa</div>
+              <h3>Scalable type</h3>
+              <p>
+                CSS <code>clamp()</code> lets headings and spacing interpolate
+                smoothly between small and large screens.
+              </p>
+              <a class="text-link" href="#principles">See the approach <span aria-hidden="true">→</span></a>
+            </article>
+
+            <article class="card">
+              <div class="card-icon" aria-hidden="true">▦</div>
+              <h3>Flexible grids</h3>
+              <p>
+                Auto-fitting columns create as many cards as space allows and
+                stack naturally when the viewport narrows.
+              </p>
+              <a class="text-link" href="#principles">See the approach <span aria-hidden="true">→</span></a>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section-muted" id="principles" aria-labelledby="principles-title">
+        <div class="container principles-grid">
+          <div>
+            <p class="eyebrow">A practical foundation</p>
+            <h2 id="principles-title">Design once. Adapt everywhere.</h2>
+            <p class="section-lede">
+              Use the CSS file as a starting point for marketing pages,
+              dashboards, product shells, or any interface that needs to stay
+              calm under changing screen dimensions.
+            </p>
+          </div>
+
+          <div class="principle-list">
+            <div class="principle-item">
+              <span class="principle-number">01</span>
+              <div>
+                <h3>Keep boundaries visible</h3>
+                <p>Use max-widths, overflow-safe media, and constrained text.</p>
+              </div>
+            </div>
+            <div class="principle-item">
+              <span class="principle-number">02</span>
+              <div>
+                <h3>Let space breathe</h3>
+                <p>Scale section padding gradually instead of jumping at every breakpoint.</p>
+              </div>
+            </div>
+            <div class="principle-item">
+              <span class="principle-number">03</span>
+              <div>
+                <h3>Test the extremes</h3>
+                <p>Check compact phones, rotated tablets, and wide desktop displays.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container footer-inner">
+        <p>© 2026 Responsive Starter</p>
+        <div class="footer-links">
+          <a href="#top">Back to top</a>
+          <a href="#features">Features</a>
+          <a href="#principles">Principles</a>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

@@ -5,6 +5,7 @@ import appVersionHandler from '../../../api/app-version.js'
 import locationsHandler from '../../../api/locations.js'
 import purgeWorkspaceHandler from '../../../api/purge-workspace.js'
 import sendProposalEmailHandler from '../../../api/send-proposal-email.js'
+import presenceHandler from '../../../api/presence.js'
 
 type LegacyHandler = (request: Parameters<RequestHandler>[0], response: Parameters<RequestHandler>[1]) => void | Promise<void>
 
@@ -27,3 +28,4 @@ export const appVersion = controller(appVersionHandler)
 export const locations = controller(locationsHandler)
 export const purgeWorkspace = controller(purgeWorkspaceHandler)
 export const sendProposalEmail = controller(sendProposalEmailHandler)
+export const presence = controller(presenceHandler)
