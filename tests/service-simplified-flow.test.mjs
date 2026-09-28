@@ -6,33 +6,68 @@ const service = fs.readFileSync('src/workbench/WbService.jsx', 'utf8')
 const store = fs.readFileSync('src/store.jsx', 'utf8')
 
 test('Service flow uses the Standard Rate Sheet path', () => {
-  assert.match(service, /Standard service identification/)
-  assert.match(service, /Offer path/)
-  assert.match(service, /Confirm standard service scope/)
   assert.match(service, /Standard Rate Sheet/)
   assert.doesNotMatch(service, /Customized Proposal/)
 })
 
-test('Service Scope uses a decision-first operational layout', () => {
-  assert.match(service, /service-scope-grid/)
-  assert.match(service, /service-status-strip/)
-  assert.match(service, /service-decision-panel/)
-  assert.match(service, /service-lane-card/)
-  assert.match(service, /service-requirement-option/)
-  assert.match(service, /Customer changes create a revision/)
-  assert.match(service, /service-next-step-card/)
-  assert.match(service, /scopeConfirmed && <>/)
+test('Scope Confirmation owns the single site-visit decision', () => {
+  const workbench = fs.readFileSync('src/pages/Workbench.jsx', 'utf8')
+  const request = fs.readFileSync('src/workbench/ServiceRequestPanel.jsx', 'utf8')
+  const scope = fs.readFileSync('src/workbench/ServiceScopePanel.jsx', 'utf8')
+  assert.match(workbench, /function RequirementTab\(\{ opp, onContinueToScope, onContinueToRate \}\)/)
+  assert.match(workbench, /<ServiceRequestPanel opp=\{opp\} onContinue=\{onContinueToScope\} \/>/)
+  assert.match(workbench, /<ServiceScopePanel opp=\{opp\} onContinue=\{onConfirmScope\} \/>/)
+  assert.doesNotMatch(request, /Site visit/)
+  assert.match(scope, /Site visit/)
+  assert.match(scope, /scopeConfirmed: true/)
+  assert.match(scope, /updateServiceFlow\(opp\.id/)
+  assert.match(request, /updateServiceFlow\(opp\.id/)
+  assert.doesNotMatch(service, /service-requirement-option/)
 })
 
-test('standard scope keeps the site survey optional and preserves the travel gate', () => {
+test('Service Request advances once into Scope Confirmation', () => {
+  const request = fs.readFileSync('src/workbench/ServiceRequestPanel.jsx', 'utf8')
+  assert.match(request, /requestConfirmed: true/)
+  assert.match(request, /Continue to Scope Confirmation/)
+})
+
+test('the survey panel reports the request without duplicating the decision control', () => {
   const survey = fs.readFileSync('src/workbench/SurveyPanel.jsx', 'utf8')
+  const scope = fs.readFileSync('src/workbench/ServiceScopePanel.jsx', 'utf8')
   const workbench = fs.readFileSync('src/pages/Workbench.jsx', 'utf8')
-  assert.match(survey, /surveyRequired: e\.target\.checked/)
+  assert.match(survey, /Site survey requirement is locked from Scope Confirmation/)
+  assert.doesNotMatch(survey, /type="checkbox"/)
   assert.doesNotMatch(survey, /Carry the SoW into the proposal scope/)
   assert.doesNotMatch(workbench, /onOpenOffer=/)
-  assert.match(service, /Confirm manual travel estimate/)
-  assert.match(service, /focus === 'scope' && scopeConfirmed && <div className="ana-card c-12 service-travel-confirmation">[\s\S]*Confirm manual travel estimate/)
+  assert.match(scope, /import SurveyPanel from '\.\/SurveyPanel\.jsx'/)
+  assert.match(scope, /<SurveyPanel opp=\{opp\} est=\{est\} \/>/)
+  assert.match(scope, /surveyReady = !siteVisitSelected \|\| !!survey\?\.report/)
+  assert.match(scope, /disabled=\{!surveyReady\}/)
+  assert.match(scope, /Complete the site survey before preparing the rate schedule/)
+  assert.match(service, /Confirm entered travel days/)
+  assert.match(service, /rate schedule is published independently/)
+  assert.doesNotMatch(service, /<SurveyPanel opp=\{opp\} est=\{est\} \/>/)
+  assert.doesNotMatch(service, /Next action required:/)
+  assert.doesNotMatch(service, /Confirmed Service Request/)
+  assert.doesNotMatch(service, /No site visit selected/)
+  assert.doesNotMatch(service, /Scope confirmed\. Complete the estimate below/)
+  assert.doesNotMatch(service, /service-flow-summary service-status-strip/)
+  assert.doesNotMatch(service, /site-visit requirement was recorded in Service Request/)
+  assert.match(service, /<div className="ana-card c-6 service-estimate-panel">[\s\S]*Confirm entered travel days/)
+  assert.doesNotMatch(service, /service-travel-confirmation/)
   assert.match(workbench, /servicePhaseBlockers\(step\)/)
+  assert.match(workbench, /step\.servicePhaseStart >= 7[\s\S]*est\.travelConfirmed/)
+})
+
+test('Scope Confirmation gates the rate schedule on a required survey', () => {
+  const scope = fs.readFileSync('src/workbench/ServiceScopePanel.jsx', 'utf8')
+  const workbench = fs.readFileSync('src/pages/Workbench.jsx', 'utf8')
+  assert.match(scope, /const survey = \(store\.surveys \|\| \[\]\)\.find\(v => v\.oppId === opp\.id\)/)
+  assert.match(scope, /const surveyReady = !siteVisitSelected \|\| !!survey\?\.report/)
+  assert.match(scope, /surveyRequired: siteVisitSelected/)
+  assert.match(workbench, /est\.surveyRequired && !survey\?\.report/)
+  assert.match(workbench, /Complete the site survey report before preparing the Standard Rate Schedule/)
+  assert.doesNotMatch(workbench, /!enteringStandardRate && step\.servicePhaseStart >= 3/)
 })
 
 test('Service flow combines internal review and records one customer decision', () => {
@@ -47,8 +82,8 @@ test('Service flow combines internal review and records one customer decision', 
   assert.match(store, /updateServiceFlow\(oppId, patch\)/)
 })
 
-test('Service review still requires scope, travel, and required survey evidence', () => {
-  assert.match(service, /!scopeConfirmed \|\| !est\.travelConfirmed/)
+test('Service review still requires the request, travel, and required survey evidence', () => {
+  assert.match(service, /!est\.travelConfirmed/)
   assert.match(service, /est\.surveyRequired && !\(\(store\.surveys \|\| \[\]\)\.find/)
   // The single review only gates the opportunities still carrying one.
   assert.match(service, /!!reviewApproval/)
@@ -88,12 +123,13 @@ test('Service grouped stages use explicit operational handoffs', () => {
   assert.doesNotMatch(workbench, /serviceAutoAdvance/)
   assert.match(workbench, /servicePhaseStart/)
   assert.match(workbench, /servicePhase: step\.servicePhaseStart/)
-  assert.match(workbench, /onConfirmScope/)
+  assert.match(workbench, /onContinueToScope/)
+  assert.match(workbench, /onContinueToRate/)
 })
 
 // ---- Path A: the published rate schedule, and billing on actual days -------
 
-test('the standard rate schedule is issued on its own, before the site visit', () => {
+test('the standard rate schedule is issued after scope and before execution', () => {
   const panel = fs.readFileSync('src/workbench/RateSheetPanel.jsx', 'utf8')
   // The same enclosure a full service proposal carries, sent early and alone.
   assert.match(panel, /SERVICE_RATE_SCHEDULE_URL/)
@@ -113,7 +149,7 @@ test('the standard rate schedule is issued on its own, before the site visit', (
   // Re-issued rather than re-created when the customer negotiates.
   assert.match(panel, /Re-issue rate schedule/)
   assert.match(service, /offerMode === 'Standard Rate Sheet' && <RateSheetPanel/)
-  assert.match(service, /Confirm scope and survey/)
+  assert.doesNotMatch(service, /Confirm scope and survey/)
 })
 
 test('Service forms use wide bordered controls and avoid leading-zero numeric entry', () => {
@@ -337,8 +373,9 @@ test('an admin rate revision survives a demo wipe', async () => {
 
 test('the Standard Rate Sheet lane is fixed for new Service scope', async () => {
   const wb = fs.readFileSync('src/workbench/WbService.jsx', 'utf8')
-  assert.match(wb, /offerMode: 'Standard Rate Sheet', requirementSource, scopeConfirmed: true/)
-  assert.match(wb, /surveyRequired: siteVisitSelected/)
+  const scope = fs.readFileSync('src/workbench/ServiceScopePanel.jsx', 'utf8')
+  assert.match(scope, /offerMode: 'Standard Rate Sheet'/)
+  assert.match(scope, /surveyRequired: siteVisitSelected/)
   assert.doesNotMatch(wb, /SoW \/ Proposal/)
   assert.doesNotMatch(wb, /AMC/)
 })
@@ -390,8 +427,9 @@ test('a quiet customer and an expired schedule both raise an alert', async () =>
 
 test('new Service scope exposes only the Standard Rate Sheet path', () => {
   const wb = fs.readFileSync('src/workbench/WbService.jsx', 'utf8')
+  const scope = fs.readFileSync('src/workbench/ServiceScopePanel.jsx', 'utf8')
   assert.match(wb, /Standard Rate Sheet/)
-  assert.match(wb, /Site visit/)
+  assert.match(scope, /Site visit/)
   assert.doesNotMatch(wb, /<option>Customized Proposal<\/option>/)
   assert.doesNotMatch(wb, /<span>SoW \/ Proposal<\/span>/)
   assert.doesNotMatch(wb, /<span>AMC<\/span>/)
@@ -399,10 +437,10 @@ test('new Service scope exposes only the Standard Rate Sheet path', () => {
 })
 
 test('standard Service scope confirms a rate-sheet offer without proposal sources', () => {
-  const wb = fs.readFileSync('src/workbench/WbService.jsx', 'utf8')
-  assert.match(wb, /offerMode: 'Standard Rate Sheet'/)
-  assert.match(wb, /surveyRequired: siteVisitSelected/)
-  assert.doesNotMatch(wb, /offerMode: 'Customized Proposal'/)
+  const scope = fs.readFileSync('src/workbench/ServiceScopePanel.jsx', 'utf8')
+  assert.match(scope, /offerMode: 'Standard Rate Sheet'/)
+  assert.match(scope, /surveyRequired: siteVisitSelected/)
+  assert.doesNotMatch(scope, /offerMode: 'Customized Proposal'/)
 })
 
 test('active Service records use the Standard Rate Sheet lane in Send Offer', () => {

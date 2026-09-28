@@ -8,9 +8,10 @@ import { Chip } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 import { serviceOfferCleared } from '../gates.js'
 
-// Path A's defining step: the published rate schedule goes to the customer
-// *before* the site visit, so the day rates are acknowledged up front and the
-// engineer's time can simply be billed against them afterwards. The same PDF
+// Path A's defining step: after scope and any required survey are complete,
+// the published rate schedule goes to the customer before execution, so the
+// day rates are acknowledged up front and the engineer's time can simply be
+// billed against them afterwards. The same PDF
 // already rides along with a full service proposal as an enclosure
 // (proposalDoc.js `enclosuresFor`), but a standard job never gets that far —
 // it needs the sheet on its own, early.
@@ -45,7 +46,7 @@ export default function RateSheetPanel({ opp, est, readOnly = false, onConfirmSe
     'day rates set out in that schedule; weekend and overtime deployment carry the',
     'premiums stated there. The final invoice is raised on the actual engineer days',
     'deployed on site.', '',
-    'Please confirm your acceptance and we will schedule the site visit.', '',
+    'Please confirm your acceptance and we will confirm the service deployment plan.', '',
     'Best regards,', displayRole(store.role), 'ModAE',
   ].join('\n')
   useEffect(() => {
@@ -107,8 +108,8 @@ export default function RateSheetPanel({ opp, est, readOnly = false, onConfirmSe
       <div className="service-rate-layout">
         <section className="service-rate-details" aria-label="Standard rate schedule details">
           <p className="hint">
-            Sent before the site visit so the customer accepts the published day rates up front.
-            Billing afterwards is on actual engineer days at these rates.
+            Sent after scope and any required survey so the customer accepts the published day
+            rates before execution. Billing afterwards is on actual engineer days at these rates.
           </p>
           <table className="cost-table" style={{ width: '100%' }}>
             <tbody>

@@ -33,6 +33,8 @@ import { downloadKycTemplate } from '../kycTemplate.js'
 import { leadIdentity, leadFieldValue } from '../leadFieldMapping.js'
 import { verificationItem } from '../leadVerification.js'
 import OpportunityComingSoon from '../workbench/OpportunityComingSoon.jsx'
+import ServiceRequestPanel from '../workbench/ServiceRequestPanel.jsx'
+import ServiceScopePanel from '../workbench/ServiceScopePanel.jsx'
 import ServiceDecisionPanel from '../workbench/ServiceDecisionPanel.jsx'
 import ServiceExecutionPanel from '../workbench/ServiceExecutionPanel.jsx'
 import ServiceReportPanel from '../workbench/ServiceReportPanel.jsx'
@@ -208,7 +210,7 @@ function OpportunityProgress({ activeStep, completedThrough, reviewing = false, 
 function CreatedOpportunityPanel({ opp, activeStep, onDismiss, onContinue }) {
   const route = opp.route || opp.oppType || 'opportunity'
   const nextByRoute = {
-    Service: ['Start Service Request', 'Confirm the request, then verify scope and the standard rate schedule.'],
+    Service: ['Start Service Request', 'Confirm the request once, then prepare the standard rate schedule.'],
     Spares: ['Start requirement validation', 'Resolve customer clarifications before sourcing parts.'],
     Project: ['Review opportunity intake', 'Confirm registration and customer requirements before quoting.'],
   }
@@ -385,12 +387,13 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
     const est = (store.svcEstimates || []).find(e => e.oppId === opp.id) || {}
     const survey = (store.surveys || []).find(v => v.oppId === opp.id)
     const review = serviceOfferCleared(opp, store.getProposal(opp.id), store)
-    // Path A's offer *is* the published rate schedule, issued on its own before
-    // the site visit — it never becomes a proposal submission.
+    // Path A's offer is the published rate schedule. Scope Confirmation owns
+    // the conditional pre-pricing survey; this stage never duplicates it.
     const communication = (store.communications?.[opp.id] || []).find(c => ['submission', 'rate-sheet'].includes(c.kind) && c.status === 'sent')
     const blockers = []
-    if (step.servicePhaseStart >= 3 && !est.scopeConfirmed) blockers.push({ key: 'service-scope', severity: 'block', text: 'Confirm the Service scope and offer path' })
-    if (step.servicePhaseStart >= 3 && (!est.travelConfirmed || (est.surveyRequired && !survey?.report))) blockers.push({ key: 'service-evidence', severity: 'block', text: est.surveyRequired ? 'Complete travel confirmation and the site survey report before preparing the offer' : 'Confirm the manual travel estimate before preparing the offer' })
+    if (step.servicePhaseStart >= 3 && !est.scopeConfirmed) blockers.push({ key: 'service-scope', severity: 'block', text: 'Confirm the Service scope and site-visit requirement' })
+    if (step.servicePhaseStart >= 3 && est.surveyRequired && !survey?.report) blockers.push({ key: 'service-survey', severity: 'block', text: 'Complete the site survey report before preparing the Standard Rate Schedule' })
+    if (step.servicePhaseStart >= 7 && (!est.travelConfirmed || (est.surveyRequired && !survey?.report))) blockers.push({ key: 'service-evidence', severity: 'block', text: est.surveyRequired ? 'Complete travel confirmation and the site survey report before Service Execution' : 'Confirm the manual travel estimate before Service Execution' })
     if (step.servicePhaseStart >= 6 && !est.offerPrepared) blockers.push({ key: 'service-offer', severity: 'block', text: 'Issue the Standard Rate Sheet first' })
     if (step.servicePhaseStart >= 6 && !review) blockers.push({ key: 'service-review', severity: 'block', text: 'Approve the offer for release before sending it to the customer' })
     if (step.servicePhaseStart >= 6 && !communication) blockers.push({ key: 'service-send', severity: 'block', text: 'Send the approved offer to the customer first' })
@@ -776,7 +779,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
       <fieldset className={`wb-body workflow-edit-boundary ${workflowReadOnly ? 'workflow-edit-boundary--readonly' : ''}`} disabled={workflowReadOnly && viewTab !== 'comms'} aria-readonly={workflowReadOnly || undefined}>
         {viewTab === 'overview' && opp.route === 'Spares' && <SparesIntakeTab opp={opp} detailsRef={detailsRef} />}
         {viewTab === 'overview' && opp.route !== 'Spares' && <OverviewTab opp={opp} detailsRef={detailsRef} />}
-        {viewTab === 'requirement' && <RequirementTab opp={opp} />}
+        {viewTab === 'requirement' && <RequirementTab opp={opp} onContinueToScope={opp.route === 'Service' ? () => advanceStep('service-scope') : undefined} onContinueToRate={opp.route === 'Service' ? () => advanceStep('service-rate') : undefined} />}
         {viewTab === 'requirement-validation' && <SparesRequirementTab opp={opp} sourceText={sourceText} onContinueToSourcing={() => advanceStep('sourcing')} />}
         {viewTab === 'customer' && <CustomerKycTab opp={opp} />}
         {viewTab === 'registration' && <RegistrationTab opp={opp} goTab={goTab} />}
@@ -1036,8 +1039,17 @@ function RegistrationTab({ opp, goTab, detailsRef, spares = false }) {
 }
 
 // ---------------------------------------------------------------------------
-function RequirementTab({ opp }) {
+function RequirementTab({ opp, onContinueToScope, onContinueToRate }) {
   const store = useStore()
+  if (opp.route === 'Service') {
+    return <>
+      <div className="ana-card c-12 service-flow-summary">
+        <div className="ana-title">Service opportunity flow</div>
+        <p className="hint">Service Request → Scope Confirmation → Standard Rate Schedule → Customer Acceptance → Service Execution &amp; Close.</p>
+      </div>
+      <ServiceRequestPanel opp={opp} onContinue={onContinueToScope} />
+    </>
+  }
   const lead = store.leads.find(l => l.oppId === opp.id)
   const readonly = [
     ['Opportunity ID', opp.id], ['Sell-to', opp.sellTo], ['Category', opp.category],
@@ -1055,10 +1067,6 @@ function RequirementTab({ opp }) {
     <div className="ana-grid">
       {opp.context === 'Brownfield' && opp.oppType !== 'Spares' && <div className="ana-card c-12">
         <BSteps opp={opp} />
-      </div>}
-      {opp.context === 'Service' && <div className="ana-card c-12 service-flow-summary">
-        <div className="ana-title">Service opportunity flow</div>
-        <p className="hint">Service intake → capture enquiry → confirm scope and survey → choose rate sheet or proposal → one Service Review → customer decision → execute and invoice.</p>
       </div>}
       <div className="ana-card c-6">
         <div className="ana-title">Source requirement</div>
@@ -2005,7 +2013,7 @@ function SourcingTab({ opp, goTab, onConfirmScope, onContinueToProposal }) {
   if (opp.route === 'Service') {
     return <div className="ana-grid service-sourcing-workbench">
       <div className="ana-card c-12">
-        <WbService opp={opp} focus="scope" onConfirmScope={onConfirmScope} />
+        <ServiceScopePanel opp={opp} onContinue={onConfirmScope} />
       </div>
     </div>
   }

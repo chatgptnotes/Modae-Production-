@@ -1546,8 +1546,6 @@ table.sheet td.internal { background: var(--border-soft) !important; color: var(
 .created-opportunity-dismiss:hover { color: var(--text-primary); }
 .opportunity-coming-soon-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
 .service-scope-grid { gap: 14px; }
-.service-status-strip { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(380px, 1.4fr); gap: 12px 20px; align-items: center; }
-.service-status-strip > .hint { grid-column: 1 / -1; margin: 0; padding-top: 10px; border-top: 1px solid var(--border-subtle); }
 .service-status-steps { display: flex; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
 .service-panel-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
 .service-decision-intro { display: flex; align-items: center; gap: 9px; padding: 10px; border: 1px solid var(--border-subtle); border-radius: 7px; background: var(--surface-raised); color: var(--text-primary); font-size: 12px; line-height: 1.4; }
@@ -1569,7 +1567,7 @@ table.sheet td.internal { background: var(--border-soft) !important; color: var(
 .service-lane-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 0; border-top: 1px solid var(--border-subtle); color: var(--text-secondary); font-size: 11px; font-weight: 700; }
 .service-lane-card .hint { margin-top: 16px; }
 @media (max-width: 1050px) { .created-opportunity-panel { grid-template-columns: auto 1fr; } .created-opportunity-facts, .created-opportunity-actions { grid-column: 2; } .created-opportunity-actions { justify-content: flex-start; } }
-@media (max-width: 760px) { .created-opportunity-panel, .service-status-strip, .service-scope-controls { grid-template-columns: 1fr; } .created-opportunity-mark { align-self: start; } .created-opportunity-facts, .created-opportunity-actions, .service-status-strip > .hint { grid-column: auto; } .service-status-steps { justify-content: flex-start; } .service-requirement-options { grid-template-columns: 1fr; } .service-decision-footer { align-items: stretch; flex-direction: column; } }
+@media (max-width: 760px) { .created-opportunity-panel, .service-scope-controls { grid-template-columns: 1fr; } .created-opportunity-mark { align-self: start; } .created-opportunity-facts, .created-opportunity-actions { grid-column: auto; } .service-requirement-options { grid-template-columns: 1fr; } .service-decision-footer { align-items: stretch; flex-direction: column; } }
 @media (max-width: 760px) { .service-form-action-row, .service-form-grid-two, .service-form-grid-four { grid-template-columns: 1fr; flex-direction: column; align-items: stretch; } .service-form-action-row > button, .service-date-control, .service-discount-field, .service-invoice-field { max-width: none; width: 100%; } }
 @media (max-width: 900px) { .service-rate-layout { grid-template-columns: 1fr; } .service-rate-email { padding-left: 0; padding-top: 18px; border-top: 1px solid var(--border-subtle); border-left: 0; } }
 .service-next-step-card { border-style: dashed; border-top: 1px dashed var(--border-default); background: var(--surface-raised); }
@@ -14516,6 +14514,10 @@ table.sheet tbody tr:hover td {
 .service-rate-email-heading { color: var(--text-primary); font-size: 16px; font-weight: 800; }
 .service-rate-email > .hint { margin: 5px 0 0; }
 .service-rate-email-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.service-scope-handoff { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-left: 3px solid var(--primary-accent); }
+.service-scope-handoff .ana-title { margin-top: 4px; }
+.service-scope-handoff .hint { margin: 5px 0 0; }
+.service-scope-handoff > button { flex: 0 0 auto; white-space: nowrap; }
 .service-form-stack { display: grid; gap: 12px; width: 100%; margin-top: 14px; }
 .service-form-field { display: grid; gap: 6px; color: var(--text-primary); font-size: 12px; font-weight: 800; line-height: 1.25; }
 .service-form-control { width: 100%; min-width: 0; min-height: 42px; box-sizing: border-box; padding: 9px 11px; border: 1px solid var(--border-default); border-radius: 7px; background: var(--card-bg); color: var(--text-primary); font: inherit; font-weight: 500; }
@@ -14530,6 +14532,7 @@ table.sheet tbody tr:hover td {
 .service-date-control { max-width: 240px; }
 .service-decision-note { min-height: 132px; resize: vertical; }
 .service-discount-field { max-width: 340px; margin-top: 10px; }
+@media (max-width: 760px) { .service-scope-handoff { align-items: stretch; flex-direction: column; } .service-scope-handoff > button { width: 100%; } }
 .service-form-grid { display: grid; gap: 12px; }
 .service-form-grid-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .service-form-grid-four { grid-template-columns: repeat(4, minmax(0, 1fr)); }

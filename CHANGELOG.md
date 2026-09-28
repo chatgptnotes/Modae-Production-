@@ -13,6 +13,9 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Restored Scope Confirmation as a distinct Service stage between Service
+  Request and Standard Rate Schedule. The site-visit requirement is selected
+  once there, and any required site survey is completed before pricing.
 - Simplified the Service workflow into five industrial stages — Service Request,
   Scope Confirmation, Standard Rate Schedule, Customer Acceptance, and Service
   Execution & Close — while preserving detailed phase data, legacy links, gated
@@ -21,7 +24,8 @@ This is an implementation and release log, not a dump of every commit.
   numeric entry, clearer discount guidance, and revision routing back to the
   Standard Rate Schedule when customers request changes.
 - Reworked the Standard Rate Schedule card into a responsive two-column layout
-  with rate details beside the complete editable customer email composer.
+  with rate details beside the complete editable customer email composer. The
+  rate stage no longer duplicates the survey or travel decision controls.
 - Reorganized imported runtime binaries under a semantic `assets/` tree,
   replaced supplied filenames with clean internal names while preserving
   customer-facing attachment names, and updated the brand-refresh and icon

@@ -314,13 +314,16 @@ test('opening a Spares proposal repairs stale lead rows from confirmed sourcing 
 
 test('the service workbench can set surveyRequired and run the survey chain', () => {
   const panel = read('src/workbench/SurveyPanel.jsx')
-  assert.match(panel, /surveyRequired: e\.target\.checked/,
-    'the "Site Survey Required?" decision must be settable — gates.js reads this flag')
+  const scope = read('src/workbench/ServiceScopePanel.jsx')
+  assert.match(scope, /surveyRequired: siteVisitSelected/,
+    'Scope Confirmation must be the single source of the site-visit decision')
+  assert.doesNotMatch(panel, /type="checkbox"/)
   assert.match(panel, /store\.requestSurvey\(/)
   assert.match(panel, /store\.updateSurvey\(/)
   assert.match(panel, /report:/, 'the site survey report is part of the standard flow')
   assert.doesNotMatch(panel, /Carry the SoW into the proposal scope/)
-  assert.match(read('src/workbench/WbService.jsx'), /<SurveyPanel opp=\{opp\} est=\{est\} \/>/)
+  assert.match(scope, /<SurveyPanel opp=\{opp\} est=\{est\} \/>/)
+  assert.doesNotMatch(read('src/workbench/WbService.jsx'), /<SurveyPanel opp=\{opp\} est=\{est\} \/>/)
 })
 
 test('the survey gates only bite once a survey is actually required', () => {

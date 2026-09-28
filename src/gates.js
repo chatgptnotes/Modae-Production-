@@ -306,11 +306,11 @@ export function readiness(opp, proposal, state) {
 
   if (opp.route === 'Service') {
     const est = (state.svcEstimates || []).find(e => e.oppId === opp.id)
-    // Until 22 Sep an unconditional 'Service offer review' blocker stood here and
-    // incidentally covered this. Confirming the scope and the offer path is the
-    // salesperson's own step, so it is stated in its own right.
-    if (!est?.scopeConfirmed) {
-      b.push({ key: 'svc-scope', severity: 'block', text: 'Service scope and offer path not confirmed' })
+    // The Service Request is confirmed once before entering the rate schedule.
+    // Keep the historical scope flag readable for older opportunities, but do
+    // not ask new opportunities to confirm the same decision again.
+    if (!est?.requestConfirmed && !est?.scopeConfirmed) {
+      b.push({ key: 'svc-request', severity: 'block', text: 'Service request not confirmed' })
     }
     if (est && !est.travelConfirmed) {
       b.push({ key: 'svc-travel', severity: 'block', text: 'Manual travel estimate not confirmed' })

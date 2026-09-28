@@ -4,7 +4,7 @@ import { displayRole } from '../utils.js'
 import { Chip } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 
-// A site visit is optional evidence for the Standard Rate Sheet workflow.
+// A site visit is selected once in Scope Confirmation and is read-only here.
 export default function SurveyPanel({ opp, est }) {
   const store = useStore()
   const survey = (store.surveys || []).find(v => v.oppId === opp.id)
@@ -23,15 +23,14 @@ export default function SurveyPanel({ opp, est }) {
     <div className="ana-card c-12">
       <div className="ana-title">Site survey {stageChip()}</div>
       <div className="check-row">
-        <input type="checkbox" checked={required}
-          onChange={e => store.updateSvcEstimate(opp.id, { surveyRequired: e.target.checked })} />
-        <span>Site survey required for this service opportunity</span>
+        <span>Site survey requirement is locked from Scope Confirmation</span>
+        <Chip tone={required ? 'state-Review' : 'grey'}>{required ? 'Required' : 'Not required'}</Chip>
       </div>
 
       {!required ? (
         <p className="hint">
-          Standard service — priced from the rate sheet below (service rates, travel / lodging,
-          manpower days and consumables). Tick the box if the scope cannot be priced without a site visit.
+          No site survey is required. Scope can proceed to the Standard Rate Schedule using the
+          published service rates and the internal deployment estimate.
         </p>
       ) : !survey ? (
         <div className="service-form-action-row">
