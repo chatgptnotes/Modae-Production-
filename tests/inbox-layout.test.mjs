@@ -55,6 +55,12 @@ test('stale unavailable AI summaries have a targeted repair path', () => {
   assert.match(inbox, /Repair \$\{staleAiLeads\.length\} stale AI summar/)
 })
 
+test('rate-limited extraction is presented as a temporary retry state', () => {
+  assert.match(inbox, /aiResult\.errorCode === 'AI_RATE_LIMITED'/)
+  assert.match(inbox, /AI extraction is temporarily busy/)
+  assert.match(inbox, /retry shortly/)
+})
+
 test('subject and preview stay in a contained two-line inbox cell', () => {
   assert.match(inbox, /className="mail-subject-head"[^>]*>Subject \/ preview/)
   assert.match(inbox, /className="mail-subject-meta">[\s\S]*className="mail-subject-title">\{l\.subject\}/)

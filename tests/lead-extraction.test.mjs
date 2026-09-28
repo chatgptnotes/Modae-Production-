@@ -80,6 +80,19 @@ test('identity extraction captures EUC/EUN and multiple supporting site facts', 
   assert.equal(found.fields.some(field => field.k === 'Delivery / Site Location' && field.v === 'Reasi plant'), true)
 })
 
+test('identity extraction separates a standalone facility line from its following geographic address', () => {
+  const found = extractLeadIdentityFacts(`
+    Replacement vibration monitoring spares for Unit 2
+
+    Koyna Hydroelectric Power Station
+    Satara District, Maharashtra, India
+
+    Our preferred delivery window is within 8–10 weeks.
+  `)
+  assert.equal(found.fields.some(field => field.k === 'Site / Plant Name' && field.v === 'Koyna Hydroelectric Power Station'), true)
+  assert.equal(found.eucLocation, 'Koyna, Satara District, Maharashtra, India')
+})
+
 test('collapsed inline labels stay in their own customer and EUC fields', () => {
   const text = 'Sell To Customer: Eastern Alloy WorksEnd User / EUC Name: Eastern Alloy WorksEUC Location: JamshedpurContact Person: Ankit VermaContact Phone: +91 98765 43210'
   const identity = extractLeadIdentityFacts(text)

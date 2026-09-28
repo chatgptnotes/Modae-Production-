@@ -260,7 +260,7 @@ export default function Admin() {
   // Manual AI model selection is not exposed in Admin yet. Template mapping
   // still receives the routine model hint; the server applies its own routing.
   const provider = 'Google'
-  const model = 'gemini-3.1-flash-lite'
+  const model = 'gemini-3.6-flash'
   const customModel = ''
 
 

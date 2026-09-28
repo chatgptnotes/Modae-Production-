@@ -99,7 +99,25 @@ test('AI route health check returns the configured model on success', async () =
   } finally { globalThis.fetch = oldFetch }
 })
 
-test('AI route uses Flash-Lite for routine work', async () => {
+test('AI route retries a temporary Gemini rate limit before succeeding', async () => {
+  const oldFetch = globalThis.fetch
+  let calls = 0
+  globalThis.fetch = async () => {
+    calls += 1
+    if (calls < 3) return { ok: false, status: 429 }
+    return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'ok' }] } }] }) }
+  }
+  try {
+    await withEnv('server-side-only', async () => {
+      const res = response()
+      await handler({ method: 'POST', headers: { authorization: 'Bearer test-token' }, body: { task: 'health' } }, res)
+      assert.equal(res.out.status, 200)
+      assert.equal(calls, 3)
+    })
+  } finally { globalThis.fetch = oldFetch }
+})
+
+test('AI route uses Gemini 3.6 Flash for routine work', async () => {
   const oldFetch = globalThis.fetch
   globalThis.fetch = async () => ({ ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ text: 'ok' }) }] } }] }) })
   try {
@@ -107,12 +125,12 @@ test('AI route uses Flash-Lite for routine work', async () => {
       const res = response()
       await handler({ method: 'POST', headers: { authorization: 'Bearer test-token' }, body: { task: 'email.proofread', model: 'gemini-2.5-flash', payload: { body: 'Review this.' } } }, res)
       assert.equal(res.out.status, 200)
-      assert.equal(res.out.body.model, 'gemini-3.1-flash-lite')
+      assert.equal(res.out.body.model, 'gemini-3.6-flash')
     })
   } finally { globalThis.fetch = oldFetch }
 })
 
-test('AI route uses Flash for complex document reasoning', async () => {
+test('AI route uses Gemini 3.6 Flash for complex document reasoning', async () => {
   const oldFetch = globalThis.fetch
   globalThis.fetch = async () => ({ ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ issues: [], summary: 'ok', confidence: 90 }) }] } }] }) })
   try {
@@ -120,7 +138,7 @@ test('AI route uses Flash for complex document reasoning', async () => {
       const res = response()
       await handler({ method: 'POST', headers: { authorization: 'Bearer test-token' }, body: { task: 'proposal.review', model: 'gemini-3.1-flash-lite', payload: { workbook: [] } } }, res)
       assert.equal(res.out.status, 200)
-      assert.equal(res.out.body.model, 'gemini-3.5-flash-lite')
+      assert.equal(res.out.body.model, 'gemini-3.6-flash')
     })
   } finally { globalThis.fetch = oldFetch }
 })
@@ -128,7 +146,9 @@ test('AI route uses Flash for complex document reasoning', async () => {
 test('lead extraction prompt enforces complete chunk-aware document scanning', async () => {
   const oldFetch = globalThis.fetch
   let request
-  globalThis.fetch = async (_url, options) => {
+  let requestedUrl = ''
+  globalThis.fetch = async (url, options) => {
+    requestedUrl = String(url)
     request = JSON.parse(options.body)
     return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({
       summary: 'Scanned enquiry.', route: 'Spares', urgency: 'Normal', completeness: 50,
@@ -147,17 +167,20 @@ test('lead extraction prompt enforces complete chunk-aware document scanning', a
         },
       } }, res)
       assert.equal(res.out.status, 200)
+      assert.match(requestedUrl, /gemini-3\.6-flash:generateContent/)
       const prompt = request.contents[0].parts[0].text
       assert.match(prompt, /Read every supplied page,\s+section and table row/i)
       assert.match(prompt, /not readable\/scan-only/i)
       assert.match(prompt, /preserve every distinct customer, EUC\/EUN/i)
+      assert.match(prompt, /all related location\/address\/city\/state\/\s*country facts/i)
+      assert.match(prompt, /preserve every distinct customer,[\s\S]*delivery\s+location/i)
       assert.match(prompt, /"phase":"final-segment"/)
       assert.match(prompt, /one row per item, preserving description/i)
     })
   } finally { globalThis.fetch = oldFetch }
 })
 
-test('AI route maps the retired Gemini Pro alias to the supported Flash model', async () => {
+test('AI route maps the retired Gemini Pro alias to Gemini 3.6 Flash', async () => {
   const oldFetch = globalThis.fetch
   let requestedUrl = ''
   globalThis.fetch = async url => {
@@ -169,8 +192,8 @@ test('AI route maps the retired Gemini Pro alias to the supported Flash model', 
       const res = response()
       await handler({ method: 'POST', headers: { authorization: 'Bearer test-token' }, body: { task: 'health', model: 'gemini-pro-latest' } }, res)
       assert.equal(res.out.status, 200)
-      assert.equal(res.out.body.model, 'gemini-3.5-flash-lite')
-      assert.match(requestedUrl, /gemini-3\.5-flash-lite:generateContent/)
+      assert.equal(res.out.body.model, 'gemini-3.6-flash')
+      assert.match(requestedUrl, /gemini-3\.6-flash:generateContent/)
     })
   } finally { globalThis.fetch = oldFetch }
 })

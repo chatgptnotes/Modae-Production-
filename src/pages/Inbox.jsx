@@ -329,7 +329,9 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
       completeness: fields.length ? 20 : 0,
       suggestedOwner: routeOwnerForLocation(eucLocation, store.config, ''),
       ai: {
-        summary: `AI extraction was unavailable${aiResult.error ? `: ${aiResult.error}` : ''}. The original enquiry was saved for manual structuring.`,
+        summary: aiResult.errorCode === 'AI_RATE_LIMITED'
+          ? 'AI extraction is temporarily busy. The original enquiry was saved; retry shortly.'
+          : `AI extraction was unavailable${aiResult.error ? `: ${aiResult.error}` : ''}. The original enquiry was saved for manual structuring.`,
         fields: fields.map(f => ({ ...f, v: cleanDisplayValue(f.v), state: 'pending' })),
         lineItems,
         missing,

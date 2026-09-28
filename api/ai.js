@@ -4,15 +4,10 @@ import { getAdminSupabaseClient } from './_supabase-client.js'
 // GEMINI_API_KEY is read only on the server. Never expose it through VITE_.
 
 const API = 'https://generativelanguage.googleapis.com/v1beta/models'
-const DEFAULT_MODEL = 'gemini-3.1-flash-lite'
-// Gemini 2.5 access is restricted for some API projects. Use the cheaper
-// stable Flash-Lite model for complex JSON review so new deployments do not
-// fail with a model-not-found response.
-const COMPLEX_MODEL = 'gemini-3.5-flash-lite'
-const COMPLEX_TASKS = new Set(['approval.condition-evidence', 'proposal.review', 'template.map', 'tender.extract', 'admin.routing-review'])
+const DEFAULT_MODEL = 'gemini-3.6-flash'
 const MODEL_ALIASES = {
-  'gemini-pro': COMPLEX_MODEL,
-  'gemini-pro-latest': COMPLEX_MODEL,
+  'gemini-pro': DEFAULT_MODEL,
+  'gemini-pro-latest': DEFAULT_MODEL,
 }
 
 const send = (res, status, body) => {
@@ -26,7 +21,16 @@ const cap = (value, max) => String(value ?? '').slice(0, max)
 const MAX_REQUEST_CHARS = 350000
 const RATE_WINDOW_MS = 10 * 60 * 1000
 const RATE_LIMIT = 40
+const MAX_UPSTREAM_RETRIES = 2
 const rateBuckets = new Map()
+
+const retryDelayMs = (response, attempt) => {
+  if (process.env.NODE_ENV === 'test') return 0
+  const retryAfter = response?.headers?.get?.('retry-after')
+  const seconds = Number(retryAfter)
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.min(seconds * 1000, 2000)
+  return [250, 750][attempt] || 750
+}
 
 const authClient = () => {
   return getAdminSupabaseClient()
@@ -886,9 +890,9 @@ export default async function handler(req, res) {
   const requested = /^gemini-[\w.-]+$/.test(requestedModel)
     ? (MODEL_ALIASES[requestedModel] || requestedModel)
     : DEFAULT_MODEL
-  // Routine high-volume work always uses the budget model. Complex document
-  // reasoning is routed to the stronger model regardless of the client picker.
-  const model = task === 'health' ? requested : COMPLEX_TASKS.has(task) ? COMPLEX_MODEL : DEFAULT_MODEL
+  // All AI tasks use the same stable multimodal model. Health checks may still
+  // request a specific model so Admin can verify a configured endpoint.
+  const model = task === 'health' ? requested : DEFAULT_MODEL
   if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'lead.clarify', 'email.clarification', 'email.followup', 'reply.classify', 'tender.extract', 'location.search', 'admin.routing-review'].includes(task)) {
     return fail(res, 400, 'AI_BAD_REQUEST', `Unsupported task: ${task}`)
   }
@@ -944,12 +948,17 @@ export default async function handler(req, res) {
   }
 
   try {
-    const upstream = await fetch(`${API}/${model}:generateContent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify(requestBody),
-      signal: AbortSignal.timeout(10_000),
-    })
+    let upstream
+    for (let attempt = 0; attempt <= MAX_UPSTREAM_RETRIES; attempt += 1) {
+      upstream = await fetch(`${API}/${model}:generateContent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+        body: JSON.stringify(requestBody),
+        signal: AbortSignal.timeout(10_000),
+      })
+      if (upstream.status !== 429 || attempt === MAX_UPSTREAM_RETRIES) break
+      await new Promise(resolve => setTimeout(resolve, retryDelayMs(upstream, attempt)))
+    }
     if (!upstream.ok) {
       const errorCode = [401, 403].includes(upstream.status)
         ? 'AI_KEY_REJECTED'
@@ -963,7 +972,7 @@ export default async function handler(req, res) {
         : errorCode === 'AI_MODEL_UNAVAILABLE'
           ? `The Gemini model ${model} is unavailable for this API key. Check the server AI configuration.`
         : errorCode === 'AI_RATE_LIMITED'
-          ? 'Gemini is temporarily rate limited; try again shortly'
+          ? 'Gemini is temporarily busy or rate limited; retry shortly'
           : `Gemini service returned HTTP ${upstream.status}`
       return fail(res, 502, errorCode, error)
     }

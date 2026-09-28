@@ -13,6 +13,11 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Standardized all non-health Gemini AI tasks on the stable `gemini-3.6-flash`
+  model, including lead extraction and complex document review.
+- Fixed lead extraction for unlabelled facility addresses so a standalone
+  station or plant name is separated from its district, state, and country
+  location.
 - Restored Scope Confirmation as a distinct Service stage between Service
   Request and Standard Rate Schedule. The site-visit requirement is selected
   once there, and any required site survey is completed before pricing.

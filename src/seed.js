@@ -781,7 +781,7 @@ export const seedConfig = {
     { id: 'bi', label: 'BI', state: 'Healthy' },
   ],
   // No key here by design: it lives in Vercel's server-side environment.
-  aiModel: { provider: 'Google', model: 'gemini-3.1-flash-lite', customModel: '', endpoint: '', updatedBy: '', updatedOn: '' },
+  aiModel: { provider: 'Google', model: 'gemini-3.6-flash', customModel: '', endpoint: '', updatedBy: '', updatedOn: '' },
   // Admin document uploads (metadata only — content stays with the file's home).
   uploads: {
     priceLists: [
