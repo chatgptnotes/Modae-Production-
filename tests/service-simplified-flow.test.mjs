@@ -202,11 +202,12 @@ test('discounting a Path A offer pulls in the full matrix', async () => {
   assert.ok(blockers.some(b => b.key === 'pricing-threshold'), 'the discount must route for sign-off')
 })
 
-test('a customised proposal always runs the full matrix', async () => {
+test('a closed historical customised proposal keeps the full matrix', async () => {
   const { serviceMatrixExempt, transitionBlockers } = await gatesFor()
   const state = stateWith({ offerMode: 'Customized Proposal' })
-  assert.equal(serviceMatrixExempt(serviceOpp(), state), false)
-  const blockers = transitionBlockers(serviceOpp(), 'Submitted', { revision: '00', bom: [], terms: [] }, state)
+  const opp = serviceOpp({ status: 'Closed', stage: 'Won' })
+  assert.equal(serviceMatrixExempt(opp, state), false)
+  const blockers = transitionBlockers(opp, 'Submitted', { revision: '00', bom: [], terms: [] }, state)
   assert.ok(blockers.some(b => b.key === 'tech-approval'))
   assert.ok(blockers.some(b => b.key === 'release'))
 })
@@ -214,16 +215,17 @@ test('a customised proposal always runs the full matrix', async () => {
 test('an opportunity already on the single review keeps running on it', async () => {
   const { legacyServiceReview, transitionBlockers, serviceOfferCleared } = await gatesFor()
   const review = { oppId: 'SVC-1', type: 'Service offer review', status: 'Pending' }
+  const opp = serviceOpp({ status: 'Closed', stage: 'Won' })
   const state = stateWith({ offerMode: 'Customized Proposal' }, { approvals: [review] })
-  assert.ok(legacyServiceReview(serviceOpp(), state.approvals))
+  assert.ok(legacyServiceReview(opp, state.approvals))
 
-  const blockers = transitionBlockers(serviceOpp(), 'Submitted', { revision: '00', bom: [], terms: [] }, state)
+  const blockers = transitionBlockers(opp, 'Submitted', { revision: '00', bom: [], terms: [] }, state)
   assert.ok(blockers.some(b => b.key === 'service-review'), 'the in-flight review still gates')
   assert.equal(blockers.some(b => b.key === 'tech-approval'), false, 'it must not also acquire §5')
 
   const approved = stateWith({ offerMode: 'Customized Proposal' },
     { approvals: [{ ...review, status: 'Approved' }] })
-  assert.equal(serviceOfferCleared(serviceOpp(), null, approved), true)
+  assert.equal(serviceOfferCleared(opp, null, approved), true)
 })
 
 test('the margin matrix routes Service by value and margin', async () => {
@@ -290,7 +292,7 @@ test('the Standard Rate Sheet lane is fixed for new Service scope', async () => 
 
 test('Service no longer derives a customised lane from enquiry language', () => {
   const wb = fs.readFileSync('src/workbench/WbService.jsx', 'utf8')
-  assert.match(wb, /offerMode = est\.offerMode \|\| 'Standard Rate Sheet'/)
+  assert.match(wb, /serviceUsesStandardRates\(opp, store\)/)
   assert.doesNotMatch(wb, /aiSourcesFor/)
   assert.doesNotMatch(wb, /suggestedOfferFor/)
 })
@@ -348,4 +350,27 @@ test('standard Service scope confirms a rate-sheet offer without proposal source
   assert.match(wb, /offerMode: 'Standard Rate Sheet'/)
   assert.match(wb, /surveyRequired: siteVisitSelected/)
   assert.doesNotMatch(wb, /offerMode: 'Customized Proposal'/)
+})
+
+test('active Service records use the Standard Rate Sheet lane in Send Offer', () => {
+  const workbench = fs.readFileSync('src/pages/Workbench.jsx', 'utf8')
+  const rateSheet = fs.readFileSync('src/workbench/RateSheetPanel.jsx', 'utf8')
+  assert.match(workbench, /opp\.route === 'Service'/)
+  assert.match(workbench, /<RateSheetPanel opp=\{opp\}/)
+  assert.match(rateSheet, /Preview rate schedule/)
+  assert.match(rateSheet, /kind: 'rate-sheet'/)
+})
+
+test('active legacy Service records are treated as published-rate offers unless discounted', async () => {
+  const { serviceMatrixExempt } = await gatesFor()
+  assert.equal(serviceMatrixExempt(serviceOpp({ status: 'Open' }), stateWith({ offerMode: 'Customized Proposal' })), true)
+  assert.equal(serviceMatrixExempt(serviceOpp({ status: 'Open' }), stateWith({ offerMode: 'Customized Proposal', rateDiscountPct: 10 })), false)
+  assert.equal(serviceMatrixExempt(serviceOpp({ status: 'Closed', stage: 'Won' }), stateWith({ offerMode: 'Customized Proposal' })), false)
+})
+
+test('standard Customer Decision does not show an approval warning', () => {
+  const decision = fs.readFileSync('src/workbench/ServiceDecisionPanel.jsx', 'utf8')
+  assert.match(decision, /standardRateOffer/)
+  assert.match(decision, /!standardRateOffer && !review/)
+  assert.match(decision, /Selling at published rates\. No approval is required\./)
 })

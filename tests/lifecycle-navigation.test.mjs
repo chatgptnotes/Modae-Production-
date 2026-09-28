@@ -38,15 +38,19 @@ test('milestone changes open their lifecycle workspace', () => {
   assert.match(workbench, /'--progress-step-count': steps\.length/)
 })
 
-test('Service workflow pages can be opened before their persisted phase', () => {
+test('Service workflow lets users preview every non-current page as read-only', () => {
   assert.match(workbench, /allowFutureNavigation = false/)
   assert.match(workbench, /disabled=\{!allowFutureNavigation && index > completedThrough\}/)
   assert.match(workbench, /const serviceOpenNavigation = opp\.route === 'Service'/)
+  assert.match(workbench, /const viewingFutureStep = requestedStepIndex > persistedStepIndex/)
+  assert.match(workbench, /const activeStep = serviceOpenNavigation && requestedWorkflowStep\s*\? requestedWorkflowStep\.slug/)
   assert.match(workbench, /if \(index < 0 \|\| \(!serviceOpenNavigation && index > persistedStepIndex\)\) return/)
+  assert.match(workbench, /const workflowReadOnly = reviewingCompletedStep \|\| viewingFutureStep/)
   assert.match(workbench, /allowFutureNavigation=\{serviceOpenNavigation\}/)
-  assert.match(workbench, /if \(serviceOpenNavigation\) \{\s*const serviceBlockers = servicePhaseBlockers\(step\)/)
   assert.match(workbench, /setTransition\(\{ kind: 'blocked', target: step\.label, blockers: serviceBlockers \}\)/)
-  assert.match(workbench, /selectStep\(step\.slug\)/)
+  assert.match(workbench, /if \(serviceBlockers\.length\) \{[\s\S]*setTransition\(\{ kind: 'blocked', target: step\.label, blockers: serviceBlockers \}\)/)
+  assert.match(workbench, /if \(opp\.route === 'Service' && viewingFutureStep\) return/)
+  assert.match(workbench, /Previewing future stage:/)
 })
 
 test('Service workflow uses the 10-step progress rail without duplicate work-area navigation', () => {
@@ -133,7 +137,7 @@ test('transition modal shows pending approvals without approval-navigation short
   assert.match(transition, /Exception approval <b>\{exception\.id\}<\/b> is pending\./)
 })
 
-test('communications tabs stack the full-width submission form above the full-width log', () => {
+test('communications tabs stack the route-specific send form above the full-width log', () => {
   const legacyStart = workbench.indexOf('function LegacyCommsTab')
   const legacyEnd = workbench.indexOf('// ---------------------------------------------------------------------------', legacyStart + 1)
   const legacy = workbench.slice(legacyStart, legacyEnd)
@@ -142,9 +146,9 @@ test('communications tabs stack the full-width submission form above the full-wi
   const comms = workbench.slice(commsStart, commsEnd)
 
   assert.ok(legacy.indexOf('<SubmissionPanel opp={opp} />') < legacy.indexOf('Communication log'))
-  assert.ok(comms.indexOf('<SubmissionPanel opp={opp} readOnly={readOnly} />') < comms.indexOf('Communication log'))
+  assert.ok(comms.indexOf("opp.route === 'Service'") < comms.indexOf('Communication log'))
   assert.match(legacy, /<div className="ana-card c-12">\s*<SubmissionPanel opp=\{opp\} \/>\s*<\/div>\s*<div className="ana-card c-12">\s*<div className="ana-title">Communication log<\/div>/s)
-  assert.match(comms, /<div className="ana-card c-12">\s*<SubmissionPanel opp=\{opp\} readOnly=\{readOnly\} \/>\s*<\/div>\s*<div className="ana-card c-12">\s*<div className="ana-title">Communication log<\/div>/s)
+  assert.match(comms, /<div className="ana-card c-12">\s*\{opp\.route === 'Service'[\s\S]*<RateSheetPanel opp=\{opp\} est=\{est\} readOnly=\{readOnly\} \/>[\s\S]*<SubmissionPanel opp=\{opp\} readOnly=\{readOnly\} \/>[\s\S]*<\/div>\s*<div className="ana-card c-12">\s*<div className="ana-title">Communication log<\/div>/s)
 })
 
 test('commercial decisions appear before sourcing, not inside the proposal editor', () => {

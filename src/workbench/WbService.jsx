@@ -6,7 +6,7 @@ import { Icon } from '../icons.jsx'
 import SurveyPanel from './SurveyPanel.jsx'
 import RateSheetPanel from './RateSheetPanel.jsx'
 import { serviceCost, estimateQuantities, serviceMoney, sheetFor } from '../serviceRates.js'
-import { serviceMatrixExempt, legacyServiceReview, serviceOfferCleared } from '../gates.js'
+import { serviceMatrixExempt, serviceUsesStandardRates, legacyServiceReview, serviceOfferCleared } from '../gates.js'
 
 const DEFAULT_EST = {
   workDays: 1, travelDays: 1, dailyHours: 8, otHours: 0,
@@ -32,7 +32,7 @@ export default function WbService({ opp, focus = 'scope' }) {
   const scopeConfirmed = !!est.scopeConfirmed
   // New Service opportunities use one commercial lane. Historical saved modes
   // remain readable without rewriting existing records.
-  const offerMode = est.offerMode || 'Standard Rate Sheet'
+  const offerMode = serviceUsesStandardRates(opp, store) ? 'Standard Rate Sheet' : (est.offerMode || 'Standard Rate Sheet')
   const requirementSource = Array.isArray(est.requirementSource)
     ? est.requirementSource.filter(source => source === 'Site visit')
     : []

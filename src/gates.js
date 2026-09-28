@@ -194,15 +194,21 @@ export function pricingApprovalFor(opp, proposal, approvals, pricingRows = []) {
         : (a.rev == null || String(a.rev) === rev))))
 }
 
-// A Service opportunity now runs the same §5 stack as a project — technical,
-// commercial and the margin matrix (decision, 22 Sep). The one carve-out is
-// Path A while it is selling at published rates: the standard rate schedule is
-// a rate card, not a negotiated price, so there is nothing for an approver to
-// decide. Discount it and the full matrix applies.
+// Active Service opportunities use the published Standard Rate Sheet lane.
+// Older closed records retain their saved lane so historical approvals remain
+// readable. A discount turns the published rate into a negotiated offer and
+// therefore brings back the normal approval matrix.
+export function serviceUsesStandardRates(opp, state) {
+  if (opp?.route !== 'Service') return false
+  const est = (state?.svcEstimates || []).find(e => e.oppId === opp.id) || {}
+  if (opp.status !== 'Closed') return true
+  return (est.offerMode || est.aiOfferMode) === 'Standard Rate Sheet'
+}
+
 export function serviceMatrixExempt(opp, state) {
   if (opp?.route !== 'Service') return false
   const est = (state?.svcEstimates || []).find(e => e.oppId === opp.id) || {}
-  if ((est.offerMode || est.aiOfferMode) !== 'Standard Rate Sheet') return false
+  if (!serviceUsesStandardRates(opp, state)) return false
   return !(Number(est.rateDiscountPct) > 0)
 }
 

@@ -21,6 +21,7 @@ import PropBuilder from '../workbench/PropBuilder.jsx'
 // through store.saveProposal, so the two views are never out of step.
 import Proposal from './Proposal.jsx'
 import SubmissionPanel from '../workbench/SubmissionPanel.jsx'
+import RateSheetPanel from '../workbench/RateSheetPanel.jsx'
 import PoHandover from '../workbench/PoHandover.jsx'
 import OpportunityDetailsEditor, { OpportunityDetailsView } from '../OpportunityDetailsEditor.jsx'
 import AttachmentViewer from '../AttachmentViewer.jsx'
@@ -340,14 +341,16 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
   const requestedWorkflowStep = workflowBySlug[requestedStep]
     || workflowSteps.find(step => (step.milestones || [step.milestone]).includes(requestedStep))
   const requestedStepIndex = requestedWorkflowStep ? workflowSteps.findIndex(step => step.slug === requestedWorkflowStep.slug) : -1
+  const requestedCompletedOrCurrent = requestedWorkflowStep && requestedStepIndex <= persistedStepIndex
   const reviewingCompletedStep = requestedStepIndex >= 0 && requestedStepIndex < persistedStepIndex
   const serviceOpenNavigation = opp.route === 'Service'
+  const viewingFutureStep = requestedStepIndex > persistedStepIndex
   const activeStep = serviceOpenNavigation && requestedWorkflowStep
     ? requestedWorkflowStep.slug
     : reviewingCompletedStep ? requestedWorkflowStep.slug : (fallbackStep?.slug || 'intake')
   const activeStepConfig = workflowBySlug[activeStep]
   const viewTab = activeStepConfig?.tab || 'overview'
-  const workflowReadOnly = reviewingCompletedStep
+  const workflowReadOnly = reviewingCompletedStep || viewingFutureStep
   useEffect(() => {
     if (tab !== 'overview' || requestedStep !== activeStep) {
       nav(`/opp/${opp.id}?step=${encodeURIComponent(activeStep)}`, { replace: true })
@@ -484,25 +487,16 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
   const advanceStep = async slug => {
     const step = workflowBySlug[slug]
     if (!step) return
-    if (serviceOpenNavigation) {
-      const serviceBlockers = servicePhaseBlockers(step)
-      if (serviceBlockers.length) {
-        setTransition({ kind: 'blocked', target: step.label, blockers: serviceBlockers })
-        return
-      }
-      selectStep(step.slug)
-      return
-    }
-    // Viewing the next workbench page is safe even when its lifecycle
-    // transition is blocked. Keep the persisted milestone and its approval
-    // gate unchanged, but do not force the user to stay on the current page
-    // while they review or prepare the next step.
+    if (opp.route === 'Service' && viewingFutureStep) return
     if (opp.route === 'Service') {
       const serviceBlockers = servicePhaseBlockers(step)
       if (serviceBlockers.length) {
         setTransition({ kind: 'blocked', target: step.label, blockers: serviceBlockers })
         return
       }
+      selectStep(step.slug)
+      store.updateServiceFlow(opp.id, { servicePhase: step.servicePhase })
+      return
     }
     const moved = await moveMilestone(step.milestone, step.tab)
     if (opp.route === 'Service' && moved) store.updateServiceFlow(opp.id, { servicePhase: step.servicePhase })
@@ -749,10 +743,16 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
         </Modal>
       )}
       {workflowReadOnly && <div className="workflow-readonly-notice" role="status">
-        <span>Reviewing completed stage: <b>{activeStepConfig?.label || 'this stage'}</b>. Current workflow stage: <b>{workflowSteps[persistedStepIndex]?.label || opp.milestone}</b>.</span>
-        <button type="button" className="secondary" onClick={() => openBackwardTransition(activeStepConfig)}>
-          Move back to {activeStepConfig?.label || 'this stage'} to edit
-        </button>
+        {viewingFutureStep ? (
+          <span>Previewing future stage: <b>{activeStepConfig?.label || 'this stage'}</b>. Current workflow stage: <b>{workflowSteps[persistedStepIndex]?.label || opp.milestone}</b>.</span>
+        ) : (
+          <>
+            <span>Reviewing completed stage: <b>{activeStepConfig?.label || 'this stage'}</b>. Current workflow stage: <b>{workflowSteps[persistedStepIndex]?.label || opp.milestone}</b>.</span>
+            <button type="button" className="secondary" onClick={() => openBackwardTransition(activeStepConfig)}>
+              Move back to {activeStepConfig?.label || 'this stage'} to edit
+            </button>
+          </>
+        )}
       </div>}
       <fieldset className={`wb-body workflow-edit-boundary ${workflowReadOnly ? 'workflow-edit-boundary--readonly' : ''}`} disabled={workflowReadOnly && viewTab !== 'comms'} aria-readonly={workflowReadOnly || undefined}>
         {viewTab === 'overview' && opp.route === 'Spares' && <SparesIntakeTab opp={opp} detailsRef={detailsRef} />}
@@ -2650,6 +2650,7 @@ function CommsTab({ opp, readOnly = false }) {
   const vendorQuotes = store.vendorQuotes?.[opp.id] || []
   const leadRows = store.communications?.[lead?.id] || []
   const opportunityRows = store.communications?.[opp.id] || []
+  const est = store.svcEstimates.find(e => e.oppId === opp.id) || { oppId: opp.id }
   const mailbox = store.config?.commonMailbox || 'sales@modae.demo'
   const inbound = lead ? [{
     id: `lead-${lead.id}`, ts: lead.ts, dir: 'In', kind: 'enquiry',
@@ -2661,7 +2662,9 @@ function CommsTab({ opp, readOnly = false }) {
   return (
     <div className="ana-grid">
       <div className="ana-card c-12">
-        <SubmissionPanel opp={opp} readOnly={readOnly} />
+        {opp.route === 'Service'
+          ? <RateSheetPanel opp={opp} est={est} readOnly={readOnly} />
+          : <SubmissionPanel opp={opp} readOnly={readOnly} />}
       </div>
       <div className="ana-card c-12">
         <div className="ana-title">Communication log</div>

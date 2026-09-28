@@ -4,6 +4,7 @@ import { Chip } from '../ui.jsx'
 import { canPriceProposal } from '../utils.js'
 import { serviceCost, actualQuantities, engineerDaysFrom, serviceMoney, sheetFor, hasActuals } from '../serviceRates.js'
 import { Icon } from '../icons.jsx'
+import { serviceUsesStandardRates } from '../gates.js'
 
 export default function ServiceInvoicePanel({ opp }) {
   const store = useStore()
@@ -15,7 +16,7 @@ export default function ServiceInvoicePanel({ opp }) {
   const ready = !!est.serviceReport
   const comm = canPriceProposal(store.role)
   const sheet = sheetFor(opp, est)
-  const basis = est.invoiceBasis || (est.offerMode === 'Standard Rate Sheet' ? 'Actual engineer days' : 'Approved scope / BOQ / lump sum')
+  const basis = est.invoiceBasis || (serviceUsesStandardRates(opp, store) ? 'Actual engineer days' : 'Approved scope / BOQ / lump sum')
   const money = v => serviceMoney(sheet, v)
 
   // Standard rate-sheet work is billed on what the engineer actually spent, at

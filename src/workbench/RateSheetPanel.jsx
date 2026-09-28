@@ -6,6 +6,7 @@ import { gmailComposeHref, displayRole, fmt } from '../utils.js'
 import { sheetFor } from '../serviceRates.js'
 import { Chip } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
+import { serviceOfferCleared } from '../gates.js'
 
 // Path A's defining step: the published rate schedule goes to the customer
 // *before* the site visit, so the day rates are acknowledged up front and the
@@ -20,7 +21,7 @@ const RATE_PREVIEW = [
   ['Overtime — per hour', 'otHour'],
 ]
 
-export default function RateSheetPanel({ opp, est }) {
+export default function RateSheetPanel({ opp, est, readOnly = false }) {
   const store = useStore()
   const sheet = sheetFor(opp, est)
   const rs = store.rateSheets[sheet]
@@ -85,6 +86,7 @@ export default function RateSheetPanel({ opp, est }) {
   }
 
   const pendingDraft = drafted || (lastSent?.status === 'draft' ? lastSent.id : '')
+  const offerCleared = serviceOfferCleared(opp, store.getProposal(opp.id), store)
 
   return (
     <div className="ana-card c-12">
@@ -108,23 +110,27 @@ export default function RateSheetPanel({ opp, est }) {
         </tbody>
       </table>
       <p className="hint">{sheet} schedule · {rs.currency} · attached as {enclosure.filename}</p>
+      <p style={{ marginTop: 8 }}>
+        <a href={SERVICE_RATE_SCHEDULE_URL} target="_blank" rel="noreferrer">Preview rate schedule</a>
+      </p>
 
       <div style={{ display: 'grid', gap: 8, marginTop: 10, maxWidth: 560 }}>
         <label style={{ fontSize: 12 }}>To
-          <input type="text" value={emailTo} onChange={e => setEmailTo(e.target.value)}
+          <input type="text" value={emailTo} disabled={readOnly} onChange={e => setEmailTo(e.target.value)}
             placeholder="customer@company.com" style={{ width: '100%' }} />
         </label>
         <label style={{ fontSize: 12 }}>Subject
-          <input type="text" value={subject} onChange={e => setSubject(e.target.value)} style={{ width: '100%' }} />
+          <input type="text" value={subject} disabled={readOnly} onChange={e => setSubject(e.target.value)} style={{ width: '100%' }} />
         </label>
       </div>
 
       <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <button className="primary" disabled={!emailTo.trim()} onClick={send}>
+        <button className="primary" disabled={readOnly || !offerCleared || !emailTo.trim()} onClick={send}>
           <Icon name="send" size={13} /> {est.rateSheetSentOn ? 'Re-issue rate schedule' : 'Download schedule & draft email'}
         </button>
-        {pendingDraft && <button onClick={markSent}>Mark as sent</button>}
+        {pendingDraft && <button disabled={readOnly} onClick={markSent}>Mark as sent</button>}
         {!emailTo.trim() && <span className="hint">A customer address is required.</span>}
+        {!offerCleared && <span className="hint">Approval is required before a discounted rate schedule can be sent.</span>}
       </div>
 
       {pendingDraft && (
