@@ -2071,8 +2071,12 @@ export function StoreProvider({ children }) {
       setState(s => {
         const current = s.svcEstimates.find(e => e.oppId === oppId) || { oppId }
         const nextEstimate = { ...current, ...patch }
+        const opportunities = patch.servicePhase !== undefined
+          ? s.opportunities.map(o => (o.id === oppId ? { ...o, servicePhase: patch.servicePhase } : o))
+          : s.opportunities
         return withAudit({
           ...s,
+          opportunities,
           svcEstimates: s.svcEstimates.some(e => e.oppId === oppId)
             ? s.svcEstimates.map(e => (e.oppId === oppId ? nextEstimate : e))
             : [...s.svcEstimates, nextEstimate],

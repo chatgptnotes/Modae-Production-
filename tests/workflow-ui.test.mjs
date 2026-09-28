@@ -114,6 +114,14 @@ test('Service backward movement restores the selected service phase', () => {
   assert.match(workbench, /store\.updateServiceFlow\(opp\.id, \{ servicePhase: step\.servicePhase \}\)/)
 })
 
+test('Service flow persistence mirrors servicePhase onto the opportunity', () => {
+  const store = read('src/store.jsx')
+  const update = store.slice(store.indexOf('    updateServiceFlow(oppId, patch)'))
+  assert.match(update, /opportunities: s\.opportunities\.map\(/)
+  assert.match(update, /patch\.servicePhase !== undefined/)
+  assert.match(update, /servicePhase: patch\.servicePhase/)
+})
+
 test('communication log rows wrap long subjects and metadata inside the card', () => {
   const workbench = read('src/pages/Workbench.jsx')
   const styles = read('src/styles.css')
