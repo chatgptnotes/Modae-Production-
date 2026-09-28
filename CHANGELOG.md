@@ -26,6 +26,9 @@ This is an implementation and release log, not a dump of every commit.
 - Reworked the Standard Rate Schedule card into a responsive two-column layout
   with rate details beside the complete editable customer email composer. The
   rate stage no longer duplicates the survey or travel decision controls.
+- Removed internal deployment planning and cost build-up cards from the
+  Standard Rate Schedule stage. Engineer assignment, actual days, execution
+  readiness, and billing inputs remain in Service Execution & Close.
 - Reorganized imported runtime binaries under a semantic `assets/` tree,
   replaced supplied filenames with clean internal names while preserving
   customer-facing attachment names, and updated the brand-refresh and icon

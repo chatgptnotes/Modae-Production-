@@ -14507,6 +14507,7 @@ table.sheet tbody tr:hover td {
 }
 
 .service-rate-composer { width: 100%; }
+.service-rate-workbench { gap: 14px; }
 .service-rate-layout { display: grid; grid-template-columns: minmax(280px, .85fr) minmax(0, 1.15fr); gap: 22px; margin-top: 16px; align-items: start; }
 .service-rate-details { min-width: 0; }
 .service-rate-details .hint { margin-top: 0; }
@@ -14514,6 +14515,9 @@ table.sheet tbody tr:hover td {
 .service-rate-email-heading { color: var(--text-primary); font-size: 16px; font-weight: 800; }
 .service-rate-email > .hint { margin: 5px 0 0; }
 .service-rate-email-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.service-rate-review-inline { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 14px; padding: 12px; border-top: 1px solid var(--border-subtle); background: var(--surface-raised); }
+.service-rate-review-inline .hint { margin: 4px 0 0; }
+.service-rate-review-inline > button { flex: 0 0 auto; white-space: nowrap; }
 .service-scope-handoff { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-left: 3px solid var(--primary-accent); }
 .service-scope-handoff .ana-title { margin-top: 4px; }
 .service-scope-handoff .hint { margin: 5px 0 0; }
@@ -14533,6 +14537,7 @@ table.sheet tbody tr:hover td {
 .service-decision-note { min-height: 132px; resize: vertical; }
 .service-discount-field { max-width: 340px; margin-top: 10px; }
 @media (max-width: 760px) { .service-scope-handoff { align-items: stretch; flex-direction: column; } .service-scope-handoff > button { width: 100%; } }
+@media (max-width: 760px) { .service-rate-review-inline { align-items: stretch; flex-direction: column; } .service-rate-review-inline > button { width: 100%; } }
 .service-form-grid { display: grid; gap: 12px; }
 .service-form-grid-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .service-form-grid-four { grid-template-columns: repeat(4, minmax(0, 1fr)); }

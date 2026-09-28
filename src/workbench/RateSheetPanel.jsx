@@ -22,7 +22,7 @@ const RATE_PREVIEW = [
   ['Overtime — per hour', 'otHour'],
 ]
 
-export default function RateSheetPanel({ opp, est, readOnly = false, onConfirmSent }) {
+export default function RateSheetPanel({ opp, est, readOnly = false, onConfirmSent, legacyReview = false, reviewApproval = null, reviewReady = false, onRequestReview }) {
   const store = useStore()
   const sheet = sheetFor(opp, est)
   const rs = store.rateSheets[sheet]
@@ -162,6 +162,19 @@ export default function RateSheetPanel({ opp, est, readOnly = false, onConfirmSe
           {est.rateSheetSentOn && !pendingDraft && (
             <div className="okbox">
               Issue {est.rateSheetRev} sent on {est.rateSheetSentOn}. Re-issue it if the scope or rates are renegotiated.
+            </div>
+          )}
+
+          {legacyReview && (
+            <div className="service-rate-review-inline">
+              <div>
+                <div className="service-panel-kicker">Legacy exception</div>
+                <b>One Service Review</b>
+                <p className="hint">This historical Service record retains its combined internal review before customer acceptance.</p>
+              </div>
+              <button className="primary" disabled={readOnly || !reviewReady || !!reviewApproval} onClick={onRequestReview}>
+                <Icon name="users" size={13} /> {reviewApproval ? `Service review ${reviewApproval.status.toLowerCase()}` : 'Request one Service Review'}
+              </button>
             </div>
           )}
         </section>

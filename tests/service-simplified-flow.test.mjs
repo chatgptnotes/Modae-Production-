@@ -10,6 +10,16 @@ test('Service flow uses the Standard Rate Sheet path', () => {
   assert.doesNotMatch(service, /Customized Proposal/)
 })
 
+test('Standard Rate Schedule keeps only customer issuance work', () => {
+  const panel = fs.readFileSync('src/workbench/RateSheetPanel.jsx', 'utf8')
+  assert.doesNotMatch(service, /service-estimate-panel/)
+  assert.doesNotMatch(service, /service-cost-panel/)
+  assert.doesNotMatch(service, /Internal deployment planning/)
+  assert.doesNotMatch(service, /Cost build-up/)
+  assert.match(panel, /legacyReview/)
+  assert.match(panel, /onRequestReview/)
+})
+
 test('Scope Confirmation owns the single site-visit decision', () => {
   const workbench = fs.readFileSync('src/pages/Workbench.jsx', 'utf8')
   const request = fs.readFileSync('src/workbench/ServiceRequestPanel.jsx', 'utf8')
@@ -44,8 +54,6 @@ test('the survey panel reports the request without duplicating the decision cont
   assert.match(scope, /surveyReady = !siteVisitSelected \|\| !!survey\?\.report/)
   assert.match(scope, /disabled=\{!surveyReady\}/)
   assert.match(scope, /Complete the site survey before preparing the rate schedule/)
-  assert.match(service, /Confirm entered travel days/)
-  assert.match(service, /rate schedule is published independently/)
   assert.doesNotMatch(service, /<SurveyPanel opp=\{opp\} est=\{est\} \/>/)
   assert.doesNotMatch(service, /Next action required:/)
   assert.doesNotMatch(service, /Confirmed Service Request/)
@@ -53,7 +61,7 @@ test('the survey panel reports the request without duplicating the decision cont
   assert.doesNotMatch(service, /Scope confirmed\. Complete the estimate below/)
   assert.doesNotMatch(service, /service-flow-summary service-status-strip/)
   assert.doesNotMatch(service, /site-visit requirement was recorded in Service Request/)
-  assert.match(service, /<div className="ana-card c-6 service-estimate-panel">[\s\S]*Confirm entered travel days/)
+  assert.doesNotMatch(service, /Confirm entered travel days/)
   assert.doesNotMatch(service, /service-travel-confirmation/)
   assert.match(workbench, /servicePhaseBlockers\(step\)/)
   assert.match(workbench, /step\.servicePhaseStart >= 7[\s\S]*est\.travelConfirmed/)
@@ -71,8 +79,10 @@ test('Scope Confirmation gates the rate schedule on a required survey', () => {
 })
 
 test('Service flow combines internal review and records one customer decision', () => {
+  const panel = fs.readFileSync('src/workbench/RateSheetPanel.jsx', 'utf8')
   assert.match(service, /type: 'Service offer review'/)
-  assert.match(service, /Request one Service Review/)
+  assert.match(panel, /Request one Service Review/)
+  assert.match(panel, /legacyReview/)
   const decision = fs.readFileSync('src/workbench/ServiceDecisionPanel.jsx', 'utf8')
   assert.match(decision, /Customer acceptance/)
   assert.match(decision, /Changes requested/)
@@ -83,10 +93,11 @@ test('Service flow combines internal review and records one customer decision', 
 })
 
 test('Service review still requires the request, travel, and required survey evidence', () => {
-  assert.match(service, /!est\.travelConfirmed/)
-  assert.match(service, /est\.surveyRequired && !\(\(store\.surveys \|\| \[\]\)\.find/)
+  const panel = fs.readFileSync('src/workbench/RateSheetPanel.jsx', 'utf8')
+  assert.match(service, /const reviewReady = !!est\.travelConfirmed/)
+  assert.match(service, /!reviewAllowed \|\| reviewApproval/)
   // The single review only gates the opportunities still carrying one.
-  assert.match(service, /!!reviewApproval/)
+  assert.match(panel, /!!reviewApproval/)
 })
 
 // Reversed on 22 Sep: Service now runs the same layered approval as a project.
@@ -148,16 +159,17 @@ test('the standard rate schedule is issued after scope and before execution', ()
   assert.match(panel, /offerPrepared: true/)
   // Re-issued rather than re-created when the customer negotiates.
   assert.match(panel, /Re-issue rate schedule/)
-  assert.match(service, /offerMode === 'Standard Rate Sheet' && <RateSheetPanel/)
+  assert.match(service, /offerMode === 'Standard Rate Sheet' && \([\s\S]*<RateSheetPanel/)
   assert.doesNotMatch(service, /Confirm scope and survey/)
 })
 
 test('Service forms use wide bordered controls and avoid leading-zero numeric entry', () => {
   const service = fs.readFileSync('src/workbench/WbService.jsx', 'utf8')
+  const execution = fs.readFileSync('src/workbench/ServiceExecutionPanel.jsx', 'utf8')
   const survey = fs.readFileSync('src/workbench/SurveyPanel.jsx', 'utf8')
   const decision = fs.readFileSync('src/workbench/ServiceDecisionPanel.jsx', 'utf8')
-  assert.match(service, /service-number-input/)
-  assert.match(service, /value=\{est\[k\] \?\? ''\}/)
+  assert.match(execution, /service-number-input/)
+  assert.match(execution, /value=\{est\[key\] \?\? ''\}/)
   assert.match(survey, /service-form-control/)
   assert.match(decision, /service-form-control/)
 })
@@ -239,12 +251,11 @@ test('the invoice bills the accepted rates against the actual deployment', async
   assert.equal(billed.gst, Math.round(billed.subtotal * 18) / 100)
 })
 
-test('the estimate and the invoice share one build-up', () => {
+test('the service invoice uses the shared rate build-up', () => {
   const rates = fs.readFileSync('src/serviceRates.js', 'utf8')
   const invoice = fs.readFileSync('src/workbench/ServiceInvoicePanel.jsx', 'utf8')
   // The formula lives in one place; neither panel recomputes it.
   assert.match(rates, /export function serviceCost/)
-  assert.match(service, /serviceCost\(store\.rateSheets, sheet, estimateQuantities\(est\)\)/)
   assert.match(invoice, /serviceCost\(store\.rateSheets, sheet, q\)/)
   assert.doesNotMatch(invoice, /engineerDay \*/)
 })
