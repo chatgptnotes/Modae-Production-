@@ -41,6 +41,8 @@ test('Service flow combines internal review and records one customer decision', 
   const decision = fs.readFileSync('src/workbench/ServiceDecisionPanel.jsx', 'utf8')
   assert.match(decision, /Customer acceptance/)
   assert.match(decision, /Changes requested/)
+  assert.match(decision, /onChangesRequested/)
+  assert.match(decision, /Discount requested by customer/)
   assert.match(decision, /revision: \(est\.revision \|\| 0\) \+ 1/)
   assert.match(store, /updateServiceFlow\(oppId, patch\)/)
 })
@@ -102,12 +104,28 @@ test('the standard rate schedule is issued on its own, before the site visit', (
   assert.match(panel, /emailBody/)
   assert.match(panel, /Confirm sent/)
   assert.match(panel, /onConfirmSent/)
+  assert.match(panel, /service-rate-composer/)
   // Issuing it is what prepares the Path A offer.
   assert.match(panel, /offerPrepared: true/)
   // Re-issued rather than re-created when the customer negotiates.
   assert.match(panel, /Re-issue rate schedule/)
   assert.match(service, /offerMode === 'Standard Rate Sheet' && <RateSheetPanel/)
   assert.match(service, /Confirm scope and survey/)
+})
+
+test('Service forms use wide bordered controls and avoid leading-zero numeric entry', () => {
+  const service = fs.readFileSync('src/workbench/WbService.jsx', 'utf8')
+  const survey = fs.readFileSync('src/workbench/SurveyPanel.jsx', 'utf8')
+  const decision = fs.readFileSync('src/workbench/ServiceDecisionPanel.jsx', 'utf8')
+  assert.match(service, /service-number-input/)
+  assert.match(service, /value=\{est\[k\] \?\? ''\}/)
+  assert.match(survey, /service-form-control/)
+  assert.match(decision, /service-form-control/)
+})
+
+test('customer changes return to the Standard Rate Schedule stage', () => {
+  const workbench = fs.readFileSync('src/pages/Workbench.jsx', 'utf8')
+  assert.match(workbench, /onChangesRequested=\{\(\) => advanceStep\('service-rate'\)\}/)
 })
 
 test('Service execution offers engineer suggestions without removing free text entry', () => {
@@ -404,5 +422,5 @@ test('standard Customer Decision does not show an approval warning', () => {
   const decision = fs.readFileSync('src/workbench/ServiceDecisionPanel.jsx', 'utf8')
   assert.match(decision, /standardRateOffer/)
   assert.match(decision, /!standardRateOffer && !review/)
-  assert.match(decision, /Selling at published rates\. No approval is required\./)
+  assert.match(decision, /no additional approval is required/)
 })

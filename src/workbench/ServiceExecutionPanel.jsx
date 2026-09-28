@@ -33,20 +33,20 @@ export default function ServiceExecutionPanel({ opp }) {
     <div className="ana-card c-12">
       <div className="ana-title">Execute service {complete && <Chip tone="state-Accepted">Complete</Chip>}</div>
       {!accepted && <div className="warnbox">Record customer acceptance before scheduling execution.</div>}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        <label style={{ fontSize: 12 }}>Assigned service engineer
-          <input list={`service-engineers-${opp.id}`} value={est.engineer || ''} onChange={e => upd({ engineer: e.target.value })} placeholder="Type or select engineer" style={{ width: '100%' }} />
+      <div className="service-form-grid service-form-grid-two">
+        <label className="service-form-field">Assigned service engineer
+          <input className="service-form-control" list={`service-engineers-${opp.id}`} value={est.engineer || ''} onChange={e => upd({ engineer: e.target.value })} placeholder="Type or select engineer" />
           <datalist id={`service-engineers-${opp.id}`}>{engineerSuggestions.map(name => <option key={name} value={name} />)}</datalist>
           <span className="hint">Assign the engineer responsible for site execution. You can type a name or select a suggestion.</span>
         </label>
-        <label style={{ fontSize: 12 }}>Service date<input type="date" value={est.executionDate || ''} onChange={e => upd({ executionDate: e.target.value })} style={{ width: '100%' }} /></label>
+        <label className="service-form-field">Service date<input className="service-form-control" type="date" value={est.executionDate || ''} onChange={e => upd({ executionDate: e.target.value })} /></label>
       </div>
       <div className="section-title" style={{ marginTop: 10 }}>Time actually deployed</div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
+      <div className="service-form-grid service-form-grid-four">
         {ACTUALS.map(([key, label, quoted]) => (
-          <label key={key} style={{ fontSize: 12 }}>{label}
-            <input type="number" min="0" value={est[key] ?? ''} placeholder={`quoted ${est[quoted] ?? 0}`}
-              onChange={e => upd({ [key]: Math.max(0, +e.target.value || 0) })} style={{ width: '100%' }} />
+          <label key={key} className="service-form-field">{label}
+            <input className="service-form-control service-number-input" type="number" min="0" value={est[key] ?? ''} placeholder={`quoted ${est[quoted] ?? 0}`}
+              onChange={e => upd({ [key]: e.target.value === '' ? '' : Math.max(0, Number(e.target.value) || 0) })} />
           </label>
         ))}
       </div>

@@ -16,7 +16,10 @@ This is an implementation and release log, not a dump of every commit.
 - Simplified the Service workflow into five industrial stages — Service Request,
   Scope Confirmation, Standard Rate Schedule, Customer Acceptance, and Service
   Execution & Close — while preserving detailed phase data, legacy links, gated
-  survey/travel checks, and automatic stage progression.
+  survey/travel checks, and explicit operational handoffs.
+- Standardized Service workflow form controls with wide bordered fields, clean
+  numeric entry, clearer discount guidance, and revision routing back to the
+  Standard Rate Schedule when customers request changes.
 - Reorganized imported runtime binaries under a semantic `assets/` tree,
   replaced supplied filenames with clean internal names while preserving
   customer-facing attachment names, and updated the brand-refresh and icon

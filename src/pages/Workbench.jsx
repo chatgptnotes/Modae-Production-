@@ -788,7 +788,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
         {viewTab === 'proposal' && <ProposalTab opp={opp} goTab={goTab} onConfirmSent={() => advanceStep('service-acceptance')} />}
         {viewTab === 'approval' && <ApprovalsTab opp={opp} />}
         {viewTab === 'followup' && <FollowUpTab opp={opp} goTab={goTab} />}
-        {viewTab === 'service-decision' && <ServiceDecisionPanel opp={opp} onContinue={() => advanceStep('service-delivery')} />}
+        {viewTab === 'service-decision' && <ServiceDecisionPanel opp={opp} onContinue={() => advanceStep('service-delivery')} onChangesRequested={() => advanceStep('service-rate')} />}
         {viewTab === 'service-execution' && <ServiceDeliveryClose opp={opp} />}
         {viewTab === 'service-report' && <ServiceReportPanel opp={opp} />}
         {viewTab === 'service-invoice' && <ServiceInvoicePanel opp={opp} />}

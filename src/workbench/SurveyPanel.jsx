@@ -34,9 +34,11 @@ export default function SurveyPanel({ opp, est }) {
           manpower days and consumables). Tick the box if the scope cannot be priced without a site visit.
         </p>
       ) : !survey ? (
-        <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-          <input placeholder="What the survey must establish" style={{ flex: 1, minWidth: 200 }}
+        <div className="service-form-action-row">
+          <label className="service-form-field service-form-grow">Survey requirement
+            <input className="service-form-control" placeholder="What must the site visit confirm?"
             value={detail} onChange={e => setDetail(e.target.value)} />
+          </label>
           <button className="primary" onClick={() => store.requestSurvey(opp.id, detail.trim())}>
             <Icon name="send" size={13} /> Raise site survey request
           </button>
@@ -48,19 +50,21 @@ export default function SurveyPanel({ opp, est }) {
             {survey.detail ? ` — ${survey.detail}` : ''}
           </p>
 
-          <label style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
+          <label className="service-form-field service-form-field-spaced">
             Site visit date
-            <input type="date" value={survey.visitOn || ''} style={{ maxWidth: 200, display: 'block' }}
+            <input className="service-form-control service-date-control" type="date" value={survey.visitOn || ''}
               onChange={e => store.updateSurvey(opp.id, { visitOn: e.target.value, state: e.target.value ? 'Visit scheduled' : 'Requested' }, 'Site visit scheduled')} />
           </label>
 
-          <div className="section-title" style={{ marginTop: 10 }}>Survey report</div>
+          <div className="section-title service-form-section-title">Survey findings</div>
           {survey.report ? (
             <div className="okbox" style={{ whiteSpace: 'pre-wrap' }}>{survey.report}</div>
           ) : (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              <textarea rows={3} placeholder="Findings from the site visit" style={{ flex: 1, minWidth: 240 }}
+            <div className="service-form-action-row service-report-entry">
+              <label className="service-form-field service-form-grow">Survey findings
+                <textarea className="service-form-control" rows={6} placeholder="Record findings, access conditions, and recommendations"
                 value={report} onChange={e => setReport(e.target.value)} />
+              </label>
               <button className="primary" disabled={!report.trim() || !survey.visitOn}
                 title={!survey.visitOn ? 'Record the site visit date first' : ''}
                 onClick={() => store.updateSurvey(opp.id, { report: report.trim(), state: 'Report submitted' }, 'Survey report filed')}>

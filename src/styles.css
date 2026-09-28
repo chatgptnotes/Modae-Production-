@@ -1570,6 +1570,7 @@ table.sheet td.internal { background: var(--border-soft) !important; color: var(
 .service-lane-card .hint { margin-top: 16px; }
 @media (max-width: 1050px) { .created-opportunity-panel { grid-template-columns: auto 1fr; } .created-opportunity-facts, .created-opportunity-actions { grid-column: 2; } .created-opportunity-actions { justify-content: flex-start; } }
 @media (max-width: 760px) { .created-opportunity-panel, .service-status-strip, .service-scope-controls { grid-template-columns: 1fr; } .created-opportunity-mark { align-self: start; } .created-opportunity-facts, .created-opportunity-actions, .service-status-strip > .hint { grid-column: auto; } .service-status-steps { justify-content: flex-start; } .service-requirement-options { grid-template-columns: 1fr; } .service-decision-footer { align-items: stretch; flex-direction: column; } }
+@media (max-width: 760px) { .service-form-action-row, .service-form-grid-two, .service-form-grid-four { grid-template-columns: 1fr; flex-direction: column; align-items: stretch; } .service-form-action-row > button, .service-date-control, .service-discount-field, .service-invoice-field { max-width: none; width: 100%; } }
 .service-next-step-card { border-style: dashed; border-top: 1px dashed var(--border-default); background: var(--surface-raised); }
 .service-next-step-card .ana-title { margin-top: 4px; }
 .service-offer-context { border-left: 3px solid var(--action-accent); }
@@ -14498,12 +14499,35 @@ table.sheet tbody tr:hover td {
 }
 
 .service-rate-email-body {
-  min-height: 190px;
+  width: 100%;
+  min-height: 240px;
   padding: 12px;
   font-size: 14px;
   line-height: 1.5;
   resize: vertical;
 }
+
+.service-rate-composer { width: 100%; }
+.service-form-stack { display: grid; gap: 12px; width: 100%; margin-top: 14px; }
+.service-form-field { display: grid; gap: 6px; color: var(--text-primary); font-size: 12px; font-weight: 800; line-height: 1.25; }
+.service-form-control { width: 100%; min-width: 0; min-height: 42px; box-sizing: border-box; padding: 9px 11px; border: 1px solid var(--border-default); border-radius: 7px; background: var(--card-bg); color: var(--text-primary); font: inherit; font-weight: 500; }
+.service-form-control:focus { border-color: var(--primary-accent); outline: 2px solid color-mix(in srgb, var(--primary-accent) 22%, transparent); outline-offset: 1px; }
+.service-form-control:disabled { background: var(--surface-raised); color: var(--text-secondary); cursor: not-allowed; }
+.service-form-field-spaced { margin-top: 12px; }
+.service-form-action-row { display: flex; align-items: end; gap: 12px; width: 100%; margin-top: 12px; }
+.service-form-grow { flex: 1 1 auto; min-width: 0; }
+.service-form-action-row > button { flex: 0 0 auto; min-height: 42px; white-space: nowrap; }
+.service-form-section-title { margin-top: 16px; }
+.service-report-entry { align-items: end; }
+.service-date-control { max-width: 240px; }
+.service-decision-note { min-height: 132px; resize: vertical; }
+.service-discount-field { max-width: 340px; margin-top: 10px; }
+.service-form-grid { display: grid; gap: 12px; }
+.service-form-grid-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.service-form-grid-four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.service-number-input { font-variant-numeric: tabular-nums; }
+.service-report-textarea { min-height: 170px; resize: vertical; }
+.service-invoice-field { max-width: 460px; margin-top: 12px; }
 
 .service-scope-grid .ana-title,
 .service-delivery-close .ana-title {

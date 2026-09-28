@@ -10,8 +10,8 @@ export default function ServiceReportPanel({ opp }) {
   return <div className="ana-grid"><div className="ana-card c-12">
     <div className="ana-title">Service Report {est.serviceReport && <Chip tone="state-Accepted">Submitted</Chip>}</div>
     {!executionReady && <div className="warnbox">Complete Execute Service first: engineer, service date, and actual engineer days are required.</div>}
-    <label style={{ display: 'block', fontSize: 12 }}>Completed work, findings, and deliverables
-      <textarea rows={7} disabled={!executionReady} value={est.serviceReport || ''} onChange={save} placeholder="Record the service performed and attach or describe deliverables" style={{ width: '100%' }} />
+    <label className="service-form-field">Completed work, findings, and deliverables
+      <textarea className="service-form-control service-report-textarea" rows={7} disabled={!executionReady} value={est.serviceReport || ''} onChange={save} placeholder="Record the service performed, findings, and deliverables" />
     </label>
 
     <p className="hint" style={{ marginTop: 12 }}>Record the completed standard service work and findings here. The invoice uses the actual engineer deployment against the accepted rate sheet.</p>

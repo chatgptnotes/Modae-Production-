@@ -97,7 +97,7 @@ export default function RateSheetPanel({ opp, est, readOnly = false, onConfirmSe
   const offerCleared = serviceOfferCleared(opp, store.getProposal(opp.id), store)
 
   return (
-    <div className="ana-card c-12">
+    <div className="ana-card c-12 service-rate-composer">
       <div className="ana-title">
         Standard rate schedule
         {est.rateSheetSentOn
@@ -122,20 +122,20 @@ export default function RateSheetPanel({ opp, est, readOnly = false, onConfirmSe
         <a href={SERVICE_RATE_SCHEDULE_URL} target="_blank" rel="noreferrer">Preview rate schedule</a>
       </p>
 
-      <div style={{ display: 'grid', gap: 8, marginTop: 10, maxWidth: 560 }}>
-        <label style={{ fontSize: 12 }}>To
-          <input type="text" value={emailTo} disabled={readOnly} onChange={e => setEmailTo(e.target.value)}
-            placeholder="customer@company.com" style={{ width: '100%' }} />
+      <div className="service-form-stack">
+        <label className="service-form-field">To
+          <input className="service-form-control" type="text" value={emailTo} disabled={readOnly} onChange={e => setEmailTo(e.target.value)}
+            placeholder="customer@company.com" />
         </label>
-        <label style={{ fontSize: 12 }}>Subject
-          <input type="text" value={subject} disabled={readOnly} onChange={e => setSubject(e.target.value)} style={{ width: '100%' }} />
+        <label className="service-form-field">Subject
+          <input className="service-form-control" type="text" value={subject} disabled={readOnly} onChange={e => setSubject(e.target.value)} />
         </label>
-        <label style={{ fontSize: 12 }}>CC
-          <input type="text" value={emailCc} disabled={readOnly} onChange={e => setEmailCc(e.target.value)} style={{ width: '100%' }} />
+        <label className="service-form-field">CC
+          <input className="service-form-control" type="text" value={emailCc} disabled={readOnly} onChange={e => setEmailCc(e.target.value)} />
         </label>
-        <label style={{ fontSize: 12 }}>Email body
-          <textarea className="service-rate-email-body" rows={10} value={emailBody} disabled={readOnly}
-            onChange={e => setEmailBody(e.target.value)} style={{ width: '100%' }} />
+        <label className="service-form-field">Email body
+          <textarea className="service-form-control service-rate-email-body" rows={10} value={emailBody} disabled={readOnly}
+            onChange={e => setEmailBody(e.target.value)} />
         </label>
       </div>
 

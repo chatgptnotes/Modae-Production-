@@ -183,28 +183,29 @@ export default function WbService({ opp, focus = 'scope', onConfirmScope, onConf
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
           {NUM_FIELDS.map(([k, label]) => (
-            <label key={k} style={{ fontSize: 12 }}>
+            <label key={k} className="service-form-field">
               {label}
-              <input type="number" min="0" value={est[k] ?? 0} style={{ width: '100%' }}
-                onChange={e => upd({ [k]: Math.max(0, +e.target.value || 0) })} />
+              <input className="service-form-control service-number-input" type="number" min="0" value={est[k] ?? ''} placeholder="0"
+                onChange={e => upd({ [k]: e.target.value === '' ? '' : Math.max(0, Number(e.target.value) || 0) })}
+                onBlur={() => { if (est[k] === '') upd({ [k]: 0 }) }} />
             </label>
           ))}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 8 }}>
-          <label style={{ fontSize: 12 }}>
+          <label className="service-form-field">
             Engineer
-            <input value={est.engineer || ''} style={{ width: '100%' }} placeholder="Name / availability"
+            <input className="service-form-control" value={est.engineer || ''} placeholder="Name / availability"
               onChange={e => upd({ engineer: e.target.value })} />
           </label>
-          <label style={{ fontSize: 12 }}>
+          <label className="service-form-field">
             Mobilisation date
-            <input type="date" value={est.mobilisation || ''} style={{ width: '100%' }}
+            <input className="service-form-control" type="date" value={est.mobilisation || ''}
               onChange={e => upd({ mobilisation: e.target.value })} />
           </label>
         </div>
-        <label style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
+        <label className="service-form-field service-form-field-spaced">
           Tools / certifications
-          <input value={est.toolsCerts || ''} style={{ width: '100%' }} placeholder="e.g. balancing kit, permits"
+          <input className="service-form-control" value={est.toolsCerts || ''} placeholder="e.g. balancing kit, permits"
             onChange={e => upd({ toolsCerts: e.target.value })} />
         </label>
         <div className="check-row" style={{ marginTop: 10 }}>
