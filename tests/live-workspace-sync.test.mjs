@@ -12,7 +12,7 @@ test('the shared workspace loads once per session and saves only explicit edits'
 
   const store = read('src/store.jsx')
   assert.match(store, /import \{ readLiveData \} from '\.\/liveSync\.js'/)
-  assert.match(datastore, /saveWorkspaceToRailway\(collaborativeDirty\)/)
+  assert.match(datastore, /saveWorkspaceToServer\(collaborativeDirty\)/)
   assert.doesNotMatch(store, /return startLiveEvents\(/)
   assert.doesNotMatch(store, /document\.addEventListener\('visibilitychange'/)
   assert.doesNotMatch(store, /useEffect\(\(\) => \{\n    if \(!datastore\.dbEnabled\(\) \|\| !hydratedRef\.current\) return\n    void pullSharedData\(\)/)
@@ -32,7 +32,7 @@ test('fast workspace hydration includes the Sourcing data needed to avoid a fals
   const datastore = read('src/datastore.js')
   const store = read('src/store.jsx')
 
-  assert.match(datastore, /loadBusinessTables\(\{ includeRecords: false, coreEntities: \['proposals', 'spares_lines'\], collaborative: railway \|\| \{\} \}\)/)
+  assert.match(datastore, /loadBusinessTables\(\{ includeRecords: false, coreEntities: \['proposals', 'spares_lines'\], collaborative: serverWorkspace \|\| \{\} \}\)/)
   assert.match(datastore, /includeRecords = true, coreEntities = \[\], collaborative = \{\}/)
   assert.match(datastore, /coreEntities\.includes\(entity\)/)
   assert.match(store, /sourcingDataStatus/)
@@ -153,6 +153,17 @@ test('approval decisions refresh only approvals and opportunities', () => {
   const decision = store.slice(store.indexOf('    recordDecision(id,'), store.indexOf('    clearApprovals(', store.indexOf('    recordDecision(id,')))
   assert.match(decision, /await readLiveData\(\['approvals', 'opportunities'\]\)/)
   assert.doesNotMatch(decision, /await pullSharedData\(\)/)
+})
+
+test('the Approvals page polls the backend for approval updates while visible', () => {
+  const store = read('src/store.jsx')
+  const approvals = read('src/pages/Approvals.jsx')
+  assert.match(store, /async refreshApprovals\(\)/)
+  assert.match(store, /readLiveData\(\['approvals', 'opportunities'\]\)/)
+  assert.match(approvals, /APPROVAL_REFRESH_MS = 5000/)
+  assert.match(approvals, /setInterval\(refresh, APPROVAL_REFRESH_MS\)/)
+  assert.match(approvals, /document\.visibilityState === 'visible'/)
+  assert.match(approvals, /store\.refreshApprovals\(\)/)
 })
 
 test('pending opportunity IDs stay local-only and are persisted in the browser snapshot', () => {

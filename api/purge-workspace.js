@@ -1,5 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
 import { randomUUID } from 'node:crypto'
+import { getAdminSupabaseClient } from './_supabase-client.js'
 
 const PURGE_CONFIRMATION = 'DELETE ALL LEADS AND OPPORTUNITIES'
 const PURGE_ROLES = new Set(['SUPER', 'ADMIN', 'LJS'])
@@ -16,10 +16,7 @@ const jsonBody = req => {
 }
 
 function adminClient() {
-  const url = clean(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL)
-  const serviceKey = clean(process.env.SUPABASE_SERVICE_ROLE_KEY)
-  if (!/^https?:\/\/.+/i.test(url) || !serviceKey) return null
-  return createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
+  return getAdminSupabaseClient()
 }
 
 async function currentPurgeAdmin(client, token) {

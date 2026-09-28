@@ -253,7 +253,7 @@ test('the seeded PO is backfilled into saved state without clobbering work', () 
 // --------------------------------------------------------------- deployment
 test('deployment is documented with staging and production separated', () => {
   const doc = read('DEPLOYMENT.md')
-  assert.match(doc, /Railway staging and production environments/)
+  assert.match(doc, /SuperBees staging and production environments/)
   assert.match(doc, /must not share a Supabase project/)
   assert.match(doc, /GEMINI_API_KEY` is never a `VITE_` variable|GEMINI_API_KEY/)
 })

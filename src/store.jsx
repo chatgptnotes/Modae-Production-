@@ -1540,7 +1540,7 @@ export function StoreProvider({ children }) {
         flushPersistence()
           .then(async saved => {
             if (saved === false) return false
-            // The Railway writer may have merged a second approver's decision
+            // The server writer may have merged a second approver's decision
             // into this same row. Pull that canonical row immediately so the
             // final approval can advance the existing Submitted gate without
             // waiting for a focus or route change.
@@ -2366,6 +2366,21 @@ export function StoreProvider({ children }) {
       setLiveSyncStatus('live')
       applyServer(res.slices, res.diagnostics)
       return true
+    },
+
+    async refreshApprovals() {
+      // Approval pages only need the two compact collaborative slices. Keep
+      // their background refresh independent from the heavier workspace pull.
+      if (!datastore.dbEnabled()) return true
+      try {
+        const slices = await readLiveData(['approvals', 'opportunities'])
+        if (!slices) return false
+        applyServer(slices)
+        return true
+      } catch (error) {
+        console.warn('Approval refresh failed:', error?.message || error)
+        return false
+      }
     },
 
     async recoverOpportunity(id) {

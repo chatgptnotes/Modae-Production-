@@ -35,6 +35,21 @@ test('edited proposal workbooks can be serialized and parsed again', () => {
   assert.equal(roundTrip.sheets[0].rows[1][1], 'Updated customer')
 })
 
+test('serialized proposal workbooks drop trailing empty rows and columns', () => {
+  const parsed = parseProposalWorkbook(workbookBytes(), 'template.xlsx')
+  const bloated = {
+    ...parsed,
+    sheets: parsed.sheets.map(sheet => ({
+      ...sheet,
+      rows: [...sheet.rows, ['', '', '', ''], ['', '', '', '']],
+      styles: [...sheet.styles, ['', '', '', ''], ['', '', '', '']],
+    })),
+  }
+  const roundTrip = parseProposalWorkbook(serializeProposalWorkbook(bloated), 'template.xlsx')
+  assert.deepEqual(roundTrip.sheets.map(sheet => sheet.rows.length), [2, 2])
+  assert.deepEqual(roundTrip.sheets[0].rows.at(-1), ['Customer', 'Example'])
+})
+
 test('proposal workbook parser keeps a style matrix for rendered worksheet cells', () => {
   const parsed = parseProposalWorkbook(workbookBytes(), 'template.xlsx')
   assert.equal(parsed.sheets[0].styles.length, parsed.sheets[0].rows.length)

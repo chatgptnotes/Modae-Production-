@@ -113,17 +113,6 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
   const draftOpened = sentNow || submission?.status === 'draft'
   const releasePending = finalQuoteApprovalRequired && !release
   const mailboxLocked = readOnly || releasePending
-  const requestRelease = () => store.requestApproval({
-    oppId: opp.id,
-    type: 'Final quote release',
-    rev: String(p.revision ?? ''),
-    approver: 'LJS',
-    needed: ['LJS', 'AH'],
-    detail: 'Final quote release is required before the customer quote can be sent.',
-    blockingReason: 'The customer-facing quote cannot be sent until LJS + AH approve its final release.',
-    opportunitySummary: `${opp.oppName || 'This opportunity'} is a ${opp.route || 'sales'} opportunity for ${opp.sellTo || 'the customer'}.`,
-  })
-
   const doc = docModel(p, opp, { files: [], config: store.config })
   const { totalQty, lineQuoted, lineCost, linePrice, computeTotals } = buildPricing(store, p)
   const totals = computeTotals(p)
@@ -135,6 +124,10 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
   const ccValid = splitRecipients(emailCc).length === 0 || recipientsValid(emailCc)
   const filenameValid = !attachProposal || validProposalFilename(proposalFilename)
   const canSend = (!finalQuoteApprovalRequired || !!release) && !pendingConds.length && (!attachProposal || proposalValidated) && (!attachProposal || uploadStorageReady) && filenameValid && fromValid && toValid && ccValid && Boolean(emailSubject.trim()) && Boolean(emailBody.trim()) && !readingFiles && !readOnly
+  const supportingAttachmentNames = [
+    ...enclosuresFor(route).map(e => e.filename),
+    ...extraFiles.map(f => f.filename),
+  ]
 
   const removeExtraFile = filename => setExtraFiles(files => files.filter(f => f.filename !== filename))
 
@@ -393,9 +386,13 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
           aria-invalid={!filenameValid} aria-describedby={!filenameValid ? 'proposal-filename-error' : undefined} />
       </label>}
       {!filenameValid && <span id="proposal-filename-error" className="err-text">Use a valid filename ending in .xlsx.</span>}
-      <div className="submission-attachment-supporting">
-        <span><b>Also attached:</b> {[...enclosuresFor(route).map(e => e.filename), ...extraFiles.map(f => f.filename)].join(' · ') || 'No additional files'}</span>
-        <button type="button" onClick={openProposalPreview} className="submission-preview-action" title="View the exact Excel workbook that will be attached">
+      {supportingAttachmentNames.length > 0 && (
+        <div className="submission-attachment-supporting">
+          <span>{supportingAttachmentNames.join(' · ')}</span>
+        </div>
+      )}
+      <div className="submission-preview-row">
+        <button type="button" onClick={openProposalPreview} className="submission-preview-action" aria-label="View the proposal Excel workbook">
           <Icon name="fileSheet" size={13} /> View proposal Excel
         </button>
       </div>
@@ -420,9 +417,7 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
             <b>{opp.route === 'Service' ? 'Service Review pending' : 'Final quote release pending'}</b>
             <span>{releaseReason || 'AH + LJS must approve the current proposal revision before it can be sent.'}</span>
           </div>
-          {opp.route !== 'Service' && !pendingRelease && (
-            <button className="exception-action" type="button" onClick={requestRelease}>Request approval</button>
-          )}
+          {!pendingRelease && <span className="hint">Request approval from the Proposal or Approval step before entering Quotation Submission.</span>}
         </div>
       )}
 
@@ -444,7 +439,7 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
         </button>
         <span className="hint">Optional professional review</span>
       </div>
-      <textarea className="submission-message-draft" value={emailBody} disabled={mailboxLocked} onChange={e => { aiRequestRef.current += 1; setEmailBody(e.target.value) }} rows={9} />
+      <textarea className="submission-message-draft" value={emailBody} disabled={mailboxLocked} onChange={e => { aiRequestRef.current += 1; setEmailBody(e.target.value) }} rows={7} />
       {messageNotice && <WarnBox>{messageNotice}</WarnBox>}
       {proofreadError && <ErrBox>{proofreadError}</ErrBox>}
 
@@ -460,25 +455,27 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
       )}
 
       <div className="submission-actions">
-        <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={onFilesPicked} />
-        <button className="secondary" type="button" disabled={mailboxLocked || readingFiles}
-          onClick={() => fileInputRef.current?.click()}>
-          <Icon name="upload" size={13} /> {readingFiles ? 'Reading files…' : `Attach files${extraFiles.length ? ` (${extraFiles.length})` : ''}`}
-        </button>
-        <button className="primary submission-draft-action" disabled={!canSend || sending}
-          title={pendingConds.length ? 'Confirm all approval conditions first'
-            : attachProposal && !proposalValidated ? 'Validate the proposal before attaching it'
-            : attachProposal && !uploadStorageReady ? 'Wait for the validated workbook upload to finish'
-            : !fromValid ? 'Enter a valid sender email in the From field'
-            : !toValid ? 'Enter a valid recipient email in the To field'
-            : !ccValid ? 'The CC address is not valid'
-            : !filenameValid ? 'Enter a valid proposal filename ending in .xlsx'
-            : !emailSubject.trim() ? 'Enter a subject'
-            : !emailBody.trim() ? 'Enter a message'
-            : !release ? 'Awaiting AH + LJS approval before sending' : ''}
-          onClick={send}>
-          <Icon name="send" size={13} /> {sending ? 'Opening Gmail…' : 'Draft email'}
-        </button>
+        <div className="submission-action-buttons">
+          <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={onFilesPicked} />
+          <button className="secondary" type="button" disabled={mailboxLocked || readingFiles}
+            onClick={() => fileInputRef.current?.click()}>
+            <Icon name="upload" size={13} /> {readingFiles ? 'Reading files…' : `Attach files${extraFiles.length ? ` (${extraFiles.length})` : ''}`}
+          </button>
+          <button className="primary submission-draft-action" disabled={!canSend || sending}
+            title={pendingConds.length ? 'Confirm all approval conditions first'
+              : attachProposal && !proposalValidated ? 'Validate the proposal before attaching it'
+              : attachProposal && !uploadStorageReady ? 'Wait for the validated workbook upload to finish'
+              : !fromValid ? 'Enter a valid sender email in the From field'
+              : !toValid ? 'Enter a valid recipient email in the To field'
+              : !ccValid ? 'The CC address is not valid'
+              : !filenameValid ? 'Enter a valid proposal filename ending in .xlsx'
+              : !emailSubject.trim() ? 'Enter a subject'
+              : !emailBody.trim() ? 'Enter a message'
+              : !release ? 'Awaiting AH + LJS approval before sending' : ''}
+            onClick={send}>
+            <Icon name="send" size={13} /> {sending ? 'Opening Gmail…' : 'Draft email'}
+          </button>
+        </div>
         {extraFiles.map(f => (
           <div key={f.filename} className="check-row">
             <Icon name="fileText" size={13} />

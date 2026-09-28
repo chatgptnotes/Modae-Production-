@@ -25,7 +25,7 @@ test('user management exposes account creation and password reset controls', () 
 
 test('admin user API provisions through server-only Supabase credentials', () => {
   const api = read('api/admin-users.js')
-  assert.match(api, /SUPABASE_SERVICE_ROLE_KEY/)
+  assert.match(read('api/_supabase-client.js'), /SUPABASE_SERVICE_ROLE_KEY/)
   assert.doesNotMatch(api, /VITE_SUPABASE_SERVICE_ROLE_KEY/)
   assert.match(api, /auth\.admin\.createUser/)
   assert.match(api, /auth\.admin\.updateUserById/)
@@ -45,7 +45,7 @@ test('server deployment documentation keeps the service key server-side', () => 
   assert.match(env, /VITE_SUPABASE_URL=/)
   assert.match(env, /VITE_SUPABASE_ANON_KEY=/)
   assert.match(env, /SUPABASE_SERVICE_ROLE_KEY=/)
-  assert.match(deploy, /Railway's service Variables page/)
+  assert.match(deploy, /SuperBees environment variables/)
   assert.match(deploy, /SUPABASE_SERVICE_ROLE_KEY=/)
   assert.match(env, /Never put real secrets in this file or prefix them with VITE_/)
 })

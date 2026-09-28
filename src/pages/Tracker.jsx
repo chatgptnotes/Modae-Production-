@@ -299,7 +299,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     const next = {}
     for (const key of ['oppType', 'bu', 'stage']) {
       const v = params.get(key)
-      if (v) next[key] = new Set([v])
+      if (v) next[key] = new Set(v.split(',').map(value => value.trim()).filter(Boolean))
     }
     if (Object.keys(next).length) applyFilters(next)
     setParams({}, { replace: true })

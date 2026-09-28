@@ -1,4 +1,5 @@
 import XLSX from 'xlsx-js-style'
+import { MODAE_COLORS, MODAE_DOCUMENT_STANDARDS } from './branding/modae.js'
 
 export const PART_HEADERS = ['Part Number', 'Description', 'Price', 'Currency']
 export const ADDER_HEADERS = ['Part Number', 'Adder Code', 'Adder Description', 'Adder Price']
@@ -14,6 +15,34 @@ const numberValue = value => {
   if (typeof value === 'number') return Number.isFinite(value) ? value : NaN
   const clean = String(value ?? '').replace(/[, ]/g, '').trim()
   return clean ? Number(clean) : NaN
+}
+
+const rgb = value => String(value).replace(/^#/, '').toUpperCase()
+
+function styleTemplateSheet(sheet, widths, { headerRow = 0, autofilter = true } = {}) {
+  sheet['!cols'] = widths.map(wch => ({ wch }))
+  sheet['!rows'] = Array.from({ length: XLSX.utils.decode_range(sheet['!ref']).e.r + 1 }, (_, index) => ({
+    hpt: index === headerRow ? 24 : 20,
+  }))
+  sheet['!margins'] = MODAE_DOCUMENT_STANDARDS.marginsInches
+  if (autofilter) sheet['!autofilter'] = { ref: sheet['!ref'] }
+  const range = XLSX.utils.decode_range(sheet['!ref'])
+  for (let row = range.s.r; row <= range.e.r; row++) {
+    for (let column = range.s.c; column <= range.e.c; column++) {
+      const cell = sheet[XLSX.utils.encode_cell({ r: row, c: column })]
+      if (!cell) continue
+      cell.s = {
+        font: { name: 'Candara', sz: row === headerRow ? MODAE_DOCUMENT_STANDARDS.headingSizePt : MODAE_DOCUMENT_STANDARDS.bodySizePt, ...(row === headerRow ? { bold: true } : {}) },
+        alignment: { vertical: 'top', wrapText: typeof cell.v === 'string' },
+        ...(row === headerRow
+          ? {
+              fill: { patternType: 'solid', fgColor: { rgb: rgb(MODAE_COLORS.primaryLight) } },
+              border: { top: { style: 'thin', color: { rgb: rgb(MODAE_COLORS.primary) } }, bottom: { style: 'thin', color: { rgb: rgb(MODAE_COLORS.primary) } } },
+            }
+          : { border: { bottom: { style: 'thin', color: { rgb: rgb(MODAE_COLORS.border) } } } }),
+      }
+    }
+  }
 }
 
 export function buildPriceListTemplate(listName = 'BNK', currency = 'EUR') {
@@ -36,9 +65,19 @@ export function buildPriceListTemplate(listName = 'BNK', currency = 'EUR') {
     ['Example Parts row', 'RK16-BASE', '16-slot base rack chassis', 2000, currency],
     ['Example Adders row', 'RK16-BASE', 'CE', 'CE mark', 110],
   ])
-  parts['!cols'] = [{ wch: 24 }, { wch: 54 }, { wch: 14 }, { wch: 12 }]
-  adders['!cols'] = [{ wch: 24 }, { wch: 18 }, { wch: 42 }, { wch: 14 }]
+  styleTemplateSheet(parts, [24, 54, 14, 12])
+  styleTemplateSheet(adders, [24, 18, 42, 14])
   instructions['!cols'] = [{ wch: 24 }, { wch: 24 }, { wch: 54 }, { wch: 14 }, { wch: 12 }]
+  instructions['!rows'] = Array.from({ length: 8 }, (_, index) => ({ hpt: index === 0 ? 26 : 34 }))
+  instructions['!margins'] = MODAE_DOCUMENT_STANDARDS.marginsInches
+  for (const ref of Object.keys(instructions).filter(key => !key.startsWith('!'))) {
+    const cell = instructions[ref]
+    cell.s = {
+      font: { name: 'Candara', sz: ref === 'A1' ? MODAE_DOCUMENT_STANDARDS.headingSizePt : MODAE_DOCUMENT_STANDARDS.bodySizePt, ...(ref === 'A1' ? { bold: true } : {}) },
+      alignment: { vertical: 'top', wrapText: true },
+      ...(ref === 'A1' ? { fill: { patternType: 'solid', fgColor: { rgb: rgb(MODAE_COLORS.primaryLight) } } } : {}),
+    }
+  }
   XLSX.utils.book_append_sheet(workbook, parts, 'Parts')
   XLSX.utils.book_append_sheet(workbook, adders, 'Adders')
   XLSX.utils.book_append_sheet(workbook, instructions, 'Instructions')

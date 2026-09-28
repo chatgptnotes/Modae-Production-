@@ -128,15 +128,25 @@ export function updateWorkbookCell(workbook, sheetName, rowIndex, columnIndex, v
 export function serializeProposalWorkbook(workbook) {
   const output = XLSX.utils.book_new()
   for (const sheet of workbook?.sheets || []) {
-    const worksheet = XLSX.utils.aoa_to_sheet(sheet.rows || [])
-    for (let rowIndex = 0; rowIndex < (sheet.styles || []).length; rowIndex++) {
-      for (let columnIndex = 0; columnIndex < (sheet.styles[rowIndex] || []).length; columnIndex++) {
-        const style = sheet.styles[rowIndex][columnIndex]
+    const sourceRows = sheet.rows || []
+    const merges = sheet.merges || []
+    const lastValueRow = sourceRows.reduce((last, row, rowIndex) => row.some(value => value !== null && value !== undefined && value !== '') ? rowIndex : last, -1)
+    const lastValueColumn = sourceRows.reduce((last, row) => Math.max(last, row.reduce((rowLast, value, columnIndex) => value !== null && value !== undefined && value !== '' ? columnIndex : rowLast, -1)), -1)
+    const lastMergeRow = merges.reduce((last, merge) => Math.max(last, Number(merge.e?.r) || 0), -1)
+    const lastMergeColumn = merges.reduce((last, merge) => Math.max(last, Number(merge.e?.c) || 0), -1)
+    const lastRow = Math.max(0, lastValueRow, lastMergeRow)
+    const lastColumn = Math.max(0, lastValueColumn, lastMergeColumn)
+    const rows = sourceRows.slice(0, lastRow + 1).map(row => (row || []).slice(0, lastColumn + 1))
+    const styles = (sheet.styles || []).slice(0, lastRow + 1).map(row => (row || []).slice(0, lastColumn + 1))
+    const worksheet = XLSX.utils.aoa_to_sheet(rows)
+    for (let rowIndex = 0; rowIndex < styles.length; rowIndex++) {
+      for (let columnIndex = 0; columnIndex < (styles[rowIndex] || []).length; columnIndex++) {
+        const style = styles[rowIndex][columnIndex]
         const address = XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })
         if (style && worksheet[address]) worksheet[address].s = { ...style }
       }
     }
-    worksheet['!merges'] = (sheet.merges || []).map(merge => ({
+    worksheet['!merges'] = merges.map(merge => ({
       s: { ...merge.s }, e: { ...merge.e },
     }))
     worksheet['!cols'] = (sheet.widths || []).map(width => ({ wpx: Number(width) || 110 }))

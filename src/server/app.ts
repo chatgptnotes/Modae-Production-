@@ -23,11 +23,13 @@ type AppOptions = {
 }
 
 const isLocalOrigin = (origin: string) => /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)
+const configuredOrigins = () => new Set(String(process.env.CORS_ORIGINS || '').split(',').map(origin => origin.trim()).filter(Boolean))
 
 function corsOptions(req: express.Request, callback: (error: Error | null, options?: cors.CorsOptions) => void) {
   const origin = req.get('origin')
   const ownOrigin = origin && `${req.protocol}://${req.get('host')}` === origin
-  callback(null, { origin: !origin || ownOrigin || isLocalOrigin(origin), optionsSuccessStatus: 204 })
+  const allowed = !origin || Boolean(ownOrigin) || isLocalOrigin(origin) || configuredOrigins().has(origin)
+  callback(null, { origin: allowed, optionsSuccessStatus: 204 })
 }
 
 export function createApp({
@@ -53,6 +55,7 @@ export function createApp({
     subscribe: liveSubscriber || configuredApprovalGateway?.subscribe,
   }
   app.disable('x-powered-by')
+  app.set('trust proxy', 1)
   app.use(cors(corsOptions))
   app.use(express.json({ limit: '2mb' }))
 
@@ -108,7 +111,7 @@ export function createApp({
     try {
       const user = await gateway.authenticate(token)
       if (!user) return res.status(401).json({ ok: false, error: 'The application session is invalid or expired.' })
-      // Production reads come from the Railway cache. The injected reader is
+      // Production reads come from the server cache. The injected reader is
       // retained only for endpoint tests and explicit adapter overrides.
       const data = liveReader && gateway.readLive
         ? await gateway.readLive(token, user.id, entities)

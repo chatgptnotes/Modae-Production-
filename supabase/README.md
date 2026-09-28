@@ -23,9 +23,9 @@ The active repository migrations are `007_live_workspace_sync.sql`,
 `008_dedicated_workspace_tables.sql`, `009_relational_workspace_data.sql`,
 `010_workspace_contract_verification.sql`, and
 `011_save_rows_lock_order.sql`, and `012_permanent_workspace_purge.sql`.
-`013_railway_free_tier_security.sql` is the Railway-first Free-plan migration:
-it removes anonymous business-data access and adds small active-row indexes for
-the shared Railway cache.
+`013_railway_free_tier_security.sql` is a historical Free-plan security
+migration: it removes anonymous business-data access and adds small active-row
+indexes for the shared server workspace cache.
 `014_user_presence.sql` adds the isolated, service-role-only heartbeat table
 used by the administrator Users online dashboard card.
 Migration 008 moves large JSONB entities out of `records`; migration 009 adds
@@ -48,7 +48,7 @@ it only through `api/purge-workspace.js` after session and role verification.
 
 The browser loads the workspace on boot and on explicit refresh. It does not
 reload the complete workspace for route changes, focus, visibility restoration,
-or reconnect. Railway sends lightweight live events for approvals, leads, and
+or reconnect. The server sends lightweight live events for approvals, leads, and
 opportunities; receiving browsers selectively read only those changed tables
 with their own Supabase bearer token. This is not Supabase Realtime.
 

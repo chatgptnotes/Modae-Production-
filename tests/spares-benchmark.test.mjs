@@ -40,10 +40,10 @@ const allParts = Object.entries(seedPriceLists)
   .flatMap(([list, v]) => v.parts.map(p => ({ ...p, list, currency: v.currency })))
 const lead = seedAiLeads.find(l => l.id === 'LD-208')
 
-test('the benchmark documents are still in the repository', () => {
-  const dir = 'doc/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)'
-  assert.ok(exists(`${dir}/02_7425309-Buyers Speces.pdf`), 'the Ref 14716 enquiry')
-  assert.ok(exists(`${dir}/Spares Firm Offer Rev00 2May2026.xlsx`), 'the proposal that answered it')
+test('the benchmark workflow fixtures are represented by tracked runtime assets', () => {
+  const bundledProposal = 'branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx'
+  assert.ok(exists(bundledProposal), 'the bundled proposal template')
+  assert.ok(lead.attachments.some(a => /Buyers Speces/.test(a.name)), 'the seeded enquiry attachment metadata')
 })
 
 test('the enquiry is seeded and carries its buyer reference', () => {

@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { getAdminSupabaseClient } from './_supabase-client.js'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const ADMIN_ROLES = new Set(['SUPER', 'ADMIN', 'LJS'])
@@ -12,10 +12,7 @@ const jsonBody = req => {
 }
 
 function adminClient() {
-  const url = clean(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL)
-  const serviceKey = clean(process.env.SUPABASE_SERVICE_ROLE_KEY)
-  if (!/^https?:\/\/.+/i.test(url) || !serviceKey) return null
-  return createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
+  return getAdminSupabaseClient()
 }
 
 async function loadUserProfiles(client) {

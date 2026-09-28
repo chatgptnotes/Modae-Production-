@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { getAdminSupabaseClient } from './_supabase-client.js'
 
 // Vercel Gemini proxy for the browser AI contract.
 // GEMINI_API_KEY is read only on the server. Never expose it through VITE_.
@@ -15,16 +15,7 @@ const MODEL_ALIASES = {
   'gemini-pro-latest': COMPLEX_MODEL,
 }
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'content-type, authorization',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
-
 const send = (res, status, body) => {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Headers', CORS['Access-Control-Allow-Headers'])
-  res.setHeader('Access-Control-Allow-Methods', CORS['Access-Control-Allow-Methods'])
   return res.status(status).json(body)
 }
 
@@ -38,10 +29,7 @@ const RATE_LIMIT = 40
 const rateBuckets = new Map()
 
 const authClient = () => {
-  const url = String(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL || '').trim()
-  const key = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '').trim()
-  if (!/^https?:\/\/.+/i.test(url) || !key) return null
-  return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } })
+  return getAdminSupabaseClient()
 }
 
 async function authenticate(req) {
@@ -873,9 +861,6 @@ ${cap(p.instructions, 1000)}`
 
 export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Origin', '*')
-    res.setHeader('Access-Control-Allow-Headers', CORS['Access-Control-Allow-Headers'])
-    res.setHeader('Access-Control-Allow-Methods', CORS['Access-Control-Allow-Methods'])
     return res.status(204).end()
   }
   if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'POST only' })
@@ -963,6 +948,7 @@ export default async function handler(req, res) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
       body: JSON.stringify(requestBody),
+      signal: AbortSignal.timeout(10_000),
     })
     if (!upstream.ok) {
       const errorCode = [401, 403].includes(upstream.status)
@@ -975,7 +961,7 @@ export default async function handler(req, res) {
       const error = errorCode === 'AI_KEY_REJECTED'
         ? 'Gemini rejected the configured server credential'
         : errorCode === 'AI_MODEL_UNAVAILABLE'
-          ? `The Gemini model ${model} is unavailable for this API key. Check the Railway AI configuration.`
+          ? `The Gemini model ${model} is unavailable for this API key. Check the server AI configuration.`
         : errorCode === 'AI_RATE_LIMITED'
           ? 'Gemini is temporarily rate limited; try again shortly'
           : `Gemini service returned HTTP ${upstream.status}`

@@ -12,11 +12,9 @@ test('deployment invalidation uses the same stable Git commit at build and runti
   const api = read('api/app-version.js')
   const vite = read('vite.config.js')
   assert.match(api, /Cache-Control.*no-store/)
-  assert.match(api, /RAILWAY_GIT_COMMIT_SHA/)
-  assert.doesNotMatch(api, /RAILWAY_DEPLOYMENT_ID/)
+  assert.match(api, /SUPERBEES_GIT_COMMIT_SHA/)
   assert.match(vite, /__APP_DEPLOYMENT_ID__/)
-  assert.match(vite, /RAILWAY_GIT_COMMIT_SHA/)
-  assert.doesNotMatch(vite, /RAILWAY_DEPLOYMENT_ID/)
+  assert.match(vite, /SUPERBEES_GIT_COMMIT_SHA/)
 })
 
 function memoryStorage(entries = []) {

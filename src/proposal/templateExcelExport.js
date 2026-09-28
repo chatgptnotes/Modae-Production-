@@ -120,8 +120,43 @@ function setPrintLayout(worksheet, orientation) {
     paperSize: worksheet.pageSetup?.paperSize || 9,
     fitToPage: worksheet.pageSetup?.fitToPage ?? true,
     fitToWidth: worksheet.pageSetup?.fitToWidth ?? 1,
-    fitToHeight: worksheet.pageSetup?.fitToHeight ?? 0,
+    fitToHeight: orientation === 'portrait' ? 1 : 0,
   }
+}
+
+const hasWorkbookValue = value => value !== null && value !== undefined && value !== ''
+
+function trimEmptyTemplateRows(worksheet, lastContentRow) {
+  for (let rowNumber = lastContentRow + 1; rowNumber <= worksheet.rowCount; rowNumber++) {
+    let hasValue = false
+    for (let column = 1; column <= worksheet.columnCount; column++) {
+      if (hasWorkbookValue(worksheet.getCell(rowNumber, column).value)) {
+        hasValue = true
+        break
+      }
+    }
+    if (!hasValue) worksheet.getRow(rowNumber).hidden = true
+  }
+}
+
+function setCustomerPrintArea(workbook, worksheet, firstColumn, lastColumn) {
+  let lastContentRow = 1
+  for (let rowNumber = 1; rowNumber <= worksheet.rowCount; rowNumber++) {
+    for (let column = firstColumn; column <= lastColumn; column++) {
+      if (hasWorkbookValue(worksheet.getCell(rowNumber, column).value)) {
+        lastContentRow = rowNumber
+        break
+      }
+    }
+  }
+  const start = columnName(firstColumn)
+  const end = columnName(lastColumn)
+  const area = `${start}1:${end}${lastContentRow}`
+  worksheet.pageSetup.printArea = area
+  trimEmptyTemplateRows(worksheet, lastContentRow)
+  const sheetIndex = workbook.worksheets.indexOf(worksheet)
+  const definedPrintArea = (workbook.definedNames.model || []).find(name => name.name === '_xlnm.Print_Area' && name.localSheetId === sheetIndex)
+  if (definedPrintArea) definedPrintArea.ranges = [`'${worksheet.name}'!$${start}$1:$${end}$${lastContentRow}`]
 }
 
 function expandSharedFormulas(workbook) {
@@ -599,6 +634,8 @@ export async function generateProposalWorkbook(args) {
   if (mappedCommercial && !setMappedCommercialSheet(commercial, generationArgs)) setCommercialSheet(workbook, commercial, generationArgs)
   else if (!mappedCommercial) setCommercialSheet(workbook, commercial, generationArgs)
   applyHeaderRule(commercial, 1, 9)
+  setCustomerPrintArea(workbook, cover, 1, Math.min(18, cover.columnCount))
+  setCustomerPrintArea(workbook, commercial, 1, Math.min(8, commercial.columnCount))
   return new Uint8Array(await workbook.xlsx.writeBuffer())
 }
 

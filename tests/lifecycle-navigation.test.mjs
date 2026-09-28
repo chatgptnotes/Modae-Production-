@@ -135,6 +135,7 @@ test('transition modal shows pending approvals without approval-navigation short
   assert.doesNotMatch(transition, /Open approval/)
   assert.match(transition, /is pending with/)
   assert.match(transition, /Exception approval <b>\{exception\.id\}<\/b> is pending\./)
+  assert.match(transition, /Request final quote release from AH \+ LJS/)
 })
 
 test('communications tabs stack the route-specific send form above the full-width log', () => {

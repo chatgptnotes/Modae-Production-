@@ -16,6 +16,9 @@ test('template exposes structured parts and adders sheets', () => {
   const workbook = buildPriceListTemplate('BNK', 'EUR')
   assert.deepEqual(XLSX.utils.sheet_to_json(workbook.Sheets.Parts, { header: 1 })[0], PART_HEADERS)
   assert.deepEqual(XLSX.utils.sheet_to_json(workbook.Sheets.Adders, { header: 1 })[0], ADDER_HEADERS)
+  assert.equal(workbook.Sheets.Parts['!autofilter'].ref, 'A1:D2')
+  assert.equal(workbook.Sheets.Adders['!autofilter'].ref, 'A1:D2')
+  assert.equal(workbook.Sheets.Parts.A1.s.font.bold, true)
   assert.ok(workbook.Sheets.Instructions)
 })
 

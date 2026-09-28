@@ -708,12 +708,11 @@ test('releaseState explains why the submission gate is closed', () => {
 
 test('the Submitted step renders the release reason, not just the generic text', () => {
   const source = read('src/workbench/SubmissionPanel.jsx')
+  const workbench = read('src/pages/Workbench.jsx')
   assert.match(source, /releaseReason/,
     'SubmissionPanel must surface releaseState.reason in its pending branch')
-  // The panel must be able to break the deadlock in place: request the joint
-  // LJS + AH release without navigating away to the transition dialog.
-  assert.match(source, /needed: \['LJS', 'AH'\]/,
-    'the in-place release request must be the joint LJS + AH gate')
-  assert.match(source, /pendingRelease &&/,
-    'the request button must hide while a release request is already pending')
+  // The panel is a status-only fallback. The workflow transition owns the
+  // request so approval is asked before entering Quotation Submission.
+  assert.doesNotMatch(source, /const requestRelease = \(\)/)
+  assert.match(workbench, /Request final quote release from AH \+ LJS/)
 })

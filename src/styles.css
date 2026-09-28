@@ -3151,30 +3151,44 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
 .submission-mail-attachments { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 10px; align-items: start; margin: 0 12px; color: var(--text-muted); font-size: 11.5px; }
 .submission-mail-attachments > b { padding-top: 8px; }
 .submission-mail-body-label { margin: 0 12px; color: var(--text-muted); font-size: 11.5px; font-weight: 700; }
-.submission-mail-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: -5px 12px 0; }
+.submission-mail-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 0 12px; }
 .submission-mailbox .submission-message-draft { margin: 0 12px; width: auto !important; border-radius: 5px; }
 .submission-mailbox .submission-actions { margin: 0 12px 10px; }
 .submission-mailbox.is-locked input, .submission-mailbox.is-locked textarea { cursor: not-allowed; }
-.submission-message-draft { display: block; min-height: 180px; line-height: 1.55; }
+.submission-message-draft { display: block; min-height: 144px; line-height: 1.55; }
 .submission-attachment-editor { display: grid; gap: 8px; min-width: 0; padding: 6px 0; }
 .submission-attachment-name { display: grid; grid-template-columns: minmax(150px, 190px) minmax(260px, 1fr); align-items: center; gap: 10px; }
 .submission-attachment-name > span { color: var(--text-secondary); font-size: 11px; font-weight: 700; }
 .submission-attachment-name input { width: 100%; min-width: 0; font-variant-numeric: tabular-nums; }
 .submission-attachment-name input[aria-invalid="true"] { border-color: var(--color-crimson); outline-color: var(--color-crimson); }
 .submission-attachment-editor .err-text { margin: -2px 0 0 200px; }
-.submission-attachment-supporting { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; color: var(--text-tertiary); font-size: 11.5px; }
+.submission-attachment-supporting { min-width: 0; margin-left: 200px; color: var(--text-tertiary); font-size: 11.5px; }
 .submission-attachment-supporting > span { min-width: 0; overflow-wrap: anywhere; }
-.submission-preview-action { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; }
-.submission-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-.submission-actions .submission-draft-action { margin-left: auto; }
+.submission-preview-row { display: flex; justify-content: flex-end; min-width: 0; }
+.submission-preview-action { display: inline-flex; align-items: center; gap: 5px; }
+.submission-actions { display: grid; gap: 8px; margin-top: 8px; }
+.submission-action-buttons {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 0 8px;
+  border-top: 1px solid var(--border-soft);
+  background: var(--card-bg);
+}
+.submission-action-buttons .submission-draft-action { margin-left: auto; }
 .submission-actions .submission-draft-action:disabled { opacity: 1; }
 .submission-actions .check-row { flex-basis: 100%; margin: 0; }
 .submission-actions > .hint { flex-basis: 100%; margin-top: -2px; }
 @media (max-width: 680px) {
-  .submission-actions .submission-draft-action { margin-left: 0; }
+  .submission-action-buttons .submission-draft-action { margin-left: 0; }
   .submission-attachment-name { grid-template-columns: 1fr; gap: 5px; }
   .submission-attachment-editor .err-text { margin-left: 0; }
-  .submission-attachment-supporting { align-items: flex-start; flex-direction: column; }
+  .submission-attachment-supporting { margin-left: 0; }
+  .submission-preview-row { justify-content: flex-start; }
   .submission-mailbox-head, .submission-approval-banner { align-items: flex-start; flex-direction: column; }
   .submission-mail-field, .submission-mail-attachments { grid-template-columns: 1fr; gap: 4px; }
   .submission-mail-attachments > b { padding-top: 0; }
@@ -6230,6 +6244,65 @@ button.linklike:hover { text-decoration: underline; }
 .qcard .q-bar i.miss { background: var(--amber-text, var(--palette-562a2cbe)); }
 @media (max-width: 900px) { .qcards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 460px) { .qcards { grid-template-columns: 1fr; } }
+
+/* Executive attainment story: outcome first, then quarter and monthly pace. */
+.performance-scorecard-grid,
+.performance-lower-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  gap: 16px;
+  align-items: stretch;
+  margin-bottom: 16px;
+}
+.performance-lower-grid { grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); }
+.performance-scorecard-grid > .dashboard-card,
+.performance-lower-grid > .dashboard-card { grid-column: auto; min-width: 0; }
+.attainment-summary { display: grid; gap: 18px; height: 100%; align-content: center; }
+.attainment-summary-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.attainment-summary-top > div { display: grid; gap: 2px; }
+.attainment-kicker,
+.attainment-summary-top > div > span:last-child { color: var(--text-subtle); font-size: 12px; }
+.attainment-summary-top strong { color: var(--text-main); font-size: clamp(42px, 4vw, 64px); line-height: .95; letter-spacing: -.05em; font-variant-numeric: tabular-nums; }
+.attainment-status { padding: 5px 8px; border: 1px solid var(--border-soft); border-radius: 5px; color: var(--text-subtle); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.attainment-status.positive { color: var(--won-text); border-color: color-mix(in srgb, var(--won-text) 35%, var(--border-soft)); }
+.attainment-status.negative { color: var(--amber-text); border-color: color-mix(in srgb, var(--amber-text) 35%, var(--border-soft)); }
+.attainment-progress { height: 12px; overflow: hidden; border-radius: 999px; background: var(--border-soft); }
+.attainment-progress i { display: block; height: 100%; min-width: 0; border-radius: inherit; background: var(--primary-accent); transition: width .35s ease; }
+.attainment-summary-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.attainment-summary-stats div { display: grid; gap: 3px; min-width: 0; }
+.attainment-summary-stats span { color: var(--text-subtle); font-size: 11px; }
+.attainment-summary-stats b { color: var(--text-main); font-size: 13px; font-variant-numeric: tabular-nums; }
+.attainment-summary-stats b.positive { color: var(--won-text); }
+.attainment-summary-stats b.negative { color: var(--amber-text); }
+.performance-scorecard-grid .chart-legend { margin-bottom: 8px; }
+.performance-card-note { margin-top: 8px; }
+.performance-signal { display: flex; align-items: baseline; gap: 5px; margin: -4px 0 4px; color: var(--text-main); font-size: 13px; font-weight: 700; }
+.performance-signal span { color: var(--text-subtle); font-weight: 500; }
+.dashboard-funnel-list { display: grid; gap: 3px; padding-top: 2px; }
+.dashboard-funnel-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) 18px minmax(82px, 108px); align-items: center; gap: 5px; min-height: 39px; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; text-align: left; }
+.dashboard-funnel-row:hover { background: var(--select-fill); box-shadow: none; transform: none; }
+.dashboard-funnel-row:focus-visible { outline: 2px solid var(--primary-accent); outline-offset: 2px; }
+.dashboard-funnel-index { color: var(--primary-accent); font-size: 12px; font-weight: 700; }
+.dashboard-funnel-shape { display: flex; align-items: center; justify-content: center; width: var(--funnel-width); min-height: 30px; margin: 0 auto; color: #fff; background: var(--primary-accent); clip-path: polygon(0 0, 100% 0, 88% 100%, 12% 100%); font-size: 11px; font-variant-numeric: tabular-nums; transition: filter .2s ease, transform .2s ease; }
+.dashboard-funnel-row:nth-child(2) .dashboard-funnel-shape { background: color-mix(in srgb, var(--primary-accent) 88%, #fff); }
+.dashboard-funnel-row:nth-child(3) .dashboard-funnel-shape { background: color-mix(in srgb, var(--primary-accent) 76%, #fff); }
+.dashboard-funnel-row:nth-child(4) .dashboard-funnel-shape { background: color-mix(in srgb, var(--primary-accent) 64%, #fff); }
+.dashboard-funnel-row:nth-child(5) .dashboard-funnel-shape { background: var(--won-text); }
+.dashboard-funnel-row:hover .dashboard-funnel-shape { filter: brightness(1.06); transform: translateY(-1px); }
+.dashboard-funnel-connector { display: block; width: 100%; border-top: 1px dotted var(--border-soft); }
+.dashboard-funnel-label { display: grid; gap: 1px; min-width: 0; padding-left: 2px; }
+.dashboard-funnel-label strong { color: var(--text-main); font-size: 11px; line-height: 1.1; white-space: nowrap; }
+.dashboard-funnel-label small { color: var(--text-subtle); font-size: 9px; line-height: 1.15; white-space: nowrap; }
+.dashboard-funnel-row.won .dashboard-funnel-index { color: var(--won-text); }
+@media (max-width: 900px) {
+  .performance-scorecard-grid,
+  .performance-lower-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  .attainment-summary-top { flex-direction: column; }
+  .attainment-summary-stats { grid-template-columns: 1fr; gap: 10px; }
+  .attainment-summary-stats div { grid-template-columns: 1fr auto; align-items: baseline; }
+}
 
 /* Sales-owner dashboard detail blocks — kept separate from the role-specific
    summary cards so the full sales view remains readable on smaller screens. */
@@ -11454,6 +11527,7 @@ table.sheet tfoot td {
 .dashboard-page .stat-cards {
   gap: 14px;
   margin-bottom: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .dashboard-page .stat-card-v2 {
@@ -13185,6 +13259,103 @@ table.sheet tbody tr:hover td {
   overflow-wrap: anywhere;
 }
 
+/* Final dashboard polish: keep executive panels compact and dense controls
+   aligned without changing the underlying role or data scope. */
+.dashboard-page .home-analytics {
+  align-content: start;
+}
+
+.dashboard-page .home-analytics > .dashboard-card {
+  margin-top: 12px;
+}
+
+.dashboard-page .home-analytics .home-forecast-value {
+  margin-top: 10px;
+}
+
+.dashboard-page .home-analytics .home-forecast-split {
+  margin-top: 12px;
+  margin-bottom: 10px;
+}
+
+.dashboard-page .home-analytics-link,
+.dashboard-page .home-forecast-action,
+.dashboard-page .dashboard-card-link,
+.dashboard-page .ana-title-action button,
+.dashboard-page .targets-table button {
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+.dashboard-page .targets-table td:first-child {
+  min-width: 220px;
+  width: 28%;
+}
+
+.dashboard-page .targets-table td:first-child .hint {
+  display: block;
+  margin-top: 2px;
+}
+
+.dashboard-page .home-alert-rail {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  align-items: stretch;
+  margin-top: 14px;
+  padding-top: 12px;
+}
+
+.dashboard-page .home-alert-rail > button,
+.dashboard-page .home-alert-rail > div {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 52px;
+  padding: 10px 12px;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  background: #F8FAFC;
+}
+
+.dashboard-page .home-alert-rail > button {
+  width: 100%;
+  color: #475569;
+  text-align: left;
+}
+
+.dashboard-page .home-alert-rail > button:hover {
+  border-color: #CBD5E1;
+  background: #FFFFFF;
+}
+
+.dashboard-page .home-alert-rail > div {
+  color: #475569;
+}
+
+.dashboard-page .home-alert-rail .home-alert-value {
+  color: #0F172A;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.dashboard-page .home-alert-rail > button > span:last-child,
+.dashboard-page .home-alert-rail > div > span:last-child {
+  min-width: 0;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+@media (max-width: 640px) {
+  .dashboard-page .home-alert-rail {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 560px) {
   .dashboard-page .dashboard-action-title {
     flex-wrap: wrap;
@@ -14171,13 +14342,13 @@ table.sheet tbody tr:hover td {
   outline-color: var(--focus-ring) !important;
 }
 
-/* LJS proposal status card: four readable summary blocks and a wrapped,
+/* LJS proposal status card: three lifecycle summary blocks and a wrapped,
    purpose-built table. The generic dashboard table rules are optimized for
    the eight-column opportunity table, so this six-column table needs its own
    widths to keep long customer and opportunity names from colliding. */
 .proposal-status-summary {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   margin: 14px 0 2px;
 }
@@ -14200,7 +14371,6 @@ table.sheet tbody tr:hover td {
 .proposal-status-summary__item--prepare { --summary-color: var(--status-warning); --summary-bg: var(--status-warning-soft); }
 .proposal-status-summary__item--approval { --summary-color: var(--status-info); --summary-bg: var(--status-info-soft); }
 .proposal-status-summary__item--sent { --summary-color: var(--status-success); --summary-bg: var(--status-success-soft); }
-.proposal-status-summary__item--follow-up { --summary-color: var(--status-danger); --summary-bg: var(--status-danger-soft); }
 .proposal-status-summary__item.is-empty { --summary-color: var(--text-subtle); --summary-bg: var(--surface-sunken); }
 .proposal-status-summary__item:hover { transform: none; border-color: var(--summary-color); box-shadow: none; }
 .proposal-status-summary__item.is-selected { border-color: var(--summary-color); box-shadow: 0 0 0 2px color-mix(in srgb, var(--summary-color) 28%, transparent); }
@@ -14213,6 +14383,46 @@ table.sheet tbody tr:hover td {
   font-weight: 700;
   line-height: 1.25;
 }
+.proposal-follow-up-alert {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--status-danger-soft);
+  border-left: 3px solid var(--status-danger);
+  border-radius: 6px;
+  background: var(--status-danger-soft);
+  color: var(--text-main);
+  text-align: left;
+}
+.proposal-follow-up-alert:hover,
+.proposal-follow-up-alert.is-selected {
+  border-color: var(--status-danger);
+  box-shadow: none;
+}
+.proposal-follow-up-alert.is-empty {
+  border-color: var(--border-soft);
+  border-left-color: var(--border-color);
+  background: var(--surface-sunken);
+}
+.proposal-follow-up-count {
+  color: var(--status-danger);
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.proposal-follow-up-alert.is-empty .proposal-follow-up-count { color: var(--text-subtle); }
+.proposal-follow-up-copy { display: grid; min-width: 0; gap: 2px; }
+.proposal-follow-up-copy b { color: var(--status-danger); font-size: 12px; }
+.proposal-follow-up-alert.is-empty .proposal-follow-up-copy b { color: var(--text-subtle); }
+.proposal-follow-up-copy small { color: var(--text-subtle); font-size: 11px; }
+.proposal-follow-up-action { color: var(--status-danger); font-size: 11px; font-weight: 700; white-space: nowrap; }
+.proposal-follow-up-alert.is-empty .proposal-follow-up-action { color: var(--text-subtle); }
 .proposal-status-table { min-width: 920px; }
 .proposal-status-table th:nth-child(1) { width: 31%; }
 .proposal-status-table th:nth-child(2) { width: 20%; }
@@ -14247,7 +14457,9 @@ table.sheet tbody tr:hover td {
 }
 .proposal-status-footer button { flex: 0 0 auto; }
 @media (max-width: 700px) {
-  .proposal-status-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .proposal-status-summary { grid-template-columns: 1fr; }
+  .proposal-follow-up-alert { grid-template-columns: auto minmax(0, 1fr); }
+  .proposal-follow-up-action { grid-column: 2; }
   .proposal-status-footer { align-items: flex-start; flex-direction: column; }
 }
 

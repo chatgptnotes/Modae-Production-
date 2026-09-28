@@ -7,7 +7,10 @@ export default defineConfig({
   server: { proxy: { '/api': 'http://localhost:3000', '/healthz': 'http://localhost:3000' } },
   define: {
     __APP_DEPLOYMENT_ID__: JSON.stringify(
-      process.env.RAILWAY_GIT_COMMIT_SHA || 'local'
+      process.env.SUPERBEES_GIT_COMMIT_SHA ||
+      process.env.GIT_COMMIT_SHA ||
+      process.env.VERCEL_GIT_COMMIT_SHA ||
+      'local'
     ),
   },
 })

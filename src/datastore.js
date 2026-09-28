@@ -1,6 +1,6 @@
 import { describeSupabaseError, isSupabaseAuthError, supabase } from './supabase.js'
 import { writeCachedRules } from './rules.js'
-import { loadWorkspaceFromRailway, saveWorkspaceToRailway } from './workspaceApi.js'
+import { loadWorkspaceFromServer, saveWorkspaceToServer } from './workspaceApi.js'
 import { mergeOpportunityRow } from './workflowTransitions.js'
 
 // Server persistence for the store: normalized business rows plus dedicated
@@ -320,8 +320,8 @@ export async function loadCore() {
 // stale or omitted a row that is still present in the normalized table.
 export async function loadOpportunity(id) {
   if (!supabase || !id) return null
-  const railway = await loadWorkspaceFromRailway()
-  if (railway) return (railway.opportunities || []).find(row => row?.id === id) || null
+  const serverWorkspace = await loadWorkspaceFromServer()
+  if (serverWorkspace) return (serverWorkspace.opportunities || []).find(row => row?.id === id) || null
   const result = await supabase.from('opportunities')
     .select('id, data, rev')
     .eq('id', id)
@@ -337,11 +337,11 @@ export async function loadOpportunity(id) {
 
 async function fetchCore() {
   try {
-    const railway = await loadWorkspaceFromRailway()
+    const serverWorkspace = await loadWorkspaceFromServer()
     const [consolidatedConfig, consolidatedState, business] = await Promise.all([
       loadConsolidatedConfig(),
       loadConsolidatedState(),
-      loadBusinessTables({ includeRecords: false, coreEntities: ['proposals', 'spares_lines'], collaborative: railway || {} }),
+      loadBusinessTables({ includeRecords: false, coreEntities: ['proposals', 'spares_lines'], collaborative: serverWorkspace || {} }),
     ])
     const slices = {}
     if (consolidatedState) Object.assign(slices, consolidatedState)
@@ -371,7 +371,7 @@ async function fetchCore() {
 
 async function fetchAll() {
   try {
-    const railway = await loadWorkspaceFromRailway()
+    const serverWorkspace = await loadWorkspaceFromServer()
     const slices = {}
     const [consolidatedConfig, consolidatedState] = await Promise.all([
       loadConsolidatedConfig(),
@@ -380,7 +380,7 @@ async function fetchAll() {
     if (consolidatedState) Object.assign(slices, consolidatedState)
     if (consolidatedConfig) slices.config = consolidatedConfig
     if (consolidatedConfig) writeCachedRules(consolidatedConfig)
-    const business = await loadBusinessTables({ includeRecords: true, collaborative: railway || {} })
+    const business = await loadBusinessTables({ includeRecords: true, collaborative: serverWorkspace || {} })
     // Apply empty normalized arrays too. This prevents stale local/demo rows
     // from surviving when the server intentionally has no active rows.
     for (const [key, value] of Object.entries(business)) {
@@ -420,8 +420,8 @@ async function saveSlicesNow(dirty) {
   const collaborativeDirty = Object.fromEntries(Object.entries(dirty)
     .filter(([key]) => key === 'leads' || key === 'opportunities' || key === 'approvals'))
   if (Object.keys(collaborativeDirty).length) {
-    const savedByRailway = await saveWorkspaceToRailway(collaborativeDirty)
-    if (!savedByRailway) throw new Error('A signed-in Railway session is required to save shared leads, opportunities, and approvals.')
+    const savedByServer = await saveWorkspaceToServer(collaborativeDirty)
+    if (!savedByServer) throw new Error('A signed-in server session is required to save shared leads, opportunities, and approvals.')
     normalizedDirty = { ...normalizedDirty }
     for (const key of Object.keys(collaborativeDirty)) delete normalizedDirty[key]
   }

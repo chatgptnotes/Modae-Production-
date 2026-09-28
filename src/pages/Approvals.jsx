@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES } from '../seed.js'
@@ -11,6 +11,7 @@ import { pricingThresholdExceptions } from '../gates.js'
 import { buildPricing, normalizeProposal } from '../proposal/docProps.js'
 
 const NEW_APPROVAL_MS = 48 * 60 * 60 * 1000
+const APPROVAL_REFRESH_MS = 5000
 // Approval ts/decisionTs are full ISO stamps; ddMmmYY wants YYYY-MM-DD.
 const day = ts => ddMmmYY((ts || '').slice(0, 10))
 const time = ts => {
@@ -354,6 +355,32 @@ export default function Approvals() {
   const [typeF, setTypeF] = useState('')
   const [boqOppId, setBoqOppId] = useState('')
   const [decisionDrafts, setDecisionDrafts] = useState({})
+  const [refreshError, setRefreshError] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    const isVisible = () => typeof document === 'undefined' || document.visibilityState === 'visible'
+    const refresh = async () => {
+      if (!active || !isVisible()) return
+      const refreshed = await store.refreshApprovals()
+      if (active) setRefreshError(!refreshed)
+    }
+    const onVisibilityChange = () => {
+      if (isVisible()) void refresh()
+    }
+    void refresh()
+    const timer = setInterval(refresh, APPROVAL_REFRESH_MS)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      active = false
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [])
+
+  const refreshNotice = refreshError
+    ? <div className="approval-notice approval-notice-info"><Icon name="info" size={14} /> Approval updates are temporarily unavailable. Your saved decisions are safe; try refreshing the page.</div>
+    : null
   // Approver workbench for LJS/AH/admins, plus any role named on a joint gate.
   const approverView = isApprover(role) || store.approvals.some(a => neededOf(a).includes(role))
   const canDecide = a => neededOf(a).includes(role)
@@ -535,6 +562,7 @@ export default function Approvals() {
     return (
       <div className="page approvals-page">
         <div className="approval-head"><div><div className="approval-eyebrow">REQUEST TRACKING</div><h2><Icon name="checkCircle" size={18} /> My approval requests</h2><p className="hint">Track decisions and approvers for requests raised by you.</p></div></div>
+        {refreshNotice}
         <div className="approval-summary approval-summary-three"><div className="approval-summary-card summary-pending"><b>{store.approvals.filter(a => a.requestedBy === role && a.status === 'Pending').length}</b><span>Pending</span></div><div className="approval-summary-card summary-approved"><b>{store.approvals.filter(a => a.requestedBy === role && a.status === 'Approved').length}</b><span>Approved</span></div><div className="approval-summary-card summary-rejected"><b>{store.approvals.filter(a => a.requestedBy === role && a.status === 'Rejected').length}</b><span>Rejected</span></div></div>
         <FilterBar {...filterBarProps} />
         <div className="approval-notice approval-notice-info">
@@ -559,6 +587,7 @@ export default function Approvals() {
   return (
     <div className="page approvals-page">
       <div className="approval-head"><div><div className="approval-eyebrow">DECISION WORKSPACE</div><h2><Icon name="checkCircle" size={18} /> Approvals — {displayRole(role)}</h2><p className="hint">Resolve requests, inspect linked records, and keep the pipeline moving.</p></div></div>
+      {refreshNotice}
       <div className="approval-summary"><div className="approval-summary-card summary-pending"><b>{forMe.length}</b><span>Needs your decision</span></div><div className="approval-summary-card summary-waiting"><b>{others.length}</b><span>Awaiting others</span></div><div className="approval-summary-card summary-decided"><b>{decided.length}</b><span>Approved requests</span></div></div>
       <FilterBar {...filterBarProps} />
       <div className="approval-explainer"><span className="hint">

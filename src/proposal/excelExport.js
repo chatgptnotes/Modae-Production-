@@ -117,6 +117,7 @@ export function buildTableWorkbook(sheetName, headers, rows) {
   const workbook = XLSX.utils.book_new()
   const sheet = XLSX.utils.aoa_to_sheet(all)
   styleSheet(sheet, all, contentWidths(headers, rows), [0])
+  sheet['!autofilter'] = { ref: sheet['!ref'] }
   XLSX.utils.book_append_sheet(workbook, sheet, sheetName)
   return workbook
 }

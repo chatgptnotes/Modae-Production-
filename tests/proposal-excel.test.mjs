@@ -80,6 +80,8 @@ test('generic Excel headers use the ModAE document palette', () => {
   assert.equal(sheet.A1.s.border.top.color.rgb, 'ED3F2F')
   assert.equal(sheet.B2.s.border.bottom.color.rgb, 'E3E3E5')
   assert.equal(sheet.B2.s.font.name, 'Candara')
+  assert.equal(sheet['!autofilter'].ref, 'A1:B2', 'the report has a usable filter range')
+  assert.equal(sheet['!pageSetup'].fitToWidth, 1, 'the report prints one page wide')
 })
 
 test('Spares proposal pricing falls back to the confirmed sourcing line', () => {
@@ -301,6 +303,24 @@ test('generated Spares workbooks are editable and have no external Excel names',
   assert.ok(!workbook.getWorksheet('Firm Rev-00').sheetProtection)
   assert.notEqual(workbook.getWorksheet('Firm Rev-00').getCell('C10').protection?.locked, true)
   assert.ok(workbook.getWorksheet('Cover Letter').getCell('A3').value == null)
+})
+
+test('generated proposal print areas stop at the final customer content row', async () => {
+  const templateBuffer = fs.readFileSync('branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx')
+  const output = await generateProposalWorkbook({
+    templateBuffer,
+    logoBuffer: fs.readFileSync('branding/mod-ae/assets/modae-official-logo.png'),
+    route: 'Spares',
+    p: { revision: '00', bom: [{ pn: 'P-1', desc: 'Probe', common: 1 }] },
+    opp: { id: '2609001PJS', sellTo: 'Customer' },
+    doc: { docTerms: [{ label: 'Validity', text: '30 days' }] },
+    totalQty: line => line.common,
+    lineQuoted: () => 100,
+  })
+  const workbook = new ExcelJS.Workbook()
+  await workbook.xlsx.load(output)
+  assert.equal(workbook.getWorksheet('Cover Letter').pageSetup.printArea, 'A1:R26')
+  assert.equal(workbook.getWorksheet('Firm Rev-00').pageSetup.printArea, 'A1:H21')
 })
 
 test('generated proposal keeps customer references out of the part number column', async () => {

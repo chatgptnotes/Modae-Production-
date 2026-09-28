@@ -50,6 +50,17 @@ test('extra files can be attached, listed and removed before sending', () => {
   assert.match(submission, /Attach files/)
 })
 
+test('supporting attachment filenames use a clean aligned line', () => {
+  const css = read('src/styles.css')
+  assert.match(submission, /const supportingAttachmentNames = \[/)
+  assert.match(submission, /supportingAttachmentNames\.length > 0/)
+  assert.match(submission, /supportingAttachmentNames\.join\(' · '\)/)
+  assert.doesNotMatch(submission, /Also attached:/)
+  assert.match(css, /\.submission-attachment-supporting \{[\s\S]*margin-left: 200px;/)
+  assert.match(css, /\.submission-preview-row \{[\s\S]*justify-content: flex-end;/)
+  assert.match(css, /\.submission-preview-row \{ justify-content: flex-start; \}/)
+})
+
 test('customer submission waits for a validated uploaded workbook to finish storage', () => {
   assert.match(submission, /isValidatedUploadStorageReady/)
   assert.match(submission, /!uploadStorageReady/)
@@ -99,7 +110,7 @@ test('proposal message can be created by AI and remains editable', () => {
   assert.match(submission, /timeoutMs: 12000/)
   assert.match(submission, /A professional built-in draft was applied/)
   assert.match(submission, /confirm whether the offer meets your technical and commercial requirements/)
-  assert.match(submission, /className="submission-message-draft" value=\{emailBody\}.*rows=\{9\}/)
+  assert.match(submission, /className="submission-message-draft" value=\{emailBody\}.*rows=\{7\}/)
   assert.match(aiApi, /'email\.proposal'/)
   assert.match(aiApi, /proposalEmailPrompt/)
   assert.match(aiApi, /emailProposalSchema/)
@@ -111,14 +122,32 @@ test('proposal message can be created by AI and remains editable', () => {
   assert.match(aiApi, /clarification: one polite sentence offering clarification/)
 })
 
-test('the automatic message draft stays comfortably readable', () => {
+test('the automatic message draft stays compact and comfortably readable', () => {
   const css = read('src/styles.css')
-  assert.match(css, /\.submission-message-draft \{[\s\S]*min-height: 180px;/)
+  const submission = read('src/workbench/SubmissionPanel.jsx')
+  assert.match(css, /\.submission-message-draft \{[\s\S]*min-height: 144px;/)
+  assert.match(submission, /className="submission-message-draft" value=\{emailBody\}.*rows=\{7\}/)
+  assert.match(css, /\.submission-mail-toolbar \{[\s\S]*margin: 0 12px;/)
+  assert.doesNotMatch(css, /\.submission-mail-toolbar \{[\s\S]*margin: -5px 12px 0;/)
+})
+
+test('proposal preview has its own action row instead of a tooltip collision point', () => {
+  const css = read('src/styles.css')
+  const submission = read('src/workbench/SubmissionPanel.jsx')
+  assert.match(submission, /className="submission-preview-row"/)
+  assert.match(css, /\.submission-preview-row \{[\s\S]*justify-content: flex-end;/)
+  assert.doesNotMatch(submission, /title="View the exact Excel workbook that will be attached"/)
 })
 
 test('the draft action keeps the primary orange appearance when disabled', () => {
   const css = read('src/styles.css')
   assert.match(css, /\.submission-actions \.submission-draft-action:disabled \{ opacity: 1; \}/)
+})
+
+test('email actions stay reachable while the submission form scrolls', () => {
+  const css = read('src/styles.css')
+  assert.match(submission, /className="submission-action-buttons"/)
+  assert.match(css, /\.submission-action-buttons \{[\s\S]*position: sticky;[\s\S]*bottom: 0;/)
 })
 
 test('proposal attachment is opt-in and requires validated review', () => {
@@ -149,6 +178,8 @@ test('pending approval keeps the customer submission visible as a locked mailbox
   assert.match(submission, /Awaiting approval/)
   assert.match(submission, /disabled=\{mailboxLocked\}/)
   assert.match(submission, /Awaiting AH \+ LJS approval before sending/)
+  assert.doesNotMatch(submission, /const requestRelease = \(\)/)
+  assert.match(submission, /Request approval from the Proposal or Approval step before entering Quotation Submission/)
   assert.doesNotMatch(submission, /Customer submission \(simulated\)/)
 })
 

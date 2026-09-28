@@ -93,13 +93,13 @@ test('a stale pending copy cannot reopen an already approved request', () => {
   assert.equal(rows[0].status, 'Approved')
 })
 
-test('health endpoint reports that the Railway service is ready', async () => {
+test('health endpoint reports that the deployment service is ready', async () => {
   const response = await request(app).get('/healthz')
   assert.equal(response.status, 200)
   assert.deepEqual(response.body, { ok: true })
 })
 
-test('presence endpoint is registered in the Railway Express app', async () => {
+test('presence endpoint is registered in the Express app', async () => {
   const response = await request(app).post('/api/presence')
   assert.equal(response.status, 503)
   assert.equal(response.body.ok, false)
@@ -120,6 +120,27 @@ test('CORS allows localhost development origins but rejects unknown origins', as
 
   const unknown = await request(app).get('/healthz').set('Origin', 'https://untrusted.example')
   assert.equal(unknown.headers['access-control-allow-origin'], undefined)
+})
+
+test('CORS allows origins configured through CORS_ORIGINS', async () => {
+  const previous = process.env.CORS_ORIGINS
+  process.env.CORS_ORIGINS = 'https://staging.superbees.example, https://app.superbees.example'
+  try {
+    const configuredApp = createApp({ staticDir: '' })
+    const response = await request(configuredApp).options('/api/locations')
+      .set('Origin', 'https://staging.superbees.example')
+      .set('Access-Control-Request-Method', 'GET')
+    assert.equal(response.status, 204)
+    assert.equal(response.headers['access-control-allow-origin'], 'https://staging.superbees.example')
+  } finally {
+    if (previous === undefined) delete process.env.CORS_ORIGINS
+    else process.env.CORS_ORIGINS = previous
+  }
+})
+
+test('Express trusts one configured reverse proxy hop', () => {
+  const configuredApp = createApp({ staticDir: '' })
+  assert.equal(configuredApp.get('trust proxy'), 1)
 })
 
 test('Express serves static files and falls back to the SPA shell for deep links', async () => {
@@ -150,7 +171,7 @@ test('approval API requires a session and returns only approval rows', async () 
   assert.deepEqual(authenticated.body, { ok: true, approvals: [{ id: 'AP-1', status: 'Pending' }] })
 })
 
-test('approval publish requires a session and notifies the Railway event hub', async () => {
+test('approval publish requires a session and notifies the in-memory event hub', async () => {
   let publications = 0
   const app = createApp({
     staticDir: '',
@@ -204,7 +225,7 @@ test('live data API returns only requested approval, lead, and opportunity rows'
   assert.deepEqual(reads, [['leads', 'opportunities']])
 })
 
-test('workspace bootstrap is cached once in Railway for multiple signed-in browsers', async () => {
+test('workspace bootstrap is cached once for multiple signed-in browsers', async () => {
   let reads = 0
   const app = createApp({
     staticDir: '',
@@ -223,7 +244,7 @@ test('workspace bootstrap is cached once in Railway for multiple signed-in brows
   assert.equal(reads, 1)
 })
 
-test('workspace save authenticates and sends only changed collaborative slices to Railway', async () => {
+test('workspace save authenticates and sends only changed collaborative slices to the server', async () => {
   const writes: unknown[] = []
   const app = createApp({
     staticDir: '',

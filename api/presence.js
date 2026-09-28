@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js'
+import { getAdminSupabaseClient } from './_supabase-client.js'
 
 const ADMIN_ROLES = new Set(['SUPER', 'ADMIN', 'LJS'])
 const ONLINE_WINDOW_MS = 2 * 60 * 1000
@@ -6,10 +6,7 @@ const ONLINE_WINDOW_MS = 2 * 60 * 1000
 const clean = value => String(value || '').trim()
 
 function adminClient() {
-  const url = clean(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL)
-  const serviceKey = clean(process.env.SUPABASE_SERVICE_ROLE_KEY)
-  if (!/^https?:\/\/.+/i.test(url) || !serviceKey) return null
-  return createClient(url, serviceKey, { auth: { persistSession: false, autoRefreshToken: false } })
+  return getAdminSupabaseClient()
 }
 
 async function currentProfile(client, token) {

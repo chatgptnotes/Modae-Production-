@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { fetchWorkspace, saveWorkspace } from '../src/workspaceApi.js'
 
-test('workspace bootstrap sends the signed-in token to Railway', async () => {
+test('workspace bootstrap sends the signed-in token to the server', async () => {
   let request: { url?: string, init?: RequestInit } = {}
   const data = await fetchWorkspace('access-token', async (url, init) => {
     request = { url: String(url), init }
@@ -13,7 +13,7 @@ test('workspace bootstrap sends the signed-in token to Railway', async () => {
   assert.deepEqual(data, { leads: [] })
 })
 
-test('collaborative saves go to Railway instead of the browser Supabase client', async () => {
+test('collaborative saves go to the server instead of the browser Supabase client', async () => {
   let request: { url?: string, init?: RequestInit } = {}
   await saveWorkspace('access-token', { approvals: [{ id: 'AP-2' }] }, async (url, init) => {
     request = { url: String(url), init }

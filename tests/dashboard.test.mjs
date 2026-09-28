@@ -130,10 +130,35 @@ test('dashboard cockpits keep broad analytics away from sales and technical user
   assert.match(source, /Commercial posture/)
 })
 
-test('LJS sees pipeline overview before owner actions', () => {
+test('LJS keeps proposal actions and removes the duplicate owner queue', () => {
   const source = read('src/pages/MyDashboard.jsx')
   const owner = source.slice(source.indexOf('function OwnerDashboard'), source.indexOf('// --------------------------------------------------------------- approvers'))
-  assert.ok(owner.indexOf('<AnalyticsOverview') < owner.indexOf('title="Owner priority queue"'))
+  assert.match(owner, /<ProposalStatusCard/)
+  assert.match(owner, /title="Decisions waiting on you"/)
+  assert.doesNotMatch(owner, /title="Owner priority queue"/)
+})
+
+test('LJS decisions waiting card uses the full dashboard width', () => {
+  const source = read('src/pages/MyDashboard.jsx')
+  const owner = source.slice(source.indexOf('function OwnerDashboard'), source.indexOf('// --------------------------------------------------------------- approvers'))
+  assert.match(owner, /<Card title="Decisions waiting on you"[\s\S]*?span=\{12\}/)
+})
+
+test('dashboard visual polish fills KPI space and keeps dense controls compact', () => {
+  const styles = read('src/styles.css')
+  assert.match(styles, /\.dashboard-page \.stat-cards\s*\{[\s\S]*grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(220px,\s*1fr\)\)/)
+  assert.match(styles, /\.dashboard-page \.home-analytics > \.dashboard-card\s*\{[\s\S]*margin-top:\s*12px/)
+  assert.match(styles, /\.dashboard-page \.ana-title-action button\s*,\s*\.dashboard-page \.targets-table button\s*\{[\s\S]*min-height:\s*36px/)
+  assert.match(styles, /\.dashboard-page \.targets-table td:first-child\s*\{[\s\S]*min-width:\s*220px/)
+  assert.match(styles, /\.dashboard-page \.targets-table td:first-child \.hint\s*\{[\s\S]*display:\s*block/)
+})
+
+test('dashboard work queue summary uses responsive metric tiles', () => {
+  const styles = read('src/styles.css')
+  assert.match(styles, /\.dashboard-page \.home-alert-rail\s*\{[\s\S]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)/)
+  assert.match(styles, /\.dashboard-page \.home-alert-rail > button\s*,\s*\.dashboard-page \.home-alert-rail > div\s*\{[\s\S]*border:\s*1px solid/)
+  assert.match(styles, /\.dashboard-page \.home-alert-rail \.home-alert-value\s*\{[\s\S]*font-size:\s*20px/)
+  assert.match(styles, /@media \(max-width: 640px\)[\s\S]*\.dashboard-page \.home-alert-rail\s*\{[\s\S]*grid-template-columns:\s*1fr/)
 })
 
 test('commercial approvers see the pipeline before their priority queue', () => {
@@ -161,12 +186,14 @@ test('LJS proposal status card has one bottom register link', () => {
   assert.match(card, /proposal-status-summary__item--prepare/)
   assert.match(card, /proposal-status-summary__item--approval/)
   assert.match(card, /proposal-status-summary__item--sent/)
-  assert.match(card, /proposal-status-summary__item--follow-up/)
+  assert.match(card, /proposal-follow-up-alert/)
+  assert.doesNotMatch(card, /proposal-status-summary__item--follow-up/)
   assert.match(card, /is-empty/)
   assert.match(styles, /\.proposal-status-summary__item--prepare \{ --summary-color: var\(--status-warning\);/)
   assert.match(styles, /\.proposal-status-summary__item--approval \{ --summary-color: var\(--status-info\);/)
   assert.match(styles, /\.proposal-status-summary__item--sent \{ --summary-color: var\(--status-success\);/)
-  assert.match(styles, /\.proposal-status-summary__item--follow-up \{ --summary-color: var\(--status-danger\);/)
+  assert.match(styles, /\.proposal-status-summary\s*\{[\s\S]*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/)
+  assert.match(styles, /\.proposal-follow-up-alert\s*\{[\s\S]*border-left: 3px solid var\(--status-danger\)/)
   assert.match(styles, /\.proposal-status-summary__item\.is-empty \{ --summary-color: var\(--text-subtle\);/)
   assert.match(styles, /\.proposal-status-summary__item \{[\s\S]*grid-template-columns: minmax\(0, 1fr\) auto;[\s\S]*grid-template-areas: 'label value';/)
   assert.match(styles, /\.proposal-status-summary \.home-alert-value \{ grid-area: value;[\s\S]*text-align: right;/)
@@ -176,7 +203,7 @@ test('LJS proposal status card has one bottom register link', () => {
   assert.match(card, /<button[^>]*aria-pressed=\{selectedStatus === 'To be prepared'\}/)
   assert.match(card, /<button[^>]*aria-pressed=\{selectedStatus === 'Awaiting approval'\}/)
   assert.match(card, /<button[^>]*aria-pressed=\{selectedStatus === 'Sent'\}/)
-  assert.match(card, /<button[^>]*aria-pressed=\{selectedStatus === 'Follow-up due'\}/)
+  assert.match(card, /<button[^>]*className=\{`proposal-follow-up-alert/)
   assert.match(card, /filteredPriority\.map/)
   assert.match(card, /const filteredSummaryLabel = selectedStatus === 'all'/)
   assert.match(card, /\{filteredSummaryLabel\}/)
@@ -278,16 +305,17 @@ test('every internal role can open detailed reporting from their reporting actio
   assert.ok(!PERMS.CUST.includes('analytics'))
 })
 
-test('annual attainment gauge fills its card area above the figures', () => {
+test('annual attainment scorecard leads with progress above the figures', () => {
   const dashboard = read('src/pages/MyDashboard.jsx')
   const styles = read('src/styles.css')
-  const card = dashboard.slice(dashboard.indexOf('title="Annual attainment"'), dashboard.indexOf('title="Quarterly target vs actual"'))
+  const card = dashboard.slice(dashboard.indexOf("'Annual attainment'"), dashboard.indexOf('title="Quarterly target vs actual"'))
 
-  assert.match(card, /<ArcGauge[^>]*fluid/)
-  assert.ok(card.indexOf('<ArcGauge') < card.indexOf('annual-attainment-table'),
-    'the figures table remains below the gauge')
-  assert.match(styles, /\.annual-attainment-gauge\s*\{[^}]*flex:\s*1 1 auto/s)
-  assert.match(styles, /\.annual-attainment-gauge \.gauge-fluid \.gauge-svg\s*\{[^}]*width:\s*100%[^}]*height:\s*100%/s)
+  assert.match(card, /className="attainment-summary"/)
+  assert.match(card, /className="attainment-progress"/)
+  assert.ok(card.indexOf('attainment-progress') < card.indexOf('attainment-summary-stats'),
+    'the progress track remains above the supporting figures')
+  assert.match(styles, /\.attainment-progress\s*\{[^}]*height:\s*12px/s)
+  assert.match(styles, /\.attainment-summary-stats\s*\{[^}]*grid-template-columns:\s*repeat\(3/s)
 })
 
 test('ADMIN and LJS are co-equal application authorities', () => {
@@ -441,12 +469,12 @@ test('the gradient id is unique per chart instance', () => {
 
 test('there is one run-rate card, not two, under the prototype title', () => {
   const source = read('src/pages/MyDashboard.jsx')
-  // 21 Aug: the card carries the Ver 1.1 prototype's title.
-  assert.equal((source.match(/title="Monthly performance against run rate"/g) || []).length, 1)
+  const sales = source.slice(source.indexOf('function SalesDashboard'), source.indexOf('// ------------------------------------------------------------ team targets'))
+  assert.equal((sales.match(/title="Monthly performance against run rate"/g) || []).length, 1)
   assert.doesNotMatch(source, /title="Monthly bookings"/)
   // The old sparkline card plotted the same array with no target and no labels.
   assert.doesNotMatch(source, /<Sparkline points=\{monthPoints\}/)
-  assert.doesNotMatch(source, /import \{ ArcGauge, Sparkline \}/, 'the unused import must go too')
+  assert.doesNotMatch(source, /ArcGauge/, 'the old gauge must go too')
 })
 
 // dataviz, interaction reference: "An HTML chart is interactive by default — the
@@ -531,6 +559,33 @@ test('the quarterly card pairs the column chart with the quarter cards', () => {
   }
   assert.match(source, /fill=\{target > 0 && actual >= target \? 'var\(--won-text\)' : 'var\(--primary-accent\)'\}/,
     'a quarter at or above target turns green')
+})
+
+test('performance scorecard is shared across personal and company dashboard scopes', () => {
+  const source = read('src/pages/MyDashboard.jsx')
+  assert.match(source, /function PerformanceScorecard\(\{ perf, scope = 'personal' \}\)/)
+  assert.match(source, /'Annual attainment'/)
+  assert.match(source, /className=\"attainment-summary\"/)
+  assert.match(source, /className=\"attainment-progress\"/)
+  assert.match(source, /<PerformanceScorecard perf=\{perf\} scope=\"personal\" \/>/)
+  assert.match(source, /<PerformanceScorecard perf=\{perf\} scope=\"company\" \/>/)
+})
+
+test('role dashboards expose an appropriate funnel beside the run-rate story', () => {
+  const source = read('src/pages/MyDashboard.jsx')
+  assert.match(source, /function DashboardFunnel\(\{ store, role, nav, title = 'My funnel' \}\)/)
+  assert.match(source, /className=['\"]dashboard-funnel funnel-visual['\"]/)
+  assert.match(source, /Leads assigned/)
+  assert.match(source, /Qualified/)
+  assert.match(source, /Opportunities/)
+  assert.match(source, /Proposal sent/)
+  assert.match(source, /const FUNNEL_GROUPS =/)
+  assert.match(source, /stages: \['RFI', 'Budgetary'\]/)
+  assert.match(source, /stages: \['Firm Bid', 'Negotiate'\]/)
+  assert.match(source, /className="dashboard-funnel-connector"/)
+  assert.match(read('src/styles.css'), /\.dashboard-funnel-connector\s*\{[^}]*border-top:\s*1px dotted/s)
+  assert.match(source, /<DashboardFunnel store=\{store\} role=\{role\} nav=\{nav\} \/>/)
+  assert.match(source, /className=\"performance-lower-grid\"/)
 })
 
 test('the detailed analytics page owns the funnel instead of the daily dashboard', () => {

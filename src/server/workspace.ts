@@ -106,7 +106,7 @@ export function createWorkspaceReader(): WorkspaceReader | null {
   if (!url || !serviceRoleKey) return null
   const service = createServiceClient(url, serviceRoleKey)
   return async () => {
-    // Railway makes this one server-to-database read and reuses it for every
+    // The server makes this one database read and reuses it for every
     // browser until a successful write invalidates the cache.
     const [leads, opportunities, approvals, records, proposals, sparesLines, clarifications, audit, settings] = await Promise.all([
       service.from('leads').select('id, data').is('deleted_at', null),
@@ -147,7 +147,7 @@ export function createWorkspaceWriter(): WorkspaceWriter | null {
   return async dirty => {
     const entities = Object.keys(dirty)
     if (!entities.length || entities.some(entity => !collaborativeEntities.includes(entity as CollaborativeEntity))) {
-      throw new Error('Only lead, opportunity, and approval saves are supported by the Railway workspace gateway.')
+      throw new Error('Only lead, opportunity, and approval saves are supported by the server workspace gateway.')
     }
     for (const entity of entities as CollaborativeEntity[]) {
       const desired = dirty[entity]

@@ -18,14 +18,14 @@ export async function saveWorkspace(token, dirty, fetcher = fetch) {
   if (!response.ok) throw new Error(`Workspace save failed (${response.status})`)
 }
 
-export async function loadWorkspaceFromRailway() {
+export async function loadWorkspaceFromServer() {
   const { data } = await supabaseAuth?.getSession?.() || {}
   const token = data?.session?.access_token
   if (!token) return null
   return fetchWorkspace(token)
 }
 
-export async function saveWorkspaceToRailway(dirty) {
+export async function saveWorkspaceToServer(dirty) {
   const { data } = await supabaseAuth?.getSession?.() || {}
   const token = data?.session?.access_token
   if (!token) return false

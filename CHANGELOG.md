@@ -2,15 +2,32 @@
 
 ## 2026-09-27
 
+- Polished the Follow-up & Closure workbench layout so long opportunity names, workflow labels, revisions, close-out controls, and competitor inputs wrap within responsive cards instead of clipping or overflowing.
 - Reduced Supabase traffic by limiting workspace hydration to one initial session load, removing automatic focus/visibility/route pulls, disabling presence polling, and preventing non-changing sourcing reconciliation from triggering autosaves.
 - Fixed the Service SOW handoff so carrying the Statement of Work opens Prepare Offer, keeps the travel confirmation gate visible, and recognizes proposal and quotation language during service classification.
 - Simplified new Service opportunities to the Standard Rate Sheet workflow, keeping Site Visit optional and removing proposal-specific handoff controls from the Service UI.
+- Routed Service Send Offer through the rate-schedule email panel with PDF preview, while keeping discounts approval-gated and preserving closed historical proposal lanes.
 
 Important project changes are recorded here in reverse chronological order.
 This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Added backend-backed approval refresh on the Approvals page every five
+  seconds while visible, with an immediate refresh when returning to the tab
+  and a non-blocking connection warning when the backend is unavailable.
+- Separated proposal follow-up alerts from lifecycle status counts so the LJS proposal card clearly distinguishes status from action.
+- Restyled dashboard work-queue summaries as responsive metric tiles for clearer counts and labels.
+- Expanded the LJS “Decisions waiting on you” card to the full dashboard width for a cleaner company-level layout.
+- Removed the duplicate Owner priority queue from the LJS dashboard while retaining the Priority proposals table and its proposal actions.
+
+- Migrated deployment runtime to SuperBees with explicit `0.0.0.0` binding,
+  graceful shutdown, environment-driven CORS, startup environment validation,
+  provider timeouts, shared Supabase API clients, and neutral deployment
+  identity handling.
+- Redesigned My Dashboard performance reporting into a shared role-aware scorecard with annual progress, quarterly target-versus-actual cards, monthly target/actual run rate, and a scoped funnel for personal or company views.
+- Replaced the dashboard funnel list with a five-level tapered funnel matching the reviewed visual: Leads assigned, Qualified, Opportunities, Proposal sent, and Won; grouped funnel clicks now filter all underlying workflow stages.
+- Refined the funnel to match the supplied reference layout with numbered steps, centered counts, tapered red sections, dotted label connectors, and compact right-side descriptions.
 - Switched complex AI review from restricted Gemini 2.5 Flash to the cheaper
   Gemini 3.5 Flash-Lite model and added a clear model-access error.
 - Fixed Opportunities Excel export by using a browser-compatible workbook writer,

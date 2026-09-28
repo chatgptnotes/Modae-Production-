@@ -5,9 +5,6 @@ const GEO_NAMES_URL = 'https://secure.geonames.org/searchJSON'
 const clean = value => String(value ?? '').trim()
 
 const send = (res, status, body) => {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Headers', 'content-type')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
   return res.status(status).json(body)
 }
 
@@ -29,7 +26,7 @@ export function normalizeGeoNamesResults(rows = []) {
 }
 
 export default async function handler(req, res) {
-  if (req.method === 'OPTIONS') return send(res, 204, {})
+  if (req.method === 'OPTIONS') return res.status(204).end()
   if (req.method !== 'GET') return send(res, 405, { ok: false, error: 'Method not allowed' })
 
   const query = clean(req.query?.q || new URL(req.url || '', 'http://localhost').searchParams.get('q'))
@@ -47,7 +44,7 @@ export default async function handler(req, res) {
   url.searchParams.set('orderby', 'relevance')
 
   try {
-    const response = await fetch(url)
+    const response = await fetch(url, { signal: AbortSignal.timeout(10_000) })
     if (!response.ok) return send(res, 502, { ok: false, error: 'Global location provider unavailable' })
     const payload = await response.json()
     if (payload.status) return send(res, 502, { ok: false, error: payload.status.message || 'Global location provider rejected the request' })

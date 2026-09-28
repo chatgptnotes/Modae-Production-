@@ -5,7 +5,6 @@ import { ROLES, OWNERS } from '../seed.js'
 import { readiness, isBlocked, nextActionWith } from '../gates.js'
 import { ageDays, isApprover, isAdminRole, isSalesOwner, canPriceProposal, fmtLakh, ddMmmYY, displayRole, displayRoleLabel, isHiddenDashboardOpportunity } from '../utils.js'
 import { analyticsSnapshot, counts, salesPerformance, winLossAnalysis, FY_QUARTERS, FY_MONTHS, PROB_WEIGHT } from '../kpi.js'
-import { ArcGauge } from '../dashviz.jsx'
 import { Icon } from '../icons.jsx'
 import ForecastDashboard from './Dashboard.jsx'
 import WinLossFlow from '../WinLossFlow.jsx'
@@ -176,6 +175,76 @@ function QuarterBars({ perf }) {
         )
       })}
     </div>
+  )
+}
+
+function attainmentStatus(perf) {
+  if (!perf.annual) return 'Target not set'
+  if (!perf.achieved) return 'No bookings yet'
+  if (perf.achieved >= perf.expected) return 'Ahead of pace'
+  return 'Behind pace'
+}
+
+function PerformanceScorecard({ perf, scope = 'personal' }) {
+  const variance = perf.achieved - perf.expected
+  const pct = Math.min(100, Math.max(0, perf.annual ? (perf.achieved / perf.annual) * 100 : 0))
+  return (
+    <div className="performance-scorecard-grid">
+      <Card title={scope === 'company' ? 'Company attainment' : 'Annual attainment'} icon="target" tone="tone-green" span={4} className="annual-attainment-card">
+        <div className="attainment-summary">
+          <div className="attainment-summary-top">
+            <div>
+              <span className="attainment-kicker">{perf.fy || 'Current financial year'}</span>
+              <strong>{Math.round(perf.attainPct)}%</strong>
+              <span>of {fmtLakh(perf.annual)} target</span>
+            </div>
+            <span className={`attainment-status ${variance >= 0 ? 'positive' : 'negative'}`}>{attainmentStatus(perf)}</span>
+          </div>
+          <div className="attainment-progress" aria-label={`${Math.round(perf.attainPct)} percent of annual target achieved`}>
+            <i style={{ width: `${pct}%` }} />
+          </div>
+          <div className="attainment-summary-stats">
+            <div><span>Achieved</span><b>{fmtLakh(perf.achieved)}</b></div>
+            <div><span>Expected by now</span><b>{fmtLakh(perf.expected)}</b></div>
+            <div><span>{variance >= 0 ? 'Ahead by' : 'Gap to pace'}</span><b className={variance >= 0 ? 'positive' : 'negative'}>{fmtLakh(Math.abs(variance))}</b></div>
+          </div>
+        </div>
+      </Card>
+      <Card title="Quarterly target vs actual" icon="chartBar" tone="tone-sky" span={8}>
+        <QuarterColumns perf={perf} />
+        <QuarterBars perf={perf} />
+        <div className="hint performance-card-note">Booked orders against the quarterly number.</div>
+      </Card>
+    </div>
+  )
+}
+
+const FUNNEL_GROUPS = [
+  { label: 'Leads assigned', stages: ['Lead'], note: 'start of funnel' },
+  { label: 'Qualified', stages: ['RFI', 'Budgetary'], note: 'qualified interest' },
+  { label: 'Opportunities', stages: ['RFQ'], note: 'active opportunity' },
+  { label: 'Proposal sent', stages: ['Firm Bid', 'Negotiate'], note: 'commercial review' },
+  { label: 'Won', stages: ['Won'], note: 'closed business' },
+]
+
+function DashboardFunnel({ store, role, nav, title = 'My funnel' }) {
+  const owner = isSalesOwner(role) ? role : null
+  const scoped = (store.opportunities || []).filter(o => !owner || o.owner === owner)
+  const rows = FUNNEL_GROUPS.map(group => ({ ...group, count: scoped.filter(o => group.stages.includes(o.stage)).length }))
+  return (
+    <Card title={title} icon="layers" tone="tone-slate" span={4} className="dashboard-funnel funnel-visual">
+      <div className="dashboard-funnel-list" role="list" aria-label={`${title} stages`}>
+        {rows.map((row, index) => (
+          <button key={`${row.label}-${index}`} className={`dashboard-funnel-row ${row.label === 'Won' ? 'won' : ''}`} onClick={() => nav(`/?stage=${encodeURIComponent(row.stages.join(','))}`)} role="listitem">
+            <span className="dashboard-funnel-index">{String(index + 1).padStart(2, '0')}</span>
+            <span className="dashboard-funnel-shape" style={{ '--funnel-width': `${100 - (index * 13)}%` }}><b>{row.count}</b></span>
+            <span className="dashboard-funnel-connector" aria-hidden="true" />
+            <span className="dashboard-funnel-label"><strong>{row.label}</strong><small>{row.note}</small></span>
+          </button>
+        ))}
+      </div>
+      <p className="hint performance-card-note">{owner ? 'Your leads through to won business.' : 'Company leads through to won business.'}</p>
+    </Card>
   )
 }
 
@@ -506,7 +575,6 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
   const myLeads = store.leads.filter(l => (l.assignedOwner || l.suggestedOwner) === role)
   const leads = myLeads.filter(l => l.status === 'New')
   const unproposed = visibleOpen.filter(o => !o.proposalDate)
-  const variance = perf.achieved - perf.expected
   return (
     <div className="page dashboard-page">
       {head}
@@ -548,40 +616,21 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
       </div>
 
       <div className="section-title">Performance</div>
-      <div className="ana-grid">
-        <Card title="Annual attainment" icon="target" tone="tone-green" span={4} className="annual-attainment-card">
-          <div className="annual-attainment-body">
-            <div className="annual-attainment-gauge">
-              <ArcGauge pct={perf.attainPct} fluid value={`${Math.round(perf.attainPct)}%`} caption={`of ${fmtLakh(perf.annual)}`} />
-            </div>
-            <table className="cost-table annual-attainment-table" style={{ width: '100%' }}>
-              <tbody>
-                <tr><td>Expected by now</td><td className="num">{fmtLakh(perf.expected)}</td></tr>
-                <tr><td>Achieved</td><td className="num">{fmtLakh(perf.achieved)}</td></tr>
-                <tr className="total"><td>Variance</td>
-                  <td className="num" style={{ color: variance >= 0 ? 'var(--won-text)' : 'var(--amber-text)' }}>
-                    {variance >= 0 ? '+' : ''}{fmtLakh(variance)}
-                  </td></tr>
-              </tbody>
-            </table>
-          </div>
-        </Card>
-
-        <Card title="Quarterly target vs actual" icon="chartBar" tone="tone-sky" span={8}>
-          <QuarterColumns perf={perf} />
-          <QuarterBars perf={perf} />
-          <div className="hint" style={{ marginTop: 8 }}>Booked orders against your quarterly number.</div>
-        </Card>
-
-        <Card title="Monthly performance against run rate" icon="chartLine" tone="tone-sky" span={12}>
+      <PerformanceScorecard perf={perf} scope="personal" />
+      <div className="performance-lower-grid">
+        <Card title="Monthly performance against run rate" icon="chartLine" tone="tone-sky" span={8}>
+          <div className="performance-signal">{attainmentStatus(perf)} <span>· target pace vs actual pace</span></div>
           <RunRateChart perf={perf} />
-          <div className="hint" style={{ marginTop: 8 }}>
+          <div className="hint performance-card-note">
             {perf.fy} · {FY_MONTHS[0]}–{FY_MONTHS[FY_MONTHS.length - 1]} · actual against target run rate,
             booked to {FY_MONTHS[Math.max(0, (perf.monthsElapsed || 1) - 1)]} ·{' '}
             {perf.orders.length} order{perf.orders.length === 1 ? '' : 's'}
           </div>
         </Card>
+        <DashboardFunnel store={store} role={role} nav={nav} />
+      </div>
 
+      <div className="ana-grid">
         <Card title="Pipeline snapshot" icon="chartBar" tone="tone-teal" span={8}
           action={<button onClick={() => nav('/analytics')}>Open detailed analytics</button>}>
           {/* The prototype's chartBars rows (Bt_html clickable prototype.html:4170):
@@ -744,8 +793,12 @@ function ProposalStatusCard({ store, nav }) {
         <button type="button" className={`proposal-status-summary__item proposal-status-summary__item--prepare ${toPrepare.length ? '' : 'is-empty'} ${selectedStatus === 'To be prepared' ? 'is-selected' : ''}`} aria-pressed={selectedStatus === 'To be prepared'} onClick={() => toggleStatus('To be prepared')}><span className="home-alert-value">{toPrepare.length}</span><span>To be prepared</span></button>
         <button type="button" className={`proposal-status-summary__item proposal-status-summary__item--approval ${awaitingApproval.length ? '' : 'is-empty'} ${selectedStatus === 'Awaiting approval' ? 'is-selected' : ''}`} aria-pressed={selectedStatus === 'Awaiting approval'} onClick={() => toggleStatus('Awaiting approval')}><span className="home-alert-value">{awaitingApproval.length}</span><span>Awaiting approval</span></button>
         <button type="button" className={`proposal-status-summary__item proposal-status-summary__item--sent ${sent.length ? '' : 'is-empty'} ${selectedStatus === 'Sent' ? 'is-selected' : ''}`} aria-pressed={selectedStatus === 'Sent'} onClick={() => toggleStatus('Sent')}><span className="home-alert-value">{sent.length}</span><span>Sent</span></button>
-        <button type="button" className={`proposal-status-summary__item proposal-status-summary__item--follow-up ${followUpDue.length ? '' : 'is-empty'} ${selectedStatus === 'Follow-up due' ? 'is-selected' : ''}`} aria-pressed={selectedStatus === 'Follow-up due'} onClick={() => toggleStatus('Follow-up due')}><span className="home-alert-value">{followUpDue.length}</span><span>Follow-up due</span></button>
       </div>
+      <button type="button" className={`proposal-follow-up-alert ${followUpDue.length ? '' : 'is-empty'} ${selectedStatus === 'Follow-up due' ? 'is-selected' : ''}`} aria-pressed={selectedStatus === 'Follow-up due'} onClick={() => toggleStatus('Follow-up due')}>
+        <span className="proposal-follow-up-count">{followUpDue.length}</span>
+        <span className="proposal-follow-up-copy"><b>Follow-up due</b><small>Sent proposals needing customer follow-up</small></span>
+        <span className="proposal-follow-up-action">Review →</span>
+      </button>
       <div className="section-title" style={{ marginTop: 18 }}>{selectedHeading}</div>
       <div className="dashboard-table-scroll">
         <table className="dashboard-table proposal-status-table">
@@ -792,11 +845,7 @@ function OwnerDashboard({ store, nav, role, c, blocked, nextActions, head }) {
       <AnalyticsOverview {...{ store, role, nav }} />
       <div className="ana-grid"><ProposalStatusCard {...{ store, nav }} /></div>
       <div className="ana-grid">
-        <Card title="Owner priority queue" icon="target" tone="tone-amber" span={12}
-          action={<button onClick={() => nav('/approvals')}>Review all</button>}>
-          <NextActions {...{ nextActions, nav }} />
-        </Card>
-        <Card title="Decisions waiting on you" icon="checkCircle" tone="tone-green" span={6}
+        <Card title="Decisions waiting on you" icon="checkCircle" tone="tone-green" span={12}
           action={<button onClick={() => nav('/approvals')}>View all</button>}>
           {mine.slice(0, PREVIEW_LIMIT).map(a => (
             <button key={a.id} className="dashboard-action" onClick={() => nav('/approvals')}>
@@ -806,12 +855,14 @@ function OwnerDashboard({ store, nav, role, c, blocked, nextActions, head }) {
           ))}
           {!mine.length && <p className="hint">Nothing is waiting on you right now.</p>}
         </Card>
-        <Card title="Company attainment" icon="target" tone="tone-sky" span={6}>
-          <QuarterBars perf={perf} />
-          <div className="hint" style={{ marginTop: 8 }}>
-            {fmtLakh(perf.achieved)} booked of {fmtLakh(perf.annual)} · {Math.round(perf.attainPct)}% attained
-          </div>
+      </div>
+      <PerformanceScorecard perf={perf} scope="company" />
+      <div className="performance-lower-grid">
+        <Card title="Monthly performance against run rate" icon="chartLine" tone="tone-sky" span={8}>
+          <div className="performance-signal">{attainmentStatus(perf)} <span>· target pace vs actual pace</span></div>
+          <RunRateChart perf={perf} />
         </Card>
+        <DashboardFunnel store={store} role={role} nav={nav} title="Company funnel" />
       </div>
       <div className="ana-grid">
         <TeamTargetsCard store={store} />
@@ -887,14 +938,16 @@ function ApproverDashboard({ store, nav, role, c, blocked, nextActions, head, co
             </ul>
           </Card>
         )}
-        <Card title="Company attainment" icon="target" tone="tone-sky" span={12}>
-          <QuarterBars perf={perf} />
-          <div className="hint" style={{ marginTop: 8 }}>
-            {fmtLakh(perf.achieved)} booked of {fmtLakh(perf.annual)} · {Math.round(perf.attainPct)}% attained
-          </div>
-        </Card>
         <TeamTargetsCard store={store} />
         <ForecastReportCard />
+      </div>
+      <PerformanceScorecard perf={perf} scope="company" />
+      <div className="performance-lower-grid">
+        <Card title="Monthly performance against run rate" icon="chartLine" tone="tone-sky" span={8}>
+          <div className="performance-signal">{attainmentStatus(perf)} <span>· target pace vs actual pace</span></div>
+          <RunRateChart perf={perf} />
+        </Card>
+        <DashboardFunnel store={store} role={role} nav={nav} title="Company funnel" />
       </div>
     </div>
   )
@@ -952,15 +1005,16 @@ function AdminDashboard({ store, nav, role, c, blocked, nextActions, head }) {
 
       <AnalyticsOverview {...{ store, role, nav }} />
       <div className="ana-grid">
-        <Card title="Company attainment" icon="target" tone="tone-sky" span={12}>
-          <QuarterBars perf={perf} />
-          <div className="hint" style={{ marginTop: 8 }}>
-            {fmtLakh(perf.achieved)} booked of {fmtLakh(perf.annual)} · {Math.round(perf.attainPct)}% attained
-          </div>
-        </Card>
-
         <TeamTargetsCard store={store} />
         <ForecastReportCard />
+      </div>
+      <PerformanceScorecard perf={perf} scope="company" />
+      <div className="performance-lower-grid">
+        <Card title="Monthly performance against run rate" icon="chartLine" tone="tone-sky" span={8}>
+          <div className="performance-signal">{attainmentStatus(perf)} <span>· target pace vs actual pace</span></div>
+          <RunRateChart perf={perf} />
+        </Card>
+        <DashboardFunnel store={store} role={role} nav={nav} title="Company funnel" />
       </div>
     </div>
   )
