@@ -21,7 +21,7 @@ const NUM_FIELDS = [
 
 // Reactive-service workbench: rate-sheet driven cost build-up with the manual
 // travel-estimate confirmation gate.
-export default function WbService({ opp, focus = 'scope' }) {
+export default function WbService({ opp, focus = 'scope', onConfirmScope, onConfirmSent }) {
   const store = useStore()
   const comm = canPriceProposal(store.role)
   const est = store.svcEstimates.find(e => e.oppId === opp.id) || { oppId: opp.id, ...DEFAULT_EST }
@@ -47,6 +47,8 @@ export default function WbService({ opp, focus = 'scope' }) {
     : null
   const approvalStep = exempt ? '3 No approval needed' : onLegacyReview ? '3 One internal review' : '3 §5 approvals'
   const approvalCleared = serviceOfferCleared(opp, store.getProposal(opp.id), store)
+  const survey = (store.surveys || []).find(v => v.oppId === opp.id)
+  const evidenceReady = !!est.travelConfirmed && (!est.surveyRequired || !!survey?.report)
 
   const upd = patch => store.updateSvcEstimate(opp.id, patch)
 
@@ -76,11 +78,11 @@ export default function WbService({ opp, focus = 'scope' }) {
     <div className="ana-grid service-scope-grid">
       <div className="ana-card c-12 service-flow-summary service-status-strip">
         <div>
-          <div className="service-panel-kicker">Service Scope &amp; Survey</div>
-          <div className="ana-title">{focus === 'scope' ? 'Confirm the commercial lane before estimating' : 'Prepare the accepted service offer'}</div>
+          <div className="service-panel-kicker">Scope Confirmation</div>
+          <div className="ana-title">{focus === 'scope' ? 'Confirm scope before pricing' : 'Prepare the standard rate schedule'}</div>
         </div>
         <div className="service-status-steps" aria-label="Service flow status">
-          {['1 AI identifies', '2 Confirm scope', approvalStep, '4 Customer decision'].map((step, i) => (
+          {['1 Identify request', '2 Confirm scope', '3 Rate schedule', '4 Customer acceptance'].map((step, i) => (
             <Chip key={step} tone={i === 0 || (i === 1 && scopeConfirmed) || (i === 2 && approvalCleared) || (i === 3 && est.customerDecision) ? 'state-Accepted' : 'grey'}>{step}</Chip>
           ))}
         </div>
@@ -135,6 +137,25 @@ export default function WbService({ opp, focus = 'scope' }) {
       </div>
       </>}
       {focus === 'scope' && scopeConfirmed && <SurveyPanel opp={opp} est={est} />}
+      {focus === 'scope' && scopeConfirmed && <div className="ana-card c-12 service-travel-confirmation">
+        <div className="service-panel-kicker">Estimate readiness</div>
+        <div className="ana-title">Confirm manual travel estimate</div>
+        <div className="check-row">
+          <input type="checkbox" checked={!!est.travelConfirmed}
+            onChange={e => upd({ travelConfirmed: e.target.checked })} />
+          <span>Confirm manual travel estimate</span>
+          {est.travelConfirmed
+            ? <Chip tone="state-Accepted">Confirmed</Chip>
+            : <Chip tone="state-Blocks">Blocks rate schedule</Chip>}
+        </div>
+          <p className="hint">Confirm the planned travel days before preparing the rate schedule. If a site survey is required, submit its report here as well.</p>
+        <div className="service-decision-footer">
+          <span className={evidenceReady ? 'service-confirmed-copy' : 'hint'}>
+            {evidenceReady ? 'Scope and survey evidence are ready.' : 'Complete the required evidence before continuing.'}
+          </span>
+          <button className="primary" disabled={!evidenceReady} onClick={onConfirmScope}>Confirm scope and survey</button>
+        </div>
+      </div>}
       {focus === 'offer' && <>
         <div className="ana-card c-12 service-offer-context">
           <div className="service-panel-kicker">Confirmed scope</div>
@@ -144,10 +165,10 @@ export default function WbService({ opp, focus = 'scope' }) {
           </div>
           <p className="hint">Scope is locked. Complete the service estimate below, then issue the standard rate schedule.</p>
           {!est.travelConfirmed && <div className="warnbox service-offer-blocker" role="status">
-            <b>Next action required:</b> confirm the manual travel estimate below before the offer can be prepared or reviewed.
+            <b>Next action required:</b> confirm the manual travel estimate below before the rate schedule can be prepared or reviewed.
           </div>}
         </div>
-        {offerMode === 'Standard Rate Sheet' && <RateSheetPanel opp={opp} est={est} />}
+        {offerMode === 'Standard Rate Sheet' && <RateSheetPanel opp={opp} est={est} onConfirmSent={onConfirmSent} />}
       </>}
       {focus === 'offer' && scopeConfirmed && <>
         {/* Standard Service is priced from the published rate sheet. */}

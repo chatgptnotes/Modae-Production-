@@ -66,7 +66,7 @@ Before production promotion, also walk the manual checklist in
 
 ```text
 api/              Vercel serverless routes
-branding/         Runtime ModAE logos, images, and brand data
+assets/           Imported runtime brand, document, and workbook assets
 public/           PWA icons, service worker, and fonts
 scripts/          Local build, document, asset, and workflow utilities
 src/              React application, state, workflows, and integrations
@@ -112,10 +112,11 @@ variables, branches, or production data.
 
 ## Local-only files
 
-Reference documents, prototypes, backups, generated PDFs, scraped branding
-material, and retired migrations belong under `.local/`. This directory is
-ignored by Git on purpose. Moving a file there keeps it available on the local
-machine but prevents it from being committed or deployed.
+Reference documents, completed planning and QA notes, prototypes, backups,
+generated PDFs, optional agent tooling, scraped branding material, and retired
+migrations belong under `.local/`. This directory is ignored by Git on purpose.
+Moving a file there keeps it available on the local machine but prevents it
+from being committed or deployed.
 
 Do not copy local-only files back into runtime directories unless the application
 actually imports or serves them.
@@ -125,6 +126,4 @@ actually imports or serves them.
 - [AGENTS.md](./AGENTS.md) — technical context and rules for developers and coding agents
 - [CHANGELOG.md](./CHANGELOG.md) — dated project changes and cleanup history
 - [DEPLOYMENT.md](./DEPLOYMENT.md) — staging and production deployment procedure
-- [IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) — product implementation status
-- [WORKFLOW_CONFORMANCE.md](./WORKFLOW_CONFORMANCE.md) — workflow review and remediation status
 - [supabase/README.md](./supabase/README.md) — active database schema policy

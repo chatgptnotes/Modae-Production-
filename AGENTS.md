@@ -33,6 +33,8 @@ database access, deployment configuration, or tracked assets.
 - `src/pages/` contains route-level screens.
 - `src/workbench/` contains opportunity workflow panels.
 - `src/proposal/` contains proposal-specific view helpers and components.
+- `assets/` contains tracked runtime brand data, images, customer documents,
+  and workbook templates imported by browser code.
 
 ### State and persistence
 
@@ -113,6 +115,8 @@ Historical migrations and backups are local-only under `.local/backups/`.
 - Make the smallest structural change that solves the requested problem.
 - Preserve existing user-facing behavior unless the request explicitly changes it.
 - Do not move runtime assets into `.local/` if source code imports or serves them.
+- Keep imported binary assets under the semantic `assets/` hierarchy; do not
+  recreate the retired root-level `branding/` or `modae doc/` directories.
 - Put personal documents, prototypes, scraped material, generated outputs,
   backups, and retired migrations under `.local/`.
 - Keep `.local/` ignored and never stage it.

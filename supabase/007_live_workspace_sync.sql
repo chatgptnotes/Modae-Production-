@@ -1,5 +1,5 @@
 -- Deliver lead, approval, and workflow changes to other open devices immediately.
--- Safe to run after supabase-tables.sql.  Realtime still enforces the table's
+-- Safe to run after 000_fresh_project.sql. Realtime still enforces the table's
 -- existing RLS policies for each subscriber; this migration grants no access.
 
 do $$

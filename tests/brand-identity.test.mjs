@@ -178,7 +178,7 @@ test('dark mode gets its own steps, not a flipped light palette', () => {
 test('the branding sources no longer say the opposite', () => {
   // Both files recorded "website colors were intentionally not copied". The
   // client reversed that; leaving it would have the next person undo this work.
-  const profile = read('branding/mod-ae/data/brand-profile.json')
+  const profile = read('assets/brand/modae/data/brand-profile.json')
   assert.equal(/intentionally not copied/.test(profile), false)
   assert.match(profile, /Superseded 20 Aug 2026/)
   JSON.parse(profile)  // and it must still parse

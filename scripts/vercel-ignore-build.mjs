@@ -23,7 +23,7 @@ if (!previous || !current || !/^[0-9a-f]{7,40}$/i.test(previous) || !/^[0-9a-f]{
       file.startsWith('src/')
       || file.startsWith('api/')
       || file.startsWith('public/')
-      || file.startsWith('branding/')
+      || file.startsWith('assets/')
       || file.startsWith('scripts/')
       || file === 'package.json'
       || file === 'package-lock.json'

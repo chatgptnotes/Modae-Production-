@@ -6,7 +6,8 @@ import ExcelJS from 'exceljs'
 import { customerProposalArtifact } from '../src/proposal/emailAttachments.js'
 import { resolveProposalTemplate } from '../src/proposal/templateRegistry.js'
 
-const bundledPath = 'branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx'
+const bundledPath = 'assets/workbooks/proposal-templates/spares.xlsx'
+const logoPath = 'assets/brand/modae/images/official-logo.png'
 
 test('the bundled Spares template is present and readable', async () => {
   const bytes = fs.readFileSync(bundledPath)
@@ -31,7 +32,7 @@ test('template resolution is route-specific and an active Admin template wins', 
 test('customer preview and attachment are produced from the same redacted XLSX bytes', async () => {
   const artifact = await customerProposalArtifact({
     templateBuffer: fs.readFileSync(bundledPath),
-    logoBuffer: fs.readFileSync('branding/mod-ae/assets/modae-official-logo.png'),
+    logoBuffer: fs.readFileSync(logoPath),
     route: 'Spares',
     p: { revision: '01', revisionDate: '2026-09-19', bom: [{ pn: 'P-1', desc: 'Probe', common: 1 }] },
     opp: { id: '2609014PP', sellTo: 'Demo Thermal Power Ltd.' },
@@ -56,7 +57,7 @@ test('Project and Services generation use their own commercial worksheets', asyn
   const cases = [
     {
       route: 'Project',
-      path: 'branding/Further Inputs/Further Inputs/Proposals and T&Cs/Big Project Opp/2608222RS  Project Rev-00.xlsx',
+      path: 'assets/workbooks/proposal-templates/project.xlsx',
       sheet: 'Priced BoQ',
       descriptionCell: 'D10',
       internalCell: 'N10',
@@ -64,7 +65,7 @@ test('Project and Services generation use their own commercial worksheets', asyn
     },
     {
       route: 'Services',
-      path: 'branding/Further Inputs/Further Inputs/Proposals and T&Cs/Big Service Opp-1 (Won) With SoW/Service Proposal 14Apr26 Rev-01.xlsx',
+      path: 'assets/workbooks/proposal-templates/service.xlsx',
       sheet: 'Proposal',
       descriptionCell: 'D9',
       internalCell: 'J9',
@@ -75,7 +76,7 @@ test('Project and Services generation use their own commercial worksheets', asyn
   for (const item of cases) {
     const artifact = await customerProposalArtifact({
       templateBuffer: fs.readFileSync(item.path),
-      logoBuffer: fs.readFileSync('branding/mod-ae/assets/modae-official-logo.png'),
+      logoBuffer: fs.readFileSync(logoPath),
       route: item.route,
       p: { revision: '01', bom: [{ pn: 'P-1', desc: `${item.route} live line`, common: 1 }] },
       opp: { id: 'ROUTE-1', sellTo: 'Customer' },
@@ -105,7 +106,7 @@ test('an uploaded mapped template clears unused example lines before customer se
   offer.addRow(['', 'Grand Total', '', '', 30])
   const artifact = await customerProposalArtifact({
     templateBuffer: await template.xlsx.writeBuffer(),
-    logoBuffer: fs.readFileSync('branding/mod-ae/assets/modae-official-logo.png'),
+    logoBuffer: fs.readFileSync(logoPath),
     route: 'Project',
     mapping: {
       method: 'gemini+deterministic', coverSheet: 'Cover', commercialSheet: 'Offer', customerLastColumn: 5,

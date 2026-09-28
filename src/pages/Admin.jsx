@@ -703,7 +703,7 @@ export default function Admin() {
             onChange={v => store.updateConfig({ approvalThresholds: { ...thresholds, valueBreak: v } })} />
           <NumField label="Margin break (%)" value={thresholds.marginBreak} disabled={!canEdit}
             onChange={v => store.updateConfig({ approvalThresholds: { ...thresholds, marginBreak: v } })} />
-          <NumField label="Max discount before approval (%)" value={thresholds.discountPct ?? 5} disabled={!canEdit}
+          <NumField label="Max discount before approval (%)" value={thresholds.discountPct ?? 15} disabled={!canEdit}
             onChange={v => store.updateConfig({ approvalThresholds: { ...thresholds, discountPct: Math.max(0, Math.min(100, v)) } })} />
           <NumField label="Max markup before approval (%)" value={thresholds.markupPct ?? 10} disabled={!canEdit}
             onChange={v => store.updateConfig({ approvalThresholds: { ...thresholds, markupPct: Math.max(0, Math.min(100, v)) } })} />

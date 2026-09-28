@@ -19,7 +19,7 @@ const exists = file => fs.existsSync(path.join(root, file))
 // provided sample inquiry (Ref: 14716) and proposal as the benchmark for
 // success". Both documents are in the repo:
 //
-//   doc/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/
+//   assets/workbooks/proposal-templates/spares.xlsx
 //     02_7425309-Buyers Speces.pdf           the enquiry — "Ref:14716" on page 1
 //     Spares Firm Offer Rev00 2May2026.xlsx  the answer  — "Our Ref: 2511096RS"
 //
@@ -41,7 +41,7 @@ const allParts = Object.entries(seedPriceLists)
 const lead = seedAiLeads.find(l => l.id === 'LD-208')
 
 test('the benchmark workflow fixtures are represented by tracked runtime assets', () => {
-  const bundledProposal = 'branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx'
+  const bundledProposal = 'assets/workbooks/proposal-templates/spares.xlsx'
   assert.ok(exists(bundledProposal), 'the bundled proposal template')
   assert.ok(lead.attachments.some(a => /Buyers Speces/.test(a.name)), 'the seeded enquiry attachment metadata')
 })

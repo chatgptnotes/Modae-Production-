@@ -22,7 +22,7 @@ const print = stripComments(read('src/proposal/PrintDoc.jsx'))
 
 // The covering letter is the one page every proposal has, and it was the one
 // page written from imagination rather than from the client's own documents.
-// All five sample workbooks in doc/Further Inputs carry an identical Cover
+// All five supplied sample workbooks carry an identical Cover
 // Letter sheet; these tests pin what it actually contains.
 
 test('the letter prints the fields the samples print', () => {

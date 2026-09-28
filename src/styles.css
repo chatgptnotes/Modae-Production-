@@ -14489,9 +14489,31 @@ table.sheet tbody tr:hover td {
 .page .progress-controls { min-width: 0; flex-wrap: wrap; }
 .page .progress-controls span { min-width: 0; max-width: min(240px, 100%); overflow-wrap: anywhere; }
 .page .progress-step .progress-label {
-  max-width: 13ch;
-  overflow-wrap: anywhere;
+  max-width: 15ch;
+  overflow-wrap: normal;
   text-wrap: balance;
+  font-size: 14px;
+  line-height: 1.25;
+  font-weight: 700;
+}
+
+.service-rate-email-body {
+  min-height: 190px;
+  padding: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.service-scope-grid .ana-title,
+.service-delivery-close .ana-title {
+  font-size: 18px;
+}
+
+.service-scope-grid .hint,
+.service-delivery-close .hint {
+  font-size: 14px;
+  line-height: 1.45;
 }
 
 .page .follow-up-grid {

@@ -1,5 +1,5 @@
 const safeDownloadName = value => String(value || 'document').replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '')
-const INDIA_KYC_FORM_URL = new URL('../modae doc/Sample Docs/Sample Docs/KYC FORM TEMPLATE-India.docx', import.meta.url).href
+const INDIA_KYC_FORM_URL = new URL('../assets/documents/kyc/india-template.docx', import.meta.url).href
 
 export function downloadKycTemplate(customerName, recordId, itemName, configuredTemplate = null) {
   const link = document.createElement('a')

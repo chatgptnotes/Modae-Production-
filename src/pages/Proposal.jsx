@@ -69,7 +69,7 @@ const ROUTE_TABS = {
   Spares: ['Cover Letter', 'Edit Sheet', 'Document', 'Firm Offer', 'Clarifications', 'Sensor Comparison', 'Priced BoQ'],
 }
 
-const MEGGITT_ITEM_LIST_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-2 With Different Make (Not yet won)/Meggitt Item List.xlsx', import.meta.url).href
+const MEGGITT_ITEM_LIST_URL = new URL('../../assets/workbooks/references/spares/meggitt-item-list.xlsx', import.meta.url).href
 
 const approvalTermKey = value => {
   const text = String(value || '').toLowerCase()

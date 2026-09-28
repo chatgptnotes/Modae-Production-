@@ -380,19 +380,20 @@ export function exportCSV(filename, headers, rows) {
   URL.revokeObjectURL(a.href)
 }
 
-// Gmail compose URL. Reliable in the browser and, unlike `mailto:`, does not
-// depend on a desktop mail client being configured. Shared by the proposal
-// dispatch dialog and the lead clarification draft so the two cannot drift.
+// Gmail compose URL. The `tf=cm` trigger is the current Gmail web format;
+// `view=cm&fs=1` can open Gmail without applying the prefilled body. Unlike
+// `mailto:`, this does not depend on a desktop mail client being configured.
+// Shared by the proposal dispatch dialog and the lead clarification draft so
+// the two cannot drift.
 //
 // Nothing here sends: it builds a link a human clicks, which opens a compose
 // window they still have to review and submit. That is the whole point on the
 // lead side — see src/leadClarification.js.
 export function gmailComposeHref({ to = '', cc = '', subject = '', body = '' } = {}) {
   if (!String(to).trim()) return ''
-  // Never cut through a %XX escape when trimming an over-long body.
-  const encBody = encodeURIComponent(body).slice(0, 1600).replace(/%[0-9A-F]?$/i, '')
+  const encBody = encodeURIComponent(String(body))
   const ccPart = String(cc).trim() ? `&cc=${encodeURIComponent(String(cc).trim())}` : ''
-  return 'https://mail.google.com/mail/?view=cm&fs=1'
-    + `&to=${encodeURIComponent(String(to).trim())}`
-    + `&su=${encodeURIComponent(subject)}${ccPart}&body=${encBody}`
+  return 'https://mail.google.com/mail/u/0/?'
+    + `to=${encodeURIComponent(String(to).trim())}`
+    + `&su=${encodeURIComponent(subject)}${ccPart}&body=${encBody}&tf=cm`
 }

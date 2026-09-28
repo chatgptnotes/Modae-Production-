@@ -133,7 +133,7 @@ opportunity ID still read `— withheld —`.
 
 The client's yardstick. The enquiry (`02_7425309-Buyers Speces.pdf`, "Ref:14716")
 and the proposal that answered it (`Spares Firm Offer Rev00 2May2026.xlsx`,
-Our Ref 2511096RS) are both in `doc/Further Inputs/`.
+Our Ref 2511096RS) are retained with the local reference documents.
 
 1. Demo Launcher → **Spares benchmark — enquiry 14716** (scenario 1, persona RS).
 2. The lead shows five B&K line items and two open questions (delivery address,

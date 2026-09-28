@@ -31,6 +31,7 @@ test('standard scope keeps the site survey optional and preserves the travel gat
   assert.doesNotMatch(survey, /Carry the SoW into the proposal scope/)
   assert.doesNotMatch(workbench, /onOpenOffer=/)
   assert.match(service, /Confirm manual travel estimate/)
+  assert.match(service, /focus === 'scope' && scopeConfirmed && <div className="ana-card c-12 service-travel-confirmation">[\s\S]*Confirm manual travel estimate/)
   assert.match(workbench, /servicePhaseBlockers\(step\)/)
 })
 
@@ -38,7 +39,7 @@ test('Service flow combines internal review and records one customer decision', 
   assert.match(service, /type: 'Service offer review'/)
   assert.match(service, /Request one Service Review/)
   const decision = fs.readFileSync('src/workbench/ServiceDecisionPanel.jsx', 'utf8')
-  assert.match(decision, /Customer decision/)
+  assert.match(decision, /Customer acceptance/)
   assert.match(decision, /Changes requested/)
   assert.match(decision, /revision: \(est\.revision \|\| 0\) \+ 1/)
   assert.match(store, /updateServiceFlow\(oppId, patch\)/)
@@ -66,16 +67,26 @@ test('Service runs the three-part matrix, with the legacy review as the exceptio
   assert.doesNotMatch(builder, /opp\.route === 'Service' \? serviceApprovalSet/)
 })
 
-test('Service progress follows intake through execution and invoice', () => {
+test('Service progress uses grouped industrial stages while retaining detailed panels', () => {
   const workbench = fs.readFileSync('src/pages/Workbench.jsx', 'utf8')
   assert.match(workbench, /const SERVICE_WORKFLOW_STEPS = \[/)
-  for (const label of ['Service Intake', 'Capture Enquiry', 'Scope & Survey', 'Prepare Offer', 'Internal Review', 'Send Offer', 'Customer Decision', 'Execute Service', 'Service Report', 'Invoice']) {
+  for (const label of ['Service Request', 'Scope Confirmation', 'Standard Rate Schedule', 'Customer Acceptance', 'Service Execution & Close']) {
     assert.match(workbench, new RegExp(label.replace(/[&]/g, '\\&')))
   }
+  assert.match(workbench, /servicePhaseStart/)
+  assert.match(workbench, /servicePhaseEnd/)
   assert.match(workbench, /ServiceDecisionPanel/)
   assert.match(workbench, /ServiceExecutionPanel/)
   assert.match(workbench, /ServiceReportPanel/)
   assert.match(workbench, /ServiceInvoicePanel/)
+})
+
+test('Service grouped stages use explicit operational handoffs', () => {
+  const workbench = fs.readFileSync('src/pages/Workbench.jsx', 'utf8')
+  assert.doesNotMatch(workbench, /serviceAutoAdvance/)
+  assert.match(workbench, /servicePhaseStart/)
+  assert.match(workbench, /servicePhase: step\.servicePhaseStart/)
+  assert.match(workbench, /onConfirmScope/)
 })
 
 // ---- Path A: the published rate schedule, and billing on actual days -------
@@ -87,11 +98,32 @@ test('the standard rate schedule is issued on its own, before the site visit', (
   assert.match(panel, /ENCLOSURES\.serviceRates/)
   assert.match(panel, /kind: 'rate-sheet'/)
   assert.match(panel, /rateSheetSentOn/)
+  assert.match(panel, /emailCc/)
+  assert.match(panel, /emailBody/)
+  assert.match(panel, /Confirm sent/)
+  assert.match(panel, /onConfirmSent/)
   // Issuing it is what prepares the Path A offer.
   assert.match(panel, /offerPrepared: true/)
   // Re-issued rather than re-created when the customer negotiates.
   assert.match(panel, /Re-issue rate schedule/)
   assert.match(service, /offerMode === 'Standard Rate Sheet' && <RateSheetPanel/)
+  assert.match(service, /Confirm scope and survey/)
+})
+
+test('Service execution offers engineer suggestions without removing free text entry', () => {
+  const execution = fs.readFileSync('src/workbench/ServiceExecutionPanel.jsx', 'utf8')
+  assert.match(execution, /datalist/)
+  assert.match(execution, /engineerSuggestions/)
+  assert.match(execution, /Assigned service engineer/)
+})
+
+test('discount approval defaults to fifteen percent while remaining admin configurable', () => {
+  const seed = fs.readFileSync('src/seed.js', 'utf8')
+  const gates = fs.readFileSync('src/gates.js', 'utf8')
+  const admin = fs.readFileSync('src/pages/Admin.jsx', 'utf8')
+  assert.match(seed, /discountPct: 15/)
+  assert.match(gates, /: 15/)
+  assert.match(admin, /discountPct \?\? 15/)
 })
 
 test('a sent rate schedule satisfies the service send step', () => {

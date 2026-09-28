@@ -53,10 +53,15 @@ test('Service workflow lets users preview every non-current page as read-only', 
   assert.match(workbench, /Previewing future stage:/)
 })
 
-test('Service workflow uses the 10-step progress rail without duplicate work-area navigation', () => {
-  for (const label of ['Service Intake', 'Capture Enquiry', 'Scope & Survey', 'Prepare Offer', 'Internal Review', 'Send Offer', 'Customer Decision', 'Execute Service', 'Service Report', 'Invoice']) {
+test('Service workflow uses five grouped industrial stages', () => {
+  for (const label of ['Service Request', 'Scope Confirmation', 'Standard Rate Schedule', 'Customer Acceptance', 'Service Execution & Close']) {
     assert.match(workbench, new RegExp(label.replace(/[&]/g, '\\&')))
   }
+  for (const legacySlug of ['service-intake', 'service-capture', 'service-scope', 'service-offer', 'service-review', 'service-send', 'service-decision', 'service-execution', 'service-report', 'service-invoice']) {
+    assert.match(workbench, new RegExp(legacySlug))
+  }
+  assert.match(workbench, /servicePhaseStart/)
+  assert.match(workbench, /servicePhaseEnd/)
   assert.doesNotMatch(workbench, /SERVICE_WORK_AREAS/)
   assert.doesNotMatch(workbench, /ServiceWorkAreaBar/)
   assert.doesNotMatch(workbench, /Current work area/)
@@ -192,7 +197,7 @@ test('approval is shown in an opportunity rail only while its request is pending
   assert.match(workbench, /step\.milestone !== 'Approval' \|\| approvalPending/)
   assert.match(workbench, /hiddenApprovalRequested/)
   assert.match(workbench, /replace: true/)
-  assert.match(workbench, /const requestedWorkflowStep = workflowBySlug\[requestedStep\]/)
+  assert.match(workbench, /const requestedWorkflowStep = workflowBySlug\[requestedServiceSlug\]/)
   assert.match(workbench, /const activeStepConfig = workflowBySlug\[activeStep\]/)
   assert.match(workbench, /!activeStepConfig && viewTab === 'approvals'/)
 })

@@ -10,8 +10,8 @@ import { leadWorkflow } from '../src/leadWorkflow.js'
 import { routeOwner } from '../src/leadRules.js'
 
 // The client's own catalogue, transcribed from the "Field List" sheet of
-// `doc/Further Inputs/Pipeline Explanation With Opp ID & Entry Row
-// Explanations.xlsx` (2026 Apr New Fields List). This is the source of truth:
+// the supplied pipeline explanation workbook (2026 Apr New Fields List). This
+// is the source of truth:
 // if the app offers a value that is not here, a pipeline export will not
 // round-trip, and if it is missing one, an import will be rejected.
 //

@@ -24,12 +24,21 @@ export default function ServiceExecutionPanel({ opp }) {
   }
   const accepted = est.customerDecision === 'Accepted'
   const complete = !!est.executionDate && !!est.engineer && Number(est.actualEngineerDays) > 0
+  const engineerSuggestions = [...(store.users || [])]
+    .filter(user => /engineer|technical|service/i.test(`${user.role || ''} ${user.title || ''} ${user.name || ''}`))
+    .map(user => user.name || user.email)
+    .filter(Boolean)
+    .filter((name, index, names) => names.indexOf(name) === index)
   return <div className="ana-grid">
     <div className="ana-card c-12">
-      <div className="ana-title">Execute service & invoice {complete && <Chip tone="state-Accepted">Complete</Chip>}</div>
+      <div className="ana-title">Execute service {complete && <Chip tone="state-Accepted">Complete</Chip>}</div>
       {!accepted && <div className="warnbox">Record customer acceptance before scheduling execution.</div>}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-        <label style={{ fontSize: 12 }}>Assigned engineer<input value={est.engineer || ''} onChange={e => upd({ engineer: e.target.value })} placeholder="Engineer name" style={{ width: '100%' }} /></label>
+        <label style={{ fontSize: 12 }}>Assigned service engineer
+          <input list={`service-engineers-${opp.id}`} value={est.engineer || ''} onChange={e => upd({ engineer: e.target.value })} placeholder="Type or select engineer" style={{ width: '100%' }} />
+          <datalist id={`service-engineers-${opp.id}`}>{engineerSuggestions.map(name => <option key={name} value={name} />)}</datalist>
+          <span className="hint">Assign the engineer responsible for site execution. You can type a name or select a suggestion.</span>
+        </label>
         <label style={{ fontSize: 12 }}>Service date<input type="date" value={est.executionDate || ''} onChange={e => upd({ executionDate: e.target.value })} style={{ width: '100%' }} /></label>
       </div>
       <div className="section-title" style={{ marginTop: 10 }}>Time actually deployed</div>

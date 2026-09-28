@@ -13,6 +13,22 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Simplified the Service workflow into five industrial stages — Service Request,
+  Scope Confirmation, Standard Rate Schedule, Customer Acceptance, and Service
+  Execution & Close — while preserving detailed phase data, legacy links, gated
+  survey/travel checks, and automatic stage progression.
+- Reorganized imported runtime binaries under a semantic `assets/` tree,
+  replaced supplied filenames with clean internal names while preserving
+  customer-facing attachment names, and updated the brand-refresh and icon
+  tools to use the new structure.
+- Fixed Service workflow phase persistence so advancing or returning between
+  service stages updates the opportunity’s current stage as well as its service
+  estimate record.
+- Archived completed planning and QA documents, generated reference PDFs and
+  their one-off generators, the responsive prototype, retired Supabase setup
+  SQL, dead desktop tile code, and optional repository agent skills under the
+  ignored `.local/` directory. Removed the archived application-map npm command
+  and updated active schema documentation to use the fresh-project baseline.
 - Added backend-backed approval refresh on the Approvals page every five
   seconds while visible, with an immediate refresh when returning to the tab
   and a non-blocking connection warning when the backend is unavailable.
@@ -309,6 +325,5 @@ This is an implementation and release log, not a dump of every commit.
 - Added staging and production deployment guidance using separate Vercel and
   Supabase projects.
 
-For detailed feature status and workflow decisions, see
-[IMPLEMENTATION_PLAN.md](./IMPLEMENTATION_PLAN.md) and
-[WORKFLOW_CONFORMANCE.md](./WORKFLOW_CONFORMANCE.md).
+Completed implementation and workflow-review documents are retained locally
+under `.local/project-history/` in the checkout where they were archived.

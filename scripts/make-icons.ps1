@@ -3,7 +3,7 @@
 # This is the one PowerShell helper in scripts/ (everything else is .mjs): the
 # repo has no image dependency (no sharp, no ImageMagick on the box), and
 # Windows PowerShell's System.Drawing does the crop + resize with nothing to
-# install. Run it whenever branding/mod-ae/assets/modae-icon-source.png changes:
+# install. Run it whenever assets/brand/modae/images/icon-source.png changes:
 #
 #   powershell -ExecutionPolicy Bypass -File scripts/make-icons.ps1
 #
@@ -15,7 +15,7 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Drawing
 
 $root = Split-Path -Parent $PSScriptRoot
-$source = Join-Path $root 'branding\mod-ae\assets\modae-icon-source.png'
+$source = Join-Path $root 'assets\brand\modae\images\icon-source.png'
 
 # Bounding box of the mark itself (both glyphs + dot) inside the 1770x485
 # source. The thin purple bar at x 22-102 and yellow bar at x 1671-1750 are

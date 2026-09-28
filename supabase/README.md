@@ -56,9 +56,9 @@ For a completely new Supabase project, run [`000_fresh_project.sql`](./000_fresh
 first, then run every migration from `007_live_workspace_sync.sql` through
 `014_user_presence.sql` in numeric order. Migration 009 includes
 the relational tables, typed backfill, RLS policies, grants, indexes, and
-realtime publication entries. Do not use the retired
-root-level `supabase-tables.sql` for a new project because it references the
-legacy `app_state` migration model.
+realtime publication entries. The retired `supabase-tables.sql` is archived
+locally under `.local/backups/supabase/`; do not use it for a new project
+because it references the legacy `app_state` migration model.
 
 Verify the active schema with:
 

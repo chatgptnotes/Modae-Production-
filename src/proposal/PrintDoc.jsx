@@ -134,7 +134,7 @@ export default function PrintDoc({ p, opp, doc, priced, totals, lineQuoted }) {
         <div className="doc-rule" />
 
         {/* Field order, labels and omissions all come from the client's own
-            sample proposals (doc/Further Inputs — five workbooks, one identical
+            supplied sample proposals (five workbooks, one identical
             Cover Letter sheet). Date stands alone; Our Ref / Bid Stage / Bid
             Type / Revision stack under it; the addressee block carries no "To"
             label; and there is no Encl:, no CC:, no "Yours faithfully" and no

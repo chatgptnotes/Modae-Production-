@@ -39,7 +39,7 @@ export default function InputsWorkbook({ store }) {
 
   return <div className="inputs-workbook">
     <div className="proposal-sheet-head">
-      <div><h3>Inputs Workbook</h3><p className="hint">Reference workbook structure from Further Inputs, backed by live application data.</p></div>
+      <div><h3>Inputs Workbook</h3><p className="hint">Built-in proposal workbook structure, backed by live application data.</p></div>
       <span className="pill Blue">Reference data</span>
     </div>
     <div className="sheet-wrap workbook-scroll">{table}</div>

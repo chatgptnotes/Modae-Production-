@@ -364,10 +364,9 @@ export const seedPriceLists = {
       // ---- DS821 displacement-sensor family -------------------------------
       // The five line items of the Ref 14716 GeM enquiry and the firm offer
       // that answered it (2511096RS). Part numbers and descriptions are taken
-      // verbatim from those two documents:
-      //   doc/Further Inputs/.../Spares Opp-1 (Won almost)/
-      //     02_7425309-Buyers Speces.pdf          — the enquiry, "Ref:14716"
-      //     Spares Firm Offer Rev00 2May2026.xlsx — the proposal
+      // verbatim from the locally retained 02_7425309-Buyers Speces.pdf enquiry
+      // and the built-in Spares Firm Offer Rev00 2May2026.xlsx proposal template
+      // at assets/workbooks/proposal-templates/spares.xlsx.
       // Keywords carry the buyer's own wording so matchParts resolves a GeM
       // item description that never quotes the ModAE catalogue name.
       //
@@ -744,7 +743,7 @@ export const seedConfig = {
   fastTrack: { enabled: true, customerStatus: 'Green' },
   aiThresholds: { high: 90, med: 75 },
   // Diagram 02 §5C margin matrix: order value against ₹10 Lakh, margin against 50%.
-  approvalThresholds: { valueBreak: 1000000, marginBreak: 50, discountPct: 5, markupPct: 10, pricingApprovers: ['AH', 'LJS'] },
+  approvalThresholds: { valueBreak: 1000000, marginBreak: 50, discountPct: 15, markupPct: 10, pricingApprovers: ['AH', 'LJS'] },
   requireFinalQuoteApproval: true,
   requireCommercialDeviationApproval: true,
   amberFee: { amount: 25000, cur: 'INR', days: 7 },
@@ -1125,10 +1124,9 @@ export const seedAiLeads = [
   },
   // ---- The 20 Aug benchmark ------------------------------------------------
   // The client named one enquiry and one proposal as the yardstick for the
-  // spares lead-to-proposal flow. Both are in the repo:
-  //   doc/Further Inputs/.../Spares Opp-1 (Won almost)/
-  //     02_7425309-Buyers Speces.pdf          — this enquiry, "Ref:14716"
-  //     Spares Firm Offer Rev00 2May2026.xlsx — the answer, Our Ref 2511096RS
+  // spares lead-to-proposal flow. The 02_7425309-Buyers Speces.pdf enquiry is
+  // retained locally; its Spares Firm Offer Rev00 2May2026.xlsx answer ships as
+  // assets/workbooks/proposal-templates/spares.xlsx.
   // Five B&K Vibro line items whose part codes match one-for-one across the two
   // documents; the price list carries all five (see seedPriceLists.BNK).
   // Green so the flow exercises the existing fast track end to end.

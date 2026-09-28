@@ -240,7 +240,7 @@ export function customerResponse(text, key, pointer = false) {
 
 // A covering letter, not a summary: what we received, what we understand, what
 // is enclosed, the commercial headline, and how we stand on the terms.
-// Worded from the client's own sample cover letters (doc/Further Inputs). The
+// Worded from the client's built-in proposal templates under assets/. The
 // previous draft narrated an eleven-section document — executive summary, scope
 // of supply, assumptions, exclusions, deviations, clause-by-clause compliance —
 // which no real proposal contains, so it promised the customer pages that were
@@ -604,7 +604,7 @@ export function docModel(p, opp, ctx = {}) {
 // is very complicated." The section sets written then were marked PROVISIONAL,
 // pending the client's own sample proposals.
 //
-// Those samples arrived (doc/Further Inputs — five workbooks) and settled it
+// Those supplied proposal workbooks settled it
 // differently than expected: the documents are not long-or-short runs of
 // numbered sections at all. Every one of them, the big project included, is a
 // Cover Letter plus ONE commercial sheet, with technical annexes beside it.

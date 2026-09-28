@@ -6,7 +6,7 @@ import { customerLocationValue, isPlaceholderLocation } from '../locations.js'
 import { MODAE_DOCUMENT_STANDARDS } from '../branding/modae.js'
 
 const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-const LOGO_URL = new URL('../../branding/mod-ae/assets/modae-official-logo.png', import.meta.url).href
+const LOGO_URL = new URL('../../assets/brand/modae/images/official-logo.png', import.meta.url).href
 
 const clean = value => value == null ? '' : String(value)
 const round2 = value => Math.round((Number(value) || 0) * 100) / 100

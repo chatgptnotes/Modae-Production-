@@ -8,6 +8,9 @@ import { parseProposalWorkbook } from '../src/proposal/workbook.js'
 import { buildPricing } from '../src/proposal/docProps.js'
 import { defaultCosting } from '../src/seed.js'
 
+const SPARES_TEMPLATE_PATH = 'assets/workbooks/proposal-templates/spares.xlsx'
+const MODAE_LOGO_PATH = 'assets/brand/modae/images/official-logo.png'
+
 const input = {
   p: {
     revision: '00', revisionDate: '2026-08-21', ourRef: '2608227RS', bidStage: 'Biding', bidType: 'Priced',
@@ -95,10 +98,10 @@ test('Spares proposal pricing falls back to the confirmed sourcing line', () => 
 })
 
 test('generated proposal pricing rounds cached customer values to two decimals', async () => {
-  const templateBuffer = fs.readFileSync('branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx')
+  const templateBuffer = fs.readFileSync(SPARES_TEMPLATE_PATH)
   const output = await generateProposalWorkbook({
     templateBuffer,
-    logoBuffer: fs.readFileSync('branding/mod-ae/assets/modae-official-logo.png'),
+    logoBuffer: fs.readFileSync(MODAE_LOGO_PATH),
     route: 'Spares',
     p: { revision: '00', bom: [{ pn: 'P-1', desc: 'Probe', common: 2 }] },
     opp: { id: '2609001PJS', sellTo: 'Customer' },
@@ -121,12 +124,12 @@ test('generated proposal pricing rounds cached customer values to two decimals',
 })
 
 test('exact proposal export preserves template artwork, merges and print layout', async () => {
-  const templateBuffer = fs.readFileSync('branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx')
+  const templateBuffer = fs.readFileSync(SPARES_TEMPLATE_PATH)
   const sourceWorkbook = new ExcelJS.Workbook()
   await sourceWorkbook.xlsx.load(templateBuffer)
   const sourceCover = sourceWorkbook.getWorksheet('Cover Letter')
   const sourceFirm = sourceWorkbook.getWorksheet('Firm Rev-00')
-  const logoBuffer = fs.readFileSync('branding/mod-ae/assets/modae-official-logo.png')
+  const logoBuffer = fs.readFileSync(MODAE_LOGO_PATH)
   const output = await generateProposalWorkbook({
     templateBuffer,
     logoBuffer,
@@ -176,14 +179,14 @@ test('exact proposal export preserves template artwork, merges and print layout'
 })
 
 test('mapped cover exports remove stale placeholder locations without inventing an address', async () => {
-  const templateBuffer = fs.readFileSync('branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx')
+  const templateBuffer = fs.readFileSync(SPARES_TEMPLATE_PATH)
   const source = new ExcelJS.Workbook()
   await source.xlsx.load(templateBuffer)
   source.getWorksheet('Cover Letter').getCell('B14').value = 'gggg - 400000, Maharashtra'
   const staleTemplate = new Uint8Array(await source.xlsx.writeBuffer())
   const output = await generateProposalWorkbook({
     templateBuffer: staleTemplate,
-    logoBuffer: fs.readFileSync('branding/mod-ae/assets/modae-official-logo.png'),
+    logoBuffer: fs.readFileSync(MODAE_LOGO_PATH),
     route: 'Spares',
     mapping: { method: 'gemini-v1', coverSheet: 'Cover Letter', fields: { location: { sheet: 'Cover Letter', row: 11, column: 0 } } },
     p: { revision: '00', bom: [{ pn: 'P-1', desc: 'Probe', common: 1 }] },
@@ -201,12 +204,12 @@ test('mapped cover exports remove stale placeholder locations without inventing 
 })
 
 test('proposal Excel customer-facing cells preserve the supplied template styling', async () => {
-  const templateBuffer = fs.readFileSync('branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx')
+  const templateBuffer = fs.readFileSync(SPARES_TEMPLATE_PATH)
   const source = new ExcelJS.Workbook()
   await source.xlsx.load(templateBuffer)
   const output = await generateProposalWorkbook({
     templateBuffer,
-    logoBuffer: fs.readFileSync('branding/mod-ae/assets/modae-official-logo.png'),
+    logoBuffer: fs.readFileSync(MODAE_LOGO_PATH),
     route: 'Spares',
     p: { revision: '00', bom: [{ pn: 'P-1', desc: 'Probe', common: 1 }] },
     opp: { id: '2609001PJS', sellTo: 'Customer' },
@@ -222,10 +225,10 @@ test('proposal Excel customer-facing cells preserve the supplied template stylin
 })
 
 test('customer-facing proposal export removes internal and template-only columns', async () => {
-  const templateBuffer = fs.readFileSync('branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx')
+  const templateBuffer = fs.readFileSync(SPARES_TEMPLATE_PATH)
   const output = await generateProposalWorkbook({
     templateBuffer,
-    logoBuffer: fs.readFileSync('branding/mod-ae/assets/modae-official-logo.png'),
+    logoBuffer: fs.readFileSync(MODAE_LOGO_PATH),
     route: 'Spares',
     redactInternalCosting: true,
     p: { revision: '00', bom: [{ pn: 'P-1', desc: 'Probe', common: 1 }] },
@@ -244,10 +247,10 @@ test('customer-facing proposal export removes internal and template-only columns
 })
 
 test('spares export keeps reference rows but uses live proposal quantities', async () => {
-  const templateBuffer = fs.readFileSync('branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx')
+  const templateBuffer = fs.readFileSync(SPARES_TEMPLATE_PATH)
   const output = await generateProposalWorkbook({
     templateBuffer,
-    logoBuffer: fs.readFileSync('branding/mod-ae/assets/modae-official-logo.png'),
+    logoBuffer: fs.readFileSync(MODAE_LOGO_PATH),
     route: 'Spares',
     p: {
       revision: '00', bom: [
@@ -284,10 +287,10 @@ test('spares export keeps reference rows but uses live proposal quantities', asy
 })
 
 test('generated Spares workbooks are editable and have no external Excel names', async () => {
-  const templateBuffer = fs.readFileSync('branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx')
+  const templateBuffer = fs.readFileSync(SPARES_TEMPLATE_PATH)
   const output = await generateProposalWorkbook({
     templateBuffer,
-    logoBuffer: fs.readFileSync('branding/mod-ae/assets/modae-official-logo.png'),
+    logoBuffer: fs.readFileSync(MODAE_LOGO_PATH),
     route: 'Spares',
     p: { revision: '00', bom: [{ pn: 'P-1', desc: 'Probe', common: 1 }] },
     opp: { id: '2609001PJS', sellTo: 'Customer' },
@@ -306,10 +309,10 @@ test('generated Spares workbooks are editable and have no external Excel names',
 })
 
 test('generated proposal print areas stop at the final customer content row', async () => {
-  const templateBuffer = fs.readFileSync('branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx')
+  const templateBuffer = fs.readFileSync(SPARES_TEMPLATE_PATH)
   const output = await generateProposalWorkbook({
     templateBuffer,
-    logoBuffer: fs.readFileSync('branding/mod-ae/assets/modae-official-logo.png'),
+    logoBuffer: fs.readFileSync(MODAE_LOGO_PATH),
     route: 'Spares',
     p: { revision: '00', bom: [{ pn: 'P-1', desc: 'Probe', common: 1 }] },
     opp: { id: '2609001PJS', sellTo: 'Customer' },
@@ -324,10 +327,10 @@ test('generated proposal print areas stop at the final customer content row', as
 })
 
 test('generated proposal keeps customer references out of the part number column', async () => {
-  const templateBuffer = fs.readFileSync('branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx')
+  const templateBuffer = fs.readFileSync(SPARES_TEMPLATE_PATH)
   const output = await generateProposalWorkbook({
     templateBuffer,
-    logoBuffer: fs.readFileSync('branding/mod-ae/assets/modae-official-logo.png'),
+    logoBuffer: fs.readFileSync(MODAE_LOGO_PATH),
     route: 'Spares',
     p: { revision: '00', bom: [{ pn: '', custRef: 'Vibration sensors', desc: 'Vibration sensors', common: 1 }] },
     opp: { id: '2609002', sellTo: 'Customer' },

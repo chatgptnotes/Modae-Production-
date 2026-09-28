@@ -4,7 +4,7 @@ export const BUILT_IN_PROPOSAL_TEMPLATES = Object.freeze([
   Object.freeze({
     key: 'Project',
     label: 'Project proposal',
-    url: new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Big Project Opp/2608222RS  Project Rev-00.xlsx', import.meta.url).href,
+    url: new URL('../../assets/workbooks/proposal-templates/project.xlsx', import.meta.url).href,
     filename: '2608222RS Project Rev-00.xlsx',
     source: 'built-in',
     mapping: Object.freeze({
@@ -22,7 +22,7 @@ export const BUILT_IN_PROPOSAL_TEMPLATES = Object.freeze([
   Object.freeze({
     key: 'Service',
     label: 'Service proposal',
-    url: new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Big Service Opp-1 (Won) With SoW/Service Proposal 14Apr26 Rev-01.xlsx', import.meta.url).href,
+    url: new URL('../../assets/workbooks/proposal-templates/service.xlsx', import.meta.url).href,
     filename: 'Service Proposal 14Apr26 Rev-01.xlsx',
     source: 'built-in',
     mapping: Object.freeze({
@@ -40,7 +40,7 @@ export const BUILT_IN_PROPOSAL_TEMPLATES = Object.freeze([
   Object.freeze({
     key: 'Spares',
     label: 'Spares firm offer',
-    url: new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/Spares Opp-1 (Won almost)/Spares Firm Offer Rev00 2May2026.xlsx', import.meta.url).href,
+    url: new URL('../../assets/workbooks/proposal-templates/spares.xlsx', import.meta.url).href,
     filename: 'Spares Firm Offer Rev00 2May2026.xlsx',
     source: 'built-in',
   }),

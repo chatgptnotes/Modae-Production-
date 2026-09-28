@@ -79,8 +79,12 @@ test('service proposals carry the rate schedule, others do not', async () => {
   }
   const attachments = read('src/proposal/emailAttachments.js')
   assert.match(attachments, /enclosuresFor\(route\)/)
+  const enclosurePaths = {
+    'ModAE Standard Terms-Sales.pdf': '../assets/documents/proposal/standard-terms-sales.pdf',
+    'ModAE Services Rate Schedule FY2025-26.pdf': '../assets/documents/proposal/services-rate-schedule-fy2025-26.pdf',
+  }
   for (const enclosure of enclosuresFor('Services')) {
-    assert.ok(fs.existsSync(new URL(`../branding/Further Inputs/Further Inputs/Proposals and T&Cs/${enclosure.filename}`, import.meta.url)),
+    assert.ok(fs.existsSync(new URL(enclosurePaths[enclosure.filename], import.meta.url)),
       `${enclosure.filename} must ship with the app`)
   }
 })

@@ -58,7 +58,7 @@ test('the proposal type selector overrides the opportunity route', () => {
   assert.equal(docRoute({ proposalType: 'Project' }, { oppType: 'Spares' }), 'Project')
 })
 
-// The client's own sample proposals (doc/Further Inputs) settled what the
+// The client's supplied sample proposals settled what the
 // documents actually are: a covering letter plus ONE commercial sheet, with
 // technical annexes beside it. Not a long-or-short run of numbered sections —
 // which is what the arrays this test used to assert against were.

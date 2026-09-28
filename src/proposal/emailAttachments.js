@@ -2,8 +2,8 @@ import { generateProposalWorkbook, MIME_XLSX } from './templateExcelExport.js'
 import { ENCLOSURES, enclosuresFor } from '../proposalDoc.js'
 import { parseProposalWorkbook } from './workbook.js'
 
-export const STANDARD_TERMS_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/ModAE Standard Terms-Sales.pdf', import.meta.url).href
-export const SERVICE_RATE_SCHEDULE_URL = new URL('../../branding/Further Inputs/Further Inputs/Proposals and T&Cs/ModAE Services Rate Schedule FY2025-26.pdf', import.meta.url).href
+export const STANDARD_TERMS_URL = new URL('../../assets/documents/proposal/standard-terms-sales.pdf', import.meta.url).href
+export const SERVICE_RATE_SCHEDULE_URL = new URL('../../assets/documents/proposal/services-rate-schedule-fy2025-26.pdf', import.meta.url).href
 
 const ENCLOSURE_URLS = {
   [ENCLOSURES.gtc.filename]: STANDARD_TERMS_URL,

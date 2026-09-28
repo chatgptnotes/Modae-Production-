@@ -198,7 +198,9 @@ test('an answered clarification stops the auto-drop timer', () => {
 test('the compose link carries the reviewed draft, and refuses an empty To', () => {
   const draft = draftClarification({ ...lead, assignedOwner: 'RS' }, { users: seedUsers, config: seedConfig })
   const href = gmailComposeHref(draft)
-  assert.match(href, /^https:\/\/mail\.google\.com\/mail\/\?view=cm/)
+  assert.match(href, /^https:\/\/mail\.google\.com\/mail\/u\/0\/\?to=/)
+  assert.ok(href.includes('&tf=cm'), 'Gmail compose links must use the current compose trigger')
+  assert.equal(new URL(href).searchParams.get('body'), draft.body)
   assert.ok(href.includes(`to=${encodeURIComponent(draft.to)}`))
   assert.ok(href.includes(`cc=${encodeURIComponent(draft.cc)}`))
   assert.equal(gmailComposeHref({ ...draft, to: '   ' }), '', 'no recipient, no link')

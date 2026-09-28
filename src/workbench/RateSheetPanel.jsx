@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useStore } from '../store.jsx'
 import { ENCLOSURES } from '../proposalDoc.js'
 import { SERVICE_RATE_SCHEDULE_URL } from '../proposal/emailAttachments.js'
@@ -21,7 +21,7 @@ const RATE_PREVIEW = [
   ['Overtime — per hour', 'otHour'],
 ]
 
-export default function RateSheetPanel({ opp, est, readOnly = false }) {
+export default function RateSheetPanel({ opp, est, readOnly = false, onConfirmSent }) {
   const store = useStore()
   const sheet = sheetFor(opp, est)
   const rs = store.rateSheets[sheet]
@@ -31,7 +31,9 @@ export default function RateSheetPanel({ opp, est, readOnly = false }) {
   const lastSent = sentLog[0]
 
   const [emailTo, setEmailTo] = useState(opp.contactEmail || customer?.email || '')
+  const [emailCc, setEmailCc] = useState('sales@mod-ae.com')
   const [subject, setSubject] = useState(`Service rate schedule — ${opp.oppName} (${opp.id})`)
+  const [emailBody, setEmailBody] = useState('')
   const [drafted, setDrafted] = useState('')
 
   const money = v => (sheet === 'India' ? `₹ ${fmt(v)}K` : `$ ${fmt(v)}`)
@@ -46,10 +48,13 @@ export default function RateSheetPanel({ opp, est, readOnly = false }) {
     'Please confirm your acceptance and we will schedule the site visit.', '',
     'Best regards,', displayRole(store.role), 'ModAE',
   ].join('\n')
+  useEffect(() => {
+    setEmailBody(current => current || body)
+  }, [body])
 
   const send = () => {
     if (!emailTo.trim()) return
-    const href = gmailComposeHref({ to: emailTo, cc: 'sales@mod-ae.com', subject, body })
+    const href = gmailComposeHref({ to: emailTo, cc: emailCc, subject, body: emailBody })
     if (!href) return
     // The schedule is a static bundled asset, so it downloads straight from its
     // URL — no base64 round-trip is needed for a single enclosure.
@@ -65,7 +70,7 @@ export default function RateSheetPanel({ opp, est, readOnly = false }) {
     const id = 'CM-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8)
     store.addCommunication(opp.id, {
       id, direction: 'outbound', from: store.config?.gmailAccount || 'sales@mod-ae.com',
-      to: emailTo, cc: 'sales@mod-ae.com', subject, body,
+      to: emailTo, cc: emailCc, subject, body: emailBody,
       kind: 'rate-sheet', status: 'draft', revision: String(issue),
       attachmentNames: [enclosure.filename],
     })
@@ -73,7 +78,6 @@ export default function RateSheetPanel({ opp, est, readOnly = false }) {
     // clears the "Prepare the Standard Rate Sheet or Customized Proposal" blocker.
     store.updateServiceFlow(opp.id, {
       rateSheetRev: issue,
-      rateSheetSentOn: new Date().toISOString().slice(0, 10),
       offerPrepared: true,
       offerPreparedOn: new Date().toISOString().slice(0, 10),
     })
@@ -82,7 +86,11 @@ export default function RateSheetPanel({ opp, est, readOnly = false }) {
 
   const markSent = () => {
     store.updateCommunication(opp.id, drafted || lastSent?.id, { status: 'sent' }, 'Rate schedule marked as sent')
+    store.updateServiceFlow(opp.id, { rateSheetSentOn: new Date().toISOString().slice(0, 10), offerPrepared: true })
     setDrafted('')
+    // Let the communication and service-flow updates render before the parent
+    // evaluates the handoff blockers.
+    if (onConfirmSent) window.setTimeout(onConfirmSent, 0)
   }
 
   const pendingDraft = drafted || (lastSent?.status === 'draft' ? lastSent.id : '')
@@ -122,13 +130,20 @@ export default function RateSheetPanel({ opp, est, readOnly = false }) {
         <label style={{ fontSize: 12 }}>Subject
           <input type="text" value={subject} disabled={readOnly} onChange={e => setSubject(e.target.value)} style={{ width: '100%' }} />
         </label>
+        <label style={{ fontSize: 12 }}>CC
+          <input type="text" value={emailCc} disabled={readOnly} onChange={e => setEmailCc(e.target.value)} style={{ width: '100%' }} />
+        </label>
+        <label style={{ fontSize: 12 }}>Email body
+          <textarea className="service-rate-email-body" rows={10} value={emailBody} disabled={readOnly}
+            onChange={e => setEmailBody(e.target.value)} style={{ width: '100%' }} />
+        </label>
       </div>
 
       <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <button className="primary" disabled={readOnly || !offerCleared || !emailTo.trim()} onClick={send}>
           <Icon name="send" size={13} /> {est.rateSheetSentOn ? 'Re-issue rate schedule' : 'Download schedule & draft email'}
         </button>
-        {pendingDraft && <button disabled={readOnly} onClick={markSent}>Mark as sent</button>}
+        {pendingDraft && <button disabled={readOnly} onClick={markSent}>Confirm sent</button>}
         {!emailTo.trim() && <span className="hint">A customer address is required.</span>}
         {!offerCleared && <span className="hint">Approval is required before a discounted rate schedule can be sent.</span>}
       </div>

@@ -145,7 +145,7 @@ export function computeProposalTotals(proposal) {
 // and line-level pricing (including the spares sourcing workbench).
 export function pricingThresholdExceptions(opp, proposal, state = {}) {
   const thresholds = state.config?.approvalThresholds || {}
-  const discountPct = Number.isFinite(Number(thresholds.discountPct)) ? Number(thresholds.discountPct) : 5
+  const discountPct = Number.isFinite(Number(thresholds.discountPct)) ? Number(thresholds.discountPct) : 15
   const markupPct = Number.isFinite(Number(thresholds.markupPct)) ? Number(thresholds.markupPct) : 10
   const rows = []
   const seen = new Set()

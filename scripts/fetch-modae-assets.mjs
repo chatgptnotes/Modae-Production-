@@ -1,5 +1,7 @@
 #!/usr/bin/env node
-// Re-captures the ModAE image archive from mod-ae.com into branding/mod-ae/.
+// Re-captures the ModAE image archive from mod-ae.com into the ignored
+// .local/branding/modae/ workspace and promotes only app-consumed images into
+// assets/brand/modae/images/.
 //
 // The original capture committed only its outputs, no script, so the archive
 // silently drifted to 9 of 41 available images and nobody could tell. This
@@ -20,11 +22,12 @@ import { execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const BRANDING = path.join(ROOT, 'branding/mod-ae')
-const ASSETS = path.join(BRANDING, 'assets')
+const ARCHIVE = path.join(ROOT, '.local/branding/modae')
+const ASSETS = path.join(ARCHIVE, 'assets')
 const WEB = path.join(ASSETS, 'web')
-const RAW = path.join(BRANDING, 'raw')
-const MANIFEST = path.join(BRANDING, 'data/asset-manifest.json')
+const RAW = path.join(ARCHIVE, 'raw')
+const MANIFEST = path.join(ARCHIVE, 'data/asset-manifest.json')
+const RUNTIME_IMAGES = path.join(ROOT, 'assets/brand/modae/images')
 
 const SITE = 'https://mod-ae.com'
 const FORCE = process.argv.includes('--force')
@@ -61,13 +64,19 @@ const CURATED = {
   'singnture2.png': { title: 'Signature', type: 'brand' },
 }
 
-// The nine files src/branding/modae.js resolves by literal path. Renaming or
-// moving any of them breaks the app build, so the manifest flags them.
-const CONSUMED_BY_APP = new Set([
-  'modae-official-logo.png', 'about-us-pic-2.jpg', 'Antisurge-Control-System.jpg',
-  'products-centrifugal-compressor.jpg', 'machinery-diagnostics-1.jpg',
-  'Monitoring-Systems-1.jpg', 'OverSpeed-Detection-System.jpg',
-  'Our-Producs-banner-2.jpg', 'Turbine-Control-System-1.jpg',
+// Remote filenames are provenance; tracked runtime filenames are stable,
+// descriptive application identifiers. The official logo is supplied artwork,
+// not a separate media-library item, so this fetcher deliberately leaves it
+// untouched.
+const RUNTIME_IMAGE_MAP = new Map([
+  ['about-us-pic-2.jpg', 'about.jpg'],
+  ['Antisurge-Control-System.jpg', 'products/antisurge-control.jpg'],
+  ['products-centrifugal-compressor.jpg', 'products/asset-health-management.jpg'],
+  ['machinery-diagnostics-1.jpg', 'products/machinery-diagnostics.jpg'],
+  ['Monitoring-Systems-1.jpg', 'products/monitoring-systems.jpg'],
+  ['OverSpeed-Detection-System.jpg', 'products/overspeed-detection.jpg'],
+  ['Our-Producs-banner-2.jpg', 'products/sensors.jpg'],
+  ['Turbine-Control-System-1.jpg', 'products/turbine-control.jpg'],
 ])
 
 fs.mkdirSync(RAW, { recursive: true })
@@ -242,6 +251,8 @@ function typeFor(name) {
 
 async function main() {
   fs.mkdirSync(WEB, { recursive: true })
+  fs.mkdirSync(path.dirname(MANIFEST), { recursive: true })
+  fs.mkdirSync(path.join(RUNTIME_IMAGES, 'products'), { recursive: true })
 
   log('Enumerating media library…')
   const media = await enumerateMedia()
@@ -306,38 +317,14 @@ async function main() {
         : { path: `assets/web/${name}`, ...dimsOf(webPath), bytes: fs.statSync(webPath).size, sha1: sha1(webBuf), origin, source_url: webSource },
     }
     if (item.alt_text) entry.alt_text = item.alt_text
-    if (CONSUMED_BY_APP.has(name)) entry.consumed_by_app = true
+    const runtimeName = RUNTIME_IMAGE_MAP.get(name)
+    if (runtimeName) {
+      const runtimePath = path.join(RUNTIME_IMAGES, runtimeName)
+      fs.copyFileSync(fullPath, runtimePath)
+      entry.consumed_by_app = true
+      entry.runtime_path = path.relative(ROOT, runtimePath)
+    }
     entries.push(entry)
-  }
-
-  // modae-official-logo.png is the one asset with no media-library record. It is
-  // not a separate upload: pixel comparison shows it is a re-encode of
-  // red-logo.png (identical 1770x485 RGBA canvas; every pixel with alpha>0 is
-  // byte-identical, the files differ only in RGB beneath transparent pixels).
-  // The app consumes it as logoUrl/letterheadUrl/officialLogoUrl.
-  const officialName = 'modae-official-logo.png'
-  const officialFull = path.join(ASSETS, officialName)
-  if (fs.existsSync(officialFull)) {
-    const buf = fs.readFileSync(officialFull)
-    const officialWeb = path.join(WEB, officialName)
-    if (FORCE || !fs.existsSync(officialWeb)) localDownscale(officialFull, officialWeb)
-    const webBuf = fs.readFileSync(officialWeb)
-    entries.push({
-      title: 'ModAE official logo (letterhead)',
-      type: 'logo',
-      source_url: `${SITE}/wp-content/uploads/2024/10/red-logo.png`,
-      local_path: `assets/${officialName}`,
-      derived_from: 'assets/red-logo.png',
-      provenance: 'verified_identical_artwork',
-      note: 'Re-encoded copy of red-logo.png, not a separate upload. Identical '
-        + '1770x485 RGBA canvas; all 269,805 pixels with alpha>0 are byte-identical, '
-        + 'differing only in RGB beneath fully transparent pixels. Consumed by '
-        + 'src/branding/modae.js as logoUrl/letterheadUrl/officialLogoUrl — do not delete or rename.',
-      fetched_at: fetchedAt,
-      consumed_by_app: true,
-      full: { path: `assets/${officialName}`, ...dimsOf(officialFull), bytes: buf.length, sha1: sha1(buf) },
-      web: { path: `assets/web/${officialName}`, ...dimsOf(officialWeb), bytes: webBuf.length, sha1: sha1(webBuf), origin: 'local_downscale_sips' },
-    })
   }
 
   entries.sort((a, b) => a.local_path.localeCompare(b.local_path))

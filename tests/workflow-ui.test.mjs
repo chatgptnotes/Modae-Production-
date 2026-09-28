@@ -110,8 +110,9 @@ test('Workbench waits for sync before showing not-found and keeps loaded hooks s
 
 test('Service backward movement restores the selected service phase', () => {
   const workbench = read('src/pages/Workbench.jsx')
-  assert.match(workbench, /if \(opp\.route === 'Service' && step\.servicePhase != null\)/)
-  assert.match(workbench, /store\.updateServiceFlow\(opp\.id, \{ servicePhase: step\.servicePhase \}\)/)
+  assert.match(workbench, /if \(opp\.route === 'Service' && step\.servicePhaseStart != null\)/)
+  assert.match(workbench, /store\.updateServiceFlow\(opp\.id, \{ servicePhase: step\.servicePhaseStart \}\)/)
+  assert.match(workbench, /step\?\.servicePhaseStart \?\? step\?\.servicePhase/)
 })
 
 test('Service flow persistence mirrors servicePhase onto the opportunity', () => {

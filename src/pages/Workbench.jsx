@@ -114,17 +114,24 @@ const SPARES_WORKFLOW_STEPS = [
   { slug: 'follow-up', label: 'Follow-up & Closure', milestone: 'Follow-up', tab: 'followup' },
 ]
 const SERVICE_WORKFLOW_STEPS = [
-  { slug: 'service-intake', label: 'Service Intake', milestone: 'Intake', tab: 'overview', servicePhase: 0 },
-  { slug: 'service-capture', label: 'Capture Enquiry', milestone: 'Qualification', tab: 'requirement', servicePhase: 1 },
-  { slug: 'service-scope', label: 'Scope & Survey', milestone: 'Screening', tab: 'sourcing', servicePhase: 2 },
-  { slug: 'service-offer', label: 'Prepare Offer', milestone: 'Proposal', tab: 'proposal', servicePhase: 3 },
-  { slug: 'service-review', label: 'Internal Review', milestone: 'Approval', tab: 'approval', servicePhase: 4 },
-  { slug: 'service-send', label: 'Send Offer', milestone: 'Submitted', tab: 'comms', servicePhase: 5 },
-  { slug: 'service-decision', label: 'Customer Decision', milestone: 'Submitted', tab: 'service-decision', servicePhase: 6 },
-  { slug: 'service-execution', label: 'Execute Service', milestone: 'Follow-up', tab: 'service-execution', servicePhase: 7 },
-  { slug: 'service-report', label: 'Service Report', milestone: 'Follow-up', tab: 'service-report', servicePhase: 8 },
-  { slug: 'service-invoice', label: 'Invoice', milestone: 'Follow-up', tab: 'service-invoice', servicePhase: 9 },
+  { slug: 'service-enquiry', label: 'Service Request', milestone: 'Qualification', tab: 'requirement', servicePhaseStart: 0, servicePhaseEnd: 1, advanceTo: 2 },
+  { slug: 'service-scope', label: 'Scope Confirmation', milestone: 'Screening', tab: 'sourcing', servicePhaseStart: 2, servicePhaseEnd: 2, advanceTo: 3 },
+  { slug: 'service-rate', label: 'Standard Rate Schedule', milestone: 'Proposal', tab: 'proposal', servicePhaseStart: 3, servicePhaseEnd: 5, advanceTo: 6 },
+  { slug: 'service-acceptance', label: 'Customer Acceptance', milestone: 'Submitted', tab: 'service-decision', servicePhaseStart: 6, servicePhaseEnd: 6, advanceTo: 7 },
+  { slug: 'service-delivery', label: 'Service Execution & Close', milestone: 'Follow-up', tab: 'service-execution', servicePhaseStart: 7, servicePhaseEnd: 9, advanceTo: 10 },
 ]
+const SERVICE_LEGACY_STEP_MAP = {
+  'service-intake': 'service-enquiry',
+  'service-capture': 'service-enquiry',
+  'service-scope': 'service-scope',
+  'service-offer': 'service-rate',
+  'service-review': 'service-rate',
+  'service-send': 'service-rate',
+  'service-decision': 'service-acceptance',
+  'service-execution': 'service-delivery',
+  'service-report': 'service-delivery',
+  'service-invoice': 'service-delivery',
+}
 const workflowStepsFor = (config, route) => {
   if (route === 'Spares') return SPARES_WORKFLOW_STEPS
   if (route === 'Service') return SERVICE_WORKFLOW_STEPS
@@ -201,7 +208,7 @@ function OpportunityProgress({ activeStep, completedThrough, reviewing = false, 
 function CreatedOpportunityPanel({ opp, activeStep, onDismiss, onContinue }) {
   const route = opp.route || opp.oppType || 'opportunity'
   const nextByRoute = {
-    Service: ['Start Service Intake', 'Capture the enquiry, then confirm the scope and offer path.'],
+    Service: ['Start Service Request', 'Confirm the request, then verify scope and the standard rate schedule.'],
     Spares: ['Start requirement validation', 'Resolve customer clarifications before sourcing parts.'],
     Project: ['Review opportunity intake', 'Confirm registration and customer requirements before quoting.'],
   }
@@ -231,16 +238,27 @@ function CreatedOpportunityPanel({ opp, activeStep, onDismiss, onContinue }) {
 
 const activeStepConfigLabel = step => {
   const labels = {
+    'service-enquiry': 'Service Request',
     'service-intake': 'Service Intake',
-    'service-capture': 'Capture Enquiry',
-    'service-scope': 'Scope & Survey',
+    'service-capture': 'Service Request',
+    'service-scope': 'Scope Confirmation',
+    'service-rate': 'Standard Rate Schedule',
+    'service-offer': 'Standard Rate Schedule',
+    'service-review': 'Standard Rate Schedule',
+    'service-send': 'Standard Rate Schedule',
+    'service-acceptance': 'Customer Acceptance',
+    'service-decision': 'Customer Acceptance',
+    'service-delivery': 'Service Execution & Close',
+    'service-execution': 'Service Execution & Close',
+    'service-report': 'Service Execution & Close',
+    'service-invoice': 'Service Execution & Close',
     intake: 'Intake',
     'requirement-validation': 'Requirement Validation',
   }
   return labels[step] || 'Intake'
 }
 
-const activeStepForNotice = opp => opp.route === 'Service' ? 'service-intake' : 'intake'
+const activeStepForNotice = opp => opp.route === 'Service' ? 'service-enquiry' : 'intake'
 
 function OpportunityLoading() {
   return (
@@ -329,16 +347,17 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
     ? (Number.isInteger(opp.servicePhase) ? opp.servicePhase : (serviceMilestonePhase[effectiveMilestone] ?? 0))
     : null
   const persistedWorkflowStep = opp.route === 'Service'
-    ? allWorkflowSteps.find(step => step.servicePhase === persistedServicePhase)
-      || [...allWorkflowSteps].reverse().find(step => step.servicePhase <= persistedServicePhase)
+    ? allWorkflowSteps.find(step => persistedServicePhase >= step.servicePhaseStart && persistedServicePhase <= step.servicePhaseEnd)
+      || [...allWorkflowSteps].reverse().find(step => step.servicePhaseStart <= persistedServicePhase)
     : allWorkflowSteps.find(step => (step.milestones || [step.milestone]).includes(effectiveMilestone))
   const fallbackStep = workflowBySlug[persistedWorkflowStep?.slug]
     || workflowSteps[Math.max(0, allWorkflowSteps.indexOf(persistedWorkflowStep) - 1)]
     || workflowSteps[0]
   const persistedStepIndex = opp.route === 'Service'
-    ? workflowSteps.filter(step => step.servicePhase != null && step.servicePhase < persistedServicePhase).length
+    ? Math.max(0, workflowSteps.findIndex(step => step.slug === persistedWorkflowStep?.slug))
     : Math.max(0, workflowSteps.findIndex(step => (step.milestones || [step.milestone]).includes(effectiveMilestone)))
-  const requestedWorkflowStep = workflowBySlug[requestedStep]
+  const requestedServiceSlug = opp.route === 'Service' ? (SERVICE_LEGACY_STEP_MAP[requestedStep] || requestedStep) : requestedStep
+  const requestedWorkflowStep = workflowBySlug[requestedServiceSlug]
     || workflowSteps.find(step => (step.milestones || [step.milestone]).includes(requestedStep))
   const requestedStepIndex = requestedWorkflowStep ? workflowSteps.findIndex(step => step.slug === requestedWorkflowStep.slug) : -1
   const requestedCompletedOrCurrent = requestedWorkflowStep && requestedStepIndex <= persistedStepIndex
@@ -362,7 +381,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
     nav(`/opp/${opp.id}?step=${encodeURIComponent(step)}`)
   }
   const servicePhaseBlockers = step => {
-    if (opp.route !== 'Service' || step.servicePhase == null || step.servicePhase <= persistedStepIndex) return []
+    if (opp.route !== 'Service' || step.servicePhaseStart == null || step.servicePhaseStart <= persistedServicePhase) return []
     const est = (store.svcEstimates || []).find(e => e.oppId === opp.id) || {}
     const survey = (store.surveys || []).find(v => v.oppId === opp.id)
     const review = serviceOfferCleared(opp, store.getProposal(opp.id), store)
@@ -370,14 +389,14 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
     // the site visit — it never becomes a proposal submission.
     const communication = (store.communications?.[opp.id] || []).find(c => ['submission', 'rate-sheet'].includes(c.kind) && c.status === 'sent')
     const blockers = []
-    if (step.servicePhase >= 2 && !est.scopeConfirmed) blockers.push({ key: 'service-scope', severity: 'block', text: 'Confirm the Service scope and offer path' })
-    if (step.servicePhase >= 3 && (!est.travelConfirmed || (est.surveyRequired && !survey?.report))) blockers.push({ key: 'service-evidence', severity: 'block', text: est.surveyRequired ? 'Complete travel confirmation and the site survey report before preparing the offer' : 'Confirm the manual travel estimate before preparing the offer' })
-    if (step.servicePhase >= 4 && !est.offerPrepared) blockers.push({ key: 'service-offer', severity: 'block', text: 'Issue the Standard Rate Sheet first' })
-    if (step.servicePhase >= 5 && !review) blockers.push({ key: 'service-review', severity: 'block', text: 'Approve the offer for release before sending it to the customer' })
-    if (step.servicePhase >= 6 && !communication) blockers.push({ key: 'service-send', severity: 'block', text: 'Send the approved offer to the customer first' })
-    if (step.servicePhase >= 7 && est.customerDecision !== 'Accepted') blockers.push({ key: 'service-decision', severity: 'block', text: 'Record customer acceptance before scheduling service execution' })
-    if (step.servicePhase >= 8 && (!est.engineer || !est.executionDate || !(Number(est.actualEngineerDays) > 0))) blockers.push({ key: 'service-execution', severity: 'block', text: 'Assign an engineer, schedule the service, and record actual engineer days' })
-    if (step.servicePhase >= 9 && !est.serviceReport) blockers.push({ key: 'service-report', severity: 'block', text: 'Submit the service report before invoicing' })
+    if (step.servicePhaseStart >= 3 && !est.scopeConfirmed) blockers.push({ key: 'service-scope', severity: 'block', text: 'Confirm the Service scope and offer path' })
+    if (step.servicePhaseStart >= 3 && (!est.travelConfirmed || (est.surveyRequired && !survey?.report))) blockers.push({ key: 'service-evidence', severity: 'block', text: est.surveyRequired ? 'Complete travel confirmation and the site survey report before preparing the offer' : 'Confirm the manual travel estimate before preparing the offer' })
+    if (step.servicePhaseStart >= 6 && !est.offerPrepared) blockers.push({ key: 'service-offer', severity: 'block', text: 'Issue the Standard Rate Sheet first' })
+    if (step.servicePhaseStart >= 6 && !review) blockers.push({ key: 'service-review', severity: 'block', text: 'Approve the offer for release before sending it to the customer' })
+    if (step.servicePhaseStart >= 6 && !communication) blockers.push({ key: 'service-send', severity: 'block', text: 'Send the approved offer to the customer first' })
+    if (step.servicePhaseStart >= 7 && est.customerDecision !== 'Accepted') blockers.push({ key: 'service-decision', severity: 'block', text: 'Record customer acceptance before scheduling service execution' })
+    if (step.servicePhaseStart >= 10 && (!est.engineer || !est.executionDate || !(Number(est.actualEngineerDays) > 0))) blockers.push({ key: 'service-execution', severity: 'block', text: 'Assign an engineer, schedule the service, and record actual engineer days' })
+    if (step.servicePhaseStart >= 10 && !est.serviceReport) blockers.push({ key: 'service-report', severity: 'block', text: 'Submit the service report before invoicing' })
     return blockers
   }
   const proposal = store.getProposal(opp.id)
@@ -436,8 +455,8 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
     goTab(tabOverride || LIFECYCLE_TABS[milestone] || 'overview')
     return true
   }
-  const workflowPosition = step => opp.route === 'Service' && Number.isInteger(step?.servicePhase)
-    ? step.servicePhase
+  const workflowPosition = step => opp.route === 'Service' && Number.isInteger(step?.servicePhaseStart ?? step?.servicePhase)
+    ? (step.servicePhaseStart ?? step.servicePhase)
     : MILESTONES.indexOf(step?.milestone)
   const openBackwardTransition = step => {
     const currentIndex = workflowPosition({ milestone: opp.milestone, servicePhase: opp.servicePhase })
@@ -450,8 +469,8 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
     const targetIndex = workflowPosition(step)
     if (!step || !reason?.trim() || targetIndex < 0 || currentIndex < 0 || targetIndex >= currentIndex) return false
     await moveToMilestone(step.milestone, reason, step.tab)
-    if (opp.route === 'Service' && step.servicePhase != null) {
-      store.updateServiceFlow(opp.id, { servicePhase: step.servicePhase })
+    if (opp.route === 'Service' && step.servicePhaseStart != null) {
+      store.updateServiceFlow(opp.id, { servicePhase: step.servicePhaseStart })
     }
     return true
   }
@@ -495,7 +514,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
         return
       }
       selectStep(step.slug)
-      store.updateServiceFlow(opp.id, { servicePhase: step.servicePhase })
+      store.updateServiceFlow(opp.id, { servicePhase: step.servicePhaseStart })
       return
     }
     const moved = await moveMilestone(step.milestone, step.tab)
@@ -762,15 +781,15 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
         {viewTab === 'customer' && <CustomerKycTab opp={opp} />}
         {viewTab === 'registration' && <RegistrationTab opp={opp} goTab={goTab} />}
         {viewTab === 'clarifications' && <ClarificationsTab opp={opp} sourceText={sourceText} />}
-        {viewTab === 'sourcing' && <SourcingTab opp={opp} goTab={goTab} onContinueToProposal={() => {
+        {viewTab === 'sourcing' && <SourcingTab opp={opp} goTab={goTab} onConfirmScope={() => advanceStep('service-rate')} onContinueToProposal={() => {
           const proposalStep = workflowSteps.find(step => step.milestone === 'Proposal')
           if (proposalStep) advanceStep(proposalStep.slug)
         }} />}
-        {viewTab === 'proposal' && <ProposalTab opp={opp} goTab={goTab} />}
+        {viewTab === 'proposal' && <ProposalTab opp={opp} goTab={goTab} onConfirmSent={() => advanceStep('service-acceptance')} />}
         {viewTab === 'approval' && <ApprovalsTab opp={opp} />}
         {viewTab === 'followup' && <FollowUpTab opp={opp} goTab={goTab} />}
-        {viewTab === 'service-decision' && <ServiceDecisionPanel opp={opp} />}
-        {viewTab === 'service-execution' && <ServiceExecutionPanel opp={opp} />}
+        {viewTab === 'service-decision' && <ServiceDecisionPanel opp={opp} onContinue={() => advanceStep('service-delivery')} />}
+        {viewTab === 'service-execution' && <ServiceDeliveryClose opp={opp} />}
         {viewTab === 'service-report' && <ServiceReportPanel opp={opp} />}
         {viewTab === 'service-invoice' && <ServiceInvoicePanel opp={opp} />}
         {!activeStepConfig && viewTab === 'approvals' && <ApprovalsTab opp={opp} />}
@@ -1978,7 +1997,7 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
 }
 
 // ---------------------------------------------------------------------------
-function SourcingTab({ opp, goTab, onContinueToProposal }) {
+function SourcingTab({ opp, goTab, onConfirmScope, onContinueToProposal }) {
   const store = useStore()
   const sourcingLines = store.sparesLines.filter(l => l.oppId === opp.id && !isPlaceholderSparesLine(l))
   const superseded = sourcingLines.some(l => String(l.match).toLowerCase().includes('superseded'))
@@ -1986,7 +2005,7 @@ function SourcingTab({ opp, goTab, onContinueToProposal }) {
   if (opp.route === 'Service') {
     return <div className="ana-grid service-sourcing-workbench">
       <div className="ana-card c-12">
-        <WbService opp={opp} focus="scope" />
+        <WbService opp={opp} focus="scope" onConfirmScope={onConfirmScope} />
       </div>
     </div>
   }
@@ -2014,7 +2033,26 @@ function FollowUpTab({ opp, goTab }) {
   return <FollowUpPane opp={opp} onRevision={() => goTab('sourcing')} />
 }
 
-function ProposalTab({ opp, goTab }) {
+function ServiceDeliveryClose({ opp }) {
+  return (
+    <div className="ana-grid service-delivery-close">
+      <div className="ana-card c-12">
+        <div className="service-panel-kicker">Service execution</div>
+        <ServiceExecutionPanel opp={opp} />
+      </div>
+      <div className="ana-card c-12">
+        <div className="service-panel-kicker">Service closeout</div>
+        <ServiceReportPanel opp={opp} />
+      </div>
+      <div className="ana-card c-12">
+        <div className="service-panel-kicker">Billing</div>
+        <ServiceInvoicePanel opp={opp} />
+      </div>
+    </div>
+  )
+}
+
+function ProposalTab({ opp, goTab, onConfirmSent }) {
   const [sub, setSub] = useState(opp.route === 'Service' ? 'workbench' : 'edit-sheet')
   const openBuilder = () => setSub('builder')
   // Diagram 02 §3 is the Brownfield lane only — Greenfield runs Phase-1
@@ -2024,7 +2062,7 @@ function ProposalTab({ opp, goTab }) {
     <div className="proposal-tab-shell">
       {sub === 'workbench' && (
         opp.route === 'Spares' ? <WbSpares opp={opp} openBuilder={openBuilder} />
-        : opp.route === 'Service' ? <WbService opp={opp} focus="offer" openBuilder={openBuilder} />
+        : opp.route === 'Service' ? <WbService opp={opp} focus="offer" openBuilder={openBuilder} onConfirmSent={onConfirmSent} />
         : <WbProject opp={opp} openBuilder={openBuilder} />
       )}
       {sub === 'builder' && (
