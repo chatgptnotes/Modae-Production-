@@ -104,60 +104,67 @@ export default function RateSheetPanel({ opp, est, readOnly = false, onConfirmSe
           ? <Chip tone="state-Accepted">Issue {est.rateSheetRev} sent {est.rateSheetSentOn}</Chip>
           : <Chip tone="state-Blocks">Not issued</Chip>}
       </div>
-      <p className="hint">
-        Sent before the site visit so the customer accepts the published day rates up front.
-        Billing afterwards is on actual engineer days at these rates.
-      </p>
+      <div className="service-rate-layout">
+        <section className="service-rate-details" aria-label="Standard rate schedule details">
+          <p className="hint">
+            Sent before the site visit so the customer accepts the published day rates up front.
+            Billing afterwards is on actual engineer days at these rates.
+          </p>
+          <table className="cost-table" style={{ width: '100%' }}>
+            <tbody>
+              {RATE_PREVIEW.map(([label, key]) => (
+                <tr key={key}><td>{label}</td><td className="num">{money(rs.rates[key])}</td></tr>
+              ))}
+              <tr><td>Weekend premium</td><td className="num">{rs.rates.weekendPct}%</td></tr>
+            </tbody>
+          </table>
+          <p className="hint">{sheet} schedule · {rs.currency} · attached as {enclosure.filename}</p>
+          <p style={{ marginTop: 8 }}>
+            <a href={SERVICE_RATE_SCHEDULE_URL} target="_blank" rel="noreferrer">Preview rate schedule</a>
+          </p>
+        </section>
 
-      <table className="cost-table" style={{ width: '100%', maxWidth: 420 }}>
-        <tbody>
-          {RATE_PREVIEW.map(([label, key]) => (
-            <tr key={key}><td>{label}</td><td className="num">{money(rs.rates[key])}</td></tr>
-          ))}
-          <tr><td>Weekend premium</td><td className="num">{rs.rates.weekendPct}%</td></tr>
-        </tbody>
-      </table>
-      <p className="hint">{sheet} schedule · {rs.currency} · attached as {enclosure.filename}</p>
-      <p style={{ marginTop: 8 }}>
-        <a href={SERVICE_RATE_SCHEDULE_URL} target="_blank" rel="noreferrer">Preview rate schedule</a>
-      </p>
+        <section className="service-rate-email" aria-label="Customer rate schedule email">
+          <div className="service-rate-email-heading">Review customer email</div>
+          <p className="hint">Edit the message, open Gmail, attach the rate schedule, send it, then confirm the email was sent.</p>
+          <div className="service-form-stack">
+            <label className="service-form-field">To
+              <input className="service-form-control" type="text" value={emailTo} disabled={readOnly} onChange={e => setEmailTo(e.target.value)}
+                placeholder="customer@company.com" />
+            </label>
+            <label className="service-form-field">Subject
+              <input className="service-form-control" type="text" value={subject} disabled={readOnly} onChange={e => setSubject(e.target.value)} />
+            </label>
+            <label className="service-form-field">CC
+              <input className="service-form-control" type="text" value={emailCc} disabled={readOnly} onChange={e => setEmailCc(e.target.value)} />
+            </label>
+            <label className="service-form-field">Email body
+              <textarea className="service-form-control service-rate-email-body" rows={14} value={emailBody} disabled={readOnly}
+                onChange={e => setEmailBody(e.target.value)} />
+            </label>
+          </div>
 
-      <div className="service-form-stack">
-        <label className="service-form-field">To
-          <input className="service-form-control" type="text" value={emailTo} disabled={readOnly} onChange={e => setEmailTo(e.target.value)}
-            placeholder="customer@company.com" />
-        </label>
-        <label className="service-form-field">Subject
-          <input className="service-form-control" type="text" value={subject} disabled={readOnly} onChange={e => setSubject(e.target.value)} />
-        </label>
-        <label className="service-form-field">CC
-          <input className="service-form-control" type="text" value={emailCc} disabled={readOnly} onChange={e => setEmailCc(e.target.value)} />
-        </label>
-        <label className="service-form-field">Email body
-          <textarea className="service-form-control service-rate-email-body" rows={10} value={emailBody} disabled={readOnly}
-            onChange={e => setEmailBody(e.target.value)} />
-        </label>
+          <div className="service-rate-email-actions">
+            <button className="primary" disabled={readOnly || !offerCleared || !emailTo.trim()} onClick={send}>
+              <Icon name="send" size={13} /> {est.rateSheetSentOn ? 'Re-issue rate schedule' : 'Download schedule & draft email'}
+            </button>
+            {pendingDraft && <button disabled={readOnly} onClick={markSent}>Confirm sent</button>}
+            {!emailTo.trim() && <span className="hint">A customer address is required.</span>}
+            {!offerCleared && <span className="hint">Approval is required before a discounted rate schedule can be sent.</span>}
+          </div>
+
+          {pendingDraft && (
+            <div className="warnbox">
+              Draft opened in Gmail with {enclosure.filename} downloaded — attach it, send, then confirm sent here.
+            </div>
+          )}
+          {est.rateSheetSentOn && !pendingDraft && (
+            <div className="okbox">
+              Issue {est.rateSheetRev} sent on {est.rateSheetSentOn}. Re-issue it if the scope or rates are renegotiated.
+            </div>
+          )}
+        </section>
       </div>
-
-      <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        <button className="primary" disabled={readOnly || !offerCleared || !emailTo.trim()} onClick={send}>
-          <Icon name="send" size={13} /> {est.rateSheetSentOn ? 'Re-issue rate schedule' : 'Download schedule & draft email'}
-        </button>
-        {pendingDraft && <button disabled={readOnly} onClick={markSent}>Confirm sent</button>}
-        {!emailTo.trim() && <span className="hint">A customer address is required.</span>}
-        {!offerCleared && <span className="hint">Approval is required before a discounted rate schedule can be sent.</span>}
-      </div>
-
-      {pendingDraft && (
-        <div className="warnbox">
-          Draft opened in Gmail with {enclosure.filename} downloaded — attach it, send, then mark it as sent here.
-        </div>
-      )}
-      {est.rateSheetSentOn && !pendingDraft && (
-        <div className="okbox">
-          Issue {est.rateSheetRev} sent on {est.rateSheetSentOn}. Re-issue it if the scope or rates are renegotiated.
-        </div>
-      )}
     </div>
   )
 }

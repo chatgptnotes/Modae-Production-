@@ -20,6 +20,8 @@ This is an implementation and release log, not a dump of every commit.
 - Standardized Service workflow form controls with wide bordered fields, clean
   numeric entry, clearer discount guidance, and revision routing back to the
   Standard Rate Schedule when customers request changes.
+- Reworked the Standard Rate Schedule card into a responsive two-column layout
+  with rate details beside the complete editable customer email composer.
 - Reorganized imported runtime binaries under a semantic `assets/` tree,
   replaced supplied filenames with clean internal names while preserving
   customer-facing attachment names, and updated the brand-refresh and icon

@@ -105,6 +105,9 @@ test('the standard rate schedule is issued on its own, before the site visit', (
   assert.match(panel, /Confirm sent/)
   assert.match(panel, /onConfirmSent/)
   assert.match(panel, /service-rate-composer/)
+  assert.match(panel, /service-rate-layout/)
+  assert.match(panel, /service-rate-details/)
+  assert.match(panel, /service-rate-email/)
   // Issuing it is what prepares the Path A offer.
   assert.match(panel, /offerPrepared: true/)
   // Re-issued rather than re-created when the customer negotiates.

@@ -1571,6 +1571,7 @@ table.sheet td.internal { background: var(--border-soft) !important; color: var(
 @media (max-width: 1050px) { .created-opportunity-panel { grid-template-columns: auto 1fr; } .created-opportunity-facts, .created-opportunity-actions { grid-column: 2; } .created-opportunity-actions { justify-content: flex-start; } }
 @media (max-width: 760px) { .created-opportunity-panel, .service-status-strip, .service-scope-controls { grid-template-columns: 1fr; } .created-opportunity-mark { align-self: start; } .created-opportunity-facts, .created-opportunity-actions, .service-status-strip > .hint { grid-column: auto; } .service-status-steps { justify-content: flex-start; } .service-requirement-options { grid-template-columns: 1fr; } .service-decision-footer { align-items: stretch; flex-direction: column; } }
 @media (max-width: 760px) { .service-form-action-row, .service-form-grid-two, .service-form-grid-four { grid-template-columns: 1fr; flex-direction: column; align-items: stretch; } .service-form-action-row > button, .service-date-control, .service-discount-field, .service-invoice-field { max-width: none; width: 100%; } }
+@media (max-width: 900px) { .service-rate-layout { grid-template-columns: 1fr; } .service-rate-email { padding-left: 0; padding-top: 18px; border-top: 1px solid var(--border-subtle); border-left: 0; } }
 .service-next-step-card { border-style: dashed; border-top: 1px dashed var(--border-default); background: var(--surface-raised); }
 .service-next-step-card .ana-title { margin-top: 4px; }
 .service-offer-context { border-left: 3px solid var(--action-accent); }
@@ -14508,6 +14509,13 @@ table.sheet tbody tr:hover td {
 }
 
 .service-rate-composer { width: 100%; }
+.service-rate-layout { display: grid; grid-template-columns: minmax(280px, .85fr) minmax(0, 1.15fr); gap: 22px; margin-top: 16px; align-items: start; }
+.service-rate-details { min-width: 0; }
+.service-rate-details .hint { margin-top: 0; }
+.service-rate-email { min-width: 0; padding-left: 22px; border-left: 1px solid var(--border-subtle); }
+.service-rate-email-heading { color: var(--text-primary); font-size: 16px; font-weight: 800; }
+.service-rate-email > .hint { margin: 5px 0 0; }
+.service-rate-email-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 .service-form-stack { display: grid; gap: 12px; width: 100%; margin-top: 14px; }
 .service-form-field { display: grid; gap: 6px; color: var(--text-primary); font-size: 12px; font-weight: 800; line-height: 1.25; }
 .service-form-control { width: 100%; min-width: 0; min-height: 42px; box-sizing: border-box; padding: 9px 11px; border: 1px solid var(--border-default); border-radius: 7px; background: var(--card-bg); color: var(--text-primary); font: inherit; font-weight: 500; }
