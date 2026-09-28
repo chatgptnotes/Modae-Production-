@@ -424,15 +424,34 @@ export default function Approvals() {
       : <span className="hint">No linked opportunity or lead</span>
 
   // Detail may embed commercial trigger values (GM%, discount, value) — gate it.
-  const PricingRows = ({ rows = [] }) => (
-    <div className="approval-pricing-rows">
+  const PricingRows = ({ rows = [], approvers = [] }) => {
+    const discountRows = rows.filter(row => row.discount > row.discountPct)
+    const markupRows = rows.filter(row => row.markup > row.markupPct)
+    const totalDiscount = rows.reduce((sum, row) => sum + (Number(row.discountAmountINR) || 0), 0)
+    const totalList = rows.reduce((sum, row) => sum + (Number(row.listTotalINR) || 0), 0)
+    const approvalRoles = approvers.length ? approvers : ['AH', 'LJS']
+    return <div className="approval-pricing-rows">
+      <div className="approval-pricing-explanation">
+        <b>Why approval is required</b>
+        <span>The requested pricing is outside the configured commercial limit. One approval from {displayRoles(approvalRoles)} is required before the quote can continue.</span>
+      </div>
+      <div className="approval-pricing-summary">
+        <span><b>Affected lines</b>{rows.length}</span>
+        {discountRows.length > 0 && <span><b>Discount exceptions</b>{discountRows.length}</span>}
+        {markupRows.length > 0 && <span><b>Markup exceptions</b>{markupRows.length}</span>}
+        {totalList > 0 && <span><b>Total list value</b>₹ {fmt(totalList)}</span>}
+        {totalDiscount > 0 && <span><b>Total discount impact</b>₹ {fmt(totalDiscount)}</span>}
+      </div>
       {rows.map((row, i) => <div className="approval-pricing-row" key={`${row.label}-${i}`}>
         <b>{row.label}</b>
-        {row.discount > row.discountPct && <span>Discount {row.discount}% <small>(limit {row.discountPct}%)</small></span>}
-        {row.markup > row.markupPct && <span>Markup {row.markup}% <small>(limit {row.markupPct}%)</small></span>}
+        {row.discount > row.discountPct && <span>Discount {row.discount}% <small>(allowed {row.discountPct}%, exceeds by {row.discountExcessPct} points)</small></span>}
+        {row.markup > row.markupPct && <span>Markup {row.markup}% <small>(allowed {row.markupPct}%, exceeds by {row.markupExcessPct} points)</small></span>}
+        {row.quantity > 0 && <span>Qty {row.quantity}</span>}
+        {row.discountAmountINR > 0 && <span>Impact ₹ {fmt(row.discountAmountINR)}</span>}
+        {row.afterDiscountTotalINR > 0 && <span>After discount ₹ {fmt(row.afterDiscountTotalINR)}</span>}
       </div>)}
     </div>
-  )
+  }
   const Detail = ({ a }) => {
     const hasContext = Boolean(a.oppId || a.opportunitySummary || a.blockingReason)
     // OpportunityContext owns the reason whenever a request is linked to an
@@ -443,7 +462,7 @@ export default function Approvals() {
       <OpportunityContext a={a} />
       <RejectionRequirements approval={a} />
       {showStandaloneDetail && (a.type === 'Pricing threshold exception' && a.pricingRows?.length && comm
-        ? <><div style={{ fontSize: 12.5 }}>{a.detail}</div><PricingRows rows={pricingRowsFor(a)} /></>
+        ? <><div style={{ fontSize: 12.5 }}>{a.detail}</div><PricingRows rows={pricingRowsFor(a)} approvers={neededOf(a)} /></>
         : COMMERCIAL_RX.test(a.detail || '') && !comm
           ? <div className="restricted" style={{ fontSize: 12.5 }}><Icon name="lock" size={11} /> Commercial exception — trigger values (GM% / discount / value) visible to LJS / AH only.</div>
           : <div style={{ fontSize: 12.5 }}>{a.detail}</div>)}
@@ -471,6 +490,7 @@ export default function Approvals() {
     // dense inline paragraph.
     const reason = baseReason.replace(/\s+Review findings:[\s\S]*$/i, '').trim()
     const deviations = comm ? (a.deviationDetails || []) : []
+    const pricingRows = comm && a.type === 'Pricing threshold exception' ? pricingRowsFor(a) : []
     return (
       <div className="approval-opportunity-context">
         <div className="approval-context-head">
@@ -497,6 +517,7 @@ export default function Approvals() {
             )}
           </div>
         </div>
+        {pricingRows.length > 0 && <PricingRows rows={pricingRows} approvers={neededOf(a)} />}
         {deviations.length > 0 && (
           <div className="approval-context-deviations">
             <div className="approval-context-deviation-head"><span></span><b>Customer asked</b><b>ModAE standard</b><b>Requested response</b></div>
@@ -516,6 +537,12 @@ export default function Approvals() {
     const needed = neededOf(a)
     const others = needed.filter(r => r !== role)
     const approved = others.filter(r => (a.decisions || {})[r]?.d === 'Approved')
+    if (a.anyOf) {
+      if (needed.includes(role)) {
+        return <div className="approval-approver-summary">One approval required — your approval or {displayRoles(others)} can clear this request</div>
+      }
+      return <div className="approval-approver-summary">One approval required — {displayRoles(needed)}</div>
+    }
     if (needed.includes(role)) {
       return <div className="approval-approver-summary">
         {others.length === 0

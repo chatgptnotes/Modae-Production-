@@ -15,6 +15,16 @@ This is an implementation and release log, not a dump of every commit.
 
 - Standardized all non-health Gemini AI tasks on the stable `gemini-3.6-flash`
   model, including lead extraction and complex document review.
+- Corrected proposal workbook review so Delivery and Incoterms are compared as
+  separate terms, related line-value changes are grouped by item, ambiguous
+  line matches are blocked, and Gemini review failures require an explicit AI
+  retry before validation can complete.
+- Fixed open Workbench pages showing stale clarification answers by refreshing
+  shared Supabase state on entry, focus, and visibility restoration, with a
+  retry warning when the shared pull fails.
+- Expanded pricing-threshold approvals with the exact requested percentage,
+  allowed limit, excess points, affected-line count, and discount impact so
+  approvers can understand the commercial reason before deciding.
 - Fixed lead extraction for unlabelled facility addresses so a standalone
   station or plant name is separated from its district, state, and country
   location.

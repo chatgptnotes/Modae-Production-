@@ -287,6 +287,39 @@ export default function Workbench() {
   const [searchParams] = useSearchParams()
   const opp = store.opportunities.find(o => o.id === oppId)
   const [recovery, setRecovery] = useState('idle')
+  const [sharedRefreshError, setSharedRefreshError] = useState('')
+
+  useEffect(() => {
+    if (!store.authReady || !['live', 'degraded'].includes(store.liveSyncStatus)) return undefined
+    let active = true
+    const refreshSharedData = () => {
+      if (document.visibilityState === 'hidden') return
+      void store.refreshSharedData().then(ok => {
+        if (!active) return
+        setSharedRefreshError(ok ? '' : 'Shared workspace data could not be refreshed.')
+      }).catch(() => {
+        if (active) setSharedRefreshError('Shared workspace data could not be refreshed.')
+      })
+    }
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refreshSharedData()
+    }
+    refreshSharedData()
+    window.addEventListener('focus', refreshSharedData)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      active = false
+      window.removeEventListener('focus', refreshSharedData)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [oppId, store.authReady, store.liveSyncStatus])
+
+  const retrySharedRefresh = () => {
+    setSharedRefreshError('')
+    void store.refreshSharedData().then(ok => {
+      if (!ok) setSharedRefreshError('Shared workspace data could not be refreshed.')
+    }).catch(() => setSharedRefreshError('Shared workspace data could not be refreshed.'))
+  }
 
   useEffect(() => {
     if (opp || !store.authReady || store.liveSyncStatus === 'connecting' || store.liveSyncStatus === 'reconnecting') return undefined
@@ -305,10 +338,12 @@ export default function Workbench() {
     return <OpportunityNotFound oppId={oppId} />
   }
 
-  return <WorkbenchWorkspace oppId={oppId} tab={tab} store={store} searchParams={searchParams} opp={opp} />
+  return <WorkbenchWorkspace oppId={oppId} tab={tab} store={store} searchParams={searchParams} opp={opp}
+    sharedRefreshError={sharedRefreshError}
+    onRetrySharedRefresh={retrySharedRefresh} />
 }
 
-function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp }) {
+function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp, sharedRefreshError = '', onRetrySharedRefresh }) {
   const nav = useNavigate()
   const [transition, setTransition] = useState(null)
   const [pendingTransition, setPendingTransition] = useState(null)
@@ -682,6 +717,10 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
 
   return (
     <div className="page">
+      {sharedRefreshError && <div className="page-sync-warning" role="alert">
+        <span>{sharedRefreshError} Changes on another device may not be visible yet.</span>
+        <button type="button" onClick={onRetrySharedRefresh}>Retry</button>
+      </div>}
       <div className="opp-summary">
         <Link className="back-to-opportunities" to="/opportunities">
           <Icon name="arrowLeft" size={13} /> Back to opportunities
@@ -734,7 +773,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp 
                   <div className="transition-blocker-head"><b>{item.text}</b><span className="transition-owner">Owner: <strong>{blockerOwner(item)}</strong></span></div>
                   <span className="transition-explanation">{blockerExplanation(item)}</span>
                   {item.approvalType && <div className="transition-request-reason"><b>Reason for request</b><span>{approvalRequestReason(item)}</span></div>}
-                  {item.key === 'pricing-threshold' && item.pricingRows?.length > 0 && <div className="transition-pricing-details">{item.pricingRows.map((row, rowIndex) => <div key={`${row.label}-${rowIndex}`}><b>{row.label}</b>{row.discount > row.discountPct && <span>Discount {row.discount}% (limit {row.discountPct}%)</span>}{row.markup > row.markupPct && <span>Markup {row.markup}% (limit {row.markupPct}%)</span>}</div>)}</div>}
+                  {item.key === 'pricing-threshold' && item.pricingRows?.length > 0 && <div className="transition-pricing-details">{item.pricingRows.map((row, rowIndex) => <div key={`${row.label}-${rowIndex}`}><b>{row.label}</b>{row.discount > row.discountPct && <span>Discount {row.discount}% (allowed {row.discountPct}%, exceeds by {row.discountExcessPct} points)</span>}{row.markup > row.markupPct && <span>Markup {row.markup}% (allowed {row.markupPct}%, exceeds by {row.markupExcessPct} points)</span>}{row.discountAmountINR > 0 && <span>Impact ₹ {fmt(row.discountAmountINR)}</span>}</div>)}</div>}
                   {item.key === 'clarifications' && clarificationRows.length > 0 && <div className="transition-detail-list">{clarificationRows.map(row => <div key={row.id}><b>{row.id}</b> · {row.category} · {row.q} <em>{row.status}</em></div>)}</div>}
                   {item.key === 'dev' && deviationRows.length > 0 && <div className="transition-detail-list">{deviationRows.map((row, index) => <div key={`${row.term}-${index}`}><b>{row.term}</b><br />Customer requested: {row.customerAsk || 'Not recorded'}<br />ModAE offered: {row.ourResponse || 'Pending review'}</div>)}</div>}
                   {item.severity === 'wait' && <span>Waiting for the responsible approver.</span>}

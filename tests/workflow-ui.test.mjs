@@ -105,7 +105,7 @@ test('Workbench waits for sync before showing not-found and keeps loaded hooks s
   assert.match(workbench, /function OpportunityLoading\(\)/)
   assert.match(workbench, /store\.liveSyncStatus === 'connecting'/)
   assert.match(workbench, /return <WorkbenchWorkspace oppId=\{oppId\}/)
-  assert.match(workbench, /function WorkbenchWorkspace\(\{ oppId, tab = 'overview', store, searchParams, opp \}\)/)
+  assert.match(workbench, /function WorkbenchWorkspace\(\{ oppId, tab = 'overview', store, searchParams, opp, sharedRefreshError = '', onRetrySharedRefresh \}\)/)
 })
 
 test('Service backward movement restores the selected service phase', () => {

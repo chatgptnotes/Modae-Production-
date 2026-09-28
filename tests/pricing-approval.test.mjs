@@ -37,6 +37,35 @@ test('pricing thresholds flag proposal and sourcing line exceptions', () => {
   assert.equal(blockers.find(item => item.key === 'pricing-threshold')?.anyOf, true)
 })
 
+test('pricing exceptions explain the excess and calculate the discount impact', () => {
+  const result = pricingThresholdExceptions(opp, { revision: '01', bom: [] }, {
+    ...state,
+    sparesLines: [{
+      oppId: 'PRICE-1', pn: 'P-2', qty: 2, listUnitPrice: 100,
+      currency: 'INR', discountPct: 10, markupPct: 0,
+    }],
+  })
+  const row = result.rows.find(item => item.label === 'P-2')
+  assert.equal(row.discountExcessPct, 5)
+  assert.equal(row.quantity, 2)
+  assert.equal(row.listTotalINR, 200)
+  assert.equal(row.discountAmountINR, 20)
+  assert.equal(row.afterDiscountTotalINR, 180)
+})
+
+test('pricing approval UI explains why the exception needs sign-off', () => {
+  const approvals = read('src/pages/Approvals.jsx')
+  const spares = read('src/workbench/WbSpares.jsx')
+  assert.match(approvals, /Why approval is required/)
+  assert.match(approvals, /exceeds by/)
+  assert.match(approvals, /Affected lines/)
+  assert.match(approvals, /pricingRows\.length > 0 && <PricingRows rows=\{pricingRows\} approvers=\{neededOf\(a\)\} \/>/)
+  assert.match(approvals, /One approval required — your approval or/)
+  assert.match(approvals, /One approval from \{displayRoles\(approvalRoles\)\}/)
+  assert.match(spares, /Why approval is required/)
+  assert.match(spares, /Total discount impact/)
+})
+
 test('removed sourcing lines do not create pricing or confirmation blockers', () => {
   const proposal = { revision: '01', bom: [] }
   const removedLine = { id: 'SL-REMOVED', oppId: 'PRICE-1', pn: 'P-REMOVED', qty: 0, removedFromSourcing: true, markupPct: 50, confirmed: false }

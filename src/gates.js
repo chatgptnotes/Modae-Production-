@@ -149,13 +149,50 @@ export function pricingThresholdExceptions(opp, proposal, state = {}) {
   const markupPct = Number.isFinite(Number(thresholds.markupPct)) ? Number(thresholds.markupPct) : 10
   const rows = []
   const seen = new Set()
+  const costing = { ...defaultCosting, ...(proposal?.costing || {}) }
+  const impactFor = row => {
+    const isSourcingLine = row?.oppId && row?.qty != null
+    if (isSourcingLine) {
+      const financials = sparesLineFinancials(row, costing)
+      const discountAmountINR = financials.listTotalINR - financials.discountedPurchaseUnitPriceINR * financials.qty
+      return {
+        quantity: financials.qty,
+        listTotalINR: financials.listTotalINR,
+        discountAmountINR,
+        afterDiscountTotalINR: financials.discountedPurchaseUnitPriceINR * financials.qty,
+        adjustedTotalINR: financials.lineTotalINR,
+      }
+    }
+    const quantity = lineQty(row, proposal?.units || 7)
+    const listUnit = Number(row?.listUnitPriceINR ?? row?.listUnitPrice ?? row?.listPriceINR ?? row?.listPrice) || 0
+    const listTotalINR = Number(row?.listTotalINR ?? row?.listTotalPrice) || listUnit * quantity
+    if (!listTotalINR) return { quantity }
+    const discountAmountINR = listTotalINR * (Number(row?.discountPct) || 0) / 100
+    const afterDiscountTotalINR = listTotalINR - discountAmountINR
+    return {
+      quantity,
+      listTotalINR,
+      discountAmountINR,
+      afterDiscountTotalINR,
+      adjustedTotalINR: afterDiscountTotalINR * (1 + (normalizeMarkupPct(row?.markupPct) / 100)),
+    }
+  }
   const add = (row, label) => {
     const discount = Number(row?.discountPct) || 0
     const markup = normalizeMarkupPct(row?.markupPct)
     const key = `${label}|${discount}|${markup}|${discountPct}|${markupPct}`
     if ((discount > discountPct || markup > markupPct) && !seen.has(key)) {
       seen.add(key)
-      rows.push({ label, discount, markup, discountPct, markupPct })
+      rows.push({
+        label,
+        discount,
+        markup,
+        discountPct,
+        markupPct,
+        discountExcessPct: Math.max(0, discount - discountPct),
+        markupExcessPct: Math.max(0, markup - markupPct),
+        ...impactFor(row),
+      })
     }
   }
   add(proposal, 'Proposal pricing')

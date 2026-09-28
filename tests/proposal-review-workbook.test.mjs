@@ -141,6 +141,33 @@ test('compares uploaded commercial terms with the original proposal without bloc
   assert.deepEqual(result.termChanges.map(change => change.label), ['Payment', 'Delivery'])
 })
 
+test('keeps Incoterms separate from the Delivery term', () => {
+  const workbook = { sheets: [{ name: 'Firm Rev-00', rows: [
+    ['Terms & Conditions:'],
+    ['1. Delivery: 10–12 weeks ex-works'],
+    ['2. Incoterms: Delivery shall follow the schedule and Incoterms stated in this proposal.'],
+  ] }] }
+  const terms = extractCommercialTerms(workbook)
+  assert.deepEqual(terms.map(term => term.key), ['delivery', 'freight'])
+  assert.equal(terms[0].text, '10–12 weeks ex-works')
+  assert.equal(terms[1].text, 'Delivery shall follow the schedule and Incoterms stated in this proposal.')
+})
+
+test('blocks an ambiguous description match instead of changing the wrong line', () => {
+  const result = importReviewedWorkbook({ sheets: [{ name: 'Firm Offer', rows: [
+    ['Description', 'Quantity', 'Unit Price', 'Total Price'],
+    ['Repeated item', 2, 100, 200],
+  ] }] }, {
+    units: 1,
+    bom: [
+      { desc: 'Repeated item', pn: 'A-1', qtyPerUnit: 0, common: 1, spares: 0, quoted: 50 },
+      { desc: 'Repeated item', pn: 'B-1', qtyPerUnit: 0, common: 1, spares: 0, quoted: 60 },
+    ],
+  }, { sellTo: '' })
+  assert.ok(result.issues.some(issue => issue.code === 'line.ambiguous' && issue.severity === 'block'))
+  assert.deepEqual(result.proposal.bom.map(line => line.quoted), [50, 60])
+})
+
 test('normalizes AI findings without allowing arbitrary severities', () => {
   const findings = normalizeAiReview({ findings: [{ severity: 'block', code: 'scope', text: 'Scope differs', evidence: 'Proposal row 4' }, { severity: 'danger', finding: 'Review this' }] })
   assert.deepEqual(findings.map(item => item.severity), ['block', 'warning'])

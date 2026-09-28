@@ -26,7 +26,7 @@ test('proposal validation shows staged scan progress and reviews generated propo
   assert.match(proposal, /<ScanProgress[\s\S]*title=\{reviewProgressTitle\}/)
   assert.match(proposal, /setReviewProgressStages\(automatic \? UPLOAD_REVIEW_STAGES : GENERATED_REVIEW_STAGES\)/)
   assert.match(proposal, /const UPLOAD_REVIEW_STAGES = \['Reading workbook…', 'Importing proposal values…', 'Running local checks…', 'AI semantic review in progress…', 'Applying review results…'\]/)
-  assert.match(proposal, /Local comparison only; AI did not confirm these findings/)
+  assert.match(proposal, /The proposal is not validated\. Retry AI review before continuing/)
   assert.match(proposal, /<button className="primary" onClick=\{\(\) => setValidateChoice\(true\)\} disabled=\{reviewBusy\}>/)
   assert.match(proposal, /const yieldToPaint = \(\) => new Promise/)
   assert.match(proposal, /const uploadReviewedProposal = async event =>/)
@@ -54,6 +54,13 @@ test('uploaded workbook storage does not block validation and has a retry state'
   assert.match(proposal, /storageStatus: 'failed'/)
   assert.match(proposal, /Retry storage upload/)
   assert.match(proposal, /validation can continue/)
+})
+
+test('AI review failure blocks proposal validation and exposes a retry action', () => {
+  assert.match(proposal, /ai\.unavailable/)
+  assert.match(proposal, /Retry AI review/)
+  assert.match(proposal, /reviewStatus: hasActiveBlock \? 'Needs attention'/)
+  assert.doesNotMatch(proposal, /Continue anyway.*ai\.unavailable/)
 })
 
 test('stored workbook reviews are recomputed from the pre-import snapshot and shown first', () => {
@@ -99,6 +106,8 @@ test('validation findings are grouped with a readable summary', () => {
   assert.match(proposal, /Blocking findings/)
   assert.match(proposal, /Needs review/)
   assert.match(proposal, /Informational/)
+  assert.match(proposal, /const groupReviewIssues = issues =>/)
+  assert.match(proposal, /values changed/)
 })
 
 test('AI findings and extracted value changes use structured display formatting', () => {

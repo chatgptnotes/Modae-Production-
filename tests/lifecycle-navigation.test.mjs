@@ -38,6 +38,14 @@ test('milestone changes open their lifecycle workspace', () => {
   assert.match(workbench, /'--progress-step-count': steps\.length/)
 })
 
+test('an open Workbench refreshes shared clarification state when it regains focus', () => {
+  assert.match(workbench, /const refreshSharedData = \(\) => \{[\s\S]*store\.refreshSharedData\(\)/)
+  assert.match(workbench, /window\.addEventListener\('focus', refreshSharedData\)/)
+  assert.match(workbench, /document\.addEventListener\('visibilitychange', onVisibilityChange\)/)
+  assert.match(workbench, /document\.visibilityState === 'visible'/)
+  assert.match(workbench, /refreshSharedData\(\)/)
+})
+
 test('Service workflow lets users preview every non-current page as read-only', () => {
   assert.match(workbench, /allowFutureNavigation = false/)
   assert.match(workbench, /disabled=\{!allowFutureNavigation && index > completedThrough\}/)

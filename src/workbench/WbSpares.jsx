@@ -114,8 +114,16 @@ function PricingApprovalCard({ approval, approvers, role, canRequest, onRequest,
     </div>
     {!approval && <div className="sourcing-approval-copy">The pricing threshold exception must be reviewed before this opportunity can continue.</div>}
     {approval && <div className="sourcing-approval-copy">Requested by <b>{approval.requestedBy || 'user'}</b>{approval.ts ? ` · ${ddMmmYY(approval.ts.slice(0, 10))}` : ''}{approval.status === 'Pending' && !myDecision ? ` · awaiting ${needed.filter(r => !(approval.decisions || {})[r]).join(' or ')}` : ''}</div>}
-    {!!pricingRows?.length && <div className="sourcing-approval-reason"><b>Reason:</b> pricing exceeds the configured approval threshold.
-      <div className="sourcing-approval-reason-rows">{pricingRows.map((row, index) => <div key={`${row.label}-${index}`}><b>{row.label}</b>{row.discount > row.discountPct && <span>Discount {row.discount}% <small>(limit {row.discountPct}%)</small></span>}{row.markup > row.markupPct && <span>Markup {row.markup}% <small>(limit {row.markupPct}%)</small></span>}</div>)}</div>
+    {!!pricingRows?.length && <div className="sourcing-approval-reason">
+      <div><b>Why approval is required:</b> the requested pricing is outside the configured commercial limit. One approval from {approvers.join(' or ')} is required before the proposal can continue.</div>
+      <div className="sourcing-approval-summary">
+        <span><b>Affected lines</b> {pricingRows.length}</span>
+        {pricingRows.some(row => row.discount > row.discountPct) && <span><b>Discount exceptions</b> {pricingRows.filter(row => row.discount > row.discountPct).length}</span>}
+        {pricingRows.some(row => row.markup > row.markupPct) && <span><b>Markup exceptions</b> {pricingRows.filter(row => row.markup > row.markupPct).length}</span>}
+        {pricingRows.some(row => row.listTotalINR > 0) && <span><b>Total list value</b> {money(pricingRows.reduce((sum, row) => sum + (n(row.listTotalINR)), 0))}</span>}
+        {pricingRows.some(row => row.discountAmountINR > 0) && <span><b>Total discount impact</b> {money(pricingRows.reduce((sum, row) => sum + (n(row.discountAmountINR)), 0))}</span>}
+      </div>
+      <div className="sourcing-approval-reason-rows">{pricingRows.map((row, index) => <div key={`${row.label}-${index}`}><b>{row.label}</b>{row.discount > row.discountPct && <span>Discount {row.discount}% <small>(allowed {row.discountPct}%, exceeds by {row.discountExcessPct} points)</small></span>}{row.markup > row.markupPct && <span>Markup {row.markup}% <small>(allowed {row.markupPct}%, exceeds by {row.markupExcessPct} points)</small></span>}{row.quantity > 0 && <span>Qty {row.quantity}</span>}{row.discountAmountINR > 0 && <span>Impact {money(row.discountAmountINR)}</span>}</div>)}</div>
     </div>}
     {approval?.status === 'Rejected' && approval.decisionNote && <div className="sourcing-approval-copy">Decision note: {approval.decisionNote}</div>}
     {approval && myDecision && <div className="sourcing-approval-copy">Your decision: <b>{myDecision.d}</b>{myDecision.c ? ` — ${myDecision.c}` : ''}</div>}

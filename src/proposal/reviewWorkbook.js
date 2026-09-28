@@ -8,18 +8,18 @@ const money = value => Math.round((Number(value) || 0) * 100) / 100
 
 const aliases = {
   description: ['item description', 'description', 'item scope', 'scope', 'scope / equipment description'],
-  partNumber: ['proposed model part no', 'proposed modelpart no', 'model part number', 'modelpartnumber', 'part no', 'part number', 'model'],
+  partNumber: ['proposed model part no', 'proposed modelpart no', 'model part number', 'modelpartnumber', 'part no', 'part number', 'part number / customer reference', 'model'],
   quantity: ['total qty', 'total quantity', 'qty', 'quantity', 'qty unit'],
   uom: ['uom', 'unit'],
-  unitPrice: ['unit price', 'unit price inr', 'unit price rs'],
-  totalPrice: ['total price', 'total price inr', 'quoted total'],
+  unitPrice: ['unit price', 'unit price inr', 'unit price rs', 'customer unit price', 'quoted unit price'],
+  totalPrice: ['total price', 'total price inr', 'quoted total', 'customer total price', 'line total'],
 }
 
 const commercialTermPatterns = [
   { key: 'payment', label: 'Payment', pattern: /payment(?:\s+terms?)?/i, start: /^payment(?:\s+terms?)?\s*:?\s*/i },
+  { key: 'freight', label: 'Freight / Incoterms', pattern: /freight|incoterms?|shipping/i, start: /^(?:and\s+)?(?:freight(?:\s*&\s*insurance)?|incoterms?|shipping)\s*:?\s*/i },
   { key: 'delivery', label: 'Delivery', pattern: /delivery(?:\s+period|\s+terms?)?/i, start: /^delivery(?:\s+period|\s+terms?)?\s*:?\s*/i },
   { key: 'warranty', label: 'Warranty', pattern: /warranty/i, start: /^warranty(?:\s+certificate)?\s*:?\s*/i },
-  { key: 'freight', label: 'Freight', pattern: /freight(?:\s*&\s*insurance)?/i, start: /^freight(?:\s*&\s*insurance)?\s*:?\s*/i },
   { key: 'validity', label: 'Proposal validity', pattern: /proposal\s+validity|offer\s+validity/i, start: /^proposal\s+validity(?:\s*&\s*price\s+escalation\s+clause)?\s*:?\s*/i },
 ]
 
@@ -214,11 +214,16 @@ export function importReviewedWorkbook(workbook, proposal, opportunity) {
   const originalBomLength = originalBom.length
   const nextBom = [...originalBom].map(line => ({ ...line }))
   const used = new Set()
+  const ambiguous = new Set()
   const normalized = value => key(value).replace(/ea|nos|pcs|sets?$/g, '')
   const findExisting = row => {
     const exactPn = nextBom.findIndex((line, index) => !used.has(index) && row.pn && normalized(line.pn) === normalized(row.pn))
-    if (exactPn >= 0) return exactPn
-    return nextBom.findIndex((line, index) => !used.has(index) && row.description && normalized(line.desc) === normalized(row.description))
+    if (exactPn >= 0) return { index: exactPn }
+    const descriptionMatches = nextBom
+      .map((line, index) => ({ line, index }))
+      .filter(({ line, index }) => !used.has(index) && row.description && normalized(line.desc) === normalized(row.description))
+    if (descriptionMatches.length > 1) return { index: -1, ambiguous: true, indexes: descriptionMatches.map(match => match.index) }
+    return { index: descriptionMatches[0]?.index ?? -1 }
   }
 
   for (const row of importedRows) {
@@ -229,7 +234,13 @@ export function importReviewedWorkbook(workbook, proposal, opportunity) {
     if (row.unitPrice != null && row.totalPrice != null && Math.abs(money(row.unitPrice) * row.qty - money(row.totalPrice)) > 0.01) {
       issues.push({ severity: 'block', code: 'line.total', text: `Workbook row ${row.index} total price does not equal unit price × quantity.` })
     }
-    const existingIndex = findExisting(row)
+    const match = findExisting(row)
+    if (match.ambiguous) {
+      match.indexes.forEach(index => ambiguous.add(index))
+      issues.push({ severity: 'block', code: 'line.ambiguous', text: `Workbook row ${row.index} matches more than one proposal line. Add the exact part number before continuing.`, evidence: `${table.sheet.name}, Row ${row.index}` })
+      continue
+    }
+    const existingIndex = match.index
     if (existingIndex >= 0) {
       used.add(existingIndex)
       const old = nextBom[existingIndex]
@@ -258,7 +269,7 @@ export function importReviewedWorkbook(workbook, proposal, opportunity) {
   }
 
   originalBom.forEach((line, index) => {
-    if (used.has(index)) return
+    if (used.has(index) || ambiguous.has(index)) return
     const label = line.desc || line.pn || `line ${index + 1}`
     const change = {
       field: 'line',
@@ -278,7 +289,7 @@ export function importReviewedWorkbook(workbook, proposal, opportunity) {
 
   // The uploaded workbook is authoritative for the active customer BoQ. Keep
   // newly imported rows, but do not carry forward original rows absent from it.
-  const mergedBom = nextBom.filter((_, index) => index >= originalBomLength || used.has(index))
+  const mergedBom = nextBom.filter((_, index) => index >= originalBomLength || used.has(index) || ambiguous.has(index))
 
   const customerText = (workbook.sheets || []).flatMap(sheet => sheet.rows || []).flat().map(clean).join(' ')
   if (opportunity?.sellTo && customerText && !customerText.toLowerCase().includes(clean(opportunity.sellTo).toLowerCase())) {

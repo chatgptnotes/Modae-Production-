@@ -1068,6 +1068,18 @@ button.ghost, .btn.ghost { background: transparent; border-color: transparent; c
 button.ghost:hover, .btn.ghost:hover { background: var(--primary-soft); filter: none; }
 button:hover, .btn:hover { filter: brightness(.96); }
 button:disabled, .btn:disabled { opacity: .55; cursor: not-allowed; filter: none; }
+.page-sync-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--status-warning);
+  background: var(--status-warning-soft);
+  color: var(--primary-ink);
+}
+.page-sync-warning button { flex: 0 0 auto; }
 button:focus-visible, .btn:focus-visible {
   outline: 2px solid var(--primary-accent); outline-offset: 1px;
 }
@@ -3738,6 +3750,10 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .approval-evidence-input { display: none; }
 .approval-evidence-result { color: var(--text-muted); font-size: 11px; }
 .approval-pricing-rows { display: grid; gap: 4px; margin-top: 7px; padding: 7px 9px; border-left: 2px solid var(--primary-accent); background: var(--palette-f58d7116); font-size: 11.5px; }
+.approval-pricing-explanation { display: grid; gap: 3px; padding-bottom: 5px; border-bottom: 1px solid var(--border-soft); }
+.approval-pricing-summary, .sourcing-approval-summary { display: flex; gap: 12px; flex-wrap: wrap; color: var(--text-muted); }
+.approval-pricing-summary span, .sourcing-approval-summary span { display: inline-flex; gap: 4px; }
+.approval-pricing-summary b, .sourcing-approval-summary b { color: var(--text-main); }
 .approval-pricing-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: baseline; }
 .approval-pricing-row b { min-width: 150px; color: var(--text-main); }
 .approval-pricing-row span { color: var(--text-muted); }
@@ -3745,6 +3761,7 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .transition-pricing-details { display: grid; gap: 3px; margin-top: 6px; padding-left: 10px; font-size: 11.5px; }
 .transition-pricing-details > div { display: flex; gap: 12px; flex-wrap: wrap; }
 .transition-pricing-details span { color: var(--text-muted); }
+.sourcing-approval-summary { margin: 7px 0; padding: 7px 0; border-top: 1px solid var(--border-soft); border-bottom: 1px solid var(--border-soft); font-size: 11.5px; }
 .approval-pending-card { border-left: 3px solid var(--primary-accent); }
 .approval-pending-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 10px 0; padding: 10px 12px; border: 1px solid var(--palette-c8de3e70); border-left: 4px solid var(--amber-text); border-radius: 3px; background: var(--palette-c9fb3389); color: var(--palette-a01c73fe); font-size: 12.5px; }
 .approval-pending-banner div { display: grid; gap: 3px; }
@@ -10174,6 +10191,10 @@ button.install, .btn.install,
   font-size: 13px;
   line-height: 1.35;
   overflow-wrap: anywhere;
+}
+.proposal-review-value-change-row {
+  display: grid;
+  gap: 6px;
 }
 .proposal-review-value-change-field {
   padding-top: 7px;

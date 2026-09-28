@@ -138,7 +138,7 @@ const rememberApprovedFindings = (issues, approvals, oppId, revision) => issues.
 })
 
 const rememberOverriddenFindings = (issues, override) => issues.map(issue => {
-  if (!override?.accepted) return issue
+  if (!override?.accepted || issue.code === 'ai.unavailable') return issue
   const key = reviewFindingKey(issue)
   const remembered = (override.findings || []).find(saved => saved.findingKey === key || reviewFindingKey(saved) === key)
   if (!remembered) return issue
@@ -200,27 +200,49 @@ const reviewIssueSummary = (issue, change) => change
   ? `${change.line || 'Proposal line'} · ${change.label || 'Changed value'} · ${reviewValue(change.field, change.before)} → ${reviewValue(change.field, change.after)}`
   : issue.text
 
-function ReviewIssue({ issue, overridden = false, onUseStandardTerms }) {
+const groupReviewIssues = issues => {
+  const groups = new Map()
+  issues.forEach(issue => {
+    const change = issue.change
+    const key = issue.code === 'line.value-changed'
+      ? `${issue.code}:${change?.line || 'proposal-line'}`
+      : `${issue.code}:${change?.line || change?.label || issue.text}`
+    const current = groups.get(key)
+    if (!current) {
+      groups.set(key, { ...issue, groupedChanges: change ? [change] : [] })
+      return
+    }
+    if (change) current.groupedChanges.push(change)
+  })
+  return [...groups.values()]
+}
+
+function ReviewIssue({ issue, overridden = false, onUseStandardTerms, onRetryAiReview }) {
   const change = ['line.value-changed', 'term.value-changed'].includes(issue.code) ? issue.change : null
+  const groupedChanges = issue.groupedChanges?.length > 1 ? issue.groupedChanges : change ? [change] : []
+  const grouped = groupedChanges.length > 1
   return <details className={`proposal-review-issue ${overridden ? 'info' : issue.severity} ${issue.humanReview ? 'human-review' : ''}`}>
     <summary className="proposal-review-issue-summary">
       <div className="proposal-review-issue-head"><span className="proposal-review-severity">{overridden ? 'Overridden' : reviewSeverityLabel(issue.severity)}</span><strong>{reviewFindingTitle(issue)}</strong>{issue.source === 'AI' && <span className="proposal-review-source">AI review</span>}</div>
-      <span className="proposal-review-issue-summary-text">{reviewIssueSummary(issue, change)}</span>
+      <span className="proposal-review-issue-summary-text">{grouped ? `${groupedChanges[0].line || 'Proposal line'} · ${groupedChanges.length} values changed` : reviewIssueSummary(issue, change)}</span>
     </summary>
     <div className="proposal-review-issue-body">
       {change
         ? <div className="proposal-review-value-change">
             <div className="proposal-review-value-change-item"><span>{issue.code === 'term.value-changed' ? 'Term' : 'Item'}</span><strong>{change.line || 'Proposal line'}</strong></div>
-            <div className="proposal-review-value-change-field"><span>{change.label || 'Changed value'}</span></div>
-            <div className="proposal-review-value-change-values">
-              <div><span>Previous</span><code>{reviewValue(change.field, change.before)}</code></div>
-              <div><span>Uploaded value</span><code>{reviewValue(change.field, change.after)}</code></div>
-            </div>
+            {groupedChanges.map((item, index) => <div className="proposal-review-value-change-row" key={`${item.field}-${index}`}>
+              <div className="proposal-review-value-change-field"><span>{item.label || 'Changed value'}</span></div>
+              <div className="proposal-review-value-change-values">
+                <div><span>Previous</span><code>{reviewValue(item.field, item.before)}</code></div>
+                <div><span>Uploaded value</span><code>{reviewValue(item.field, item.after)}</code></div>
+              </div>
+            </div>)}
           </div>
         : <p className={`proposal-review-issue-text ${issue.source === 'AI' ? 'proposal-review-ai-text' : ''}`}>{issue.text}</p>}
       {issue.evidence && <div className="proposal-review-evidence"><span>Evidence</span><code>{issue.evidence}</code></div>}
       {issue.approval && <span className="proposal-review-approval">Already approved{issue.approval.approver ? ` by ${issue.approval.approver}` : ''}{issue.approval.date ? ` on ${issue.approval.date}` : ''}</span>}
       {!overridden && issue.code === 'terms.missing' && onUseStandardTerms && <button type="button" className="btn-secondary proposal-review-action" onClick={onUseStandardTerms}>Use ModAE standard terms</button>}
+      {!overridden && issue.code === 'ai.unavailable' && onRetryAiReview && <button type="button" className="btn-secondary proposal-review-action" onClick={onRetryAiReview}>Retry AI review</button>}
     </div>
   </details>
 }
@@ -1061,10 +1083,12 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   const reviewIssuesAreInformational = displayReviewIssues.length > 0
     && displayReviewIssues.every(issue => issue.severity === 'info')
   const workbookChangeIssues = displayReviewIssues.filter(issue => ['line.value-changed', 'line.removed', 'term.value-changed'].includes(issue.code))
+  const groupedWorkbookChangeIssues = groupReviewIssues(workbookChangeIssues)
   const otherReviewIssues = displayReviewIssues.filter(issue => !['line.value-changed', 'line.removed', 'term.value-changed'].includes(issue.code))
   const blockingReviewIssues = otherReviewIssues.filter(issue => issue.severity === 'block')
   const warningReviewIssues = otherReviewIssues.filter(issue => issue.severity === 'warning')
   const informationalReviewIssues = otherReviewIssues.filter(issue => issue.severity === 'info')
+  const aiReviewUnavailable = displayReviewIssues.some(issue => issue.code === 'ai.unavailable')
   const workflowBlocked = blockers.some(bl => bl.severity === 'block' || bl.severity === 'wait')
   const approvalRequired = blockers.some(bl => bl.approvalType && bl.severity !== 'wait') || pendingForOpp.length > 0
   const reviewBanner = reviewStatus === 'Needs attention'
@@ -1304,7 +1328,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       ), { model: store.config?.aiModel?.model })
       const aiReview = aiResult.data?.data || aiResult.data || {}
       const aiIssues = normalizeAiReview(aiReview)
-      if (!aiResult.data && aiResult.error) aiIssues.push({ severity: 'info', code: 'ai.unavailable', source: 'AI', text: `AI semantic review was unavailable: ${aiResult.error}. Local comparison only; AI did not confirm these findings.` })
+      if (!aiResult.data) aiIssues.push({ severity: 'block', code: 'ai.unavailable', source: 'AI', text: `AI semantic review was unavailable: ${aiResult.error || 'Gemini did not return a review'}. The proposal is not validated. Retry AI review before continuing.` })
       const aiSummary = String(aiReview.summary || '').trim()
       setReviewStage(retainProgress ? 4 : 3)
       const logicalIssues = filterLogicalChangeIssues(issues, aiReview, { aiAvailable: Boolean(aiResult.data) })
@@ -1350,6 +1374,15 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     } finally {
       setReviewBusy(false)
     }
+  }
+
+  const retryAiReview = async () => {
+    const current = pRef.current
+    await validateReviewedProposal(current, {
+      automatic: Boolean(current.reviewedUpload),
+      preserveRevision: true,
+      retainProgress: Boolean(current.reviewedUpload),
+    })
   }
 
   const validateAiDraft = async () => {
@@ -1425,6 +1458,10 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
 
   const continueAnyway = () => {
     const findings = p.reviewIssues || []
+    if (findings.some(issue => issue.code === 'ai.unavailable')) {
+      setReviewError('Gemini must complete the semantic review before this proposal can continue.')
+      return
+    }
     const overriddenFindings = findings.map(issue => ({
       ...issue,
       originalSeverity: issue.originalSeverity || issue.severity,
@@ -1816,7 +1853,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
             {p.reviewedUpload?.comparisonAvailable && !workbookChangeIssues.length && <div className="proposal-review-issue info">No meaningful workbook changes found in uploaded {p.reviewedUpload.filename || `Rev-${p.revision || '00'}`}.</div>}
             {!!workbookChangeIssues.length && <div className="proposal-review-workbook-changes">
               <div className="proposal-review-group-head"><strong>Workbook changes detected</strong><span>{workbookChangeIssues.length} item{workbookChangeIssues.length === 1 ? '' : 's'}</span></div>
-              <div className="proposal-review-group-list">{workbookChangeIssues.map((issue, index) => <ReviewIssue key={`change-${index}`} issue={issue} overridden={overrideAccepted} />)}</div>
+              <div className="proposal-review-group-list">{groupedWorkbookChangeIssues.map((issue, index) => <ReviewIssue key={`change-${index}`} issue={issue} overridden={overrideAccepted} />)}</div>
             </div>}
             {!!otherReviewIssues.length
               ? overrideAccepted
@@ -1826,12 +1863,12 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
                     {!!informationalReviewIssues.length && <div className="proposal-review-group proposal-review-group-info"><div className="proposal-review-group-head"><strong>Informational</strong><span>{informationalReviewIssues.length} item{informationalReviewIssues.length === 1 ? '' : 's'}</span></div><div className="proposal-review-group-list">{informationalReviewIssues.map((issue, index) => <ReviewIssue key={`info-${index}`} issue={issue} overridden />)}</div></div>}
                   </details>
                 : <>
-                    {!!blockingReviewIssues.length && <div className="proposal-review-group proposal-review-group-block"><div className="proposal-review-group-head"><strong>Blocking findings</strong><span>{blockingReviewIssues.length} item{blockingReviewIssues.length === 1 ? '' : 's'}</span></div><div className="proposal-review-group-list">{blockingReviewIssues.map((issue, index) => <ReviewIssue key={`block-${index}`} issue={issue} onUseStandardTerms={useModaeStandardTerms} />)}</div></div>}
+                    {!!blockingReviewIssues.length && <div className="proposal-review-group proposal-review-group-block"><div className="proposal-review-group-head"><strong>Blocking findings</strong><span>{blockingReviewIssues.length} item{blockingReviewIssues.length === 1 ? '' : 's'}</span></div><div className="proposal-review-group-list">{blockingReviewIssues.map((issue, index) => <ReviewIssue key={`block-${index}`} issue={issue} onUseStandardTerms={useModaeStandardTerms} onRetryAiReview={retryAiReview} />)}</div></div>}
                     {!!warningReviewIssues.length && <div className="proposal-review-group proposal-review-group-warning"><div className="proposal-review-group-head"><strong>Needs review</strong><span>{warningReviewIssues.length} item{warningReviewIssues.length === 1 ? '' : 's'}</span></div><div className="proposal-review-group-list">{warningReviewIssues.map((issue, index) => <ReviewIssue key={`warning-${index}`} issue={issue} onUseStandardTerms={useModaeStandardTerms} />)}</div></div>}
                     {!!informationalReviewIssues.length && <div className="proposal-review-group proposal-review-group-info"><div className="proposal-review-group-head"><strong>Informational</strong><span>{informationalReviewIssues.length} item{informationalReviewIssues.length === 1 ? '' : 's'}</span></div><div className="proposal-review-group-list">{informationalReviewIssues.map((issue, index) => <ReviewIssue key={`info-${index}`} issue={issue} onUseStandardTerms={useModaeStandardTerms} />)}</div></div>}
                   </>
               : !workbookChangeIssues.length && <div className="proposal-review-issue info">Review complete — proposal is ready to proceed.</div>}
-            {reviewStatus === 'Needs attention' && <button className="btn-secondary" onClick={() => setOverrideConfirmOpen(true)}>Continue anyway</button>}
+            {reviewStatus === 'Needs attention' && !aiReviewUnavailable && <button className="btn-secondary" onClick={() => setOverrideConfirmOpen(true)}>Continue anyway</button>}
           </div>}
         </section>
       )}
