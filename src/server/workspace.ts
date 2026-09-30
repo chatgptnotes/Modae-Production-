@@ -75,6 +75,8 @@ export const mergeConcurrentOpportunityRows = mergeOpportunityRows
 export class WorkspaceCache {
   private value: WorkspaceSlices | null = null
   private loading: Promise<WorkspaceSlices> | null = null
+  private generation = 0
+  private requiresGeneration = false
 
   constructor(private readonly read: WorkspaceReader) {}
 
@@ -92,7 +94,20 @@ export class WorkspaceCache {
     return Object.fromEntries(entities.map(entity => [entity, data[entity] || []]))
   }
 
-  invalidate() { this.value = null }
+  invalidate({ purge = false } = {}) {
+    this.value = null
+    this.loading = null
+    if (purge) {
+      this.generation += 1
+      this.requiresGeneration = true
+    }
+  }
+
+  generationHeader() { return String(this.generation) }
+
+  acceptsSaveGeneration(value: string | undefined) {
+    return !this.requiresGeneration || value === this.generationHeader()
+  }
 }
 
 const rows = (result: { data: Array<{ id: string, data: unknown }> | null, error: unknown }) => {

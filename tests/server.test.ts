@@ -244,6 +244,18 @@ test('workspace bootstrap is cached once for multiple signed-in browsers', async
   assert.equal(reads, 1)
 })
 
+test('a purged workspace cache rejects saves from an older browser generation', async () => {
+  const cache = new workspace.WorkspaceCache(async () => ({ leads: [], opportunities: [], approvals: [] }))
+  assert.equal(cache.acceptsSaveGeneration(undefined), true)
+
+  cache.invalidate({ purge: true })
+
+  assert.equal(cache.generationHeader(), '1')
+  assert.equal(cache.acceptsSaveGeneration(undefined), false)
+  assert.equal(cache.acceptsSaveGeneration('0'), false)
+  assert.equal(cache.acceptsSaveGeneration('1'), true)
+})
+
 test('workspace save authenticates and sends only changed collaborative slices to the server', async () => {
   const writes: unknown[] = []
   const app = createApp({

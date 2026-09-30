@@ -437,6 +437,13 @@ export function StoreProvider({ children }) {
       })
       .catch(e => {
         setAdminSaveState('error')
+        if (e?.code === 'WORKSPACE_PURGED') {
+          // The server rejected a snapshot from before a permanent purge.
+          // Reload so bootstrap replaces the stale browser state before any
+          // further save attempt can recreate deleted rows.
+          if (typeof window !== 'undefined') window.location.reload()
+          return false
+        }
         const authError = invalidateSupabaseAuth(e)
         if (!authError) setLiveSyncStatus('error')
         const saveError = {

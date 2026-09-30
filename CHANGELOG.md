@@ -13,6 +13,10 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Prevented stale workspace snapshots from recreating rows after a permanent
+  purge by invalidating the server workspace cache, tagging browser sessions
+  with a purge generation, rejecting pre-purge saves, and reloading rejected
+  clients before they can retry old data.
 - Hardened the Spares Sourcing-to-Proposal handoff with one shared gate for
   empty, invalid, unconfirmed, missing-price, and expired-price lines. Direct
   and embedded Proposal access now returns users to Sourcing, and stale proposal

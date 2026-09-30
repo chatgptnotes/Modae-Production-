@@ -66,6 +66,7 @@ export function createApp({
     if (!gateway.authenticate) return res.status(503).json({ ok: false, error: 'Workspace sync is not configured.' })
     try {
       if (!await gateway.authenticate(token)) return res.status(401).json({ ok: false, error: 'The application session is invalid or expired.' })
+      res.setHeader('x-workspace-generation', workspaceCache.generationHeader())
       return res.status(200).json({ ok: true, data: await workspaceCache.bootstrap() })
     } catch (error) { return next(error) }
   })
@@ -78,6 +79,11 @@ export function createApp({
     if (!gateway.authenticate || !writer) return res.status(503).json({ ok: false, error: 'Workspace writes are not configured.' })
     try {
       if (!await gateway.authenticate(token)) return res.status(401).json({ ok: false, error: 'The application session is invalid or expired.' })
+      const generation = String(req.get('x-workspace-generation') || '')
+      if (!workspaceCache.acceptsSaveGeneration(generation)) {
+        res.setHeader('x-workspace-generation', workspaceCache.generationHeader())
+        return res.status(409).json({ ok: false, error: 'The workspace was purged. Refresh before saving.', errorCode: 'WORKSPACE_PURGED' })
+      }
       await writer(dirty)
       workspaceCache.invalidate()
       const liveChanges = (['leads', 'opportunities', 'approvals'] as const).filter(key => key in dirty)
@@ -89,7 +95,12 @@ export function createApp({
   app.post('/api/admin-users', adminUsers)
   app.get('/api/app-version', appVersion)
   app.get('/api/locations', locations)
-  app.post('/api/purge-workspace', purgeWorkspace)
+  app.post('/api/purge-workspace', async (req, res, next) => {
+    try {
+      await purgeWorkspace(req, res, next)
+      if (res.statusCode >= 200 && res.statusCode < 300) workspaceCache.invalidate({ purge: true })
+    } catch (error) { next(error) }
+  })
   app.post('/api/send-proposal-email', sendProposalEmail)
   app.post('/api/presence', presence)
   app.get('/api/approvals', async (req, res, next) => {
