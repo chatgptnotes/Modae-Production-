@@ -46,6 +46,11 @@ test('mailbox bulk toolbar actions are wired', () => {
   assert.match(fs.readFileSync(new URL('../src/store.jsx', import.meta.url), 'utf8'), /updateLeads\(ids, patch, detail = ''\)/)
 })
 
+test('inbox refresh pulls shared data in place', () => {
+  assert.match(inbox, /onClick=\{\(\) => \{ void store\.refreshSharedData\(\) \}\}/)
+  assert.doesNotMatch(inbox, /title="Refresh inbox"[^\n]*window\.location\.reload/)
+})
+
 test('stale unavailable AI summaries have a targeted repair path', () => {
   assert.match(inbox, /isUnavailableAiSummary = lead => \/\^AI extraction was unavailable/)
   assert.match(inbox, /const staleAiLeads = \(store\.leads \|\| \[\]\)\.filter\(isUnavailableAiSummary\)/)
@@ -80,6 +85,8 @@ test('subject and preview stay in a contained two-line inbox cell', () => {
 test('opportunity scope is optional during lead qualification and registration', () => {
   assert.match(inbox, /const missing = \['Customer name', 'Required quantities and specifications'\]/)
   assert.match(inbox, /if \(text\.includes\('opportunity scope'\)\) return false/)
+  assert.match(inbox, /<textarea rows=\{5\} value=\{decisionDraft\.scope\}/)
+  assert.match(css, /\.lead-decision-grid input, \.lead-decision-grid select, \.lead-decision-grid textarea \{[\s\S]*border: 1px solid var\(--ws-border-strong\)/)
   const register = fs.readFileSync(new URL('../src/pages/Register.jsx', import.meta.url), 'utf8')
     assert.match(register, /const missingInfo = \[/)
     assert.match(register, /!\/opportunity\\s\+scope\/i\.test/)

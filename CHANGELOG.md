@@ -13,6 +13,10 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Restored lightweight cross-device workspace updates for leads, opportunities,
+  and approvals, including focus/visibility/reconnect recovery and an in-place
+  inbox refresh so a lead created on another device appears without a browser
+  reload.
 - Reordered the sales-owner dashboard into an action-to-outcome flow, moving
   Pipeline snapshot ahead of detailed tables, placing My orders after
   Performance, and making pipeline counts full-width with a compact empty

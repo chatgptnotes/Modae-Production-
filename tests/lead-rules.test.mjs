@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { customerCompanyFromText, customerContactFromText, deadlineForLead, expiredLeadDeadline, hardenLeadExtraction, isFastTrackLead, isInternalSender, normalizeLeadContactFields, opportunityOwnerFor, routeOwner, routeOwnerForLocation, supplyMissing } from '../src/leadRules.js'
+import { customerCompanyFromText, customerContactFromText, deadlineForLead, expiredLeadDeadline, hardenLeadExtraction, isFastTrackLead, isInternalSender, mergeSourceFieldFacts, normalizeLeadContactFields, opportunityOwnerFor, routeOwner, routeOwnerForLocation, sourceFieldFacts, supplyMissing } from '../src/leadRules.js'
 import { indiaRegionForLocation } from '../src/indiaLocations.js'
 
 const config = {
@@ -87,6 +87,45 @@ test('internal ModAE senders are not treated as customer contacts', () => {
   const fields = [{ group: 'Customer', k: 'Contact person', v: 'Ruthvik Satish', conf: 100 }]
   assert.deepEqual(normalizeLeadContactFields(fields, { from: 'sales@mod-ae.com', text: 'Please quote.\nRegards,\nRuthvik Satish' }), [])
   assert.equal(normalizeLeadContactFields(fields, { from: 'sales@mod-ae.com', text: 'Customer contact: Neha Kulkarni' })[0].v, 'Neha Kulkarni')
+})
+
+test('explicit source labels fill every supported lead decision field', () => {
+  const text = `
+    Customer: Eastern Alloy Works
+    Contact Person: Ankit Verma
+    Contact Phone: +91 98765 43210
+    Contact Email: procurement@easternalloy.example.com
+    EUC Name: Eastern Alloy Works
+    EUC Location: Jamshedpur, Jharkhand
+    Opportunity Name: VC-8000 vibration-monitoring spares
+    Opportunity Type: Spares
+    Opportunity Scope: Supply of VC-8000 vibration-monitoring spares
+    Business Unit: Energy
+    Segment: Industrial
+    Equipment / Product Family: VC-8000
+    RFQ Number: RFQ-TEST-2026-004
+    RFQ Date: 30-Sep-2026
+  `
+  const facts = sourceFieldFacts(text)
+  const value = key => facts.find(field => field.k === key)?.v
+  assert.equal(value('Sell-to customer'), 'Eastern Alloy Works')
+  assert.equal(value('Contact person'), 'Ankit Verma')
+  assert.equal(value('Contact phone'), '+91 98765 43210')
+  assert.equal(value('Contact email'), 'procurement@easternalloy.example.com')
+  assert.equal(value('EUC Location'), 'Jamshedpur, Jharkhand')
+  assert.equal(value('Opportunity type'), 'Spares')
+  assert.equal(value('Business unit'), 'Energy')
+  assert.equal(value('Segment'), 'Industrial')
+  assert.equal(value('RFQ number'), 'RFQ-TEST-2026-004')
+})
+
+test('explicit source facts repair an AI omission without inventing silent fields', () => {
+  const text = 'Customer: Eastern Alloy Works\nContact Person: Ankit Verma\nContact Phone: +91 98765 43210'
+  const merged = mergeSourceFieldFacts([{ group: 'Customer', k: 'Sell-to customer', v: 'Eastern Alloy Works', conf: 70 }], text)
+  assert.equal(merged.find(field => field.k === 'Contact person')?.v, 'Ankit Verma')
+  assert.equal(merged.find(field => field.k === 'Business unit'), undefined)
+  const hardened = hardenLeadExtraction({ fields: [], lineItems: [], missing: [] }, { from: 'buyer@example.com', text })
+  assert.equal(hardened.fields.find(field => field.k === 'Contact person')?.v, 'Ankit Verma')
 })
 
 test('lead extraction hardening does not invent quantities and flags missing evidence', () => {

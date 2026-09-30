@@ -11,11 +11,11 @@ test('the shared workspace loads once per session and saves only explicit edits'
   assert.match(datastore, /\.is\('deleted_at', null\)/)
 
   const store = read('src/store.jsx')
-  assert.match(store, /import \{ readLiveData \} from '\.\/liveSync\.js'/)
+  assert.match(store, /import \{ readLiveData, startLiveEvents \} from '\.\/liveSync\.js'/)
   assert.match(datastore, /saveWorkspaceToServer\(collaborativeDirty\)/)
-  assert.doesNotMatch(store, /return startLiveEvents\(/)
-  assert.doesNotMatch(store, /document\.addEventListener\('visibilitychange'/)
-  assert.doesNotMatch(store, /useEffect\(\(\) => \{\n    if \(!datastore\.dbEnabled\(\) \|\| !hydratedRef\.current\) return\n    void pullSharedData\(\)/)
+  assert.match(store, /const stopLiveEvents = startLiveEvents\(/)
+  assert.match(store, /document\.addEventListener\('visibilitychange'/)
+  assert.match(store, /window\.addEventListener\('online'/)
   assert.match(store, /const initialHydrationRef = useRef\(null\)/)
   assert.match(store, /const userId = state\.auth\?\.user\?\.id \|\| ''/)
   assert.match(store, /initialHydrationRef\.current === userId/)
@@ -134,11 +134,13 @@ test('save RPC errors retain the entity that failed', () => {
   assert.match(datastore, /throw annotateRpcError\('opportunities', result\.error\)/)
 })
 
-test('lifecycle events do not trigger repeated full workspace pulls', () => {
+test('lifecycle events refresh the shared workspace without overlapping pulls', () => {
   const store = read('src/store.jsx')
-  assert.doesNotMatch(store, /window\.addEventListener\('online'/)
-  assert.doesNotMatch(store, /document\.addEventListener\('visibilitychange'/)
-  assert.doesNotMatch(store, /pullSharedData\(/)
+  assert.match(store, /const sharedPullInFlightRef = useRef\(null\)/)
+  assert.match(store, /const pullSharedData = \(\{ force = false \} = \{\}\)/)
+  assert.match(store, /window\.addEventListener\('focus', onFocus\)/)
+  assert.match(store, /document\.addEventListener\('visibilitychange', onVisibility\)/)
+  assert.match(store, /window\.addEventListener\('online', onOnline\)/)
 })
 
 test('manual refresh remains the only full workspace pull after initial hydration', () => {

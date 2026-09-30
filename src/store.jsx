@@ -32,7 +32,7 @@ import {
 import { releaseState, transitionBlockers } from './gates.js'
 import { clearSupabaseSession, isSupabaseAuthError, supabase, supabaseConfigError } from './supabase.js'
 import { isLocalDemoSession } from './authMode.js'
-import { readLiveData } from './liveSync.js'
+import { readLiveData, startLiveEvents } from './liveSync.js'
 import { purgeWorkspace } from './workspacePurge.js'
 
 const StoreCtx = createContext(null)
@@ -330,6 +330,7 @@ function reconcileApprovedSubmissions(s) {
 export function StoreProvider({ children }) {
   const [state, setState] = useState(initialState)
   const initialHydrationRef = useRef(null)
+  const sharedPullInFlightRef = useRef(null)
   datastore.setLocalDemoMode(isLocalDemoSession(state))
   const [authReady, setAuthReady] = useState(() => !supabase || !!state.auth?.user)
   const [liveSyncStatus, setLiveSyncStatus] = useState(() => supabaseConfigError ? 'config-error' : datastore.dbEnabled() ? 'connecting' : 'offline')
@@ -627,6 +628,38 @@ export function StoreProvider({ children }) {
     return flushSaves()
   }
 
+  // A lead created on another device must reach an already-open inbox without
+  // making every browser poll the full workspace continuously. The server's
+  // lightweight event stream identifies changed collaborative slices; this
+  // pull is deduplicated so reconnect, focus, and visibility events cannot
+  // queue overlapping full reads.
+  const pullSharedData = ({ force = false } = {}) => {
+    if (!datastore.dbEnabled()) return false
+    if (!force && sharedPullInFlightRef.current) return sharedPullInFlightRef.current
+    const pull = (async () => {
+      await flushSaves()
+      const res = await datastore.loadAll({ force: true })
+      if (!res) { setLiveSyncStatus('error'); return false }
+      if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
+      if (res.error) {
+        const authError = invalidateSupabaseAuth(res.error)
+        if (!authError) setLiveSyncStatus('error')
+        return false
+      }
+      if (res.empty) {
+        setLiveSyncStatus('degraded')
+        return true
+      }
+      setLiveSyncStatus('live')
+      applyServer(res.slices, res.diagnostics)
+      return true
+    })()
+    sharedPullInFlightRef.current = pull
+    return pull.finally(() => {
+      if (sharedPullInFlightRef.current === pull) sharedPullInFlightRef.current = null
+    })
+  }
+
   useEffect(() => {
     const userId = state.auth?.user?.id || ''
     if (!datastore.dbEnabled() || !userId) return
@@ -634,9 +667,43 @@ export function StoreProvider({ children }) {
     initialHydrationRef.current = userId
     hydrate()
     loadApprovedPriceLists()
+    const stopLiveEvents = startLiveEvents({
+      onChange: async entities => {
+        try {
+          const slices = await readLiveData(entities)
+          if (slices) applyServer(slices)
+          setLiveSyncStatus('live')
+        } catch (error) {
+          if (!invalidateSupabaseAuth(error)) setLiveSyncStatus('error')
+        }
+      },
+      onError: error => {
+        if (!isSupabaseAuthError(error)) setLiveSyncStatus('error')
+      },
+    })
+    const onFocus = () => {
+      if (!hydratedRef.current) return
+      void pullSharedData()
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        flushLocalCache()
+        void flushSaves()
+      } else {
+        onFocus()
+      }
+    }
+    const onOnline = () => onFocus()
     const onPageHide = () => { flushLocalCache(); flushSaves() }
+    window.addEventListener('focus', onFocus)
+    window.addEventListener('online', onOnline)
+    document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('pagehide', onPageHide)
     return () => {
+      stopLiveEvents?.()
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('online', onOnline)
+      document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('pagehide', onPageHide)
     }
   }, [state.auth?.user?.id])

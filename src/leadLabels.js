@@ -7,6 +7,16 @@ export const LEAD_LABELS = {
   eucLocation: String.raw`(?:(?:euc|eun|end\s+user)(?:\s+site)?\s+(?:location|address)|(?:site|plant|station|project\s+site|installation)\s+(?:location|address)|delivery\s+(?:location|address|site)|site\s+address|location|region|city(?:\s+and\s+state)?|state|country)`,
   contactPerson: String.raw`(?:customer\s+)?(?:contact\s+person|contact|attn\.?|kind\s+attention)`,
   contactPhone: String.raw`(?:contact\s+phone|phone|mobile|telephone)(?:\s+(?:number|#))?`,
+  contactEmail: String.raw`(?:contact\s+)?e[-\s]?mail`,
+  oppName: String.raw`(?:opportunity|opp)\s+name`,
+  oppType: String.raw`(?:opportunity|opp)\s+type`,
+  opportunityScope: String.raw`(?:opportunity\s+scope|requested\s+scope|requirement)`,
+  category: String.raw`(?:customer\s+)?categor(?:y|ies)`,
+  businessUnit: String.raw`(?:business\s+unit|\bbu\b)`,
+  segment: String.raw`segment`,
+  product: String.raw`(?:equipment\s*/\s*product\s+family|product(?:\s+family)?)`,
+  rfqNumber: String.raw`(?:rfq|tender|enquiry|inquiry)\s*(?:number|no\.?|reference|ref\.?)`,
+  rfqDate: String.raw`(?:rfq|tender|enquiry|inquiry)\s+date`,
 }
 
 const allLabels = Object.values(LEAD_LABELS).join('|')

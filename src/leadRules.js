@@ -44,6 +44,67 @@ export const customerPhoneFromText = text => {
   return extractLabeledValue(text, LEAD_LABELS.contactPhone)
 }
 
+const SOURCE_FIELD_SPECS = [
+  ['Sell-to customer', 'Customer', LEAD_LABELS.sellTo],
+  ['Contact person', 'Customer', LEAD_LABELS.contactPerson],
+  ['Contact email', 'Customer', LEAD_LABELS.contactEmail],
+  ['Contact phone', 'Customer', LEAD_LABELS.contactPhone],
+  ['EUC Name', 'Customer', LEAD_LABELS.eucName],
+  ['EUC Location', 'Customer', LEAD_LABELS.eucLocation],
+  ['Opportunity name', 'RFQ', LEAD_LABELS.oppName],
+  ['Opportunity type', 'RFQ', LEAD_LABELS.oppType],
+  ['Opportunity scope', 'RFQ', LEAD_LABELS.opportunityScope],
+  ['Customer category', 'Customer', LEAD_LABELS.category],
+  ['Business unit', 'Customer', LEAD_LABELS.businessUnit],
+  ['Segment', 'Customer', LEAD_LABELS.segment],
+  ['Equipment / Product Family', 'Customer', LEAD_LABELS.product],
+  ['RFQ number', 'RFQ', LEAD_LABELS.rfqNumber],
+  ['RFQ date', 'RFQ', LEAD_LABELS.rfqDate],
+]
+
+const sourceFieldMatches = (field, canonical) => {
+  const label = String(field?.k || '').toLowerCase().replace(/[：:;/|_-]+/g, ' ').replace(/\s+/g, ' ').trim()
+  const aliases = {
+    'Sell-to customer': /^(?:sell to customer|sell to|customer name|customer|buyer|company)$/,
+    'Contact person': /^(?:contact person|contact|signatory|attn|kind attention)$/,
+    'Contact email': /^(?:contact email|email|e mail)$/,
+    'Contact phone': /^(?:contact phone|contact number|phone|mobile|telephone)$/,
+    'EUC Name': /^(?:euc|euc name|eun|eun name|end user|end user name|ultimate customer|beneficiary)$/,
+    'EUC Location': /^(?:euc location|eun location|end user location|location|region|city|state|country)$/,
+    'Opportunity name': /^(?:opportunity name|opp name)$/,
+    'Opportunity type': /^(?:opportunity type|opp type)$/,
+    'Opportunity scope': /^(?:opportunity scope|scope|requested scope|requirement)$/,
+    'Customer category': /^(?:customer category|category)$/,
+    'Business unit': /^(?:business unit|bu)$/,
+    Segment: /^segment$/,
+    'Equipment / Product Family': /^(?:equipment product family|product|product family)$/,
+    'RFQ number': /^(?:rfq number|rfq no|rfq reference|tender number|tender reference|enquiry number|enquiry reference|inquiry number|inquiry reference)$/,
+    'RFQ date': /^(?:rfq date|tender date|enquiry date|inquiry date)$/,
+  }
+  return aliases[canonical]?.test(label)
+}
+
+// Explicit labels are stronger than a model omission or a model guess. This
+// resolver is intentionally source-only; it never invents a value for a
+// field that the enquiry does not state.
+export const sourceFieldFacts = (text = '') => {
+  const source = String(text || '')
+  return SOURCE_FIELD_SPECS.flatMap(([k, group, labels]) => {
+    const value = extractLabeledValue(source, labels)
+    return value ? [{ group, k, v: value, conf: 98, ev: `Explicit ${k.toLowerCase()} label in enquiry`, source: 'deterministic' }] : []
+  })
+}
+
+export const mergeSourceFieldFacts = (fields = [], text = '') => {
+  const existing = Array.isArray(fields) ? [...fields] : []
+  for (const sourceField of sourceFieldFacts(text)) {
+    const index = existing.findIndex(field => sourceFieldMatches(field, sourceField.k))
+    if (index < 0) existing.push(sourceField)
+    else existing[index] = { ...existing[index], ...sourceField, state: existing[index].state || 'pending' }
+  }
+  return existing
+}
+
 export const customerCompanyFromText = text => {
   return extractLabeledValue(text, LEAD_LABELS.sellTo).replace(/[,]+$/, '')
 }
@@ -69,7 +130,7 @@ const boundedConfidence = (value, fallback = 0) => {
 export const hardenLeadExtraction = (ai, { from = '', text = '', config = {} } = {}) => {
   if (!ai) return ai
   const sourceCompany = customerCompanyFromText(text)
-  const normalized = normalizeLeadContactFields(ai.fields, { from, text, config })
+  const normalized = mergeSourceFieldFacts(normalizeLeadContactFields(ai.fields, { from, text, config }), text)
   const hasCompany = normalized.some(field => /sell[-\s]?to\s+customer|customer name/i.test(String(field?.k || '')))
   const fields = (sourceCompany && !hasCompany
     ? [...normalized, { group: 'Customer', k: 'Sell-to customer', v: sourceCompany, conf: 98, ev: 'Explicit Customer label in email body' }]

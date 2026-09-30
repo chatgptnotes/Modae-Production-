@@ -20,7 +20,7 @@ import { leadWorkflow } from '../leadWorkflow.js'
 import { parseLeadLineItems } from '../tenderParse.js'
 import { deterministicLeadRoute, leadTextChunks, mergeLeadResults, cleanDisplayValue, extractLeadIdentityFacts } from '../leadExtraction.js'
 import { scanAttachment, parsedToLeadFields, deterministicPromptContext, mergeDeterministicIntoAi } from '../docScan.js'
-import { customerContactFromText, customerCompanyFromText, customerPhoneFromText, hardenLeadExtraction, isFastTrackLead, isInternalSender, isRegistrationCriticalField, normalizeLeadContactFields, opportunityOwnerFor, routeOwner, routeOwnerForLocation, supplyMissing } from '../leadRules.js'
+import { customerContactFromText, customerCompanyFromText, customerPhoneFromText, hardenLeadExtraction, isFastTrackLead, isInternalSender, isRegistrationCriticalField, normalizeLeadContactFields, opportunityOwnerFor, routeOwner, routeOwnerForLocation, sourceFieldFacts, supplyMissing } from '../leadRules.js'
 import { indiaLocation, indiaRegionForLocation } from '../indiaLocations.js'
 import {
   QUOTE_FEE_DOCUMENTS, answeredPatch, clarificationItems, clarificationKindFor,
@@ -1483,10 +1483,13 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
   const [reassignOpen, setReassignOpen] = useState(false)
   const [compareOpen, setCompareOpen] = useState(false)
   const internalSender = isInternalSender(lead.from, store.config)
-  const explicitCustomerContact = customerContactFromText(`${lead.subject || ''}\n${lead.body || ''}`)
+  const leadSourceText = `${lead.subject || ''}\n${lead.body || ''}`
+  const sourceFacts = sourceFieldFacts(leadSourceText)
+  const sourceValue = key => sourceFacts.find(field => field.k === key)?.v || ''
+  const explicitCustomerContact = customerContactFromText(leadSourceText)
   const storedCustomerContact = internalSender
     ? explicitCustomerContact
-    : lead.contactPerson || leadFieldValue(ai.fields, /contact\s*person|contact/i) || lead.parse?.contactPerson || ''
+    : lead.contactPerson || leadFieldValue(ai.fields, /contact\s*person|contact/i) || lead.parse?.contactPerson || explicitCustomerContact || ''
   const initialLocation = lead.location || (lead.region && !indiaRegionForLocation(lead.region, store.config) ? lead.region : '') || mappedLeadFieldValue(ai.fields, 'eucLocation')
   const initialRegion = lead.region || indiaRegionForLocation(initialLocation, store.config) || initialLocation
   const regionalOwner = routeOwner(initialRegion, store.config, '')
@@ -1496,22 +1499,22 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
     const buSegment = splitBuSegment(ai.fields)
     const sourcePhone = customerPhoneFromText(`${lead.subject || ''}\n${lead.body || ''}`)
     return ({
-    sellTo: identity.sellTo,
-    scope: lead.opportunityScope || mappedLeadFieldValue(ai.fields, 'scope') || '',
+    sellTo: identity.sellTo || sourceValue('Sell-to customer'),
+    scope: lead.opportunityScope || mappedLeadFieldValue(ai.fields, 'scope') || sourceValue('Opportunity scope') || '',
     location: initialLocation,
     region: initialRegion,
-    eucName: identity.eucName,
-    eucLocation: normalizeLocationValue(identity.eucLocation || initialLocation),
+    eucName: identity.eucName || sourceValue('EUC Name'),
+    eucLocation: normalizeLocationValue(identity.eucLocation || initialLocation || sourceValue('EUC Location')),
     contactPerson: identity.contactPerson || storedCustomerContact,
-    contactPhone: identity.contactPhone || sourcePhone,
+    contactPhone: identity.contactPhone || sourcePhone || sourceValue('Contact phone'),
     owner: savedOverride ? lead.assignedOwner : regionalOwner,
     oppType: OPP_TYPES.includes(lead.oppType)
       ? lead.oppType
       : mappedLeadFieldValue(ai.fields, 'oppType') || (lead.route === 'Service' ? 'Service' : lead.route === 'Project' ? 'Project' : 'Spares'),
     customerStatus: customerStatusForLead(lead, store.customers),
-    bu: buSegment.bu || 'Energy',
-    segment: buSegment.segment || 'Others',
-    product: mappedLeadFieldValue(ai.fields, 'product') || 'Various',
+    bu: buSegment.bu || sourceValue('Business unit') || '',
+    segment: buSegment.segment || sourceValue('Segment') || '',
+    product: mappedLeadFieldValue(ai.fields, 'product') || sourceValue('Equipment / Product Family') || '',
   })}
   const [decisionDraft, setDecisionDraft] = useState(initialDecisions)
   const persistedDecisionRef = useRef(initialDecisions())
@@ -2503,18 +2506,21 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
           <label><span className="decision-field-heading">Business unit {decisionAiMeta('bu', false)}</span>
             <div className="decision-value-row"><select value={decisionDraft.bu} disabled={lead.status === 'Dropped'}
               onChange={e => setDecisionDraft({ ...decisionDraft, bu: e.target.value })}>
+              <option value="">Not specified</option>
               {BUS.map(bu => <option key={bu}>{bu}</option>)}
             </select>{decisionAiStatus('bu')}</div>
           </label>
           <label><span className="decision-field-heading">Segment {decisionAiMeta('segment', false)}</span>
             <div className="decision-value-row"><select value={decisionDraft.segment} disabled={lead.status === 'Dropped'}
               onChange={e => setDecisionDraft({ ...decisionDraft, segment: e.target.value })}>
+              <option value="">Not specified</option>
               {SEGMENTS.map(segment => <option key={segment}>{segment}</option>)}
             </select>{decisionAiStatus('segment')}</div>
           </label>
           <label><span className="decision-field-heading">Equipment / Product Family {decisionAiMeta('product', false)}</span>
             <div className="decision-value-row"><select value={decisionDraft.product} disabled={lead.status === 'Dropped'}
               onChange={e => setDecisionDraft({ ...decisionDraft, product: e.target.value })}>
+              <option value="">Not specified</option>
               {PRODUCTS.map(product => <option key={product} value={product}>{product === 'Various' ? 'Multiple equipment items' : product}</option>)}
             </select>{decisionAiStatus('product')}</div>
           </label>
@@ -2856,18 +2862,21 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
               <label>Business unit {decisionAiMeta('bu')}
                 <select value={decisionDraft.bu} disabled={lead.status === 'Dropped'}
                   onChange={e => setDecisionDraft({ ...decisionDraft, bu: e.target.value })}>
+                  <option value="">Not specified</option>
                   {BUS.map(bu => <option key={bu}>{bu}</option>)}
                 </select>
               </label>
               <label>Segment {decisionAiMeta('segment')}
                 <select value={decisionDraft.segment} disabled={lead.status === 'Dropped'}
                   onChange={e => setDecisionDraft({ ...decisionDraft, segment: e.target.value })}>
+                  <option value="">Not specified</option>
                   {SEGMENTS.map(segment => <option key={segment}>{segment}</option>)}
                 </select>
               </label>
               <label>Equipment / Product Family {decisionAiMeta('product')}
                 <select value={decisionDraft.product} disabled={lead.status === 'Dropped'}
                   onChange={e => setDecisionDraft({ ...decisionDraft, product: e.target.value })}>
+                <option value="">Not specified</option>
                 {PRODUCTS.map(product => <option key={product} value={product}>{product === 'Various' ? 'Multiple equipment items' : product}</option>)}
                 </select>
               </label>
@@ -3712,7 +3721,7 @@ export default function Inbox() {
       <div className="mailbox-list">
         <div className="mail-list-toolbar">
           <label className="mail-check"><input type="checkbox" checked={mailboxRows.length > 0 && mailboxRows.every(l => selectedIds.has(l.id))} onChange={selectVisible} aria-label="Select visible messages" /></label>
-          <button type="button" className="mail-icon-btn" title="Refresh inbox" aria-label="Refresh inbox" onClick={() => window.location.reload()}><Icon name="refresh" size={15} /></button>
+          <button type="button" className="mail-icon-btn" title="Refresh inbox" aria-label="Refresh inbox" onClick={() => { void store.refreshSharedData() }}><Icon name="refresh" size={15} /></button>
           <div className="mail-more-actions">
             <button type="button" className="mail-icon-btn" title="More actions" aria-label="More actions" aria-expanded={bulkMenuOpen} onClick={() => setBulkMenuOpen(open => !open)}><Icon name="list" size={15} /></button>
             {bulkMenuOpen && <div className="mail-action-menu" role="menu">
