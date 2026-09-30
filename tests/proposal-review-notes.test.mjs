@@ -56,11 +56,14 @@ test('uploaded workbook storage does not block validation and has a retry state'
   assert.match(proposal, /validation can continue/)
 })
 
-test('AI review failure blocks proposal validation and exposes a retry action', () => {
+test('AI review failure exposes retry and owner-only bypass actions', () => {
   assert.match(proposal, /ai\.unavailable/)
   assert.match(proposal, /Retry AI review/)
   assert.match(proposal, /reviewStatus: hasActiveBlock \? 'Needs attention'/)
-  assert.doesNotMatch(proposal, /Continue anyway.*ai\.unavailable/)
+  assert.match(proposal, /const canSkipAiReview = !!opp && opp\.owner === store\.role/)
+  assert.match(proposal, /Continue without AI review/)
+  assert.match(proposal, /Only the opportunity owner can skip an unavailable AI review/)
+  assert.match(proposal, /Resolve the other blocking findings before skipping the unavailable AI review/)
 })
 
 test('stored workbook reviews are recomputed from the pre-import snapshot and shown first', () => {

@@ -40,6 +40,11 @@ GMAIL_APP_PASSWORD=...
 SUPERBEES_GIT_COMMIT_SHA=...
 ```
 
+Vercel only provides the public domain/DNS. Railway serves the React bundle
+and the Express `/api/*` routes, including `/api/ai`. Set `CORS_ORIGINS` to
+the public domain shown in the browser. The Gemini key and `AI_RATE_LIMIT`
+belong only to Railway; never add them as `VITE_` variables.
+
 `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `SUPABASE_ANON_KEY` are
 required in production. The two Gmail variables are optional as a pair: omit
 both to disable server-side proposal email, or configure both together.

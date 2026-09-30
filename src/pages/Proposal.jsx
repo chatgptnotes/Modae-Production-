@@ -1095,6 +1095,9 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   const warningReviewIssues = otherReviewIssues.filter(issue => issue.severity === 'warning')
   const informationalReviewIssues = otherReviewIssues.filter(issue => issue.severity === 'info')
   const aiReviewUnavailable = displayReviewIssues.some(issue => issue.code === 'ai.unavailable')
+  const nonAiBlockingReviewIssues = blockingReviewIssues.filter(issue => issue.code !== 'ai.unavailable')
+  const canSkipAiReview = !!opp && opp.owner === store.role
+  const aiOnlyReviewFailure = aiReviewUnavailable && nonAiBlockingReviewIssues.length === 0
   const workflowBlocked = blockers.some(bl => bl.severity === 'block' || bl.severity === 'wait')
   const approvalRequired = blockers.some(bl => bl.approvalType && bl.severity !== 'wait') || pendingForOpp.length > 0
   const reviewBanner = reviewStatus === 'Needs attention'
@@ -1108,7 +1111,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
             ? { tone: 'success', title: 'Review complete', text: 'Approval is required before the quote can be released.' }
             : { tone: 'success', title: 'Review complete', text: 'This proposal is ready for approval.' }
       : reviewStatus === 'Override accepted'
-        ? { tone: 'override', title: 'Review override accepted', text: 'The findings were saved and the proposal can continue through approval.' }
+        ? { tone: 'override', title: 'Review override accepted', text: p.reviewOverride?.kind === 'ai-unavailable' ? 'Gemini was unavailable. The opportunity owner acknowledged the outage and the proposal can continue.' : 'The findings were saved and the proposal can continue through approval.' }
         : p.reviewedUpload
             ? { tone: 'neutral', title: 'Uploaded proposal review', text: 'This uploaded workbook is being checked against the opportunity and its approval history.' }
           : { tone: 'neutral', title: 'Review the generated proposal', text: 'Validate the system-generated workbook before requesting approval.' }
@@ -1469,8 +1472,12 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
 
   const continueAnyway = () => {
     const findings = p.reviewIssues || []
-    if (findings.some(issue => issue.code === 'ai.unavailable')) {
-      setReviewError('Gemini must complete the semantic review before this proposal can continue.')
+    const hasAiUnavailable = findings.some(issue => issue.code === 'ai.unavailable')
+    const hasOtherBlocking = findings.some(issue => issue.severity === 'block' && issue.code !== 'ai.unavailable')
+    if (hasAiUnavailable && (!canSkipAiReview || hasOtherBlocking)) {
+      setReviewError(hasOtherBlocking
+        ? 'Resolve the other blocking findings before skipping the unavailable AI review.'
+        : 'Only the opportunity owner can skip an unavailable AI review.')
       return
     }
     const overriddenFindings = findings.map(issue => ({
@@ -1483,14 +1490,16 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     const next = {
       ...p,
       reviewStatus: 'Override accepted',
-      reviewOverride: { accepted: true, by: store.role, at: new Date().toISOString(), findings: overriddenFindings },
+      reviewOverride: { accepted: true, kind: hasAiUnavailable ? 'ai-unavailable' : 'findings', by: store.role, at: new Date().toISOString(), findings: overriddenFindings },
       reviewIssues: overriddenFindings,
       reviewNeedsRevision: false,
     }
     setP(next)
     store.saveProposal(oppId, next, { immediate: true })
     setReviewError('')
-    setReviewMessage('Validation findings were stored. You chose to continue anyway; this override was recorded in the audit trail.')
+    setReviewMessage(hasAiUnavailable
+      ? 'Gemini was unavailable. You chose to continue without AI review; this override was recorded in the audit trail.'
+      : 'Validation findings were stored. You chose to continue anyway; this override was recorded in the audit trail.')
   }
 
   const exportBoQ = () => exportCSV(
@@ -1891,13 +1900,13 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
                     {!!informationalReviewIssues.length && <div className="proposal-review-group proposal-review-group-info"><div className="proposal-review-group-head"><strong>Informational</strong><span>{informationalReviewIssues.length} item{informationalReviewIssues.length === 1 ? '' : 's'}</span></div><div className="proposal-review-group-list">{informationalReviewIssues.map((issue, index) => <ReviewIssue key={`info-${index}`} issue={issue} onUseStandardTerms={useModaeStandardTerms} />)}</div></div>}
                   </>
               : !workbookChangeIssues.length && <div className="proposal-review-issue info">Review complete — proposal is ready to proceed.</div>}
-            {reviewStatus === 'Needs attention' && !aiReviewUnavailable && <button className="btn-secondary" onClick={() => setOverrideConfirmOpen(true)}>Continue anyway</button>}
+            {reviewStatus === 'Needs attention' && ((!aiReviewUnavailable && blockingReviewIssues.length > 0) || (aiOnlyReviewFailure && canSkipAiReview)) && <button className="btn-secondary" onClick={() => setOverrideConfirmOpen(true)}>{aiOnlyReviewFailure ? 'Continue without AI review' : 'Continue anyway'}</button>}
           </div>}
         </section>
       )}
-      {overrideConfirmOpen && <ConfirmModal title="Continue with validation findings?" tone="danger"
-        message="These findings will be overridden and the decision will be stored in the audit trail."
-        confirmLabel="Continue anyway" onClose={() => setOverrideConfirmOpen(false)}
+      {overrideConfirmOpen && <ConfirmModal title={aiOnlyReviewFailure ? 'Continue without AI review?' : 'Continue with validation findings?'} tone="danger"
+        message={aiOnlyReviewFailure ? 'Gemini is unavailable. Continue without AI review? This decision will be stored in the audit trail.' : 'These findings will be overridden and the decision will be stored in the audit trail.'}
+        confirmLabel={aiOnlyReviewFailure ? 'Continue without AI review' : 'Continue anyway'} onClose={() => setOverrideConfirmOpen(false)}
         onConfirm={() => { continueAnyway(); setOverrideConfirmOpen(false) }} />}
 
       <div className="proposal-tab-bar proposal-artifact-tabs">

@@ -1,9 +1,9 @@
-// Gemini access for the app, via the server-side Vercel `/api/ai` function. The
+// Gemini access for the app, via the server-side Railway `/api/ai` service. The
 // key never reaches the browser: we post a task name and payload, while the
 // function owns the prompt, schema and credential.
 //
 // Mirrors the filestore/datastore facade — every call returns null when the AI
-// is unavailable (no Vercel key, timeout, bad JSON) so each call site can
+// is unavailable (no Railway key, timeout, bad JSON) so each call site can
 // fall back to the deterministic path the app has always had:
 //
 //   const ai = await runTask('lead.extract', payload)
@@ -11,10 +11,11 @@
 
 import { supabaseAuth } from './supabase.js'
 
-// AI always goes through the same-origin Vercel function. Never add a
-// browser-side Gemini key or an alternate Supabase function URL.
+// Railway serves the browser bundle and the Express API on the same origin.
+// Vercel only provides the public domain/DNS, so the browser must call the
+// Railway route through the same-origin path.
 const AI_URL = '/api/ai'
-export const usesVercelAi = () => true
+export const usesRailwayAi = () => true
 
 export const aiEnabled = () => !!AI_URL
 
@@ -103,5 +104,5 @@ export async function testConnection(model) {
 // Sends a new provider credential only to the server-side setup function. It
 // is deliberately not persisted in app state or localStorage.
 export async function saveAiKey(apiKey, role = '') {
-  throw new Error('AI credentials are managed in the Vercel environment')
+  throw new Error('AI credentials are managed in the Railway environment')
 }

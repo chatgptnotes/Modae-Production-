@@ -1,6 +1,6 @@
 import { getAdminSupabaseClient } from './_supabase-client.js'
 
-// Vercel Gemini proxy for the browser AI contract.
+// Railway Gemini proxy for the browser AI contract.
 // GEMINI_API_KEY is read only on the server. Never expose it through VITE_.
 
 const API = 'https://generativelanguage.googleapis.com/v1beta/models'
@@ -886,7 +886,7 @@ export default async function handler(req, res) {
   if (!allowRequest(auth.user.id, ip)) return fail(res, 429, 'AI_RATE_LIMITED', 'Too many AI requests. Please wait a few minutes and try again.')
 
   const key = String(process.env.GEMINI_API_KEY || '').trim()
-  if (!key) return fail(res, 503, 'AI_KEY_MISSING', 'Gemini is not configured for this Vercel environment')
+  if (!key) return fail(res, 503, 'AI_KEY_MISSING', 'Gemini is not configured for this Railway environment')
 
   let input
   try { input = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {}) }
@@ -993,7 +993,7 @@ export default async function handler(req, res) {
     if (task === 'health' || !structuredTasks.has(task)) return send(res, 200, { ok: true, model, text })
     return send(res, 200, { ok: true, model, data: JSON.parse(text) })
   } catch (error) {
-    console.error('Vercel Gemini proxy failed', error?.message || error)
+    console.error('Railway Gemini proxy failed', error?.message || error)
     return fail(res, 502, 'AI_NETWORK_ERROR', 'Gemini could not be reached; try again shortly')
   }
 }
