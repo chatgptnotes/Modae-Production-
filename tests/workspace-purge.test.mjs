@@ -33,6 +33,16 @@ test('the purge procedure retains only price lists and required user profiles', 
   assert.match(migration, /grant execute on function public\.purge_workspace_data\(\) to service_role/)
 })
 
+test('workspace deletes bump the persistent generation marker', () => {
+  const migration = read('supabase/016_workspace_generation.sql')
+  assert.match(migration, /workspace_generation/)
+  assert.match(migration, /create or replace function public\.bump_workspace_generation\(\)/)
+  for (const table of ['opportunities', 'leads', 'approvals']) {
+    assert.match(migration, new RegExp(`after delete on public\\.${table}`))
+  }
+  assert.match(migration, /id in \('users', 'workspace_generation'\)/)
+})
+
 test('Admin exposes a typed permanent purge and blocks further browser saves', () => {
   const admin = read('src/pages/Admin.jsx')
   const store = read('src/store.jsx')

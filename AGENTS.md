@@ -105,7 +105,9 @@ The active repository migrations are `supabase/007_live_workspace_sync.sql`,
 `supabase/009_relational_workspace_data.sql`,
 `supabase/010_workspace_contract_verification.sql`, and
 `supabase/011_save_rows_lock_order.sql`, and
-`supabase/012_permanent_workspace_purge.sql`.
+`supabase/012_permanent_workspace_purge.sql`,
+`supabase/015_atomic_opportunity_sequences.sql`, and
+`supabase/016_workspace_generation.sql`.
 `supabase/014_user_presence.sql` stores the short-lived admin-only online
 indicator; browser code must access it only through `api/presence.js`.
 Historical migrations and backups are local-only under `.local/backups/`.
@@ -171,6 +173,9 @@ directory convention, or validation requirement changes.
 - Supabase is authoritative for shared state, including empty/deleted slices.
   Never write a browser snapshot back to Supabase merely because it exists in
   localStorage; only edits made after an authoritative pull may be saved.
+- Direct deletes from opportunities, leads, or approvals increment the
+  database-backed workspace generation so stale browser/server snapshots cannot
+  recreate deleted rows.
 - Every Vercel deployment invalidates active browser sessions. The client must
   clear app-owned local/session storage, Cache Storage, service-worker state,
   and local IndexedDB file data, sign out locally, and reload to login. Do not

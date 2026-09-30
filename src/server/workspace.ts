@@ -4,6 +4,7 @@ import { mergeConcurrentOpportunityRows as mergeOpportunityRows } from '../workf
 export type WorkspaceSlices = Record<string, unknown>
 export type WorkspaceReader = () => Promise<WorkspaceSlices>
 export type WorkspaceWriter = (dirty: WorkspaceSlices) => Promise<void>
+export type WorkspaceGenerationReader = () => Promise<number>
 
 type ApprovalDecision = { d?: unknown; when?: unknown; [key: string]: unknown }
 type ApprovalRow = Record<string, any> & { id: string; status?: string; approvalKey?: string; needed?: unknown; approver?: unknown; anyOf?: unknown; decisions?: Record<string, ApprovalDecision>; __sv?: unknown }
@@ -77,12 +78,34 @@ export class WorkspaceCache {
   private loading: Promise<WorkspaceSlices> | null = null
   private generation = 0
   private requiresGeneration = false
+  private generationReady = false
 
-  constructor(private readonly read: WorkspaceReader) {}
+  constructor(private readonly read: WorkspaceReader, private readonly readGeneration?: WorkspaceGenerationReader) {}
+
+  async currentGeneration() {
+    if (!this.readGeneration) return this.generation
+    const observed = Number(await this.readGeneration()) || 0
+    if (!this.generationReady) {
+      this.generation = observed
+      this.generationReady = true
+    } else if (observed !== this.generation) {
+      this.value = null
+      this.loading = null
+      this.generation = observed
+      this.requiresGeneration = true
+    }
+    return this.generation
+  }
 
   async bootstrap() {
+    await this.currentGeneration()
     if (this.value) return this.value
     if (!this.loading) this.loading = this.read().then(value => {
+      const valueGeneration = Number(value.workspaceGeneration)
+      if (Number.isFinite(valueGeneration)) {
+        this.generation = valueGeneration
+        this.generationReady = true
+      }
       this.value = value
       return value
     }).finally(() => { this.loading = null })
@@ -105,7 +128,8 @@ export class WorkspaceCache {
 
   generationHeader() { return String(this.generation) }
 
-  acceptsSaveGeneration(value: string | undefined) {
+  async acceptsSaveGeneration(value: string | undefined) {
+    await this.currentGeneration()
     return !this.requiresGeneration || value === this.generationHeader()
   }
 }
@@ -136,9 +160,12 @@ export function createWorkspaceReader(): WorkspaceReader | null {
     ])
     const recordRows = rows(records) as Array<{ entity: string, id: string, data: unknown }>
     const state = Object.fromEntries(recordRows.filter(row => row.entity === 'state').map(row => [row.id, row.data]))
+    const workspaceGeneration = Number((state.workspace_generation as any)?.value) || 0
+    delete state.workspace_generation
     const config = (rows(settings).find(row => row.id === 'config')?.data || {})
     return {
       ...state,
+      workspaceGeneration,
       config,
       leads: rows(leads).map(row => row.data),
       opportunities: rows(opportunities).map(row => row.data),
@@ -148,6 +175,18 @@ export function createWorkspaceReader(): WorkspaceReader | null {
       clarifications: rows(clarifications).map(row => row.data),
       audit: rows(audit).map(row => row.data),
     }
+  }
+}
+
+export function createWorkspaceGenerationReader(): WorkspaceGenerationReader | null {
+  const url = configuredValue('SUPABASE_URL', 'VITE_SUPABASE_URL')
+  const serviceRoleKey = configuredValue('SUPABASE_SERVICE_ROLE_KEY')
+  if (!url || !serviceRoleKey) return null
+  const service = createServiceClient(url, serviceRoleKey)
+  return async () => {
+    const result = await service.from('records').select('data').eq('entity', 'state').eq('id', 'workspace_generation').maybeSingle()
+    if (result.error) throw result.error
+    return Number((result.data?.data as any)?.value) || 0
   }
 }
 

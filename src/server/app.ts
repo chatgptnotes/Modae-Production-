@@ -5,7 +5,7 @@ import {
   authorizationToken, createApprovalGateway, requestedLiveEntities,
   type ApprovalGateway, type LiveEntity,
 } from './approvals.js'
-import { createWorkspaceReader, createWorkspaceWriter, WorkspaceCache, type WorkspaceReader, type WorkspaceWriter } from './workspace.js'
+import { createWorkspaceGenerationReader, createWorkspaceReader, createWorkspaceWriter, WorkspaceCache, type WorkspaceReader, type WorkspaceWriter } from './workspace.js'
 import {
   adminUsers, ai, appVersion, locations, purgeWorkspace, sendProposalEmail,
   presence,
@@ -46,7 +46,7 @@ export function createApp({
   const configuredApprovalGateway = createApprovalGateway()
   const workspaceCache = new WorkspaceCache(workspaceReader || createWorkspaceReader() || (async () => {
     throw new Error('Workspace cache is not configured.')
-  }))
+  }), createWorkspaceGenerationReader() || undefined)
   const gateway = {
     authenticate: approvalAuth || configuredApprovalGateway?.authenticate,
     read: approvalReader || configuredApprovalGateway?.read,
@@ -66,8 +66,9 @@ export function createApp({
     if (!gateway.authenticate) return res.status(503).json({ ok: false, error: 'Workspace sync is not configured.' })
     try {
       if (!await gateway.authenticate(token)) return res.status(401).json({ ok: false, error: 'The application session is invalid or expired.' })
+      const workspace = await workspaceCache.bootstrap()
       res.setHeader('x-workspace-generation', workspaceCache.generationHeader())
-      return res.status(200).json({ ok: true, data: await workspaceCache.bootstrap() })
+      return res.status(200).json({ ok: true, data: workspace })
     } catch (error) { return next(error) }
   })
   app.post('/api/workspace/save', async (req, res, next) => {
@@ -80,7 +81,7 @@ export function createApp({
     try {
       if (!await gateway.authenticate(token)) return res.status(401).json({ ok: false, error: 'The application session is invalid or expired.' })
       const generation = String(req.get('x-workspace-generation') || '')
-      if (!workspaceCache.acceptsSaveGeneration(generation)) {
+      if (!await workspaceCache.acceptsSaveGeneration(generation)) {
         res.setHeader('x-workspace-generation', workspaceCache.generationHeader())
         return res.status(409).json({ ok: false, error: 'The workspace was purged. Refresh before saving.', errorCode: 'WORKSPACE_PURGED' })
       }

@@ -146,6 +146,8 @@ async function loadConsolidatedState() {
   if (result.error) return null
   const state = {}
   for (const row of result.data || []) {
+    // This row is server-only cache invalidation metadata, not application state.
+    if (row.id === 'workspace_generation') continue
     state[row.id] = row.data
     const key = normalizedKey(CONSOLIDATED_STATE_ENTITY, row.id)
     normalizedRevisions.set(key, Number(row.rev) || 0)

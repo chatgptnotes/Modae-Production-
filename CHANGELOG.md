@@ -20,6 +20,9 @@ This is an implementation and release log, not a dump of every commit.
   purge by invalidating the server workspace cache, tagging browser sessions
   with a purge generation, rejecting pre-purge saves, and reloading rejected
   clients before they can retry old data.
+- Made direct Supabase deletes of opportunities, leads, and approvals invalidate
+  the server cache automatically through a persistent database generation marker;
+  the marker is hidden from application state and stale browser saves are rejected.
 - Hardened the Spares Sourcing-to-Proposal handoff with one shared gate for
   empty, invalid, unconfirmed, missing-price, and expired-price lines. Direct
   and embedded Proposal access now returns users to Sourcing, and stale proposal
