@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, WON_REASONS, REVISION_TYPES, DEFAULT_WORKFLOW, isWorkflowAvailable } from '../seed.js'
 import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY, gmailComposeHref, displayRole, displayRoles, displayRoleLabel, formatISTDateTime, productDisplayLabel } from '../utils.js'
+import { EMAIL_RE, recipientsValid, splitRecipients } from '../emailValidation.js'
 import { APPROVAL_5B, pricingThresholdExceptions, readiness, sparesSourcingBlockers, isBlocked, nextActionWith, transitionBlockers, isClarificationResolved, isClarificationCoveredByAnswer, actionableClarifications, displayClarifications, isClarificationCoveredBySource, releaseVoidReason, serviceOfferCleared } from '../gates.js'
 import { COMMERCIAL_RX } from './Approvals.jsx'
 import { Chip, ClassChip, AiBadge, MarkWonControl, WarnBox, ErrBox, Modal } from '../ui.jsx'
@@ -2280,8 +2281,15 @@ function FollowUpPane({ opp, onRevision }) {
   const [fuOpen, setFuOpen] = useState(false)
   const [fuDraft, setFuDraft] = useState('')
   const [fuBusy, setFuBusy] = useState(false)
-  const [fuSent, setFuSent] = useState(false)
-  const [escOpen, setEscOpen] = useState(false)
+  const [mailType, setMailType] = useState('follow-up')
+  const [mailFrom, setMailFrom] = useState(store.config?.gmailAccount || store.config?.commonMailbox || 'sales@mod-ae.com')
+  const customer = (store.customers || []).find(c => c.id === opp.customerId || c.name === opp.sellTo)
+  const [mailTo, setMailTo] = useState(opp.contactEmail || customer?.email || '')
+  const [mailCc, setMailCc] = useState('')
+  const [mailSubject, setMailSubject] = useState('')
+  const [mailError, setMailError] = useState('')
+  const [draftCommunicationId, setDraftCommunicationId] = useState('')
+  const [mailNotice, setMailNotice] = useState('')
   // Diagram 02 §7 "Opportunity Lost — Capture Loss Reason" and §8 competitor
   // tracking. Both close-out branches live beside the follow-up loop they end.
   const [lossReason, setLossReason] = useState('')
@@ -2303,6 +2311,12 @@ function FollowUpPane({ opp, onRevision }) {
   const validityDays = opp.validityDays || 30
   const age = opp.proposalDate ? ageDays(opp.proposalDate) : null
   const left = age == null ? null : validityDays - age
+  const proposalSentAt = opp.proposalDate ? new Date(opp.proposalDate).getTime() : 0
+  const customerReplied = commsRows.some(c => (c.dir === 'In' || c.direction === 'inbound')
+    && (!proposalSentAt || new Date(c.ts || 0).getTime() >= proposalSentAt))
+  const canEscalate = age != null && age >= 14 && !customerReplied
+  const escalationUser = (store.users || []).find(u => String(u.role || '').toLowerCase() === 'ljs'
+    && String(u.status || '').toLowerCase() !== 'disabled')
 
   // Diagram 02 §7 has one revision path, not two: every revision is typed, is
   // routed back to the B-step that owns it, and re-opens the §5 approval. This
@@ -2337,21 +2351,65 @@ function FollowUpPane({ opp, onRevision }) {
       senderName: displayRole(opp.owner),
     })
     setFuBusy(false)
+    setMailType('follow-up')
+    setMailFrom(store.config?.gmailAccount || store.config?.commonMailbox || 'sales@mod-ae.com')
+    setMailTo(opp.contactEmail || customer?.email || '')
+    setMailCc('')
+    setMailSubject(`Follow-up — ${opp.oppName}`)
+    setMailError('')
+    setDraftCommunicationId('')
+    setMailNotice('')
     setFuDraft(text?.trim() || templateFu())
     setFuOpen(true)
   }
 
-  const sendFu = () => {
+  const openEscalation = () => {
+    if (!canEscalate) return
+    const latestHistory = commsRows.filter(c => c.kind === 'follow-up' || c.kind === 'submission')
+      .slice(0, 4).map(c => `${c.ts ? ddMmmYY(c.ts.slice(0, 10)) : 'Date not recorded'} · ${c.kind} · ${c.subject || ''} · ${c.status || 'logged'}`).join('\n')
+    setMailType('escalation')
+    setMailFrom(store.config?.gmailAccount || store.config?.commonMailbox || 'sales@mod-ae.com')
+    setMailTo(escalationUser?.email || '')
+    setMailCc('')
+    setMailSubject(`No-response escalation — ${opp.id} — ${opp.oppName}`)
+    setFuDraft([
+      `Hi ${escalationUser?.name || 'LJS'},`, '',
+      `Please review this opportunity: ${opp.oppName} (${opp.id}), customer ${opp.sellTo || 'not recorded'}, route ${opp.route || 'not recorded'}.`,
+      `The proposal was submitted ${age} day(s) ago (${ddMmmYY(opp.proposalDate)}). No customer reply is recorded since submission.`,
+      `Owner: ${displayRole(opp.owner)}. Current milestone: ${opp.milestone || opp.stage || 'not recorded'}.`,
+      '', 'Recent proposal/follow-up history:', latestHistory || 'No submission or follow-up communication is recorded.',
+      '', 'Please advise on the next action. This is an internal escalation; no message has been sent to the customer.',
+      '', 'Regards,', displayRole(opp.owner),
+    ].join('\n'))
+    setMailError('')
+    setDraftCommunicationId('')
+    setMailNotice('')
+    setFuOpen(true)
+  }
+
+  const openMailDraft = () => {
+    setMailError('')
+    if (!EMAIL_RE.test(mailFrom.trim())) { setMailError('Enter a valid From email address.'); return }
+    if (!recipientsValid(mailTo)) { setMailError('Enter one or more valid recipient email addresses.'); return }
+    if (splitRecipients(mailCc).length && !recipientsValid(mailCc)) { setMailError('Check the CC email address(es).'); return }
+    const href = gmailComposeHref({ to: mailTo, cc: mailCc, subject: mailSubject, body: fuDraft })
+    if (!href) { setMailError('Enter a recipient email address before opening Gmail.'); return }
+    const draftWindow = window.open(href, '_blank')
+    if (!draftWindow) { setMailError('Chrome blocked the Gmail tab. Allow pop-ups for this site and try again.'); return }
+    const id = `CM-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     store.addCommunication(opp.id, {
-      from: store.config?.commonMailbox || 'sales@modae.demo',
-      to: opp.contactPerson || opp.sellTo,
-      subject: `Follow-up — ${opp.oppName}`,
-      body: fuDraft,
-      kind: 'follow-up',
-      status: 'logged',
+      id, direction: 'outbound', from: mailFrom.trim(), to: mailTo.trim(), cc: mailCc.trim(),
+      subject: mailSubject.trim(), body: fuDraft, kind: mailType === 'escalation' ? 'escalation' : 'follow-up', status: 'draft',
     })
-    setFuOpen(false)
-    setFuSent(true)
+    setDraftCommunicationId(id)
+    setMailNotice('Gmail draft opened. Review and send it in Gmail, then mark it sent here.')
+  }
+
+  const markMailSent = () => {
+    if (!draftCommunicationId) return
+    store.updateCommunication(opp.id, draftCommunicationId, { status: 'sent' }, `${mailType === 'escalation' ? 'Escalation' : 'Follow-up'} email marked as sent`)
+    setMailNotice('Email marked as sent in Communications.')
+    setDraftCommunicationId('')
   }
 
   return (
@@ -2515,15 +2573,13 @@ function FollowUpPane({ opp, onRevision }) {
           <button onClick={openFu} disabled={fuBusy}>
             <Icon name="sparkles" size={13} /> {fuBusy ? 'Drafting…' : 'AI: draft follow-up'}
           </button>
-          <button onClick={() => setEscOpen(true)}><Icon name="sparkles" size={13} /> AI: escalation suggestion</button>
+          <button onClick={openEscalation} disabled={!canEscalate} title={!canEscalate ? 'Available after 14 days without a recorded customer reply' : ''}>
+            <Icon name="sparkles" size={13} /> Draft escalation email
+          </button>
         </div>
-        {fuSent && <div className="okbox">Follow-up logged in Communications.</div>}
-        {escOpen && (
-          <div className="okbox">
-            Post-quotation intelligence: {age != null ? `submitted ${age} day(s) ago with no recorded customer response` : 'proposal not yet submitted'}.
-            Suggest a courtesy call by {displayRole(opp.owner)} this week, and escalate to LJS if silent past day 14 of the follow-up schedule.
-          </div>
-        )}
+        {!canEscalate && !customerReplied && <p className="hint">Internal escalation to LJS is available after 14 days without a recorded customer reply. Until then, the opportunity owner should make a courtesy call.</p>}
+        {customerReplied && <p className="hint">A customer reply is recorded after proposal submission. Review it before considering an internal escalation.</p>}
+        {mailNotice && <div className="okbox">{mailNotice}</div>}
       </div>
 
       <div className="ana-card c-6 follow-up-panel">
@@ -2622,12 +2678,20 @@ function FollowUpPane({ opp, onRevision }) {
       </div>
 
       {fuOpen && (
-        <Modal title="AI-drafted follow-up" onClose={() => setFuOpen(false)} wide>
-          <textarea rows={10} style={{ width: '100%' }} value={fuDraft} onChange={e => setFuDraft(e.target.value)} />
-          <WarnBox>Human review required before sending.</WarnBox>
+        <Modal title={mailType === 'escalation' ? 'Internal escalation email' : 'AI-drafted follow-up email'} onClose={() => setFuOpen(false)} wide>
+          <div className="follow-up-email-fields">
+            <label>From<input type="email" value={mailFrom} onChange={e => setMailFrom(e.target.value)} /></label>
+            <label>To<input type="text" value={mailTo} onChange={e => setMailTo(e.target.value)} placeholder="Recipient email address(es)" /></label>
+            <label>CC<input type="text" value={mailCc} onChange={e => setMailCc(e.target.value)} placeholder="Optional" /></label>
+            <label>Subject<input value={mailSubject} onChange={e => setMailSubject(e.target.value)} /></label>
+          </div>
+          <label className="follow-up-email-body-label">Message<textarea rows={10} style={{ width: '100%' }} value={fuDraft} onChange={e => setFuDraft(e.target.value)} /></label>
+          <WarnBox>Review the recipient and message in Gmail before sending.</WarnBox>
+          {mailError && <ErrBox>{mailError}</ErrBox>}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
             <button onClick={() => setFuOpen(false)}>Cancel</button>
-            <button className="primary" onClick={sendFu}><Icon name="send" size={13} /> Log follow-up</button>
+            {draftCommunicationId && <button onClick={markMailSent}><Icon name="check" size={13} /> Mark as sent</button>}
+            <button className="primary" onClick={openMailDraft}><Icon name="mail" size={13} /> Open Gmail draft</button>
           </div>
         </Modal>
       )}

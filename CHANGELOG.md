@@ -13,6 +13,11 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Changed follow-up and escalation actions to open editable Gmail drafts and
+  track draft/sent status in Communications. Internal escalation is gated until
+  14 days after proposal submission when no customer reply is recorded; approval
+  cards now prefer specific quote-release rationale over generic blockers.
+
 - Fixed built-in proposal workbook loading to bypass stale browser/service-worker
   responses and expose the failing asset URL and HTTP status for deployment
   diagnosis.

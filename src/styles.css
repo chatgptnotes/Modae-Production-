@@ -2105,7 +2105,13 @@ button.secondary:hover, .btn.secondary:hover {
 .follow-up-panel > .form-card { flex: 1; }
 .follow-up-control-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .follow-up-control-row input, .follow-up-control-row select { min-width: 0; }
-.revision-control-row select { flex: 0 1 190px; }
+.revision-control-row select {
+  flex: 1 1 280px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .revision-control-row input { flex: 1 1 220px; }
 .competitor-control-row input:first-child { flex: 1 1 120px; }
 .competitor-control-row input:nth-child(2) { flex: 2 1 180px; }
@@ -3801,12 +3807,17 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
   display: block;
   width: 100%;
   max-width: 700px;
-  min-height: 32px;
+  min-height: 92px;
   margin-top: 7px;
-  padding: 4px 2px;
+  padding: 9px 10px;
+  border: 1px solid var(--border-default);
+  border-radius: 5px;
+  background: var(--surface-raised);
+  color: var(--text-primary);
   line-height: 1.45;
-  resize: none;
+  resize: vertical;
   overflow: hidden;
+  box-sizing: border-box;
 }
 .approval-decision-error { margin-top: 7px; }
 .approval-decision-submit { margin-top: 9px; }
@@ -14650,6 +14661,11 @@ table.sheet tbody tr:hover td {
   text-align: right;
 }
 .page .follow-up-control-row { min-width: 0; align-items: stretch; }
+.follow-up-email-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+.follow-up-email-fields label, .follow-up-email-body-label { display: grid; gap: 4px; min-width: 0; font-size: 12px; font-weight: 600; }
+.follow-up-email-fields input { box-sizing: border-box; width: 100%; min-width: 0; }
+.follow-up-email-body-label textarea { box-sizing: border-box; }
+@media (max-width: 640px) { .follow-up-email-fields { grid-template-columns: minmax(0, 1fr); } }
 .page .follow-up-control-row > input,
 .page .follow-up-control-row > select,
 .page .follow-up-control-row > button { min-width: 0; }

@@ -243,13 +243,14 @@ function DecisionForm({ a, role, draft = {}, onDraftChange, onDecide }) {
         ))}
       </div>
       {d && <textarea
-          rows={1}
+          rows={4}
           onInput={e => {
             e.currentTarget.style.height = 'auto'
             e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`
           }}
           value={comment} onChange={e => onDraftChange({ comment: e.target.value })}
           placeholder="Decision note (required)"
+          aria-label="Decision note (required)"
           className="approval-decision-input"
         />}
       {err && <div className="errbox approval-decision-error">{err}</div>}
@@ -476,9 +477,24 @@ export default function Approvals() {
     const snapshot = a.opportunitySnapshot || {}
     const summary = a.opportunitySummary || opp?.remarks || 'No opportunity summary was captured.'
     const isCommercialRequest = a.type === 'Commercial deviation'
+    const genericReason = 'Approval is required before the workflow can continue.'
+    const blockingReason = String(a.blockingReason || '').trim()
+    const detail = String(a.detail || '').trim()
+    const genericBlocker = !blockingReason || /^(?:final quote release is required|approval is required before the workflow can continue\.?|approval required)$/i.test(blockingReason)
+    const release = a.approvalSnapshot?.release || {}
+    const releaseContext = a.type === 'Final quote release' && release
+      ? [
+          release.subject && `Customer quote: ${release.subject}`,
+          release.technical?.length != null && `${release.technical.length} technical BOQ line(s)`,
+          release.commercial?.length != null && `${release.commercial.length} priced line(s)`,
+          release.validityDays && `Offer validity: ${release.validityDays} days`,
+        ].filter(Boolean).join(' · ')
+      : ''
     const baseReason = !comm && isCommercialRequest
       ? 'Commercial deviation approval is required before submission.'
-      : (a.blockingReason || a.detail || 'Approval is required before the workflow can continue.')
+      : (genericBlocker && detail && !/^final quote release is required$/i.test(detail)
+        ? detail
+        : (!genericBlocker ? blockingReason : (detail || releaseContext || blockingReason || genericReason)))
     const reviewFindings = comm
       ? (proposal?.reviewIssues || [])
         .filter(issue => ['block', 'warning'].includes(issue?.severity) && String(issue?.text || '').trim())
@@ -488,7 +504,8 @@ export default function Approvals() {
     // Older and newly-created requests may both carry the findings in their
     // stored detail. Render them as a structured list here instead of one
     // dense inline paragraph.
-    const reason = baseReason.replace(/\s+Review findings:[\s\S]*$/i, '').trim()
+    const reason = [baseReason, releaseContext && releaseContext !== baseReason ? releaseContext : '']
+      .filter(Boolean).join(' — ').replace(/\s+Review findings:[\s\S]*$/i, '').trim()
     const deviations = comm ? (a.deviationDetails || []) : []
     const pricingRows = comm && (a.type === 'Pricing threshold exception' || a.coversPricingThreshold) ? pricingRowsFor(a) : []
     return (

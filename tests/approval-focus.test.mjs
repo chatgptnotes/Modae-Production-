@@ -9,9 +9,10 @@ test('approval decision notes keep a quiet focus treatment', () => {
   const styles = read('src/styles.css')
 
   assert.match(approvals, /className="approval-decision-input"/)
-  assert.match(approvals, /rows=\{1\}/)
+  assert.match(approvals, /rows=\{4\}/)
+  assert.match(approvals, /aria-label="Decision note \(required\)"/)
   assert.match(approvals, /onInput=\{e => \{[\s\S]*style\.height = 'auto'[\s\S]*scrollHeight/)
-  assert.match(styles, /\.approval-decision-input\s*\{[\s\S]*padding: 4px 2px;[\s\S]*line-height: 1\.45;/)
+  assert.match(styles, /\.approval-decision-input\s*\{[\s\S]*min-height: 92px;[\s\S]*padding: 9px 10px;[\s\S]*border: 1px solid var\(--border-default\);[\s\S]*border-radius: 5px;[\s\S]*resize: vertical;[\s\S]*line-height: 1\.45;/)
   assert.match(styles, /\.approval-decision-input:focus-visible\s*\{[\s\S]*outline: 0;[\s\S]*box-shadow: none;/)
   assert.match(styles, /\.approval-decision-input:focus-visible\s*\{[\s\S]*border-bottom-color: var\(--action-accent\)/)
 })
