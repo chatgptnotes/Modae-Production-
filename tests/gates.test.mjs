@@ -232,6 +232,34 @@ test('an uploaded proposal revision must pass logical review before Submitted', 
   )
 })
 
+test('uploaded proposal review explains how to recover after AI validation fails', () => {
+  const uploaded = {
+    ...releasedProposal,
+    reviewedUpload: { filename: 'edited.xlsx', sheets: [{ name: 'Firm Offer', rows: [] }] },
+    reviewStatus: 'Needs attention',
+    reviewIssues: [{ code: 'ai.unavailable', severity: 'block' }],
+  }
+  const blocker = transitionBlockers(
+    { ...baseOpp, milestone: 'Approval' }, 'Submitted', uploaded, poState({}),
+  ).find(item => item.key === 'proposal-review')
+  assert.match(blocker.text, /AI review could not complete/)
+  assert.match(blocker.action, /Retry AI review/)
+})
+
+test('uploaded proposal review points to blocking findings after a failed validation pass', () => {
+  const uploaded = {
+    ...releasedProposal,
+    reviewedUpload: { filename: 'edited.xlsx', sheets: [{ name: 'Firm Offer', rows: [] }] },
+    reviewStatus: 'Needs attention',
+    reviewIssues: [{ code: 'commercial.mismatch', severity: 'block' }],
+  }
+  const blocker = transitionBlockers(
+    { ...baseOpp, milestone: 'Approval' }, 'Submitted', uploaded, poState({}),
+  ).find(item => item.key === 'proposal-review')
+  assert.match(blocker.text, /1 blocking finding/)
+  assert.match(blocker.action, /Validation findings/)
+})
+
 test('standard ModAE terms do not require commercial AH approval', () => {
   const blockers = transitionBlockers(
     { ...baseOpp, milestone: 'Approval' }, 'Submitted', releasedProposal,

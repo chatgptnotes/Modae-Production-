@@ -1,9 +1,40 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import handler from '../api/ai.js'
+import { aiRateLimit, allowRequest } from '../api/ai.js'
 import { formatEmailBody, textFromTaskResult } from '../src/ai.js'
 
 process.env.NODE_ENV = 'test'
+
+test('AI request limit defaults to 120 and accepts a positive server override', () => {
+  const before = process.env.AI_RATE_LIMIT
+  try {
+    delete process.env.AI_RATE_LIMIT
+    assert.equal(aiRateLimit(), 120)
+    process.env.AI_RATE_LIMIT = '240'
+    assert.equal(aiRateLimit(), 240)
+    process.env.AI_RATE_LIMIT = 'invalid'
+    assert.equal(aiRateLimit(), 120)
+    process.env.AI_RATE_LIMIT = '0'
+    assert.equal(aiRateLimit(), 120)
+  } finally {
+    if (before === undefined) delete process.env.AI_RATE_LIMIT
+    else process.env.AI_RATE_LIMIT = before
+  }
+})
+
+test('AI request limiter allows 120 requests and blocks the next one in its window', () => {
+  const before = process.env.AI_RATE_LIMIT
+  try {
+    process.env.AI_RATE_LIMIT = '120'
+    const user = `rate-test-${Date.now()}-${Math.random()}`
+    for (let i = 0; i < 120; i += 1) assert.equal(allowRequest(user, 'test-ip'), true)
+    assert.equal(allowRequest(user, 'test-ip'), false)
+  } finally {
+    if (before === undefined) delete process.env.AI_RATE_LIMIT
+    else process.env.AI_RATE_LIMIT = before
+  }
+})
 
 const response = () => {
   const out = {}

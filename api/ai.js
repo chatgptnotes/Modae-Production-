@@ -20,9 +20,18 @@ const fail = (res, status, errorCode, error) =>
 const cap = (value, max) => String(value ?? '').slice(0, max)
 const MAX_REQUEST_CHARS = 3000000
 const RATE_WINDOW_MS = 10 * 60 * 1000
-const RATE_LIMIT = 40
+const DEFAULT_RATE_LIMIT = 120
 const MAX_UPSTREAM_RETRIES = 2
 const rateBuckets = new Map()
+
+// Keep a server-side guard against accidental request loops, while allowing
+// hosted environments to tune it independently of Google's spend cap. Invalid
+// values deliberately fall back to the safe default rather than disabling the
+// guard or producing an unusable limit.
+export const aiRateLimit = () => {
+  const configured = Number.parseInt(String(process.env.AI_RATE_LIMIT || ''), 10)
+  return Number.isInteger(configured) && configured > 0 ? configured : DEFAULT_RATE_LIMIT
+}
 
 const retryDelayMs = (response, attempt) => {
   if (process.env.NODE_ENV === 'test') return 0
@@ -52,7 +61,7 @@ async function authenticate(req) {
   }
 }
 
-function allowRequest(userId, ip) {
+export function allowRequest(userId, ip) {
   const now = Date.now()
   const key = `${userId}:${ip || 'unknown'}`
   const current = rateBuckets.get(key)
@@ -60,7 +69,7 @@ function allowRequest(userId, ip) {
     rateBuckets.set(key, { startedAt: now, count: 1 })
     return true
   }
-  if (current.count >= RATE_LIMIT) return false
+  if (current.count >= aiRateLimit()) return false
   current.count += 1
   return true
 }

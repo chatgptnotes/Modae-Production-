@@ -826,7 +826,22 @@ export function transitionBlockers(opp, target, proposal, state) {
   // quote is "Ready for Dispatch".
   if (next >= MILESTONES.indexOf('Submitted')) {
     if (proposal?.reviewedUpload && !['Validated', 'Override accepted'].includes(proposal.reviewStatus)) {
-      b.push({ key: 'proposal-review', severity: 'block', text: 'Validate the uploaded proposal revision before moving to Submitted' })
+      const reviewIssues = Array.isArray(proposal.reviewIssues) ? proposal.reviewIssues : []
+      const aiUnavailable = reviewIssues.some(issue => issue?.code === 'ai.unavailable')
+      const blockingFindings = reviewIssues.filter(issue => issue?.severity === 'block' && issue?.code !== 'ai.unavailable')
+      b.push({
+        key: 'proposal-review', severity: 'block',
+        text: aiUnavailable
+          ? 'AI review could not complete, so the uploaded proposal is still not validated'
+          : blockingFindings.length
+            ? `Uploaded proposal validation still has ${blockingFindings.length} blocking finding${blockingFindings.length === 1 ? '' : 's'}`
+            : 'Validate the uploaded proposal revision before moving to Submitted',
+        action: aiUnavailable
+          ? 'Wait a few minutes, open the Proposal page, and click Retry AI review. If it still fails, ask an admin to check the Gemini server configuration.'
+          : blockingFindings.length
+            ? 'Open the Validation findings on the Proposal page, resolve every red item, and click Validate review again.'
+            : 'Open the Proposal page and click Validate review, then resolve any blocking findings shown.',
+      })
     }
     // §5A is drawn as "LJS OR AN" and §5B as "AH ONLY", so 5A names both roles
     // and marks itself `anyOf` — either technical approver alone clears it.

@@ -4240,6 +4240,7 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .workbench-blocker.wait { background: var(--palette-f58d7116); border-color: var(--border-soft); color: var(--text-muted); }
 .workbench-blocker b, .workbench-blocker span { display: block; }
 .workbench-blocker span { margin-top: 4px; color: var(--text-muted); }
+.workbench-blocker .transition-next-action { margin-top: 7px; padding: 6px 8px; border-left: 3px solid var(--palette-9c482213); background: var(--palette-f07f705); color: var(--text-main); line-height: 1.4; }
 .workbench-summary { font-size: 12.5px; line-height: 1.55; margin: 0 0 12px; }
 .workbench-readiness { display: flex; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid var(--border-soft); padding-top: 9px; font-size: 11.5px; color: var(--text-muted); }
 .workbench-kpi { display: flex; align-items: baseline; gap: 7px; margin: 4px 0 10px; }

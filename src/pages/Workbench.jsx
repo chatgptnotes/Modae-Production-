@@ -708,6 +708,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
       const voided = releaseVoidReason(proposal, store.approvals, opp.id, opp)
       return `Section 5C: the final quote release, routed by order value and margin. It covers this revision only — a revised quote must be released again.${voided ? ` ${voided}` : ''}`
     }
+    if (blocker.key === 'proposal-review') return 'The uploaded workbook must pass semantic review before this opportunity can move to Submitted.'
     if (blocker.key.startsWith('sp-desc-')) return 'This spares line needs a real description. Complete the description in Sourcing before the proposal can be built.'
     if (blocker.key.startsWith('sp-qty-')) return 'This spares line has no positive quantity. Correct the quantity in Sourcing before the proposal can be built.'
     if (blocker.key.startsWith('sp-conf-')) return 'This spares line’s part match has not been confirmed. Confirm the match — or pick an alternative — in Sourcing before the proposal can be built.'
@@ -784,6 +785,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
                 return <div key={`${item.key}-${i}`} className={`workbench-blocker ${item.severity}`}>
                   <div className="transition-blocker-head"><b>{item.text}</b><span className="transition-owner">Owner: <strong>{blockerOwner(item)}</strong></span></div>
                   <span className="transition-explanation">{blockerExplanation(item)}</span>
+                  {item.key === 'proposal-review' && <span className="transition-next-action"><b>Next step:</b> {item.action || blockerExplanation(item)}</span>}
                   {item.approvalType && <div className="transition-request-reason"><b>Reason for request</b><span>{approvalRequestReason(item)}</span></div>}
                   {item.key === 'pricing-threshold' && item.pricingRows?.length > 0 && <div className="transition-pricing-details">{item.pricingRows.map((row, rowIndex) => <div key={`${row.label}-${rowIndex}`}><b>{row.label}</b>{row.discount > row.discountPct && <span>Discount {row.discount}% (allowed {row.discountPct}%, exceeds by {row.discountExcessPct} points)</span>}{row.markup > row.markupPct && <span>Markup {row.markup}% (allowed {row.markupPct}%, exceeds by {row.markupExcessPct} points)</span>}{row.discountAmountINR > 0 && <span>Impact ₹ {fmt(row.discountAmountINR)}</span>}</div>)}</div>}
                   {item.key === 'clarifications' && clarificationRows.length > 0 && <div className="transition-detail-list">{clarificationRows.map(row => <div key={row.id}><b>{row.id}</b> · {row.category} · {row.q} <em>{row.status}</em></div>)}</div>}
