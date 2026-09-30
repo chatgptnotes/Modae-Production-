@@ -11,7 +11,9 @@ import { pricingThresholdExceptions } from '../gates.js'
 import { buildPricing, normalizeProposal } from '../proposal/docProps.js'
 
 const NEW_APPROVAL_MS = 48 * 60 * 60 * 1000
-const APPROVAL_REFRESH_MS = 5000
+// Approval updates remain near-real-time without making every open approvals
+// tab issue a request every few seconds against the Supabase free tier.
+const APPROVAL_REFRESH_MS = 30000
 // Approval ts/decisionTs are full ISO stamps; ddMmmYY wants YYYY-MM-DD.
 const day = ts => ddMmmYY((ts || '').slice(0, 10))
 const time = ts => {

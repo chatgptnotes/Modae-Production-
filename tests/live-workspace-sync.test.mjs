@@ -170,10 +170,19 @@ test('the Approvals page polls the backend for approval updates while visible', 
   const approvals = read('src/pages/Approvals.jsx')
   assert.match(store, /async refreshApprovals\(\)/)
   assert.match(store, /readLiveData\(\['approvals', 'opportunities'\]\)/)
-  assert.match(approvals, /APPROVAL_REFRESH_MS = 5000/)
+  assert.match(approvals, /APPROVAL_REFRESH_MS = 30000/)
   assert.match(approvals, /setInterval\(refresh, APPROVAL_REFRESH_MS\)/)
   assert.match(approvals, /document\.visibilityState === 'visible'/)
   assert.match(approvals, /store\.refreshApprovals\(\)/)
+})
+
+test('live-data reads reuse an identical in-flight request', () => {
+  const liveSync = read('src/liveSync.js')
+  assert.match(liveSync, /const liveDataReadsInFlight = new Map\(\)/)
+  assert.match(liveSync, /const existing = liveDataReadsInFlight\.get\(key\)/)
+  assert.match(liveSync, /if \(existing\) return existing/)
+  assert.match(liveSync, /liveDataReadsInFlight\.set\(key, request\)/)
+  assert.match(liveSync, /liveDataReadsInFlight\.delete\(key\)/)
 })
 
 test('pending opportunity IDs stay local-only and are persisted in the browser snapshot', () => {

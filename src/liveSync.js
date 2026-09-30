@@ -1,6 +1,7 @@
 import { supabaseAuth } from './supabase.js'
 
 export const LIVE_ENTITIES = new Set(['approvals', 'leads', 'opportunities'])
+const liveDataReadsInFlight = new Map()
 
 const pause = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
 const isAuthStatus = status => [401, 403].includes(Number(status))
@@ -33,12 +34,25 @@ export function parseLiveEvent(block) {
 }
 
 export async function readLiveData(entities) {
-  const token = await accessToken()
-  if (!token || !entities.length) return null
-  const response = await fetch(liveDataUrl(entities), { headers: { Authorization: `Bearer ${token}` } })
-  if (!response.ok) throw await responseError(response, 'Live data refresh failed')
-  const body = await response.json()
-  return body.data || null
+  const requested = [...new Set(entities.filter(entity => LIVE_ENTITIES.has(entity)))].sort()
+  if (!requested.length) return null
+  const key = requested.join(',')
+  const existing = liveDataReadsInFlight.get(key)
+  if (existing) return existing
+
+  const request = (async () => {
+    const token = await accessToken()
+    if (!token) return null
+    const response = await fetch(liveDataUrl(requested), { headers: { Authorization: `Bearer ${token}` } })
+    if (!response.ok) throw await responseError(response, 'Live data refresh failed')
+    const body = await response.json()
+    return body.data || null
+  })()
+  liveDataReadsInFlight.set(key, request)
+  request.finally(() => {
+    if (liveDataReadsInFlight.get(key) === request) liveDataReadsInFlight.delete(key)
+  }).catch(() => {})
+  return request
 }
 
 export async function publishLiveChanges(entities) {

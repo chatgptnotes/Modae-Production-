@@ -13,6 +13,9 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Reduced Supabase usage on the Free plan by changing approvals polling from
+  five seconds to 30 seconds and reusing identical in-flight live-data reads.
+
 - Changed follow-up and escalation actions to open editable Gmail drafts and
   track draft/sent status in Communications. Internal escalation is gated until
   14 days after proposal submission when no customer reply is recorded; approval
