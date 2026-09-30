@@ -29,6 +29,14 @@ test('template resolution is route-specific and an active Admin template wins', 
   assert.equal(resolved.path, uploaded.path)
 })
 
+test('built-in templates expose deployable asset URLs', () => {
+  for (const route of ['Project', 'Services', 'Spares']) {
+    const template = resolveProposalTemplate({}, route)
+    assert.equal(template.source, 'built-in')
+    assert.match(template.url, /\/assets\/workbooks\/proposal-templates\/\w+\.xlsx$/)
+  }
+})
+
 test('customer preview and attachment are produced from the same redacted XLSX bytes', async () => {
   const artifact = await customerProposalArtifact({
     templateBuffer: fs.readFileSync(bundledPath),

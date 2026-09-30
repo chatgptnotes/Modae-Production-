@@ -13,6 +13,9 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Fixed built-in proposal workbook loading to bypass stale browser/service-worker
+  responses and expose the failing asset URL and HTTP status for deployment
+  diagnosis.
 - Canonicalized legacy opportunity IDs for display so owner display names such
   as `R. Sundaram` render as the stable `RS` suffix without changing stored
   primary keys or breaking linked records.

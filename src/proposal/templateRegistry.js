@@ -78,7 +78,12 @@ export async function loadProposalTemplateBuffer(template) {
     if (!stored?.blob) throw new Error(`The active ${template.key || template.lane} proposal template could not be loaded`)
     return stored.blob.arrayBuffer()
   }
-  const response = await fetch(template.url)
-  if (!response.ok) throw new Error(`The built-in ${template.key} proposal template could not be loaded`)
+  // Template URLs are Vite-emitted, hashed assets. Do not allow a stale
+  // browser/service-worker response to hide a newly deployed workbook.
+  const response = await fetch(template.url, { cache: 'no-store' })
+  if (!response.ok) {
+    const status = response.status ? ` (HTTP ${response.status})` : ''
+    throw new Error(`The built-in ${template.key} proposal template could not be loaded${status}: ${template.url}`)
+  }
   return response.arrayBuffer()
 }
