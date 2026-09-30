@@ -54,6 +54,16 @@ test('active Supabase requests use only the production table allowlist', () => {
   assert.deepEqual(violations, [])
 })
 
+test('opportunity sequences are reserved atomically and owner suffixes are canonical', () => {
+  const migration = fs.readFileSync(path.join(root, 'supabase/015_atomic_opportunity_sequences.sql'), 'utf8')
+  const store = fs.readFileSync(path.join(root, 'src/store.jsx'), 'utf8')
+  assert.match(migration, /create or replace function public\.next_opportunity_sequence\(p_yymm text\)/)
+  assert.match(migration, /on conflict \(id\) do update/)
+  assert.match(migration, /grant execute on function public\.next_opportunity_sequence\(text\)/)
+  assert.match(store, /datastore\.reserveOpportunitySequence\(yymm\)/)
+  assert.match(store, /ownerIdFor\(owner, roleNames\)/)
+})
+
 test('normalized business hydration uses canonical rows and consolidated state', () => {
   const datastore = fs.readFileSync(path.join(root, 'src/datastore.js'), 'utf8')
   assert.match(datastore, /from\('leads'\)\.select\('id, data, rev'\)\.is\('deleted_at', null\)/)

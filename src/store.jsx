@@ -8,7 +8,7 @@ import { statusFolderFor } from './sharepoint.js'
 import {
   buildPoCompare, buildHandover, milestoneForStage, routeForType,
   contextForType, B_STEPS, REVISION_TYPES,
-  ROLES, SUBFOLDERS, MILESTONES, newProposal, PORTAL_ENABLED, defaultBStepOwners, seedConfig,
+  ROLES, SUBFOLDERS, MILESTONES, newProposal, PORTAL_ENABLED, defaultBStepOwners, seedConfig, ownerIdFor,
   canSignBStep,
 } from './seed.js'
 import { leadConfig, opportunityOwnerFor, routeOwner, expiredLeadDeadline, aiAuditDetail } from './leadRules.js'
@@ -2723,5 +2723,20 @@ export function nextOppId(opportunities, owner) {
     .map(o => parseInt(String(o.id).slice(4, 7), 10))
     .filter(n => !isNaN(n))
   const next = (seqs.length ? Math.max(...seqs) : 0) + 1
-  return `${yymm}${String(next).padStart(3, '0')}${owner}`
+  return `${yymm}${String(next).padStart(3, '0')}${ownerIdFor(owner)}`
+}
+
+export async function reserveOppId(opportunities, owner, roleNames = {}) {
+  const now = new Date()
+  const yymm = String(now.getFullYear()).slice(2) + String(now.getMonth() + 1).padStart(2, '0')
+  const canonicalOwner = ownerIdFor(owner, roleNames)
+  if (datastore.dbEnabled()) {
+    try {
+      const sequence = await datastore.reserveOpportunitySequence(yymm)
+      return `${yymm}${String(sequence).padStart(3, '0')}${canonicalOwner}`
+    } catch (error) {
+      console.warn('Central opportunity sequence unavailable — using local fallback:', error?.message || error)
+    }
+  }
+  return nextOppId(opportunities, canonicalOwner)
 }

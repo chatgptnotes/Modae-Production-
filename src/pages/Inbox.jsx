@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useStore, nextOppId } from '../store.jsx'
+import { useStore, reserveOppId } from '../store.jsx'
 import { ddMmmYY, ageDays, isTodayIST, gmailComposeHref, displayRole, formatISTTime, formatISTDate, nowIST, productDisplayLabel } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import ScanProgress from '../ScanProgress.jsx'
@@ -53,14 +53,14 @@ export const isUnavailableAiSummary = lead => /^AI extraction was unavailable\b/
 // A qualified lead can be converted from its own decision page. Keep this
 // small, synchronous path here so the user does not have to pass through a
 // second registration screen just to create the opportunity.
-function createOpportunityFromLeadPage({ store, lead, fields, decision, customer, customerStatus, regionalOwner }) {
+async function createOpportunityFromLeadPage({ store, lead, fields, decision, customer, customerStatus, regionalOwner }) {
   const today = new Date().toISOString().slice(0, 10)
   const owner = decision.owner || regionalOwner || opportunityOwnerFor({
     location: decision.eucLocation || decision.location || lead.location || lead.region,
     region: lead.region,
     config: store.config,
   })
-  const id = nextOppId(store.opportunities, owner)
+  const id = await reserveOppId(store.opportunities, owner, store.config?.roleNames)
   const { extracted, workbenchRows, bom } = buildLeadProposalData(lead, store.priceLists, store.adhocParts)
   const identity = leadIdentity(lead, fields)
   const sellTo = decision.sellTo || identity.sellTo || customer?.name || '—'
@@ -1794,11 +1794,11 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
     String(item?.description || item?.partNumber || item?.customerRef || '').trim()
   )
 
-  const createDirectly = () => {
+  const createDirectly = async () => {
     if (registrationBlocked || directCreateBusy || lead.status !== 'Qualified') return
     setDirectCreateBusy(true)
     try {
-      const id = createOpportunityFromLeadPage({
+      const id = await createOpportunityFromLeadPage({
         store, lead, fields: ai.fields, decision: decisionDraft,
         customer, customerStatus: previewCustomerStatus, regionalOwner,
       })
@@ -3454,7 +3454,7 @@ export default function Inbox() {
   const simShapeOptions = templatesForSelection(simProjectType, activeSimOppType)
   const activeSimShape = simShapeOptions.some(t => t.key === simShape) ? simShape : ''
 
-  const createSimulatedLead = (status, options = {}) => {
+  const createSimulatedLead = async (status, options = {}) => {
     const projectType = options.projectType || simProjectType
     const oppType = options.oppType || activeSimOppType
     const lead = simulatedLead(status, new Date(), {
@@ -3503,7 +3503,7 @@ export default function Inbox() {
     const resolvedOppType = OPP_TYPES.includes(lead.oppType) ? lead.oppType : (oppType || lead.route || 'Project')
     const product = mapped('product') || 'Various'
     const knownCustomer = store.customers.some(c => c.name.toLowerCase() === sellTo.toLowerCase())
-    const oppId = nextOppId(store.opportunities, owner)
+    const oppId = await reserveOppId(store.opportunities, owner, store.config?.roleNames)
     const today = nowIST().slice(0, 10)
     const maxSl = Math.max(0, ...store.opportunities.map(o => o.sl || 0))
     if (!knownCustomer) store.addCustomer({ name: sellTo, category, status, kyc: status === 'Green' ? 'Verified' : 'Pending', payment: '—' })

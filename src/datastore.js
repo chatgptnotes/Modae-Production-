@@ -22,6 +22,15 @@ let localDemoMode = false
 export const setLocalDemoMode = enabled => { localDemoMode = Boolean(enabled) }
 export const dbEnabled = () => !!supabase && !localDemoMode
 
+export async function reserveOpportunitySequence(yymm) {
+  if (!supabase) return null
+  const result = await supabase.rpc('next_opportunity_sequence', { p_yymm: yymm })
+  if (result.error) throw result.error
+  const sequence = Number(result.data)
+  if (!Number.isInteger(sequence) || sequence < 1) throw new Error('Supabase returned an invalid opportunity sequence.')
+  return sequence
+}
+
 export const DEDICATED_ENTITIES = {
   proposals: 'proposals',
   spares_lines: 'spares_lines',

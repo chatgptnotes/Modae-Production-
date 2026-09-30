@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useStore, nextOppId } from '../store.jsx'
+import { useStore, nextOppId, reserveOppId } from '../store.jsx'
 import { OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, SUBFOLDERS, routeForType, newProposal } from '../seed.js'
 import { Icon } from '../icons.jsx'
 import { ErrBox } from '../ui.jsx'
@@ -194,8 +194,9 @@ export default function Register() {
     const { extracted } = buildLeadProposalData(lead, store.priceLists, store.adhocParts)
     const leadVerification = verificationSnapshot(lead, leadCustomerStatus, { approval: redApproval, config: store.config })
     const finalOwner = isOverride ? owner : creationOwner
+    const id = await reserveOppId(store.opportunities, creationOwner, store.config?.roleNames)
     const opp = {
-      id: previewId,
+      id,
       sourceLeadId: lead.id,
       sl: Math.max(0, ...store.opportunities.map(o => o.sl || 0)) + 1,
       sellTo, category, location,

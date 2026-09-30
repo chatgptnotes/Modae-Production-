@@ -107,6 +107,7 @@ test('My Dashboard branches per role', () => {
     assert.match(source, new RegExp(`function ${fn}\\(`), `${fn} must exist`)
   }
   assert.match(source, /const sales = isSalesOwner\(role\)/)
+  assert.match(source, /dashboardRoleLabel\(role\)/)
   assert.match(source, /const owner = role === 'LJS'/)
   assert.match(source, /const commercial = role === 'AH'/)
   assert.match(source, /const tech = role === 'TECH'/)

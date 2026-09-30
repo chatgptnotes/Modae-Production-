@@ -65,6 +65,12 @@ test('Sourcing reconciles missing structured lead rows for existing opportunitie
   assert.match(store, /addSparesLinesFromLead\(oppId, rows, \{ auditAction = 'Lead lines imported' \}/)
 })
 
+test('Sourcing restores proposal BOQ rows when sourcing rows are missing', () => {
+  assert.match(sparesWorkbench, /const proposalSourcingRows = proposal =>/)
+  assert.match(sparesWorkbench, /Sourcing lines restored from proposal/)
+  assert.match(sparesWorkbench, /!proposal\?\.bom\?\.length/)
+})
+
 test('Sourcing catalogue reconciliation is stable and does not autosave on render', () => {
   assert.match(sparesWorkbench, /const lines = useMemo\(\(\) => store\.sparesLines\.filter\(/)
   assert.match(sparesWorkbench, /\), \[store\.sparesLines, opp\.id\]\)/)

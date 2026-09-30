@@ -15,6 +15,7 @@ import WinLossFlow from '../WinLossFlow.jsx'
 // quarterly performance, then their own work queue.
 
 const roleLabel = role => displayRoleLabel(role) || role
+const dashboardRoleLabel = role => roleLabel(role).replace(displayRole(role), role)
 const PREVIEW_LIMIT = 5
 
 function Metric({ label, value, hint, tone = '', onClick, variant = '' }) {
@@ -533,7 +534,7 @@ export default function MyDashboard() {
     <div className="home-head">
       <div>
         <h2>My Dashboard</h2>
-        <p className="hint">{roleLabel(role)}{store.sales?.fy ? ` · ${store.sales.fy}` : ''}</p>
+        <p className="hint">{dashboardRoleLabel(role)}{store.sales?.fy ? ` · ${store.sales.fy}` : ''}</p>
       </div>
       <div className="home-head-actions">
         <button onClick={() => nav('/opportunities')}><Icon name="cards" size={13} /> Opportunities</button>

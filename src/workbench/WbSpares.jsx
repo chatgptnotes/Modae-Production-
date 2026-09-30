@@ -19,6 +19,33 @@ import { getSparesMatchEntry, requestSparesMatch } from './sparesMatchCache.js'
 const n = value => Number.isFinite(Number(value)) ? Number(value) : 0
 const money = value => `₹ ${fmt(n(value))}`
 
+const proposalSourcingRows = proposal => (proposal?.bom || [])
+  .filter(line => !isPlaceholderSparesLine(line) && String(line?.desc || line?.itemCategory || line?.pn || '').trim())
+  .map(line => {
+    const qty = Number(line.common) > 0
+      ? Number(line.common)
+      : Number(line.qty) > 0
+        ? Number(line.qty)
+        : Math.max(0, Number(line.qtyPerUnit) || 0) * Math.max(1, Number(proposal.units) || 1)
+    const listPrice = Number(line.listUnitPrice ?? line.listPrice) || 0
+    return {
+      origin: 'proposal',
+      custRef: line.custRef || line.pn || line.desc || line.itemCategory,
+      pn: line.pn || '',
+      desc: line.desc || line.itemCategory || '',
+      qty,
+      uom: line.uom || 'EA',
+      listPrice,
+      listUnitPrice: listPrice,
+      baseCost: Number(line.baseCost) || 0,
+      currency: line.currency || 'INR',
+      priceList: line.priceSourceName || line.priceList || 'Ad-hoc',
+      priceSource: line.priceSource || 'manual',
+      priceState: listPrice > 0 || Number(line.quoted) > 0 ? 'Current' : 'Needs pricing',
+      confirmed: qty > 0 && (listPrice > 0 || Number(line.quoted) > 0),
+    }
+  })
+
 // Keep numeric costing inputs canonical while preserving a usable editing
 // state. In particular, 016 becomes 16, while 0.5 remains 0.5.
 const normalizeNumericDraft = value => {
@@ -177,6 +204,11 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
       store.addSparesLinesFromLead(opp.id, workbenchRows, { auditAction: 'Sourcing lines restored from lead' })
     }
   }, [sourcingDataStatus, opp.id, opp.sourceLeadId, store.leads, store.leadArchive, store.priceLists, store.adhocParts])
+  useEffect(() => {
+    if (sourcingDataStatus !== 'ready' || lines.length || !proposal?.bom?.length) return
+    const rows = proposalSourcingRows(proposal)
+    if (rows.length) store.addSparesLinesFromLead(opp.id, rows, { auditAction: 'Sourcing lines restored from proposal' })
+  }, [sourcingDataStatus, opp.id, lines.length, proposal])
   useEffect(() => {
     if (sourcingDataStatus !== 'ready') return
     if (!comm || dedupedOppRef.current === opp.id || !lines.length) return

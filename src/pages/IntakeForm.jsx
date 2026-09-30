@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { useStore, nextOppId } from '../store.jsx'
+import { useStore, reserveOppId } from '../store.jsx'
 import { CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES } from '../seed.js'
 import { runJson } from '../ai.js'
 import { aiAttachmentPayload, supportsVisualAi } from '../aiAttachments.js'
@@ -167,7 +167,7 @@ export default function IntakeForm({ destinationPicker = null }) {
     }
   }, [f, touched, required, selectedProducts.length])
 
-  const submit = e => {
+  const submit = async e => {
     e.preventDefault()
     if (!validation.isComplete) return
     const today = new Date().toISOString().slice(0, 10)
@@ -178,7 +178,7 @@ export default function IntakeForm({ destinationPicker = null }) {
       config: store.config,
       fallback: f.owner || store.role || 'LJS',
     })
-    const id = nextOppId(store.opportunities, owner)
+    const id = await reserveOppId(store.opportunities, owner, store.config?.roleNames)
     const maxSl = Math.max(0, ...store.opportunities.map(o => o.sl || 0))
     const extractedFields = [...aiFilledFields]
       .filter(key => f[key] !== undefined && f[key] !== '')

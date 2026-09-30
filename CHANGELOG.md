@@ -27,6 +27,8 @@ This is an implementation and release log, not a dump of every commit.
 - Simplified the Lead inbox to one unified list by removing the redundant
   Primary, Qualified, and Opportunity mailbox tabs; status filtering remains
   available in the inbox filter bar.
+- Made future opportunity IDs unique across devices by reserving monthly
+  sequences atomically in Supabase and normalizing owner suffixes to role codes.
 - Restored lightweight cross-device workspace updates for leads, opportunities,
   and approvals, including focus/visibility/reconnect recovery and an in-place
   inbox refresh so a lead created on another device appears without a browser

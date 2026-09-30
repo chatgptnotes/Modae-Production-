@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useStore, nextOppId } from '../store.jsx'
+import { useStore, reserveOppId } from '../store.jsx'
 import { CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS } from '../seed.js'
 import { extractPdfText, parseTender, matchParts, buildProposal, buildOpportunityDraft } from '../tenderParse.js'
 import { uploadOppFile } from '../filestore.js'
@@ -188,7 +188,7 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
         config: store.config,
         fallback: draft.owner || store.role || 'LJS',
       })
-      id = nextOppId(store.opportunities, owner)
+      id = await reserveOppId(store.opportunities, owner, store.config?.roleNames)
       const maxSl = Math.max(0, ...store.opportunities.map(o => o.sl || 0))
       const sellTo = draft.sellTo.trim()
       // Tenders spell the buyer out in full ("MAHARASHTRA STATE POWER GENERATION
