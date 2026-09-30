@@ -1,7 +1,7 @@
 // Optional non-catalogue rows that may be added to a customer-facing Spares
 // firm offer. They are not inserted automatically.
 import { defaultCosting } from '../seed.js'
-import { PRICE_SOURCES, isMissingSparesDescription, sparesLineFinancials } from '../pricing.js'
+import { PRICE_SOURCES, isMissingSparesDescription, normalizePriceFields, sparesLineFinancials } from '../pricing.js'
 
 export const SPARES_SUPPORT_ROWS = [
   { desc: 'Warranty Certificate', pn: 'NA', common: 1 },
@@ -40,6 +40,83 @@ const supportPartKey = value => /^na$/i.test(String(value || '').trim()) ? '' : 
 const supportKey = line => `${supportPartKey(line?.pn)}|${String(line?.desc || '').trim().toLowerCase()}`
 
 const partKey = value => String(value || '').trim().toLowerCase()
+
+const lineIdentityKeys = line => [line?.pn, line?.custRef, line?.desc]
+  .map(value => partKey(value).replace(/[^a-z0-9]+/g, ''))
+  .filter(Boolean)
+
+const proposalLineQuantity = (line, proposal = {}) => {
+  const common = Number(line?.common)
+  if (Number.isFinite(common) && common > 0) return common
+  const qty = Number(line?.qty)
+  if (Number.isFinite(qty) && qty > 0) return qty
+  return Math.max(0, Number(line?.qtyPerUnit) || 0) * Math.max(1, Number(proposal?.units) || 1)
+}
+
+// A released Spares proposal is the baseline for a new revision. Restore its
+// customer-facing commercial values into the editable sourcing rows before the
+// user changes the requested revision (for example, a higher discount).
+export function restoreSparesLinesFromProposal(existingLines = [], proposal = {}, priceLists = {}, costing = defaultCosting) {
+  const sourceLines = existingLines.map(line => ({ ...line }))
+  const used = new Set()
+  const restored = []
+  const proposalBom = (proposal?.bom || []).filter(line => {
+    const qty = proposalLineQuantity(line, proposal)
+    return !isPlaceholderSparesLine(line) && (line?.sparesSupport || (qty > 0 && !isMissingSparesDescription(line)))
+  })
+
+  const findExisting = proposalLine => {
+    const proposalKeys = new Set(lineIdentityKeys(proposalLine))
+    return sourceLines.findIndex((line, index) => !used.has(index)
+      && lineIdentityKeys(line).some(key => proposalKeys.has(key)))
+  }
+
+  proposalBom.forEach(proposalLine => {
+    const existingIndex = findExisting(proposalLine)
+    if (existingIndex >= 0) used.add(existingIndex)
+    const existing = existingIndex >= 0 ? sourceLines[existingIndex] : {}
+    const qty = proposalLineQuantity(proposalLine, proposal)
+    const listUnitPrice = Number(proposalLine.listUnitPrice ?? proposalLine.listPrice) || 0
+    const restoredLine = normalizePriceFields({
+      ...existing,
+      oppId: existing.oppId,
+      pn: proposalLine.pn || existing.pn || '',
+      custRef: proposalLine.custRef || proposalLine.pn || existing.custRef || '',
+      desc: proposalLine.desc || existing.desc || '',
+      qty,
+      uom: proposalLine.uom || existing.uom || 'EA',
+      listPrice: Number(proposalLine.listPrice ?? listUnitPrice) || 0,
+      listUnitPrice,
+      baseCost: proposalLine.baseCost == null ? existing.baseCost : Number(proposalLine.baseCost) || 0,
+      discountPct: Number(proposalLine.discountPct) || 0,
+      markupPct: Number(proposalLine.markupPct) || 0,
+      currency: proposalLine.currency || existing.currency || 'INR',
+      priceList: proposalLine.priceSourceName || proposalLine.priceList || existing.priceList || '',
+      priceSource: proposalLine.priceSource || existing.priceSource || PRICE_SOURCES.MANUAL,
+      priceSourceName: proposalLine.priceSourceName || existing.priceSourceName || '',
+      priceSourceVersion: proposalLine.priceSourceVersion || existing.priceSourceVersion || '',
+      priceSourceRef: proposalLine.priceSourceRef || existing.priceSourceRef || '',
+      priceSourceDate: proposalLine.priceSourceDate || existing.priceSourceDate || '',
+      removedFromSourcing: false,
+      removedQty: 0,
+      confirmed: qty > 0 && (listUnitPrice > 0 || Number(proposalLine.quoted) > 0),
+    })
+    restored.push(restoredLine)
+  })
+
+  sourceLines.forEach((line, index) => {
+    if (used.has(index)) return
+    restored.push({
+      ...line,
+      qty: 0,
+      removedQty: Math.max(0, Number(line.qty) || 0),
+      removedFromSourcing: true,
+      confirmed: false,
+    })
+  })
+
+  return { lines: restored, costing }
+}
 
 export function catalogueDescriptionForLine(line, priceLists = {}) {
   const pn = partKey(line?.pn || line?.custRef)

@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import { extractCustomerSparesLines, reconcileSparesLines } from '../src/clarificationSparesSync.js'
+import { restoreSparesLinesFromProposal } from '../src/proposal/sparesBoq.js'
 import { seedPriceLists } from '../src/seed.js'
 
 test('customer clarification table extracts the five requested Metrix lines', () => {
@@ -53,4 +54,27 @@ test('reconciliation tolerates formatted part numbers and removes duplicate sugg
   assert.equal(result.lines[0].pn, 'VC8000-SETPOINT/CHASSIS')
   assert.equal(result.lines[0].qty, 2)
   assert.ok(result.changes.some(change => change.deduplicated === 1))
+})
+
+test('revision restoration copies the last proposal values back into sourcing', () => {
+  const result = restoreSparesLinesFromProposal([
+    { id: 'SL-1', oppId: 'OPP-1', pn: 'P-1', custRef: 'P-1', desc: 'Old description', qty: 1, confirmed: true, listPrice: 100, listUnitPrice: 100, discountPct: 5, markupPct: 4, priceSource: 'manual' },
+    { id: 'SL-2', oppId: 'OPP-1', pn: 'STALE', custRef: 'STALE', desc: 'Removed line', qty: 2, confirmed: true, listPrice: 200, listUnitPrice: 200 },
+  ], {
+    bom: [
+      { pn: 'P-1', custRef: 'P-1', desc: 'Updated description', common: 4, uom: 'EA', listPrice: 1250, listUnitPrice: 1250, baseCost: 900, discountPct: 12, markupPct: 12, currency: 'INR', priceSource: 'manual', priceSourceName: 'Manual pricing' },
+      { pn: 'P-2', custRef: 'P-2', desc: 'Added line', common: 1, uom: 'EA', listPrice: 500, listUnitPrice: 500, baseCost: 350, discountPct: 3, markupPct: 5, currency: 'INR', priceSource: 'manual' },
+    ],
+  }, {}, {})
+
+  assert.deepEqual(result.lines.map(line => [line.pn, line.qty, line.discountPct, line.markupPct, line.listUnitPrice]), [
+    ['P-1', 4, 12, 12, 1250],
+    ['P-2', 1, 3, 5, 500],
+    ['STALE', 0, undefined, undefined, 200],
+  ])
+  assert.equal(result.lines[0].id, 'SL-1')
+  assert.equal(result.lines[1].id, undefined)
+  assert.equal(result.lines[1].confirmed, true)
+  assert.equal(result.lines[2].removedFromSourcing, true)
+  assert.equal(result.lines[2].removedQty, 2)
 })

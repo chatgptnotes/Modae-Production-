@@ -296,7 +296,7 @@ test('every internal role can open detailed reporting from their reporting actio
   assert.doesNotMatch(tabletApp, /path="\/dashboard"[^\n]*#forecast-details/)
   assert.match(app, /<Route path="\/dashboard" element=\{<Navigate to="\/my-dashboard" replace \/>\} \/>/)
   assert.match(tabletApp, /<Route path="\/dashboard" element=\{<Navigate to="\/my-dashboard" replace \/>\} \/>/)
-  assert.match(app, /<Route path="\/po" element=\{<Navigate to="\/proposal-sent" replace \/>\} \/>/)
+  assert.match(app, /<Route path="\/po" element=\{<PageGate page="po"><PurchaseOrders \/><\/PageGate>\} \/>/)
   assert.match(app, /<Route path="\/analytics" element=\{<PageGate page="analytics"><Analytics \/><\/PageGate>\}/)
   assert.match(tabletApp, /<Route path="\/analytics" element=\{<TabletGate page="analytics"><Analytics \/><\/TabletGate>\}/)
   for (const role of Object.keys(ROLES).filter(r => r !== 'CUST')) {
@@ -604,7 +604,7 @@ test('the pipeline snapshot is bars plus a stat list, not a table', () => {
   const card = source.slice(start, source.indexOf('<ForecastReportCard />', start))
   for (const row of ['Open value', 'Weighted', 'Booked orders']) assert.ok(card.includes(`'${row}'`), row)
   assert.match(card, /className=\{`mb-fill \$\{row\.cls\}`\}/)
-  assert.match(card, /className="stat-list"/)
+  assert.match(card, /className="stat-list pipeline-stat-list"/)
   assert.doesNotMatch(card, /cost-table/, 'the flat table gave way to the prototype bars')
   const css = read('src/styles.css')
   for (const cls of ['snap-open', 'snap-weighted', 'snap-booked']) assert.match(css, new RegExp(`\.mb-fill\.${cls}`))
@@ -642,4 +642,57 @@ test('My opportunities is table-only', () => {
   assert.match(source, /title="My opportunities"[\s\S]*dashboard-table/)
   assert.doesNotMatch(source, /ViewSwitch|dashboard-view-switch|sales-opportunity-cards|sales-compact-list/)
   assert.doesNotMatch(source, /view === ['"](?:cards|compact)['"]/) 
+})
+
+test('My orders spans the full dashboard width', () => {
+  const source = read('src/pages/MyDashboard.jsx')
+  assert.match(source, /<Card title="My orders"[\s\S]*?span=\{12\}/)
+})
+
+test('Pipeline snapshot spans the full dashboard width', () => {
+  const source = read('src/pages/MyDashboard.jsx')
+  assert.match(source, /<Card title="Pipeline snapshot"[\s\S]*?span=\{12\}/)
+})
+
+test('sales dashboard follows the action-to-outcome workflow', () => {
+  const source = read('src/pages/MyDashboard.jsx')
+  const sales = source.slice(source.indexOf('function SalesDashboard'), source.indexOf('// ------------------------------------------------------------ team targets'))
+  const positions = [
+    'title="Priority queue"',
+    'title="Pipeline snapshot"',
+    '<SalesOpportunitySection ',
+    '<SalesCustomerSection ',
+    '<div className="section-title">Performance</div>',
+    'title="My orders"',
+  ].map(marker => sales.indexOf(marker))
+  assert.ok(positions.every(position => position >= 0), 'all sales dashboard sections must be present')
+  for (let i = 1; i < positions.length; i += 1) {
+    assert.ok(positions[i - 1] < positions[i], `${positions[i - 1]} must precede ${positions[i]}`)
+  }
+})
+
+test('pipeline summary and empty orders use deliberate full-width states', () => {
+  const source = read('src/pages/MyDashboard.jsx')
+  const styles = read('src/styles.css')
+  assert.match(source, /className="pipeline-summary"/)
+  assert.match(source, /className="stat-list pipeline-stat-list"/)
+  assert.match(source, /dashboard-orders-empty/)
+  assert.match(styles, /\.dashboard-page \.pipeline-summary,[\s\S]*?width:\s*100%/)
+  assert.match(styles, /\.dashboard-page \.pipeline-stat-list li[\s\S]*?width:\s*100%/)
+  assert.match(styles, /\.dashboard-page \.dashboard-orders-empty[\s\S]*?padding-top:\s*2px/)
+})
+
+test('dashboard view-all actions open the matching workspaces', () => {
+  const dashboard = read('src/pages/MyDashboard.jsx')
+  const app = read('src/App.jsx')
+  const myOpps = read('src/pages/MyOpps.jsx')
+  const styles = read('src/styles.css')
+  assert.match(dashboard, /title="My opportunities"[\s\S]*?nav\('\/opportunities'\)/)
+  assert.match(dashboard, /title="Priority queue"[\s\S]*?nav\('\/my'\)/)
+  assert.match(dashboard, /title="My orders"[\s\S]*?nav\('\/po'\)/)
+  assert.match(app, /const PurchaseOrders = lazyWithRecovery\(\(\) => import\('\.\/pages\/PurchaseOrders\.jsx'\)\)/)
+  assert.match(app, /<Route path="\/po" element=\{<PageGate page="po"><PurchaseOrders \/><\/PageGate>\} \/>/)
+  assert.doesNotMatch(app, /<Route path="\/po" element=\{<Navigate to="\/proposal-sent"/)
+  assert.match(myOpps, /<table className="sheet opportunity-list">/)
+  assert.match(styles, /\.opportunity-list th, \.opportunity-list td \{[\s\S]*?white-space: normal/)
 })

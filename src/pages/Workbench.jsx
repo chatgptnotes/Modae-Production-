@@ -653,6 +653,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
     anyOf: !!blocker.anyOf,
     detail: blocker.text,
     pricingRows: blocker.pricingRows || undefined,
+    coversPricingThreshold: blocker.coversPricingThreshold || undefined,
     ...approvalContextFor(blocker),
   })
   const requestException = blocker => {
@@ -786,7 +787,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
                     : null}
                   {item.key === 'commercial-decision' && <button type="button" className="exception-action" onClick={openCommercialDecisions}>Review commercial decisions</button>}
                   {approvable && openRequest && <span>{item.approvalType === 'Commercial deviation' ? 'AH approval for commercial deviations' : item.approvalType} <b>{openRequest.id}</b> is pending with {openRequest.needed?.join(openRequest.anyOf ? ' or ' : ' + ') || openRequest.approver}.</span>}
-                  {approvable && !openRequest && <button className="exception-action" onClick={() => requestBlockerApproval(item)}>{item.key === 'release' ? 'Request final quote release from AH + LJS' : item.approvalType === 'Commercial deviation' ? 'Request AH approval for commercial deviations' : `Request ${item.approvalType.toLowerCase()} from ${blockerOwner(item)}`}</button>}
+                  {approvable && !openRequest && <button className="exception-action" onClick={() => requestBlockerApproval(item)}>{item.coversPricingThreshold ? 'Request combined quote approval from AH + LJS' : item.key === 'release' ? 'Request final quote release from AH + LJS' : item.approvalType === 'Commercial deviation' ? 'Request AH approval for commercial deviations' : `Request ${item.approvalType.toLowerCase()} from ${blockerOwner(item)}`}</button>}
                   {requestable && exception?.status === 'Pending' && <span>Exception approval <b>{exception.id}</b> is pending.</span>}
                   {requestable && !exception && <button className="exception-action" onClick={() => requestException(item)}>Request {blockerOwner(item)} approval to continue</button>}
                   {requestable && exception?.status === 'Rejected' && <span>Exception <b>{exception.id}</b> was rejected; resolve the requirement or request a new review.</span>}
@@ -2593,7 +2594,7 @@ function ApprovalsTab({ opp }) {
   const store = useStore()
   const rows = store.approvals.filter(a => a.oppId === opp.id)
   const pricingRowsFor = a => {
-    if (a.type !== 'Pricing threshold exception') return a.pricingRows || []
+    if (a.type !== 'Pricing threshold exception' && !a.coversPricingThreshold) return a.pricingRows || []
     const current = pricingThresholdExceptions(opp, store.getProposal(opp.id), store).rows
     return current.length ? current : (a.pricingRows || [])
   }
@@ -2607,14 +2608,14 @@ function ApprovalsTab({ opp }) {
             <span className={`pill ${statusPill(a.status)}`}>{a.status}</span>
             <span className="hint" style={{ marginLeft: 'auto' }}>requested by {displayRole(a.requestedBy)} · {ddMmmYY((a.ts || '').slice(0, 10))}</span>
           </div>
-          {(COMMERCIAL_RX.test(a.detail || '') || (a.type === 'Pricing threshold exception' && a.pricingRows?.length > 0)) && !canPriceProposal(store.role) ? (
+          {(COMMERCIAL_RX.test(a.detail || '') || ((a.type === 'Pricing threshold exception' || a.coversPricingThreshold) && a.pricingRows?.length > 0)) && !canPriceProposal(store.role) ? (
             <div className="restricted" style={{ fontSize: 12.5, margin: '6px 0' }}>
               <Icon name="lock" size={11} /> Commercial exception — trigger values (GM% / discount / value) visible to approvers and the opportunity owner only.
             </div>
           ) : (
             <>
               <div style={{ fontSize: 12.5, margin: '6px 0' }}>{a.detail}</div>
-              {a.type === 'Pricing threshold exception' && pricingRowsFor(a).length > 0 && <div className="approval-pricing-rows">{pricingRowsFor(a).map((row, i) => <div className="approval-pricing-row" key={`${row.label}-${i}`}><b>{row.label}</b>{row.discount > row.discountPct && <span>Discount {row.discount}% <small>(limit {row.discountPct}%)</small></span>}{row.markup > row.markupPct && <span>Markup {row.markup}% <small>(limit {row.markupPct}%)</small></span>}</div>)}</div>}
+              {(a.type === 'Pricing threshold exception' || a.coversPricingThreshold) && pricingRowsFor(a).length > 0 && <div className="approval-pricing-rows">{pricingRowsFor(a).map((row, i) => <div className="approval-pricing-row" key={`${row.label}-${i}`}><b>{row.label}</b>{row.discount > row.discountPct && <span>Discount {row.discount}% <small>(limit {row.discountPct}%)</small></span>}{row.markup > row.markupPct && <span>Markup {row.markup}% <small>(limit {row.markupPct}%)</small></span>}</div>)}</div>}
             </>
           )}
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>

@@ -397,7 +397,7 @@ export default function Approvals() {
 
   const oppName = id => (store.opportunities.find(o => o.id === id) || {}).oppName || ''
   const pricingRowsFor = a => {
-    if (a.type !== 'Pricing threshold exception' || !a.oppId) return a.pricingRows || []
+    if ((a.type !== 'Pricing threshold exception' && !a.coversPricingThreshold) || !a.oppId) return a.pricingRows || []
     const opp = store.opportunities.find(item => item.id === a.oppId)
     const current = pricingThresholdExceptions(opp, store.getProposal(a.oppId), store).rows
     return current.length ? current : (a.pricingRows || [])
@@ -461,7 +461,7 @@ export default function Approvals() {
     return <>
       <OpportunityContext a={a} />
       <RejectionRequirements approval={a} />
-      {showStandaloneDetail && (a.type === 'Pricing threshold exception' && a.pricingRows?.length && comm
+      {showStandaloneDetail && ((a.type === 'Pricing threshold exception' || a.coversPricingThreshold) && a.pricingRows?.length && comm
         ? <><div style={{ fontSize: 12.5 }}>{a.detail}</div><PricingRows rows={pricingRowsFor(a)} approvers={neededOf(a)} /></>
         : COMMERCIAL_RX.test(a.detail || '') && !comm
           ? <div className="restricted" style={{ fontSize: 12.5 }}><Icon name="lock" size={11} /> Commercial exception — trigger values (GM% / discount / value) visible to LJS / AH only.</div>
@@ -490,7 +490,7 @@ export default function Approvals() {
     // dense inline paragraph.
     const reason = baseReason.replace(/\s+Review findings:[\s\S]*$/i, '').trim()
     const deviations = comm ? (a.deviationDetails || []) : []
-    const pricingRows = comm && a.type === 'Pricing threshold exception' ? pricingRowsFor(a) : []
+    const pricingRows = comm && (a.type === 'Pricing threshold exception' || a.coversPricingThreshold) ? pricingRowsFor(a) : []
     return (
       <div className="approval-opportunity-context">
         <div className="approval-context-head">

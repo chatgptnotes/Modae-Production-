@@ -341,10 +341,14 @@ test('the survey gates only bite once a survey is actually required', () => {
 
 test('the revision dialog keeps typed categories without sign-off routing', () => {
   const builder = read('src/workbench/PropBuilder.jsx')
+  const store = read('src/store.jsx')
   assert.match(builder, /store\.reviseProposal\(opp\.id, reviseReason\.trim\(\), reviseType\)/,
     'the revision category must reach the store')
   assert.match(builder, /REVISION_TYPES\.map/, 'the type must be chosen, not assumed')
   assert.ok(REVISION_TYPES.every(t => !t.step), 'revision categories must not route to sign-off steps')
+  assert.match(store, /restoreSparesLinesFromProposal/, 'opening a Spares revision must restore the prior proposal into sourcing')
+  assert.match(store, /routeForType\(opp\?\.oppType\) === 'Spares'/, 'restoration must be scoped to the Spares sourcing workflow')
+  assert.match(store, /sparesLines: restoredSparesLines/, 'restored sourcing rows must be persisted with the revision')
 })
 
 // ---------------------------------------------------------------------------

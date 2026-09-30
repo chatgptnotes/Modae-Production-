@@ -223,12 +223,21 @@ function pricingApprovers(state) {
 export function pricingApprovalFor(opp, proposal, approvals, pricingRows = []) {
   const rev = String(proposal?.revision ?? '')
   const signature = pricingExceptionSignature(pricingRows)
-  return (approvals || []).find(a => a.status !== 'Cancelled' && a.oppId === opp.id && a.type === 'Pricing threshold exception'
-    && (a.pricingSignature
-      ? a.pricingSignature === signature
-      : (a.approvalSnapshot
-        ? !approvalAffectedByProposal(a, a.type, proposal, opp)
-        : (a.rev == null || String(a.rev) === rev))))
+  return (approvals || []).find(a => {
+    const isPricingApproval = a.type === 'Pricing threshold exception'
+      || (a.type === 'Final quote release' && a.coversPricingThreshold)
+    if (a.status === 'Cancelled' || a.oppId !== opp.id || !isPricingApproval) return false
+    // Older approvals may not have pricingSignature, but their pricingRows
+    // still identify exactly what the approver signed off. Do not fall back to
+    // the full proposal snapshot when those rows are available: unrelated
+    // workbook edits must not reopen the same discount exception.
+    const approvedSignature = a.pricingSignature
+      || (a.pricingRows?.length ? pricingExceptionSignature(a.pricingRows) : '')
+    if (approvedSignature) return approvedSignature === signature
+    return a.approvalSnapshot
+      ? !approvalAffectedByProposal(a, a.type, proposal, opp)
+      : (a.rev == null || String(a.rev) === rev)
+  })
 }
 
 // Active Service opportunities use the published Standard Rate Sheet lane.
@@ -833,6 +842,24 @@ export function transitionBlockers(opp, target, proposal, state) {
         approvalType: g.type, needed: g.needed, anyOf: !!g.anyOf,
         text: waiting ? `${g.label} is awaiting approval` : `${g.label} is required`,
       })
+    }
+    // A pricing exception and final release are one decision package for the
+    // joint AH + LJS approval. Keep the pricing rows on the release blocker so
+    // one request contains every point the approvers must decide.
+    const pricingBlocker = b.find(item => item.key === 'pricing-threshold')
+    const releaseBlocker = b.find(item => item.key === 'release')
+    if (pricingBlocker && releaseBlocker) {
+      releaseBlocker.coversPricingThreshold = true
+      releaseBlocker.pricingRows = pricingBlocker.pricingRows
+      releaseBlocker.needed = ['LJS', 'AH']
+      releaseBlocker.approver = 'LJS'
+      releaseBlocker.anyOf = false
+      releaseBlocker.severity = pricingBlocker.severity === 'wait' || releaseBlocker.severity === 'wait' ? 'wait' : 'block'
+      releaseBlocker.text = releaseBlocker.severity === 'wait'
+        ? 'Combined pricing exception and final quote release approval is awaiting AH + LJS'
+        : 'Combined pricing exception and final quote release approval is required from AH + LJS'
+      const pricingIndex = b.indexOf(pricingBlocker)
+      b.splice(pricingIndex, 1)
     }
     const conditions = mine.flatMap(a => a.status === 'Approved with conditions' ? (a.conditions || []) : []).filter(c => !c.incorporated)
     if (conditions.length) b.push({ key: 'conditions', severity: 'block', text: 'All approval conditions must be incorporated and confirmed' })

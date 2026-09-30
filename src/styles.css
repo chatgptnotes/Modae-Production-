@@ -1481,7 +1481,23 @@ table.sheet tfoot td { font-weight: 700; background: var(--primary-soft); }
 .opportunity-list th:nth-child(7), .opportunity-list td:nth-child(7) { width: 100px; }
 .opportunity-list th:nth-child(8), .opportunity-list td:nth-child(8) { width: 208px; }
 .opportunity-list th:nth-child(9), .opportunity-list td:nth-child(9) { width: 190px; }
-.opportunity-list td { overflow-wrap: break-word; }
+.opportunity-list th, .opportunity-list td {
+  white-space: normal;
+  vertical-align: top;
+  line-height: 1.35;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.opportunity-list th:nth-child(1), .opportunity-list td:nth-child(1),
+.opportunity-list td:nth-child(4), .opportunity-list td:nth-child(6),
+.opportunity-list td:nth-child(7) {
+  white-space: nowrap;
+}
+.opportunity-list td:nth-child(1), .opportunity-list td:nth-child(4),
+.opportunity-list td:nth-child(6), .opportunity-list td:nth-child(7) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .opportunity-list .opportunity-cell { display: flex; align-items: center; min-width: 0; gap: 6px; }
 .opportunity-list .opportunity-name { min-width: 0; overflow-wrap: break-word; }
 .opportunity-list .opportunity-cell .pill { flex: 0 0 auto; margin-left: 0 !important; }
@@ -11604,6 +11620,28 @@ table.sheet tfoot td {
   display: flex;
   min-width: 0;
   flex-direction: column;
+}
+
+/* The pipeline register is a full-width summary, so its count rows must not
+   inherit a narrower list width from another dashboard surface. */
+.dashboard-page .pipeline-summary,
+.dashboard-page .pipeline-stat-list {
+  width: 100%;
+}
+.dashboard-page .pipeline-stat-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.dashboard-page .pipeline-stat-list li {
+  width: 100%;
+  box-sizing: border-box;
+}
+.dashboard-page .ana-table.is-empty tbody tr {
+  border-bottom: 0;
+}
+.dashboard-page .dashboard-orders-empty {
+  padding-top: 2px;
+  padding-bottom: 2px;
 }
 
 .dashboard-page .dashboard-card .ana-title {

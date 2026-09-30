@@ -34,6 +34,7 @@ const WorkflowAdmin = lazyWithRecovery(() => import('./pages/WorkflowAdmin.jsx')
 const Register = lazyWithRecovery(() => import('./pages/Register.jsx'))
 const Workbench = lazyWithRecovery(() => import('./pages/Workbench.jsx'))
 const ProposalSent = lazyWithRecovery(() => import('./pages/ProposalSent.jsx'))
+const PurchaseOrders = lazyWithRecovery(() => import('./pages/PurchaseOrders.jsx'))
 const Portal = lazyWithRecovery(() => import('./pages/Portal.jsx'))
 const TabletApp = lazyWithRecovery(() => import('./tablet/TabletApp.jsx'))
 // import TabletApp from './tablet/TabletApp.jsx'
@@ -371,7 +372,7 @@ export default function App() {
       <Route path="/opp/:oppId/:tab" element={<PageGate page="tracker"><Workbench /></PageGate>} />
       <Route path="/approvals" element={<PageGate page="approvals"><Approvals /></PageGate>} />
       <Route path="/proposal-sent" element={<PageGate page="proposalSent"><ProposalSent /></PageGate>} />
-      <Route path="/po" element={<Navigate to="/proposal-sent" replace />} />
+      <Route path="/po" element={<PageGate page="po"><PurchaseOrders /></PageGate>} />
       <Route path="/audit" element={<PageGate page="audit"><Audit /></PageGate>} />
       <Route path="/new" element={<PageGate page="new"><IntakeForm /></PageGate>} />
       <Route path="/tender" element={<PageGate page="tender"><TenderIntake /></PageGate>} />

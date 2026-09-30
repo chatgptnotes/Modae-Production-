@@ -5,7 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { pricingApprovalFor, pricingThresholdExceptions, readiness } from '../src/gates.js'
-import { pricingExceptionSignature } from '../src/approvalMemory.js'
+import { pricingExceptionSignature, proposalApprovalSnapshot } from '../src/approvalMemory.js'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 
@@ -116,6 +116,32 @@ test('a signature-backed pricing approval survives a revision bump and unrelated
   assert.equal(blockers.some(item => item.key === 'pricing-threshold'), false)
 })
 
+test('a legacy pricing approval reuses its exact pricing rows after unrelated workbook edits', () => {
+  const approvedProposal = {
+    revision: '01',
+    bom: [{ pn: 'P-1', quoted: 100, discountPct: 8 }],
+  }
+  const currentProposal = {
+    ...approvedProposal,
+    bom: [
+      { pn: 'P-1', quoted: 100, discountPct: 8 },
+      { pn: 'P-9', quoted: 555, quantity: 4 },
+    ],
+  }
+  const pricingRows = pricingThresholdExceptions(opp, approvedProposal, state).rows
+  const legacyApproval = {
+    oppId: 'PRICE-1',
+    type: 'Pricing threshold exception',
+    status: 'Approved',
+    rev: '01',
+    pricingRows,
+    approvalSnapshot: proposalApprovalSnapshot(approvedProposal, opp),
+  }
+
+  const blockers = readiness(opp, currentProposal, { ...state, approvals: [legacyApproval] })
+  assert.equal(blockers.some(item => item.key === 'pricing-threshold'), false)
+})
+
 test('a pricing approval re-opens when an approved over-threshold value changes', () => {
   const proposal = { revision: '01', discountPct: 8, bom: [] }
   const offendingRows = pricingThresholdExceptions(opp, proposal, state).rows
@@ -137,8 +163,11 @@ test('a pending pricing approval with a matching signature still waits, not bloc
 
 test('the Proposal page forwards pricingRows so its approvals carry the signature', () => {
   const source = read('src/pages/Proposal.jsx')
+  const store = read('src/store.jsx')
   const matches = source.match(/\.\.\.\(bl\.pricingRows\?\.length \? \{ pricingRows: bl\.pricingRows \} : \{\}\)/g) || []
   assert.equal(matches.length, 2, 'both requestApproval call sites must forward pricingRows')
+  assert.match(store, /req\.type === 'Pricing threshold exception' \|\| req\.coversPricingThreshold/,
+    'combined quote approvals must retain the pricing signature')
 })
 
 function read(relative) {

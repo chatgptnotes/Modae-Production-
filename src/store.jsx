@@ -27,6 +27,7 @@ import {
   isSparesSupportRow,
   sparesProposalBom,
   orderedSparesProposalBom,
+  restoreSparesLinesFromProposal,
 } from './proposal/sparesBoq.js'
 import { releaseState, transitionBlockers } from './gates.js'
 import { clearSupabaseSession, isSupabaseAuthError, supabase, supabaseConfigError } from './supabase.js'
@@ -897,6 +898,7 @@ export function StoreProvider({ children }) {
       setState(s => {
         const p = s.proposals[oppId]
         if (!p) return s
+        const opp = s.opportunities.find(item => item.id === oppId)
         const revisions = p.revisions || []
         // Only explicit quote revisions count toward the customer-facing version.
         const nextRevisionNumber = revisions.filter(r => r.status === 'Revised').length + 2
@@ -915,15 +917,28 @@ export function StoreProvider({ children }) {
             snapshot: snapshotProposal(p),
           }],
         }
+        const restoredSparesLines = routeForType(opp?.oppType) === 'Spares'
+          ? restoreSparesLinesFromProposal(
+            s.sparesLines.filter(line => line.oppId === oppId),
+            p,
+            s.priceLists,
+            p.costing,
+          ).lines.reduce((rows, line) => {
+            const nextLine = line.oppId ? line : { ...line, oppId }
+            if (nextLine.id) return [...rows, nextLine]
+            return [...rows, { ...nextLine, id: mintId('SL', [...s.sparesLines, ...rows]) }]
+          }, [])
+          : s.sparesLines
         return withAudit({
           ...s,
+          sparesLines: restoredSparesLines,
           proposals: { ...s.proposals, [oppId]: next },
           opportunities: s.opportunities.map(o => (o.id === oppId ? {
             ...o, milestone: 'Sourcing',
             workflowTransition: workflowTransition(o.milestone, 'Sourcing', note || 'Quote revision opened'),
           } : o)),
         }, 'Quote revision opened', oppId,
-        `Rev ${next.revision} - ${spec.id} change, re-approval required - ${note || 'no reason given'}`)
+        `Rev ${next.revision} - ${spec.id} change, previous proposal values restored to Sourcing for revision; re-approval required - ${note || 'no reason given'}`)
       })
     },
 
@@ -1263,7 +1278,7 @@ export function StoreProvider({ children }) {
           approvalSnapshot: req.approvalSnapshot || proposalApprovalSnapshot(proposal, opportunity),
           // Pricing approvals are remembered by the offending rows only, so the
           // approval survives unrelated proposal edits and revision bumps.
-          ...(req.type === 'Pricing threshold exception' && req.pricingRows?.length
+          ...((req.type === 'Pricing threshold exception' || req.coversPricingThreshold) && req.pricingRows?.length
             ? { pricingSignature: pricingExceptionSignature(req.pricingRows) }
             : {}),
           ...(previousRejection ? { previousRejection } : {}),

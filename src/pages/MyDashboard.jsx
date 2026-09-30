@@ -441,7 +441,7 @@ function SalesOpportunitySection({ store, open, nav, money }) {
   const action = o => nextActionWith(o, store.getProposal(o.id), store)
   return (
     <Card title="My opportunities" icon="sheet" tone="tone-sky" span={12}
-      action={<button onClick={() => nav('/my')}>View all</button>}>
+      action={<button onClick={() => nav('/opportunities')}>View all</button>}>
       <div className="dashboard-table-scroll"><table className="dashboard-table"><thead><tr><th>ID</th><th>Opportunity</th><th>Customer</th><th>Stage</th><th>Value (₹)</th><th>Win %</th><th>Next action</th><th>Due</th></tr></thead><tbody>{rows.map(o => { const na = action(o); const go = () => nav(`/opp/${o.id}`); return <tr key={o.id} tabIndex={0} role="link" aria-label={`Open opportunity ${o.id}`} onClick={go} onKeyDown={event => activateDashboardRow(event, go)}><td><b>{o.id}</b></td><td><span className="dashboard-cell-ellipsis">{o.oppName}</span></td><td><span className="dashboard-cell-ellipsis">{o.sellTo}</span></td><td><span className="pill open">{o.stage}</span></td><td>{money ? fmtLakh(o.valueK) : '—'}</td><td>{o.prob || '—'}</td><td title={na.text}><span className="dashboard-cell-clamp">{na.text || o.remarks || 'Review next step'}</span></td><td>{o.orderDate ? ddMmmYY(o.orderDate) : '—'}</td></tr>})}</tbody></table></div>
       {!rows.length && <div className="dashboard-empty">No open opportunities are assigned to you.</div>}
     </Card>
@@ -591,22 +591,36 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
           <NextActions nextActions={visibleNextActions} nav={nav} />
         </Card>
 
-        <Card title="My orders" icon="clipboardCheck" tone="tone-green" span={6}
-          action={<button onClick={() => nav('/po')}>View all</button>}>
-          <table className="ana-table">
-            <thead><tr><th>Order</th><th>Customer</th><th className="num">Value (₹)</th><th>Status</th></tr></thead>
-            <tbody>
-              {perf.orders.slice(0, PREVIEW_LIMIT).map(o => (
-                <tr key={o.id}>
-                  <td>{o.id}</td>
-                  <td title={o.title}>{o.customer}</td>
-                  <td className="num">{money ? fmtLakh(o.valueK) : '—'}</td>
-                  <td>{o.status}</td>
-                </tr>
+        <Card title="Pipeline snapshot" icon="chartBar" tone="tone-teal" span={12}
+          action={<button onClick={() => nav('/analytics')}>Open detailed analytics</button>}>
+          {/* The prototype's chartBars rows (Bt_html clickable prototype.html:4170):
+              open / weighted / booked as proportional bars, counts as a list. */}
+          {money && (
+            <div>
+              {[
+                { label: 'Open value', value: openValue, cls: 'snap-open' },
+                { label: 'Weighted', value: weightedValue, cls: 'snap-weighted' },
+                { label: 'Booked orders', value: perf.achieved, cls: 'snap-booked' },
+              ].map((row, _, rows) => (
+                <div key={row.label} className="mbar" aria-label={`${row.label}: ${fmtLakh(row.value)}`}>
+                  <span className="mb-lbl wide">{row.label}</span>
+                  <span className="mb-track">
+                    <span className={`mb-fill ${row.cls}`}
+                      style={{ width: `${Math.max(2, (row.value / Math.max(1, ...rows.map(r => r.value))) * 100)}%` }} />
+                  </span>
+                  <span className="mb-val wide">{fmtLakh(row.value)}</span>
+                </div>
               ))}
-              {!perf.orders.length && <tr><td className="empty" colSpan={4}>No orders booked this year.</td></tr>}
-            </tbody>
-          </table>
+            </div>
+          )}
+          <div className="pipeline-summary">
+            <ul className="stat-list pipeline-stat-list" style={{ marginTop: money ? 10 : 0 }}>
+              <li>Open opportunities<b>{visibleOpen.length}</b></li>
+              <li>Without a proposal<b>{unproposed.length}</b></li>
+              <li>New leads in your queue<b>{leads.length}</b></li>
+              <li>Blocked<b>{visibleBlocked.length}</b></li>
+            </ul>
+          </div>
         </Card>
       </div>
 
@@ -631,36 +645,23 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
       </div>
 
       <div className="ana-grid">
-        <Card title="Pipeline snapshot" icon="chartBar" tone="tone-teal" span={8}
-          action={<button onClick={() => nav('/analytics')}>Open detailed analytics</button>}>
-          {/* The prototype's chartBars rows (Bt_html clickable prototype.html:4170):
-              open / weighted / booked as proportional bars, counts as a list. */}
-          {money && (
-            <div>
-              {[
-                { label: 'Open value', value: openValue, cls: 'snap-open' },
-                { label: 'Weighted', value: weightedValue, cls: 'snap-weighted' },
-                { label: 'Booked orders', value: perf.achieved, cls: 'snap-booked' },
-              ].map((row, _, rows) => (
-                <div key={row.label} className="mbar" aria-label={`${row.label}: ${fmtLakh(row.value)}`}>
-                  <span className="mb-lbl wide">{row.label}</span>
-                  <span className="mb-track">
-                    <span className={`mb-fill ${row.cls}`}
-                      style={{ width: `${Math.max(2, (row.value / Math.max(1, ...rows.map(r => r.value))) * 100)}%` }} />
-                  </span>
-                  <span className="mb-val wide">{fmtLakh(row.value)}</span>
-                </div>
+        <Card title="My orders" icon="clipboardCheck" tone="tone-green" span={12}
+          action={<button onClick={() => nav('/po')}>View all</button>}>
+          <table className={`ana-table${!perf.orders.length ? ' is-empty' : ''}`}>
+            <thead><tr><th>Order</th><th>Customer</th><th className="num">Value (₹)</th><th>Status</th></tr></thead>
+            <tbody>
+              {perf.orders.slice(0, PREVIEW_LIMIT).map(o => (
+                <tr key={o.id}>
+                  <td>{o.id}</td>
+                  <td title={o.title}>{o.customer}</td>
+                  <td className="num">{money ? fmtLakh(o.valueK) : '—'}</td>
+                  <td>{o.status}</td>
+                </tr>
               ))}
-            </div>
-          )}
-          <ul className="stat-list" style={{ marginTop: money ? 10 : 0 }}>
-            <li>Open opportunities<b>{visibleOpen.length}</b></li>
-            <li>Without a proposal<b>{unproposed.length}</b></li>
-            <li>New leads in your queue<b>{leads.length}</b></li>
-            <li>Blocked<b>{visibleBlocked.length}</b></li>
-          </ul>
+              {!perf.orders.length && <tr><td className="empty dashboard-orders-empty" colSpan={4}>No orders booked this year.</td></tr>}
+            </tbody>
+          </table>
         </Card>
-
       </div>
     </div>
   )

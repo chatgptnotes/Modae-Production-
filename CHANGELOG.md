@@ -13,6 +13,18 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Reordered the sales-owner dashboard into an action-to-outcome flow, moving
+  Pipeline snapshot ahead of detailed tables, placing My orders after
+  Performance, and making pipeline counts full-width with a compact empty
+  orders state.
+- Corrected dashboard View all destinations so My opportunities opens the full
+  Opportunities tracker and My orders opens Purchase Orders; also fixed long
+  opportunity names overlapping adjacent columns in the personal pipeline.
+- Combined pricing-exception and final-quote-release approvals into one complete
+  joint AH + LJS request, including the affected pricing rows and decision context.
+- Restored the last customer-facing Spares proposal into Sourcing when opening
+  a revision, including quantities and commercial adjustments, so requested
+  changes such as additional discount start from the sent proposal values.
 - Standardized all non-health Gemini AI tasks on the stable `gemini-3.6-flash`
   model, including lead extraction and complex document review.
 - Corrected proposal workbook review so Delivery and Incoterms are compared as

@@ -706,6 +706,32 @@ test('releaseState explains why the submission gate is closed', () => {
   assert.equal(open.reason, '')
 })
 
+test('pricing exception and final release are one complete joint approval request', () => {
+  const opp = {
+    ...baseOpp,
+    milestone: 'Approval',
+    route: 'Spares',
+  }
+  const proposal = {
+    revision: '01',
+    terms: [{ term: 'Payment' }],
+    bom: [{ pn: 'EC-10', desc: 'Extension cable', common: 1, listPrice: 100, quoted: 93, discountPct: 7 }],
+  }
+  const blockers = transitionBlockers(opp, 'Submitted', proposal, {
+    approvals: [],
+    clarifications: [],
+    sparesLines: [],
+    config: { approvalThresholds: { discountPct: 5, markupPct: 10 }, requireFinalQuoteApproval: true },
+  })
+  const approval = blockers.find(item => item.key === 'release')
+  assert.equal(blockers.filter(item => item.key === 'pricing-threshold' || item.key === 'release').length, 1)
+  assert.equal(approval.approvalType, 'Final quote release')
+  assert.deepEqual(approval.needed, ['LJS', 'AH'])
+  assert.equal(approval.anyOf, false)
+  assert.equal(approval.coversPricingThreshold, true)
+  assert.equal(approval.pricingRows.length, 1)
+})
+
 test('the Submitted step renders the release reason, not just the generic text', () => {
   const source = read('src/workbench/SubmissionPanel.jsx')
   const workbench = read('src/pages/Workbench.jsx')

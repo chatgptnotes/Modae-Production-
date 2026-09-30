@@ -298,8 +298,10 @@ test('discounting a Path A offer pulls in the full matrix', async () => {
 
   const blockers = transitionBlockers(serviceOpp(), 'Submitted', { revision: '00', bom: [], terms: [] }, state)
   assert.ok(blockers.some(b => b.key === 'tech-approval'), 'technical approval must apply')
-  assert.ok(blockers.some(b => b.key === 'release'), 'release must apply')
-  assert.ok(blockers.some(b => b.key === 'pricing-threshold'), 'the discount must route for sign-off')
+  const release = blockers.find(b => b.key === 'release')
+  assert.ok(release, 'release must apply')
+  assert.equal(release.coversPricingThreshold, true, 'release must carry the pricing exception')
+  assert.equal(blockers.some(b => b.key === 'pricing-threshold'), false, 'the discount must not create a duplicate blocker')
 })
 
 test('a closed historical customised proposal keeps the full matrix', async () => {
