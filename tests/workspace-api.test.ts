@@ -24,3 +24,10 @@ test('collaborative saves go to the server instead of the browser Supabase clien
   assert.equal((request.init?.headers as Record<string, string>).Authorization, 'Bearer access-token')
   assert.equal(request.init?.body, JSON.stringify({ dirty: { approvals: [{ id: 'AP-2' }] } }))
 })
+
+test('workspace API errors retain authentication status and server code', async () => {
+  await assert.rejects(
+    fetchWorkspace('expired-token', async () => new Response(JSON.stringify({ error: 'The application session is invalid or expired.', errorCode: 'AUTH_INVALID' }), { status: 401 })),
+    error => error.status === 401 && error.code === 'AUTH_INVALID',
+  )
+})

@@ -37,7 +37,7 @@ export async function runTaskResult(task, payload = {}, { timeoutMs = DEFAULT_TI
     const body = { task, payload, model }
     const { data: session } = await supabaseAuth?.getSession?.() || { data: null }
     const accessToken = session?.session?.access_token
-    const { data, error, errorCode } = await fetch(AI_URL, {
+    const { data, error, errorCode, status } = await fetch(AI_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -48,12 +48,12 @@ export async function runTaskResult(task, payload = {}, { timeoutMs = DEFAULT_TI
     }).then(async response => {
       const data = await response.json().catch(() => ({}))
       return response.ok
-        ? { data, error: null }
-        : { data, error: new Error(data?.error || `AI proxy returned HTTP ${response.status}`), errorCode: data?.errorCode || 'AI_PROXY_ERROR' }
+        ? { data, error: null, status: response.status }
+        : { data, error: new Error(data?.error || `AI proxy returned HTTP ${response.status}`), errorCode: data?.errorCode || 'AI_PROXY_ERROR', status: response.status }
     })
-    if (error) return { data: null, errorCode: errorCode || 'AI_PROXY_ERROR', error: error.message }
-    if (!data?.ok) return { data: null, errorCode: data?.errorCode || 'AI_TASK_FAILED', error: data?.error || 'AI task failed' }
-    return { data, errorCode: '', error: '' }
+    if (error) return { data: null, errorCode: errorCode || 'AI_PROXY_ERROR', error: error.message, status }
+    if (!data?.ok) return { data: null, errorCode: data?.errorCode || 'AI_TASK_FAILED', error: data?.error || 'AI task failed', status }
+    return { data, errorCode: '', error: '', status }
   } catch (e) {
     // Same posture as datastore.js: warn, and let the caller carry on without.
     console.warn(`AI task "${task}" unavailable — using the built-in fallback:`, e?.message || e)

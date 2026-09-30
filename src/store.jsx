@@ -2446,7 +2446,11 @@ export function StoreProvider({ children }) {
       const res = await datastore.loadAll({ force: true })
       if (!res) { setSourcingDataStatus('error'); setLiveSyncStatus('error'); return false }
       if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
-      if (res.error) { setSourcingDataStatus('error'); setLiveSyncStatus('error'); return false }
+      if (res.error) {
+        setSourcingDataStatus('error')
+        if (!invalidateSupabaseAuth(res.error)) setLiveSyncStatus('error')
+        return false
+      }
       if (res.empty) { setSourcingDataStatus('ready'); setLiveSyncStatus('degraded'); return false }
       setSourcingDataStatus('ready')
       setLiveSyncStatus('live')
@@ -2464,6 +2468,7 @@ export function StoreProvider({ children }) {
         applyServer(slices)
         return true
       } catch (error) {
+        if (invalidateSupabaseAuth(error)) return false
         console.warn('Approval refresh failed:', error?.message || error)
         return false
       }

@@ -3,6 +3,15 @@ import { supabaseAuth } from './supabase.js'
 export const LIVE_ENTITIES = new Set(['approvals', 'leads', 'opportunities'])
 
 const pause = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
+const isAuthStatus = status => [401, 403].includes(Number(status))
+
+async function responseError(response, fallback) {
+  const body = await response.json().catch(() => ({}))
+  const error = new Error(body?.error || `${fallback} (${response.status})`)
+  error.status = response.status
+  error.code = body?.errorCode || ''
+  return error
+}
 
 async function accessToken() {
   const { data } = await supabaseAuth?.getSession?.() || {}
@@ -27,7 +36,7 @@ export async function readLiveData(entities) {
   const token = await accessToken()
   if (!token || !entities.length) return null
   const response = await fetch(liveDataUrl(entities), { headers: { Authorization: `Bearer ${token}` } })
-  if (!response.ok) throw new Error(`Live data refresh failed (${response.status})`)
+  if (!response.ok) throw await responseError(response, 'Live data refresh failed')
   const body = await response.json()
   return body.data || null
 }
@@ -41,7 +50,7 @@ export async function publishLiveChanges(entities) {
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ entities: changed }),
   })
-  if (!response.ok) throw new Error(`Live update publish failed (${response.status})`)
+  if (!response.ok) throw await responseError(response, 'Live update publish failed')
   return true
 }
 
@@ -59,7 +68,10 @@ export function startLiveEvents({ onChange, onError = () => {} }) {
         const response = await fetch('/api/live-events', {
           headers: { Authorization: `Bearer ${token}` }, signal: controller.signal,
         })
-        if (!response.ok || !response.body) throw new Error(`Live event connection failed (${response.status})`)
+        if (!response.ok || !response.body) {
+          if (!response.ok) throw await responseError(response, 'Live event connection failed')
+          throw new Error('Live event connection returned no response body')
+        }
         retry = 1000
         // A reconnect can miss an in-memory notification. Refresh these three
         // small collaborative slices once, never the complete workspace.
@@ -79,7 +91,10 @@ export function startLiveEvents({ onChange, onError = () => {} }) {
           }
         }
       } catch (error) {
-        if (!stopped && error?.name !== 'AbortError') onError(error)
+        if (!stopped && error?.name !== 'AbortError') {
+          onError(error)
+          if (isAuthStatus(error?.status)) stopped = true
+        }
       }
       if (!stopped) { await pause(retry); retry = Math.min(retry * 2, 15000) }
     }

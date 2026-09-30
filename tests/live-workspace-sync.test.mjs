@@ -16,6 +16,7 @@ test('the shared workspace loads once per session and saves only explicit edits'
   assert.match(store, /const stopLiveEvents = startLiveEvents\(/)
   assert.match(store, /document\.addEventListener\('visibilitychange'/)
   assert.match(store, /window\.addEventListener\('online'/)
+  assert.match(store, /if \(!invalidateSupabaseAuth\(res\.error\)\) setLiveSyncStatus\('error'\)/)
   assert.match(store, /const initialHydrationRef = useRef\(null\)/)
   assert.match(store, /const userId = state\.auth\?\.user\?\.id \|\| ''/)
   assert.match(store, /initialHydrationRef\.current === userId/)
@@ -141,6 +142,13 @@ test('lifecycle events refresh the shared workspace without overlapping pulls', 
   assert.match(store, /window\.addEventListener\('focus', onFocus\)/)
   assert.match(store, /document\.addEventListener\('visibilitychange', onVisibility\)/)
   assert.match(store, /window\.addEventListener\('online', onOnline\)/)
+})
+
+test('live-event authentication failures stop reconnecting and recover the session', () => {
+  const liveSync = read('src/liveSync.js')
+  const store = read('src/store.jsx')
+  assert.match(liveSync, /if \(isAuthStatus\(error\?\.status\)\) stopped = true/)
+  assert.match(store, /if \(invalidateSupabaseAuth\(error\)\) return false/)
 })
 
 test('manual refresh remains the only full workspace pull after initial hydration', () => {

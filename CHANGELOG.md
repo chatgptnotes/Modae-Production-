@@ -13,6 +13,16 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Fixed proposal workbook round-trip validation so an unchanged downloaded ModAE
+  Terms & Conditions block is compared with the exact rendered baseline instead
+  of internal workflow terms, while genuine customer-facing edits remain visible.
+- Improved authentication failure recovery so rejected Supabase bearer tokens
+  preserve HTTP diagnostics, stop live-event reconnect loops, clear the stale
+  browser session, and return the user to sign-in instead of leaving Sourcing
+  in a misleading load-error state.
+- Simplified the Lead inbox to one unified list by removing the redundant
+  Primary, Qualified, and Opportunity mailbox tabs; status filtering remains
+  available in the inbox filter bar.
 - Restored lightweight cross-device workspace updates for leads, opportunities,
   and approvals, including focus/visibility/reconnect recovery and an in-place
   inbox refresh so a lead created on another device appears without a browser
