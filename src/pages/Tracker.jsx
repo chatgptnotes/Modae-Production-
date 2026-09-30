@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { CLOSE_REASONS, WON_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES } from '../seed.js'
+import { CLOSE_REASONS, WON_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES, displayOpportunityId } from '../seed.js'
 import { fmt, fmtRupeesFromK, rupeesToK, mmmYY, ddMmmYY, stageClass, productList, productLabel, productDisplayLabel, sameCustomer, displayRole, OPPORTUNITY_DATE_FIELDS, OPPORTUNITY_PERIODS, opportunityDateRange } from '../utils.js'
 import { downloadTableXlsx } from '../proposal/tableExcelExport.js'
 import { useFormulaBar } from '../formulabar.jsx'
@@ -767,7 +767,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                 <td className="rowhead">{index + 1}</td>
                 <td onClick={selectCell(o, COLS[0])} className={`oppid ${customerStatusFor(o)} ${stageClass(o) === 'open' ? '' : stageClass(o)} ${isSel(o, COLS[0]) ? 'cell-sel' : ''}`}>
                   <span className="tracker-oppid-actions">
-                    <Link to={`/opp/${o.id}`} title="Open opportunity workspace">{o.id}</Link>
+                    <Link to={`/opp/${o.id}`} title="Open opportunity workspace">{displayOpportunityId(o.id, store.config?.roleNames)}</Link>
                   </span>
                 </td>
                 <td onClick={selectCell(o, COLS[1])} className={isSel(o, COLS[1]) ? 'cell-sel' : ''} title={o.sellTo}>{['Intake', 'Registration'].includes(o.milestone) ? <WrapInput value={o.sellTo} onChange={upd(o.id, 'sellTo')} title={o.sellTo} /> : <div className="ro" title="Locked after registration">{o.sellTo || '—'}</div>}</td>

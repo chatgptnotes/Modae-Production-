@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { ownerIdFor } from '../src/seed.js'
+import { displayOpportunityId, ownerIdFor } from '../src/seed.js'
 
 test('ownerIdFor keeps canonical role ids stable', () => {
   assert.equal(ownerIdFor('RS'), 'RS')
@@ -15,4 +15,10 @@ test('ownerIdFor resolves default and admin-customized display names', () => {
 test('ownerIdFor preserves unknown values for auditability', () => {
   assert.equal(ownerIdFor('Unassigned'), 'Unassigned')
   assert.equal(ownerIdFor(''), '')
+})
+
+test('legacy opportunity IDs display the canonical owner code', () => {
+  assert.equal(displayOpportunityId('2609002R. Sundaram'), '2609002RS')
+  assert.equal(displayOpportunityId('2609002RS'), '2609002RS')
+  assert.equal(displayOpportunityId('OP-1'), 'OP-1')
 })

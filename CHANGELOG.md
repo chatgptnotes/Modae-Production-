@@ -13,6 +13,9 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Canonicalized legacy opportunity IDs for display so owner display names such
+  as `R. Sundaram` render as the stable `RS` suffix without changing stored
+  primary keys or breaking linked records.
 - Prevented stale workspace snapshots from recreating rows after a permanent
   purge by invalidating the server workspace cache, tagging browser sessions
   with a purge generation, rejecting pre-purge saves, and reloading rejected

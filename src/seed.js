@@ -124,6 +124,18 @@ export function ownerIdFor(value, roleNames = {}) {
   return defaults ? defaults[0] : raw
 }
 
+// Older workspaces occasionally embedded an owner's display name in the
+// opportunity id (for example, 2609002R. Sundaram). Keep the stored primary
+// key untouched because it is referenced by other workspace tables, but show
+// the canonical owner code anywhere the id is rendered.
+export function displayOpportunityId(value, roleNames = {}) {
+  const raw = String(value || '')
+  const match = raw.match(/^(\d{7})(.+)$/)
+  if (!match) return raw
+  const owner = ownerIdFor(match[2], roleNames)
+  return owner === match[2] ? raw : `${match[1]}${owner}`
+}
+
 // The customer-facing portal is parked for now. The page, its routes and the
 // CUST persona all stay in the code — this single flag is what takes them out
 // of the app and what puts them back. Flipping it to true restores the persona

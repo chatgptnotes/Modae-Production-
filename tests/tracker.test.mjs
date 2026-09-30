@@ -220,7 +220,7 @@ test('My Opportunities shows the same working columns', () => {
 })
 
 test('opportunity IDs open the full opportunity workspace', () => {
-  assert.match(tracker, /<Link to=\{`\/opp\/\$\{o\.id\}`\} title="Open opportunity workspace">\{o\.id\}<\/Link>/)
+  assert.match(tracker, /<Link to=\{`\/opp\/\$\{o\.id\}`\} title="Open opportunity workspace">\{displayOpportunityId\(o\.id, store\.config\?\.roleNames\)\}<\/Link>/)
   assert.doesNotMatch(tracker, /<Link to=\{`\/folders\/\$\{o\.id\}`\}>\{o\.id\}<\/Link>/)
 })
 
