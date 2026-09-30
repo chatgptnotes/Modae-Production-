@@ -86,7 +86,7 @@ test('an empty date-filtered inbox offers a direct recovery action', () => {
 test('inbox rows are ordered by newest received enquiry first', () => {
   assert.match(inbox, /const inboxReceivedAt = lead => lead\?\.ts \|\| lead\?\.receivedAt/)
   assert.match(inbox, /const compareInboxRows = \(a, b\) =>/)
-  assert.match(inbox, /const mailboxRows = rows\.filter\(matchesTab\)\.sort\(compareInboxRows\)/)
+  assert.match(inbox, /const mailboxRows = rows\.sort\(compareInboxRows\)/)
 })
 
 test('the owner rule reports what it is holding back', () => {
@@ -108,10 +108,8 @@ test('the simulator modal asks for project type before opportunity type', () => 
   assert.doesNotMatch(inbox, /Generate missing-info lead/)
 })
 
-test('converted leads have a dedicated tab and linked opportunity marker', () => {
-  assert.match(inbox, /\['converted', 'Opportunity'\]/)
-  assert.match(inbox, /mailTab === 'converted'\) return l\.status === 'Converted'/)
-  assert.match(inbox, /tab === 'converted' \? l\.status === 'Converted'/)
+test('converted leads stay in the unified inbox and retain their linked opportunity marker', () => {
+  assert.doesNotMatch(inbox, /mailTab|mailTabItems|DetailTabs ariaLabel="Mailbox views"/)
   assert.match(inbox, /className="mail-opportunity-link"/)
   assert.match(inbox, /nav\('\/opp\/' \+ l\.oppId\)/)
   assert.match(inbox, /<span className="pill Green">Opportunity<\/span>/)

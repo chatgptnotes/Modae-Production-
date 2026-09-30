@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useStore, nextOppId } from '../store.jsx'
 import { CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES } from '../seed.js'
 import { runJson } from '../ai.js'
+import { aiAttachmentPayload, supportsVisualAi } from '../aiAttachments.js'
 import { extractPdfText, parseTender, buildOpportunityDraft } from '../tenderParse.js'
 import { displayRole } from '../utils.js'
 import { opportunityOwnerFor } from '../leadRules.js'
@@ -239,9 +240,10 @@ export default function IntakeForm({ destinationPicker = null }) {
     // rejecting them sent the salesperson back to typing everything by hand.
     const name = file.name.toLowerCase()
     const isPdf = file.type.includes('pdf') || name.endsWith('.pdf')
+    const isImage = supportsVisualAi(file) && !isPdf
     const isEmail = name.endsWith('.eml') || name.endsWith('.msg') || file.type === 'message/rfc822'
-    if (!isPdf && !isEmail) {
-      setAiError('Upload the enquiry as a PDF or a saved email (.eml)')
+    if (!isPdf && !isEmail && !isImage) {
+      setAiError('Upload the enquiry as a PDF, image, or saved email (.eml)')
       return
     }
 
@@ -264,7 +266,9 @@ export default function IntakeForm({ destinationPicker = null }) {
       // A saved email is already text, so it skips pdfjs entirely.
       const extracted = isEmail
         ? { fullText: await file.text(), struct: [] }
-        : await extractPdfText(file)
+        : isImage
+          ? { fullText: '', struct: [] }
+          : await extractPdfText(file)
       const parsed = parseTender(extracted.fullText, extracted.struct)
       const localDraft = buildOpportunityDraft(parsed)
 
@@ -274,7 +278,8 @@ export default function IntakeForm({ destinationPicker = null }) {
         pages: extracted.struct.length,
         text: extracted.fullText,
         parsed,
-        products: PRODUCTS // Context for product categorization
+        products: PRODUCTS,
+        aiAttachments: await aiAttachmentPayload([file]),
       }, { fallback: store.config?.aiModel?.provider === 'Built-in fallback' })
 
       if (aiResult) {
@@ -285,7 +290,7 @@ export default function IntakeForm({ destinationPicker = null }) {
         const enriched = { local: true, extractedHeader: parsed.header, missing: parsed.missing, localDraft }
         setAiResults(enriched)
         applyAiResultsToForm(enriched)
-        setAiNotice('AI is unavailable, so the PDF was parsed locally. Review the filled fields before submitting.')
+        setAiNotice('AI is unavailable, so the file was parsed locally. Review the filled fields before submitting.')
       }
     } catch (error) {
       console.error('Document processing error:', error)
@@ -458,7 +463,7 @@ export default function IntakeForm({ destinationPicker = null }) {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".pdf,application/pdf,.eml,.msg,message/rfc822"
+                    accept=".pdf,application/pdf,.eml,.msg,message/rfc822,.png,.jpg,.jpeg,.webp,image/*"
                     onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
                     style={{ display: 'none' }}
                   />

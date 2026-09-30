@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { isPlaceholderSparesLine, useStore } from '../store.jsx'
 import { defaultCosting } from '../seed.js'
 import { canPriceProposal, clampCosting, unitCostINR, fmt, ddMmmYY } from '../utils.js'
-import { pricingApprovalFor, pricingThresholdExceptions } from '../gates.js'
+import { pricingApprovalFor, pricingThresholdExceptions, sparesSourcingBlockers } from '../gates.js'
 import { Chip, ConfChip, AiBadge, ConfirmModal, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 import { PRICE_SOURCES, formatPriceSource, isConfirmableSparesLine, isMissingSparesDescription, normalizeMarkupPct, reconcileCatalogueMatch, reconcilePriceSource, resolvePriceSource, sparesLineFinancials } from '../pricing.js'
@@ -315,11 +315,14 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
   const calculatedItems = useMemo(() => orderedLineItems.map(item => {
     return { ...item, lineProfit: item.lineTotal - item.lineTotalCogs }
   }), [orderedLineItems])
+  const activeSourceLines = lines.filter(line => line.qty > 0 && !line.removedFromSourcing && !isPlaceholderSparesLine(line))
   const pricedItems = calculatedItems.filter(item => item.qty > 0 && item.listUnitPrice > 0)
   const activeItems = calculatedItems.filter(item => item.qty > 0 && item.confirmed)
   const eligibleActiveItems = activeItems.filter(item => !isMissingSparesDescription(item.sourceLine))
-  const missingDescriptionLines = lines.filter(isMissingSparesDescription)
-  const pendingConfirmationCount = pricedItems.filter(item => !item.confirmed).length
+  const missingDescriptionLines = activeSourceLines.filter(isMissingSparesDescription)
+  const pendingConfirmationCount = activeSourceLines.filter(line => !line.confirmed).length
+  const needsPricingLines = activeSourceLines.filter(line => line.priceState === 'Needs pricing' || !(Number(line.listUnitPrice ?? line.listPrice) > 0))
+  const expiredLines = activeSourceLines.filter(line => line.priceState === 'Expired')
   const pricingExceptions = pricingThresholdExceptions(opp, proposal, store)
   const pricingApprovers = store.config?.approvalThresholds?.pricingApprovers?.filter(Boolean)?.length
     ? store.config.approvalThresholds.pricingApprovers.filter(Boolean)
@@ -328,7 +331,16 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     ? pricingApprovalFor(opp, proposal, store.approvals || [], pricingExceptions.rows)
     : null
   const pricingApprovalClear = !pricingExceptions.rows.length || pricingApproval?.status === 'Approved'
-  const canContinueToProposal = pricedItems.length > 0 && pendingConfirmationCount === 0 && eligibleActiveItems.length > 0 && pricingApprovalClear
+  const sourceBlockers = sparesSourcingBlockers(opp, proposal, store)
+  const canContinueToProposal = sourceBlockers.length === 0
+    && activeSourceLines.length > 0
+    && missingDescriptionLines.length === 0
+    && pendingConfirmationCount === 0
+    && needsPricingLines.length === 0
+    && expiredLines.length === 0
+    && pricedItems.length === activeSourceLines.length
+    && eligibleActiveItems.length === activeSourceLines.length
+    && pricingApprovalClear
   const totals = useMemo(() => pricedItems.reduce((total, item) => ({
     revenue: total.revenue + item.lineTotal,
     cogs: total.cogs + item.lineTotalCogs,
@@ -340,8 +352,6 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
   const importedLineCount = lines.filter(line => String(line.currency || 'INR').toUpperCase() !== 'INR').length
   const domesticLineCount = lines.length - importedLineCount
   const proposalOnlyMismatch = !lines.length && (proposal.bom || []).length > 0
-  const expiredLines = lines.filter(l => l.priceState === 'Expired')
-  const needsPricingLines = lines.filter(l => l.priceState === 'Needs pricing')
   const clarifications = (store.clarifications || []).filter(c => c.oppId === opp.id && c.status === 'Answered')
 
   const requestPricingApproval = () => store.requestApproval({
@@ -383,7 +393,12 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
   const continueTitle = !canContinueToProposal
     ? (pricingExceptions.rows.length && !pricingApprovalClear
       ? (pricingApproval?.status === 'Pending' ? `Awaiting pricing approval from ${pricingApprovers.join(' or ')}` : `Request pricing approval from ${pricingApprovers.join(' or ')}`)
-      : pendingConfirmationCount ? `Confirm ${pendingConfirmationCount} remaining priced line${pendingConfirmationCount === 1 ? '' : 's'} first` : 'Add and price at least one sourcing line first')
+      : sourceBlockers.some(item => item.key.startsWith('sp-qty-')) ? 'Enter a positive quantity for every sourcing line first'
+      : missingDescriptionLines.length ? `Add descriptions to ${missingDescriptionLines.length} sourcing line${missingDescriptionLines.length === 1 ? '' : 's'} first`
+      : pendingConfirmationCount ? `Confirm ${pendingConfirmationCount} remaining sourcing line${pendingConfirmationCount === 1 ? '' : 's'} first`
+      : expiredLines.length ? `Refresh ${expiredLines.length} expired price source${expiredLines.length === 1 ? '' : 's'} first`
+      : needsPricingLines.length ? `Price ${needsPricingLines.length} sourcing line${needsPricingLines.length === 1 ? '' : 's'} first`
+      : 'Add and complete at least one sourcing line first')
     : ''
 
   const updateLine = (line, field, value) => {
@@ -609,6 +624,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
       confirmLabel="Remove line" onClose={() => setPendingRemove(null)}
       onConfirm={() => confirmRemoveLine(pendingRemove)} />}
     <div className="section-title">Bill of Quantities (BOQ) — Spares sourcing ({lines.length} line{lines.length === 1 ? '' : 's'})</div>
+    {!canContinueToProposal && <div className="warnbox sourcing-handoff-warning"><b>Complete Sourcing before Proposal.</b> {continueTitle} The next page remains locked until every active line is described, priced, matched, and confirmed here.</div>}
     {clarifications.length > 0 && <details className="okbox customer-information-banner sourcing-clarification-context">
       <summary><b>Confirmed customer information</b><span className="hint"> These answers stay attached to the opportunity and should be checked while validating each line.</span></summary>
       <div className="sourcing-clarification-content">{clarifications.map(c => <div key={c.id} className="sourcing-clarification-row"><b>{c.category || 'Clarification'}:</b> {c.response}<span className="hint"> · {c.answerSource || 'Customer'}{c.answeredAt ? ` · ${c.answeredAt}` : ''}</span></div>)}</div>

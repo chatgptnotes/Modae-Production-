@@ -9,12 +9,12 @@ import { Chip, ConfChip, ConfirmModal, WarnBox, ErrBox, Modal } from '../ui.jsx'
 import { ROLES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, CUSTOMER_STATUSES, LEAD_SOURCES, routeForType, newProposal } from '../seed.js'
 import { isAdminRole, isApprover } from '../utils.js'
 import { aiEnabled, runTaskResult, runText } from '../ai.js'
+import { aiAttachmentPayload } from '../aiAttachments.js'
 import { extractDocText } from '../docText.js'
 import { fmtSize } from '../filestore.js'
 import { hold, add as holdMore, remove as removeHeldFile } from '../leadFiles.js'
 import { listFiles } from '../leadBlobs.js'
 import AttachmentViewer from '../AttachmentViewer.jsx'
-import DetailTabs from '../DetailTabs.jsx'
 import { findDuplicates } from '../insights.js'
 import { leadWorkflow } from '../leadWorkflow.js'
 import { parseLeadLineItems } from '../tenderParse.js'
@@ -397,9 +397,6 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
 // Attachment text kept on the lead — the store persists to localStorage, so the
 // whole document is not carried; this is enough for the AI and for evidence.
 const TEXT_TOTAL = 150000
-const AI_FILE_BYTES = 4 * 1024 * 1024
-const AI_TOTAL_BYTES = 8 * 1024 * 1024
-
 function KycReviewModal({ item, row, onClose, onDecision }) {
   const [reason, setReason] = useState(row?.rejectionReason || '')
   const [error, setError] = useState('')
@@ -505,7 +502,7 @@ function LeadVerification({ lead, customerStatus, store }) {
     const key = kycIdentityKey(item)
     const local = extractKycIdentityCandidate(item, rec.text)
     if (local) return local
-    const aiAttachments = await attachmentAiPayload([{ file }])
+    const aiAttachments = await aiAttachmentPayload([{ file }])
     if (!aiAttachments.length && !rec.text) return {
       key: key || 'NONE', value: '', confidence: 0, evidence: '', source: 'unreadable',
       warnings: ['The document has no readable text or supported visual content. Enter the value manually.'],
@@ -841,26 +838,6 @@ async function fullLeadAttachments(lead, attachments) {
   return out
 }
 
-// Scanned PDFs and images have no text layer. Send their bytes only for the
-// transient AI request; the lead stores metadata/text, never this payload.
-async function attachmentAiPayload(files) {
-  let total = 0
-  const out = []
-  for (const f of files) {
-    const file = f.file || f
-    const type = file.type || (/\.pdf$/i.test(file.name) ? 'application/pdf' : '')
-    if (!/^application\/(pdf|image\/)/i.test(type) && !/^image\//i.test(type)) continue
-    if (file.size > AI_FILE_BYTES || total + file.size > AI_TOTAL_BYTES) continue
-    const bytes = new Uint8Array(await file.arrayBuffer())
-    let binary = ''
-    const chunk = 0x8000
-    for (let i = 0; i < bytes.length; i += chunk) binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
-    out.push({ name: file.name, mimeType: type, dataBase64: btoa(binary) })
-    total += file.size
-  }
-  return out
-}
-
 // Paste a real inbound enquiry and let Gemini structure it.
 function PasteLeadModal({ onClose }) {
   const store = useStore()
@@ -907,7 +884,7 @@ function PasteLeadModal({ onClose }) {
   const add = async () => {
     if (!body.trim() && !files.length) { setErr('Paste the email body, or attach the enquiry document.'); return }
     setBusy(true); setErr('')
-    const extracted = await extractLead({ from, subject, body, attachments: files, aiAttachments: await attachmentAiPayload(files) }, store)
+    const extracted = await extractLead({ from, subject, body, attachments: files, aiAttachments: await aiAttachmentPayload(files) }, store)
     setBusy(false)
     if (!extracted) {
       setErr('Extraction is unavailable — check the AI configuration on the Admin page, or add the mail unextracted and structure it by hand.')
@@ -1180,7 +1157,7 @@ function LeadSourceContext({ lead, canAct }) {
       holdMore(lead.id, responseFiles.map(file => file.file))
       const responseText = response.body ? `\n\nCUSTOMER CLARIFICATION RESPONSE:\n${response.body}` : ''
       await reread(
-        { ...lead, body: `${lead.body || ''}${responseText}`, attachments: nextAttachments, aiAttachments: await attachmentAiPayload(responseFiles) },
+        { ...lead, body: `${lead.body || ''}${responseText}`, attachments: nextAttachments, aiAttachments: await aiAttachmentPayload(responseFiles) },
         'AI re-read the lead with the customer clarification response',
         'The customer clarification was saved, but AI could not re-read the lead. Retry when available.',
       )
@@ -1610,15 +1587,17 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
     store.updateLead(lead.id, { attachments: nextAttachments }, `Document(s) added to lead: ${names}`)
     holdMore(lead.id, recs.map(r => r.file))
     setAddingDocs(false)
-    // Nothing readable came out, so there is nothing new for the AI to read.
-    if (recs.every(r => !r.text)) {
-      setDocErr(recs[0].err || 'No text could be read from this file — it is attached by name only.')
+    const visualPayload = await aiAttachmentPayload(recs)
+    // Visual PDFs/images have no local text layer, but can still be read by
+    // the multimodal lead extractor. Only unsupported files stop here.
+    if (recs.every(r => !r.text) && !visualPayload.length) {
+      setDocErr(recs[0].err || 'No readable text or supported visual content was found — the file is attached by name only.')
       return
     }
     // Re-read with the new material. `lead` in this closure predates the patch,
     // so the fresh attachment list is passed explicitly.
     await runExtraction({
-      source: { ...lead, attachments: nextAttachments, aiAttachments: await attachmentAiPayload(recs) },
+      source: { ...lead, attachments: nextAttachments, aiAttachments: visualPayload },
       keepDecisions: true,
       detail: `AI re-read the lead with ${names}`,
       failureNote: `${names} was attached successfully, but AI could not re-read the lead. The previous extracted fields are unchanged. Retry when the AI proxy is available.`,
@@ -2127,7 +2106,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
       holdMore(lead.id, responseFiles.map(file => file.file))
       const responseText = response.body ? `\n\nCUSTOMER CLARIFICATION RESPONSE:\n${response.body}` : ''
       await runExtraction({
-        source: { ...lead, body: `${lead.body || ''}${responseText}`, attachments: nextAttachments, aiAttachments: await attachmentAiPayload(responseFiles) },
+        source: { ...lead, body: `${lead.body || ''}${responseText}`, attachments: nextAttachments, aiAttachments: await aiAttachmentPayload(responseFiles) },
         keepDecisions: true,
         detail: 'AI re-read the lead with the customer clarification response',
         failureNote: 'The customer clarification was saved, but AI could not re-read the lead. Retry when the AI proxy is available.',
@@ -3286,7 +3265,6 @@ export default function Inbox() {
   const [completenessF, setCompletenessF] = useState('')
   const [ownerF, setOwnerF] = useState('')
   const [ageF, setAgeF] = useState('')
-  const [mailTab, setMailTab] = useState('primary')
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false)
   const [repairingAi, setRepairingAi] = useState(false)
@@ -3387,19 +3365,12 @@ export default function Inbox() {
     }
     return true
   }
-  const matchesTab = l => {
-    if (mailTab === 'unread') return l.status === 'New' && !l.readAt
-    if (mailTab === 'qualified') return l.status === 'Qualified'
-    if (mailTab === 'converted') return l.status === 'Converted'
-    return true
-  }
-
   const rows = listSource.filter(l => ownerVisible(l) && matchesFilters(l))
-  const mailboxRows = rows.filter(matchesTab).sort(compareInboxRows)
+  const mailboxRows = rows.sort(compareInboxRows)
   const dateFilterActive = !!receivedF || !!ageF
   const staleAiLeads = (store.leads || []).filter(isUnavailableAiSummary)
-  // Rows this tab would show if they were yours. Surfaced rather than dropped.
-  const hiddenByOwner = listSource.filter(l => !ownerVisible(l) && matchesFilters(l) && matchesTab(l)).length
+  // Rows this view would show if they were yours. Surfaced rather than dropped.
+  const hiddenByOwner = listSource.filter(l => !ownerVisible(l) && matchesFilters(l)).length
   const toggleSelected = id => setSelectedIds(prev => {
     const next = new Set(prev)
     if (next.has(id)) next.delete(id); else next.add(id)
@@ -3579,17 +3550,6 @@ export default function Inbox() {
     setSimulationOpen(false)
     setClearSimulatedConfirm(false)
   }
-  const tabCount = tab => rows.filter(l => tab === 'unread'
-    ? l.status === 'New' && !l.readAt
-    : tab === 'qualified' ? l.status === 'Qualified'
-      : tab === 'converted' ? l.status === 'Converted' : true).length
-  const convertedTab = ['converted', 'Opportunity']
-  const mailTabItems = [
-    { id: 'primary', label: 'Primary', count: tabCount('primary') },
-    { id: 'unread', label: 'Unread', count: tabCount('unread') },
-    { id: 'qualified', label: 'Qualified', count: tabCount('qualified') },
-    { id: convertedTab[0], label: convertedTab[1], count: tabCount('converted') },
-  ].filter(item => item.id === 'primary' || item.count > 0 || item.id === mailTab)
   const sourceOptions = [...new Set(listSource.map(l => l.source || l.channel).filter(Boolean))].sort()
   const ownerOptions = [...new Set(listSource.map(l => l.suggestedOwner || 'Unassigned'))].sort()
   const filterSelect = (value, onChange, label, options, short) => (
@@ -3611,7 +3571,7 @@ export default function Inbox() {
         </div>
         <div className="mailbox-head-actions">
           <button className="primary" onClick={() => setPasteOpen(true)}><Icon name="bot" size={13} /> New enquiry</button>
-          <button onClick={() => { setShowArchive(v => !v); setMailTab('primary'); setSelectedIds(new Set()) }}>
+          <button onClick={() => { setShowArchive(v => !v); setSelectedIds(new Set()) }}>
             <Icon name="folder" size={13} /> {showArchive ? 'Back to inbox' : `Archive (${(store.leadArchive || []).length})`}
           </button>
         </div>
@@ -3716,8 +3676,6 @@ export default function Inbox() {
         </Modal>
       )}
 
-      <DetailTabs ariaLabel="Mailbox views" activeId={mailTab} items={mailTabItems} onChange={setMailTab} />
-
       <div className="mailbox-list">
         <div className="mail-list-toolbar">
           <label className="mail-check"><input type="checkbox" checked={mailboxRows.length > 0 && mailboxRows.every(l => selectedIds.has(l.id))} onChange={selectVisible} aria-label="Select visible messages" /></label>
@@ -3803,12 +3761,9 @@ export default function Inbox() {
                <b>{hiddenByOwner} lead{hiddenByOwner === 1 ? '' : 's'} here, none assigned to you</b>
                <span>Leads are routed to an owner by the AI region rules, so a lead you created can belong to someone else.</span>
                <button className="primary" onClick={() => setShowAll(true)}>Show all leads</button>
-             </> : mailTab === 'converted' ? <>
-               <b>No opportunities here</b>
-               <span>Leads converted into opportunities will appear in this tab.</span>
              </> : <>
-              <b>{receivedF === 'today' || ageF === 'today' ? 'No messages received today' : 'No messages here'}</b>
-              <span>{receivedF === 'today' || ageF === 'today' ? 'No inbox records match the current India business date.' : 'Try another mailbox tab or change your filters.'}</span>
+               <b>{receivedF === 'today' || ageF === 'today' ? 'No messages received today' : 'No messages here'}</b>
+               <span>{receivedF === 'today' || ageF === 'today' ? 'No inbox records match the current India business date.' : 'Try changing your filters.'}</span>
               {dateFilterActive && <button className="primary" type="button" onClick={() => { setReceivedF(''); setAgeF('') }}>Clear date filter</button>}
             </>}
           </div>

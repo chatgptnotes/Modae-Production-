@@ -40,7 +40,7 @@ test('AI route rejects oversized payloads before calling Gemini', async () => {
     await handler({
       method: 'POST',
       headers: { authorization: 'Bearer test-token' },
-      body: { task: 'health', payload: { text: 'x'.repeat(350001) } },
+      body: { task: 'health', payload: { text: 'x'.repeat(3000001) } },
     }, res)
     assert.equal(res.out.status, 413)
     assert.equal(res.out.body.errorCode, 'AI_PAYLOAD_TOO_LARGE')

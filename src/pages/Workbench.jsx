@@ -3,13 +3,14 @@ import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, WON_REASONS, REVISION_TYPES, DEFAULT_WORKFLOW, isWorkflowAvailable } from '../seed.js'
 import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY, gmailComposeHref, displayRole, displayRoles, displayRoleLabel, formatISTDateTime, productDisplayLabel } from '../utils.js'
-import { APPROVAL_5B, pricingThresholdExceptions, readiness, isBlocked, nextActionWith, transitionBlockers, isClarificationResolved, isClarificationCoveredByAnswer, actionableClarifications, displayClarifications, isClarificationCoveredBySource, releaseVoidReason, serviceOfferCleared } from '../gates.js'
+import { APPROVAL_5B, pricingThresholdExceptions, readiness, sparesSourcingBlockers, isBlocked, nextActionWith, transitionBlockers, isClarificationResolved, isClarificationCoveredByAnswer, actionableClarifications, displayClarifications, isClarificationCoveredBySource, releaseVoidReason, serviceOfferCleared } from '../gates.js'
 import { COMMERCIAL_RX } from './Approvals.jsx'
 import { Chip, ClassChip, AiBadge, MarkWonControl, WarnBox, ErrBox, Modal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 import { productBrandProfiles } from '../branding/modae.js'
 import { MODAE_COMPANY } from '../proposalDoc.js'
 import { runJson, runTaskResult, runText } from '../ai.js'
+import { aiAttachmentPayload } from '../aiAttachments.js'
 import { clarificationSender } from '../leadClarification.js'
 import { extractCustomerSparesLines } from '../clarificationSparesSync.js'
 import WbSpares from '../workbench/WbSpares.jsx'
@@ -26,6 +27,8 @@ import PoHandover from '../workbench/PoHandover.jsx'
 import OpportunityDetailsEditor, { OpportunityDetailsView } from '../OpportunityDetailsEditor.jsx'
 import AttachmentViewer from '../AttachmentViewer.jsx'
 import { extractDocText } from '../docText.js'
+import { extractKycIdentityCandidate, normalizeKycCandidate } from '../kycExtraction.js'
+import { kycIdentityKey } from '../kycValidation.js'
 import { putFiles } from '../leadBlobs.js'
 import { uploadOppFile, fmtSize } from '../filestore.js'
 import { isPlaceholderSparesLine } from '../proposal/sparesBoq.js'
@@ -438,6 +441,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
     return blockers
   }
   const proposal = store.getProposal(opp.id)
+  const sourceBlockers = opp.route === 'Spares' ? sparesSourcingBlockers(opp, proposal, store) : []
   const sourceLead = [...(store.leads || []), ...(store.leadArchive || [])].find(lead => lead.id === opp.sourceLeadId || lead.oppId === opp.id)
   const sourceText = [sourceLead?.subject, sourceLead?.body, opp.remarks, opp.oppName].filter(Boolean).join(' ')
   useEffect(() => {
@@ -592,7 +596,12 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
         ? { ...previous, blockers: currentBlockers }
         : previous)
     }
-  }, [transition?.kind, transition?.target, transition?.blockers, opp.id, opp.milestone, store.clarifications, store.approvals, store.proposals])
+  }, [transition?.kind, transition?.target, transition?.blockers, opp.id, opp.milestone, store.clarifications, store.approvals, store.proposals, store.sparesLines])
+  useEffect(() => {
+    if (opp.route !== 'Spares' || viewTab !== 'proposal' || !sourceBlockers.length) return
+    if (transition?.kind === 'blocked' && transition.target === 'Proposal') return
+    setTransition({ kind: 'blocked', target: 'Proposal', blockers: sourceBlockers })
+  }, [opp.id, opp.route, viewTab, sourceBlockers.length, store.sparesLines, store.proposals])
   const approvalRequestFor = blocker => (store.approvals || []).find(a =>
     a.oppId === opp.id
     && a.status === 'Pending'
@@ -699,6 +708,8 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
       const voided = releaseVoidReason(proposal, store.approvals, opp.id, opp)
       return `Section 5C: the final quote release, routed by order value and margin. It covers this revision only — a revised quote must be released again.${voided ? ` ${voided}` : ''}`
     }
+    if (blocker.key.startsWith('sp-desc-')) return 'This spares line needs a real description. Complete the description in Sourcing before the proposal can be built.'
+    if (blocker.key.startsWith('sp-qty-')) return 'This spares line has no positive quantity. Correct the quantity in Sourcing before the proposal can be built.'
     if (blocker.key.startsWith('sp-conf-')) return 'This spares line’s part match has not been confirmed. Confirm the match — or pick an alternative — in Sourcing before the proposal can be built.'
     if (blocker.key.startsWith('sp-price-')) return 'This spares line’s price source has expired. Refresh it against a current price list or supplier quotation in Sourcing.'
     if (blocker.key === 'pricing-threshold') return 'A discount or markup exceeds the Admin-configured limit. Request one approval from AH or LJS before continuing.'
@@ -782,9 +793,15 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
                       stage owns the next action and users should not be detoured
                       into another editable page from this dialog. */}
                   {['clarifications', 'kyc', 'required-contactPerson', 'required-contactPhone'].includes(item.key)
-                    || item.key.startsWith('sp-conf-') || item.key.startsWith('sp-price-')
+                    || item.key.startsWith('sp-desc-') || item.key.startsWith('sp-qty-') || item.key.startsWith('sp-conf-') || item.key.startsWith('sp-price-')
                     ? <span className="hint">Resolve this requirement from the current workflow stage.</span>
                     : null}
+                  {(item.key.startsWith('sp-desc-') || item.key.startsWith('sp-qty-') || item.key.startsWith('sp-conf-') || item.key.startsWith('sp-price-') || item.key === 'sp-source-empty') && (
+                    <button type="button" className="exception-action" onClick={() => {
+                      const sourcingStep = workflowSteps.find(step => step.slug === 'sourcing')
+                      if (sourcingStep) openBackwardTransition(sourcingStep)
+                    }}>Return to Sourcing</button>
+                  )}
                   {item.key === 'commercial-decision' && <button type="button" className="exception-action" onClick={openCommercialDecisions}>Review commercial decisions</button>}
                   {approvable && openRequest && <span>{item.approvalType === 'Commercial deviation' ? 'AH approval for commercial deviations' : item.approvalType} <b>{openRequest.id}</b> is pending with {openRequest.needed?.join(openRequest.anyOf ? ' or ' : ' + ') || openRequest.approver}.</span>}
                   {approvable && !openRequest && <button className="exception-action" onClick={() => requestBlockerApproval(item)}>{item.coversPricingThreshold ? 'Request combined quote approval from AH + LJS' : item.key === 'release' ? 'Request final quote release from AH + LJS' : item.approvalType === 'Commercial deviation' ? 'Request AH approval for commercial deviations' : `Request ${item.approvalType.toLowerCase()} from ${blockerOwner(item)}`}</button>}
@@ -1299,6 +1316,30 @@ function CustomerKycTab({ opp }) {
       if (doc.text) meta.text = doc.text.slice(0, KYC_TEXT_CAP)
       if (doc.pages) meta.pages = doc.pages
       if (doc.err) meta.err = doc.err
+      const localCandidate = extractKycIdentityCandidate(itemName, doc.text || '')
+      let scan = localCandidate
+        ? { value: localCandidate.value, confidence: localCandidate.confidence || 100, source: 'local-document-scan', evidence: localCandidate.evidence || '' }
+        : null
+      if (!scan) {
+        const aiAttachments = await aiAttachmentPayload([file])
+        if (doc.text || aiAttachments.length) {
+          const result = await runTaskResult('kyc.extract', {
+            item: itemName,
+            key: kycIdentityKey(itemName) || 'NONE',
+            text: doc.text || '',
+            aiAttachments,
+          }, { model: store.config?.aiModel?.model })
+          const data = result.data?.data || result.data
+          if (data) scan = {
+            value: normalizeKycCandidate(data.value),
+            confidence: Math.max(0, Math.min(100, Number(data.confidence) || 0)),
+            source: 'ai-document-scan', evidence: String(data.evidence || ''),
+            warnings: Array.isArray(data.warnings) ? data.warnings : [],
+          }
+          else scan = { value: '', confidence: 0, source: 'unavailable', evidence: result.error || 'AI scan unavailable' }
+        } else scan = { value: '', confidence: 0, source: 'unreadable', evidence: doc.err || 'No readable text or supported visual content' }
+      }
+      meta.scan = scan
       try {
         const rec = await uploadOppFile(opp, 'KYC', file)
         store.addFile(opp.id, 'KYC', rec)
@@ -1747,6 +1788,7 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
     setReplyErr('')
     const attachments = []
     const attachmentMeta = []
+    const aiAttachments = []
     for (const file of replyFiles) {
       let text = ''
       try { text = (await extractDocText(file))?.text || '' } catch (err) { text = `Could not extract text: ${err?.message || String(err)}` }
@@ -1759,6 +1801,7 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
       }
       attachments.push({ name: file.name, text })
     }
+    aiAttachments.push(...await aiAttachmentPayload(replyFiles))
     const aiResult = await runTaskResult('clarification.answer', {
       oppName: opp.oppName,
       customer: opp.sellTo,
@@ -1767,6 +1810,7 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
       receivedAt: replyForm.receivedAt,
       body: replyForm.body,
       attachments,
+      aiAttachments,
       questions: open.map(c => ({ id: c.id, question: c.q, category: c.category, gap: c.gap })),
       fieldOptions: OPP_FIELD_OPTIONS.filter(([key]) => key).map(([key, label]) => ({ key, label })),
       currentFields: Object.fromEntries(OPP_FIELD_OPTIONS.filter(([key]) => key).map(([key]) => [key, opp[key] || ''])),

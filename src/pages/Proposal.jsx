@@ -8,7 +8,7 @@ import { useFormulaBar } from '../formulabar.jsx'
 import { Icon, ModaeImageLogo } from '../icons.jsx'
 import { ConfirmModal, Modal } from '../ui.jsx'
 import AttachmentViewer from '../AttachmentViewer.jsx'
-import { readiness, isBlocked } from '../gates.js'
+import { readiness, sparesSourcingBlockers, isBlocked } from '../gates.js'
 import { docModel, docRoute, enclosuresFor, MODAE_COMPANY } from '../proposalDoc.js'
 import DocEditor from '../proposal/DocEditor.jsx'
 import PrintDoc from '../proposal/PrintDoc.jsx'
@@ -608,6 +608,9 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   const fb = useFormulaBar()
   const opp = store.opportunities.find(o => o.id === oppId)
   const isComingSoon = !!opp && !isWorkflowAvailable(opp.oppType)
+  const sourcingBlockers = opp?.route === 'Spares'
+    ? sparesSourcingBlockers(opp, store.getProposal(oppId), store)
+    : []
   const canEditProposal = !!opp && (opp.owner === store.role || isAdminRole(store.role))
   const [tab, setTab] = useState(initialTab)
   const [workbook, setWorkbook] = useState('proposal')
@@ -680,6 +683,9 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   useEffect(() => {
     if (isComingSoon) return
     if (!opp || routeForType(opp.oppType) !== 'Spares') return
+    // Never repair or create a partial customer-facing BoQ while Sourcing is
+    // incomplete. The Sourcing page is the only authority for this handoff.
+    if (sourcingBlockers.length) return
     const sourceLines = (store.sparesLines || []).filter(line => line.oppId === oppId
       && !line.removedFromSourcing
       && !isPlaceholderSparesLine(line)
@@ -699,7 +705,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     const next = { ...current, bom: nextBom }
     store.sendLinesToProposal(oppId)
     setP(normalize(next, opp))
-  }, [oppId, opp?.oppType, store.sparesLines, store.proposals?.[oppId]?.bom, isComingSoon]) // eslint-disable-line
+  }, [oppId, opp?.oppType, store.sparesLines, store.proposals?.[oppId]?.bom, sourcingBlockers.length, isComingSoon]) // eslint-disable-line
 
   // Print-all: render the full customer document (cover + terms + BoQ) first,
   // then open the dialog; afterprint restores the tabbed view.
@@ -1280,6 +1286,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
           { sheets: reviewedUpload.sheets },
           reviewedUpload.baseProposal,
           opp,
+          { comparisonTerms: reviewedUpload.comparisonTerms },
         )
         reviewedUpload = {
           ...reviewedUpload,
@@ -1322,6 +1329,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
         issues,
         {
           baseline: reviewedUpload?.baseProposal,
+          baselineTerms: reviewedUpload?.comparisonTerms || [],
           deterministicChanges: reviewedUpload?.importedChanges,
           deterministicTermChanges: reviewedUpload?.termChanges,
         },
@@ -1426,7 +1434,10 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       setReviewStage(1)
       const parsed = parseRenderedWorkbook(await file.arrayBuffer(), file.name)
       const baselineProposal = p.draftBaseline || snapshotProposal(p)
-      const imported = importReviewedWorkbook(parsed, baselineProposal, opp)
+      const comparisonTerms = p.draftBaselineDocumentTerms
+        || baselineProposal.renderedDocumentTerms
+        || docModel(baselineProposal, opp, { config: store.config }).docTerms
+      const imported = importReviewedWorkbook(parsed, baselineProposal, opp, { comparisonTerms })
       // Keep each uploaded artifact addressable. Re-uploading a workbook must
       // not overwrite the bytes referenced by an older revision snapshot.
       const blobKey = `proposal-review-${opp.id}-rev-${String(p.revision || '00').padStart(2, '0')}-${Date.now()}`
@@ -1434,7 +1445,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
         ...p,
         ...imported.proposal,
         artifactSheets: p.artifactSheets || imported.proposal.artifactSheets || [],
-        reviewedUpload: { filename: file.name, type: file.type, size: file.size, uploadedAt: new Date().toISOString(), blobKey, storageStatus: 'pending', storageError: '', sheets: parsed.sheets, importedChanges: imported.changes, termChanges: imported.termChanges, validationIssues: imported.issues, table: imported.table, baseProposal: baselineProposal },
+        reviewedUpload: { filename: file.name, type: file.type, size: file.size, uploadedAt: new Date().toISOString(), blobKey, storageStatus: 'pending', storageError: '', sheets: parsed.sheets, importedChanges: imported.changes, termChanges: imported.termChanges, validationIssues: imported.issues, table: imported.table, baseProposal: baselineProposal, comparisonTerms },
         reviewStatus: 'Ready for validation',
         reviewIssues: imported.issues,
         reviewNeedsRevision: false,
@@ -1495,6 +1506,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       store.saveProposal(oppId, {
         ...p,
         draftBaseline,
+        draftBaselineDocumentTerms: doc.docTerms,
         draftBaselineAt: new Date().toISOString(),
       }, { immediate: true })
       const templateBuffer = await loadProposalTemplateBuffer(configuredProposalTemplate)
@@ -1650,6 +1662,17 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     .filter(name => name !== 'Priced BoQ' || comm)
   // Switching route while sitting on a now-hidden tab must not blank the page.
   if (!visibleTabs.includes(tab)) { setTab('Cover Letter'); return null }
+
+  if (!embedded && route === 'Spares' && sourcingBlockers.length) {
+    return <main className="page proposal-handoff-blocked">
+      <div className="form-card">
+        <h2>Proposal is locked until Sourcing is complete</h2>
+        <p>Finish every active Spares line in the Sourcing workbench before opening or editing the customer proposal.</p>
+        <ul>{sourcingBlockers.map(blocker => <li key={blocker.key}>{blocker.text}</li>)}</ul>
+        <Link className="primary" to={`/opp/${oppId}?step=sourcing`}>Return to Sourcing</Link>
+      </div>
+    </main>
+  }
 
   // Embedded, the opportunity page owns the padding and the sheet strip sits in
   // normal flow, so the 64px clearance `.page` reserves for the fixed bar is wrong.

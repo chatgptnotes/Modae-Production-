@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 
 import { ROLES, PERMS, PORTAL_ENABLED, selectableRoles } from '../src/seed.js'
 import { canViewCommercial, canPriceProposal, isSalesOwner } from '../src/utils.js'
-import { transitionBlockers, releaseState, readiness, commercialGate, approvalForRev, approvalSet } from '../src/gates.js'
+import { transitionBlockers, releaseState, readiness, sparesSourcingBlockers, commercialGate, approvalForRev, approvalSet } from '../src/gates.js'
 import { contextForType, routeForType, CONTEXTS, OPP_TYPES } from '../src/seed.js'
 import { proposalApprovalSnapshot } from '../src/approvalMemory.js'
 
@@ -434,6 +434,32 @@ test('Retrofit shares the Brownfield workbench with Spares', () => {
   assert.equal(routeForType('Spares'), 'Spares')
   assert.equal(routeForType('Service'), 'Service')
   assert.equal(routeForType('Project'), 'Project')
+})
+
+test('Spares readiness owns every sourcing handoff requirement', () => {
+  const opp = { ...baseOpp, route: 'Spares', oppType: 'Spares', milestone: 'Sourcing' }
+  const proposal = { bom: [{ pn: 'P-1', quoted: 100 }], terms: [] }
+  const state = {
+    approvals: [], clarifications: [], config: {},
+    sparesLines: [
+      { id: 'SL-DESC', oppId: opp.id, custRef: '1', pn: '', desc: '', qty: 1, listPrice: 100, priceState: 'Current', confirmed: false },
+      { id: 'SL-CONF', oppId: opp.id, custRef: 'P-1', pn: 'P-1', desc: 'Part 1', qty: 1, listPrice: 100, priceState: 'Current', confirmed: false },
+      { id: 'SL-EXPIRED', oppId: opp.id, custRef: 'P-2', pn: 'P-2', desc: 'Part 2', qty: 1, listPrice: 100, priceState: 'Expired', confirmed: true },
+    ],
+  }
+  const blockers = readiness(opp, proposal, state)
+  assert.ok(blockers.some(item => item.key === 'sp-desc-SL-DESC'))
+  assert.ok(blockers.some(item => item.key === 'sp-conf-SL-CONF'))
+  assert.ok(blockers.some(item => item.key === 'sp-price-SL-EXPIRED'))
+})
+
+test('Spares handoff blocks empty and zero-quantity sourcing datasets', () => {
+  const opp = { ...baseOpp, route: 'Spares', oppType: 'Spares', milestone: 'Proposal' }
+  const common = { approvals: [], clarifications: [], config: {} }
+  assert.equal(sparesSourcingBlockers(opp, { bom: [] }, { ...common, sparesLines: [] })[0].key, 'sp-source-empty')
+  assert.equal(sparesSourcingBlockers(opp, { bom: [] }, { ...common, sparesLines: [
+    { id: 'SL-ZERO', oppId: opp.id, custRef: 'P-1', pn: 'P-1', desc: 'Part 1', qty: 0, listPrice: 100, confirmed: true },
+  ] })[0].key, 'sp-qty-SL-ZERO')
 })
 
 // ---------------------------------------------------------------------------

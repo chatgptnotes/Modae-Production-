@@ -60,6 +60,7 @@ const termTextWithoutLabel = (value, term) => {
 const proposalTermValue = term => compactTermText(
   term?.ourResponse || term?.proposedTerm || term?.customerAsk || term?.standardTerm || '',
 )
+const comparisonTermValue = term => compactTermText(term?.text || proposalTermValue(term))
 
 // Customer-facing proposal workbooks print terms as a heading followed by one
 // or more prose rows. Keep the rows grouped until the next recognised term so
@@ -98,11 +99,14 @@ export function extractCommercialTerms(workbook) {
   return [...found.values()].filter(term => term.text)
 }
 
-const commercialTermChanges = (workbook, proposal) => {
+const commercialTermChanges = (workbook, proposal, comparisonTerms = null) => {
   const uploaded = extractCommercialTerms(workbook)
-  const original = new Map((proposal?.terms || []).flatMap(term => {
-    const keyValue = term?.key || termKeyForText(term?.term)
-    const value = proposalTermValue(term)
+  const baseline = Array.isArray(comparisonTerms) && comparisonTerms.length
+    ? comparisonTerms
+    : proposal?.terms || []
+  const original = new Map(baseline.flatMap(term => {
+    const keyValue = term?.key || termKeyForText(term?.label || term?.term)
+    const value = comparisonTermValue(term)
     return keyValue && value ? [[keyValue, { key: keyValue, label: termForKey(keyValue)?.label || term.term, text: value }]] : []
   }))
   const changes = []
@@ -186,10 +190,10 @@ const valueChangeIssue = (row, change, sheetName) => ({
   change: { ...change, row: row.index, line: row.description || row.pn },
 })
 
-export function importReviewedWorkbook(workbook, proposal, opportunity) {
+export function importReviewedWorkbook(workbook, proposal, opportunity, { comparisonTerms = null } = {}) {
   const issues = []
   const changes = []
-  const termReview = commercialTermChanges(workbook, proposal)
+  const termReview = commercialTermChanges(workbook, proposal, comparisonTerms)
   const table = findTable(workbook)
   if (!table) {
     return { proposal, issues: [{ severity: 'block', code: 'workbook.table', text: 'No proposal BoQ table with description and quantity columns was found.' }, ...termReview.issues], changes, termChanges: termReview.changes, table: null }
@@ -327,6 +331,7 @@ export function reviewWorkbookPayload(workbook, proposal, opportunity, localIssu
     comparison: {
       method: 'deterministic-local-parse-before-ai',
       baselineLines: proposalLineSnapshot(comparison.baseline),
+      baselineTerms: comparison.baselineTerms || [],
       deterministicChanges: comparison.deterministicChanges || [],
       deterministicTermChanges: comparison.deterministicTermChanges || [],
       candidateChanges,

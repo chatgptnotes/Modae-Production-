@@ -8,8 +8,8 @@
 
 import { unitCostINR, unitSellINR } from './utils.js'
 import { defaultCosting, MILESTONES } from './seed.js'
-import { applyAdjustment, normalizeMarkupPct, sparesLineFinancials } from './pricing.js'
-import { isPlaceholderSparesLine } from './proposal/sparesBoq.js'
+import { applyAdjustment, isMissingSparesDescription, normalizeMarkupPct, sparesLineFinancials } from './pricing.js'
+import { isLegacyAutoSparesSupportRow, isPlaceholderSparesLine } from './proposal/sparesBoq.js'
 import { classRule, classOrder, noExceptionKeys } from './customerClasses.js'
 import { needsCommercialApproval, needsCommercialDecision, needsCommercialResolution, commercialApprovalDetails, isLegacyCommercialClarification, isCommercialConfirmationRow, isDeliveryBasisClarification, sourceContainsDeliveryRequirement } from './commercialTerms.js'
 import { clarificationTopic } from './leadClarification.js'
@@ -339,15 +339,7 @@ export function readiness(opp, proposal, state) {
   }
 
   if (opp.route === 'Spares') {
-    for (const l of (state.sparesLines || []).filter(x => x.oppId === opp.id && !x.removedFromSourcing && (x.qty == null || Number(x.qty) > 0) && !isPlaceholderSparesLine(x))) {
-      if (!l.confirmed) {
-        b.push({ key: `sp-conf-${l.id}`, severity: 'block', text: `Unconfirmed part match — ${l.custRef || l.pn}` })
-      } else if (l.priceState === 'Needs pricing') {
-        b.push({ key: `sp-price-${l.id}`, severity: 'block', text: `Pricing required — select a price-list part or apply an approved quote (${l.pn || l.custRef})` })
-      } else if (l.priceState === 'Expired') {
-        b.push({ key: `sp-price-${l.id}`, severity: 'block', text: `Expired price source — request price update (${l.pn})` })
-      }
-    }
+    b.push(...sparesSourcingBlockers(opp, proposal, state))
   }
 
   if (opp.route === 'Service') {
@@ -411,6 +403,43 @@ export function readiness(opp, proposal, state) {
   }
 
   return b
+}
+
+// The Sourcing page, lifecycle transition, direct Proposal route, and embedded
+// Proposal builder all use this same handoff contract. Keep support rows out of
+// the customer-requested line count, and report one actionable blocker per line
+// in priority order so operators can clear the row from left to right.
+export function sparesSourcingBlockers(opp, proposal, state = {}) {
+  if (opp?.route !== 'Spares') return []
+  const lines = (state.sparesLines || []).filter(line =>
+    line.oppId === opp.id
+    && !line.removedFromSourcing
+    && !isPlaceholderSparesLine(line)
+    && !isLegacyAutoSparesSupportRow(line))
+  const blockers = []
+  if (!lines.length) {
+    const sourcingIndex = MILESTONES.indexOf('Sourcing')
+    const currentIndex = MILESTONES.indexOf(opp.milestone)
+    if (currentIndex >= sourcingIndex) {
+      blockers.push({ key: 'sp-source-empty', severity: 'block', text: 'Complete the Spares BOQ in Sourcing before opening Proposal' })
+    }
+    return blockers
+  }
+  for (const line of lines) {
+    const label = line.custRef || line.pn || line.id
+    if (line.qty != null && !(Number(line.qty) > 0)) {
+      blockers.push({ key: `sp-qty-${line.id}`, severity: 'block', text: `Positive quantity required in Sourcing — ${label}` })
+    } else if (isMissingSparesDescription(line)) {
+      blockers.push({ key: `sp-desc-${line.id}`, severity: 'block', text: `Description required in Sourcing — ${label}` })
+    } else if (!line.confirmed) {
+      blockers.push({ key: `sp-conf-${line.id}`, severity: 'block', text: `Unconfirmed part match — ${label}` })
+    } else if (line.priceState === 'Needs pricing' || !(Number(line.listUnitPrice ?? line.listPrice) > 0)) {
+      blockers.push({ key: `sp-price-${line.id}`, severity: 'block', text: `Pricing required — select a price-list part or apply an approved quote (${line.pn || line.custRef})` })
+    } else if (line.priceState === 'Expired') {
+      blockers.push({ key: `sp-price-${line.id}`, severity: 'block', text: `Expired price source — request price update (${line.pn || line.custRef})` })
+    }
+  }
+  return blockers
 }
 
 // Who the next action actually sits with. Biji, 13 Aug: "I should know where is

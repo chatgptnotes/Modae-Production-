@@ -13,6 +13,10 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Hardened the Spares Sourcing-to-Proposal handoff with one shared gate for
+  empty, invalid, unconfirmed, missing-price, and expired-price lines. Direct
+  and embedded Proposal access now returns users to Sourcing, and stale proposal
+  repair cannot create a partial BoQ before sourcing is complete.
 - Fixed proposal workbook round-trip validation so an unchanged downloaded ModAE
   Terms & Conditions block is compared with the exact rendered baseline instead
   of internal workflow terms, while genuine customer-facing edits remain visible.

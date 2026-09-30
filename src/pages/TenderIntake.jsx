@@ -7,6 +7,7 @@ import { uploadOppFile } from '../filestore.js'
 import { fmt, sameCustomer } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { runJson } from '../ai.js'
+import { aiAttachmentPayload, supportsVisualAi } from '../aiAttachments.js'
 import ScanProgress from '../ScanProgress.jsx'
 import { opportunityOwnerFor } from '../leadRules.js'
 
@@ -114,12 +115,14 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
   const openOpps = store.opportunities.filter(o => o.status === 'Open')
 
   const startParse = async f => {
-    setError(null); setFile(f); setUploadOpen(true); setStep('parsing'); setStage(0)
+    setError(null); setWarn(''); setFile(f); setUploadOpen(true); setStep('parsing'); setStage(0)
     const timer = setInterval(() => setStage(s => Math.min(s + 1, STAGES_MSG.length - 1)), 650)
     const minDelay = new Promise(r => setTimeout(r, 2400))
     try {
-      const ex = await extractPdfText(f)
-      if (ex.charCount < 200) throw { code: 'NO_TEXT_LAYER' }
+      const ex = /.(png|jpe?g|gif|webp)$/i.test(f.name)
+        ? { fullText: '', struct: [], charCount: 0 }
+        : await extractPdfText(f)
+      if (ex.charCount < 200 && !supportsVisualAi(f)) throw { code: 'NO_TEXT_LAYER' }
       const p = parseTender(ex.fullText, ex.struct)
       // Gemini fills only what the rules could not read, and adds the
       // commercial risk read the rules never attempted. The deterministic
@@ -127,7 +130,9 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
       const ai = await runJson('tender.extract', {
         filename: f.name, pages: ex.struct?.length ?? '', text: ex.fullText,
         parsed: p.header, products: PRODUCTS,
+        aiAttachments: await aiAttachmentPayload([f]),
       }, { timeoutMs: 90000, fallback: store.config?.aiModel?.provider === 'Built-in fallback' })
+      if (!ai) setWarn('AI extraction was unavailable. The local parser results are shown; review every field before confirming.')
       mergeAi(p, ai)
       await minDelay
       clearInterval(timer)
@@ -265,7 +270,7 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
           {error && (
             <div className="restricted" style={{ maxWidth: 640, marginBottom: 12 }}>
               {error.code === 'NO_TEXT_LAYER' && <>
-                This looks like a scanned document with no text layer — AI extraction needs selectable text.{' '}
+                This file has no readable text layer and is not a supported visual document.{' '}
                 <Link to="/new">Enter the opportunity manually instead ▸</Link>
               </>}
               {error.code === 'NOT_PDF' && 'That file is not a PDF — upload the tender/RFQ document as PDF.'}
@@ -289,7 +294,7 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
               onDragLeave={() => setDrag(false)}
               onDrop={onDrop}
               onClick={() => fileInput.current?.click()}>
-              <input ref={fileInput} type="file" accept="application/pdf,.pdf" style={{ display: 'none' }} onChange={onPick} />
+              <input ref={fileInput} type="file" accept="application/pdf,.pdf,.png,.jpg,.jpeg,.webp,image/*" style={{ display: 'none' }} onChange={onPick} />
               <div className="tender-drop-icon"><Icon name="fileText" size={40} /></div>
               <b>Drop the tender / RFQ PDF here</b>
               <div className="hint">or tap to choose a file</div>

@@ -18,7 +18,7 @@ const fail = (res, status, errorCode, error) =>
   send(res, status, { ok: false, errorCode, error })
 
 const cap = (value, max) => String(value ?? '').slice(0, max)
-const MAX_REQUEST_CHARS = 350000
+const MAX_REQUEST_CHARS = 3000000
 const RATE_WINDOW_MS = 10 * 60 * 1000
 const RATE_LIMIT = 40
 const MAX_UPSTREAM_RETRIES = 2
@@ -328,6 +328,8 @@ function proposalReviewPrompt(p) {
   return `${HOUSE}
 
 Review the supplied ${p.artifactType === 'uploaded-workbook' ? 'manually reviewed proposal workbook' : 'generated proposal'} against the opportunity and proposal data. Find semantic inconsistencies only; arithmetic and required field checks are already supplied as LOCAL FINDINGS. Do not invent facts or change values. Use block only for a clear identity or scope contradiction, warning for a concern requiring human review, and info for a useful observation. Return concise findings with evidence from a sheet name and row when possible; for a generated proposal, cite the relevant proposal line or term instead.
+
+For an uploaded workbook, compare customer-facing commercial terms against comparison.baselineTerms when supplied. These are the exact ModAE Terms & Conditions rendered into the downloaded workbook; do not treat different internal workflow wording in PROPOSAL.terms as a workbook change.
 
 The comparison.candidateChanges list contains locally detected possible workbook changes. Decide logically which candidates are real business changes. Return their zero-based indexes in confirmedChangeIndexes. Ignore harmless formatting, punctuation, whitespace, rounding, capitalization, and equivalent units such as Nos., No., EA, and pieces. A candidate with code line.removed is a real business change when an original proposal line is absent from the uploaded revision. Do not confirm a candidate when its before and after values came from different workbook columns, different rows, or an ambiguous line match. Delivery period, Freight, and Incoterms are separate commercial terms: never use an Incoterms sentence as the uploaded Delivery period. Group related findings by the same logical item or term in the summary, and do not report the same change more than once. Do not repeat candidate changes in findings; findings are only for additional semantic problems that cannot be represented by a candidate. If no candidate is materially different, return an empty confirmedChangeIndexes array.
 
@@ -920,7 +922,7 @@ export default async function handler(req, res) {
                                     : task === 'admin.routing-review' ? routingReviewPrompt(payload)
                   : leadPrompt(payload)
   const requestBody = {
-    contents: [{ parts: [{ text: prompt }, ...(['lead.extract', 'approval.condition-evidence', 'kyc.extract'].includes(task) ? inlineParts(payload) : [])] }],
+    contents: [{ parts: [{ text: prompt }, ...(['lead.extract', 'tender.extract', 'clarification.answer', 'approval.condition-evidence', 'kyc.extract'].includes(task) ? inlineParts(payload) : [])] }],
     generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'reply.classify', 'tender.extract', 'location.search', 'admin.routing-review'].includes(task)
       ? {
           maxOutputTokens: task === 'health' ? 8 : 2048,

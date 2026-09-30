@@ -37,7 +37,7 @@ test('the extracted sender becomes the proposal recipient', () => {
 // that was not a PDF, so the salesperson retyped every field by hand.
 test('saved emails are accepted alongside tender PDFs', () => {
   assert.match(intake, /name\.endsWith\('\.eml'\)/)
-  assert.match(intake, /accept="\.pdf,application\/pdf,\.eml,\.msg,message\/rfc822"/)
+  assert.match(intake, /accept="\.pdf,application\/pdf,\.eml,\.msg,message\/rfc822,\.png,\.jpg,\.jpeg,\.webp,image\/\*"/)
   assert.match(intake, /isEmail\s*\n?\s*\? \{ fullText: await file\.text\(\), struct: \[\] \}/,
     'an email is already text — it must not go through pdfjs')
   assert.doesNotMatch(intake, /setAiError\('Please upload a PDF document'\)/)

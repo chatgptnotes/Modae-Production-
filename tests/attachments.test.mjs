@@ -6,6 +6,7 @@ import zlib from 'node:zlib'
 import { fileURLToPath } from 'node:url'
 
 import { docxXmlToText, extractDocxText, extractDocText } from '../src/docText.js'
+import { aiAttachmentPayload, supportsVisualAi, visualMimeType } from '../src/aiAttachments.js'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
@@ -129,6 +130,16 @@ test('an empty text file is reported rather than passed on as content', async ()
   assert.match(out.err, /empty/)
 })
 
+test('visual uploads produce bounded multimodal AI payloads', async () => {
+  const image = fileOf('rfq.png', Buffer.from('image-bytes'), 'image/png')
+  assert.equal(supportsVisualAi(image), true)
+  assert.equal(visualMimeType({ name: 'scan.jpg', type: '' }), 'image/jpeg')
+  const payload = await aiAttachmentPayload([image])
+  assert.equal(payload.length, 1)
+  assert.equal(payload[0].mimeType, 'image/png')
+  assert.equal(typeof payload[0].dataBase64, 'string')
+})
+
 // ------------------------------------------------------------ the wiring
 
 // Guards the regression this feature exists to fix: a .docx used to reach the
@@ -147,6 +158,19 @@ test('the Vercel AI route sends uploaded files as Gemini inline data', () => {
   const ai = read('api/ai.js')
   assert.match(ai, /inlineData/, 'multimodal attachments must be sent to Gemini')
   assert.match(ai, /payload\.aiAttachments/, 'the Vercel route must read the attachment payload')
+  assert.match(ai, /'tender\.extract', 'clarification\.answer'/, 'tender and clarification tasks must receive visual attachments')
+})
+
+test('document intake and opportunity clarification pass visual files to AI', () => {
+  const intake = read('src/pages/IntakeForm.jsx')
+  const tender = read('src/pages/TenderIntake.jsx')
+  const workbench = read('src/pages/Workbench.jsx')
+  assert.match(intake, /aiAttachmentPayload\(\[file\]\)/)
+  assert.match(intake, /image\/\*/)
+  assert.match(tender, /aiAttachmentPayload\(\[f\]\)/)
+  assert.match(tender, /image\/\*/)
+  assert.match(workbench, /aiAttachments\.push\(\.\.\.await aiAttachmentPayload\(replyFiles\)\)/)
+  assert.match(workbench, /runTaskResult\('kyc\.extract'/)
 })
 
 test('the Vercel AI route uses only the server-side Gemini key', () => {

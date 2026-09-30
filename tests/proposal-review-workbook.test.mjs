@@ -141,6 +141,25 @@ test('compares uploaded commercial terms with the original proposal without bloc
   assert.deepEqual(result.termChanges.map(change => change.label), ['Payment', 'Delivery'])
 })
 
+test('does not flag an unchanged downloaded ModAE terms block', () => {
+  const workbook = { sheets: [{ name: 'Firm Offer Rev-00', rows: [
+    ['Description', 'Part Number', 'Quantity', 'Unit Price', 'Total Price'],
+    ['Proximity probe, 8 mm', 'PRB-8', 1, 1250, 1250],
+    [],
+    ['Terms & Conditions:'],
+    ['1. Payment Terms: Payment shall be made in accordance with the agreed commercial terms.'],
+    ['2. Freight & Insurance: Delivery and Incoterms: Delivery shall follow the schedule and Incoterms stated in this proposal.'],
+  ] }] }
+  const result = importReviewedWorkbook(workbook, proposal, { sellTo: '' }, {
+    comparisonTerms: [
+      { label: 'Payment Terms', text: 'Payment shall be made in accordance with the agreed commercial terms.' },
+      { label: 'Freight & Insurance', text: 'Delivery and Incoterms: Delivery shall follow the schedule and Incoterms stated in this proposal.' },
+    ],
+  })
+  assert.equal(result.issues.some(issue => issue.code === 'term.value-changed'), false)
+  assert.deepEqual(result.termChanges, [])
+})
+
 test('keeps Incoterms separate from the Delivery term', () => {
   const workbook = { sheets: [{ name: 'Firm Rev-00', rows: [
     ['Terms & Conditions:'],
