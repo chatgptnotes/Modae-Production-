@@ -23,7 +23,8 @@ The active repository migrations are `007_live_workspace_sync.sql`,
 `008_dedicated_workspace_tables.sql`, `009_relational_workspace_data.sql`,
 `010_workspace_contract_verification.sql`, and
 `011_save_rows_lock_order.sql`, `012_permanent_workspace_purge.sql`,
-`015_atomic_opportunity_sequences.sql`, and `016_workspace_generation.sql`.
+`015_atomic_opportunity_sequences.sql`, `016_workspace_generation.sql`, and
+`017_complete_bnk_catalogue.sql`.
 `013_railway_free_tier_security.sql` is a historical Free-plan security
 migration: it removes anonymous business-data access and adds small active-row
 indexes for the shared server workspace cache.
@@ -49,6 +50,8 @@ it only through `api/purge-workspace.js` after session and role verification.
 Migration 016 adds a persistent workspace generation marker and delete triggers;
 direct SQL deletes from leads, opportunities, or approvals automatically
 invalidate stale browser/server workspace snapshots.
+Migration 017 adds the curated B&K parts missing from older approved uploads;
+it is additive and preserves all existing price-list rows and prices.
 
 The browser loads the workspace on boot and on explicit refresh. It does not
 reload the complete workspace for route changes, focus, visibility restoration,
@@ -58,7 +61,7 @@ with their own Supabase bearer token. This is not Supabase Realtime.
 
 For a completely new Supabase project, run [`000_fresh_project.sql`](./000_fresh_project.sql)
 first, then run every migration from `007_live_workspace_sync.sql` through
-`016_workspace_generation.sql` in numeric order. Migration 009 includes
+`017_complete_bnk_catalogue.sql` in numeric order. Migration 009 includes
 the relational tables, typed backfill, RLS policies, grants, indexes, and
 realtime publication entries. The retired `supabase-tables.sql` is archived
 locally under `.local/backups/supabase/`; do not use it for a new project

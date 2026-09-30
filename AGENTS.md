@@ -107,7 +107,8 @@ The active repository migrations are `supabase/007_live_workspace_sync.sql`,
 `supabase/011_save_rows_lock_order.sql`, and
 `supabase/012_permanent_workspace_purge.sql`,
 `supabase/015_atomic_opportunity_sequences.sql`, and
-`supabase/016_workspace_generation.sql`.
+`supabase/016_workspace_generation.sql`,
+`supabase/017_complete_bnk_catalogue.sql`.
 `supabase/014_user_presence.sql` stores the short-lived admin-only online
 indicator; browser code must access it only through `api/presence.js`.
 Historical migrations and backups are local-only under `.local/backups/`.

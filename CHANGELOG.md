@@ -26,6 +26,8 @@ This is an implementation and release log, not a dump of every commit.
 - Made direct Supabase deletes of opportunities, leads, and approvals invalidate
   the server cache automatically through a persistent database generation marker;
   the marker is hidden from application state and stale browser saves are rejected.
+- Completed the approved B&K catalogue for production by adding missing curated
+  part rows additively, so exact customer part numbers can resolve to list prices.
 - Hardened the Spares Sourcing-to-Proposal handoff with one shared gate for
   empty, invalid, unconfirmed, missing-price, and expired-price lines. Direct
   and embedded Proposal access now returns users to Sourcing, and stale proposal
