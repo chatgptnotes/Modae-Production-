@@ -3803,21 +3803,27 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .approval-decision-title { margin-bottom: 8px; color: var(--palette-ea2bdd67); font-size: 12px; font-weight: 800; }
 .approval-decision-options { display: flex; gap: 12px; flex-wrap: wrap; }
 .approval-decision-options label { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; }
-.approval-decision-input {
+.approvals-page .approval-decision-form textarea.approval-decision-input {
   display: block;
   width: 100%;
   max-width: 700px;
   min-height: 92px;
   margin-top: 7px;
   padding: 9px 10px;
-  border: 1px solid var(--border-default);
+  border: 1px solid var(--border-default) !important;
   border-radius: 5px;
   background: var(--surface-raised);
   color: var(--text-primary);
   line-height: 1.45;
   resize: vertical;
-  overflow: hidden;
+  overflow: auto;
   box-sizing: border-box;
+}
+.approvals-page .approval-decision-form textarea.approval-decision-input:focus,
+.approvals-page .approval-decision-form textarea.approval-decision-input:focus-visible {
+  border: 1px solid var(--action-accent) !important;
+  outline: 0;
+  box-shadow: none;
 }
 .approval-decision-error { margin-top: 7px; }
 .approval-decision-submit { margin-top: 9px; }
@@ -14387,8 +14393,7 @@ table.sheet tbody tr:hover td {
   }
 }
 
-/* Text-entry focus stays quiet: the field keeps its accent underline without
-   growing a red rectangle around the whole control while someone types. */
+/* Text-entry focus stays quiet and avoids a full focus ring. */
 .shell :where(input:not([type='checkbox']):not([type='radio']), select, textarea):focus,
 .shell :where(input:not([type='checkbox']):not([type='radio']), select, textarea):focus-visible,
 .approval-decision-input:focus,
