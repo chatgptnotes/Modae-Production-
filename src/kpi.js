@@ -1,5 +1,31 @@
 import { ageDays, monthKey, monthLabel, canViewCommercial, isSalesOwner } from './utils.js'
-import { OWNERS, STAGES, routeForType } from './seed.js'
+import { OWNERS, routeForType } from './seed.js'
+
+// One pipeline definition shared by the dashboard, analytics, and tracker.
+// The stored stage values remain backward-compatible; these are the customer-
+// facing funnel labels and their legacy stage aliases.
+export const FUNNEL_STAGES = [
+  { key: 'qualified', label: 'Qualified Lead', stages: ['Lead', 'RFI'], note: 'qualified interest' },
+  { key: 'budgetary', label: 'Budgetary', stages: ['Budgetary'], note: 'budgetary request' },
+  { key: 'rfq', label: 'RFQ', stages: ['RFQ'], note: 'formal enquiry' },
+  { key: 'firm-proposal', label: 'Firm Proposal', stages: ['Firm Bid'], note: 'commercial proposal' },
+  { key: 'negotiate', label: 'Negotiate', stages: ['Negotiate'], note: 'commercial review' },
+]
+
+export function funnelRows(opportunities = [], { owner = null } = {}) {
+  const scoped = opportunities.filter(o => !owner || o.owner === owner)
+  return FUNNEL_STAGES.map(group => {
+    const rows = scoped.filter(o => {
+      if (!group.stages.includes(o.stage)) return false
+      return o.status === 'Open'
+    })
+    return {
+      ...group,
+      count: rows.length,
+      valueK: rows.reduce((sum, row) => sum + (+row.valueK || 0), 0),
+    }
+  })
+}
 
 // Dashboard metrics. Kept as pure functions so the tablet command deck and the
 // Analytics page can never disagree — the formulas below are the ones Analytics
@@ -128,19 +154,16 @@ export function pipelineSeries(store, comm, months = 6) {
 
 // Compact, permission-aware snapshot for landing pages. Keep this beside the
 // detailed KPI formulas so Home and Analytics never tell different stories.
-export function analyticsSnapshot(store, role = store.role) {
+export function analyticsSnapshot(store, role = store.role, { scope = 'role' } = {}) {
   const comm = canViewCommercial(role)
   // LJS is the strategic owner, not a sales-owner scope. Their landing page
   // must start with the complete company picture; individual sales owners
   // remain scoped to their own pipeline.
-  const owner = isSalesOwner(role) ? role : null
+  const owner = scope === 'my' ? role : (scope === 'role' && isSalesOwner(role) ? role : null)
   const scoped = (store.opportunities || []).filter(o => !owner || o.owner === owner)
   const open = scoped.filter(o => o.status === 'Open')
   const sum = rows => rows.reduce((total, o) => total + (+o.valueK || 0), 0)
-  const funnel = STAGES.filter(s => s !== 'Won' && s !== 'Lost').map(stage => {
-    const rows = open.filter(o => o.stage === stage)
-    return { label: stage, count: rows.length, valueK: sum(rows) }
-  })
+  const funnel = funnelRows(scoped, { owner })
   const won = scoped.filter(o => o.stage === 'Won').length
   const lost = scoped.filter(o => o.stage === 'Lost').length
   const decided = won + lost

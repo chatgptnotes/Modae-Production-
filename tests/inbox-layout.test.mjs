@@ -93,7 +93,7 @@ test('opportunity scope is optional during lead qualification and registration',
 })
 
 test('AI missing information is optional for registration', () => {
-  assert.match(inbox, /const registrationBlocked = missingIdentity\.length > 0 \|\| registrationPendingLow\.length > 0 \|\| verificationBlocked/)
+  assert.match(inbox, /const registrationBlocked = missingIdentity\.length > 0 \|\| inquiryMissing \|\| registrationPendingLow\.length > 0 \|\| verificationBlocked/)
   // The interactive "Missing information" panel (with per-item +Add) is the
   // single source of truth for optional follow-up items — a second static
   // "Optional information still missing" box used to repeat the same list.

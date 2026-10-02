@@ -11,6 +11,7 @@ import { suggestProbability } from '../insights.js'
 import { MarkWonControl, Modal, Portal } from '../ui.jsx'
 import { Icon, ModaeImageLogo } from '../icons.jsx'
 import { workflowStageLabelFor } from '../workflowStage.js'
+import { parsePipelineFile } from '../pipelineImport.js'
 import {
   filterValueKey, filterValueLabel, matchesFilterQuery,
   toggleSubsetIn, toggleValueIn,
@@ -50,7 +51,7 @@ export const COLS = [
   { key: 'gmPct', letter: 'T', label: 'GM%', num: true, w: 3 },
   { key: 'createDate', letter: 'U', label: 'Create Date', w: 5, wAll: 7 },
   { key: 'proposalDate', letter: 'V', label: 'Proposal Send Date', w: 5, wAll: 7, wKey: 12 },
-  { key: 'orderDate', letter: 'W', label: 'Expected Order Date', w: 14, wAll: 9 },
+  { key: 'orderDate', letter: 'W', label: 'Expected Order Date', w: 14, wAll: 9, wKey: 12 },
   { key: 'invoiceDate', letter: 'X', label: 'Expected Ship Date', w: 7, wAll: 9 },
   { key: 'status', letter: 'Y', label: 'Status*', w: 5 },
   { key: 'stage', letter: 'Z', label: 'Stage*', w: 11, wAll: 8, wKey: 13 },
@@ -65,10 +66,45 @@ export const COLS = [
 
 // The columns a sales owner actually works from, in Biji's words on 13 Aug:
 // "Opportunity ID, Customer, Opportunity Name, Stage, Probability… I need
-// value, proposal send date… and I should know where is the next action
+// value, proposal send date, expected order date… and I should know where is the next action
 // pending." He was explicit that Opportunity Owner and Updated are not
 // required — a rep filtered to their own rows already knows the owner.
-const KEY_COLS = ['id', 'sellTo', 'oppName', 'stage', 'oppType', 'prob', 'valueK', 'proposalDate', 'nextActionOwner']
+const KEY_COLS = ['id', 'sellTo', 'oppName', 'stage', 'oppType', 'prob', 'valueK', 'proposalDate', 'orderDate', 'nextActionOwner']
+
+function PipelineUploadPreview({ preview, onClose }) {
+  const { fileName, sheetName, headers, rows, previewRows, missing } = preview
+  const shown = previewRows.slice(0, 25)
+  return (
+    <Modal title={`Pipeline upload preview — ${fileName}`} onClose={onClose} wide className="workbook-preview-modal">
+      <p className="hint">
+        This is only a preview. Nothing has been imported or saved.
+        {' '}{rows.length} row{rows.length === 1 ? '' : 's'} read from {sheetName || 'the first sheet'}.
+      </p>
+      {missing.length > 0 && (
+        <div className="warnbox" role="alert">
+          The preview could not find: {missing.map(key => key === 'sellTo' ? 'Customer' : 'Opportunity Name').join(' and ')}.
+          Check the workbook headings before the later migration step.
+        </div>
+      )}
+      {!rows.length ? (
+        <div className="hint">No data rows were found in the first sheet.</div>
+      ) : (
+        <div className="sheet-wrap" style={{ maxHeight: '52vh', overflow: 'auto' }}>
+          <table className="sheet">
+            <thead><tr>{headers.map(header => <th key={header}>{header}</th>)}</tr></thead>
+            <tbody>{shown.map((row, index) => (
+              <tr key={index}>{headers.map(header => <td key={header}>{String(row[header] ?? '')}</td>)}</tr>
+            ))}</tbody>
+          </table>
+          {rows.length > shown.length && <p className="hint">Showing the first {shown.length} rows only.</p>}
+        </div>
+      )}
+      <div className="form-actions" style={{ marginTop: 12 }}>
+        <button type="button" onClick={onClose}>Close preview</button>
+      </div>
+    </Modal>
+  )
+}
 // Hiding a spreadsheet column means hiding the header and the matching cell in
 // every row. The cells are written out in COLS order, so one generated rule per
 // hidden column does it — the same thing Excel's "hide column" does, and it
@@ -172,7 +208,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const store = useStore()
   const fb = useFormulaBar()
   const drawer = useDrawer()
-  const [sheet, setSheet] = useState('Opportunities') // Opportunities | Old Closed Opps
+  const [sheet, setSheet] = useState('Opportunities') // Opportunities | My Orders
 
   const isSalesRep = OWNERS.includes(store.role)
   const isManager = ROLES[store.role]?.admin || ROLES[store.role]?.commercial
@@ -188,6 +224,9 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const [dateFilter, setDateFilter] = useState(DEFAULT_DATE_FILTER)
   const [dateFilterDraft, setDateFilterDraft] = useState(DEFAULT_DATE_FILTER)
   const [dateFilterOpen, setDateFilterOpen] = useState(false)
+  const [pipelinePreview, setPipelinePreview] = useState(null)
+  const [pipelineUploadError, setPipelineUploadError] = useState('')
+  const pipelineFileRef = useRef(null)
   const [dateFilterPos, setDateFilterPos] = useState(null)
   const [productPick, setProductPick] = useState(null) // { id, x, y } of the open product picker
   const [closePending, setClosePending] = useState(null) // { id, stage } awaiting outcome and reason
@@ -264,7 +303,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const owners = [...(isSalesRep ? ['Mine'] : []), 'All', ...new Set(all.map(o => o.owner))]
   const base = all.filter(o =>
     (ownerFilter === 'Mine' ? o.owner === store.role : ownerFilter === 'All' || o.owner === ownerFilter) &&
-    (sheet !== 'Old Closed Opps' || o.status === 'Closed'))
+    (sheet !== 'My Orders' || o.status === 'Closed'))
 
   const searchableBase = base.filter(o => matchesGlobalSearch(o, searchTerm, COLS, cellVal))
   const statusOptions = [...new Set(all.map(o => o.status).filter(Boolean))].sort()
@@ -493,6 +532,19 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     })])
   )
 
+  const onPipelineFile = async event => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setPipelineUploadError('')
+    try {
+      const parsed = parsePipelineFile(await file.arrayBuffer())
+      setPipelinePreview({ ...parsed, fileName: file.name, sheetName: 'first sheet' })
+    } catch {
+      setPipelineUploadError('The file could not be read. Please choose an .xlsx, .xls, or .csv file.')
+    }
+  }
+
   // The filter menu is portaled to document.body so it is not clipped or
   // trapped behind the sticky table header while the sheet scrolls.
   // Checkbox picker for the multi-value Product cell. Reuses the filter
@@ -649,7 +701,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
 
   return (
     <div className="page tracker-page">
-      <h2>Opportunities {sheet === 'Old Closed Opps' && '— Old Closed Opps'} <span className="tracker-result-count" aria-live="polite">{resultCountLabel}</span></h2>
+      <h2>{sheet === 'My Orders' ? 'My Orders' : 'Opportunities'} <span className="tracker-result-count" aria-live="polite">{resultCountLabel}</span></h2>
       <div className="toolbar">
         <div className="tracker-toolbar-filters">
           <select id="opportunities-owner-filter" aria-label="Opportunity owner" value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)}>
@@ -700,6 +752,10 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
             {colView === 'key' ? `All ${COLS.length} columns` : 'Key columns'}
           </button>
           <button onClick={exportRows} title="Export all columns for the rows shown">Extract to Excel</button>
+          <button type="button" onClick={() => pipelineFileRef.current?.click()} title="Preview an existing pipeline workbook without importing it">
+            Upload Excel
+          </button>
+          <input ref={pipelineFileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={onPipelineFile} />
           {onCreateOpportunity ? (
             <button
               className="tracker-create-logo"
@@ -726,6 +782,8 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
           </div>
         )}
       </div>
+      {pipelineUploadError && <div className="errbox" role="alert">{pipelineUploadError}</div>}
+      {pipelinePreview && <PipelineUploadPreview preview={pipelinePreview} onClose={() => setPipelinePreview(null)} />}
       {dateFilterOpen && dateFilterPos && renderDateFilterPop(dateFilterPos)}
 
       <div ref={sheetWrapRef} className="sheet-wrap fill" onScroll={handleSheetScroll}>
@@ -915,7 +973,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                   <strong>{base.length ? 'No opportunities match these filters.' : 'No opportunities are loaded for this view.'}</strong>
                   <span>{base.length
                     ? 'Try changing the search or removing an active filter.'
-                    : sheet === 'Old Closed Opps'
+                    : sheet === 'My Orders'
                       ? 'Closed history is empty in the current workspace.'
                       : ownerFilter === 'All'
                         ? 'All Opportunities is selected; the workspace currently contains no rows to display.'
@@ -942,7 +1000,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
       </div>
 
       <div className="sheet-tabs">
-        {['Opportunities', 'Old Closed Opps'].map(t => (
+        {['Opportunities', 'My Orders'].map(t => (
           <div key={t} className={`tab ${sheet === t ? 'active' : ''}`}
             onClick={() => setSheet(t)}>
             {t}

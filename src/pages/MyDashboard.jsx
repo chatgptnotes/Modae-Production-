@@ -3,8 +3,8 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS } from '../seed.js'
 import { readiness, isBlocked, nextActionWith } from '../gates.js'
-import { ageDays, isApprover, isAdminRole, isSalesOwner, canPriceProposal, fmtLakh, ddMmmYY, displayRole, displayRoleLabel, isHiddenDashboardOpportunity } from '../utils.js'
-import { analyticsSnapshot, counts, salesPerformance, winLossAnalysis, FY_QUARTERS, FY_MONTHS, PROB_WEIGHT } from '../kpi.js'
+import { ageDays, isApprover, isAdminRole, isSalesOwner, canViewCommercial, canPriceProposal, fmtLakh, ddMmmYY, displayRole, displayRoleLabel, isHiddenDashboardOpportunity } from '../utils.js'
+import { analyticsSnapshot, counts, salesPerformance, winLossAnalysis, FY_QUARTERS, FY_MONTHS, PROB_WEIGHT, funnelRows } from '../kpi.js'
 import { Icon } from '../icons.jsx'
 import ForecastDashboard from './Dashboard.jsx'
 import WinLossFlow from '../WinLossFlow.jsx'
@@ -72,11 +72,11 @@ function ForecastReportCard() {
   )
 }
 
-function AnalyticsOverview({ store, role, nav }) {
-  const snapshot = analyticsSnapshot(store, role)
+function AnalyticsOverview({ store, role, nav, scope = 'role' }) {
+  const snapshot = analyticsSnapshot(store, role, { scope })
   const metric = row => snapshot.comm ? fmtLakh(row.valueK) : row.count
   const max = Math.max(1, ...snapshot.funnel.map(row => snapshot.comm ? row.valueK : row.count))
-  const scope = snapshot.owner ? `Your pipeline · ${snapshot.owner}` : 'Company pipeline'
+  const scopeLabel = snapshot.owner ? `Your pipeline · ${snapshot.owner}` : 'Company pipeline'
   const scoped = store.opportunities.filter(o => !snapshot.owner || o.owner === snapshot.owner)
   const winLoss = winLossAnalysis(scoped, store.competitors, { commercial: snapshot.comm })
   const outcomeShare = snapshot.comm ? winLoss.insights.wonValueShare : winLoss.summary.winRate
@@ -86,7 +86,7 @@ function AnalyticsOverview({ store, role, nav }) {
         <div>
           <div className="eyebrow">Live business view</div>
           <h3 id="dashboard-analytics-title">{role === 'AH' ? 'Commercial pipeline' : 'Pipeline overview'}</h3>
-          <p>{scope} · Open opportunities and current stage distribution</p>
+          <p>{scopeLabel} · Open opportunities and current stage distribution</p>
         </div>
         <button className="home-analytics-link" onClick={() => nav('/analytics')}>Open detailed analytics <span aria-hidden="true">↗</span></button>
       </div>
@@ -95,8 +95,8 @@ function AnalyticsOverview({ store, role, nav }) {
           <div className="home-panel-title"><span>Pipeline by stage</span><span className="home-panel-note">{snapshot.openCount} open</span></div>
           <div className="home-funnel" role="list" aria-label="Open opportunities by stage">
             {snapshot.funnel.map((row, index) => (
-              <button key={row.label} className="home-funnel-row" onClick={() => nav(`/?stage=${encodeURIComponent(row.label)}`)} role="listitem">
-                <span className="home-funnel-stage"><span className="home-funnel-index">{String(index + 1).padStart(2, '0')}</span>{row.label}</span>
+              <button key={row.label} className="home-funnel-row" onClick={() => nav(`/?stage=${encodeURIComponent(row.stages.join(','))}`)} role="listitem">
+                <span className="home-funnel-stage">{row.label}</span>
                 <span className="home-funnel-track"><span className="home-funnel-fill" style={{ width: `${Math.max(row.count ? 5 : 0, ((snapshot.comm ? row.valueK : row.count) / max) * 100)}%` }} /></span>
                 <span className="home-funnel-value">{metric(row)}</span>
               </button>
@@ -220,31 +220,22 @@ function PerformanceScorecard({ perf, scope = 'personal' }) {
   )
 }
 
-const FUNNEL_GROUPS = [
-  { label: 'Leads assigned', stages: ['Lead'], note: 'start of funnel' },
-  { label: 'Qualified', stages: ['RFI', 'Budgetary'], note: 'qualified interest' },
-  { label: 'Opportunities', stages: ['RFQ'], note: 'active opportunity' },
-  { label: 'Proposal sent', stages: ['Firm Bid', 'Negotiate'], note: 'commercial review' },
-  { label: 'Won', stages: ['Won'], note: 'closed business' },
-]
-
-function DashboardFunnel({ store, role, nav, title = 'My funnel' }) {
-  const owner = isSalesOwner(role) ? role : null
-  const scoped = (store.opportunities || []).filter(o => !owner || o.owner === owner)
-  const rows = FUNNEL_GROUPS.map(group => ({ ...group, count: scoped.filter(o => group.stages.includes(o.stage)).length }))
+function DashboardFunnel({ store, role, nav, title = 'My funnel', scope = 'role' }) {
+  const owner = scope === 'my' ? role : (scope === 'role' && isSalesOwner(role) ? role : null)
+  const rows = funnelRows(store.opportunities || [], { owner })
+  const showValue = canViewCommercial(role) || isSalesOwner(role)
   return (
     <Card title={title} icon="layers" tone="tone-slate" span={4} className="dashboard-funnel funnel-visual">
       <div className="dashboard-funnel-list" role="list" aria-label={`${title} stages`}>
         {rows.map((row, index) => (
-          <button key={`${row.label}-${index}`} className={`dashboard-funnel-row ${row.label === 'Won' ? 'won' : ''}`} onClick={() => nav(`/?stage=${encodeURIComponent(row.stages.join(','))}`)} role="listitem">
-            <span className="dashboard-funnel-index">{String(index + 1).padStart(2, '0')}</span>
+          <button key={`${row.label}-${index}`} className="dashboard-funnel-row" onClick={() => nav(`/?stage=${encodeURIComponent(row.stages.join(','))}`)} role="listitem">
             <span className="dashboard-funnel-shape" style={{ '--funnel-width': `${100 - (index * 13)}%` }}><b>{row.count}</b></span>
             <span className="dashboard-funnel-connector" aria-hidden="true" />
-            <span className="dashboard-funnel-label"><strong>{row.label}</strong><small>{row.note}</small></span>
+            <span className="dashboard-funnel-label"><strong>{row.label}</strong><small>{row.note} · {showValue ? `${fmtLakh(row.valueK)} · ` : ''}{row.count} record{row.count === 1 ? '' : 's'}</small></span>
           </button>
         ))}
       </div>
-      <p className="hint performance-card-note">{owner ? 'Your leads through to won business.' : 'Company leads through to won business.'}</p>
+      <p className="hint performance-card-note">{owner ? 'Your open pipeline. Won and Lost are shown separately.' : 'Company open pipeline. Won and Lost are shown separately.'}</p>
     </Card>
   )
 }
@@ -520,6 +511,7 @@ export default function MyDashboard() {
   const store = useStore()
   const nav = useNavigate()
   const role = store.role
+  const [scope, setScope] = useState(() => isSalesOwner(role) ? 'my' : 'global')
   const c = counts(store, role)
 
   const sales = isSalesOwner(role)
@@ -529,7 +521,7 @@ export default function MyDashboard() {
   const admin = isAdminRole(role) && !owner
   const tech = role === 'TECH'
 
-  const { open, blocked, nextActions } = useWorkQueue(store, role, sales)
+  const { open, blocked, nextActions } = useWorkQueue(store, role, sales && scope === 'my')
   const head = (
     <div className="home-head">
       <div>
@@ -537,17 +529,21 @@ export default function MyDashboard() {
         <p className="hint">{dashboardRoleLabel(role)}{store.sales?.fy ? ` · ${store.sales.fy}` : ''}</p>
       </div>
       <div className="home-head-actions">
+        <div className="scope-toggle-group" role="group" aria-label="Dashboard view">
+          <button type="button" className={scope === 'my' ? 'active' : ''} aria-pressed={scope === 'my'} onClick={() => setScope('my')}>My View</button>
+          <button type="button" className={scope === 'global' ? 'active' : ''} aria-pressed={scope === 'global'} onClick={() => setScope('global')}>Global View</button>
+        </div>
         <button onClick={() => nav('/opportunities')}><Icon name="cards" size={13} /> Opportunities</button>
       </div>
     </div>
   )
 
-  if (sales) return <SalesDashboard {...{ store, nav, role, c, open, blocked, nextActions, head }} />
-  if (owner) return <OwnerDashboard {...{ store, nav, role, c, open, blocked, nextActions, head }} />
-  if (commercial) return <CommercialDashboard {...{ store, nav, role, c, open, blocked, nextActions, head }} />
-  if (approver) return <ApproverDashboard {...{ store, nav, role, c, open, blocked, nextActions, head }} />
-  if (admin) return <AdminDashboard {...{ store, nav, role, c, open, blocked, nextActions, head }} />
-  if (tech) return <TechDashboard {...{ store, nav, role, c, open, blocked, nextActions, head }} />
+  if (sales) return <SalesDashboard {...{ store, nav, role, c, open, blocked, nextActions, head, scope }} />
+  if (owner) return <OwnerDashboard {...{ store, nav, role, c, open, blocked, nextActions, head, scope }} />
+  if (commercial) return <CommercialDashboard {...{ store, nav, role, c, open, blocked, nextActions, head, scope }} />
+  if (approver) return <ApproverDashboard {...{ store, nav, role, c, open, blocked, nextActions, head, scope }} />
+  if (admin) return <AdminDashboard {...{ store, nav, role, c, open, blocked, nextActions, head, scope }} />
+  if (tech) return <TechDashboard {...{ store, nav, role, c, open, blocked, nextActions, head, scope }} />
 
   // Any future role still gets the work queue rather than a blank page.
   return (
@@ -565,17 +561,63 @@ export default function MyDashboard() {
 }
 
 // ------------------------------------------------------------------- sales
-function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head }) {
-  const perf = salesPerformance(store, role)
+function quarterRange(date = new Date()) {
+  const year = date.getFullYear()
+  const month = date.getMonth() + 1
+  const quarter = Math.floor((month - 1) / 3)
+  const start = new Date(year, quarter * 3, 1)
+  const end = new Date(year, quarter * 3 + 3, 0)
+  const iso = value => value.toISOString().slice(0, 10)
+  return [iso(start), iso(end)]
+}
+
+function SalesPipelineSection({ store, nav, role, scope, money }) {
+  const [filter, setFilter] = useState('all')
+  const owner = scope === 'my' ? role : null
+  const inScope = (store.opportunities || []).filter(o => !owner || o.owner === owner)
+    .filter(o => !isHiddenDashboardOpportunity(o))
+  const [from, to] = quarterRange()
+  const open = inScope.filter(o => o.status === 'Open' && o.orderDate && o.orderDate >= from && o.orderDate <= to)
+    .sort((a, b) => (+b.valueK || 0) - (+a.valueK || 0))
+  const closed = inScope.filter(o => o.status === 'Closed')
+    .sort((a, b) => String(b.orderDate || b.lastUpdated || '').localeCompare(String(a.orderDate || a.lastUpdated || '')) || ((+b.valueK || 0) - (+a.valueK || 0)))
+  const rows = filter === 'open' ? open : filter === 'closed' ? closed : [...open, ...closed]
+  const preview = rows.slice(0, PREVIEW_LIMIT)
+  const tab = (key, label, count) => <button type="button" className={`pipeline-filter${filter === key ? ' active' : ''}`} onClick={() => setFilter(key)}>{label} <b>{count}</b></button>
+  return (
+    <Card title="My Opportunities / My Orders" icon="sheet" tone="tone-sky" span={12}
+      action={<button onClick={() => nav('/opportunities')}>View all</button>}>
+      <div className="pipeline-filter-row" aria-label="Opportunity and order filters">
+        {tab('all', 'All', inScope.length)}
+        {tab('open', 'Open opportunities', open.length)}
+        {tab('closed', 'My orders (closed)', closed.length)}
+      </div>
+      <div className="dashboard-table-scroll"><table className="dashboard-table"><thead><tr><th>ID</th><th>Opportunity / Order</th><th>Customer</th><th>Status</th><th>Stage</th><th>Expected / Close Date</th><th>Value (₹)</th></tr></thead><tbody>
+        {preview.map(o => <tr key={o.id} tabIndex={0} role="link" aria-label={`Open opportunity ${o.id}`} onClick={() => nav(`/opp/${o.id}`)} onKeyDown={event => activateDashboardRow(event, () => nav(`/opp/${o.id}`))}>
+          <td><b>{o.id}</b></td><td><span className="dashboard-cell-ellipsis">{o.oppName}</span></td><td><span className="dashboard-cell-ellipsis">{o.sellTo}</span></td>
+          <td><span className={`pill ${o.status === 'Closed' ? (o.stage === 'Won' ? 'won' : 'lost') : 'open'}`}>{o.status === 'Closed' ? `Closed · ${o.stage}` : 'Open'}</span></td>
+          <td>{o.stage}</td><td>{o.orderDate ? ddMmmYY(o.orderDate) : '—'}</td><td>{money ? fmtLakh(o.valueK) : '—'}</td>
+        </tr>)}
+        {!preview.length && <tr><td className="empty" colSpan={7}>No records in this view.</td></tr>}
+      </tbody></table></div>
+      {open.length > PREVIEW_LIMIT && filter !== 'closed' && <p className="hint">Showing the five highest-value opportunities expected to close this quarter.</p>}
+      {!open.length && filter === 'open' && <p className="hint">No open opportunities are expected to close this quarter.</p>}
+    </Card>
+  )
+}
+
+function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head, scope }) {
+  const perf = salesPerformance(store, scope === 'my' ? role : null)
   const money = canPriceProposal(role)
-  const visibleOpen = open.filter(o => !isHiddenDashboardOpportunity(o))
+  const visibleOpen = (scope === 'my' ? store.opportunities.filter(o => o.owner === role && o.status === 'Open') : store.opportunities.filter(o => o.status === 'Open')).filter(o => !isHiddenDashboardOpportunity(o))
   const visibleBlocked = blocked.filter(({ opp }) => !isHiddenDashboardOpportunity(opp))
   const visibleNextActions = nextActions.filter(({ opp }) => !isHiddenDashboardOpportunity(opp))
   const openValue = visibleOpen.reduce((s, o) => s + (+o.valueK || 0), 0)
   const weightedValue = visibleOpen.reduce((s, o) => s + (+o.valueK || 0) * (PROB_WEIGHT[o.prob] ?? PROB_WEIGHT.Low), 0)
-  const myLeads = store.leads.filter(l => (l.assignedOwner || l.suggestedOwner) === role)
+  const myLeads = store.leads.filter(l => scope === 'global' || (l.assignedOwner || l.suggestedOwner) === role)
   const leads = myLeads.filter(l => l.status === 'New')
   const unproposed = visibleOpen.filter(o => !o.proposalDate)
+  const staleCount = scope === 'my' ? c.myStale : visibleOpen.filter(o => (ageDays(o.lastUpdated) ?? 0) > 30).length
   return (
     <div className="page dashboard-page">
       {head}
@@ -583,7 +625,7 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
       <div className="stat-cards">
         <Metric label="New leads" value={leads.length} tone={leads.length ? 'amber' : 'green'} onClick={() => nav('/inbox')} />
         <Metric label="Blocked" value={visibleBlocked.length} tone={visibleBlocked.length ? 'red' : 'green'} onClick={() => nav('/my')} />
-        <Metric label="Needs update" value={c.myStale} tone={c.myStale ? 'amber' : 'green'} onClick={() => nav('/my')} />
+        <Metric label="Needs update" value={staleCount} tone={staleCount ? 'amber' : 'green'} onClick={() => nav('/my')} />
       </div>
 
       <div className="ana-grid">
@@ -626,7 +668,7 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
       </div>
 
       <div className="ana-grid sales-detail-grid">
-        <SalesOpportunitySection store={store} open={visibleOpen} nav={nav} money={money} />
+        <SalesPipelineSection store={store} nav={nav} role={role} scope={scope} money={money} />
         <SalesCustomerSection store={store} open={visibleOpen} orders={perf.orders} nav={nav} money={money} />
       </div>
 
@@ -642,28 +684,9 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head 
             {perf.orders.length} order{perf.orders.length === 1 ? '' : 's'}
           </div>
         </Card>
-        <DashboardFunnel store={store} role={role} nav={nav} />
+        <DashboardFunnel store={store} role={role} nav={nav} scope={scope} />
       </div>
 
-      <div className="ana-grid">
-        <Card title="My orders" icon="clipboardCheck" tone="tone-green" span={12}
-          action={<button onClick={() => nav('/po')}>View all</button>}>
-          <table className={`ana-table${!perf.orders.length ? ' is-empty' : ''}`}>
-            <thead><tr><th>Order</th><th>Customer</th><th className="num">Value (₹)</th><th>Status</th></tr></thead>
-            <tbody>
-              {perf.orders.slice(0, PREVIEW_LIMIT).map(o => (
-                <tr key={o.id}>
-                  <td>{o.id}</td>
-                  <td title={o.title}>{o.customer}</td>
-                  <td className="num">{money ? fmtLakh(o.valueK) : '—'}</td>
-                  <td>{o.status}</td>
-                </tr>
-              ))}
-              {!perf.orders.length && <tr><td className="empty dashboard-orders-empty" colSpan={4}>No orders booked this year.</td></tr>}
-            </tbody>
-          </table>
-        </Card>
-      </div>
     </div>
   )
 }
@@ -831,7 +854,7 @@ function ProposalStatusCard({ store, nav }) {
 // ------------------------------------------------------------- owner cockpit
 // LJS is the strategic owner: start with the whole company picture, then move
 // into approvals, risk, attainment, and team targets.
-function OwnerDashboard({ store, nav, role, c, blocked, nextActions, head }) {
+function OwnerDashboard({ store, nav, role, c, blocked, nextActions, head, scope }) {
   const perf = salesPerformance(store)
   const mine = (store.approvals || []).filter(a => a.status === 'Pending'
     && (a.needed?.length ? a.needed : [a.approver]).includes(role) && !(a.decisions || {})[role])
@@ -844,7 +867,7 @@ function OwnerDashboard({ store, nav, role, c, blocked, nextActions, head }) {
         <Metric label="Waiting on you" value={mine.length} tone={mine.length ? 'red' : 'green'} onClick={() => nav('/approvals')} />
         <Metric label="Blocked" value={blocked.length} tone={blocked.length ? 'red' : 'green'} onClick={() => nav('/')} />
       </div>
-      <AnalyticsOverview {...{ store, role, nav }} />
+      <AnalyticsOverview {...{ store, role, nav, scope }} />
       <div className="ana-grid"><ProposalStatusCard {...{ store, nav }} /></div>
       <div className="ana-grid">
         <Card title="Decisions waiting on you" icon="checkCircle" tone="tone-green" span={12}
@@ -864,7 +887,7 @@ function OwnerDashboard({ store, nav, role, c, blocked, nextActions, head }) {
           <div className="performance-signal">{attainmentStatus(perf)} <span>· target pace vs actual pace</span></div>
           <RunRateChart perf={perf} />
         </Card>
-        <DashboardFunnel store={store} role={role} nav={nav} title="Company funnel" />
+        <DashboardFunnel store={store} role={role} nav={nav} title={scope === 'my' ? 'My funnel' : 'Company funnel'} scope={scope} />
       </div>
       <div className="ana-grid">
         <TeamTargetsCard store={store} />
@@ -881,7 +904,7 @@ function CommercialDashboard(props) {
 }
 
 // --------------------------------------------------------------- approvers
-function ApproverDashboard({ store, nav, role, c, blocked, nextActions, head, commercial = false }) {
+function ApproverDashboard({ store, nav, role, c, blocked, nextActions, head, commercial = false, scope }) {
   const perf = salesPerformance(store)   // whole company
   const snapshot = analyticsSnapshot(store, role)
   const mine = (store.approvals || []).filter(a => a.status === 'Pending'
@@ -897,7 +920,7 @@ function ApproverDashboard({ store, nav, role, c, blocked, nextActions, head, co
         {!commercial && <Metric label="Needs update" value={c.stale} tone={c.stale ? 'amber' : 'green'} onClick={() => nav('/my')} />}
       </div>
 
-      {commercial && <AnalyticsOverview {...{ store, role, nav }} />}
+      {commercial && <AnalyticsOverview {...{ store, role, nav, scope }} />}
 
       <div className="ana-grid">
         <Card title="Priority queue" icon="target" tone="tone-amber" span={12}
@@ -929,7 +952,7 @@ function ApproverDashboard({ store, nav, role, c, blocked, nextActions, head, co
 
       </div>
 
-      {!commercial && <AnalyticsOverview {...{ store, role, nav }} />}
+      {!commercial && <AnalyticsOverview {...{ store, role, nav, scope }} />}
       <div className="ana-grid">
         {commercial && (
           <Card title="Commercial posture" icon="chartLine" tone="tone-sky" span={12}>
@@ -949,14 +972,14 @@ function ApproverDashboard({ store, nav, role, c, blocked, nextActions, head, co
           <div className="performance-signal">{attainmentStatus(perf)} <span>· target pace vs actual pace</span></div>
           <RunRateChart perf={perf} />
         </Card>
-        <DashboardFunnel store={store} role={role} nav={nav} title="Company funnel" />
+        <DashboardFunnel store={store} role={role} nav={nav} title={scope === 'my' ? 'My funnel' : 'Company funnel'} scope={scope} />
       </div>
     </div>
   )
 }
 
 // ------------------------------------------------------------------- admin
-function AdminDashboard({ store, nav, role, c, blocked, nextActions, head }) {
+function AdminDashboard({ store, nav, role, c, blocked, nextActions, head, scope }) {
   const users = store.auth?.users || []
   const pendingUsers = users.filter(u => u.status === 'Pending')
   const perf = salesPerformance(store)
@@ -1005,7 +1028,7 @@ function AdminDashboard({ store, nav, role, c, blocked, nextActions, head }) {
 
       </div>
 
-      <AnalyticsOverview {...{ store, role, nav }} />
+      <AnalyticsOverview {...{ store, role, nav, scope }} />
       <div className="ana-grid">
         <TeamTargetsCard store={store} />
         <ForecastReportCard />
@@ -1016,7 +1039,7 @@ function AdminDashboard({ store, nav, role, c, blocked, nextActions, head }) {
           <div className="performance-signal">{attainmentStatus(perf)} <span>· target pace vs actual pace</span></div>
           <RunRateChart perf={perf} />
         </Card>
-        <DashboardFunnel store={store} role={role} nav={nav} title="Company funnel" />
+        <DashboardFunnel store={store} role={role} nav={nav} title={scope === 'my' ? 'My funnel' : 'Company funnel'} scope={scope} />
       </div>
     </div>
   )

@@ -163,7 +163,7 @@ export default function Dashboard({ embedded = false }) {
       <div className="sheet-tabs">
         <div className="tab active">Pivot</div>
         <div className="tab" onClick={() => nav('/')}>Opportunities</div>
-        <div className="tab" onClick={() => nav('/')}>Old Closed Opps</div>
+        <div className="tab" onClick={() => nav('/opportunities')}>My Orders</div>
         <div className="tab">＋</div>
       </div>
     </div>

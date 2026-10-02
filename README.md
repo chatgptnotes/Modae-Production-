@@ -14,6 +14,10 @@ submission, and follow-up.
 - Routes technical, commercial, and release approvals.
 - Stores opportunity files and supports SharePoint integration.
 - Provides dashboards, audit history, user administration, and workflow tools.
+- Provides shared personal/global pipeline views, a common six-stage sales funnel,
+  and closed-opportunity order reporting.
+- Provides an Excel pipeline upload preview; pipeline migration is a later step
+  and previewed rows are not saved.
 - Admins can independently require final quote-release approval and approval of
   special customer commercial terms.
 
@@ -22,14 +26,14 @@ submission, and follow-up.
 - React 18 and Vite
 - React Router
 - Supabase Auth, pull-based database synchronization, and persistence
-- Vercel serverless API routes
+- Express API routes served by Railway
 - ExcelJS, PDF.js, and XLSX utilities for proposal and document workflows
 
 The application pulls shared state from Supabase on boot, route changes,
 window focus/visibility restoration, reconnect, and explicit refresh. It does
 not use Supabase Realtime or WebSockets. Supabase is authoritative for shared
 data, including deletions; browser snapshots are offline working copies and
-are never republished merely because they exist locally. Each new Vercel
+are never republished merely because they exist locally. Each new Railway
 deployment invalidates active browser sessions, clears app-owned browser
 storage/cache, and returns users to sign-in. The application can run locally
 without Supabase. In that mode it uses the local demo state and does not write
@@ -65,7 +69,7 @@ Before production promotion, also walk the manual checklist in
 ## Project structure
 
 ```text
-api/              Vercel serverless routes
+api/              API route handlers used by the Express server
 assets/           Imported runtime brand, document, and workbook assets
 public/           PWA icons, service worker, and fonts
 scripts/          Local build, document, asset, and workflow utilities
@@ -106,9 +110,10 @@ query.
 
 ## Deployment
 
-Staging and production are separate Vercel projects with separate Supabase
-projects. Read [DEPLOYMENT.md](./DEPLOYMENT.md) before changing environment
-variables, branches, or production data.
+Staging and production are separate Railway environments with separate
+Supabase projects. Staging uses a sanitized workspace copy with the complete
+price lists and catalogue data. Read [DEPLOYMENT.md](./DEPLOYMENT.md) before
+changing environment variables, branches, or production data.
 
 ## Local-only files
 

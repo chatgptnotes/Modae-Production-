@@ -1,9 +1,9 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { STAGES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, PROB_LEVELS } from '../seed.js'
+import { OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, PROB_LEVELS } from '../seed.js'
 import { fmtLakh, ageDays, canViewCommercial, isAdminRole, isApprover, isSalesOwner, sameCustomer, productList, displayRoleLabel, displayRole } from '../utils.js'
-import { PROB_WEIGHT, winLossAnalysis } from '../kpi.js'
+import { PROB_WEIGHT, winLossAnalysis, FUNNEL_STAGES, funnelRows } from '../kpi.js'
 import { Icon } from '../icons.jsx'
 import { MODAE_COLORS } from '../branding/modae.js'
 import WinLossFlow from '../WinLossFlow.jsx'
@@ -90,7 +90,7 @@ function Restricted() {
 // "N% of prior" conversion between lifecycle stages (`pctTxt`, Bt_html
 // clickable prototype.html:3643) — geometry and shading stay the same.
 export function Funnel({ stages, showValue, conversion = false, onStageClick }) {
-  const W = 620, ROW = 46, GAP = 7, NUM = 46, DETAIL = 190
+  const W = 620, ROW = 46, GAP = 7, NUM = 0, DETAIL = 190
   const H = stages.length * ROW + (stages.length - 1) * GAP
   const plotW = W - NUM - DETAIL
   const metric = s => (showValue ? s.valueK : s.count)
@@ -130,9 +130,6 @@ export function Funnel({ stages, showValue, conversion = false, onStageClick }) 
         const wTop = wAt(i), wBot = wAt(i + 1)
         return (
           <g key={s.label} onClick={() => onStageClick?.(s)} className={onStageClick ? 'funnel-stage-interactive' : undefined}>
-            <text x={NUM - 12} y={y(i) + ROW / 2 + 9} textAnchor="end" fontSize="25" fontWeight="800"
-              fill={FUNNEL_RAMP[i]} opacity=".7">{String(i + 1).padStart(2, '0')}</text>
-
             <polygon fill="url(#fnlRamp)"
               points={`${cx - wTop / 2},${top} ${cx + wTop / 2},${top} ${cx + wBot / 2},${bot} ${cx - wBot / 2},${bot}`} />
             <text x={cx} y={y(i) + ROW / 2 + 5} textAnchor="middle" fontSize={showValue ? 12.5 : 14} fontWeight="800"
@@ -141,7 +138,7 @@ export function Funnel({ stages, showValue, conversion = false, onStageClick }) 
             <line x1={cx + wTop / 2 + 6} y1={y(i) + ROW / 2} x2={W - DETAIL + 4} y2={y(i) + ROW / 2}
               stroke="var(--border-soft)" strokeWidth="1" strokeDasharray="3 3" />
             <text x={W - DETAIL + 12} y={y(i) + ROW / 2 - 3} fontSize="12" fontWeight="700" fill="var(--text-main)">
-              {s.label}{showValue ? ` (${s.count})` : ''}
+              {s.label} ({s.count}){showValue ? ` · ${fmtLakh(s.valueK)}` : ''}
             </text>
             <text x={W - DETAIL + 12} y={y(i) + ROW / 2 + 12} fontSize="10.5" fill="var(--text-muted)">
               {caption(s, i)}
@@ -179,6 +176,7 @@ export default function Analytics({ embedded = false }) {
     label: o === 'All' ? 'All owners' : `${displayRoleLabel(o)}${o === selfOwner ? ' (you)' : ''}`,
   }))
 
+  const stageMatches = (value, row) => value === 'All' || value.split(',').includes(row.stage)
   const opps = allOpps.filter(o =>
     (ownerSel === 'All' || o.owner === ownerSel) &&
     (f.customer === 'All' || o.sellTo === f.customer) &&
@@ -186,7 +184,7 @@ export default function Analytics({ embedded = false }) {
     (f.oppType === 'All' || o.oppType === f.oppType) &&
     (f.segment === 'All' || o.segment === f.segment) &&
     (f.product === 'All' || productList(o.product).includes(f.product)) &&
-    (f.stage === 'All' || o.stage === f.stage) &&
+    stageMatches(f.stage, o) &&
     (f.prob === 'All' || (o.prob || 'Low') === f.prob) &&
     (f.status === 'All' || o.status === f.status) &&
     inRange(o.createDate, dateRange))
@@ -265,7 +263,7 @@ export default function Analytics({ embedded = false }) {
           <Field label="Opp type" value={f.oppType} onChange={v => set('oppType', v)} options={['All', ...OPP_TYPES]} />
           <Field label="Segment" value={f.segment} onChange={v => set('segment', v)} options={['All', ...SEGMENTS]} />
           <Field label="Equipment / Product Family" value={f.product} onChange={v => set('product', v)} options={['All', ...PRODUCTS.map(p => p === 'Various' ? { value: 'Various', label: 'Multiple equipment items' } : p)]} />
-          <Field label="Stage" value={f.stage} onChange={v => set('stage', v)} options={['All', ...STAGES]} />
+          <Field label="Stage" value={f.stage} onChange={v => set('stage', v)} options={[{ value: 'All', label: 'All stages' }, ...FUNNEL_STAGES.map(group => ({ value: group.stages.join(','), label: group.label }))]} />
           <Field label="Probability" value={f.prob} onChange={v => set('prob', v)} options={['All', ...PROB_LEVELS]} />
           <Field label="Status" value={f.status} onChange={v => set('status', v)} options={['All', 'Open', 'Closed']} />
         </div>
@@ -284,6 +282,11 @@ export default function Analytics({ embedded = false }) {
           <button className="af-reset" onClick={() => setF(DEFAULTS)} disabled={!chips.length}>Reset filters</button>
         </div>
       </div>
+
+      <section className="analysis-section" aria-label="Pipeline funnel">
+        <div className="analysis-section-head"><div><span className="analysis-kicker">Live pipeline</span><h3>Opportunity funnel</h3><p>Open opportunities by the shared ModAE funnel stages. Won is shown as the closed outcome.</p></div></div>
+        <Funnel stages={funnelRows(opps)} showValue={comm} onStageClick={stage => set('stage', stage.stages.join(','))} />
+      </section>
 
       <section className="analysis-summary" aria-label="Win and loss summary">
         <div><b>{winLoss.summary.total}</b><span>Closed opportunities</span></div>

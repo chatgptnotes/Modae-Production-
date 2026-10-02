@@ -23,7 +23,18 @@ export default function PurchaseOrders() {
     const o = store.opportunities.find(x => x.id === pc.oppId)
     return !!o && o.owner === role
   })
-  const orders = (store.sales?.orders || []).filter(o => approver || o.owner === role)
+  // Closed opportunities are the source of truth for the order book. Keep the
+  // legacy sales.orders rows as a compatibility fallback for older workspaces.
+  const closedOpportunities = (store.opportunities || [])
+    .filter(o => o.status === 'Closed' && (approver || o.owner === role))
+    .map(o => ({
+      id: o.id, owner: o.owner, customer: o.sellTo, title: o.oppName,
+      valueK: o.valueK, po: o.stage === 'Won' ? 'Recorded on opportunity' : 'Closed opportunity',
+      status: o.stage, booked: o.orderDate || o.lastUpdated || o.createDate,
+    }))
+  const legacyOrders = (store.sales?.orders || []).filter(o =>
+    (approver || o.owner === role) && !closedOpportunities.some(closed => closed.id === o.id))
+  const orders = [...closedOpportunities, ...legacyOrders]
   const totalK = orders.reduce((s, o) => s + (+o.valueK || 0), 0)
 
   const needsMe = (role === 'LJS' || role === 'AH')

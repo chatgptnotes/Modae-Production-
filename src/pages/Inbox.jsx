@@ -79,12 +79,12 @@ async function createOpportunityFromLeadPage({ store, lead, fields, decision, cu
     customerStatus, leadVerification,
     eucName, eucLocation,
     oppName: lead.subject, opportunityScope: decision.scope,
-    owner, oppType: decision.oppType, bu: decision.bu, segment: decision.segment, product: decision.product,
+    owner, oppType: decision.oppType, inquiryType: decision.inquiryType, bu: decision.bu, segment: decision.segment, product: decision.product,
     suggestedOwner: regionalOwner || owner, ownerOverrideReason: lead.ownerOverrideReason || '',
-    prob: 'Low', valueK: 0, cogsK: 0, rfqNumber: lead.ref || lead.rfqNumber || '', rfqDate: lead.rfqDate || '',
+    prob: 'Low', valueK: 0, cogsK: 0, rfqNumber: decision.rfqNumber || lead.ref || lead.rfqNumber || '', rfqDate: decision.rfqDate || lead.rfqDate || '',
     extractedFields: acceptedFields, requestedItems: extracted,
     createDate: today, proposalDate: '', orderDate: '', invoiceDate: '',
-    status: 'Open', stage: 'Lead', milestone: 'Screening', closedReason: '',
+    status: 'Open', stage: decision.inquiryType === 'Budgetary' ? 'Budgetary' : 'RFQ', milestone: 'Screening', closedReason: '',
     contactPerson, contactPhone,
     contactEmail: isInternalSender(lead.from, store.config) ? '' : (lead.from || ''), lastUpdated: today, forecast: false,
     remarks: 'Registered from lead ' + lead.id, route: routeForType(decision.oppType),
@@ -1488,6 +1488,9 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
     oppType: OPP_TYPES.includes(lead.oppType)
       ? lead.oppType
       : mappedLeadFieldValue(ai.fields, 'oppType') || (lead.route === 'Service' ? 'Service' : lead.route === 'Project' ? 'Project' : 'Spares'),
+    inquiryType: lead.inquiryType || '',
+    rfqNumber: lead.rfqNumber || lead.ref || '',
+    rfqDate: lead.rfqDate || '',
     customerStatus: customerStatusForLead(lead, store.customers),
     bu: buSegment.bu || sourceValue('Business unit') || '',
     segment: buSegment.segment || sourceValue('Segment') || '',
@@ -1774,6 +1777,8 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
     .filter(([key]) => !String(decisionDraft[key] || '').trim())
     .map(([, label]) => label)
   const effectiveMissing = reconcileMissingWithDecisions(ai.missing, decisionDraft, ai.fields, ai.lineItems)
+  const inquiryMissing = !decisionDraft.inquiryType
+    || (decisionDraft.inquiryType === 'Firm/RFQ' && (!String(decisionDraft.rfqNumber || '').trim() || !String(decisionDraft.rfqDate || '').trim()))
   // The compact rail is for additional AI follow-up only. Registration-critical
   // fields already have a single source of truth in the Lead decisions form and
   // its required-before-registration warning, so do not repeat them here.
@@ -1787,7 +1792,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
   // visible below, but do not prevent opportunity registration; only the
   // mandatory identity fields, low-confidence decisions, verification and
   // approval gates block the next step.
-  const registrationBlocked = missingIdentity.length > 0 || registrationPendingLow.length > 0 || verificationBlocked
+  const registrationBlocked = missingIdentity.length > 0 || inquiryMissing || registrationPendingLow.length > 0 || verificationBlocked
   const canAct = !['Converted', 'Dropped'].includes(lead.status)
   const clarificationAvailable = canAct && !!clarificationKindFor(lead, previewCustomerStatus)
   const clarificationParts = (ai.lineItems || []).filter(item =>
@@ -2472,6 +2477,20 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
               {OPP_TYPES.map(type => <option key={type}>{type}</option>)}
             </select>{decisionAiStatus('oppType')}</div>
           </label>
+          <label><span className="decision-field-heading">Inquiry type <span className="required-mark">*</span></span>
+            <select value={decisionDraft.inquiryType} disabled={lead.status === 'Dropped'}
+              onChange={e => setDecisionDraft({ ...decisionDraft, inquiryType: e.target.value })}>
+              <option value="">Select inquiry type</option>
+              <option value="Budgetary">Budgetary</option>
+              <option value="Firm/RFQ">Firm/RFQ</option>
+            </select>
+          </label>
+          <label><span className="decision-field-heading">RFQ number {decisionDraft.inquiryType === 'Firm/RFQ' && <span className="required-mark">*</span>}</span>
+            <input value={decisionDraft.rfqNumber || ''} disabled={lead.status === 'Dropped'} onChange={e => setDecisionDraft({ ...decisionDraft, rfqNumber: e.target.value })} placeholder="Enter RFQ number" />
+          </label>
+          <label><span className="decision-field-heading">RFQ date {decisionDraft.inquiryType === 'Firm/RFQ' && <span className="required-mark">*</span>}</span>
+            <input type="date" value={decisionDraft.rfqDate || ''} disabled={lead.status === 'Dropped'} onChange={e => setDecisionDraft({ ...decisionDraft, rfqDate: e.target.value })} />
+          </label>
           <label><span className="decision-field-heading">Customer class {decisionAiMeta('customerStatus', false)}</span>
             <div className="decision-value-row"><select value={decisionDraft.customerStatus} disabled={lead.status === 'Dropped'}
               onChange={e => {
@@ -3129,6 +3148,7 @@ function LegacyLeadDetail({ lead }) {
           sellTo: pick('sellTo'), category: pick('category'), location: pick('location'),
           eucName: pick('eucName'), eucLocation: pick('eucLocation'), oppName: pick('oppName'),
           owner: '', oppType: pick('oppType'), bu: pick('bu'), segment: pick('segment'),
+          inquiryType: lead.inquiryType || '', rfqNumber: lead.ref || lead.rfqNumber || '', rfqDate: lead.rfqDate || '',
           product: pick('product'), contactPerson: pick('contactPerson'), contactPhone: pick('contactPhone'),
           // The enquiry's sender becomes the proposal's recipient.
           contactEmail: lead.from || '',

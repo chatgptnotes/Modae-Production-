@@ -45,7 +45,7 @@ test('server deployment documentation keeps the service key server-side', () => 
   assert.match(env, /VITE_SUPABASE_URL=/)
   assert.match(env, /VITE_SUPABASE_ANON_KEY=/)
   assert.match(env, /SUPABASE_SERVICE_ROLE_KEY=/)
-  assert.match(deploy, /SuperBees environment variables/)
+  assert.match(deploy, /Railway staging service variables/)
   assert.match(deploy, /SUPABASE_SERVICE_ROLE_KEY=/)
   assert.match(env, /Never put real secrets in this file or prefix them with VITE_/)
 })

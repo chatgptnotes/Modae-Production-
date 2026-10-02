@@ -25,11 +25,11 @@ const proposalFor = o => newProposal(o.id, o)
 // Opportunity Name, Stage, Probability… I need value, value and expected order
 // date… and I should know where is the next action pending." Opportunity Owner
 // and Updated were explicitly not required.
-test('the key-column set includes Proposal Send Date instead of Expected Order Date', () => {
+test('the key-column set includes Proposal Send Date and Expected Order Date', () => {
   const m = tracker.match(/const KEY_COLS = \[([^\]]*)\]/)
   assert.ok(m, 'KEY_COLS must exist')
   const keys = m[1].split(',').map(s => s.trim().replace(/'/g, '')).filter(Boolean)
-  assert.deepEqual(keys, ['id', 'sellTo', 'oppName', 'stage', 'oppType', 'prob', 'valueK', 'proposalDate', 'nextActionOwner'])
+  assert.deepEqual(keys, ['id', 'sellTo', 'oppName', 'stage', 'oppType', 'prob', 'valueK', 'proposalDate', 'orderDate', 'nextActionOwner'])
   assert.match(tracker, /label: 'Proposal Send Date'/)
   assert.match(tracker, /label: 'Expected Order Date'/)
   assert.ok(!keys.includes('owner'), 'Owner is not required for a sales owner')
@@ -217,6 +217,13 @@ test('My Opportunities shows the same working columns', () => {
   assert.match(myOpps, /<th>Expected Order Date<\/th><th>Next Action<\/th>/)
   assert.doesNotMatch(myOpps, /<th>Owner<\/th>/)
   assert.doesNotMatch(myOpps, /<th>Updated<\/th>/)
+})
+
+test('closed opportunities are labelled My Orders', () => {
+  const tracker = read('src/pages/Tracker.jsx')
+  assert.match(tracker, /\['Opportunities', 'My Orders'\]/)
+  assert.match(tracker, /sheet !== 'My Orders' \|\| o\.status === 'Closed'/)
+  assert.doesNotMatch(tracker, /Old Closed Opps/)
 })
 
 test('opportunity IDs open the full opportunity workspace', () => {

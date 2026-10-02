@@ -11,12 +11,12 @@ import { opportunityOwnerFor } from '../leadRules.js'
 const empty = {
   sellTo: '', category: '', location: '', eucName: '', eucLocation: '',
   oppName: '', owner: '', oppType: '', bu: '', segment: '', product: [],
-  contactPerson: '', contactPhone: '', contactEmail: '', valueK: '', rfqNumber: '', rfqDate: '',
+  inquiryType: '', contactPerson: '', contactPhone: '', contactEmail: '', valueK: '', rfqNumber: '', rfqDate: '',
 }
 
 // Shared by the submit gate and by the post-extraction check, so "required" and
 // "the document should have given us this" can never drift apart.
-const REQUIRED_FIELDS = ['sellTo', 'category', 'eucName', 'eucLocation', 'oppName', 'owner',
+const REQUIRED_FIELDS = ['sellTo', 'category', 'eucName', 'eucLocation', 'oppName', 'owner', 'inquiryType',
   'oppType', 'bu', 'segment', 'product', 'contactPerson', 'contactPhone']
 
 // Select/Pills/Input live at module scope, not inside IntakeForm. A component
@@ -150,11 +150,15 @@ export default function IntakeForm({ destinationPicker = null }) {
   // Calculate validation status in real-time
   const validation = useMemo(() => {
     const missing = required.filter(k => k === 'product' ? selectedProducts.length === 0 : !f[k])
+    if (f.inquiryType === 'Firm/RFQ') {
+      if (!f.rfqNumber) missing.push('rfqNumber')
+      if (!f.rfqDate) missing.push('rfqDate')
+    }
     const filled = required.length - missing.length
     return {
       missing,
       filled,
-      total: required.length,
+      total: required.length + (f.inquiryType === 'Firm/RFQ' ? 2 : 0),
       isComplete: missing.length === 0,
       fields: required.reduce((acc, field) => {
         acc[field] = {
@@ -204,10 +208,10 @@ export default function IntakeForm({ destinationPicker = null }) {
       // prob is salesperson-set later — the form does not collect it (audio 00:24)
       prob: '',
       valueK: +f.valueK || 0, cogsK: 0,
-      rfqNumber: f.rfqNumber || '', rfqDate: f.rfqDate || '',
+      inquiryType: f.inquiryType, rfqNumber: f.rfqNumber || '', rfqDate: f.rfqDate || '',
       extractedFields, requestedItems,
       createDate: today, proposalDate: '', orderDate: '', invoiceDate: '',
-      status: 'Open', stage: 'Lead', closedReason: '',
+      status: 'Open', stage: f.inquiryType === 'Budgetary' ? 'Budgetary' : 'RFQ', closedReason: '',
       contactPerson: f.contactPerson, contactPhone: f.contactPhone, contactEmail: f.contactEmail || '',
       lastUpdated: today, forecast: false, remarks: '', nextActionOwner: '',
     })
@@ -506,6 +510,12 @@ export default function IntakeForm({ destinationPicker = null }) {
           {/* ---- Group 1 — Customer Info (Fields 1-5) ---- */}
           <div className="forms-col">
             <div className="forms-col-head">Customer Info</div>
+
+            <div className="q">
+              <div className="q-label">Inquiry Type<span className="star">*</span></div>
+              <Select field="inquiryType" options={['Budgetary', 'Firm/RFQ']} placeholder="Select inquiry type" />
+              <div className="hint">Firm/RFQ requires RFQ number and RFQ date.</div>
+            </div>
 
             <div className="q">
               <div className="q-label">RFQ Number</div>

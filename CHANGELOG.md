@@ -13,6 +13,17 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Added the Railway deployment contract and staging runbook. Staging now has a
+  documented separate Supabase project, full price-list/catalogue copying,
+  sanitized workflow data, and Railway health/build/start configuration.
+
+- Added a shared ModAE pipeline funnel across dashboard and analytics, with My
+  View/Global View scope controls, quarter-ranked opportunity previews, closed
+  opportunities in the order book, and Budgetary versus Firm/RFQ intake
+  validation.
+- Added an Opportunities-page Excel upload preview. Existing pipeline workbooks
+  can be opened and reviewed without importing or saving any rows; migration is
+  intentionally deferred.
 - Reduced Supabase usage on the Free plan by changing approvals polling from
   five seconds to 30 seconds and reusing identical in-flight live-data reads.
 

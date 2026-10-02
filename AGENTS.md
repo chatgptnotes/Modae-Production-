@@ -8,9 +8,9 @@ database access, deployment configuration, or tracked assets.
 
 - Product: WinTrack ModAE sales workspace
 - Frontend: React 18, Vite, React Router
-- Backend boundary: Vercel serverless functions in `api/`
+- Backend boundary: Express server in `src/server/`, with route handlers in `api/`
 - Persistence: Supabase Auth and database sync, with local browser fallback
-- Deployment: Vercel staging and production projects
+- Deployment: Railway staging and production environments
 - Package manager: npm
 - Module format: native ESM (`"type": "module"`)
 
@@ -177,12 +177,12 @@ directory convention, or validation requirement changes.
 - Direct deletes from opportunities, leads, or approvals increment the
   database-backed workspace generation so stale browser/server snapshots cannot
   recreate deleted rows.
-- Every Vercel deployment invalidates active browser sessions. The client must
+- Every Railway deployment invalidates active browser sessions. The client must
   clear app-owned local/session storage, Cache Storage, service-worker state,
   and local IndexedDB file data, sign out locally, and reload to login. Do not
   use the remote file-deletion reset path for deployment cleanup.
 - Proposal PDF generation currently uses the browser print flow.
-- Server-side email sending is available through the Vercel route and remains
+- Server-side email sending is available through the Railway route and remains
   approval-gated in the UI.
 - A full production workflow still depends on correctly configured Supabase,
-  Vercel, SharePoint, and SMTP credentials.
+  Railway, SharePoint, and SMTP credentials.

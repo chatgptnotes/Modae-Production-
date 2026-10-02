@@ -226,13 +226,13 @@ test('LJS has company scope while sales owners remain owner-scoped', () => {
 
 test('technical reviewers use the shared company work queue', () => {
   const source = read('src/pages/MyDashboard.jsx')
-  assert.match(source, /useWorkQueue\(store, role, sales\)/)
+  assert.match(source, /useWorkQueue\(store, role, sales && scope === 'my'\)/)
   assert.doesNotMatch(source, /useWorkQueue\(store, role, sales \|\| tech\)/)
 })
 
 test('clickable dashboard table rows support keyboard activation', () => {
   const source = read('src/pages/MyDashboard.jsx')
-  assert.equal((source.match(/tabIndex=\{0\} role="link"/g) || []).length, 3,
+  assert.equal((source.match(/tabIndex=\{0\} role="link"/g) || []).length, 4,
     'opportunity, customer, and proposal rows must be keyboard-focusable links')
   assert.equal((source.match(/onKeyDown=\{event => activateDashboardRow\(event, go\)\}/g) || []).length, 3,
     'opportunity, customer, and proposal rows must activate from the keyboard')
@@ -249,10 +249,10 @@ test('My Dashboard leads with a capped daily-work queue for every role', () => {
     'dashboard record previews must be capped at five rows')
   assert.doesNotMatch(source, /title="My funnel"/,
     'the daily dashboard must not keep the secondary funnel card')
-  assert.match(source, /function SalesDashboard\(\{ store, nav, role, c, open, blocked, nextActions, head \}\)/,
+  assert.match(source, /function SalesDashboard\(\{ store, nav, role, c, open, blocked, nextActions, head, scope \}\)/,
     'sales work summary needs the scoped dashboard counts')
-  assert.match(source, /Metric label="Needs update" value=\{c\.myStale\}/,
-    'sales needs-update count must reflect all stale opportunities, not the five-row preview')
+  assert.match(source, /const staleCount = scope === 'my' \? c\.myStale/,
+    'sales needs-update count must reflect the selected scope, not the five-row preview')
 })
 
 // The page must be reachable without a sidebar — the tablet/phone shell has none,
@@ -574,18 +574,17 @@ test('performance scorecard is shared across personal and company dashboard scop
 
 test('role dashboards expose an appropriate funnel beside the run-rate story', () => {
   const source = read('src/pages/MyDashboard.jsx')
-  assert.match(source, /function DashboardFunnel\(\{ store, role, nav, title = 'My funnel' \}\)/)
+  assert.match(source, /function DashboardFunnel\(\{ store, role, nav, title = 'My funnel', scope = 'role' \}\)/)
   assert.match(source, /className=['\"]dashboard-funnel funnel-visual['\"]/)
-  assert.match(source, /Leads assigned/)
-  assert.match(source, /Qualified/)
-  assert.match(source, /Opportunities/)
-  assert.match(source, /Proposal sent/)
-  assert.match(source, /const FUNNEL_GROUPS =/)
-  assert.match(source, /stages: \['RFI', 'Budgetary'\]/)
-  assert.match(source, /stages: \['Firm Bid', 'Negotiate'\]/)
+  const kpi = read('src/kpi.js')
+  assert.match(kpi, /Qualified Lead/)
+  assert.match(kpi, /Firm Proposal/)
+  assert.match(kpi, /FUNNEL_STAGES/)
+  assert.match(kpi, /stages: \['Lead', 'RFI'\]/)
+  assert.match(kpi, /stages: \['Firm Bid'\]/)
   assert.match(source, /className="dashboard-funnel-connector"/)
   assert.match(read('src/styles.css'), /\.dashboard-funnel-connector\s*\{[^}]*border-top:\s*1px dotted/s)
-  assert.match(source, /<DashboardFunnel store=\{store\} role=\{role\} nav=\{nav\} \/>/)
+  assert.match(source, /<DashboardFunnel store=\{store\} role=\{role\} nav=\{nav\} scope=\{scope\} \/>/)
   assert.match(source, /className=\"performance-lower-grid\"/)
 })
 
@@ -647,7 +646,7 @@ test('My opportunities is table-only', () => {
 
 test('My orders spans the full dashboard width', () => {
   const source = read('src/pages/MyDashboard.jsx')
-  assert.match(source, /<Card title="My orders"[\s\S]*?span=\{12\}/)
+  assert.match(source, /<Card title="My Opportunities \/ My Orders"[\s\S]*?span=\{12\}/)
 })
 
 test('Pipeline snapshot spans the full dashboard width', () => {
@@ -661,10 +660,9 @@ test('sales dashboard follows the action-to-outcome workflow', () => {
   const positions = [
     'title="Priority queue"',
     'title="Pipeline snapshot"',
-    '<SalesOpportunitySection ',
+    '<SalesPipelineSection ',
     '<SalesCustomerSection ',
     '<div className="section-title">Performance</div>',
-    'title="My orders"',
   ].map(marker => sales.indexOf(marker))
   assert.ok(positions.every(position => position >= 0), 'all sales dashboard sections must be present')
   for (let i = 1; i < positions.length; i += 1) {
@@ -677,10 +675,10 @@ test('pipeline summary and empty orders use deliberate full-width states', () =>
   const styles = read('src/styles.css')
   assert.match(source, /className="pipeline-summary"/)
   assert.match(source, /className="stat-list pipeline-stat-list"/)
-  assert.match(source, /dashboard-orders-empty/)
+  assert.match(source, /pipeline-filter-row/)
   assert.match(styles, /\.dashboard-page \.pipeline-summary,[\s\S]*?width:\s*100%/)
   assert.match(styles, /\.dashboard-page \.pipeline-stat-list li[\s\S]*?width:\s*100%/)
-  assert.match(styles, /\.dashboard-page \.dashboard-orders-empty[\s\S]*?padding-top:\s*2px/)
+  assert.match(styles, /\.pipeline-filter-row/)
 })
 
 test('dashboard view-all actions open the matching workspaces', () => {
@@ -688,9 +686,9 @@ test('dashboard view-all actions open the matching workspaces', () => {
   const app = read('src/App.jsx')
   const myOpps = read('src/pages/MyOpps.jsx')
   const styles = read('src/styles.css')
-  assert.match(dashboard, /title="My opportunities"[\s\S]*?nav\('\/opportunities'\)/)
+  assert.match(dashboard, /title="My Opportunities \/ My Orders"[\s\S]*?nav\('\/opportunities'\)/)
   assert.match(dashboard, /title="Priority queue"[\s\S]*?nav\('\/my'\)/)
-  assert.match(dashboard, /title="My orders"[\s\S]*?nav\('\/po'\)/)
+  assert.match(dashboard, /title="My Opportunities \/ My Orders"[\s\S]*?nav\('\/opportunities'\)/)
   assert.match(app, /const PurchaseOrders = lazyWithRecovery\(\(\) => import\('\.\/pages\/PurchaseOrders\.jsx'\)\)/)
   assert.match(app, /<Route path="\/po" element=\{<PageGate page="po"><PurchaseOrders \/><\/PageGate>\} \/>/)
   assert.doesNotMatch(app, /<Route path="\/po" element=\{<Navigate to="\/proposal-sent"/)
