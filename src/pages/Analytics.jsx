@@ -7,6 +7,7 @@ import { PROB_WEIGHT, winLossAnalysis, FUNNEL_STAGES, funnelRows } from '../kpi.
 import { Icon } from '../icons.jsx'
 import { MODAE_COLORS } from '../branding/modae.js'
 import WinLossFlow from '../WinLossFlow.jsx'
+import WinLossPie from '../WinLossPie.jsx'
 
 // Funnel ramp validated with the dataviz palette checker (ordinal, light
 // surface): monotone lightness, ≥0.06 step gaps, light end ≥2:1 on white.
@@ -220,12 +221,6 @@ export default function Analytics({ embedded = false }) {
     .map(o => ({ ...o, age: ageDays(o.createDate) }))
     .sort((a, b) => b.age - a.age)
 
-  const compareTotal = comm
-    ? (winLoss.summary.wonValueK || 0) + (winLoss.summary.lostValueK || 0)
-    : winLoss.summary.total
-  const compareWon = comm ? (winLoss.summary.wonValueK || 0) : winLoss.summary.won
-  const compareWonPct = compareTotal ? Math.round((compareWon / compareTotal) * 100) : 0
-
   return (
     <div className={`page ana-page${embedded ? ' embedded-analytics' : ''}`}>
       <h2>{embedded ? 'Detailed analytics' : 'Analytics'}</h2>
@@ -302,14 +297,9 @@ export default function Analytics({ embedded = false }) {
         <div className="analysis-value-compare">
           <div className="analysis-hero-head"><div><span className="analysis-kicker">Outcome mix</span><h3>How much we win</h3></div><strong>{winLoss.summary.winRate}%</strong></div>
           <p>{comm ? 'Won versus lost commercial value across the selected scope.' : 'Won versus lost opportunities across the selected scope.'}</p>
-          <div className="analysis-compare-track" aria-hidden="true">
-            <i className="won" style={{ width: `${compareTotal ? Math.max(5, compareWonPct) : 0}%` }} />
-            <i className="lost" style={{ width: `${compareTotal ? Math.max(5, 100 - compareWonPct) : 0}%` }} />
-          </div>
-          <div className="analysis-compare-legend">
-            <span><b className="result-won">Won</b><strong>{comm ? fmtLakh(winLoss.summary.wonValueK) : winLoss.summary.won}</strong></span>
-            <span><b className="result-lost">Lost</b><strong>{comm ? fmtLakh(winLoss.summary.lostValueK) : winLoss.summary.lost}</strong></span>
-          </div>
+          <WinLossPie wonCount={winLoss.summary.won} lostCount={winLoss.summary.lost}
+            wonValueK={winLoss.summary.wonValueK} lostValueK={winLoss.summary.lostValueK}
+            commercial={comm} />
         </div>
         <div className="analysis-insight-grid">
           <article className="analysis-insight good"><span className="analysis-kicker">Top win driver</span><b>{winLoss.insights.topWinReason || 'No win reason yet'}</b><span>{comm ? fmtLakh(winLoss.insights.topWinReasonValueK) : '—'} won value</span></article>

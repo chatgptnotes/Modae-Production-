@@ -1,11 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useStore, reserveOppId } from '../store.jsx'
 import { ddMmmYY, ageDays, isTodayIST, gmailComposeHref, displayRole, formatISTTime, formatISTDate, nowIST, productDisplayLabel } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import ScanProgress from '../ScanProgress.jsx'
 import { useDrawer } from '../drawer.jsx'
-import { Chip, ConfChip, ConfirmModal, WarnBox, ErrBox, Modal } from '../ui.jsx'
+import { Chip, ConfChip, ConfirmModal, WarnBox, ErrBox, Modal, Portal } from '../ui.jsx'
 import { ROLES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, CUSTOMER_STATUSES, LEAD_SOURCES, routeForType, newProposal } from '../seed.js'
 import { isAdminRole, isApprover } from '../utils.js'
 import { aiEnabled, runTaskResult, runText } from '../ai.js'
@@ -39,6 +39,8 @@ import { deriveOpportunityScope } from '../leadScope.js'
 import { normalizeLocationValue, useGlobalLocationSearch } from '../locations.js'
 import { matchCustomer, customerStatusForLead } from '../leadCustomerClass.js'
 import { LEAD_LABELS, extractLabeledValue } from '../leadLabels.js'
+import CustomerPicker from '../CustomerPicker.jsx'
+import { findLeadById } from '../leadInboxSelection.js'
 export { matchCustomer, customerStatusForLead } from '../leadCustomerClass.js'
 // Common-mailbox lead inbox: AI parses each inquiry, a human decides whether it
 // becomes an opportunity (Qualify → registration / intake form) or is dropped.
@@ -71,11 +73,11 @@ async function createOpportunityFromLeadPage({ store, lead, fields, decision, cu
   const category = fields.find(f => /category/i.test(f.k))?.v || lead.category || customer?.category || '—'
   const acceptedFields = fields.filter(f => f.state === 'accepted' && String(f.v || '').trim())
     .map(f => ({ key: f.k, value: String(f.v).trim(), confidence: f.conf, evidence: f.ev || '', note: f.note || '' }))
-  const leadVerification = verificationSnapshot(lead, customerStatus, { config: store.config })
+  const leadVerification = verificationSnapshot({ ...lead, existingCustomerKyc: customer?.kyc === 'Valid' }, customerStatus, { config: store.config })
   const opp = {
     id, sourceLeadId: lead.id,
     sl: Math.max(0, ...store.opportunities.map(o => o.sl || 0)) + 1,
-    sellTo, category, location: decision.location || eucLocation,
+    sellTo, category, location: decision.location || eucLocation, sellToCustomerLocation: decision.location || eucLocation,
     customerStatus, leadVerification,
     eucName, eucLocation,
     oppName: lead.subject, opportunityScope: decision.scope,
@@ -646,6 +648,12 @@ function LeadVerification({ lead, customerStatus, store }) {
     }, `Amber processing fee ${mode === 'simulated' ? 'marked paid (simulated)' : 'confirmed'}`)
   }
 
+  if (customer?.kyc === 'Valid') return (
+    <div className="okbox" style={{ marginTop: 10 }}>
+      Existing verified customer — KYC is already complete and will not be requested again.
+    </div>
+  )
+
   if (customerStatus === 'Green') return (
     <div className="okbox" style={{ marginTop: 10 }}>
       Green customer — KYC and payment verification are not required.
@@ -677,13 +685,13 @@ function LeadVerification({ lead, customerStatus, store }) {
     <div className="lead-decision-card" style={{ marginTop: 12 }}>
       <div className="lead-decision-head"><div><b>Blue customer — KYC request</b><span>Customer shares KYC documents {windowLabel}</span></div>
         <div className="lead-decision-head-actions">
-        <span className={verification.kycRequestStatus === 'cancelled' ? 'lead-decision-note' : leadVerificationComplete(lead, customerStatus, { config: store.config }) ? 'lead-decision-saved' : 'lead-decision-note'}>
-            {verification.kycRequestStatus === 'cancelled' ? 'Cancelled' : leadVerificationComplete(lead, customerStatus, { config: store.config }) ? 'KYC Approved' : 'Pending Review'}
+        <span className={verification.kycRequestStatus === 'cancelled' ? 'lead-decision-note' : verification.kycRequestStatus === 'deferred' ? 'lead-decision-note' : leadVerificationComplete(lead, customerStatus, { config: store.config }) ? 'lead-decision-saved' : 'lead-decision-note'}>
+            {verification.kycRequestStatus === 'cancelled' ? 'Cancelled' : verification.kycRequestStatus === 'deferred' ? 'Skipped for now' : leadVerificationComplete(lead, customerStatus, { config: store.config }) ? 'KYC Approved' : 'Pending Review'}
           </span>
-          {editable && verification.kycRequestStatus !== 'cancelled' && !leadVerificationComplete(lead, customerStatus, { config: store.config }) && (
-            <button type="button" onClick={simulateAllKyc}>Simulate all KYC done</button>
+          {editable && !['cancelled', 'deferred'].includes(verification.kycRequestStatus) && !leadVerificationComplete(lead, customerStatus, { config: store.config }) && (
+            <button type="button" onClick={() => store.skipLeadKyc(lead.id)}>Skip for now</button>
           )}
-          {editable && verification.kycRequestStatus === 'cancelled' && (
+          {editable && ['cancelled', 'deferred'].includes(verification.kycRequestStatus) && (
             <button type="button" onClick={() => store.reopenLeadKyc(lead.id)}>Reopen KYC request</button>
           )}
         </div></div>
@@ -692,7 +700,8 @@ function LeadVerification({ lead, customerStatus, store }) {
         <span><b>Documents due:</b> {dateLabel(deadline?.dueAt)}</span>
         <span className={deadline?.expired ? 'deadline-overdue' : ''}><b>{deadlineLabel}</b></span>
       </div>
-      {verification.kycRequestStatus === 'cancelled' && <div className="lead-decision-note">This request is cancelled. Reopen it to upload or simulate the KYC documents again.</div>}
+      {verification.kycRequestStatus === 'cancelled' && <div className="lead-decision-note">This request is cancelled. Reopen it to upload KYC documents again.</div>}
+      {verification.kycRequestStatus === 'deferred' && <div className="warnbox">KYC skipped for now. It is required before commercial approval or order processing.</div>}
       {verification.kycRequestStatus !== 'cancelled' && !leadVerificationComplete(lead, customerStatus, { config: store.config }) && (
         <div className="lead-decision-note">Waiting for customer KYC documents. Nothing has been uploaded yet.</div>
       )}
@@ -846,6 +855,8 @@ function PasteLeadModal({ onClose }) {
   const [from, setFrom] = useState('')
   const [subject, setSubject] = useState('')
   const [source, setSource] = useState('')
+  const [forwardingDepartment, setForwardingDepartment] = useState('')
+  const [forwardedBy, setForwardedBy] = useState('')
   const [body, setBody] = useState('')
   const [files, setFiles] = useState([])
   const [drag, setDrag] = useState(false)
@@ -872,6 +883,7 @@ function PasteLeadModal({ onClose }) {
   // registration upload are keyed by the new lead id.
   const newLead = id => ({
     id, ts: nowIST(), channel: 'Email', source,
+    ...(source === 'Internal / Non-sales Enquiry' ? { forwardingDepartment, forwardedBy } : {}),
     // Every lead reaches the AI through the common mailbox — the drawing calls
     // it the single source of truth — so L-04 is satisfied by construction here
     // rather than by pattern-matching the source string.
@@ -920,6 +932,12 @@ function PasteLeadModal({ onClose }) {
           <option value="">— select the source —</option>
           {LEAD_SOURCES.map(s => <option key={s}>{s}</option>)}
         </select>
+        {source === 'Internal / Non-sales Enquiry' && <>
+          <label style={{ marginTop: 6 }}>Forwarding department</label>
+          <input value={forwardingDepartment} onChange={e => setForwardingDepartment(e.target.value)} placeholder="e.g. Service, Projects, Finance" style={{ width: '100%' }} />
+          <label style={{ marginTop: 6 }}>Forwarded by</label>
+          <input value={forwardedBy} onChange={e => setForwardedBy(e.target.value)} placeholder="Name or email" style={{ width: '100%' }} />
+        </>}
         <label style={{ marginTop: 6 }}>From</label>
         <input value={from} onChange={e => setFrom(e.target.value)}
           placeholder="name@customer.com" style={{ width: '100%' }} />
@@ -1612,6 +1630,13 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
   const previewCustomer = matchCustomer(store.customers, { ...lead, sellTo: decisionDraft.sellTo })
   const previewCustomerStatus = previewCustomer?.status || leadCustomerStatus
   const previewLead = { ...lead, customerStatus: previewCustomerStatus, redFlag: previewCustomerStatus === 'Red' }
+  const createDecisionCustomer = name => {
+    const created = { name, category: 'EUC', status: 'Blue', kyc: 'Pending', payment: '—' }
+    store.addCustomer(created)
+    setDecisionDraft(previous => ({ ...previous, sellTo: name, customerStatus: 'Blue' }))
+    setDecisionSaved(false)
+    return created
+  }
   const isRed = previewCustomerStatus === 'Red'
   const redApproval = redClearanceFor(store.approvals, lead.id, store.config)
   const redCleared = isRedCleared(redApproval, store.config)
@@ -1772,7 +1797,9 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
   const ownerRuleLabel = rule ? `${rule.region} rule` : 'Ownership rule'
 
   const qualifyBlocked = isRed && !redCleared
-  const verificationBlocked = !leadVerificationComplete(lead, previewCustomerStatus, { redCleared, config: store.config })
+  const verificationComplete = leadVerificationComplete({ ...lead, existingCustomerKyc: previewCustomer?.kyc === 'Valid' }, previewCustomerStatus, { redCleared, config: store.config })
+  const verificationDeferred = previewCustomerStatus === 'Blue' && lead.verification?.kycRequestStatus === 'deferred'
+  const verificationBlocked = !verificationComplete && !verificationDeferred
   const missingIdentity = REQUIRED_IDENTITY_FIELDS
     .filter(([key]) => !String(decisionDraft[key] || '').trim())
     .map(([, label]) => label)
@@ -2061,11 +2088,13 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
     }
     const routedOwner = routeOwner(decisionDraft.region, store.config, decisionDraft.owner)
     const isOverride = routedOwner && decisionDraft.owner !== routedOwner
-    if (isOverride && !['LJS', 'AH'].includes(store.role)) {
-      setDecisionErr(`Region routing assigns this lead to ${routedOwner}. Only LJS or AH can override the owner.`)
+    const currentLeadOwner = lead.assignedOwner || lead.owner || regionalOwner
+    const canReassignOwner = isAdminRole(store.role) || store.role === currentLeadOwner
+    if (isOverride && !canReassignOwner) {
+      setDecisionErr(`Region routing assigns this lead to ${routedOwner}. The assigned Sales Owner or an administrator may reassign it.`)
       return
     }
-    if (isOverride && !(lead.ownerOverrideReason || '').trim()) {
+    if (isOverride && !(lead.ownerOverrideReason || '').trim() && !canReassignOwner) {
       setDecisionErr('An owner override reason is required.')
       return
     }
@@ -2432,10 +2461,21 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
         </div>
         <div className="lead-decision-grid">
           <div className="lead-decision-subsection">Customer and contact</div>
-            <label><span className="decision-field-heading">Sell To Customer <span className="required-mark">*</span> {decisionAiMeta('sellTo', false)}</span>
-            <div className="decision-value-row"><input type="text" value={decisionDraft.sellTo} disabled={lead.status === 'Dropped'}
-              onChange={e => updateDecisionField('sellTo', e.target.value)} placeholder="Enter customer name" />{decisionAiStatus('sellTo')}</div>
-            </label>
+            <div>
+              <span className="decision-field-heading">Sell To Customer <span className="required-mark">*</span> {decisionAiMeta('sellTo', false)}</span>
+              <CustomerPicker
+                customers={store.customers}
+                value={decisionDraft.sellTo}
+                onChange={(value, selected) => {
+                  updateDecisionField('sellTo', value)
+                  if (selected?.status) setDecisionDraft(previous => ({ ...previous, customerStatus: selected.status }))
+                }}
+                onCreate={createDecisionCustomer}
+                disabled={lead.status === 'Dropped'}
+                label=""
+              />
+              {decisionAiStatus('sellTo')}
+            </div>
           <label><span className="decision-field-heading">Opportunity scope {decisionAiMeta('scope', false)}</span>
             <div className="decision-value-row"><textarea rows={5} value={decisionDraft.scope} disabled={lead.status === 'Dropped'}
               onChange={e => updateDecisionField('scope', e.target.value)} placeholder="Enter requested scope or items" />{decisionAiStatus('scope')}</div>
@@ -2536,7 +2576,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
         {decisionErr && <div className="errbox" style={{ marginTop: 8 }}>{decisionErr}</div>}
         {decisionDraft.owner !== routeOwner(decisionDraft.region, store.config, decisionDraft.owner) && (
           <label className="afield" style={{ display: 'block', marginTop: 8 }}>Owner override reason
-            <textarea rows={2} value={lead.ownerOverrideReason || ''} disabled={!['LJS', 'AH'].includes(store.role)}
+            <textarea rows={2} value={lead.ownerOverrideReason || ''} disabled={!canReassignOwner}
               onChange={e => store.updateLead(lead.id, { ownerOverrideReason: e.target.value }, 'Owner override reason updated')}
               placeholder="Required for an LJS/AH owner override" />
           </label>
@@ -3287,6 +3327,7 @@ export default function Inbox() {
   const [ageF, setAgeF] = useState('')
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false)
+  const [openHeaderFilter, setOpenHeaderFilter] = useState(null)
   const [repairingAi, setRepairingAi] = useState(false)
   const [repairAiNote, setRepairAiNote] = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState(null)
@@ -3309,7 +3350,7 @@ export default function Inbox() {
   const [showArchive, setShowArchive] = useState(false)
   const seesAll = isAdminRole(store.role) || isApprover(store.role)
 
-  const sel = leadId ? store.leads.find(l => l.id === leadId) : null
+  const sel = leadId ? findLeadById(store.leads, store.leadArchive || [], leadId) : null
   // Opening a New lead marks it read, but does not qualify or otherwise change
   // its workflow status. The notification badge therefore behaves like mail:
   // it clears when the message is opened, while the lead remains New until a
@@ -3572,12 +3613,70 @@ export default function Inbox() {
   }
   const sourceOptions = [...new Set(listSource.map(l => l.source || l.channel).filter(Boolean))].sort()
   const ownerOptions = [...new Set(listSource.map(l => l.suggestedOwner || 'Unassigned'))].sort()
-  const filterSelect = (value, onChange, label, options, short) => (
-    <select className={`mail-head-filter ${value ? 'active' : ''}`} value={value} onChange={e => onChange(e.target.value)}
-      aria-label={`Filter by ${label}`} title={`Filter by ${label}`}>
-      <option value="">{short || label}</option>{options.map(o => Array.isArray(o) ? <option key={o[0]} value={o[0]}>{o[1]}</option> : <option key={o}>{o}</option>)}
-    </select>
-  )
+  useEffect(() => {
+    if (!openHeaderFilter) return undefined
+    const close = event => {
+      if (event.key === 'Escape') setOpenHeaderFilter(null)
+    }
+    const closeOnViewportChange = () => setOpenHeaderFilter(null)
+    window.addEventListener('keydown', close)
+    window.addEventListener('resize', closeOnViewportChange)
+    window.addEventListener('scroll', closeOnViewportChange, true)
+    return () => {
+      window.removeEventListener('keydown', close)
+      window.removeEventListener('resize', closeOnViewportChange)
+      window.removeEventListener('scroll', closeOnViewportChange, true)
+    }
+  }, [openHeaderFilter])
+
+  const filterMenu = (key, value, onChange, label, options, short, allLabel) => {
+    const entries = [{ value: '', label: allLabel || `All ${label.toLowerCase()}` }, ...options.map(option => (
+      Array.isArray(option) ? { value: option[0], label: option[1] } : { value: option, label: option }
+    ))]
+    const isOpen = openHeaderFilter?.key === key
+    const open = event => {
+      event.stopPropagation()
+      if (isOpen) {
+        setOpenHeaderFilter(null)
+        return
+      }
+      const rect = event.currentTarget.getBoundingClientRect()
+      const menuWidth = 220
+      setOpenHeaderFilter({
+        key,
+        label,
+        entries,
+        x: Math.max(8, Math.min(rect.left, window.innerWidth - menuWidth - 8)),
+        y: Math.min(rect.bottom + 4, Math.max(8, window.innerHeight - 300)),
+      })
+    }
+    return (
+      <>
+        <button type="button" className={`mail-head-filter ${value ? 'active' : ''}`} onClick={open}
+          aria-label={`Filter by ${label}`} title={`Filter by ${label}`} aria-haspopup="menu" aria-expanded={isOpen}>
+          {short || label}
+        </button>
+        {isOpen && <Portal>
+          <div className="filter-overlay" onClick={() => setOpenHeaderFilter(null)} />
+          <div className="mail-header-filter-menu" role="menu" aria-label={`${label} filter`}
+            style={{ position: 'fixed', left: openHeaderFilter.x, top: openHeaderFilter.y }} onClick={event => event.stopPropagation()}>
+            <div className="mail-header-filter-title">{label}</div>
+            {openHeaderFilter.entries.map(entry => (
+              <button type="button" role="menuitemradio" aria-checked={value === entry.value}
+                className={`mail-header-filter-option${value === entry.value ? ' selected' : ''}`} key={entry.value || 'all'}
+                onClick={() => { onChange(entry.value); setOpenHeaderFilter(null) }}>
+                <span>{entry.label}</span>{value === entry.value && <span aria-hidden="true">✓</span>}
+              </button>
+            ))}
+          </div>
+        </Portal>}
+      </>
+    )
+  }
+
+  // Keep the previous helper name available during Vite hot reloads so an
+  // already-mounted inbox cannot fail if an older render still references it.
+  const filterSelect = (...args) => filterMenu(...args)
 
   return (
     <div className="page mailbox-page">
@@ -3697,7 +3796,8 @@ export default function Inbox() {
       )}
 
       <div className="mailbox-list">
-        <div className="mail-list-toolbar">
+        <div className="mail-column-head">
+          <div className="mail-list-toolbar">
           <label className="mail-check"><input type="checkbox" checked={mailboxRows.length > 0 && mailboxRows.every(l => selectedIds.has(l.id))} onChange={selectVisible} aria-label="Select visible messages" /></label>
           <button type="button" className="mail-icon-btn" title="Refresh inbox" aria-label="Refresh inbox" onClick={() => { void store.refreshSharedData() }}><Icon name="refresh" size={15} /></button>
           <div className="mail-more-actions">
@@ -3707,39 +3807,23 @@ export default function Inbox() {
               <button type="button" onClick={clearSelection}>Clear selection</button>
               <button type="button" onClick={() => setReadForSelected(true)} disabled={!selectedIds.size}>Mark selected as read</button>
               <button type="button" onClick={() => setReadForSelected(false)} disabled={!selectedIds.size}>Mark selected as unread</button>
+              <button type="button" onClick={deleteSelected} disabled={!selectedIds.size}>Delete selected leads</button>
+              {hiddenByOwner > 0 && <button type="button" onClick={() => setShowAll(true)}>{hiddenByOwner} more assigned to others — show</button>}
+              {staleAiLeads.length > 0 && <button type="button" onClick={repairStaleAi} disabled={repairingAi}>{repairingAi ? 'Repairing AI summaries…' : `Repair ${staleAiLeads.length} stale AI summar${staleAiLeads.length === 1 ? 'y' : 'ies'}`}</button>}
             </div>}
           </div>
           {selectedIds.size > 0 && <span className="mail-selection-count">{selectedIds.size} selected</span>}
-          {selectedIds.size > 0 && <>
-            <button type="button" className="mail-icon-btn" title="Mark as read" aria-label="Mark as read" onClick={() => setReadForSelected(true)}><Icon name="mail" size={15} /></button>
-            <button type="button" className="mail-icon-btn" title="Mark as unread" aria-label="Mark as unread" onClick={() => setReadForSelected(false)}><Icon name="eye" size={15} /></button>
-            <button type="button" className="mail-icon-btn mail-delete-btn" title="Delete selected leads" aria-label="Delete selected leads" onClick={deleteSelected}><Icon name="trash" size={15} /></button>
-          </>}
-          {hiddenByOwner > 0 && (
-            <button className="mail-hidden-note" onClick={() => setShowAll(true)}
-              title="These leads exist — they are assigned to another owner">
-              <Icon name="eye" size={12} /> {hiddenByOwner} more assigned to others — show
-            </button>
-          )}
-          {staleAiLeads.length > 0 && (
-            <button type="button" className="mail-repair-ai" onClick={repairStaleAi} disabled={repairingAi}
-              title="Re-run Gemini only for leads carrying the saved unavailable-extraction message">
-              <Icon name="bot" size={12} /> {repairingAi ? 'Repairing AI summaries…' : `Repair ${staleAiLeads.length} stale AI summar${staleAiLeads.length === 1 ? 'y' : 'ies'}`}
-            </button>
-          )}
-          {repairAiNote && <span className="mail-repair-ai-note" role="status">{repairAiNote}</span>}
+          </div>
+          <span className="mail-head-filter-cell">{filterMenu('received', receivedF, setReceivedF, 'Received date', [['today', 'Today'], ['7', 'Last 7 days'], ['30', 'Last 30 days']], 'Date', 'All dates')}</span>
+          <span className="mail-head-filter-cell">{filterMenu('source', sourceF, setSourceF, 'Source / sender', sourceOptions, 'Source', 'All sources')}</span><span className="mail-subject-head" title="Subject / preview">Subject</span>
+          <span className="mail-head-filter-cell">{filterMenu('route', routeF, setRouteF, 'AI route', ROUTE_OPTIONS, 'AI route', 'All routes')}</span>
+          <span className="mail-head-filter-cell">{filterMenu('urgency', urgencyF, setUrgencyF, 'Urgency', ['Normal', 'Urgent'], 'Urgency', 'All urgencies')}</span>
+          <span className="mail-head-filter-cell">{filterMenu('duplicate', duplicateF, setDuplicateF, 'Dup. risk', ['Low', 'Medium', 'High'], 'Dup risk', 'All duplicate risk')}</span>
+          <span className="mail-head-filter-cell">{filterMenu('completeness', completenessF, setCompletenessF, 'Completeness', [['high', 'High ≥90%'], ['medium', 'Medium 60–89%'], ['low', 'Low <60%']], 'Complete', 'All completeness')}</span>
+          <span className="mail-head-filter-cell">{filterMenu('owner', ownerF, setOwnerF, 'Suggested owner', ownerOptions, 'Owner', 'All owners')}</span>
+          <span className="mail-head-filter-cell">{filterMenu('status', statusF, setStatusF, 'Status', STATUS_OPTIONS, 'Status', 'All statuses')}</span>
+          <span className="mail-head-filter-cell">{filterMenu('age', ageF, setAgeF, 'Age', [['today', 'Today'], ['7', '7–29 days'], ['30', '30+ days']], 'Age', 'All ages')}</span>
           <span className="mail-list-count">{mailboxRows.length ? `1–${mailboxRows.length} of ${mailboxRows.length}` : '0 messages'}</span>
-        </div>
-        <div className="mail-column-head">
-          <span></span><span></span><span><select className={`mail-head-filter ${receivedF ? 'active' : ''}`} value={receivedF} onChange={e => setReceivedF(e.target.value)} aria-label="Filter by received date"><option value="">Received</option><option value="today">Today</option><option value="7">Last 7 days</option><option value="30">Last 30 days</option></select></span>
-          <span>{filterSelect(sourceF, setSourceF, 'Source / sender', sourceOptions)}</span><span className="mail-subject-head" title="Subject / preview">Subject / preview</span>
-          <span>{filterSelect(routeF, setRouteF, 'AI route', ROUTE_OPTIONS)}</span>
-          <span>{filterSelect(urgencyF, setUrgencyF, 'Urgency', ['Normal', 'Urgent'])}</span>
-          <span>{filterSelect(duplicateF, setDuplicateF, 'Dup. risk', ['Low', 'Medium', 'High'])}</span>
-          <span>{filterSelect(completenessF, setCompletenessF, 'Completeness', [['high', 'High ≥90%'], ['medium', 'Medium 60–89%'], ['low', 'Low <60%']], 'Complete')}</span>
-          <span>{filterSelect(ownerF, setOwnerF, 'Sugg. owner', ownerOptions, 'Owner')}</span>
-          <span>{filterSelect(statusF, setStatusF, 'Status', STATUS_OPTIONS)}</span>
-          <span>{filterSelect(ageF, setAgeF, 'Age', [['today', 'Today'], ['7', '7–29 days'], ['30', '30+ days']])}</span>
         </div>
         {mailboxRows.map(l => {
           const completeness = l.completeness ?? (l.parse?.confidence != null ? Math.round(l.parse.confidence * 100) : null)

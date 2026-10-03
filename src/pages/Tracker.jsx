@@ -2,14 +2,14 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { CLOSE_REASONS, WON_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES, displayOpportunityId } from '../seed.js'
-import { fmt, fmtRupeesFromK, rupeesToK, mmmYY, ddMmmYY, stageClass, productList, productLabel, productDisplayLabel, sameCustomer, displayRole, OPPORTUNITY_DATE_FIELDS, OPPORTUNITY_PERIODS, opportunityDateRange } from '../utils.js'
+import { fmt, fmtRupeesFromK, rupeesToK, ddMmmYY, ddMMyyyy, stageClass, productList, productLabel, productDisplayLabel, sameCustomer, displayRole, OPPORTUNITY_DATE_FIELDS, OPPORTUNITY_PERIODS, opportunityDateRange } from '../utils.js'
 import { downloadTableXlsx } from '../proposal/tableExcelExport.js'
 import { useFormulaBar } from '../formulabar.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { nextActionWith } from '../gates.js'
 import { suggestProbability } from '../insights.js'
 import { MarkWonControl, Modal, Portal } from '../ui.jsx'
-import { Icon, ModaeImageLogo } from '../icons.jsx'
+import { Icon } from '../icons.jsx'
 import { workflowStageLabelFor } from '../workflowStage.js'
 import { parsePipelineFile } from '../pipelineImport.js'
 import {
@@ -17,51 +17,47 @@ import {
   toggleSubsetIn, toggleValueIn,
 } from '../columnFilter.js'
 import { colType, compareVals, matchesGlobalSearch, sortLabels } from '../trackerFilters.js'
+import { OpportunitySummaryCard, shouldShowSparseCards } from '../sparseResultCards.jsx'
 
 const DEFAULT_DATE_FILTER = { field: 'orderDate', period: 'all', date: '', from: '', to: '' }
 
 // Columns with their real-sheet letters (row number = Sl + 2, as in the sheet).
 // `w` is the column's share of the sheet width — free text gets the generous
-// shares, single-token chips the thin ones. The two views read the weights
-// differently (see columnWidthCss): the key view divides the viewport between
-// its 9 columns and wraps what does not fit, while the all-31 view turns the
-// weights into px widths and scrolls sideways. `wAll` overrides `w` in the
-// all-31 view, where the identity and date columns earn a bigger slice.
+// shares, single-token chips the thin ones. The all-31 view turns these
+// weights into px widths and scrolls sideways. The key view shares the
+// available width; `wAll` gives full-view identity/date columns a bigger slice.
 export const COLS = [
-  // 11, not 8: an opp ID is 9 characters and must never wrap — at 8 the key
-  // view gave the column ~64px against the ~66px the ID needs, so exactly one
-  // character spilled onto a second line.
-  { key: 'id', letter: 'C', label: 'Opp ID', w: 11, wAll: 13, wKey: 12 },
-  { key: 'sellTo', letter: 'D', label: 'Sell To Customer*', w: 16, wAll: 13, wKey: 17 },
+  { key: 'id', letter: 'C', label: 'Opp ID', w: 11, wAll: 13 },
+  { key: 'sellTo', letter: 'D', label: 'Sell To Customer*', w: 16, wAll: 13 },
   { key: 'category', letter: 'E', label: 'Category', w: 6 },
   { key: 'location', letter: 'F', label: 'Location', w: 6 },
   { key: 'customerStatus', letter: 'G', label: 'Customer Status', w: 5 },
   { key: 'eucName', letter: 'H', label: 'EUC Name*', w: 8 },
   { key: 'eucLocation', letter: 'I', label: 'EUC Location', w: 6 },
-  { key: 'oppName', letter: 'J', label: 'Opportunity Name/Description*', w: 22, wAll: 18, wKey: 27 },
+  { key: 'oppName', letter: 'J', label: 'Opportunity Name/Description*', w: 22, wAll: 18 },
   { key: 'owner', letter: 'K', label: 'Owner', w: 4 },
-  { key: 'oppType', letter: 'L', label: 'Opp Type', w: 10, wAll: 8, wKey: 10 },
+  { key: 'oppType', letter: 'L', label: 'Opp Type', w: 10, wAll: 8 },
   { key: 'bu', letter: 'M', label: 'BU', w: 4 },
   { key: 'segment', letter: 'N', label: 'Segment', w: 5 },
   { key: 'product', letter: 'O', label: 'Equipment / Product Family', w: 6 },
-  { key: 'prob', letter: 'P', label: 'Prob (%)', w: 9, wAll: 7, wKey: 8 },
-  { key: 'valueK', letter: 'Q', label: 'Value (₹)*', num: true, w: 8, wKey: 9 },
+  { key: 'prob', letter: 'P', label: 'Prob (%)', w: 9, wAll: 7 },
+  { key: 'valueK', letter: 'Q', label: 'Value (₹)*', num: true, w: 7 },
   { key: 'cogsK', letter: 'R', label: 'COGS (₹)*', num: true, w: 5 },
   { key: 'gmK', letter: 'S', label: 'GM (₹)', num: true, w: 4 },
   { key: 'gmPct', letter: 'T', label: 'GM%', num: true, w: 3 },
   { key: 'createDate', letter: 'U', label: 'Create Date', w: 5, wAll: 7 },
-  { key: 'proposalDate', letter: 'V', label: 'Proposal Send Date', w: 5, wAll: 7, wKey: 12 },
-  { key: 'orderDate', letter: 'W', label: 'Expected Order Date', w: 14, wAll: 9, wKey: 12 },
+  { key: 'proposalDate', letter: 'V', label: 'Proposal Send Date', w: 5, wAll: 7 },
+  { key: 'orderDate', letter: 'W', label: 'Expected Order Date', w: 14, wAll: 7 },
   { key: 'invoiceDate', letter: 'X', label: 'Expected Ship Date', w: 7, wAll: 9 },
   { key: 'status', letter: 'Y', label: 'Status*', w: 5 },
-  { key: 'stage', letter: 'Z', label: 'Stage*', w: 11, wAll: 8, wKey: 13 },
+  { key: 'stage', letter: 'Z', label: 'Stage*', w: 11, wAll: 8 },
   { key: 'closedReason', letter: 'AA', label: 'Closed Reason*', w: 6 },
   { key: 'contactPerson', letter: 'AB', label: 'Contact Person*', w: 7 },
   { key: 'contactPhone', letter: 'AC', label: 'Contact Phone #*', w: 6 },
   { key: 'lastUpdated', letter: 'AD', label: 'Last Updated', w: 5, wAll: 7 },
   { key: 'forecast', letter: 'AE', label: 'Forecast', w: 3 },
   { key: 'remarks', letter: 'AF', label: 'Update/Remarks', w: 10 },
-  { key: 'nextActionOwner', letter: 'AG', label: 'Next Action', w: 11, wKey: 15 },
+  { key: 'nextActionOwner', letter: 'AG', label: 'Next Action', w: 11 },
 ]
 
 // The columns a sales owner actually works from, in Biji's words on 13 Aug:
@@ -70,6 +66,12 @@ export const COLS = [
 // pending." He was explicit that Opportunity Owner and Updated are not
 // required — a rep filtered to their own rows already knows the owner.
 const KEY_COLS = ['id', 'sellTo', 'oppName', 'stage', 'oppType', 'prob', 'valueK', 'proposalDate', 'orderDate', 'nextActionOwner']
+const KEY_COL_WIDTHS = {
+  id: 8, sellTo: 10, oppName: 21, stage: 9, oppType: 6,
+  prob: 7, valueK: 7, proposalDate: 8, orderDate: 10,
+  nextActionOwner: 6,
+}
+const ROWHEAD_PCT = 3
 
 function PipelineUploadPreview({ preview, onClose }) {
   const { fileName, sheetName, headers, rows, previewRows, missing } = preview
@@ -118,23 +120,9 @@ function hiddenColumnCss(hidden) {
   return `${sel} { display: none; } .sheet.cols-key tfoot { display: none; }`
 }
 
-// Both views size their columns from COLS[].w, but they spend it differently.
-//
-// Key view: table-layout: fixed, nothing scrolls sideways, so the 9 columns
-// divide the viewport between them as percentages renormalised over that set —
-// that way the key view is not left with a 9-column table filling 40% of the
-// width. Anything too long for its share wraps onto a second line.
-//
-// All-31 view: 31 columns cannot share one viewport and stay readable (it came
-// to ~37px each at 1366px), so the weights become px widths and the sheet
-// scrolls sideways inside .sheet-wrap instead.
-//
-// Same nth-child indexing as hiddenColumnCss: the Sl rowhead is child 1, so
-// COLS[i] is child i + 2. Only the Sl rowhead lives outside COLS.
-// Percentages must stay plain — Chrome resolves a calc() containing a
-// percentage as `auto` for fixed-layout column widths, which silently
-// collapses every column to an equal share and undoes the whole point.
-const ROWHEAD_PCT = 2.6
+// The full view keeps pixel floors and scrolls inside .sheet-wrap; the key
+// view uses percentages so every working column shares the available width.
+// Same nth-child indexing as hiddenColumnCss: Sl is child 1; COLS[i] is i + 2.
 // px per weight unit in the scrolling view, and the floor below which a column
 // is too narrow to read its own header. Sums to a sheet about 3000px wide.
 const PX_PER_UNIT = 13
@@ -142,7 +130,7 @@ const MIN_COL_PX = 78
 const ROWHEAD_PX = 34
 
 function columnWidthCss(cols, scope, all = false) {
-  const share = c => (all && c.wAll) || (!all && c.wKey) || c.w
+  const share = c => (all && c.wAll) || c.w
   const rule = (sel, value) => `${scope} thead tr > ${sel}, ${scope} tbody tr > ${sel} { ${value} }`
   const label = value => `--tracker-cell-label: ${JSON.stringify(value)};`
   if (all) {
@@ -152,12 +140,9 @@ function columnWidthCss(cols, scope, all = false) {
       ...cols.map(c => rule(`:nth-child(${COLS.indexOf(c) + 2})`, `min-width: ${px(c)}px; ${label(c.label)}`)),
     ].join('\n')
   }
-  const total = cols.reduce((sum, c) => sum + share(c), 0)
-  const budget = 100 - ROWHEAD_PCT
-  const pct = value => `width: ${value.toFixed(3)}%;`
   return [
-    rule(':nth-child(1)', `${pct(ROWHEAD_PCT)} ${label('SL')}`),
-    ...cols.map(c => rule(`:nth-child(${COLS.indexOf(c) + 2})`, `${pct((share(c) / total) * budget)} ${label(c.label)}`)),
+    rule(':nth-child(1)', `width: ${ROWHEAD_PCT}%; min-width: 0; ${label('SL')}`),
+    ...cols.map(c => rule(`:nth-child(${COLS.indexOf(c) + 2})`, `width: ${KEY_COL_WIDTHS[c.key]}%; min-width: 0; ${label(c.label)}`)),
   ].join('\n')
 }
 
@@ -166,7 +151,7 @@ function columnWidthCss(cols, scope, all = false) {
 // content instead. Enter is swallowed: these are one-value fields that happen
 // to need two lines, not multiline notes. The observer watches the cell, not
 // the textarea — resizing ourselves would feed our own notifications back.
-function WrapInput({ value, onChange, title }) {
+function WrapInput({ value, onChange, title, label }) {
   const ref = useRef(null)
   useLayoutEffect(() => {
     const el = ref.current
@@ -185,7 +170,7 @@ function WrapInput({ value, onChange, title }) {
     return () => ro.disconnect()
   }, [value])
   return (
-    <textarea ref={ref} className="wrapcell" rows={1} value={value} title={title}
+    <textarea ref={ref} className="wrapcell" rows={1} value={value} title={title} aria-label={label}
       onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }}
       onChange={e => {
         // Enter is blocked above, but a paste can still carry newlines into a
@@ -220,26 +205,25 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const [openFilter, setOpenFilter] = useState(null)   // { key, x, y } of the open dropdown
   const [filterSearch, setFilterSearch] = useState({})
   const [searchTerm, setSearchTerm] = useState('')
-  const [statusFilter, setStatusFilter] = useState('')
   const [dateFilter, setDateFilter] = useState(DEFAULT_DATE_FILTER)
   const [dateFilterDraft, setDateFilterDraft] = useState(DEFAULT_DATE_FILTER)
   const [dateFilterOpen, setDateFilterOpen] = useState(false)
   const [pipelinePreview, setPipelinePreview] = useState(null)
   const [pipelineUploadError, setPipelineUploadError] = useState('')
   const pipelineFileRef = useRef(null)
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false)
+  const moreMenuRef = useRef(null)
   const [dateFilterPos, setDateFilterPos] = useState(null)
   const [productPick, setProductPick] = useState(null) // { id, x, y } of the open product picker
   const [closePending, setClosePending] = useState(null) // { id, stage } awaiting outcome and reason
   const [closeReason, setCloseReason] = useState('')
   const [closeReasonNote, setCloseReasonNote] = useState('')
   const sheetWrapRef = useRef(null)
-  const lastSheetScrollLeft = useRef(0)
-  const horizontalGestureNudged = useRef(false)
-  const horizontalGestureTimer = useRef(null)
-  // Sales owners open on the eight columns they work from; everyone else on the
-  // full sheet. Either can switch — nothing is taken away, only folded.
-  const [colView, setColView] = useState(() => ((OWNERS.includes(store.role)
-    && !(ROLES[store.role]?.admin || ROLES[store.role]?.commercial)) ? 'key' : 'all'))
+  // Open on the readable working columns for every role. The complete sheet is
+  // still one click away; this keeps the page aligned at desktop widths where
+  // all 31 columns cannot fit without becoming unusably narrow.
+  const [colView, setColView] = useState('key')
+  const [showDenseView, setShowDenseView] = useState(false)
 
   useEffect(() => {
     if (!openFilter) return undefined
@@ -275,6 +259,22 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     }
   }, [dateFilterOpen])
 
+  useEffect(() => {
+    if (!moreMenuOpen) return undefined
+    const close = event => {
+      if (event.key === 'Escape') setMoreMenuOpen(false)
+    }
+    const onPointerDown = event => {
+      if (!moreMenuRef.current?.contains(event.target)) setMoreMenuOpen(false)
+    }
+    window.addEventListener('keydown', close)
+    window.addEventListener('pointerdown', onPointerDown)
+    return () => {
+      window.removeEventListener('keydown', close)
+      window.removeEventListener('pointerdown', onPointerDown)
+    }
+  }, [moreMenuOpen])
+
   const gmK = o => (o.valueK || 0) - (o.cogsK || 0)
   const gmPct = o => (o.valueK ? Math.round((gmK(o) / o.valueK) * 100) + '%' : null)
   const customerStatusFor = o => store.customers.find(c => sameCustomer(c.name, o.sellTo))?.status || o.customerStatus || 'Blue'
@@ -287,8 +287,8 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
       case 'gmPct': return gmPct(o) || '—'
       case 'valueK': return (o.valueK || 0) * 1000
       case 'cogsK': return (o.cogsK || 0) * 1000
-      case 'createDate': case 'proposalDate': return mmmYY(o[key])
-      case 'orderDate': case 'invoiceDate': return o[key] ? mmmYY(o[key]) : ''
+      case 'createDate': return ddMMyyyy(o[key])
+      case 'proposalDate': case 'orderDate': case 'invoiceDate': return o[key] ? ddMMyyyy(o[key]) : ''
       case 'lastUpdated': return ddMmmYY(o[key])
       case 'forecast': return o.forecast ? '✓ Checked' : '☐ Unchecked'
       case 'prob': return o.prob || ''
@@ -303,13 +303,9 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const owners = [...(isSalesRep ? ['Mine'] : []), 'All', ...new Set(all.map(o => o.owner))]
   const base = all.filter(o =>
     (ownerFilter === 'Mine' ? o.owner === store.role : ownerFilter === 'All' || o.owner === ownerFilter) &&
-    (sheet !== 'My Orders' || o.status === 'Closed'))
+    (sheet !== 'My Orders' || (o.status === 'Closed' && o.stage === 'Won')))
 
   const searchableBase = base.filter(o => matchesGlobalSearch(o, searchTerm, COLS, cellVal))
-  const statusOptions = [...new Set(all.map(o => o.status).filter(Boolean))].sort()
-  const statusFilteredBase = statusFilter
-    ? searchableBase.filter(o => o.status === statusFilter)
-    : searchableBase
 
   // Filters are derived from the current searchable rows so toolbar search,
   // owner selection, and every column filter always compose predictably.
@@ -327,7 +323,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     const [from, to] = dateFilterState.range
     return (!from || value >= from) && (!to || value <= to)
   }
-  const dateFilteredBase = statusFilteredBase.filter(o => matchesDateFilter(o))
+  const dateFilteredBase = searchableBase.filter(o => matchesDateFilter(o))
 
   // Analytics bars land here pre-filtered via query params (?owner= / ?oppType= / ?bu= / ?stage=).
   const [params, setParams] = useSearchParams()
@@ -363,20 +359,14 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   }
 
   const totals = rows.reduce((t, o) => ({ v: t.v + (+o.valueK || 0), c: t.c + (+o.cogsK || 0) }), { v: 0, c: 0 })
-  const workspaceLoading = ['connecting', 'reconnecting'].includes(store.liveSyncStatus)
-  const resultCountLabel = workspaceLoading
-    ? 'Loading shared data…'
-    : rows.length === base.length
-    ? `${base.length} loaded`
-    : `${rows.length} of ${base.length} shown`
+  const sparseResults = rows.length > 0 && rows.length <= 3
+  const showCards = shouldShowSparseCards(rows.length, showDenseView)
   const activeFilterCount = Object.values(filters).filter(value => value instanceof Set).length
     + (dateFilterActive || dateFilterState.error ? 1 : 0)
     + (searchTerm.trim() ? 1 : 0)
-    + (statusFilter ? 1 : 0)
 
   const clearAllTableState = () => {
     setSearchTerm('')
-    setStatusFilter('')
     setOwnerFilter(defaultOwnerFilter)
     setFilters({})
     setSort(null)
@@ -442,7 +432,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     const patch = { [field]: value }
     // Reopening clears the closure fields; a Won/Lost stage must not survive.
     if (field === 'status' && value === 'Open') Object.assign(patch, { closedReason: '', closedReasonNote: '', stage: 'Firm Bid' })
-    if (field === 'closedReason' && !['Others', 'Other'].includes(value)) patch.closedReasonNote = ''
+    if (field === 'closedReason' && value !== 'Other') patch.closedReasonNote = ''
     if (field === 'status' && value === 'Closed') {
       setClosePending({ id, stage: '' })
       setCloseReason('')
@@ -466,7 +456,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
 
   const confirmClose = () => {
     const note = closeReasonNote.trim()
-    const requiresNote = closePending?.stage === 'Won' ? closeReason === 'Other' : closeReason === 'Others'
+    const requiresNote = closePending?.stage === 'Won' ? closeReason === 'Other' : closeReason === 'Other'
     if (!closePending || !closeReason || (requiresNote && !note)) return
     if (closePending.stage === 'Won') {
       store.markWon(closePending.id, closeReason, requiresNote ? note : '')
@@ -476,22 +466,12 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     cancelClose()
   }
 
-  useEffect(() => () => clearTimeout(horizontalGestureTimer.current), [])
+  useLayoutEffect(() => {
+    if (sheetWrapRef.current) sheetWrapRef.current.scrollLeft = 0
+  }, [colView])
 
-  const handleSheetScroll = e => {
+  const handleSheetScroll = () => {
     if (openFilter) setOpenFilter(null)
-    const wrap = e.currentTarget
-    const movedHorizontally = Math.abs(wrap.scrollLeft - lastSheetScrollLeft.current) > 0
-    if (movedHorizontally && !horizontalGestureNudged.current && wrap.scrollHeight > wrap.clientHeight) {
-      const maxTop = wrap.scrollHeight - wrap.clientHeight
-      wrap.scrollTop = Math.min(wrap.scrollTop + 12, maxTop)
-      horizontalGestureNudged.current = true
-    }
-    lastSheetScrollLeft.current = wrap.scrollLeft
-    clearTimeout(horizontalGestureTimer.current)
-    horizontalGestureTimer.current = setTimeout(() => {
-      horizontalGestureNudged.current = false
-    }, 140)
   }
 
   // Formula-bar selection: address + underlying formula + commit (for editable cells).
@@ -688,7 +668,6 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   const activeChips = [
     searchTerm.trim() && { id: 'search', label: `Search: ${searchTerm.trim()}`, remove: () => setSearchTerm('') },
     ownerFilter !== defaultOwnerFilter && { id: 'owner', label: `Owner: ${ownerFilter === 'Mine' ? 'My opportunities' : displayRole(ownerFilter)}`, remove: () => setOwnerFilter(defaultOwnerFilter) },
-    statusFilter && { id: 'status', label: `Status: ${statusFilter}`, remove: () => setStatusFilter('') },
     dateFilterActive && { id: 'date', label: dateFilterSummary, remove: clearDateFilter },
     ...Object.entries(filters)
       .filter(([, allowed]) => allowed instanceof Set)
@@ -701,73 +680,83 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
 
   return (
     <div className="page tracker-page">
-      <h2>{sheet === 'My Orders' ? 'My Orders' : 'Opportunities'} <span className="tracker-result-count" aria-live="polite">{resultCountLabel}</span></h2>
+      <h2>{sheet === 'My Orders' ? 'My Orders' : 'Opportunities'}</h2>
       <div className="toolbar">
         <div className="tracker-toolbar-filters">
-          <select id="opportunities-owner-filter" aria-label="Opportunity owner" value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)}>
+          <select id="opportunities-owner-filter" className="tracker-owner-filter" aria-label="Opportunity owner" value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)}>
             {owners.map(p => <option key={p} value={p}>
               {p === 'All' ? 'All Opportunities' : p === 'Mine' ? 'My Opportunities' : displayRole(p)}
             </option>)}
           </select>
-          <label className="tracker-search" aria-label="Search all opportunities">
-            <Icon name="search" size={14} />
-            <input type="search" placeholder="Search all opportunities…" value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)} />
-          </label>
-          <label className="tracker-quick-filter">
-            <span>Status</span>
-            <select aria-label="Filter opportunities by status" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-              <option value="">All statuses</option>
-              {statusOptions.map(status => <option key={status} value={status}>{status}</option>)}
-            </select>
-          </label>
-          <button type="button" className={`tracker-date-filter-button${dateFilterActive ? ' active' : ''}`} onClick={openDateFilterMenu}
-            aria-haspopup="dialog" aria-expanded={dateFilterOpen} title={dateFilterSummary}>
-            Date filter{dateFilterActive ? ' · Active' : ''}
-          </button>
-          {isSalesRep && (
-            <button
-              type="button"
-              className={`scope-toggle${ownerFilter === 'All' ? ' active' : ''}`}
-              aria-pressed={ownerFilter === 'All'}
-              title="Show all opportunities"
-              onClick={() => setOwnerFilter(ownerFilter === 'All' ? 'Mine' : 'All')}>
-              {ownerFilter === 'All' ? 'Showing all' : 'Show all'}
+          <div className="tracker-search-group">
+            <label className="tracker-search" aria-label="Search all opportunities">
+              <Icon name="search" size={14} />
+              <input type="search" placeholder="Search all opportunities…" value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)} />
+            </label>
+            <button type="button" className={`tracker-search-filter${dateFilterActive ? ' active' : ''}`} onClick={openDateFilterMenu}
+              aria-haspopup="dialog" aria-expanded={dateFilterOpen} title={dateFilterSummary || 'Filter opportunities by date'}>
+              <Icon name="filter" size={14} /> <span>Filter</span>{dateFilterActive && <span className="tracker-search-filter-active">Active</span>}
             </button>
-          )}
+          </div>
         </div>
         <div className="tracker-toolbar-actions">
-          {activeFilterCount > 0 && (
-            <button type="button" className="tracker-clear-filters" onClick={clearAllTableState}>
-              Clear filters &amp; sort ({activeFilterCount})
+          <div className="tracker-more-menu" ref={moreMenuRef}>
+            <button type="button" className="tracker-more-trigger" aria-haspopup="menu" aria-expanded={moreMenuOpen}
+              onClick={() => setMoreMenuOpen(open => !open)}>
+              <Icon name="menu" size={15} /> More
             </button>
-          )}
-          {colView === 'key' && (
-            <span className="pill Blue" title="Total value of the rows shown">₹ {fmt(totals.v)}K</span>
-          )}
-          <button onClick={() => setColView(colView === 'key' ? 'all' : 'key')}
+            {moreMenuOpen && (
+              <div className="tracker-more-menu-list" role="menu">
+                {sparseResults && <button type="button" role="menuitem" onClick={() => { setShowDenseView(view => !view); setMoreMenuOpen(false) }}>
+                  {showCards ? 'Table view' : 'Card view'}
+                </button>}
+                {activeFilterCount > 0 && <button type="button" role="menuitem" onClick={() => { clearAllTableState(); setMoreMenuOpen(false) }}>
+                  Clear filters &amp; sort ({activeFilterCount})
+                </button>}
+                {colView === 'key' && (
+                  <label className="tracker-more-select" role="menuitem">
+                    <span>Column filters</span>
+                    <select defaultValue="" aria-label="Sort and filter key opportunity field"
+                      onChange={e => {
+                        openColumnMenu(COLS.find(col => col.key === e.currentTarget.value), e)
+                        e.currentTarget.value = ''
+                        setMoreMenuOpen(false)
+                      }}>
+                      <option value="" disabled>Select field</option>
+                      {KEY_COLS.map(key => {
+                        const col = COLS.find(item => item.key === key)
+                        return <option key={key} value={key}>{col.label}</option>
+                      })}
+                    </select>
+                  </label>
+                )}
+                <button type="button" role="menuitem" onClick={() => { exportRows(); setMoreMenuOpen(false) }}>Extract to Excel</button>
+                <button type="button" role="menuitem" onClick={() => { pipelineFileRef.current?.click(); setMoreMenuOpen(false) }}
+                  title="Preview an existing pipeline workbook without importing it">Upload Excel</button>
+              </div>
+            )}
+          </div>
+          <button type="button" className="tracker-columns-toggle"
+            onClick={() => setColView(colView === 'key' ? 'all' : 'key')}
             title={colView === 'key'
               ? 'Show every column in the pipeline sheet'
               : `Show only the working columns: ${KEY_COLS.length} of ${COLS.length}`}>
             {colView === 'key' ? `All ${COLS.length} columns` : 'Key columns'}
           </button>
-          <button onClick={exportRows} title="Export all columns for the rows shown">Extract to Excel</button>
-          <button type="button" onClick={() => pipelineFileRef.current?.click()} title="Preview an existing pipeline workbook without importing it">
-            Upload Excel
-          </button>
           <input ref={pipelineFileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={onPipelineFile} />
           {onCreateOpportunity ? (
             <button
               className="tracker-create-logo"
-              onClick={onCreateOpportunity}
-              aria-label="Create opportunity"
-              title="Create opportunity"
-            >
-              <ModaeImageLogo height={30} />
+            onClick={onCreateOpportunity}
+            aria-label="Create opportunity"
+            title="Create opportunity"
+          >
+              <Icon name="plus" size={16} /> Create opportunity
             </button>
           ) : (
             <Link className="tracker-create-logo" to="/new" aria-label="Create opportunity" title="Create opportunity">
-              <ModaeImageLogo height={30} />
+              <Icon name="plus" size={16} /> Create opportunity
             </Link>
           )}
         </div>
@@ -787,6 +776,12 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
       {dateFilterOpen && dateFilterPos && renderDateFilterPop(dateFilterPos)}
 
       <div ref={sheetWrapRef} className="sheet-wrap fill" onScroll={handleSheetScroll}>
+        {showCards ? <div className="sparse-card-grid tracker-sparse-cards" aria-label="Opportunity summaries">
+          {rows.map(o => <OpportunitySummaryCard key={o.id} opportunity={o}
+            stage={workflowStageLabelFor(o)}
+            nextAction={displayRole(nextActionWith(o, store.getProposal(o.id), store).owner)}
+            roleNames={store.config?.roleNames} />)}
+        </div> : <>
         {colView === 'key'
           ? <style>{[
             hiddenColumnCss(COLS.map((c, i) => (KEY_COLS.includes(c.key) ? -1 : i)).filter(i => i >= 0)),
@@ -804,9 +799,6 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                     aria-label={`Sort and filter ${col.label}`} aria-haspopup="dialog"
                     aria-expanded={openFilter?.key === col.key} onClick={e => openColumnMenu(col, e)}>
                     <span className="tracker-th-label">{col.label}</span>
-                    <span className="tracker-th-indicator" aria-hidden="true">
-                      {filters[col.key] ? '▼*' : sort?.key === col.key ? (sort.dir === 1 ? '▲' : '▼') : '▼'}
-                    </span>
                   </button>
                   {openFilter?.key === col.key && renderFilterPop(col, openFilter)}
                 </th>
@@ -828,7 +820,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                     <Link to={`/opp/${o.id}`} title="Open opportunity workspace">{displayOpportunityId(o.id, store.config?.roleNames)}</Link>
                   </span>
                 </td>
-                <td onClick={selectCell(o, COLS[1])} className={isSel(o, COLS[1]) ? 'cell-sel' : ''} title={o.sellTo}>{['Intake', 'Registration'].includes(o.milestone) ? <WrapInput value={o.sellTo} onChange={upd(o.id, 'sellTo')} title={o.sellTo} /> : <div className="ro" title="Locked after registration">{o.sellTo || '—'}</div>}</td>
+                <td onClick={selectCell(o, COLS[1])} className={`tracker-free-text ${isSel(o, COLS[1]) ? 'cell-sel' : ''}`} title={o.sellTo}><span className="tracker-cell-label">{COLS[1].label}</span>{['Intake', 'Registration'].includes(o.milestone) ? <WrapInput value={o.sellTo} onChange={upd(o.id, 'sellTo')} title={o.sellTo} label={COLS[1].label} /> : <div className="ro" title="Locked after registration">{o.sellTo || '—'}</div>}</td>
                 <td onClick={selectCell(o, COLS[2])} className={isSel(o, COLS[2]) ? 'cell-sel' : ''}>
                   {['Intake', 'Registration'].includes(o.milestone) ? <select value={o.category} onChange={upd(o.id, 'category')}>{CATEGORIES.map(c => <option key={c}>{c}</option>)}</select> : <div className="ro" title="Locked after registration">{o.category || '—'}</div>}
                 </td>
@@ -841,12 +833,13 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                 </td>
                 <td onClick={selectCell(o, COLS[5])} className={isSel(o, COLS[5]) ? 'cell-sel' : ''} title={o.eucName}>{['Intake', 'Registration'].includes(o.milestone) ? <input type="text" value={o.eucName} onChange={upd(o.id, 'eucName')} /> : <div className="ro" title="Locked after registration">{o.eucName || '—'}</div>}</td>
                 <td onClick={selectCell(o, COLS[6])} className={isSel(o, COLS[6]) ? 'cell-sel' : ''} title={o.eucLocation}>{['Intake', 'Registration'].includes(o.milestone) ? <input type="text" value={o.eucLocation} onChange={upd(o.id, 'eucLocation')} /> : <div className="ro" title="Locked after registration">{o.eucLocation || '—'}</div>}</td>
-                <td onClick={selectCell(o, COLS[7])} className={isSel(o, COLS[7]) ? 'cell-sel' : ''} title={o.oppName}>{['Intake', 'Registration'].includes(o.milestone) ? <WrapInput value={o.oppName} onChange={upd(o.id, 'oppName')} title={o.oppName} /> : <div className="ro" title="Locked after registration">{o.oppName || '—'}</div>}</td>
+                <td onClick={selectCell(o, COLS[7])} className={`tracker-free-text ${isSel(o, COLS[7]) ? 'cell-sel' : ''}`} title={o.oppName}><span className="tracker-cell-label">{COLS[7].label}</span>{['Intake', 'Registration'].includes(o.milestone) ? <WrapInput value={o.oppName} onChange={upd(o.id, 'oppName')} title={o.oppName} label={COLS[7].label} /> : <div className="ro" title="Locked after registration">{o.oppName || '—'}</div>}</td>
                 <td onClick={selectCell(o, COLS[8])} className={isSel(o, COLS[8]) ? 'cell-sel' : ''}>
                   {['Intake', 'Registration'].includes(o.milestone) ? <select value={o.owner} onChange={upd(o.id, 'owner')}>{OWNERS.map(c => <option key={c} value={c}>{displayRole(c)}</option>)}</select> : <div className="ro" title="Locked after registration">{displayRole(o.owner) || '—'}</div>}
                 </td>
                 <td onClick={selectCell(o, COLS[9])} className={isSel(o, COLS[9]) ? 'cell-sel' : ''}>
-                  {['Intake', 'Registration'].includes(o.milestone) ? <select value={o.oppType} onChange={upd(o.id, 'oppType')}>{OPP_TYPES.map(c => <option key={c}>{c}</option>)}</select> : <div className="ro" title="Locked after registration">{o.oppType || '—'}</div>}
+                  <span className="tracker-cell-label">{COLS[9].label}</span>
+                  {['Intake', 'Registration'].includes(o.milestone) ? <select value={o.oppType} onChange={upd(o.id, 'oppType')} aria-label={COLS[9].label}>{OPP_TYPES.map(c => <option key={c}>{c}</option>)}</select> : <div className="ro" title="Locked after registration">{o.oppType || '—'}</div>}
                 </td>
                 <td onClick={selectCell(o, COLS[10])} className={isSel(o, COLS[10]) ? 'cell-sel' : ''}>
                   {['Intake', 'Registration'].includes(o.milestone) ? <select value={o.bu} onChange={upd(o.id, 'bu')}>{BUS.map(c => <option key={c}>{c}</option>)}</select> : <div className="ro" title="Locked after registration">{o.bu || '—'}</div>}
@@ -873,21 +866,22 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                 {/* Suggested from stage, account class and how long the row has
                     sat still — always a suggestion, never a write. */}
                 <td onClick={selectCell(o, COLS[13])} className={isSel(o, COLS[13]) ? 'cell-sel' : ''}>
+                  <span className="tracker-cell-label">{COLS[13].label}</span>
                   {(() => {
                     const sug = suggestProbability(o, store.getProposal(o.id), store.config)
                     return (
-                      ['Intake', 'Registration'].includes(o.milestone) ? <select value={o.prob || ''} onChange={upd(o.id, 'prob')}
+                      ['Intake', 'Registration'].includes(o.milestone) ? <select value={o.prob || ''} onChange={upd(o.id, 'prob')} aria-label={COLS[13].label}
                         className={!o.prob && sug ? 'derived' : ''}
                         title={sug ? `Suggested ${sug.level} — ${sug.why}` : ''}>
-                        <option value="">{sug ? `${sug.level} (suggested)` : ''}</option>
+                        <option value="">Select probability</option>
                         {PROB_LEVELS.map(p => <option key={p}>{p}</option>)}
-                      </select> : <div className="ro" title="Locked after registration">{o.prob || (sug ? `${sug.level} (suggested)` : '—')}</div>
+                      </select> : <div className="ro" title="Locked after registration">{o.prob || (sug ? sug.level : '—')}</div>
                     )
                   })()}
                 </td>
                 {/* Value and COGS are open tracker inputs for every role. GM and
                     GM% remain derived from them and are therefore read only. */}
-                <td onClick={selectCell(o, COLS[14])} className={`num ${isSel(o, COLS[14]) ? 'cell-sel' : ''}`}><input type="number" min="0" value={o.valueK ? o.valueK * 1000 : ''} onChange={upd(o.id, 'valueK')} placeholder="-" /></td>
+                <td onClick={selectCell(o, COLS[14])} className={`num ${isSel(o, COLS[14]) ? 'cell-sel' : ''}`}><span className="tracker-cell-label">{COLS[14].label}</span><input type="number" min="0" value={o.valueK ? o.valueK * 1000 : ''} onChange={upd(o.id, 'valueK')} aria-label={COLS[14].label} placeholder="-" /></td>
                 <td onClick={selectCell(o, COLS[15])} className={`num ${isSel(o, COLS[15]) ? 'cell-sel' : ''}`}><input type="number" min="0" value={o.cogsK ? o.cogsK * 1000 : ''} onChange={upd(o.id, 'cogsK')} placeholder="-" /></td>
                 <td onClick={selectCell(o, COLS[16])} className={`num ${isSel(o, COLS[16]) ? 'cell-sel' : ''}`}>{o.valueK ? fmtRupeesFromK(gmK(o)) : '-'}</td>
                 {gmPct(o)
@@ -895,16 +889,18 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                   : <td onClick={selectCell(o, COLS[17])} className={`${isSel(o, COLS[17]) ? 'cell-sel' : ''}`}>—</td>}
                 {/* Created and Proposal are system-stamped — read only, like Last Updated. */}
                 <td onClick={selectCell(o, COLS[18])} className={isSel(o, COLS[18]) ? 'cell-sel' : ''}>
-                  <div className="ro" title="Stamped when the opportunity was created — read only">{mmmYY(o.createDate) || '—'}</div>
+                  <div className="ro" title="Stamped when the opportunity was created — read only">{ddMMyyyy(o.createDate) || '—'}</div>
                 </td>
                 <td onClick={selectCell(o, COLS[19])} className={isSel(o, COLS[19]) ? 'cell-sel' : ''}>
-                  <div className="ro" title="Stamped when the proposal was first priced — read only">{mmmYY(o.proposalDate) || '—'}</div>
+                  <span className="tracker-cell-label">{COLS[19].label}</span>
+                  <div className="ro" title="Stamped when the proposal was sent — read only">{ddMMyyyy(o.proposalDate) || '—'}</div>
                 </td>
                 {/* The salesperson's own forecast dates — mandatory, per the 13 Aug review:
                     "he has to put some date. It can be wrong, but he has to put some date." */}
                 <td onClick={selectCell(o, COLS[20])}
                   className={`${isSel(o, COLS[20]) ? 'cell-sel ' : ''}${o.status === 'Open' && !o.orderDate ? 'need' : ''}`.trim()}>
-                  <input type="date" value={o.orderDate} max={o.invoiceDate ? new Date(new Date(`${o.invoiceDate}T00:00:00`).getTime() - 86400000).toISOString().slice(0, 10) : undefined} onChange={upd(o.id, 'orderDate')}
+                  <span className="tracker-cell-label">{COLS[20].label}</span>
+                  <input type="date" value={o.orderDate} max={o.invoiceDate ? new Date(new Date(`${o.invoiceDate}T00:00:00`).getTime() - 86400000).toISOString().slice(0, 10) : undefined} onChange={upd(o.id, 'orderDate')} aria-label={COLS[20].label}
                     title={o.orderDate ? '' : 'Expected order date is required on an open opportunity'} /></td>
                 <td onClick={selectCell(o, COLS[21])}
                   className={`${isSel(o, COLS[21]) ? 'cell-sel ' : ''}${o.status === 'Open' && !o.invoiceDate ? 'need' : ''}`.trim()}>
@@ -916,6 +912,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                   </select>
                 </td>
                 <td onClick={selectCell(o, COLS[23])} className={isSel(o, COLS[23]) ? 'cell-sel' : ''}>
+                  <span className="tracker-cell-label">{COLS[23].label}</span>
                   <div className="tracker-stage-cell">
                     {o.status === 'Closed' && ['Won', 'Lost'].includes(o.stage) ? (
                       <div className={`tracker-terminal-stage ${o.stage.toLowerCase()}`} title="Terminal outcome; workflow milestone shown below">
@@ -931,9 +928,10 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                 <td onClick={selectCell(o, COLS[24])}
                   className={`${o.status === 'Closed' && !o.closedReason ? 'err' : ''} ${isSel(o, COLS[24]) ? 'cell-sel' : ''}`}
                   title={o.status === 'Closed' && !o.closedReason ? 'Closed Reason is mandatory — pick a justification' : ''}>
+                  <span className="tracker-cell-label">{COLS[24].label}</span>
                   {o.status === 'Closed' ? (
-                    <select value={o.closedReason} onChange={upd(o.id, 'closedReason')}
-                      title={(o.closedReason === 'Others' || o.closedReason === 'Other') && o.closedReasonNote ? `${o.closedReason} — ${o.closedReasonNote}` : ''}>
+                    <select value={o.closedReason} onChange={upd(o.id, 'closedReason')} aria-label={COLS[24].label}
+                      title={o.closedReason === 'Other' && o.closedReasonNote ? `${o.closedReason} — ${o.closedReasonNote}` : ''}>
                       <option value="">— required —</option>
                       {[...(o.stage === 'Won' ? WON_REASONS : CLOSE_REASONS), ...(o.closedReason && !(o.stage === 'Won' ? WON_REASONS : CLOSE_REASONS).includes(o.closedReason) ? [o.closedReason] : [])]
                         .map(r => <option key={r}>{r}</option>)}
@@ -953,10 +951,11 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                     "— none —" it read on every row before. Typing a value
                     overrides the derivation. */}
                 <td onClick={selectCell(o, COLS[30])} className={isSel(o, COLS[30]) ? 'cell-sel' : ''}>
+                  <span className="tracker-cell-label">{COLS[30].label}</span>
                   {(() => {
                     const na = nextActionWith(o, store.getProposal(o.id), store)
                     return (
-                      <select value={o.nextActionOwner || ''} onChange={upd(o.id, 'nextActionOwner')}
+                      <select value={o.nextActionOwner || ''} onChange={upd(o.id, 'nextActionOwner')} aria-label={COLS[30].label}
                         className={!o.nextActionOwner && na.owner ? 'derived' : ''}
                         title={na.text || 'No blocker — set an owner if someone else owes you an action'}>
                         <option value="">{na.owner ? `${displayRole(na.owner)} (auto)` : '— none —'}</option>
@@ -997,6 +996,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
             </tr>
           </tfoot>
         </table>
+        </>}
       </div>
 
       <div className="sheet-tabs">
@@ -1029,14 +1029,14 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                 value={closeReason}
                 onChange={e => {
                   setCloseReason(e.target.value)
-                  if (!(closePending.stage === 'Won' ? e.target.value === 'Other' : e.target.value === 'Others')) setCloseReasonNote('')
+                  if (e.target.value !== 'Other') setCloseReasonNote('')
                 }}
                 autoFocus
               >
                 <option value="">— select a reason —</option>
                 {(closePending.stage === 'Won' ? WON_REASONS : CLOSE_REASONS).map(reason => <option key={reason} value={reason}>{reason}</option>)}
               </select>
-              {((closePending.stage === 'Won' && closeReason === 'Other') || (closePending.stage !== 'Won' && closeReason === 'Others')) && (
+              {closeReason === 'Other' && (
                 <label className="tracker-close-reason-note" htmlFor="tracker-close-reason-note">
                   Additional explanation
                   <textarea
@@ -1052,7 +1052,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
             </>
           )}
           <div className="forms-actions">
-              <button className="primary" disabled={!closePending.stage || !closeReason || ((closePending.stage === 'Won' ? closeReason === 'Other' : closeReason === 'Others') && !closeReasonNote.trim())} onClick={confirmClose}>Confirm</button>
+              <button className="primary" disabled={!closePending.stage || !closeReason || (closeReason === 'Other' && !closeReasonNote.trim())} onClick={confirmClose}>Confirm</button>
             <button onClick={cancelClose}>Cancel</button>
           </div>
         </Modal>

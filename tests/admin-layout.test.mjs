@@ -4,7 +4,6 @@ import fs from 'node:fs'
 
 const styles = fs.readFileSync('src/styles.css', 'utf8')
 const admin = fs.readFileSync('src/pages/Admin.jsx', 'utf8')
-const app = fs.readFileSync('src/App.jsx', 'utf8')
 
 test('Admin cards use content height instead of stretched minimum heights', () => {
   assert.match(styles, /\.admin-setting-grid,\s*\.admin-wide-grid,\s*\.admin-bottom-grid \{[\s\S]*?align-items: start;/)
@@ -32,12 +31,10 @@ test('Admin workflow exposes nested category navigation', () => {
   assert.match(admin, /id="admin-subpanel-customer"/)
 })
 
-test('Admin workflow includes region filtering, visual owner/risk badges, and save feedback', () => {
+test('Admin workflow includes region filtering and visual owner/risk badges', () => {
   assert.match(admin, /type="search" value=\{regionSearch\}/)
   assert.match(admin, /admin-owner-badge/)
   assert.match(admin, /risk-badge/)
-  assert.match(app, /showAdminSaveStatus=\{loc\.pathname === '\/admin'\}/)
-  assert.match(app, /notification-save-status/)
 })
 
 test('Admin access controls keep users and regional ownership in one panel', () => {

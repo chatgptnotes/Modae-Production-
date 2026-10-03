@@ -11,11 +11,8 @@ test('KYC checklist completion updates customer master status', () => {
   assert.doesNotMatch(storeSource, /payment: complete \?/)
 })
 
-test('Customer KYC tab offers an AH-admin simulated completion shortcut', () => {
+test('Customer KYC tab keeps completion document-based', () => {
   assert.match(workbenchSource, /const canVerify = store\.role === 'AH' \|\| isAdminRole\(store\.role\)/)
-  assert.match(workbenchSource, /const simulateAllKycDone = \(\) => \{/)
-  assert.match(workbenchSource, /if \(!customer \|\| !canVerify \|\| busy\) return/)
-  assert.match(workbenchSource, /items\.forEach\(item => store\.setKycState\(customer\.name, item\.name, 'Verified'\)\)/)
-  assert.match(workbenchSource, /Simulate all KYC done/)
-  assert.match(workbenchSource, /disabled=\{!canVerify \|\| !!busy \|\| items\.every\(k => k\.state === 'Verified'\)\}/)
+  assert.doesNotMatch(workbenchSource, /simulateAllKycDone|Simulate all KYC done/)
+  assert.match(workbenchSource, /Upload…|Replace…/)
 })

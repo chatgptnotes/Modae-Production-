@@ -1,8 +1,8 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { OWNERS, ROLES } from '../seed.js'
-import { canPriceProposal, canViewCommercial, isSalesOwner, fmtRupeesFromK, mmmYY, ddMmmYY, stageClass, productDisplayLabel, displayRole, isHiddenDashboardOpportunity } from '../utils.js'
+import { OWNERS, ROLES, displayOpportunityId } from '../seed.js'
+import { canPriceProposal, canViewCommercial, isSalesOwner, fmtRupeesFromK, ddMmmYY, ddMMyyyy, stageClass, productDisplayLabel, displayRole, isHiddenDashboardOpportunity } from '../utils.js'
 import { nextActionWith } from '../gates.js'
 import { useDrawer } from '../drawer.jsx'
 import { Icon } from '../icons.jsx'
@@ -38,13 +38,13 @@ export default function MyOpps() {
 
   const fullCell = (o, key) => {
     if (['cogsK', 'gmK', 'gmPct'].includes(key) && !canSeeCommercial) return <Icon name="lock" size={12} />
-    if (key === 'id') return <b>{o.id}</b>
+    if (key === 'id') return <b>{displayOpportunityId(o.id)}</b>
     if (key === 'product') return productDisplayLabel(o.product) || '—'
     if (key === 'valueK') return o.valueK ? fmtRupeesFromK(o.valueK) : '—'
     if (key === 'cogsK') return o.cogsK ? fmtRupeesFromK(o.cogsK) : '—'
     if (key === 'gmK') return o.valueK ? fmtRupeesFromK((o.valueK || 0) - (o.cogsK || 0)) : '—'
     if (key === 'gmPct') return o.valueK ? `${Math.round((((o.valueK || 0) - (o.cogsK || 0)) / o.valueK) * 100)}%` : '—'
-    if (key === 'createDate' || key === 'proposalDate' || key === 'orderDate' || key === 'invoiceDate') return o[key] ? mmmYY(o[key]) : '—'
+    if (key === 'createDate' || key === 'proposalDate' || key === 'orderDate' || key === 'invoiceDate') return o[key] ? ddMMyyyy(o[key]) : '—'
     if (key === 'lastUpdated') return ddMmmYY(o[key]) || '—'
     if (key === 'forecast') return o.forecast ? 'Checked' : '—'
     if (key === 'nextActionOwner') return displayRole(na(o).owner) || '—'
@@ -110,7 +110,7 @@ export default function MyOpps() {
               const dc = devCount(o)
               return (
                 <tr key={o.id} className="rowclick" onClick={() => drawer.open({ type: 'opp', id: o.id })}>
-                  <td><b>{o.id}</b></td>
+                  <td><b>{displayOpportunityId(o.id)}</b></td>
                   <td>{o.sellTo}</td>
                   <td className="opportunity-cell">
                     <span className="opportunity-name">{o.oppName}</span>
@@ -123,7 +123,7 @@ export default function MyOpps() {
                   <td>{comm ? (o.valueK ? fmtRupeesFromK(o.valueK) : '—') : ''}</td>
                   <td className={o.status === 'Open' && !o.orderDate ? 'need' : ''}
                     title={o.orderDate ? '' : 'No expected order date set'}>
-                    {o.orderDate ? mmmYY(o.orderDate) : '— set —'}
+                    {o.orderDate ? ddMMyyyy(o.orderDate) : '— set —'}
                   </td>
                   <td title={na(o).text}>
                     {na(o).owner

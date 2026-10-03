@@ -412,6 +412,6 @@ test('the demo launcher stands down when the demo data is gone', () => {
 test('the intake form accepts a customer name that is not in the master yet', () => {
   const src = fs.readFileSync(new URL('../src/pages/IntakeForm.jsx', import.meta.url), 'utf8')
   assert.doesNotMatch(src, /<Select field="sellTo"/, 'Sell To must not be a closed dropdown')
-  assert.match(src, /<Input field="sellTo" list="intake-customers"/)
-  assert.match(src, /<datalist id="intake-customers">/, 'the master is still offered as suggestions')
+  assert.match(src, /<CustomerPicker/)
+  assert.match(src, /onCreate={createCustomer}/, 'new customers can be created inline')
 })

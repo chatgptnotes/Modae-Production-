@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { selectableRoles, ROLES, DEMO_PASSWORD } from '../seed.js'
+import { selectableRoles, ROLES, DEMO_PASSWORD, LEVEL3_ROLES, LEVEL3_ROLE_IDS, userRoles } from '../seed.js'
 import { ddMmmYY, isAdminRole, displayRoleLabel } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { ConfirmModal } from '../ui.jsx'
@@ -36,7 +36,7 @@ async function adminUserRequest(body) {
 export default function Users() {
   const store = useStore()
   const nav = useNavigate()
-  const canManage = isAdminRole(store.role)
+  const canManage = isAdminRole(store.roles || store.role)
   const [editingUserId, setEditingUserId] = useState(null)
   const [userDraft, setUserDraft] = useState(null)
   const [userErr, setUserErr] = useState('')
@@ -46,7 +46,7 @@ export default function Users() {
   const [usersView, setUsersView] = useState('accounts')
   const [rejecting, setRejecting] = useState(null)
   const [createOpen, setCreateOpen] = useState(false)
-  const [createDraft, setCreateDraft] = useState({ name: '', email: '', password: '', confirmPassword: '', role: 'RS' })
+  const [createDraft, setCreateDraft] = useState({ name: '', email: '', password: '', confirmPassword: '', role: 'RS', roles: ['STANDARD_USER'] })
   const [createErr, setCreateErr] = useState('')
   const [createBusy, setCreateBusy] = useState(false)
   const [credentialNotice, setCredentialNotice] = useState(null)
@@ -90,7 +90,7 @@ export default function Users() {
   const pending = store.users.filter(u => u.status === 'Pending')
   const startUserEdit = user => {
     setEditingUserId(user.id)
-    setUserDraft({ name: user.name || '', email: user.email || '', role: user.role, status: user.status })
+    setUserDraft({ name: user.name || '', email: user.email || '', role: user.role, roles: userRoles(user), status: user.status })
     setUserErr('')
   }
 
@@ -104,6 +104,7 @@ export default function Users() {
     const name = String(userDraft?.name || '').trim()
     const email = String(userDraft?.email || '').trim()
     const role = userDraft?.role
+    const roles = userDraft?.roles || [role]
     const status = userDraft?.status
     if (!name) {
       setUserErr('Name is required.')
@@ -134,9 +135,9 @@ export default function Users() {
     setUserBusy(true)
     try {
       const remote = supabase && authStatus[user.id]?.authStatus === 'Created'
-        ? await adminUserRequest({ action: 'update', authId: authStatus[user.id].authId, email: user.email, nextEmail: email, name, role })
+      ? await adminUserRequest({ action: 'update', authId: authStatus[user.id].authId, email: user.email, nextEmail: email, name, role, roles })
         : null
-      store.updateUser(user.id, { name, email, role, status, ...(remote?.user?.id ? { authId: remote.user.id } : {}) })
+      store.updateUser(user.id, { name, email, role, roles, status, ...(remote?.user?.id ? { authId: remote.user.id } : {}) })
       if (remote?.user?.id) setAuthStatus(s => ({ ...s, [user.id]: { ...(s[user.id] || {}), authId: remote.user.id, email, authStatus: 'Created' } }))
       cancelUserEdit()
     } catch (error) {
@@ -163,7 +164,7 @@ export default function Users() {
   const closeCreate = () => {
     setCreateOpen(false)
     setCreateErr('')
-    setCreateDraft({ name: '', email: '', password: '', confirmPassword: '', role: 'RS' })
+    setCreateDraft({ name: '', email: '', password: '', confirmPassword: '', role: 'RS', roles: ['STANDARD_USER'] })
   }
 
   const createAccount = async event => {
@@ -177,7 +178,8 @@ export default function Users() {
     if (!EMAIL_RE.test(email)) return setCreateErr('Enter a valid email address.')
     if (password.length < 8) return setCreateErr('Password must be at least 8 characters.')
     if (password !== confirmPassword) return setCreateErr('Passwords do not match.')
-    if (!ASSIGNABLE.includes(createDraft.role)) return setCreateErr('Select a valid role.')
+    if (!ASSIGNABLE.includes(createDraft.role)) return setCreateErr('Select a valid operational role.')
+    if (!Array.isArray(createDraft.roles) || !createDraft.roles.length) return setCreateErr('Select at least one application role.')
     if (store.users.some(user => String(user.email || '').trim().toLowerCase() === email)) {
       return setCreateErr('That email is already registered.')
     }
@@ -185,12 +187,12 @@ export default function Users() {
     setCreateBusy(true)
     try {
       const remote = supabase
-        ? await adminUserRequest({ action: 'create', name, email, password, role: createDraft.role })
+        ? await adminUserRequest({ action: 'create', name, email, password, role: createDraft.role, roles: createDraft.roles })
         : null
       store.addUser({
         id: nextUserId(store.users),
         ...(remote?.user?.id ? { authId: remote.user.id } : {}),
-        name, email, role: createDraft.role, status: 'Active', created: today(),
+        name, email, role: createDraft.role, roles: createDraft.roles, status: 'Active', created: today(),
         // Supabase owns the password in cloud mode. Local demo mode retains
         // the existing browser-only credential model.
         ...(supabase ? { pw: '' } : { pw: password }),
@@ -301,6 +303,9 @@ export default function Users() {
             <label>Password<input type="password" autoComplete="new-password" value={createDraft.password} onChange={e => setCreateDraft(d => ({ ...d, password: e.target.value }))} placeholder="At least 8 characters" /></label>
             <label>Confirm password<input type="password" autoComplete="new-password" value={createDraft.confirmPassword} onChange={e => setCreateDraft(d => ({ ...d, confirmPassword: e.target.value }))} placeholder="Repeat password" /></label>
             <label>Role<select value={createDraft.role} onChange={e => setCreateDraft(d => ({ ...d, role: e.target.value }))}>{ASSIGNABLE.map(role => <option key={role} value={role}>{displayRoleLabel(role)}</option>)}</select></label>
+            <label>Application roles<select multiple value={createDraft.roles} onChange={e => setCreateDraft(d => ({ ...d, roles: [...e.target.selectedOptions].map(o => o.value) }))} aria-label="Application roles">
+              {LEVEL3_ROLE_IDS.map(id => <option key={id} value={id}>{LEVEL3_ROLES[id].name}</option>)}
+            </select><span className="hint">Hold Ctrl/Cmd to select more than one.</span></label>
           </div>
           {createErr && <div className="err-text" role="alert">{createErr}</div>}
           <div className="forms-actions users-create-actions"><button type="submit" className="primary" disabled={createBusy}>{createBusy ? 'Creating…' : 'Create account'}</button></div>
@@ -372,6 +377,9 @@ export default function Users() {
                         {u.role === 'SUPER' && <option value="SUPER">{displayRoleLabel('SUPER')}</option>}
                         {ASSIGNABLE.map(r => <option key={r} value={r}>{displayRoleLabel(r)}</option>)}
                       </select>
+                      <select multiple value={userDraft.roles || []} onChange={e => { setUserDraft(d => ({ ...d, roles: [...e.target.selectedOptions].map(o => o.value) })); setUserErr('') }} aria-label={`Application roles for ${u.name}`}>
+                        {[...new Set([...LEVEL3_ROLE_IDS, ...userRoles(u).filter(id => !LEVEL3_ROLE_IDS.includes(id))])].map(r => <option key={r} value={r}>{LEVEL3_ROLES[r]?.name || displayRoleLabel(r)}</option>)}
+                      </select>
                     </td>
                     <td><select value={userDraft.status} onChange={e => { setUserDraft(d => ({ ...d, status: e.target.value })); setUserErr('') }} aria-label={`Status for ${u.name}`}>
                       {['Active', 'Pending', 'Suspended'].map(status => <option key={status} value={status}>{status}</option>)}
@@ -381,7 +389,7 @@ export default function Users() {
                   <>
                     <td><div className="user-name-display"><b>{u.name}</b>{u.role === store.role && <span className="pill you"> You</span>}</div></td>
                     <td>{u.email || 'No email assigned'}</td>
-                    <td>{displayRoleLabel(u.role) || u.role}</td>
+                    <td><div>{displayRoleLabel(u.role) || u.role}</div><span className="hint">{userRoles(u).map(r => LEVEL3_ROLES[r]?.name || displayRoleLabel(r)).join(' · ')}</span></td>
                     <td><span className={`pill status-${u.status}`}>{u.status}</span></td>
                   </>
                 )}

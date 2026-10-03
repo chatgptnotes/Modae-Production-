@@ -25,13 +25,15 @@ const proposalFor = o => newProposal(o.id, o)
 // Opportunity Name, Stage, Probability… I need value, value and expected order
 // date… and I should know where is the next action pending." Opportunity Owner
 // and Updated were explicitly not required.
-test('the key-column set includes Proposal Send Date and Expected Order Date', () => {
+test('the key-column set includes dates but leaves Closed Reason to the full sheet', () => {
   const m = tracker.match(/const KEY_COLS = \[([^\]]*)\]/)
   assert.ok(m, 'KEY_COLS must exist')
   const keys = m[1].split(',').map(s => s.trim().replace(/'/g, '')).filter(Boolean)
   assert.deepEqual(keys, ['id', 'sellTo', 'oppName', 'stage', 'oppType', 'prob', 'valueK', 'proposalDate', 'orderDate', 'nextActionOwner'])
   assert.match(tracker, /label: 'Proposal Send Date'/)
   assert.match(tracker, /label: 'Expected Order Date'/)
+  assert.match(tracker, /\{ key: 'closedReason', letter: 'AA', label: 'Closed Reason\*'/)
+  assert.doesNotMatch(m[1], /closedReason/)
   assert.ok(!keys.includes('owner'), 'Owner is not required for a sales owner')
   assert.ok(!keys.includes('lastUpdated'), 'Updated is not required for a sales owner')
 })
@@ -40,11 +42,16 @@ test('opportunity proposal lookups tolerate incomplete hydration state', () => {
   assert.match(myOpps, /store\.proposals\?\.\[o\.id\]/)
 })
 
-test('sales owners open on the key columns, everyone else on the full sheet', () => {
-  assert.match(tracker, /const \[colView, setColView\] = useState\(\(\) =>/)
-  assert.match(tracker, /\? 'key' : 'all'/)
+test('all roles open on the readable key columns and can switch to the full sheet', () => {
+  assert.match(tracker, /const \[colView, setColView\] = useState\('key'\)/)
   // And the full sheet is one click away — nothing is removed.
   assert.match(tracker, /setColView\(colView === 'key' \? 'all' : 'key'\)/)
+})
+
+test('status filter is removed from the Opportunities toolbar and More menu', () => {
+  assert.doesNotMatch(tracker, /Filter opportunities by status/)
+  assert.doesNotMatch(tracker, /All statuses/)
+  assert.doesNotMatch(tracker, /statusFilter/)
 })
 
 test('Excel export includes every tracker column for every role', () => {
@@ -65,14 +72,22 @@ test('Value and COGS are editable for every tracker user while GM stays derived'
   assert.doesNotMatch(tracker, /name="lock"/)
 })
 
-test('registration details become visibly read-only after registration', () => {
-  assert.match(tracker, /Locked after registration/)
-  assert.match(tracker, /\['Intake', 'Registration'\]\.includes\(o\.milestone\)/)
+test('customer and opportunity detail editing is available in the workspace', () => {
+  assert.match(read('src/OpportunityDetailsEditor.jsx'), /CustomerPicker/)
+  assert.match(read('src/pages/Workbench.jsx'), /opp\.owner === store\.role \|\| isAdminRole\(store\.role\)/)
 })
 
 test('the opportunities table does not directly edit workflow stages', () => {
   assert.match(tracker, /Workflow stages are changed from the opportunity workspace/)
   assert.doesNotMatch(tracker, /store\.setMilestone\(o\.id, e\.target\.value/)
+})
+
+test('forecast dates retain inline editing while Expected Order Date has usable table width', () => {
+  assert.match(tracker, /orderDate: 10,/)
+  assert.match(tracker, /wAll: 7/)
+  assert.match(tracker, /<input type="date" value=\{o\.orderDate\} max=\{o\.invoiceDate/)
+  assert.match(tracker, /<input type="date" value=\{o\.invoiceDate\} min=\{o\.orderDate/)
+  assert.doesNotMatch(tracker, /ForecastDateInput/)
 })
 
 test('closed opportunities expose the shared mark-won control', () => {
@@ -89,14 +104,74 @@ test('closed terminal outcomes are explicit in the tracker stage cell', () => {
 
 test('tracker column text wraps at word boundaries without arbitrary word splitting', () => {
   assert.match(styles, /\.tracker-page \.tracker-th-label[\s\S]*overflow-wrap: normal;[\s\S]*word-break: normal;/)
-  assert.match(styles, /\.tracker-page \.sheet:not\(\.cols-key\) th,[\s\S]*overflow-wrap: break-word;[\s\S]*word-break: normal;/)
+  assert.match(styles, /\.tracker-page \.sheet:not\(\.cols-key\) th,[\s\S]*overflow-wrap: normal;[\s\S]*word-break: normal;/)
+  assert.match(styles, /\.tracker-page \.sheet:not\(\.cols-key\) \.tracker-th-label \{[\s\S]*overflow-wrap: normal;[\s\S]*word-break: normal;/)
   assert.match(styles, /\.tracker-page \.sheet:not\(\.cols-key\) thead tr > :nth-child\(2\)[\s\S]*white-space: nowrap;/)
 })
 
-test('key columns use dedicated readable width weights and natural wrapping', () => {
-  assert.match(tracker, /wKey: 27/)
-  assert.match(tracker, /\(!all && c\.wKey\) \|\| c\.w/)
-  assert.match(styles, /\.tracker-page \.sheet\.cols-key th, \.tracker-page \.sheet\.cols-key td[\s\S]*overflow-wrap: normal; word-break: normal;/)
+test('key columns use a complete percentage budget rather than pixel floors', () => {
+  const widths = tracker.match(/const KEY_COL_WIDTHS = \{([^}]+)\}/)?.[1]
+  assert.ok(widths)
+  const values = [...widths.matchAll(/\w+: (\d+),?/g)].map(([, value]) => Number(value))
+  assert.equal(values.length, 10)
+  assert.equal(values.reduce((sum, value) => sum + value, 0), 92)
+  assert.match(tracker, /const ROWHEAD_PCT = 3/)
+  assert.match(tracker, /width: \$\{KEY_COL_WIDTHS\[c\.key\]\}%; min-width: 0;/)
+  assert.doesNotMatch(tracker, /KEY_TABLE_MIN_WIDTH|--tracker-key-min-width/)
+})
+
+test('key view reserves a usable share for expected order dates', () => {
+  const widths = tracker.match(/const KEY_COL_WIDTHS = \{([^}]+)\}/)?.[1]
+  assert.ok(widths)
+  assert.match(widths, /orderDate: 10/)
+  assert.match(styles, /\.tracker-page \.sheet\.cols-key td input\[type="date"\] \{[\s\S]*?min-width: min\(10ch, 100%\);/)
+})
+
+test('numeric Value column stays compact while description keeps the recovered width', () => {
+  const widths = tracker.match(/const KEY_COL_WIDTHS = \{([^}]+)\}/)?.[1]
+  assert.ok(widths)
+  assert.match(widths, /valueK: 7/)
+  assert.match(widths, /oppName: 21/)
+  assert.match(tracker, /label: 'Value \(₹\)\*', num: true, w: 7/)
+  assert.match(styles, /table\.sheet\.cols-key td\.num,[\s\S]*white-space: nowrap;/)
+})
+
+test('desktop tracker actions stay on one logical row until the compact breakpoint', () => {
+  assert.match(styles, /\.tracker-page \.tracker-toolbar-actions \{\s*flex-wrap: nowrap;\s*justify-content: flex-end;/)
+  assert.match(styles, /@container workspace \(max-width: 70rem\) \{[\s\S]*?\.tracker-page \.tracker-toolbar-actions \{[\s\S]*?flex-wrap: wrap;/)
+})
+
+test('key table wraps narrow headers and values without spilling into adjacent columns', () => {
+  assert.match(styles, /\.tracker-page \.sheet\.cols-key \.tracker-th-label \{[^}]*white-space: normal;[^}]*overflow-wrap: anywhere;/)
+  assert.match(styles, /\.tracker-page \.sheet\.cols-key td\.tracker-free-text \{[^}]*overflow-wrap: anywhere;/)
+  assert.match(styles, /\.tracker-page \.sheet\.cols-key td input\[type="date"\][\s\S]*min-width: 0;/)
+  assert.match(styles, /\.tracker-page table\.sheet\.cols-key th\.th-filter \{ height: auto; min-height: 46px; \}/)
+  assert.match(styles, /\.tracker-page table\.sheet\.cols-key td \{ font-size: 12px; \}/)
+  assert.match(styles, /\.tracker-page table\.sheet\.cols-key th\.th-filter \{ font-size: 12px; \}/)
+  assert.match(styles, /\.tracker-page \.sheet\.cols-key th,\s*\.tracker-page \.sheet\.cols-key td \{ padding: 5px 4px; \}/)
+})
+
+test('Opportunities headers use plain table labels without boxed controls', () => {
+  assert.match(styles, /Flatten the first spreadsheet header row/)
+  assert.match(styles, /\.opportunities-page \.tracker-page table\.sheet thead \.tracker-th-control\s*\{[\s\S]*?border: 0;[\s\S]*?background: transparent;[\s\S]*?border-radius: 0;/)
+  assert.match(styles, /Keep the plain column labels on an opaque sticky strip while rows scroll/)
+  assert.match(styles, /\.opportunities-page \.tracker-page table\.sheet thead th\s*\{[\s\S]*?position: sticky;[\s\S]*?background: #FFFFFF !important;/)
+})
+
+test('key view does not pin the ID over the row number when columns narrow', () => {
+  assert.match(styles, /\.tracker-page table\.sheet\.cols-key tbody :is\(td\.rowhead, td\.oppid\) \{\s*position: static;\s*left: auto;/)
+  assert.match(styles, /\.tracker-page table\.sheet\.cols-key thead :is\(th\.rowhead, th:nth-child\(2\)\) \{\s*left: auto;/)
+})
+
+test('key Stage cell keeps the Mark Won control inside its narrow column', () => {
+  assert.match(styles, /\.tracker-page \.sheet\.cols-key \.tracker-stage-cell \{[^}]*flex-wrap: wrap;/)
+  assert.match(styles, /\.tracker-page \.sheet\.cols-key \.mark-won-control \{[^}]*flex: 0 1 auto;[^}]*white-space: normal;/)
+  assert.match(styles, /\.tracker-page \.sheet\.cols-key \.mark-won-control input \{[^}]*width: 13px;[^}]*min-width: 13px;/)
+})
+
+test('switching table views returns to the first column without vertical nudging', () => {
+  assert.match(tracker, /useLayoutEffect\(\(\) => \{[\s\S]*?sheetWrapRef\.current\.scrollLeft = 0[\s\S]*?\}, \[colView\]\)/)
+  assert.doesNotMatch(tracker, /wrap\.scrollTop = Math\.min/)
 })
 
 test('tracker has no trailing proposal action column', () => {
@@ -118,10 +193,10 @@ test('closing from the Status column requires outcome then reason', () => {
 })
 
 test('Won and Lost closure paths keep terminal milestones and reason notes aligned', () => {
-  assert.match(read('src/store.jsx'), /stage: 'Lost', status: 'Closed', closedReason: reason, closedReasonNote: reason === 'Others' \? reasonNote : '', milestone: 'Follow-up'/)
+  assert.match(read('src/store.jsx'), /stage: 'Lost', status: 'Closed', closedReason: reason, closedReasonNote: reason === 'Other' \? reasonNote : '', milestone: 'Follow-up'/)
   assert.match(read('src/store.jsx'), /stage: 'Won', status: 'Closed', closedReason: reason, closedReasonNote: reason === 'Other' \? reasonNote : '', milestone: 'Handover'/)
   assert.match(tracker, /o\.stage === 'Won' \? WON_REASONS : CLOSE_REASONS/)
-  assert.match(tracker, /closePending\.stage === 'Won' \? closeReason === 'Other' : closeReason === 'Others'/)
+  assert.match(tracker, /closeReason === 'Other'/)
 })
 
 test('tracker offers all, mine, and specific-owner filtering', () => {
@@ -133,9 +208,9 @@ test('tracker offers all, mine, and specific-owner filtering', () => {
   assert.match(tracker, /sortVal = \(o, key\) => \(DATE_KEYS\.includes\(key\) \? \(o\[key\] \|\| ''\)/)
 })
 
-test('show-all opportunity controls use text toggles instead of checkboxes', () => {
-  assert.match(tracker, /className=\{`scope-toggle\$\{ownerFilter === 'All' \? ' active' : ''\}`\}/)
-  assert.match(tracker, /aria-pressed=\{ownerFilter === 'All'\}/)
+test('opportunities scope uses the owner selector without a header checkbox', () => {
+  assert.doesNotMatch(tracker, /className="tracker-search-scope"/)
+  assert.doesNotMatch(tracker, /type="checkbox"[\s\S]*?checked=\{ownerFilter === 'All'\}/)
   assert.doesNotMatch(tracker, /className="mail-show-all tracker-show-all"[\s\S]*?type="checkbox"/)
   assert.match(myOpps, /className=\{`scope-toggle\$\{showAll \? ' active' : ''\}`\}/)
   assert.match(myOpps, /aria-pressed=\{showAll\}/)
@@ -152,6 +227,19 @@ test('manager tracker views do not show a redundant all-opportunities status lab
   assert.doesNotMatch(tracker, /Showing all opportunities/)
 })
 
+test('the opportunities toolbar does not show a total-value chip', () => {
+  assert.doesNotMatch(tracker, /title="Total value of the rows shown"/)
+  assert.doesNotMatch(tracker, /className="pill Blue"/)
+})
+
+test('the Opportunities toolbar uses compact borderless actions and a smaller primary create action', () => {
+  assert.match(styles, /\.opportunities-page \.tracker-page > \.toolbar button\s*\{[\s\S]*?min-height: 32px;[\s\S]*?border-color: transparent;[\s\S]*?background: transparent;[\s\S]*?font-size: 13px;/)
+  assert.match(styles, /\.opportunities-page \.tracker-page > \.toolbar \.tracker-create-logo\s*\{[\s\S]*?min-width: 144px;[\s\S]*?height: 32px;[\s\S]*?border-color: transparent;[\s\S]*?background: var\(--action-primary\);[\s\S]*?font-size: 13px;/)
+  assert.match(styles, /Merge the closed Opportunities controls into one flat header strip/)
+  assert.match(styles, /\.opportunities-page > \.tracker-page > \.toolbar \.tracker-create-logo\s*\{[\s\S]*?background: transparent;[\s\S]*?color: var\(--action-primary\)/)
+  assert.match(tracker, /className="tracker-create-logo"[\s\S]*?<Icon name="plus" size=\{16\} \/> Create opportunity/)
+})
+
 test('editable controls use a flattened surface treatment', () => {
   assert.match(styles, /\.shell :where\(input:not\(\[type='checkbox'\]\):not\(\[type='radio'\]\), select, textarea\)\s*\{[\s\S]*background: transparent;/)
   assert.match(styles, /\.shell :where\(input:not\(\[type='checkbox'\]\):not\(\[type='radio'\]\), select, textarea\)\s*\{[\s\S]*box-shadow: none;/)
@@ -165,9 +253,9 @@ test('spreadsheet focus does not render the red rectangular outline', () => {
   assert.match(styles, /table\.sheet td \.wrapcell:focus\s*\{[\s\S]*outline: 0;[\s\S]*box-shadow: inset 0 -2px 0 var\(--focus-ring\)/)
 })
 
-test('tracker makes the loaded-row count and empty-view cause explicit', () => {
-  assert.match(tracker, /const resultCountLabel = workspaceLoading[\s\S]*rows\.length === base\.length/)
-  assert.match(tracker, /className="tracker-result-count" aria-live="polite"/)
+test('tracker keeps its title uncluttered and makes empty-view causes explicit', () => {
+  assert.doesNotMatch(tracker, /resultCountLabel/)
+  assert.doesNotMatch(tracker, /tracker-result-count/)
   assert.match(tracker, /No opportunities are loaded for this view\./)
   assert.match(tracker, /All Opportunities is selected; the workspace currently contains no rows to display\./)
 })
@@ -182,12 +270,53 @@ test('tracker column controls compose filters and support select-all toggling', 
   assert.match(styles, /table\.sheet th\.th-filter[\s\S]*font-weight: 700/)
 })
 
+test('clicking a column name opens its menu without a separate arrow control', () => {
+  assert.match(tracker, /<button type="button" className="tracker-th-control"[\s\S]*onClick=\{e => openColumnMenu\(col, e\)\}/)
+  assert.match(tracker, /<span className="tracker-th-label">\{col\.label\}<\/span>/)
+  assert.doesNotMatch(tracker, /tracker-th-indicator/)
+  assert.match(tracker, /aria-sort=\{sort\?\.key === col\.key/)
+})
+
+test('key fields retain a filter menu when their header moves into row labels', () => {
+  assert.match(tracker, /aria-label="Sort and filter key opportunity field"/)
+  assert.match(tracker, /KEY_COLS\.map\(key =>/)
+  assert.match(tracker, /openColumnMenu\(COLS\.find\(col => col\.key === e\.currentTarget\.value\), e\)/)
+  assert.match(styles, /\.tracker-secondary-filter \{ display: none; \}/)
+  for (const index of [1, 7, 9, 13, 14, 19, 20, 23, 24, 30]) {
+    assert.match(tracker, new RegExp(`<span className="tracker-cell-label">\\{COLS\\[${index}\\]\\.label\\}<\\/span>`))
+  }
+})
+
+test('editable key fields keep accessible names when their headers are hidden', () => {
+  assert.match(tracker, /function WrapInput\(\{ value, onChange, title, label \}\)/)
+  assert.match(tracker, /<textarea[^>]*aria-label=\{label\}/)
+  for (const index of [9, 13, 14, 20, 24, 30]) {
+    assert.match(tracker, new RegExp(`aria-label=\\{COLS\\[${index}\\]\\.label\\}`))
+  }
+})
+
 test('tracker provides dual-layer global and quick filtering with removable chips', () => {
   assert.match(tracker, /matchesGlobalSearch\(o, searchTerm, COLS, cellVal\)/)
-  assert.match(tracker, /Filter opportunities by status/)
   assert.match(tracker, /className="tracker-filter-chips flex flex-wrap items-center gap-1"/)
   assert.match(tracker, /No opportunities match these filters\./)
   assert.match(tracker, /placeholder="Search all opportunities…"/)
+})
+
+test('opportunities search is a separate bordered field beside owner scope', () => {
+  assert.match(tracker, /className="tracker-owner-filter"[^>]*aria-label="Opportunity owner"/)
+  assert.match(tracker, /className="tracker-search" aria-label="Search all opportunities"/)
+  assert.match(styles, /\.opportunities-page > \.tracker-page > \.toolbar \.tracker-search-group \.tracker-search \{[\s\S]*?border: 1px solid var\(--border-color\) !important;[\s\S]*?border-radius: 8px !important;/)
+  assert.match(styles, /\.opportunities-page > \.tracker-page > \.toolbar \.tracker-search-group \.tracker-search:focus-within \{[\s\S]*?box-shadow: 0 0 0 2px var\(--primary-soft\) !important;/)
+  assert.match(styles, /\.opportunities-page > \.tracker-page > \.toolbar \.tracker-toolbar-filters > \.tracker-owner-filter \{[\s\S]*?border: 1px solid var\(--border-color\) !important;/)
+})
+
+test('date filter is available inside the Opportunities search surface', () => {
+  assert.doesNotMatch(tracker, /className=\{`tracker-date-filter-button\$\{dateFilterActive/)
+  assert.match(tracker, /className=\{`tracker-search-filter\$\{dateFilterActive/)
+  assert.match(tracker, /<Icon name="filter" size=\{14\} \/> <span>Filter<\/span>/)
+  assert.match(tracker, /aria-haspopup="dialog" aria-expanded=\{dateFilterOpen\}/)
+  assert.match(styles, /\.opportunities-page > \.tracker-page > \.toolbar \.tracker-search-group \{[\s\S]*?border: 1px solid var\(--border-color\);[\s\S]*?border-radius: 8px;/)
+  assert.match(styles, /\.tracker-search-filter-active \{[\s\S]*?text-transform: uppercase;/)
 })
 
 test('tracker date filter supports specific dates and calendar periods', () => {
@@ -222,8 +351,14 @@ test('My Opportunities shows the same working columns', () => {
 test('closed opportunities are labelled My Orders', () => {
   const tracker = read('src/pages/Tracker.jsx')
   assert.match(tracker, /\['Opportunities', 'My Orders'\]/)
-  assert.match(tracker, /sheet !== 'My Orders' \|\| o\.status === 'Closed'/)
+  assert.match(tracker, /sheet !== 'My Orders' \|\| \(o\.status === 'Closed' && o\.stage === 'Won'\)/)
   assert.doesNotMatch(tracker, /Old Closed Opps/)
+})
+
+test('My Orders contains Won opportunities only', () => {
+  const dashboard = read('src/pages/MyDashboard.jsx')
+  assert.match(dashboard, /o\.status === 'Closed' && o\.stage === 'Won'/)
+  assert.match(dashboard, /My orders \(Won\)/)
 })
 
 test('opportunity IDs open the full opportunity workspace', () => {

@@ -7,6 +7,7 @@ import { aiAttachmentPayload, supportsVisualAi } from '../aiAttachments.js'
 import { extractPdfText, parseTender, buildOpportunityDraft } from '../tenderParse.js'
 import { displayRole } from '../utils.js'
 import { opportunityOwnerFor } from '../leadRules.js'
+import CustomerPicker from '../CustomerPicker.jsx'
 
 const empty = {
   sellTo: '', category: '', location: '', eucName: '', eucLocation: '',
@@ -144,6 +145,11 @@ export default function IntakeForm({ destinationPicker = null }) {
   }
 
   const knownCustomer = store.customers.find(c => c.name.toLowerCase() === f.sellTo.trim().toLowerCase())
+  const createCustomer = name => {
+    const customer = { name, category: f.category || 'EUC', status: 'Blue', kyc: 'Pending', payment: '—' }
+    store.addCustomer(customer)
+    return customer
+  }
 
   const required = REQUIRED_FIELDS
 
@@ -200,7 +206,7 @@ export default function IntakeForm({ destinationPicker = null }) {
     }
     store.addOpportunity({
       sl: maxSl + 1, id,
-      sellTo, category: f.category, location: f.location,
+      sellTo, category: f.category, location: f.location, sellToCustomerLocation: f.location,
       customerStatus: knownCustomer ? knownCustomer.status : 'Blue',
       eucName: f.eucName, eucLocation: f.eucLocation, oppName: f.oppName,
       owner, oppType: f.oppType, bu: f.bu, segment: f.segment,
@@ -537,10 +543,14 @@ export default function IntakeForm({ destinationPicker = null }) {
                   list is empty, and a plain <select> would make the first real
                   enquiry impossible to file. Submit already creates the
                   customer (flagged Blue) when the name is a new one. */}
-              <Input field="sellTo" list="intake-customers" placeholder="Select or type customer name" />
-              <datalist id="intake-customers">
-                {store.customers.map(c => <option key={c.name} value={c.name} />)}
-              </datalist>
+              <CustomerPicker
+                customers={store.customers}
+                value={f.sellTo}
+                onChange={value => setF(previous => ({ ...previous, sellTo: value }))}
+                onCreate={createCustomer}
+                disabled={false}
+                label=""
+              />
               {f.sellTo && (
                 <div className="hint" style={{ marginTop: 2 }}>
                   {knownCustomer

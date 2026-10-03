@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useStore, reserveOppId } from '../store.jsx'
-import { CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS } from '../seed.js'
+import { CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, displayOpportunityId } from '../seed.js'
 import { extractPdfText, parseTender, matchParts, buildProposal, buildOpportunityDraft } from '../tenderParse.js'
 import { uploadOppFile } from '../filestore.js'
 import { fmt, sameCustomer } from '../utils.js'
@@ -312,7 +312,7 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
             </label>
             {target !== 'new' && (
               <select value={target} onChange={e => setTarget(e.target.value)} style={{ marginLeft: 24 }}>
-                {openOpps.map(o => <option key={o.id} value={o.id}>{o.id} — {o.oppName.slice(0, 50)}</option>)}
+                {openOpps.map(o => <option key={o.id} value={o.id}>{displayOpportunityId(o.id)} — {o.oppName.slice(0, 50)}</option>)}
               </select>
             )}
             <div className="costing-note">

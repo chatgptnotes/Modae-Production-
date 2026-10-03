@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
+import { displayOpportunityId } from '../seed.js'
 import { Icon } from '../icons.jsx'
 import IntakeForm from './IntakeForm.jsx'
 import TenderIntake from './TenderIntake.jsx'
@@ -52,7 +53,7 @@ export default function CreateOpportunity() {
             <label htmlFor="existing-opportunity">Existing opportunity</label>
             <select id="existing-opportunity" value={targetId} onChange={e => setTargetId(e.target.value)}>
               {visibleOpenOpps.length ? visibleOpenOpps.map(o => (
-                <option key={o.id} value={o.id}>{o.id} — {o.sellTo} — {o.oppName}</option>
+                <option key={o.id} value={o.id}>{displayOpportunityId(o.id)} — {o.sellTo} — {o.oppName}</option>
               )) : <option value="" disabled>No matching opportunities</option>}
             </select>
             {target && <span className="hint">New extracted tender lines will be saved to this opportunity.</span>}

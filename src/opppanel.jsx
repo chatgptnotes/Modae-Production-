@@ -4,7 +4,7 @@ import { useStore } from './store.jsx'
 import {
   SUBFOLDERS,
 } from './seed.js'
-import { fmt, fmtRupeesFromK, mmmYY, ddMmmYY, canViewCommercial, canPriceProposal, productList, solutionLabel } from './utils.js'
+import { fmt, fmtRupeesFromK, ddMmmYY, ddMMyyyy, canViewCommercial, canPriceProposal, productList, solutionLabel } from './utils.js'
 import { nextActionWith } from './gates.js'
 import { Icon } from './icons.jsx'
 import { Chip, ClassChip } from './ui.jsx'
@@ -176,10 +176,10 @@ export default function OppPanel({ oppId }) {
 
           <div className="fgroup">Dates</div>
           <div className="dgrid2">
-            <Field label="Create Date"><div className="ro">{mmmYY(opp.createDate)}</div></Field>
-            <Field label="Proposal Date"><div className="ro">{mmmYY(opp.proposalDate) || '—'}</div></Field>
-            <Field label="Expected Order Date *"><div className="ro">{opp.orderDate || '—'}</div></Field>
-            <Field label="Expected Ship Date *"><div className="ro">{opp.invoiceDate || '—'}</div></Field>
+            <Field label="Create Date"><div className="ro">{ddMMyyyy(opp.createDate)}</div></Field>
+            <Field label="Proposal Send Date"><div className="ro">{ddMMyyyy(opp.proposalDate) || '—'}</div></Field>
+            <Field label="Expected Order Date *"><div className="ro">{ddMMyyyy(opp.orderDate) || '—'}</div></Field>
+            <Field label="Expected Ship Date *"><div className="ro">{ddMMyyyy(opp.invoiceDate) || '—'}</div></Field>
             <Field label="Next Action Pending"><div className="ro">{opp.nextActionOwner || na.owner || '— none —'}</div></Field>
             <Field label="Last Updated"><div className="ro">{ddMmmYY(opp.lastUpdated)}</div></Field>
           </div>

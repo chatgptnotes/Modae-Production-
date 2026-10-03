@@ -7,15 +7,15 @@ import { fileURLToPath } from 'node:url'
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
 
-test('post-registration opportunity details are rendered read-only and guarded in the store', () => {
+test('active opportunity details remain editable only for the owner or admins', () => {
   const editor = read('src/OpportunityDetailsEditor.jsx')
   const workbench = read('src/pages/Workbench.jsx')
   const store = read('src/store.jsx')
   assert.match(editor, /editable = true/)
   assert.match(editor, /if \(!editable\) return <OpportunityDetailsView/)
-  assert.match(workbench, /\['Intake', 'Registration'\]\.includes\(opp\.milestone\)/)
-  assert.match(store, /Registration facts are editable only while the opportunity is being/)
-  assert.match(store, /captured\. Later stages, including Approval/)
+  assert.match(workbench, /opp\.status !== 'Closed'/)
+  assert.match(workbench, /opp\.owner === store\.role \|\| isAdminRole\(store\.role\)/)
+  assert.match(store, /Level 2 keeps customer and commercial details editable through the active workflow/)
   assert.match(store, /detailFields = new Set/)
 })
 

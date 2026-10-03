@@ -11,7 +11,7 @@ test('route lazy imports use guarded chunk recovery', () => {
   const app = read('src/App.jsx')
   assert.match(app, /import \{ lazyWithRecovery \} from ['"]\.\/lazyImport\.js['"]/
   )
-  assert.equal((app.match(/lazyWithRecovery\(\(\) => import\(/g) || []).length, 24)
+  assert.equal((app.match(/lazyWithRecovery\(\(\) => import\(/g) || []).length, 25)
   assert.doesNotMatch(app, /const Workbench = lazy\(/)
 })
 

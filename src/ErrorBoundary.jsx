@@ -25,7 +25,7 @@ export default class ErrorBoundary extends React.Component {
         <div style={{
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           gap: 12, minHeight: '100vh', padding: 24, textAlign: 'center',
-          background: '#f3f4f5', color: '#282828', fontFamily: 'Inter, system-ui, sans-serif',
+          background: '#f3f4f5', color: '#282828', fontFamily: 'Candara, Segoe UI, system-ui, sans-serif',
         }}>
           <h2 style={{ margin: 0 }}>{chunkFailure ? 'A new workspace version is available' : 'Something went wrong'}</h2>
           <p style={{ margin: 0, color: '#616161', maxWidth: 480 }}>

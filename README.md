@@ -9,17 +9,30 @@ submission, and follow-up.
 - Captures and reviews incoming leads.
 - Extracts enquiry details using AI when configured, with deterministic fallbacks.
 - Registers qualified leads as opportunities.
+- Fits every key opportunity column in one full-width table without horizontal
+  scrolling, including at browser zoom; the full 31-column table scrolls
+  horizontally. Clicking a column name opens its menu.
+  The Lead inbox always keeps enquiries in compact, fitted rows so every inbox
+  column remains visible without horizontal scrolling.
 - Tracks project, spares, and services opportunities.
 - Builds proposals, pricing, terms, and supporting documents.
 - Routes technical, commercial, and release approvals.
 - Stores opportunity files and supports SharePoint integration.
 - Provides dashboards, audit history, user administration, and workflow tools.
+- Offers a site-wide light/dark toggle that remembers the browser preference and
+  follows the device color scheme until a mode is selected.
 - Provides shared personal/global pipeline views, a common six-stage sales funnel,
   and closed-opportunity order reporting.
 - Provides an Excel pipeline upload preview; pipeline migration is a later step
   and previewed rows are not saved.
 - Admins can independently require final quote-release approval and approval of
   special customer commercial terms.
+- Level 2 intake supports searchable customer-master selection, inline creation
+  of new customers, internal enquiries, deferred KYC, active opportunity edits,
+  initials-free opportunity IDs, and structured win/loss reasons.
+- Level 3 user administration supports standard application roles, multiple
+  roles per user, and combined role-based page access while retaining the
+  existing Supabase Auth account flow.
 
 ## Technology
 

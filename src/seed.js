@@ -39,9 +39,7 @@ export const PRODUCTS = [
 export const PROB_LEVELS = ['Low', 'Medium', 'High']
 export const STAGES = ['Lead', 'RFI', 'Budgetary', 'RFQ', 'Firm Bid', 'Negotiate', 'Won', 'Lost']
 export const CLOSE_REASONS = [
-  'Relationship', 'Unique Product', 'Pedigree', 'Best Price', 'Trade Compliance',
-  'Technical Compliance', 'Commercial Compliance', 'Capability', 'Lead Time',
-  'No Bid', 'Abandoned/Delayed', 'Duplicate Opportunity', 'Validity Expired', 'Others',
+  'Technical capability/depth', 'Pricing', 'Competitor', 'Customer decision', 'Scope', 'Commercial terms', 'Other',
 ]
 export const WON_REASONS = [
   'Customer acceptance', 'Purchase order received', 'Commercial confirmation',
@@ -58,15 +56,32 @@ export const CUSTOMER_STATUSES = ['Green', 'Amber', 'Red', 'Blue']
 // entering the AI ecosystem". `channel` records the arrival, `source` the
 // origin, and only the latter answers "where does our work come from".
 export const LEAD_SOURCES = [
-  'Website enquiry',
+  'ModAE Website Inquiry',
   'Email',
-  'OEM referral',
-  'WhatsApp',
-  'Phone call',
-  'GeM / tender portal',
-  'Networking & relationship',
-  'Existing Green customer',
+  'OEM Referral / Networking / Relationship',
+  'WhatsApp / Phone Call',
+  'GeM / Tender Portals',
+  'Existing Customer',
+  'Internal / Non-sales Enquiry',
 ]
+
+// Values used in older workspaces and imported enquiries remain readable, but
+// all new lead-entry controls use the concise Level 2 labels above.
+export const LEGACY_LEAD_SOURCE_ALIASES = Object.freeze({
+  'Website enquiry': 'ModAE Website Inquiry',
+  Website: 'ModAE Website Inquiry',
+  'OEM referral': 'OEM Referral / Networking / Relationship',
+  'OEM/referral': 'OEM Referral / Networking / Relationship',
+  WhatsApp: 'WhatsApp / Phone Call',
+  'WhatsApp/phone': 'WhatsApp / Phone Call',
+  'Phone call': 'WhatsApp / Phone Call',
+  'GeM / tender portal': 'GeM / Tender Portals',
+  'GeM/tender': 'GeM / Tender Portals',
+  'Networking & relationship': 'OEM Referral / Networking / Relationship',
+  'Existing Green customer': 'Existing Customer',
+  'Existing customer': 'Existing Customer',
+  'Internal enquiry': 'Internal / Non-sales Enquiry',
+})
 
 // The demo launcher needs a small, deterministic opportunity set. These are
 // local fixtures only; production boot converts demo state to an empty
@@ -124,16 +139,15 @@ export function ownerIdFor(value, roleNames = {}) {
   return defaults ? defaults[0] : raw
 }
 
-// Older workspaces occasionally embedded an owner's display name in the
-// opportunity id (for example, 2609002R. Sundaram). Keep the stored primary
+// Older workspaces embedded an owner's code or display name in the opportunity
+// id (for example, 2609002RS or 2609002R. Sundaram). Keep the stored primary
 // key untouched because it is referenced by other workspace tables, but show
-// the canonical owner code anywhere the id is rendered.
+// the numeric-only ID anywhere the id is rendered.
 export function displayOpportunityId(value, roleNames = {}) {
   const raw = String(value || '')
   const match = raw.match(/^(\d{7})(.+)$/)
   if (!match) return raw
-  const owner = ownerIdFor(match[2], roleNames)
-  return owner === match[2] ? raw : `${match[1]}${owner}`
+  return match[1]
 }
 
 // The customer-facing portal is parked for now. The page, its routes and the
@@ -167,6 +181,25 @@ export const PERMS = {
   AN: ['mydashboard', 'inbox', 'tracker', 'my', 'proposal', 'proposalSent', 'pricelists', 'analytics', 'approvals', 'folders', 'aimap', 'launcher'],
   TECH: ['mydashboard', 'inbox', 'tracker', 'my', 'proposal', 'proposalSent', 'pricelists', 'analytics', 'approvals', 'aimap', 'launcher'],
   CUST: pages(['portal']),
+}
+
+// Level 3 application roles are additive to the historical operational role
+// IDs above. `role` remains the active persona/owner ID for compatibility,
+// while `roles` carries durable permission assignments.
+export const LEVEL3_ROLES = {
+  STANDARD_USER: { name: 'Standard User', label: 'Standard User', pages: SALES_PAGES },
+  TEAM_LEAD: { name: 'Team Lead', label: 'Team Lead', pages: [...SALES_PAGES, 'approvals'] },
+  MANAGEMENT: { name: 'Management', label: 'Management', pages: ['mydashboard', 'tracker', 'my', 'approvals', 'analytics', 'customers', 'audit', 'folders', 'po', 'launcher'] },
+  ADMIN: { name: 'Admin', label: 'Admin', admin: true, pages: pages(['mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'proposalSent', 'pricelists', 'analytics', 'customers', 'audit', 'users', 'aimap', 'admin', 'po', 'launcher', 'voice', 'portal']) },
+}
+
+export const LEVEL3_ROLE_IDS = Object.freeze(Object.keys(LEVEL3_ROLES))
+export const standardRoleIds = roles => (Array.isArray(roles) ? roles : [roles])
+  .map(role => String(role || '').trim().toUpperCase())
+  .filter(role => LEVEL3_ROLES[role] || ROLES[role])
+export const userRoles = user => {
+  const assigned = standardRoleIds(user?.roles)
+  return assigned.length ? assigned : standardRoleIds(user?.role)
 }
 
 // Opportunity lifecycle milestones (BT prototype stepper).
@@ -981,7 +1014,7 @@ export const seedHandover = {}
 // ---------------------------------------------------------------------------
 export const seedAiLeads = [
   {
-    id: 'LD-201', ts: '2026-08-10T10:15:00Z', channel: 'Email', source: 'Networking & relationship',
+    id: 'LD-201', ts: '2026-08-10T10:15:00Z', channel: 'Email', source: 'OEM Referral / Networking / Relationship',
     from: 'akhil.umesh@tatapower.example.in', sender: 'Akhil Umesh — Tata Power',
     subject: 'Request for quotation — Meggitt VMS spares (retrofit)',
     ref: 'RFQ/TP/2026/0814', route: 'Spares', urgency: 'Normal', duplicateRisk: 'Medium',
@@ -1005,7 +1038,7 @@ export const seedAiLeads = [
     },
   },
   {
-    id: 'LD-202', ts: '2026-08-09T16:40:00Z', channel: 'Email', source: 'OEM referral',
+    id: 'LD-202', ts: '2026-08-09T16:40:00Z', channel: 'Email', source: 'OEM Referral / Networking / Relationship',
     from: 'scm@epc-major.example.com', sender: 'Supply Chain — (large EPC)',
     subject: 'Provide offer price for VAMS system for Tarali PSP project',
     ref: 'EPC/TARALI/VAMS/26-118', route: 'Project', urgency: 'Urgent', duplicateRisk: 'Low',
@@ -1028,7 +1061,7 @@ export const seedAiLeads = [
     },
   },
   {
-    id: 'LD-203', ts: '2026-08-08T13:05:00Z', channel: 'Email', source: 'Existing Green customer',
+    id: 'LD-203', ts: '2026-08-08T13:05:00Z', channel: 'Email', source: 'Existing Customer',
     from: 'agm.koyna@mahagenco.example.in', sender: 'AGM (E&M) — MAHAGENCO Koyna',
     subject: 'Koyna Hydroelectric Project — offer for Stage 3 upgrade as discussed during visit',
     ref: 'KOYNA/ST3/2026', route: 'Project', urgency: 'Normal', duplicateRisk: 'Low',
@@ -1050,7 +1083,7 @@ export const seedAiLeads = [
     },
   },
   {
-    id: 'LD-204', ts: '2026-08-07T10:58:00Z', channel: 'Email', source: 'Website enquiry',
+    id: 'LD-204', ts: '2026-08-07T10:58:00Z', channel: 'Email', source: 'ModAE Website Inquiry',
     from: 'npd.sourcing@oem-customer.example.com', sender: 'NPD Sourcing',
     subject: 'Inquiry for Vibration Sensor Specifications & Pricing — VIBROTEST 60 or VST-100',
     ref: '', route: 'Spares', urgency: 'Normal', duplicateRisk: 'Low',
@@ -1070,7 +1103,7 @@ export const seedAiLeads = [
     },
   },
   {
-    id: 'LD-205', ts: '2026-08-06T09:20:00Z', channel: 'Email', source: 'GeM / tender portal',
+    id: 'LD-205', ts: '2026-08-06T09:20:00Z', channel: 'Email', source: 'GeM / Tender Portals',
     from: 'gembuyer@example.gov.in', sender: 'GeM Buyer — Cooling Tower Cell',
     subject: 'Technical Clarifications For GeM Bid — cooling tower fan gearbox vibration monitoring & control panel',
     ref: 'GEM/2026/B/7411347', route: 'Project', urgency: 'Urgent', duplicateRisk: 'Low',
@@ -1090,7 +1123,7 @@ export const seedAiLeads = [
     },
   },
   {
-    id: 'LD-206', ts: '2026-08-11T05:30:00Z', channel: 'Email', source: 'Phone call',
+    id: 'LD-206', ts: '2026-08-11T05:30:00Z', channel: 'Email', source: 'WhatsApp / Phone Call',
     from: 'procurement@capsa-realix.example.ae', sender: 'CAPSA Dubai / Realix',
     subject: 'Provide offer for VMS system and accessories',
     ref: 'CAPSA/VMS/2026-31', route: 'Spares', urgency: 'Normal', duplicateRisk: 'Low',
@@ -1115,7 +1148,7 @@ export const seedAiLeads = [
   // reference, same sender domain — exactly what duplicate detection is for, and
   // the reason the detector has something real to find in the demo.
   {
-    id: 'LD-207', ts: '2026-08-12T04:40:00Z', channel: 'Email', source: 'Networking & relationship',
+    id: 'LD-207', ts: '2026-08-12T04:40:00Z', channel: 'Email', source: 'OEM Referral / Networking / Relationship',
     from: 'akhil.umesh@tatapower.example.in', sender: 'Akhil Umesh — Tata Power',
     subject: 'Reminder: Request for quotation — Meggitt VMS spares (retrofit)',
     ref: 'RFQ/TP/2026/0814', route: 'Spares', urgency: 'Normal', duplicateRisk: 'High',
@@ -1143,7 +1176,7 @@ export const seedAiLeads = [
   // documents; the price list carries all five (see seedPriceLists.BNK).
   // Green so the flow exercises the existing fast track end to end.
   {
-    id: 'LD-208', ts: '2026-08-19T06:15:00Z', channel: 'Email', source: 'GeM / tender portal',
+    id: 'LD-208', ts: '2026-08-19T06:15:00Z', channel: 'Email', source: 'GeM / Tender Portals',
     from: 'purchase@ntpc-vindhyachal.example.gov.in', sender: 'Purchase — NTPC Vindhyachal',
     subject: 'Enquiry Ref 14716 — B&K Vibro spare sensors & accessories (GeM two-part bid)',
     ref: '14716', route: 'Spares', urgency: 'Normal', duplicateRisk: 'Low',

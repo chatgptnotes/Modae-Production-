@@ -162,7 +162,7 @@ export const INQUIRY_TEMPLATES = [
   {
     key: 'cms-upgrade',
     subject: 'Condition monitoring upgrade — enquiry for online CMS',
-    route: 'Project', oppType: 'Upgrade', urgency: 'Normal', refPrefix: 'CMS', source: 'Website enquiry',
+    route: 'Project', oppType: 'Upgrade', urgency: 'Normal', refPrefix: 'CMS', source: 'ModAE Website Inquiry',
     bu: 'Energy', segment: 'Industrial', product: 'B&K', suggestedOwner: 'RS',
     body: 'Hello,\n\nWe currently do route-based vibration data collection and want to move critical machines to online condition monitoring. Roughly 18 machines — fans, pumps and a compressor train.\n\nPlease share an indicative budgetary offer and a typical architecture.',
     attachments: [],

@@ -20,6 +20,7 @@ const PATHS = {
   star: <path d="m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9Z" />,
   printer: <><path d="M7 8V3.5h10V8" /><rect x="3" y="8" width="18" height="8" rx="1.5" /><path d="M7 16h10v4.5H7z" /></>,
   search: <><circle cx="11" cy="11" r="6.5" /><path d="m20 20-3.8-3.8" /></>,
+  filter: <path d="M4 5h16l-6.5 7v5l-3 2v-7Z" />,
   x: <path d="M6 6l12 12M18 6 6 18" />,
   check: <path d="m4.5 12.5 5 5 10-11" />,
   checkCircle: <><circle cx="12" cy="12" r="9" /><path d="m8 12.5 2.8 2.8L16.5 9" /></>,

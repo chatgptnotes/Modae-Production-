@@ -20,8 +20,8 @@ const css = read('src/styles.css')
 test('the brand palette is declared once, in the branding module', () => {
   assert.equal(MODAE_COLORS.primary, '#ED3F2F', "the website's .btn__primary")
   assert.equal(MODAE_COLORS.ink, '#282828')
-  assert.equal(MODAE_TYPE.heading.includes('Inter'), true)
-  assert.equal(MODAE_TYPE.body.includes('Inter'), true)
+  assert.equal(MODAE_TYPE.heading.includes('Candara'), true)
+  assert.equal(MODAE_TYPE.body.includes('Candara'), true)
 })
 
 test('styles.css mirrors the brand tokens', () => {
@@ -29,13 +29,12 @@ test('styles.css mirrors the brand tokens', () => {
   assert.match(root_, /--primary-accent: #ed3f2f/i)
   assert.match(root_, /--bg-sidebar: #282828/i)
   assert.match(root_, /--text-main: #282828/i)
-  assert.match(root_, /--font-heading: 'Inter'/)
-  assert.match(root_, /--font-body: 'Inter'/)
+  assert.match(root_, /--font-heading: 'Candara'/)
+  assert.match(root_, /--font-body: 'Candara'/)
 })
 
-// The 18 Aug guideline standardises DOCUMENT templates on Candara 11pt/12pt.
-// The app UI uses Inter; only printed/customer-facing proposal documents keep
-// the Candara face, on screen and in print alike.
+// The 18 Aug guideline standardises document templates on Candara 11pt/12pt.
+// The entire app now uses the same Candara face, on screen and in print alike.
 test('printed documents use the Candara document face', () => {
   assert.equal(MODAE_TYPE.document.includes('Candara'), true)
   const root_ = css.slice(css.indexOf(':root {'), css.indexOf('}', css.indexOf(':root {')))
@@ -47,7 +46,7 @@ test('printed documents use the Candara document face', () => {
     assert.match(rule, /font-size: 11pt/)
   }
   assert.match(css, /\.doc-h \{[^}]*font-size: 12pt/, 'guideline heading size')
-  assert.match(css, /--font-body: 'Inter'/, 'the website UI uses Inter')
+  assert.match(css, /--font-body: 'Candara'/, 'the website UI uses Candara')
 })
 
 test('document standards carry the exact approved furniture', () => {
@@ -125,24 +124,14 @@ test('buttons carry the website treatment at enterprise metrics', () => {
   assert.match(css, /button:focus-visible, \.btn:focus-visible/)
 })
 
-test('the web fonts are self-hosted and offline-cached', () => {
-  // A Google Fonts <link> would leave this PWA unstyled on a tablet with no
-  // signal, so the files ship with the app.
-  for (const f of ['inter-latin.woff2', 'inter-latin-ext.woff2']) {
-    assert.ok(exists(`public/fonts/${f}`), `public/fonts/${f} must be committed`)
-  }
+test('Candara is the system typography and is not network-dependent', () => {
   assert.doesNotMatch(read('index.html'), /fonts\.googleapis\.com|fonts\.gstatic\.com/)
   assert.doesNotMatch(css, /fonts\.googleapis\.com|fonts\.gstatic\.com/)
-
-  // latin-ext is not optional: the rupee sign lives there and this app prints ₹
-  // on nearly every screen.
-  assert.match(css, /U\+20AD-20C0/, 'latin-ext must cover U+20B9')
-  assert.match(css, /font-display: swap/)
+  assert.match(css, /--font-family-sans: 'Candara'/)
+  assert.match(css, /--font-family-mono: 'Candara'/)
 
   const sw = read('public/sw.js')
-  assert.match(sw, /'\/fonts\/inter-latin\.woff2'/)
   assert.match(sw, /url\.pathname\.startsWith\('\/fonts\/'\)/)
-  // A stale cache would keep serving the old shell in the system font.
   assert.match(sw, /const CACHE = 'wintrack-v6'/)
   assert.doesNotMatch(sw, /wintrack-v[1-5]/)
 })
@@ -156,14 +145,8 @@ test('nothing renders a hardcoded sky hex any more', () => {
   }
 })
 
-test('the funnel ramp is a validated sequential ramp, not the website ramp', () => {
-  // Checked with the dataviz validator in ordinal mode: monotone lightness,
-  // every adjacent gap >= 0.06, 1 degree of hue spread, light end 2.05:1 on
-  // white. The website's own chShade ramp fails all four — it runs
-  // light -> lighter and then drops to a chroma-free charcoal.
-  assert.equal(MODAE_COLORS.ramp.length, 6)
-  assert.equal(MODAE_COLORS.ramp[2], MODAE_COLORS.primary, 'brand red sits mid-ramp')
-  assert.equal(MODAE_COLORS.ramp.includes('#3A3A3A'), false, 'the charcoal step breaks monotonicity')
+test('the funnel uses the approved emerald and forest green stage ramp', () => {
+  assert.deepEqual(MODAE_COLORS.ramp, ['#064E3B', '#047857', '#059669', '#10B981', '#6EE7B7'])
   assert.match(read('src/pages/Analytics.jsx'), /const FUNNEL_RAMP = MODAE_COLORS\.ramp/)
 })
 

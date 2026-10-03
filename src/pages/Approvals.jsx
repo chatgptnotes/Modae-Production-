@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { ROLES } from '../seed.js'
+import { ROLES, displayOpportunityId } from '../seed.js'
 import { isApprover, canViewCommercial, ddMmmYY, displayRole, displayRoles, formatISTTime, fmt } from '../utils.js'
 import { useDrawer } from '../drawer.jsx'
 import { Icon } from '../icons.jsx'
@@ -125,10 +125,10 @@ function ApprovalBoqModal({ opp, proposal, store, onClose }) {
   const totalMargin = totals.target - totals.cost
 
   return (
-    <Modal title={`BOQ / COMMERCIAL REVIEW — ${opp.id}`} wide className="approval-boq-modal" onClose={onClose}>
+    <Modal title={`BOQ / COMMERCIAL REVIEW — ${displayOpportunityId(opp.id)}`} wide className="approval-boq-modal" onClose={onClose}>
       <div className="approval-boq-document-head">
         <div className="approval-boq-document-kicker">MATERIALS CONTROL // BILL OF QUANTITIES</div>
-        <div className="approval-boq-document-id">{opp.id}</div>
+        <div className="approval-boq-document-id">{displayOpportunityId(opp.id)}</div>
       </div>
       <dl className="approval-boq-meta">
         <div><dt>Customer</dt><dd>{opp.sellTo || 'Not recorded'}</dd></div>
@@ -138,7 +138,7 @@ function ApprovalBoqModal({ opp, proposal, store, onClose }) {
       </dl>
       <div className="approval-boq-table-wrap">
         <table className="approval-boq-table" aria-readonly="true">
-          <caption>Read-only bill of quantities and commercial review for {opp.id}</caption>
+          <caption>Read-only bill of quantities and commercial review for {displayOpportunityId(opp.id)}</caption>
           <colgroup>
             <col className="boq-col-index" /><col className="boq-col-description" /><col className="boq-col-part" />
             <col className="boq-col-qty" /><col className="boq-col-uom" /><col className="boq-col-unit" />

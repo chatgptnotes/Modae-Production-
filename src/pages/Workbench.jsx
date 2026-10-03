@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, WON_REASONS, REVISION_TYPES, DEFAULT_WORKFLOW, isWorkflowAvailable } from '../seed.js'
-import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY, gmailComposeHref, displayRole, displayRoles, displayRoleLabel, formatISTDateTime, productDisplayLabel } from '../utils.js'
+import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, WON_REASONS, REVISION_TYPES, DEFAULT_WORKFLOW, isWorkflowAvailable, displayOpportunityId } from '../seed.js'
+import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY, ddMMyyyy, gmailComposeHref, displayRole, displayRoles, displayRoleLabel, formatISTDateTime, productDisplayLabel } from '../utils.js'
 import { EMAIL_RE, recipientsValid, splitRecipients } from '../emailValidation.js'
 import { APPROVAL_5B, pricingThresholdExceptions, readiness, sparesSourcingBlockers, isBlocked, nextActionWith, transitionBlockers, isClarificationResolved, isClarificationCoveredByAnswer, actionableClarifications, displayClarifications, isClarificationCoveredBySource, releaseVoidReason, serviceOfferCleared } from '../gates.js'
 import { COMMERCIAL_RX } from './Approvals.jsx'
@@ -213,6 +213,7 @@ function OpportunityProgress({ activeStep, completedThrough, reviewing = false, 
 
 function CreatedOpportunityPanel({ opp, activeStep, onDismiss, onContinue }) {
   const route = opp.route || opp.oppType || 'opportunity'
+  const visibleOppId = displayOpportunityId(opp.id)
   const nextByRoute = {
     Service: ['Start Service Request', 'Confirm the request once, then prepare the standard rate schedule.'],
     Spares: ['Start requirement validation', 'Resolve customer clarifications before sourcing parts.'],
@@ -225,7 +226,7 @@ function CreatedOpportunityPanel({ opp, activeStep, onDismiss, onContinue }) {
       <div className="created-opportunity-mark"><Icon name="check" size={17} /></div>
       <div className="created-opportunity-copy">
         <div className="created-opportunity-kicker">Opportunity created</div>
-        <h2>{opp.id} is ready in the {route} workspace</h2>
+        <h2>{visibleOppId} is ready in the {route} workspace</h2>
         <p>{nextCopy}</p>
       </div>
       <div className="created-opportunity-facts" aria-label="Created opportunity details">
@@ -348,6 +349,7 @@ export default function Workbench() {
 }
 
 function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp, sharedRefreshError = '', onRetrySharedRefresh }) {
+  const visibleOppId = displayOpportunityId(opp.id, store.config?.roleNames)
   const nav = useNavigate()
   const [transition, setTransition] = useState(null)
   const [pendingTransition, setPendingTransition] = useState(null)
@@ -740,7 +742,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
           <Icon name="arrowLeft" size={13} /> Back to opportunities
         </Link>
         <div className="opp-summary-title">
-          <h1><span className="opp-id">{opp.id}</span><span className="opp-title-separator">-</span>{titleCase(opp.oppName)}</h1>
+          <h1><span className="opp-id">{visibleOppId}</span><span className="opp-title-separator">-</span>{titleCase(opp.oppName)}</h1>
           <ClassChip cls={opp.customerStatus} />
           <Chip tone="grey">{opp.route}</Chip>
           {/* Which of the diagram's three worlds this runs in — it decides the
@@ -883,15 +885,15 @@ function OverviewTab({ opp, detailsRef }) {
   ].join(' ')
 
   const dates = [
-    ['Created', ddMmmYY(opp.createDate)], ['Proposal', ddMmmYY(opp.proposalDate) || '—'],
-    ['Expected order', ddMmmYY(opp.orderDate) || '—'], ['Last updated', ddMmmYY(opp.lastUpdated)],
+    ['Created', ddMMyyyy(opp.createDate)], ['Proposal', ddMMyyyy(opp.proposalDate) || '—'],
+    ['Expected order', ddMMyyyy(opp.orderDate) || '—'], ['Last updated', ddMmmYY(opp.lastUpdated)],
     ['Age', `${ageDays(opp.createDate) ?? '—'} days`],
   ]
 
   return (
     <div className="workbench-overview">
-      {opp.milestone === 'Intake'
-        ? <OpportunityDetailsEditor ref={detailsRef} opp={opp} store={store} className="workbench-details-editor" />
+      {opp.status !== 'Closed'
+        ? <OpportunityDetailsEditor ref={detailsRef} opp={opp} store={store} className="workbench-details-editor" editable={opp.owner === store.role || isAdminRole(store.role)} />
         : <OpportunityDetailsView opp={opp} className="workbench-details-editor" />}
       <div className="workbench-overview-grid">
         <section className="workbench-panel">
@@ -1090,8 +1092,8 @@ function RegistrationTab({ opp, goTab, detailsRef, spares = false }) {
         )}
       </div>
       <div className="ana-card c-12">
-        {['Intake', 'Registration'].includes(opp.milestone)
-          ? <OpportunityDetailsEditor ref={detailsRef} opp={opp} store={store} className="workbench-details-editor" editable />
+        {opp.status !== 'Closed'
+          ? <OpportunityDetailsEditor ref={detailsRef} opp={opp} store={store} className="workbench-details-editor" editable={opp.owner === store.role || isAdminRole(store.role)} />
           : <OpportunityDetailsView opp={opp} className="workbench-details-editor" />}
       </div>
     </div>
@@ -1209,10 +1211,6 @@ function CustomerKycTab({ opp }) {
   const displayedKycStatus = leadKycVerified ? 'Valid' : (customer?.kyc || '—')
   const fee = store.config?.amberFee || { amount: 25000, cur: 'INR', days: 7 }
   const setState = (item, state, file, mode) => customer && store.setKycState(customer.name, item, state, file, mode)
-  const simulateAllKycDone = () => {
-    if (!customer || !canVerify || busy) return
-    items.forEach(item => store.setKycState(customer.name, item.name, 'Verified', undefined, 'simulated'))
-  }
   // items.forEach(item => store.setKycState(customer.name, item.name, 'Verified'))
   // item.key === 'kyc' && <button className="exception-action" onClick={() => openTransitionTab('customer')}>Open Customer/KYC</button>
   // Request {item.approvalType.toLowerCase()} from {blockerOwner(item)}
@@ -1469,9 +1467,6 @@ function CustomerKycTab({ opp }) {
         ) : <>
         <input ref={fileInput} type="file" style={{ display: 'none' }} onChange={onPick} />
         {customer && !canVerify && <p className="hint">Only AH can verify these documents.</p>}
-        {customer && canVerify && <button type="button" disabled={!canVerify || !!busy || items.every(k => k.state === 'Verified')} onClick={simulateAllKycDone}>
-          <Icon name="bot" size={12} /> Simulate all KYC done
-        </button>}
         {items.map(k => (
           <React.Fragment key={k.name}>
             <div className="check-row">
@@ -2375,7 +2370,7 @@ function FollowUpPane({ opp, onRevision }) {
     setFuDraft([
       `Hi ${escalationUser?.name || 'LJS'},`, '',
       `Please review this opportunity: ${opp.oppName} (${opp.id}), customer ${opp.sellTo || 'not recorded'}, route ${opp.route || 'not recorded'}.`,
-      `The proposal was submitted ${age} day(s) ago (${ddMmmYY(opp.proposalDate)}). No customer reply is recorded since submission.`,
+      `The proposal was submitted ${age} day(s) ago (${ddMMyyyy(opp.proposalDate)}). No customer reply is recorded since submission.`,
       `Owner: ${displayRole(opp.owner)}. Current milestone: ${opp.milestone || opp.stage || 'not recorded'}.`,
       '', 'Recent proposal/follow-up history:', latestHistory || 'No submission or follow-up communication is recorded.',
       '', 'Please advise on the next action. This is an internal escalation; no message has been sent to the customer.',
@@ -2561,7 +2556,7 @@ function FollowUpPane({ opp, onRevision }) {
         {age == null
           ? <p className="hint">Not yet submitted — the validity countdown starts at the proposal date.</p>
           : left > 0
-            ? <p style={{ fontSize: 12.5 }}>Validity: <b>{left} day(s) left</b> of {validityDays} (submitted {ddMmmYY(opp.proposalDate)}).</p>
+            ? <p style={{ fontSize: 12.5 }}>Validity: <b>{left} day(s) left</b> of {validityDays} (submitted {ddMMyyyy(opp.proposalDate)}).</p>
             : <WarnBox>Proposal validity expired {-left} day(s) ago — revalidate or issue a revision.</WarnBox>}
         {(store.config?.reminders || []).map(r => (
           <div key={r.id} className="check-row">
@@ -2613,13 +2608,13 @@ function FollowUpPane({ opp, onRevision }) {
                   <option value="">— loss reason (required) —</option>
                   {CLOSE_REASONS.map(r => <option key={r}>{r}</option>)}
                 </select>
-                {lossReason === 'Others' && <textarea value={lossReasonNote} onChange={e => setLossReasonNote(e.target.value)}
+                {lossReason === 'Other' && <textarea value={lossReasonNote} onChange={e => setLossReasonNote(e.target.value)}
                   maxLength={240} rows={3} placeholder="Enter the loss explanation" />}
                 <input placeholder="Competitor who won it (optional)" value={lossCompetitor}
                   onChange={e => setLossCompetitor(e.target.value)} />
-                <button disabled={!lossReason || (lossReason === 'Others' && !lossReasonNote.trim())} title={lossReason ? '' : 'Select a loss reason first'}
+                <button disabled={!lossReason || (lossReason === 'Other' && !lossReasonNote.trim())} title={lossReason ? '' : 'Select a loss reason first'}
                   onClick={() => {
-                    store.closeLost(opp.id, lossReason, lossCompetitor.trim() ? { name: lossCompetitor.trim() } : null, lossReason === 'Others' ? lossReasonNote.trim() : '')
+                    store.closeLost(opp.id, lossReason, lossCompetitor.trim() ? { name: lossCompetitor.trim() } : null, lossReason === 'Other' ? lossReasonNote.trim() : '')
                     setCloseOutcome(''); setLossReason(''); setLossReasonNote(''); setLossCompetitor('')
                   }}>
                   <Icon name="flag" size={13} /> Close as lost

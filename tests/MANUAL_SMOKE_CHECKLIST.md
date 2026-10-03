@@ -156,13 +156,29 @@ Our Ref 2511096RS) are retained with the local reference documents.
 
 - Nothing sky-blue or navy survives: chrome is ModAE red `#ED3F2F` on charcoal
   `#282828`.
-- Headings and body render in **Inter**. With DevTools offline-throttled
-  and a hard reload, they must still render — the fonts are precached, not linked.
+- Headings and body render in **Candara** where the system provides it, with the
+  documented fallback stack on other platforms.
 - Buttons are 7px-radius, primary is red with white text, **Danger is a distinct
   red** so a destructive action never reads as a primary button.
 - Prices show a real `₹` glyph, not a fallback-font one. (That is the latin-ext
   subset doing its job.)
 - Tablet dark mode: the accent lifts to `#EF7765`; nothing stays slate/sky.
+
+### Responsive wrapping and zoom — check on desktop and tablet
+
+- At 80%, 100%, 125%, 150%, 200%, and 400% browser zoom, long customer names,
+  URLs, filenames, IDs, and pasted descriptions wrap inside their cards or cells.
+- Toolbars, filters, headers, metadata rows, and action groups wrap or stack;
+  no controls overlap or force the whole page sideways.
+- Wide tables scroll horizontally inside their local table container; the page
+  itself does not gain an unexpected horizontal scrollbar.
+- On Opportunities, both key and all-column views stay as tables at high zoom
+  and narrow widths. Scroll within the grid; verify IDs, probability, both date
+  columns, and native date pickers remain readable and editable.
+- At the wide desktop reference width, all 11 key columns fit without a
+  horizontal scrollbar; switching views returns the grid to its left edge.
+- Inputs, selects, buttons, images, and modal content stay within their parent
+  bounds at each zoom level.
 
 ### Monthly bookings chart — My Dashboard
 

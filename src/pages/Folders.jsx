@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { SUBFOLDERS } from '../seed.js'
+import { SUBFOLDERS, displayOpportunityId } from '../seed.js'
 import { stageClass, displayRole } from '../utils.js'
 import * as filestore from '../filestore.js'
 import { getConfig } from '../sharepoint.js'
@@ -192,7 +192,7 @@ export default function Folders() {
                   onMouseLeave={disarm(o.id)} title={o.oppName}>
                   <SyncPill sync={(store.spSync || {})[o.id]} style={{ position: 'absolute', top: 3, left: 3 }} />
                   <FolderIcon cls={cls} pathStyle={pathStyle} />
-                  <div className="fname">{o.id}</div>
+                <div className="fname">{displayOpportunityId(o.id)}</div>
                   <div className="fmeta">{o.sellTo}</div>
                 </div>
               ))}
@@ -226,7 +226,7 @@ export default function Folders() {
         <div className="explorer-bar">
           <FolderIcon size={18} />
           <Link to="/folders">Sales - Opportunities</Link> ›
-          <Link to={`/folders/${opp.id}`}>{opp.id}</Link> ›
+          <Link to={`/folders/${opp.id}`}>{displayOpportunityId(opp.id)}</Link> ›
           <b>{subfolder}</b>
           <span style={{ flex: 1 }} />
           {cloudErr && <span className="hint" style={{ color: 'var(--lost-text)' }}>{cloudErr}</span>}
@@ -298,7 +298,7 @@ export default function Folders() {
       <div className="explorer-bar">
         <FolderIcon cls={stageClass(opp)} size={18} />
         <Link to="/folders">Sales - Opportunities</Link> ›
-        <b>{opp.id}</b>
+        <b>{displayOpportunityId(opp.id)}</b>
         <SyncPill sync={(store.spSync || {})[opp.id]} />
         <span style={{ flex: 1 }} />
         {cloudErr && <span className="hint" style={{ color: 'var(--lost-text)' }}>{cloudErr}</span>}
@@ -338,7 +338,7 @@ export default function Folders() {
       {subNames.includes('Proposal') && (
         <div className="hint" style={{ marginTop: 10 }}>
           The proposal workbook lives inside the <Link to={`/folders/${opp.id}/Proposal`}>Proposal</Link> folder —{' '}
-          <Link to={`/proposal/${opp.id}`}>open {opp.id} Proposal Workbook.xlsx ▸</Link>
+          <Link to={`/proposal/${opp.id}`}>open {displayOpportunityId(opp.id)} Proposal Workbook.xlsx ▸</Link>
         </div>
       )}
     </div>

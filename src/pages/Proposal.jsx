@@ -907,11 +907,8 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       const t = computeTotals(next)
       const valueK = Math.round(t.target / 1000)
       const cogsK = Math.round(t.cost / 1000)
-      if (isFinite(valueK) && isFinite(cogsK) && (valueK !== opp.valueK || cogsK !== opp.cogsK || !opp.proposalDate)) {
-        store.updateOpportunity(oppId, {
-          valueK, cogsK,
-          ...(opp.proposalDate ? {} : { proposalDate: new Date().toISOString().slice(0, 10) }),
-        })
+      if (isFinite(valueK) && isFinite(cogsK) && (valueK !== opp.valueK || cogsK !== opp.cogsK)) {
+        store.updateOpportunity(oppId, { valueK, cogsK })
       }
     }
   }
@@ -1195,16 +1192,6 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     setConditionTarget(null)
     setConditionNote('')
   }
-  const markSubmitted = () => {
-    store.addCommunication(oppId, {
-      to: opp.contactPerson || opp.sellTo,
-      subject: `${oppId} — Proposal Rev ${p.revision} submitted to customer`,
-      kind: 'submission',
-      revision: String(p.revision ?? ''),
-    })
-    if (!opp.proposalDate) store.updateOpportunity(oppId, { proposalDate: new Date().toISOString().slice(0, 10) })
-  }
-
   // Phase-one human-in-the-loop checkpoint. This is intentionally deterministic
   // in the local demo: production AI can replace the implementation while the
   // proposal state and UX remain the same.

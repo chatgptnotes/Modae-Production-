@@ -71,16 +71,8 @@ test('the reserved Fx slots reach every field the client puts them on', () => {
 
 // The client's sheet spells two close reasons wrong. We keep the corrected
 // spelling on screen, so an import has to accept theirs.
-test('close reasons cover the client list, typos included', () => {
-  const theirs = ['Relationship', 'Unique Product', 'Pedigreee', 'Best Price', 'Trade Compliance',
-    'Technical Compliance', 'Commercial Compliance', 'Capability', 'Lead Time', 'No Bid',
-    'Abandoned/Delayed', 'Duplicate Oppurtunity', 'Validity Expired', 'Others']
-  const alias = { Pedigreee: 'Pedigree', 'Duplicate Oppurtunity': 'Duplicate Opportunity' }
-  for (const reason of theirs) {
-    const ours = alias[reason] || reason
-    assert.ok(CLOSE_REASONS.includes(ours), `"${reason}" must map onto a close reason we offer`)
-  }
-  assert.equal(CLOSE_REASONS.length, theirs.length, 'no invented close reasons')
+test('close reasons use the Level 2 loss categories', () => {
+  assert.deepEqual(CLOSE_REASONS, ['Technical capability/depth', 'Pricing', 'Competitor', 'Customer decision', 'Scope', 'Commercial terms', 'Other'])
 })
 
 // ---------------------------------------------------------------------------
@@ -131,16 +123,15 @@ test('Central India is no longer silently routed to PP', () => {
 // Every lead used to carry source: 'Common mailbox', which recorded how it
 // arrived rather than where it came from, so "which channels produce work"
 // was unanswerable.
-test('the eight documented lead sources are offered', () => {
+test('the Level 2 lead sources are offered', () => {
   assert.deepEqual(LEAD_SOURCES, [
-    'Website enquiry',
+    'ModAE Website Inquiry',
     'Email',
-    'OEM referral',
-    'WhatsApp',
-    'Phone call',
-    'GeM / tender portal',
-    'Networking & relationship',
-    'Existing Green customer',
+    'OEM Referral / Networking / Relationship',
+    'WhatsApp / Phone Call',
+    'GeM / Tender Portals',
+    'Existing Customer',
+    'Internal / Non-sales Enquiry',
   ])
 })
 

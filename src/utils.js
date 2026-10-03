@@ -69,7 +69,7 @@ export function stageClass(o) {
   return o.stage === 'Won' ? 'won' : o.stage === 'Lost' ? 'lost' : 'open'
 }
 
-import { ROLES, PERMS } from './seed.js'
+import { ROLES, PERMS, LEVEL3_ROLES, userRoles } from './seed.js'
 
 // The provider refreshes this reference whenever persisted config changes. The
 // optional config argument keeps the resolver useful in pure/test contexts.
@@ -79,13 +79,15 @@ export const setRoleNameConfig = config => { activeRoleNames = config?.roleNames
 // Commercial visibility (Value/COGS/GM and pricing) follows the active persona,
 // per the wireframe's "Restricted — commercial data" rule. Forecast reporting
 // has its own scope because it is intentionally available to all internal roles.
-export const canViewCommercial = role => !!ROLES[role]?.commercial
-export const isAdminRole = role => !!ROLES[role]?.admin
+const roleList = role => Array.isArray(role) ? role : [role]
+const hasRoleDefinition = (role, field) => roleList(role).some(id => !!ROLES[id]?.[field] || (field === 'admin' && !!LEVEL3_ROLES[id]?.[field]))
+export const canViewCommercial = role => roleList(role).some(id => !!ROLES[id]?.commercial || id === 'MANAGEMENT' || id === 'ADMIN')
+export const isAdminRole = role => hasRoleDefinition(role, 'admin') || roleList(role).includes('ADMIN')
 // ADMIN and LJS are co-equal application authorities and may maintain supplier
 // price lists. SUPER remains the system-owner persona.
 export const canManagePriceLists = role => isAdminRole(role)
-export const isSalesOwner = role => !!ROLES[role]?.sales
-export const canViewForecast = role => !!ROLES[role] && !ROLES[role]?.external
+export const isSalesOwner = role => roleList(role).some(id => !!ROLES[id]?.sales || id === 'STANDARD_USER' || id === 'TEAM_LEAD')
+export const canViewForecast = role => roleList(role).some(id => !!ROLES[id] || !!LEVEL3_ROLES[id]) && !roleList(role).includes('CUST')
 export const forecastOwnerScope = role => isSalesOwner(role) ? role : null
 // A sales owner writes their own proposal, so they must see the numbers that go
 // into it — BoQ rates, landed cost, margin — even though they stay outside the
@@ -112,7 +114,7 @@ export const solutionList = v => (Array.isArray(v)
   : String(v || '').split(',').map(s => s.trim()).filter(Boolean))
 export const solutionLabel = v => solutionList(v).join(', ')
 // LJS (strategic) and AH (commercial & ops) decide gates; admins can see the queue.
-export const isApprover = role => role === 'LJS' || role === 'AH' || isAdminRole(role)
+export const isApprover = role => roleList(role).some(id => id === 'LJS' || id === 'AH' || id === 'TEAM_LEAD' || id === 'MANAGEMENT') || isAdminRole(role)
 export const displayRole = (role, config) => {
   if (!role) return ''
   return config?.roleNames?.[role] || activeRoleNames[role] || ROLES[role]?.name || role
@@ -130,7 +132,9 @@ export const displayRoleLabel = (role, config) => {
 export const displayRoles = (roles, separator = ' + ', config) =>
   (roles || []).map(role => displayRole(role, config)).filter(Boolean).join(separator)
 // Page-level permission from the PERMS matrix (unknown role sees nothing).
-export const canSeePage = (role, page) => (PERMS[role] || []).includes(page)
+export const canSeePage = (role, page) => roleList(role).some(id => (PERMS[id] || LEVEL3_ROLES[id]?.pages || []).includes(page))
+export const rolesForUser = user => userRoles(user)
+export const hasPermission = (role, permission) => canSeePage(role, permission)
 
 // Does a tender's spelled-out buyer name refer to a customer we already hold
 // under a short name? Compares the legal-suffix-stripped forms, and the long
@@ -341,6 +345,14 @@ export function ddMmmYY(dateStr) {
   if (!dateStr) return ''
   const [y, m, d] = dateStr.split('-')
   return `${d}-${MONTHS[parseInt(m, 10) - 1]}-${y.slice(2)}`
+}
+
+// "DD/MM/YYYY" style for user-facing proposal and forecast dates. Persisted
+// values remain ISO dates so inputs, sorting, and date filtering stay stable.
+export function ddMMyyyy(dateStr) {
+  if (!dateStr) return ''
+  const match = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/)
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : ''
 }
 
 // Evaluate an Excel-style formula ("=8.5%+2.5%+5%", "=112*1.16*0.5", "4299").

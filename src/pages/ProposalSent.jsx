@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { canPriceProposal, ddMmmYY, displayRole, fmtLakh, isSalesOwner } from '../utils.js'
+import { displayOpportunityId } from '../seed.js'
+import { canPriceProposal, ddMmmYY, ddMMyyyy, displayRole, fmtLakh, isSalesOwner } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { latestSubmissionForRevision } from '../submissionStatus.js'
 
@@ -19,18 +20,18 @@ const dateValue = date => {
   return Number.isFinite(value) ? value : 0
 }
 
-const sentDateFor = (opp, submission) => submission?.ts || opp.proposalDate || ''
+const sentDateFor = (opp, submission) => submission?.sentAt || opp.proposalDate || ''
 
 const formatSentDate = value => {
   const text = String(value || '')
   const isoDate = text.match(/^(\d{4})-(\d{2})-(\d{2})/)
-  if (isoDate) return ddMmmYY(`${isoDate[1]}-${isoDate[2]}-${isoDate[3]}`)
+  if (isoDate) return ddMMyyyy(`${isoDate[1]}-${isoDate[2]}-${isoDate[3]}`)
   const parsed = new Date(value)
   if (!Number.isFinite(parsed.getTime())) return ''
   const year = parsed.getFullYear()
   const month = String(parsed.getMonth() + 1).padStart(2, '0')
   const day = String(parsed.getDate()).padStart(2, '0')
-  return ddMmmYY(`${year}-${month}-${day}`)
+  return ddMMyyyy(`${year}-${month}-${day}`)
 }
 
 const statusFor = (opp, communications, submission) => {
@@ -192,7 +193,7 @@ export default function ProposalSent() {
             <tbody>
               {visibleRows.map(row => (
                 <tr key={row.opp.id}>
-                  <td><button className="proposal-sent-link" title={`${row.opp.id} — ${row.opp.oppName || 'Untitled opportunity'}`} aria-label={`Open follow-up for ${row.opp.id} — ${row.opp.oppName || 'Untitled opportunity'}`} onClick={() => nav(`/opp/${row.opp.id}/followup`)}><b>{row.opp.id}</b><span>{row.opp.oppName || 'Untitled opportunity'}</span></button></td>
+                  <td><button className="proposal-sent-link" title={`${displayOpportunityId(row.opp.id)} — ${row.opp.oppName || 'Untitled opportunity'}`} aria-label={`Open follow-up for ${displayOpportunityId(row.opp.id)} — ${row.opp.oppName || 'Untitled opportunity'}`} onClick={() => nav(`/opp/${row.opp.id}/followup`)}><b>{displayOpportunityId(row.opp.id)}</b><span>{row.opp.oppName || 'Untitled opportunity'}</span></button></td>
                   <td><span className="proposal-sent-cell-text" title={row.opp.sellTo || '—'}>{row.opp.sellTo || '—'}</span></td>
                   <td><span className="proposal-sent-cell-text" title={displayRole(row.opp.owner) || '—'}>{displayRole(row.opp.owner) || '—'}</span></td>
                   <td><span className="proposal-sent-revision">Rev-{row.revision}</span>{commercial && <span className="proposal-sent-value">{fmtLakh(row.opp.valueK || 0)}</span>}</td>

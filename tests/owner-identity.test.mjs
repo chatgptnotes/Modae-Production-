@@ -18,7 +18,8 @@ test('ownerIdFor preserves unknown values for auditability', () => {
 })
 
 test('legacy opportunity IDs display the canonical owner code', () => {
-  assert.equal(displayOpportunityId('2609002R. Sundaram'), '2609002RS')
-  assert.equal(displayOpportunityId('2609002RS'), '2609002RS')
+  assert.equal(displayOpportunityId('2609002R. Sundaram'), '2609002')
+  assert.equal(displayOpportunityId('2609002RS'), '2609002')
+  assert.equal(displayOpportunityId('2609002'), '2609002')
   assert.equal(displayOpportunityId('OP-1'), 'OP-1')
 })

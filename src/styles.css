@@ -1,4 +1,6 @@
+@import "tailwindcss/theme.css";
 @import "tailwindcss/utilities.css";
+@custom-variant dark (&:where(.dark, .dark *));
 
 * { box-sizing: border-box; }
 
@@ -12,19 +14,19 @@
    ------------------------------------------------------------------------- */
 :root {
   color-scheme: light;
-  --surface-canvas: #F7F7F8;
+  --surface-canvas: #F8F7F4;
   --surface-default: #FFFFFF;
   --surface-raised: #FFFFFF;
-  --surface-sunken: #F1F1F2;
+  --surface-sunken: #F9FAFB;
   --surface-inverse: #282828;
   --surface-inverse-raised: #3A3A3A;
-  --text-primary: #282828;
-  --text-secondary: #3F3F3F;
-  --text-tertiary: #616161;
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-tertiary: #64748B;
   --text-on-inverse: #ffffff;
   --text-on-accent: #ffffff;
-  --border-default: #E3E3E5;
-  --border-subtle: #EFEFF1;
+  --border-default: #D1D5DB;
+  --border-subtle: #F1F5F9;
   --border-inverse: rgba(255, 255, 255, .22);
   --color-primary: #ED3F2F;
   --color-primary-hover: #C7291B;
@@ -32,17 +34,17 @@
   --color-primary-soft: #FDEDEB;
   --color-crimson: #C93838;
   --color-crimson-soft: #FBE9E9;
-  --action-primary: var(--color-primary);
-  --action-primary-hover: var(--color-primary-hover);
-  --action-primary-active: var(--color-primary-active);
+  --action-primary: #1E1E24;
+  --action-primary-hover: #000000;
+  --action-primary-active: #000000;
   --action-primary-soft: var(--color-primary-soft);
-  --action-secondary-bg: #F1F1F2;
-  --action-secondary-text: #3F3F3F;
-  --action-secondary-border: #E3E3E5;
-  --action-secondary-hover: #EFEFF1;
-  --action-accent: var(--action-primary);
-  --action-accent-hover: var(--action-primary-hover);
-  --action-accent-ink: var(--action-primary-hover);
+  --action-secondary-bg: #FFFFFF;
+  --action-secondary-text: #374151;
+  --action-secondary-border: #D1D5DB;
+  --action-secondary-hover: #F5F5F4;
+  --action-accent: var(--color-primary);
+  --action-accent-hover: var(--color-primary-hover);
+  --action-accent-ink: var(--color-primary-hover);
   --action-accent-soft: var(--action-primary-soft);
   --action-accent-border: #F6C3BD;
   --status-success: #37A64A;
@@ -53,7 +55,7 @@
   --status-danger-soft: #FBE9E9;
   --status-info: #2F80ED;
   --status-info-soft: #E5F1FB;
-  --focus-ring: #2F80ED;
+  --focus-ring: #64748B;
   --shadow-color: rgba(40, 40, 40, .18);
   /* Brand source aliases retained for tooling and downstream integrations. */
   --primary-accent: #ed3f2f;
@@ -62,10 +64,10 @@
   --primary-soft: #fdedeb;
   --status-bad: #c93838;
   --bg-sidebar: #282828;
-  --bg-app: #F7F7F8;
-  --card-bg: #FFFFFF;
-  --text-main: #282828;
-  --text-muted: #616161;
+  --bg-app: var(--surface-canvas);
+  --card-bg: var(--surface-default);
+  --text-main: #0F172A;
+  --text-muted: #475569;
   --won-fill: #e8f6eb;
   --won-text: #237a33;
   --lost-fill: #fbe9e9;
@@ -74,9 +76,9 @@
   --amber-text: #8f6100;
   --status-good: #37a64a;
   --status-warn: #d99200;
-  --font-heading: 'Inter', 'Segoe UI', system-ui, sans-serif;
-  --font-body: 'Inter', 'Segoe UI', system-ui, sans-serif;
-  --font-document: 'Candara', 'Optima', 'Segoe UI', system-ui, sans-serif;
+  --font-heading: 'Candara', 'Segoe UI', system-ui, sans-serif;
+  --font-body: 'Candara', 'Segoe UI', system-ui, sans-serif;
+  --font-document: 'Candara', 'Segoe UI', system-ui, sans-serif;
 }
 
 /* Long-running document work gets its own stable surface so route changes and
@@ -121,7 +123,7 @@
 
 /* Accessible dark roles: light text is never placed on a light surface and
    the red action is lifted for AA contrast on dark surfaces. */
-.theme-dark {
+html.dark {
   color-scheme: dark;
   --surface-canvas: #0f1011;
   --surface-default: #16181a;
@@ -141,6 +143,9 @@
   --color-primary-hover: #F39C8E;
   --color-primary-active: #F6B4AD;
   --color-primary-soft: rgba(237, 63, 47, .18);
+  --action-primary: var(--color-primary);
+  --action-primary-hover: var(--color-primary-hover);
+  --action-primary-active: var(--color-primary-active);
   --action-secondary-bg: #1f2937;
   --action-secondary-text: #e2e8f0;
   --action-secondary-border: #475569;
@@ -243,7 +248,7 @@
 .funnel-stage-interactive:hover { opacity: .82; }
 .funnel-stage-link { cursor: pointer; }
 .funnel-stage-link:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
-@media (max-width: 900px) {
+@media (max-width: 900px), (max-width: 80em) {
   .proposal-sent-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .proposal-sent-filters { grid-template-columns: minmax(180px, 1fr) repeat(2, minmax(130px, 1fr)); }
   .proposal-sent-filters label:last-child { grid-column: span 1; }
@@ -261,13 +266,9 @@
   .proposal-sent-search { grid-column: 1 / -1; }
 }
 
-/* ---- ModAE web fonts ----------------------------------------------------
-   Self-hosted, not linked: this is an offline-capable PWA, and a Google Fonts
-   <link> would leave the app unstyled on a tablet with no signal. Inter is a
-   variable font, so one file per subset covers every UI weight we use.
-   latin-ext is not optional: the rupee sign (U+20B9)
-   lives there and this app prints ₹ on nearly every screen.
-   Refresh with scripts/fetch-modae-fonts.mjs. -------------------------------- */
+/* ---- ModAE typography ---------------------------------------------------
+   Candara is a system font. Unsupported platforms use the shared fallback
+   stack declared in the typography tokens above. --------------------------- */
 /* Compatibility palette tokens for legacy selectors. These values are
    centralized here so component rules never contain literal colors. */
 :root {
@@ -537,26 +538,6 @@
   --palette-aefcaaf6: rgba(99,102,241,var(--tint-a));
 }
 
-@font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url('/fonts/inter-latin.woff2') format('woff2');
-  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
-    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
-    U+FEFF, U+FFFD;
-}
-@font-face {
-  font-family: 'Inter';
-  font-style: normal;
-  font-weight: 100 900;
-  font-display: swap;
-  src: url('/fonts/inter-latin-ext.woff2') format('woff2');
-  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
-    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
-    U+2113, U+2C60-2C7F, U+A720-A7FF;
-}
 /* ---- ModAE brand identity ------------------------------------------------
    Mirrors MODAE_COLORS / MODAE_TYPE in src/branding/modae.js, which was read
    off mod-ae.com's own theme stylesheet. Keep the two in step — the app used to
@@ -565,12 +546,12 @@
    The token *names* are unchanged on purpose: ~370 var() call sites across this
    file reskin through them without being rewritten. --------------------------- */
 :root {
-  --font-heading: 'Inter', 'Segoe UI', system-ui, sans-serif;
-  --font-body: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --font-heading: 'Candara', 'Segoe UI', system-ui, sans-serif;
+  --font-body: 'Candara', 'Segoe UI', system-ui, sans-serif;
   /* Enterprise UI typography scale. Keep these tokens separate from the
      document font so dense workspace screens can evolve independently. */
-  --font-family-sans: 'Inter', 'Segoe UI', system-ui, sans-serif;
-  --font-family-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  --font-family-sans: 'Candara', 'Segoe UI', system-ui, sans-serif;
+  --font-family-mono: 'Candara', 'Segoe UI', system-ui, sans-serif;
   --fs-xs: .6875rem;
   --fs-sm: .75rem;
   --fs-base: .8125rem;
@@ -589,31 +570,29 @@
   --fw-medium: 500;
   --fw-semibold: 600;
   --fw-bold: 700;
-  /* Printed document templates only (18 Aug guideline): Candara cannot be
-     self-hosted, so the client's Windows machines render the real face and
-     everything else falls back. The app UI stays on the two tokens above. */
-  --font-document: 'Candara', 'Optima', 'Segoe UI', system-ui, sans-serif;
+  /* Candara is a Windows system font; other platforms use the fallbacks. */
+  --font-document: 'Candara', 'Segoe UI', system-ui, sans-serif;
 
-  --bg-sidebar: var(--palette-5c743b8);        /* charcoal — sidebar, table headers, dark bars */
+  --bg-sidebar: var(--palette-5c743b8);          /* existing workspace navigation */
   --bg-sidebar-2: var(--palette-be87547e);      /* raised surface inside dark chrome */
-  --bg-app: var(--palette-3380d128);            /* canvas */
-  --card-bg: var(--palette-7e6529f6);
-  /* Action aliases keep legacy selectors aligned with the ModAE red system. */
-  --primary-accent: var(--action-primary);
-  --primary-fill: var(--action-primary);
-  --primary-ink: var(--action-primary-hover);
-  --primary-hover: var(--action-primary-hover);
-  --primary-deep: var(--action-primary-active);
+  --bg-app: var(--surface-canvas);               /* warm workspace canvas */
+  --card-bg: var(--surface-default);
+  /* Brand accents remain ModAE red; primary action buttons use charcoal. */
+  --primary-accent: var(--color-primary);
+  --primary-fill: var(--color-primary);
+  --primary-ink: var(--color-primary-hover);
+  --primary-hover: var(--color-primary-hover);
+  --primary-deep: var(--color-primary-active);
   --primary-soft: var(--action-primary-soft);
   --primary-border: var(--action-accent-border);
   --teal: var(--palette-7471ade3);              /* secondary accent — neutral, not a second brand hue */
   --teal-dark: var(--palette-b463a55b);
   --teal-soft: var(--palette-acdce5fa);
-  --text-main: var(--palette-5c743b8);         /* headings */
-  --text-muted: var(--palette-7471ade3);
-  --text-subtle: var(--palette-a37f0155);
-  --border-color: var(--palette-1cf33820);
-  --border-soft: var(--palette-f16c243);
+  --text-main: var(--text-primary);              /* headings */
+  --text-muted: var(--text-secondary);
+  --text-subtle: var(--text-tertiary);
+  --border-color: var(--border-default);
+  --border-soft: var(--border-subtle);
 
   --r-card: 12px;
   --r-ctl: 7px;
@@ -621,7 +600,7 @@
   /* Legacy aliases — existing rules reskin through these, no rewrite needed */
   --xl-green: var(--primary-accent);
   --xl-green-dark: var(--primary-ink);
-  --hdr-navy: #475569;
+  --hdr-navy: #F9FAFB;
   --grid-line: var(--border-color);
   --header-fill: var(--palette-a8eed606);
   --select-fill: var(--primary-soft);
@@ -764,7 +743,6 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }
 .side-foot button.reset:hover { color: var(--palette-4843938); border-color: var(--palette-d2deb813); }
 .main-col { flex: 1; min-width: 0; width: calc(100% - var(--shell-nav-w, 216px)); margin-left: var(--shell-nav-w, 216px); display: flex; flex-direction: column; transition: margin-left .2s ease, width .2s ease; }
 .main-col { position: relative; }
-.shell-nav-burger { display: none; }
 .sidebar-mode-switch { display: flex; align-items: center; justify-content: flex-start; gap: 7px; width: 100%; text-align: left; }
 .topbar {
   display: flex; align-items: center; gap: 10px; background: var(--palette-4843938);
@@ -857,52 +835,6 @@ table.sheet td.cell-sel {
 .tracker-page .toolbar label { min-width: 0; }
 .filter-search { width: calc(100% - 16px); margin: 5px 8px; padding: 6px 8px; border: 1px solid var(--border-color); border-radius: 4px; }
 .link-button { margin-left: 6px; padding: 0; border: 0; background: transparent; color: var(--primary-accent); text-decoration: underline; cursor: pointer; }
-/* The bell is position:fixed, so it reserves no space and will sit on top of
-   whatever a page puts in its top-right corner. Page headers clear it with
-   --bell-clearance rather than a copied constant, so resizing the bell here
-   moves every header that avoids it. */
-:root { --bell-size: 42px; --bell-inset: 24px; --bell-clearance: calc(var(--bell-size) + 10px); }
-.notification-wrap { position: fixed; top: 14px; right: max(var(--bell-inset), env(safe-area-inset-right)); z-index: 20; display: flex; flex-direction: column; align-items: center; }
-.notification-button { position: relative; display: grid; place-items: center; width: var(--bell-size); height: var(--bell-size); padding: 0; border: 1px solid #E5E7EB; border-radius: 50%; background: #F3F4F6; color: #1F2937; cursor: pointer; box-shadow: 0 1px 3px rgba(15,23,42,.14); transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease, color .16s ease, transform .16s ease; }
-.notification-button:hover, .notification-button.is-open { border-color: #D1D5DB; background: #E5E7EB; color: #111827; box-shadow: 0 4px 10px rgba(15,23,42,.18); transform: scale(1.05); }
-.notification-button:focus-visible { outline: 2px solid #6B7280; outline-offset: 3px; }
-.notification-save-status { margin-top: 8px; }
-.notification-count { position: absolute; top: -4px; right: -4px; display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 5px; border: 0; border-radius: 999px; background: #DC2626; color: #FFF; font-size: 11px; font-weight: 800; line-height: 1; text-align: center; box-shadow: 0 0 0 2px #FFF; }
-.notification-overlay { position: fixed; inset: 0; z-index: -1; }
-.notification-popover { position: absolute; top: 52px; right: 0; width: min(400px, calc(100vw - 28px)); max-height: min(520px, calc(100vh - 78px)); border: 1px solid var(--border-color); border-radius: 9px; background: var(--palette-4843938); box-shadow: 0 10px 30px rgba(0,0,0,.16); overflow-y: auto; overflow-x: hidden; }
-.notification-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 12px 13px; border-bottom: 1px solid var(--border-soft); }
-.notification-heading > div { display: grid; gap: 3px; }
-.notification-heading span { color: var(--text-muted); font-size: 11px; }
-.notification-mark-read { padding: 0; border: 0; background: transparent; color: var(--primary-accent); font-size: 11px; font-weight: 700; white-space: nowrap; cursor: pointer; }
-.notification-mark-read:hover { text-decoration: underline; }
-/* justify-content is restated on every full-width button that reads as a list
-   row: the base button rule centres its content, which is right for a toolbar
-   button and wrong for a row of text. */
-.notification-item { display: flex; align-items: flex-start; justify-content: flex-start; width: 100%; min-height: 0; gap: 9px; padding: 8px 13px; border: 0; border-bottom: 1px solid var(--border-soft); background: transparent; color: var(--text-main); text-align: left; cursor: pointer; }
-.notification-item:hover { background: var(--header-fill); }
-/* Unread items carry a subtle surface tint and a small dot; reading does not
-   remove the active item from the panel. */
-.notification-item.unseen { background: var(--primary-soft); }
-.notification-item.unseen > .notification-signal { color: var(--primary-accent); }
-.notification-signal { position: relative; display: grid; flex: 0 0 auto; margin-top: 2px; color: var(--text-muted); }
-.notification-signal i { display: none; position: absolute; top: -3px; right: -4px; width: 6px; height: 6px; border: 1px solid var(--palette-4843938); border-radius: 50%; background: var(--primary-accent); }
-.notification-item.unseen .notification-signal i { display: block; }
-.notification-item.tone-critical .notification-signal { color: #B42318; }
-.notification-item.tone-success .notification-signal { color: #15803D; }
-.notification-item.tone-warning .notification-signal { color: #B45309; }
-.notification-date { flex: 0 0 auto; align-self: flex-start; color: var(--text-subtle); font-size: 10.5px; white-space: nowrap; }
-.notification-item > .ic { flex: 0 0 auto; margin-top: 2px; }
-.notification-item > span:not(.notification-signal) { display: grid; flex: 1; min-width: 0; gap: 2px; }
-.notification-item b, .notification-item small { overflow-wrap: anywhere; white-space: normal; }
-.notification-item b { line-height: 1.25; }
-.notification-item small { color: var(--text-muted); line-height: 1.35; }
-.notification-empty { margin: 0; padding: 18px 13px; }
-@media (max-width: 560px) {
-  :root { --bell-inset: 16px; }
-  .notification-wrap { top: 10px; }
-  .notification-popover { top: 50px; right: -2px; width: min(400px, calc(100vw - 24px)); max-height: calc(100vh - 68px); }
-}
-
 /* Admin workflow sub-tabs, save feedback, and compact configuration controls. */
 .admin-page .admin-workflow-tabs {
   position: sticky;
@@ -1047,7 +979,7 @@ button.primary, .btn.primary {
 button.primary:hover, .btn.primary:hover {
   background: var(--primary-hover); border-color: var(--primary-hover); filter: none;
 }
-button:not(.primary):not(.dark):not(.danger):not(.ghost):hover,
+button:not(.primary):not(.dark):not(.danger):not(.ghost):not(.dashboard-funnel-row):hover,
 .btn:not(.primary):not(.dark):not(.danger):not(.ghost):hover {
   background: var(--action-secondary-hover);
   border-color: var(--action-secondary-border);
@@ -1088,7 +1020,7 @@ select, input[type=text], input[type=number], input[type=date], input[type=tel],
 }
 
 /* Pipeline-report grid: navy header band like the real sheet */
-.sheet-wrap { overflow-x: auto; background: var(--palette-4843938); border: 1px solid var(--grid-line); }
+.sheet-wrap { overflow-x: auto; background: var(--surface-default); border: 1px solid var(--grid-line); }
 /* Data tables that should use the width they are given. These wrappers used to
    carry hardcoded inline caps (720-980px), which left a wide blank band to the
    right of the table on every screen bigger than the cap. The cap is now a
@@ -1628,95 +1560,12 @@ table.sheet td.internal { background: var(--border-soft) !important; color: var(
   }
   .tracker-page .toolbar > .spacer { display: none; }
   .tracker-page .tracker-search { width: auto; min-width: 0; }
-  .tracker-page .sheet-wrap {
-    overflow-x: hidden;
-    border: 0;
-    background: transparent;
-  }
-  .tracker-page table.sheet,
-  .tracker-page table.sheet thead,
-  .tracker-page table.sheet tbody,
-  .tracker-page table.sheet tfoot,
-  .tracker-page table.sheet tr,
-  .tracker-page table.sheet td {
-    display: block;
-    width: 100% !important;
-    min-width: 0 !important;
-    max-width: none !important;
-    box-sizing: border-box;
-  }
-  .tracker-page table.sheet { table-layout: auto !important; background: transparent; }
-  .tracker-page table.sheet thead { display: none; }
-  .tracker-page table.sheet tbody { display: grid; gap: .75rem; }
-  .tracker-page table.sheet tbody tr.rowclick {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    overflow: hidden;
-    border: 1px solid var(--grid-line);
-    border-radius: .5rem;
-    background: var(--palette-4843938);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, .06);
-  }
-  .tracker-page table.sheet tbody tr.rowclick td {
-    display: grid;
-    grid-template-columns: minmax(7.5rem, 34%) minmax(0, 1fr);
-    align-items: start;
-    gap: .5rem;
-    padding: .55rem .7rem;
-    border: 0;
-    border-bottom: 1px solid var(--border-soft);
-    white-space: normal;
-    overflow-wrap: anywhere;
-    word-break: normal;
-    text-align: left;
-  }
-  .tracker-page table.sheet tbody tr.rowclick td:last-child { border-bottom: 0; }
-  .tracker-page table.sheet tbody tr.rowclick td::before {
-    content: var(--tracker-cell-label);
-    min-width: 0;
-    color: var(--text-muted);
-    font-size: .68rem;
-    font-weight: 700;
-    line-height: 1.25;
-    text-transform: uppercase;
-    letter-spacing: .03em;
-  }
-  .tracker-page table.sheet tbody tr.rowclick td.rowhead {
-    display: none;
-  }
-  .tracker-page table.sheet tbody tr.rowclick td > * {
-    min-width: 0;
-    max-width: 100%;
-    overflow-wrap: anywhere;
-    white-space: normal;
-  }
-  .tracker-page table.sheet tbody tr.rowclick td input,
-  .tracker-page table.sheet tbody tr.rowclick td select,
-  .tracker-page table.sheet tbody tr.rowclick td textarea,
-  .tracker-page table.sheet tbody tr.rowclick td .cell-pick {
-    width: 100%;
-    box-sizing: border-box;
-  }
-  .tracker-page table.sheet tbody tr:not(.rowclick) td.tracker-empty-state {
-    display: grid;
-    gap: .35rem;
-    text-align: center;
-    border: 1px solid var(--grid-line);
-    border-radius: .5rem;
-    padding: 1rem;
-  }
-  .tracker-page table.sheet tbody tr:not(.rowclick) td.tracker-empty-state::before { display: none; }
-  .tracker-page table.sheet tfoot { margin-top: .75rem; }
-  .tracker-page table.sheet tfoot tr,
-  .tracker-page table.sheet tfoot td { display: block; width: 100%; box-sizing: border-box; }
-  .tracker-page table.sheet tfoot td:not(:first-child) { display: none; }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 480px), (max-width: 40em) {
   .tracker-page .toolbar { grid-template-columns: minmax(0, 1fr); }
   .tracker-page .toolbar > .tracker-search,
   .tracker-page .toolbar > .tracker-filter-chips { grid-column: 1; }
-  .tracker-page table.sheet tbody tr.rowclick td { grid-template-columns: 1fr; gap: .25rem; }
 }
 
 /* OneDrive-style folder wall */
@@ -2285,6 +2134,32 @@ a.oppid-link:hover { text-decoration: underline; }
 .analysis-compare-legend, .dashboard-win-loss-compare-legend { display: flex; justify-content: space-between; gap: 16px; margin-top: 10px; color: var(--text-secondary); font-size: 12px; }
 .analysis-compare-legend span { display: flex; align-items: center; gap: 8px; }
 .analysis-compare-legend strong { color: var(--text-primary); font-size: 13px; }
+.win-loss-pie { display: flex; align-items: center; justify-content: center; gap: clamp(18px, 4vw, 42px); min-width: 0; margin: 18px auto 4px; }
+.win-loss-pie-chart { display: grid; flex: 0 0 auto; place-items: center; width: clamp(116px, 15vw, 168px); aspect-ratio: 1; border-radius: 50%; color: var(--text-primary); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-primary) 10%, transparent); }
+.win-loss-pie-chart > span { font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.win-loss-pie.is-empty .win-loss-pie-chart { background: var(--border-subtle); color: var(--text-secondary); }
+.win-loss-pie-legend { display: grid; gap: 14px; min-width: 0; }
+.win-loss-pie-legend > div { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.win-loss-pie-legend i { flex: 0 0 auto; width: 12px; height: 12px; border-radius: 3px; }
+.win-loss-pie-legend i.won { background: var(--status-success); }
+.win-loss-pie-legend i.lost { background: var(--status-danger); }
+.win-loss-pie-legend span { display: grid; gap: 2px; min-width: 0; }
+.win-loss-pie-legend b { color: var(--text-primary); font-size: 13px; }
+.win-loss-pie-legend small { color: var(--text-secondary); font-size: 11px; }
+.win-loss-pie.is-compact { justify-content: flex-start; gap: 14px; margin: 0; }
+.win-loss-pie.is-compact .win-loss-pie-chart { width: 96px; }
+.win-loss-pie.is-compact .win-loss-pie-chart > span { font-size: 15px; }
+.win-loss-pie.is-compact .win-loss-pie-legend { gap: 9px; }
+.win-loss-pie.is-compact .win-loss-pie-legend > div { gap: 7px; }
+.win-loss-pie.is-compact .win-loss-pie-legend b { font-size: 11px; }
+.win-loss-pie.is-compact .win-loss-pie-legend small { font-size: 10px; }
+.analysis-value-compare .win-loss-pie { margin-top: 22px; }
+@media (max-width: 520px) {
+  .analysis-value-compare { padding: 16px; }
+  .win-loss-pie:not(.is-compact) { justify-content: flex-start; gap: 20px; }
+  .win-loss-pie:not(.is-compact) .win-loss-pie-chart { width: 112px; }
+  .win-loss-pie:not(.is-compact) .win-loss-pie-legend { gap: 10px; }
+}
 .analysis-insight-grid { display: grid; grid-template-rows: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .analysis-insight { display: flex; flex-direction: column; justify-content: center; gap: 5px; padding: 15px 18px; border-left: 3px solid var(--border-default); }
 .analysis-insight.good { border-left-color: var(--status-success); }
@@ -2322,9 +2197,6 @@ a.oppid-link:hover { text-decoration: underline; }
 .dashboard-win-loss-rate, .dashboard-win-loss-insight { display: flex; flex-direction: column; justify-content: center; gap: 4px; }
 .dashboard-win-loss-rate strong { color: var(--text-primary); font-size: 34px; line-height: 1; letter-spacing: -.05em; }
 .dashboard-win-loss-rate > span:last-child, .dashboard-win-loss-insight > span:last-child { color: var(--text-secondary); font-size: 11px; }
-.dashboard-win-loss-compare { padding: 2px 0; }
-.dashboard-win-loss-compare-head { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 10px; color: var(--text-secondary); font-size: 11px; font-weight: 700; }
-.dashboard-win-loss-compare-legend b { font-weight: 800; }
 .dashboard-win-loss-insight { padding-left: 16px; border-left: 1px solid var(--border-subtle); }
 .dashboard-win-loss-insight b { overflow: hidden; color: var(--text-primary); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
 .dashboard-win-loss-empty { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 74px; padding: 12px 14px; border: 1px dashed var(--border-default); background: var(--surface-raised); }
@@ -3119,25 +2991,6 @@ table.sheet td.locked { color: var(--text-subtle); text-align: center; backgroun
   }
 }
 
-@media (max-width: 1024px) {
-  .shell-nav-burger {
-    position: fixed;
-    top: 12px;
-    left: 14px;
-    z-index: 42;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 38px;
-    height: 38px;
-    padding: 0;
-    border: 1px solid var(--border-color);
-    border-radius: 8px;
-    background: var(--palette-4843938);
-    color: var(--text-main);
-    box-shadow: 0 4px 14px var(--palette-8946acb8);
-  }
-}
 @media (max-width: 700px) {
   .proposal-preview-modal { top: 2vh; width: 96vw; max-height: 96vh; padding: 12px; }
   .proposal-preview-toolbar { align-items: flex-start; flex-direction: column; }
@@ -3248,7 +3101,7 @@ tr.rowclick { cursor: pointer; }
 }
 .drawer {
   position: fixed; top: 0; right: 0; bottom: 0; width: min(480px, 96vw);
-  background: var(--palette-4843938); z-index: 40; box-shadow: -4px 0 18px var(--palette-5ea69147);
+  background: var(--surface-default); z-index: 40; box-shadow: -4px 0 18px var(--palette-5ea69147);
   display: flex; flex-direction: column;
   transform: translateX(102%); transition: transform .25s ease;
 }
@@ -3273,7 +3126,7 @@ tr.rowclick { cursor: pointer; }
   border-right: 1px solid var(--grid-line); background: var(--palette-10692a31); color: var(--palette-4bf509); border-radius: 0;
   flex: none; white-space: nowrap;
 }
-.drawer-tabs .dtab.active { background: var(--palette-4843938); font-weight: 700; color: var(--xl-green-dark); box-shadow: inset 0 2px 0 var(--xl-green); }
+.drawer-tabs .dtab.active { background: var(--surface-default); font-weight: 700; color: var(--xl-green-dark); box-shadow: inset 0 2px 0 var(--xl-green); }
 .drawer-files { padding: 10px 14px; border-bottom: 1px solid var(--grid-line); }
 .drawer-files-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .drawer-propsum { margin-top: 10px; }
@@ -3337,7 +3190,7 @@ tr.rowclick { cursor: pointer; }
 .opportunity-details-actions button { padding: 3px 9px; font-size: 11.5px; }
 .tracker-oppid-actions { display: flex; align-items: center; justify-content: space-between; gap: 5px; min-width: 0; }
 .tracker-oppid-actions > a { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.workbench-details-editor { background: var(--palette-4843938); border: 1px solid var(--border-soft); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; box-shadow: 0 2px 8px var(--palette-9c5f15c9); }
+.workbench-details-editor { background: var(--surface-default); border: 1px solid var(--border-soft); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; box-shadow: 0 2px 8px var(--palette-9c5f15c9); }
 .workbench-details-editor .opportunity-details-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 @media (max-width: 900px) { .workbench-details-editor .opportunity-details-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 620px) { .workbench-details-editor .opportunity-details-grid { grid-template-columns: 1fr; } }
@@ -3515,7 +3368,7 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 /* Gmail-inspired mailbox list — the lead remains a workflow record, but the
    inbox itself reads like mail: search first, tabs second, messages in rows. */
 .mailbox-page { padding-top: 18px; }
-.mailbox-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; padding-right: var(--bell-clearance); }
+.mailbox-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 .mailbox-head h2 { display: flex; align-items: center; gap: 7px; margin-bottom: 3px; }
 .mailbox-head p { margin: 0; }
 .mailbox-head-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; align-items: center; }
@@ -3526,13 +3379,13 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .mail-search-row select { padding: 7px 9px; border-radius: 5px; }
 .mail-show-all { display: inline-flex; align-items: center; gap: 5px; color: var(--text-muted); white-space: nowrap; }
 .mail-show-all-static { padding: 7px 9px; border: 1px solid var(--border-color); border-radius: 5px; background: var(--surface-sunken); font-size: 12px; font-weight: 650; }
-.mailbox-list { container-type: inline-size; overflow-x: auto; background: var(--palette-4843938); border: 1px solid var(--border-color); border-top: 0; box-shadow: 0 2px 8px var(--palette-9c5f15c9); }
-.mail-list-toolbar { display: flex; align-items: center; gap: 5px; min-height: 44px; padding: 5px 10px; border-bottom: 1px solid var(--border-soft); color: var(--text-muted); }
+.mailbox-list { container-type: inline-size; overflow-x: hidden; background: var(--palette-4843938); border: 1px solid var(--border-color); border-top: 0; box-shadow: 0 2px 8px var(--palette-9c5f15c9); }
+.mail-list-toolbar { display: flex; align-items: center; grid-column: 1 / span 2; gap: 2px; min-width: 0; min-height: 0; height: 100%; padding: 0; border: 0; color: var(--text-muted); }
 .mail-check { display: inline-flex; align-items: center; justify-content: center; width: 30px; flex: 0 0 30px; cursor: pointer; }
 .mail-check input { accent-color: var(--primary-accent); }
 /* min-height:0 releases the base button's 40px floor, which would otherwise beat
    the 30px height and render this circle as an oval. */
-.mail-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; min-height: 0; padding: 0; border: 0; background: transparent; color: var(--text-muted); border-radius: 50%; }
+.mail-icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; min-height: 0; padding: 0; border: 0; background: transparent; color: var(--text-muted); border-radius: 50%; }
 .mail-icon-btn:hover, .mail-star:hover { color: var(--primary-deep); background: var(--primary-soft); filter: none; }
 .mail-icon-btn.mail-delete-btn:hover { color: var(--palette-bbf39d23); background: var(--palette-cb21daf); }
 .mail-selection-count { margin-left: 8px; font-size: 12px; color: var(--primary-deep); font-weight: 600; }
@@ -3541,7 +3394,7 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .mail-action-menu button { display: block; width: 100%; padding: 7px 9px; border: 0; background: transparent; color: var(--text-main); text-align: left; font-size: 12px; border-radius: 3px; }
 .mail-action-menu button:hover:not(:disabled) { background: var(--primary-soft); color: var(--primary-deep); }
 .mail-action-menu button:disabled { opacity: .45; cursor: not-allowed; }
-.mail-list-count { margin-left: auto; padding-right: 6px; font-size: 11.5px; }
+.mail-list-count { position: absolute; right: 8px; top: 50%; z-index: 1; margin: 0; padding: 0; transform: translateY(-50%); color: var(--text-subtle); font-size: 10px; font-weight: 600; pointer-events: none; }
 /* "N more assigned to others" — the owner filter says what it is holding back
    rather than leaving the row silently missing. */
 .mail-hidden-note {
@@ -3552,28 +3405,40 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 }
 .mail-hidden-note:hover { background: var(--palette-4843938); filter: none; }
 .mail-hidden-note + .mail-list-count { margin-left: 8px; }
-/* Twelve tracks that can actually shrink. minmax(0, Nfr) is the point: a bare
-   1fr floors at min-content, which is what forced the 1230px min-width and the
-   horizontal scrollbar. */
+/* Twelve tracks that share the available desktop workspace. minmax(0, Nfr)
+   prevents any cell's intrinsic content from widening the application shell. */
 .mail-column-head, .mail-row {
   --mail-grid-template:
-    30px 28px 86px
-    minmax(180px, 1.35fr)
-    minmax(320px, 4fr)
-    minmax(105px, .85fr) minmax(95px, .85fr)
-    minmax(110px, .9fr) minmax(120px, .95fr)
-    minmax(130px, .8fr) minmax(100px, 1fr)
-    72px;
+    32px 32px
+    minmax(0, 8fr) minmax(0, 12fr) minmax(0, 22fr)
+    minmax(0, 8fr) minmax(0, 8fr) minmax(0, 8fr) minmax(0, 9fr)
+    minmax(0, 12fr) minmax(0, 11fr) minmax(0, 8fr);
   display: grid; align-items: center;
   grid-template-columns: var(--mail-grid-template);
-  min-width: 1350px;
+  width: 100%; min-width: 0;
 }
-.mail-column-head { min-height: 34px; padding: 0 10px 0 8px; background: var(--palette-f58d7116); border-bottom: 1px solid var(--border-color); color: var(--text-muted); font-size: 10px; font-weight: 700; letter-spacing: .25px; text-transform: uppercase; }
+.mail-column-head { position: relative; min-height: 34px; padding: 0 10px 0 8px; background: var(--palette-f58d7116); border-bottom: 1px solid var(--border-color); color: var(--text-muted); font-size: 10px; font-weight: 700; letter-spacing: .25px; text-transform: uppercase; }
+.mail-column-head > .mail-list-toolbar .mail-check { width: 18px; flex: 0 0 18px; }
+.mail-column-head > .mail-list-toolbar .mail-icon-btn { width: 22px; height: 22px; }
+.mail-column-head > .mail-list-toolbar .mail-selection-count,
+.mail-column-head > .mail-list-toolbar .mail-hidden-note,
+.mail-column-head > .mail-list-toolbar .mail-repair-ai,
+.mail-column-head > .mail-list-toolbar .mail-repair-ai-note { display: none; }
 .mail-column-head .mail-subject-head { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.15; }
 .mail-column-head span { overflow: hidden; padding-right: 8px; text-overflow: ellipsis; white-space: nowrap; }
-.mail-head-filter { width: 100%; min-width: 0; padding: 2px 3px; border: 0; border-radius: 3px; background: transparent; color: var(--text-muted); font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
-.mail-head-filter:hover, .mail-head-filter:focus { background: var(--primary-soft); color: var(--primary-deep); outline: none; }
-.mail-head-filter.active { color: var(--primary-deep); background: var(--primary-soft); }
+.mail-column-head .mail-head-filter-cell { overflow: visible; }
+.mail-head-filter { display: block; width: 100%; min-width: 0; min-height: 24px; padding: 0; overflow: hidden; border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; color: var(--text-muted); font: inherit; font-size: 10px; letter-spacing: inherit; text-align: left; text-overflow: clip; text-transform: inherit; white-space: nowrap; cursor: pointer; }
+/* Filter controls are clickable labels, not boxed buttons. Keep the active
+   and focus states text-only so they align with the neighbouring Subject label. */
+.mail-column-head .mail-head-filter:hover { background: transparent !important; border-color: transparent !important; color: var(--primary-deep); }
+.mail-column-head .mail-head-filter:focus-visible { background: transparent !important; border-color: transparent !important; box-shadow: none !important; color: var(--primary-deep); outline: 0; text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.mail-column-head .mail-head-filter.active { background: transparent !important; border-color: transparent !important; color: var(--primary-deep); }
+.mail-header-filter-menu { z-index: 30; width: min(220px, calc(100vw - 16px)); max-height: min(300px, calc(100vh - 16px)); overflow-y: auto; padding: 6px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--palette-4843938); box-shadow: 0 8px 24px rgba(15, 23, 42, .18); color: var(--text-main); }
+.mail-header-filter-title { padding: 4px 8px 6px; border-bottom: 1px solid var(--border-soft); color: var(--text-muted); font-size: 10px; font-weight: 800; letter-spacing: .08em; line-height: 1.25; text-transform: uppercase; }
+.mail-header-filter-option { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; width: 100%; min-height: 30px; padding: 7px 8px; border: 0; border-radius: 4px; background: transparent; color: inherit; font: inherit; font-size: 12px; line-height: 1.25; text-align: left; white-space: normal; overflow-wrap: anywhere; cursor: pointer; }
+.mail-header-filter-option:hover, .mail-header-filter-option:focus-visible, .mail-header-filter-option.selected { background: var(--primary-soft); color: var(--primary-deep); outline: none; }
+.mail-header-filter-option > span:first-child { min-width: 0; }
+.mail-header-filter-option > span:last-child { flex: 0 0 auto; font-weight: 800; }
 
 /* Approval action center */
 .approvals-page { max-width: 1320px; }
@@ -3583,7 +3448,7 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .approval-head p { margin: 0; }
 .approval-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 12px 0; }
 .approval-summary-three { grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 930px; }
-.approval-summary-card { display: flex; flex-direction: column; gap: 4px; min-height: 64px; padding: 12px 14px; background: var(--palette-4843938); border: 1px solid var(--border-soft); border-left: 4px solid var(--primary-accent); border-radius: 6px; box-shadow: 0 2px 7px var(--palette-9c5f15c9); }
+.approval-summary-card { display: flex; flex-direction: column; gap: 4px; min-height: 64px; padding: 12px 14px; background: var(--surface-default); border: 1px solid var(--border-soft); border-left: 4px solid var(--primary-accent); border-radius: 6px; box-shadow: 0 2px 7px var(--palette-9c5f15c9); }
 .approval-summary-card b { color: var(--text-main); font-size: 22px; line-height: 1; }
 .approval-summary-card span { color: var(--text-muted); font-size: 11px; font-weight: 600; }
 .summary-pending { border-left-color: var(--primary-accent); }
@@ -3591,21 +3456,21 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .summary-conditions { border-left-color: var(--palette-bcd85701); }
 .summary-decided, .summary-approved { border-left-color: var(--palette-8a6b8946); }
 .summary-rejected { border-left-color: var(--palette-9c482213); }
-.approval-filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 14px 0 12px; padding: 8px; background: var(--palette-f58d7116); border: 1px solid var(--border-soft); border-radius: 7px; }
-.approval-search { display: flex; align-items: center; gap: 7px; flex: 1 1 360px; min-width: 240px; padding: 0 10px; background: var(--palette-4843938); border: 1px solid var(--border-color); border-radius: 5px; color: var(--text-subtle); }
+.approval-filters { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 14px 0 12px; padding: 8px; background: var(--surface-sunken); border: 1px solid var(--border-soft); border-radius: 7px; }
+.approval-search { display: flex; align-items: center; gap: 7px; flex: 1 1 360px; min-width: 240px; padding: 0 10px; background: var(--surface-default); border: 1px solid var(--border-color); border-radius: 5px; color: var(--text-subtle); }
 .approval-search input { min-width: 0; flex: 1; padding: 7px 0; border: 0; outline: 0; background: transparent; }
 .approval-filters select { min-width: 155px; padding: 7px 9px; border-radius: 5px; }
 .approval-clear { padding: 7px 10px; border-radius: 5px; color: var(--primary-deep); background: var(--primary-soft); border-color: transparent; }
 .approval-notice { margin: 10px 0 16px; }
 .approval-notice-info { display: flex; align-items: center; gap: 8px; max-width: none; padding: 9px 12px; border: 1px solid var(--palette-727de4a5); border-left: 3px solid var(--palette-8c5c9231); border-radius: 5px; color: var(--palette-a4c64cdf); background: var(--palette-c64de9c9); font-size: 12px; }
-.approval-explainer { display: flex; padding: 10px 12px; margin: 10px 0 16px; border: 1px solid var(--border-soft); border-left: 3px solid var(--primary-accent); border-radius: 5px; background: var(--palette-f58d7116); }
+.approval-explainer { display: flex; padding: 10px 12px; margin: 10px 0 16px; border: 1px solid var(--border-soft); border-left: 3px solid var(--primary-accent); border-radius: 5px; background: var(--surface-sunken); }
 .approval-section-heading { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin: 20px 0 8px; padding-bottom: 7px; border-bottom: 1px solid var(--border-color); }
 .approval-section-heading h3 { margin: 2px 0 0; color: var(--text-main); font-size: 15px; }
 .approval-section-subtitle { margin: 4px 0 0; color: var(--text-muted); font-size: 12px; }
 .approval-section-heading h3 span { display: inline-flex; align-items: center; justify-content: center; min-width: 21px; height: 20px; margin-left: 4px; padding: 0 6px; border-radius: 10px; color: var(--primary-deep); background: var(--primary-soft); font-size: 11px; vertical-align: 1px; }
 .approval-section-primary { margin-top: 18px; border-bottom-color: var(--palette-1afe5264); }
 .approval-list { display: grid; gap: 10px; }
-.approval-card { border: 1px solid var(--border-soft); border-radius: 7px; background: var(--palette-4843938); box-shadow: 0 2px 7px var(--palette-8061284c); padding: 14px 16px; }
+.approval-card { border: 1px solid var(--border-soft); border-radius: 7px; background: var(--surface-default); box-shadow: 0 2px 7px var(--palette-8061284c); padding: 14px 16px; }
 .approvals-page .approval-card {
   width: 100%;
   max-width: 1100px;
@@ -3637,7 +3502,7 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .approval-type { color: var(--text-muted); font-size: 12px; }
 .approval-new-pill { display: inline-flex; align-items: center; height: 18px; padding: 0 7px; border: 1px solid var(--primary-border); border-radius: 999px; background: var(--primary-soft); color: var(--primary-deep); font-size: 10px; font-weight: 800; letter-spacing: .4px; text-transform: uppercase; }
 .approval-ref { margin: 8px 0; font-size: 13px; }
-.approval-opportunity-context { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--border-soft); border-left: 3px solid var(--primary-accent); border-radius: 5px; background: var(--palette-f58d7116); }
+.approval-opportunity-context { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--border-soft); border-left: 3px solid var(--primary-accent); border-radius: 5px; background: var(--surface-sunken); }
 .approval-context-head { display: flex; align-items: center; gap: 7px; }
 .approval-context-label { color: var(--text-subtle); font-size: 10px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; }
 .approval-context-summary { margin: 5px 0 8px; font-size: 12.5px; line-height: 1.45; }
@@ -3745,7 +3610,7 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 }
 .approval-boq-table td:first-child, .approval-boq-table th:first-child { text-align: center; }
 .approval-boq-table td:nth-child(4), .approval-boq-table td:nth-child(5) { white-space: nowrap; }
-.approval-boq-table td:nth-child(n+6) { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-variant-numeric: tabular-nums; }
+.approval-boq-table td:nth-child(n+6) { font-family: var(--font-family-mono); font-variant-numeric: tabular-nums; }
 .approval-boq-table .boq-col-index { width: 38px; }
 .approval-boq-table .boq-col-description { width: 19%; }
 .approval-boq-table .boq-col-part { width: 11%; }
@@ -3756,8 +3621,8 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .approval-boq-table tfoot td { border-bottom: 0; background: var(--surface-sunken); color: var(--text-primary); font-weight: 900; white-space: nowrap; }
 .approval-boq-total-label { font-size: 10px; }
 .approval-boq-actions { justify-content: flex-end; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border-default); }
-.approval-boq-close { border-radius: 0 !important; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
-.approval-card form { background: var(--palette-f58d7116); padding: 10px; border-radius: 5px; }
+.approval-boq-close { border-radius: 0 !important; font-family: var(--font-family-mono); font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+.approval-card form { background: var(--surface-sunken); padding: 10px; border-radius: 5px; }
 .approval-condition-row { margin: 6px 0; padding: 7px 8px; border: 1px solid var(--border-soft); border-radius: 5px; font-size: 12.5px; }
 .approval-condition-text { line-height: 1.4; }
 .approval-condition-open, .approval-condition-complete { margin-top: 5px; display: flex; align-items: flex-start; gap: 5px; }
@@ -3771,7 +3636,7 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .approval-condition-error { margin-top: 6px; }
 .approval-evidence-input { display: none; }
 .approval-evidence-result { color: var(--text-muted); font-size: 11px; }
-.approval-pricing-rows { display: grid; gap: 4px; margin-top: 7px; padding: 7px 9px; border-left: 2px solid var(--primary-accent); background: var(--palette-f58d7116); font-size: 11.5px; }
+.approval-pricing-rows { display: grid; gap: 4px; margin-top: 7px; padding: 7px 9px; border-left: 2px solid var(--primary-accent); background: var(--surface-sunken); font-size: 11.5px; }
 .approval-pricing-explanation { display: grid; gap: 3px; padding-bottom: 5px; border-bottom: 1px solid var(--border-soft); }
 .approval-pricing-summary, .sourcing-approval-summary { display: flex; gap: 12px; flex-wrap: wrap; color: var(--text-muted); }
 .approval-pricing-summary span, .sourcing-approval-summary span { display: inline-flex; gap: 4px; }
@@ -3788,8 +3653,8 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .approval-pending-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 10px 0; padding: 10px 12px; border: 1px solid var(--palette-c8de3e70); border-left: 4px solid var(--amber-text); border-radius: 3px; background: var(--palette-c9fb3389); color: var(--palette-a01c73fe); font-size: 12.5px; }
 .approval-pending-banner div { display: grid; gap: 3px; }
 .approval-pending-banner span { color: inherit; }
-.approval-awaiting { margin-top: 9px; padding: 8px 10px; border-radius: 4px; background: var(--palette-f58d7116); }
-.approval-rejection-requirements { margin-top: 9px; padding: 9px 11px; border-left: 3px solid var(--primary-accent); border-radius: 4px; background: var(--palette-f58d7116); color: var(--text-main); font-size: 12px; }
+.approval-awaiting { margin-top: 9px; padding: 8px 10px; border-radius: 4px; background: var(--surface-sunken); }
+.approval-rejection-requirements { margin-top: 9px; padding: 9px 11px; border-left: 3px solid var(--primary-accent); border-radius: 4px; background: var(--surface-sunken); color: var(--text-main); font-size: 12px; }
 .approval-rejection-requirements b { display: block; margin-bottom: 5px; }
 .approval-rejection-requirements ul { margin: 0; padding-left: 18px; }
 .approval-rejection-requirements li + li { margin-top: 3px; }
@@ -3862,8 +3727,9 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
   .approval-boq-meta > div:nth-child(n+3) { border-top: 1px solid var(--border-subtle); }
   .approval-boq-table { min-width: 1100px; }
 }
-/* Keep rows compact while allowing the metadata, subject, and preview to breathe. */
-.mail-row { min-height: 88px; overflow: visible; padding: 10px 10px 10px 8px; border-bottom: 1px solid var(--border-soft); cursor: pointer; color: var(--text-muted); transition: background .15s ease, box-shadow .15s ease; }
+/* Compact enquiry rows keep the metadata rail aligned while the subject cell
+   carries a readable opportunity, subject, and preview stack. */
+.mail-row { min-height: 58px; overflow: hidden; padding: 6px 10px 6px 8px; border-bottom: 1px solid var(--border-soft); cursor: pointer; color: var(--text-muted); transition: background .15s ease, box-shadow .15s ease; }
 .mail-row:hover { background: var(--palette-3353bb00); box-shadow: inset 3px 0 0 var(--primary-accent); }
 .mail-row.selected { background: var(--primary-soft); }
 .mail-row.unread { color: var(--text-main); background: var(--palette-b315b730); }
@@ -3872,15 +3738,17 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .mail-star:hover { color: var(--palette-bcd85701); }
 .mail-star.starred { color: var(--palette-bcd85701); }
 .mail-star.starred svg { fill: currentColor; }
-.mail-row > div { min-width: 0; overflow-wrap: break-word; line-height: 1.2; }
-.mail-sender { min-width: 0; padding-right: 12px; overflow-wrap: break-word; font-size: 12px; }
-.mail-sender b, .mail-sender small { display: block; min-width: 0; overflow-wrap: break-word; }
-.mail-sender small, .mail-date small { margin-top: 3px; color: var(--text-subtle); font-size: 10.5px; }
-.mail-content { min-width: 0; padding-right: 12px; font-size: 12px; white-space: normal !important; }
-.mail-content-stack { display: flex; min-width: 0; max-width: 100%; flex-direction: column; justify-content: center; gap: 3px; }
-.mail-subject-meta { display: flex; align-items: center; min-width: 0; gap: 6px; overflow: hidden; flex-wrap: nowrap; white-space: nowrap; }
-.mail-subject-title { display: -webkit-box; min-width: 0; overflow: hidden; color: var(--text-main); line-height: 1.25; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
-.mail-content small { display: -webkit-box; min-width: 0; margin-top: 3px; overflow: hidden; color: var(--text-subtle); line-height: 1.25; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+.mail-row > div { min-width: 0; overflow: hidden; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.mail-sender { min-width: 0; padding-right: 12px; overflow: hidden; font-size: 12px; white-space: normal; overflow-wrap: anywhere; word-break: normal; }
+.mail-sender b, .mail-sender small { display: block; min-width: 0; overflow: hidden; white-space: normal; overflow-wrap: anywhere; word-break: normal; }
+.mail-sender small::before, .mail-date small::before { content: ' · '; }
+.mail-sender small, .mail-date small { color: var(--text-subtle); font-size: 10.5px; }
+.mail-content { min-width: 0; padding-right: 12px; overflow: hidden; font-size: 12px; text-overflow: clip; white-space: normal !important; }
+.mail-content-stack { display: block; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: clip; white-space: normal; }
+.mail-subject-meta { display: inline-flex; align-items: center; min-width: 0; gap: 6px; margin-right: 6px; overflow: hidden; vertical-align: middle; flex-wrap: nowrap; white-space: nowrap; }
+.mail-subject-title { display: inline; min-width: 0; overflow: hidden; color: var(--text-main); line-height: 1.25; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; word-break: normal; }
+.mail-content small { display: inline; min-width: 0; margin: 0; overflow: hidden; color: var(--text-subtle); line-height: 1.25; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; word-break: normal; }
+.mail-content small::before { content: ' — '; }
 .mail-ref { flex: 0 0 auto; max-width: 25%; overflow: hidden; color: var(--primary-deep) !important; font-size: 10.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .mail-opportunity-link { display: inline-flex; align-items: center; flex: 0 1 auto; max-width: 100%; margin: 0; padding: 0; overflow: hidden; border: 0; border-radius: 0; background: transparent !important; box-shadow: none; color: var(--primary-deep); font: inherit; font-size: 10.5px; font-weight: 700; text-align: left; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .mail-opportunity-link:hover { background: transparent !important; border-color: transparent; text-decoration: underline; }
@@ -3931,9 +3799,17 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .mail-detail-label > b { color: var(--text-main); font-size: 11px; }
 .mail-detail-label > span:not(.pill):not(.conf-badge) { font-size: 11px; }
 .mail-labels .conf-badge, .mail-labels .pill, .mail-labels .chip { font-size: 10px; }
-.mail-date { text-align: left; white-space: nowrap; font-size: 11px; }
-.mail-date b, .mail-date small { display: block; white-space: nowrap; }
+.mail-date { min-width: 0; text-align: left; white-space: normal; font-size: 11px; line-height: 1.2; }
+.mail-date b, .mail-date small { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mail-date small::before { content: none; }
 .mail-owner { font-weight: 700; color: var(--text-main); }
+.mail-row > div > .pill {
+  display: inline-flex;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .mail-age { white-space: nowrap; font-size: 11px; font-weight: 650; color: var(--text-muted); }
 .mail-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; min-height: 220px; color: var(--text-muted); }
 .mail-empty b { color: var(--text-main); }
@@ -4208,7 +4084,7 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .workflow-stage-row { display: grid; grid-template-columns: 34px minmax(180px, 1fr) minmax(130px, .7fr) auto auto; align-items: center; gap: 9px; padding: 8px 0; border-top: 1px solid var(--grid-line); }
 .workflow-stage-row.retired { opacity: .58; }
 .workflow-stage-order { color: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
-.workflow-stage-id { color: var(--text-subtle); font-family: 'JetBrains Mono', monospace; font-size: 10px; overflow: hidden; text-overflow: ellipsis; }
+.workflow-stage-id { color: var(--text-subtle); font-family: var(--font-family-mono); font-size: 10px; overflow: hidden; text-overflow: ellipsis; }
 .workflow-stage-actions { display: inline-flex; gap: 4px; }
 .workflow-stage-actions button { min-width: 28px; padding: 5px 7px; }
 .workflow-add-form { align-items: center; }
@@ -4233,7 +4109,7 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 /* Workbench */
 .opp-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
 .opp-head h2 { margin: 0; }
-.opp-summary { background: var(--palette-4843938); border: 1px solid var(--border-soft); border-radius: 8px; padding: 14px 16px; box-shadow: 0 3px 14px var(--palette-2059d567); }
+.opp-summary { background: var(--surface-default); border: 1px solid var(--border-soft); border-radius: 8px; padding: 14px 16px; box-shadow: 0 3px 14px var(--palette-2059d567); }
 .back-to-opportunities { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 12px; color: var(--text-muted); font-size: 12px; font-weight: 700; text-decoration: none; }
 .back-to-opportunities:hover { color: var(--primary-ink); text-decoration: underline; }
 .opp-summary-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -4244,11 +4120,11 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .opp-summary-grid span { display: block; color: var(--text-muted); font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; margin-bottom: 3px; }
 .opp-summary-grid b { display: block; font-size: 12.5px; line-height: 1.35; }
 .opp-summary-action b { color: var(--text-main); }
-.opp-lifecycle { margin: 12px 0 0; padding: 12px 14px 10px; background: var(--palette-4843938); border: 1px solid var(--border-soft); border-radius: 8px; }
+.opp-lifecycle { margin: 12px 0 0; padding: 12px 14px 10px; background: var(--surface-default); border: 1px solid var(--border-soft); border-radius: 8px; }
 .opp-lifecycle .workbench-section-title { margin-bottom: 9px; }
 .workbench-section-title { display: flex; align-items: center; gap: 7px; font-size: 15px; font-weight: 800; margin-bottom: 10px; color: var(--text-main); }
 .workbench-overview-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
-.workbench-panel { min-width: 0; background: var(--palette-4843938); border: 1px solid var(--border-soft); border-radius: 8px; padding: 14px 16px; box-shadow: 0 2px 8px var(--palette-9c5f15c9); }
+.workbench-panel { min-width: 0; background: var(--surface-default); border: 1px solid var(--border-soft); border-radius: 8px; padding: 14px 16px; box-shadow: 0 2px 8px var(--palette-9c5f15c9); }
 .workbench-timeline-panel { grid-column: 1 / -1; }
 .workbench-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 12px; }
 .workbench-actions button { font-size: 12px; }
@@ -4282,7 +4158,7 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .wb-tabs { display: flex; flex-wrap: wrap; background: var(--header-fill); border: 1px solid var(--grid-line); border-bottom: none; }
 .wb-tabs .wtab { padding: 8px 13px; font-size: 12.5px; cursor: pointer; border: none; border-right: 1px solid var(--grid-line); background: var(--palette-10692a31); color: var(--palette-4bf509); border-radius: 0; }
 .wb-tabs .wtab.active { background: var(--palette-4843938); font-weight: 700; color: var(--xl-green-dark); box-shadow: inset 0 2px 0 var(--xl-green); }
-.wb-body { background: var(--palette-4843938); border: 1px solid var(--grid-line); padding: 14px 16px; }
+.wb-body { background: var(--surface-default); border: 1px solid var(--grid-line); padding: 14px 16px; }
 .wb-sub { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
 .wb-sub button.active { background: var(--primary-fill); color: var(--palette-4843938); border-color: var(--primary-fill); }
 .proposal-tab-shell > .wb-sub { grid-column: 1; grid-row: 1; align-self: stretch; margin: 0; padding: 7px 0 7px 7px; background: var(--palette-f58d7116); border: 1px solid var(--border-soft); border-right: 0; border-radius: 6px 0 0 6px; }
@@ -5547,11 +5423,11 @@ button.install:hover { background: var(--primary-hover); }
   --tint-a: .16;
 }
 .tablet-mode.theme-light {
-  --dash-bg: var(--bg-app);
-  --dash-surface: var(--card-bg);
-  --dash-surface-2: var(--palette-2e00a314);
-  --dash-border: var(--border-soft);
-  --dash-border-hi: var(--border-color);
+  --dash-bg: #F3F0EB;
+  --dash-surface: #FFFEFC;
+  --dash-surface-2: #F8F5F0;
+  --dash-border: #DDD6CC;
+  --dash-border-hi: #C9C0B4;
   --dash-text: var(--text-main);
   --dash-text-2: var(--text-muted);
   --dash-text-3: var(--text-subtle);
@@ -5560,7 +5436,7 @@ button.install:hover { background: var(--primary-hover); }
   --dash-good: var(--palette-f23536ab);
   --dash-warn: var(--palette-58c5a833);
   --dash-bad: var(--palette-bbf39d23);
-  --dash-track: var(--border-soft);
+  --dash-track: #E9E4DC;
   --dash-shadow: 0 1px 2px var(--palette-634e2531), 0 6px 16px -10px var(--palette-b012041d);
   --tint-a: .12;
 }
@@ -6305,7 +6181,10 @@ button.linklike:hover { text-decoration: underline; }
   align-items: stretch;
   margin-bottom: 16px;
 }
-.performance-lower-grid { grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); }
+.performance-lower-grid {
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  align-items: stretch;
+}
 .performance-scorecard-grid > .dashboard-card,
 .performance-lower-grid > .dashboard-card { grid-column: auto; min-width: 0; }
 .attainment-summary { display: grid; gap: 18px; height: 100%; align-content: center; }
@@ -6329,20 +6208,44 @@ button.linklike:hover { text-decoration: underline; }
 .performance-card-note { margin-top: 8px; }
 .performance-signal { display: flex; align-items: baseline; gap: 5px; margin: -4px 0 4px; color: var(--text-main); font-size: 13px; font-weight: 700; }
 .performance-signal span { color: var(--text-subtle); font-weight: 500; }
-.dashboard-funnel-list { display: grid; gap: 3px; padding-top: 2px; }
-.dashboard-funnel-row { display: grid; grid-template-columns: minmax(0, 1fr) 18px minmax(82px, 108px); align-items: center; gap: 5px; min-height: 39px; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; text-align: left; }
-.dashboard-funnel-row:hover { background: var(--select-fill); box-shadow: none; transform: none; }
-.dashboard-funnel-row:focus-visible { outline: 2px solid var(--primary-accent); outline-offset: 2px; }
-.dashboard-funnel-shape { display: flex; align-items: center; justify-content: center; width: var(--funnel-width); min-height: 30px; margin: 0 auto; color: #fff; background: var(--primary-accent); clip-path: polygon(0 0, 100% 0, 88% 100%, 12% 100%); font-size: 11px; font-variant-numeric: tabular-nums; transition: filter .2s ease, transform .2s ease; }
-.dashboard-funnel-row:nth-child(2) .dashboard-funnel-shape { background: color-mix(in srgb, var(--primary-accent) 88%, #fff); }
-.dashboard-funnel-row:nth-child(3) .dashboard-funnel-shape { background: color-mix(in srgb, var(--primary-accent) 76%, #fff); }
-.dashboard-funnel-row:nth-child(4) .dashboard-funnel-shape { background: color-mix(in srgb, var(--primary-accent) 64%, #fff); }
-.dashboard-funnel-row:nth-child(5) .dashboard-funnel-shape { background: var(--won-text); }
-.dashboard-funnel-row:hover .dashboard-funnel-shape { filter: brightness(1.06); transform: translateY(-1px); }
-.dashboard-funnel-connector { display: block; width: 100%; border-top: 1px dotted var(--border-soft); }
-.dashboard-funnel-label { display: grid; gap: 1px; min-width: 0; padding-left: 2px; }
-.dashboard-funnel-label strong { color: var(--text-main); font-size: 11px; line-height: 1.1; white-space: nowrap; }
-.dashboard-funnel-label small { color: var(--text-subtle); font-size: 9px; line-height: 1.15; white-space: nowrap; }
+.dashboard-funnel-list { display: grid; gap: 0; padding-top: 2px; }
+.dashboard-page .dashboard-funnel-row {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(104px, .9fr) minmax(0, 1.35fr);
+  align-items: center;
+  gap: 14px;
+  min-height: 54px;
+  padding: 6px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--dashboard-rule);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+}
+.dashboard-page .dashboard-funnel-row:last-child { border-bottom: 0; }
+.dashboard-page .dashboard-funnel-row:hover { background: var(--dashboard-wash); box-shadow: none; transform: none; }
+.dashboard-page .dashboard-funnel-row:focus-visible { outline: 2px solid var(--primary-accent); outline-offset: 2px; }
+.dashboard-funnel-shape {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--funnel-width);
+  min-height: 40px;
+  margin: 0 auto;
+  color: #fff;
+  background: var(--stage-color, var(--pipeline-qualified));
+  clip-path: polygon(0 0, 100% 0, 88% 100%, 12% 100%);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  transition: filter .2s ease, transform .2s ease;
+}
+.dashboard-page .dashboard-funnel-row:is(.stage-firm-proposal, .stage-negotiate) .dashboard-funnel-shape { color: #18181B; }
+.dashboard-page .dashboard-funnel-row:hover .dashboard-funnel-shape { filter: brightness(1.06); transform: translateY(-1px); }
+.dashboard-funnel-label { display: grid; gap: 3px; min-width: 0; overflow-wrap: anywhere; }
+.dashboard-funnel-label strong { color: var(--text-main); font-size: 12px; line-height: 1.2; white-space: normal; }
+.dashboard-funnel-label small { color: var(--text-subtle); font-size: 10.5px; line-height: 1.25; white-space: normal; overflow-wrap: anywhere; }
 @media (max-width: 900px) {
   .performance-scorecard-grid,
   .performance-lower-grid { grid-template-columns: 1fr; }
@@ -6811,8 +6714,8 @@ html, body { overflow-x: hidden; max-width: 100%; }
    Scoped off .tablet-mode: the tablet shell (tablet/TabletApp.jsx) is a
    block-flow document with a fixed bottom tab bar and wants native scrolling.
    ========================================================================= */
-.shell { --sidenav-w: 252px; --shell-nav-w: 252px; }
-.shell.sidebar-compact { --sidenav-w: 88px; --shell-nav-w: 88px; }
+.shell { --sidenav-w: 216px; --shell-nav-w: 216px; }
+.shell.sidebar-compact { --sidenav-w: 80px; --shell-nav-w: 80px; }
 @media (max-width: 1024px) { .shell { --sidenav-w: 216px; --shell-nav-w: 0px; } }
 
 .shell:not(.tablet-mode) { height: 100dvh; overflow: hidden; }
@@ -6827,8 +6730,8 @@ html, body { overflow-x: hidden; max-width: 100%; }
 /* -------------------------------------------------------------- pipeline sheet
    The grid fills the frame: title + toolbar on top, sheet-tab strip on the
    bottom, and the rows scroll under a navy header that finally sticks. The two
-   column views handle width differently — the key view keeps all 9 columns on
-   screen and wraps, the all-31 view scrolls sideways. See the blocks below. */
+   column views handle width differently — the 11-column key view fills the
+   available width; the all-31 view scrolls sideways. */
 .opportunities-page, .tracker-page {
   height: 100%; min-height: 0;
   display: flex; flex-direction: column;
@@ -6852,8 +6755,7 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .tracker-page .tracker-th-control {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 7px;
+  justify-content: flex-start;
   width: 100%;
   min-height: 34px;
   margin: 0;
@@ -6873,24 +6775,24 @@ html, body { overflow-x: hidden; max-width: 100%; }
   outline-offset: -1px;
 }
 .tracker-page .tracker-th-label {
-  display: -webkit-box;
+  display: block;
   flex: 1 1 auto;
   min-width: 0;
   white-space: normal;
-  overflow-wrap: normal;
+  overflow-wrap: anywhere;
   word-break: normal;
   line-height: 1.15;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
+  overflow: visible;
+  text-overflow: clip;
 }
-.tracker-page .tracker-th-indicator {
-  flex: 0 0 auto;
-  color: inherit;
-  font-size: 11px;
-  line-height: 1;
-}
+.tracker-page .th-filter.filtered .tracker-th-label { color: var(--primary-accent); }
 .tracker-page .sheet.cols-key .tracker-th-control { white-space: normal; }
+.tracker-page .sheet.cols-key .tracker-th-label {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  hyphens: none;
+}
 .tracker-page .tracker-clear-filters {
   min-height: 30px;
   padding: 5px 9px;
@@ -6900,15 +6802,6 @@ html, body { overflow-x: hidden; max-width: 100%; }
   color: var(--primary-deep);
   font-size: 12px;
   font-weight: 700;
-}
-.tracker-page .tracker-result-count {
-  display: inline-block;
-  margin-left: 8px;
-  color: var(--text-tertiary);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: .02em;
-  vertical-align: middle;
 }
 .tracker-page .tracker-clear-filters:hover { background: var(--select-fill); }
 .tracker-page > .toolbar {
@@ -6935,7 +6828,6 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .tracker-page .tracker-quick-filter {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
   min-height: 30px;
   color: var(--text-secondary);
   font-size: 12px;
@@ -7028,7 +6920,7 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .tracker-date-pop-actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border-soft); }
 .tracker-date-pop-actions button { min-height: 30px; padding: 5px 10px; }
 @media (max-width: 760px) { .tracker-date-pop { width: min(300px, calc(100vw - 16px)); min-width: 0; } .tracker-date-error { white-space: normal; } }
-.tracker-page table.sheet td input, .tracker-page table.sheet td select { min-width: 0; text-overflow: ellipsis; }
+.tracker-page table.sheet td input, .tracker-page table.sheet td select { min-width: 0; text-overflow: clip; }
 .tracker-stage-cell { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .tracker-terminal-stage { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
 .tracker-outcome-label { font-size: 11px; font-weight: 800; letter-spacing: .02em; }
@@ -7048,29 +6940,74 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .close-outcome-form textarea { min-height: 58px; resize: vertical; }
 .tracker-page table.sheet td.num input { text-align: right; }
 
-/* Key view — 9 columns divide the viewport between them, so nothing scrolls
-   sideways and a value too long for its share wraps onto a second line instead
-   of being cut off. Fixed layout is what makes that width budget enforceable:
-   the per-column percentages are generated from COLS[].w in pages/Tracker.jsx.
-   Headers wrap on the same terms; the caret floats right (above) so a wrapped
-   label never swallows the sort/filter control. */
-.tracker-page table.sheet.cols-key { table-layout: fixed; }
-/* break-word, not anywhere: free text wraps at spaces and a single token is
-   kept whole rather than chopped — `anywhere` was splitting opportunity IDs
-   as "2609003R / S". */
-.tracker-page .sheet.cols-key th, .tracker-page .sheet.cols-key td {
-  white-space: normal; overflow-wrap: normal; word-break: normal; vertical-align: middle;
+/* Key fields share the page width, with wrapping instead of sideways scroll. */
+.tracker-page table.sheet.cols-key th.th-filter { height: auto; min-height: 46px; }
+.tracker-page table.sheet.cols-key th.th-filter { font-size: 12px; }
+.tracker-page table.sheet.cols-key td input,
+.tracker-page table.sheet.cols-key td select {
+  text-overflow: clip;
 }
-/* Opp ID and Proposal hold one indivisible token each. Wrapping those reads as
-   corrupt data, so they stay on one line and fall back to an ellipsis (and the
-   hover title) if their column is ever too narrow. Column widths come from
-   columnWidthCss() in pages/Tracker.jsx — under table-layout:fixed a min-width
-   here would be ignored, so the width itself is set there. */
-.tracker-page .sheet.cols-key thead tr > :nth-child(2),
-.tracker-page .sheet.cols-key tbody tr > :nth-child(2),
-.tracker-page .sheet.cols-key thead tr > :last-child,
-.tracker-page .sheet.cols-key tbody tr > :last-child {
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+
+/* Fixed layout keeps headers and editors aligned with the percentage columns. */
+.tracker-page table.sheet.cols-key { table-layout: fixed; }
+/* At high zoom, even a single long token has to stay inside its cell. */
+.tracker-page .sheet.cols-key th, .tracker-page .sheet.cols-key td {
+  white-space: normal; overflow-wrap: anywhere; word-break: normal; vertical-align: middle;
+}
+/* Free text can wrap and increase the row height without overlapping cells. */
+.tracker-page .sheet.cols-key td.tracker-free-text {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.tracker-page .sheet.cols-key td input[type="date"] {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: min(10ch, 100%);
+  max-width: 100%;
+}
+.tracker-page .sheet.cols-key td select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+.tracker-page table.sheet.cols-key td { font-size: 12px; }
+.tracker-page table.sheet.cols-key td :is(input, select, .wrapcell) { font-size: 12px; }
+.tracker-page table.sheet.cols-key td.num,
+.tracker-page table.sheet.cols-key td.num input {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+.tracker-page .sheet.cols-key th,
+.tracker-page .sheet.cols-key td { padding: 5px 4px; }
+.tracker-page .sheet.cols-key th.th-filter { padding: 4px; }
+/* There is no sideways movement in key view, so pinning the first cells would
+   make them overlap when their percentage tracks become narrow at zoom. */
+.tracker-page table.sheet.cols-key tbody :is(td.rowhead, td.oppid) {
+  position: static;
+  left: auto;
+}
+.tracker-page table.sheet.cols-key thead :is(th.rowhead, th:nth-child(2)) {
+  left: auto;
+}
+.tracker-page .sheet.cols-key .tracker-stage-cell {
+  flex-wrap: wrap;
+  gap: 3px;
+}
+.tracker-page .sheet.cols-key .mark-won-control {
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.tracker-page .sheet.cols-key .mark-won-control input {
+  flex: none;
+  width: 13px;
+  min-width: 13px;
+  max-width: 13px;
+  height: 13px;
 }
 
 /* The wrapping free-text cells (WrapInput in pages/Tracker.jsx). Height is set
@@ -7097,9 +7034,13 @@ table.sheet td .wrapcell:focus {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: normal;
-  overflow-wrap: break-word;
+  overflow-wrap: normal;
   word-break: normal;
   vertical-align: middle;
+}
+.tracker-page .sheet:not(.cols-key) .tracker-th-label {
+  overflow-wrap: normal;
+  word-break: normal;
 }
 .tracker-page .sheet:not(.cols-key) .wrapcell { height: auto !important; white-space: pre; }
 
@@ -7127,6 +7068,315 @@ table.sheet td .wrapcell:focus {
 .tracker-page .sheet:not(.cols-key) tbody tr:nth-child(even) > :nth-child(2) { background: var(--palette-2e00a314); }
 .tracker-page .sheet:not(.cols-key) tbody tr:hover > :nth-child(2) { background: var(--select-fill); }
 
+/* Final tracker alignment contract. The route-level page owns the available
+   width; the full workbook may scroll inside the sheet, but neither the
+   toolbar nor the sheet tabs may widen the application column. */
+.tracker-page {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  box-sizing: border-box;
+  padding-inline: clamp(14px, 2vw, 30px);
+}
+.tracker-page > .toolbar {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.tracker-page .tracker-toolbar-filters,
+.tracker-page .tracker-toolbar-actions {
+  min-width: 0;
+  max-width: 100%;
+}
+.tracker-page .tracker-toolbar-actions {
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  row-gap: 6px;
+}
+.tracker-page .tracker-toolbar-filters {
+  display: grid;
+  grid-template-columns: minmax(145px, auto) minmax(220px, 1fr) minmax(135px, auto) auto auto;
+  align-items: center;
+  gap: 8px;
+}
+.tracker-page .tracker-toolbar-filters > select,
+.tracker-page .tracker-toolbar-filters > .tracker-search,
+.tracker-page .tracker-toolbar-filters > .tracker-quick-filter,
+.tracker-page .tracker-toolbar-filters > .tracker-date-filter-button,
+.tracker-page .tracker-toolbar-filters > .scope-toggle {
+  min-width: 0;
+  max-width: 100%;
+}
+.tracker-page .tracker-toolbar-filters > .tracker-search {
+  width: auto;
+  min-width: 0;
+}
+.tracker-page .tracker-quick-filter {
+  min-width: 135px;
+  white-space: nowrap;
+}
+.tracker-page > .sheet-wrap.fill {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+.tracker-page table.sheet.cols-key {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+.tracker-page > .sheet-tabs {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+/* A handful of results reads better as records than as one thin spreadsheet
+   row above an otherwise empty sheet. The dense views remain one click away. */
+.sparse-view-toggle { white-space: nowrap; }
+.sparse-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 350px), 1fr));
+  grid-auto-rows: minmax(300px, 1fr);
+  gap: 16px;
+  padding: 16px;
+  box-sizing: border-box;
+  min-width: 0;
+}
+.tracker-sparse-cards { min-height: 100%; }
+.sparse-result-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: clamp(18px, 2vw, 28px);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--card-bg);
+  box-shadow: 0 4px 18px rgba(18, 24, 34, .06);
+  color: var(--text-main);
+}
+.sparse-card-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; min-width: 0; }
+.sparse-card-heading-text { min-width: 0; }
+.sparse-card-eyebrow { color: var(--primary-deep); font-size: 12px; font-weight: 750; letter-spacing: .04em; }
+.sparse-card-heading h3 { margin: 8px 0 4px; font-size: clamp(19px, 1.5vw, 25px); line-height: 1.25; overflow-wrap: anywhere; }
+.sparse-card-heading h3 a { color: inherit; text-decoration: none; }
+.sparse-card-heading h3 a:hover { text-decoration: underline; }
+.sparse-card-heading p { margin: 0; color: var(--text-muted); overflow-wrap: anywhere; }
+.sparse-card-status { flex: 0 0 auto; border: 1px solid var(--border-color); border-radius: 999px; padding: 5px 10px; background: var(--surface-sunken); font-size: 12px; font-weight: 700; }
+.sparse-card-status.closed { color: var(--text-muted); }
+.sparse-card-preview { margin: 18px 0 0; line-height: 1.5; overflow-wrap: anywhere; }
+.sparse-card-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 24px; margin: 26px 0; }
+.sparse-card-detail { min-width: 0; display: grid; align-content: start; gap: 5px; border-top: 1px solid var(--border-soft); padding-top: 11px; }
+.sparse-card-detail > span { color: var(--text-muted); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.sparse-card-detail > strong { font-size: 15px; line-height: 1.35; font-weight: 650; overflow-wrap: anywhere; }
+.sparse-card-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: auto; padding-top: 18px; border-top: 1px solid var(--border-soft); }
+.sparse-card-open { display: inline-flex; align-items: center; gap: 12px; margin-left: auto; color: var(--primary-deep); font-weight: 750; white-space: nowrap; }
+.sparse-card-select { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.sparse-card-select input { accent-color: var(--primary-accent); }
+.sparse-card-star { min-height: 34px; min-width: 34px; padding: 2px; font-size: 22px; line-height: 1; }
+.sparse-card-star.starred { color: var(--amber-text); }
+.sparse-card-linked { font-size: 12px; overflow-wrap: anywhere; }
+@media (min-width: 1100px) {
+  .sparse-card-grid:has(> :only-child) .sparse-card-details { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .sparse-card-grid { gap: 10px; padding: 10px; }
+  .sparse-card-heading { flex-wrap: wrap; }
+  .sparse-card-details { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+}
+
+@media (max-width: 72em) {
+  .tracker-page .tracker-toolbar-filters {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  .tracker-page .tracker-toolbar-filters > .tracker-search {
+    flex: 1 1 220px;
+  }
+}
+
+/* Browser zoom reduces the effective CSS viewport before it reaches the
+   physical mobile breakpoints. Switch the tracker to the same safe stacked
+   controls early enough that the filters and actions never compete for one
+   desktop row. */
+@media (min-width: 901px) and (max-width: 80em) {
+  .shell:not(.tablet-mode) {
+    --sidenav-w: 216px;
+    --shell-nav-w: 216px;
+  }
+  .shell:not(.tablet-mode).sidebar-compact {
+    --sidenav-w: 80px;
+    --shell-nav-w: 80px;
+  }
+  .tracker-page > .toolbar {
+    grid-template-columns: 1fr;
+  }
+  .tracker-page .tracker-toolbar-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+  }
+  .tracker-page .tracker-toolbar-filters > select,
+  .tracker-page .tracker-toolbar-filters > .tracker-search,
+  .tracker-page .tracker-toolbar-filters > .tracker-quick-filter,
+  .tracker-page .tracker-toolbar-filters > .tracker-date-filter-button,
+  .tracker-page .tracker-toolbar-filters > .scope-toggle {
+    flex: 1 1 180px;
+  }
+  .tracker-page .tracker-toolbar-filters > .tracker-search {
+    min-width: min(260px, 100%);
+  }
+  .tracker-page .tracker-toolbar-actions {
+    justify-content: flex-start;
+  }
+
+  /* The full workbook remains an intentional spreadsheet mode as controls
+     reflow at zoom. */
+  .tracker-page > .sheet-wrap:has(table.sheet:not(.cols-key)) {
+    overflow-x: auto;
+    border: 1px solid var(--grid-line);
+    background: var(--palette-4843938);
+  }
+  .tracker-page table.sheet:not(.cols-key),
+  .tracker-page table.sheet:not(.cols-key) thead,
+  .tracker-page table.sheet:not(.cols-key) tbody,
+  .tracker-page table.sheet:not(.cols-key) tfoot {
+    display: table;
+    width: max-content !important;
+    min-width: 100% !important;
+  }
+  .tracker-page table.sheet:not(.cols-key) thead { display: table-header-group; }
+  .tracker-page table.sheet:not(.cols-key) tbody { display: table-row-group; }
+  .tracker-page table.sheet:not(.cols-key) tfoot { display: table-footer-group; }
+  .tracker-page table.sheet:not(.cols-key) tr { display: table-row; }
+  .tracker-page table.sheet:not(.cols-key) th,
+  .tracker-page table.sheet:not(.cols-key) td {
+    display: table-cell;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    padding: 3px 7px;
+    border: 1px solid var(--grid-line);
+  }
+  .tracker-page table.sheet:not(.cols-key) tbody tr.rowclick {
+    display: table-row;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .tracker-page table.sheet:not(.cols-key) tbody tr.rowclick td {
+    display: table-cell;
+    grid-template-columns: none;
+    padding: 3px 7px;
+    border: 1px solid var(--grid-line);
+  }
+  .tracker-page table.sheet:not(.cols-key) tbody tr.rowclick td::before {
+    display: none;
+  }
+}
+
+/* Sidebar polish: keep the rail visually intentional at desktop scale. The
+   late layer is deliberate because the stylesheet contains older sidebar
+   rules for tablet and compact modes; these selectors only refine the normal
+   expanded desktop rail and retain the existing width contract. */
+@media (min-width: 1025px) {
+  .shell:not(.tablet-mode) > .sidenav {
+    background:
+      radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--primary-accent) 12%, transparent), transparent 34%),
+      linear-gradient(180deg, var(--bg-sidebar) 0%, color-mix(in srgb, var(--bg-sidebar) 90%, #000) 100%);
+    border-right: 1px solid color-mix(in srgb, var(--border-inverse) 50%, transparent);
+    box-shadow: 12px 0 30px rgba(15, 23, 42, .14);
+  }
+
+  .shell:not(.tablet-mode) > .sidenav > .brand {
+    min-height: 72px;
+    padding: 18px 18px 16px;
+    border-bottom-color: color-mix(in srgb, var(--border-inverse) 42%, transparent);
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-nav {
+    padding: 18px 12px 12px;
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-nav-group + .side-nav-group {
+    margin-top: 22px;
+    padding-top: 12px;
+    border-top: 1px solid color-mix(in srgb, var(--border-inverse) 30%, transparent);
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-nav-heading {
+    padding: 0 12px 8px;
+    color: color-mix(in srgb, var(--text-on-inverse) 52%, transparent);
+    font-size: 10px;
+    letter-spacing: .12em;
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-item {
+    min-height: 42px;
+    margin: 3px 0;
+    padding: 10px 12px;
+    border-left-width: 3px;
+    border-radius: 9px;
+    color: color-mix(in srgb, var(--text-on-inverse) 68%, transparent);
+    font-size: 13px;
+    font-weight: 550;
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-item:hover {
+    background: color-mix(in srgb, var(--text-on-inverse) 8%, transparent);
+    color: var(--text-on-inverse);
+    transform: translateX(2px);
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-item.active {
+    background: color-mix(in srgb, var(--primary-accent) 18%, var(--bg-sidebar));
+    color: var(--text-on-inverse);
+    border-left-color: var(--primary-accent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary-accent) 28%, transparent);
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-item .ic {
+    width: 19px;
+    color: color-mix(in srgb, var(--text-on-inverse) 62%, transparent);
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-item.active .ic,
+  .shell:not(.tablet-mode) > .sidenav .side-item:hover .ic {
+    color: var(--text-on-inverse);
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-foot {
+    gap: 7px;
+    padding: 14px 12px 16px;
+    border-top-color: color-mix(in srgb, var(--border-inverse) 42%, transparent);
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-foot button.reset {
+    width: 100%;
+    min-height: 38px;
+    justify-content: flex-start;
+    padding: 8px 11px;
+    border: 1px solid color-mix(in srgb, var(--text-on-inverse) 16%, transparent);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--text-on-inverse) 6%, transparent);
+    color: color-mix(in srgb, var(--text-on-inverse) 78%, transparent);
+    font-size: 11.5px;
+    font-weight: 600;
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-foot button.reset:hover {
+    background: color-mix(in srgb, var(--text-on-inverse) 11%, transparent);
+    border-color: color-mix(in srgb, var(--text-on-inverse) 28%, transparent);
+    color: var(--text-on-inverse);
+  }
+}
+
 /* ------------------------------------------------------------------- mailbox
    Same shape: header, search and tabs pinned, the message list is the only
    scroller, the analytics note stays on screen at the bottom. */
@@ -7141,17 +7391,15 @@ table.sheet td .wrapcell:focus {
 .mailbox-page > .hint { flex: 0 0 auto; }
 .mailbox-list {
   flex: 1 1 auto; min-height: 0;
-  overflow-x: auto; overflow-y: auto;
+  overflow-x: hidden; overflow-y: auto;
 }
-/* 44px is .mail-list-toolbar's min-height — the two stack as one sticky head. */
-.mail-list-toolbar { position: sticky; top: 0; z-index: 3; min-width: 1350px; background: var(--palette-4843938); }
-.mail-column-head { position: sticky; top: 44px; z-index: 2; }
+/* The controls and filter labels share one sticky header row. */
+.mail-column-head { position: sticky; top: 0; z-index: 3; }
 .mail-row > div, .mail-row > .pill { min-width: 0; }
 .mail-row .chip, .mail-row .pill { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* The complete grid remains available at every container width. The list is
-   the horizontal and vertical scroll region, so the toolbar and sticky header
-   travel with the same scrollable content as the rows. */
+/* The desktop grid fits its workspace. Smaller workspaces switch to compact
+   lead cards in Inbox.jsx, keeping all detail reachable without x-scrolling. */
 
 /* The numbered Terms & Conditions block the sample proposals print under the
    pricing sheet. Numbered prose, not a table — the samples are emphatic. */
@@ -7263,6 +7511,29 @@ table.sheet td .wrapcell:focus {
 .runrate-plot { position: relative; }
 .runrate-plot svg { display: block; width: 100%; height: auto; }
 .runrate-plot svg:focus-visible { outline: 2px solid var(--primary-accent); outline-offset: 2px; }
+.runrate-chart.is-empty .runrate-plot { padding-block: 8px; }
+.runrate-chart.is-empty .runrate-plot svg { opacity: .62; }
+.runrate-empty-note {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  max-width: min(300px, 68%);
+  gap: 3px;
+  padding: 10px 15px;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--border-soft);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--card-bg) 94%, transparent);
+  color: var(--text-main);
+  text-align: center;
+  pointer-events: none;
+}
+.runrate-empty-note strong { font-size: 12px; }
+.runrate-empty-note span { color: var(--text-subtle); font-size: 10.5px; line-height: 1.25; }
+.dashboard-page .performance-lower-grid .performance-signal { margin: 0 0 14px; }
+.dashboard-page .performance-lower-grid .runrate-chart { margin-top: 4px; }
 .runrate-crosshair {
   stroke: var(--text-subtle);
   stroke-width: 1;
@@ -8038,9 +8309,8 @@ button.install.install-secondary:hover, .btn.install.install-secondary:hover {
 /* ===========================================================================
    Enterprise workspace typography system
    ---------------------------------------------------------------------------
-   Inter is self-hosted above for offline/PWA reliability. In a networked app,
-   the equivalent hosted import should request Inter and JetBrains Mono at
-   weights 400, 500, 600, and 700 with display=swap.
+   Candara is a system font. Unsupported platforms use the shared fallback
+   stack above, including for technical fields that previously used a mono face.
    =========================================================================== */
 
 html {
@@ -8062,6 +8332,7 @@ textarea {
 body {
   font-size: var(--fs-base);
   line-height: var(--lh-normal);
+  overflow-wrap: anywhere;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -8074,7 +8345,7 @@ body {
   line-height: var(--lh-tight);
   letter-spacing: var(--ls-tight);
   text-wrap: balance;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
 }
 :where(h1) { font-size: var(--fs-display); font-weight: var(--fw-bold); }
 :where(h2) { font-size: var(--fs-2xl); }
@@ -8087,8 +8358,41 @@ body {
   max-width: 75ch;
   line-height: var(--lh-normal);
   text-wrap: pretty;
-  overflow-wrap: break-word;
+  overflow-wrap: anywhere;
   hyphens: auto;
+}
+
+/* Responsive layout invariants. Flex/grid children otherwise use their
+   min-content width, which makes long names, URLs, and pasted identifiers
+   push the whole page sideways at high browser zoom. */
+:where(.page, .main-col, .shell, .card, .panel, [role='dialog']) {
+  min-width: 0;
+  max-width: 100%;
+}
+:where(.page, .card, .panel, .modal, [role='dialog']) > * {
+  min-width: 0;
+  max-width: 100%;
+}
+:where(.page, .card, .panel, .modal, [role='dialog']) :where(a, p, li, dd, dt, small, strong, b, span) {
+  overflow-wrap: anywhere;
+}
+:where(img, svg, video, canvas, iframe) {
+  max-width: 100%;
+}
+:where(button, input, select, textarea) {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+:where(.sheet-wrap, .table-wrap, .table-scroll, .dashboard-table-scroll, [class$='-table-wrap']) {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+:where(table) {
+  max-width: 100%;
+}
+:where(.sheet-wrap, .table-wrap, .table-scroll, .dashboard-table-scroll, [class$='-table-wrap']) table :where(th, td) {
+  overflow-wrap: anywhere;
 }
 
 :where(code, kbd, pre, .code, .opp-id, .oppid, .oppid-link, .ref-no,
@@ -8410,7 +8714,7 @@ body {
   --select-fill: var(--action-accent-soft);
 }
 
-.theme-dark {
+html.dark {
   --bg-app: var(--surface-canvas);
   --card-bg: var(--surface-default);
   --bg-sidebar: var(--surface-sunken);
@@ -8539,7 +8843,7 @@ body {
 }
 
 @media (prefers-contrast: more) {
-  :root, .theme-dark {
+  :root, html.dark {
     --border-default: currentColor;
     --border-subtle: currentColor;
   }
@@ -8946,7 +9250,7 @@ body {
   box-shadow: none;
 }
 .dashboard-page .dashboard-card .ana-title { margin-bottom: 12px; }
-.dashboard-page button:not(.home-funnel-row):not(.home-alert-rail button),
+.dashboard-page button:not(.home-funnel-row):not(.home-alert-rail button):not(.dashboard-funnel-row),
 .dashboard-page .btn {
   min-height: 40px;
   padding: 0 16px;
@@ -10249,7 +10553,7 @@ button.install, .btn.install,
 .proposal-review-value-change-values code {
   min-width: 0;
   color: inherit;
-  font: 600 12px/1.3 var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font: 600 12px/1.3 var(--font-mono, var(--font-family-mono));
   overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums;
 }
@@ -11124,6 +11428,38 @@ table.sheet th {
   border-color: #CBD5E1;
 }
 
+/* Opportunities column headers use the same quiet surface as the toolbar
+   controls, so the sheet reads as one continuous workspace. */
+.tracker-page table.sheet thead th.th-filter,
+.tracker-page table.sheet thead th.rowhead {
+  background: var(--surface-default);
+  color: var(--text-secondary);
+  border-color: var(--border-default);
+}
+.tracker-page table.sheet thead .tracker-th-control {
+  background: var(--surface-default);
+}
+.tracker-page table.sheet thead .tracker-th-control:hover,
+.tracker-page table.sheet thead .tracker-th-control:focus-visible {
+  background: var(--surface-sunken);
+}
+
+/* Column headers are table structure, not toolbar controls: keep one flat
+   continuous strip and reserve the filled surfaces for interactive buttons. */
+.tracker-page table.sheet thead th.th-filter,
+.tracker-page table.sheet thead th.rowhead,
+.tracker-page table.sheet thead .tracker-th-control {
+  background: var(--surface-sunken);
+  border-radius: 0;
+}
+.tracker-page table.sheet thead .tracker-th-control {
+  padding-inline: 6px;
+}
+.tracker-page table.sheet thead .tracker-th-control:hover,
+.tracker-page table.sheet thead .tracker-th-control:focus-visible {
+  background: var(--select-fill);
+}
+
 .sourcing-workbench table.sheet.sourcing-sheet--fixed th {
   color: var(--text-primary);
   font-weight: 800 !important;
@@ -11145,7 +11481,7 @@ table.sheet th {
 }
 .sourcing-workbench .sheet.sourcing-sheet--fixed td:last-child {
   z-index: 2;
-  background: var(--palette-4843938);
+  background: var(--surface-default);
 }
 .sourcing-workbench .sheet.sourcing-sheet--fixed tbody tr:nth-child(even) td:last-child { background: var(--palette-2e00a314); }
 .sourcing-workbench .sheet.sourcing-sheet--fixed tbody tr:hover td:last-child { background: var(--select-fill); }
@@ -11167,7 +11503,7 @@ table.sheet th {
 }
 .sourcing-workbench .sheet.sourcing-sheet--fixed td:first-child {
   z-index: 3;
-  background: var(--palette-4843938);
+  background: var(--surface-default);
 }
 .sourcing-workbench .sheet.sourcing-sheet--fixed tbody tr:nth-child(even) td:first-child { background: var(--palette-2e00a314); }
 .sourcing-workbench .sheet.sourcing-sheet--fixed tbody tr:hover td:first-child { background: var(--select-fill); }
@@ -11176,7 +11512,7 @@ table.sheet th {
 /* The pinned Part identity column stays neutral while the editable pricing
    cells retain their row striping and hover state. */
 .sourcing-workbench .sheet.sourcing-sheet--fixed tbody td:first-child {
-  background: var(--palette-4843938) !important;
+  background: var(--surface-default) !important;
 }
 
 .sourcing-workbench .sourcing-cell-actions .sourcing-row-actions {
@@ -11293,14 +11629,14 @@ table.sheet th {
 .sourcing-workbench .sheet.sourcing-sheet--fixed thead th {
   position: sticky;
   top: 0;
-  background: var(--palette-4843938) !important;
+  background: var(--surface-default) !important;
   color: var(--text-primary) !important;
 }
 .sourcing-workbench .sheet.sourcing-sheet--fixed thead th:first-child {
-  background: var(--palette-4843938) !important;
+  background: var(--surface-default) !important;
 }
 .sourcing-workbench .sheet.sourcing-sheet--fixed thead th:last-child {
-  background: var(--palette-4843938) !important;
+  background: var(--surface-default) !important;
 }
 .sourcing-workbench .sourcing-cell-part .sourcing-remove-row { margin-top: 2px; }
 .sourcing-workbench .sourcing-cell-part .sourcing-remove-row {
@@ -11515,30 +11851,17 @@ table.sheet tfoot td {
 
 /* Top KPI strip: one neutral card treatment, with a restrained border accent. */
 .dashboard-page .stat-cards > .dashboard-top-kpi {
-  background: #FFFFFF;
-  border: 1px solid #E2E8F0;
+  background: var(--dashboard-card, #FFFFFF);
+  border: 1px solid var(--dashboard-border, #E4E4E7);
   border-top-width: 2px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, .08);
-  color: #0F172A;
+  box-shadow: var(--dashboard-shadow, 0 1px 2px rgba(24, 24, 27, .04), 0 8px 20px rgba(24, 24, 27, .06));
+  color: var(--dashboard-text, #0F172A);
 }
 
 .dashboard-page .stat-cards > .dashboard-top-kpi .sc-value,
 .dashboard-page .stat-cards > .dashboard-top-kpi .sc-label,
 .dashboard-page .stat-cards > .dashboard-top-kpi .hint {
-  color: #0F172A;
-}
-
-.dashboard-page .stat-cards > .dashboard-top-kpi:nth-child(1) {
-  border-top-color: #94A3B8;
-}
-
-.dashboard-page .stat-cards > .dashboard-top-kpi:nth-child(2),
-.dashboard-page .stat-cards > .dashboard-top-kpi:nth-child(4) {
-  border-top-color: #EA580C;
-}
-
-.dashboard-page .stat-cards > .dashboard-top-kpi:nth-child(3) {
-  border-top-color: #CBD5E1;
+  color: var(--dashboard-text, #0F172A);
 }
 
 /* -------------------------------------------------------------------------
@@ -11548,21 +11871,20 @@ table.sheet tfoot td {
    the compact legacy workspace defaults above.
    ------------------------------------------------------------------------- */
 .dashboard-page {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-family-sans);
   font-size: 14px;
   line-height: 1.45;
-  color: #0F172A;
+  color: var(--dashboard-text, #0F172A);
 }
 
 .dashboard-page .home-head {
   align-items: flex-start;
   margin: 4px 0 20px;
-  padding-right: var(--bell-clearance);
 }
 
 .dashboard-page .home-head h2 {
   margin: 0;
-  color: #0F172A;
+  color: var(--dashboard-text, #0F172A);
   font-size: clamp(24px, 2vw, 30px);
   font-weight: 750;
   letter-spacing: -.025em;
@@ -11572,7 +11894,7 @@ table.sheet tfoot td {
 
 .dashboard-page .home-head .hint {
   margin-top: 7px;
-  color: #475569;
+  color: var(--dashboard-muted, #475569);
   font-size: 14px;
   line-height: 1.35;
 }
@@ -11595,7 +11917,7 @@ table.sheet tfoot td {
 }
 
 .dashboard-page .stat-card-v2 .sc-value {
-  color: #0F172A;
+  color: var(--dashboard-text, #0F172A);
   font-size: clamp(27px, 2.2vw, 34px);
   font-weight: 750;
   letter-spacing: -.025em;
@@ -11603,7 +11925,7 @@ table.sheet tfoot td {
 }
 
 .dashboard-page .stat-card-v2 .sc-label {
-  color: #475569;
+  color: var(--dashboard-muted, #475569);
   font-size: 12px;
   font-weight: 650;
   letter-spacing: .01em;
@@ -11614,7 +11936,7 @@ table.sheet tfoot td {
 .dashboard-page .stat-card-v2 .hint {
   grid-area: hint;
   margin-top: 3px;
-  color: #475569;
+  color: var(--dashboard-muted, #475569);
   font-size: 12px;
   line-height: 1.25;
   min-width: 0;
@@ -11774,7 +12096,7 @@ table.sheet tfoot td {
 .dashboard-page .dashboard-action:focus-visible {
   position: relative;
   z-index: 1;
-  outline: 2px solid #EA580C;
+  outline: 2px solid var(--primary-accent);
   outline-offset: 2px;
 }
 
@@ -11978,7 +12300,7 @@ button.secondary,
 .btn.secondary,
 .admin-page button.secondary,
 .admin-page .btn.secondary,
-button:not(.primary):not(.danger):not(.dark):not(.ghost),
+button:not(.primary):not(.danger):not(.dark):not(.ghost):not(.dashboard-funnel-row),
 .btn:not(.primary):not(.danger):not(.dark):not(.ghost) {
   background: #F1F5F9;
   border-color: #E2E8F0;
@@ -12988,19 +13310,18 @@ button:not(.primary):not(.danger):not(.dark):not(.ghost),
   }
 }
 
-/* Keep the fixed navigation rail and the page column on the same width
-   contract. Several older desktop rules used 216/68px while the current rail
-   is 252/88px, which let the expanded rail cover the page's left edge. */
+/* Keep the fixed navigation rail and the page column on the same compact
+   desktop width contract so the expanded rail never steals inbox columns. */
 
 @media (min-width: 1025px) {
   .shell {
-    --sidenav-w: 252px;
-    --shell-nav-w: 252px;
+    --sidenav-w: 216px;
+    --shell-nav-w: 216px;
   }
 
   .shell.sidebar-compact {
-    --sidenav-w: 88px;
-    --shell-nav-w: 88px;
+    --sidenav-w: 80px;
+    --shell-nav-w: 80px;
   }
 
   .shell > .sidenav {
@@ -13223,7 +13544,7 @@ button.secondary,
 .btn.secondary,
 .admin-page button.secondary,
 .admin-page .btn.secondary,
-button:not(.primary):not(.danger):not(.dark):not(.ghost),
+button:not(.primary):not(.danger):not(.dark):not(.ghost):not(.dashboard-funnel-row),
 .btn:not(.primary):not(.danger):not(.dark):not(.ghost) {
   background: var(--action-secondary-bg);
   border-color: var(--action-secondary-border);
@@ -14723,3 +15044,2286 @@ table.sheet tbody tr:hover td {
 .scope-toggle-group button.active,
 .pipeline-filter.active { background: var(--brand-red); border-color: var(--brand-red); color: var(--text-on-inverse); }
 .pipeline-filter-row { margin: 0 0 10px; }
+.customer-picker { position: relative; }
+.customer-picker-menu { position: absolute; z-index: 20; left: 0; right: 0; top: calc(100% + 3px); max-height: 250px; overflow: auto; background: var(--surface, #fff); border: 1px solid var(--border, #cbd5e1); border-radius: 8px; box-shadow: 0 10px 24px rgba(15, 23, 42, .16); padding: 4px; }
+.customer-picker-menu button { display: flex; flex-direction: column; align-items: flex-start; width: 100%; padding: 8px 9px; border: 0; background: transparent; text-align: left; cursor: pointer; }
+.customer-picker-menu button:hover { background: var(--surface-muted, #f1f5f9); }
+.customer-picker-menu button span, .customer-picker-empty { color: var(--muted, #64748b); font-size: 11px; }
+.customer-picker-create { border-top: 1px solid var(--border, #e2e8f0) !important; color: var(--primary-accent, #b42318); font-weight: 700; }
+
+/* Text fields use a simple box everywhere. The older global focus rules were
+   written for the original red theme and added a large red glow, especially
+   to modal controls rendered outside .shell. Preserve semantic error styling,
+   but remove decorative focus shadows and outlines from ordinary fields. */
+:where(input:not([type='checkbox']):not([type='radio']), select, textarea):focus,
+:where(input:not([type='checkbox']):not([type='radio']), select, textarea):focus-visible {
+  box-shadow: none !important;
+  outline: 0 !important;
+}
+:where(input:not([type='checkbox']):not([type='radio']), select, textarea):not(.error):not(.needs-input):not([aria-invalid='true']):focus,
+:where(input:not([type='checkbox']):not([type='radio']), select, textarea):not(.error):not(.needs-input):not([aria-invalid='true']):focus-visible {
+  border-color: var(--border-default) !important;
+}
+
+/* -------------------------------------------------------------------------
+   ModAE navigation rail
+   -------------------------------------------------------------------------
+   The shell navigation intentionally stays route- and permission-agnostic.
+   This late, desktop-only layer gives the existing rail a stronger ModAE
+   signature without changing its responsive drawer or compact-mode contract.
+   ------------------------------------------------------------------------- */
+@media (min-width: 64.0625em) {
+  .shell:not(.tablet-mode) > .sidenav {
+    background:
+      radial-gradient(150% 42% at 0% 0%, color-mix(in srgb, var(--primary-accent) 22%, transparent), transparent 58%),
+      linear-gradient(155deg, #353031 0%, var(--bg-sidebar) 42%, #1c1c1d 100%);
+    border-right-color: color-mix(in srgb, var(--text-on-inverse) 13%, transparent);
+    box-shadow: 14px 0 34px rgba(16, 12, 12, .17);
+  }
+
+  .shell:not(.tablet-mode) > .sidenav > .brand {
+    min-height: 78px;
+    padding: 20px 20px 18px;
+    overflow: hidden;
+  }
+
+  .shell:not(.tablet-mode) > .sidenav > .brand::after {
+    position: absolute;
+    right: 20px;
+    bottom: 0;
+    left: 20px;
+    height: 2px;
+    content: '';
+    background: linear-gradient(90deg, var(--primary-accent), color-mix(in srgb, var(--primary-accent) 38%, #f7a45c), transparent);
+    opacity: .9;
+  }
+
+  /* The expanded rail is a brand lockup, not a left-aligned utility row.
+     Center the fixed-size official mark so 80–100% browser zoom leaves the
+     same intentional balance on either side. Compact mode has its own mark
+     sizing below and deliberately does not inherit this treatment. */
+  .shell:not(.tablet-mode):not(.sidebar-compact) > .sidenav > .brand {
+    min-height: 88px;
+    justify-content: center;
+    padding: 20px 28px 18px;
+  }
+
+  .shell:not(.tablet-mode):not(.sidebar-compact) > .sidenav .brand .modae-logo {
+    display: inline-flex;
+    justify-content: center;
+    width: 100%;
+  }
+
+  .shell:not(.tablet-mode):not(.sidebar-compact) > .sidenav .brand .modae-official-logo {
+    width: auto;
+    height: 40px;
+    max-width: 160px;
+    object-fit: contain;
+  }
+
+  .shell:not(.tablet-mode):not(.sidebar-compact) > .sidenav > .brand::after {
+    right: 28px;
+    left: 28px;
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-nav {
+    padding: 20px 12px 14px;
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-nav-heading {
+    padding: 0 12px 9px;
+    color: color-mix(in srgb, var(--text-on-inverse) 52%, transparent);
+    font-size: 9.5px;
+    font-weight: 800;
+    letter-spacing: .16em;
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-nav-group + .side-nav-group {
+    margin-top: 24px;
+    padding-top: 14px;
+    border-top-color: color-mix(in srgb, var(--text-on-inverse) 11%, transparent);
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-item {
+    min-height: 44px;
+    margin: 3px 0;
+    padding: 10px 12px;
+    border-left: 0;
+    border-radius: 9px;
+    color: color-mix(in srgb, var(--text-on-inverse) 70%, transparent);
+    font-size: 13.5px;
+    font-weight: 600;
+    line-height: 1.2;
+    transition: background-color .16s ease, box-shadow .16s ease, color .16s ease, transform .16s ease;
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-item::before {
+    position: absolute;
+    top: 11px;
+    bottom: 11px;
+    left: 0;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    content: '';
+    background: var(--primary-accent);
+    opacity: 0;
+    transform: scaleY(.45);
+    transition: opacity .16s ease, transform .16s ease;
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-item .ic {
+    width: 19px;
+    color: color-mix(in srgb, var(--text-on-inverse) 62%, transparent);
+    opacity: 1;
+    transition: color .16s ease;
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-item:hover {
+    background: color-mix(in srgb, var(--text-on-inverse) 7%, transparent);
+    color: var(--text-on-inverse);
+    transform: translateX(2px);
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-item.active {
+    background: linear-gradient(90deg, color-mix(in srgb, var(--primary-accent) 26%, transparent), color-mix(in srgb, var(--primary-accent) 9%, transparent));
+    color: var(--text-on-inverse);
+    border-left-color: transparent;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary-accent) 31%, transparent), 0 5px 14px rgba(0, 0, 0, .13);
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-item.active::before {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-item.active .ic,
+  .shell:not(.tablet-mode) > .sidenav .side-item:hover .ic {
+    color: var(--text-on-inverse);
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-item:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 2px;
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-item .side-badge {
+    min-width: 19px;
+    padding: 2px 6px;
+    border: 1px solid color-mix(in srgb, var(--primary-accent) 48%, transparent);
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--primary-accent) 18%, var(--bg-sidebar));
+    color: var(--text-on-inverse);
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.25;
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-foot {
+    gap: 3px;
+    padding: 14px 12px 16px;
+    border-top-color: color-mix(in srgb, var(--text-on-inverse) 13%, transparent);
+    background: color-mix(in srgb, #000 10%, transparent);
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-foot button.reset {
+    min-height: 34px;
+    padding: 7px 10px;
+    border-color: transparent;
+    border-radius: 7px;
+    background: transparent;
+    color: color-mix(in srgb, var(--text-on-inverse) 62%, transparent);
+    font-size: 11.5px;
+    font-weight: 600;
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-foot button.reset:hover,
+  .shell:not(.tablet-mode) > .sidenav .side-foot button.reset:focus-visible {
+    border-color: transparent;
+    background: color-mix(in srgb, var(--text-on-inverse) 8%, transparent);
+    color: var(--text-on-inverse);
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-foot button.reset:focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 1px;
+  }
+
+  .shell:not(.tablet-mode) > .sidenav .side-foot button.reset:last-child {
+    margin-top: 5px;
+    border-top: 1px solid color-mix(in srgb, var(--text-on-inverse) 10%, transparent);
+    border-radius: 0 0 7px 7px;
+  }
+
+  .shell.sidebar-compact:not(.tablet-mode) > .sidenav > .brand {
+    min-height: 78px;
+    padding: 18px 8px 16px;
+  }
+
+  .shell.sidebar-compact:not(.tablet-mode) > .sidenav > .brand::after {
+    right: 14px;
+    left: 14px;
+  }
+
+  .shell.sidebar-compact:not(.tablet-mode) > .sidenav .side-nav {
+    padding-inline: 10px;
+  }
+
+  .shell.sidebar-compact:not(.tablet-mode) > .sidenav .side-item {
+    min-height: 44px;
+    padding: 10px 0;
+  }
+
+  .shell.sidebar-compact:not(.tablet-mode) > .sidenav .side-item::before {
+    top: 10px;
+    bottom: 10px;
+  }
+
+  .shell.sidebar-compact:not(.tablet-mode) > .sidenav .side-badge {
+    top: 3px;
+    right: 3px;
+  }
+
+  .shell.sidebar-compact:not(.tablet-mode) > .sidenav .side-foot {
+    padding-inline: 10px;
+  }
+
+  .shell.sidebar-compact:not(.tablet-mode) > .sidenav .side-foot button.reset {
+    width: 100%;
+    min-height: 34px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell:not(.tablet-mode) > .sidenav .side-item,
+  .shell:not(.tablet-mode) > .sidenav .side-item::before,
+  .shell:not(.tablet-mode) > .sidenav .side-item .ic {
+    transition: none;
+  }
+}
+
+/* Browser zoom changes the usable workspace width without necessarily crossing
+   a device breakpoint. Query the content pane itself, after the sidebar has
+   claimed its space, so controls move as complete units instead of colliding. */
+.main-scroll {
+  container-name: workspace;
+  container-type: inline-size;
+}
+
+@container workspace (max-width: 70rem) {
+  :is(.toolbar, .forms-head, .proposal-sent-head, .proposal-sent-head-actions,
+    .sourcing-footer-actions, .lead-decision-actions, .progress-controls) {
+    align-items: stretch;
+  }
+
+  :is(.toolbar, .forms-head, .proposal-sent-head, .proposal-sent-head-actions,
+    .sourcing-footer-actions, .lead-decision-actions, .progress-controls) > button,
+  :is(.toolbar, .forms-head, .proposal-sent-head, .proposal-sent-head-actions,
+    .sourcing-footer-actions, .lead-decision-actions, .progress-controls) > .btn {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .page .workbench-details-editor .opportunity-details-grid,
+  .workbench-details-editor .opportunity-details-grid,
+  .opportunity-details-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .forms-head .req-note {
+    flex: 1 1 15rem;
+    white-space: normal;
+    text-align: left;
+  }
+
+  .sheet-tabs,
+  .detail-tabs-primary {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+  }
+}
+
+@container workspace (max-width: 44rem) {
+  :is(.toolbar, .forms-head, .proposal-sent-head, .proposal-sent-head-actions,
+    .sourcing-footer-actions, .lead-decision-actions, .progress-controls) > button,
+  :is(.toolbar, .forms-head, .proposal-sent-head, .proposal-sent-head-actions,
+    .sourcing-footer-actions, .lead-decision-actions, .progress-controls) > .btn {
+    flex: 1 1 100%;
+  }
+
+  .page .workbench-details-editor .opportunity-details-grid,
+  .workbench-details-editor .opportunity-details-grid,
+  .opportunity-details-grid,
+  .dgrid2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Filters and actions are independent tracker groups. They must step down
+   separately, so zoom cannot make one group compress the other into overlap. */
+@container workspace (max-width: 70rem) {
+  .tracker-page > .toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .tracker-page .tracker-toolbar-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .tracker-page .tracker-toolbar-filters > select,
+  .tracker-page .tracker-toolbar-filters > .tracker-quick-filter,
+  .tracker-page .tracker-toolbar-filters > .tracker-date-filter-button,
+  .tracker-page .tracker-toolbar-filters > .scope-toggle {
+    flex: 1 1 10.5rem;
+    min-inline-size: 0;
+  }
+
+  .tracker-page .tracker-toolbar-filters > .tracker-search {
+    flex: 2 1 17rem;
+    min-inline-size: min(17rem, 100%);
+  }
+
+  .tracker-page .tracker-quick-filter,
+  .tracker-page .tracker-date-filter-button,
+  .tracker-page .scope-toggle {
+    white-space: nowrap;
+  }
+
+  .tracker-page .tracker-toolbar-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .tracker-page .tracker-toolbar-actions > button,
+  .tracker-page .tracker-toolbar-actions > .pill,
+  .tracker-page .tracker-toolbar-actions > .tracker-create-logo {
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .tracker-page .sheet.cols-key th,
+  .tracker-page .sheet.cols-key td {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .tracker-page > .sheet-wrap:has(table.sheet:not(.cols-key)) {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+}
+
+@container workspace (max-width: 44rem) {
+  .tracker-page .tracker-toolbar-filters > select,
+  .tracker-page .tracker-toolbar-filters > .tracker-search,
+  .tracker-page .tracker-toolbar-filters > .tracker-quick-filter,
+  .tracker-page .tracker-toolbar-filters > .tracker-date-filter-button,
+  .tracker-page .tracker-toolbar-filters > .scope-toggle {
+    flex: 1 1 100%;
+    min-inline-size: 0;
+  }
+
+  .tracker-page .tracker-toolbar-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tracker-page .tracker-toolbar-actions > button,
+  .tracker-page .tracker-toolbar-actions > .pill,
+  .tracker-page .tracker-toolbar-actions > .tracker-create-logo {
+    width: 100%;
+  }
+}
+
+/* Preserve the existing desktop navigation finish independently of the
+   dashboard palette so dashboard color changes cannot restyle the sidebar. */
+.shell:not(.tablet-mode) > .sidenav {
+  border-right-color: rgba(255, 255, 255, .08);
+  box-shadow: 10px 0 28px rgba(24, 24, 27, .10);
+}
+
+/* -------------------------------------------------------------------------
+   Dashboard semantic palette
+   -------------------------------------------------------------------------
+   Brand red remains the decisive action and blocker colour. Pipeline stages
+   and KPI states use separate semantic hues, so a full dashboard can be read
+   without treating every important item as an alert.
+   ------------------------------------------------------------------------- */
+.dashboard-page {
+  --dashboard-canvas: #F3F0EB;
+  --dashboard-card: #FFFEFC;
+  --dashboard-card-subtle: #F8F5F0;
+  --dashboard-border: #DDD6CC;
+  --dashboard-border-strong: #C9C0B4;
+  --dashboard-shadow: 0 1px 2px rgba(24, 24, 27, .04), 0 8px 20px rgba(24, 24, 27, .06);
+  --pipeline-track: #E9E4DC;
+  --pipeline-qualified: #18181B;
+  --pipeline-budgetary: #7C2D12;
+  --pipeline-rfq: #C2410C;
+  --pipeline-proposal: #EA580C;
+  --pipeline-negotiate: #FBBF24;
+  --dashboard-text: #0F172A;
+  --dashboard-muted: #475569;
+  --dashboard-brand: var(--primary-accent);
+  --dashboard-neutral: #475569;
+  --dashboard-info: #2563EB;
+  --dashboard-warning: #92400E;
+  --dashboard-danger: #B42318;
+  --dashboard-success: #15803D;
+  background: var(--dashboard-canvas);
+  color: var(--dashboard-text);
+}
+
+.dashboard-page .dashboard-card,
+.dashboard-page .home-analytics,
+.dashboard-page .stat-card-v2 {
+  background: var(--dashboard-card);
+  border-color: var(--dashboard-border);
+  box-shadow: var(--dashboard-shadow);
+}
+
+.dashboard-page .dashboard-card:hover,
+.dashboard-page .stat-card-v2:hover {
+  border-color: var(--dashboard-border-strong);
+  box-shadow: 0 2px 4px rgba(24, 24, 27, .05), 0 12px 24px rgba(24, 24, 27, .07);
+}
+
+.dashboard-page .home-funnel-panel,
+.dashboard-page .home-forecast-panel {
+  background: var(--dashboard-card-subtle);
+}
+.dashboard-page .home-funnel-panel {
+  border-top-color: var(--dashboard-success);
+}
+.dashboard-page .home-forecast-panel {
+  border-top-color: var(--dashboard-info);
+}
+
+.dashboard-page .home-funnel-track,
+.dashboard-page .attainment-progress {
+  background: var(--pipeline-track);
+}
+
+.dashboard-page .home-funnel-row.stage-qualified,
+.dashboard-page .dashboard-funnel-row.stage-qualified { --stage-color: var(--pipeline-qualified); }
+.dashboard-page .home-funnel-row.stage-budgetary,
+.dashboard-page .dashboard-funnel-row.stage-budgetary { --stage-color: var(--pipeline-budgetary); }
+.dashboard-page .home-funnel-row.stage-rfq,
+.dashboard-page .dashboard-funnel-row.stage-rfq { --stage-color: var(--pipeline-rfq); }
+.dashboard-page .home-funnel-row.stage-firm-proposal,
+.dashboard-page .dashboard-funnel-row.stage-firm-proposal { --stage-color: var(--pipeline-proposal); }
+.dashboard-page .home-funnel-row.stage-negotiate,
+.dashboard-page .dashboard-funnel-row.stage-negotiate { --stage-color: var(--pipeline-negotiate); }
+
+.dashboard-page .home-funnel-fill,
+.dashboard-page .dashboard-funnel-shape {
+  background: var(--stage-color, var(--pipeline-qualified));
+}
+
+.dashboard-page .dashboard-funnel-row:is(.stage-firm-proposal, .stage-negotiate) .dashboard-funnel-shape {
+  color: #18181B;
+}
+
+.dashboard-page .dashboard-funnel-row:nth-child(n) .dashboard-funnel-shape { background: var(--stage-color, var(--pipeline-qualified)); }
+
+.dashboard-page .stat-card-v2.tone-sky {
+  background: var(--dashboard-card);
+  border-color: var(--dashboard-border);
+  border-left: 3px solid var(--dashboard-info);
+}
+.dashboard-page .stat-card-v2.tone-sky .sc-value { color: var(--dashboard-info); }
+.dashboard-page .stat-card-v2.tone-amber {
+  background: var(--dashboard-card);
+  border-color: var(--dashboard-border);
+  border-left: 3px solid var(--dashboard-warning);
+}
+.dashboard-page .stat-card-v2.tone-amber .sc-value { color: var(--dashboard-warning); }
+.dashboard-page .stat-card-v2.tone-red {
+  background: var(--dashboard-card);
+  border-color: var(--dashboard-border);
+  border-left: 3px solid var(--dashboard-danger);
+}
+.dashboard-page .stat-card-v2.tone-red .sc-value { color: var(--dashboard-danger); }
+.dashboard-page .stat-card-v2.tone-green {
+  background: var(--dashboard-card);
+  border-color: var(--dashboard-border);
+  border-left: 3px solid var(--dashboard-success);
+}
+.dashboard-page .stat-card-v2.tone-green .sc-value { color: var(--dashboard-success); }
+.dashboard-page .stat-card-v2.tone-slate {
+  background: var(--dashboard-card);
+  border-color: var(--dashboard-border);
+  border-left: 3px solid var(--dashboard-neutral);
+}
+.dashboard-page .stat-card-v2.tone-slate .sc-value { color: var(--dashboard-neutral); }
+
+.dashboard-page .ana-ico.tone-red { background: color-mix(in srgb, var(--dashboard-danger) 10%, white); color: var(--dashboard-danger); }
+.dashboard-page .ana-ico.tone-amber { background: color-mix(in srgb, var(--dashboard-warning) 10%, white); color: var(--dashboard-warning); }
+.dashboard-page .ana-ico.tone-sky { background: color-mix(in srgb, var(--dashboard-info) 10%, white); color: var(--dashboard-info); }
+.dashboard-page .ana-ico.tone-green { background: color-mix(in srgb, var(--dashboard-success) 10%, white); color: var(--dashboard-success); }
+.dashboard-page .ana-ico.tone-slate { background: color-mix(in srgb, var(--dashboard-neutral) 10%, white); color: var(--dashboard-neutral); }
+.dashboard-page .ana-ico.tone-teal,
+.dashboard-page .ana-ico.tone-violet { background: color-mix(in srgb, var(--dashboard-info) 10%, white); color: var(--dashboard-info); }
+
+.dashboard-page .dashboard-action:hover { background: var(--dashboard-card-subtle); }
+.dashboard-page .dashboard-action:focus-visible { outline-color: var(--dashboard-brand); }
+
+/* Opportunities is a spreadsheet workspace: the page and nested tracker have
+   no card-like gutter, while the title and controls retain a small inset. */
+.main-scroll > .page.opportunities-page {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+.opportunities-page > .page.tracker-page {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+}
+.opportunities-page > .tracker-page > h2 {
+  box-sizing: border-box;
+  margin: 12px 0 10px;
+  padding-inline: 12px;
+}
+.opportunities-page > .tracker-page > .toolbar {
+  box-sizing: border-box;
+  padding-inline: 12px;
+}
+.opportunities-page > .tracker-page > .sheet-wrap.fill {
+  border: 0;
+  border-left: 10px solid #fff;
+  border-right: 10px solid #fff;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Opportunities toolbar: a shared compact control height keeps the filter
+   and action rows aligned while retaining one clear creation path. */
+.opportunities-page .tracker-page > .toolbar :is(button, select, .tracker-search) {
+  min-height: 36px;
+  font-size: 14px;
+}
+.opportunities-page .tracker-page > .toolbar :is(button, select) { padding-inline: 14px; }
+.opportunities-page .tracker-page > .toolbar .tracker-search { padding-inline: 13px; }
+.opportunities-page .tracker-page > .toolbar .tracker-create-logo {
+  display: inline-flex;
+  min-width: 160px;
+  height: 36px;
+  gap: 8px;
+  padding-inline: 16px;
+  border-color: var(--action-primary);
+  background: var(--action-primary);
+  color: var(--text-on-accent);
+  font-size: 14px;
+  font-weight: 750;
+}
+.opportunities-page .tracker-page > .toolbar .tracker-create-logo:hover {
+  border-color: var(--action-primary-hover);
+  background: var(--action-primary-hover);
+  color: var(--text-on-accent);
+}
+.tracker-secondary-filter { display: none; }
+.tracker-cell-label { display: none; }
+
+/* The owner scope is part of the search surface rather than a separate
+   toolbar button. */
+.tracker-search-group {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 240px;
+}
+.tracker-search-group .tracker-search {
+  flex: 1 1 auto;
+  min-width: 0;
+  border-radius: 5px 0 0 5px;
+}
+.tracker-columns-toggle { white-space: nowrap; }
+
+/* Keep the desktop pipeline row focused on filtering and creation. Secondary
+   workbook and view actions live behind one compact overflow menu. */
+.tracker-more-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+.tracker-more-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 74px;
+  white-space: nowrap;
+}
+.tracker-more-menu-list {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 6px);
+  right: 0;
+  display: grid;
+  min-width: 190px;
+  gap: 2px;
+  padding: 5px;
+  border: 1px solid var(--border-default);
+  border-radius: 7px;
+  background: var(--surface-raised);
+  box-shadow: 0 10px 24px rgba(25, 35, 50, .16);
+}
+.tracker-more-menu-list button,
+.tracker-more-select {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 32px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-main);
+  font-size: 12px;
+  text-align: left;
+  white-space: nowrap;
+}
+.tracker-more-menu-list button { cursor: pointer; }
+.tracker-more-menu-list button:hover,
+.tracker-more-menu-list button:focus-visible,
+.tracker-more-select:focus-within { background: var(--primary-soft); color: var(--primary-deep); outline: 0; }
+.tracker-more-select { gap: 8px; }
+.tracker-more-select span { flex: 1 1 auto; }
+.tracker-more-select select {
+  min-width: 0;
+  max-width: 108px;
+  padding: 3px 4px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--surface-default);
+  color: var(--text-main);
+  font-size: 11px;
+}
+.opportunities-page .tracker-page > .toolbar .tracker-more-menu-list button,
+.opportunities-page .tracker-page > .toolbar .tracker-more-select {
+  min-height: 32px;
+  padding: 7px 9px;
+  font-size: 12px;
+}
+.opportunities-page .tracker-page > .toolbar .tracker-more-select select {
+  min-height: 26px;
+  padding: 3px 4px;
+  font-size: 11px;
+}
+@media (max-width: 40em) {
+  .opportunities-page .tracker-search-group {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .tracker-more-menu-list { left: 0; right: auto; }
+}
+
+/* Keep the toolbar usable at zoom without changing the single-row key sheet. */
+@container workspace (max-width: 44rem) {
+  .opportunities-page .tracker-page > .toolbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .opportunities-page .tracker-toolbar-filters,
+  .opportunities-page .tracker-toolbar-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    min-width: 0;
+  }
+  .opportunities-page .tracker-toolbar-filters > .tracker-search {
+    flex: 1 1 240px;
+    min-width: min(240px, 100%);
+  }
+  .opportunities-page .tracker-search-group {
+    flex: 1 1 240px;
+    min-width: min(240px, 100%);
+  }
+}
+
+/* -------------------------------------------------------------------------
+   Dashboard command-center visual system
+   A scoped finishing layer: keeps all existing role logic and navigation,
+   while giving the sales workspace one clear operational hierarchy.
+   ------------------------------------------------------------------------- */
+.dashboard-page {
+  --dashboard-accent: var(--color-primary);
+  --dashboard-ink: var(--text-primary);
+  --dashboard-muted: var(--text-tertiary);
+  --dashboard-rule: var(--border-default);
+  --dashboard-wash: var(--surface-sunken);
+  max-width: 1500px;
+  padding-bottom: 36px;
+}
+
+.dashboard-page .home-head {
+  align-items: flex-end;
+  margin: 4px 0 24px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--dashboard-rule);
+}
+
+.dashboard-page .home-head h2 {
+  font-size: clamp(28px, 2.3vw, 36px);
+  font-weight: 800;
+  letter-spacing: -.045em;
+}
+
+.dashboard-page .home-head .hint {
+  max-width: 64ch;
+  color: var(--dashboard-muted);
+}
+
+.dashboard-page .home-head-actions {
+  align-items: stretch;
+}
+
+.dashboard-page .dashboard-head-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--dashboard-rule);
+  border-radius: 6px;
+  background: var(--surface-default);
+  color: var(--dashboard-ink);
+  box-shadow: none;
+  white-space: nowrap;
+}
+
+.dashboard-page .scope-toggle-group {
+  display: contents;
+}
+
+.dashboard-page .dashboard-head-action:hover {
+  border-color: var(--dashboard-ink);
+  background: var(--dashboard-wash);
+}
+
+.dashboard-page .dashboard-head-action:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.dashboard-page .dashboard-head-action.active {
+  color: var(--text-on-accent);
+  background: var(--dashboard-ink);
+  border-color: var(--dashboard-ink);
+}
+
+.dashboard-page .dashboard-head-action.active:hover {
+  background: var(--dashboard-ink);
+}
+
+/* Keep the scope buttons semantically grouped while presenting all three
+   header actions as one visually aligned row. */
+.dashboard-page .home-head-actions > .dashboard-head-action,
+.dashboard-page .scope-toggle-group > .dashboard-head-action {
+  min-height: 40px;
+}
+
+.dashboard-page .stat-cards {
+  gap: 10px;
+  margin-bottom: 26px;
+}
+
+.dashboard-page .stat-cards > .stat-card-v2 {
+  min-height: 104px;
+  padding: 18px 20px;
+  border: 1px solid var(--dashboard-rule);
+  border-top: 3px solid var(--dashboard-accent);
+  border-radius: 6px;
+  background: var(--surface-default);
+  box-shadow: none;
+}
+
+.dashboard-page .stat-cards > .stat-card-v2.tone-good,
+.dashboard-page .stat-cards > .stat-card-v2.tone-warn,
+.dashboard-page .stat-cards > .stat-card-v2.tone-red,
+.dashboard-page .stat-cards > .stat-card-v2.tone-amber,
+.dashboard-page .stat-cards > .stat-card-v2.tone-sky,
+.dashboard-page .stat-cards > .stat-card-v2.tone-green,
+.dashboard-page .stat-cards > .stat-card-v2.tone-slate,
+.dashboard-page .stat-cards > .stat-card-v2.tone-teal {
+  background: var(--surface-default);
+  border-color: var(--dashboard-rule);
+  border-top-color: var(--dashboard-accent);
+}
+
+.dashboard-page .stat-card-v2 .sc-value {
+  color: var(--dashboard-ink);
+  font-size: clamp(30px, 2.6vw, 38px);
+  font-weight: 800;
+  letter-spacing: -.045em;
+}
+
+.dashboard-page .stat-card-v2 .sc-label {
+  color: var(--dashboard-ink);
+  font-weight: 750;
+}
+
+.dashboard-page .home-analytics {
+  padding: 24px;
+  border: 1px solid var(--dashboard-rule);
+  border-top: 3px solid var(--dashboard-accent);
+  border-radius: 6px;
+  background: var(--surface-default);
+  box-shadow: none;
+}
+
+.dashboard-page .home-analytics-head { align-items: flex-start; gap: 24px; }
+.dashboard-page .home-analytics h3 { margin-top: 4px; color: var(--dashboard-ink); font-size: 23px; letter-spacing: -.03em; }
+.dashboard-page .home-analytics-head p { color: var(--dashboard-muted); }
+
+.dashboard-page .home-analytics-link,
+.dashboard-page .dashboard-card-link {
+  min-height: 38px;
+  border: 1px solid var(--dashboard-rule);
+  border-radius: 4px;
+  background: var(--dashboard-wash);
+  box-shadow: none;
+}
+
+.dashboard-page .home-analytics-grid { gap: 12px; margin-top: 22px; }
+
+.dashboard-page .home-funnel-panel {
+  padding: 18px;
+  border: 1px solid var(--dashboard-rule);
+  border-radius: 5px;
+  background: var(--surface-default);
+}
+
+.dashboard-page .home-panel-title {
+  color: var(--dashboard-ink);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.dashboard-page .home-funnel-row {
+  min-height: 40px;
+  padding: 0 8px;
+  border-radius: 3px;
+  transition: background-color 150ms ease, transform 150ms ease;
+}
+
+.dashboard-page .home-funnel-row:hover {
+  background: var(--dashboard-wash);
+  transform: translateX(3px);
+}
+
+.dashboard-page .home-funnel-track { background: var(--dashboard-wash); }
+.dashboard-page .home-funnel-fill { background: var(--dashboard-accent); }
+.dashboard-page .home-funnel-stage { color: var(--dashboard-ink); font-weight: 700; }
+.dashboard-page .home-funnel-value { color: var(--dashboard-ink); font-weight: 800; }
+
+.dashboard-page .home-forecast-panel {
+  padding: 20px;
+  border: 0;
+  border-top: 3px solid var(--dashboard-accent);
+  border-radius: 5px;
+  background: var(--dashboard-ink);
+  color: var(--text-on-inverse);
+}
+
+.dashboard-page .home-forecast-panel .home-panel-title,
+.dashboard-page .home-forecast-panel .home-panel-note,
+.dashboard-page .home-forecast-panel .home-forecast-label,
+.dashboard-page .home-forecast-panel .home-forecast-split span {
+  color: color-mix(in srgb, var(--text-on-inverse), transparent 32%);
+}
+
+.dashboard-page .home-forecast-value,
+.dashboard-page .home-forecast-split b { color: var(--text-on-inverse); }
+.dashboard-page .home-forecast-split { border-color: color-mix(in srgb, var(--text-on-inverse), transparent 80%); }
+
+.dashboard-page .home-forecast-action {
+  min-height: 42px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--text-on-accent);
+  background: var(--dashboard-accent);
+}
+
+.dashboard-page .home-alert-rail {
+  gap: 10px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top-color: var(--dashboard-rule);
+}
+
+.dashboard-page .home-alert-rail > button,
+.dashboard-page .home-alert-rail > div {
+  min-height: 72px;
+  border-color: var(--dashboard-rule);
+  border-radius: 5px;
+  background: var(--dashboard-wash);
+  box-shadow: none;
+}
+
+.dashboard-page .home-alert-rail > button:hover {
+  border-color: var(--dashboard-accent);
+  background: var(--surface-default);
+}
+
+.dashboard-page .dashboard-card {
+  border-color: var(--dashboard-rule);
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+.dashboard-page .dashboard-card .ana-title {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--dashboard-rule);
+  color: var(--dashboard-ink);
+}
+
+.dashboard-page .dashboard-card .ana-ico { color: var(--dashboard-accent); }
+
+@media (max-width: 760px) {
+  .dashboard-page .home-head { align-items: flex-start; padding-bottom: 14px; }
+  .dashboard-page .home-head-actions { width: 100%; flex-wrap: wrap; }
+  .dashboard-page .home-head-actions > .dashboard-head-action,
+  .dashboard-page .scope-toggle-group > .dashboard-head-action { flex: 1 1 0; }
+  .dashboard-page .home-analytics { padding: 18px; }
+  .dashboard-page .home-analytics-grid { grid-template-columns: 1fr; }
+  .dashboard-page .home-forecast-panel { min-height: 250px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-page .home-funnel-row { transition: none; }
+  .dashboard-page .home-funnel-row:hover { transform: none; }
+}
+
+/* -------------------------------------------------------------------------
+   Showcase landing page
+   A self-contained public product surface: dark industrial palette, one
+   ModAE-red accent, image-led asymmetric composition, and measured motion.
+   ------------------------------------------------------------------------- */
+.showcase-landing { isolation: isolate; background: #161616; }
+.showcase-logo { display: block; width: auto; filter: brightness(0) invert(1); }
+.showcase-noise { position: fixed; z-index: -1; inset: 0; pointer-events: none; opacity: .28; background-image: radial-gradient(rgba(255,255,255,.08) .6px, transparent .6px); background-size: 5px 5px; mask-image: linear-gradient(to bottom, black, transparent 82%); }
+.showcase-kicker { color: #ed3f2f; font-size: 10px; font-weight: 800; letter-spacing: .18em; line-height: 1.3; text-transform: uppercase; }
+.showcase-accent-word { color: #ed3f2f; }
+.showcase-nav-link, .showcase-primary-cta, .showcase-secondary-cta, .showcase-card-arrow { display: inline-flex; align-items: center; justify-content: center; gap: 9px; font-weight: 750; text-decoration: none; transition: transform 180ms ease, background-color 180ms ease, border-color 180ms ease, color 180ms ease; }
+.showcase-nav-link { min-height: 38px; color: #e7e5e4; font-size: 13px; }
+.showcase-nav-link:hover { color: #ed3f2f; transform: translateX(2px); }
+.showcase-primary-cta { min-height: 46px; padding: 0 18px; border: 1px solid #ed3f2f; border-radius: 999px; color: #fff; background: #ed3f2f; font-size: 14px; box-shadow: 0 10px 24px rgba(237,63,47,.22); }
+.showcase-primary-cta:hover { color: #fff; background: #c7291b; border-color: #c7291b; transform: translateY(-2px); }
+.showcase-primary-cta:active, .showcase-secondary-cta:active { transform: translateY(1px) scale(.98); }
+.showcase-secondary-cta { min-height: 46px; padding: 0 18px; border: 1px solid rgba(255,255,255,.18); border-radius: 999px; color: #f5f5f4; background: rgba(255,255,255,.04); font-size: 14px; }
+.showcase-secondary-cta:hover { color: #fff; border-color: rgba(255,255,255,.42); background: rgba(255,255,255,.1); transform: translateY(-2px); }
+.showcase-card-arrow { width: 42px; height: 42px; border: 1px solid rgba(255,255,255,.22); border-radius: 999px; color: #fff; background: rgba(0,0,0,.24); backdrop-filter: blur(8px); }
+.showcase-card:hover { transform: translateY(-8px); }
+.showcase-card:hover .showcase-card-arrow, .showcase-hero-card:hover .showcase-card-arrow { color: #fff; border-color: #ed3f2f; background: #ed3f2f; transform: rotate(-8deg); }
+.showcase-card { transition: transform 280ms cubic-bezier(.16,1,.3,1), border-color 280ms ease, box-shadow 280ms ease; }
+.showcase-card:hover { border-color: rgba(237,63,47,.65); box-shadow: 0 28px 58px rgba(0,0,0,.32); }
+.showcase-hero-card { transition: transform 320ms cubic-bezier(.16,1,.3,1), box-shadow 320ms ease; }
+.showcase-hero-card:hover { transform: translateY(-5px) rotate(.25deg); box-shadow: 0 40px 100px rgba(0,0,0,.48); }
+.showcase-closing { background: linear-gradient(120deg, #24201f 0%, #1a1a1a 56%, #35201d 100%); box-shadow: inset 0 1px rgba(255,255,255,.04), 0 24px 60px rgba(0,0,0,.18); }
+.showcase-landing :focus-visible { outline: 2px solid #ff8b7e; outline-offset: 4px; }
+
+@media (max-width: 767px) {
+  .showcase-hero-copy h1 { max-width: 11ch; }
+  .showcase-card { min-height: 350px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .showcase-landing *, .showcase-landing *::before, .showcase-landing *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+  .showcase-card:hover, .showcase-hero-card:hover, .showcase-card:hover .showcase-card-arrow, .showcase-hero-card:hover .showcase-card-arrow, .showcase-nav-link:hover, .showcase-primary-cta:hover, .showcase-secondary-cta:hover { transform: none; }
+}
+
+/* -------------------------------------------------------------------------
+   Corporate workspace shell
+   ------------------------------------------------------------------------- */
+.shell:not(.tablet-mode) {
+  --corporate-canvas: #F8F7F4;
+  --corporate-surface: #FFFFFF;
+  --corporate-ink: #172033;
+  --corporate-muted: #64748b;
+  --corporate-rule: #E5E7EB;
+  background: var(--corporate-canvas);
+}
+
+.shell:not(.tablet-mode) > .main-col { background: var(--corporate-canvas); }
+
+.dashboard-page {
+  --dashboard-canvas: #F8F7F4;
+  --dashboard-card: #FFFFFF;
+  --dashboard-card-subtle: #F9FAFB;
+  --dashboard-border: #E5E7EB;
+  --dashboard-border-strong: #D1D5DB;
+  --pipeline-track: #F1F5F9;
+  --pipeline-qualified: #18181B;
+  --pipeline-budgetary: #7C2D12;
+  --pipeline-rfq: #C2410C;
+  --pipeline-proposal: #EA580C;
+  --pipeline-negotiate: #FBBF24;
+  --surface-default: #FFFFFF;
+  --surface-sunken: #F9FAFB;
+  --border-default: #E5E7EB;
+  --dashboard-accent: #ed3f2f;
+  --dashboard-ink: #172033;
+  --dashboard-muted: #64748b;
+  --dashboard-rule: #E5E7EB;
+  --dashboard-wash: #F9FAFB;
+  padding: 26px 28px 40px;
+  background: var(--dashboard-canvas);
+}
+
+.dashboard-page .home-head { margin-top: 0; }
+.dashboard-page .stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.dashboard-page .dashboard-card,
+.dashboard-page .home-analytics,
+.dashboard-page .stat-cards > .stat-card-v2 { border-color: var(--dashboard-rule); }
+
+/* Top-of-dashboard KPIs are a compact operational summary: use the number
+   for scanning, with the narrow edge carrying the secondary status cue. */
+.dashboard-page .stat-card-v2.dashboard-kpi {
+  --kpi-accent: var(--dashboard-neutral);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 5px;
+  min-height: 88px;
+  padding: 15px 18px;
+  border: 1px solid var(--dashboard-rule);
+  border-top: 1px solid var(--dashboard-rule);
+  border-left: 3px solid var(--kpi-accent);
+  border-radius: 6px;
+  background: var(--surface-default);
+  box-shadow: none;
+}
+.dashboard-page .stat-card-v2.dashboard-kpi .sc-value {
+  color: var(--dashboard-ink);
+  font-size: clamp(30px, 2.35vw, 36px);
+  font-weight: 800;
+  letter-spacing: -.04em;
+  line-height: 1;
+}
+.dashboard-page .stat-card-v2.dashboard-kpi .sc-label {
+  color: var(--dashboard-muted);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.2;
+  text-transform: none;
+}
+.dashboard-page .stat-card-v2.dashboard-kpi .hint { color: var(--dashboard-muted); }
+.dashboard-page .stat-card-v2.dashboard-kpi.tone-sky { --kpi-accent: var(--dashboard-info); }
+.dashboard-page .stat-card-v2.dashboard-kpi.tone-green { --kpi-accent: var(--dashboard-success); }
+.dashboard-page .stat-card-v2.dashboard-kpi.tone-amber { --kpi-accent: var(--dashboard-warning); }
+.dashboard-page .stat-card-v2.dashboard-kpi.tone-red { --kpi-accent: var(--dashboard-danger); }
+.dashboard-page .stat-card-v2.dashboard-kpi.tone-slate { --kpi-accent: var(--dashboard-neutral); }
+.dashboard-page .stat-card-v2.dashboard-kpi.tone-teal { --kpi-accent: var(--dashboard-success); }
+.dashboard-page .stat-card-v2.dashboard-kpi.clickable:hover {
+  border-color: var(--dashboard-border-strong);
+  box-shadow: 0 2px 5px rgba(24, 24, 27, .06), 0 10px 20px rgba(24, 24, 27, .06);
+  transform: translateY(-1px);
+}
+.dashboard-page .stat-card-v2.dashboard-kpi.clickable:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@container workspace (max-width: 44rem) {
+  .dashboard-page { padding: 18px 14px 30px; }
+  .dashboard-page .stat-cards { grid-template-columns: 1fr; }
+}
+
+/* Shared workspace finish: route-specific layouts stay intact while their
+   colors, controls, tables, and navigation use one consistent system. */
+.shell:not(.tablet-mode) {
+  --surface-canvas: #F8F7F4;
+  --surface-default: #FFFFFF;
+  --surface-raised: #FFFFFF;
+  --surface-sunken: #F9FAFB;
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-tertiary: #64748B;
+  --border-default: #D1D5DB;
+  --border-subtle: #F1F5F9;
+  --action-primary: #1E1E24;
+  --action-primary-hover: #000000;
+  --action-primary-active: #000000;
+  --action-secondary-bg: #FFFFFF;
+  --action-secondary-text: #374151;
+  --action-secondary-border: #D1D5DB;
+  --action-secondary-hover: #F5F5F4;
+  --focus-ring: #64748B;
+  --bg-app: #F8F7F4;
+  --card-bg: #FFFFFF;
+  --text-main: #0F172A;
+  --text-muted: #475569;
+  --text-subtle: #64748B;
+  --border-color: #D1D5DB;
+  --border-soft: #F1F5F9;
+}
+
+.shell:not(.tablet-mode) > .main-col { background: #F8F7F4; }
+
+.shell .primary,
+.shell button.primary,
+.shell .btn.primary,
+.shell .tracker-create-logo {
+  min-height: 40px;
+  padding: 8px 16px;
+  border: 1px solid #1E1E24;
+  border-radius: 8px;
+  background: #1E1E24;
+  color: #FFFFFF;
+  font-weight: 500;
+  transition: background-color .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease;
+}
+
+.shell .primary:hover:not(:disabled),
+.shell button.primary:hover:not(:disabled),
+.shell .btn.primary:hover:not(:disabled),
+.shell .tracker-create-logo:hover {
+  border-color: #000000;
+  background: #000000;
+  color: #FFFFFF;
+}
+
+.shell button.secondary,
+.shell .btn.secondary,
+  .shell button:not(.primary):not(.danger):not(.dark):not(.ghost):not(.icon-action):not(.mail-icon-btn):not(.mail-star):not(.reset):not(.sidebar-toggle):not(.tb-bell):not(.tb-icon):not(.tablet-bar button):not(.tab-bottom button):not(.dashboard-funnel-row):not(.theme-toggle),
+.shell .btn:not(.primary):not(.danger):not(.dark):not(.ghost):not(.icon-action) {
+  border: 1px solid #D1D5DB;
+  border-radius: 8px;
+  background: #FFFFFF;
+  color: #374151;
+  transition: background-color .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease;
+}
+
+.shell button.secondary:hover:not(:disabled),
+.shell .btn.secondary:hover:not(:disabled),
+  .shell button:not(.primary):not(.danger):not(.dark):not(.ghost):not(.icon-action):not(.mail-icon-btn):not(.mail-star):not(.reset):not(.sidebar-toggle):not(.tb-bell):not(.tb-icon):not(.tablet-bar button):not(.tab-bottom button):not(.dashboard-funnel-row):not(.theme-toggle):hover:not(:disabled),
+.shell .btn:not(.primary):not(.danger):not(.dark):not(.ghost):not(.icon-action):hover:not(:disabled) {
+  border-color: #A8A29E;
+  background: #F5F5F4;
+  color: #1E293B;
+}
+
+.shell select,
+.shell input:not([type="checkbox"]):not([type="radio"]),
+.shell textarea {
+  border-color: #E2E8F0;
+  border-radius: 8px;
+  background-color: #FFFFFF;
+  color: #4B5563;
+}
+
+.shell :where(button, .btn, select, input, textarea):focus-visible {
+  outline: 2px solid #64748B;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px rgba(100, 116, 139, .18);
+}
+
+.shell :is(.panel, .form-card, .card, .ana-card, .stat-card-v2, .home-analytics, .dashboard-card, .home-funnel-panel, .home-forecast-panel, .mailbox-list, .sparse-card) {
+  border: 1px solid #E5E7EB;
+  border-radius: 8px;
+  background: #FFFFFF;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .05);
+}
+
+.shell :is(table:not(.sheet), .dashboard-table) thead th {
+  border-bottom: 1px solid #E5E7EB;
+  background: #F9FAFB;
+  color: #64748B;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.shell :is(table:not(.sheet), .dashboard-table) tbody td {
+  border-bottom: 1px solid #F1F5F9;
+  background: #FFFFFF;
+  color: #475569;
+}
+
+.shell :is(table:not(.sheet), .dashboard-table) tbody tr:hover td { background: #F8FAFC; }
+.shell .dashboard-page .dashboard-table tbody tr:nth-child(even) td { background: #FFFFFF; }
+.shell .dashboard-table td:first-child,
+.shell .dashboard-table td:first-child a,
+.shell .dashboard-table td:first-child b,
+.shell .tracker-page td.oppid,
+.shell .mail-ref,
+.shell .mail-opportunity-link { color: #0F172A; }
+
+.shell .tracker-page table.sheet:not(.cols-key) thead th,
+.shell .tracker-page table.sheet.cols-key thead th {
+  border-color: #E5E7EB;
+  border-bottom: 1px solid #E5E7EB;
+  background: #F9FAFB;
+  color: #64748B;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.shell .tracker-page table.sheet:not(.cols-key) tbody tr:not(:hover) td { background: #FFFFFF; }
+.shell .tracker-page table.sheet:not(.cols-key) tbody tr:hover td { background: #F8FAFC; }
+
+.shell .mailbox-list { border-color: #E5E7EB; box-shadow: 0 1px 2px rgba(15, 23, 42, .05); }
+.shell .mail-list-toolbar,
+.shell .mail-column-head { background: #F9FAFB; color: #64748B; }
+.shell .mail-row:not(.selected):not(.unread) { background: #FFFFFF; }
+.shell .mail-row:not(.selected):not(.unread):hover { background: #F8FAFC; box-shadow: inset 3px 0 0 #D1D5DB; }
+
+.dashboard-page {
+  --dashboard-canvas: #F8F7F4;
+  --dashboard-card: #FFFFFF;
+  --dashboard-card-subtle: #F9FAFB;
+  --dashboard-border: #E5E7EB;
+  --dashboard-border-strong: #D1D5DB;
+  --dashboard-shadow: 0 1px 2px rgba(15, 23, 42, .05);
+  --dashboard-text: #0F172A;
+  --dashboard-muted: #475569;
+  --surface-default: #FFFFFF;
+  --surface-sunken: #F9FAFB;
+  --border-default: #E5E7EB;
+}
+
+.dashboard-page .home-forecast-panel { background: #FFFFFF; color: #0F172A; }
+.dashboard-page .home-forecast-panel :is(.home-panel-title, .home-panel-note, .home-forecast-label, .home-forecast-split span) { color: #64748B; }
+.dashboard-page .home-forecast-panel :is(.home-forecast-value, .home-forecast-split b) { color: #0F172A; }
+.dashboard-page .home-forecast-split { border-color: #E5E7EB; }
+
+.tablet-mode.theme-light {
+  --surface-canvas: #F8F7F4;
+  --surface-default: #FFFFFF;
+  --surface-raised: #FFFFFF;
+  --surface-sunken: #F9FAFB;
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-tertiary: #64748B;
+  --border-default: #D1D5DB;
+  --border-subtle: #F1F5F9;
+  --action-primary: #1E1E24;
+  --action-primary-hover: #000000;
+  --action-primary-active: #000000;
+  --action-secondary-bg: #FFFFFF;
+  --action-secondary-text: #374151;
+  --action-secondary-border: #D1D5DB;
+  --action-secondary-hover: #F5F5F4;
+  --focus-ring: #64748B;
+  --bg-app: #F8F7F4;
+  --card-bg: #FFFFFF;
+  --text-main: #0F172A;
+  --text-muted: #475569;
+  --text-subtle: #64748B;
+  --border-color: #D1D5DB;
+  --border-soft: #F1F5F9;
+  --dash-bg: #F8F7F4;
+  --dash-surface: #FFFFFF;
+  --dash-surface-2: #F9FAFB;
+  --dash-border: #E5E7EB;
+  --dash-border-hi: #D1D5DB;
+  --dash-text: #0F172A;
+  --dash-text-2: #475569;
+  --dash-text-3: #64748B;
+  --dash-track: #F1F5F9;
+}
+
+.shell.theme-dark :is(.panel, .form-card, .card, .ana-card, .stat-card-v2, .home-analytics, .dashboard-card, .home-funnel-panel, .home-forecast-panel, .mailbox-list, .sparse-card) {
+  border-color: rgba(227, 227, 229, .24);
+  background: #16181A;
+  color: #EDEDED;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .25);
+}
+.shell.theme-dark :is(select, input:not([type="checkbox"]):not([type="radio"]), textarea) {
+  border-color: #475569;
+  background-color: #16181A;
+  color: #E2E8F0;
+}
+.shell.theme-dark .primary,
+.shell.theme-dark button.primary,
+.shell.theme-dark .btn.primary,
+.shell.theme-dark .tracker-create-logo {
+  border-color: #EF7765;
+  background: #EF7765;
+  color: #0F1011;
+}
+.shell.theme-dark .primary:hover:not(:disabled),
+.shell.theme-dark button.primary:hover:not(:disabled),
+.shell.theme-dark .btn.primary:hover:not(:disabled),
+.shell.theme-dark .tracker-create-logo:hover { background: #F39C8E; border-color: #F39C8E; }
+.shell.theme-dark button:not(.primary):not(.danger):not(.dark):not(.ghost):not(.icon-action):not(.mail-icon-btn):not(.mail-star):not(.reset):not(.sidebar-toggle):not(.tb-bell):not(.tb-icon):not(.tablet-bar button):not(.tab-bottom button):not(.dashboard-funnel-row):not(.theme-toggle),
+.shell.theme-dark .btn:not(.primary):not(.danger):not(.dark):not(.ghost):not(.icon-action) {
+  border-color: #475569;
+  background: #1F2937;
+  color: #E2E8F0;
+}
+.shell.theme-dark .mail-list-toolbar,
+.shell.theme-dark .mail-column-head,
+.shell.theme-dark .dashboard-page .home-forecast-panel { background: #1F2224; color: #EDEDED; }
+.shell.theme-dark .dashboard-page {
+  --dashboard-canvas: #0F1011;
+  --dashboard-card: #16181A;
+  --dashboard-card-subtle: #1F2224;
+  --dashboard-border: rgba(227, 227, 229, .24);
+  --dashboard-border-strong: #475569;
+  --dashboard-text: #EDEDED;
+  --dashboard-ink: #EDEDED;
+  --dashboard-muted: #C4C8CC;
+  --dashboard-rule: rgba(227, 227, 229, .24);
+  --dashboard-wash: #1F2224;
+  --surface-default: #16181A;
+  --surface-sunken: #0B0C0D;
+  --border-default: rgba(227, 227, 229, .30);
+}
+.shell.theme-dark :is(table:not(.sheet), .dashboard-table) thead th,
+.shell.theme-dark .tracker-page table.sheet thead th { border-color: #39414A; background: #1F2224; color: #C4C8CC; }
+.shell.theme-dark :is(table:not(.sheet), .dashboard-table) tbody td,
+.shell.theme-dark .tracker-page table.sheet tbody td { border-color: #30363D; background: #16181A; color: #C4C8CC; }
+.shell.theme-dark :is(table:not(.sheet), .dashboard-table) tbody tr:hover td,
+.shell.theme-dark .tracker-page table.sheet tbody tr:hover td { background: #1F2224; }
+.shell.theme-dark .dashboard-page .home-forecast-panel :is(.home-panel-title, .home-panel-note, .home-forecast-label, .home-forecast-split span) { color: #C4C8CC; }
+.shell.theme-dark .dashboard-page .home-forecast-panel :is(.home-forecast-value, .home-forecast-split b) { color: #EDEDED; }
+
+/* Inbox grid containment: keep the complete message grid inside the same
+   workspace-width contract as the Opportunities sheet. The grid, its sticky
+   header, and its toolbar scroll together; the page itself never widens. */
+.mailbox-page {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  box-sizing: border-box;
+  padding-inline: clamp(14px, 2vw, 30px);
+}
+.mailbox-list {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  border: 0;
+  box-shadow: none;
+}
+.mail-list-toolbar,
+.mail-column-head,
+.mail-row { width: 100%; min-width: 0; }
+.shell .mail-opportunity-link { border: 0; }
+
+@container workspace (max-width: 70rem) {
+  .mailbox-page > .mailbox-head { flex-wrap: wrap; }
+  .mailbox-head-actions { justify-content: flex-start; }
+  .mail-search-row { flex-wrap: wrap; }
+  .mail-search {
+    flex: 1 1 24rem;
+    width: auto;
+  }
+  .mail-search-row > :is(select, .mail-show-all, .scope-toggle) {
+    flex: 1 1 10.5rem;
+    min-width: 0;
+  }
+}
+
+@container workspace (max-width: 44rem) {
+  .mailbox-head-actions { width: 100%; }
+  .mailbox-head-actions > button { flex: 1 1 10.5rem; }
+  .mail-search {
+    flex-basis: 100%;
+    width: 100%;
+  }
+}
+
+/* Keep dashboard KPI values and labels together. This prevents the three
+   summary tiles from reading as sparse, oversized empty boxes. */
+.dashboard-page .stat-card-v2.dashboard-kpi {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: 'value label' 'value hint';
+  align-items: center;
+  justify-content: start;
+  column-gap: 12px;
+  row-gap: 2px;
+  min-height: 76px;
+  padding: 13px 16px;
+  border: 1px solid var(--dashboard-rule);
+  border-top: 1px solid var(--dashboard-rule);
+  border-left: 3px solid var(--kpi-accent);
+  border-radius: 6px;
+  background: var(--surface-default);
+  box-shadow: none;
+}
+.dashboard-page .stat-card-v2.dashboard-kpi .sc-value {
+  grid-area: value;
+  color: var(--dashboard-ink);
+  font-size: clamp(28px, 2vw, 34px);
+  font-weight: 800;
+  letter-spacing: -.04em;
+  line-height: 1;
+}
+.dashboard-page .stat-card-v2.dashboard-kpi .sc-label {
+  grid-area: label;
+  align-self: end;
+  color: var(--dashboard-ink);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.2;
+}
+.dashboard-page .stat-card-v2.dashboard-kpi .hint { grid-area: hint; margin: 0; }
+.dashboard-page .stat-card-v2.dashboard-kpi.clickable:hover {
+  border-color: var(--dashboard-border-strong);
+  box-shadow: 0 2px 5px rgba(24, 24, 27, .06), 0 10px 20px rgba(24, 24, 27, .06);
+  transform: translateY(-1px);
+}
+
+/* One root-controlled color system for the workspace and public surfaces. */
+html.dark,
+.shell.theme-dark {
+  color-scheme: dark;
+  --surface-canvas: #0F172A;
+  --surface-default: #1E293B;
+  --surface-raised: #1E293B;
+  --surface-sunken: #0F172A;
+  --surface-inverse: #F1F5F9;
+  --text-primary: #F8FAFC;
+  --text-secondary: #94A3B8;
+  --text-tertiary: #94A3B8;
+  --text-on-inverse: #0F172A;
+  --border-default: #1E293B;
+  --border-subtle: #1E293B;
+  --action-primary: #F1F5F9;
+  --action-primary-hover: #FFFFFF;
+  --action-secondary-bg: #1E293B;
+  --action-secondary-text: #F8FAFC;
+  --action-secondary-border: #334155;
+  --action-secondary-hover: #334155;
+  --hdr-navy: #1E293B;
+  --header-fill: #334155;
+  --surface: #1E293B;
+  --bg-app: #0F172A;
+  --card-bg: #1E293B;
+  --text-main: #F8FAFC;
+  --text-muted: #94A3B8;
+  --text-subtle: #94A3B8;
+  --border-color: #334155;
+  --border-soft: #1E293B;
+}
+
+.shell.theme-light {
+  --border-default: #E2E8F0;
+  --border-color: #E2E8F0;
+}
+
+html.dark body { background: #0F172A; color: #F8FAFC; }
+.shell.theme-dark:not(.tablet-mode) {
+  --corporate-canvas: #0F172A;
+  --corporate-surface: #1E293B;
+  --corporate-ink: #F8FAFC;
+  --corporate-muted: #94A3B8;
+  --corporate-rule: #334155;
+  background: #0F172A;
+}
+.shell.theme-dark:not(.tablet-mode) > .sidenav {
+  --bg-sidebar: #111827;
+  --bg-sidebar-2: #1E293B;
+  --text-on-inverse: #F8FAFC;
+  background: #111827;
+  border-right-color: #334155;
+  color: #F8FAFC;
+}
+.shell.theme-dark:not(.tablet-mode) > .sidenav .side-nav-heading { color: #94A3B8; }
+.shell.theme-dark:not(.tablet-mode) > .sidenav .side-item { color: #CBD5E1; }
+.shell.theme-dark:not(.tablet-mode) > .sidenav .side-item .ic { color: #94A3B8; }
+.shell.theme-dark:not(.tablet-mode) > .sidenav .side-item:hover {
+  background: #1E293B;
+  color: #F8FAFC;
+}
+.shell.theme-dark:not(.tablet-mode) > .sidenav .side-item.active {
+  background: #334155;
+  color: #F8FAFC;
+}
+.shell.theme-dark:not(.tablet-mode) > .sidenav .side-item:is(:hover, .active) .ic { color: #F8FAFC; }
+.shell.theme-dark:not(.tablet-mode) > .sidenav .side-foot button.reset { color: #CBD5E1; }
+.shell.theme-dark:not(.tablet-mode) > .sidenav .side-foot button.reset:is(:hover, :focus-visible) {
+  background: #1E293B;
+  color: #F8FAFC;
+}
+.shell.theme-dark > .brand-watermark { display: none; }
+.shell.theme-dark > .main-col,
+.shell.theme-dark:not(.tablet-mode) > .main-col { background: #0F172A; }
+.shell.theme-dark .topbar { background: #1E293B; border-color: #334155; color: #F8FAFC; }
+.shell.theme-dark .topbar-title { color: #94A3B8; }
+.shell.theme-dark .dashboard-page {
+  --dashboard-canvas: #0F172A;
+  --dashboard-card: #1E293B;
+  --dashboard-card-subtle: #334155;
+  --dashboard-border: #334155;
+  --dashboard-border-strong: #475569;
+  --dashboard-text: #F8FAFC;
+  --dashboard-ink: #F8FAFC;
+  --dashboard-muted: #94A3B8;
+  --dashboard-rule: #334155;
+  --dashboard-wash: #334155;
+  --surface-default: #1E293B;
+  --surface-sunken: #0F172A;
+  --border-default: #334155;
+  background: #0F172A;
+}
+.shell.theme-dark .dashboard-page .home-forecast-panel,
+.shell.theme-dark .dashboard-page .home-forecast-panel :is(.home-forecast-value, .home-forecast-split b) {
+  color: #F8FAFC;
+}
+.shell.theme-dark .dashboard-page .home-forecast-panel { background: #1E293B; }
+.shell.theme-dark :is(.panel, .form-card, .card, .ana-card, .stat-card-v2, .home-analytics, .dashboard-card, .home-funnel-panel, .home-forecast-panel, .mailbox-list, .sparse-card) {
+  background: #1E293B;
+  border-color: #334155;
+  color: #F8FAFC;
+}
+.shell.theme-dark :is(table:not(.sheet), .dashboard-table) :is(th, td),
+.shell.theme-dark .tracker-page table.sheet :is(th, td) {
+  background: #1E293B;
+  border-color: #334155;
+  color: #CBD5E1;
+}
+.shell.theme-dark :is(table:not(.sheet), .dashboard-table) tbody tr:hover td,
+.shell.theme-dark .tracker-page table.sheet tbody tr:hover td { background: #334155; }
+.shell.theme-dark .tracker-page table.sheet:not(.cols-key) tbody tr:not(:hover) td,
+.shell.theme-dark .dashboard-page .dashboard-table tbody tr:nth-child(even) td { background: #1E293B; }
+.shell.theme-dark :is(.mail-list-toolbar, .mail-column-head, .mail-row:not(.selected):not(.unread)) { background: #1E293B; color: #94A3B8; }
+.shell.theme-dark :is(.dashboard-table td:first-child, .dashboard-table td:first-child a, .dashboard-table td:first-child b, .tracker-page td.oppid, .mail-ref, .mail-opportunity-link) { color: #F8FAFC; }
+.shell.theme-dark .tablet-bar { background: #0F172A; }
+.shell.theme-dark :is(.page, .admin-page, .home-page, .tracker-page) { color: #F8FAFC; }
+.shell.theme-dark :is(.page h2, .admin-page h2, .admin-page h3, .admin-page .section-title, .home-page h2, .home-page h3, .dashboard-page h2, .dashboard-page h3, .admin-card h3, .admin-card .section-title) { color: #F8FAFC; }
+.shell.theme-dark :is(.admin-card, .admin-status-strip, .home-card, .metric-card) {
+  background: #1E293B;
+  border-color: #334155;
+  color: #F8FAFC;
+}
+.shell.theme-dark .admin-card:hover { background: #334155; border-color: #475569; }
+.shell.theme-dark table.sheet { background: #1E293B; border-color: #334155; }
+.shell.theme-dark table.sheet :is(th, td),
+.shell.theme-dark table.sheet tbody tr:nth-child(even) td,
+.shell.theme-dark table.sheet tfoot td { background: #1E293B; border-color: #334155; color: #CBD5E1; }
+.shell.theme-dark table.sheet tbody tr:hover td { background: #334155; }
+.shell.theme-dark table.sheet td.cstat { background: #1E293B !important; color: #CBD5E1; }
+.shell.theme-dark .dashboard-page .home-alert-rail > :is(button, div) { background: #1E293B; border-color: #334155; color: #94A3B8; }
+.shell.theme-dark .dashboard-page .home-alert-rail :is(.home-alert-value, button > span:last-child, div > span:last-child) { color: #F8FAFC; }
+.shell.theme-dark :is(.ana-title, .home-analytics h3, .home-panel-title, .stat-card-v2 .sc-label) { color: #F8FAFC; }
+.shell.theme-dark .approval-decision-form { background: var(--status-info-soft) !important; border-color: var(--status-info); }
+.shell.theme-dark .approval-decision-title { color: var(--text-primary); }
+.shell.theme-dark .approval-notice-info { background: var(--status-info-soft); border-color: var(--status-info); color: var(--text-primary); }
+.shell.theme-dark .approval-pending-banner { background: var(--status-warning-soft); border-color: var(--status-warning); color: var(--text-primary); }
+.shell.theme-dark .lead-workspace {
+  --ws-bg: #0F172A;
+  --ws-surface: #1E293B;
+  --ws-surface-2: #334155;
+  --ws-border: #334155;
+  --ws-border-strong: #475569;
+  --ws-text: #F8FAFC;
+  --ws-text-2: #CBD5E1;
+  --ws-text-3: #94A3B8;
+}
+.shell.theme-dark :is(.drawer, .modal, .sheet-wrap, .workbench-details-editor, .opp-summary, .opp-lifecycle, .workbench-panel, .wb-body) {
+  background: #1E293B;
+  border-color: #334155;
+  color: #F8FAFC;
+}
+.shell.theme-dark .drawer-tabs .dtab.active { color: #F8FAFC; }
+.shell.theme-dark.tablet-mode {
+  --dash-bg: #0F172A;
+  --dash-surface: #1E293B;
+  --dash-surface-2: #334155;
+  --dash-border: #334155;
+  --dash-border-hi: #475569;
+  --dash-text: #F8FAFC;
+  --dash-text-2: #CBD5E1;
+  --dash-text-3: #94A3B8;
+  --dash-track: #334155;
+}
+
+.theme-toggle,
+.shell .theme-toggle,
+.tablet-bar .theme-toggle {
+  width: 38px;
+  height: 38px;
+  min-height: 38px;
+  padding: 0;
+  border: 1px solid #E2E8F0;
+  border-radius: 9px;
+  background: #FFFFFF;
+  color: #0F172A;
+  cursor: pointer;
+  box-shadow: none;
+}
+.theme-toggle:hover,
+.shell .theme-toggle:hover,
+.tablet-bar .theme-toggle:hover { background: #F1F5F9; transform: none; }
+html.dark .theme-toggle,
+html.dark .shell .theme-toggle,
+html.dark .tablet-bar .theme-toggle {
+  border-color: #475569;
+  background: #1E293B;
+  color: #F8FAFC;
+}
+html.dark .theme-toggle:hover,
+html.dark .shell .theme-toggle:hover,
+html.dark .tablet-bar .theme-toggle:hover { background: #334155; }
+.theme-toggle:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+.login-theme-toggle { position: absolute; z-index: 4; top: 20px; right: 20px; }
+.login-bg:not(.auth-loading) { background: #F8F7F4; }
+html.dark .login-bg:not(.auth-loading) { background: #0F172A; }
+.auth-loading { background: #F8F7F4; color: #0F172A; }
+html.dark .auth-loading { background: #0F172A; color: #F8FAFC; }
+.auth-loading__spinner { border-color: #CBD5E1; border-top-color: #0F172A; }
+html.dark .auth-loading__spinner { border-color: #475569; border-top-color: #F8FAFC; }
+html.dark .login-card { background: #1E293B; border: 1px solid #334155; color: #F8FAFC; }
+html.dark .login-card :is(input, select) { background: #0F172A; border-color: #475569; color: #F8FAFC; }
+html.dark .login-card .login-switch a { color: #F8FAFC; }
+
+/* Proposal pages are customer documents and keep their paper palette. */
+html.dark .propdoc {
+  color-scheme: light;
+  --text-main: #0F172A;
+  --text-muted: #475569;
+  --text-subtle: #64748B;
+  --border-soft: #E2E8F0;
+  --surface-default: #FFFFFF;
+  --surface: #FFFFFF;
+  --hdr-navy: #F9FAFB;
+  color: #0F172A;
+}
+
+.showcase-landing { background: #F8F7F4; color: #0F172A; }
+html.dark .showcase-landing { background: #0F172A; color: #F8FAFC; }
+.showcase-logo { filter: none; }
+html.dark .showcase-logo { filter: brightness(0) invert(1); }
+.showcase-nav-link { color: #0F172A; }
+html.dark .showcase-nav-link { color: #F8FAFC; }
+.showcase-secondary-cta { color: #0F172A; border-color: #CBD5E1; background: #FFFFFF; }
+.showcase-secondary-cta:hover { color: #0F172A; background: #F1F5F9; border-color: #94A3B8; }
+html.dark .showcase-secondary-cta { color: #F8FAFC; border-color: #475569; background: #1E293B; }
+html.dark .showcase-secondary-cta:hover { color: #FFFFFF; background: #334155; }
+.showcase-noise { opacity: .08; }
+html.dark .showcase-noise { opacity: .28; }
+.showcase-closing { background: #FFFFFF; border-color: #E2E8F0; box-shadow: 0 10px 32px rgba(15,23,42,.07); }
+.showcase-closing h2 { color: #0F172A; }
+html.dark .showcase-closing { background: #1E293B; border-color: #334155; box-shadow: none; }
+html.dark .showcase-closing h2 { color: #F8FAFC; }
+
+html.theme-ready :is(body, .shell, .main-col, .topbar, .tablet-bar, .login-bg, .login-card, .showcase-landing, .showcase-proof, .showcase-closing, .panel, .form-card, .card, .dashboard-card, .stat-card-v2, .theme-toggle) {
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  html.theme-ready :is(body, .shell, .main-col, .topbar, .tablet-bar, .login-bg, .login-card, .showcase-landing, .showcase-proof, .showcase-closing, .panel, .form-card, .card, .dashboard-card, .stat-card-v2, .theme-toggle) { transition: none; }
+}
+@media print {
+  html.dark body { background: #FFFFFF; color: #0F172A; }
+  html.dark .propdoc { background: #FFFFFF; color: #0F172A; }
+}
+
+/* Opportunities keeps its dense spreadsheet rhythm: toolbar actions are
+   compact text controls, with the create path as the only filled action. */
+.opportunities-page .tracker-page > .toolbar button {
+  min-height: 32px;
+  padding: 4px 10px;
+  border-color: transparent;
+  background: transparent;
+  font-size: 13px;
+}
+.opportunities-page .tracker-page > .toolbar button:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--surface-sunken);
+}
+.opportunities-page .tracker-page > .toolbar :is(.tracker-date-filter-button.active, .scope-toggle.active) {
+  background: var(--action-primary-soft);
+  color: var(--action-primary);
+}
+.opportunities-page .tracker-page > .toolbar .tracker-create-logo {
+  min-width: 144px;
+  height: 32px;
+  padding-inline: 12px;
+  border-color: transparent;
+  background: var(--action-primary);
+  color: var(--text-on-accent);
+  font-size: 13px;
+}
+.opportunities-page .tracker-page > .toolbar .tracker-create-logo:hover:not(:disabled) {
+  border-color: transparent;
+  background: var(--action-primary-hover);
+  color: var(--text-on-accent);
+}
+
+/* Zoom-stable Opportunities type and toolbar contract. Text scales smoothly
+   with the available workspace instead of jumping between fixed breakpoints. */
+.opportunities-page {
+  container-type: inline-size;
+  --opp-type: clamp(12px, calc(.68rem + .18vw), 15px);
+  --opp-small-type: clamp(11px, calc(.62rem + .14vw), 13px);
+  --opp-heading-type: clamp(25px, calc(1.2rem + 1.15vw), 36px);
+}
+.opportunities-page > .tracker-page,
+.opportunities-page > .tracker-page .toolbar,
+.opportunities-page > .tracker-page .sheet-tabs {
+  font-size: var(--opp-type);
+}
+.opportunities-page > .tracker-page > h2 {
+  font-size: var(--opp-heading-type);
+  line-height: 1.08;
+  padding-inline: 12px;
+}
+.opportunities-page > .tracker-page > .toolbar {
+  overflow-x: auto;
+  padding-inline: 12px;
+  scrollbar-width: thin;
+}
+.opportunities-page .tracker-page > .toolbar :is(button, select, .tracker-search) {
+  font-size: var(--opp-type);
+}
+.opportunities-page .tracker-page table.sheet th.th-filter {
+  font-size: var(--opp-small-type);
+  line-height: 1.18;
+}
+.opportunities-page .tracker-page table.sheet td,
+.opportunities-page .tracker-page table.sheet td :is(input, select, textarea, .wrapcell) {
+  font-size: var(--opp-small-type);
+  line-height: 1.25;
+}
+.opportunities-page .tracker-page > .sheet-tabs .tab {
+  font-size: var(--opp-type);
+}
+
+/* Preserve one coherent desktop row through browser zoom. The search group
+   keeps a usable floor; surrounding controls are bounded before it shrinks. */
+@media (min-width: 901px) {
+  .opportunities-page .tracker-page > .toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-width: 1120px;
+  }
+  .opportunities-page .tracker-page .tracker-toolbar-filters {
+    display: grid;
+    grid-template-columns: 180px minmax(360px, 1fr) 150px 120px;
+    flex-wrap: nowrap;
+  }
+  .opportunities-page .tracker-page .tracker-search-group {
+    min-width: 360px;
+  }
+  .opportunities-page .tracker-page .tracker-toolbar-actions {
+    flex-wrap: nowrap;
+    white-space: nowrap;
+  }
+  .opportunities-page .tracker-page .tracker-toolbar-actions > * {
+    flex: 0 0 auto;
+  }
+}
+
+@container workspace (max-width: 70rem) {
+  .opportunities-page .tracker-page > .toolbar {
+    min-width: 1120px;
+  }
+}
+
+/* Reference treatment is deliberately limited to the My Dashboard run-rate
+   and ModAE Funnel cards; it does not recolour the rest of the workspace. */
+.dashboard-page {
+  --dashboard-coral: #F44336;
+}
+
+.dashboard-page .runrate-chart .legend-line.actual {
+  border-top-color: var(--dashboard-coral);
+}
+
+.dashboard-page .dashboard-funnel.funnel-visual {
+  --modae-funnel-qualified: #F44336;
+  --modae-funnel-budgetary: #FF5A4E;
+  --modae-funnel-rfq: #F46A5F;
+  --modae-funnel-proposal: #F8897F;
+  --modae-funnel-negotiate: #237A32;
+}
+
+.dashboard-page .dashboard-funnel.funnel-visual .dashboard-funnel-row {
+  min-height: 0;
+  height: 50px;
+  margin-bottom: 5px;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: #F1F1F1;
+}
+
+.dashboard-page .dashboard-funnel.funnel-visual .dashboard-funnel-list {
+  grid-auto-rows: 50px;
+}
+
+.dashboard-page .dashboard-funnel.funnel-visual .dashboard-funnel-row:last-child {
+  margin-bottom: 0;
+}
+
+.dashboard-page .dashboard-funnel.funnel-visual .dashboard-funnel-row.stage-qualified { --modae-funnel-stage: var(--modae-funnel-qualified); }
+.dashboard-page .dashboard-funnel.funnel-visual .dashboard-funnel-row.stage-budgetary { --modae-funnel-stage: var(--modae-funnel-budgetary); }
+.dashboard-page .dashboard-funnel.funnel-visual .dashboard-funnel-row.stage-rfq { --modae-funnel-stage: var(--modae-funnel-rfq); }
+.dashboard-page .dashboard-funnel.funnel-visual .dashboard-funnel-row.stage-firm-proposal { --modae-funnel-stage: var(--modae-funnel-proposal); }
+.dashboard-page .dashboard-funnel.funnel-visual .dashboard-funnel-row.stage-negotiate { --modae-funnel-stage: var(--modae-funnel-negotiate); }
+
+.dashboard-page .dashboard-funnel.funnel-visual .dashboard-funnel-shape {
+  min-height: 38px;
+  color: #FFFFFF;
+  background: var(--modae-funnel-stage);
+}
+
+.dashboard-page .dashboard-funnel.funnel-visual .dashboard-funnel-row.stage-negotiate .dashboard-funnel-shape {
+  color: #FFFFFF;
+}
+
+.dashboard-page .dashboard-funnel.funnel-visual .dashboard-funnel-row:hover {
+  background: #E9E9E9;
+}
+
+/* Final overlap guard for the Opportunities toolbar. The minimum width is the
+   measured sum of the filter and action groups; below it, the toolbar scrolls
+   as one strip instead of allowing grid items to paint over one another. */
+@media (min-width: 901px) {
+  .opportunities-page > .tracker-page > .toolbar {
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    overflow-x: visible;
+    padding-inline: 12px;
+  }
+  .opportunities-page > .tracker-page .tracker-toolbar-filters {
+    grid-template-columns: 150px minmax(180px, 1fr) 130px 108px;
+    min-width: 0;
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+  .opportunities-page > .tracker-page .tracker-search-group {
+    min-width: 0;
+  }
+  .opportunities-page > .tracker-page .tracker-toolbar-actions {
+    flex: 0 0 auto;
+    min-width: 0;
+    gap: 6px;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    align-items: center;
+  }
+  .opportunities-page > .tracker-page .tracker-more-menu {
+    width: 90px;
+  }
+  .opportunities-page > .tracker-page .tracker-more-trigger {
+    width: 100%;
+  }
+  .opportunities-page > .tracker-page .tracker-columns-toggle {
+    width: 150px;
+  }
+  .opportunities-page > .tracker-page .tracker-create-logo {
+    width: 180px;
+    min-width: 144px;
+    padding-inline: 10px;
+    gap: 5px;
+  }
+}
+
+/* At tighter desktop widths, keep every toolbar control in the same row by
+   giving the search surface the remaining space and trimming only chrome. */
+@media (min-width: 901px) and (max-width: 1280px) {
+  .opportunities-page > .tracker-page > .toolbar {
+    column-gap: 8px;
+  }
+  .opportunities-page > .tracker-page .tracker-toolbar-filters {
+    grid-template-columns: 132px minmax(145px, 1fr) 118px 100px;
+    gap: 4px;
+  }
+  .opportunities-page > .tracker-page .tracker-toolbar-actions {
+    gap: 4px;
+  }
+  .opportunities-page > .tracker-page .tracker-more-menu {
+    width: 82px;
+  }
+  .opportunities-page > .tracker-page .tracker-columns-toggle {
+    width: 136px;
+  }
+  .opportunities-page > .tracker-page .tracker-create-logo {
+    width: 166px;
+  }
+}
+
+/* Final vertical alignment contract: every desktop toolbar control shares a
+   common box, so zoom changes text size without shifting individual controls. */
+@media (min-width: 901px) {
+  .opportunities-page > .tracker-page > .toolbar {
+    align-items: center;
+    padding-inline: 12px;
+  }
+  .opportunities-page > .tracker-page .tracker-toolbar-filters {
+    align-items: center;
+  }
+  .opportunities-page > .tracker-page .tracker-toolbar-filters > select,
+  .opportunities-page > .tracker-page .tracker-quick-filter select,
+  .opportunities-page > .tracker-page .tracker-date-filter-button,
+  .opportunities-page > .tracker-page .tracker-search,
+  .opportunities-page > .tracker-page .tracker-toolbar-actions > button,
+  .opportunities-page > .tracker-page .tracker-more-trigger {
+    box-sizing: border-box;
+    height: 32px;
+    min-height: 32px;
+    line-height: 1.15;
+    vertical-align: middle;
+  }
+}
+
+/* Merge the closed Opportunities controls into one flat header strip. The
+   opened More menu remains surfaced so secondary actions are still discoverable. */
+.opportunities-page > .tracker-page > .toolbar {
+  border-bottom: 1px solid var(--border-subtle);
+  background: transparent;
+  padding-inline: 12px;
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-toolbar-filters,
+.opportunities-page > .tracker-page > .toolbar .tracker-toolbar-actions {
+  background: transparent;
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-toolbar-filters > select,
+.opportunities-page > .tracker-page > .toolbar .tracker-quick-filter select,
+.opportunities-page > .tracker-page > .toolbar .tracker-date-filter-button,
+.opportunities-page > .tracker-page > .toolbar .tracker-search,
+.opportunities-page > .tracker-page > .toolbar .tracker-toolbar-actions > button,
+.opportunities-page > .tracker-page > .toolbar .tracker-more-trigger {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-search-group .tracker-search {
+  border-right: 1px solid var(--border-subtle);
+}
+.opportunities-page > .tracker-page > .toolbar :is(
+  .tracker-toolbar-filters > select,
+  .tracker-quick-filter select
+) {
+  padding-inline: 4px 22px;
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-search {
+  padding-inline: 4px 8px;
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-date-filter-button,
+.opportunities-page > .tracker-page > .toolbar .tracker-more-trigger,
+.opportunities-page > .tracker-page > .toolbar .tracker-columns-toggle,
+.opportunities-page > .tracker-page > .toolbar .tracker-create-logo {
+  padding-inline: 6px;
+}
+.opportunities-page > .tracker-page > .toolbar :is(
+  .tracker-toolbar-filters > select,
+  .tracker-quick-filter select,
+  .tracker-date-filter-button,
+  .tracker-search,
+  .tracker-more-trigger,
+  .tracker-columns-toggle,
+  .tracker-create-logo
+):hover:not(:disabled) {
+  background: var(--surface-sunken);
+}
+.opportunities-page > .tracker-page > .toolbar :is(
+  .tracker-toolbar-filters > select,
+  .tracker-quick-filter select,
+  .tracker-date-filter-button,
+  .tracker-search,
+  .tracker-more-trigger,
+  .tracker-columns-toggle,
+  .tracker-create-logo
+):focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-create-logo {
+  min-width: 166px;
+  border: 0;
+  background: transparent;
+  color: var(--action-primary);
+  font-weight: 750;
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-create-logo:hover:not(:disabled) {
+  background: var(--action-primary-soft);
+  color: var(--action-primary-hover);
+}
+
+/* Keep the Opportunities scope selector separate from the search field, and
+   restore the same clear search-surface treatment used by Lead inbox. */
+.opportunities-page > .tracker-page > .toolbar .tracker-toolbar-filters > .tracker-owner-filter {
+  box-sizing: border-box;
+  min-height: 40px;
+  height: 40px;
+  padding: 8px 30px 8px 12px;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 8px !important;
+  background-color: var(--palette-4843938) !important;
+  color: var(--text-main);
+  box-shadow: none;
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-search-group {
+  min-width: 0;
+  flex: 1 1 320px;
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-search-group .tracker-search {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 40px;
+  height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 8px !important;
+  background: var(--palette-4843938) !important;
+  color: var(--text-muted);
+  box-shadow: none;
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-search-group .tracker-search:focus-within {
+  border-color: var(--primary-accent) !important;
+  box-shadow: 0 0 0 2px var(--primary-soft) !important;
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-search-group .tracker-search input {
+  min-height: 0;
+  height: 22px;
+  padding: 0;
+  font-size: 14px;
+}
+
+@container workspace (max-width: 70rem) {
+  .opportunities-page > .tracker-page > .toolbar .tracker-search-group {
+    flex: 2 1 17rem;
+    min-inline-size: min(17rem, 100%);
+  }
+}
+
+@container workspace (max-width: 44rem) {
+  .opportunities-page > .tracker-page > .toolbar .tracker-search-group {
+    flex-basis: 100%;
+    width: 100%;
+  }
+}
+
+/* The date filter lives inside the search surface so filtering reads as one
+   coherent toolbar action instead of a detached third field. */
+.opportunities-page > .tracker-page > .toolbar .tracker-search-group {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  min-height: 40px;
+  height: 40px;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--palette-4843938);
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-search-group .tracker-search {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  min-height: 38px;
+  height: 38px;
+  padding: 8px 12px;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-search-group:focus-within {
+  border-color: var(--primary-accent);
+  box-shadow: 0 0 0 2px var(--primary-soft);
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-search-group .tracker-search-filter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-height: 38px;
+  height: 38px;
+  padding: 8px 12px;
+  border: 0;
+  border-left: 1px solid var(--border-color);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-search-filter:hover,
+.opportunities-page > .tracker-page > .toolbar .tracker-search-filter:focus-visible,
+.opportunities-page > .tracker-page > .toolbar .tracker-search-filter.active {
+  background: var(--primary-soft);
+  color: var(--primary-deep);
+  outline: none;
+}
+.tracker-search-filter-active { font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }
+
+/* Flatten the first spreadsheet header row as well: column labels such as
+   Opp Type are text on one continuous strip, not individual cards. */
+.opportunities-page .tracker-page table.sheet thead th.th-filter,
+.opportunities-page .tracker-page table.sheet thead th.rowhead,
+.opportunities-page .tracker-page table.sheet thead .tracker-th-control {
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+.opportunities-page .tracker-page table.sheet thead .tracker-th-control {
+  border: 0;
+  display: block;
+  width: 100%;
+  min-height: 0;
+  margin: 0;
+  padding: 2px 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.opportunities-page .tracker-page table.sheet thead .tracker-th-control:hover {
+  background: transparent;
+  color: var(--primary-accent);
+}
+.opportunities-page .tracker-page table.sheet thead .tracker-th-control:focus-visible {
+  background: transparent;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+/* Inbox row hierarchy: opportunity marker first, subject second, preview third. */
+.mail-row {
+  min-height: 106px;
+}
+.mail-row > .mail-content {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  white-space: normal;
+}
+.mail-content-stack {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+}
+.mail-sender b, .mail-sender small {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.mail-subject-meta {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  margin: 0;
+  white-space: nowrap;
+}
+.mail-subject-title {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.mail-content small {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.mail-content small::before { content: none; }
+
+/* The opportunity marker is an inline navigation link, not a standalone
+   action button. The shell's generic button theme must not box it in. */
+.shell .mail-row > .mail-content .mail-subject-meta > button.mail-opportunity-link {
+  min-height: 0 !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--primary-deep) !important;
+}
+.shell .mail-row > .mail-content .mail-subject-meta > button.mail-opportunity-link:hover {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  text-decoration: underline;
+}
+
+/* Shared button themes can reintroduce a rounded surface at runtime. Keep
+   the Opportunities header controls strictly plain-table text. */
+.opportunities-page .tracker-page table.sheet thead .tracker-th-control {
+  appearance: none !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 2px 0 !important;
+}
+.opportunities-page .tracker-page table.sheet thead .tracker-th-control:hover,
+.opportunities-page .tracker-page table.sheet thead .tracker-th-control:focus-visible {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+/* Keep the plain column labels on an opaque sticky strip while rows scroll. */
+.opportunities-page .tracker-page table.sheet thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #FFFFFF !important;
+}
+.opportunities-page .tracker-page table.sheet thead th.rowhead {
+  z-index: 4;
+}
+.shell.theme-dark .opportunities-page .tracker-page table.sheet thead th {
+  background: #1F2224 !important;
+}
+
+/* Compact Lead inbox contract: the mailbox is a fitted workspace grid, not a
+   floating card. Keep its full width available for all message columns. */
+@media (min-width: 1025px) {
+  .shell:not(.tablet-mode) .mailbox-page {
+    width: 100%;
+    max-width: none;
+    padding-inline: clamp(14px, 1.5vw, 24px);
+  }
+
+  .shell:not(.tablet-mode) .mailbox-list {
+    width: 100%;
+    max-width: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+}

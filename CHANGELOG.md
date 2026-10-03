@@ -13,6 +13,88 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Replaced native Lead inbox header selects with accessible filter buttons and
+  readable wrapped dropdown menus so column labels no longer show browser arrows
+  or clipped option text.
+
+- Restyled the Opportunities search as a separate bordered search field beside
+  the owner scope selector, matching the Lead inbox search treatment.
+
+- Moved the Opportunities date filter into the search surface behind a Filter
+  button, removing the detached Date filter toolbar control.
+
+- Replaced truncated Lead inbox column labels with compact readable headers
+  while retaining full filter names for accessibility.
+
+- Removed Closed Reason from the default Opportunities key-column view while
+  retaining it in the full 31-column sheet and its approval-gated editing flow.
+
+- Flattened the Lead inbox opportunity link so its badge and ID wrap cleanly
+  as inline context instead of inheriting the global rounded button chrome.
+
+- Restored the Lead inbox row hierarchy so opportunity context, subject, and
+  preview text stack clearly without widening the fitted inbox grid.
+
+- Restored the compact Lead inbox shell with a 216px desktop sidebar, a flat
+  full-width mailbox surface, and fitted columns that remain visible together.
+
+- Unified the My Dashboard header controls into one aligned button row while
+  preserving My View and Global View accessibility states.
+
+- Removed the authenticated desktop workspace top bar so desktop navigation
+  stays focused in the sidebar; tablet navigation and theme controls remain
+  unchanged.
+
+- Compact Opportunities toolbar actions behind a More menu so the primary
+  filters and Create opportunity control stay on one readable desktop row.
+- Integrated the sales-owner scope switch into the Opportunities search control
+  and matched the table column-header surface to the toolbar controls.
+- Replaced the visible scope button with a compact All checkbox and restored
+  the All 31 columns toggle beside More in the Opportunities toolbar.
+- Added smooth page-scoped responsive text sizing and a zoom-stable desktop
+  toolbar so the Opportunities layout stays readable through browser zoom.
+- Aligned all Opportunities toolbar controls to one shared height and reduced
+  the owner scope control to a compact checkbox-only affordance.
+
+- Added a shared light/dark preference across desktop, tablet, sign-in, and
+  showcase views, with an early head script to apply the selected or system
+  theme before the interface renders. Corrected approval cards, filters, pinned
+  sourcing cells, lead review, drawers, and workbench panels that still used
+  fixed light surfaces in dark mode. Restored readable desktop navigation
+  contrast and hid the workspace watermark in dark mode.
+
+- Restored the Lead inbox to compact fitted rows for every result count, keeping
+  every mailbox column visible without horizontal scrolling or summary cards.
+
+- Refined dashboard colors into a scoped enterprise palette with neutral card
+  surfaces, semantic KPI and chart accents, and a consistent pipeline ramp.
+
+- Added a true won/lost pie chart to the dashboard and Analytics outcome mix,
+  charting opportunity counts for restricted roles and commercial value where
+  permitted, with a legend and empty-state treatment.
+
+- Fixed Opportunities tracker alignment by opening all roles in the readable
+  key-column view and constraining the toolbar, table, and sheet tabs to the
+  main content column; the full pipeline sheet remains locally scrollable.
+- Made the Opportunities workspace zoom-resilient: toolbar controls stack while
+  both table views retain readable column widths and scroll horizontally inside
+  the grid without colliding with the sidebar. Column-name buttons now open
+  their menus without separate arrow indicators.
+- Tightened the 11-column Opportunities view to fit a wide desktop, enlarged
+  table text, allowed long headings to wrap cleanly, and reset horizontal
+  position when switching table views.
+
+- Added the Level 3 role foundation: standard application roles, durable
+  multi-role user profiles, combined page permissions, Admin user assignment
+  controls, and server-side Supabase Auth verification using trusted profile
+  roles while preserving legacy operational role IDs.
+
+- Added Level 2 customer and opportunity workflow improvements: concise lead
+  sources with internal-enquiry attribution, searchable customer selection with
+  inline new-customer creation, verified-customer KYC reuse, deferred KYC with
+  commercial/order gating, owner/admin opportunity editing and reassignment,
+  initials-free opportunity IDs, and structured loss-reason filtering.
+
 - Added the Railway deployment contract and staging runbook. Staging now has a
   documented separate Supabase project, full price-list/catalogue copying,
   sanitized workflow data, and Railway health/build/start configuration.
@@ -420,3 +502,15 @@ This is an implementation and release log, not a dump of every commit.
 
 Completed implementation and workflow-review documents are retained locally
 under `.local/project-history/` in the checkout where they were archived.
+- Reduced the Opportunities toolbar sizing so all filters and actions fit in one aligned desktop row without the previous oversized minimum width.
+- Flattened the Opportunities toolbar into the page header so closed controls no longer look like separate raised buttons.
+- Moved the Opportunities status filter into the More menu to remove the prominent All statuses toolbar button while preserving status filtering.
+- Removed the remaining status-filter control and status-filter state from the Opportunities page for a cleaner header.
+- Removed the Opportunities header scope checkbox so the owner selector is the only scope control and the header stays text-only.
+- Flattened Opportunities table column headers so labels such as Opp Type no longer render inside individual boxes.
+- Converted the Opportunities column header row to a plain table format with no boxed header controls.
+- Added an opaque sticky white strip behind the plain Opportunities table header while rows scroll.
+- Simplified Opportunities probability values to Low, Medium, and High without visible recommendation suffixes.
+- Changed Proposal Send Date to record the latest successful customer send, with
+  exact communication timestamps retained, and standardized proposal/order date
+  display to DD/MM/YYYY while preserving ISO storage.

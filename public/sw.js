@@ -1,16 +1,9 @@
 // Bumped when the cache policy changes so existing clients do not retain a
 // shell or asset cache created by the previous deployment strategy.
 const CACHE = 'wintrack-v6'
-const FONTS = [
-  '/fonts/inter-latin.woff2',
-  '/fonts/inter-latin-ext.woff2',
-]
-// Precached, not merely cacheable: this app is meant to work on a tablet with
-// no signal, and a font fetched lazily is a font that is missing offline.
 const PRECACHE = [
   '/', '/index.html', '/manifest.webmanifest',
   '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png',
-  ...FONTS,
 ]
 
 self.addEventListener('install', (event) => {

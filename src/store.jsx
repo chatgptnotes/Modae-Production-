@@ -9,7 +9,7 @@ import {
   buildPoCompare, buildHandover, milestoneForStage, routeForType,
   contextForType, B_STEPS, REVISION_TYPES,
   ROLES, SUBFOLDERS, MILESTONES, newProposal, PORTAL_ENABLED, defaultBStepOwners, seedConfig, ownerIdFor,
-  canSignBStep,
+  canSignBStep, userRoles,
 } from './seed.js'
 import { leadConfig, opportunityOwnerFor, routeOwner, expiredLeadDeadline, aiAuditDetail } from './leadRules.js'
 import { withoutSimulated, simulatedCount } from './simulatedLeads.js'
@@ -136,9 +136,9 @@ const localSnapshot = state => ({
   config: state.config,
   auth: state.auth,
   role: state.role,
+  roles: state.roles,
   viewMode: state.viewMode,
   viewModePinned: state.viewModePinned,
-  tabletTheme: state.tabletTheme,
   inboxShowAll: state.inboxShowAll,
 })
 
@@ -799,17 +799,21 @@ export function StoreProvider({ children }) {
       // Status-folder diff BEFORE the patch lands — a stage change (Won/Lost/
       // reopen) moves the SharePoint folder between the four status folders.
       const before = stateRef.current.opportunities.find(o => o.id === id)
-      // Registration facts are editable only while the opportunity is being
-      // captured. Later stages, including Approval, must not rewrite the
-      // values an approver reviewed.
-      const editableMilestones = new Set(['Intake', 'Registration'])
+      // Level 2 keeps customer and commercial details editable through the active workflow.
+      // Only the assigned owner and administrators may make
+      // those changes; every change remains audited and approval snapshots
+      // are refreshed by the existing proposal sync path.
+      const role = stateRef.current.role
+      const canEdit = before && (before.owner === role || ROLES[role]?.admin)
       const detailFields = new Set([
         'owner', 'oppName', 'opportunityScope', 'rfqNumber', 'rfqDate', 'valueK',
         'sellTo', 'category', 'location', 'customerStatus', 'eucName',
         'eucLocation', 'oppType', 'bu', 'segment', 'solution', 'product',
-        'prob', 'contactPerson', 'contactPhone', 'additionalCustomerInformation',
+        'prob', 'contactPerson', 'contactPhone', 'contactEmail',
+        'additionalCustomerInformation', 'sellToCustomerLocation',
+        'commercialNotes', 'paymentTerms', 'deliveryTerms', 'incoterms',
       ])
-      if (before && !editableMilestones.has(before.milestone)) {
+      if (before && !canEdit) {
         patch = Object.fromEntries(Object.entries(patch).filter(([key]) => !detailFields.has(key)))
       }
       // Legacy pipeline edits still need to move the canonical workflow. The
@@ -1111,7 +1115,7 @@ export function StoreProvider({ children }) {
         const next = withAudit({
           ...s,
           opportunities: s.opportunities.map(o => (o.id === oppId
-            ? { ...o, stage: 'Lost', status: 'Closed', closedReason: reason, closedReasonNote: reason === 'Others' ? reasonNote : '', milestone: 'Follow-up', lastUpdated: nowIST().slice(0, 10),
+          ? { ...o, stage: 'Lost', status: 'Closed', closedReason: reason, closedReasonNote: reason === 'Other' ? reasonNote : '', milestone: 'Follow-up', lastUpdated: nowIST().slice(0, 10),
                 workflowTransition: workflowTransition(o.milestone, 'Follow-up', reason) }
             : o)),
         }, 'Opportunity lost', oppId, reason)
@@ -1175,6 +1179,23 @@ export function StoreProvider({ children }) {
           )),
         },
       }, action, oppId, patch.reviewerDecision || patch.aiClassification?.outcome || communicationId))
+    },
+
+    markProposalSent(oppId, communicationId) {
+      const sentAt = nowIST()
+      const sentDate = sentAt.slice(0, 10)
+      setState(s => withAudit({
+        ...s,
+        communications: {
+          ...(s.communications || {}),
+          [oppId]: ((s.communications || {})[oppId] || []).map(c => (
+            c.id === communicationId ? { ...c, status: 'sent', sentAt } : c
+          )),
+        },
+        opportunities: (s.opportunities || []).map(o => o.id === oppId
+          ? { ...o, proposalDate: sentDate, lastUpdated: sentDate }
+          : o),
+      }, 'Proposal email marked as sent', oppId, communicationId))
     },
 
     // ---- Lead inbox -------------------------------------------------------
@@ -1482,13 +1503,14 @@ export function StoreProvider({ children }) {
       setState(s => {
         if (!ROLES[s.role]?.admin || !user?.email) return s
         if (s.users.some(u => String(u.email || '').toLowerCase() === String(user.email).toLowerCase())) return s
-        return withAudit({ ...s, users: [...s.users, user] }, 'User added', user.id || user.email, `role ${user.role || '—'}`)
+        const nextUser = { ...user, roles: userRoles(user) }
+        return withAudit({ ...s, users: [...s.users, nextUser] }, 'User added', user.id || user.email, `roles ${(nextUser.roles || []).join(', ') || '—'}`)
       })
     },
 
     updateUser(id, patch) {
       setState(s => {
-        const users = s.users.map(u => (u.id === id ? { ...u, ...patch } : u))
+        const users = s.users.map(u => (u.id === id ? { ...u, ...patch, roles: patch.roles ? userRoles({ ...u, ...patch }) : userRoles(u) } : u))
         const authUser = s.auth?.user
         const isCurrentUser = authUser?.id === id
         const auth = isCurrentUser && (patch.email !== undefined || patch.name !== undefined || patch.role !== undefined)
@@ -1497,6 +1519,7 @@ export function StoreProvider({ children }) {
             ...(patch.email !== undefined ? { email: patch.email } : {}),
             ...(patch.name !== undefined ? { name: patch.name } : {}),
             ...(patch.role !== undefined ? { role: patch.role } : {}),
+            ...(patch.roles !== undefined ? { roles: userRoles({ ...authUser, ...patch }) } : {}),
           } }
           : s.auth
         const safeUser = user => {
@@ -1506,7 +1529,8 @@ export function StoreProvider({ children }) {
         }
         const safePatch = Object.fromEntries(Object.entries(patch || {}).map(([key, value]) => [key, key === 'pw' ? '[redacted]' : value]))
         return withAudit(
-          { ...s, users, auth, role: isCurrentUser && patch.role !== undefined ? patch.role : s.role },
+          { ...s, users, auth, roles: isCurrentUser && patch.roles !== undefined ? userRoles({ ...authUser, ...patch }) : s.roles,
+            role: isCurrentUser && patch.role !== undefined ? patch.role : s.role },
           'User updated', id,
           JSON.stringify({ before: safeUser(s.users.find(u => u.id === id)), patch: safePatch }))
       })
@@ -1525,11 +1549,6 @@ export function StoreProvider({ children }) {
         ...s,
         sales: { ...s.sales, targets: { ...(s.sales?.targets || {}), [owner]: { annual, q } } },
       }, 'Sales target updated', owner, `annual ${annual}K · quarters ${q.join('/')}K`))
-    },
-
-    // Cosmetic only — deliberately not audited, toggling would flood the log.
-    setTabletTheme(theme) {
-      setState(s => ((theme === 'dark' || theme === 'light') ? { ...s, tabletTheme: theme } : s))
     },
 
     // ---- Lead inbox: "Show all" ------------------------------------------
@@ -1676,6 +1695,21 @@ export function StoreProvider({ children }) {
             verification: { ...verification, kycRequestStatus: 'pending' },
           } : l),
         }, 'KYC request reopened', leadId)
+      })
+    },
+    skipLeadKyc(leadId) {
+      setState(s => {
+        const lead = s.leads.find(l => l.id === leadId)
+        if (!lead) return s
+        const verification = lead.verification || {}
+        return withAudit({
+          ...s,
+          leads: s.leads.map(l => l.id === leadId ? {
+            ...l,
+            kycCompletedAt: null,
+            verification: { ...verification, kycRequestStatus: 'deferred', kycVerifiedAt: '' },
+          } : l),
+        }, 'KYC deferred', leadId, 'Skipped for now; required before commercial/order processing')
       })
     },
     clearLeadKycItem(leadId, itemName) {
@@ -2465,6 +2499,28 @@ export function StoreProvider({ children }) {
       return true
     },
 
+    // Sourcing has its own fast-load contract. Retrying it should not make
+    // the BOQ depend on unrelated full-workspace reads (for example a
+    // transient audit/config query failure).
+    async refreshSourcingData() {
+      if (!datastore.dbEnabled()) return false
+      const res = await datastore.loadCore()
+      if (!res) {
+        setSourcingDataStatus('error')
+        return false
+      }
+      if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
+      if (res.error) {
+        setSourcingDataStatus('error')
+        if (!invalidateSupabaseAuth(res.error)) setLiveSyncStatus('error')
+        return false
+      }
+      setSourcingDataStatus('ready')
+      setLiveSyncStatus('live')
+      if (!res.empty) applyServer(res.slices, res.diagnostics)
+      return true
+    },
+
     async refreshApprovals() {
       // Approval pages only need the two compact collaborative slices. Keep
       // their background refresh independent from the heavier workspace pull.
@@ -2520,7 +2576,8 @@ export function StoreProvider({ children }) {
       datastore.setLocalDemoMode(source === 'local-demo')
       setState(st => ({
         ...withAudit(st, 'Signed in', u.email),
-        auth: { source, user: { id: u.id, name: u.name, email: u.email, role: u.role } },
+        auth: { source, user: { id: u.id, name: u.name, email: u.email, role: u.role, roles: userRoles(u) } },
+        roles: userRoles(u),
         role: ROLES[u.role] ? u.role : st.role,
       }))
       return { ok: true }
@@ -2531,9 +2588,11 @@ export function StoreProvider({ children }) {
       datastore.setLocalDemoMode(false)
       const local = stateRef.current.users.find(item => item.email.toLowerCase() === user.email.toLowerCase())
       const role = local?.role || user.user_metadata?.role || fallbackRole
+      const roles = userRoles(local || { role, roles: user.user_metadata?.roles })
       setState(st => ({
         ...withAudit(st, 'Signed in', user.email),
-        auth: { source: 'supabase', user: { id: user.id, name: local?.name || user.user_metadata?.name || user.email, email: user.email, role } },
+        auth: { source: 'supabase', user: { id: user.id, name: local?.name || user.user_metadata?.name || user.email, email: user.email, role, roles } },
+        roles,
         role: ROLES[role] ? role : st.role,
       }))
       return { ok: true }
@@ -2560,7 +2619,7 @@ export function StoreProvider({ children }) {
         ...st,
         users: [...st.users, {
           id: `U-${String(seq).padStart(3, '0')}`, name, email: email.trim(), pw,
-          role: role || 'RS', status: 'Pending', created: new Date().toISOString().slice(0, 10),
+          role: role || 'RS', roles: ['STANDARD_USER'], status: 'Pending', created: new Date().toISOString().slice(0, 10),
         }],
       }, 'Registration submitted', email))
       return { ok: true }
@@ -2571,7 +2630,8 @@ export function StoreProvider({ children }) {
         if (!u || u.status !== 'Active') return st
         return {
           ...withAudit(st, 'Signed in as', u.email, `by ${st.role}`),
-          auth: { user: { id: u.id, name: u.name, email: u.email, role: u.role } },
+          auth: { user: { id: u.id, name: u.name, email: u.email, role: u.role, roles: userRoles(u) } },
+          roles: userRoles(u),
           role: ROLES[u.role] ? u.role : st.role,
         }
       })
@@ -2720,8 +2780,7 @@ export function StoreProvider({ children }) {
 
 export const useStore = () => useContext(StoreCtx)
 
-// Opp ID = YYMM + 3-digit monthly sequence + owner initials
-// (e.g. 2609001RS), per the Sales Pipeline Report sheet.
+// Opp ID = YYMM + 3-digit monthly sequence (e.g. 2609012).
 export function nextOppId(opportunities, owner) {
   const now = new Date()
   const yymm = String(now.getFullYear()).slice(2) + String(now.getMonth() + 1).padStart(2, '0')
@@ -2730,7 +2789,7 @@ export function nextOppId(opportunities, owner) {
     .map(o => parseInt(String(o.id).slice(4, 7), 10))
     .filter(n => !isNaN(n))
   const next = (seqs.length ? Math.max(...seqs) : 0) + 1
-  return `${yymm}${String(next).padStart(3, '0')}${ownerIdFor(owner)}`
+  return `${yymm}${String(next).padStart(3, '0')}`
 }
 
 export async function reserveOppId(opportunities, owner, roleNames = {}) {
@@ -2740,7 +2799,7 @@ export async function reserveOppId(opportunities, owner, roleNames = {}) {
   if (datastore.dbEnabled()) {
     try {
       const sequence = await datastore.reserveOpportunitySequence(yymm)
-      return `${yymm}${String(sequence).padStart(3, '0')}${canonicalOwner}`
+      return `${yymm}${String(sequence).padStart(3, '0')}`
     } catch (error) {
       console.warn('Central opportunity sequence unavailable — using local fallback:', error?.message || error)
     }

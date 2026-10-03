@@ -1,6 +1,7 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
-import { CATEGORIES, CUSTOMER_STATUSES, OWNERS, OPP_TYPES, BUS, SEGMENTS, SOLUTIONS, PRODUCTS, PROB_LEVELS } from './seed.js'
+import { CATEGORIES, CUSTOMER_STATUSES, OWNERS, OPP_TYPES, BUS, SEGMENTS, SOLUTIONS, PRODUCTS, PROB_LEVELS, displayOpportunityId } from './seed.js'
 import { displayRole, productList, solutionLabel, solutionList, rupeesToK } from './utils.js'
+import CustomerPicker from './CustomerPicker.jsx'
 
 const Field = ({ label, children }) => (
   <div className="opportunity-field"><label>{label}</label>{children}</div>
@@ -24,7 +25,8 @@ const displayOpportunityScope = value => String(value || '')
 const fields = [
   'owner', 'oppName', 'opportunityScope', 'rfqNumber', 'rfqDate', 'valueK', 'sellTo', 'category', 'location', 'customerStatus',
   'eucName', 'eucLocation', 'oppType', 'bu', 'segment', 'solution', 'product', 'prob',
-  'contactPerson', 'contactPhone', 'additionalCustomerInformation',
+  'contactPerson', 'contactPhone', 'contactEmail', 'sellToCustomerLocation',
+  'additionalCustomerInformation', 'commercialNotes', 'paymentTerms', 'deliveryTerms', 'incoterms',
 ]
 
 const makeDraft = opp => ({
@@ -36,7 +38,10 @@ const makeDraft = opp => ({
   bu: opp.bu || '', segment: opp.segment || '', solution: solutionList(opp.solution),
   product: productList(opp.product), prob: opp.prob || '',
   contactPerson: opp.contactPerson || '', contactPhone: opp.contactPhone || '',
+  contactEmail: opp.contactEmail || '', sellToCustomerLocation: opp.sellToCustomerLocation || opp.location || '',
   additionalCustomerInformation: opp.additionalCustomerInformation || '',
+  commercialNotes: opp.commercialNotes || '', paymentTerms: opp.paymentTerms || '',
+  deliveryTerms: opp.deliveryTerms || '', incoterms: opp.incoterms || '',
 })
 
 export function OpportunityDetailsView({ opp, className = '' }) {
@@ -49,7 +54,7 @@ export function OpportunityDetailsView({ opp, className = '' }) {
 
       <div className="opportunity-details-group">Identity</div>
       <div className="dgrid2 opportunity-details-grid">
-        <ReadOnlyField label="Opp ID" value={`${opp.id} (Sl ${opp.sl})`} />
+        <ReadOnlyField label="Opp ID" value={`${displayOpportunityId(opp.id)} (Sl ${opp.sl})`} />
         <ReadOnlyField label="Owner" value={displayRole(opp.owner)} />
         <ReadOnlyField label="RFQ Number" value={opp.rfqNumber} />
         <ReadOnlyField label="RFQ Date" value={opp.rfqDate} />
@@ -67,7 +72,7 @@ export function OpportunityDetailsView({ opp, className = '' }) {
       <div className="dgrid2 opportunity-details-grid">
         <ReadOnlyField label="Sell To Customer" value={opp.sellTo} />
         <ReadOnlyField label="Category" value={opp.category} />
-        <ReadOnlyField label="Location" value={opp.location} />
+        <ReadOnlyField label="Sell To Customer Location" value={opp.sellToCustomerLocation || opp.location} />
         <ReadOnlyField label="Customer Status" value={opp.customerStatus} />
         <ReadOnlyField label="EUC Name" value={opp.eucName} />
         <ReadOnlyField label="EUC Location" value={opp.eucLocation} />
@@ -92,6 +97,7 @@ export function OpportunityDetailsView({ opp, className = '' }) {
       <div className="dgrid2 opportunity-details-grid">
         <ReadOnlyField label="Contact Person" value={opp.contactPerson} />
         <ReadOnlyField label="Contact Phone" value={opp.contactPhone} />
+        <ReadOnlyField label="Contact Email" value={opp.contactEmail} />
       </div>
 
       {Array.isArray(opp.extractedFields) && opp.extractedFields.length > 0 && (
@@ -203,7 +209,7 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
 
       <div className="opportunity-details-group">Identity</div>
       <div className="dgrid2 opportunity-details-grid">
-        <Field label="Opp ID"><div className="ro read-only-field">{opp.id} <span>(Sl {opp.sl})</span></div></Field>
+        <Field label="Opp ID"><div className="ro read-only-field">{displayOpportunityId(opp.id)} <span>(Sl {opp.sl})</span></div></Field>
         <Field label="Owner"><select value={draft.owner} onChange={e => set('owner', e.target.value)}>{OWNERS.map(x => <option key={x}>{displayRole(x)}</option>)}</select></Field>
         <Field label="RFQ Number"><input type="text" value={draft.rfqNumber} onChange={e => set('rfqNumber', e.target.value)} /></Field>
         <Field label="RFQ Date"><input type="date" value={draft.rfqDate} onChange={e => set('rfqDate', e.target.value)} /></Field>
@@ -219,9 +225,19 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
 
       <div className="opportunity-details-group">Customer</div>
       <div className="dgrid2 opportunity-details-grid">
-        <Field label="Sell To Customer"><input type="text" value={draft.sellTo} onChange={e => set('sellTo', e.target.value)} /></Field>
+        <CustomerPicker
+          customers={store.customers}
+          value={draft.sellTo}
+          onChange={value => set('sellTo', value)}
+          onCreate={name => {
+            const customer = { name, category: draft.category || 'EUC', status: 'Blue', kyc: 'Pending', payment: '—' }
+            store.addCustomer(customer)
+            return customer
+          }}
+          label="Sell To Customer"
+        />
         <Field label="Category"><select value={draft.category} onChange={e => set('category', e.target.value)}>{CATEGORIES.map(x => <option key={x}>{x}</option>)}</select></Field>
-        <Field label="Location"><input type="text" value={draft.location} onChange={e => set('location', e.target.value)} /></Field>
+        <Field label="Sell To Customer Location"><input type="text" value={draft.sellToCustomerLocation} onChange={e => { set('sellToCustomerLocation', e.target.value); set('location', e.target.value) }} /></Field>
         <Field label="Customer Status"><select value={draft.customerStatus} onChange={e => set('customerStatus', e.target.value)}>{CUSTOMER_STATUSES.map(x => <option key={x}>{x}</option>)}</select></Field>
         <Field label="EUC Name"><input type="text" value={draft.eucName} onChange={e => set('eucName', e.target.value)} /></Field>
         <Field label="EUC Location"><input type="text" value={draft.eucLocation} onChange={e => set('eucLocation', e.target.value)} /></Field>
@@ -305,6 +321,15 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
       <div className="dgrid2 opportunity-details-grid">
         <Field label="Contact Person *"><input ref={contactPersonRef} type="text" value={draft.contactPerson} onChange={e => set('contactPerson', e.target.value)} placeholder="Enter contact name" /></Field>
         <Field label="Contact Phone *"><input ref={contactPhoneRef} type="tel" value={draft.contactPhone} onChange={e => set('contactPhone', e.target.value)} placeholder="Enter contact phone" /></Field>
+        <Field label="Contact Email"><input type="email" value={draft.contactEmail} onChange={e => set('contactEmail', e.target.value)} placeholder="customer@example.com" /></Field>
+      </div>
+
+      <div className="opportunity-details-group">Commercial information</div>
+      <div className="dgrid2 opportunity-details-grid">
+        <Field label="Payment terms"><input value={draft.paymentTerms} onChange={e => set('paymentTerms', e.target.value)} /></Field>
+        <Field label="Delivery terms"><input value={draft.deliveryTerms} onChange={e => set('deliveryTerms', e.target.value)} /></Field>
+        <Field label="Incoterms"><input value={draft.incoterms} onChange={e => set('incoterms', e.target.value)} /></Field>
+        <div className="opportunity-details-wide"><Field label="Commercial notes"><textarea rows={3} value={draft.commercialNotes} onChange={e => set('commercialNotes', e.target.value)} /></Field></div>
       </div>
 
       <div className="opportunity-details-actions">

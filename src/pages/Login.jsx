@@ -8,6 +8,7 @@ import { InstallBanner } from '../install.jsx'
 import BrandWatermark from '../branding/BrandWatermark.jsx'
 import { supabase, signInWithPassword, signUpWithPassword } from '../supabase.js'
 import { canUseLocalDemoAuth } from '../authMode.js'
+import { ThemeToggle } from '../theme.jsx'
 
 // Roles a new registrant may request: the sales owners plus the technical
 // reviewer. Approvers/admin accounts are provisioned by a super admin.
@@ -86,6 +87,7 @@ export default function Login() {
   return (
     <div className="login-bg">
       <BrandWatermark variant="login" />
+      <ThemeToggle className="login-theme-toggle" />
       <div className="login-card">
         <ModaeImageLogo className="login-logo" height={38} />
 

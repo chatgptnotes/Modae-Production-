@@ -1,13 +1,14 @@
-import React, { useEffect, useId, useRef, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { ROLES, OWNERS } from '../seed.js'
+import { ROLES, OWNERS, displayOpportunityId } from '../seed.js'
 import { readiness, isBlocked, nextActionWith } from '../gates.js'
-import { ageDays, isApprover, isAdminRole, isSalesOwner, canViewCommercial, canPriceProposal, fmtLakh, ddMmmYY, displayRole, displayRoleLabel, isHiddenDashboardOpportunity } from '../utils.js'
+import { ageDays, isApprover, isAdminRole, isSalesOwner, canViewCommercial, canPriceProposal, fmtLakh, ddMmmYY, ddMMyyyy, displayRole, displayRoleLabel, isHiddenDashboardOpportunity } from '../utils.js'
 import { analyticsSnapshot, counts, salesPerformance, winLossAnalysis, FY_QUARTERS, FY_MONTHS, PROB_WEIGHT, funnelRows } from '../kpi.js'
 import { Icon } from '../icons.jsx'
 import ForecastDashboard from './Dashboard.jsx'
 import WinLossFlow from '../WinLossFlow.jsx'
+import WinLossPie from '../WinLossPie.jsx'
 
 // My Dashboard — "there has to be something called My Dashboard… it will be
 // different for all the roles" (13 Aug review). The salesperson's version is
@@ -18,7 +19,7 @@ const roleLabel = role => displayRoleLabel(role) || role
 const dashboardRoleLabel = role => roleLabel(role).replace(displayRole(role), role)
 const PREVIEW_LIMIT = 5
 
-function Metric({ label, value, hint, tone = '', onClick, variant = '' }) {
+function Metric({ label, value, hint, tone = '', onClick, variant = 'dashboard-kpi' }) {
   const El = onClick ? 'button' : 'div'
   return (
     <El className={`stat-card-v2 tone-${tone}${onClick ? ' clickable' : ''}${variant ? ` ${variant}` : ''}`} onClick={onClick}>
@@ -79,7 +80,6 @@ function AnalyticsOverview({ store, role, nav, scope = 'role' }) {
   const scopeLabel = snapshot.owner ? `Your pipeline · ${snapshot.owner}` : 'Company pipeline'
   const scoped = store.opportunities.filter(o => !snapshot.owner || o.owner === snapshot.owner)
   const winLoss = winLossAnalysis(scoped, store.competitors, { commercial: snapshot.comm })
-  const outcomeShare = snapshot.comm ? winLoss.insights.wonValueShare : winLoss.summary.winRate
   return (
     <section className="home-analytics dashboard-analytics" aria-labelledby="dashboard-analytics-title">
       <div className="home-analytics-head">
@@ -95,7 +95,7 @@ function AnalyticsOverview({ store, role, nav, scope = 'role' }) {
           <div className="home-panel-title"><span>Pipeline by stage</span><span className="home-panel-note">{snapshot.openCount} open</span></div>
           <div className="home-funnel" role="list" aria-label="Open opportunities by stage">
             {snapshot.funnel.map((row, index) => (
-              <button key={row.label} className="home-funnel-row" onClick={() => nav(`/?stage=${encodeURIComponent(row.stages.join(','))}`)} role="listitem">
+              <button key={row.label} className={`home-funnel-row stage-${row.key}`} onClick={() => nav(`/?stage=${encodeURIComponent(row.stages.join(','))}`)} role="listitem">
                 <span className="home-funnel-stage">{row.label}</span>
                 <span className="home-funnel-track"><span className="home-funnel-fill" style={{ width: `${Math.max(row.count ? 5 : 0, ((snapshot.comm ? row.valueK : row.count) / max) * 100)}%` }} /></span>
                 <span className="home-funnel-value">{metric(row)}</span>
@@ -131,17 +131,9 @@ function AnalyticsOverview({ store, role, nav, scope = 'role' }) {
               <strong>{winLoss.summary.winRate}%</strong>
               <span>of {winLoss.summary.total} closed opportunities</span>
             </div>
-            <div className="dashboard-win-loss-compare" aria-label="Won versus lost outcomes">
-              <div className="dashboard-win-loss-compare-head"><span>Outcome mix</span><span>{snapshot.comm ? 'Commercial value' : 'Opportunity count'}</span></div>
-              <div className="dashboard-win-loss-compare-track" aria-hidden="true">
-                <i className="won" style={{ width: `${Math.max(5, outcomeShare)}%` }} />
-                <i className="lost" style={{ width: `${Math.max(5, 100 - outcomeShare)}%` }} />
-              </div>
-              <div className="dashboard-win-loss-compare-legend">
-                <span><b className="result-won">{winLoss.summary.won} won</b>{snapshot.comm && ` · ${fmtLakh(winLoss.summary.wonValueK)}`}</span>
-                <span><b className="result-lost">{winLoss.summary.lost} lost</b>{snapshot.comm && ` · ${fmtLakh(winLoss.summary.lostValueK)}`}</span>
-              </div>
-            </div>
+            <WinLossPie wonCount={winLoss.summary.won} lostCount={winLoss.summary.lost}
+              wonValueK={winLoss.summary.wonValueK} lostValueK={winLoss.summary.lostValueK}
+              commercial={snapshot.comm} compact />
             <div className="dashboard-win-loss-insight">
               <span className="analysis-kicker">Signal</span>
               <b>{winLoss.insights.topWinReason}</b>
@@ -186,6 +178,12 @@ function attainmentStatus(perf) {
   return 'Behind pace'
 }
 
+function RunRateSignal({ perf }) {
+  if (!perf.annual) return <div className="performance-signal"><strong>Target not set</strong><span>Set an annual target to begin monthly tracking.</span></div>
+  if (!perf.achieved) return <div className="performance-signal"><strong>No bookings yet</strong><span>Monthly targets are ready when the first order is booked.</span></div>
+  return <div className="performance-signal"><strong>{attainmentStatus(perf)}</strong><span>Target pace compared with actual pace.</span></div>
+}
+
 function PerformanceScorecard({ perf, scope = 'personal' }) {
   const variance = perf.achieved - perf.expected
   const pct = Math.min(100, Math.max(0, perf.annual ? (perf.achieved / perf.annual) * 100 : 0))
@@ -220,7 +218,7 @@ function PerformanceScorecard({ perf, scope = 'personal' }) {
   )
 }
 
-function DashboardFunnel({ store, role, nav, title = 'My funnel', scope = 'role' }) {
+function DashboardFunnel({ store, role, nav, title = 'ModAE Funnel', scope = 'role' }) {
   const owner = scope === 'my' ? role : (scope === 'role' && isSalesOwner(role) ? role : null)
   const rows = funnelRows(store.opportunities || [], { owner })
   const showValue = canViewCommercial(role) || isSalesOwner(role)
@@ -228,9 +226,8 @@ function DashboardFunnel({ store, role, nav, title = 'My funnel', scope = 'role'
     <Card title={title} icon="layers" tone="tone-slate" span={4} className="dashboard-funnel funnel-visual">
       <div className="dashboard-funnel-list" role="list" aria-label={`${title} stages`}>
         {rows.map((row, index) => (
-          <button key={`${row.label}-${index}`} className="dashboard-funnel-row" onClick={() => nav(`/?stage=${encodeURIComponent(row.stages.join(','))}`)} role="listitem">
+          <button key={`${row.label}-${index}`} className={`dashboard-funnel-row stage-${row.key}`} onClick={() => nav(`/?stage=${encodeURIComponent(row.stages.join(','))}`)} role="listitem">
             <span className="dashboard-funnel-shape" style={{ '--funnel-width': `${100 - (index * 13)}%` }}><b>{row.count}</b></span>
-            <span className="dashboard-funnel-connector" aria-hidden="true" />
             <span className="dashboard-funnel-label"><strong>{row.label}</strong><small>{row.note} · {showValue ? `${fmtLakh(row.valueK)} · ` : ''}{row.count} record{row.count === 1 ? '' : 's'}</small></span>
           </button>
         ))}
@@ -296,9 +293,6 @@ function QuarterColumns({ perf }) {
 // tooltip and the table, which still say "Not booked yet" past `elapsed`,
 // rather than from the line stopping.
 function RunRateChart({ perf }) {
-  // Unique per instance: a hardcoded gradient id collides when two charts share
-  // a page, and the second one silently picks up the first one's fill.
-  const gradientId = `runrate-fade-${useId().replace(/:/g, '')}`
   // Which month the pointer (or the keyboard) is asking about. null = no readout.
   const [hover, setHover] = useState(null)
   const svgRef = useRef(null)
@@ -306,6 +300,7 @@ function RunRateChart({ perf }) {
   const target = perf.monthlyTarget || FY_MONTHS.map(() => perf.annual / 12)
   const elapsed = Math.max(1, Math.min(FY_MONTHS.length, perf.monthsElapsed || FY_MONTHS.length))
   const actual = perf.monthly
+  const hasBookings = actual.some(value => Number(value) > 0)
 
   // The reference prototype used a 360-wide viewBox in a ~360px card. This card
   // is twice that, and the svg scales to fill it — which multiplied every
@@ -319,7 +314,6 @@ function RunRateChart({ perf }) {
   const py = v => base - (v / max) * (base - topY)
   const pts = series => series.map((v, i) => `${px(i).toFixed(1)},${py(v).toFixed(1)}`).join(' ')
 
-  const area = `${padL},${base} ${pts(actual)} ${px(actual.length - 1).toFixed(1)},${base}`
   // Six labels plus a guaranteed last one, so twelve months do not collide.
   const every = Math.ceil(FY_MONTHS.length / 6)
 
@@ -349,32 +343,31 @@ function RunRateChart({ perf }) {
   const side = hover != null && px(hover) > W / 2 ? 'left' : 'right'
 
   return (
-    <div className="runrate-chart">
+    <div className={`runrate-chart${hasBookings ? '' : ' is-empty'}`}>
       <div className="runrate-plot">
+        {!hasBookings && (
+          <div className="runrate-empty-note" role="status">
+            <strong>No bookings recorded yet</strong>
+            <span>Monthly actuals will appear here once orders are booked.</span>
+          </div>
+        )}
         <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} tabIndex={0} role="img"
           aria-label={`Monthly bookings against target run rate, ${FY_MONTHS[0]} to ${FY_MONTHS[FY_MONTHS.length - 1]}. Use the arrow keys to read each month.`}
           onPointerMove={event => setHover(monthAt(event))}
           onPointerLeave={() => setHover(null)}
           onBlur={() => setHover(null)}
           onKeyDown={onKeyDown}>
-          <defs>
-            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--primary-accent)" stopOpacity=".28" />
-              <stop offset="100%" stopColor="var(--primary-accent)" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          <polygon points={area} fill={`url(#${gradientId})`} />
           {hover != null && (
             <line className="runrate-crosshair" x1={px(hover)} y1={topY - 6} x2={px(hover)} y2={base} />
           )}
           <polyline points={pts(target)} fill="none" stroke="var(--text-main)" strokeWidth="1.6"
             strokeDasharray="5 4" opacity=".6" />
-          <polyline points={pts(actual)} fill="none" stroke="var(--primary-accent)" strokeWidth="2.6"
+          <polyline points={pts(actual)} fill="none" stroke="var(--dashboard-coral)" strokeWidth="2.6"
             strokeLinejoin="round" strokeLinecap="round" />
           {actual.map((v, i) => (
             <circle key={FY_MONTHS[i]} cx={px(i).toFixed(1)} cy={py(v).toFixed(1)}
               r={hover === i ? '5.5' : '4'}
-              fill="var(--card-bg)" stroke="var(--primary-accent)" strokeWidth="2" />
+              fill="var(--card-bg)" stroke="var(--dashboard-coral)" strokeWidth="2" />
           ))}
           {hover != null && (
             <circle cx={px(hover).toFixed(1)} cy={py(target[hover]).toFixed(1)} r="3.6"
@@ -434,7 +427,7 @@ function SalesOpportunitySection({ store, open, nav, money }) {
   return (
     <Card title="My opportunities" icon="sheet" tone="tone-sky" span={12}
       action={<button onClick={() => nav('/opportunities')}>View all</button>}>
-      <div className="dashboard-table-scroll"><table className="dashboard-table"><thead><tr><th>ID</th><th>Opportunity</th><th>Customer</th><th>Stage</th><th>Value (₹)</th><th>Win %</th><th>Next action</th><th>Due</th></tr></thead><tbody>{rows.map(o => { const na = action(o); const go = () => nav(`/opp/${o.id}`); return <tr key={o.id} tabIndex={0} role="link" aria-label={`Open opportunity ${o.id}`} onClick={go} onKeyDown={event => activateDashboardRow(event, go)}><td><b>{o.id}</b></td><td><span className="dashboard-cell-ellipsis">{o.oppName}</span></td><td><span className="dashboard-cell-ellipsis">{o.sellTo}</span></td><td><span className="pill open">{o.stage}</span></td><td>{money ? fmtLakh(o.valueK) : '—'}</td><td>{o.prob || '—'}</td><td title={na.text}><span className="dashboard-cell-clamp">{na.text || o.remarks || 'Review next step'}</span></td><td>{o.orderDate ? ddMmmYY(o.orderDate) : '—'}</td></tr>})}</tbody></table></div>
+      <div className="dashboard-table-scroll"><table className="dashboard-table"><thead><tr><th>ID</th><th>Opportunity</th><th>Customer</th><th>Stage</th><th>Value (₹)</th><th>Win %</th><th>Next action</th><th>Due</th></tr></thead><tbody>{rows.map(o => { const na = action(o); const go = () => nav(`/opp/${o.id}`); return <tr key={o.id} tabIndex={0} role="link" aria-label={`Open opportunity ${o.id}`} onClick={go} onKeyDown={event => activateDashboardRow(event, go)}><td><b>{o.id}</b></td><td><span className="dashboard-cell-ellipsis">{o.oppName}</span></td><td><span className="dashboard-cell-ellipsis">{o.sellTo}</span></td><td><span className="pill open">{o.stage}</span></td><td>{money ? fmtLakh(o.valueK) : '—'}</td><td>{o.prob || '—'}</td><td title={na.text}><span className="dashboard-cell-clamp">{na.text || o.remarks || 'Review next step'}</span></td><td>{o.orderDate ? ddMMyyyy(o.orderDate) : '—'}</td></tr>})}</tbody></table></div>
       {!rows.length && <div className="dashboard-empty">No open opportunities are assigned to you.</div>}
     </Card>
   )
@@ -530,10 +523,10 @@ export default function MyDashboard() {
       </div>
       <div className="home-head-actions">
         <div className="scope-toggle-group" role="group" aria-label="Dashboard view">
-          <button type="button" className={scope === 'my' ? 'active' : ''} aria-pressed={scope === 'my'} onClick={() => setScope('my')}>My View</button>
-          <button type="button" className={scope === 'global' ? 'active' : ''} aria-pressed={scope === 'global'} onClick={() => setScope('global')}>Global View</button>
+          <button type="button" className={`dashboard-head-action${scope === 'my' ? ' active' : ''}`} aria-pressed={scope === 'my'} onClick={() => setScope('my')}>My View</button>
+          <button type="button" className={`dashboard-head-action${scope === 'global' ? ' active' : ''}`} aria-pressed={scope === 'global'} onClick={() => setScope('global')}>Global View</button>
         </div>
-        <button onClick={() => nav('/opportunities')}><Icon name="cards" size={13} /> Opportunities</button>
+        <button className="dashboard-head-action" onClick={() => nav('/opportunities')}><Icon name="cards" size={13} /> Opportunities</button>
       </div>
     </div>
   )
@@ -577,11 +570,16 @@ function SalesPipelineSection({ store, nav, role, scope, money }) {
   const inScope = (store.opportunities || []).filter(o => !owner || o.owner === owner)
     .filter(o => !isHiddenDashboardOpportunity(o))
   const [from, to] = quarterRange()
-  const open = inScope.filter(o => o.status === 'Open' && o.orderDate && o.orderDate >= from && o.orderDate <= to)
+  const allOpen = inScope.filter(o => o.status === 'Open')
+  const open = allOpen.filter(o => o.orderDate && o.orderDate >= from && o.orderDate <= to)
     .sort((a, b) => (+b.valueK || 0) - (+a.valueK || 0))
-  const closed = inScope.filter(o => o.status === 'Closed')
+  // Orders are completed Won opportunities with a customer purchase order.
+  // Lost opportunities remain in the opportunity/outcome views, never here.
+  const closed = inScope.filter(o => o.status === 'Closed' && o.stage === 'Won')
     .sort((a, b) => String(b.orderDate || b.lastUpdated || '').localeCompare(String(a.orderDate || a.lastUpdated || '')) || ((+b.valueK || 0) - (+a.valueK || 0)))
-  const rows = filter === 'open' ? open : filter === 'closed' ? closed : [...open, ...closed]
+  const lost = inScope.filter(o => o.status === 'Closed' && o.stage === 'Lost')
+    .sort((a, b) => String(b.lastUpdated || b.orderDate || '').localeCompare(String(a.lastUpdated || a.orderDate || '')) || ((+b.valueK || 0) - (+a.valueK || 0)))
+  const rows = filter === 'open' ? allOpen : filter === 'closed' ? closed : filter === 'lost' ? lost : [...open, ...closed]
   const preview = rows.slice(0, PREVIEW_LIMIT)
   const tab = (key, label, count) => <button type="button" className={`pipeline-filter${filter === key ? ' active' : ''}`} onClick={() => setFilter(key)}>{label} <b>{count}</b></button>
   return (
@@ -589,19 +587,20 @@ function SalesPipelineSection({ store, nav, role, scope, money }) {
       action={<button onClick={() => nav('/opportunities')}>View all</button>}>
       <div className="pipeline-filter-row" aria-label="Opportunity and order filters">
         {tab('all', 'All', inScope.length)}
-        {tab('open', 'Open opportunities', open.length)}
-        {tab('closed', 'My orders (closed)', closed.length)}
+        {tab('open', 'Open opportunities', allOpen.length)}
+        {tab('closed', 'My orders (Won)', closed.length)}
+        {tab('lost', 'Lost', lost.length)}
       </div>
       <div className="dashboard-table-scroll"><table className="dashboard-table"><thead><tr><th>ID</th><th>Opportunity / Order</th><th>Customer</th><th>Status</th><th>Stage</th><th>Expected / Close Date</th><th>Value (₹)</th></tr></thead><tbody>
-        {preview.map(o => <tr key={o.id} tabIndex={0} role="link" aria-label={`Open opportunity ${o.id}`} onClick={() => nav(`/opp/${o.id}`)} onKeyDown={event => activateDashboardRow(event, () => nav(`/opp/${o.id}`))}>
-          <td><b>{o.id}</b></td><td><span className="dashboard-cell-ellipsis">{o.oppName}</span></td><td><span className="dashboard-cell-ellipsis">{o.sellTo}</span></td>
+        {preview.map(o => <tr key={o.id} tabIndex={0} role="link" aria-label={`Open opportunity ${displayOpportunityId(o.id)}`} onClick={() => nav(`/opp/${o.id}`)} onKeyDown={event => activateDashboardRow(event, () => nav(`/opp/${o.id}`))}>
+          <td><b>{displayOpportunityId(o.id)}</b></td><td><span className="dashboard-cell-ellipsis">{o.oppName}</span></td><td><span className="dashboard-cell-ellipsis">{o.sellTo}</span></td>
           <td><span className={`pill ${o.status === 'Closed' ? (o.stage === 'Won' ? 'won' : 'lost') : 'open'}`}>{o.status === 'Closed' ? `Closed · ${o.stage}` : 'Open'}</span></td>
-          <td>{o.stage}</td><td>{o.orderDate ? ddMmmYY(o.orderDate) : '—'}</td><td>{money ? fmtLakh(o.valueK) : '—'}</td>
+          <td>{o.stage}</td><td>{o.orderDate ? ddMMyyyy(o.orderDate) : '—'}</td><td>{money ? fmtLakh(o.valueK) : '—'}</td>
         </tr>)}
         {!preview.length && <tr><td className="empty" colSpan={7}>No records in this view.</td></tr>}
       </tbody></table></div>
       {open.length > PREVIEW_LIMIT && filter !== 'closed' && <p className="hint">Showing the five highest-value opportunities expected to close this quarter.</p>}
-      {!open.length && filter === 'open' && <p className="hint">No open opportunities are expected to close this quarter.</p>}
+      {!open.length && filter === 'all' && <p className="hint">No open opportunities are expected to close this quarter.</p>}
     </Card>
   )
 }
@@ -676,7 +675,7 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head,
       <PerformanceScorecard perf={perf} scope="personal" />
       <div className="performance-lower-grid">
         <Card title="Monthly performance against run rate" icon="chartLine" tone="tone-sky" span={8}>
-          <div className="performance-signal">{attainmentStatus(perf)} <span>· target pace vs actual pace</span></div>
+          <RunRateSignal perf={perf} />
           <RunRateChart perf={perf} />
           <div className="hint performance-card-note">
             {perf.fy} · {FY_MONTHS[0]}–{FY_MONTHS[FY_MONTHS.length - 1]} · actual against target run rate,
@@ -855,7 +854,7 @@ function ProposalStatusCard({ store, nav }) {
 // LJS is the strategic owner: start with the whole company picture, then move
 // into approvals, risk, attainment, and team targets.
 function OwnerDashboard({ store, nav, role, c, blocked, nextActions, head, scope }) {
-  const perf = salesPerformance(store)
+  const perf = salesPerformance(store, scope === 'my' ? role : null)
   const mine = (store.approvals || []).filter(a => a.status === 'Pending'
     && (a.needed?.length ? a.needed : [a.approver]).includes(role) && !(a.decisions || {})[role])
 
@@ -863,8 +862,8 @@ function OwnerDashboard({ store, nav, role, c, blocked, nextActions, head, scope
     <div className="page dashboard-page">
       {head}
       <div className="stat-cards">
-        <Metric label="Company pipeline" value={analyticsSnapshot(store, role).openCount} tone="sky" onClick={() => nav('/analytics')} />
-        <Metric label="Waiting on you" value={mine.length} tone={mine.length ? 'red' : 'green'} onClick={() => nav('/approvals')} />
+        <Metric label={scope === 'my' ? 'My pipeline' : 'Company pipeline'} value={analyticsSnapshot(store, role, { scope }).openCount} tone="sky" onClick={() => nav('/analytics')} />
+        <Metric label="Waiting on you" value={mine.length} tone={mine.length ? 'amber' : 'green'} onClick={() => nav('/approvals')} />
         <Metric label="Blocked" value={blocked.length} tone={blocked.length ? 'red' : 'green'} onClick={() => nav('/')} />
       </div>
       <AnalyticsOverview {...{ store, role, nav, scope }} />
@@ -884,10 +883,10 @@ function OwnerDashboard({ store, nav, role, c, blocked, nextActions, head, scope
       <PerformanceScorecard perf={perf} scope="company" />
       <div className="performance-lower-grid">
         <Card title="Monthly performance against run rate" icon="chartLine" tone="tone-sky" span={8}>
-          <div className="performance-signal">{attainmentStatus(perf)} <span>· target pace vs actual pace</span></div>
+          <RunRateSignal perf={perf} />
           <RunRateChart perf={perf} />
         </Card>
-        <DashboardFunnel store={store} role={role} nav={nav} title={scope === 'my' ? 'My funnel' : 'Company funnel'} scope={scope} />
+        <DashboardFunnel store={store} role={role} nav={nav} scope={scope} />
       </div>
       <div className="ana-grid">
         <TeamTargetsCard store={store} />
@@ -905,8 +904,8 @@ function CommercialDashboard(props) {
 
 // --------------------------------------------------------------- approvers
 function ApproverDashboard({ store, nav, role, c, blocked, nextActions, head, commercial = false, scope }) {
-  const perf = salesPerformance(store)   // whole company
-  const snapshot = analyticsSnapshot(store, role)
+  const perf = salesPerformance(store, scope === 'my' ? role : null)
+  const snapshot = analyticsSnapshot(store, role, { scope })
   const mine = (store.approvals || []).filter(a => a.status === 'Pending'
     && (a.needed?.length ? a.needed : [a.approver]).includes(role) && !(a.decisions || {})[role])
 
@@ -914,7 +913,7 @@ function ApproverDashboard({ store, nav, role, c, blocked, nextActions, head, co
     <div className="page dashboard-page">
       {head}
       <div className="stat-cards">
-        <Metric label="Waiting on you" value={mine.length} tone={mine.length ? 'red' : 'green'} onClick={() => nav('/approvals')} />
+        <Metric label="Waiting on you" value={mine.length} tone={mine.length ? 'amber' : 'green'} onClick={() => nav('/approvals')} />
         {commercial && <Metric label="Commercial pipeline" value={fmtLakh(snapshot.pipelineK)} tone="sky" onClick={() => nav('/analytics')} />}
         <Metric label="Blocked" value={blocked.length} tone={blocked.length ? 'red' : 'green'} onClick={() => nav('/')} />
         {!commercial && <Metric label="Needs update" value={c.stale} tone={c.stale ? 'amber' : 'green'} onClick={() => nav('/my')} />}
@@ -969,10 +968,10 @@ function ApproverDashboard({ store, nav, role, c, blocked, nextActions, head, co
       <PerformanceScorecard perf={perf} scope="company" />
       <div className="performance-lower-grid">
         <Card title="Monthly performance against run rate" icon="chartLine" tone="tone-sky" span={8}>
-          <div className="performance-signal">{attainmentStatus(perf)} <span>· target pace vs actual pace</span></div>
+          <RunRateSignal perf={perf} />
           <RunRateChart perf={perf} />
         </Card>
-        <DashboardFunnel store={store} role={role} nav={nav} title={scope === 'my' ? 'My funnel' : 'Company funnel'} scope={scope} />
+        <DashboardFunnel store={store} role={role} nav={nav} scope={scope} />
       </div>
     </div>
   )
@@ -982,7 +981,7 @@ function ApproverDashboard({ store, nav, role, c, blocked, nextActions, head, co
 function AdminDashboard({ store, nav, role, c, blocked, nextActions, head, scope }) {
   const users = store.auth?.users || []
   const pendingUsers = users.filter(u => u.status === 'Pending')
-  const perf = salesPerformance(store)
+  const perf = salesPerformance(store, scope === 'my' ? role : null)
 
   return (
     <div className="page dashboard-page">
@@ -1036,10 +1035,10 @@ function AdminDashboard({ store, nav, role, c, blocked, nextActions, head, scope
       <PerformanceScorecard perf={perf} scope="company" />
       <div className="performance-lower-grid">
         <Card title="Monthly performance against run rate" icon="chartLine" tone="tone-sky" span={8}>
-          <div className="performance-signal">{attainmentStatus(perf)} <span>· target pace vs actual pace</span></div>
+          <RunRateSignal perf={perf} />
           <RunRateChart perf={perf} />
         </Card>
-        <DashboardFunnel store={store} role={role} nav={nav} title={scope === 'my' ? 'My funnel' : 'Company funnel'} scope={scope} />
+        <DashboardFunnel store={store} role={role} nav={nav} scope={scope} />
       </div>
     </div>
   )

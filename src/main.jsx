@@ -8,6 +8,7 @@ import { FormulaBarProvider } from './formulabar.jsx'
 import { DrawerProvider } from './drawer.jsx'
 import { registerSW } from './pwa.js'
 import { deploymentNeedsReset, resetAndReload, watchDeployment } from './deployment.js'
+import { ThemeProvider } from './theme.jsx'
 import './styles.css'
 
 async function boot() {
@@ -28,13 +29,15 @@ if (legacyRoute) window.history.replaceState(null, '', legacyRoute)
     <React.StrictMode>
       <ErrorBoundary>
         <BrowserRouter>
-          <StoreProvider>
-            <FormulaBarProvider>
-              <DrawerProvider>
-                <App />
-              </DrawerProvider>
-            </FormulaBarProvider>
-          </StoreProvider>
+          <ThemeProvider>
+            <StoreProvider>
+              <FormulaBarProvider>
+                <DrawerProvider>
+                  <App />
+                </DrawerProvider>
+              </FormulaBarProvider>
+            </StoreProvider>
+          </ThemeProvider>
         </BrowserRouter>
       </ErrorBoundary>
     </React.StrictMode>,

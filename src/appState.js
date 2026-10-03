@@ -6,7 +6,7 @@ import {
   seedRateSheets, seedSvcEstimates, seedClarifications, seedHandover,
   seedAiLeads, seedJointApprovals, seedCatalogRev,
   seedPoCompare, milestoneForStage, routeForType, contextForType,
-  ROLES, B_STEPS, defaultBStepOwners, DEFAULT_WORKFLOW, ownerIdFor,
+  ROLES, B_STEPS, defaultBStepOwners, DEFAULT_WORKFLOW, ownerIdFor, LEGACY_LEAD_SOURCE_ALIASES, userRoles,
 } from './seed.js'
 import { normalizePriceFields, reconcileCatalogueMatch, reconcilePriceSource } from './pricing.js'
 import { DEFAULT_CURRENCY_RATES, normalizedCurrencyRates } from './currency.js'
@@ -302,11 +302,14 @@ export function migrate(s) {
   if (!Array.isArray(s.config.kycItems)) s.config.kycItems = seedConfig.kycItems
   s.config.roleNames = { ...seedConfig.roleNames, ...(s.config.roleNames || {}) }
   const canonicalOwner = value => ownerIdFor(value, s.config.roleNames)
-  s.leads = s.leads.map(lead => ({
+  const normalizeLead = lead => ({
     ...lead,
+    source: LEGACY_LEAD_SOURCE_ALIASES[lead.source] || lead.source,
     suggestedOwner: canonicalOwner(lead.suggestedOwner),
     assignedOwner: canonicalOwner(lead.assignedOwner),
-  }))
+  })
+  s.leads = s.leads.map(normalizeLead)
+  s.leadArchive = (s.leadArchive || []).map(normalizeLead)
   if (!Array.isArray(s.config.workflow) || !s.config.workflow.length) s.config.workflow = DEFAULT_WORKFLOW.map(x => ({ ...x }))
   s.config.workflow = s.config.workflow.map((stage, i) => ({
     ...DEFAULT_WORKFLOW[i], ...stage,
@@ -379,7 +382,8 @@ export function migrate(s) {
     s.viewModePinned = false
     delete s.viewModeRestoreRev
   }
-  if (s.tabletTheme !== 'dark' && s.tabletTheme !== 'light') s.tabletTheme = 'dark'
+  // The browser's standalone theme preference now owns every viewport.
+  delete s.tabletTheme
   // The inbox's "Show all" used to be component state, so a reload put a sales
   // owner back on their own leads — and a lead the simulator had just routed to
   // someone else looked like it had never saved. Per-device, never synced.
@@ -396,6 +400,12 @@ export function migrate(s) {
   if (!Array.isArray(s.competitors)) s.competitors = []
   if (!s.spSync || typeof s.spSync !== 'object' || Array.isArray(s.spSync)) s.spSync = {}
   if (!s.auth) s.auth = { user: null }
+  // Level 3 role migration: preserve the legacy primary role while adding a
+  // durable multi-role assignment for every existing profile.
+  if (Array.isArray(s.users)) {
+    s.users = s.users.map(user => ({ ...user, roles: userRoles(user) }))
+  }
+  if (!Array.isArray(s.roles)) s.roles = userRoles(s.auth?.user || { role: s.role })
   // Price lists added to the seed after a state was saved (e.g. Meggitt) land
   // by name — existing lists are the user's data and are never overwritten.
   if (!s.priceLists) s.priceLists = demo ? seedPriceLists : {}
@@ -674,6 +684,7 @@ export function seedState() {
     pendingOpportunitySyncIds: [],
     users: seedUsers,
     role: 'SUPER',
+    roles: ['SUPER', 'ADMIN'],
   })
 }
 

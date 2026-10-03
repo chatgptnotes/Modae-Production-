@@ -5,19 +5,91 @@ import fs from 'node:fs'
 const css = fs.readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
 const inbox = fs.readFileSync(new URL('../src/pages/Inbox.jsx', import.meta.url), 'utf8')
 
-test('inbox keeps every column visible and scrolls the complete grid narrowly', () => {
-  assert.match(css, /\.mail-date b, \.mail-date small \{ display: block; white-space: nowrap; \}/)
-  assert.match(css, /minmax\(130px, \.8fr\) minmax\(100px, 1fr\)\s+72px;/)
-  assert.match(css, /--mail-grid-template:[\s\S]*minmax\(180px, 1\.35fr\)[\s\S]*minmax\(320px, 4fr\)/)
-  assert.match(css, /grid-template-columns: var\(--mail-grid-template\);[\s\S]*min-width: 1350px;/)
-  assert.match(css, /\.mailbox-list \{[\s\S]*overflow-x: auto; overflow-y: auto;/)
-  assert.match(css, /\.mail-list-toolbar \{[\s\S]*min-width: 1350px;/)
+test('inbox keeps every column visible in a fitted desktop grid', () => {
+  assert.match(css, /\.mail-date b, \.mail-date small \{ display: block;[\s\S]*white-space: nowrap; \}/)
+  assert.match(css, /--mail-grid-template:[\s\S]*32px 32px[\s\S]*minmax\(0, 22fr\)[\s\S]*minmax\(0, 12fr\)[\s\S]*minmax\(0, 11fr\)[\s\S]*minmax\(0, 8fr\);/)
+  assert.match(css, /grid-template-columns: var\(--mail-grid-template\);[\s\S]*width: 100%;[\s\S]*min-width: 0;/)
+  assert.match(css, /\.mailbox-list \{[\s\S]*overflow-x: hidden; overflow-y: auto;/)
+  assert.match(css, /\.mail-list-toolbar \{[\s\S]*min-width: 0;/)
+  assert.match(inbox, /<div className="mail-column-head">\s*<div className="mail-list-toolbar">/)
   assert.doesNotMatch(css, /@container \(max-width: (900|1180|1400)px\)/)
   assert.doesNotMatch(css, /\.mail-column-head > :nth-child\((8|10|12)\), \.mail-row > :nth-child\(/)
-  for (const label of ['Received', 'Source / sender', 'Subject / preview', 'AI route', 'Urgency', 'Dup. risk', 'Completeness', 'Sugg. owner', 'Status', 'Age']) {
+  for (const label of ['Received', 'Source / sender', 'Subject / preview', 'AI route', 'Urgency', 'Dup. risk', 'Completeness', 'Suggested owner', 'Status', 'Age']) {
     assert.match(inbox, new RegExp(label.replace(/[/.]/g, '\\$&')))
   }
   assert.match(inbox, /age == null \? '—' : age === 0 \? 'Today' : `\$\{age\} d old`/)
+  assert.match(inbox, /filterMenu\('received', receivedF, setReceivedF, 'Received date'/)
+  assert.match(inbox, /filterMenu\('source', sourceF, setSourceF, 'Source \/ sender'/)
+  assert.match(inbox, /filterMenu\('completeness', completenessF, setCompletenessF,[\s\S]*?'Complete'/)
+  assert.match(inbox, /aria-haspopup="menu" aria-expanded=\{isOpen\}/)
+  assert.match(inbox, /role="menuitemradio" aria-checked=\{value === entry\.value\}/)
+})
+
+test('inbox metadata stays compact while subject content stacks clearly', () => {
+  assert.match(css, /\.mail-head-filter \{[\s\S]*?white-space: nowrap;[\s\S]*?cursor: pointer;/)
+  assert.match(css, /\.mail-head-filter \{[\s\S]*?border: 0 !important;[\s\S]*?border-radius: 0 !important;[\s\S]*?background: transparent !important;[\s\S]*?box-shadow: none !important;/)
+  assert.match(css, /\.mail-column-head \.mail-head-filter:hover \{[\s\S]*?background: transparent !important;[\s\S]*?color: var\(--primary-deep\);/)
+  assert.match(css, /\.mail-column-head \.mail-head-filter:focus-visible \{[\s\S]*?background: transparent !important;[\s\S]*?box-shadow: none !important;[\s\S]*?outline: 0;[\s\S]*?text-decoration: underline;/)
+  assert.match(css, /\.mail-column-head \.mail-head-filter\.active \{[\s\S]*?background: transparent !important;[\s\S]*?color: var\(--primary-deep\);/)
+  assert.match(css, /\.mail-header-filter-menu \{[\s\S]*?overflow-y: auto;/)
+  assert.match(css, /\.mail-header-filter-option \{[\s\S]*?white-space: normal;[\s\S]*?overflow-wrap: anywhere;/)
+  assert.match(css, /\.mail-sender b, \.mail-sender small \{[\s\S]*?display: block;[\s\S]*?white-space: normal;[\s\S]*?overflow-wrap: anywhere;/)
+  assert.match(css, /\.mail-row > \.mail-content \{[\s\S]*?display: flex;[\s\S]*?white-space: normal;/)
+  assert.match(css, /\.mail-content-stack \{[\s\S]*?display: flex;[\s\S]*?flex-direction: column;[\s\S]*?white-space: normal;/)
+  assert.match(css, /\.mail-subject-meta \{[\s\S]*?display: flex;[\s\S]*?white-space: nowrap;/)
+  assert.match(css, /\.mail-content small \{[\s\S]*?-webkit-line-clamp: 2;/)
+  assert.match(css, /\.shell \.mail-opportunity-link \{\s*border: 0;/)
+})
+
+test('inbox rows reserve room for opportunity, subject, and preview lines', () => {
+  assert.match(css, /\.mail-row\s*\{[\s\S]*?min-height:\s*106px;/)
+  assert.match(css, /\.mail-content small::before \{ content: none; \}/)
+  assert.match(css, /\.shell \.mail-row > \.mail-content \.mail-subject-meta > button\.mail-opportunity-link\s*\{[\s\S]*?min-height:\s*0 !important;[\s\S]*?border:\s*0 !important;[\s\S]*?background:\s*transparent !important;/)
+})
+
+test('inbox date metadata stacks cleanly without an inline separator', () => {
+  assert.match(css, /\.mail-date \{[\s\S]*white-space: normal;[\s\S]*line-height: 1\.2;/)
+  assert.match(css, /\.mail-date small::before \{ content: none; \}/)
+})
+
+test('inbox owner and status columns keep their metadata readable', () => {
+  assert.match(css, /\.mail-owner \{[\s\S]*font-weight: 700;/)
+  assert.match(css, /\.mail-row > div > \.pill \{[\s\S]*display: inline-flex;[\s\S]*white-space: nowrap;/)
+})
+
+test('inbox confines its fitted grid to the workspace like the Opportunities sheet', () => {
+  assert.match(css, /\.mailbox-page \{\s*width: 100%;\s*max-width: none;\s*min-width: 0;\s*box-sizing: border-box;/)
+  assert.match(css, /\.mailbox-list \{\s*width: 100%;[\s\S]*?max-width: 100%;[\s\S]*?min-width: 0;[\s\S]*?overflow-x: hidden;/)
+  assert.match(css, /\.mail-list-toolbar,\s*\.mail-column-head,\s*\.mail-row \{\s*width: 100%;\s*min-width: 0;/)
+  assert.match(css, /\.mailbox-list \{\s*width: 100%;\s*max-width: 100%;\s*min-width: 0;\s*box-sizing: border-box;\s*overflow-x: hidden;\s*border: 0;\s*box-shadow: none;/)
+})
+
+test('inbox actions share the compact column header row', () => {
+  assert.match(css, /\.mail-list-toolbar \{[\s\S]*grid-column: 1 \/ span 2;[\s\S]*min-height: 0;[\s\S]*height: 100%;/)
+  assert.match(css, /\.mail-column-head \{ position: relative; min-height: 34px;/)
+  assert.match(css, /\.mail-column-head \{ position: sticky; top: 0; z-index: 3; \}/)
+  assert.doesNotMatch(css, /\.mail-column-head \{ position: sticky; top: 44px;/)
+})
+
+test('inbox always uses fitted rows instead of summary cards', () => {
+  assert.doesNotMatch(inbox, /LeadSummaryCard|shouldShowSparseCards/)
+  assert.doesNotMatch(inbox, /compactMailbox|showDenseView|ResizeObserver|sparse-view-toggle/)
+  assert.doesNotMatch(inbox, /has-sparse-cards|sparse-filter-bar|lead-sparse-cards/)
+  assert.match(inbox, /<div className="mail-column-head">/)
+  assert.match(inbox, /mailboxRows\.map\(l => \{[\s\S]*?className=\{`mail-row /)
+})
+
+test('inbox controls reflow from workspace width instead of widening the shell', () => {
+  assert.match(css, /@container workspace \(max-width: 70rem\) \{[\s\S]*?\.mailbox-page > \.mailbox-head \{[\s\S]*?flex-wrap: wrap;/)
+  assert.match(css, /@container workspace \(max-width: 70rem\) \{[\s\S]*?\.mail-search-row \{[\s\S]*?flex-wrap: wrap;/)
+  assert.match(css, /@container workspace \(max-width: 44rem\) \{[\s\S]*?\.mail-search \{[\s\S]*?flex-basis: 100%;/)
+})
+
+test('desktop inbox uses the compact rail and flat full-width mailbox surface', () => {
+  assert.match(css, /\.shell\s*\{\s*--sidenav-w:\s*216px;\s*--shell-nav-w:\s*216px;/)
+  assert.match(css, /\.shell\.sidebar-compact\s*\{\s*--sidenav-w:\s*80px;\s*--shell-nav-w:\s*80px;/)
+  assert.match(css, /@media \(min-width: 1025px\)[\s\S]*?\.shell:not\(\.tablet-mode\) \.mailbox-page\s*\{[\s\S]*?width:\s*100%;[\s\S]*?padding-inline:/)
+  assert.match(css, /@media \(min-width: 1025px\)[\s\S]*?\.shell:not\(\.tablet-mode\) \.mailbox-list\s*\{[\s\S]*?border:\s*0;[\s\S]*?border-radius:\s*0;[\s\S]*?box-shadow:\s*none;/)
 })
 
 test('simulated inquiries return to the shared inbox after saving', () => {
@@ -66,8 +138,8 @@ test('rate-limited extraction is presented as a temporary retry state', () => {
   assert.match(inbox, /retry shortly/)
 })
 
-test('subject and preview stay in a contained two-line inbox cell', () => {
-  assert.match(inbox, /className="mail-subject-head"[^>]*>Subject \/ preview/)
+test('subject and preview stay contained inside the inbox cell', () => {
+  assert.match(inbox, /className="mail-subject-head"[^>]*title="Subject \/ preview">Subject<\/span>/)
   assert.match(inbox, /className="mail-subject-meta">[\s\S]*className="mail-subject-title">\{l\.subject\}/)
   assert.match(inbox, /<small>\{l\.ai\?\.summary \|\| l\.body\?\.replace/)
   assert.match(inbox, /className="mail-content-stack"/)
@@ -75,11 +147,11 @@ test('subject and preview stay in a contained two-line inbox cell', () => {
   assert.match(css, /\.mail-subject-meta \{[\s\S]*flex-wrap: nowrap;[\s\S]*white-space: nowrap;/)
     assert.match(css, /\.mail-opportunity-link \{[\s\S]*white-space: nowrap;/)
   assert.match(css, /\.mail-opportunity-link \{[\s\S]*background: transparent !important;/)
-  assert.match(css, /\.mail-row \{[\s\S]*min-height: 88px;[\s\S]*overflow: visible;/)
-  assert.match(css, /\.mail-subject-title \{[\s\S]*-webkit-line-clamp: 2;[\s\S]*overflow-wrap: anywhere;/)
-  assert.match(css, /\.mail-content small \{[\s\S]*-webkit-line-clamp: 2;[\s\S]*overflow-wrap: anywhere;/)
+  assert.match(css, /\.mail-row \{[\s\S]*min-height: 58px;[\s\S]*overflow: hidden;/)
+  assert.match(css, /\.mail-subject-title \{[\s\S]*display: block;[\s\S]*white-space: normal;[\s\S]*overflow-wrap: anywhere;/)
+  assert.match(css, /\.mail-content small \{[\s\S]*display: -webkit-box;[\s\S]*white-space: normal;[\s\S]*overflow-wrap: anywhere;/)
   assert.match(css, /\.mail-column-head \.mail-subject-head \{[\s\S]*white-space: nowrap;/)
-  assert.match(css, /minmax\(320px, 4fr\)/)
+  assert.match(css, /minmax\(0, 22fr\)/)
 })
 
 test('opportunity scope is optional during lead qualification and registration', () => {
@@ -208,7 +280,7 @@ test('customer KYC display honors verified lead-stage data and simulated mode', 
   assert.match(workbench, /item\.value \|\| .*verificationItem\(sourceLead\.verification, name\)\.value/)
   assert.match(workbench, /ID: \{item\.value \|\| verificationItem\(sourceLead\.verification, name\)\.value\}/)
   assert.match(register, /kyc: leadVerification\.status === 'Verified' \? 'Valid' : 'Pending'/)
-  assert.match(inbox, /const leadVerification = verificationSnapshot\(lead, customerStatus, \{ config: store\.config \}\)/)
+  assert.match(inbox, /const leadVerification = verificationSnapshot\(\{ \.\.\.lead, existingCustomerKyc: customer\?\.kyc === 'Valid' \}, customerStatus/)
   assert.match(inbox, /kyc: leadVerification\.status === 'Verified' \? 'Valid' : 'Pending'/)
 })
 
@@ -282,7 +354,7 @@ test('compact lead review uses one decision form and a bounded review rail', () 
   assert.match(inbox, /className="icon-action act-accept" aria-label=\{`Accept \$\{field\.k\}`\}/)
   assert.match(inbox, /className="decision-status-icon accepted" role="status" aria-label="Accepted"/)
   assert.match(inbox, /className="decision-status-icon review" role="status" aria-label="Review required"/)
-  assert.match(inbox, /className="decision-value-row"><input type="text" value=\{decisionDraft\.sellTo\}/)
+  assert.match(inbox, /<CustomerPicker[\s\S]*value=\{decisionDraft\.sellTo\}/)
   assert.match(inbox, /decisionAiStatus\('sellTo'\)/)
   assert.match(inbox, /className="decision-field-heading">Sell To Customer/)
   assert.match(inbox, /className="decision-field-heading">Assigned owner<\/span>/)

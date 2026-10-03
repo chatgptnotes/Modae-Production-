@@ -9,6 +9,7 @@ import { mergeOpportunityRow } from './workflowTransitions.js'
 // original localStorage-only behavior without env vars.
 
 // Per-device/session state that must never be shared across browsers.
+// Keep tabletTheme here for older local snapshots while appState removes it.
 export const LOCAL_ONLY = ['viewMode', 'viewModePinned', 'tabletTheme', 'spSync', 'auth', 'role',
   'inboxShowAll', 'leadSyncBaseline', 'clarificationSyncBaseline', 'opportunitySyncBaseline',
   'sparesLinesSyncBaseline', 'deletedLeadIds', 'deletedOpportunityIds', 'pendingOpportunitySyncIds',

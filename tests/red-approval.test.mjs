@@ -161,10 +161,10 @@ test('a Customer Master Red status governs future leads without rewriting opport
 
 test('Register no longer stacks an unclearable duplicate blocker', () => {
   const source = read('src/pages/Register.jsx')
-  assert.match(source, /leadVerificationBlockers\(lead, leadCustomerStatus, \{ redCleared[^}]*\}\)/)
+  assert.match(source, /leadVerificationBlockers\(\{ \.\.\.lead, existingCustomerKyc \}, leadCustomerStatus/)
   assert.equal(/blockers\.push\('Red continuation approval/.test(source), false,
     'the duplicate push must be gone — leadVerificationBlockers owns this now')
-  assert.match(source, /verificationSnapshot\(lead, leadCustomerStatus, \{ approval: redApproval[^}]*\}\)/)
+  assert.match(source, /verificationSnapshot\(\{ \.\.\.lead, existingCustomerKyc \}, leadCustomerStatus, \{ approval: redApproval[^}]*\}\)/)
   // And the class chain is the shared one, not an inline copy that drops redFlag.
   assert.match(source, /customerStatusForLead\(lead, store\.customers\)/)
   assert.equal(/lead\.customerStatus \|\| customer\?\.status \|\| 'Blue'/.test(source), false)

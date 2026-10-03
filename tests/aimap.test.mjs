@@ -118,7 +118,8 @@ test('the suggestion never overwrites what the salesperson typed', () => {
   const tracker = read('src/pages/Tracker.jsx')
   assert.match(tracker, /value=\{o\.prob \|\| ''\} onChange=\{upd\(o\.id, 'prob'\)\}/,
     'the stored value still drives the control')
-  assert.match(tracker, /\$\{sug\.level\} \(suggested\)/)
+  assert.match(tracker, /<option value="">Select probability<\/option>/)
+  assert.doesNotMatch(tracker, /\$\{sug\.level\} \(suggested\)/)
 })
 
 // ------------------------------------------------------- escalation suggestion

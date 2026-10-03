@@ -1,6 +1,7 @@
 import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
+import { displayOpportunityId } from '../seed.js'
 import { canViewCommercial, isApprover, fmtLakh, ddMmmYY, displayRole } from '../utils.js'
 import { Chip, KpiCard, WarnBox } from '../ui.jsx'
 
@@ -118,7 +119,7 @@ export default function PurchaseOrders() {
             <tbody>
               {orders.map(o => (
                 <tr key={o.id}>
-                  <td><b>{o.id}</b></td>
+                  <td><b>{displayOpportunityId(o.id)}</b></td>
                   {approver && <td>{displayRole(o.owner)}</td>}
                   <td>{o.customer}</td>
                   <td>{o.title}</td>

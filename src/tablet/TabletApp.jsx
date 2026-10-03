@@ -35,10 +35,11 @@ import Portal from '../pages/Portal.jsx'
 import Opportunities from '../pages/Opportunities.jsx'
 import TabletHome from './TabletHome.jsx'
 import './tablet.css'
+import { ThemeToggle, useTheme } from '../theme.jsx'
 
 function TabletGate({ page, children }) {
   const store = useStore()
-  if (!canSeePage(store.role, page)) return <Navigate to="/home" replace />
+  if (!canSeePage(store.roles || store.role, page)) return <Navigate to="/home" replace />
   return children
 }
 
@@ -50,12 +51,12 @@ const BOTTOM = [
 
 export default function TabletApp() {
   const store = useStore()
+  const { theme } = useTheme()
   const nav = useNavigate()
   const loc = useLocation()
   const role = store.role
   const custAccount = store.auth?.user?.role === 'CUST'
   const c = counts(store, role)
-  const theme = store.tabletTheme === 'light' ? 'light' : 'dark'
   const backend = activeBackend()
   const online = backend === 'sharepoint'
     ? { label: 'SharePoint', tone: 'ok' }
@@ -122,10 +123,7 @@ export default function TabletApp() {
           <Icon name="wifi" size={13} /> <span className="tb-label">{online.label}</span>
         </span>
         <InstallButton />
-        <button className="tb-icon" title={theme === 'dark' ? 'Switch to light dashboard' : 'Switch to dark dashboard'}
-          onClick={() => store.setTabletTheme(theme === 'dark' ? 'light' : 'dark')}>
-          <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={15} />
-        </button>
+        <ThemeToggle className="tb-icon" />
         <button onClick={() => { store.setViewMode('full'); nav('/opportunities') }} title="Switch to the full desktop site">
           <Icon name="monitor" size={14} /> <span className="tb-label">Full site</span>
         </button>
@@ -137,7 +135,7 @@ export default function TabletApp() {
       </header>
       {routes}
       <nav className="tab-bottom">
-        {BOTTOM.filter(t => canSeePage(role, t.page)).map((t, i) => {
+        {BOTTOM.filter(t => canSeePage(store.roles || role, t.page)).map((t, i) => {
           const badge = t.badge ? t.badge(store) : 0
           return (
             <React.Fragment key={t.to}>
@@ -149,7 +147,7 @@ export default function TabletApp() {
             </React.Fragment>
           )
         })}
-        {canSeePage(role, 'voice') && (
+        {canSeePage(store.roles || role, 'voice') && (
           <button className="tab-fab" title="Voice update — speak a lead or status change"
             onClick={() => nav('/voice')}>
             <Icon name="mic" size={22} />

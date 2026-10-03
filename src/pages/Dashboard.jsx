@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
+import { displayOpportunityId } from '../seed.js'
 import { fmt, fmtLakh, monthKey, monthLabel, exportCSV, canViewForecast, forecastOwnerScope, displayRole, isHiddenDashboardOpportunity } from '../utils.js'
 
 // The "Pivot" sheet, shaped like the real one: rows = customers, columns =
@@ -150,7 +151,7 @@ export default function Dashboard({ embedded = false }) {
           <tbody>
             {inScope.filter(o => !isHiddenDashboardOpportunity(o)).map(o => (
               <tr key={o.id}>
-                <td className="oppid">{o.id}</td><td>{o.sellTo}</td><td>{o.oppName}</td>
+                <td className="oppid">{displayOpportunityId(o.id)}</td><td>{o.sellTo}</td><td>{o.oppName}</td>
                 <td>{displayRole(o.owner)}</td><td>{o.stage}</td><td>{o.prob || ''}</td>
                 <td>{monthLabel(monthKey(o.orderDate))}</td>
                 <td className="num">{fmt(o.valueK)}</td>

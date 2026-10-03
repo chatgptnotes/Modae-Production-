@@ -359,7 +359,7 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
   const markAsSent = () => {
     const id = communicationId || submission?.id
     if (!id) return
-    store.updateCommunication(opp.id, id, { status: 'sent' }, 'Proposal email marked as sent')
+    store.markProposalSent(opp.id, id)
     setSentNow(false)
   }
 

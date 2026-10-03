@@ -234,7 +234,7 @@ test('the page distinguishes an opened Gmail draft from a confirmed sent email',
   assert.match(submission, /revision: String\(p\.revision \?\? ''\)/)
   assert.match(submission, /latestSubmissionForRevision\(store\.communications\?\.\[opp\.id\], p\.revision\)/)
   assert.match(submission, /Mark as sent/)
-  assert.match(submission, /status: 'sent'/)
+  assert.match(submission, /store\.markProposalSent\(opp\.id, id\)/)
   assert.match(submission, /Proposal email marked as sent/)
 })
 
@@ -247,11 +247,11 @@ test('opening Gmail does not complete the opportunity workflow', () => {
   assert.match(sendFlow, /status: 'draft'/)
 })
 
-test('manual confirmation only marks the communication as sent', () => {
+test('manual confirmation records the sent event through the store action', () => {
   const markStart = submission.indexOf('const markAsSent = () => {')
   const markEnd = submission.indexOf('  const retryGmailDraft = () => {', markStart)
   const markFlow = submission.slice(markStart, markEnd)
-  assert.match(markFlow, /store\.updateCommunication\(opp\.id, id, \{ status: 'sent' \}/)
+  assert.match(markFlow, /store\.markProposalSent\(opp\.id, id\)/)
   assert.doesNotMatch(markFlow, /store\.updateOpportunity\(/)
   assert.doesNotMatch(markFlow, /store\.updateServiceFlow\(/)
 })

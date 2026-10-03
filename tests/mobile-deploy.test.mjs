@@ -86,7 +86,7 @@ test('approval BOQ opens a read-only details popup without navigation', () => {
   const approvals = read('src/pages/Approvals.jsx')
   assert.match(approvals, /function ApprovalBoqModal\(/)
   assert.match(approvals, /onClick=\{\(\) => setBoqOppId\(opp\.id\)\}/)
-  assert.match(approvals, /<Modal title=\{`BOQ \/ COMMERCIAL REVIEW — \$\{opp\.id\}`\}/)
+  assert.match(approvals, /<Modal title=\{`BOQ \/ COMMERCIAL REVIEW — \$\{displayOpportunityId\(opp\.id\)\}`\}/)
   assert.match(approvals, /<table className="approval-boq-table" aria-readonly="true">/)
   assert.match(approvals, /className="approval-boq-group-row"/)
   assert.match(approvals, /<th colSpan=\{5\}>Specification<\/th>/)

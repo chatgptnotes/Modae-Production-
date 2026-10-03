@@ -46,6 +46,16 @@ test('a successful shared refresh clears a transient Sourcing-load failure', () 
   assert.match(refresh, /setSourcingDataStatus\('ready'\)/)
 })
 
+test('Sourcing retry uses the fast sourcing read instead of the full workspace pull', () => {
+  const store = read('src/store.jsx')
+  const spares = read('src/workbench/WbSpares.jsx')
+  const refresh = store.slice(store.indexOf('async refreshSourcingData()'), store.indexOf('async refreshApprovals()'))
+
+  assert.match(refresh, /datastore\.loadCore\(\)/)
+  assert.doesNotMatch(refresh, /datastore\.loadAll\(\{ force: true \}\)/)
+  assert.match(spares, /store\.refreshSourcingData\?\.\(\)/)
+})
+
 test('approval cancellation is persisted immediately instead of waiting for draft debounce', () => {
   const store = read('src/store.jsx')
   const cancellation = store.slice(store.indexOf('cancelApproval(id, reason = \'\')'), store.indexOf('decideApproval(id,'))

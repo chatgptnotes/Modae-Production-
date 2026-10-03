@@ -1,11 +1,15 @@
 import { getAdminSupabaseClient } from './_supabase-client.js'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const ADMIN_ROLES = new Set(['SUPER', 'ADMIN', 'LJS'])
-const ASSIGNABLE_ROLES = new Set(['ADMIN', 'LJS', 'AH', 'RS', 'PP', 'SS', 'PJS', 'RJS', 'SR', 'AN', 'TECH'])
+const ADMIN_ROLES = new Set(['SUPER', 'ADMIN', 'LJS', 'MANAGEMENT'])
+const STANDARD_ROLES = new Set(['STANDARD_USER', 'TEAM_LEAD', 'MANAGEMENT', 'ADMIN'])
+const ASSIGNABLE_ROLES = new Set(['ADMIN', 'LJS', 'AH', 'RS', 'PP', 'SS', 'PJS', 'RJS', 'SR', 'AN', 'TECH', ...STANDARD_ROLES])
 const PROVISIONABLE_ROLES = new Set([...ASSIGNABLE_ROLES, 'SUPER', 'CUST'])
 
 const clean = value => String(value || '').trim()
+const rolesOf = profile => [...new Set((Array.isArray(profile?.roles) ? profile.roles : [profile?.role])
+  .map(role => clean(role).toUpperCase())
+  .filter(role => ASSIGNABLE_ROLES.has(role) || role === 'SUPER' || role === 'CUST'))]
 const jsonBody = req => {
   try { return typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {}) }
   catch { return null }
@@ -32,7 +36,7 @@ async function currentAdmin(client, token) {
   if (authError || !authData?.user?.email) return null
   const profiles = await loadUserProfiles(client)
   const profile = profiles.find(user => String(user.email || '').toLowerCase() === authData.user.email.toLowerCase())
-  return profile && ADMIN_ROLES.has(profile.role) ? { auth: authData.user, profile } : null
+  return profile && rolesOf(profile).some(role => ADMIN_ROLES.has(role)) ? { auth: authData.user, profile } : null
 }
 
 function validateCredentials(email, password) {
@@ -124,12 +128,12 @@ export default async function handler(req, res) {
       const results = []
       for (const profile of profiles) {
         const email = clean(profile.email).toLowerCase()
-        const base = { id: profile.id, email: profile.email, name: profile.name, role: profile.role }
+        const base = { id: profile.id, email: profile.email, name: profile.name, role: profile.role, roles: rolesOf(profile) }
         if (!EMAIL_RE.test(email)) {
           results.push({ ...base, authStatus: 'Failed', error: 'Invalid email address.' })
           continue
         }
-        if (!PROVISIONABLE_ROLES.has(profile.role)) {
+        if (!rolesOf(profile).some(role => PROVISIONABLE_ROLES.has(role))) {
           results.push({ ...base, authStatus: 'Failed', error: 'This role cannot be provisioned.' })
           continue
         }
@@ -142,7 +146,7 @@ export default async function handler(req, res) {
           email,
           password: String(body.password),
           email_confirm: true,
-          user_metadata: { name: profile.name, role: profile.role },
+          user_metadata: { name: profile.name, role: profile.role, roles: rolesOf(profile) },
         })
         if (createError) {
           results.push({ ...base, authStatus: 'Failed', error: createError.message || 'Could not create the account.' })
@@ -167,13 +171,14 @@ export default async function handler(req, res) {
     if (credentialError) return res.status(400).json({ ok: false, error: credentialError })
     const name = clean(body.name)
     const role = clean(body.role)
+    const roles = rolesOf({ role, roles: body.roles })
     if (!name) return res.status(400).json({ ok: false, error: 'Name is required.' })
-    if (!ASSIGNABLE_ROLES.has(role)) return res.status(400).json({ ok: false, error: 'Select a valid role.' })
+    if (!roles.length) return res.status(400).json({ ok: false, error: 'Select at least one valid role.' })
     const { data, error } = await client.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
-      user_metadata: { name, role },
+      user_metadata: { name, role, roles },
     })
     if (error) {
       const duplicate = /already|exists|registered/i.test(error.message || '')
@@ -196,15 +201,16 @@ export default async function handler(req, res) {
     const nextEmail = clean(body.nextEmail).toLowerCase()
     const name = clean(body.name)
     const role = clean(body.role)
+    const roles = rolesOf({ role, roles: body.roles })
     if (!EMAIL_RE.test(nextEmail)) return res.status(400).json({ ok: false, error: 'Enter a valid email address.' })
     if (!name) return res.status(400).json({ ok: false, error: 'Name is required.' })
-    if (!ASSIGNABLE_ROLES.has(role) && role !== 'SUPER') return res.status(400).json({ ok: false, error: 'Select a valid role.' })
+    if (!roles.length && role !== 'SUPER') return res.status(400).json({ ok: false, error: 'Select at least one valid role.' })
     const target = await findAuthUser(client, { authId: clean(body.authId), email })
     if (!target) return res.status(404).json({ ok: false, error: 'No Supabase account was found for this user.' })
     const { data, error } = await client.auth.admin.updateUserById(target.id, {
       email: nextEmail,
       email_confirm: true,
-      user_metadata: { ...(target.user_metadata || {}), name, role },
+      user_metadata: { ...(target.user_metadata || {}), name, role, roles },
     })
     if (error) return res.status(502).json({ ok: false, error: 'Could not update the Supabase account.' })
     return res.status(200).json({ ok: true, action, user: { id: data.user.id, email: data.user.email } })

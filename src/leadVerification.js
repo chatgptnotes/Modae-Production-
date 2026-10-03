@@ -65,6 +65,7 @@ export function amberPaymentComplete(verification) {
 // Dispatch on what the class *requires*, not on its name, so a renamed or
 // reconfigured class needs no code change here.
 export function leadVerificationComplete(lead, customerStatus = lead?.customerStatus || '', { redCleared = false, config = null } = {}) {
+  if (lead?.existingCustomerKyc === true) return true
   const v = classRule(config, customerStatus)?.verification
   if (!v) return false
   switch (v.requires) {
@@ -81,6 +82,7 @@ export function leadVerificationComplete(lead, customerStatus = lead?.customerSt
 }
 
 export function leadVerificationBlockers(lead, customerStatus = lead?.customerStatus || '', { redCleared = false, config = null } = {}) {
+  if (lead?.existingCustomerKyc === true) return []
   const v = classRule(config, customerStatus)?.verification
   if (!v) return ['Customer classification is required']
   if (v.requires === 'documents') {
@@ -98,14 +100,17 @@ export function leadVerificationBlockers(lead, customerStatus = lead?.customerSt
 }
 
 export function verificationSnapshot(lead, customerStatus = lead?.customerStatus || '', { approval = null, config = null } = {}) {
+  if (lead?.existingCustomerKyc === true) return { status: 'Verified', type: 'KYC', customerStatus, items: {}, verifiedAt: lead?.kycCompletedAt || '' }
   const v = classRule(config, customerStatus)?.verification
   const snap = v?.snapshot
   if (v?.requires === 'documents') {
     return {
-      status: snap?.status || 'Verified', type: snap?.type || 'KYC', customerStatus,
+      status: lead?.verification?.kycRequestStatus === 'deferred' ? 'Deferred' : (snap?.status || 'Verified'),
+      type: snap?.type || 'KYC', customerStatus,
       items: Object.fromEntries(checklistFor(config, customerStatus)
         .map(item => [item, verificationItem(lead?.verification, item)])),
       verifiedAt: lead?.verification?.kycVerifiedAt || '',
+      deferredAt: lead?.verification?.kycRequestStatus === 'deferred' ? (lead?.lastUpdated || '') : '',
     }
   }
   if (v?.requires === 'fee') {

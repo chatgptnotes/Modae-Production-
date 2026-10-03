@@ -76,10 +76,10 @@ test('detailed analytics leads with operational win/loss tables instead of the o
   assert.match(analytics, /topWinReason/)
 })
 
-test('dashboard win/loss card presents a visual value comparison and actionable detail link', () => {
+test('dashboard win/loss card presents the pie breakdown and actionable detail link', () => {
   const dashboard = read('src/pages/MyDashboard.jsx')
   assert.match(dashboard, /dashboard-win-loss-hero/)
-  assert.match(dashboard, /dashboard-win-loss-compare/)
+  assert.match(dashboard, /<WinLossPie/)
   assert.match(dashboard, /View detailed analysis/)
   assert.match(dashboard, /topWinReason/)
   assert.match(dashboard, /<WinLossFlow/)
@@ -154,12 +154,43 @@ test('dashboard visual polish fills KPI space and keeps dense controls compact',
   assert.match(styles, /\.dashboard-page \.targets-table td:first-child \.hint\s*\{[\s\S]*display:\s*block/)
 })
 
+test('dashboard header actions share one aligned button treatment', () => {
+  const dashboard = read('src/pages/MyDashboard.jsx')
+  const styles = read('src/styles.css')
+  assert.match(dashboard, /className="dashboard-head-action" onClick=\{\(\) => nav\('\/opportunities'\)\}/)
+  assert.match(dashboard, /className=\{`dashboard-head-action\$\{scope === 'my'/)
+  assert.match(styles, /\.dashboard-page \.dashboard-head-action\s*\{[\s\S]*?min-height:\s*40px;[\s\S]*?border-radius:\s*6px;/)
+  assert.match(styles, /\.dashboard-page \.scope-toggle-group\s*\{[\s\S]*?display:\s*contents;/)
+  assert.match(styles, /@media \(max-width: 760px\)[\s\S]*?\.dashboard-page \.scope-toggle-group > \.dashboard-head-action\s*\{\s*flex:\s*1 1 0;/)
+})
+
 test('dashboard work queue summary uses responsive metric tiles', () => {
   const styles = read('src/styles.css')
   assert.match(styles, /\.dashboard-page \.home-alert-rail\s*\{[\s\S]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)/)
   assert.match(styles, /\.dashboard-page \.home-alert-rail > button\s*,\s*\.dashboard-page \.home-alert-rail > div\s*\{[\s\S]*border:\s*1px solid/)
   assert.match(styles, /\.dashboard-page \.home-alert-rail \.home-alert-value\s*\{[\s\S]*font-size:\s*20px/)
   assert.match(styles, /@media \(max-width: 640px\)[\s\S]*\.dashboard-page \.home-alert-rail\s*\{[\s\S]*grid-template-columns:\s*1fr/)
+})
+
+test('dashboard command-center visual system keeps the KPI rail, pipeline, and work queue intentionally structured', () => {
+  const styles = read('src/styles.css')
+  assert.match(styles, /Dashboard command-center visual system/)
+  assert.match(styles, /\.dashboard-page \.stat-cards > \.stat-card-v2\s*\{[\s\S]*border-top: 3px solid var\(--dashboard-accent\)/)
+  assert.match(styles, /\.dashboard-page \.home-analytics\s*\{[\s\S]*border-top: 3px solid var\(--dashboard-accent\)/)
+  assert.match(styles, /\.dashboard-page \.home-funnel-row:hover\s*\{[\s\S]*transform: translateX\(3px\)/)
+  assert.match(styles, /@media \(max-width: 760px\)[\s\S]*\.dashboard-page \.home-analytics-grid\s*\{[\s\S]*grid-template-columns: 1fr/)
+})
+
+test('top dashboard KPIs use neutral figures with a semantic edge treatment', () => {
+  const dashboard = read('src/pages/MyDashboard.jsx')
+  const styles = read('src/styles.css')
+  assert.match(dashboard, /function Metric\(\{ label, value, hint, tone = '', onClick, variant = 'dashboard-kpi' \}\)/)
+  assert.match(styles, /\.dashboard-page \.stat-card-v2\.dashboard-kpi\s*\{[\s\S]*?grid-template-columns: auto minmax\(0, 1fr\);[\s\S]*?min-height: 76px;[\s\S]*?border-left: 3px solid var\(--kpi-accent\);/)
+  assert.match(styles, /\.dashboard-page \.stat-card-v2\.dashboard-kpi \.sc-value\s*\{[\s\S]*?color: var\(--dashboard-ink\);/)
+  assert.match(styles, /\.dashboard-page \.stat-card-v2\.dashboard-kpi\.tone-sky\s*\{[\s\S]*?--kpi-accent: var\(--dashboard-info\);/)
+  assert.match(styles, /\.dashboard-page \.stat-card-v2\.dashboard-kpi\.tone-green\s*\{[\s\S]*?--kpi-accent: var\(--dashboard-success\);/)
+  assert.match(styles, /\.dashboard-page \.stat-card-v2\.dashboard-kpi\.tone-red\s*\{[\s\S]*?--kpi-accent: var\(--dashboard-danger\);/)
+  assert.match(styles, /\.dashboard-page \.stat-card-v2\.dashboard-kpi\.clickable:focus-visible\s*\{[\s\S]*?outline: 2px solid var\(--focus-ring\);/)
 })
 
 test('commercial approvers see the pipeline before their priority queue', () => {
@@ -346,8 +377,21 @@ test('win and loss reasons are grouped in the owner dashboard overview', () => {
   assert.match(overview, /winLossAnalysis\(/)
   assert.match(overview, /Win \/ loss analysis/)
   assert.match(overview, /topWinReason/)
-  assert.match(overview, /dashboard-win-loss-compare/)
+  assert.match(overview, /<WinLossPie/)
   assert.doesNotMatch(overview, /o\.closedReason \|\| '—'/)
+})
+
+test('dashboard palette is semantic and contained to dashboard surfaces', () => {
+  const styles = read('src/styles.css')
+  const palette = styles.slice(styles.indexOf('Dashboard semantic palette'))
+
+  assert.match(palette, /\.dashboard-page\s*\{[^}]*--dashboard-canvas:/s)
+  assert.match(palette, /\.dashboard-page\s*\{[^}]*--dashboard-success:/s)
+  assert.match(palette, /\.dashboard-page\s*\{[^}]*--dashboard-warning:/s)
+  assert.match(palette, /\.dashboard-page\s*\{[^}]*--dashboard-danger:/s)
+  assert.match(palette, /\.dashboard-page \.stat-card-v2\.tone-sky\s*\{[^}]*background:\s*var\(--dashboard-card\)/s)
+  assert.doesNotMatch(palette, /^\.main-col\s*\{/m)
+  assert.doesNotMatch(palette, /\.sidenav/)
 })
 
 // --------------------------------------------------------------- sales maths
@@ -447,10 +491,10 @@ test('the actual line runs the full year, like the Ver 1.1 chart', () => {
   assert.match(source, /\{i < elapsed \? fmtLakh\(perf\.monthly\[i\]\) : 'Not booked yet'\}/)
 })
 
-test('target is dotted, actual is solid, and neither colour is hardcoded', () => {
+test('target is dotted and the actual series uses the dashboard coral token', () => {
   const source = read('src/pages/MyDashboard.jsx')
   assert.match(source, /strokeDasharray="5 4"/, 'the target run rate is the dashed line')
-  assert.match(source, /stroke="var\(--primary-accent\)" strokeWidth="2\.6"/, 'the actual is the solid brand line')
+  assert.match(source, /stroke="var\(--dashboard-coral\)" strokeWidth="2\.6"/, 'the actual is the solid coral line')
   assert.doesNotMatch(source, /#94a3b8/, 'the target colour was a hardcoded slate literal')
   const css = read('src/styles.css')
   assert.doesNotMatch(css, /\.legend-line\.target \{ border-top-color: #94a3b8/)
@@ -459,13 +503,10 @@ test('target is dotted, actual is solid, and neither colour is hardcoded', () =>
   assert.match(source, /Actual run rate/)
 })
 
-test('the gradient id is unique per chart instance', () => {
-  // dashviz's `sparkFade` and Analytics' `fnlRamp` are global literals: two on
-  // one page and the second silently inherits the first one's fill.
+test('the run-rate chart stays flat like the reference without an area fill', () => {
   const source = read('src/pages/MyDashboard.jsx')
-  assert.match(source, /const gradientId = `runrate-fade-\$\{useId\(\)/)
-  assert.match(source, /id=\{gradientId\}/)
-  assert.match(source, /fill=\{`url\(#\$\{gradientId\}\)`\}/)
+  assert.doesNotMatch(source, /linearGradient id=/)
+  assert.doesNotMatch(source, /<polygon points=\{area\}/)
 })
 
 test('there is one run-rate card, not two, under the prototype title', () => {
@@ -572,9 +613,9 @@ test('performance scorecard is shared across personal and company dashboard scop
   assert.match(source, /<PerformanceScorecard perf=\{perf\} scope=\"company\" \/>/)
 })
 
-test('role dashboards expose an appropriate funnel beside the run-rate story', () => {
+test('role dashboards expose the ModAE Funnel beside the run-rate story', () => {
   const source = read('src/pages/MyDashboard.jsx')
-  assert.match(source, /function DashboardFunnel\(\{ store, role, nav, title = 'My funnel', scope = 'role' \}\)/)
+  assert.match(source, /function DashboardFunnel\(\{ store, role, nav, title = 'ModAE Funnel', scope = 'role' \}\)/)
   assert.match(source, /className=['\"]dashboard-funnel funnel-visual['\"]/)
   const kpi = read('src/kpi.js')
   assert.match(kpi, /Qualified Lead/)
@@ -582,10 +623,57 @@ test('role dashboards expose an appropriate funnel beside the run-rate story', (
   assert.match(kpi, /FUNNEL_STAGES/)
   assert.match(kpi, /stages: \['Lead', 'RFI'\]/)
   assert.match(kpi, /stages: \['Firm Bid'\]/)
-  assert.match(source, /className="dashboard-funnel-connector"/)
-  assert.match(read('src/styles.css'), /\.dashboard-funnel-connector\s*\{[^}]*border-top:\s*1px dotted/s)
+  assert.doesNotMatch(source, /dashboard-funnel-connector/)
   assert.match(source, /<DashboardFunnel store=\{store\} role=\{role\} nav=\{nav\} scope=\{scope\} \/>/)
   assert.match(source, /className=\"performance-lower-grid\"/)
+})
+
+test('ModAE Funnel uses reference rails and coral-to-green stage treatment', () => {
+  const styles = read('src/styles.css')
+  for (const [token, color] of [
+    ['qualified', '#F44336'],
+    ['budgetary', '#FF5A4E'],
+    ['rfq', '#F46A5F'],
+    ['proposal', '#F8897F'],
+    ['negotiate', '#237A32'],
+  ]) assert.match(styles, new RegExp(`--modae-funnel-${token}: ${color}`))
+  assert.match(styles, /\.dashboard-page \.dashboard-funnel\.funnel-visual \.dashboard-funnel-row\s*\{[^}]*background:\s*#F1F1F1;/s)
+  assert.match(styles, /\.dashboard-page \.dashboard-funnel\.funnel-visual \.dashboard-funnel-row\.stage-negotiate \.dashboard-funnel-shape\s*\{[^}]*color:\s*#FFFFFF;/s)
+})
+
+test('monthly run-rate uses the reference coral actual series', () => {
+  const source = read('src/pages/MyDashboard.jsx')
+  assert.match(source, /stroke="var\(--dashboard-coral\)" strokeWidth="2\.6"/)
+  assert.match(source, /stroke="var\(--dashboard-coral\)" strokeWidth="2"/)
+  const styles = read('src/styles.css')
+  assert.match(styles, /--dashboard-coral:\s*#F44336/)
+  assert.match(styles, /\.legend-line\.actual\s*\{[^}]*border-top-color:\s*var\(--dashboard-coral\)/s)
+})
+
+test('shared button resets leave dashboard funnel rows borderless', () => {
+  const styles = read('src/styles.css')
+  assert.match(styles, /\.dashboard-page button:not\(\.home-funnel-row\):not\(\.home-alert-rail button\):not\(\.dashboard-funnel-row\)/)
+  assert.match(styles, /button:not\(\.primary\):not\(\.danger\):not\(\.dark\):not\(\.ghost\):not\(\.dashboard-funnel-row\)/)
+  assert.match(styles, /\.shell button:not\([^\n]*\.dashboard-funnel-row\):not\(\.theme-toggle\),/)
+  assert.match(styles, /\.shell button:not\([^\n]*\.dashboard-funnel-row\):not\(\.theme-toggle\):hover:not\(:disabled\)/)
+  assert.match(styles, /\.shell\.theme-dark button:not\([^\n]*\.dashboard-funnel-row\):not\(\.theme-toggle\),/)
+})
+
+test('run-rate chart remains visible when no bookings are recorded', () => {
+  const source = read('src/pages/MyDashboard.jsx')
+  assert.match(source, /const hasBookings = actual\.some\(value => Number\(value\) > 0\)/)
+  assert.match(source, /className=\{`runrate-chart\$\{hasBookings \? '' : ' is-empty'\}`\}/)
+  assert.match(source, /\{!hasBookings && \(/)
+  assert.match(source, /No bookings recorded yet/)
+  assert.match(source, /<polyline points=\{pts\(target\)\}/)
+  assert.match(source, /<polyline points=\{pts\(actual\)\}/)
+  assert.match(read('src/styles.css'), /\.runrate-empty-note\s*\{[^}]*pointer-events:\s*none/s)
+})
+
+test('run-rate and funnel cards use a wider chart with a responsive 60/40 split', () => {
+  const styles = read('src/styles.css')
+  assert.match(styles, /\.performance-lower-grid\s*\{\s*grid-template-columns:\s*minmax\(0,\s*3fr\)\s+minmax\(0,\s*2fr\);/)
+  assert.match(styles, /@media\s*\(max-width:\s*900px\)[\s\S]*?\.performance-lower-grid\s*\{\s*grid-template-columns:\s*1fr;/)
 })
 
 test('the detailed analytics page owns the funnel instead of the daily dashboard', () => {

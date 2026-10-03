@@ -65,26 +65,14 @@ export const MODAE_COLORS = Object.freeze({
     warn: '#D99200',
     bad: '#C93838',   // one step darker than the website tone: white text needs 4.5:1
   }),
-  // Sequential ramp for magnitude (the pipeline funnel). One hue, light→dark,
-  // with the brand red as step 3 — placing it mid-ramp leaves the lightness
-  // room the six steps need.
-  //
-  // Validated as a *sequential* ramp (lightness monotonicity, adjacent ΔL,
-  // single hue, light-end contrast), not as a categorical one: monotone,
-  // 1° hue spread, every gap ≥ 0.06, light end 2.05:1 on white. The website's
-  // own `chShade` ramp fails all four — it runs light→lighter and then drops to
-  // a chroma-free charcoal — so it is deliberately not reused here.
-  ramp: Object.freeze(['#F39C8E', '#EF7765', '#ED3F2F', '#BB2718', '#8A1710', '#5E0F09']),
+  // Customer-approved sales funnel palette, from forest green to soft sage.
+  ramp: Object.freeze(['#064E3B', '#047857', '#059669', '#10B981', '#6EE7B7']),
 })
 
 export const MODAE_TYPE = Object.freeze({
-  heading: "'Inter', 'Segoe UI', system-ui, sans-serif",
-  body: "'Inter', 'Segoe UI', system-ui, sans-serif",
-  // Document templates only (18 Aug guideline: Candara, 11pt body / 12pt
-  // headings). Candara is a Windows system font that cannot be self-hosted,
-  // so the printed documents carry a fallback stack; the client's machines
-  // are Windows and render the real face.
-  document: "'Candara', 'Optima', 'Segoe UI', system-ui, sans-serif",
+  heading: "'Candara', 'Segoe UI', system-ui, sans-serif",
+  body: "'Candara', 'Segoe UI', system-ui, sans-serif",
+  document: "'Candara', 'Segoe UI', system-ui, sans-serif",
   // Website buttons are 60px tall hero controls. The colour, radius, weight and
   // letter-spacing carry across; the metrics do not — this is a dense
   // enterprise UI, not a marketing page.

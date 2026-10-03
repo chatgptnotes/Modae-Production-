@@ -14,7 +14,7 @@ import { isInternalSender, isRegistrationCriticalField, routeOwnerForLocation } 
 import { leadFieldValue, splitBuSegment, leadIdentity } from '../leadFieldMapping.js'
 
 // Registration — the moment a qualified lead becomes an opportunity and the
-// permanent opportunity ID is minted (YYMM + sequence + owner initials).
+// permanent opportunity ID is minted (YYMM + three-digit sequence).
 // The ID is withheld while anything mandatory is unresolved.
 
 const fieldVal = (fields, re) => {
@@ -124,7 +124,11 @@ export default function Register() {
   // here *and* unconditionally inside leadVerificationBlockers; that second
   // copy read no approvals, so it could never clear and an approved Red lead
   // could never be registered.
-  const verificationBlockers = leadVerificationBlockers(lead, leadCustomerStatus, { redCleared, config: store.config })
+  const existingCustomerKyc = customer?.kyc === 'Valid'
+  const verificationDeferred = !existingCustomerKyc && leadCustomerStatus === 'Blue' && lead.verification?.kycRequestStatus === 'deferred'
+  const verificationBlockers = verificationDeferred
+    ? []
+    : leadVerificationBlockers({ ...lead, existingCustomerKyc }, leadCustomerStatus, { redCleared, config: store.config })
   // Opportunity scope is useful context but is not required to register a
   // lead; the opportunity can be structured and scoped later in the workbench.
   // AI-missing fields are follow-up information, not registration gates. The
@@ -192,14 +196,14 @@ export default function Register() {
     ).trim()
     const scope = String(lead.opportunityScope || leadFieldValue(fields, 'scope') || '').trim()
     const { extracted } = buildLeadProposalData(lead, store.priceLists, store.adhocParts)
-    const leadVerification = verificationSnapshot(lead, leadCustomerStatus, { approval: redApproval, config: store.config })
+    const leadVerification = verificationSnapshot({ ...lead, existingCustomerKyc }, leadCustomerStatus, { approval: redApproval, config: store.config })
     const finalOwner = isOverride ? owner : creationOwner
     const id = await reserveOppId(store.opportunities, creationOwner, store.config?.roleNames)
     const opp = {
       id,
       sourceLeadId: lead.id,
       sl: Math.max(0, ...store.opportunities.map(o => o.sl || 0)) + 1,
-      sellTo, category, location,
+      sellTo, category, location, sellToCustomerLocation: location,
       customerStatus: leadCustomerStatus,
       leadVerification,
       eucName, eucLocation,
