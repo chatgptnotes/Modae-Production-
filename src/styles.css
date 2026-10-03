@@ -3417,7 +3417,7 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
   grid-template-columns: var(--mail-grid-template);
   width: 100%; min-width: 0;
 }
-.mail-column-head { position: relative; min-height: 34px; padding: 0 10px 0 8px; background: var(--palette-f58d7116); border-bottom: 1px solid var(--border-color); color: var(--text-muted); font-size: 10px; font-weight: 700; letter-spacing: .25px; text-transform: uppercase; }
+.mail-column-head { position: relative; min-height: 34px; padding: 0 10px 0 8px; background: var(--palette-f58d7116); border-bottom: 1px solid var(--border-color); color: var(--text-main); font-size: 10px; font-weight: 800; letter-spacing: .25px; text-transform: uppercase; }
 .mail-column-head > .mail-list-toolbar .mail-check { width: 18px; flex: 0 0 18px; }
 .mail-column-head > .mail-list-toolbar .mail-icon-btn { width: 22px; height: 22px; }
 .mail-column-head > .mail-list-toolbar .mail-selection-count,
@@ -3427,6 +3427,12 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .mail-column-head .mail-subject-head { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.15; }
 .mail-column-head span { overflow: hidden; padding-right: 8px; text-overflow: ellipsis; white-space: nowrap; }
 .mail-column-head .mail-head-filter-cell { overflow: visible; }
+.mail-column-head .mail-status-head,
+.mail-column-head .mail-age-head,
+.mail-column-head .mail-status-head .mail-head-filter,
+.mail-column-head .mail-age-head .mail-head-filter,
+.mail-row > .mail-status,
+.mail-row > .mail-age { text-align: right; }
 .mail-head-filter { display: block; width: 100%; min-width: 0; min-height: 24px; padding: 0; overflow: hidden; border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; color: var(--text-muted); font: inherit; font-size: 10px; letter-spacing: inherit; text-align: left; text-overflow: clip; text-transform: inherit; white-space: nowrap; cursor: pointer; }
 /* Filter controls are clickable labels, not boxed buttons. Keep the active
    and focus states text-only so they align with the neighbouring Subject label. */

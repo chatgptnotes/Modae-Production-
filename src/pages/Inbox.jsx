@@ -3821,8 +3821,8 @@ export default function Inbox() {
           <span className="mail-head-filter-cell">{filterMenu('duplicate', duplicateF, setDuplicateF, 'Dup. risk', ['Low', 'Medium', 'High'], 'Dup risk', 'All duplicate risk')}</span>
           <span className="mail-head-filter-cell">{filterMenu('completeness', completenessF, setCompletenessF, 'Completeness', [['high', 'High ≥90%'], ['medium', 'Medium 60–89%'], ['low', 'Low <60%']], 'Complete', 'All completeness')}</span>
           <span className="mail-head-filter-cell">{filterMenu('owner', ownerF, setOwnerF, 'Suggested owner', ownerOptions, 'Owner', 'All owners')}</span>
-          <span className="mail-head-filter-cell">{filterMenu('status', statusF, setStatusF, 'Status', STATUS_OPTIONS, 'Status', 'All statuses')}</span>
-          <span className="mail-head-filter-cell">{filterMenu('age', ageF, setAgeF, 'Age', [['today', 'Today'], ['7', '7–29 days'], ['30', '30+ days']], 'Age', 'All ages')}</span>
+          <span className="mail-head-filter-cell mail-status-head">{filterMenu('status', statusF, setStatusF, 'Status', STATUS_OPTIONS, 'Status', 'All statuses')}</span>
+          <span className="mail-head-filter-cell mail-age-head">{filterMenu('age', ageF, setAgeF, 'Age', [['today', 'Today'], ['7', '7–29 days'], ['30', '30+ days']], 'Age', 'All ages')}</span>
           <span className="mail-list-count">{mailboxRows.length ? `1–${mailboxRows.length} of ${mailboxRows.length}` : '0 messages'}</span>
         </div>
         {mailboxRows.map(l => {
@@ -3851,7 +3851,7 @@ export default function Inbox() {
               <div><Chip tone={l.duplicateRisk === 'Medium' || l.duplicateRisk === 'High' ? 'conf-med' : 'grey'}>{l.duplicateRisk || 'Low'}</Chip></div>
               <div>{completeness != null ? <ConfChip conf={completeness} thresholds={store.config.aiThresholds} /> : '—'}</div>
               <div className="mail-owner">{l.suggestedOwner || '—'}</div>
-              <div><span className={`pill ${PILL[l.status] || 'Blue'}`}>{l.status}</span></div>
+              <div className="mail-status"><span className={`pill ${PILL[l.status] || 'Blue'}`}>{l.status}</span></div>
               <div className="mail-age" title={age == null ? 'Age unavailable' : `${age} day${age === 1 ? '' : 's'} old`}>
                 {age == null ? '—' : age === 0 ? 'Today' : `${age} d old`}
               </div>

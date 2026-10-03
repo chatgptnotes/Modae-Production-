@@ -57,6 +57,14 @@ test('inbox owner and status columns keep their metadata readable', () => {
   assert.match(css, /\.mail-row > div > \.pill \{[\s\S]*display: inline-flex;[\s\S]*white-space: nowrap;/)
 })
 
+test('inbox headers are bold and the final Status and Age columns are right-aligned', () => {
+  assert.match(css, /\.mail-column-head \{[\s\S]*color: var\(--text-main\);[\s\S]*font-weight: 800;/)
+  assert.match(css, /\.mail-column-head \.mail-status-head,[\s\S]*\.mail-row > \.mail-age \{ text-align: right; \}/)
+  assert.match(inbox, /className="mail-head-filter-cell mail-status-head"/)
+  assert.match(inbox, /className="mail-head-filter-cell mail-age-head"/)
+  assert.match(inbox, /<div className="mail-status"><span className=\{`pill/)
+})
+
 test('inbox confines its fitted grid to the workspace like the Opportunities sheet', () => {
   assert.match(css, /\.mailbox-page \{\s*width: 100%;\s*max-width: none;\s*min-width: 0;\s*box-sizing: border-box;/)
   assert.match(css, /\.mailbox-list \{\s*width: 100%;[\s\S]*?max-width: 100%;[\s\S]*?min-width: 0;[\s\S]*?overflow-x: hidden;/)
