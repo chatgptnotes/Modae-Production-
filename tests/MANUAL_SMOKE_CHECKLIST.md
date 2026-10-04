@@ -31,6 +31,16 @@ browser prompt, no localhost URL.
 - CUST is redirected to `/portal` only.
 - `/my-dashboard` renders a different, populated page for each internal role.
   TECH must not land on an empty sales dashboard.
+- On My Dashboard, switch My View / Global View and verify approvals and blocked
+  work use the selected scope. LJS's My View must include decisions on other
+  owners' opportunities without adding them to the personal pipeline total.
+- Check owner, FY/quarter, search, pagination, and funnel-stage filters. A funnel
+  click must filter the on-page register; zero-count stages have no visible bar.
+- Check the dashboard at desktop and phone widths, refresh/error feedback, and
+  keyboard controls. Verify the default FY, numeric team targets, quarter labels,
+  and numbered pagination. Task deadlines must not use expected close dates.
+  Open the register menu → “More reports & settings” and confirm proposal
+  follow-up, monthly reporting, and permitted target editing still work.
 
 ## Route-driven proposals
 

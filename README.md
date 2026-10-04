@@ -23,6 +23,13 @@ submission, and follow-up.
   and public showcase views.
 - Provides shared personal/global pipeline views, a common six-stage sales funnel,
   and closed-opportunity order reporting.
+- My Dashboard puts scoped summary cards and urgent work before its sales funnel,
+  performance charts, and searchable opportunity/approval register. My View
+  includes decisions assigned to you even when another salesperson owns the
+  opportunity. Global View includes company approvals and supports owner and
+  fiscal-period filters. Existing role reports and target tools remain under
+  the register menu → “More reports & settings.” The configured FY is selected
+  by default; task dates appear only when a real workflow deadline exists.
 - Provides an Excel pipeline upload preview; pipeline migration is a later step
   and previewed rows are not saved.
 - Admins can independently require final quote-release approval and approval of

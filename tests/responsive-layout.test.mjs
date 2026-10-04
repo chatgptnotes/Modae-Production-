@@ -50,7 +50,7 @@ test('main page titles use the same icons as their sidebar destinations', () => 
     Admin: 'gear', Audit: 'list', Users: 'shield',
   }
   for (const [page, icon] of Object.entries(titleIcons)) {
-    const source = fs.readFileSync(path.join(root, 'src/pages', `${page}.jsx`), 'utf8')
+    const source = fs.readFileSync(path.join(root, 'src/pages', page === 'MyDashboard' ? 'myDashboard/WorkspaceDashboard.jsx' : `${page}.jsx`), 'utf8')
     assert.match(source, new RegExp(`className="workspace-page-title"><Icon name="${icon}" size=\\{18\\}`), `${page} title should use sidebar icon ${icon}`)
   }
 })

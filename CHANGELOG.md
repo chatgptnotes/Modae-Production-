@@ -13,6 +13,17 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Redesigned only My Dashboard with the existing ModAE palette: compact scoped
+  KPIs, urgent work, a count-scaled funnel with values, performance charts, and
+  a searchable paginated register. My View includes personal decisions and
+  assigned work; Global View uses company or selected-owner approval/blocker
+  counts. Added explicit refresh and fiscal-period filters without changing
+  persistence, other pages, or the sidebar. Existing role reports and target
+  editing remain available through the register menu → “More reports & settings.”
+  Matched the approved full-page reference with numeric actual/target columns,
+  quarterly values above bars, coloured stage labels, and numbered six-row
+  pagination. Defaulted to the configured FY and display real clarification or
+  approval deadlines, with workflow status when no deadline exists.
 
 - Removed dark mode and all theme controls. The desktop, tablet, sign-in, and
   showcase surfaces now use the permanent light ModAE palette.

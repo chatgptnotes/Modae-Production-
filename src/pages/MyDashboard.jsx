@@ -7,6 +7,7 @@ import { ageDays, isApprover, isAdminRole, isSalesOwner, canViewCommercial, canP
 import { analyticsSnapshot, counts, salesPerformance, winLossAnalysis, FY_QUARTERS, FY_MONTHS, PROB_WEIGHT, funnelRows } from '../kpi.js'
 import { Icon } from '../icons.jsx'
 import ForecastDashboard from './Dashboard.jsx'
+import WorkspaceDashboard from './myDashboard/WorkspaceDashboard.jsx'
 
 // My Dashboard — "there has to be something called My Dashboard… it will be
 // different for all the roles" (13 Aug review). The salesperson's version is
@@ -14,7 +15,6 @@ import ForecastDashboard from './Dashboard.jsx'
 // quarterly performance, then their own work queue.
 
 const roleLabel = role => displayRoleLabel(role) || role
-const dashboardRoleLabel = role => roleLabel(role).replace(displayRole(role), role)
 const PREVIEW_LIMIT = 5
 
 function Metric({ label, value, hint, tone = '', onClick, variant = 'dashboard-kpi' }) {
@@ -565,8 +565,13 @@ function NextActions({ nextActions, nav }) {
 export default function MyDashboard() {
   const store = useStore()
   const nav = useNavigate()
+  const location = useLocation()
+  return <WorkspaceDashboard store={store} nav={nav} reportHash={location.hash} renderReports={(reportStore, scope) => <RoleDashboard store={reportStore} scope={scope} nav={nav} />} />
+}
+
+// Existing role-specific reports remain available below the daily workspace.
+function RoleDashboard({ store, nav, scope }) {
   const role = store.role
-  const [scope, setScope] = useState(() => isSalesOwner(role) ? 'my' : 'global')
   const c = counts(store, role)
 
   const sales = isSalesOwner(role)
@@ -577,21 +582,7 @@ export default function MyDashboard() {
   const tech = role === 'TECH'
 
   const { open, blocked, nextActions } = useWorkQueue(store, role, sales && scope === 'my')
-  const head = (
-    <div className="home-head">
-      <div>
-        <h2 className="workspace-page-title"><Icon name="chartBar" size={18} /> My Dashboard</h2>
-        <p className="hint">{dashboardRoleLabel(role)}{store.sales?.fy ? ` · ${store.sales.fy}` : ''}</p>
-      </div>
-      <div className="home-head-actions">
-        <div className="scope-toggle-group" role="group" aria-label="Dashboard view">
-          <button type="button" className={`dashboard-head-action${scope === 'my' ? ' active' : ''}`} aria-pressed={scope === 'my'} onClick={() => setScope('my')}>My View</button>
-          <button type="button" className={`dashboard-head-action${scope === 'global' ? ' active' : ''}`} aria-pressed={scope === 'global'} onClick={() => setScope('global')}>Global View</button>
-        </div>
-        <button className="dashboard-head-action" onClick={() => nav('/opportunities')}><Icon name="cards" size={13} /> Opportunities</button>
-      </div>
-    </div>
-  )
+  const head = null
 
   if (sales) return <SalesDashboard {...{ store, nav, role, c, open, blocked, nextActions, head, scope }} />
   if (owner) return <OwnerDashboard {...{ store, nav, role, c, open, blocked, nextActions, head, scope }} />

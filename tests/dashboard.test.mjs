@@ -114,7 +114,7 @@ test('My Dashboard branches per role', () => {
     assert.match(source, new RegExp(`function ${fn}\\(`), `${fn} must exist`)
   }
   assert.match(source, /const sales = isSalesOwner\(role\)/)
-  assert.match(source, /dashboardRoleLabel\(role\)/)
+  assert.match(read('src/pages/myDashboard/WorkspaceDashboard.jsx'), /displayRoleLabel\(role\)/)
   assert.match(source, /const owner = role === 'LJS'/)
   assert.match(source, /const commercial = role === 'AH'/)
   assert.match(source, /const tech = role === 'TECH'/)
@@ -161,16 +161,15 @@ test('dashboard visual polish fills KPI space and keeps dense controls compact',
   assert.match(styles, /\.dashboard-page \.targets-table td:first-child \.hint\s*\{[\s\S]*display:\s*block/)
 })
 
-test('dashboard header actions share one aligned button treatment', () => {
-  const dashboard = read('src/pages/MyDashboard.jsx')
-  const styles = read('src/styles.css')
-  assert.match(dashboard, /className="dashboard-head-action" onClick=\{\(\) => nav\('\/opportunities'\)\}/)
-  assert.match(dashboard, /className=\{`dashboard-head-action\$\{scope === 'my'/)
-  assert.match(styles, /\.dashboard-page \.dashboard-head-action\s*\{[\s\S]*?min-height:\s*40px;[\s\S]*?border-radius:\s*6px;/)
-  assert.match(styles, /\.dashboard-page \.scope-toggle-group\s*\{[\s\S]*?display:\s*contents;/)
-  assert.match(styles, /@media \(max-width: 760px\)[\s\S]*?\.dashboard-page \.scope-toggle-group > \.dashboard-head-action\s*\{\s*flex:\s*1 1 0;/)
-  assert.match(styles, /\.dashboard-page \.home-head\s*\{\s*align-items:\s*center;\s*margin-bottom:\s*14px;\s*padding-bottom:\s*10px;/)
-  assert.match(styles, /@media \(max-width: 760px\)\s*\{\s*\.dashboard-page \.home-head\s*\{\s*align-items:\s*flex-start;/)
+test('dashboard view switch, owner and date controls belong to the page-local workspace', () => {
+  const dashboard = read('src/pages/myDashboard/WorkspaceDashboard.jsx')
+  const styles = read('src/pages/myDashboard/workspace.css')
+  assert.match(dashboard, /aria-pressed=\{scope === value\}/)
+  assert.match(dashboard, /Opportunity creation and booking period/)
+  assert.match(dashboard, /scope === 'global' && <label/)
+  assert.match(styles, /\.dashboard-page\.dashboard-workspace \.dw-header \.dw-scope button\[aria-pressed="true"\]/)
+  assert.match(styles, /box-shadow: inset 0 -3px var\(--color-primary\)/)
+  assert.match(styles, /@media \(max-width: 540px\)/)
 })
 
 test('dashboard work queue summary uses responsive metric tiles', () => {

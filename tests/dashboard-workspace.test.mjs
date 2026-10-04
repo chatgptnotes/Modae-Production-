@@ -1,0 +1,161 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { dashboardModel, dashboardPeriod, dashboardTiming, paginationNumbers, dateInPeriod, registerRows } from '../src/pages/myDashboard/model.js'
+
+const now = new Date('2026-10-04T12:00:00Z')
+
+test('task timing uses real deadlines and the IST business day', () => {
+  assert.equal(dashboardTiming('2026-10-04', '', now).label, 'Today')
+  assert.equal(dashboardTiming('2026-10-03', '', now).label, '1 day overdue')
+  assert.equal(dashboardTiming('2026-10-01', '', now).label, '3 days overdue')
+  assert.equal(dashboardTiming('2026-10-06', '', now).tone, 'neutral')
+  assert.equal(dashboardTiming('2026-10-05', '', new Date('2026-10-04T20:00:00Z')).label, 'Today')
+  for (const due of ['', 'unknown', '2026-02-30']) assert.deepEqual(dashboardTiming(due, 'Awaiting decision', now), { label: 'Awaiting decision', tone: 'neutral', title: '' })
+})
+
+test('register pagination includes endpoints and bounded gaps', () => {
+  assert.deepEqual(paginationNumbers(1, 1), [1])
+  assert.deepEqual(paginationNumbers(2, 3), [1, 2, 3])
+  assert.deepEqual(paginationNumbers(1, 12), [1, 2, 'gap-12', 12])
+  assert.deepEqual(paginationNumbers(6, 12), [1, 'gap-5', 5, 6, 7, 'gap-12', 12])
+  assert.deepEqual(paginationNumbers(12, 12), [1, 'gap-11', 11, 12])
+})
+
+test('deadline read model excludes resolved clarifications and does not use expected close dates', () => {
+  const store = workspace({ opportunities: [opportunity('A', 'RS', { orderDate: '2026-01-01' })], approvals: [], clarifications: [
+    { id: 'c1', oppId: 'A', q: 'Confirm model?', due: '2026-10-01' },
+    { id: 'c2', oppId: 'A', q: 'Confirm warranty?', due: '2026-09-01', response: 'Confirmed' },
+  ] })
+  const model = dashboardModel(store, { now })
+  assert.equal(model.work[0].clarificationDue, '2026-10-01')
+  assert.equal(model.queue.some(task => task.due === '2026-01-01'), false)
+})
+const opportunity = (id, owner, extra = {}) => ({ id, owner, status: 'Open', stage: 'RFQ', valueK: 100, createDate: '2026-08-01', lastUpdated: '2026-10-01', customerStatus: 'Green', ...extra })
+const approval = (id, oppId, extra = {}) => ({ id, oppId, status: 'Pending', type: 'Quote release', approver: 'LJS', requestedBy: 'RS', ts: '2026-08-01', ...extra })
+const workspace = (extra = {}) => ({ role: 'LJS', opportunities: [opportunity('A', 'RS'), opportunity('B', 'PP'), opportunity('C', 'LJS')],
+  approvals: [approval('AP-A', 'A'), approval('AP-B', 'B', { approver: 'AH' })],
+  proposals: {}, customers: [], clarifications: [], config: {},
+  sales: { fy: 'FY 2026–27', targets: { RS: { annual: 400, q: [100, 100, 100, 100] }, PP: { annual: 200, q: [50, 50, 50, 50] } },
+    orders: [{ id: 'OR-A', owner: 'RS', valueK: 120, booked: '2026-08-01' }, { id: 'OR-B', owner: 'PP', valueK: 80, booked: '2026-10-01' }] },
+  ...extra })
+
+test('global KPIs, approvals, funnel and register share company or selected-owner scope', () => {
+  const store = workspace()
+  const global = dashboardModel(store, { now })
+  assert.equal(global.open.length, 3)
+  assert.equal(global.pipelineK, 300)
+  assert.equal(global.weightedK, 75)
+  assert.equal(global.pending.length, 2)
+  assert.equal(global.funnel.find(row => row.key === 'rfq').count, 3)
+  assert.equal(registerRows(global).length, 3)
+  assert.equal(global.perf.annual, 600)
+  const rs = dashboardModel(store, { owner: 'RS', now })
+  assert.deepEqual(rs.open.map(o => o.id), ['A'])
+  assert.deepEqual(rs.pending.map(a => a.id), ['AP-A'])
+  assert.equal(rs.blocked.every(row => row.opp.owner === 'RS'), true)
+  assert.equal(rs.perf.annual, 400)
+  assert.equal(rs.perf.achieved, 120)
+  assert.deepEqual(rs.team.map(row => row.owner), ['RS'])
+})
+
+test('an approver personal view includes decisions on other owners without inflating their pipeline', () => {
+  const mine = dashboardModel(workspace(), { scope: 'my', now })
+  assert.deepEqual(mine.pipeline.map(o => o.id), ['C'])
+  assert.equal(mine.pipelineK, 100)
+  assert.deepEqual(mine.decisions.map(a => a.id), ['AP-A'])
+  assert.deepEqual(mine.pending.map(a => a.id), ['AP-A'])
+  assert.equal(mine.queue.some(task => task.opp?.id === 'A' && task.cta === 'Review'), true)
+  assert.equal(mine.queue.some(task => task.opp?.id === 'B'), false)
+  assert.equal(mine.work.some(row => row.opp.id === 'A'), true)
+  assert.equal(mine.work.some(row => row.opp.id === 'B'), false)
+})
+
+test('personal requests and undecided joint approvals count once, completed decisions disappear', () => {
+  const store = workspace({ approvals: [
+    approval('joint', 'A', { needed: ['LJS', 'AH'], requestedBy: 'LJS' }),
+    approval('decided', 'B', { needed: ['LJS', 'AH'], decisions: { LJS: { decision: 'Approved' } } }),
+    approval('requested', 'C', { approver: 'AH', requestedBy: 'LJS' }),
+    approval('done', 'A', { status: 'Approved' }),
+  ] })
+  const mine = dashboardModel(store, { scope: 'my', now })
+  assert.deepEqual(mine.pending.map(a => a.id), ['joint', 'requested'])
+  assert.equal(mine.decisions.length, 1)
+  assert.equal(mine.queue.filter(task => task.id === 'approval-joint').length, 1)
+  assert.equal(mine.queue.find(task => task.id === 'approval-requested').cta, 'View')
+  assert.equal(mine.reportStore.approvals.some(a => a.id === 'done'), true, 'reports retain approved gates')
+})
+
+test('explicit next-action responsibility appears in My View and the blocked register', () => {
+  const store = workspace({ opportunities: [opportunity('owned-elsewhere', 'RS', { nextActionOwner: 'LJS', route: 'Service' })], approvals: [] })
+  const mine = dashboardModel(store, { scope: 'my', now })
+  assert.equal(mine.open.length, 0)
+  assert.equal(mine.work.length, 1)
+  assert.equal(mine.blocked.length, 1)
+  assert.deepEqual(registerRows(mine, { workFilter: 'blocked' }).map(o => o.id), ['owned-elsewhere'])
+})
+
+test('fiscal filters handle Jan–Mar and exclusive end dates', () => {
+  assert.deepEqual(dashboardPeriod('q4', 'FY 2026–27', now), { start: '2027-01-01', end: '2027-04-01' })
+  const fy = dashboardPeriod('fy', 'FY 2026–27', now)
+  assert.equal(dateInPeriod('2026-04-01', fy), true)
+  assert.equal(dateInPeriod('2027-03-31', fy), true)
+  assert.equal(dateInPeriod('2027-04-01', fy), false)
+  assert.equal(dateInPeriod('', fy), false)
+  assert.equal(dateInPeriod('', null), true)
+})
+
+test('period and owner filters scope bookings and targets consistently', () => {
+  const store = workspace()
+  const q2 = dashboardModel(store, { period: 'q2', now })
+  assert.equal(q2.perf.achieved, 120)
+  assert.equal(q2.perf.annual, 150)
+  assert.deepEqual(q2.perf.quarterTarget, [0, 150, 0, 0])
+  assert.equal(q2.team.find(row => row.owner === 'RS').annual, 100)
+  const q3 = dashboardModel(store, { period: 'q3', now })
+  assert.equal(q3.open.length, 0)
+  assert.equal(q3.pending.length, 0)
+  assert.equal(q3.perf.achieved, 80)
+})
+
+test('hidden records stay out of every dashboard count, queue and register', () => {
+  const model = dashboardModel(workspace({ opportunities: [opportunity('hidden', 'RS', { oppName: 'Primary 10 Opportunity' })], approvals: [approval('hidden-approval', 'hidden')] }), { now })
+  assert.equal(model.pipeline.length, 0)
+  assert.equal(model.queue.length, 0)
+  assert.equal(model.pending.length, 0)
+  assert.equal(model.pipelineK, 0)
+  assert.equal(registerRows(model).length, 0)
+})
+
+test('stage filters include aliases, search combines filters, and does not mutate workspace rows', () => {
+  const store = workspace({ opportunities: [opportunity('A', 'RS', { stage: 'Lead', sellTo: 'Andritz' }), opportunity('B', 'PP', { stage: 'RFI' }), opportunity('C', 'LJS')] })
+  const before = structuredClone(store)
+  const model = dashboardModel(store, { now })
+  assert.deepEqual(registerRows(model, { stage: 'Lead,RFI' }).map(o => o.id), ['A', 'B'])
+  assert.deepEqual(registerRows(model, { stage: 'Lead,RFI', query: 'ANDRITZ' }).map(o => o.id), ['A'])
+  assert.deepEqual(store, before)
+})
+
+test('empty workspaces provide zero KPIs and avoid target division by zero', () => {
+  const model = dashboardModel(workspace({ opportunities: [], approvals: [], sales: {} }), { now })
+  assert.equal(model.open.length, 0)
+  assert.equal(model.pipelineK, 0)
+  assert.equal(model.weightedK, 0)
+  assert.equal(model.perf.attainPct, 0)
+  assert.equal(model.outcomes.summary.total, 0)
+  assert.deepEqual(model.queue, [])
+})
+
+test('FY performance excludes bookings from other financial years even with All dates selected', () => {
+  const store = workspace()
+  store.sales.orders.push({ owner: 'RS', booked: '2025-08-01', valueK: 9999 })
+  const model = dashboardModel(store, { now })
+  assert.equal(model.perf.achieved, 200)
+  assert.equal(model.team.find(row => row.owner === 'RS').achieved, 120)
+})
+
+test('pipeline card filters show open records while the full register retains closed outcomes', () => {
+  const model = dashboardModel(workspace({ opportunities: [opportunity('open', 'RS'), opportunity('won', 'PP', { stage: 'Won', status: 'Closed' })] }), { now })
+  assert.equal(registerRows(model).length, 2)
+  assert.deepEqual(registerRows(model, { workFilter: 'open' }).map(o => o.id), ['open'])
+  assert.deepEqual(registerRows(model, { stage: 'Won' }).map(o => o.id), ['won'])
+})
