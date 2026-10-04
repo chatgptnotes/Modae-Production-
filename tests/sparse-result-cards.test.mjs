@@ -1,17 +1,24 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 import { OpportunitySummaryCard, LeadSummaryCard, shouldShowSparseCards } from '../src/sparseResultCards.jsx'
 import { findLeadById } from '../src/leadInboxSelection.js'
 
-test('sparse cards appear only for one to three results unless table view was chosen', () => {
+test('legacy sparse-card helper remains independently bounded', () => {
   assert.equal(shouldShowSparseCards(0, false), false)
   assert.equal(shouldShowSparseCards(1, false), true)
   assert.equal(shouldShowSparseCards(3, false), true)
   assert.equal(shouldShowSparseCards(4, false), false)
   assert.equal(shouldShowSparseCards(1, true), false)
+})
+
+test('Opportunities always renders the dense table route', () => {
+  const tracker = fs.readFileSync(new URL('../src/pages/Tracker.jsx', import.meta.url), 'utf8')
+  assert.doesNotMatch(tracker, /shouldShowSparseCards|showDenseView|showCards|sparseResults/)
+  assert.match(tracker, /<table className=\{`sheet\$\{colView === 'key' \? ' cols-key' : ''\}`\}/)
 })
 
 test('opportunity card shows key information and links to its workspace', () => {

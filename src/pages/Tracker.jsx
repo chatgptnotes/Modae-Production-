@@ -17,7 +17,6 @@ import {
   toggleSubsetIn, toggleValueIn,
 } from '../columnFilter.js'
 import { colType, compareVals, matchesGlobalSearch, sortLabels } from '../trackerFilters.js'
-import { OpportunitySummaryCard, shouldShowSparseCards } from '../sparseResultCards.jsx'
 
 const DEFAULT_DATE_FILTER = { field: 'orderDate', period: 'all', date: '', from: '', to: '' }
 
@@ -223,7 +222,6 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   // still one click away; this keeps the page aligned at desktop widths where
   // all 31 columns cannot fit without becoming unusably narrow.
   const [colView, setColView] = useState('key')
-  const [showDenseView, setShowDenseView] = useState(false)
 
   useEffect(() => {
     if (!openFilter) return undefined
@@ -359,8 +357,6 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   }
 
   const totals = rows.reduce((t, o) => ({ v: t.v + (+o.valueK || 0), c: t.c + (+o.cogsK || 0) }), { v: 0, c: 0 })
-  const sparseResults = rows.length > 0 && rows.length <= 3
-  const showCards = shouldShowSparseCards(rows.length, showDenseView)
   const activeFilterCount = Object.values(filters).filter(value => value instanceof Set).length
     + (dateFilterActive || dateFilterState.error ? 1 : 0)
     + (searchTerm.trim() ? 1 : 0)
@@ -706,9 +702,6 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
             </button>
             {moreMenuOpen && (
               <div className="tracker-more-menu-list" role="menu">
-                {sparseResults && <button type="button" role="menuitem" onClick={() => { setShowDenseView(view => !view); setMoreMenuOpen(false) }}>
-                  {showCards ? 'Table view' : 'Card view'}
-                </button>}
                 {activeFilterCount > 0 && <button type="button" role="menuitem" onClick={() => { clearAllTableState(); setMoreMenuOpen(false) }}>
                   Clear filters &amp; sort ({activeFilterCount})
                 </button>}
@@ -777,12 +770,6 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
       {pipelineUploadError && <div className="errbox" role="alert">{pipelineUploadError}</div>}
 
       <div ref={sheetWrapRef} className="sheet-wrap fill" onScroll={handleSheetScroll}>
-        {showCards ? <div className="sparse-card-grid tracker-sparse-cards" aria-label="Opportunity summaries">
-          {rows.map(o => <OpportunitySummaryCard key={o.id} opportunity={o}
-            stage={workflowStageLabelFor(o)}
-            nextAction={displayRole(nextActionWith(o, store.getProposal(o.id), store).owner)}
-            roleNames={store.config?.roleNames} />)}
-        </div> : <>
         {colView === 'key'
           ? <style>{[
             hiddenColumnCss(COLS.map((c, i) => (KEY_COLS.includes(c.key) ? -1 : i)).filter(i => i >= 0)),
@@ -997,7 +984,6 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
             </tr>
           </tfoot>
         </table>
-        </>}
       </div>
       </div>
       {pipelinePreview && <PipelineUploadPreview preview={pipelinePreview} onClose={() => setPipelinePreview(null)} />}
