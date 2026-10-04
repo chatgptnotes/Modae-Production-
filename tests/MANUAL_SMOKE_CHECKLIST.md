@@ -162,7 +162,8 @@ Our Ref 2511096RS) are retained with the local reference documents.
   red** so a destructive action never reads as a primary button.
 - Prices show a real `₹` glyph, not a fallback-font one. (That is the latin-ext
   subset doing its job.)
-- Tablet dark mode: the accent lifts to `#EF7765`; nothing stays slate/sky.
+- Tablet view stays on the permanent light ModAE palette; nothing switches to
+  a dark surface.
 
 ### Responsive wrapping and zoom — check on desktop and tablet
 

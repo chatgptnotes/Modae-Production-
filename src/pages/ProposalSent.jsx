@@ -134,8 +134,7 @@ export default function ProposalSent() {
     <div className="page proposal-sent-page">
       <div className="proposal-sent-head">
         <div>
-          <span className="eyebrow">Customer follow-up</span>
-          <h2>Proposal Sent</h2>
+          <h2 className="workspace-page-title"><Icon name="send" size={18} /> Proposal Sent</h2>
           <p className="hint">Keep submitted proposals moving from customer review to a clear next decision.</p>
         </div>
         <div className="proposal-sent-head-actions">

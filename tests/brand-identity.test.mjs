@@ -28,7 +28,7 @@ test('styles.css mirrors the brand tokens', () => {
   const root_ = css.slice(css.indexOf(':root {'), css.indexOf('}', css.indexOf(':root {')))
   assert.match(root_, /--primary-accent: #ed3f2f/i)
   assert.match(root_, /--bg-sidebar: #282828/i)
-  assert.match(root_, /--text-main: #282828/i)
+  assert.match(root_, /--text-main: #0F172A/i)
   assert.match(root_, /--font-heading: 'Candara'/)
   assert.match(root_, /--font-body: 'Candara'/)
 })
@@ -150,12 +150,14 @@ test('the funnel uses the approved emerald and forest green stage ramp', () => {
   assert.match(read('src/pages/Analytics.jsx'), /const FUNNEL_RAMP = MODAE_COLORS\.ramp/)
 })
 
-test('dark mode gets its own steps, not a flipped light palette', () => {
-  const dark = css.slice(css.indexOf('.tablet-mode.theme-dark {'))
-    .slice(0, css.slice(css.indexOf('.tablet-mode.theme-dark {')).indexOf('}'))
-  assert.match(dark, /--dash-accent: #ef7765/i, 'one step up the brand ramp for a dark surface')
-  assert.match(dark, /--dash-bad: #f07070/i)
-  assert.doesNotMatch(dark, /#38bdf8|#2dd4bf|#0b1220/, 'the slate/sky dark theme must be gone')
+test('the application is permanently light and has no dark-mode controls', () => {
+  for (const file of ['index.html', 'src/main.jsx', 'src/App.jsx',
+    'src/pages/Login.jsx', 'src/pages/ShowcaseLanding.jsx', 'src/tablet/TabletApp.jsx']) {
+    const source = read(file)
+    assert.doesNotMatch(source, /ThemeProvider|ThemeToggle|useTheme|prefers-color-scheme|wintrack-modae-theme|theme-dark|html\.dark|dark:/, `${file} must not expose dark mode`)
+  }
+  assert.match(css, /:root\s*\{[\s\S]*color-scheme:\s*light;/)
+  assert.doesNotMatch(css, /theme-toggle|theme-ready|theme-dark|theme-light|html\.dark/)
 })
 
 test('the branding sources no longer say the opposite', () => {

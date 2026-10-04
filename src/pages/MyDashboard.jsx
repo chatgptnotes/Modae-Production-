@@ -7,8 +7,6 @@ import { ageDays, isApprover, isAdminRole, isSalesOwner, canViewCommercial, canP
 import { analyticsSnapshot, counts, salesPerformance, winLossAnalysis, FY_QUARTERS, FY_MONTHS, PROB_WEIGHT, funnelRows } from '../kpi.js'
 import { Icon } from '../icons.jsx'
 import ForecastDashboard from './Dashboard.jsx'
-import WinLossFlow from '../WinLossFlow.jsx'
-import WinLossPie from '../WinLossPie.jsx'
 
 // My Dashboard — "there has to be something called My Dashboard… it will be
 // different for all the roles" (13 Aug review). The salesperson's version is
@@ -73,15 +71,43 @@ function ForecastReportCard() {
   )
 }
 
-function AnalyticsOverview({ store, role, nav, scope = 'role' }) {
+function AnalyticsOverview({ store, role, nav, scope = 'role', summary }) {
+  const [winLossFilters, setWinLossFilters] = useState({ period: 'all', owner: 'All', reason: 'All' })
   const snapshot = analyticsSnapshot(store, role, { scope })
   const metric = row => snapshot.comm ? fmtLakh(row.valueK) : row.count
   const max = Math.max(1, ...snapshot.funnel.map(row => snapshot.comm ? row.valueK : row.count))
   const scopeLabel = snapshot.owner ? `Your pipeline · ${snapshot.owner}` : 'Company pipeline'
   const scoped = store.opportunities.filter(o => !snapshot.owner || o.owner === snapshot.owner)
-  const winLoss = winLossAnalysis(scoped, store.competitors, { commercial: snapshot.comm })
+  const closedInScope = scoped.filter(o => o.stage === 'Won' || o.stage === 'Lost')
+  const canFilterOutcomeOwner = !snapshot.owner && (isAdminRole(role) || isApprover(role))
+  const outcomeOwners = [...new Set(closedInScope.map(o => o.owner).filter(Boolean))].sort()
+  const outcomeReasons = [...new Set(closedInScope.map(o => String(o.closedReason || '').trim() || 'Unspecified'))].sort()
+  const selectedReason = outcomeReasons.includes(winLossFilters.reason) ? winLossFilters.reason : 'All'
+  const periodStart = (() => {
+    if (winLossFilters.period === 'all') return ''
+    const date = new Date()
+    if (winLossFilters.period === '90d') date.setDate(date.getDate() - 90)
+    if (winLossFilters.period === 'fy') {
+      const fyYear = date.getMonth() >= 3 ? date.getFullYear() : date.getFullYear() - 1
+      date.setFullYear(fyYear, 3, 1)
+    }
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  })()
+  const filteredClosed = closedInScope.filter(o => {
+    const closeDate = o.lastUpdated || o.orderDate || o.createDate || ''
+    const reason = String(o.closedReason || '').trim() || 'Unspecified'
+    return (!canFilterOutcomeOwner || winLossFilters.owner === 'All' || o.owner === winLossFilters.owner)
+      && (!periodStart || (closeDate && closeDate >= periodStart))
+      && (selectedReason === 'All' || reason === selectedReason)
+  })
+  const winLoss = winLossAnalysis(filteredClosed, store.competitors, { commercial: snapshot.comm })
+  const lossReasons = winLoss.byReason.filter(row => row.lost > 0)
+    .sort((a, b) => snapshot.comm ? b.lostValueK - a.lostValueK : b.lost - a.lost)
+    .slice(0, 5)
+  const maxLoss = Math.max(1, ...lossReasons.map(row => snapshot.comm ? row.lostValueK : row.lost))
   return (
     <section className="home-analytics dashboard-analytics" aria-labelledby="dashboard-analytics-title">
+      {summary && <div className="dashboard-live-kpis" aria-label="Dashboard summary metrics">{summary}</div>}
       <div className="home-analytics-head">
         <div>
           <div className="eyebrow">Live business view</div>
@@ -116,31 +142,55 @@ function AnalyticsOverview({ store, role, nav, scope = 'role' }) {
         </div>
       </div>
       <div className="home-alert-rail" aria-label="Work queue summary">
-        <button onClick={() => nav('/inbox')}><span className="home-alert-value">{snapshot.counts.newLeads}</span><span>New leads</span></button>
-        <button onClick={() => nav('/approvals')}><span className="home-alert-value">{snapshot.counts.forMe || snapshot.counts.myPending}</span><span>{snapshot.counts.forMe ? 'Awaiting your decision' : 'Your requests'}</span></button>
-        <button onClick={() => nav('/my')}><span className="home-alert-value">{snapshot.counts.myStale}</span><span>Need an update</span></button>
+        <button className={`home-alert-kpi home-alert-leads ${snapshot.counts.newLeads ? 'is-active' : 'is-clear'}`} onClick={() => nav('/inbox')}><span className="home-alert-value">{snapshot.counts.newLeads}</span><span>New leads</span></button>
+        <button className={`home-alert-kpi home-alert-requests ${(snapshot.counts.forMe || snapshot.counts.myPending) ? 'is-active' : 'is-clear'}`} onClick={() => nav('/approvals')}><span className="home-alert-value">{snapshot.counts.forMe || snapshot.counts.myPending}</span><span>{snapshot.counts.forMe ? 'Awaiting your decision' : 'Your requests'}</span></button>
+        <button className={`home-alert-kpi home-alert-stale ${snapshot.counts.myStale ? 'is-active' : 'is-clear'}`} onClick={() => nav('/my')}><span className="home-alert-value">{snapshot.counts.myStale}</span><span>Need an update</span></button>
       </div>
       <Card title="Win / loss analysis" icon="checkCircle" tone="tone-green" span={12}
         action={<button className="dashboard-card-link" onClick={() => nav('/analytics')}>View detailed analysis <span aria-hidden="true">↗</span></button>}>
-        <WinLossFlow openCount={snapshot.openCount} closedCount={winLoss.summary.total} wonCount={winLoss.summary.won} lostCount={winLoss.summary.lost}
-          commercial={snapshot.comm} wonValueK={winLoss.summary.wonValueK} lostValueK={winLoss.summary.lostValueK} />
-        {winLoss.summary.total ? (
-          <div className="dashboard-win-loss-hero">
-            <div className="dashboard-win-loss-rate">
-              <span className="analysis-kicker">Win rate</span>
-              <strong>{winLoss.summary.winRate}%</strong>
-              <span>of {winLoss.summary.total} closed opportunities</span>
+        <div className="dashboard-wl-filters" aria-label="Win and loss filters">
+          <label><span>Period</span><select value={winLossFilters.period} onChange={event => setWinLossFilters(current => ({ ...current, period: event.target.value }))}>
+            <option value="all">All time</option><option value="90d">Last 90 days</option><option value="fy">This FY</option>
+          </select></label>
+          {canFilterOutcomeOwner && <label><span>Owner</span><select value={winLossFilters.owner} onChange={event => setWinLossFilters(current => ({ ...current, owner: event.target.value }))}>
+            <option value="All">All owners</option>{outcomeOwners.map(owner => <option key={owner} value={owner}>{displayRoleLabel(owner)}</option>)}
+          </select></label>}
+          <label><span>Close reason</span><select value={selectedReason} onChange={event => setWinLossFilters(current => ({ ...current, reason: event.target.value }))}>
+            <option value="All">All reasons</option>{outcomeReasons.map(reason => <option key={reason} value={reason}>{reason}</option>)}
+          </select></label>
+          <span className="dashboard-wl-filter-count">{winLoss.summary.total} closed {winLoss.summary.total === 1 ? 'outcome' : 'outcomes'}</span>
+        </div>
+        <div className="dashboard-wl-outcomes" aria-label="Won and lost opportunity outcomes">
+          <article className="dashboard-wl-outcome is-won">
+            <span>Won opportunities</span><strong>{winLoss.summary.won}</strong>
+            <small>{snapshot.comm ? fmtLakh(winLoss.summary.wonValueK) : `${winLoss.summary.won} ${winLoss.summary.won === 1 ? 'opportunity' : 'opportunities'}`}</small>
+          </article>
+          <article className="dashboard-wl-outcome is-lost">
+            <span>Lost opportunities</span><strong>{winLoss.summary.lost}</strong>
+            <small>{snapshot.comm ? fmtLakh(winLoss.summary.lostValueK) : `${winLoss.summary.lost} ${winLoss.summary.lost === 1 ? 'opportunity' : 'opportunities'}`}</small>
+          </article>
+          <div className="dashboard-wl-rate">
+            <span>Win rate</span><strong>{winLoss.summary.total ? `${winLoss.summary.winRate}%` : '—'}</strong>
+            <div className="dashboard-wl-rate-track" role="progressbar" aria-label="Win rate" aria-valuemin="0" aria-valuemax="100" aria-valuenow={winLoss.summary.winRate}>
+              <i style={{ width: `${winLoss.summary.winRate}%` }} />
             </div>
-            <WinLossPie wonCount={winLoss.summary.won} lostCount={winLoss.summary.lost}
-              wonValueK={winLoss.summary.wonValueK} lostValueK={winLoss.summary.lostValueK}
-              commercial={snapshot.comm} compact />
-            <div className="dashboard-win-loss-insight">
-              <span className="analysis-kicker">Signal</span>
-              <b>{winLoss.insights.topWinReason}</b>
-              <span>Leading win reason{snapshot.comm ? ` · ${fmtLakh(winLoss.insights.topWinReasonValueK)}` : ''}</span>
-            </div>
+            <small>{winLoss.summary.total ? `${winLoss.summary.won} won of ${winLoss.summary.total} closed` : 'No closed outcomes in this selection'}</small>
           </div>
-        ) : <div className="dashboard-win-loss-empty"><b>Build your first win/loss signal</b><span>Close an opportunity with a reason to see win rate, value mix, and the strongest commercial drivers here.</span><button onClick={() => nav('/analytics')}>Open analytics <span aria-hidden="true">↗</span></button></div>}
+        </div>
+        <section className="dashboard-wl-reasons" aria-label="Reasons for lost opportunities">
+          <div className="dashboard-wl-reasons-head"><div><span className="analysis-kicker">Decision insight</span><h4>Top loss reasons</h4></div><span>{lossReasons.length} shown</span></div>
+          {lossReasons.length ? <div className="dashboard-wl-reason-list">
+            {lossReasons.map(row => {
+              const amount = snapshot.comm ? row.lostValueK : row.lost
+              return <div className="dashboard-wl-reason" key={row.reason}>
+                <span className="dashboard-wl-reason-name">{row.reason}</span>
+                <span className="dashboard-wl-reason-track"><i style={{ width: `${Math.max(5, (amount / maxLoss) * 100)}%` }} /></span>
+                <b>{snapshot.comm ? fmtLakh(row.lostValueK) : `${row.lost} ${row.lost === 1 ? 'loss' : 'losses'}`}</b>
+              </div>
+            })}
+          </div> : <p className="dashboard-wl-no-reasons">No lost opportunities match these filters. Close opportunities with a defined reason to build this analysis.</p>}
+          <button className="dashboard-wl-all-reasons" onClick={() => nav('/analytics')}>View all reasons and closed records <span aria-hidden="true">↗</span></button>
+        </section>
       </Card>
     </section>
   )
@@ -184,36 +234,48 @@ function RunRateSignal({ perf }) {
   return <div className="performance-signal"><strong>{attainmentStatus(perf)}</strong><span>Target pace compared with actual pace.</span></div>
 }
 
-function PerformanceScorecard({ perf, scope = 'personal' }) {
+function AttainmentCard({ perf, scope = 'personal' }) {
   const variance = perf.achieved - perf.expected
   const pct = Math.min(100, Math.max(0, perf.annual ? (perf.achieved / perf.annual) * 100 : 0))
   return (
-    <div className="performance-scorecard-grid">
-      <Card title={scope === 'company' ? 'Company attainment' : 'Annual attainment'} icon="target" tone="tone-green" span={4} className="annual-attainment-card">
-        <div className="attainment-summary">
-          <div className="attainment-summary-top">
-            <div>
-              <span className="attainment-kicker">{perf.fy || 'Current financial year'}</span>
-              <strong>{Math.round(perf.attainPct)}%</strong>
-              <span>of {fmtLakh(perf.annual)} target</span>
-            </div>
-            <span className={`attainment-status ${variance >= 0 ? 'positive' : 'negative'}`}>{attainmentStatus(perf)}</span>
+    <Card title={scope === 'company' ? 'Company attainment' : 'Annual attainment'} icon="target" tone="tone-green" span={4} className="annual-attainment-card">
+      <div className="attainment-summary">
+        <div className="attainment-summary-top">
+          <div>
+            <span className="attainment-kicker">{perf.fy || 'Current financial year'}</span>
+            <strong>{Math.round(perf.attainPct)}%</strong>
+            <span>of {fmtLakh(perf.annual)} target</span>
           </div>
-          <div className="attainment-progress" aria-label={`${Math.round(perf.attainPct)} percent of annual target achieved`}>
-            <i style={{ width: `${pct}%` }} />
-          </div>
-          <div className="attainment-summary-stats">
-            <div><span>Achieved</span><b>{fmtLakh(perf.achieved)}</b></div>
-            <div><span>Expected by now</span><b>{fmtLakh(perf.expected)}</b></div>
-            <div><span>{variance >= 0 ? 'Ahead by' : 'Gap to pace'}</span><b className={variance >= 0 ? 'positive' : 'negative'}>{fmtLakh(Math.abs(variance))}</b></div>
-          </div>
+          <span className={`attainment-status ${variance >= 0 ? 'positive' : 'negative'}`}>{attainmentStatus(perf)}</span>
         </div>
-      </Card>
-      <Card title="Quarterly target vs actual" icon="chartBar" tone="tone-sky" span={8}>
-        <QuarterColumns perf={perf} />
-        <QuarterBars perf={perf} />
-        <div className="hint performance-card-note">Booked orders against the quarterly number.</div>
-      </Card>
+        <div className="attainment-progress" aria-label={`${Math.round(perf.attainPct)} percent of annual target achieved`}>
+          <i style={{ width: `${pct}%` }} />
+        </div>
+        <div className="attainment-summary-stats">
+          <div><span>Achieved</span><b>{fmtLakh(perf.achieved)}</b></div>
+          <div><span>Expected by now</span><b>{fmtLakh(perf.expected)}</b></div>
+          <div><span>{variance >= 0 ? 'Ahead by' : 'Gap to pace'}</span><b className={variance >= 0 ? 'positive' : 'negative'}>{fmtLakh(Math.abs(variance))}</b></div>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+function QuarterlyTargetCard({ perf }) {
+  return (
+    <Card title="Quarterly target vs actual" icon="chartBar" tone="tone-sky" span={8}>
+      <QuarterColumns perf={perf} />
+      <QuarterBars perf={perf} />
+      <div className="hint performance-card-note">Booked orders against the quarterly number.</div>
+    </Card>
+  )
+}
+
+function PerformanceScorecard({ perf, scope = 'personal', funnel }) {
+  return (
+    <div className="performance-scorecard-grid">
+      {funnel}
+      <QuarterlyTargetCard perf={perf} />
     </div>
   )
 }
@@ -518,7 +580,7 @@ export default function MyDashboard() {
   const head = (
     <div className="home-head">
       <div>
-        <h2>My Dashboard</h2>
+        <h2 className="workspace-page-title"><Icon name="chartBar" size={18} /> My Dashboard</h2>
         <p className="hint">{dashboardRoleLabel(role)}{store.sales?.fy ? ` · ${store.sales.fy}` : ''}</p>
       </div>
       <div className="home-head-actions">
@@ -672,7 +734,8 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head,
       </div>
 
       <div className="section-title">Performance</div>
-      <PerformanceScorecard perf={perf} scope="personal" />
+      <PerformanceScorecard perf={perf} scope="personal"
+        funnel={<DashboardFunnel store={store} role={role} nav={nav} scope={scope} />} />
       <div className="performance-lower-grid">
         <Card title="Monthly performance against run rate" icon="chartLine" tone="tone-sky" span={8}>
           <RunRateSignal perf={perf} />
@@ -683,7 +746,7 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head,
             {perf.orders.length} order{perf.orders.length === 1 ? '' : 's'}
           </div>
         </Card>
-        <DashboardFunnel store={store} role={role} nav={nav} scope={scope} />
+        <AttainmentCard perf={perf} scope="personal" />
       </div>
 
     </div>
@@ -736,16 +799,16 @@ function TeamTargetsCard({ store, span = 12 }) {
             const t = targets[owner] || { annual: 0, q: [0, 0, 0, 0] }
             if (editing !== owner) return (
               <tr key={owner}>
-                <td><b>{displayRole(owner)}</b> <span className="hint">{roleLabel(owner).replace(`${displayRole(owner)} - `, '')}</span></td>
+                <td className="targets-owner"><b>{displayRole(owner)}</b> <span className="hint">{roleLabel(owner).replace(`${displayRole(owner)} - `, '')}</span></td>
                 <td className="num">{fmtLakh(t.annual)}</td>
                 {(t.q || [0, 0, 0, 0]).map((v, i) => <td key={FY_QUARTERS[i]} className="num">{fmtLakh(v)}</td>)}
-                <td className="num"><button onClick={() => begin(owner)}>Edit</button></td>
+                <td className="num targets-action-cell"><button onClick={() => begin(owner)}>Edit</button></td>
               </tr>
             )
             return (
               <tr key={owner} className="targets-editing">
-                <td><b>{displayRole(owner)}</b> <span className="hint">{roleLabel(owner).replace(`${displayRole(owner)} - `, '')}</span></td>
-                <td className="num">
+                <td className="targets-owner"><b>{displayRole(owner)}</b> <span className="hint">{roleLabel(owner).replace(`${displayRole(owner)} - `, '')}</span></td>
+                <td className="num targets-action-cell">
                   <input type="number" min="0" value={draft.annual} aria-label={`${owner} annual target`}
                     onChange={e => setDraft(d => ({ ...d, annual: e.target.value }))} />
                 </td>
@@ -812,17 +875,12 @@ function ProposalStatusCard({ store, nav }) {
 
   return (
     <Card title="Proposal status & follow-up" icon="fileText" tone="tone-sky" span={12}>
-      <p className="hint">Track what is ready, sent, waiting, and overdue.</p>
       <div className="proposal-status-summary" aria-label="Proposal status summary">
         <button type="button" className={`proposal-status-summary__item proposal-status-summary__item--prepare ${toPrepare.length ? '' : 'is-empty'} ${selectedStatus === 'To be prepared' ? 'is-selected' : ''}`} aria-pressed={selectedStatus === 'To be prepared'} onClick={() => toggleStatus('To be prepared')}><span className="home-alert-value">{toPrepare.length}</span><span>To be prepared</span></button>
         <button type="button" className={`proposal-status-summary__item proposal-status-summary__item--approval ${awaitingApproval.length ? '' : 'is-empty'} ${selectedStatus === 'Awaiting approval' ? 'is-selected' : ''}`} aria-pressed={selectedStatus === 'Awaiting approval'} onClick={() => toggleStatus('Awaiting approval')}><span className="home-alert-value">{awaitingApproval.length}</span><span>Awaiting approval</span></button>
         <button type="button" className={`proposal-status-summary__item proposal-status-summary__item--sent ${sent.length ? '' : 'is-empty'} ${selectedStatus === 'Sent' ? 'is-selected' : ''}`} aria-pressed={selectedStatus === 'Sent'} onClick={() => toggleStatus('Sent')}><span className="home-alert-value">{sent.length}</span><span>Sent</span></button>
+        <button type="button" className={`proposal-status-summary__item proposal-status-summary__item--follow-up ${followUpDue.length ? '' : 'is-empty'} ${selectedStatus === 'Follow-up due' ? 'is-selected' : ''}`} aria-pressed={selectedStatus === 'Follow-up due'} onClick={() => toggleStatus('Follow-up due')}><span className="home-alert-value">{followUpDue.length}</span><span>Follow-up due</span></button>
       </div>
-      <button type="button" className={`proposal-follow-up-alert ${followUpDue.length ? '' : 'is-empty'} ${selectedStatus === 'Follow-up due' ? 'is-selected' : ''}`} aria-pressed={selectedStatus === 'Follow-up due'} onClick={() => toggleStatus('Follow-up due')}>
-        <span className="proposal-follow-up-count">{followUpDue.length}</span>
-        <span className="proposal-follow-up-copy"><b>Follow-up due</b><small>Sent proposals needing customer follow-up</small></span>
-        <span className="proposal-follow-up-action">Review →</span>
-      </button>
       <div className="section-title" style={{ marginTop: 18 }}>{selectedHeading}</div>
       <div className="dashboard-table-scroll">
         <table className="dashboard-table proposal-status-table">
@@ -832,12 +890,12 @@ function ProposalStatusCard({ store, nav }) {
               const go = () => nav(path)
               return (
                 <tr key={opp.id} tabIndex={0} role="link" aria-label={`${action} ${opp.id}`} onClick={go} onKeyDown={event => activateDashboardRow(event, go)}>
-                  <td><b className="proposal-opportunity-id">{opp.id}</b><span className="proposal-opportunity-name">{opp.oppName}</span></td>
-                  <td><span className="proposal-customer-name">{opp.sellTo}</span></td>
-                  <td>{displayRole(opp.owner)}</td>
-                  <td><span className={`pill ${status === 'Follow-up due' ? 'lost' : status === 'Awaiting approval' ? 'open' : 'won'}`}>{status}</span></td>
-                  <td>{fmtLakh(opp.valueK)}</td>
-                  <td><span className="hint">{action} →</span></td>
+                  <td><b className="proposal-opportunity-id">{opp.id}</b><span className="proposal-opportunity-name" title={opp.oppName || 'Opportunity unavailable'}>{opp.oppName || '—'}</span></td>
+                  <td><span className="proposal-customer-name dashboard-cell-ellipsis" title={opp.sellTo || 'Customer unavailable'}>{opp.sellTo || '—'}</span></td>
+                  <td><span className="proposal-owner-name dashboard-cell-ellipsis" title={displayRole(opp.owner)}>{displayRole(opp.owner)}</span></td>
+                  <td className="dashboard-status-cell"><span className={`pill ${status === 'Follow-up due' ? 'lost' : status === 'Awaiting approval' ? 'open' : 'won'}`}>{status}</span></td>
+                  <td className="num dashboard-value-cell">{fmtLakh(opp.valueK)}</td>
+                  <td className="dashboard-action-cell"><span className="hint">{action} →</span></td>
                 </tr>
               )
             })}
@@ -861,12 +919,13 @@ function OwnerDashboard({ store, nav, role, c, blocked, nextActions, head, scope
   return (
     <div className="page dashboard-page">
       {head}
-      <div className="stat-cards">
-        <Metric label={scope === 'my' ? 'My pipeline' : 'Company pipeline'} value={analyticsSnapshot(store, role, { scope }).openCount} tone="sky" onClick={() => nav('/analytics')} />
-        <Metric label="Waiting on you" value={mine.length} tone={mine.length ? 'amber' : 'green'} onClick={() => nav('/approvals')} />
-        <Metric label="Blocked" value={blocked.length} tone={blocked.length ? 'red' : 'green'} onClick={() => nav('/')} />
-      </div>
-      <AnalyticsOverview {...{ store, role, nav, scope }} />
+      <AnalyticsOverview {...{ store, role, nav, scope }} summary={(
+        <div className="stat-cards">
+          <Metric label={scope === 'my' ? 'My pipeline' : 'Company pipeline'} value={analyticsSnapshot(store, role, { scope }).openCount} tone="sky" onClick={() => nav('/analytics')} />
+          <Metric label="Waiting on you" value={mine.length} tone={mine.length ? 'amber' : 'green'} onClick={() => nav('/approvals')} />
+          <Metric label="Blocked" value={blocked.length} tone={blocked.length ? 'red' : 'green'} onClick={() => nav('/')} />
+        </div>
+      )} />
       <div className="ana-grid"><ProposalStatusCard {...{ store, nav }} /></div>
       <div className="ana-grid">
         <Card title="Decisions waiting on you" icon="checkCircle" tone="tone-green" span={12}
@@ -880,13 +939,14 @@ function OwnerDashboard({ store, nav, role, c, blocked, nextActions, head, scope
           {!mine.length && <p className="hint">Nothing is waiting on you right now.</p>}
         </Card>
       </div>
-      <PerformanceScorecard perf={perf} scope="company" />
+      <PerformanceScorecard perf={perf} scope="company"
+        funnel={<DashboardFunnel store={store} role={role} nav={nav} scope={scope} />} />
       <div className="performance-lower-grid">
         <Card title="Monthly performance against run rate" icon="chartLine" tone="tone-sky" span={8}>
           <RunRateSignal perf={perf} />
           <RunRateChart perf={perf} />
         </Card>
-        <DashboardFunnel store={store} role={role} nav={nav} scope={scope} />
+        <AttainmentCard perf={perf} scope="company" />
       </div>
       <div className="ana-grid">
         <TeamTargetsCard store={store} />
@@ -965,13 +1025,14 @@ function ApproverDashboard({ store, nav, role, c, blocked, nextActions, head, co
         <TeamTargetsCard store={store} />
         <ForecastReportCard />
       </div>
-      <PerformanceScorecard perf={perf} scope="company" />
+      <PerformanceScorecard perf={perf} scope="company"
+        funnel={<DashboardFunnel store={store} role={role} nav={nav} scope={scope} />} />
       <div className="performance-lower-grid">
         <Card title="Monthly performance against run rate" icon="chartLine" tone="tone-sky" span={8}>
           <RunRateSignal perf={perf} />
           <RunRateChart perf={perf} />
         </Card>
-        <DashboardFunnel store={store} role={role} nav={nav} scope={scope} />
+        <AttainmentCard perf={perf} scope="company" />
       </div>
     </div>
   )
@@ -1032,13 +1093,14 @@ function AdminDashboard({ store, nav, role, c, blocked, nextActions, head, scope
         <TeamTargetsCard store={store} />
         <ForecastReportCard />
       </div>
-      <PerformanceScorecard perf={perf} scope="company" />
+      <PerformanceScorecard perf={perf} scope="company"
+        funnel={<DashboardFunnel store={store} role={role} nav={nav} scope={scope} />} />
       <div className="performance-lower-grid">
         <Card title="Monthly performance against run rate" icon="chartLine" tone="tone-sky" span={8}>
           <RunRateSignal perf={perf} />
           <RunRateChart perf={perf} />
         </Card>
-        <DashboardFunnel store={store} role={role} nav={nav} scope={scope} />
+        <AttainmentCard perf={perf} scope="company" />
       </div>
     </div>
   )

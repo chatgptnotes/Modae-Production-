@@ -79,7 +79,7 @@ export default function Users() {
   if (!canManage) {
     return (
       <div className="page">
-        <h2>User management</h2>
+        <h2 className="workspace-page-title"><Icon name="shield" size={18} /> User management</h2>
         <div className="restricted" style={{ maxWidth: 520 }}>
           Restricted — user accounts and role assignments are visible to administrators only.
         </div>
@@ -269,7 +269,7 @@ export default function Users() {
 
   return (
     <div className="page">
-      <h2>User management</h2>
+      <h2 className="workspace-page-title"><Icon name="shield" size={18} /> User management</h2>
       <div className="toolbar">
         <span className="hint">Admins manage accounts, assign roles and approve registrations. {supabase ? 'Accounts are provisioned through Supabase Auth.' : 'Demo accounts are stored only in this browser.'}</span>
         <span className="spacer" />

@@ -235,7 +235,7 @@ export default function Customers() {
 
   return (
     <div className="page">
-      <h2>Customer Master</h2>
+      <h2 className="workspace-page-title"><Icon name="users" size={18} /> Customer Master</h2>
       <div className="toolbar">
         <span className="hint">
           Status comes from the periodic accounting-system upload (payment pattern, KYC).

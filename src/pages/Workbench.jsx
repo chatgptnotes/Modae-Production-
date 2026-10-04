@@ -164,7 +164,7 @@ const titleCase = value => String(value || '').toLowerCase().split(/\s+/).map((w
   return small ? word : word.charAt(0).toUpperCase() + word.slice(1)
 }).join(' ').replace(/\bBoq\b/g, 'BOQ').replace(/\bKyc\b/g, 'KYC').replace(/\bRfq\b/g, 'RFQ')
 
-function OpportunityProgress({ activeStep, completedThrough, reviewing = false, onStep, onBack, onNext, allowFutureNavigation = false, steps = WORKFLOW_STEPS }) {
+function OpportunityProgress({ activeStep, completedThrough, reviewing = false, onStep, onBack, onNext, onEdit, allowFutureNavigation = false, steps = WORKFLOW_STEPS }) {
   const activeIndex = steps.findIndex(step => step.slug === activeStep)
   const currentIndex = reviewing ? completedThrough : activeIndex
   const currentStep = steps[currentIndex]
@@ -182,6 +182,10 @@ function OpportunityProgress({ activeStep, completedThrough, reviewing = false, 
             <Icon name="chevronLeft" size={17} />
           </button>
           <span>{reviewing ? `Review: ${steps[activeIndex]?.label}` : steps[activeIndex]?.label}</span>
+          {reviewing && <button type="button" className="progress-edit-stage" onClick={() => onEdit?.(steps[activeIndex])}
+            aria-label={`Edit ${steps[activeIndex]?.label || 'reviewed stage'}`} title={`Edit ${steps[activeIndex]?.label || 'reviewed stage'}`}>
+            Edit stage
+          </button>}
           <button type="button" className="progress-arrow" disabled={activeIndex < 0 || activeIndex >= steps.length - 1}
             aria-label="Next workflow step" title="Next workflow step"
             onClick={() => {
@@ -768,6 +772,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
       </div>
       <OpportunityProgress steps={workflowSteps} activeStep={activeStep} completedThrough={persistedStepIndex} reviewing={workflowReadOnly}
         allowFutureNavigation={serviceOpenNavigation}
+        onEdit={step => openBackwardTransition(step)}
         onStep={selectStep}
         onBack={step => {
           const activeIndex = workflowSteps.findIndex(item => item.slug === activeStep)
@@ -826,17 +831,8 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
           )}
         </Modal>
       )}
-      {workflowReadOnly && <div className="workflow-readonly-notice" role="status">
-        {viewingFutureStep ? (
-          <span>Previewing future stage: <b>{activeStepConfig?.label || 'this stage'}</b>. Current workflow stage: <b>{workflowSteps[persistedStepIndex]?.label || opp.milestone}</b>.</span>
-        ) : (
-          <>
-            <span>Reviewing completed stage: <b>{activeStepConfig?.label || 'this stage'}</b>. Current workflow stage: <b>{workflowSteps[persistedStepIndex]?.label || opp.milestone}</b>.</span>
-            <button type="button" className="secondary" onClick={() => openBackwardTransition(activeStepConfig)}>
-              Move back to {activeStepConfig?.label || 'this stage'} to edit
-            </button>
-          </>
-        )}
+      {viewingFutureStep && <div className="workflow-readonly-notice" role="status">
+        <span>Previewing future stage: <b>{activeStepConfig?.label || 'this stage'}</b>. Current workflow stage: <b>{workflowSteps[persistedStepIndex]?.label || opp.milestone}</b>.</span>
       </div>}
       <fieldset className={`wb-body workflow-edit-boundary ${workflowReadOnly ? 'workflow-edit-boundary--readonly' : ''}`} disabled={workflowReadOnly && viewTab !== 'comms'} aria-readonly={workflowReadOnly || undefined}>
         {viewTab === 'overview' && opp.route === 'Spares' && <SparesIntakeTab opp={opp} detailsRef={detailsRef} />}

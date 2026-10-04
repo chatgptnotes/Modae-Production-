@@ -13,6 +13,10 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+
+- Removed dark mode and all theme controls. The desktop, tablet, sign-in, and
+  showcase surfaces now use the permanent light ModAE palette.
+
 - Replaced native Lead inbox header selects with accessible filter buttons and
   readable wrapped dropdown menus so column labels no longer show browser arrows
   or clipped option text.
@@ -42,8 +46,7 @@ This is an implementation and release log, not a dump of every commit.
   preserving My View and Global View accessibility states.
 
 - Removed the authenticated desktop workspace top bar so desktop navigation
-  stays focused in the sidebar; tablet navigation and theme controls remain
-  unchanged.
+  stays focused in the sidebar.
 
 - Compact Opportunities toolbar actions behind a More menu so the primary
   filters and Create opportunity control stay on one readable desktop row.

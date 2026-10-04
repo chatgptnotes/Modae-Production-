@@ -35,7 +35,6 @@ import Portal from '../pages/Portal.jsx'
 import Opportunities from '../pages/Opportunities.jsx'
 import TabletHome from './TabletHome.jsx'
 import './tablet.css'
-import { ThemeToggle, useTheme } from '../theme.jsx'
 
 function TabletGate({ page, children }) {
   const store = useStore()
@@ -51,7 +50,6 @@ const BOTTOM = [
 
 export default function TabletApp() {
   const store = useStore()
-  const { theme } = useTheme()
   const nav = useNavigate()
   const loc = useLocation()
   const role = store.role
@@ -106,7 +104,7 @@ export default function TabletApp() {
   )
 
   return (
-    <div className={`shell tablet-mode theme-${theme}`} style={{ display: 'block' }}>
+    <div className="shell tablet-mode" style={{ display: 'block' }}>
       <BrandWatermark variant="tablet" />
       <header className="tablet-bar">
         <ModaeLogo className="tb-brand" size={24} onClick={() => nav('/home')} />
@@ -123,7 +121,6 @@ export default function TabletApp() {
           <Icon name="wifi" size={13} /> <span className="tb-label">{online.label}</span>
         </span>
         <InstallButton />
-        <ThemeToggle className="tb-icon" />
         <button onClick={() => { store.setViewMode('full'); nav('/opportunities') }} title="Switch to the full desktop site">
           <Icon name="monitor" size={14} /> <span className="tb-label">Full site</span>
         </button>

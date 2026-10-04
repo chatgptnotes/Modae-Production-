@@ -1,6 +1,5 @@
 @import "tailwindcss/theme.css";
 @import "tailwindcss/utilities.css";
-@custom-variant dark (&:where(.dark, .dark *));
 
 * { box-sizing: border-box; }
 
@@ -121,53 +120,6 @@
   50% { opacity: .45; transform: rotate(45deg); }
 }
 
-/* Accessible dark roles: light text is never placed on a light surface and
-   the red action is lifted for AA contrast on dark surfaces. */
-html.dark {
-  color-scheme: dark;
-  --surface-canvas: #0f1011;
-  --surface-default: #16181a;
-  --surface-raised: #1f2224;
-  --surface-sunken: #0b0c0d;
-  --surface-inverse: #f3f4f5;
-  --surface-inverse-raised: #d9dcdf;
-  --text-primary: #ededed;
-  --text-secondary: #c4c8cc;
-  --text-tertiary: #a8a8a8;
-  --text-on-inverse: #0f1011;
-  --text-on-accent: #0f1011;
-  --border-default: rgba(227, 227, 229, .30);
-  --border-subtle: rgba(227, 227, 229, .16);
-  --border-inverse: rgba(0, 0, 0, .35);
-  --color-primary: #EF7765;
-  --color-primary-hover: #F39C8E;
-  --color-primary-active: #F6B4AD;
-  --color-primary-soft: rgba(237, 63, 47, .18);
-  --action-primary: var(--color-primary);
-  --action-primary-hover: var(--color-primary-hover);
-  --action-primary-active: var(--color-primary-active);
-  --action-secondary-bg: #1f2937;
-  --action-secondary-text: #e2e8f0;
-  --action-secondary-border: #475569;
-  --action-secondary-hover: #334155;
-  --action-accent: var(--action-primary);
-  --action-accent-hover: var(--action-primary-hover);
-  --action-accent-ink: var(--action-primary-active);
-  --action-accent-soft: var(--action-primary-soft);
-  --action-accent-border: #EF7765;
-  --status-success: #4fbf62;
-  --status-success-soft: rgba(79, 191, 98, .18);
-  --status-warning: #e8a93a;
-  --status-warning-soft: rgba(232, 169, 58, .18);
-  --status-danger: #f07070;
-  --status-danger-soft: rgba(240, 112, 112, .18);
-  --status-info: #93c5fd;
-  --status-info-soft: rgba(147, 197, 253, .18);
-  --focus-ring: #93c5fd;
-  --shadow-color: rgba(0, 0, 0, .4);
-}
-
-/* ---- Proposal Sent workspace ----------------------------------------- */
 .proposal-sent-page { max-width: 1480px; }
 .proposal-sent-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 22px; }
 .proposal-sent-head h2 { margin: 3px 0 6px; letter-spacing: -.035em; }
@@ -611,8 +563,7 @@ html.dark {
   --status-warn: #D99200;
   --status-bad: #C93838;
   /* dashviz.jsx primitives (Sparkline, ArcGauge, DonutGauge) read only these.
-     Declared here so they resolve on every page; .tablet-mode.theme-dark
-     overrides the set with steps chosen for a dark surface. */
+     Declared here so they resolve on every page. */
   --dash-track: var(--border-soft);
   --dash-accent: var(--primary-fill);
   --dash-teal: var(--text-muted);
@@ -2020,7 +1971,7 @@ a.oppid-link:hover { text-decoration: underline; }
    dashviz.jsx primitives work anywhere rather than only inside .ana-page and
    .tablet-mode. They used to be declared here only, which left the ArcGauge on
    My Dashboard reading undefined tokens — the attainment percentage rendered
-   near-invisible. .tablet-mode.theme-dark still overrides them all. */
+   near-invisible on the tablet canvas. */
 /* Filter bar — two rows of compact fields plus an active-filter chip strip */
 .ana-filters {
   background: var(--card-bg); border: 1px solid var(--border-soft);
@@ -2193,19 +2144,6 @@ a.oppid-link:hover { text-decoration: underline; }
 
 .dashboard-card-link { display: inline-flex; align-items: center; gap: 5px; padding: 0; border: 0; background: transparent; color: var(--primary-ink); cursor: pointer; font-size: 11px; font-weight: 750; }
 .dashboard-card-link:hover { color: var(--primary-accent); filter: none; }
-.dashboard-win-loss-hero { display: grid; grid-template-columns: minmax(130px, .7fr) minmax(250px, 1.6fr) minmax(160px, .9fr); align-items: stretch; gap: 18px; padding: 4px 0 2px; }
-.dashboard-win-loss-rate, .dashboard-win-loss-insight { display: flex; flex-direction: column; justify-content: center; gap: 4px; }
-.dashboard-win-loss-rate strong { color: var(--text-primary); font-size: 34px; line-height: 1; letter-spacing: -.05em; }
-.dashboard-win-loss-rate > span:last-child, .dashboard-win-loss-insight > span:last-child { color: var(--text-secondary); font-size: 11px; }
-.dashboard-win-loss-insight { padding-left: 16px; border-left: 1px solid var(--border-subtle); }
-.dashboard-win-loss-insight b { overflow: hidden; color: var(--text-primary); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
-.dashboard-win-loss-empty { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; min-height: 74px; padding: 12px 14px; border: 1px dashed var(--border-default); background: var(--surface-raised); }
-.dashboard-win-loss-empty b { color: var(--text-primary); font-size: 13px; }
-.dashboard-win-loss-empty span { color: var(--text-secondary); font-size: 11px; line-height: 1.45; }
-.dashboard-win-loss-empty button { padding: 7px 10px; border: 1px solid var(--border-default); border-radius: 7px; background: var(--card-bg); color: var(--primary-ink); cursor: pointer; font-size: 11px; font-weight: 750; white-space: nowrap; }
-.dashboard-win-loss-empty button:hover { border-color: var(--primary-accent); filter: none; }
-@media (max-width: 760px) { .dashboard-win-loss-hero { grid-template-columns: 1fr 1.7fr; } .dashboard-win-loss-insight { grid-column: 1 / -1; padding: 12px 0 0; border-top: 1px solid var(--border-subtle); border-left: 0; } .dashboard-win-loss-empty { grid-template-columns: 1fr; } }
-@media (max-width: 520px) { .dashboard-win-loss-hero { grid-template-columns: 1fr; gap: 14px; } .dashboard-win-loss-insight { grid-column: auto; } }
 
 .win-loss-flow { padding: 14px 16px; border: 1px solid var(--border-default); background: var(--surface-raised); }
 .win-loss-flow-main { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 14px; }
@@ -3394,7 +3332,6 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
 .mail-action-menu button { display: block; width: 100%; padding: 7px 9px; border: 0; background: transparent; color: var(--text-main); text-align: left; font-size: 12px; border-radius: 3px; }
 .mail-action-menu button:hover:not(:disabled) { background: var(--primary-soft); color: var(--primary-deep); }
 .mail-action-menu button:disabled { opacity: .45; cursor: not-allowed; }
-.mail-list-count { position: absolute; right: 8px; top: 50%; z-index: 1; margin: 0; padding: 0; transform: translateY(-50%); color: var(--text-subtle); font-size: 10px; font-weight: 600; pointer-events: none; }
 /* "N more assigned to others" — the owner filter says what it is holding back
    rather than leaving the row silently missing. */
 .mail-hidden-note {
@@ -5401,34 +5338,10 @@ button.install:hover { background: var(--primary-hover); }
 }
 
 /* =========================================================================
-   Tablet command deck — dark/light KPI dashboard.
-   Token blocks are declared twice (theme-dark / theme-light); every rule below
-   reads only --dash-*, so the whole subtree flips by swapping one class.
+   Tablet command deck — light KPI dashboard.
+   The dashboard reads a single permanent light token set.
    ========================================================================= */
-/* Dark mode gets its OWN steps, not an automatic flip of the light ones.
-   var(--palette-1e263aa2) clears 4.5:1 on this surface but sits flat against it, so the accent
-   moves one step up the brand ramp (var(--palette-6497acb2), 6.35:1) — bright enough to read as
-   the accent without glowing. Status hues are lifted the same way and stay
-   distinct from the brand red. Contrast measured against --dash-surface. */
-.tablet-mode.theme-dark {
-  --dash-bg: var(--palette-a578805b);
-  --dash-surface: var(--palette-2ebdbffa);
-  --dash-surface-2: var(--palette-ec08acfb);
-  --dash-border: var(--palette-782671ec);
-  --dash-border-hi: var(--palette-ee38f06e);
-  --dash-text: var(--palette-4b2d19b3);          /* 15.2:1 */
-  --dash-text-2: var(--palette-871c983b);        /*  7.5:1 */
-  --dash-text-3: var(--palette-c4d6c56a);        /*  4.2:1 */
-  --dash-accent: #ef7765;        /*  6.3:1 — brand red, one step lighter */
-  --dash-teal: var(--palette-871c983b);          /* neutral secondary, as in light mode */
-  --dash-good: var(--palette-a4eda8fc);          /*  7.6:1 */
-  --dash-warn: var(--palette-9b68fe15);          /*  8.6:1 */
-  --dash-bad: #f07070;           /*  6.2:1 — distinct from the brand accent */
-  --dash-track: var(--palette-fc21318a);
-  --dash-shadow: 0 1px 2px var(--palette-d8e2ef60);
-  --tint-a: .16;
-}
-.tablet-mode.theme-light {
+.tablet-mode {
   --dash-bg: #F3F0EB;
   --dash-surface: #FFFEFC;
   --dash-surface-2: #F8F5F0;
@@ -5500,10 +5413,10 @@ button.install:hover { background: var(--primary-hover); }
 .tint-rust .dash-tile-icon { background: var(--palette-9458c85d); color: var(--palette-8c6f9f5f); }
 .tint-wine .dash-tile-icon { background: var(--palette-2a2fb42f); color: var(--palette-bd62cee1); }
 .tint-slate .dash-tile-icon { background: var(--palette-b2ee9b8e); color: var(--dash-text-2); }
-.theme-light .tint-navy .dash-tile-icon { color: var(--palette-3aae0650); }
-.theme-light .tint-purple .dash-tile-icon { color: var(--palette-29ccf5a1); }
-.theme-light .tint-rust .dash-tile-icon { color: var(--palette-aca9b855); }
-.theme-light .tint-wine .dash-tile-icon { color: var(--palette-7581aeb7); }
+.tint-navy .dash-tile-icon { color: var(--palette-3aae0650); }
+.tint-purple .dash-tile-icon { color: var(--palette-29ccf5a1); }
+.tint-rust .dash-tile-icon { color: var(--palette-aca9b855); }
+.tint-wine .dash-tile-icon { color: var(--palette-7581aeb7); }
 
 /* ---- KPI feature tiles ---- */
 .dash-tile.feature { min-height: 176px; gap: 8px; cursor: default; }
@@ -6615,7 +6528,7 @@ html, body { overflow-x: hidden; max-width: 100%; }
   }
 }
 
-/* The tablet bar carries brand + two bells + connection chip + install + theme
+/* The tablet bar carries brand + two bells + connection chip + install
    + role select + two mode buttons. That never fit on a phone in one nowrap
    row, so it wraps, and the button labels collapse to their icons first. */
 .tablet-bar { flex-wrap: wrap; row-gap: 6px; }
@@ -7048,7 +6961,12 @@ table.sheet td .wrapcell:focus {
   overflow-wrap: normal;
   word-break: normal;
 }
-.tracker-page .sheet:not(.cols-key) .wrapcell { height: auto !important; white-space: pre; }
+.tracker-page .sheet:not(.cols-key) .wrapcell {
+  height: auto !important;
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
 
 /* Keep identifiers and the trailing action link intact in the scrolling view;
    ordinary labels and values may wrap at word boundaries. */
@@ -8720,24 +8638,6 @@ body {
   --select-fill: var(--action-accent-soft);
 }
 
-html.dark {
-  --bg-app: var(--surface-canvas);
-  --card-bg: var(--surface-default);
-  --bg-sidebar: var(--surface-sunken);
-  --bg-sidebar-2: var(--surface-raised);
-  --text-main: var(--text-primary);
-  --text-muted: var(--text-secondary);
-  --text-subtle: var(--text-tertiary);
-  --border-color: var(--border-default);
-  --border-soft: var(--border-subtle);
-  --primary-accent: var(--action-accent);
-  --primary-fill: var(--action-accent);
-  --primary-hover: var(--action-accent-hover);
-  --primary-ink: var(--action-accent-ink);
-  --primary-soft: var(--action-accent-soft);
-  --primary-border: var(--action-accent-border);
-}
-
 /* WCAG AA guardrails for controls and keyboard navigation. */
 :where(button, .btn, input, select, textarea):focus-visible {
   outline: 3px solid var(--focus-ring);
@@ -8849,7 +8749,7 @@ html.dark {
 }
 
 @media (prefers-contrast: more) {
-  :root, html.dark {
+  :root {
     --border-default: currentColor;
     --border-subtle: currentColor;
   }
@@ -10170,6 +10070,24 @@ button.install, .btn.install,
   background: var(--surface-default);
   color: var(--text-primary);
   box-shadow: none;
+}
+.page .progress-controls button.progress-edit-stage {
+  width: auto;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 10px;
+  border-color: var(--action-accent-border);
+  border-radius: 7px;
+  background: var(--color-primary-soft);
+  color: var(--action-accent-ink);
+  font-size: 11px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.page .progress-controls button.progress-edit-stage:hover:not(:disabled) {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-active);
 }
 .page .progress-controls button.progress-arrow {
   border-color: var(--action-accent);
@@ -14749,9 +14667,9 @@ table.sheet tbody tr:hover td {
    widths to keep long customer and opportunity names from colliding. */
 .proposal-status-summary {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
-  margin: 14px 0 2px;
+  margin: 0 0 2px;
 }
 .proposal-status-summary__item {
   --summary-color: var(--text-subtle);
@@ -14772,6 +14690,7 @@ table.sheet tbody tr:hover td {
 .proposal-status-summary__item--prepare { --summary-color: var(--status-warning); --summary-bg: var(--status-warning-soft); }
 .proposal-status-summary__item--approval { --summary-color: var(--status-info); --summary-bg: var(--status-info-soft); }
 .proposal-status-summary__item--sent { --summary-color: var(--status-success); --summary-bg: var(--status-success-soft); }
+.proposal-status-summary__item--follow-up { --summary-color: var(--status-danger); --summary-bg: var(--status-danger-soft); }
 .proposal-status-summary__item.is-empty { --summary-color: var(--text-subtle); --summary-bg: var(--surface-sunken); }
 .proposal-status-summary__item:hover { transform: none; border-color: var(--summary-color); box-shadow: none; }
 .proposal-status-summary__item.is-selected { border-color: var(--summary-color); box-shadow: 0 0 0 2px color-mix(in srgb, var(--summary-color) 28%, transparent); }
@@ -14784,46 +14703,6 @@ table.sheet tbody tr:hover td {
   font-weight: 700;
   line-height: 1.25;
 }
-.proposal-follow-up-alert {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  min-width: 0;
-  margin-top: 10px;
-  padding: 10px 12px;
-  border: 1px solid var(--status-danger-soft);
-  border-left: 3px solid var(--status-danger);
-  border-radius: 6px;
-  background: var(--status-danger-soft);
-  color: var(--text-main);
-  text-align: left;
-}
-.proposal-follow-up-alert:hover,
-.proposal-follow-up-alert.is-selected {
-  border-color: var(--status-danger);
-  box-shadow: none;
-}
-.proposal-follow-up-alert.is-empty {
-  border-color: var(--border-soft);
-  border-left-color: var(--border-color);
-  background: var(--surface-sunken);
-}
-.proposal-follow-up-count {
-  color: var(--status-danger);
-  font-size: 20px;
-  font-weight: 800;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-.proposal-follow-up-alert.is-empty .proposal-follow-up-count { color: var(--text-subtle); }
-.proposal-follow-up-copy { display: grid; min-width: 0; gap: 2px; }
-.proposal-follow-up-copy b { color: var(--status-danger); font-size: 12px; }
-.proposal-follow-up-alert.is-empty .proposal-follow-up-copy b { color: var(--text-subtle); }
-.proposal-follow-up-copy small { color: var(--text-subtle); font-size: 11px; }
-.proposal-follow-up-action { color: var(--status-danger); font-size: 11px; font-weight: 700; white-space: nowrap; }
-.proposal-follow-up-alert.is-empty .proposal-follow-up-action { color: var(--text-subtle); }
 .proposal-status-table { min-width: 920px; }
 .proposal-status-table th:nth-child(1) { width: 31%; }
 .proposal-status-table th:nth-child(2) { width: 20%; }
@@ -14859,9 +14738,11 @@ table.sheet tbody tr:hover td {
 .proposal-status-footer button { flex: 0 0 auto; }
 @media (max-width: 700px) {
   .proposal-status-summary { grid-template-columns: 1fr; }
-  .proposal-follow-up-alert { grid-template-columns: auto minmax(0, 1fr); }
-  .proposal-follow-up-action { grid-column: 2; }
   .proposal-status-footer { align-items: flex-start; flex-direction: column; }
+}
+
+@media (min-width: 701px) and (max-width: 900px) {
+  .proposal-status-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* Follow-up & Closure layout repair.
@@ -15310,6 +15191,10 @@ table.sheet tbody tr:hover td {
 /* Browser zoom changes the usable workspace width without necessarily crossing
    a device breakpoint. Query the content pane itself, after the sidebar has
    claimed its space, so controls move as complete units instead of colliding. */
+
+/* Browser zoom changes the usable workspace width without necessarily crossing
+   a device breakpoint. Query the content pane itself, after the sidebar has
+   claimed its space, so controls move as complete units instead of colliding. */
 .main-scroll {
   container-name: workspace;
   container-type: inline-size;
@@ -15362,6 +15247,24 @@ table.sheet tbody tr:hover td {
   .opportunity-details-grid,
   .dgrid2 {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Keep the run-rate story primary and give the ModAE Funnel a compact,
+   readable secondary column. Each paired row stretches its cards to a shared
+   height while the page itself remains one naturally scrolling document. */
+.dashboard-page .performance-lower-grid {
+  grid-template-columns: minmax(0, 1.85fr) minmax(260px, 1fr);
+  width: min(100%, 1120px);
+  max-width: 1120px;
+  margin-inline: auto;
+  align-items: stretch;
+}
+@media (max-width: 900px) {
+  .dashboard-page .performance-lower-grid {
+    width: 100%;
+    max-width: none;
+    grid-template-columns: 1fr;
   }
 }
 
@@ -15897,6 +15800,43 @@ table.sheet tbody tr:hover td {
 .dashboard-page .home-analytics h3 { margin-top: 4px; color: var(--dashboard-ink); font-size: 23px; letter-spacing: -.03em; }
 .dashboard-page .home-analytics-head p { color: var(--dashboard-muted); }
 
+.dashboard-page .dashboard-live-kpis {
+  margin: 0 0 18px;
+}
+
+.dashboard-page .dashboard-live-kpis .stat-cards {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 10px;
+  margin: 0;
+}
+
+.dashboard-page .dashboard-live-kpis .stat-card-v2.dashboard-kpi {
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 84px;
+  height: 84px;
+  padding: 14px 16px;
+  border: 1px solid var(--dashboard-rule);
+  border-left: 1px solid var(--dashboard-rule);
+  border-radius: 0;
+  background: var(--surface-default);
+  box-shadow: none;
+  text-align: center;
+}
+
+.dashboard-page .dashboard-live-kpis .stat-card-v2.dashboard-kpi .sc-value {
+  font-size: clamp(25px, 2vw, 32px);
+  color: var(--kpi-accent);
+}
+
+.dashboard-page .dashboard-live-kpis .stat-card-v2.dashboard-kpi .sc-label {
+  color: var(--dashboard-ink);
+  text-align: center;
+}
+
 .dashboard-page .home-analytics-link,
 .dashboard-page .dashboard-card-link {
   min-height: 38px;
@@ -16011,6 +15951,8 @@ table.sheet tbody tr:hover td {
   .dashboard-page .home-analytics { padding: 18px; }
   .dashboard-page .home-analytics-grid { grid-template-columns: 1fr; }
   .dashboard-page .home-forecast-panel { min-height: 250px; }
+  .dashboard-page .dashboard-live-kpis .stat-cards { grid-template-columns: 1fr; }
+  .dashboard-page .dashboard-live-kpis .stat-card-v2.dashboard-kpi { height: 76px; min-height: 76px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -16211,7 +16153,7 @@ table.sheet tbody tr:hover td {
 
 .shell button.secondary,
 .shell .btn.secondary,
-  .shell button:not(.primary):not(.danger):not(.dark):not(.ghost):not(.icon-action):not(.mail-icon-btn):not(.mail-star):not(.reset):not(.sidebar-toggle):not(.tb-bell):not(.tb-icon):not(.tablet-bar button):not(.tab-bottom button):not(.dashboard-funnel-row):not(.theme-toggle),
+  .shell button:not(.primary):not(.danger):not(.dark):not(.ghost):not(.icon-action):not(.mail-icon-btn):not(.mail-star):not(.reset):not(.sidebar-toggle):not(.tb-bell):not(.tb-icon):not(.tablet-bar button):not(.tab-bottom button):not(.dashboard-funnel-row),
 .shell .btn:not(.primary):not(.danger):not(.dark):not(.ghost):not(.icon-action) {
   border: 1px solid #D1D5DB;
   border-radius: 8px;
@@ -16222,7 +16164,7 @@ table.sheet tbody tr:hover td {
 
 .shell button.secondary:hover:not(:disabled),
 .shell .btn.secondary:hover:not(:disabled),
-  .shell button:not(.primary):not(.danger):not(.dark):not(.ghost):not(.icon-action):not(.mail-icon-btn):not(.mail-star):not(.reset):not(.sidebar-toggle):not(.tb-bell):not(.tb-icon):not(.tablet-bar button):not(.tab-bottom button):not(.dashboard-funnel-row):not(.theme-toggle):hover:not(:disabled),
+  .shell button:not(.primary):not(.danger):not(.dark):not(.ghost):not(.icon-action):not(.mail-icon-btn):not(.mail-star):not(.reset):not(.sidebar-toggle):not(.tb-bell):not(.tb-icon):not(.tablet-bar button):not(.tab-bottom button):not(.dashboard-funnel-row):hover:not(:disabled),
 .shell .btn:not(.primary):not(.danger):not(.dark):not(.ghost):not(.icon-action):hover:not(:disabled) {
   border-color: #A8A29E;
   background: #F5F5F4;
@@ -16317,7 +16259,7 @@ table.sheet tbody tr:hover td {
 .dashboard-page .home-forecast-panel :is(.home-forecast-value, .home-forecast-split b) { color: #0F172A; }
 .dashboard-page .home-forecast-split { border-color: #E5E7EB; }
 
-.tablet-mode.theme-light {
+.tablet-mode {
   --surface-canvas: #F8F7F4;
   --surface-default: #FFFFFF;
   --surface-raised: #FFFFFF;
@@ -16353,61 +16295,6 @@ table.sheet tbody tr:hover td {
   --dash-track: #F1F5F9;
 }
 
-.shell.theme-dark :is(.panel, .form-card, .card, .ana-card, .stat-card-v2, .home-analytics, .dashboard-card, .home-funnel-panel, .home-forecast-panel, .mailbox-list, .sparse-card) {
-  border-color: rgba(227, 227, 229, .24);
-  background: #16181A;
-  color: #EDEDED;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, .25);
-}
-.shell.theme-dark :is(select, input:not([type="checkbox"]):not([type="radio"]), textarea) {
-  border-color: #475569;
-  background-color: #16181A;
-  color: #E2E8F0;
-}
-.shell.theme-dark .primary,
-.shell.theme-dark button.primary,
-.shell.theme-dark .btn.primary,
-.shell.theme-dark .tracker-create-logo {
-  border-color: #EF7765;
-  background: #EF7765;
-  color: #0F1011;
-}
-.shell.theme-dark .primary:hover:not(:disabled),
-.shell.theme-dark button.primary:hover:not(:disabled),
-.shell.theme-dark .btn.primary:hover:not(:disabled),
-.shell.theme-dark .tracker-create-logo:hover { background: #F39C8E; border-color: #F39C8E; }
-.shell.theme-dark button:not(.primary):not(.danger):not(.dark):not(.ghost):not(.icon-action):not(.mail-icon-btn):not(.mail-star):not(.reset):not(.sidebar-toggle):not(.tb-bell):not(.tb-icon):not(.tablet-bar button):not(.tab-bottom button):not(.dashboard-funnel-row):not(.theme-toggle),
-.shell.theme-dark .btn:not(.primary):not(.danger):not(.dark):not(.ghost):not(.icon-action) {
-  border-color: #475569;
-  background: #1F2937;
-  color: #E2E8F0;
-}
-.shell.theme-dark .mail-list-toolbar,
-.shell.theme-dark .mail-column-head,
-.shell.theme-dark .dashboard-page .home-forecast-panel { background: #1F2224; color: #EDEDED; }
-.shell.theme-dark .dashboard-page {
-  --dashboard-canvas: #0F1011;
-  --dashboard-card: #16181A;
-  --dashboard-card-subtle: #1F2224;
-  --dashboard-border: rgba(227, 227, 229, .24);
-  --dashboard-border-strong: #475569;
-  --dashboard-text: #EDEDED;
-  --dashboard-ink: #EDEDED;
-  --dashboard-muted: #C4C8CC;
-  --dashboard-rule: rgba(227, 227, 229, .24);
-  --dashboard-wash: #1F2224;
-  --surface-default: #16181A;
-  --surface-sunken: #0B0C0D;
-  --border-default: rgba(227, 227, 229, .30);
-}
-.shell.theme-dark :is(table:not(.sheet), .dashboard-table) thead th,
-.shell.theme-dark .tracker-page table.sheet thead th { border-color: #39414A; background: #1F2224; color: #C4C8CC; }
-.shell.theme-dark :is(table:not(.sheet), .dashboard-table) tbody td,
-.shell.theme-dark .tracker-page table.sheet tbody td { border-color: #30363D; background: #16181A; color: #C4C8CC; }
-.shell.theme-dark :is(table:not(.sheet), .dashboard-table) tbody tr:hover td,
-.shell.theme-dark .tracker-page table.sheet tbody tr:hover td { background: #1F2224; }
-.shell.theme-dark .dashboard-page .home-forecast-panel :is(.home-panel-title, .home-panel-note, .home-forecast-label, .home-forecast-split span) { color: #C4C8CC; }
-.shell.theme-dark .dashboard-page .home-forecast-panel :is(.home-forecast-value, .home-forecast-split b) { color: #EDEDED; }
 
 /* Inbox grid containment: keep the complete message grid inside the same
    workspace-width contract as the Opportunities sheet. The grid, its sticky
@@ -16496,251 +16383,6 @@ table.sheet tbody tr:hover td {
   border-color: var(--dashboard-border-strong);
   box-shadow: 0 2px 5px rgba(24, 24, 27, .06), 0 10px 20px rgba(24, 24, 27, .06);
   transform: translateY(-1px);
-}
-
-/* One root-controlled color system for the workspace and public surfaces. */
-html.dark,
-.shell.theme-dark {
-  color-scheme: dark;
-  --surface-canvas: #0F172A;
-  --surface-default: #1E293B;
-  --surface-raised: #1E293B;
-  --surface-sunken: #0F172A;
-  --surface-inverse: #F1F5F9;
-  --text-primary: #F8FAFC;
-  --text-secondary: #94A3B8;
-  --text-tertiary: #94A3B8;
-  --text-on-inverse: #0F172A;
-  --border-default: #1E293B;
-  --border-subtle: #1E293B;
-  --action-primary: #F1F5F9;
-  --action-primary-hover: #FFFFFF;
-  --action-secondary-bg: #1E293B;
-  --action-secondary-text: #F8FAFC;
-  --action-secondary-border: #334155;
-  --action-secondary-hover: #334155;
-  --hdr-navy: #1E293B;
-  --header-fill: #334155;
-  --surface: #1E293B;
-  --bg-app: #0F172A;
-  --card-bg: #1E293B;
-  --text-main: #F8FAFC;
-  --text-muted: #94A3B8;
-  --text-subtle: #94A3B8;
-  --border-color: #334155;
-  --border-soft: #1E293B;
-}
-
-.shell.theme-light {
-  --border-default: #E2E8F0;
-  --border-color: #E2E8F0;
-}
-
-html.dark body { background: #0F172A; color: #F8FAFC; }
-.shell.theme-dark:not(.tablet-mode) {
-  --corporate-canvas: #0F172A;
-  --corporate-surface: #1E293B;
-  --corporate-ink: #F8FAFC;
-  --corporate-muted: #94A3B8;
-  --corporate-rule: #334155;
-  background: #0F172A;
-}
-.shell.theme-dark:not(.tablet-mode) > .sidenav {
-  --bg-sidebar: #111827;
-  --bg-sidebar-2: #1E293B;
-  --text-on-inverse: #F8FAFC;
-  background: #111827;
-  border-right-color: #334155;
-  color: #F8FAFC;
-}
-.shell.theme-dark:not(.tablet-mode) > .sidenav .side-nav-heading { color: #94A3B8; }
-.shell.theme-dark:not(.tablet-mode) > .sidenav .side-item { color: #CBD5E1; }
-.shell.theme-dark:not(.tablet-mode) > .sidenav .side-item .ic { color: #94A3B8; }
-.shell.theme-dark:not(.tablet-mode) > .sidenav .side-item:hover {
-  background: #1E293B;
-  color: #F8FAFC;
-}
-.shell.theme-dark:not(.tablet-mode) > .sidenav .side-item.active {
-  background: #334155;
-  color: #F8FAFC;
-}
-.shell.theme-dark:not(.tablet-mode) > .sidenav .side-item:is(:hover, .active) .ic { color: #F8FAFC; }
-.shell.theme-dark:not(.tablet-mode) > .sidenav .side-foot button.reset { color: #CBD5E1; }
-.shell.theme-dark:not(.tablet-mode) > .sidenav .side-foot button.reset:is(:hover, :focus-visible) {
-  background: #1E293B;
-  color: #F8FAFC;
-}
-.shell.theme-dark > .brand-watermark { display: none; }
-.shell.theme-dark > .main-col,
-.shell.theme-dark:not(.tablet-mode) > .main-col { background: #0F172A; }
-.shell.theme-dark .topbar { background: #1E293B; border-color: #334155; color: #F8FAFC; }
-.shell.theme-dark .topbar-title { color: #94A3B8; }
-.shell.theme-dark .dashboard-page {
-  --dashboard-canvas: #0F172A;
-  --dashboard-card: #1E293B;
-  --dashboard-card-subtle: #334155;
-  --dashboard-border: #334155;
-  --dashboard-border-strong: #475569;
-  --dashboard-text: #F8FAFC;
-  --dashboard-ink: #F8FAFC;
-  --dashboard-muted: #94A3B8;
-  --dashboard-rule: #334155;
-  --dashboard-wash: #334155;
-  --surface-default: #1E293B;
-  --surface-sunken: #0F172A;
-  --border-default: #334155;
-  background: #0F172A;
-}
-.shell.theme-dark .dashboard-page .home-forecast-panel,
-.shell.theme-dark .dashboard-page .home-forecast-panel :is(.home-forecast-value, .home-forecast-split b) {
-  color: #F8FAFC;
-}
-.shell.theme-dark .dashboard-page .home-forecast-panel { background: #1E293B; }
-.shell.theme-dark :is(.panel, .form-card, .card, .ana-card, .stat-card-v2, .home-analytics, .dashboard-card, .home-funnel-panel, .home-forecast-panel, .mailbox-list, .sparse-card) {
-  background: #1E293B;
-  border-color: #334155;
-  color: #F8FAFC;
-}
-.shell.theme-dark :is(table:not(.sheet), .dashboard-table) :is(th, td),
-.shell.theme-dark .tracker-page table.sheet :is(th, td) {
-  background: #1E293B;
-  border-color: #334155;
-  color: #CBD5E1;
-}
-.shell.theme-dark :is(table:not(.sheet), .dashboard-table) tbody tr:hover td,
-.shell.theme-dark .tracker-page table.sheet tbody tr:hover td { background: #334155; }
-.shell.theme-dark .tracker-page table.sheet:not(.cols-key) tbody tr:not(:hover) td,
-.shell.theme-dark .dashboard-page .dashboard-table tbody tr:nth-child(even) td { background: #1E293B; }
-.shell.theme-dark :is(.mail-list-toolbar, .mail-column-head, .mail-row:not(.selected):not(.unread)) { background: #1E293B; color: #94A3B8; }
-.shell.theme-dark :is(.dashboard-table td:first-child, .dashboard-table td:first-child a, .dashboard-table td:first-child b, .tracker-page td.oppid, .mail-ref, .mail-opportunity-link) { color: #F8FAFC; }
-.shell.theme-dark .tablet-bar { background: #0F172A; }
-.shell.theme-dark :is(.page, .admin-page, .home-page, .tracker-page) { color: #F8FAFC; }
-.shell.theme-dark :is(.page h2, .admin-page h2, .admin-page h3, .admin-page .section-title, .home-page h2, .home-page h3, .dashboard-page h2, .dashboard-page h3, .admin-card h3, .admin-card .section-title) { color: #F8FAFC; }
-.shell.theme-dark :is(.admin-card, .admin-status-strip, .home-card, .metric-card) {
-  background: #1E293B;
-  border-color: #334155;
-  color: #F8FAFC;
-}
-.shell.theme-dark .admin-card:hover { background: #334155; border-color: #475569; }
-.shell.theme-dark table.sheet { background: #1E293B; border-color: #334155; }
-.shell.theme-dark table.sheet :is(th, td),
-.shell.theme-dark table.sheet tbody tr:nth-child(even) td,
-.shell.theme-dark table.sheet tfoot td { background: #1E293B; border-color: #334155; color: #CBD5E1; }
-.shell.theme-dark table.sheet tbody tr:hover td { background: #334155; }
-.shell.theme-dark table.sheet td.cstat { background: #1E293B !important; color: #CBD5E1; }
-.shell.theme-dark .dashboard-page .home-alert-rail > :is(button, div) { background: #1E293B; border-color: #334155; color: #94A3B8; }
-.shell.theme-dark .dashboard-page .home-alert-rail :is(.home-alert-value, button > span:last-child, div > span:last-child) { color: #F8FAFC; }
-.shell.theme-dark :is(.ana-title, .home-analytics h3, .home-panel-title, .stat-card-v2 .sc-label) { color: #F8FAFC; }
-.shell.theme-dark .approval-decision-form { background: var(--status-info-soft) !important; border-color: var(--status-info); }
-.shell.theme-dark .approval-decision-title { color: var(--text-primary); }
-.shell.theme-dark .approval-notice-info { background: var(--status-info-soft); border-color: var(--status-info); color: var(--text-primary); }
-.shell.theme-dark .approval-pending-banner { background: var(--status-warning-soft); border-color: var(--status-warning); color: var(--text-primary); }
-.shell.theme-dark .lead-workspace {
-  --ws-bg: #0F172A;
-  --ws-surface: #1E293B;
-  --ws-surface-2: #334155;
-  --ws-border: #334155;
-  --ws-border-strong: #475569;
-  --ws-text: #F8FAFC;
-  --ws-text-2: #CBD5E1;
-  --ws-text-3: #94A3B8;
-}
-.shell.theme-dark :is(.drawer, .modal, .sheet-wrap, .workbench-details-editor, .opp-summary, .opp-lifecycle, .workbench-panel, .wb-body) {
-  background: #1E293B;
-  border-color: #334155;
-  color: #F8FAFC;
-}
-.shell.theme-dark .drawer-tabs .dtab.active { color: #F8FAFC; }
-.shell.theme-dark.tablet-mode {
-  --dash-bg: #0F172A;
-  --dash-surface: #1E293B;
-  --dash-surface-2: #334155;
-  --dash-border: #334155;
-  --dash-border-hi: #475569;
-  --dash-text: #F8FAFC;
-  --dash-text-2: #CBD5E1;
-  --dash-text-3: #94A3B8;
-  --dash-track: #334155;
-}
-
-.theme-toggle,
-.shell .theme-toggle,
-.tablet-bar .theme-toggle {
-  width: 38px;
-  height: 38px;
-  min-height: 38px;
-  padding: 0;
-  border: 1px solid #E2E8F0;
-  border-radius: 9px;
-  background: #FFFFFF;
-  color: #0F172A;
-  cursor: pointer;
-  box-shadow: none;
-}
-.theme-toggle:hover,
-.shell .theme-toggle:hover,
-.tablet-bar .theme-toggle:hover { background: #F1F5F9; transform: none; }
-html.dark .theme-toggle,
-html.dark .shell .theme-toggle,
-html.dark .tablet-bar .theme-toggle {
-  border-color: #475569;
-  background: #1E293B;
-  color: #F8FAFC;
-}
-html.dark .theme-toggle:hover,
-html.dark .shell .theme-toggle:hover,
-html.dark .tablet-bar .theme-toggle:hover { background: #334155; }
-.theme-toggle:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
-.login-theme-toggle { position: absolute; z-index: 4; top: 20px; right: 20px; }
-.login-bg:not(.auth-loading) { background: #F8F7F4; }
-html.dark .login-bg:not(.auth-loading) { background: #0F172A; }
-.auth-loading { background: #F8F7F4; color: #0F172A; }
-html.dark .auth-loading { background: #0F172A; color: #F8FAFC; }
-.auth-loading__spinner { border-color: #CBD5E1; border-top-color: #0F172A; }
-html.dark .auth-loading__spinner { border-color: #475569; border-top-color: #F8FAFC; }
-html.dark .login-card { background: #1E293B; border: 1px solid #334155; color: #F8FAFC; }
-html.dark .login-card :is(input, select) { background: #0F172A; border-color: #475569; color: #F8FAFC; }
-html.dark .login-card .login-switch a { color: #F8FAFC; }
-
-/* Proposal pages are customer documents and keep their paper palette. */
-html.dark .propdoc {
-  color-scheme: light;
-  --text-main: #0F172A;
-  --text-muted: #475569;
-  --text-subtle: #64748B;
-  --border-soft: #E2E8F0;
-  --surface-default: #FFFFFF;
-  --surface: #FFFFFF;
-  --hdr-navy: #F9FAFB;
-  color: #0F172A;
-}
-
-.showcase-landing { background: #F8F7F4; color: #0F172A; }
-html.dark .showcase-landing { background: #0F172A; color: #F8FAFC; }
-.showcase-logo { filter: none; }
-html.dark .showcase-logo { filter: brightness(0) invert(1); }
-.showcase-nav-link { color: #0F172A; }
-html.dark .showcase-nav-link { color: #F8FAFC; }
-.showcase-secondary-cta { color: #0F172A; border-color: #CBD5E1; background: #FFFFFF; }
-.showcase-secondary-cta:hover { color: #0F172A; background: #F1F5F9; border-color: #94A3B8; }
-html.dark .showcase-secondary-cta { color: #F8FAFC; border-color: #475569; background: #1E293B; }
-html.dark .showcase-secondary-cta:hover { color: #FFFFFF; background: #334155; }
-.showcase-noise { opacity: .08; }
-html.dark .showcase-noise { opacity: .28; }
-.showcase-closing { background: #FFFFFF; border-color: #E2E8F0; box-shadow: 0 10px 32px rgba(15,23,42,.07); }
-.showcase-closing h2 { color: #0F172A; }
-html.dark .showcase-closing { background: #1E293B; border-color: #334155; box-shadow: none; }
-html.dark .showcase-closing h2 { color: #F8FAFC; }
-
-html.theme-ready :is(body, .shell, .main-col, .topbar, .tablet-bar, .login-bg, .login-card, .showcase-landing, .showcase-proof, .showcase-closing, .panel, .form-card, .card, .dashboard-card, .stat-card-v2, .theme-toggle) {
-  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease;
-}
-@media (prefers-reduced-motion: reduce) {
-  html.theme-ready :is(body, .shell, .main-col, .topbar, .tablet-bar, .login-bg, .login-card, .showcase-landing, .showcase-proof, .showcase-closing, .panel, .form-card, .card, .dashboard-card, .stat-card-v2, .theme-toggle) { transition: none; }
-}
-@media print {
-  html.dark body { background: #FFFFFF; color: #0F172A; }
-  html.dark .propdoc { background: #FFFFFF; color: #0F172A; }
 }
 
 /* Opportunities keeps its dense spreadsheet rhythm: toolbar actions are
@@ -17205,8 +16847,10 @@ html.theme-ready :is(body, .shell, .main-col, .topbar, .tablet-bar, .login-bg, .
 }
 .opportunities-page .tracker-page table.sheet thead .tracker-th-control:focus-visible {
   background: transparent;
-  outline: 2px solid var(--focus-ring);
-  outline-offset: -2px;
+  outline: 0;
+  text-decoration: underline;
+  text-decoration-color: var(--focus-ring);
+  text-underline-offset: 3px;
 }
 
 /* Inbox row hierarchy: opportunity marker first, subject second, preview third. */
@@ -17299,6 +16943,12 @@ html.theme-ready :is(body, .shell, .main-col, .topbar, .tablet-bar, .login-bg, .
   border-radius: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
+  outline: 0 !important;
+}
+.opportunities-page .tracker-page table.sheet thead .tracker-th-control:focus-visible {
+  text-decoration: underline;
+  text-decoration-color: var(--focus-ring);
+  text-underline-offset: 3px;
 }
 
 /* Keep the plain column labels on an opaque sticky strip while rows scroll. */
@@ -17310,9 +16960,6 @@ html.theme-ready :is(body, .shell, .main-col, .topbar, .tablet-bar, .login-bg, .
 }
 .opportunities-page .tracker-page table.sheet thead th.rowhead {
   z-index: 4;
-}
-.shell.theme-dark .opportunities-page .tracker-page table.sheet thead th {
-  background: #1F2224 !important;
 }
 
 /* Compact Lead inbox contract: the mailbox is a fitted workspace grid, not a
@@ -17332,4 +16979,892 @@ html.theme-ready :is(body, .shell, .main-col, .topbar, .tablet-bar, .login-bg, .
     box-shadow: none;
     background: transparent;
   }
+}
+
+/* My Dashboard alignment pass: keep dense operational content bounded and
+   consistent without changing the shared table/card primitives elsewhere. */
+.dashboard-page .ana-grid,
+.dashboard-page .performance-scorecard-grid,
+.dashboard-page .performance-lower-grid { gap: 16px; }
+
+.dashboard-page .dashboard-card,
+.dashboard-page .home-funnel-panel,
+.dashboard-page .home-forecast-panel { box-sizing: border-box; }
+
+.dashboard-page .dashboard-card { padding: 20px; min-height: 0; }
+.dashboard-page .dashboard-card .ana-title { margin-bottom: 14px; }
+.dashboard-page .dashboard-card .hint,
+.dashboard-page .performance-card-note,
+.dashboard-page .targets-table .hint,
+.dashboard-page .dashboard-table .hint {
+  color: var(--dashboard-muted, var(--text-subtle));
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+/* Keep the three top metrics as a predictable vertical reading stack. */
+.dashboard-page .stat-card-v2.dashboard-kpi {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'value' 'label' 'hint';
+  align-items: flex-start;
+  justify-content: center;
+  row-gap: 4px;
+  min-height: 92px;
+  padding: 16px 18px;
+}
+.dashboard-page .stat-card-v2.dashboard-kpi .sc-label { align-self: auto; }
+
+/* Priority proposals: customer and owner cannot widen the fixed table. */
+.dashboard-page .proposal-status-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+.dashboard-page .proposal-status-table th:nth-child(1) { width: 27%; }
+.dashboard-page .proposal-status-table th:nth-child(2) { width: 23%; }
+.dashboard-page .proposal-status-table th:nth-child(3) { width: 15%; }
+.dashboard-page .proposal-status-table th:nth-child(4) { width: 17%; }
+.dashboard-page .proposal-status-table th:nth-child(5) { width: 10%; }
+.dashboard-page .proposal-status-table th:nth-child(6) { width: 8%; }
+.dashboard-page .proposal-status-table th,
+.dashboard-page .proposal-status-table td {
+  min-width: 0;
+}
+.dashboard-page .proposal-status-table td {
+  vertical-align: middle;
+  overflow: hidden;
+}
+.dashboard-page .proposal-status-table .proposal-opportunity-id,
+.dashboard-page .proposal-status-table .proposal-opportunity-name {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dashboard-page .proposal-status-table .proposal-opportunity-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.dashboard-page .proposal-status-table .proposal-customer-name,
+.dashboard-page .proposal-status-table .proposal-owner-name {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dashboard-page .proposal-status-table .dashboard-value-cell { text-align: right; white-space: nowrap; }
+.dashboard-page .proposal-status-table .dashboard-status-cell,
+.dashboard-page .proposal-status-table .dashboard-action-cell { vertical-align: middle; }
+.dashboard-page .proposal-status-table .dashboard-status-cell { text-align: center; }
+.dashboard-page .proposal-status-table .dashboard-status-cell .pill {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dashboard-page .proposal-status-table .dashboard-action-cell { text-align: center; }
+
+/* Team targets: labels stay left, all target values share a tabular right edge. */
+.dashboard-page .targets-table {
+  min-width: 780px;
+  table-layout: fixed;
+}
+.dashboard-page .targets-table th:first-child,
+.dashboard-page .targets-table td:first-child { width: 25%; text-align: left; }
+.dashboard-page .targets-table th.num,
+.dashboard-page .targets-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.dashboard-page .targets-table td { vertical-align: middle; }
+.dashboard-page .targets-table .targets-owner { overflow-wrap: anywhere; }
+.dashboard-page .targets-table .targets-action-cell { width: 150px; }
+.dashboard-page .targets-table .targets-actions {
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* Funnel rows reserve room for both the stage label and its sub-label. */
+.dashboard-page .dashboard-funnel.funnel-visual .dashboard-funnel-list {
+  grid-auto-rows: minmax(64px, auto);
+}
+.dashboard-page .dashboard-funnel.funnel-visual .dashboard-funnel-row {
+  min-height: 64px;
+  height: auto;
+  gap: 16px;
+  padding: 8px 10px;
+}
+.dashboard-page .dashboard-funnel.funnel-visual .dashboard-funnel-label {
+  align-content: center;
+  gap: 4px;
+  min-width: 0;
+}
+.dashboard-page .dashboard-funnel.funnel-visual .dashboard-funnel-label strong,
+.dashboard-page .dashboard-funnel.funnel-visual .dashboard-funnel-label small {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.dashboard-page .dashboard-funnel.funnel-visual .dashboard-funnel-label small {
+  line-height: 1.35;
+}
+
+/* Performance cards share the height of their row so the long dashboard reads
+   as aligned paired sections instead of mismatched card bottoms. */
+.dashboard-page .performance-scorecard-grid,
+.dashboard-page .performance-lower-grid { align-items: stretch; }
+.dashboard-page .attainment-summary { height: auto; align-content: start; gap: 16px; }
+.dashboard-page .dashboard-win-loss-hero { margin-top: 2px; }
+.dashboard-page .dashboard-card > .win-loss-flow { flex: 0 0 auto; }
+
+@media (max-width: 900px) {
+  .dashboard-page .dashboard-card { padding: 16px; }
+  .dashboard-page .proposal-status-table,
+  .dashboard-page .targets-table { min-width: 760px; }
+}
+
+/* Keep Lead inbox actions at the same secondary emphasis. New enquiry still
+   opens the primary intake flow, but it should not visually overpower Archive. */
+.mailbox-head-actions .mail-new-enquiry {
+  background: var(--action-secondary-bg);
+  border-color: var(--action-secondary-border);
+  color: var(--action-secondary-text);
+}
+.mailbox-head-actions .mail-new-enquiry:hover:not(:disabled),
+.mailbox-head-actions .mail-new-enquiry:focus-visible {
+  background: var(--action-secondary-hover);
+  border-color: var(--action-secondary-border);
+  color: var(--action-secondary-text);
+}
+
+/* Final Opportunities toolbar contract. Keep the scope/search controls in a
+   flexible left group and the secondary actions in a stable right group so
+   browser zoom changes spacing without causing overlap. */
+.opportunities-page > .tracker-page > .toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: clamp(12px, 1.5vw, 24px);
+  row-gap: 10px;
+  padding-inline: 12px;
+  overflow: visible;
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-toolbar-filters {
+  display: grid;
+  grid-template-columns: minmax(170px, 220px) minmax(240px, 1fr);
+  align-items: center;
+  min-width: 0;
+  gap: 10px;
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-search-group {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-search-group .tracker-search {
+  min-width: 0;
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-toolbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: clamp(8px, 1vw, 14px);
+  min-width: max-content;
+  white-space: nowrap;
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-more-menu {
+  width: auto;
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-more-trigger,
+.opportunities-page > .tracker-page > .toolbar .tracker-columns-toggle,
+.opportunities-page > .tracker-page > .toolbar .tracker-create-logo {
+  min-height: 40px;
+  height: 40px;
+  white-space: nowrap;
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-search-filter {
+  position: relative;
+  width: 42px;
+  min-width: 42px;
+  padding-inline: 0;
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-search-filter .ic {
+  flex: 0 0 auto;
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-search-filter-active {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 6px;
+  height: 6px;
+  margin: 0;
+  border-radius: 50%;
+  background: var(--action-primary);
+  box-shadow: 0 0 0 2px var(--palette-4843938);
+}
+.opportunities-page .tracker-page table.sheet:not(.cols-key) th,
+.opportunities-page .tracker-page table.sheet:not(.cols-key) td {
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: normal;
+  vertical-align: middle;
+}
+.opportunities-page .tracker-page table.sheet:not(.cols-key) .tracker-th-label {
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+.opportunities-page .tracker-page table.sheet:not(.cols-key) .wrapcell {
+  white-space: normal;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+.opportunities-page .tracker-page table.sheet:not(.cols-key) thead tr > :nth-child(2),
+.opportunities-page .tracker-page table.sheet:not(.cols-key) tbody tr > :nth-child(2),
+.opportunities-page .tracker-page table.sheet:not(.cols-key) thead tr > :last-child,
+.opportunities-page .tracker-page table.sheet:not(.cols-key) tbody tr > :last-child {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+@container workspace (max-width: 70rem) {
+  .opportunities-page > .tracker-page > .toolbar {
+    grid-template-columns: minmax(0, 1fr);
+    padding-inline: 12px;
+  }
+  .opportunities-page > .tracker-page > .toolbar .tracker-toolbar-actions {
+    justify-content: flex-start;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+}
+
+@container workspace (max-width: 44rem) {
+  .opportunities-page > .tracker-page > .toolbar .tracker-toolbar-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .opportunities-page > .tracker-page > .toolbar .tracker-toolbar-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+  .opportunities-page > .tracker-page > .toolbar .tracker-toolbar-actions > *,
+  .opportunities-page > .tracker-page > .toolbar .tracker-more-menu,
+  .opportunities-page > .tracker-page > .toolbar .tracker-more-trigger,
+  .opportunities-page > .tracker-page > .toolbar .tracker-columns-toggle,
+  .opportunities-page > .tracker-page > .toolbar .tracker-create-logo {
+    width: 100%;
+  }
+}
+
+/* Keep all primary Opportunities controls on one line. Container-relative
+   sizing lets the labels, control heights, and gaps compact smoothly as browser
+   zoom reduces the available workspace, without wrapping the toolbar groups. */
+.opportunities-page > .tracker-page > .toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+  align-items: center;
+  column-gap: clamp(4px, .7cqi, 12px);
+  row-gap: 0;
+  min-width: 0;
+  overflow: visible;
+  font-size: clamp(9.5px, .9cqi, 14px);
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-toolbar-filters {
+  display: grid;
+  grid-template-columns: minmax(0, .58fr) minmax(0, 1fr);
+  align-items: center;
+  min-width: 0;
+  gap: clamp(3px, .5cqi, 8px);
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-toolbar-filters > .tracker-owner-filter,
+.opportunities-page > .tracker-page > .toolbar .tracker-search-group,
+.opportunities-page > .tracker-page > .toolbar .tracker-search-group .tracker-search {
+  min-width: 0;
+  width: 100%;
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-toolbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: stretch;
+  min-width: 0;
+  gap: clamp(2px, .45cqi, 7px);
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-toolbar-actions > *,
+.opportunities-page > .tracker-page > .toolbar .tracker-more-menu {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.opportunities-page > .tracker-page > .toolbar .tracker-more-trigger,
+.opportunities-page > .tracker-page > .toolbar .tracker-columns-toggle,
+.opportunities-page > .tracker-page > .toolbar .tracker-create-logo {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: clamp(30px, 2.5cqi, 40px);
+  height: clamp(30px, 2.5cqi, 40px);
+  padding-inline: clamp(3px, .65cqi, 10px);
+  font-size: inherit;
+  white-space: nowrap;
+}
+
+/* Main workspace destinations share the Inbox's title scale and top rhythm. */
+.workspace-page-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px !important;
+  color: #0F172A !important;
+  font-size: clamp(26px, 2vw, 32px) !important;
+  font-weight: 800 !important;
+  letter-spacing: -.025em !important;
+  line-height: 1.1 !important;
+}
+.workspace-page-title > .ic {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+}
+.opportunities-page > .tracker-page > .workspace-page-title {
+  margin-top: 24px !important;
+}
+.opportunities-page > .tracker-page > .toolbar {
+  padding-inline: 12px;
+}
+.dashboard-page .home-head {
+  margin-top: 0 !important;
+}
+.mailbox-page {
+  padding-top: 24px !important;
+}
+
+/* Keep the left edge of each primary page at one consistent distance from the
+   sidebar. These route roots use the full content pane so page centering cannot
+   make that distance drift from one destination to another. */
+:root {
+  --workspace-page-gutter: clamp(14px, 1.5vw, 24px);
+}
+.main-scroll > .page:has(.workspace-page-title) {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+  padding-inline: var(--workspace-page-gutter);
+}
+.opportunities-page > .tracker-page > .workspace-page-title {
+  padding-inline: 0;
+}
+.opportunities-page > .tracker-page > .toolbar {
+  padding-inline: 0;
+}
+.opportunities-page > .tracker-page > .sheet-wrap.fill {
+  border: 0;
+  border-inline-width: 0;
+  box-shadow: none;
+}
+
+/* Connect the opportunity controls to the spreadsheet so the toolbar reads
+   as the table's header band rather than as a separate row of floating cards. */
+.opportunities-page .tracker-grid-shell {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  --opp-density: 1;
+  border: 1px solid var(--border-default);
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--surface-default);
+  box-shadow: 0 2px 8px rgba(40, 40, 40, .06);
+}
+.opportunities-page .tracker-grid-shell > .toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 8px;
+  flex-wrap: nowrap;
+  margin: 0;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-sunken);
+}
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-toolbar-filters {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr);
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+}
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-toolbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-toolbar-actions > .tracker-owner-filter {
+  flex: 0 1 190px;
+  min-width: 150px;
+  max-width: 220px;
+  height: 36px;
+  padding-inline: 10px;
+  font-size: inherit;
+}
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-search-group {
+  display: flex;
+  min-width: 0;
+  width: 100%;
+}
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-search-group .tracker-search {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-filter-chips {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.opportunities-page .tracker-grid-shell > .sheet-wrap.fill table.sheet {
+  font-size: max(11px, calc(var(--opp-small-type, 12px) * var(--opp-density)));
+}
+.opportunities-page .tracker-grid-shell > .sheet-wrap.fill table.sheet th.th-filter,
+.opportunities-page .tracker-grid-shell > .sheet-wrap.fill table.sheet td {
+  padding: max(3px, calc(6px * var(--opp-density))) max(4px, calc(7px * var(--opp-density)));
+}
+.opportunities-page .tracker-grid-shell > .sheet-wrap.fill table.sheet th.th-filter {
+  min-height: max(38px, calc(46px * var(--opp-density)));
+}
+.opportunities-page .tracker-grid-shell > .sheet-wrap.fill table.sheet .tracker-th-control {
+  min-height: max(30px, calc(34px * var(--opp-density)));
+  padding: max(3px, calc(5px * var(--opp-density))) max(4px, calc(6px * var(--opp-density)));
+}
+.opportunities-page .tracker-grid-shell > .sheet-wrap.fill table.sheet:not(.cols-key) th,
+.opportunities-page .tracker-grid-shell > .sheet-wrap.fill table.sheet:not(.cols-key) td {
+  min-width: max(56px, calc(var(--tracker-column-min, 78px) * var(--opp-density))) !important;
+}
+.opportunities-page .tracker-grid-shell > .sheet-wrap.fill table.sheet.cols-key th,
+.opportunities-page .tracker-grid-shell > .sheet-wrap.fill table.sheet.cols-key td,
+.opportunities-page .tracker-grid-shell > .sheet-wrap.fill table.sheet.cols-key td :is(input, select, textarea, .wrapcell) {
+  font-size: max(11px, calc(12px * var(--opp-density)));
+}
+.opportunities-page .tracker-grid-shell > .errbox {
+  margin: 0;
+  border-radius: 0;
+  border-inline: 0;
+  border-top: 0;
+}
+.opportunities-page .tracker-grid-shell > .sheet-wrap.fill {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 36px;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--surface-default);
+}
+.opportunities-page .tracker-grid-shell .tracker-create-logo {
+  min-width: 160px;
+  height: 36px;
+  padding: 0 16px !important;
+  border-color: var(--action-primary);
+  border-radius: 6px;
+  background: var(--action-primary);
+  color: var(--text-on-accent);
+  font-size: 14px;
+  font-weight: 750;
+}
+.opportunities-page .tracker-grid-shell .tracker-create-logo:hover:not(:disabled) {
+  border-color: var(--action-primary-hover);
+  background: var(--action-primary-hover);
+  color: var(--text-on-accent);
+}
+.opportunities-page .tracker-grid-shell .tracker-create-logo:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+@media (max-width: 900px) {
+  .opportunities-page .tracker-grid-shell { border-radius: 8px; }
+  .opportunities-page .tracker-grid-shell > .toolbar {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 10px;
+  }
+  .opportunities-page .tracker-grid-shell > .toolbar .tracker-toolbar-actions {
+    justify-content: flex-start;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+  .opportunities-page .tracker-grid-shell > .toolbar .tracker-toolbar-actions > .tracker-owner-filter {
+    flex: 1 1 180px;
+    max-width: none;
+  }
+}
+
+/* Browser zoom reduces the workspace's CSS width. Step the Opportunities
+   density down before the page needs to overflow, while keeping a readable
+   lower bound for cells and controls. */
+@container workspace (max-width: 90rem) {
+  .opportunities-page .tracker-grid-shell { --opp-density: .92; }
+}
+@container workspace (max-width: 76rem) {
+  .opportunities-page .tracker-grid-shell { --opp-density: .84; }
+}
+@container workspace (max-width: 60rem) {
+  .opportunities-page .tracker-grid-shell { --opp-density: .76; }
+}
+
+/* Keep the Opportunities controls on one neutral surface. Create opportunity
+   remains the only dark primary action; the discovery and view controls should
+   read as one consistent set of white, bordered controls. */
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-search-group,
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-more-trigger,
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-owner-filter,
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-columns-toggle,
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-create-logo {
+  box-sizing: border-box;
+  min-height: 40px;
+  height: 40px;
+  border: 1px solid var(--action-secondary-border) !important;
+  border-radius: 8px;
+  background: var(--action-secondary-bg) !important;
+  color: var(--action-secondary-text) !important;
+  box-shadow: none;
+}
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-search-group {
+  overflow: hidden;
+}
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-search-group .tracker-search {
+  background: transparent !important;
+  color: var(--action-secondary-text);
+}
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-search-group .tracker-search-filter {
+  border-left-color: var(--action-secondary-border);
+  color: var(--action-secondary-text);
+}
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-search-group:focus-within,
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-more-trigger:focus-visible,
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-owner-filter:focus-visible,
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-columns-toggle:focus-visible {
+  border-color: var(--focus-ring) !important;
+  box-shadow: 0 0 0 2px rgba(100, 116, 139, .16);
+  outline: none;
+}
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-search-group:hover,
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-more-trigger:hover:not(:disabled),
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-owner-filter:hover,
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-columns-toggle:hover:not(:disabled),
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-create-logo:hover:not(:disabled) {
+  border-color: var(--action-secondary-border) !important;
+  background: var(--action-secondary-hover) !important;
+  color: var(--action-secondary-text) !important;
+}
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-search-group .tracker-search-filter:hover,
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-search-group .tracker-search-filter:focus-visible {
+  background: var(--action-secondary-hover);
+  color: var(--action-secondary-text);
+  outline: none;
+}
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-search-group .tracker-search-filter.active {
+  background: var(--primary-soft);
+  color: var(--primary-deep);
+}
+.opportunities-page .tracker-grid-shell .tracker-create-logo {
+  border-color: var(--action-secondary-border) !important;
+  background: var(--action-secondary-bg) !important;
+  color: var(--action-secondary-text) !important;
+}
+.opportunities-page .tracker-grid-shell .tracker-create-logo:hover:not(:disabled) {
+  border-color: var(--action-secondary-border) !important;
+  background: var(--action-secondary-hover) !important;
+  color: var(--action-secondary-text) !important;
+}
+
+/* Give the two workflow hand-off columns enough room for their real values.
+   Date editors stay inside the date column and the owner selector stays inside
+   Next Action instead of pushing into the table edge. */
+.opportunities-page .tracker-grid-shell table.sheet.cols-key th:nth-child(22),
+.opportunities-page .tracker-grid-shell table.sheet.cols-key td:nth-child(22) {
+  min-width: 0;
+}
+.opportunities-page .tracker-grid-shell table.sheet.cols-key td:nth-child(22) input[type="date"] {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 11ch;
+  max-width: 100%;
+  white-space: nowrap;
+}
+.opportunities-page .tracker-grid-shell table.sheet.cols-key th:nth-child(32),
+.opportunities-page .tracker-grid-shell table.sheet.cols-key td:nth-child(32) {
+  min-width: 0;
+}
+.opportunities-page .tracker-grid-shell table.sheet.cols-key td:nth-child(32) select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-search-group {
+  min-width: min(360px, 100%);
+}
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-search-group {
+  min-height: 42px;
+  height: 42px;
+  border-radius: 10px;
+  border-color: var(--action-secondary-border) !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .06);
+}
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-search-group .tracker-search {
+  min-height: 40px;
+  height: 40px;
+  gap: 9px;
+  padding-inline: 13px;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  font-size: 14px;
+}
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-search-group .tracker-search > .ic {
+  flex: 0 0 auto;
+  color: var(--text-tertiary);
+}
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-search-group .tracker-search input {
+  min-width: 0;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-search-group .tracker-search input::placeholder {
+  color: var(--text-tertiary);
+  opacity: 1;
+}
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-search-group:focus-within {
+  border-color: var(--action-secondary-border) !important;
+  box-shadow: inset 0 -2px 0 var(--focus-ring), 0 1px 2px rgba(15, 23, 42, .08);
+}
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-toolbar-actions {
+  gap: 10px;
+}
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-toolbar-actions > .tracker-more-menu {
+  flex: 0 0 124px;
+}
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-toolbar-actions > .tracker-columns-toggle {
+  flex: 0 1 190px;
+}
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-toolbar-actions > .tracker-owner-filter {
+  flex: 1 1 190px;
+}
+.opportunities-page .tracker-grid-shell > .toolbar .tracker-toolbar-actions > .tracker-create-logo {
+  flex: 0 1 240px;
+}
+
+/* Align dashboard actions with the title/subtitle block and tighten the
+   header-to-KPI transition without changing other workspace pages. */
+.dashboard-page .home-head {
+  align-items: center;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+}
+
+@media (max-width: 760px) {
+  .dashboard-page .home-head {
+    align-items: flex-start;
+  }
+}
+
+/* This final, narrowly scoped rule wins over the shared button reset and the
+   later generic KPI layout rules for the three tiles inside Live Business View. */
+.dashboard-page .home-analytics .dashboard-live-kpis .stat-cards > button.stat-card-v2.dashboard-kpi {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  height: 96px;
+  min-height: 96px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--kpi-accent) 34%, white);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--kpi-accent) 9%, white);
+  text-align: center;
+}
+
+.dashboard-page .home-analytics .dashboard-live-kpis .stat-cards > button.stat-card-v2.dashboard-kpi .sc-value {
+  width: 100%;
+  color: var(--kpi-accent);
+  font-size: clamp(36px, 2.8vw, 42px);
+  line-height: 1;
+  text-align: center;
+}
+
+.dashboard-page .home-analytics .dashboard-live-kpis .stat-cards > button.stat-card-v2.dashboard-kpi .sc-label {
+  width: 100%;
+  color: var(--dashboard-ink);
+  font-size: 16px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .dashboard-page .home-analytics .dashboard-live-kpis .stat-cards > button.stat-card-v2.dashboard-kpi {
+    height: 88px;
+    min-height: 88px;
+  }
+}
+
+/* Work-queue counts use the same compact, centered, square KPI treatment. */
+.dashboard-page .home-analytics .home-alert-rail > button.home-alert-kpi {
+  --queue-accent: var(--dashboard-info);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 100%;
+  height: 96px;
+  min-height: 96px;
+  gap: 7px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--queue-accent) 34%, white);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--queue-accent) 9%, white);
+  color: var(--dashboard-ink);
+  text-align: center;
+}
+
+.dashboard-page .home-analytics .home-alert-rail > button.home-alert-kpi.home-alert-requests {
+  --queue-accent: var(--dashboard-warning);
+}
+
+.dashboard-page .home-analytics .home-alert-rail > button.home-alert-kpi.home-alert-stale {
+  --queue-accent: var(--dashboard-danger);
+}
+
+.dashboard-page .home-analytics .home-alert-rail > button.home-alert-kpi.is-clear {
+  --queue-accent: var(--dashboard-success);
+}
+
+.dashboard-page .home-analytics .home-alert-rail > button.home-alert-kpi .home-alert-value {
+  color: var(--queue-accent);
+  font-size: clamp(36px, 2.8vw, 42px);
+  font-weight: 800;
+  line-height: 1;
+}
+
+.dashboard-page .home-analytics .home-alert-rail > button.home-alert-kpi > span:last-child {
+  color: var(--dashboard-ink);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.dashboard-page .home-analytics .home-alert-rail > button.home-alert-kpi:hover {
+  border-color: var(--queue-accent);
+  background: color-mix(in srgb, var(--queue-accent) 13%, white);
+  transform: none;
+}
+
+@media (max-width: 640px) {
+  .dashboard-page .home-analytics .home-alert-rail > button.home-alert-kpi {
+    height: 88px;
+    min-height: 88px;
+  }
+}
+
+/* Keep the dashboard's outcome flow consistent with its other KPI groups,
+   while leaving the shared Analytics-page flow untouched. */
+.dashboard-page .dashboard-card .dashboard-wl-filters {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 0 0 14px;
+  border-bottom: 1px solid var(--dashboard-rule);
+}
+
+.dashboard-page .dashboard-wl-filters label { display: grid; gap: 4px; min-width: 150px; }
+.dashboard-page .dashboard-wl-filters label > span,
+.dashboard-page .dashboard-wl-filter-count { color: var(--dashboard-muted); font-size: 11px; font-weight: 700; }
+.dashboard-page .dashboard-wl-filter-count { margin: 0 0 10px auto; }
+.dashboard-page .dashboard-wl-filters select { min-height: 36px; padding: 0 10px; border: 1px solid var(--dashboard-rule); background: var(--surface-default); color: var(--dashboard-ink); }
+
+.dashboard-page .dashboard-wl-outcomes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.dashboard-page .dashboard-wl-outcome,
+.dashboard-page .dashboard-wl-rate {
+  --wl-accent: var(--dashboard-neutral);
+  display: flex;
+  min-width: 0;
+  min-height: 116px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 16px;
+  border: 1px solid color-mix(in srgb, var(--wl-accent) 34%, white);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--wl-accent) 9%, white);
+  text-align: center;
+}
+
+.dashboard-page .dashboard-wl-outcome.is-won { --wl-accent: var(--dashboard-success); }
+.dashboard-page .dashboard-wl-outcome.is-lost { --wl-accent: var(--dashboard-danger); }
+.dashboard-page .dashboard-wl-outcome > span,
+.dashboard-page .dashboard-wl-rate > span { color: var(--dashboard-ink); font-size: 16px; font-weight: 700; }
+.dashboard-page .dashboard-wl-outcome strong,
+.dashboard-page .dashboard-wl-rate strong { color: var(--wl-accent); font-size: clamp(36px, 2.8vw, 42px); line-height: 1; }
+.dashboard-page .dashboard-wl-outcome small,
+.dashboard-page .dashboard-wl-rate small { color: var(--dashboard-muted); font-size: 14px; }
+.dashboard-page .dashboard-wl-rate-track { width: 100%; max-width: 220px; height: 8px; overflow: hidden; background: color-mix(in srgb, var(--dashboard-neutral) 14%, white); }
+.dashboard-page .dashboard-wl-rate-track i { display: block; height: 100%; background: var(--dashboard-success); }
+
+.dashboard-page .dashboard-wl-reasons { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--dashboard-rule); }
+.dashboard-page .dashboard-wl-reasons-head { display: flex; align-items: end; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.dashboard-page .dashboard-wl-reasons-head h4 { margin: 3px 0 0; color: var(--dashboard-ink); font-size: 18px; }
+.dashboard-page .dashboard-wl-reasons-head > span { color: var(--dashboard-muted); font-size: 11px; }
+.dashboard-page .dashboard-wl-reason-list { display: grid; gap: 10px; }
+.dashboard-page .dashboard-wl-reason { display: grid; grid-template-columns: minmax(150px, .8fr) minmax(100px, 1.5fr) auto; align-items: center; gap: 12px; }
+.dashboard-page .dashboard-wl-reason-name { overflow: hidden; color: var(--dashboard-ink); font-size: 13px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-page .dashboard-wl-reason-track { height: 8px; overflow: hidden; background: color-mix(in srgb, var(--dashboard-danger) 12%, white); }
+.dashboard-page .dashboard-wl-reason-track i { display: block; height: 100%; background: var(--dashboard-danger); }
+.dashboard-page .dashboard-wl-reason > b { color: var(--dashboard-danger); font-size: 13px; white-space: nowrap; }
+.dashboard-page .dashboard-wl-no-reasons { margin: 0; padding: 14px; background: var(--dashboard-wash); color: var(--dashboard-muted); font-size: 13px; }
+.dashboard-page .dashboard-wl-all-reasons { min-height: 36px; margin-top: 14px; padding: 0; border: 0; background: transparent; color: var(--dashboard-ink); font-size: 12px; font-weight: 750; }
+
+@media (max-width: 760px) {
+  .dashboard-page .dashboard-wl-outcomes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dashboard-page .dashboard-wl-rate { grid-column: 1 / -1; }
+  .dashboard-page .dashboard-wl-filter-count { margin-left: 0; }
+}
+
+@media (max-width: 520px) {
+  .dashboard-page .dashboard-wl-outcomes { grid-template-columns: 1fr; }
+  .dashboard-page .dashboard-wl-rate { grid-column: auto; }
+  .dashboard-page .dashboard-wl-reason { grid-template-columns: minmax(0, 1fr) auto; }
+  .dashboard-page .dashboard-wl-reason-track { grid-column: 1 / -1; grid-row: 2; }
 }

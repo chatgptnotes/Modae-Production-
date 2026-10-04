@@ -1,7 +1,6 @@
 import React from 'react'
 import { Link } from 'react-router-dom'
 import { Icon, ModaeImageLogo } from '../icons.jsx'
-import { ThemeToggle } from '../theme.jsx'
 import heroSensor from '../../assets/brand/modae/images/showcase-sensor-hero.png'
 import sensors from '../../assets/brand/modae/images/products/sensors.jpg'
 import monitoring from '../../assets/brand/modae/images/products/monitoring-systems.jpg'
@@ -43,7 +42,7 @@ const proof = [
 
 export default function ShowcaseLanding() {
   return (
-    <main className="showcase-landing min-h-[100dvh] overflow-hidden bg-[#F8F7F4] text-slate-900 dark:bg-slate-900 dark:text-slate-100">
+    <main className="showcase-landing min-h-[100dvh] overflow-hidden bg-[#F8F7F4] text-slate-900">
       <div className="showcase-noise" aria-hidden="true" />
 
       <header className="relative z-10 mx-auto flex w-full max-w-[1480px] items-center justify-between px-5 py-5 sm:px-8 lg:px-12">
@@ -51,7 +50,6 @@ export default function ShowcaseLanding() {
           <ModaeImageLogo height={30} className="showcase-logo" />
         </Link>
         <div className="flex items-center gap-3">
-          <ThemeToggle />
           <a className="showcase-nav-link" href="mailto:hello@modae.com">
             Start a conversation <Icon name="arrowRight" size={15} />
           </a>
@@ -61,10 +59,10 @@ export default function ShowcaseLanding() {
       <section className="relative z-10 mx-auto grid w-full max-w-[1480px] gap-9 px-5 pb-20 pt-8 sm:px-8 lg:grid-cols-[minmax(0,1.06fr)_minmax(380px,.94fr)] lg:items-end lg:px-12 lg:pb-28 lg:pt-16">
         <div className="showcase-hero-copy max-w-3xl lg:pb-8">
           <p className="showcase-kicker">ModAE · Intelligent industrial systems</p>
-          <h1 className="mt-5 max-w-[10ch] text-[clamp(3.7rem,8.1vw,8rem)] font-extrabold leading-[.86] tracking-[-.075em] text-slate-900 dark:text-slate-100">
+          <h1 className="mt-5 max-w-[10ch] text-[clamp(3.7rem,8.1vw,8rem)] font-extrabold leading-[.86] tracking-[-.075em] text-slate-900">
             Systems that keep <span className="showcase-accent-word">industry</span> in motion.
           </h1>
-          <p className="mt-8 max-w-xl text-base leading-7 text-slate-600 dark:text-slate-400 sm:text-lg">
+          <p className="mt-8 max-w-xl text-base leading-7 text-slate-600 sm:text-lg">
             ModAE turns complex machinery into clear operating intelligence—so your team can see risk early, act with confidence, and keep critical assets productive.
           </p>
           <div className="mt-9 flex flex-wrap items-center gap-3">
@@ -91,24 +89,24 @@ export default function ShowcaseLanding() {
         </aside>
       </section>
 
-      <section className="showcase-proof relative z-10 border-y border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-800">
-        <div className="mx-auto grid max-w-[1480px] divide-y divide-slate-200 px-5 dark:divide-slate-700 sm:grid-cols-3 sm:divide-x sm:divide-y-0 sm:px-8 lg:px-12">
+      <section className="showcase-proof relative z-10 border-y border-slate-200 bg-white">
+        <div className="mx-auto grid max-w-[1480px] divide-y divide-slate-200 px-5 sm:grid-cols-3 sm:divide-x sm:divide-y-0 sm:px-8 lg:px-12">
           {proof.map(([value, label]) => (
             <div key={label} className="py-7 sm:px-8 sm:first:pl-0 sm:last:pr-0">
-              <strong className="block text-4xl font-extrabold tracking-[-.06em] text-slate-900 dark:text-slate-100">{value}</strong>
-              <span className="mt-2 block text-sm text-slate-600 dark:text-slate-400">{label}</span>
+              <strong className="block text-4xl font-extrabold tracking-[-.06em] text-slate-900">{value}</strong>
+              <span className="mt-2 block text-sm text-slate-600">{label}</span>
             </div>
           ))}
         </div>
       </section>
 
       <section id="systems" className="relative z-10 mx-auto w-full max-w-[1480px] px-5 py-20 sm:px-8 lg:px-12 lg:py-28">
-        <div className="grid gap-8 border-b border-slate-200 pb-10 dark:border-slate-800 lg:grid-cols-[1fr_minmax(330px,.65fr)] lg:items-end">
+        <div className="grid gap-8 border-b border-slate-200 pb-10 lg:grid-cols-[1fr_minmax(330px,.65fr)] lg:items-end">
           <div>
             <p className="showcase-kicker">What we build</p>
-            <h2 className="mt-4 max-w-[12ch] text-4xl font-extrabold leading-[.95] tracking-[-.06em] text-slate-900 dark:text-slate-100 sm:text-6xl">Engineered for the moment before failure.</h2>
+            <h2 className="mt-4 max-w-[12ch] text-4xl font-extrabold leading-[.95] tracking-[-.06em] text-slate-900 sm:text-6xl">Engineered for the moment before failure.</h2>
           </div>
-          <p className="max-w-md text-base leading-7 text-slate-600 dark:text-slate-400 lg:justify-self-end">From the first sensor signal to the control room decision, every system is made to reduce uncertainty around the assets that matter most.</p>
+          <p className="max-w-md text-base leading-7 text-slate-600 lg:justify-self-end">From the first sensor signal to the control room decision, every system is made to reduce uncertainty around the assets that matter most.</p>
         </div>
 
         <div className="showcase-gallery mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-12">
@@ -139,10 +137,10 @@ export default function ShowcaseLanding() {
         </div>
       </section>
 
-      <footer className="relative z-10 border-t border-slate-200 px-5 py-6 text-xs text-slate-600 dark:border-slate-800 dark:text-slate-400 sm:px-8 lg:px-12">
+      <footer className="relative z-10 border-t border-slate-200 px-5 py-6 text-xs text-slate-600 sm:px-8 lg:px-12">
         <div className="mx-auto flex max-w-[1480px] flex-wrap items-center justify-between gap-3">
           <span>© {new Date().getFullYear()} ModAE. Industrial intelligence, made actionable.</span>
-          <Link className="transition-colors hover:text-slate-900 dark:hover:text-slate-100" to="/">Workspace sign in</Link>
+          <Link className="transition-colors hover:text-slate-900" to="/">Workspace sign in</Link>
         </div>
       </footer>
     </main>

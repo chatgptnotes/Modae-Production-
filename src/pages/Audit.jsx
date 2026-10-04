@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
 import { useDrawer } from '../drawer.jsx'
+import { Icon } from '../icons.jsx'
 import { ddMmmYY, exportCSV, canSeePage, displayRole } from '../utils.js'
 
 const when = ts => `${ddMmmYY(ts.slice(0, 10))} ${ts.slice(11, 16)}`
@@ -18,7 +19,7 @@ export default function Audit() {
   if (!canSeePage(store.role, 'audit')) {
     return (
       <div className="page">
-        <h2>Audit Trail</h2>
+        <h2 className="workspace-page-title"><Icon name="list" size={18} /> Audit Trail</h2>
         <div className="restricted" style={{ maxWidth: 520 }}>
           Restricted — your role does not have access to the audit trail.
         </div>
@@ -44,7 +45,7 @@ export default function Audit() {
 
   return (
     <div className="page">
-      <h2>Audit Trail</h2>
+      <h2 className="workspace-page-title"><Icon name="list" size={18} /> Audit Trail</h2>
       <div className="toolbar">
         <input type="text" placeholder="Search actions, objects, details…" value={q}
           onChange={e => setQ(e.target.value)} style={{ width: 240 }} />

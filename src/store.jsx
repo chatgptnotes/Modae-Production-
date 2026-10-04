@@ -337,6 +337,7 @@ export function StoreProvider({ children }) {
   const [adminSaveState, setAdminSaveState] = useState('saved')
   const [priceListsStatus, setPriceListsStatus] = useState(() => Object.keys(state.priceLists || {}).length ? 'ready' : 'loading')
   const [sourcingDataStatus, setSourcingDataStatus] = useState(() => datastore.dbEnabled() ? 'loading' : 'ready')
+  const [sourcingDataError, setSourcingDataError] = useState('')
   const [syncDiagnostics, setSyncDiagnostics] = useState({ normalizedOpportunityCount: null })
   setRoleNameConfig(state.config)
   // Ref mirror so read APIs (getProposal) see same-tick mutations, not the render closure.
@@ -502,13 +503,22 @@ export function StoreProvider({ children }) {
       return
     }
     if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
-    if (res.error) {
+    const sourcingError = res.error || null
+    const coreError = res.coreError || null
+    if (sourcingError) {
       setSourcingDataStatus('error')
-      invalidateSupabaseAuth(res.error)
-      if (!isSupabaseAuthError(res.error)) setLiveSyncStatus('error')
-      return
+      setSourcingDataError(sourcingError.message || 'Sourcing data could not be loaded')
+      invalidateSupabaseAuth(sourcingError)
+    } else {
+      setSourcingDataStatus('ready')
+      setSourcingDataError('')
     }
-    setLiveSyncStatus('live')
+    if (coreError) {
+      if (!isSupabaseAuthError(coreError)) setLiveSyncStatus('error')
+      invalidateSupabaseAuth(coreError)
+    } else if (!sourcingError || !isSupabaseAuthError(sourcingError)) {
+      setLiveSyncStatus('live')
+    }
     if (hydratedRef.current) return
     const s = stateRef.current
     if (res.empty) {
@@ -526,7 +536,7 @@ export function StoreProvider({ children }) {
       setLiveSyncStatus('live')
       setSyncDiagnostics(diagnostics => ({ ...diagnostics, emptyWorkspaceAt: new Date().toISOString() }))
       setState(clean)
-      setSourcingDataStatus('ready')
+      setSourcingDataStatus(sourcingError ? 'error' : 'ready')
     } else {
       const serverSlices = syncedOf(res.slices)
       const accepted = {}
@@ -553,7 +563,7 @@ export function StoreProvider({ children }) {
       lastSavedRef.current = { ...syncedOf(merged), ...serverSlices }
       hydratedRef.current = true
       setState(merged)
-      setSourcingDataStatus('ready')
+      setSourcingDataStatus(sourcingError ? 'error' : 'ready')
       setTimeout(flushSaves, 0)
     }
   }
@@ -748,6 +758,7 @@ export function StoreProvider({ children }) {
     ...state,
     flushPersistence,
     sourcingDataStatus,
+    sourcingDataError,
     priceListsStatus,
     reloadPriceLists: () => loadApprovedPriceLists({ force: true }),
     async loadPriceListVersion(listCode, versionCode) {
@@ -2485,15 +2496,17 @@ export function StoreProvider({ children }) {
     async refreshSharedData() {
       if (!datastore.dbEnabled()) return false
       const res = await datastore.loadAll({ force: true })
-      if (!res) { setSourcingDataStatus('error'); setLiveSyncStatus('error'); return false }
+    if (!res) { setLiveSyncStatus('error'); return false }
       if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
       if (res.error) {
-        setSourcingDataStatus('error')
-        if (!invalidateSupabaseAuth(res.error)) setLiveSyncStatus('error')
-        return false
-      }
-      if (res.empty) { setSourcingDataStatus('ready'); setLiveSyncStatus('degraded'); return false }
+      if (!invalidateSupabaseAuth(res.error)) setLiveSyncStatus('error')
+      return false
+    }
+    if (Array.isArray(res.slices?.sparesLines)) {
       setSourcingDataStatus('ready')
+      setSourcingDataError('')
+    }
+    if (res.empty) { setLiveSyncStatus('degraded'); return false }
       setLiveSyncStatus('live')
       applyServer(res.slices, res.diagnostics)
       return true
@@ -2502,23 +2515,26 @@ export function StoreProvider({ children }) {
     // Sourcing has its own fast-load contract. Retrying it should not make
     // the BOQ depend on unrelated full-workspace reads (for example a
     // transient audit/config query failure).
-    async refreshSourcingData() {
+  async refreshSourcingData() {
       if (!datastore.dbEnabled()) return false
-      const res = await datastore.loadCore()
-      if (!res) {
+      try {
+        const slices = await datastore.loadSourcingData()
+        if (!slices) {
+          setSourcingDataStatus('error')
+          setSourcingDataError('Sourcing data could not be loaded')
+          return false
+        }
+        setSourcingDataStatus('ready')
+        setSourcingDataError('')
+        setLiveSyncStatus('live')
+        applyServer(slices)
+        return true
+      } catch (error) {
         setSourcingDataStatus('error')
+        setSourcingDataError(error?.message || 'Sourcing data could not be loaded')
+        if (!invalidateSupabaseAuth(error)) setLiveSyncStatus('error')
         return false
       }
-      if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
-      if (res.error) {
-        setSourcingDataStatus('error')
-        if (!invalidateSupabaseAuth(res.error)) setLiveSyncStatus('error')
-        return false
-      }
-      setSourcingDataStatus('ready')
-      setLiveSyncStatus('live')
-      if (!res.empty) applyServer(res.slices, res.diagnostics)
-      return true
     },
 
     async refreshApprovals() {

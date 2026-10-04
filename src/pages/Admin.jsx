@@ -296,7 +296,7 @@ export default function Admin() {
   if (!canSeePage(role, 'admin')) {
     return (
       <div className="page">
-        <h2>Admin — configuration</h2>
+        <h2 className="workspace-page-title"><Icon name="gear" size={18} /> Admin — configuration</h2>
         <div className="restricted" style={{ maxWidth: 520 }}>
           Restricted — configuration is visible to administrators and LJS only.
         </div>
@@ -480,8 +480,7 @@ export default function Admin() {
     <div className="page admin-page">
       <header className="admin-page-head">
         <div>
-          <p className="admin-eyebrow">Workspace settings</p>
-          <h2>Admin configuration</h2>
+          <h2 className="workspace-page-title"><Icon name="gear" size={18} /> Admin configuration</h2>
           <p className="admin-page-lede">Manage the rules, documents, and automation that shape the sales workspace.</p>
         </div>
         <div className="admin-page-actions">

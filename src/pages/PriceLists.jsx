@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
+import { Icon } from '../icons.jsx'
 import { fmt, exportCSV, canViewCommercial, canManagePriceLists } from '../utils.js'
 import { Modal } from '../ui.jsx'
 import { buildPriceListInspectionPayload, downloadPriceListTemplate, parsePriceListFile } from '../priceListImport.js'
@@ -171,7 +172,7 @@ export default function PriceLists() {
   if (!pl && !isServiceRates) {
     return (
       <div className="page">
-        <h2>Price Lists</h2>
+        <h2 className="workspace-page-title"><Icon name="tag" size={18} /> Price Lists</h2>
         {store.priceListsStatus === 'loading' || store.priceListsStatus === 'refreshing'
           ? <p className="hint price-list-loading" role="status"><span className="auth-loading__spinner" aria-hidden="true" /> Loading approved price lists…</p>
           : store.priceListsStatus === 'error'
@@ -193,7 +194,7 @@ export default function PriceLists() {
   if (isServiceRates) {
     return (
       <div className="page">
-        <h2>Price Lists</h2>
+        <h2 className="workspace-page-title"><Icon name="tag" size={18} /> Price Lists</h2>
         {listButtons}
         <div className="section-title">Service Rate Sheet</div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
@@ -221,7 +222,7 @@ export default function PriceLists() {
 
   return (
     <div className="page">
-      <h2>Price Lists</h2>
+      <h2 className="workspace-page-title"><Icon name="tag" size={18} /> Price Lists</h2>
       {listButtons}
       <div className="toolbar">
         <span className="hint">Current version {pl.version} · uploaded {pl.uploaded} · {pl.currency}. Current approved pricing reference.</span>

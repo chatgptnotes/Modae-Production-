@@ -151,6 +151,7 @@ export default function Folders() {
       .sort(([a], [b]) => b.localeCompare(a))
     return (
       <div className="page">
+        <h2 className="workspace-page-title"><Icon name="folder" size={18} /> Documents</h2>
         <div className="explorer-bar">
           <FolderIcon size={18} />
           {spConnected ? (

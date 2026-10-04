@@ -11,7 +11,6 @@ import BrandWatermark from './branding/BrandWatermark.jsx'
 import { startAutoTitle } from './autoTitle.js'
 import { RequireAuth } from './pages/Login.jsx'
 import { lazyWithRecovery } from './lazyImport.js'
-import { useTheme } from './theme.jsx'
 
 const Opportunities = lazyWithRecovery(() => import('./pages/Opportunities.jsx'))
 const IntakeForm = lazyWithRecovery(() => import('./pages/IntakeForm.jsx'))
@@ -61,10 +60,9 @@ function PageGate({ page, children }) {
 // workspace persona; a real customer account can only sign out.
 function PortalParked() {
   const store = useStore()
-  const { theme } = useTheme()
   const custAccount = store.auth?.user?.role === 'CUST'
   return (
-    <div className={`shell theme-${theme}`}>
+    <div className="shell">
       <div className="main-col">
         <div className="page page-narrow page-portal-parked">
           <h2><Icon name="lock" size={18} /> Customer portal unavailable</h2>
@@ -100,7 +98,6 @@ const NAV = [
 
 export default function App() {
   const store = useStore()
-  const { theme } = useTheme()
   const nav = useNavigate()
   const loc = useLocation()
   const mainRef = useRef(null)
@@ -200,7 +197,7 @@ export default function App() {
   // to authentication and the demo launcher.
   const c = counts(store, role)
   const shell = (
-    <div className={`shell theme-${theme} ${sidebarCompact ? 'sidebar-compact' : ''}`}>
+    <div className={`shell ${sidebarCompact ? 'sidebar-compact' : ''}`}>
       <BrandWatermark variant="shell" />
       <a className="skip-link" href="#main-content">Skip to workspace</a>
       <aside className="sidenav">

@@ -65,6 +65,24 @@ test('inbox headers are bold and the final Status and Age columns are right-alig
   assert.match(inbox, /<div className="mail-status"><span className=\{`pill/)
 })
 
+test('inbox header actions share the secondary button treatment', () => {
+  assert.match(inbox, /<button type="button" className="mail-new-enquiry"[^>]*aria-haspopup="dialog"[^>]*>.*New enquiry<\/button>/s)
+  assert.match(css, /\.mailbox-head-actions \.mail-new-enquiry \{[\s\S]*?background: var\(--action-secondary-bg\);[\s\S]*?border-color: var\(--action-secondary-border\);/)
+})
+
+test('new enquiry modal imports the hook used by its file picker', () => {
+  assert.match(inbox, /import React, \{ useEffect, useRef, useState \} from 'react'/)
+  assert.match(inbox, /function PasteLeadModal\(\{ onClose \}\)[\s\S]*const fileInput = useRef\(null\)/)
+})
+
+test('inbox omits the redundant result count above the shared header', () => {
+  assert.match(css, /\.mail-column-head, \.mail-row \{[\s\S]*?--mail-grid-template:[\s\S]*?grid-template-columns: var\(--mail-grid-template\);/)
+  assert.doesNotMatch(css, /\.mail-column-head\s*\{\s*--mail-grid-template:/)
+  assert.match(inbox, /<div className="mailbox-list">\s*<div className="mail-column-head">/)
+  assert.doesNotMatch(inbox, /mail-list-summary|1–\$\{mailboxRows\.length\} of/)
+  assert.doesNotMatch(inbox, /<div className="mail-column-head">[\s\S]*?mail-list-count/)
+})
+
 test('inbox confines its fitted grid to the workspace like the Opportunities sheet', () => {
   assert.match(css, /\.mailbox-page \{\s*width: 100%;\s*max-width: none;\s*min-width: 0;\s*box-sizing: border-box;/)
   assert.match(css, /\.mailbox-list \{\s*width: 100%;[\s\S]*?max-width: 100%;[\s\S]*?min-width: 0;[\s\S]*?overflow-x: hidden;/)

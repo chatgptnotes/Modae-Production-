@@ -33,10 +33,19 @@ test('fast workspace hydration includes the Sourcing data needed to avoid a fals
   const datastore = read('src/datastore.js')
   const store = read('src/store.jsx')
 
-  assert.match(datastore, /loadBusinessTables\(\{ includeRecords: false, coreEntities: \['proposals', 'spares_lines'\], collaborative: serverWorkspace \|\| \{\} \}\)/)
+  assert.match(datastore, /loadBusinessTables\(\{ includeRecords: false, coreEntities: \['proposals'\], collaborative: serverWorkspace \|\| \{\} \}\)/)
+  assert.match(datastore, /export async function loadSourcingData\(\)/)
+  assert.match(datastore, /const sourcingPromise = loadSourcingData\(\)/)
+  assert.match(datastore, /Promise\.allSettled\(\[sourcingPromise, workspacePromise\]\)/)
   assert.match(datastore, /includeRecords = true, coreEntities = \[\], collaborative = \{\}/)
   assert.match(datastore, /coreEntities\.includes\(entity\)/)
   assert.match(store, /sourcingDataStatus/)
+})
+
+test('an unrelated legacy records count failure does not block fast sourcing hydration', () => {
+  const datastore = read('src/datastore.js')
+  assert.match(datastore, /result\.error && \(includeRecords \|\| index !== 3\)/,
+    'the count-only records query is diagnostic during core loads, not a BOQ dependency')
 })
 
 test('a successful shared refresh clears a transient Sourcing-load failure', () => {
@@ -51,8 +60,9 @@ test('Sourcing retry uses the fast sourcing read instead of the full workspace p
   const spares = read('src/workbench/WbSpares.jsx')
   const refresh = store.slice(store.indexOf('async refreshSourcingData()'), store.indexOf('async refreshApprovals()'))
 
-  assert.match(refresh, /datastore\.loadCore\(\)/)
-  assert.doesNotMatch(refresh, /datastore\.loadAll\(\{ force: true \}\)/)
+  assert.match(refresh, /datastore\.loadSourcingData\(\)/)
+  assert.doesNotMatch(refresh, /datastore\.loadCore\(\)/)
+  assert.match(spares, /store\.sourcingDataError/)
   assert.match(spares, /store\.refreshSourcingData\?\.\(\)/)
 })
 

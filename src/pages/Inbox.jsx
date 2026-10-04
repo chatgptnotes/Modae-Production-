@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useStore, reserveOppId } from '../store.jsx'
 import { ddMmmYY, ageDays, isTodayIST, gmailComposeHref, displayRole, formatISTTime, formatISTDate, nowIST, productDisplayLabel } from '../utils.js'
@@ -3360,6 +3360,21 @@ export default function Inbox() {
       store.updateLead(sel.id, { readAt: nowIST() })
     }
   }, [sel?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!openHeaderFilter) return undefined
+    const close = event => {
+      if (event.key === 'Escape') setOpenHeaderFilter(null)
+    }
+    const closeOnViewportChange = () => setOpenHeaderFilter(null)
+    window.addEventListener('keydown', close)
+    window.addEventListener('resize', closeOnViewportChange)
+    window.addEventListener('scroll', closeOnViewportChange, true)
+    return () => {
+      window.removeEventListener('keydown', close)
+      window.removeEventListener('resize', closeOnViewportChange)
+      window.removeEventListener('scroll', closeOnViewportChange, true)
+    }
+  }, [openHeaderFilter])
   if (sel) {
     const age = ageDays(sel.ts)
     return (
@@ -3613,22 +3628,6 @@ export default function Inbox() {
   }
   const sourceOptions = [...new Set(listSource.map(l => l.source || l.channel).filter(Boolean))].sort()
   const ownerOptions = [...new Set(listSource.map(l => l.suggestedOwner || 'Unassigned'))].sort()
-  useEffect(() => {
-    if (!openHeaderFilter) return undefined
-    const close = event => {
-      if (event.key === 'Escape') setOpenHeaderFilter(null)
-    }
-    const closeOnViewportChange = () => setOpenHeaderFilter(null)
-    window.addEventListener('keydown', close)
-    window.addEventListener('resize', closeOnViewportChange)
-    window.addEventListener('scroll', closeOnViewportChange, true)
-    return () => {
-      window.removeEventListener('keydown', close)
-      window.removeEventListener('resize', closeOnViewportChange)
-      window.removeEventListener('scroll', closeOnViewportChange, true)
-    }
-  }, [openHeaderFilter])
-
   const filterMenu = (key, value, onChange, label, options, short, allLabel) => {
     const entries = [{ value: '', label: allLabel || `All ${label.toLowerCase()}` }, ...options.map(option => (
       Array.isArray(option) ? { value: option[0], label: option[1] } : { value: option, label: option }
@@ -3685,12 +3684,12 @@ export default function Inbox() {
         confirmLabel="Clear simulated leads" onClose={() => setClearSimulatedConfirm(false)} onConfirm={clearSimulated} />}
       <div className="mailbox-head">
         <div>
-          <h2><Icon name="inbox" size={18} /> Lead inbox</h2>
+          <h2 className="workspace-page-title"><Icon name="inbox" size={18} /> Lead inbox</h2>
           <p className="hint">{showArchive ? 'Discarded lead archive' : 'Common sales mailbox · AI structures, humans decide'}</p>
         </div>
         <div className="mailbox-head-actions">
-          <button className="primary" onClick={() => setPasteOpen(true)}><Icon name="bot" size={13} /> New enquiry</button>
-          <button onClick={() => { setShowArchive(v => !v); setSelectedIds(new Set()) }}>
+          <button type="button" className="mail-new-enquiry" aria-haspopup="dialog" onClick={() => setPasteOpen(true)}><Icon name="bot" size={13} /> New enquiry</button>
+          <button type="button" onClick={() => { setShowArchive(v => !v); setSelectedIds(new Set()) }}>
             <Icon name="folder" size={13} /> {showArchive ? 'Back to inbox' : `Archive (${(store.leadArchive || []).length})`}
           </button>
         </div>
@@ -3703,9 +3702,7 @@ export default function Inbox() {
         <select value={routeF} onChange={e => setRouteF(e.target.value)} aria-label="Filter by route">
           <option value="">All routes</option>{ROUTE_OPTIONS.map(r => <option key={r}>{r}</option>)}
         </select>
-        {seesAll
-          ? <span className="mail-show-all mail-show-all-static" title="Your role already has access to every lead">All leads visible</span>
-          : <button
+        {!seesAll && <button
               type="button"
               className={`scope-toggle${showAll ? ' active' : ''}`}
               aria-pressed={showAll}
@@ -3823,7 +3820,6 @@ export default function Inbox() {
           <span className="mail-head-filter-cell">{filterMenu('owner', ownerF, setOwnerF, 'Suggested owner', ownerOptions, 'Owner', 'All owners')}</span>
           <span className="mail-head-filter-cell mail-status-head">{filterMenu('status', statusF, setStatusF, 'Status', STATUS_OPTIONS, 'Status', 'All statuses')}</span>
           <span className="mail-head-filter-cell mail-age-head">{filterMenu('age', ageF, setAgeF, 'Age', [['today', 'Today'], ['7', '7–29 days'], ['30', '30+ days']], 'Age', 'All ages')}</span>
-          <span className="mail-list-count">{mailboxRows.length ? `1–${mailboxRows.length} of ${mailboxRows.length}` : '0 messages'}</span>
         </div>
         {mailboxRows.map(l => {
           const completeness = l.completeness ?? (l.parse?.confidence != null ? Math.round(l.parse.confidence * 100) : null)

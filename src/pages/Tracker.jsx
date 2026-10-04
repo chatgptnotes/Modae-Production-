@@ -68,8 +68,8 @@ export const COLS = [
 const KEY_COLS = ['id', 'sellTo', 'oppName', 'stage', 'oppType', 'prob', 'valueK', 'proposalDate', 'orderDate', 'nextActionOwner']
 const KEY_COL_WIDTHS = {
   id: 8, sellTo: 10, oppName: 21, stage: 9, oppType: 6,
-  prob: 7, valueK: 7, proposalDate: 8, orderDate: 10,
-  nextActionOwner: 6,
+  prob: 7, valueK: 7, proposalDate: 8, orderDate: 12,
+  nextActionOwner: 9,
 }
 const ROWHEAD_PCT = 3
 
@@ -137,7 +137,7 @@ function columnWidthCss(cols, scope, all = false) {
     const px = c => Math.max(MIN_COL_PX, Math.round(share(c) * PX_PER_UNIT))
     return [
       rule(':nth-child(1)', `width: ${ROWHEAD_PX}px; min-width: ${ROWHEAD_PX}px; ${label('SL')}`),
-      ...cols.map(c => rule(`:nth-child(${COLS.indexOf(c) + 2})`, `min-width: ${px(c)}px; ${label(c.label)}`)),
+      ...cols.map(c => rule(`:nth-child(${COLS.indexOf(c) + 2})`, `--tracker-column-min: ${px(c)}px; min-width: max(56px, calc(var(--tracker-column-min) * var(--opp-density, 1))); ${label(c.label)}`)),
     ].join('\n')
   }
   return [
@@ -680,14 +680,10 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
 
   return (
     <div className="page tracker-page">
-      <h2>{sheet === 'My Orders' ? 'My Orders' : 'Opportunities'}</h2>
+      <h2 className="workspace-page-title"><Icon name="cards" size={18} /> {sheet === 'My Orders' ? 'My Orders' : 'Opportunities'}</h2>
+      <div className="tracker-grid-shell">
       <div className="toolbar">
         <div className="tracker-toolbar-filters">
-          <select id="opportunities-owner-filter" className="tracker-owner-filter" aria-label="Opportunity owner" value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)}>
-            {owners.map(p => <option key={p} value={p}>
-              {p === 'All' ? 'All Opportunities' : p === 'Mine' ? 'My Opportunities' : displayRole(p)}
-            </option>)}
-          </select>
           <div className="tracker-search-group">
             <label className="tracker-search" aria-label="Search all opportunities">
               <Icon name="search" size={14} />
@@ -695,8 +691,10 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                 onChange={e => setSearchTerm(e.target.value)} />
             </label>
             <button type="button" className={`tracker-search-filter${dateFilterActive ? ' active' : ''}`} onClick={openDateFilterMenu}
-              aria-haspopup="dialog" aria-expanded={dateFilterOpen} title={dateFilterSummary || 'Filter opportunities by date'}>
-              <Icon name="filter" size={14} /> <span>Filter</span>{dateFilterActive && <span className="tracker-search-filter-active">Active</span>}
+              aria-haspopup="dialog" aria-expanded={dateFilterOpen}
+              aria-label={dateFilterActive ? `Filter opportunities by date: ${dateFilterSummary}` : 'Filter opportunities by date'}
+              title={dateFilterActive ? `Filter active: ${dateFilterSummary}` : 'Filter opportunities by date'}>
+              <Icon name="filter" size={16} />{dateFilterActive && <span className="tracker-search-filter-active" aria-hidden="true" />}
             </button>
           </div>
         </div>
@@ -737,6 +735,11 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
               </div>
             )}
           </div>
+          <select id="opportunities-owner-filter" className="tracker-owner-filter" aria-label="Opportunity owner" value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)}>
+            {owners.map(p => <option key={p} value={p}>
+              {p === 'All' ? 'All Opportunities' : p === 'Mine' ? 'My Opportunities' : displayRole(p)}
+            </option>)}
+          </select>
           <button type="button" className="tracker-columns-toggle"
             onClick={() => setColView(colView === 'key' ? 'all' : 'key')}
             title={colView === 'key'
@@ -772,8 +775,6 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
         )}
       </div>
       {pipelineUploadError && <div className="errbox" role="alert">{pipelineUploadError}</div>}
-      {pipelinePreview && <PipelineUploadPreview preview={pipelinePreview} onClose={() => setPipelinePreview(null)} />}
-      {dateFilterOpen && dateFilterPos && renderDateFilterPop(dateFilterPos)}
 
       <div ref={sheetWrapRef} className="sheet-wrap fill" onScroll={handleSheetScroll}>
         {showCards ? <div className="sparse-card-grid tracker-sparse-cards" aria-label="Opportunity summaries">
@@ -998,6 +999,9 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
         </table>
         </>}
       </div>
+      </div>
+      {pipelinePreview && <PipelineUploadPreview preview={pipelinePreview} onClose={() => setPipelinePreview(null)} />}
+      {dateFilterOpen && dateFilterPos && renderDateFilterPop(dateFilterPos)}
 
       <div className="sheet-tabs">
         {['Opportunities', 'My Orders'].map(t => (

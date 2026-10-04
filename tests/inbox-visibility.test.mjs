@@ -65,10 +65,10 @@ test('the inbox reads the toggle from the store', () => {
   assert.match(read('src/store.jsx'), /setInboxShowAll\(on\)/)
 })
 
-test('the inbox explains when a role already sees every lead', () => {
-  assert.match(inbox, /className="mail-show-all mail-show-all-static"/)
-  assert.match(inbox, /All leads visible/)
-  assert.match(inbox, /Your role already has access to every lead/)
+test('the inbox does not show a redundant all-leads label for unrestricted roles', () => {
+  assert.doesNotMatch(inbox, /className="mail-show-all mail-show-all-static"/)
+  assert.doesNotMatch(inbox, /All leads visible/)
+  assert.doesNotMatch(inbox, /Your role already has access to every lead/)
 })
 
 test('the inbox show-all control uses a text toggle instead of a checkbox', () => {
@@ -95,7 +95,7 @@ test('the owner rule reports what it is holding back', () => {
   assert.match(inbox, /const hiddenByOwner = listSource\.filter\(l => !ownerVisible\(l\)/)
   // Both the populated list and the empty state have to say it — the empty
   // state is where "nothing saved" was actually concluded.
-  assert.match(inbox, /hiddenByOwner > 0 && \(/)
+  assert.match(inbox, /hiddenByOwner > 0 &&/)
   assert.match(inbox, /none assigned to you/)
   assert.match(read('src/styles.css'), /^\.mail-hidden-note \{/m)
 })

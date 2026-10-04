@@ -83,11 +83,19 @@ test('the opportunities table does not directly edit workflow stages', () => {
 })
 
 test('forecast dates retain inline editing while Expected Order Date has usable table width', () => {
-  assert.match(tracker, /orderDate: 10,/)
+  assert.match(tracker, /orderDate: 12,/)
+  assert.match(tracker, /nextActionOwner: 9,/)
   assert.match(tracker, /wAll: 7/)
   assert.match(tracker, /<input type="date" value=\{o\.orderDate\} max=\{o\.invoiceDate/)
   assert.match(tracker, /<input type="date" value=\{o\.invoiceDate\} min=\{o\.orderDate/)
   assert.doesNotMatch(tracker, /ForecastDateInput/)
+})
+
+test('key date and Next Action cells contain their editors', () => {
+  assert.match(styles, /table\.sheet\.cols-key td:nth-child\(22\) input\[type="date"\][\s\S]*width: 100%;[\s\S]*min-width: 11ch;[\s\S]*max-width: 100%;/)
+  assert.match(styles, /table\.sheet\.cols-key td:nth-child\(32\) select\s*\{[\s\S]*width: 100%;[\s\S]*overflow: hidden;[\s\S]*text-overflow: ellipsis;/)
+  assert.match(styles, /tracker-toolbar-actions > \.tracker-more-menu\s*\{[\s\S]*flex: 0 0 124px;/)
+  assert.match(styles, /tracker-toolbar-actions > \.tracker-create-logo\s*\{[\s\S]*flex: 0 1 240px;/)
 })
 
 test('closed opportunities expose the shared mark-won control', () => {
@@ -114,7 +122,7 @@ test('key columns use a complete percentage budget rather than pixel floors', ()
   assert.ok(widths)
   const values = [...widths.matchAll(/\w+: (\d+),?/g)].map(([, value]) => Number(value))
   assert.equal(values.length, 10)
-  assert.equal(values.reduce((sum, value) => sum + value, 0), 92)
+  assert.equal(values.reduce((sum, value) => sum + value, 0), 97)
   assert.match(tracker, /const ROWHEAD_PCT = 3/)
   assert.match(tracker, /width: \$\{KEY_COL_WIDTHS\[c\.key\]\}%; min-width: 0;/)
   assert.doesNotMatch(tracker, /KEY_TABLE_MIN_WIDTH|--tracker-key-min-width/)
@@ -123,7 +131,7 @@ test('key columns use a complete percentage budget rather than pixel floors', ()
 test('key view reserves a usable share for expected order dates', () => {
   const widths = tracker.match(/const KEY_COL_WIDTHS = \{([^}]+)\}/)?.[1]
   assert.ok(widths)
-  assert.match(widths, /orderDate: 10/)
+  assert.match(widths, /orderDate: 12/)
   assert.match(styles, /\.tracker-page \.sheet\.cols-key td input\[type="date"\] \{[\s\S]*?min-width: min\(10ch, 100%\);/)
 })
 
@@ -154,6 +162,8 @@ test('key table wraps narrow headers and values without spilling into adjacent c
 test('Opportunities headers use plain table labels without boxed controls', () => {
   assert.match(styles, /Flatten the first spreadsheet header row/)
   assert.match(styles, /\.opportunities-page \.tracker-page table\.sheet thead \.tracker-th-control\s*\{[\s\S]*?border: 0;[\s\S]*?background: transparent;[\s\S]*?border-radius: 0;/)
+  assert.match(styles, /\.opportunities-page \.tracker-page table\.sheet thead \.tracker-th-control:hover,\s*\.opportunities-page \.tracker-page table\.sheet thead \.tracker-th-control:focus-visible\s*\{[\s\S]*?outline: 0 !important;/)
+  assert.match(styles, /\.opportunities-page \.tracker-page table\.sheet thead \.tracker-th-control:focus-visible\s*\{[\s\S]*?text-decoration: underline;[\s\S]*?text-underline-offset: 3px;/)
   assert.match(styles, /Keep the plain column labels on an opaque sticky strip while rows scroll/)
   assert.match(styles, /\.opportunities-page \.tracker-page table\.sheet thead th\s*\{[\s\S]*?position: sticky;[\s\S]*?background: #FFFFFF !important;/)
 })
@@ -240,6 +250,20 @@ test('the Opportunities toolbar uses compact borderless actions and a smaller pr
   assert.match(tracker, /className="tracker-create-logo"[\s\S]*?<Icon name="plus" size=\{16\} \/> Create opportunity/)
 })
 
+test('the Opportunities toolbar is visually connected to the table shell', () => {
+  assert.match(tracker, /className="tracker-grid-shell"[\s\S]*className="toolbar"[\s\S]*className="sheet-wrap fill"/)
+  assert.match(styles, /\.opportunities-page \.tracker-grid-shell\s*\{[\s\S]*display:\s*flex;[\s\S]*flex-direction:\s*column;[\s\S]*min-height:\s*0;[\s\S]*border:\s*1px solid var\(--border-default\);[\s\S]*overflow:\s*hidden;/)
+  assert.match(styles, /\.opportunities-page \.tracker-grid-shell > \.toolbar\s*\{[\s\S]*border-bottom:\s*1px solid var\(--border-subtle\);/)
+  assert.match(styles, /\.opportunities-page \.tracker-grid-shell > \.sheet-wrap\.fill\s*\{[\s\S]*flex:\s*1 1 auto;[\s\S]*min-height:\s*0;[\s\S]*overflow:\s*auto;[\s\S]*overscroll-behavior:\s*contain;[\s\S]*padding-bottom:\s*36px;[\s\S]*border:\s*0;/)
+  assert.match(styles, /\.opportunities-page \.tracker-grid-shell \.tracker-create-logo\s*\{[\s\S]*padding:\s*0 16px !important;/)
+})
+
+test('the merged Opportunities toolbar keeps desktop controls on one row', () => {
+  assert.match(styles, /\.opportunities-page \.tracker-grid-shell > \.toolbar\s*\{[\s\S]*display:\s*grid;[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) auto;[\s\S]*flex-wrap:\s*nowrap;/)
+  assert.match(styles, /\.opportunities-page \.tracker-grid-shell > \.toolbar \.tracker-toolbar-actions\s*\{[\s\S]*flex-wrap:\s*nowrap;[\s\S]*white-space:\s*nowrap;/)
+  assert.match(styles, /@media \(max-width: 900px\)[\s\S]*?\.opportunities-page \.tracker-grid-shell > \.toolbar\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\);/)
+})
+
 test('editable controls use a flattened surface treatment', () => {
   assert.match(styles, /\.shell :where\(input:not\(\[type='checkbox'\]\):not\(\[type='radio'\]\), select, textarea\)\s*\{[\s\S]*background: transparent;/)
   assert.match(styles, /\.shell :where\(input:not\(\[type='checkbox'\]\):not\(\[type='radio'\]\), select, textarea\)\s*\{[\s\S]*box-shadow: none;/)
@@ -303,20 +327,56 @@ test('tracker provides dual-layer global and quick filtering with removable chip
 })
 
 test('opportunities search is a separate bordered field beside owner scope', () => {
-  assert.match(tracker, /className="tracker-owner-filter"[^>]*aria-label="Opportunity owner"/)
+  assert.match(tracker, /className="tracker-toolbar-filters"[\s\S]*className="tracker-search-group"[\s\S]*className="tracker-toolbar-actions"[\s\S]*className="tracker-more-menu"[\s\S]*className="tracker-owner-filter"[^>]*aria-label="Opportunity owner"/)
   assert.match(tracker, /className="tracker-search" aria-label="Search all opportunities"/)
   assert.match(styles, /\.opportunities-page > \.tracker-page > \.toolbar \.tracker-search-group \.tracker-search \{[\s\S]*?border: 1px solid var\(--border-color\) !important;[\s\S]*?border-radius: 8px !important;/)
   assert.match(styles, /\.opportunities-page > \.tracker-page > \.toolbar \.tracker-search-group \.tracker-search:focus-within \{[\s\S]*?box-shadow: 0 0 0 2px var\(--primary-soft\) !important;/)
-  assert.match(styles, /\.opportunities-page > \.tracker-page > \.toolbar \.tracker-toolbar-filters > \.tracker-owner-filter \{[\s\S]*?border: 1px solid var\(--border-color\) !important;/)
+  assert.match(styles, /\.opportunities-page > \.tracker-page > \.toolbar \.tracker-toolbar-filters[\s\S]*?\.tracker-search-group/)
 })
 
 test('date filter is available inside the Opportunities search surface', () => {
   assert.doesNotMatch(tracker, /className=\{`tracker-date-filter-button\$\{dateFilterActive/)
   assert.match(tracker, /className=\{`tracker-search-filter\$\{dateFilterActive/)
-  assert.match(tracker, /<Icon name="filter" size=\{14\} \/> <span>Filter<\/span>/)
+  assert.match(tracker, /<Icon name="filter" size=\{16\} \/>\{dateFilterActive && <span className="tracker-search-filter-active"/)
+  assert.match(tracker, /aria-label=\{dateFilterActive \? `Filter opportunities by date:/)
   assert.match(tracker, /aria-haspopup="dialog" aria-expanded=\{dateFilterOpen\}/)
   assert.match(styles, /\.opportunities-page > \.tracker-page > \.toolbar \.tracker-search-group \{[\s\S]*?border: 1px solid var\(--border-color\);[\s\S]*?border-radius: 8px;/)
   assert.match(styles, /\.tracker-search-filter-active \{[\s\S]*?text-transform: uppercase;/)
+})
+
+test('Opportunities toolbar keeps groups spaced and the filter control icon-only', () => {
+  assert.match(styles, /\.opportunities-page > \.tracker-page > \.toolbar \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\) auto;/)
+  assert.match(styles, /\.opportunities-page \.tracker-grid-shell > \.toolbar \.tracker-toolbar-filters \{[\s\S]*?grid-template-columns: minmax\(240px, 1fr\);/)
+  assert.match(styles, /\.opportunities-page > \.tracker-page > \.toolbar \.tracker-search-filter \{[\s\S]*?width: 42px;/)
+  assert.match(styles, /\.opportunities-page > \.tracker-page > \.toolbar \.tracker-search-filter-active \{[\s\S]*?border-radius: 50%;/)
+  assert.match(styles, /\.opportunities-page \.tracker-page table\.sheet:not\(\.cols-key\) \.wrapcell \{[\s\S]*?white-space: normal;/)
+})
+
+test('Opportunities toolbar reads search, filter, More, owner, columns, create', () => {
+  const search = tracker.indexOf('className="tracker-search-group"')
+  const filter = tracker.indexOf('className={`tracker-search-filter')
+  const more = tracker.indexOf('className="tracker-more-menu"')
+  const owner = tracker.indexOf('className="tracker-owner-filter"')
+  const columns = tracker.indexOf('className="tracker-columns-toggle"')
+  const create = tracker.indexOf('className="tracker-create-logo"')
+  assert.ok(search >= 0 && search < filter, 'search must precede the filter control')
+  assert.ok(filter < more, 'filter must precede More')
+  assert.ok(more < owner, 'More must precede owner scope')
+  assert.ok(owner < columns, 'owner scope must precede the column toggle')
+  assert.ok(columns < create, 'the column toggle must precede Create opportunity')
+})
+
+test('all Opportunities toolbar controls share the neutral treatment', () => {
+  assert.match(styles, /\.opportunities-page \.tracker-grid-shell > \.toolbar \.tracker-search-group,[\s\S]*?\.tracker-more-trigger,[\s\S]*?\.tracker-owner-filter,[\s\S]*?\.tracker-columns-toggle,[\s\S]*?\.tracker-create-logo\s*\{[\s\S]*background: var\(--action-secondary-bg\) !important;[\s\S]*color: var\(--action-secondary-text\) !important;/)
+  assert.match(styles, /\.opportunities-page \.tracker-grid-shell > \.toolbar \.tracker-search-group \.tracker-search-filter\.active\s*\{[\s\S]*background: var\(--primary-soft\);[\s\S]*color: var\(--primary-deep\);/)
+  assert.match(styles, /\.opportunities-page \.tracker-grid-shell \.tracker-create-logo:hover:not\(:disabled\)\s*\{[\s\S]*background: var\(--action-secondary-hover\) !important;[\s\S]*color: var\(--action-secondary-text\) !important;/)
+})
+
+test('the Opportunities search bar has a clear input hierarchy and focus state', () => {
+  assert.match(styles, /\.opportunities-page \.tracker-grid-shell > \.toolbar \.tracker-search-group\s*\{[\s\S]*min-height: 42px;[\s\S]*border-radius: 10px;[\s\S]*box-shadow:/)
+  assert.match(styles, /\.opportunities-page \.tracker-grid-shell > \.toolbar \.tracker-search-group \.tracker-search input::placeholder\s*\{[\s\S]*color: var\(--text-tertiary\);[\s\S]*opacity: 1;/)
+  assert.match(styles, /\.opportunities-page \.tracker-grid-shell > \.toolbar \.tracker-search-group:focus-within\s*\{[\s\S]*border-color: var\(--action-secondary-border\) !important;[\s\S]*box-shadow: inset 0 -2px 0 var\(--focus-ring\)/)
+  assert.doesNotMatch(styles, /\.opportunities-page \.tracker-grid-shell > \.toolbar \.tracker-search-group:focus-within\s*\{[^}]*var\(--color-primary\)/)
 })
 
 test('tracker date filter supports specific dates and calendar periods', () => {

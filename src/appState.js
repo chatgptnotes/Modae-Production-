@@ -382,7 +382,7 @@ export function migrate(s) {
     s.viewModePinned = false
     delete s.viewModeRestoreRev
   }
-  // The browser's standalone theme preference now owns every viewport.
+  // Remove the retired tablet theme preference from older local snapshots.
   delete s.tabletTheme
   // The inbox's "Show all" used to be component state, so a reload put a sales
   // owner back on their own leads — and a lead the simulator had just routed to

@@ -19,8 +19,8 @@ submission, and follow-up.
 - Routes technical, commercial, and release approvals.
 - Stores opportunity files and supports SharePoint integration.
 - Provides dashboards, audit history, user administration, and workflow tools.
-- Offers a site-wide light/dark toggle that remembers the browser preference and
-  follows the device color scheme until a mode is selected.
+- Uses a permanent light ModAE-branded interface across desktop, tablet, login,
+  and public showcase views.
 - Provides shared personal/global pipeline views, a common six-stage sales funnel,
   and closed-opportunity order reporting.
 - Provides an Excel pipeline upload preview; pipeline migration is a later step

@@ -7,17 +7,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#282828" />
-    <style>html,body{background:#F8F7F4}html.dark,html.dark body{background:#0F172A}</style>
-    <script>
-      (() => {
-        let saved = null
-        try { saved = localStorage.getItem('wintrack-modae-theme') } catch { /* storage is optional */ }
-        const dark = saved === 'dark' || (saved !== 'light' && window.matchMedia?.('(prefers-color-scheme: dark)').matches)
-        document.documentElement.classList.toggle('dark', dark)
-        document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
-        document.querySelector('meta[name="theme-color"]').content = dark ? '#0F172A' : '#F8F7F4'
-      })()
-    </script>
+    <style>html,body{background:#F8F7F4;color-scheme:light}</style>
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />

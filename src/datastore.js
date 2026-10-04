@@ -9,8 +9,7 @@ import { mergeOpportunityRow } from './workflowTransitions.js'
 // original localStorage-only behavior without env vars.
 
 // Per-device/session state that must never be shared across browsers.
-// Keep tabletTheme here for older local snapshots while appState removes it.
-export const LOCAL_ONLY = ['viewMode', 'viewModePinned', 'tabletTheme', 'spSync', 'auth', 'role',
+export const LOCAL_ONLY = ['viewMode', 'viewModePinned', 'spSync', 'auth', 'role',
   'inboxShowAll', 'leadSyncBaseline', 'clarificationSyncBaseline', 'opportunitySyncBaseline',
   'sparesLinesSyncBaseline', 'deletedLeadIds', 'deletedOpportunityIds', 'pendingOpportunitySyncIds',
   // Migration markers and derived deadline timers belong to this browser.
@@ -328,6 +327,22 @@ export async function loadCore() {
   }
 }
 
+// Sourcing is a workflow-critical slice, but it must not be held hostage by
+// unrelated config, audit, or workspace requests. Keep this read narrow so a
+// valid empty result is still distinguishable from a failed sourcing read.
+export async function loadSourcingData() {
+  if (!supabase) return null
+  const result = await loadEntityRows('spares_lines')
+  if (result.error) throw result.error
+  clearNormalizedEntity('spares_lines')
+  for (const row of result.data || []) {
+    const key = normalizedKey('spares_lines', row.id)
+    normalizedRevisions.set(key, Number(row.rev) || 0)
+    normalizedRecords.set(key, { data: row.data, rev: Number(row.rev) || 0 })
+  }
+  return { sparesLines: (result.data || []).map(row => row.data) }
+}
+
 // Deep links need a narrow recovery read when the fast workspace list is
 // stale or omitted a row that is still present in the normalized table.
 export async function loadOpportunity(id) {
@@ -348,12 +363,13 @@ export async function loadOpportunity(id) {
 }
 
 async function fetchCore() {
-  try {
+  const sourcingPromise = loadSourcingData()
+  const workspacePromise = (async () => {
     const serverWorkspace = await loadWorkspaceFromServer()
     const [consolidatedConfig, consolidatedState, business] = await Promise.all([
       loadConsolidatedConfig(),
       loadConsolidatedState(),
-      loadBusinessTables({ includeRecords: false, coreEntities: ['proposals', 'spares_lines'], collaborative: serverWorkspace || {} }),
+      loadBusinessTables({ includeRecords: false, coreEntities: ['proposals'], collaborative: serverWorkspace || {} }),
     ])
     const slices = {}
     if (consolidatedState) Object.assign(slices, consolidatedState)
@@ -370,14 +386,32 @@ async function fetchCore() {
         normalizedOpportunityCount: Array.isArray(business.opportunities) ? business.opportunities.length : 0,
       },
     }
-  } catch (e) {
-    console.warn('Supabase core load failed — staying on localStorage:', e?.message)
-    return {
-      empty: false,
-      error: { message: e?.message || 'Supabase core load failed', code: e?.code || '', status: e?.status || null },
-      slices: {},
-      diagnostics: { normalizedOpportunityCount: null, lastLoadError: { message: e?.message || 'Supabase core load failed', code: e?.code || '', status: e?.status || null } },
-    }
+  })()
+  const [sourcingResult, workspaceResult] = await Promise.allSettled([sourcingPromise, workspacePromise])
+  const sourcingError = sourcingResult.status === 'rejected' ? sourcingResult.reason : null
+  const workspaceError = workspaceResult.status === 'rejected' ? workspaceResult.reason : null
+  const workspace = workspaceResult.status === 'fulfilled'
+    ? workspaceResult.value
+    : { empty: false, slices: {}, diagnostics: { normalizedOpportunityCount: null } }
+  const slices = { ...workspace.slices }
+  if (sourcingResult.status === 'fulfilled' && sourcingResult.value) Object.assign(slices, sourcingResult.value)
+  if (sourcingError) console.warn('Supabase sourcing load failed — keeping the BOQ unavailable:', sourcingError?.message)
+  if (workspaceError) console.warn('Supabase core load failed — keeping unrelated local slices:', workspaceError?.message)
+  const errorInfo = error => error ? {
+    message: error?.message || 'Supabase data load failed',
+    code: error?.code || '',
+    status: error?.status || null,
+  } : null
+  return {
+    empty: workspace.empty && sourcingResult.status === 'fulfilled' && !(sourcingResult.value?.sparesLines || []).length,
+    slices,
+    error: errorInfo(sourcingError),
+    coreError: errorInfo(workspaceError),
+    diagnostics: {
+      ...(workspace.diagnostics || {}),
+      ...(sourcingError ? { sourcingLoadError: errorInfo(sourcingError) } : {}),
+      ...(workspaceError ? { lastLoadError: errorInfo(workspaceError) } : {}),
+    },
   }
 }
 
@@ -599,7 +633,10 @@ async function loadBusinessTables({ includeRecords = true, coreEntities = [], co
     }
   }))
   const failedTables = baseTables
-    .map((result, index) => result.error ? { index, error: result.error } : null)
+    // The fast/core load only asks records for an exact count; that legacy
+    // count is diagnostic and unrelated to the proposal + sourcing rows it
+    // is trying to hydrate. A count-query failure must not hide a usable BOQ.
+    .map((result, index) => result.error && (includeRecords || index !== 3) ? { index, error: result.error } : null)
     .filter(Boolean)
   if (failedTables.length) {
     console.warn('Supabase normalized table load failed:', failedTables.map(({ index, error }) => ({

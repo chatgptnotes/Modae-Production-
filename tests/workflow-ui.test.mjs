@@ -90,8 +90,11 @@ test('follow-up communications keep message bodies inside expandable rows', () =
 test('completed workflow stages can be moved back with a recorded reason', () => {
   const workbench = read('src/pages/Workbench.jsx')
   assert.match(workbench, /onBack=\{step => \{/)
-  assert.match(workbench, /openBackwardTransition\(activeStepConfig\)/)
-  assert.match(workbench, /Move back to \{activeStepConfig\?\.label \|\| 'this stage'\} to edit/)
+  assert.match(workbench, /onEdit=\{step => openBackwardTransition\(step\)\}/)
+  assert.match(workbench, /className="progress-edit-stage"/)
+  assert.match(workbench, /aria-label=\{`Edit \$\{steps\[activeIndex\]\?\.label \|\| 'reviewed stage'\}`\}/)
+  assert.doesNotMatch(workbench, /Reviewing completed stage:/)
+  assert.doesNotMatch(workbench, /Move back to \{activeStepConfig\?\.label \|\| 'this stage'\} to edit/)
   assert.match(workbench, /targetIndex >= currentIndex\) return/)
   assert.match(workbench, /targetStep: step, reason: ''/)
   assert.match(workbench, /moveBackwardToStep\(transition\.targetStep/)

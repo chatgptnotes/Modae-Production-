@@ -7,6 +7,7 @@ import postcss from 'postcss'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const css = fs.readFileSync(path.join(root, 'src/styles.css'), 'utf8')
+const tracker = fs.readFileSync(path.join(root, 'src/pages/Tracker.jsx'), 'utf8')
 
 test('Opportunities uses the available canvas instead of reserving outer white space', () => {
   const stylesheet = postcss.parse(css)
@@ -28,9 +29,37 @@ test('Opportunities uses the available canvas instead of reserving outer white s
   assert.equal(value(outer, 'padding'), '0')
   assert.equal(value(inner, 'padding'), '0')
   assert.equal(value(title, 'padding-inline'), '12px')
-  assert.equal(value(toolbar, 'padding-inline'), '12px')
+  assert.equal(value(toolbar, 'padding-inline'), '0')
   assert.equal(value(sheet, 'border'), '0')
   assert.equal(value(sheet, 'box-shadow'), 'none')
+})
+
+test('main workspace pages share one title size and top spacing', () => {
+  assert.match(css, /\.workspace-page-title\s*\{[^}]*font-size: clamp\(26px, 2vw, 32px\) !important;[^}]*font-weight: 800 !important;[^}]*line-height: 1\.1 !important;/)
+  assert.match(css, /\.workspace-page-title\s*\{[^}]*display: flex;[^}]*align-items: center;[^}]*gap: 8px;/)
+  assert.match(css, /\.workspace-page-title > \.ic\s*\{[^}]*width: 18px;[^}]*height: 18px;/)
+  assert.match(css, /\.opportunities-page > \.tracker-page > \.workspace-page-title\s*\{\s*margin-top: 24px !important;/)
+  assert.match(css, /\.dashboard-page \.home-head\s*\{\s*margin-top: 0 !important;/)
+  assert.match(css, /\.mailbox-page\s*\{\s*padding-top: 24px !important;/)
+})
+
+test('main page titles use the same icons as their sidebar destinations', () => {
+  const titleIcons = {
+    MyDashboard: 'chartBar', Inbox: 'inbox', Tracker: 'cards', Approvals: 'checkCircle',
+    ProposalSent: 'send', Folders: 'folder', Customers: 'users', PriceLists: 'tag',
+    Admin: 'gear', Audit: 'list', Users: 'shield',
+  }
+  for (const [page, icon] of Object.entries(titleIcons)) {
+    const source = fs.readFileSync(path.join(root, 'src/pages', `${page}.jsx`), 'utf8')
+    assert.match(source, new RegExp(`className="workspace-page-title"><Icon name="${icon}" size=\\{18\\}`), `${page} title should use sidebar icon ${icon}`)
+  }
+})
+
+test('primary workspace pages share a responsive inset from the sidebar', () => {
+  assert.match(css, /--workspace-page-gutter: clamp\(14px, 1\.5vw, 24px\);/)
+  assert.match(css, /\.main-scroll > \.page:has\(\.workspace-page-title\)\s*\{[^}]*width: 100%;[^}]*max-width: none;[^}]*padding-inline: var\(--workspace-page-gutter\);/)
+  assert.match(css, /\.opportunities-page > \.tracker-page > \.workspace-page-title\s*\{\s*padding-inline: 0;/)
+  assert.match(css, /\.opportunities-page > \.tracker-page > \.sheet-wrap\.fill\s*\{[^}]*border-inline-width: 0;/)
 })
 
 test('key view fills the available page width while the full sheet scrolls locally', () => {
@@ -90,8 +119,10 @@ test('tracker headers and key-view values are not forcibly clamped', () => {
 
 test('tracker layout keeps toolbar and tabs bounded while only the full sheet scrolls locally', () => {
   assert.match(css, /\.tracker-page \{[\s\S]*?width: 100%;[\s\S]*?max-width: none;[\s\S]*?min-width: 0;/)
+  assert.match(css, /\.opportunities-page \.tracker-grid-shell\s*\{[\s\S]*?display:\s*flex;[\s\S]*?flex-direction:\s*column;[\s\S]*?min-height:\s*0;/)
   assert.match(css, /\.tracker-page \.tracker-toolbar-actions \{[\s\S]*?flex-wrap: wrap;/)
   assert.match(css, /\.tracker-page > \.sheet-wrap\.fill \{[\s\S]*?max-width: 100%;[\s\S]*?overscroll-behavior-x: contain;/)
+  assert.match(css, /\.opportunities-page \.tracker-grid-shell > \.sheet-wrap\.fill\s*\{[\s\S]*?flex:\s*1 1 auto;[\s\S]*?min-height:\s*0;[\s\S]*?overflow:\s*auto;/)
   assert.match(css, /\.tracker-page table\.sheet\.cols-key \{\s*width: 100%;\s*max-width: 100%;\s*min-width: 0;/)
   assert.match(css, /\.tracker-page > \.sheet-tabs \{[\s\S]*?overflow-x: auto;/)
 })
@@ -131,4 +162,12 @@ test('workspace-width container queries reflow controls at browser zoom', () => 
   assert.match(css, /\.tracker-page \.tracker-date-filter-button,[\s\S]*?\.tracker-page \.scope-toggle \{[\s\S]*?white-space: nowrap;/)
   assert.match(css, /@container workspace \(max-width: 44rem\) \{[\s\S]*?\.tracker-page \.tracker-toolbar-actions \{[\s\S]*?grid-template-columns: minmax\(0, 1fr\);/)
   assert.match(css, /@container workspace \(max-width: 70rem\) \{[\s\S]*?\.tracker-page > \.sheet-wrap:has\(table\.sheet:not\(\.cols-key\)\)[\s\S]*?overflow-x: auto;/)
+})
+
+test('Opportunities density scales the table before browser zoom causes clipping', () => {
+  assert.match(css, /\.opportunities-page \.tracker-grid-shell\s*\{[\s\S]*--opp-density:\s*1;/)
+  assert.match(tracker, /--tracker-column-min:\s*\$\{px\(c\)\}px; min-width: max\(56px, calc\(var\(--tracker-column-min\) \* var\(--opp-density, 1\)\)\)/)
+  assert.match(css, /\.opportunities-page \.tracker-grid-shell > \.sheet-wrap\.fill table\.sheet:not\(\.cols-key\) th,[\s\S]*?min-width: max\(56px, calc\(var\(--tracker-column-min, 78px\) \* var\(--opp-density\)\)\) !important;/)
+  assert.match(css, /@container workspace \(max-width: 90rem\) \{[\s\S]*?\.opportunities-page \.tracker-grid-shell \{ --opp-density: \.92; \}/)
+  assert.match(css, /@container workspace \(max-width: 60rem\) \{[\s\S]*?\.opportunities-page \.tracker-grid-shell \{ --opp-density: \.76; \}/)
 })
