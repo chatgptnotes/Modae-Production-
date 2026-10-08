@@ -21,14 +21,15 @@ test('the page itself never scrolls sideways', () => {
   assert.match(css, /\.sheet-wrap[^}]*overflow-x: auto/)
 })
 
-test('the tablet bar wraps and sheds labels on a phone', () => {
+test('the phone shell moves secondary utilities into searchable More', () => {
   assert.match(css, /\.tablet-bar \{ flex-wrap: wrap/)
   assert.match(css, /@media \(max-width: 720px\)[\s\S]{0,400}\.tablet-bar \.tb-label \{ display: none; \}/)
   // Every label the media query hides must actually carry the class.
   const app = read('src/App.jsx')
   const tabletApp = read('src/tablet/TabletApp.jsx')
-  const labels = tabletApp.match(/className="tb-label"/g) || []
-  assert.ok(labels.length >= 3, `expected the bar's labels to be tb-label, found ${labels.length}`)
+  assert.match(tabletApp, /<MobileMore \/>/)
+  assert.match(read('src/tablet/MobileMore.jsx'), /Search pages and tools/)
+  assert.match(tabletApp, /aria-label="Main navigation"/)
 })
 
 test('tablet shell is isolated from the full-site app shell', () => {

@@ -489,7 +489,7 @@ function SalesOpportunitySection({ store, open, nav, money }) {
   return (
     <Card title="My opportunities" icon="sheet" tone="tone-sky" span={12}
       action={<button onClick={() => nav('/opportunities')}>View all</button>}>
-      <div className="dashboard-table-scroll"><table className="dashboard-table"><thead><tr><th>ID</th><th>Opportunity</th><th>Customer</th><th>Stage</th><th>Value (₹)</th><th>Win %</th><th>Next action</th><th>Due</th></tr></thead><tbody>{rows.map(o => { const na = action(o); const go = () => nav(`/opp/${o.id}`); return <tr key={o.id} tabIndex={0} role="link" aria-label={`Open opportunity ${o.id}`} onClick={go} onKeyDown={event => activateDashboardRow(event, go)}><td><b>{o.id}</b></td><td><span className="dashboard-cell-ellipsis">{o.oppName}</span></td><td><span className="dashboard-cell-ellipsis">{o.sellTo}</span></td><td><span className="pill open">{o.stage}</span></td><td>{money ? fmtLakh(o.valueK) : '—'}</td><td>{o.prob || '—'}</td><td title={na.text}><span className="dashboard-cell-clamp">{na.text || o.remarks || 'Review next step'}</span></td><td>{o.orderDate ? ddMMyyyy(o.orderDate) : '—'}</td></tr>})}</tbody></table></div>
+      <div className="dashboard-table-scroll"><table className="dashboard-table opportunity-register-table"><thead><tr><th>ID</th><th>Opportunity</th><th>Customer</th><th>Stage</th><th>Value (₹)</th><th>Win %</th><th>Next action</th><th>Due</th></tr></thead><tbody>{rows.map(o => { const na = action(o); const go = () => nav(`/opp/${o.id}`); return <tr key={o.id} tabIndex={0} role="link" aria-label={`Open opportunity ${o.id}`} onClick={go} onKeyDown={event => activateDashboardRow(event, go)}><td><b>{o.id}</b></td><td><span className="dashboard-cell-ellipsis">{o.oppName}</span></td><td><span className="dashboard-cell-ellipsis">{o.sellTo}</span></td><td><span className="pill open">{o.stage}</span></td><td>{money ? fmtLakh(o.valueK) : '—'}</td><td>{o.prob || '—'}</td><td title={na.text}><span className="dashboard-cell-clamp">{na.text || o.remarks || 'Review next step'}</span></td><td>{o.orderDate ? ddMMyyyy(o.orderDate) : '—'}</td></tr>})}</tbody></table></div>
       {!rows.length && <div className="dashboard-empty">No open opportunities are assigned to you.</div>}
     </Card>
   )
@@ -644,7 +644,7 @@ function SalesPipelineSection({ store, nav, role, scope, money }) {
         {tab('closed', 'My orders (Won)', closed.length)}
         {tab('lost', 'Lost', lost.length)}
       </div>
-      <div className="dashboard-table-scroll"><table className="dashboard-table"><thead><tr><th>ID</th><th>Opportunity / Order</th><th>Customer</th><th>Status</th><th>Stage</th><th>Expected / Close Date</th><th>Value (₹)</th></tr></thead><tbody>
+      <div className="dashboard-table-scroll"><table className="dashboard-table pipeline-register-table"><thead><tr><th>ID</th><th>Opportunity / Order</th><th>Customer</th><th>Status</th><th>Stage</th><th>Expected / Close Date</th><th>Value (₹)</th></tr></thead><tbody>
         {preview.map(o => <tr key={o.id} tabIndex={0} role="link" aria-label={`Open opportunity ${displayOpportunityId(o.id)}`} onClick={() => nav(`/opp/${o.id}`)} onKeyDown={event => activateDashboardRow(event, () => nav(`/opp/${o.id}`))}>
           <td><b>{displayOpportunityId(o.id)}</b></td><td><span className="dashboard-cell-ellipsis">{o.oppName}</span></td><td><span className="dashboard-cell-ellipsis">{o.sellTo}</span></td>
           <td><span className={`pill ${o.status === 'Closed' ? (o.stage === 'Won' ? 'won' : 'lost') : 'open'}`}>{o.status === 'Closed' ? `Closed · ${o.stage}` : 'Open'}</span></td>
@@ -681,7 +681,7 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head,
       </div>
 
       <div className="ana-grid">
-        <Card title="Priority queue" icon="target" tone="tone-amber" span={12}
+        <Card title="Act on these first" icon="target" tone="tone-amber" span={12}
           action={<button onClick={() => nav('/my')}>View all</button>}>
           <NextActions nextActions={visibleNextActions} nav={nav} />
         </Card>
@@ -973,7 +973,7 @@ function ApproverDashboard({ store, nav, role, c, blocked, nextActions, head, co
       {commercial && <AnalyticsOverview {...{ store, role, nav, scope }} />}
 
       <div className="ana-grid">
-        <Card title="Priority queue" icon="target" tone="tone-amber" span={12}
+        <Card title="Act on these first" icon="target" tone="tone-amber" span={12}
           action={<button onClick={() => nav('/approvals')}>View all</button>}>
           <NextActions {...{ nextActions, nav }} />
         </Card>
@@ -1045,7 +1045,7 @@ function AdminDashboard({ store, nav, role, c, blocked, nextActions, head, scope
       </div>
 
       <div className="ana-grid">
-        <Card title="Priority queue" icon="target" tone="tone-amber" span={12}
+        <Card title="Act on these first" icon="target" tone="tone-amber" span={12}
           action={<button onClick={() => nav('/approvals')}>View all</button>}>
           <NextActions {...{ nextActions, nav }} />
         </Card>
@@ -1116,7 +1116,7 @@ function TechDashboard({ store, nav, blocked, nextActions, head }) {
       </div>
 
       <div className="ana-grid">
-        <Card title="Priority queue" icon="target" tone="tone-amber" span={12}
+        <Card title="Act on these first" icon="target" tone="tone-amber" span={12}
           action={<button onClick={() => nav('/')}>View all</button>}>
           <NextActions {...{ nextActions, nav }} />
         </Card>

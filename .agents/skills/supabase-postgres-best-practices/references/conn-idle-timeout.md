@@ -1,4 +1,4 @@
----
+let it be---
 title: Configure Idle Connection Timeouts
 impact: HIGH
 impactDescription: Reclaim 30-50% of connection slots from idle clients

@@ -6,6 +6,7 @@ import { ddMmmYY, isAdminRole, displayRoleLabel } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { ConfirmModal } from '../ui.jsx'
 import { supabase } from '../supabase.js'
+import { usePagedRows } from '../ui/Pagination.jsx'
 
 // Roles assignable through the UI (incl. TECH) — SUPER is deliberately not
 // offered, and CUST only while the portal is enabled (seed.js PORTAL_ENABLED).
@@ -59,6 +60,9 @@ export default function Users() {
   const [provisionBusy, setProvisionBusy] = useState(false)
   const [provisionConfirm, setProvisionConfirm] = useState(false)
   const [provisionSummary, setProvisionSummary] = useState(null)
+  const pending = store.users.filter(u => u.status === 'Pending')
+  const { pagedRows: pagePending, pagination: pendingPagination } = usePagedRows(pending, store.users.length)
+  const { pagedRows: pageUsers, pagination: usersPagination } = usePagedRows(store.users, store.users.length)
 
   useEffect(() => {
     let active = true
@@ -79,7 +83,7 @@ export default function Users() {
   if (!canManage) {
     return (
       <div className="page">
-        <h2 className="workspace-page-title"><Icon name="shield" size={18} /> User management</h2>
+        <h2 className="workspace-page-title workspace-page-title--topbar-duplicate"><Icon name="shield" size={18} /> User management</h2>
         <div className="restricted" style={{ maxWidth: 520 }}>
           Restricted — user accounts and role assignments are visible to administrators only.
         </div>
@@ -87,7 +91,6 @@ export default function Users() {
     )
   }
 
-  const pending = store.users.filter(u => u.status === 'Pending')
   const startUserEdit = user => {
     setEditingUserId(user.id)
     setUserDraft({ name: user.name || '', email: user.email || '', role: user.role, roles: userRoles(user), status: user.status })
@@ -269,7 +272,7 @@ export default function Users() {
 
   return (
     <div className="page">
-      <h2 className="workspace-page-title"><Icon name="shield" size={18} /> User management</h2>
+      <h2 className="workspace-page-title workspace-page-title--topbar-duplicate"><Icon name="shield" size={18} /> User management</h2>
       <div className="toolbar">
         <span className="hint">Admins manage accounts, assign roles and approve registrations. {supabase ? 'Accounts are provisioned through Supabase Auth.' : 'Demo accounts are stored only in this browser.'}</span>
         <span className="spacer" />
@@ -333,7 +336,7 @@ export default function Users() {
           <div className="sheet-wrap sheet-wrap-fill" style={{ marginBottom: 14 }}>
             <table className="sheet">
               <tbody>
-                {pending.map(u => (
+                {pagePending.map(u => (
                   <tr key={u.id}>
                     <td><b>{u.name}</b></td><td>{u.email}</td>
                     <td>Requested <b>{displayRoleLabel(u.role)}</b></td>
@@ -346,6 +349,7 @@ export default function Users() {
               </tbody>
             </table>
           </div>
+          {pendingPagination}
         </>
       )}
       <div className="section-title">Accounts ({store.users.length})</div>
@@ -355,7 +359,7 @@ export default function Users() {
             <tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Supabase Auth</th><th>Created</th>{canManage && <><th>Edit</th><th>Actions</th></>}</tr>
           </thead>
           <tbody>
-            {store.users.map(u => (
+            {pageUsers.map(u => (
               <React.Fragment key={u.id}>
               <tr>
                 {editingUserId === u.id ? (
@@ -442,6 +446,7 @@ export default function Users() {
           </tbody>
         </table>
       </div>
+      {usersPagination}
       </section>
 
       <section id="users-panel-role-names" className="users-tab-panel" role="tabpanel"

@@ -50,7 +50,7 @@ export function ConfChip({ conf, thresholds = { high: 90, med: 75 }, label = '' 
 }
 
 // Customer classification chip (Green / Blue / Amber / Red).
-export const ClassChip = ({ cls }) => <span className={`pill ${cls}`}>{cls}</span>
+export const ClassChip = ({ cls }) => <span className={`customer-class customer-class-${cls}`}>{cls}</span>
 
 export const Phase2Badge = () => (
   <span className="chip phase2" title="Phase 2 — direction preview, simulated only">Phase 2</span>

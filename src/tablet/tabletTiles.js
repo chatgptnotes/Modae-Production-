@@ -26,7 +26,7 @@ export function buildTabletTiles(store) {
     { key: 'admin', page: 'admin', icon: 'gear', label: 'Admin', hint: 'Rules, AI model, SharePoint, uploads', to: '/admin', color: 'wine', show: admin || role === 'LJS' },
     { key: 'audit', page: 'audit', icon: 'list', label: 'Audit Trail', hint: 'Who changed what, when', to: '/audit', color: 'slate', show: admin },
     { key: 'users', page: 'users', icon: 'shield', label: 'Users and roles', hint: 'Accounts, registrations, and permissions', to: '/users', color: 'navy', show: admin },
-  ].filter(t => t.show !== false && (!('show' in t) || t.show === true) && canSeePage(role, t.page))
+  ].filter(t => canSeePage(store.roles || role, t.page))
 }
 
 export const TABLET_SECTIONS = {

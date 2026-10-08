@@ -16,6 +16,7 @@ import { withoutSimulated, simulatedCount } from './simulatedLeads.js'
 import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, defaultViewMode } from './appState.js'
 import { unitCostINR, unitSellINR, setRoleNameConfig, nowIST, toISTISOString, canManagePriceLists } from './utils.js'
 import { PRICE_SOURCES, isConfirmableSparesLine, normalizePriceFields, sparesLineFinancials } from './pricing.js'
+import { validServiceRatePatch, validPriceListParts } from './priceListEditing.js'
 import { clarificationTopic } from './leadClarification.js'
 import { reconcileSparesLines } from './clarificationSparesSync.js'
 import { normalizedCurrencyRates } from './currency.js'
@@ -134,6 +135,9 @@ const localSnapshot = state => ({
   customers: state.customers,
   users: state.users,
   config: state.config,
+  rateSheets: state.rateSheets,
+  // Browser-only workspaces have no remote catalogue to recover on reload.
+  ...(datastore.dbEnabled() ? {} : { priceLists: state.priceLists }),
   auth: state.auth,
   role: state.role,
   roles: state.roles,
@@ -762,13 +766,14 @@ export function StoreProvider({ children }) {
     priceListsStatus,
     reloadPriceLists: () => loadApprovedPriceLists({ force: true }),
     async loadPriceListVersion(listCode, versionCode) {
-      const loaded = await datastore.loadPriceListVersion(listCode, versionCode)
+      const versionId = stateRef.current.priceLists?.[listCode]?.versions?.find(version => version.version === versionCode)?.id
+      const loaded = await datastore.loadPriceListVersion(listCode, versionCode, versionId)
       if (!loaded) return
       setState(s => {
         const current = s.priceLists?.[listCode]
         if (!current) return s
         const versions = (current.versions || []).map(version => version.version === versionCode
-          ? { ...version, currency: loaded.source_currency, uploaded: loaded.uploaded_at || '', filename: loaded.filename || '', parts: loaded.parts }
+          ? { ...version, currency: loaded.currency, uploaded: loaded.uploaded || '', filename: loaded.filename || '', parts: loaded.parts }
           : version)
         const next = { ...s.priceLists, [listCode]: { ...current, versions } }
         persistLocalSnapshot({ ...s, priceLists: next })
@@ -2177,17 +2182,20 @@ export function StoreProvider({ children }) {
     // Service day rates are commercial reference data — an FY revision has to
     // leave a trail, so this is audited like any other gated change.
     updateRateSheets(sheet, patch) {
-      setState(s => withAudit({
-        ...s,
-        rateSheets: {
-          ...s.rateSheets,
-          [sheet]: {
-            ...s.rateSheets[sheet],
-            ...patch,
-            rates: { ...s.rateSheets[sheet].rates, ...(patch.rates || {}) },
+      setState(s => {
+        if (!canManagePriceLists(s.role) || !['India', 'International'].includes(sheet) || !s.rateSheets?.[sheet] || !validServiceRatePatch(patch)) return s
+        return withAudit({
+          ...s,
+          rateSheets: {
+            ...s.rateSheets,
+            [sheet]: {
+              ...s.rateSheets[sheet],
+              ...patch,
+              rates: { ...s.rateSheets[sheet].rates, ...(patch.rates || {}) },
+            },
           },
-        },
-      }, 'Service rate sheet updated', sheet, Object.keys(patch.rates || patch).join(', ')))
+        }, 'Service rate sheet updated', sheet, [...Object.keys(patch.rates || {}), ...(patch.gst === undefined ? [] : ['gst'])].join(', '))
+      })
     },
 
     updateSvcEstimate(oppId, patch) {
@@ -2423,7 +2431,7 @@ export function StoreProvider({ children }) {
     },
     savePriceListVersion(name, baseVersionId, parts, meta = {}) {
       setState(s => {
-        if (!canManagePriceLists(s.role)) return s
+        if (!canManagePriceLists(s.role) || !validPriceListParts(parts)) return s
         const current = s.priceLists?.[name]
         if (!current) return s
         const requestedVersion = meta.version || `Revision ${(current.versions || []).length + 1}`

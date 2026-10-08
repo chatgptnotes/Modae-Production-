@@ -60,6 +60,10 @@ export const MODAE_COLORS = Object.freeze({
   surface: '#FFFFFF',
   // Semantic, deliberately not the brand red.
   status: Object.freeze({
+    critical: '#C93838',
+    warning: '#8F6100',
+    success: '#237A33',
+    neutral: '#616161',
     good: '#37A64A',
     info: '#2F80ED',
     warn: '#D99200',
@@ -73,6 +77,7 @@ export const MODAE_TYPE = Object.freeze({
   heading: "'Candara', 'Segoe UI', system-ui, sans-serif",
   body: "'Candara', 'Segoe UI', system-ui, sans-serif",
   document: "'Candara', 'Segoe UI', system-ui, sans-serif",
+  mono: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
   // Website buttons are 60px tall hero controls. The colour, radius, weight and
   // letter-spacing carry across; the metrics do not — this is a dense
   // enterprise UI, not a marketing page.

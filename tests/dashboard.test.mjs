@@ -114,7 +114,7 @@ test('My Dashboard branches per role', () => {
     assert.match(source, new RegExp(`function ${fn}\\(`), `${fn} must exist`)
   }
   assert.match(source, /const sales = isSalesOwner\(role\)/)
-  assert.match(read('src/pages/myDashboard/WorkspaceDashboard.jsx'), /displayRoleLabel\(role\)/)
+  assert.match(read('src/App.jsx'), /dashboardOwners\.map\(owner => <option key=\{owner\} value=\{owner\}>\{displayRole\(owner\)\}/)
   assert.match(source, /const owner = role === 'LJS'/)
   assert.match(source, /const commercial = role === 'AH'/)
   assert.match(source, /const tech = role === 'TECH'/)
@@ -161,15 +161,81 @@ test('dashboard visual polish fills KPI space and keeps dense controls compact',
   assert.match(styles, /\.dashboard-page \.targets-table td:first-child \.hint\s*\{[\s\S]*display:\s*block/)
 })
 
-test('dashboard view switch, owner and date controls belong to the page-local workspace', () => {
+test('dashboard keeps its fiscal controls in the report and omits the top-bar period selector', () => {
+  const dashboard = read('src/pages/myDashboard/WorkspaceDashboard.jsx')
+  const app = read('src/App.jsx')
+  const context = read('src/ui/WorkspaceViewContext.jsx')
+  const styles = read('src/pages/myDashboard/workspace.css')
+  assert.match(read('src/App.jsx'), /workspace-company-selector/)
+  assert.doesNotMatch(app, /workspace-fy-selector|Dashboard fiscal period/)
+  assert.match(context, /createContext/)
+  assert.match(dashboard, /useWorkspaceView\(\)/)
+  assert.match(dashboard, /reference-quarter/)
+  assert.match(dashboard, /setPeriod\('fy'\)/)
+  assert.doesNotMatch(dashboard, /dw-scope/)
+  assert.match(styles, /@media \(max-width: 540px\)/)
+})
+
+test('workspace dashboard keeps scope controls compact so the report starts with the KPI strip', () => {
+  const app = read('src/App.jsx')
   const dashboard = read('src/pages/myDashboard/WorkspaceDashboard.jsx')
   const styles = read('src/pages/myDashboard/workspace.css')
-  assert.match(dashboard, /aria-pressed=\{scope === value\}/)
-  assert.match(dashboard, /Opportunity creation and booking period/)
-  assert.match(dashboard, /scope === 'global' && <label/)
-  assert.match(styles, /\.dashboard-page\.dashboard-workspace \.dw-header \.dw-scope button\[aria-pressed="true"\]/)
-  assert.match(styles, /box-shadow: inset 0 -3px var\(--color-primary\)/)
-  assert.match(styles, /@media \(max-width: 540px\)/)
+  assert.doesNotMatch(dashboard, /reference-toolbar/)
+  assert.match(dashboard, /reference-kpis/)
+  assert.match(app, /workspace-company-selector/)
+  assert.match(styles, /\.dw-reference-dashboard \.reference-kpis/)
+})
+
+test('workspace dashboard follows the reference report hierarchy', () => {
+  const dashboard = read('src/pages/myDashboard/WorkspaceDashboard.jsx')
+  assert.match(dashboard, /className="page dashboard-page dw-reference-dashboard"/)
+  assert.match(dashboard, /<Performance/)
+  assert.match(dashboard, /<TopOpportunities/)
+  assert.match(dashboard, /<ActionQueue/)
+  assert.match(dashboard, /<Funnel/)
+  assert.doesNotMatch(dashboard, /<PipelineStageFlow|<OpportunityRegister/)
+  assert.match(dashboard, /<WinLoss/)
+})
+
+test('workspace view is controlled from the top bar and dashboard navigation stays neutral', () => {
+  const app = read('src/App.jsx')
+  const toggle = read('src/ui/WorkspaceViewToggle.jsx')
+  const styles = read('src/styles.css')
+  const tablet = read('src/tablet/TabletApp.jsx')
+  assert.match(app, /const label = t\.page === 'mydashboard' \? 'Dashboard' : t\.label/)
+  assert.match(app, /<WorkspaceViewToggle \/>/)
+  assert.match(app, /WorkspaceViewProvider initialScope=\{dashboardDefaultScope\(store\.role\)\}/)
+  assert.match(toggle, /role="switch"/)
+  assert.match(toggle, /aria-label="Workspace view"/)
+  assert.match(toggle, /aria-checked=\{isGlobal\}/)
+  assert.match(toggle, /onClick=\{\(\) => setScope\(isGlobal \? 'my' : 'global'\)\}/)
+  assert.match(toggle, /workspace-view-switch__thumb/)
+  assert.match(toggle, /isGlobal \? 'Global View' : 'My View'/)
+  assert.match(styles, /\.workspace-view-switch\[aria-checked="true"\][^{]*\{[^}]*background-color: #FFF !important/)
+  assert.match(styles, /workspace-view-switch__thumb[^}]*width: 8px; height: 26px;[^}]*border-radius: 999px/)
+  assert.match(styles, /workspace-view-switch__label[^}]*max-width: 90px/)
+  assert.match(styles, /workspace-view-switch\[aria-checked="true"\] \.workspace-view-switch__thumb[^}]*translateX\(104px\)/)
+  assert.match(styles, /\.workspace-view-switch__thumb[^}]*background-color: #282828/)
+  assert.match(styles, /\.workspace-view-switch\[aria-checked="true"\] \.workspace-view-switch__thumb[^}]*background-color: var\(--primary-fill\)/)
+  assert.match(styles, /\.workspace-view-switch\[aria-checked="true"\] \.workspace-view-switch__label[^}]*color: #282828 !important/)
+  assert.match(tablet, /<WorkspaceViewToggle \/>/)
+})
+
+test('workspace view scope reaches the main data registers while preserving role-specific page access', () => {
+  for (const file of [
+    'src/pages/myDashboard/WorkspaceDashboard.jsx',
+    'src/pages/Opportunities.jsx',
+    'src/pages/Tracker.jsx',
+    'src/pages/MyOpps.jsx',
+    'src/pages/Inbox.jsx',
+    'src/pages/Analytics.jsx',
+    'src/pages/Approvals.jsx',
+    'src/pages/ProposalSent.jsx',
+    'src/pages/PurchaseOrders.jsx',
+    'src/pages/Folders.jsx',
+    'src/pages/Customers.jsx',
+    'src/pages/Audit.jsx',
+  ]) assert.match(read(file), /useWorkspaceView\(\)/, `${file} must read the shared workspace scope`)
 })
 
 test('dashboard work queue summary uses responsive metric tiles', () => {
@@ -257,7 +323,7 @@ test('commercial approvers see the pipeline before their priority queue', () => 
   const approver = source.slice(source.indexOf('function ApproverDashboard'), source.indexOf('function AdminDashboard'))
   const commercialPipeline = approver.indexOf('{commercial && <AnalyticsOverview')
   assert.notEqual(commercialPipeline, -1)
-  assert.ok(commercialPipeline < approver.indexOf('title="Priority queue"'))
+  assert.ok(commercialPipeline < approver.indexOf('title="Act on these first"'))
 })
 
 test('LJS proposal status card has one bottom register link', () => {
@@ -333,10 +399,10 @@ test('clickable dashboard table rows support keyboard activation', () => {
 test('My Dashboard leads with a capped daily-work queue for every role', () => {
   const source = read('src/pages/MyDashboard.jsx')
   assert.match(source, /const PREVIEW_LIMIT = 5/)
-  assert.equal((source.match(/title="Priority queue"/g) || []).length, 4,
-    'sales, approver, admin, and technical dashboards each need one priority queue')
-  assert.equal((source.match(/title="Priority queue"[^>]+span=\{12\}/g) || []).length, 4,
-    'priority queues must use the full dashboard width')
+  assert.equal((source.match(/title="Act on these first"/g) || []).length, 4,
+    'sales, approver, admin, and technical dashboards each need one action queue')
+  assert.equal((source.match(/title="Act on these first"[^>]+span=\{12\}/g) || []).length, 4,
+    'action queues must use the full dashboard width')
   assert.match(source, /\.slice\(0, PREVIEW_LIMIT\)/,
     'dashboard record previews must be capped at five rows')
   assert.doesNotMatch(source, /title="My funnel"/,
@@ -467,7 +533,7 @@ test('a sales owner gets their own target and booked orders', () => {
   assert.equal(rs.achieved, own.reduce((s, o) => s + o.valueK, 0))
   assert.equal(rs.achieved, rs.quarterActual.reduce((a, b) => a + b, 0))
   assert.equal(rs.achieved, rs.monthly.reduce((a, b) => a + b, 0))
-  assert.equal(rs.gap, rs.annual - rs.achieved)
+  assert.equal(rs.gap, Math.max(0, rs.annual - rs.achieved))
 })
 
 test('no owner sees another owner"s numbers', () => {
@@ -721,7 +787,7 @@ test('shared button resets leave dashboard funnel rows borderless', () => {
   assert.match(styles, /button:not\(\.primary\):not\(\.danger\):not\(\.dark\):not\(\.ghost\):not\(\.dashboard-funnel-row\)/)
   assert.match(styles, /\.shell button:not\([^\n]*\.dashboard-funnel-row\),/)
   assert.match(styles, /\.shell button:not\([^\n]*\.dashboard-funnel-row\):hover:not\(:disabled\)/)
-  assert.doesNotMatch(styles, /theme-toggle|theme-dark|html\.dark/)
+  assert.match(styles, /workspace-theme-toggle/)
 })
 
 test('run-rate chart remains visible when no bookings are recorded', () => {
@@ -813,7 +879,7 @@ test('sales dashboard follows the action-to-outcome workflow', () => {
   const source = read('src/pages/MyDashboard.jsx')
   const sales = source.slice(source.indexOf('function SalesDashboard'), source.indexOf('// ------------------------------------------------------------ team targets'))
   const positions = [
-    'title="Priority queue"',
+    'title="Act on these first"',
     'title="Pipeline snapshot"',
     '<SalesPipelineSection ',
     '<SalesCustomerSection ',
@@ -842,7 +908,7 @@ test('dashboard view-all actions open the matching workspaces', () => {
   const myOpps = read('src/pages/MyOpps.jsx')
   const styles = read('src/styles.css')
   assert.match(dashboard, /title="My Opportunities \/ My Orders"[\s\S]*?nav\('\/opportunities'\)/)
-  assert.match(dashboard, /title="Priority queue"[\s\S]*?nav\('\/my'\)/)
+  assert.match(dashboard, /title="Act on these first"[\s\S]*?nav\('\/my'\)/)
   assert.match(dashboard, /title="My Opportunities \/ My Orders"[\s\S]*?nav\('\/opportunities'\)/)
   assert.match(app, /const PurchaseOrders = lazyWithRecovery\(\(\) => import\('\.\/pages\/PurchaseOrders\.jsx'\)\)/)
   assert.match(app, /<Route path="\/po" element=\{<PageGate page="po"><PurchaseOrders \/><\/PageGate>\} \/>/)

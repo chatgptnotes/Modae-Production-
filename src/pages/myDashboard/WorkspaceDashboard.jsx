@@ -1,225 +1,139 @@
-import React, { useEffect, useId, useMemo, useRef, useState } from 'react'
+import React, { useMemo } from 'react'
 import { Icon } from '../../icons.jsx'
 import { displayOpportunityId } from '../../seed.js'
-import { canPriceProposal, ddMMyyyy, displayRole, displayRoleLabel, isSalesOwner } from '../../utils.js'
 import { FY_QUARTERS } from '../../kpi.js'
-import { dashboardModel, dashboardTiming, paginationNumbers, PAGE_SIZE, registerRows } from './model.js'
+import { canPriceProposal, ddMMyyyy } from '../../utils.js'
+import { dashboardModel } from './model.js'
+import { useWorkspaceView } from '../../ui/WorkspaceViewContext.jsx'
 import './workspace.css'
+import usePhoneLayout from '../../tablet/usePhoneLayout.js'
+import PhoneDashboard from './PhoneDashboard.jsx'
 
-function Panel({ title, icon, subtitle, children, className = '', action }) {
-  return <section className={`dw-panel ${className}`}>
-    <div className="dw-panel-head"><div><h3><Icon name={icon} size={19} />{title}</h3>{subtitle && <p>{subtitle}</p>}</div>{action}</div>
-    {children}
-  </section>
+const money = value => `₹${((Number(value) || 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`
+const scopeLabel = scope => scope === 'my' ? 'My' : 'Global'
+
+function Card({ label, value, hint, icon, tone, explanation }) {
+  return <article className={`reference-kpi reference-kpi--${tone}`} tabIndex={0}
+    data-explain-title={label} data-explain={explanation}>
+    <div><h2>{label}</h2><strong>{value}</strong><p>{hint}</p></div><span><Icon name={icon} size={27} /></span>
+  </article>
 }
 
-function SummaryCard({ label, value, hint, icon, tone = 'neutral', onClick }) {
-  return <button type="button" className={`dw-kpi dw-${tone}`} onClick={onClick}>
-    <span className="dw-kpi-copy"><span className="dw-kpi-label">{label}</span><strong>{value}</strong><span className="dw-muted">{hint}</span></span>
-    <span className="dw-kpi-icon"><Icon name={icon} size={24} /></span>
-  </button>
+function Section({ title, accent, action, children, className = '', explanation = '' }) {
+  return <section className={`reference-section ${className}`}><header><h2 tabIndex={explanation ? 0 : undefined}
+    data-explain-title={explanation ? title : undefined} data-explain={explanation || undefined}>
+    <i className={`reference-accent reference-accent--${accent}`} />{title}</h2>{action}</header>{children}</section>
 }
 
-const money = value => {
-  const amount = Number(value) || 0
-  return `₹${(amount / 100).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: amount && Math.abs(amount) < 10 ? 3 : 1 })} L`
+function Performance({ model, showMoney, scope, nav, period, setPeriod }) {
+  const { perf } = model
+  const maximum = Math.max(1, perf.achieved, perf.annual)
+  const gap = Math.max(0, perf.annual - perf.achieved)
+  return <Section title={`${scopeLabel(scope)} Performance`} accent="green" className="reference-performance"
+    explanation="Compares booked sales with target; YTD target includes quarters through this quarter."
+    action={<div className="reference-performance-actions"><button className={period === 'fy' ? 'active' : ''} data-explain-title="Year to date" data-explain="Show fiscal year actuals and target through this quarter." onClick={() => setPeriod('fy')}>YTD</button><button className={period.startsWith('q') ? 'active' : ''} data-explain-title="Quarter to date" data-explain="Show actuals and target for the current quarter." onClick={() => setPeriod(`q${model.currentQuarter}`)}>QTD</button><button className="reference-orders-button" data-explain-title="View orders" data-explain="Open purchase orders." onClick={() => nav('/po')}>View Orders</button></div>}>
+    <div className="reference-performance-chart">{[['Actual', perf.achieved, 'actual'], ['Target', perf.annual, 'target']].map(([label, value, kind]) => <div className="reference-bar" key={label} tabIndex={0}
+      data-explain-title={label}
+      data-explain={label === 'Actual'
+        ? 'Actual is the total value of orders booked in the selected period.'
+        : 'Target is the configured sales goal for the selected period.'}>
+      <span>{label}</span><i><b className={kind} style={{ width: `${Number(value) / maximum * 100}%` }} /></i><strong>{showMoney ? money(value) : value}</strong></div>)}<small>Value ({showMoney ? '₹ L' : 'opportunities'})</small></div>
+    <aside className={`reference-gap ${gap > 0 ? 'is-below-target' : 'is-on-target'}`} tabIndex={0} data-explain-title="Gap to target"
+      data-explain="Gap is target minus actual, with a minimum of zero.">
+      <span>Gap</span><strong>{showMoney ? money(gap) : gap}</strong><b>{perf.annual ? `(${Math.round(gap / perf.annual * 100)}%)` : '—'}</b></aside>
+  </Section>
 }
 
-function OutcomeIcon({ won = false, name }) {
-  return <span className="dw-outcome-icon">{won ? <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M7 3h10v6a5 5 0 0 1-10 0V3Zm5 11v5m-4 2h8M7 5H3v3a4 4 0 0 0 5 4m9-7h4v3a4 4 0 0 1-5 4" /></svg> : <Icon name={name} size={21} />}</span>
+function TopOpportunities({ model, nav, showMoney, scope, topPeriod, setTopPeriod, fy }) {
+  return <Section title={`Top 5 ${scopeLabel(scope)} Opportunities`} accent="yellow" className="reference-table-section"
+    explanation={showMoney ? 'Shows the five highest-value open opportunities with order dates in this period.' : 'Shows up to five open opportunities with order dates in this period.'}
+    action={<label className="reference-quarter"><span className="visually-hidden">Top 5 fiscal period</span><select aria-label="Top 5 fiscal period" data-explain-title="Top opportunities period" data-explain="Filters by expected order date." value={topPeriod} onChange={event => setTopPeriod(event.target.value)}><option value="fy">{fy}</option>{FY_QUARTERS.map((label, index) => <option key={label} value={`q${index + 1}`}>{label} · {fy}</option>)}</select></label>}>
+    <div className="reference-table-wrap"><table className="reference-table"><thead><tr><th>#</th><th>Opportunity / Customer</th><th>Expected Order Date</th>{showMoney && <th>Expected Order Value</th>}<th>Stage</th><th>Action</th></tr></thead><tbody>
+    {model.topOpportunities.map((opp, index) => <tr key={opp.id} tabIndex={0}
+      data-explain-title={`Rank ${index + 1} · ${displayOpportunityId(opp.id)}`}
+      data-explain={showMoney ? `Ranked by value; stage: ${opp.stage || 'not set'}.` : `Stage: ${opp.stage || 'not set'}.`}>
+      <td><b className="reference-rank">{index + 1}</b></td><td><strong>{displayOpportunityId(opp.id)}</strong> <span>· {opp.sellTo || opp.oppName || 'Untitled opportunity'}</span></td><td>{opp.orderDate ? ddMMyyyy(opp.orderDate) : '—'}</td>{showMoney && <td>{money(opp.valueK)}</td>}<td><span className="reference-stage"><i className={`stage-${String(opp.stage || '').toLowerCase().replaceAll(' ', '-')}`} />{opp.stage || '—'}</span></td><td><button data-explain-title="Open opportunity" data-explain="Open this opportunity." onClick={() => nav(`/opp/${opp.id}`)}>Open</button></td></tr>)}
+    {!model.topOpportunities.length && <tr><td colSpan={showMoney ? 6 : 5}>No open opportunities with an expected order date in {model.periodLabel}.</td></tr>}
+  </tbody></table></div></Section>
 }
 
-function Timing({ due, fallback = '—', title }) {
-  const timing = dashboardTiming(due, fallback)
-  return <span className={`dw-timing dw-${timing.tone}`} title={timing.title || title}>{due && timing.title && <i aria-hidden="true" />}{timing.label}</span>
+function ActionQueue({ model, nav, scope }) {
+  const tasks = model.queue.slice(0, 3)
+  const priorityReason = task => ({
+    1: 'Approval requests are highest priority.',
+    2: 'Blocked work comes next.',
+    3: 'Follow-ups due after 14 days come next.',
+    4: 'Records unchanged for 30+ days come next.',
+    5: 'Other assigned actions appear last.',
+  }[task.rank] || 'This item needs attention.')
+  return <Section title={`${scopeLabel(scope)} Action Queue`} accent="red" className="reference-table-section"
+    explanation="Shows the three highest-priority actions: approvals, blockers, overdue follow-ups, stale records, then other actions."
+  ><div className="reference-table-wrap"><table className="reference-table"><thead><tr><th>Opportunity / Customer</th><th>Action Needed</th><th>Owner</th><th>Due / Status</th><th>Action</th></tr></thead><tbody>
+    {tasks.map(task => <tr key={task.id} tabIndex={0}
+      data-explain-title={task.text}
+      data-explain={priorityReason(task)}>
+      <td><strong>{task.opp ? displayOpportunityId(task.opp.id) : 'Approval'}</strong> <span>· {task.opp?.sellTo || task.opp?.oppName || 'Workspace approval'}</span></td><td>{task.text}</td><td>{task.owner || 'Unassigned'}</td><td><span className="reference-blocked" data-tone={task.rank === 2 ? 'danger' : task.rank <= 4 ? 'warning' : 'neutral'}><i />{task.timing || 'Blocked'}</span></td><td><button data-explain-title="Open action" data-explain="Open this action." onClick={() => nav(task.path)}>Open</button></td></tr>)}
+    {!tasks.length && <tr><td colSpan="5">Nothing requires action right now.</td></tr>}
+  </tbody></table></div></Section>
 }
 
-function Outcomes({ model, showMoney }) {
-  const closed = model.pipeline.filter(o => o.stage === 'Won' || o.stage === 'Lost')
-  const { summary } = model.outcomes
-  return <div className="dw-outcomes" aria-label="Closed opportunity results">
-    {[{ label: 'Won', count: summary.won, tone: 'success', stage: 'Won' }, { label: 'Lost', count: summary.lost, tone: 'danger', stage: 'Lost' }].map(row =>
-      <div key={row.stage} className={`dw-${row.tone}`}><OutcomeIcon won={row.stage === 'Won'} name="x" /><div><span>{row.label}</span><strong>{row.count}</strong>{showMoney && <small>{money(closed.filter(o => o.stage === row.stage).reduce((s, o) => s + (+o.valueK || 0), 0))}</small>}</div></div>)}
-    <div><OutcomeIcon name="target" /><div><span>Win rate</span><strong>{summary.total ? `${summary.winRate}%` : '—'}</strong><small>{summary.total ? `${summary.total} closed` : 'No closed results'}</small></div></div>
-  </div>
+function Funnel({ model, showMoney, scope }) {
+  const metric = row => showMoney ? row.valueK : row.count
+  const maximum = Math.max(1, ...model.funnel.map(metric))
+  return <Section title={`${scopeLabel(scope)} Sales Pipeline Funnel`} accent="blue" className="reference-funnel"
+    explanation="Groups opportunities by stage and probability; unknown probabilities count as Low."
+    action={<span className="reference-legend"><b className="high" />High <b className="medium" />Medium <b className="low" />Low</span>}><div className="reference-funnel-body"><div className="reference-funnel-list">{model.funnel.map(row => <div className="reference-funnel-row" key={row.key}>
+      <strong tabIndex={0} data-explain-title={row.label}
+        data-explain={`Includes ${row.stages.join(', ')} opportunities.${row.key === 'won' ? ' Only closed Won opportunities count.' : ' Only open opportunities count.'}`}>
+        {row.label}</strong><div style={{ width: `${Math.max(18, metric(row) / maximum * 100)}%` }}>{row.segments.map(segment => <span key={segment.key} className={segment.key} tabIndex={0}
+        data-explain-title={`${row.label} · ${segment.key} probability`}
+        data-explain={`${segment.count} ${segment.count === 1 ? 'opportunity' : 'opportunities'} in this band.${segment.key === 'low' ? ' Missing probability counts as Low.' : ''}`}
+        style={{ flex: Math.max(.15, showMoney ? segment.valueK : segment.count) }}>{segment.count ? `${segment.count}${showMoney ? ` (${money(segment.valueK)})` : ''}` : ''}</span>)}</div></div>)}</div><aside className="reference-funnel-totals"><span>Total Count</span>{model.funnel.map(row => <strong key={row.key} tabIndex={0} data-explain-title={`${row.label} · opportunity count`} data-explain={`${row.count} ${row.label} opportunities.`}>{row.count}</strong>)}</aside>{showMoney && <aside className="reference-funnel-totals"><span>Total Value</span>{model.funnel.map(row => <strong key={row.key} tabIndex={0} data-explain-title={`${row.label} · total value`} data-explain={`Combined ${row.label} value: ${money(row.valueK)}.`}>{money(row.valueK)}</strong>)}</aside>}</div></Section>
 }
 
-function Performance({ model, showMoney, scope, period }) {
-  const rows = model.team.slice().sort((a, b) => b.achieved - a.achieved).slice(0, 5)
-  const max = Math.max(1, ...rows.flatMap(row => showMoney ? [row.annual, row.achieved] : [row.open]))
-  return <Panel title={scope === 'my' ? 'My performance' : 'Team performance'} icon="users"
-    subtitle={showMoney ? 'Actual vs target · ₹ L' : 'Open opportunities by owner'}
-    action={showMoney && <div className="dw-legend"><span><i />Actual</span><span><i className="dw-target" />Target</span></div>}>
-    <div className={`dw-team-bars ${showMoney ? '' : 'dw-count-only'}`}>
-      <div className="dw-team-head"><span>{scope === 'my' ? 'Owner' : 'Team'}</span><span />{showMoney ? <><span>Actual</span><span>Target</span></> : <span>Open</span>}</div>
-      {rows.map(row => <div className="dw-team-row" key={row.owner}>
-        <span title={displayRoleLabel(row.owner)}>{row.owner}</span>
-        <span className="dw-team-track" role="img" aria-label={showMoney ? `${displayRole(row.owner)}: ${money(row.achieved)} actual, ${money(row.annual)} target` : `${displayRole(row.owner)}: ${row.open} open opportunities`}>
-          {showMoney && <i className="dw-team-target" style={{ width: `${row.annual / max * 100}%` }} />}
-          <i className="dw-team-actual" style={{ width: `${(showMoney ? row.achieved : row.open) / max * 100}%` }} />
-        </span>
-        <b>{showMoney ? money(row.achieved) : row.open}</b>
-        {showMoney && <span className="dw-team-target-value">{money(row.annual)}</span>}
-      </div>)}
-      {!rows.length && <p className="dw-empty">No performance data in this view.</p>}
-    </div>
-    <div className="dw-results-label">Closed results {period === 'all' ? '(all dates)' : `(${period.startsWith('q') ? `${period.toUpperCase()} · ` : ''}${model.perf.fy || 'This FY'})`}</div><Outcomes model={model} showMoney={showMoney} />
-  </Panel>
+function WinLoss({ model, scope, nav }) {
+  const { summary, byReason } = model.outcomes
+  const reasons = byReason.filter(row => row.won || row.lost)
+  const maximum = Math.max(1, ...reasons.map(row => Math.max(row.won, row.lost)))
+  return <Section title={`${scopeLabel(scope)} Win/Loss Analysis`} accent="purple" className="reference-winloss"
+    explanation="Win rate is Won ÷ (Won + Lost); missing reasons are Unspecified, and less common reasons group as Other."
+    action={<button className="reference-analysis-button" data-explain-title="Detailed win/loss analysis" data-explain="Open detailed results." onClick={() => nav('/analytics')}>Open detailed analysis ↗</button>}><p className="reference-analysis-subtitle">Analysis of closed opportunities in this view</p><div className="reference-winloss-grid"><div className="reference-rate"><div tabIndex={0}
+      data-explain-title="Win rate"
+      data-explain={summary.total ? 'Win rate is Won divided by all closed Won and Lost opportunities.' : 'No closed Won or Lost opportunities yet.'}>
+      <strong>{summary.total ? `${summary.winRate}%` : '—'}</strong><span>Win Rate</span></div><p><b>{summary.won}</b> Won<br /><b>{summary.lost}</b> Lost</p><small>Total Closed <b>{summary.total}</b></small></div><div className="reference-reasons"><h3>Won vs Lost by Reason</h3>{reasons.map(row => <div key={row.reason} tabIndex={0}
+      data-explain-title={row.reason}
+      data-explain={`Won: ${row.won}; Lost: ${row.lost}.`}>
+      <span>{row.reason}</span><i><b className="won" style={{ width: `${row.won / maximum * 100}%` }} /><b className="lost" style={{ width: `${row.lost / maximum * 100}%` }} /></i><strong>{row.won} / {row.lost}</strong></div>)}</div><div className="reference-reasons"><h3>Top Loss Reasons (by count)</h3>{reasons.map((row, index) => <div key={row.reason} tabIndex={0}
+      data-explain-title={`${index + 1}. ${row.reason}`}
+      data-explain={`Lost: ${row.lost}; ranked by total Won + Lost count.`}>
+      <span>{index + 1}. {row.reason}</span><i><b className="lost" style={{ width: `${row.lost / maximum * 100}%` }} /></i><strong>{row.lost}</strong></div>)}</div></div></Section>
 }
 
-function QuarterlyPerformance({ perf, period }) {
-  const chartId = useId()
-  const max = Math.max(1, ...perf.quarterActual, ...perf.quarterTarget)
-  return <Panel title="Performance against target" icon="chartBar" subtitle="Quarterly actual vs target · ₹ L"
-    action={<div className="dw-legend"><span><i />Actual</span><span><i className="dw-target" />Target</span></div>}>
-    <div className="dw-quarter-layout">
-      <div>
-        <svg className="dw-quarter-chart" viewBox="0 0 640 190" role="img" aria-labelledby={chartId}>
-          <title id={chartId}>Quarterly actual versus target: {FY_QUARTERS.map((q, i) => `${q}: ${money(perf.quarterActual[i])} actual, ${money(perf.quarterTarget[i])} target`).join('; ')}</title>
-          {[0, 0.5, 1].map(tick => <g key={tick}><line x1="50" x2="628" y1={145 - tick * 120} y2={145 - tick * 120} /><text x="42" y={149 - tick * 120} textAnchor="end">{(max * tick / 100).toLocaleString('en-IN', { maximumFractionDigits: 1 })}</text></g>)}
-          {FY_QUARTERS.map((q, i) => <g key={q}>
-            <rect className="dw-chart-actual" x={76 + i * 142} y={145 - (perf.quarterActual[i] || 0) / max * 120} width="44" height={(perf.quarterActual[i] || 0) / max * 120} rx="2" />
-            <rect className="dw-chart-target" x={122 + i * 142} y={145 - (perf.quarterTarget[i] || 0) / max * 120} width="44" height={(perf.quarterTarget[i] || 0) / max * 120} rx="2" />
-            <text className="dw-chart-label" x={98 + i * 142} y={Math.max(14, 139 - (perf.quarterActual[i] || 0) / max * 120)} textAnchor="middle">{((perf.quarterActual[i] || 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</text>
-            <text className="dw-chart-label" x={144 + i * 142} y={Math.max(14, 139 - (perf.quarterTarget[i] || 0) / max * 120)} textAnchor="middle">{((perf.quarterTarget[i] || 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</text>
-            <text x={121 + i * 142} y="168" textAnchor="middle">{q.slice(0, 2)}</text>
-          </g>)}
-        </svg>
-        <table className="visually-hidden"><caption>Quarterly performance</caption><thead><tr><th>Quarter</th><th>Actual</th><th>Target</th></tr></thead><tbody>{FY_QUARTERS.map((q, i) => <tr key={q}><th scope="row">{q}</th><td>{money(perf.quarterActual[i])}</td><td>{money(perf.quarterTarget[i])}</td></tr>)}</tbody></table>
-      </div>
-      <dl className="dw-target-summary"><dt>{period.startsWith('q') ? `${period.toUpperCase()} target summary` : `${perf.fy || 'FY'} target summary`}</dt>
-        <div><dt>Target</dt><dd>{money(perf.annual)}</dd></div><div><dt>Achieved</dt><dd>{money(perf.achieved)}</dd></div><div><dt>Gap</dt><dd>{money(perf.gap)}</dd></div>
-      </dl>
-    </div>
-  </Panel>
-}
-
-export default function WorkspaceDashboard({ store, nav, renderReports, reportHash = '' }) {
-  const role = store.role
-  const [scope, setScope] = useState(() => isSalesOwner(role) ? 'my' : 'global')
-  const [owner, setOwner] = useState('all')
-  const [period, setPeriod] = useState('fy')
-  const [query, setQuery] = useState('')
-  const [stage, setStage] = useState('all')
-  const [workFilter, setWorkFilter] = useState('all')
-  const [tab, setTab] = useState('opportunities')
-  const [page, setPage] = useState(1)
-  const [refreshing, setRefreshing] = useState(false)
-  const [refreshNote, setRefreshNote] = useState('')
-  const [showAllTasks, setShowAllTasks] = useState(false)
-  const [reportsOpen, setReportsOpen] = useState(reportHash === '#forecast-details')
-  const register = useRef(null)
-  const reportMenu = useRef(null)
-  const reportPanel = useRef(null)
-  const mounted = useRef(true)
-  useEffect(() => { mounted.current = true; return () => { mounted.current = false } }, [])
-  useEffect(() => {
-    setScope(isSalesOwner(role) ? 'my' : 'global'); setOwner('all'); setReportsOpen(false)
-  }, [role])
-  useEffect(() => { if (reportHash === '#forecast-details') setReportsOpen(true) }, [reportHash, role])
-  useEffect(() => { if (reportsOpen) reportPanel.current?.focus({ preventScroll: true }) }, [reportsOpen])
-  const showMoney = canPriceProposal(role)
-  const owners = [...new Set([...(store.opportunities || []).map(o => o.owner), ...Object.keys(store.sales?.targets || {})])].filter(Boolean).sort()
-  const effectiveOwner = owners.includes(owner) ? owner : 'all'
-  const model = useMemo(() => dashboardModel(store, { scope, owner: effectiveOwner, period }), [store, scope, effectiveOwner, period])
-  const rows = registerRows(model, { query, stage, workFilter, tab })
-  const approvals = model.pending.filter(a => !query.trim() || [a.id, a.oppId, a.type, a.requestedBy, a.approver].some(value => String(value || '').toLowerCase().includes(query.trim().toLowerCase())))
-  const team = model.team.filter(row => !query.trim() || `${row.owner} ${displayRole(row.owner)}`.toLowerCase().includes(query.trim().toLowerCase()))
-  const records = tab === 'approvals' ? approvals : tab === 'team' ? team : rows
-  const pages = Math.max(1, Math.ceil(records.length / PAGE_SIZE))
-  const currentPage = Math.min(page, pages)
-  const preview = records.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
-  useEffect(() => { setPage(1) }, [scope, effectiveOwner, period, query, stage, workFilter, tab])
-  useEffect(() => { setShowAllTasks(false); setStage('all'); setWorkFilter('all'); setQuery(''); setTab('opportunities') }, [scope])
-  const switchView = value => { setScope(value); setOwner('all') }
-  const openRegister = (nextTab = 'opportunities', nextStage = 'all', filter = 'open') => {
-    setTab(nextTab); setStage(nextStage); setWorkFilter(filter); setQuery(''); setPage(1)
-    register.current?.scrollIntoView({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' })
-    register.current?.focus({ preventScroll: true })
-  }
-  const refresh = async () => {
-    if (refreshing) return
-    setRefreshing(true); setRefreshNote('')
-    try {
-      const success = await store.refreshSharedData()
-      if (mounted.current) setRefreshNote(success ? `Refreshed at ${new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}` : 'Cloud refresh unavailable. Showing current workspace data.')
-    } catch {
-      if (mounted.current) setRefreshNote('Refresh failed. Try again.')
-    } finally { if (mounted.current) setRefreshing(false) }
-  }
-  const scopeName = scope === 'my' ? 'My' : 'Company'
-  const firstTasks = showAllTasks ? model.queue : model.queue.slice(0, 3)
-  const maxFunnel = Math.max(1, ...model.funnel.map(row => row.count))
-  const renderOpportunity = opp => {
-    const work = model.work.find(item => item.opp.id === opp.id)
-    const action = work?.action
-    const stageKey = model.funnel.find(row => row.stages.includes(opp.stage))?.key || String(opp.stage || '').toLowerCase()
-    const blocker = work?.blockers.find(b => b.severity === 'block' || b.severity === 'wait')
-    const due = blocker?.key === 'clarifications' ? work.clarificationDue : ''
-    const status = blocker ? (blocker.severity === 'wait' ? 'Waiting' : 'Blocked') : opp.status === 'Closed' ? opp.stage : '—'
-    return <tr key={opp.id}>
-      <td><button className="dw-text-link ghost" onClick={() => nav(`/opp/${opp.id}`)}>{displayOpportunityId(opp.id)}</button></td>
-      <td title={opp.oppName || ''}><b>{opp.sellTo || opp.oppName || 'Untitled opportunity'}</b></td>
-      <td><span className={`dw-stage dw-stage-${stageKey}`}>{model.funnel.find(row => row.stages.includes(opp.stage))?.label || opp.stage || '—'}</span></td>
-      {showMoney && <td className="dw-num">{money(opp.valueK)}</td>}
-      <td title={displayRole(opp.owner)}>{opp.owner || 'Unassigned'}</td><td>{action?.text || opp.remarks || 'Review next step'}</td><td><Timing due={due} fallback={status} title={opp.orderDate ? `Expected close: ${ddMMyyyy(opp.orderDate)}` : undefined} /></td>
-    </tr>
-  }
-  return <div className="page dashboard-page dashboard-workspace">
-    <header className="dw-header"><div><h2 className="workspace-page-title"><Icon name="chartBar" size={18} /> My Dashboard</h2><p>{displayRoleLabel(role).replace(displayRole(role), role)}{store.sales?.fy ? ` · ${store.sales.fy}` : ''}</p></div>
-      <div className="dw-header-controls">
-        <div className="dw-scope" role="group" aria-label="Dashboard view">{['my', 'global'].map(value => <button key={value} type="button" className="ghost" aria-pressed={scope === value} onClick={() => switchView(value)}>{value === 'my' ? 'My View' : 'Global View'}</button>)}</div>
-        <label className="dw-filter"><span className="visually-hidden">Opportunity creation and booking period</span><select value={period} title="Opportunities by creation date; orders by booking date" onChange={event => setPeriod(event.target.value)}><option value="all">All dates</option><option value="fy">{store.sales?.fy || 'This FY'}</option>{FY_QUARTERS.map((label, i) => <option key={label} value={`q${i + 1}`}>{label}</option>)}</select></label>
-        {scope === 'global' && <label className="dw-filter"><span className="visually-hidden">Owner</span><select value={effectiveOwner} onChange={event => setOwner(event.target.value)}><option value="all">All owners</option>{owners.map(key => <option key={key} value={key}>{displayRole(key)}</option>)}</select></label>}
-        <button className="dw-refresh ghost" onClick={refresh} disabled={refreshing} aria-label={refreshing ? 'Refreshing dashboard' : 'Refresh dashboard'} title="Refresh dashboard"><Icon name="refresh" size={19} /><span className="visually-hidden">{refreshing ? 'Refreshing…' : 'Refresh'}</span></button>
-        <span className="dw-refresh-note" role="status">{refreshNote || 'Current workspace'}</span>
-      </div>
-    </header>
-    <p className="visually-hidden">{scope === 'my' ? 'Your assigned opportunities and work needing your attention' : effectiveOwner === 'all' ? 'Company overview · All owners' : `Company overview · ${displayRole(effectiveOwner)}`}</p>
-    <section className="dw-summary" aria-label="Dashboard summary">
-      <SummaryCard label={`${scopeName} pipeline`} value={showMoney ? money(model.pipelineK) : model.open.length} hint={`${model.open.length} open opportunities`} icon="chartBar" tone="info" onClick={() => openRegister()} />
-      {scope === 'my' ? <SummaryCard label="Follow-ups due" value={model.followups.length} hint="14+ days since proposal" icon="send" tone={model.followups.length ? 'warning' : 'success'} onClick={() => openRegister('followups')} /> : <SummaryCard label={showMoney ? 'Weighted forecast' : 'Needs update'} value={showMoney ? money(model.weightedK) : model.stale.length} hint={showMoney ? 'Based on win probability' : 'No update in 30+ days'} icon="chartLine" onClick={() => openRegister()} />}
-      <SummaryCard label={scope === 'my' ? 'My pending approvals' : 'Pending approvals'} value={model.pending.length} hint={scope === 'my' ? `${model.decisions.length} need your decision · Including your requests` : effectiveOwner === 'all' ? 'Across the company' : 'For selected owner'} icon="clock" tone={model.pending.length ? 'warning' : 'success'} onClick={() => openRegister('approvals')} />
-      <SummaryCard label={scope === 'my' ? 'My blocked work' : 'Blocked opportunities'} value={model.blocked.length} hint="Review missing requirements" icon="alert" tone={model.blocked.length ? 'danger' : 'success'} onClick={() => openRegister('opportunities', 'all', 'blocked')} />
+export default function WorkspaceDashboard({ store, nav }) {
+  const phone = usePhoneLayout()
+  const { scope, period, setPeriod, topPeriod, setTopPeriod, owner } = useWorkspaceView()
+  const showMoney = canPriceProposal(store.role)
+  const knownOwners = [...new Set([...(store.opportunities || []).map(row => row.owner), ...Object.keys(store.sales?.targets || {})])].filter(Boolean)
+  const effectiveOwner = knownOwners.includes(owner) ? owner : 'all'
+  const model = useMemo(() => dashboardModel(store, { scope, owner: effectiveOwner, period, topPeriod }), [store, scope, effectiveOwner, period, topPeriod])
+  const fy = store.sales?.fy || 'current FY'
+  if (phone && store.viewMode === 'tablet') return <PhoneDashboard {...{ model, showMoney, nav, period, setPeriod, topPeriod, setTopPeriod, fy }} />
+  return <main className="page dashboard-page dw-reference-dashboard">
+    <section className="reference-kpis" aria-label="Dashboard summary">
+      <Card label={`${scopeLabel(scope)} Pipeline`} value={showMoney ? money(model.headlinePipelineK) : model.headlineOpenCount}
+        hint={`${model.headlineOpenCount} open opportunities`} icon="chartBar" tone="neutral"
+        explanation={showMoney ? 'Counts open opportunities and totals their expected values.' : 'Shows open opportunity count; values are restricted.'} />
+      <Card label="Follow-ups Due" value={model.followups.length} hint="14+ days since proposal" icon="send" tone="yellow"
+        explanation="Counts proposals at least 14 days old; excludes opportunities with pending approvals." />
+      <Card label="Pending Approvals" value={model.pending.length} hint={scope === 'my' ? 'Raised by you or assigned to you' : 'Pending in this view'} icon="clock" tone="yellow"
+        explanation={scope === 'my' ? 'Counts requests you raised or approvals assigned to you.' : 'Counts pending approvals matching this view.'} />
+      <Card label="Blocked Work" value={model.blocked.length} hint="Review missing requirements" icon="alert" tone="red"
+        explanation="Counts open opportunities with a blocking or waiting requirement; each counts once." />
     </section>
-    <Panel title="Needs attention" icon="alert" className="dw-attention-panel" action={model.queue.length > 3 && <button onClick={() => setShowAllTasks(value => !value)}>{showAllTasks ? 'Show fewer' : `View all ${model.queue.length}`}</button>}>
-      <div className="dw-table-wrap"><table className="dw-table dw-attention"><thead><tr><th>Opportunity / customer</th><th>Issue</th><th>Assigned to</th><th>Due / status</th><th>Action</th></tr></thead><tbody>
-        {firstTasks.map(task => <tr key={task.id}><td title={task.opp?.oppName}><b>{task.opp ? displayOpportunityId(task.opp.id) : 'Approval request'}</b>{' · '}{task.opp?.sellTo || task.opp?.oppName || 'Workspace approval'}</td><td>{task.text}</td><td data-label="Assigned to" title={task.owner?.split(', ').map(key => displayRole(key)).join(', ')}>{task.owner || 'Unassigned'}</td><td><Timing due={task.due} fallback={task.timing} /></td><td><button className={task.cta === 'Review' ? 'dw-primary primary' : ''} onClick={() => nav(task.path)}>{task.cta}</button></td></tr>)}
-        {!firstTasks.length && <tr><td colSpan={5} className="dw-empty">No pending decisions, blockers or follow-ups in this view.</td></tr>}
-      </tbody></table></div>
-    </Panel>
-    <div className="dw-analytics">
-      <Panel title="Sales funnel" icon="layers" subtitle="Open opportunity count by stage">
-        <div className="dw-funnel-head"><span>Stage</span><span>Count</span>{showMoney && <span>Value</span>}</div>
-        <div className={`dw-funnel ${showMoney ? '' : 'dw-count-only'}`}>
-          {model.funnel.map(row => <button key={row.key} type="button" className="dw-funnel-row ghost" aria-label={`${row.label}: ${row.count} opportunities${showMoney ? `, ${money(row.valueK)}` : ''}. Filter opportunity register.`} onClick={() => openRegister('opportunities', row.stages.join(','))}>
-            <span>{row.label}</span><span className="dw-funnel-track"><i style={{ width: `${row.count / maxFunnel * 100}%` }} /></span><b>{row.count}</b>{showMoney && <strong>{money(row.valueK)}</strong>}
-          </button>)}
-        </div>
-        <p className="dw-chart-note">{model.open.length} open opportunities{showMoney && ` · ${money(model.pipelineK)} total`}. Won and Lost are shown separately.</p>
-      </Panel>
-      <Performance model={model} showMoney={showMoney} scope={scope} period={period} />
-    </div>
-    {showMoney && <QuarterlyPerformance perf={model.perf} period={period} />}
-    <div ref={register} tabIndex={-1} className="dw-register-anchor">
-      <Panel title="Opportunity register" icon="sheet" className="dw-register-panel" action={<details ref={reportMenu} className="dw-more"><summary aria-label="Register menu" title="Register menu"><Icon name="menu" size={16} /></summary><div><button onClick={() => { setReportsOpen(true); if (reportMenu.current) reportMenu.current.open = false }}>More reports &amp; settings</button></div></details>}>
-        <div className="dw-register-controls"><div className="dw-tabs" role="group" aria-label="Register view">{[
-          ['opportunities', scope === 'my' ? 'My Opportunities' : 'All Opportunities'],
-          [scope === 'my' ? 'followups' : 'team', scope === 'my' ? 'My Follow-ups' : 'Team Performance'],
-          ['approvals', scope === 'my' ? 'My Approvals' : 'All Approvals'],
-        ].map(([key, label]) => <button key={key} className="ghost" aria-pressed={tab === key} onClick={() => { setTab(key); setWorkFilter('all'); setStage('all') }}>{label}</button>)}</div>
-          <div className="dw-register-filters"><label className="dw-search"><Icon name="search" size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder={tab === 'team' ? 'Search owners…' : tab === 'approvals' ? 'Search approvals…' : 'Search opportunities…'} aria-label="Search current register" /></label>
-            {(tab === 'opportunities' || tab === 'followups') && <select value={stage} aria-label="Opportunity stage" onChange={event => { setStage(event.target.value); if (event.target.value === 'Won' || event.target.value === 'Lost') setWorkFilter('all') }}><option value="all">All stages</option>{model.funnel.map(row => <option key={row.key} value={row.stages.join(',')}>{row.label}</option>)}<option value="Won">Won</option><option value="Lost">Lost</option></select>}
-          </div>
-        </div>
-        {tab === 'opportunities' && workFilter !== 'all' && <div className="dw-applied-filter">{workFilter === 'blocked' ? 'Blocked work' : 'Open opportunities'} <button onClick={() => setWorkFilter('all')}>Clear filter</button></div>}
-        <div className="dw-table-wrap"><table className="dw-table dw-register-table"><caption className="visually-hidden">{scopeName} {tab} register</caption>
-          {tab === 'approvals' ? <><thead><tr><th>Approval</th><th>Opportunity</th><th>Type</th><th>Requested by</th><th>Awaiting</th><th>Action</th></tr></thead><tbody>{preview.map(a => <tr key={a.id}><td>{a.id}</td><td>{a.oppId ? displayOpportunityId(a.oppId) : '—'}</td><td>{a.type}</td><td>{displayRole(a.requestedBy)}</td><td>{(a.needed?.length ? a.needed : [a.approver]).filter(key => !a.decisions?.[key]).map(displayRole).join(', ') || '—'}</td><td><button onClick={() => nav('/approvals')}>Open</button></td></tr>)}</tbody></> : tab === 'team' ? <><thead><tr><th>Owner</th><th>Open opportunities</th>{showMoney && <><th>Target</th><th>Achieved</th><th>Attainment</th><th>Gap</th></>}</tr></thead><tbody>{preview.map(row => <tr key={row.owner}><td>{displayRole(row.owner)}</td><td>{row.open}</td>{showMoney && <><td>{money(row.annual)}</td><td>{money(row.achieved)}</td><td>{row.annual ? `${Math.round(row.attainPct)}%` : '—'}</td><td>{money(row.gap)}</td></>}</tr>)}</tbody></> : <><thead><tr><th>ID</th><th>Opportunity / customer</th><th>Stage</th>{showMoney && <th className="dw-num">Value (₹ L)</th>}<th>Owner</th><th>Next action</th><th>Due / status</th></tr></thead><tbody>{preview.map(renderOpportunity)}</tbody></>}
-          {!preview.length && <tbody><tr><td colSpan={7} className="dw-empty">No records match this view{query || stage !== 'all' || workFilter !== 'all' ? ' and filters' : ''}.</td></tr></tbody>}
-        </table></div>
-        <div className="dw-pagination"><span>{records.length ? `Showing ${(currentPage - 1) * PAGE_SIZE + 1}–${Math.min(currentPage * PAGE_SIZE, records.length)} of ${records.length} ${tab === 'approvals' ? 'approvals' : tab === 'team' ? 'owners' : 'opportunities'}` : '0 records'}</span><nav aria-label="Register pagination"><button disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)} aria-label="Previous page"><Icon name="chevronLeft" size={14} /></button>{paginationNumbers(currentPage, pages).map(value => typeof value === 'number' ? <button key={value} className={`dw-page-number ghost${currentPage === value ? ' dw-selected' : ''}`} aria-label={`Page ${value}`} aria-current={currentPage === value ? 'page' : undefined} onClick={() => setPage(value)}>{value}</button> : <span key={value}>…</span>)}<button disabled={currentPage === pages} onClick={() => setPage(currentPage + 1)} aria-label="Next page"><Icon name="chevronRight" size={14} /></button></nav></div>
-      </Panel>
-    </div>
-    {reportsOpen && <section className="dw-reports" ref={reportPanel} tabIndex={-1} aria-label="More reports and settings"><div className="dw-reports-head"><h3>More reports &amp; settings</h3><button onClick={() => { setReportsOpen(false); reportMenu.current?.querySelector('summary')?.focus() }}>Close reports</button></div>{renderReports(model.reportStore, scope)}</section>}
-  </div>
+    <Performance model={model} showMoney={showMoney} scope={scope} nav={nav} period={period} setPeriod={setPeriod} />
+    <TopOpportunities model={model} nav={nav} showMoney={showMoney} scope={scope} topPeriod={topPeriod} setTopPeriod={setTopPeriod} fy={fy} />
+    <ActionQueue model={model} nav={nav} scope={scope} />
+    <Funnel model={model} showMoney={showMoney} scope={scope} />
+    <WinLoss model={model} scope={scope} nav={nav} />
+  </main>
 }

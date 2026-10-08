@@ -4,6 +4,9 @@ import { useStore } from '../store.jsx'
 import { displayOpportunityId } from '../seed.js'
 import { canViewCommercial, isApprover, fmtLakh, ddMmmYY, displayRole } from '../utils.js'
 import { Chip, KpiCard, WarnBox } from '../ui.jsx'
+import { useWorkspaceView } from '../ui/WorkspaceViewContext.jsx'
+import { usePagedRows } from '../ui/Pagination.jsx'
+import usePhoneLayout from '../tablet/usePhoneLayout.js'
 
 // Customer purchase orders: proposal-vs-PO validation queue plus the booked
 // order book. Sales owners see their own opportunities; approvers/admins see
@@ -14,28 +17,33 @@ const ORDER_TONE = { Delivered: 'state-Accepted', Invoiced: 'state-Accepted' }
 
 export default function PurchaseOrders() {
   const store = useStore()
+  const narrow = usePhoneLayout()
+  const phone = narrow && store.viewMode === 'tablet'
   const nav = useNavigate()
+  const { scope } = useWorkspaceView()
   const role = store.role
   const comm = canViewCommercial(role)
   const approver = isApprover(role)
 
   const validating = Object.values(store.poCompare || {}).filter(pc => {
-    if (approver) return true
+    if (approver && scope === 'global') return true
     const o = store.opportunities.find(x => x.id === pc.oppId)
     return !!o && o.owner === role
   })
   // Closed opportunities are the source of truth for the order book. Keep the
   // legacy sales.orders rows as a compatibility fallback for older workspaces.
   const closedOpportunities = (store.opportunities || [])
-    .filter(o => o.status === 'Closed' && (approver || o.owner === role))
+    .filter(o => o.status === 'Closed' && (scope === 'global' ? (approver || o.owner === role) : o.owner === role))
     .map(o => ({
       id: o.id, owner: o.owner, customer: o.sellTo, title: o.oppName,
       valueK: o.valueK, po: o.stage === 'Won' ? 'Recorded on opportunity' : 'Closed opportunity',
       status: o.stage, booked: o.orderDate || o.lastUpdated || o.createDate,
     }))
   const legacyOrders = (store.sales?.orders || []).filter(o =>
-    (approver || o.owner === role) && !closedOpportunities.some(closed => closed.id === o.id))
+    (scope === 'global' ? (approver || o.owner === role) : o.owner === role) && !closedOpportunities.some(closed => closed.id === o.id))
   const orders = [...closedOpportunities, ...legacyOrders]
+  const { pagedRows: pageValidating, pagination: validatingPagination } = usePagedRows(validating, JSON.stringify([scope, role]))
+  const { pagedRows: pageOrders, pagination: ordersPagination } = usePagedRows(orders, JSON.stringify([scope, role]))
   const totalK = orders.reduce((s, o) => s + (+o.valueK || 0), 0)
 
   const needsMe = (role === 'LJS' || role === 'AH')
@@ -46,7 +54,7 @@ export default function PurchaseOrders() {
     <div className="page">
       <h2>Purchase Orders</h2>
       <div className="hint" style={{ marginBottom: 10 }}>
-        {approver
+        {approver && scope === 'global'
           ? 'Customer purchase orders across the book — validation, deviations and joint acceptance.'
           : 'Customer purchase orders for your own opportunities, plus your booked orders.'}
       </div>
@@ -70,7 +78,8 @@ export default function PurchaseOrders() {
           <div className="hint">No purchase orders are in validation right now. Simulate PO receipt from an opportunity workbench.</div>
         )}
         {validating.length > 0 && (
-          <div className="sheet-wrap">
+          <>
+          {phone ? <section aria-label="Orders in validation">{pageValidating.map(pc => { const opp = store.opportunities.find(o => o.id === pc.oppId); return <button className="phone-record" key={pc.oppId} onClick={() => nav(`/opp/${pc.oppId}/po`)}><strong>{opp?.sellTo || pc.poNo}</strong><span>{pc.poNo} · {pc.status}</span><small>{pc.lines.filter(line => !line.resolved && ['Blocking deviation', 'Review required'].includes(line.state)).length} unresolved issues · {displayRole(opp?.owner)}</small></button> })}</section> : <div className="sheet-wrap">
             <table className="sheet">
               <thead>
                 <tr>
@@ -79,7 +88,7 @@ export default function PurchaseOrders() {
                 </tr>
               </thead>
               <tbody>
-                {validating.map(pc => {
+                {pageValidating.map(pc => {
                   const o = store.opportunities.find(x => x.id === pc.oppId)
                   const blocking = pc.lines.filter(l => l.state === 'Blocking deviation' && !l.resolved).length
                   const review = pc.lines.filter(l => l.state === 'Review required' && !l.resolved).length
@@ -103,12 +112,15 @@ export default function PurchaseOrders() {
               </tbody>
             </table>
           </div>
+          }
+          {validatingPagination}
+          </>
         )}
       </div>
 
       <div className="form-card wide">
         <div className="section-title">Booked orders</div>
-        <div className="sheet-wrap">
+        {phone ? <section aria-label="Booked orders">{pageOrders.map(o => <button className="phone-record" key={o.id} onClick={() => nav(`/opp/${o.id}/po`)}><strong>{o.customer}</strong><span>{o.title}</span><small>{displayOpportunityId(o.id)} · {o.status} · {ddMmmYY(o.booked)}{comm ? ` · ${fmtLakh(o.valueK)}` : ''}</small></button>)}{!orders.length && <p>No purchase orders booked yet.</p>}</section> : <div className="sheet-wrap">
           <table className="sheet">
             <thead>
               <tr>
@@ -117,7 +129,7 @@ export default function PurchaseOrders() {
               </tr>
             </thead>
             <tbody>
-              {orders.map(o => (
+              {pageOrders.map(o => (
                 <tr key={o.id}>
                   <td><b>{displayOpportunityId(o.id)}</b></td>
                   {approver && <td>{displayRole(o.owner)}</td>}
@@ -135,6 +147,8 @@ export default function PurchaseOrders() {
             </tbody>
           </table>
         </div>
+        }
+        {ordersPagination}
         {!comm && <div className="hint" style={{ marginTop: 6 }}>Order values are restricted — commercial data (approvers/admin only).</div>}
       </div>
     </div>

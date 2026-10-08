@@ -1,20 +1,24 @@
-import React, { useEffect } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { PORTAL_ENABLED } from '../seed.js'
 // selectableRoles().map(([id, label]) => ({ id, label }))
 import { canSeePage } from '../utils.js'
 import { DrawerHost } from '../drawer.jsx'
-import { Icon, ModaeLogo } from '../icons.jsx'
-import { InstallButton } from '../install.jsx'
+import { Icon } from '../icons.jsx'
 import { counts } from '../kpi.js'
 import BrandWatermark from '../branding/BrandWatermark.jsx'
-import { activeBackend } from '../filestore.js'
+import WorkspaceViewToggle from '../ui/WorkspaceViewToggle.jsx'
+import { useWorkspaceTheme } from '../ui/WorkspaceThemeContext.jsx'
 import IntakeForm from '../pages/IntakeForm.jsx'
 import Folders from '../pages/Folders.jsx'
 import Proposal from '../pages/Proposal.jsx'
 import PriceLists from '../pages/PriceLists.jsx'
-import Dashboard from '../pages/Dashboard.jsx'
+import ProposalSent from '../pages/ProposalSent.jsx'
+import WorkflowAdmin from '../pages/WorkflowAdmin.jsx'
+import { topbarTitleFor } from '../ui/workspaceTitles.js'
+import MobileMore from './MobileMore.jsx'
+import MobileContent from './MobileContent.jsx'
 import MyDashboard from '../pages/MyDashboard.jsx'
 import Customers from '../pages/Customers.jsx'
 import Analytics from '../pages/Analytics.jsx'
@@ -35,16 +39,18 @@ import Portal from '../pages/Portal.jsx'
 import Opportunities from '../pages/Opportunities.jsx'
 import TabletHome from './TabletHome.jsx'
 import './tablet.css'
+import './phone.css'
 
 function TabletGate({ page, children }) {
   const store = useStore()
-  if (!canSeePage(store.roles || store.role, page)) return <Navigate to="/home" replace />
+  if (!canSeePage(store.roles || store.role, page)) return <Navigate to="/more" replace />
   return children
 }
 
 const BOTTOM = [
   { to: '/my-dashboard', label: 'Dashboard', icon: 'chartBar', page: 'mydashboard' },
   { to: '/inbox', label: 'Inbox', icon: 'inbox', page: 'inbox', badge: s => counts(s).newLeads },
+  { to: '/opportunities', label: 'Opportunities', icon: 'cards', page: 'tracker' },
   { to: '/approvals', label: 'Approvals', icon: 'checkCircle', page: 'approvals', badge: s => counts(s).forMe },
 ]
 
@@ -54,11 +60,26 @@ export default function TabletApp() {
   const loc = useLocation()
   const role = store.role
   const custAccount = store.auth?.user?.role === 'CUST'
-  const c = counts(store, role)
-  const backend = activeBackend()
-  const online = backend === 'sharepoint'
-    ? { label: 'SharePoint', tone: 'ok' }
-    : backend === 'supabase' ? { label: 'Cloud', tone: 'ok' } : { label: 'Local demo', tone: 'idle' }
+  const { theme } = useWorkspaceTheme()
+  const [refreshing, setRefreshing] = useState(false)
+  const [refreshMessage, setRefreshMessage] = useState('')
+  const refreshLock = useRef(false)
+  const title = topbarTitleFor(loc.pathname, role)
+  const recordId = decodeURIComponent(loc.pathname.split('/')[2] || '')
+  const detailLabel = loc.pathname.startsWith('/inbox/') ? store.leads?.find(lead => String(lead.id) === recordId)?.subject || 'Lead detail'
+    : loc.pathname.startsWith('/opp/') ? store.opportunities?.find(opp => String(opp.id) === recordId)?.sellTo || 'Opportunity'
+    : ({ '/new': 'New opportunity', '/tender': 'Tender intake', '/po': 'Purchase orders', '/analytics': 'Analytics', '/my': 'Update opportunity', '/admin/workflow': 'Workflow configuration', '/voice': 'Voice update', '/aimap': 'AI and automation' }[loc.pathname] || (loc.pathname.startsWith('/proposal/') ? 'Proposal' : loc.pathname.startsWith('/register/') ? 'Register lead' : 'Workspace'))
+  const refresh = async () => {
+    if (refreshLock.current) return
+    refreshLock.current = true
+    setRefreshing(true)
+    setRefreshMessage('')
+    try {
+      const ok = await store.refreshSharedData()
+      setRefreshMessage(ok ? 'Workspace updated' : 'Refresh failed. Please try again.')
+    } catch { setRefreshMessage('Refresh failed. Please try again.') }
+    finally { refreshLock.current = false; setRefreshing(false) }
+  }
 
   useEffect(() => {
     if (loc.pathname === '/') nav('/home', { replace: true })
@@ -80,6 +101,10 @@ export default function TabletApp() {
       <Route path="/register/:leadId" element={<TabletGate page="inbox"><Register /></TabletGate>} />
       <Route path="/opp/:oppId" element={<TabletGate page="tracker"><Workbench /></TabletGate>} />
       <Route path="/opp/:oppId/:tab" element={<TabletGate page="tracker"><Workbench /></TabletGate>} />
+      <Route path="/proposal-sent" element={<TabletGate page="proposalSent"><ProposalSent /></TabletGate>} />
+      <Route path="/admin/workflow" element={<TabletGate page="admin"><WorkflowAdmin /></TabletGate>} />
+      <Route path="/more" element={<MobileMore />} />
+      <Route path="*" element={<Navigate to="/more" replace />} />
       <Route path="/approvals" element={<TabletGate page="approvals"><Approvals /></TabletGate>} />
       <Route path="/po" element={<TabletGate page="po"><PurchaseOrders /></TabletGate>} />
       <Route path="/audit" element={<TabletGate page="audit"><Audit /></TabletGate>} />
@@ -104,52 +129,31 @@ export default function TabletApp() {
   )
 
   return (
-    <div className="shell tablet-mode" style={{ display: 'block' }}>
+    <div className="shell tablet-mode" data-theme={theme} style={{ display: 'block' }}>
       <BrandWatermark variant="tablet" />
       <header className="tablet-bar">
-        <ModaeLogo className="tb-brand" size={24} onClick={() => nav('/home')} />
-        <span className="spacer" />
-        <button className="tb-bell" onClick={() => nav('/inbox')} title={`${c.newLeads} new leads`}>
-          <Icon name="bell" size={15} />
-          {c.newLeads > 0 && <span className="tb-dot amber">{c.newLeads}</span>}
-        </button>
-        <button className="tb-bell" onClick={() => nav('/approvals')} title={`${c.forMe} approvals waiting on you`}>
-          <Icon name="checkCircle" size={15} />
-          {c.forMe > 0 && <span className="tb-dot red">{c.forMe}</span>}
-        </button>
-        <span className={`tb-online ${online.tone}`} title={`File storage: ${online.label}`}>
-          <Icon name="wifi" size={13} /> <span className="tb-label">{online.label}</span>
-        </span>
-        <InstallButton />
-        <button onClick={() => { store.setViewMode('full'); nav('/opportunities') }} title="Switch to the full desktop site">
-          <Icon name="monitor" size={14} /> <span className="tb-label">Full site</span>
-        </button>
-        {store.auth?.user && (
-          <button onClick={store.logout} title={`Sign out ${store.auth.user.email}`}>
-            <Icon name="logout" size={14} /> <span className="tb-label">Exit</span>
-          </button>
-        )}
+        <div className="mobile-heading">
+          {!title && loc.pathname !== '/home' && loc.pathname !== '/more' && <button type="button" aria-label="Go back" onClick={() => window.history.state?.idx > 0 ? nav(-1) : nav('/more')}><Icon name="chevronLeft" size={18} /></button>}
+          <h1>{title && <Icon name={title.icon} size={18} />}{title?.label || (loc.pathname === '/more' ? 'More' : detailLabel)}</h1>
+        </div>
+        <div className="tb-utilities" aria-label="Workspace utilities">
+          {['/my-dashboard', '/inbox', '/opportunities', '/approvals', '/analytics', '/po', '/proposal-sent'].includes(loc.pathname) && <WorkspaceViewToggle />}
+          <details className="mobile-overflow"><summary aria-label="Workspace actions">•••</summary><div>
+            <button type="button" onClick={refresh} disabled={refreshing} title="Refresh workspace data"><Icon name="refresh" size={18} />{refreshing ? 'Refreshing…' : 'Refresh workspace'}</button>
+          </div></details>
+        </div>
+        {refreshMessage && <p className="mobile-refresh-status" role="status">{refreshMessage}</p>}
       </header>
-      {routes}
-      <nav className="tab-bottom">
-        {BOTTOM.filter(t => canSeePage(store.roles || role, t.page)).map((t, i) => {
+      <MobileContent hasTitle={Boolean(title)} routeKey={loc.pathname}>{routes}</MobileContent>
+      <nav className="tab-bottom" aria-label="Main navigation">
+        {BOTTOM.filter(t => canSeePage(store.roles || role, t.page)).map(t => {
           const badge = t.badge ? t.badge(store) : 0
-          return (
-            <React.Fragment key={t.to}>
-              {i === 2 && <span className="tab-fab-slot" />}
-              <NavLink to={t.to} className={({ isActive }) => (isActive ? 'active' : '')}>
-                {badge > 0 && <span className="tb-badge">{badge}</span>}
-                <Icon name={t.icon} size={20} />{t.label}
-              </NavLink>
-            </React.Fragment>
-          )
+          return <NavLink key={t.to} to={t.to} className={({ isActive }) => isActive ? 'active' : ''}>
+            {badge > 0 && <span className="tb-badge">{badge}</span>}
+            <Icon name={t.icon} size={20} />{t.label}
+          </NavLink>
         })}
-        {canSeePage(store.roles || role, 'voice') && (
-          <button className="tab-fab" title="Voice update — speak a lead or status change"
-            onClick={() => nav('/voice')}>
-            <Icon name="mic" size={22} />
-          </button>
-        )}
+        <NavLink to="/more" state={{ from: loc.pathname === '/more' ? loc.state?.from : `${loc.pathname}${loc.search}${loc.hash}` }}><Icon name="list" size={20} />More</NavLink>
       </nav>
       <DrawerHost />
     </div>

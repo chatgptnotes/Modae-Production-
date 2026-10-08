@@ -34,25 +34,48 @@ test('Opportunities uses the available canvas instead of reserving outer white s
   assert.equal(value(sheet, 'box-shadow'), 'none')
 })
 
+test('opportunity stage boxes stay on one six-column row at phone widths', () => {
+  const stylesheet = postcss.parse(css)
+  let desktopStrip
+  let phoneStrip
+  let phoneButton
+  stylesheet.walkRules(rule => {
+    if (rule.selector === '.opportunity-stage-strip' && !rule.parent.params) desktopStrip = rule
+  })
+  stylesheet.walkAtRules('media', atRule => {
+    if (atRule.params !== '(max-width: 640px)') return
+    atRule.walkRules(rule => {
+      if (rule.selector === '.opportunity-stage-strip') phoneStrip = rule
+      if (rule.selector === '.opportunity-stage-strip button') phoneButton = rule
+    })
+  })
+  const value = (rule, property) => rule.nodes.find(node => node.prop === property)?.value
+  assert.equal(value(desktopStrip, 'grid-template-columns'), 'repeat(6, minmax(0, 1fr))')
+  assert.equal(value(phoneStrip, 'grid-template-columns'), 'repeat(6, minmax(0,1fr))')
+  assert.equal(value(phoneButton, 'min-width'), '0')
+})
+
 test('main workspace pages share one title size and top spacing', () => {
   assert.match(css, /\.workspace-page-title\s*\{[^}]*font-size: clamp\(26px, 2vw, 32px\) !important;[^}]*font-weight: 800 !important;[^}]*line-height: 1\.1 !important;/)
   assert.match(css, /\.workspace-page-title\s*\{[^}]*display: flex;[^}]*align-items: center;[^}]*gap: 8px;/)
   assert.match(css, /\.workspace-page-title > \.ic\s*\{[^}]*width: 18px;[^}]*height: 18px;/)
   assert.match(css, /\.opportunities-page > \.tracker-page > \.workspace-page-title\s*\{\s*margin-top: 24px !important;/)
   assert.match(css, /\.dashboard-page \.home-head\s*\{\s*margin-top: 0 !important;/)
-  assert.match(css, /\.mailbox-page\s*\{\s*padding-top: 24px !important;/)
+  assert.match(css, /\.mailbox-page\s*\{\s*padding-top: 16px !important;/)
 })
 
 test('main page titles use the same icons as their sidebar destinations', () => {
   const titleIcons = {
-    MyDashboard: 'chartBar', Inbox: 'inbox', Tracker: 'cards', Approvals: 'checkCircle',
+    Inbox: 'inbox', Approvals: 'checkCircle',
     ProposalSent: 'send', Folders: 'folder', Customers: 'users', PriceLists: 'tag',
     Admin: 'gear', Audit: 'list', Users: 'shield',
   }
   for (const [page, icon] of Object.entries(titleIcons)) {
     const source = fs.readFileSync(path.join(root, 'src/pages', page === 'MyDashboard' ? 'myDashboard/WorkspaceDashboard.jsx' : `${page}.jsx`), 'utf8')
-    assert.match(source, new RegExp(`className="workspace-page-title"><Icon name="${icon}" size=\\{18\\}`), `${page} title should use sidebar icon ${icon}`)
+    assert.match(source, new RegExp(`className="workspace-page-title[^\"]*"><Icon name="${icon}" size=\\{18\\}`), `${page} title should use sidebar icon ${icon}`)
   }
+  const tracker = fs.readFileSync(path.join(root, 'src/pages/Tracker.jsx'), 'utf8')
+  assert.match(tracker, /workspace-page-title\$\{sheet === 'My Orders'[\s\S]*?<Icon name="cards" size=\{18\}/)
 })
 
 test('primary workspace pages share a responsive inset from the sidebar', () => {

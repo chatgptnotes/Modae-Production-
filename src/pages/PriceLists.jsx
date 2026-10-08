@@ -8,6 +8,7 @@ import { buildPriceListInspectionPayload, downloadPriceListTemplate, parsePriceL
 import { normalizedCurrencyRates } from '../currency.js'
 import { serviceRateRows, normalizeSheet } from '../serviceRates.js'
 import { runTaskResult } from '../ai.js'
+import { validPriceAmount, validPriceListParts, validServiceRatePatch } from '../priceListEditing.js'
 
 const SERVICE_RATE_LIST_KEY = 'service-rates'
 
@@ -35,6 +36,7 @@ export default function PriceLists() {
   const [editRows, setEditRows] = useState([])
   const [editVersion, setEditVersion] = useState('')
   const [rateDraft, setRateDraft] = useState({})
+  const [serviceDraft, setServiceDraft] = useState(null)
   const [partQuery, setPartQuery] = useState('')
   const [versionLoading, setVersionLoading] = useState(false)
   const rowRefs = useRef({})
@@ -52,14 +54,32 @@ export default function PriceLists() {
   const numberedParts = (displayList?.parts || []).map((part, index) => ({ ...part, srNo: index + 1 }))
   const visibleParts = !partFilter ? numberedParts : numberedParts.filter(part =>
     String(part.srNo).includes(partFilter) || String(part.pn).toLowerCase().includes(partFilter) || String(part.desc || '').toLowerCase().includes(partFilter))
+  const adhocParts = store.adhocParts || []
+  const rateRows = serviceRateRows(rateSheet, rateSheetName)
+  const serviceEditing = canUpload && serviceDraft !== null
+  const serviceDraftValid = serviceDraft && validServiceRatePatch(serviceDraft)
+  const editRowsValid = validPriceListParts(editRows)
   const requestedListAvailable = !requestedList || requestedList === SERVICE_RATE_LIST_KEY || !!store.priceLists?.[requestedList]
 
   const selectList = key => {
+    setServiceDraft(null)
     setList(key)
     setVersionId(null)
     setHighlightedPart('')
     setSearchParams({ list: key })
   }
+
+  useEffect(() => {
+    if (!canUpload) {
+      setServiceDraft(null)
+      setEditOpen(false)
+      setUploadOpen(false)
+    }
+  }, [canUpload])
+
+  useEffect(() => {
+    setServiceDraft(null)
+  }, [list])
 
   useEffect(() => {
     if ((requestedList === SERVICE_RATE_LIST_KEY || store.priceLists?.[requestedList]) && requestedList !== list) setList(requestedList)
@@ -147,9 +167,12 @@ export default function PriceLists() {
     setUploadOpen(false); setUploadFile(null); setUploadPreview(null)
   }
 
-  const openEditor = () => {
-    setEditRows(JSON.parse(JSON.stringify(displayList.parts || [])))
-    setEditVersion(`${displayList.version || 'Current'} revised`)
+  const openEditor = (current = false) => {
+    if (!canUpload || versionLoading) return
+    const source = current ? pl : displayList
+    if (current) setVersionId(null)
+    setEditRows(JSON.parse(JSON.stringify(source.parts || [])))
+    setEditVersion(`${source.version || 'Current'} revised`)
     setEditOpen(true)
   }
 
@@ -164,15 +187,32 @@ export default function PriceLists() {
   const adderText = row => (row.adders || []).map(adder => `${adder.code}|${adder.desc}|${adder.price}`).join('; ')
   const aliasText = row => (row.aliases || []).join(', ')
   const saveEditedVersion = () => {
+    if (!canUpload || !editVersion.trim() || !editRowsValid) return
     const parts = editRows.map(row => ({ ...row, price: Number(row.price) || 0, adders: (row.adders || []).map(a => ({ ...a, price: Number(a.price) || 0 })) }))
     store.savePriceListVersion(list, versionId || pl.activeVersionId, parts, { version: editVersion.trim(), currency: displayList.currency })
     setEditOpen(false); setVersionId(null)
   }
 
+  const openServiceEditor = () => {
+    if (!canUpload || !rateSheet.rates) return
+    setServiceDraft({
+      rates: Object.fromEntries(rateRows.filter(row => row.key !== 'gst').map(row => [row.key, String(row.value)])),
+      gst: String(rateSheet.gst ?? 0),
+    })
+  }
+  const saveServiceRates = () => {
+    if (!canUpload || !serviceDraftValid) return
+    store.updateRateSheets(rateSheetName, {
+      rates: Object.fromEntries(Object.entries(serviceDraft.rates).map(([key, value]) => [key, Number(value)])),
+      gst: Number(serviceDraft.gst),
+    })
+    setServiceDraft(null)
+  }
+
   if (!pl && !isServiceRates) {
     return (
       <div className="page">
-        <h2 className="workspace-page-title"><Icon name="tag" size={18} /> Price Lists</h2>
+        <h2 className="workspace-page-title workspace-page-title--topbar-duplicate"><Icon name="tag" size={18} /> Price Lists</h2>
         {store.priceListsStatus === 'loading' || store.priceListsStatus === 'refreshing'
           ? <p className="hint price-list-loading" role="status"><span className="auth-loading__spinner" aria-hidden="true" /> Loading approved price lists…</p>
           : store.priceListsStatus === 'error'
@@ -185,7 +225,7 @@ export default function PriceLists() {
   const listButtons = (
     <div className="toolbar">
       {Object.keys(store.priceLists || {}).map(k => (
-        <button key={k} className={list === k ? 'primary' : ''} onClick={() => selectList(k)}>{k}</button>
+        <button key={k} disabled={serviceEditing} className={list === k ? 'primary' : ''} onClick={() => selectList(k)}>{k}</button>
       ))}
       <button className={isServiceRates ? 'primary' : ''} onClick={() => selectList(SERVICE_RATE_LIST_KEY)}>Service Rates</button>
     </div>
@@ -194,27 +234,41 @@ export default function PriceLists() {
   if (isServiceRates) {
     return (
       <div className="page">
-        <h2 className="workspace-page-title"><Icon name="tag" size={18} /> Price Lists</h2>
+        <h2 className="workspace-page-title workspace-page-title--topbar-duplicate"><Icon name="tag" size={18} /> Price Lists</h2>
         {listButtons}
         <div className="section-title">Service Rate Sheet</div>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
+        <div className="toolbar" style={{ marginBottom: 8 }}>
           {['India', 'International'].map(name => (
-            <button key={name} className={rateSheetName === name ? 'primary' : ''} onClick={() => setRateSheetName(name)}>{name}</button>
+            <button key={name} disabled={serviceEditing} className={rateSheetName === name ? 'primary' : ''} onClick={() => setRateSheetName(name)}>{name}</button>
           ))}
           <span className="hint">{rateSheet.currency || '—'}, GST {rateSheet.gst ?? 0}%</span>
+          <span className="spacer" />
+          {canUpload && (serviceEditing ? <>
+            <button onClick={() => setServiceDraft(null)}>Cancel</button>
+            <button className="primary" disabled={!serviceDraftValid} onClick={saveServiceRates}>Save</button>
+          </> : <button className="primary" disabled={!rateSheet.rates} onClick={openServiceEditor}>Edit rates</button>)}
         </div>
         <div className="sheet-wrap sheet-wrap-fill">
           <table className="sheet">
             <thead><tr><th>Charge</th><th>Value</th><th>Unit</th></tr></thead>
             <tbody>
-              {serviceRateRows(rateSheet, rateSheetName).map(row => (
-                <tr key={row.key}><td>{row.label}</td><td className="num">{fmt(row.value)}</td><td>{row.unit}</td></tr>
+              {rateRows.map(row => (
+                <tr key={row.key}><td>{row.label}</td><td className="num">{serviceEditing
+                  ? <input type="number" min="0" max={row.key === 'gst' ? 100 : undefined} step="any"
+                    aria-label={`${row.label} (${row.unit})`} style={{ width: '100%', minWidth: 80 }}
+                    value={row.key === 'gst' ? serviceDraft.gst : serviceDraft.rates[row.key]}
+                    onChange={e => {
+                      const value = e.target.value
+                      setServiceDraft(draft => row.key === 'gst' ? { ...draft, gst: value } : { ...draft, rates: { ...draft.rates, [row.key]: value } })
+                    }} />
+                  : fmt(row.value)}</td><td>{row.unit}</td></tr>
               ))}
             </tbody>
           </table>
         </div>
+        {serviceEditing && !serviceDraftValid && <p className="errbox" role="alert">Enter a nonnegative number for every charge and GST between 0 and 100.</p>}
         <div className="costing-note">
-          Service quotes and invoices use this same rate sheet. Rates are edited in Admin.
+          Service quotes and invoices use this same rate sheet. Only LJS and Admin can edit rates here or in Admin. Saved changes follow workspace sync status.
         </div>
       </div>
     )
@@ -222,7 +276,7 @@ export default function PriceLists() {
 
   return (
     <div className="page">
-      <h2 className="workspace-page-title"><Icon name="tag" size={18} /> Price Lists</h2>
+      <h2 className="workspace-page-title workspace-page-title--topbar-duplicate"><Icon name="tag" size={18} /> Price Lists</h2>
       {listButtons}
       <div className="toolbar">
         <span className="hint">Current version {pl.version} · uploaded {pl.uploaded} · {pl.currency}. Current approved pricing reference.</span>
@@ -230,6 +284,7 @@ export default function PriceLists() {
         <button onClick={() => exportCSV(`${list}_${displayList.version}_pricelist.csv`, ['Part Number','Description',`Price (${displayList.currency})`,'Adders'], (displayList.parts || []).map(x => [x.pn, x.desc, x.price, (x.adders || []).map(a => `${a.desc} +${a.price}`).join('; ')]))}>Extract to Excel</button>
         {canEdit && <button onClick={() => downloadPriceListTemplate(list, displayList.currency)}>Download template</button>}
         {canUpload && <>
+          <button className="primary" disabled={versionLoading || !pl.parts?.length} onClick={() => openEditor(true)}>Edit price list</button>
           <button onClick={openUpload}>Upload new version</button>
         </>}
       </div>
@@ -250,14 +305,14 @@ export default function PriceLists() {
           {(pl.versions || []).slice().reverse().map(version => <option key={version.id} value={version.id}>{version.version}{version.id === pl.activeVersionId ? ' · Current' : ''} · {version.uploaded || '—'}</option>)}
         </select>
         <>
-          <button onClick={openEditor}>Edit selected version</button>
-          {versionId && versionId !== pl.activeVersionId && <button onClick={() => { store.restorePriceListVersion(list, versionId); setVersionId(null) }}>Restore selected version</button>}
+          {versionId && versionId !== pl.activeVersionId && <button disabled={versionLoading || !displayList.parts?.length} onClick={() => openEditor()}>Edit selected version</button>}
+          {versionId && versionId !== pl.activeVersionId && <button disabled={versionLoading || !displayList.parts?.length} onClick={() => { store.restorePriceListVersion(list, versionId); setVersionId(null) }}>Restore selected version</button>}
         </>
         {selectedVersion && selectedVersion.id !== pl.activeVersionId && <span className="hint">Viewing an archived version. It is not used for new proposal pricing.</span>}
         {versionLoading && <span className="hint price-list-loading"><span className="auth-loading__spinner" aria-hidden="true" /> Loading version…</span>}
       </div>}
 
-      {uploadOpen && (
+      {canUpload && uploadOpen && (
         <Modal title={`Upload ${list} price list`} wide onClose={() => setUploadOpen(false)}>
           <p className="hint">Upload the filled template, or the supplier's own price file — every sheet is read and as much as possible is extracted. This creates a new saved version; older versions remain available.</p>
           <div className="admin-field-grid">
@@ -320,7 +375,7 @@ export default function PriceLists() {
         </Modal>
       )}
 
-      {editOpen && (
+      {canUpload && editOpen && (
         <Modal title={`Edit ${list} version`} wide onClose={() => setEditOpen(false)}>
           <p className="hint">Changes are saved as a new version. Add approved customer references as comma-separated aliases; these are reused by enquiry matching. Use the Adders format <b>CODE|Description|Price</b>; separate multiple adders with semicolons.</p>
           <label className="afield">New version name<input value={editVersion} onChange={e => setEditVersion(e.target.value)} /></label>
@@ -328,12 +383,13 @@ export default function PriceLists() {
             {editRows.map((row, index) => <tr key={index}>
               <td><input value={row.pn} onChange={e => updateEditRow(index, 'pn', e.target.value)} /></td>
               <td><input value={row.desc} onChange={e => updateEditRow(index, 'desc', e.target.value)} /></td>
-              <td><input type="number" value={row.price} onChange={e => updateEditRow(index, 'price', e.target.value)} /></td>
+              <td><input type="number" min="0" step="any" aria-invalid={!validPriceAmount(row.price)} value={row.price} onChange={e => updateEditRow(index, 'price', e.target.value)} /></td>
               <td><input value={aliasText(row)} placeholder="e.g. MPC4, MPC 4" onChange={e => updateEditRow(index, 'aliases', e.target.value.split(',').map(value => value.trim()).filter(Boolean))} /></td>
               <td><input value={adderText(row)} placeholder="CODE|Description|Price" onChange={e => updateEditAdder(index, e.target.value)} /></td>
             </tr>)}
           </tbody></table></div>
-          <div className="form-actions" style={{ marginTop: 16 }}><button onClick={() => setEditOpen(false)}>Cancel</button><button className="primary" disabled={!editVersion.trim() || !editRows.length} onClick={saveEditedVersion}>Save as new version</button></div>
+          {!editRowsValid && <p className="errbox" role="alert">Each row needs a part number and nonnegative prices for the part and its adders.</p>}
+          <div className="form-actions" style={{ marginTop: 16 }}><button onClick={() => setEditOpen(false)}>Cancel</button><button className="primary" disabled={!editVersion.trim() || !editRowsValid} onClick={saveEditedVersion}>Save as new version</button></div>
         </Modal>
       )}
 
@@ -393,7 +449,7 @@ export default function PriceLists() {
         <table className="sheet">
           <thead><tr><th>Part Number</th><th>Supplier</th><th>Price</th><th>Currency</th><th>Quoted On</th><th>Note</th></tr></thead>
           <tbody>
-            {(store.adhocParts || []).map((x, i) => (
+            {adhocParts.map((x, i) => (
               <tr key={i}><td>{x.pn}</td><td>{x.supplier}</td><td className="num">{fmt(x.price)}</td><td>{x.currency}</td><td>{x.date}</td><td>{x.note}</td></tr>
             ))}
           </tbody>

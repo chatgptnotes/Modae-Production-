@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { CLOSE_REASONS, WON_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES, displayOpportunityId } from '../seed.js'
+import { CLOSE_REASONS, WON_REASONS, PROB_LEVELS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, displayOpportunityId } from '../seed.js'
 import { fmt, fmtRupeesFromK, rupeesToK, ddMmmYY, ddMMyyyy, stageClass, productList, productLabel, productDisplayLabel, sameCustomer, displayRole, OPPORTUNITY_DATE_FIELDS, OPPORTUNITY_PERIODS, opportunityDateRange } from '../utils.js'
 import { downloadTableXlsx } from '../proposal/tableExcelExport.js'
 import { useFormulaBar } from '../formulabar.jsx'
@@ -17,6 +17,9 @@ import {
   toggleSubsetIn, toggleValueIn,
 } from '../columnFilter.js'
 import { colType, compareVals, matchesGlobalSearch, sortLabels } from '../trackerFilters.js'
+import { useWorkspaceView } from '../ui/WorkspaceViewContext.jsx'
+import usePhoneLayout from '../tablet/usePhoneLayout.js'
+import PhoneFilters from '../tablet/PhoneFilters.jsx'
 
 const DEFAULT_DATE_FILTER = { field: 'orderDate', period: 'all', date: '', from: '', to: '' }
 
@@ -66,9 +69,9 @@ export const COLS = [
 // required — a rep filtered to their own rows already knows the owner.
 const KEY_COLS = ['id', 'sellTo', 'oppName', 'stage', 'oppType', 'prob', 'valueK', 'proposalDate', 'orderDate', 'nextActionOwner']
 const KEY_COL_WIDTHS = {
-  id: 8, sellTo: 10, oppName: 21, stage: 9, oppType: 6,
-  prob: 7, valueK: 7, proposalDate: 8, orderDate: 12,
-  nextActionOwner: 9,
+  id: 8, sellTo: 12, oppName: 23, stage: 8, oppType: 6,
+  prob: 7, valueK: 7, proposalDate: 7, orderDate: 12,
+  nextActionOwner: 7,
 }
 const ROWHEAD_PCT = 3
 
@@ -188,16 +191,26 @@ const scrolledInsidePopover = event => {
   return !!(target && target.nodeType === 1 && target.closest?.('.filter-pop'))
 }
 
-export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
+export default function Tracker({ initialOwnerFilter, onCreateOpportunity, afterTable = null, topContent = null }) {
   const store = useStore()
+  const narrow = usePhoneLayout()
+  const phone = narrow && store.viewMode === 'tablet'
+  const [phoneFiltersOpen, setPhoneFiltersOpen] = useState(false)
+  const { scope } = useWorkspaceView()
   const fb = useFormulaBar()
   const drawer = useDrawer()
-  const [sheet, setSheet] = useState('Opportunities') // Opportunities | My Orders
+  const [sheet, setSheet] = useState('Opportunities') // Opportunities | My Orders | My Pipeline
+  const [page, setPage] = useState(1)
+  const pageSize = 10
 
-  const isSalesRep = OWNERS.includes(store.role)
-  const isManager = ROLES[store.role]?.admin || ROLES[store.role]?.commercial
-  const defaultOwnerFilter = initialOwnerFilter || (isSalesRep && !isManager ? 'Mine' : 'All')
+  const defaultOwnerFilter = initialOwnerFilter || 'All'
   const [ownerFilter, setOwnerFilter] = useState(defaultOwnerFilter)
+  const previousScope = useRef(scope)
+  useEffect(() => {
+    if (previousScope.current === scope) return
+    previousScope.current = scope
+    setOwnerFilter('All')
+  }, [scope])
 
   const [filters, setFilters] = useState({})           // col key -> Set of allowed display values
   const [sort, setSort] = useState(null)               // { key, dir: 1 | -1 }
@@ -222,6 +235,21 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   // still one click away; this keeps the page aligned at desktop widths where
   // all 31 columns cannot fit without becoming unusably narrow.
   const [colView, setColView] = useState('key')
+  const [mobileTable, setMobileTable] = useState(false)
+  useEffect(() => {
+    if (!phone || !mobileTable) return
+    const previousFocus = document.activeElement
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const close = event => { if (event.key === 'Escape') setMobileTable(false) }
+    document.addEventListener('keydown', close)
+    document.querySelector('.phone-table-close')?.focus()
+    return () => {
+      document.body.style.overflow = previousOverflow
+      document.removeEventListener('keydown', close)
+      if (previousFocus?.isConnected) previousFocus.focus()
+    }
+  }, [phone, mobileTable])
 
   useEffect(() => {
     if (!openFilter) return undefined
@@ -298,10 +326,11 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
   }
 
   const all = [...store.opportunities].sort((a, b) => a.sl - b.sl)
-  const owners = [...(isSalesRep ? ['Mine'] : []), 'All', ...new Set(all.map(o => o.owner))]
+  const owners = ['All', ...new Set(all.map(o => o.owner))]
   const base = all.filter(o =>
-    (ownerFilter === 'Mine' ? o.owner === store.role : ownerFilter === 'All' || o.owner === ownerFilter) &&
-    (sheet !== 'My Orders' || (o.status === 'Closed' && o.stage === 'Won')))
+    (scope !== 'my' ? ownerFilter === 'All' || o.owner === ownerFilter : o.owner === store.role) &&
+    (sheet === 'My Orders' ? (o.status === 'Closed' && o.stage === 'Won')
+      : sheet === 'My Pipeline' ? (o.status === 'Open' || (o.status === 'Closed' && o.stage === 'Won')) : true))
 
   const searchableBase = base.filter(o => matchesGlobalSearch(o, searchTerm, COLS, cellVal))
 
@@ -336,7 +365,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
     }
     if (Object.keys(next).length) applyFilters(next)
     setParams({}, { replace: true })
-  }, [])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [params])  // eslint-disable-line react-hooks/exhaustive-deps
   const DATE_KEYS = ['createDate', 'proposalDate', 'orderDate', 'invoiceDate', 'lastUpdated']
   const sortVal = (o, key) => (DATE_KEYS.includes(key) ? (o[key] || '') : cellVal(o, key))
 
@@ -355,6 +384,19 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
       return compareVals(va, vb, dir)
     })
   }
+
+  useEffect(() => {
+    setPage(1)
+  }, [sheet, ownerFilter, searchTerm, filters, sort, dateFilter])
+
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize))
+  useEffect(() => {
+    setPage(current => Math.min(current, pageCount))
+  }, [pageCount])
+  const currentPage = Math.min(page, pageCount)
+  const pageRows = rows.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+  const firstRow = rows.length ? (currentPage - 1) * pageSize + 1 : 0
+  const lastRow = Math.min(currentPage * pageSize, rows.length)
 
   const totals = rows.reduce((t, o) => ({ v: t.v + (+o.valueK || 0), c: t.c + (+o.cogsK || 0) }), { v: 0, c: 0 })
   const activeFilterCount = Object.values(filters).filter(value => value instanceof Set).length
@@ -676,8 +718,9 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
 
   return (
     <div className="page tracker-page">
-      <h2 className="workspace-page-title"><Icon name="cards" size={18} /> {sheet === 'My Orders' ? 'My Orders' : 'Opportunities'}</h2>
+      <h2 className={`workspace-page-title${sheet === 'Opportunities' ? ' workspace-page-title--topbar-duplicate' : ''}`}><Icon name="cards" size={18} /> {sheet}</h2>
       <div className="tracker-grid-shell">
+      {!phone && topContent}
       <div className="toolbar">
         <div className="tracker-toolbar-filters">
           <div className="tracker-search-group">
@@ -695,6 +738,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
           </div>
         </div>
         <div className="tracker-toolbar-actions">
+          {phone && <button type="button" onClick={() => setPhoneFiltersOpen(true)}>Filters{activeFilterCount ? ` (${activeFilterCount})` : ''}</button>}
           <div className="tracker-more-menu" ref={moreMenuRef}>
             <button type="button" className="tracker-more-trigger" aria-haspopup="menu" aria-expanded={moreMenuOpen}
               onClick={() => setMoreMenuOpen(open => !open)}>
@@ -723,18 +767,17 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                   </label>
                 )}
                 <button type="button" role="menuitem" onClick={() => { exportRows(); setMoreMenuOpen(false) }}>Extract to Excel</button>
+                <button type="button" className="mobile-record-view" role="menuitem" onClick={() => { setMobileTable(true); setMoreMenuOpen(false) }}>Open editable table</button>
                 <button type="button" role="menuitem" onClick={() => { pipelineFileRef.current?.click(); setMoreMenuOpen(false) }}
                   title="Preview an existing pipeline workbook without importing it">Upload Excel</button>
               </div>
             )}
           </div>
-          <select id="opportunities-owner-filter" className="tracker-owner-filter" aria-label="Opportunity owner" value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)}>
-            {owners.map(p => <option key={p} value={p}>
-              {p === 'All' ? 'All Opportunities' : p === 'Mine' ? 'My Opportunities' : displayRole(p)}
-            </option>)}
-          </select>
+          {!phone && scope === 'global' && <select id="opportunities-owner-filter" className="tracker-owner-filter" aria-label="Opportunity owner" value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)}>
+            {owners.map(p => <option key={p} value={p}>{p === 'All' ? 'All Opportunities' : displayRole(p)}</option>)}
+          </select>}
           <button type="button" className="tracker-columns-toggle"
-            onClick={() => setColView(colView === 'key' ? 'all' : 'key')}
+            onClick={() => { setColView(colView === 'key' ? 'all' : 'key'); setMobileTable(true) }}
             title={colView === 'key'
               ? 'Show every column in the pipeline sheet'
               : `Show only the working columns: ${KEY_COLS.length} of ${COLS.length}`}>
@@ -768,8 +811,20 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
         )}
       </div>
       {pipelineUploadError && <div className="errbox" role="alert">{pipelineUploadError}</div>}
+      {phoneFiltersOpen && <PhoneFilters title="Filter opportunities" onClose={() => setPhoneFiltersOpen(false)} fields={[
+        ...(scope === 'global' ? [{ key: 'owner', label: 'Owner', value: ownerFilter, clearValue: 'All', options: owners.map(owner => [owner, owner === 'All' ? 'All owners' : displayRole(owner)]) }] : []),
+        { key: 'stage', label: 'Stage', value: filters.stage ? [...filters.stage].join(',') : '', options: [['', 'All stages'], ...new Set(all.map(o => String(cellVal(o, 'stage'))))] },
+        { key: 'sort', label: 'Sort', value: sort ? `${sort.key}:${sort.dir}` : '', options: [['', 'Default order'], ['lastUpdated:-1', 'Recently updated'], ['orderDate:1', 'Expected order date'], ['sellTo:1', 'Customer A–Z']] },
+      ]} onApply={draft => { if (draft.owner) setOwnerFilter(draft.owner); setFilters(current => { const next = { ...current }; if (draft.stage) next.stage = new Set(draft.stage.split(',')); else delete next.stage; return next }); setSort(draft.sort ? { key: draft.sort.split(':')[0], dir: Number(draft.sort.split(':')[1]) } : null) }} />}
 
-      <div ref={sheetWrapRef} className="sheet-wrap fill" onScroll={handleSheetScroll}>
+      <div className={`mobile-opportunity-cards${mobileTable ? ' is-hidden' : ''}`}>
+        {!pageRows.length && <p>No matching opportunities. Adjust your search or filters.</p>}
+        {pageRows.map(o => <article key={o.id}>
+          <Link className="phone-record" to={`/opp/${o.id}`}><strong>{o.sellTo || o.oppName || 'Untitled opportunity'}</strong><span>{o.oppName || displayOpportunityId(o.id)}</span><small>{displayOpportunityId(o.id)} · {o.stage || o.milestone || 'No stage'} · {displayRole(o.owner) || 'Unassigned'}</small></Link>
+        </article>)}
+      </div>
+      <div ref={sheetWrapRef} className={`sheet-wrap fill${mobileTable ? ' phone-table-workspace' : ' mobile-table-collapsed'}`} onScroll={handleSheetScroll}>
+        {mobileTable && <button type="button" className="mobile-record-view phone-table-close" onClick={() => setMobileTable(false)}>Close table</button>}
         {colView === 'key'
           ? <style>{[
             hiddenColumnCss(COLS.map((c, i) => (KEY_COLS.includes(c.key) ? -1 : i)).filter(i => i >= 0)),
@@ -794,7 +849,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((o, index) => (
+            {pageRows.map((o, index) => (
               <tr key={o.id} className="rowclick"
                 onClick={e => {
                   // Row click opens the detail drawer — but never when the click
@@ -802,7 +857,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                   if (e.target.closest('input,textarea,select,a,button,label,.filter-pop')) return
                   drawer.open({ type: 'opp', id: o.id })
                 }}>
-                <td className="rowhead">{index + 1}</td>
+                <td className="rowhead">{firstRow + index}</td>
                 <td onClick={selectCell(o, COLS[0])} className={`oppid ${customerStatusFor(o)} ${stageClass(o) === 'open' ? '' : stageClass(o)} ${isSel(o, COLS[0]) ? 'cell-sel' : ''}`}>
                   <span className="tracker-oppid-actions">
                     <Link to={`/opp/${o.id}`} title="Open opportunity workspace">{displayOpportunityId(o.id, store.config?.roleNames)}</Link>
@@ -857,13 +912,19 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
                   <span className="tracker-cell-label">{COLS[13].label}</span>
                   {(() => {
                     const sug = suggestProbability(o, store.getProposal(o.id), store.config)
+                    const factors = sug?.why.split(' · ').slice(0, 2).join(', ')
+                    const hasMoreFactors = (sug?.why.split(' · ').length || 0) > 2
                     return (
                       ['Intake', 'Registration'].includes(o.milestone) ? <select value={o.prob || ''} onChange={upd(o.id, 'prob')} aria-label={COLS[13].label}
                         className={!o.prob && sug ? 'derived' : ''}
-                        title={sug ? `Suggested ${sug.level} — ${sug.why}` : ''}>
+                        data-explain-title={sug ? `Suggested probability · ${sug.level}` : undefined}
+                        data-explain={sug ? `Based on ${factors}${hasMoreFactors ? ' and other factors' : ''}. Select to apply.` : undefined}>
                         <option value="">Select probability</option>
                         {PROB_LEVELS.map(p => <option key={p}>{p}</option>)}
-                      </select> : <div className="ro" title="Locked after registration">{o.prob || (sug ? sug.level : '—')}</div>
+                      </select> : <div className="ro" tabIndex={0}
+                        data-explain-title="Probability · read only after registration"
+                        data-explain={sug ? `Suggested ${sug.level} from ${factors}. Locked after registration.` : `Current value: ${o.prob || 'not set'}. Locked after registration.`}
+                      >{o.prob || (sug ? sug.level : '—')}</div>
                     )
                   })()}
                 </td>
@@ -975,7 +1036,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
           <tfoot>
             <tr>
               <td className="rowhead"></td>
-              <td colSpan={14}>Totals {rows.length < base.length && <span className="hint">({rows.length} of {base.length} rows shown — filters active)</span>}</td>
+              <td colSpan={14}>Totals {rows.length < base.length && <span className="hint">({rows.length} matching rows — filters active)</span>}</td>
               <td className="num">₹ {fmt(totals.v)}</td>
               <td className="num">₹ {fmt(totals.c)}</td>
               <td className="num">₹ {fmt(totals.v - totals.c)}</td>
@@ -985,12 +1046,23 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity }) {
           </tfoot>
         </table>
       </div>
+      <div className="tracker-pagination" aria-label="Opportunity table pages">
+        <span className="tracker-pagination-range">{firstRow}–{lastRow} of {rows.length}</span>
+        <div className="tracker-pagination-controls">
+          <button type="button" onClick={() => setPage(1)} disabled={currentPage <= 1} aria-label="First page">First</button>
+          <button type="button" onClick={() => setPage(currentPage - 1)} disabled={currentPage <= 1} aria-label="Previous page">Previous</button>
+          <span>Page {currentPage} of {pageCount}</span>
+          <button type="button" onClick={() => setPage(currentPage + 1)} disabled={currentPage >= pageCount} aria-label="Next page">Next</button>
+          <button type="button" onClick={() => setPage(pageCount)} disabled={currentPage >= pageCount} aria-label="Last page">Last</button>
+        </div>
+      </div>
+      {afterTable}
       </div>
       {pipelinePreview && <PipelineUploadPreview preview={pipelinePreview} onClose={() => setPipelinePreview(null)} />}
       {dateFilterOpen && dateFilterPos && renderDateFilterPop(dateFilterPos)}
 
       <div className="sheet-tabs">
-        {['Opportunities', 'My Orders'].map(t => (
+        {['Opportunities', 'My Orders', 'My Pipeline'].map(t => (
           <div key={t} className={`tab ${sheet === t ? 'active' : ''}`}
             onClick={() => setSheet(t)}>
             {t}

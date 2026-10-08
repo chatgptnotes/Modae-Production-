@@ -856,11 +856,11 @@ export const seedKyc = Object.fromEntries(
 
 // FY 2026-27 sales targets (K₹) and booked orders.
 export const seedSales = {
-  fy: 'FY 2026-27', currentQ: 2, monthsElapsed: 5,
+  fy: 'FY 2026-27', currentQ: 3, monthsElapsed: 8,
   targets: {
     LJS: { annual: 60000, q: [15000, 15000, 15000, 15000] },
     PP: { annual: 36000, q: [9000, 9000, 9000, 9000] },
-    RS: { annual: 36000, q: [9000, 9000, 9000, 9000] },
+    RS: { annual: 6000, q: [1500, 1500, 1500, 1500] },
     SS: { annual: 24000, q: [6000, 6000, 6000, 6000] },
     PJS: { annual: 20000, q: [5000, 5000, 5000, 5000] },
     RJS: { annual: 20000, q: [5000, 5000, 5000, 5000] },

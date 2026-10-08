@@ -5,18 +5,31 @@ import fs from 'node:fs'
 const css = fs.readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
 const inbox = fs.readFileSync(new URL('../src/pages/Inbox.jsx', import.meta.url), 'utf8')
 
-test('inbox keeps every column visible in a fitted desktop grid', () => {
+test('inbox description sits under a visible page title', () => {
+  assert.match(inbox, /<div className="mailbox-head">\s*<div>\s*<h2 className="workspace-page-title"><Icon name="inbox" size=\{18\} \/> Lead inbox<\/h2>\s*<p className="hint">\{showArchive \? 'Discarded lead archive' : scope === 'my' \? 'Your assigned leads · AI structures, humans decide' : 'Common sales mailbox · AI structures, humans decide'\}<\/p>/)
+  assert.match(css, /\.mailbox-head > div > \.hint \{ color: var\(--text-muted\); font-size: 13px; line-height: 1\.4; \}/)
+})
+
+test('inbox keeps every column available in a horizontally scrollable desktop grid', () => {
   assert.match(css, /\.mail-date b, \.mail-date small \{ display: block;[\s\S]*white-space: nowrap; \}/)
-  assert.match(css, /--mail-grid-template:[\s\S]*32px 32px[\s\S]*minmax\(0, 22fr\)[\s\S]*minmax\(0, 12fr\)[\s\S]*minmax\(0, 11fr\)[\s\S]*minmax\(0, 8fr\);/)
-  assert.match(css, /grid-template-columns: var\(--mail-grid-template\);[\s\S]*width: 100%;[\s\S]*min-width: 0;/)
-  assert.match(css, /\.mailbox-list \{[\s\S]*overflow-x: hidden; overflow-y: auto;/)
+  assert.match(css, /--mail-grid-template:[\s\S]*32px 32px[\s\S]*110px 156px minmax\(300px, 1fr\)[\s\S]*76px 116px 82px;/)
+  assert.match(css, /grid-template-columns: var\(--mail-grid-template\);[\s\S]*width: max\(100%, 1240px\); min-width: 1240px;/)
+  assert.match(css, /\.mailbox-list \{[\s\S]*overflow-x: auto;/)
+  assert.match(css, /\.mailbox-list \{ scrollbar-width: none; \}/)
+  assert.match(css, /\.mailbox-list::-webkit-scrollbar \{ display: none; \}/)
+  assert.match(css, /\.mailbox-horizontal-scrollbar \{ display: none;[\s\S]*?height: 10px;/)
+  assert.match(css, /\.mailbox-horizontal-scrollbar::before \{[^}]*background: #E5E7EB;/)
+  assert.match(css, /\.mailbox-horizontal-scrollbar:hover \.mailbox-horizontal-scrollbar-thumb \{ background: #ED3F2F; \}/)
+  assert.match(inbox, /role="scrollbar"[\s\S]*?aria-orientation="horizontal"[\s\S]*?onPointerMove=\{moveMailboxScrollDrag\}/)
   assert.match(css, /\.mail-list-toolbar \{[\s\S]*min-width: 0;/)
   assert.match(inbox, /<div className="mail-column-head">\s*<div className="mail-list-toolbar">/)
   assert.doesNotMatch(css, /@container \(max-width: (900|1180|1400)px\)/)
   assert.doesNotMatch(css, /\.mail-column-head > :nth-child\((8|10|12)\), \.mail-row > :nth-child\(/)
-  for (const label of ['Received', 'Source / sender', 'Subject / preview', 'AI route', 'Urgency', 'Dup. risk', 'Completeness', 'Suggested owner', 'Status', 'Age']) {
+  for (const label of ['Received', 'Source / sender', 'Subject / preview', 'AI route', 'Urgency', 'Completeness', 'Suggested owner', 'Status', 'Age']) {
     assert.match(inbox, new RegExp(label.replace(/[/.]/g, '\\$&')))
   }
+  assert.doesNotMatch(inbox, /filterMenu\('duplicate',/)
+  assert.doesNotMatch(inbox, /<div><Chip tone=\{l\.duplicateRisk/)
   assert.match(inbox, /age == null \? '—' : age === 0 \? 'Today' : `\$\{age\} d old`/)
   assert.match(inbox, /filterMenu\('received', receivedF, setReceivedF, 'Received date'/)
   assert.match(inbox, /filterMenu\('source', sourceF, setSourceF, 'Source \/ sender'/)
@@ -26,7 +39,7 @@ test('inbox keeps every column visible in a fitted desktop grid', () => {
 })
 
 test('inbox metadata stays compact while subject content stacks clearly', () => {
-  assert.match(css, /\.mail-head-filter \{[\s\S]*?white-space: nowrap;[\s\S]*?cursor: pointer;/)
+  assert.match(css, /\.mail-head-filter \{[\s\S]*?white-space: normal;[\s\S]*?overflow-wrap: anywhere;[\s\S]*?cursor: pointer;/)
   assert.match(css, /\.mail-head-filter \{[\s\S]*?border: 0 !important;[\s\S]*?border-radius: 0 !important;[\s\S]*?background: transparent !important;[\s\S]*?box-shadow: none !important;/)
   assert.match(css, /\.mail-column-head \.mail-head-filter:hover \{[\s\S]*?background: transparent !important;[\s\S]*?color: var\(--primary-deep\);/)
   assert.match(css, /\.mail-column-head \.mail-head-filter:focus-visible \{[\s\S]*?background: transparent !important;[\s\S]*?box-shadow: none !important;[\s\S]*?outline: 0;[\s\S]*?text-decoration: underline;/)
@@ -57,12 +70,20 @@ test('inbox owner and status columns keep their metadata readable', () => {
   assert.match(css, /\.mail-row > div > \.pill \{[\s\S]*display: inline-flex;[\s\S]*white-space: nowrap;/)
 })
 
-test('inbox headers are bold and the final Status and Age columns are right-aligned', () => {
+test('inbox headers are bold, Status is left-aligned, and Age is right-aligned', () => {
   assert.match(css, /\.mail-column-head \{[\s\S]*color: var\(--text-main\);[\s\S]*font-weight: 800;/)
-  assert.match(css, /\.mail-column-head \.mail-status-head,[\s\S]*\.mail-row > \.mail-age \{ text-align: right; \}/)
+  assert.match(css, /\.shell \.mail-column-head \.mail-head-filter,[\s\S]*font-size: clamp\(12px, 1\.05cqi, 14px\);[\s\S]*font-weight: 800;/)
+  assert.match(css, /\.mail-column-head \.mail-age-head,\s*\.mail-column-head \.mail-age-head \.mail-head-filter,\s*\.mail-row > \.mail-age \{ text-align: right; \}/)
+  assert.doesNotMatch(css, /\.mail-column-head \.mail-status-head,\s*\.mail-column-head \.mail-age-head/)
   assert.match(inbox, /className="mail-head-filter-cell mail-status-head"/)
   assert.match(inbox, /className="mail-head-filter-cell mail-age-head"/)
   assert.match(inbox, /<div className="mail-status"><span className=\{`pill/)
+})
+
+test('inbox filter menus keep readable colors outside the themed application shell', () => {
+  assert.match(css, /\.mail-header-filter-menu \{[^}]*background: #FFFFFF;[^}]*color: #282828;[^}]*color-scheme: light;/)
+  assert.match(css, /\.mail-header-filter-menu \.mail-header-filter-option \{[^}]*background: #FFFFFF !important;[^}]*color: #374151 !important;/)
+  assert.match(css, /\.mail-header-filter-menu \.mail-header-filter-option:hover,[\s\S]*?background: #FDEDEB !important; color: #9E1F14 !important;/)
 })
 
 test('inbox header actions share the secondary button treatment', () => {
@@ -78,23 +99,30 @@ test('new enquiry modal imports the hook used by its file picker', () => {
 test('inbox omits the redundant result count above the shared header', () => {
   assert.match(css, /\.mail-column-head, \.mail-row \{[\s\S]*?--mail-grid-template:[\s\S]*?grid-template-columns: var\(--mail-grid-template\);/)
   assert.doesNotMatch(css, /\.mail-column-head\s*\{\s*--mail-grid-template:/)
-  assert.match(inbox, /<div className="mailbox-list">\s*<div className="mail-column-head">/)
+  assert.match(inbox, /<div className="mailbox-list-panel">\s*<div className="mailbox-list">\s*<div className="mail-column-head">/)
   assert.doesNotMatch(inbox, /mail-list-summary|1–\$\{mailboxRows\.length\} of/)
   assert.doesNotMatch(inbox, /<div className="mail-column-head">[\s\S]*?mail-list-count/)
 })
 
-test('inbox confines its fitted grid to the workspace like the Opportunities sheet', () => {
+test('inbox confines its horizontally scrollable grid to the workspace', () => {
   assert.match(css, /\.mailbox-page \{\s*width: 100%;\s*max-width: none;\s*min-width: 0;\s*box-sizing: border-box;/)
-  assert.match(css, /\.mailbox-list \{\s*width: 100%;[\s\S]*?max-width: 100%;[\s\S]*?min-width: 0;[\s\S]*?overflow-x: hidden;/)
-  assert.match(css, /\.mail-list-toolbar,\s*\.mail-column-head,\s*\.mail-row \{\s*width: 100%;\s*min-width: 0;/)
-  assert.match(css, /\.mailbox-list \{\s*width: 100%;\s*max-width: 100%;\s*min-width: 0;\s*box-sizing: border-box;\s*overflow-x: hidden;\s*border: 0;\s*box-shadow: none;/)
+  assert.match(css, /\.mailbox-list \{\s*width: 100%;[\s\S]*?max-width: 100%;[\s\S]*?min-width: 0;[\s\S]*?overflow-x: auto;/)
+  assert.match(css, /\.mail-list-toolbar \{ width: 100%; min-width: 0; \}/)
+  assert.match(css, /\.mail-column-head,\s*\.mail-row \{ width: max\(100%, 1240px\); min-width: 1240px; box-sizing: border-box; \}/)
+  assert.match(css, /\.mailbox-list \{\s*width: 100%;\s*max-width: 100%;\s*min-width: 0;\s*box-sizing: border-box;\s*overflow-x: auto;\s*border: 0;\s*box-shadow: none;/)
 })
 
 test('inbox actions share the compact column header row', () => {
   assert.match(css, /\.mail-list-toolbar \{[\s\S]*grid-column: 1 \/ span 2;[\s\S]*min-height: 0;[\s\S]*height: 100%;/)
-  assert.match(css, /\.mail-column-head \{ position: relative; min-height: 34px;/)
+  assert.match(css, /\.mail-column-head \{ position: relative; min-height: 44px;/)
   assert.match(css, /\.mail-column-head \{ position: sticky; top: 0; z-index: 3; \}/)
   assert.doesNotMatch(css, /\.mail-column-head \{ position: sticky; top: 44px;/)
+})
+
+test('inbox column headings wrap onto readable lines', () => {
+  assert.match(css, /\.mail-column-head \.mail-subject-head \{[^}]*white-space: normal;/)
+  assert.match(css, /\.mail-column-head span \{[^}]*white-space: normal; overflow-wrap: anywhere;/)
+  assert.match(css, /\.mail-head-filter \{[^}]*min-height: 30px;[^}]*white-space: normal;/)
 })
 
 test('inbox always uses fitted rows instead of summary cards', () => {
@@ -102,7 +130,42 @@ test('inbox always uses fitted rows instead of summary cards', () => {
   assert.doesNotMatch(inbox, /compactMailbox|showDenseView|ResizeObserver|sparse-view-toggle/)
   assert.doesNotMatch(inbox, /has-sparse-cards|sparse-filter-bar|lead-sparse-cards/)
   assert.match(inbox, /<div className="mail-column-head">/)
-  assert.match(inbox, /mailboxRows\.map\(l => \{[\s\S]*?className=\{`mail-row /)
+  assert.match(inbox, /pageRows\.map\(l => \{[\s\S]*?className=\{`mail-row /)
+})
+
+test('inbox keeps pagination visible outside the scrolling message list', () => {
+  assert.match(inbox, /React\.cloneElement\(pagination, \{ alwaysVisible: true, label: 'Inbox pages' \}\)/)
+  assert.match(inbox, /<div className="mailbox-list-panel">[\s\S]*?<div className="mailbox-list">[\s\S]*?<\/div>\s*<\/div>/)
+  assert.match(inbox, /<\/aside>}\s*<\/div>\s*\{inboxPagination\}\s*\{!showArchive && <WorkspaceInsights signals=\{inboxInsights\} \/>\}/)
+  assert.match(css, /\.mailbox-split\s*\{[^}]*flex: 1 1 auto;[^}]*min-height: 0;/)
+  assert.match(css, /\.mailbox-list-panel\s*\{[^}]*display: flex;[^}]*flex-direction: column;[^}]*min-height: 0;/)
+  assert.match(css, /\.mailbox-list-panel > \.mailbox-list\s*\{[^}]*overflow-y: auto;/)
+  assert.match(css, /\.mailbox-page > \.list-pagination\s*\{[^}]*width: 100%;/)
+})
+
+test('inbox reduces the vertical gaps around its filters and summary', () => {
+  assert.match(css, /\.mailbox-page\s*\{\s*padding-top: 16px !important;/)
+  assert.match(css, /\.mailbox-page > \.mailbox-head\s*\{\s*margin-bottom: 8px;/)
+  assert.match(css, /\.mailbox-page > \.mail-search-row\s*\{\s*margin-bottom: 8px;/)
+  assert.match(css, /\.mailbox-page > \.workspace-insights\s*\{\s*min-height: 34px; margin: 0 0 6px;[^}]*border-left: 3px solid #D99200;[^}]*background: #FFFBF1;/)
+})
+
+test('Lead Preview wraps field columns and scrolls within its panel', () => {
+  assert.match(css, /\.mailbox-preview\s*\{[^}]*height: 100%; max-height: 100%;[^}]*overflow-y: auto;/)
+  assert.match(css, /\.mailbox-preview-field\s*\{[^}]*grid-template-columns: minmax\(80px, \.8fr\) minmax\(0, 1\.4fr\) 34px;/)
+  assert.match(css, /\.mailbox-preview-field b\s*\{[^}]*white-space: normal; overflow-wrap: break-word;/)
+  assert.doesNotMatch(css, /\.mailbox-preview-field b\s*\{[^}]*text-overflow: ellipsis;/)
+  assert.match(css, /\.mailbox-preview section > p\s*\{[^}]*overflow-wrap: anywhere;/)
+  assert.match(css, /\.mailbox-preview-excerpt\s*\{\s*max-height: none; overflow: visible;/)
+  assert.match(inbox, /function PreviewFieldText\(\{ value \}\)[\s\S]*?split\(\/\(\[@\._\/-\]\)\/\)[\s\S]*?<wbr \/>/)
+  assert.match(inbox, /<PreviewFieldText value=\{field\.v\} \/>/)
+  assert.match(inbox, /<PreviewFieldText value=\{`\$\{previewLead\.sender/)
+})
+
+test('inbox aging alert remains a compact full-width banner below pagination', () => {
+  assert.match(inbox, /<\/aside>}\s*<\/div>\s*\{inboxPagination\}\s*\{!showArchive && <WorkspaceInsights signals=\{inboxInsights\} \/>\}/)
+  assert.match(css, /\.mailbox-page > \.list-pagination\s*\{[^}]*width: 100%;/)
+  assert.match(css, /\.mailbox-page > \.workspace-insights\s*\{[^}]*min-height: 34px;[^}]*border-left: 3px solid #D99200;/)
 })
 
 test('inbox controls reflow from workspace width instead of widening the shell', () => {
@@ -176,8 +239,8 @@ test('subject and preview stay contained inside the inbox cell', () => {
   assert.match(css, /\.mail-row \{[\s\S]*min-height: 58px;[\s\S]*overflow: hidden;/)
   assert.match(css, /\.mail-subject-title \{[\s\S]*display: block;[\s\S]*white-space: normal;[\s\S]*overflow-wrap: anywhere;/)
   assert.match(css, /\.mail-content small \{[\s\S]*display: -webkit-box;[\s\S]*white-space: normal;[\s\S]*overflow-wrap: anywhere;/)
-  assert.match(css, /\.mail-column-head \.mail-subject-head \{[\s\S]*white-space: nowrap;/)
-  assert.match(css, /minmax\(0, 22fr\)/)
+  assert.match(css, /\.mail-column-head \.mail-subject-head \{[\s\S]*white-space: normal;/)
+  assert.match(css, /minmax\(360px, 2\.8fr\)/)
 })
 
 test('opportunity scope is optional during lead qualification and registration', () => {

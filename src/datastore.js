@@ -285,9 +285,9 @@ export async function loadPriceLists({ force = false } = {}) {
   try { return await priceListInFlight } finally { priceListInFlight = null }
 }
 
-export async function loadPriceListVersion(listCode, versionCode) {
+export async function loadPriceListVersion(listCode, versionCode, versionId) {
   if (!supabase) return null
-  const consolidatedId = priceVersionRecordId(listCode, versionCode)
+  const consolidatedId = versionId || priceVersionRecordId(listCode, versionCode)
   const consolidated = await loadEntityRows(CONSOLIDATED_PRICE_VERSION_ENTITY, { ids: [consolidatedId] })
   const row = consolidated.data?.[0]
   if (!consolidated.error && row?.data) return mapConsolidatedVersion({ id: row.id, ...row.data })
@@ -727,14 +727,14 @@ function normalizedPayload(entity, rows, deletedIds = []) {
   return [...active, ...deleted]
 }
 
-async function saveNormalizedRowsNow(entity, rows) {
+async function saveNormalizedRowsNow(entity, rows, retainedIds = new Set()) {
   const actor = await currentActorId()
   const localById = new Map(rows.map(row => [row.id, row]))
   const prefix = `${entity}|`
   const deletedIds = [...normalizedRecords.keys()]
     .filter(key => key.startsWith(prefix))
     .map(key => key.slice(prefix.length))
-    .filter(id => !localById.has(id))
+    .filter(id => !localById.has(id) && !retainedIds.has(id))
   const write = async payload => {
     const result = await supabase.rpc('save_rows', { p_entity: entity, p_rows: payload.map(row => ({ ...row, by: actor })) })
     if (result.error) throw annotateRpcError(entity, result.error)
@@ -887,7 +887,10 @@ export async function savePriceLists(priceLists = {}) {
       const versions = Array.isArray(list.versions) && list.versions.length
         ? list.versions
         : [{ version: list.version || 'Initial', currency: list.currency || 'INR', uploaded: list.uploaded || '', parts: list.parts || [] }]
-      return versions.map(version => ({
+      // Empty archived parts are lazy-load placeholders, not deletions.
+      return versions.filter(version => version.parts?.length ||
+        (version.id || priceVersionRecordId(listCode, version.version || 'Initial')) ===
+          (list.activeVersionId || priceVersionRecordId(listCode, list.version || 'Initial'))).map(version => ({
         id: version.id || priceVersionRecordId(listCode, version.version || 'Initial'),
         listCode,
         version: version.version || 'Initial',
@@ -897,8 +900,10 @@ export async function savePriceLists(priceLists = {}) {
         parts: Array.isArray(version.parts) ? version.parts : [],
       }))
     })
+    const retainedVersionIds = new Set(listRows.flatMap(list => list.versions.map(version => version.id)))
+    // Write contents before publishing metadata that points to the new version.
+    await saveNormalizedRowsNow(CONSOLIDATED_PRICE_VERSION_ENTITY, versionRows, retainedVersionIds)
     await saveNormalizedRowsNow(CONSOLIDATED_PRICE_LIST_ENTITY, listRows)
-    await saveNormalizedRowsNow(CONSOLIDATED_PRICE_VERSION_ENTITY, versionRows)
     return true
   } catch (e) {
     console.warn('Consolidated price-list save failed:', e?.message)

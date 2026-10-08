@@ -10,14 +10,14 @@ import { opportunityOwnerFor } from '../leadRules.js'
 import CustomerPicker from '../CustomerPicker.jsx'
 
 const empty = {
-  sellTo: '', category: '', location: '', eucName: '', eucLocation: '',
+  sellTo: '', sellToCustomerLocation: '', category: '', location: '', eucName: '', eucLocation: '',
   oppName: '', owner: '', oppType: '', bu: '', segment: '', product: [],
   inquiryType: '', contactPerson: '', contactPhone: '', contactEmail: '', valueK: '', rfqNumber: '', rfqDate: '',
 }
 
 // Shared by the submit gate and by the post-extraction check, so "required" and
 // "the document should have given us this" can never drift apart.
-const REQUIRED_FIELDS = ['sellTo', 'category', 'eucName', 'eucLocation', 'oppName', 'owner', 'inquiryType',
+const REQUIRED_FIELDS = ['sellTo', 'sellToCustomerLocation', 'category', 'eucName', 'eucLocation', 'oppName', 'owner', 'inquiryType',
   'oppType', 'bu', 'segment', 'product', 'contactPerson', 'contactPhone']
 
 // Select/Pills/Input live at module scope, not inside IntakeForm. A component
@@ -206,7 +206,7 @@ export default function IntakeForm({ destinationPicker = null }) {
     }
     store.addOpportunity({
       sl: maxSl + 1, id,
-      sellTo, category: f.category, location: f.location, sellToCustomerLocation: f.location,
+      sellTo, category: f.category, location: f.location, sellToCustomerLocation: f.sellToCustomerLocation,
       customerStatus: knownCustomer ? knownCustomer.status : 'Blue',
       eucName: f.eucName, eucLocation: f.eucLocation, oppName: f.oppName,
       owner, oppType: f.oppType, bu: f.bu, segment: f.segment,
@@ -561,6 +561,11 @@ export default function IntakeForm({ destinationPicker = null }) {
             </div>
 
             <div className="q">
+              <div className="q-label">Sell To Customer Location<span className="star">*</span></div>
+              <Input field="sellToCustomerLocation" placeholder="Enter customer location" />
+            </div>
+
+            <div className="q">
               <div className="q-label">
                 2. Category<span className="star">*</span>
                 {aiFilledFields.has('category') && <span className="ai-badge">AI</span>}
@@ -578,7 +583,7 @@ export default function IntakeForm({ destinationPicker = null }) {
 
             <div className="q">
               <div className="q-label">4. EUC Name<span className="star">*</span></div>
-              <Input field="eucName" placeholder="Enter end user/customer name" />
+              <CustomerPicker customers={store.customers} value={f.eucName} onChange={value => setF(previous => ({ ...previous, eucName: value }))} allowCreate={false} label="" />
             </div>
 
             <div className="q">

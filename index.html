@@ -7,7 +7,17 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#282828" />
-    <style>html,body{background:#F8F7F4;color-scheme:light}</style>
+    <script id="workspace-theme-init">
+      (() => {
+        let theme = 'light';
+        try {
+          if (location.pathname !== '/showcase' && localStorage.getItem('modae_theme') === 'dark') theme = 'dark';
+        } catch { /* Browser storage is optional. */ }
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.dataset.workspaceTheme = theme;
+      })();
+    </script>
+    <style>html,body{background:#F8F7F4;color-scheme:light}html[data-workspace-theme="dark"],html[data-workspace-theme="dark"] body{background:#201D1C;color-scheme:dark}</style>
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />

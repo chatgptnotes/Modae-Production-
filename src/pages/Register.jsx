@@ -12,6 +12,7 @@ import { buildLeadProposalData } from '../leadBoq.js'
 import { displayRole } from '../utils.js'
 import { isInternalSender, isRegistrationCriticalField, routeOwnerForLocation } from '../leadRules.js'
 import { leadFieldValue, splitBuSegment, leadIdentity } from '../leadFieldMapping.js'
+import CustomerPicker from '../CustomerPicker.jsx'
 
 // Registration — the moment a qualified lead becomes an opportunity and the
 // permanent opportunity ID is minted (YYMM + three-digit sequence).
@@ -76,6 +77,7 @@ export default function Register() {
   useEffect(() => {
     setIdentityDraft({
       ...leadIdentity(lead, lead?.ai?.fields || []),
+      sellToCustomerLocation: lead?.sellToCustomerLocation || matchCustomer(store.customers, lead)?.location || '',
     })
     setIdentitySaved(false)
   }, [lead?.id])
@@ -139,7 +141,7 @@ export default function Register() {
     ...deferredLow.map(field => `Confirm ${field.k}`),
   ]
   const missingIdentity = [
-    ['sellTo', 'Sell To Customer'], ['eucName', 'EUC Name'], ['eucLocation', 'EUC Location'],
+    ['sellTo', 'Sell To Customer'], ['sellToCustomerLocation', 'Sell To Customer Location'], ['eucName', 'EUC Name'], ['eucLocation', 'EUC Location'],
     ['contactPerson', 'Contact Person'], ['contactPhone', 'Contact Phone'],
   ].filter(([key]) => !String(identityDraft[key] || '').trim()).map(([, label]) => label)
 
@@ -180,11 +182,12 @@ export default function Register() {
     if (isOverride && !ownerOverrideReason.trim()) return
     setCreating(true)
     const sellTo = String(identityDraft.sellTo || '').trim()
+    const sellToCustomerLocation = String(identityDraft.sellToCustomerLocation || '').trim()
     const eucName = String(identityDraft.eucName || '').trim()
     const eucLocation = String(identityDraft.eucLocation || '').trim()
     const contactPerson = String(identityDraft.contactPerson || '').trim()
     const contactPhone = String(identityDraft.contactPhone || '').trim()
-    store.updateLead(lead.id, { sellTo, eucName, eucLocation, contactPerson, contactPhone }, 'Registration identity details saved')
+    store.updateLead(lead.id, { sellTo, sellToCustomerLocation, eucName, eucLocation, contactPerson, contactPhone }, 'Registration identity details saved')
     const catV = fieldVal(fields, /category/i)
     const category = guessFromList(catV, ['EUC', 'EPC', 'OEM', 'ACP', 'SI', 'RE/TR']) || lead.category || customer?.category || '—'
     const location = identityDraft.eucLocation || fieldVal(fields, /euc\s+location|site\s+location|location/i) || lead.location || lead.region || ''
@@ -203,7 +206,7 @@ export default function Register() {
       id,
       sourceLeadId: lead.id,
       sl: Math.max(0, ...store.opportunities.map(o => o.sl || 0)) + 1,
-      sellTo, category, location, sellToCustomerLocation: location,
+      sellTo, category, location, sellToCustomerLocation,
       customerStatus: leadCustomerStatus,
       leadVerification,
       eucName, eucLocation,
@@ -312,10 +315,13 @@ export default function Register() {
           <div className="section-title" style={{ marginTop: 12 }}>Mandatory identity details</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 6 }}>
             <label className="afield">Sell To Customer <span className="required-mark">*</span>
-              <input value={identityDraft.sellTo} onChange={e => updateIdentity('sellTo', e.target.value)} placeholder="Enter customer name" />
+              <CustomerPicker customers={store.customers} value={identityDraft.sellTo} onChange={value => updateIdentity('sellTo', value)} allowCreate={false} label="" />
+            </label>
+            <label className="afield">Sell To Customer Location <span className="required-mark">*</span>
+              <input value={identityDraft.sellToCustomerLocation || ''} onChange={e => updateIdentity('sellToCustomerLocation', e.target.value)} placeholder="Enter customer location" />
             </label>
             <label className="afield">EUC Name <span className="required-mark">*</span>
-              <input value={identityDraft.eucName} onChange={e => updateIdentity('eucName', e.target.value)} placeholder="Enter end user/customer name" />
+              <CustomerPicker customers={store.customers} value={identityDraft.eucName} onChange={value => updateIdentity('eucName', value)} allowCreate={false} label="" />
             </label>
             <label className="afield">EUC Location <span className="required-mark">*</span>
               <input value={identityDraft.eucLocation} onChange={e => updateIdentity('eucLocation', e.target.value)} placeholder="Enter end user location" />

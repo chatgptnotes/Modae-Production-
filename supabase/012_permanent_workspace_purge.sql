@@ -2,6 +2,7 @@
 -- This function is service-role-only and is invoked by api/purge-workspace.js
 -- after it verifies a signed-in SUPER, ADMIN, or LJS profile.
 
+
 create or replace function public.purge_workspace_data()
 returns jsonb language plpgsql security definer set search_path = public
 as $$

@@ -31,9 +31,10 @@ browser prompt, no localhost URL.
 - CUST is redirected to `/portal` only.
 - `/my-dashboard` renders a different, populated page for each internal role.
   TECH must not land on an empty sales dashboard.
-- On My Dashboard, switch My View / Global View and verify approvals and blocked
-  work use the selected scope. LJS's My View must include decisions on other
-  owners' opportunities without adding them to the personal pipeline total.
+- Verify My View / Global View is in the top bar on desktop and tablet routes,
+  stays selected while navigating, and filters each owner-based list. Dashboard
+  navigation remains labeled Dashboard. Existing role permissions must still
+  limit which pages and records are visible.
 - Check owner, FY/quarter, search, pagination, and funnel-stage filters. A funnel
   click must filter the on-page register; zero-count stages have no visible bar.
 - Check the dashboard at desktop and phone widths, refresh/error feedback, and
@@ -41,6 +42,17 @@ browser prompt, no localhost URL.
   and numbered pagination. Task deadlines must not use expected close dates.
   Open the register menu → “More reports & settings” and confirm proposal
   follow-up, monthly reporting, and permitted target editing still work.
+
+- On Price Lists, verify catalogue, service-rate, and ad-hoc tables show all
+  matching rows without pagination. Search the catalogue and open a direct part
+  link beyond the tenth row; verify the matching part scrolls into view.
+- As LJS and ADMIN, edit a supplier list, cancel once, then save a new version;
+  verify prior versions remain available and refresh retains the new values.
+  Edit India and International service rates separately, including minimum
+  callout and GST; Cancel must discard changes and Save must add an audit entry.
+  Empty/negative amounts and GST over 100 must block Save. Check desktop/mobile.
+  SUPER, AH, and RS must have no edit controls on Price Lists; SUPER must also
+  have read-only pricing controls in Admin. Other Admin settings remain usable.
 
 ## Route-driven proposals
 
@@ -198,3 +210,31 @@ Our Ref 2511096RS) are retained with the local reference documents.
   Oct, Dec, Feb, Mar).
 - The **dotted** target line runs the full year; the **solid** actual line stops at
   the current month and does not flatline along zero to March.
+
+## Workspace appearance
+
+- Switch light/dark in the desktop header and tablet/phone More → Appearance;
+  verify the selection follows layout
+  changes, navigation, reloads, and another open tab. With storage blocked,
+  switching still works for the current session; a fresh session defaults light.
+- In both themes and desktop/mobile widths, inspect Dashboard, Lead inbox,
+  Opportunities, Approvals, Workbench, Documents, Customers, Price Lists, Admin,
+  and Users. Check headings, tables, charts, inputs, keyboard focus, selections,
+  hover and disabled states, and labelled success/warning/error/info badges.
+- Open an inbox header filter, customer picker, guide, record drawer, and modal.
+  Body-mounted overlays must match the active workspace theme.
+- With dark selected, verify sign-in and `/showcase` stay light; switching back
+  to the authenticated workspace restores dark. Proposal/workbook paper and
+  attachment content retain document colours; print preview stays light.
+- After deployment cleanup, verify sign-out and appearance reset to light.
+# Phone workspace
+
+- At 360px and 390px, verify Inbox cards, advanced filter disclosure, selection,
+  pagination, local search, new enquiry, and opening a lead.
+- Open an opportunity card; switch to Edit in table, change column view, expand
+  and close the table, then return to cards. Verify filters match both views.
+- Check More search and role-filtered destinations, including Proposal Sent
+  and Workflow Admin. Confirm refresh feedback and disabled pending refresh.
+- Open More from a record and switch to Full site; verify the same record URL.
+- Check phone forms and dialogs with the keyboard open and safe-area padding;
+  rotate to landscape and verify the chosen mode persists.

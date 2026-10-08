@@ -6,23 +6,43 @@ submission, and follow-up.
 
 ## What the application does
 
+- Provides a phone workspace with bottom navigation, a searchable More menu,
+  record cards, local search and expandable data tables. Opportunity cards
+  offer an “Edit in table” alternative for spreadsheet work. More includes
+  documents, proposals and administration according to the user's permissions.
+
 - Captures and reviews incoming leads.
 - Extracts enquiry details using AI when configured, with deterministic fallbacks.
 - Registers qualified leads as opportunities.
 - Fits every key opportunity column in one full-width table without horizontal
   scrolling, including at browser zoom; the full 31-column table scrolls
   horizontally. Clicking a column name opens its menu.
-  The Lead inbox always keeps enquiries in compact, fitted rows so every inbox
-  column remains visible without horizontal scrolling.
+  The Lead inbox keeps its preview beside a horizontally scrollable lead list;
+  wider rows give each inbox column more room to show its contents.
 - Tracks project, spares, and services opportunities.
 - Builds proposals, pricing, terms, and supporting documents.
 - Routes technical, commercial, and release approvals.
 - Stores opportunity files and supports SharePoint integration.
 - Provides dashboards, audit history, user administration, and workflow tools.
-- Uses a permanent light ModAE-branded interface across desktop, tablet, login,
-  and public showcase views.
-- Provides shared personal/global pipeline views, a common six-stage sales funnel,
-  and closed-opportunity order reporting.
+- Includes permission-filtered workspace quick search, operational status
+  summaries, an inbox preview, and a weekly proposal follow-up board.
+- Offers light and dark workspace themes with a shared desktop/tablet toggle.
+  Light is the default; the browser remembers your choice and synchronizes it
+  across open tabs. The dark palette uses warm ModAE charcoal and red accents,
+  with green, amber, red, and blue distinguishing success, warnings, errors, and
+  information. Sign-in, public showcase, proposal documents, and printed output
+  retain their light presentation. Deployment cleanup resets the preference.
+- Provides shared personal/global opportunity views, a combined open-and-won My
+  Pipeline register, a value-scaled six-stage funnel with High/Medium/Low bands,
+  and closed-opportunity reporting with a loss-reason filter.
+- Keeps the My View / Global View switch in the top navigation across desktop
+  and tablet pages; owner-based lists follow the selection within existing role
+  access limits.
+- Main record lists use consistent 10-row pagination that follows search,
+  filters, and sorting. Price Lists shows all matching rows without pagination.
+- LJS and ADMIN can edit supplier price lists as new saved versions and edit
+  India/International service rates directly from Price Lists. Pricing edits,
+  uploads, restores, and currency-rate changes are read-only for other roles.
 - My Dashboard puts scoped summary cards and urgent work before its sales funnel,
   performance charts, and searchable opportunity/approval register. My View
   includes decisions assigned to you even when another salesperson owns the

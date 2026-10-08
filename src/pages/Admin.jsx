@@ -2,7 +2,7 @@ import React, { useLayoutEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { OWNERS, MILESTONES, seedConfig } from '../seed.js'
-import { isAdminRole, canSeePage, displayRoleLabel } from '../utils.js'
+import { isAdminRole, canSeePage, displayRoleLabel, canManagePriceLists } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { Chip, Modal, DemoDataControls } from '../ui.jsx'
 import { uploadAdminTemplate } from '../filestore.js'
@@ -71,11 +71,11 @@ function AutoSizingTextarea({ onChange, value, ...props }) {
 
 // The service day rates every service quote and invoice is priced from. These
 // used to live in source with no way to change them, while a second, unrelated
-// role table on Price Lists claimed to be editable. One sheet now, edited here.
+// role table on Price Lists claimed to be editable. Both editors use this sheet.
 const RATE_FIELDS = [
   ['engineerDay', 'Engineer / day'], ['seniorDay', 'Senior engineer / day'],
   ['travelDay', 'Travel / day'], ['otHour', 'Overtime / hour'],
-  ['weekendPct', 'Weekend premium (%)'], ['standbyDay', 'Standby / day'],
+  ['weekendPct', 'Weekend premium (%)'], ['standbyDay', 'Standby / day'], ['minCallout', 'Minimum callout'],
   ['flight', 'Flight (each way)'], ['hotelNight', 'Hotel / night'],
   ['transportDay', 'Local transport / day'], ['perDiem', 'Per diem'],
   ['tools', 'Tools & consumables'],
@@ -255,6 +255,7 @@ export default function Admin() {
   const nav = useNavigate()
   const role = store.role
   const canEdit = isAdminRole(role) || role === 'LJS'
+  const canEditPricing = canManagePriceLists(role)
   const config = store.config || {}
   const uploads = config.uploads || {}
   // Manual AI model selection is not exposed in Admin yet. Template mapping
@@ -296,7 +297,7 @@ export default function Admin() {
   if (!canSeePage(role, 'admin')) {
     return (
       <div className="page">
-        <h2 className="workspace-page-title"><Icon name="gear" size={18} /> Admin — configuration</h2>
+        <h2 className="workspace-page-title workspace-page-title--topbar-duplicate"><Icon name="gear" size={18} /> Admin — configuration</h2>
         <div className="restricted" style={{ maxWidth: 520 }}>
           Restricted — configuration is visible to administrators and LJS only.
         </div>
@@ -480,7 +481,7 @@ export default function Admin() {
     <div className="page admin-page">
       <header className="admin-page-head">
         <div>
-          <h2 className="workspace-page-title"><Icon name="gear" size={18} /> Admin configuration</h2>
+          <h2 className="workspace-page-title workspace-page-title--topbar-duplicate"><Icon name="gear" size={18} /> Admin configuration</h2>
           <p className="admin-page-lede">Manage the rules, documents, and automation that shape the sales workspace.</p>
         </div>
         <div className="admin-page-actions">
@@ -740,10 +741,10 @@ export default function Admin() {
           <p className="hint">INR is the reporting currency. Source price-list values remain in their original currency.</p>
           {currencies.map(currency => (
             <label key={currency} className="afield">1 {currency} = ₹
-              <input type="number" min="0.0001" step="0.0001" disabled={!canEdit}
+              <input type="number" min="0.0001" step="0.0001" disabled={!canEditPricing}
                 value={currencyRateDraft[currency] ?? currencyRates[currency] ?? ''}
                 onChange={e => setCurrencyRateDraft({ ...currencyRateDraft, [currency]: e.target.value })} />
-              <button type="button" className="primary" disabled={!canEdit}
+              <button type="button" className="primary" disabled={!canEditPricing}
                 onClick={() => {
                   const rate = currencyRateDraft[currency] ?? currencyRates[currency]
                   store.updateCurrencyRate(currency, rate)
@@ -893,7 +894,7 @@ export default function Admin() {
               </span>
             </div>
           ))}
-          <ServiceRateSheetEditor canEdit={canEdit} />
+          <ServiceRateSheetEditor canEdit={canEditPricing} />
         </div>
 
           </div>
@@ -932,11 +933,11 @@ export default function Admin() {
 
           <div className="section-title" style={{ marginTop: 6 }}>Supplier price list</div>
           <div className="admin-actions">
-            <input type="text" value={supplier} placeholder="Supplier (e.g. B&K)" disabled={!canEdit}
+            <input type="text" value={supplier} placeholder="Supplier (e.g. B&K)" disabled={!canEditPricing}
               onChange={e => setSupplier(e.target.value)} />
-            <input type="text" value={plVersion} placeholder="Version (e.g. 2026-Q3)" disabled={!canEdit}
+            <input type="text" value={plVersion} placeholder="Version (e.g. 2026-Q3)" disabled={!canEditPricing}
               onChange={e => setPlVersion(e.target.value)} />
-            <FileButton variant="secondary" label="Upload price list" disabled={!canEdit}
+            <FileButton variant="secondary" label="Upload price list" disabled={!canEditPricing}
               onFile={async f => {
                 try {
                   const listName = supplier.trim() || f.name.replace(/\.[^.]+$/, '')

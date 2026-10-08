@@ -69,7 +69,7 @@ test('customer health scores from class, KYC, payment and history', () => {
 
 test('the health score is shown on the customer master', () => {
   const page = read('src/pages/Customers.jsx')
-  assert.match(page, /customerHealth\(c, store\.opportunities\)/)
+  assert.match(page, /customerHealth\(c, scopedOpportunities\)/)
   assert.match(page, /<th>Health<\/th>/)
 })
 
