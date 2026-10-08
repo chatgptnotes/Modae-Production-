@@ -8,6 +8,7 @@ import { Icon } from '../icons.jsx'
 import { MODAE_COLORS } from '../branding/modae.js'
 import WinLossFlow from '../WinLossFlow.jsx'
 import WinLossPie from '../WinLossPie.jsx'
+import { useWorkspaceView } from '../ui/WorkspaceViewContext.jsx'
 
 // Funnel ramp validated with the dataviz palette checker (ordinal, light
 // surface): monotone lightness, ≥0.06 step gaps, light end ≥2:1 on white.
@@ -27,7 +28,7 @@ const RANGES = [
 const DEFAULTS = {
   range: 'all', from: '', to: '',
   owner: 'All', customer: 'All', bu: 'All', oppType: 'All',
-  segment: 'All', product: 'All', stage: 'All', prob: 'All', status: 'All',
+  segment: 'All', product: 'All', stage: 'All', prob: 'All', status: 'All', lossReason: 'All',
 }
 
 const pad = n => String(n).padStart(2, '0')
@@ -153,6 +154,7 @@ export function Funnel({ stages, showValue, conversion = false, onStageClick }) 
 
 export default function Analytics({ embedded = false }) {
   const store = useStore()
+  const { scope } = useWorkspaceView()
   // Sales owners may see commercial analytics for their locked own-owner scope;
   // team-wide commercial reporting remains limited to approvers/admins.
   const comm = canViewCommercial(store.role) || isSalesOwner(store.role)
@@ -166,10 +168,12 @@ export default function Analytics({ embedded = false }) {
   // only ever sees their own book, so the owner filter is fixed to their code.
   const canPickOwner = isAdminRole(store.role) || isApprover(store.role)
   const selfOwner = OWNERS.includes(store.role) ? store.role : null
-  const lockedOwner = canPickOwner ? null : selfOwner
+  const lockedOwner = scope === 'my' ? store.role : (canPickOwner ? null : selfOwner)
   const ownerSel = lockedOwner || f.owner
 
-  const allOpps = store.opportunities
+  const allOpps = scope === 'my'
+    ? store.opportunities.filter(opportunity => opportunity.owner === store.role)
+    : store.opportunities
   const dateRange = rangeFor(f.range, f.from, f.to)
   const customers = [...new Set(allOpps.map(o => o.sellTo))].sort((a, b) => a.localeCompare(b))
   const ownerOpts = ['All', ...OWNERS.filter(o => allOpps.some(x => x.owner === o))].map(o => ({
@@ -191,7 +195,9 @@ export default function Analytics({ embedded = false }) {
     inRange(o.createDate, dateRange))
 
   const open = opps.filter(o => o.status === 'Open')
-  const winLoss = winLossAnalysis(opps, store.competitors, { commercial: comm })
+  const lossReasons = [...new Set(opps.filter(o => o.stage === 'Lost').map(o => String(o.closedReason || '').trim() || 'Unspecified'))].sort()
+  const outcomeOpps = f.lossReason === 'All' ? opps : opps.filter(o => o.stage !== 'Lost' || (String(o.closedReason || '').trim() || 'Unspecified') === f.lossReason)
+  const winLoss = winLossAnalysis(outcomeOpps, store.competitors, { commercial: comm })
 
   // Every card reports the money on the records rather than how many rows there
   // are; roles without commercial access fall back to the count instead.
@@ -200,7 +206,7 @@ export default function Analytics({ embedded = false }) {
   // Active chips — the locked owner is scope, not a chip the user can drop.
   const CHIP_LABELS = {
     owner: 'Owner', customer: 'Customer', bu: 'BU', oppType: 'Opp type',
-  segment: 'Segment', product: 'Equipment / Product Family', stage: 'Stage', prob: 'Probability', status: 'Status',
+    segment: 'Segment', product: 'Equipment / Product Family', stage: 'Stage', prob: 'Probability', status: 'Status', lossReason: 'Loss reason',
   }
   const chips = Object.keys(CHIP_LABELS)
     .filter(k => f[k] !== 'All' && !(k === 'owner' && lockedOwner))
@@ -261,6 +267,7 @@ export default function Analytics({ embedded = false }) {
           <Field label="Stage" value={f.stage} onChange={v => set('stage', v)} options={[{ value: 'All', label: 'All stages' }, ...FUNNEL_STAGES.map(group => ({ value: group.stages.join(','), label: group.label }))]} />
           <Field label="Probability" value={f.prob} onChange={v => set('prob', v)} options={['All', ...PROB_LEVELS]} />
           <Field label="Status" value={f.status} onChange={v => set('status', v)} options={['All', 'Open', 'Closed']} />
+          <Field label="Loss reason" value={f.lossReason} onChange={v => set('lossReason', v)} options={['All', ...lossReasons]} disabled={!lossReasons.length} />
         </div>
         <div className="af-foot">
           <span className="af-count">

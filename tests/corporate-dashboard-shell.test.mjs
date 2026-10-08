@@ -7,19 +7,22 @@ import { fileURLToPath } from 'node:url'
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
 
-test('the authenticated workspace keeps navigation in the sidebar without a top bar', () => {
+test('the authenticated workspace keeps navigation in the sidebar and adds workspace tools in the top bar', () => {
   const app = read('src/App.jsx')
 
   assert.match(app, /<aside className="sidenav">/)
-  assert.doesNotMatch(app, /WorkspaceTopbar/)
-  assert.doesNotMatch(app, /workspace-topbar/)
+  assert.match(app, /WorkspaceTopbar/)
+  assert.match(app, /<WorkspaceViewToggle \/>/)
+  assert.match(app, /workspace-topbar/)
+  assert.match(app, /workspace-search/)
+  assert.match(app, /accessForItem/)
 })
 
 test('corporate shell and dashboard styling preserve dense responsive grids', () => {
   const css = read('src/styles.css')
 
   assert.match(css, /Corporate workspace shell/)
-  assert.doesNotMatch(css, /\.workspace-topbar\s*\{/)
+  assert.match(css, /\.workspace-topbar\s*\{/)
   assert.match(css, /\.dashboard-page\s*\{[\s\S]*?--dashboard-canvas:/)
   assert.match(css, /\.dashboard-page \.stat-cards\s*\{[\s\S]*?grid-template-columns: repeat\(auto-fit, minmax\(180px, 1fr\)\)/)
   assert.match(css, /@container workspace \(max-width: 44rem\)\s*\{[\s\S]*?\.dashboard-page \.stat-cards\s*\{[\s\S]*?grid-template-columns: 1fr/)

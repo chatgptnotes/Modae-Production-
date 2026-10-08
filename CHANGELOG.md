@@ -13,6 +13,69 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Added a dedicated phone dashboard with a two-column KPI summary, performance-first overview, compact opportunity/action rows, and separate reports. Phone inbox and opportunity filters use draft panels; approval requests open their existing review details from compact rows. Grouped More navigation and moved workspace refresh into its action menu. Removed automatic DOM-based table conversion in favor of an explicit opportunity table workspace.
+
+- Added direct supplier price-list editing and draft-based service-rate editing
+  with Save/Cancel. Limited pricing maintenance to active LJS and ADMIN roles
+  across Price Lists, Admin, and store actions; supplier history and existing
+  synchronization remain intact. Reject invalid amounts and out-of-range GST.
+- Preserved lazy-loaded supplier archives when saving another revision, and
+  load edited archives by their stored record IDs so history remains readable.
+- Retained service rates and browser-only catalogue edits in the local fallback
+  cache so refresh does not discard saved pricing changes.
+- Redesigned the phone workspace with shared page titles, five-destination
+  navigation, searchable More, permission-filtered tools, Proposal Sent and
+  Workflow Admin routes, refresh feedback, inbox cards and collapsible filters,
+  opportunity cards with an editable table alternative, and expandable tables.
+  Phone forms and dialogs use the available width; the desktop switch returns
+  to the page from which More was opened.
+
+- Removed pagination from Price Lists, including catalogue, service-rate, and
+  ad-hoc tables; search and direct part links remain available.
+- Polished dark mode with one semantic palette, accessible text and action
+  contrast, and shared desktop/tablet theme controls. Browser preferences follow
+  layout changes and synchronize across tabs; body-mounted menus and dialogs
+  follow the workspace appearance. Consolidated competing overrides while
+  retaining light document/print surfaces and deployment preference cleanup.
+- Corrected dashboard and tablet token overrides and component-level colours
+  across inbox previews, table headers, approval notices, and proposal rows.
+  Dark mode uses warm ModAE charcoal with amber, green, red, and blue semantic
+  accents; dashboard pending work is amber and ordinary pipeline totals neutral.
+
+- Added consistent 10-row pagination to the main opportunity, inbox, approval,
+  customer, audit, proposal, order, user, folder, and price-list registers. Page
+  totals reflect the current filtered result set, and changing filters returns
+  each list to its first page. Simplified insight strips and moved the inbox
+  aging summary below its filters.
+- Added a shared My View / Global View switch to the desktop and tablet top bars.
+  The selection follows navigation and scopes owner-based registers while
+  retaining existing role access; renamed the sidebar dashboard destination to
+  Dashboard.
+- Made the Top 5 FY/quarter selector interactive and independent from the
+  dashboard-wide period. Top 5 now filters strictly by expected order date;
+  performance, funnel, and dashboard totals retain the shared period selection.
+- Scaled dashboard funnel bars and their High/Medium/Low segments by expected
+  value when commercial values are available, added the Won stage, and added a
+  combined My Pipeline register for open opportunities and won orders. Detailed
+  Win/Loss Analytics now filters closed outcomes by loss reason. Customer entry
+  forms suggest existing Sell-To and EUC names and capture Sell-To location.
+- Included open opportunities without an expected order date in the configured
+  FY dashboard pipeline; quarter views remain limited to dates within that
+  quarter.
+- Added a workspace top bar with permission-filtered quick search, current sync
+  status, a role access summary, and a live IST clock. Added rule-based
+  operational insight strips, an inbox side preview, and an owner-by-week
+  proposal follow-up board; moved dashboard view/FY controls into the shared
+  top bar and added an approvals review drawer with decision history. Added a
+  clickable opportunity stage strip and aligned dashboard labels/zero states
+  to the PDF; all actions continue into existing routes.
+- Applied the WinTrack operations-console visual system across the shared shell,
+  role dashboards, lead inbox, opportunity workspace, approvals, proposal
+  register, records, admin screens, and tablet view. Navigation is grouped by
+  work area; primary actions use ModAE red; status summaries distinguish
+  pending, approved, and rejected; tables and figures use consistent data
+  styling. Existing routes, role access, data, and workflow actions are kept.
+
 - Redesigned only My Dashboard with the existing ModAE palette: compact scoped
   KPIs, urgent work, a count-scaled funnel with values, performance charts, and
   a searchable paginated register. My View includes personal decisions and

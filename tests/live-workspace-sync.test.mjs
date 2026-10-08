@@ -83,7 +83,7 @@ test('the live-sync migration publishes only shared business tables', () => {
 
 test('normalized opportunity writes fail loudly instead of falling back to ignored legacy slices', () => {
   const datastore = read('src/datastore.js')
-  assert.match(datastore, /function saveNormalizedRowsNow\(entity, rows\)/)
+  assert.match(datastore, /function saveNormalizedRowsNow\(entity, rows, retainedIds = new Set\(\)\)/)
   assert.match(datastore, /supabase\.rpc\('save_rows'/)
   assert.match(datastore, /currentActorId\(\)/)
   assert.match(datastore, /p_rows: payload\.map\(row => \(\{ \.\.\.row, by: actor \}\)\)/)

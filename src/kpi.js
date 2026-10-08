@@ -10,6 +10,7 @@ export const FUNNEL_STAGES = [
   { key: 'rfq', label: 'RFQ', stages: ['RFQ'], note: 'formal enquiry' },
   { key: 'firm-proposal', label: 'Firm Proposal', stages: ['Firm Bid'], note: 'commercial proposal' },
   { key: 'negotiate', label: 'Negotiate', stages: ['Negotiate'], note: 'commercial review' },
+  { key: 'won', label: 'Won', stages: ['Won'], note: 'closed won' },
 ]
 
 export function funnelRows(opportunities = [], { owner = null } = {}) {
@@ -17,7 +18,7 @@ export function funnelRows(opportunities = [], { owner = null } = {}) {
   return FUNNEL_STAGES.map(group => {
     const rows = scoped.filter(o => {
       if (!group.stages.includes(o.stage)) return false
-      return o.status === 'Open'
+      return group.key === 'won' ? o.status === 'Closed' : o.status === 'Open'
     })
     return {
       ...group,

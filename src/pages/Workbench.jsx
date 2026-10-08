@@ -895,7 +895,13 @@ function OverviewTab({ opp, detailsRef }) {
         <section className="workbench-panel">
           <div className="workbench-section-title">AI summary <AiBadge /></div>
           <p className="workbench-summary">{summary}</p>
-          <div className="workbench-readiness"><span>Proposal readiness</span><Chip tone={blocked ? 'state-Blocks' : 'state-Accepted'}>{blocked ? `${blockers.length} blocker(s)` : 'Ready to progress'}</Chip></div>
+          <div className="workbench-readiness"><span>Proposal readiness</span><span
+            tabIndex={0}
+            data-explain-title={blocked ? 'Why this proposal is blocked' : 'Proposal is ready'}
+            data-explain={blocked
+              ? `Resolve ${blockers.length} readiness item${blockers.length === 1 ? '' : 's'} to continue.`
+              : 'No readiness blockers; proposal can progress.'}
+          ><Chip tone={blocked ? 'state-Blocks' : 'state-Accepted'}>{blocked ? `${blockers.length} blocker(s)` : 'Ready to progress'}</Chip></span></div>
         </section>
 
         {brandedProducts.length > 0 && (
@@ -2599,7 +2605,10 @@ function FollowUpPane({ opp, onRevision }) {
             </div>
             {closeOutcome === 'Lost' && (
               <div className="follow-up-form-stack">
-                <div className="close-outcome-form">
+                <div className="close-outcome-form" tabIndex={0}
+                  data-explain-title="Closing as lost"
+                  data-explain="A loss reason is required; explain “Other.” Competitor is optional."
+                >
                 <select value={lossReason} onChange={e => setLossReason(e.target.value)} autoFocus>
                   <option value="">— loss reason (required) —</option>
                   {CLOSE_REASONS.map(r => <option key={r}>{r}</option>)}
@@ -2620,7 +2629,10 @@ function FollowUpPane({ opp, onRevision }) {
             )}
             {closeOutcome === 'Won' && (
               <div className="follow-up-form-stack">
-                <div className="close-outcome-form">
+                <div className="close-outcome-form" tabIndex={0}
+                  data-explain-title="Closing as won"
+                  data-explain="A won reason is required; explain “Other.”"
+                >
                 <select value={wonReason} onChange={e => setWonReason(e.target.value)} autoFocus>
                   <option value="">— won reason (required) —</option>
                   {WON_REASONS.map(r => <option key={r}>{r}</option>)}

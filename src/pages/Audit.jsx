@@ -1,13 +1,19 @@
 import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
+import { useWorkspaceView } from '../ui/WorkspaceViewContext.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { Icon } from '../icons.jsx'
 import { ddMmmYY, exportCSV, canSeePage, displayRole } from '../utils.js'
+import { usePagedRows } from '../ui/Pagination.jsx'
+import usePhoneLayout from '../tablet/usePhoneLayout.js'
 
 const when = ts => `${ddMmmYY(ts.slice(0, 10))} ${ts.slice(11, 16)}`
 
 export default function Audit() {
   const store = useStore()
+  const narrow = usePhoneLayout()
+  const phone = narrow && store.viewMode === 'tablet'
+  const { scope } = useWorkspaceView()
   const drawer = useDrawer()
   const [q, setQ] = useState('')
   const [role, setRole] = useState('All')
@@ -19,7 +25,7 @@ export default function Audit() {
   if (!canSeePage(store.role, 'audit')) {
     return (
       <div className="page">
-        <h2 className="workspace-page-title"><Icon name="list" size={18} /> Audit Trail</h2>
+        <h2 className="workspace-page-title workspace-page-title--topbar-duplicate"><Icon name="list" size={18} /> Audit Trail</h2>
         <div className="restricted" style={{ maxWidth: 520 }}>
           Restricted — your role does not have access to the audit trail.
         </div>
@@ -34,9 +40,10 @@ export default function Audit() {
 
   const needle = q.trim().toLowerCase()
   const rows = log.filter(e =>
-    (role === 'All' || e.role === role)
+    (scope === 'my' ? e.role === store.role : role === 'All' || e.role === role)
     && (action === 'All' || e.action === action)
     && (!needle || [e.action, e.objectId, e.detail].some(v => String(v ?? '').toLowerCase().includes(needle))))
+  const { pagedRows, pagination } = usePagedRows(rows, JSON.stringify([scope, q, role, action]))
 
   const doExport = () => exportCSV(
     'Audit_Trail.csv',
@@ -45,7 +52,7 @@ export default function Audit() {
 
   return (
     <div className="page">
-      <h2 className="workspace-page-title"><Icon name="list" size={18} /> Audit Trail</h2>
+      <h2 className="workspace-page-title workspace-page-title--topbar-duplicate"><Icon name="list" size={18} /> Audit Trail</h2>
       <div className="toolbar">
         <input type="text" placeholder="Search actions, objects, details…" value={q}
           onChange={e => setQ(e.target.value)} style={{ width: 240 }} />
@@ -69,11 +76,11 @@ export default function Audit() {
         <button onClick={doExport}>Extract to Excel</button>
       </div>
 
-      <div className="sheet-wrap">
+      {phone ? <section aria-label="Audit entries">{pagedRows.map((entry, index) => <article className="phone-audit-row" key={`${entry.ts}-${index}`}><strong>{entry.action}</strong><small>{when(entry.ts)} · {displayRole(entry.role)}</small>{oppIds.has(entry.objectId) ? <button onClick={() => drawer.open({ type: 'opp', id: entry.objectId })}>{entry.objectId}</button> : <span>{entry.objectId}</span>}<details><summary>Details</summary><p>{String(entry.detail ?? 'No additional details')}</p></details></article>)}{!rows.length && <p>No audit entries match.</p>}</section> : <div className="sheet-wrap">
         <table className="sheet">
           <thead><tr><th>When</th><th>Role</th><th>Action</th><th>Object</th><th>Detail</th></tr></thead>
           <tbody>
-            {rows.map((e, i) => {
+            {pagedRows.map((e, i) => {
               const d = String(e.detail ?? '')
               return (
                 <tr key={`${e.ts}-${i}`}>
@@ -98,6 +105,8 @@ export default function Audit() {
           </tbody>
         </table>
       </div>
+      }
+      {pagination}
     </div>
   )
 }

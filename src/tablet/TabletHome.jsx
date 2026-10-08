@@ -2,7 +2,7 @@ import React from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES } from '../seed.js'
-import { canViewCommercial, fmtLakh, ddMmmYY, displayRole, displayRoleLabel } from '../utils.js'
+import { canSeePage, canViewCommercial, fmtLakh, ddMmmYY, displayRole, displayRoleLabel } from '../utils.js'
 import { buildTabletTiles, TABLET_SECTIONS, tabletRoleGroup } from './tabletTiles.js'
 import { counts, pipelineSeries, winRate, turnaround } from '../kpi.js'
 import { Sparkline, DonutGauge, ArcGauge, TrendPill } from '../dashviz.jsx'
@@ -58,7 +58,7 @@ export default function TabletHome() {
           <button onClick={() => nav('/my')}><b>{c.myStale || c.stale}</b><span>Need update</span></button>
         </div>
         <div className="cmd-actions">
-          {QUICK.map(q => (
+          {QUICK.filter(q => canSeePage(store.roles || role, ({ '/new': 'new', '/inbox': 'inbox', '/voice': 'voice', '/approvals': 'approvals', '/folders': 'folders' })[q.to])).map(q => (
             <button key={q.to + q.icon} title={q.title} onClick={() => nav(q.to)}>
               <Icon name={q.icon} size={15} />
             </button>

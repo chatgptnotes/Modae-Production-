@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react'
 
 const normalized = value => String(value || '').trim().toLowerCase()
 
-export default function CustomerPicker({ customers = [], value = '', onChange, onCreate, disabled = false, label = 'Sell-to Customer' }) {
+export default function CustomerPicker({ customers = [], value = '', onChange, onCreate, allowCreate = true, disabled = false, label = 'Sell-to Customer' }) {
   const [query, setQuery] = useState(value || '')
   const [open, setOpen] = useState(false)
   const search = query.trim().toLowerCase()
@@ -47,7 +47,7 @@ export default function CustomerPicker({ customers = [], value = '', onChange, o
             </button>
           ))}
           {!matches.length && <div className="customer-picker-empty">No existing customer found.</div>}
-          {!exact && query.trim() && (
+          {allowCreate && !exact && query.trim() && (
             <button type="button" className="customer-picker-create" onClick={create}>
               Create new customer “{query.trim()}”
             </button>

@@ -1,20 +1,22 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { OWNERS, ROLES, displayOpportunityId } from '../seed.js'
+import { OWNERS, displayOpportunityId } from '../seed.js'
 import { canPriceProposal, canViewCommercial, isSalesOwner, fmtRupeesFromK, ddMmmYY, ddMMyyyy, stageClass, productDisplayLabel, displayRole, isHiddenDashboardOpportunity } from '../utils.js'
 import { nextActionWith } from '../gates.js'
 import { useDrawer } from '../drawer.jsx'
 import { Icon } from '../icons.jsx'
 import { COLS } from './Tracker.jsx'
+import { useWorkspaceView } from '../ui/WorkspaceViewContext.jsx'
+import { usePagedRows } from '../ui/Pagination.jsx'
 
 // My Opportunities — a single table view of the pipeline (no Cards/Sheet
 // toggle). Each row opens the same slide-in drawer the tracker uses, so every
 // sheet field stays viewable and editable.
 export default function MyOpps() {
   const store = useStore()
+  const { scope } = useWorkspaceView()
   const drawer = useDrawer()
-  const [showAll, setShowAll] = useState(false)
   const [colView, setColView] = useState('key')
 
   const role = store.role
@@ -31,8 +33,8 @@ export default function MyOpps() {
     .sort((a, b) => (b.lastUpdated || '').localeCompare(a.lastUpdated || ''))
   // Role-based filtering: sales reps see only their opportunities by default
   // Admin/System Owner/Management roles see all opportunities by default
-  const isAdmin = ROLES[role]?.admin || ROLES[role]?.commercial
-  if (mine && !isAdmin && !showAll) rows = rows.filter(o => o.owner === role)
+  if (scope === 'my') rows = rows.filter(o => o.owner === role)
+  const { pagedRows: pageRows, pagination } = usePagedRows(rows, JSON.stringify([scope, colView]))
 
   const devCount = o => ((store.proposals?.[o.id] || {}).terms || []).filter(t => t.status === 'Deviation').length
 
@@ -53,21 +55,11 @@ export default function MyOpps() {
 
   return (
     <div className="page">
-      <h2>{mine ? `My Opportunities — ${displayRole(role)}` : 'Opportunities'}</h2>
+      <h2>{scope === 'my' ? `My Opportunities${mine ? ` — ${displayRole(role)}` : ''}` : 'Opportunities'}</h2>
       <div className="toolbar">
-        {mine && !isAdmin && (
-          <button
-            type="button"
-            className={`scope-toggle${showAll ? ' active' : ''}`}
-            aria-pressed={showAll}
-            title="Show all opportunities"
-            onClick={() => setShowAll(value => !value)}>
-            {showAll ? 'Showing all' : 'Show all'}
-          </button>
-        )}
-        <span className="hint">{mine
+        <span className="hint">{scope === 'my'
           ? 'Your pipeline — click a row to view and edit every field.'
-          : 'Click a row to view and edit every field of its sheet row.'}</span>
+          : 'Company pipeline — click a row to view and edit every field.'}</span>
         <span className="spacer" />
         <button type="button" onClick={() => setColView(colView === 'key' ? 'all' : 'key')}>
           {colView === 'key' ? 'All columns' : 'Key columns'}
@@ -82,7 +74,7 @@ export default function MyOpps() {
               <tr><th>Sl</th>{COLS.map(col => <th key={col.key}>{col.label}</th>)}<th>Proposal</th></tr>
             </thead>
             <tbody>
-              {rows.map(o => (
+              {pageRows.map(o => (
                 <tr key={o.id} className="rowclick" onClick={() => drawer.open({ type: 'opp', id: o.id })}>
                   <td>{o.sl || '—'}</td>
                   {COLS.map(col => <td key={col.key} title={String(fullCell(o, col.key))}>{fullCell(o, col.key)}</td>)}
@@ -106,7 +98,7 @@ export default function MyOpps() {
             </tr>
           </thead>
           <tbody>
-            {rows.map(o => {
+            {pageRows.map(o => {
               const dc = devCount(o)
               return (
                 <tr key={o.id} className="rowclick" onClick={() => drawer.open({ type: 'opp', id: o.id })}>
@@ -140,6 +132,7 @@ export default function MyOpps() {
         </table>
         )}
       </div>
+      {pagination}
     </div>
   )
 }

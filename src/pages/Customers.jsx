@@ -6,6 +6,9 @@ import { customerHealth } from '../insights.js'
 import { parseCustomerFile } from '../customerImport.js'
 import { Icon } from '../icons.jsx'
 import { Modal, ErrBox } from '../ui.jsx'
+import { useWorkspaceView } from '../ui/WorkspaceViewContext.jsx'
+import { usePagedRows } from '../ui/Pagination.jsx'
+import usePhoneLayout from '../tablet/usePhoneLayout.js'
 
 // Customer master — status normally arrives with the accounting-system upload
 // (payment pattern / KYC). Admin / super admin can correct a record in place;
@@ -207,6 +210,9 @@ function ImportPreview({ rows, fileName, onClose }) {
 
 export default function Customers() {
   const store = useStore()
+  const narrow = usePhoneLayout()
+  const phone = narrow && store.viewMode === 'tablet'
+  const { scope } = useWorkspaceView()
   const drawer = useDrawer()
   const [editing, setEditing] = useState(null) // customer name
   const [adding, setAdding] = useState(false)
@@ -214,6 +220,10 @@ export default function Customers() {
   const [uploadErr, setUploadErr] = useState('')
   const fileRef = useRef(null)
   const canEditDirect = isAdminRole(store.role)
+  const scopedOpportunities = scope === 'my' ? store.opportunities.filter(opportunity => opportunity.owner === store.role) : store.opportunities
+  const myCustomerNames = new Set(scopedOpportunities.map(opportunity => opportunity.sellTo).filter(Boolean))
+  const visibleCustomers = scope === 'my' ? store.customers.filter(customer => myCustomerNames.has(customer.name)) : store.customers
+  const { pagedRows: pageCustomers, pagination } = usePagedRows(visibleCustomers, scope)
   const customer = store.customers.find(c => c.name === editing)
 
   const onFile = async e => {
@@ -235,7 +245,7 @@ export default function Customers() {
 
   return (
     <div className="page">
-      <h2 className="workspace-page-title"><Icon name="users" size={18} /> Customer Master</h2>
+      <h2 className="workspace-page-title workspace-page-title--topbar-duplicate"><Icon name="users" size={18} /> Customer Master</h2>
       <div className="toolbar">
         <span className="hint">
           Status comes from the periodic accounting-system upload (payment pattern, KYC).
@@ -256,11 +266,11 @@ export default function Customers() {
         )}
       </div>
       {uploadErr && <ErrBox>{uploadErr}</ErrBox>}
-      <div className="sheet-wrap sheet-wrap-fill">
+      {phone ? <section aria-label="Customers">{pageCustomers.map(c => <article key={c.name} className="phone-customer-row"><button className="phone-record" onClick={() => drawer.open({ type: 'customer', id: c.name })}><strong>{c.name}</strong><span>{c.category} · {c.status}</span><small>KYC: {c.kyc} · {c.payment}</small></button>{pendingFor(c.name) ? <small>Change pending</small> : <button onClick={() => setEditing(c.name)}>{canEditDirect ? 'Edit customer' : 'Request change'}</button>}</article>)}{!pageCustomers.length && <p>No customers in this view.</p>}</section> : <div className="sheet-wrap sheet-wrap-fill">
         <table className="sheet">
           <thead><tr><th>Customer</th><th>Category</th><th>Status</th><th>KYC</th><th>Payment Pattern</th><th>Health</th><th></th></tr></thead>
           <tbody>
-            {store.customers.map(c => (
+            {pageCustomers.map(c => (
               <tr key={c.name} className="rowclick"
                 onClick={e => {
                   if (e.target.closest('a,button,input,select,label')) return
@@ -274,12 +284,21 @@ export default function Customers() {
                 {/* Derived from class, KYC, payment behaviour and win/loss history —
                     hover for the reasons that moved it. */}
                 <td>{(() => {
-                  const h = customerHealth(c, store.opportunities)
-                  const why = h.reasons
-                    .map(r => (r.delta ? `${r.delta > 0 ? '+' : ''}${r.delta}  ` : '     ') + r.why)
-                    .join('\n')
+                  const h = customerHealth(c, scopedOpportunities)
+                  const driver = h.reasons
+                    .filter(reason => reason.delta)
+                    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))[0]
+                  const why = driver
+                    ? `Biggest factor: ${driver.why} (${driver.delta > 0 ? '+' : ''}${driver.delta}).`
+                    : 'No single factor changed the score.'
                   return (
-                    <span className={`health ${h.band === 'Healthy' ? 'ok' : h.band === 'Watch' ? 'warn' : 'bad'}`} title={why}>
+                    <span
+                      className={`health ${h.band === 'Healthy' ? 'ok' : h.band === 'Watch' ? 'warn' : 'bad'}`}
+                      tabIndex={0}
+                      aria-label={`Customer health ${h.score} out of 100, ${h.band}`}
+                      data-explain-title={`Customer health · ${h.score} / 100 · ${h.band}`}
+                      data-explain={`Health uses account, KYC, payment and outcome data. ${why}`}
+                    >
                       {h.score} · {h.band}
                     </span>
                   )
@@ -299,6 +318,8 @@ export default function Customers() {
           </tbody>
         </table>
       </div>
+      }
+      {pagination}
       <div className="legend" style={{ marginTop: 10 }}>
         <span><span className="pill Green">Green</span> good standing</span>
         <span><span className="pill Amber">Amber</span> watch — credit terms need approval</span>

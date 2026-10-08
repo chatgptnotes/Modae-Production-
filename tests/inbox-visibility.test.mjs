@@ -56,13 +56,13 @@ test('"Show all" is stored state, not component state', () => {
   assert.ok(!('inboxShowAll' in syncedOf(booted)), 'it must never sync to the server')
 })
 
-test('the inbox reads the toggle from the store', () => {
-  assert.match(inbox, /const showAll = !!store\.inboxShowAll/)
-  assert.match(inbox, /store\.setInboxShowAll\(on\)/)
+test('the inbox scope comes from the shared top-bar switch', () => {
+  assert.match(inbox, /const \{ scope, setScope \} = useWorkspaceView\(\)/)
+  assert.match(inbox, /const globalScope = scope === 'global'/)
+  assert.match(inbox, /const ownerVisible = l => globalScope \|\| l\.assignedOwner === store\.role \|\| l\.suggestedOwner === store\.role/)
   assert.doesNotMatch(inbox, /useState\(false\)\s*\/\/.*showAll/i)
   assert.doesNotMatch(inbox, /const \[showAll, setShowAll\] = useState/,
-    'component state cannot survive the list\'s own window.location.reload()')
-  assert.match(read('src/store.jsx'), /setInboxShowAll\(on\)/)
+    'scope selection belongs to the shared top bar')
 })
 
 test('the inbox does not show a redundant all-leads label for unrestricted roles', () => {
@@ -71,9 +71,9 @@ test('the inbox does not show a redundant all-leads label for unrestricted roles
   assert.doesNotMatch(inbox, /Your role already has access to every lead/)
 })
 
-test('the inbox show-all control uses a text toggle instead of a checkbox', () => {
-  assert.match(inbox, /className=\{`scope-toggle\$\{showAll \? ' active' : ''\}`\}/)
-  assert.match(inbox, /aria-pressed=\{showAll\}/)
+test('the inbox does not duplicate the top-bar scope control', () => {
+  assert.doesNotMatch(inbox, /className=\{`scope-toggle\$\{showAll/)
+  assert.match(inbox, /Choose Global View in the top bar/)
   assert.doesNotMatch(inbox, /<label className="mail-show-all"><input type="checkbox"/)
 })
 
@@ -95,7 +95,7 @@ test('the owner rule reports what it is holding back', () => {
   assert.match(inbox, /const hiddenByOwner = listSource\.filter\(l => !ownerVisible\(l\)/)
   // Both the populated list and the empty state have to say it — the empty
   // state is where "nothing saved" was actually concluded.
-  assert.match(inbox, /hiddenByOwner > 0 &&/)
+  assert.match(inbox, /hiddenByOwner > 0 \?/)
   assert.match(inbox, /none assigned to you/)
   assert.match(read('src/styles.css'), /^\.mail-hidden-note \{/m)
 })

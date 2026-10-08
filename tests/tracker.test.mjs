@@ -139,7 +139,8 @@ test('numeric Value column stays compact while description keeps the recovered w
   const widths = tracker.match(/const KEY_COL_WIDTHS = \{([^}]+)\}/)?.[1]
   assert.ok(widths)
   assert.match(widths, /valueK: 7/)
-  assert.match(widths, /oppName: 21/)
+  assert.match(widths, /sellTo: 12/)
+  assert.match(widths, /oppName: 23/)
   assert.match(tracker, /label: 'Value \(₹\)\*', num: true, w: 7/)
   assert.match(styles, /table\.sheet\.cols-key td\.num,[\s\S]*white-space: nowrap;/)
 })
@@ -209,21 +210,22 @@ test('Won and Lost closure paths keep terminal milestones and reason notes align
   assert.match(tracker, /closeReason === 'Other'/)
 })
 
-test('tracker offers all, mine, and specific-owner filtering', () => {
-  assert.match(tracker, /const owners = \[\.\.\.\(isSalesRep \? \['Mine'\] : \[\]\), 'All'/)
-  assert.match(tracker, /ownerFilter === 'Mine' \? o\.owner === store\.role/)
-  assert.match(tracker, /ownerFilter === 'All' \|\| o\.owner === ownerFilter/)
-  assert.match(tracker, /My Opportunities/)
+test('tracker owner filtering follows the top-bar scope', () => {
+  assert.match(tracker, /const owners = \['All', \.\.\.new Set\(all\.map\(o => o\.owner\)\)\]/)
+  assert.match(tracker, /scope !== 'my' \? ownerFilter === 'All' \|\| o\.owner === ownerFilter : o\.owner === store\.role/)
+  assert.match(tracker, /scope === 'global' && <select id="opportunities-owner-filter"/)
+  assert.doesNotMatch(tracker, /My Opportunities/)
   assert.match(tracker, /All Opportunities/)
   assert.match(tracker, /sortVal = \(o, key\) => \(DATE_KEYS\.includes\(key\) \? \(o\[key\] \|\| ''\)/)
 })
 
-test('opportunities scope uses the owner selector without a header checkbox', () => {
+test('My and Global scope comes from the shared top-bar switch', () => {
   assert.doesNotMatch(tracker, /className="tracker-search-scope"/)
   assert.doesNotMatch(tracker, /type="checkbox"[\s\S]*?checked=\{ownerFilter === 'All'\}/)
   assert.doesNotMatch(tracker, /className="mail-show-all tracker-show-all"[\s\S]*?type="checkbox"/)
-  assert.match(myOpps, /className=\{`scope-toggle\$\{showAll \? ' active' : ''\}`\}/)
-  assert.match(myOpps, /aria-pressed=\{showAll\}/)
+  assert.match(myOpps, /const \{ scope \} = useWorkspaceView\(\)/)
+  assert.match(myOpps, /if \(scope === 'my'\) rows = rows\.filter\(o => o\.owner === role\)/)
+  assert.doesNotMatch(myOpps, /scope-toggle/)
   assert.doesNotMatch(myOpps, /className="show-all-toggle"[\s\S]*?type="checkbox"/)
 })
 
@@ -251,7 +253,7 @@ test('the Opportunities toolbar uses compact borderless actions and a smaller pr
 })
 
 test('the Opportunities toolbar is visually connected to the table shell', () => {
-  assert.match(tracker, /className="tracker-grid-shell"[\s\S]*className="toolbar"[\s\S]*className="sheet-wrap fill"/)
+  assert.match(tracker, /className="tracker-grid-shell"[\s\S]*className="toolbar"[\s\S]*sheet-wrap fill/)
   assert.match(styles, /\.opportunities-page \.tracker-grid-shell\s*\{[\s\S]*display:\s*flex;[\s\S]*flex-direction:\s*column;[\s\S]*min-height:\s*0;[\s\S]*border:\s*1px solid var\(--border-default\);[\s\S]*overflow:\s*hidden;/)
   assert.match(styles, /\.opportunities-page \.tracker-grid-shell > \.toolbar\s*\{[\s\S]*border-bottom:\s*1px solid var\(--border-subtle\);/)
   assert.match(styles, /\.opportunities-page \.tracker-grid-shell > \.sheet-wrap\.fill\s*\{[\s\S]*flex:\s*1 1 auto;[\s\S]*min-height:\s*0;[\s\S]*overflow:\s*auto;[\s\S]*overscroll-behavior:\s*contain;[\s\S]*padding-bottom:\s*36px;[\s\S]*border:\s*0;/)
@@ -410,8 +412,8 @@ test('My Opportunities shows the same working columns', () => {
 
 test('closed opportunities are labelled My Orders', () => {
   const tracker = read('src/pages/Tracker.jsx')
-  assert.match(tracker, /\['Opportunities', 'My Orders'\]/)
-  assert.match(tracker, /sheet !== 'My Orders' \|\| \(o\.status === 'Closed' && o\.stage === 'Won'\)/)
+  assert.match(tracker, /\['Opportunities', 'My Orders', 'My Pipeline'\]/)
+  assert.match(tracker, /sheet === 'My Orders' \? \(o\.status === 'Closed' && o\.stage === 'Won'\)/)
   assert.doesNotMatch(tracker, /Old Closed Opps/)
 })
 
@@ -469,6 +471,25 @@ test('the derivation is wired into the sheet, the list and the drawer', () => {
   assert.match(tracker, /nextActionWith\(o, store\.getProposal\(o\.id\), store\)/)
   assert.match(myOpps, /nextActionWith\(o, store\.getProposal\(o\.id\), store\)/)
   assert.match(read('src/opppanel.jsx'), /nextActionWith\(opp, store\.getProposal\(oppId\), store\)/)
+})
+
+test('opportunity sheets paginate sorted, filtered rows in groups of ten', () => {
+  assert.match(tracker, /const pageSize = 10/)
+  assert.match(tracker, /const pageRows = rows\.slice\(\(currentPage - 1\) \* pageSize, currentPage \* pageSize\)/)
+  assert.match(tracker, /const totals = rows\.reduce/)
+  assert.match(tracker, /pageRows\.map\(\(o, index\)/)
+  assert.match(tracker, /\[sheet, ownerFilter, searchTerm, filters, sort, dateFilter\]/)
+  assert.match(tracker, /setPage\(current => Math\.min\(current, pageCount\)\)/)
+  assert.match(tracker, /aria-label="First page"/)
+  assert.match(tracker, /aria-label="Previous page"/)
+  assert.match(tracker, /aria-label="Next page"/)
+  assert.match(tracker, /aria-label="Last page"/)
+})
+
+test('the Opportunities alerts render after pagination and before sheet tabs', () => {
+  const trackerPage = read('src/pages/Opportunities.jsx')
+  assert.match(trackerPage, /afterTable=\{<WorkspaceInsights/)
+  assert.match(tracker, /className="tracker-pagination"[\s\S]*?\{afterTable\}[\s\S]*?className="sheet-tabs"/)
 })
 
 // ------------------------------------------------------------- dates

@@ -9,6 +9,10 @@ import { AiBadge, Modal } from '../ui.jsx'
 import { runTaskResult } from '../ai.js'
 import { pricingThresholdExceptions } from '../gates.js'
 import { buildPricing, normalizeProposal } from '../proposal/docProps.js'
+import WorkspaceInsights from '../ui/WorkspaceInsights.jsx'
+import { useWorkspaceView } from '../ui/WorkspaceViewContext.jsx'
+import { usePagedRows } from '../ui/Pagination.jsx'
+import usePhoneLayout from '../tablet/usePhoneLayout.js'
 
 const NEW_APPROVAL_MS = 48 * 60 * 60 * 1000
 // Approval updates remain near-real-time without making every open approvals
@@ -278,6 +282,8 @@ function PendingCard({
   draft,
   onDraftChange,
   onDecide,
+  compact = false,
+  onReview,
 }) {
   const remaining = neededOf(a).filter(r => !(a.decisions || {})[r])
   const myDecision = (a.decisions || {})[role]
@@ -291,10 +297,20 @@ function PendingCard({
         </div>
         <div className="approval-card-status">
           <NewMarker a={a} />
-          <span className="approval-wait-chip">{waitingLabel(a.ts)}</span>
+          <span className="approval-wait-chip"
+            tabIndex={0}
+            data-explain-title={`${a.type} · awaiting approval`}
+            data-explain={`Awaiting ${displayRoles(remaining) || 'a decision'}; approval clears this request.`}
+          >{waitingLabel(a.ts)}</span>
           <span className="hint">raised by {displayRole(a.requestedBy)} on {shortDate(a.ts)}</span>
         </div>
       </div>
+      {compact && <div className="approval-queue-preview">
+        <span>{a.type} · {opp?.sellTo || a.customerName || 'Customer not recorded'}</span>
+        <span>Awaiting {displayRoles(remaining) || 'decision'}</span>
+        <button type="button" onClick={onReview}>Review decision</button>
+      </div>}
+      {!compact && <>
       {renderRef(a)}
       {renderDetail(a)}
       <RejectionRequirements approval={a} pending />
@@ -310,15 +326,24 @@ function PendingCard({
           />
         : myDecision
           ? (
-            <div className="approval-awaiting hint">
+            <div className="approval-awaiting hint"
+              tabIndex={0}
+              data-explain-title="Your decision is recorded"
+              data-explain={`Your decision: ${myDecision.d}; awaiting ${displayRoles(remaining) || 'no one'}.`}
+            >
               You decided <b>{myDecision.d}</b> — "{myDecision.c}" · waiting on {displayRoles(remaining) || 'no one'}
             </div>
           )
           : (
-            <div className="approval-awaiting hint">
+            <div className="approval-awaiting hint"
+              tabIndex={0}
+              data-explain-title="Waiting for another approver"
+              data-explain={`Assigned to ${displayRoles(remaining) || 'another approver'}; only they can decide.`}
+            >
               Awaiting {displayRoles(remaining)}
             </div>
           )}
+      </>}
     </div>
   )
 }
@@ -349,6 +374,9 @@ function FilterBar({
 
 export default function Approvals() {
   const store = useStore()
+  const narrow = usePhoneLayout()
+  const phone = narrow && store.viewMode === 'tablet'
+  const { scope } = useWorkspaceView()
   const nav = useNavigate()
   const drawer = useDrawer()
   const role = store.role
@@ -358,6 +386,8 @@ export default function Approvals() {
   const [typeF, setTypeF] = useState('')
   const [boqOppId, setBoqOppId] = useState('')
   const [decisionDrafts, setDecisionDrafts] = useState({})
+  const [decisionDrawerId, setDecisionDrawerId] = useState('')
+  const [requestTimelineId, setRequestTimelineId] = useState('')
   const [refreshError, setRefreshError] = useState(false)
 
   useEffect(() => {
@@ -381,11 +411,23 @@ export default function Approvals() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!decisionDrawerId && !requestTimelineId) return undefined
+    const closeOnEscape = event => {
+      if (event.key === 'Escape') { setDecisionDrawerId(''); setRequestTimelineId('') }
+    }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [decisionDrawerId, requestTimelineId])
+
   const refreshNotice = refreshError
     ? <div className="approval-notice approval-notice-info"><Icon name="info" size={14} /> Approval updates are temporarily unavailable. Your saved decisions are safe; try refreshing the page.</div>
     : null
   // Approver workbench for LJS/AH/admins, plus any role named on a joint gate.
   const approverView = isApprover(role) || store.approvals.some(a => neededOf(a).includes(role))
+  const scopedApprovals = scope === 'my'
+    ? store.approvals.filter(a => a.requestedBy === role || neededOf(a).includes(role))
+    : store.approvals
   const canDecide = a => neededOf(a).includes(role)
   const updateDecisionDraft = (id, patch) => setDecisionDrafts(current => ({
     ...current,
@@ -587,9 +629,22 @@ export default function Approvals() {
     const hay = [a.id, a.type, a.detail, a.oppId, a.customerName, a.leadId, a.requestedBy].join(' ').toLowerCase()
     return (!q || hay.includes(q.toLowerCase())) && (!statusF || a.status === statusF) && (!typeF || a.type === typeF)
   }
-  const typeOptions = [...new Set(store.approvals.map(a => a.type).filter(Boolean))].sort()
+  const typeOptions = [...new Set(scopedApprovals.map(a => a.type).filter(Boolean))].sort()
   const clearFilters = () => { setQ(''); setStatusF(''); setTypeF('') }
   const hasFilters = Boolean(q || statusF || typeF)
+  const approvalResetKey = JSON.stringify([scope, role, q, statusF, typeF])
+  const mine = scopedApprovals.filter(a => a.requestedBy === role && matches(a)).sort(byTsDesc)
+  const pending = scopedApprovals.filter(a => a.status === 'Pending' && matches(a)).sort(byTsDesc)
+  const myTurn = a => canDecide(a) && !(a.decisions || {})[role]
+  const forMe = pending.filter(myTurn)
+  const others = pending.filter(a => !myTurn(a))
+  const decided = scopedApprovals
+    .filter(a => a.status !== 'Pending' && matches(a))
+    .sort((a, b) => (b.decisionTs || '').localeCompare(a.decisionTs || ''))
+  const { pagedRows: pageMine, pagination: minePagination } = usePagedRows(mine, approvalResetKey)
+  const { pagedRows: pageForMe, pagination: forMePagination } = usePagedRows(forMe, approvalResetKey)
+  const { pagedRows: pageOthers, pagination: othersPagination } = usePagedRows(others, approvalResetKey)
+  const { pagedRows: pageDecided, pagination: decidedPagination } = usePagedRows(decided, approvalResetKey)
   const filterBarProps = {
     q,
     statusF,
@@ -604,35 +659,44 @@ export default function Approvals() {
 
   // ---- Salespeople: read-only view of their own requests ------------------
   if (!approverView) {
-    const mine = store.approvals.filter(a => a.requestedBy === role && matches(a)).sort(byTsDesc)
+    const myPending = scopedApprovals.filter(a => a.requestedBy === role && a.status === 'Pending')
+    const waitingLong = myPending.filter(a => Number.isFinite(Date.parse(a.ts || '')) && Date.now() - Date.parse(a.ts) >= 7 * 86400000).length
     return (
       <div className="page approvals-page">
-        <div className="approval-head"><div><h2 className="workspace-page-title"><Icon name="checkCircle" size={18} /> My approval requests</h2><p className="hint">Track decisions and approvers for requests raised by you.</p></div></div>
+        <div className="approval-head"><div><h2 className="workspace-page-title workspace-page-title--topbar-duplicate"><Icon name="checkCircle" size={18} /> My approval requests</h2><p className="hint">Track decisions and approvers for requests raised by you.</p></div></div>
+        {!phone && <WorkspaceInsights signals={[{ count: waitingLong, tone: 'warning', label: 'Requests waiting over 7 days', source: 'Rule' }]} onRefresh={store.refreshSharedData} />}
         {refreshNotice}
-        <div className="approval-summary approval-summary-three"><div className="approval-summary-card summary-pending"><b>{store.approvals.filter(a => a.requestedBy === role && a.status === 'Pending').length}</b><span>Pending</span></div><div className="approval-summary-card summary-approved"><b>{store.approvals.filter(a => a.requestedBy === role && a.status === 'Approved').length}</b><span>Approved</span></div><div className="approval-summary-card summary-rejected"><b>{store.approvals.filter(a => a.requestedBy === role && a.status === 'Rejected').length}</b><span>Rejected</span></div></div>
+        <div className="approval-summary approval-summary-three">{['Pending', 'Approved', 'Rejected'].map(status => <button key={status} className={`approval-summary-card summary-${status.toLowerCase()}`} aria-pressed={statusF === status} onClick={() => setStatusF(statusF === status ? '' : status)}><b>{scopedApprovals.filter(a => a.requestedBy === role && a.status === status).length}</b><span>{status}</span></button>)}</div>
         <FilterBar {...filterBarProps} />
-        <div className="approval-notice approval-notice-info">
+        <details className="approval-notice approval-notice-info"><summary>How approvals work</summary>
           <Icon name="info" size={14} /> Approvals are decided by LJS / AH, and technical approvals by LJS or AN. Your requests remain visible here until resolved.
-        </div>
-        <div className="approval-list">{mine.map(a => <div key={a.id} className={cardClass(a)}><div className="approval-card-top"><b>{a.id}</b><span className={`pill ${pillFor(a.status)}`}>{a.status}</span><NewMarker a={a} /><span className="approval-type">{a.type}</span><span className="hint">requested {stamp(a.ts)}</span></div><div className="approval-ref"><RefLink a={a} /></div><Detail a={a} /><div className="approval-meta"><div><span>Approvers</span><RoleChips a={a} /></div><div><span>Decision note</span><p>{COMMERCIAL_RX.test(a.decisionNote || '') && !comm ? 'Restricted' : (a.decisionNote || 'No decision yet')}</p></div></div><QuickLinks a={a} /></div>)}</div>
+        </details>
+        <div className="approval-list">{pageMine.map(a => phone ? <button key={a.id} className="phone-record" onClick={() => setRequestTimelineId(a.id)}><strong>{store.opportunities.find(o => o.id === a.oppId)?.sellTo || a.customerName || a.id}</strong><span>{a.type} · {a.status}</span><small>{a.id} · {stamp(a.ts)}</small></button> : <div key={a.id} className={cardClass(a)}><div className="approval-card-top"><b>{a.id}</b><span className={`pill ${pillFor(a.status)}`}>{a.status}</span><NewMarker a={a} /><span className="approval-type">{a.type}</span><span className="hint">requested {stamp(a.ts)}</span></div><div className="approval-ref"><RefLink a={a} /></div><Detail a={a} /><div className="approval-meta"><div><span>Approvers</span><RoleChips a={a} /></div><div><span>Decision note</span><p>{COMMERCIAL_RX.test(a.decisionNote || '') && !comm ? 'Restricted' : (a.decisionNote || 'No decision yet')}</p></div></div><QuickLinks a={a} /><button type="button" className="approval-timeline-open" onClick={() => setRequestTimelineId(a.id)}>View decision timeline</button></div>)}</div>
+        {minePagination}
         {!mine.length && <p className="hint">No approval requests yet — raise one from the proposal workbench when a deviation needs clearance.</p>}
+        {requestTimelineId && (() => {
+          const approval = store.approvals.find(item => item.id === requestTimelineId)
+          if (!approval) return null
+          return <div className="approval-drawer-layer"><button type="button" className="approval-drawer-backdrop" aria-label="Close approval timeline" onClick={() => setRequestTimelineId('')} /><aside className="approval-decision-drawer" role="dialog" aria-modal="true" aria-label={`Approval timeline ${approval.id}`}>
+            <header><div><span className="approval-section-kicker">REQUEST TIMELINE</span><h3>{approval.id}</h3></div><button type="button" aria-label="Close approval timeline" onClick={() => setRequestTimelineId('')}>×</button></header>
+            <div className="approval-decision-drawer-body"><div className={cardClass(approval, 'form-card')}><div className="approval-card-top"><span className={`pill ${pillFor(approval.status)}`}>{approval.status}</span><span>{approval.type}</span><span className="hint">Raised {stamp(approval.ts)}</span></div><div className="approval-ref"><RefLink a={approval} /></div><Detail a={approval} /><RoleChips a={approval} /><div className="approval-decision-history"><h4>Decision history</h4>{Object.entries(approval.decisions || {}).length ? Object.entries(approval.decisions || {}).map(([approver, decision]) => <div key={approver}><b>{displayRole(approver)}</b><span>{decision.d}{decision.c ? ` — ${decision.c}` : ''}</span><small>{stamp(decision.when)}</small></div>) : <p className="hint">No decisions recorded yet.</p>}</div></div><QuickLinks a={approval} />{approval.oppId && <button className="primary" onClick={() => nav(`/proposal/${approval.oppId}`)}>Go to proposal workbench</button>}</div>
+          </aside></div>
+        })()}
       </div>
     )
   }
 
   // ---- Approver / admin workbench ----------------------------------------
-  const pending = store.approvals.filter(a => a.status === 'Pending' && matches(a)).sort(byTsDesc)
-  const myTurn = a => canDecide(a) && !(a.decisions || {})[role]
-  const forMe = pending.filter(myTurn)
-  const others = pending.filter(a => !myTurn(a))
-  const decided = store.approvals
-    .filter(a => a.status !== 'Pending' && matches(a))
-    .sort((a, b) => (b.decisionTs || '').localeCompare(a.decisionTs || ''))
   const oldestForMe = [...forMe].sort((a, b) => (a.ts || '').localeCompare(b.ts || ''))[0]
+  const pendingLong = pending.filter(a => Number.isFinite(Date.parse(a.ts || '')) && Date.now() - Date.parse(a.ts) >= 7 * 86400000).length
 
   return (
     <div className="page approvals-page">
-      <div className="approval-head"><div><h2 className="workspace-page-title"><Icon name="checkCircle" size={18} /> Approvals — {displayRole(role)}</h2><p className="hint">Resolve requests, inspect linked records, and keep the pipeline moving.</p></div></div>
+      <div className="approval-head"><div><h2 className="workspace-page-title workspace-page-title--topbar-duplicate"><Icon name="checkCircle" size={18} /> Approvals — {displayRole(role)}</h2><p className="hint">Resolve requests, inspect linked records, and keep the pipeline moving.</p></div></div>
+      <WorkspaceInsights signals={[
+        { count: forMe.length, tone: forMe.length ? 'warning' : 'positive', label: 'Decisions waiting on you', source: 'Rule' },
+        { count: pendingLong, tone: pendingLong ? 'critical' : 'positive', label: 'Requests waiting over 7 days', source: 'Rule' },
+      ]} onRefresh={store.refreshSharedData} />
       {refreshNotice}
       <div className="approval-summary"><div className="approval-summary-card summary-pending"><b>{forMe.length}</b><span>Needs your decision</span></div><div className="approval-summary-card summary-waiting"><b>{others.length}</b><span>Awaiting others</span></div><div className="approval-summary-card summary-decided"><b>{decided.length}</b><span>Approved requests</span></div></div>
       <FilterBar {...filterBarProps} />
@@ -647,7 +711,7 @@ export default function Approvals() {
           <p className="approval-section-subtitle">{oldestForMe ? `Oldest has been waiting since ${shortDate(oldestForMe.ts)}. Review each one and record a decision.` : 'Nothing is waiting on you right now.'}</p>
         </div>
       </div>
-      {forMe.map(a => <PendingCard
+      {pageForMe.map(a => <PendingCard
         key={a.id}
         a={a}
         role={role}
@@ -664,13 +728,16 @@ export default function Approvals() {
           if (saved) clearDecisionDraft(a.id)
           return saved
         }}
+        compact
+        onReview={() => setDecisionDrawerId(a.id)}
       />)}
+      {forMePagination}
       {!forMe.length && <p className="hint">Nothing pending for you — all clear.</p>}
 
       {others.length > 0 && (
         <>
           <div className="approval-section-heading"><div><span className="approval-section-kicker">IN PROGRESS</span><h3>Awaiting other approvers <span>{others.length}</span></h3></div></div>
-          {others.map(a => <PendingCard
+          {pageOthers.map(a => <PendingCard
             key={a.id}
             a={a}
             role={role}
@@ -687,12 +754,15 @@ export default function Approvals() {
               if (saved) clearDecisionDraft(a.id)
               return saved
             }}
+            compact
+            onReview={() => setDecisionDrawerId(a.id)}
           />)}
+          {othersPagination}
         </>
       )}
 
       <div className="approval-section-heading"><div><span className="approval-section-kicker">HISTORY</span><h3>Approved requests <span>{decided.length}</span></h3></div></div>
-      {decided.map(a => (
+      {pageDecided.map(a => (
         <div key={a.id} className="form-card approval-card" style={{ marginBottom: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <b>{a.id}</b>
@@ -714,7 +784,33 @@ export default function Approvals() {
           <QuickLinks a={a} />
         </div>
       ))}
+      {decidedPagination}
       {!decided.length && <p className="hint">No decisions yet.</p>}
+      {decisionDrawerId && (() => {
+        const approval = store.approvals.find(item => item.id === decisionDrawerId)
+        if (!approval) return null
+        const allowedToDecide = myTurn(approval)
+        return <div className="approval-drawer-layer">
+          <button type="button" className="approval-drawer-backdrop" aria-label="Close decision details" onClick={() => setDecisionDrawerId('')} />
+          <aside className="approval-decision-drawer" role="dialog" aria-modal="true" aria-label={`Approval ${approval.id} decision details`}>
+            <header><div><span className="approval-section-kicker">DECISION REVIEW</span><h3>{approval.id}</h3></div><button type="button" aria-label="Close decision details" onClick={() => setDecisionDrawerId('')}>×</button></header>
+            <div className="approval-decision-drawer-body">
+              <PendingCard a={approval} role={role} store={store} myTurn={myTurn}
+                renderRef={item => <div className="approval-ref"><RefLink a={item} /></div>}
+                renderDetail={item => <Detail a={item} />}
+                renderRoleChips={item => <RoleChips a={item} />}
+                renderQuickLinks={item => <QuickLinks a={item} />}
+                draft={decisionDrafts[approval.id]}
+                onDraftChange={patch => updateDecisionDraft(approval.id, patch)}
+                onDecide={async dec => { const saved = await store.recordDecision(approval.id, dec); if (saved) { clearDecisionDraft(approval.id); setDecisionDrawerId('') }; return saved }} />
+              <section className="approval-decision-history"><h4>Decision history</h4>
+                {Object.entries(approval.decisions || {}).length ? Object.entries(approval.decisions || {}).map(([approver, decision]) => <div key={approver}><b>{displayRole(approver)}</b><span>{decision.d}{decision.c ? ` — ${decision.c}` : ''}</span><small>{stamp(decision.when)}</small></div>) : <p className="hint">No decisions recorded yet.</p>}
+              </section>
+              {!allowedToDecide && <p className="approval-notice approval-notice-info">This request is awaiting another approver. You can review its details and decision history.</p>}
+            </div>
+          </aside>
+        </div>
+      })()}
     </div>
   )
 }

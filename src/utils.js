@@ -83,10 +83,10 @@ const roleList = role => Array.isArray(role) ? role : [role]
 const hasRoleDefinition = (role, field) => roleList(role).some(id => !!ROLES[id]?.[field] || (field === 'admin' && !!LEVEL3_ROLES[id]?.[field]))
 export const canViewCommercial = role => roleList(role).some(id => !!ROLES[id]?.commercial || id === 'MANAGEMENT' || id === 'ADMIN')
 export const isAdminRole = role => hasRoleDefinition(role, 'admin') || roleList(role).includes('ADMIN')
-// ADMIN and LJS are co-equal application authorities and may maintain supplier
-// price lists. SUPER remains the system-owner persona.
-export const canManagePriceLists = role => isAdminRole(role)
+// Pricing maintenance is limited to these active roles, excluding SUPER.
+export const canManagePriceLists = role => roleList(role).some(id => id === 'LJS' || id === 'ADMIN')
 export const isSalesOwner = role => roleList(role).some(id => !!ROLES[id]?.sales || id === 'STANDARD_USER' || id === 'TEAM_LEAD')
+export const dashboardDefaultScope = role => isSalesOwner(role) ? 'my' : 'global'
 export const canViewForecast = role => roleList(role).some(id => !!ROLES[id] || !!LEVEL3_ROLES[id]) && !roleList(role).includes('CUST')
 export const forecastOwnerScope = role => isSalesOwner(role) ? role : null
 // A sales owner writes their own proposal, so they must see the numbers that go

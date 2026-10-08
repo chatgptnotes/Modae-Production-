@@ -1,12 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
+import { useWorkspaceView } from '../ui/WorkspaceViewContext.jsx'
 import { SUBFOLDERS, displayOpportunityId } from '../seed.js'
 import { stageClass, displayRole } from '../utils.js'
 import * as filestore from '../filestore.js'
 import { getConfig } from '../sharepoint.js'
 import { Icon } from '../icons.jsx'
 import { PromptModal } from '../ui.jsx'
+import { PaginatedGrid } from '../ui/Pagination.jsx'
 
 // The client's four real SharePoint status folders and their Excel-ish colors.
 const OPEN_FOLDER = { fill: 'var(--amber-fill)', stroke: 'var(--amber-text)' }
@@ -47,6 +49,7 @@ function DeleteButton({ id, armed, onArm, onDelete, title }) {
 
 export default function Folders() {
   const store = useStore()
+  const { scope } = useWorkspaceView()
   const { oppId, sub } = useParams()
   const nav = useNavigate()
   const [confirmDel, setConfirmDel] = useState(null) // id of the item armed for deletion
@@ -139,7 +142,9 @@ export default function Folders() {
   // Root: the "Sales - Opportunities" wall, grouped by the four SharePoint status folders
   if (!opp) {
     const cfg = spConnected ? getConfig() : null
-    const newestFirst = [...store.opportunities].sort((a, b) => b.id.localeCompare(a.id))
+    const newestFirst = [...store.opportunities]
+      .filter(o => scope !== 'my' || o.owner === store.role)
+      .sort((a, b) => b.id.localeCompare(a.id))
     const sections = [
       { label: 'Open', opps: newestFirst.filter(o => groupFor(o) === 'Open'), cls: 'open', pathStyle: OPEN_FOLDER },
       { label: 'WON', opps: newestFirst.filter(o => groupFor(o) === 'WON'), cls: 'won' },
@@ -151,7 +156,7 @@ export default function Folders() {
       .sort(([a], [b]) => b.localeCompare(a))
     return (
       <div className="page">
-        <h2 className="workspace-page-title"><Icon name="folder" size={18} /> Documents</h2>
+        <h2 className="workspace-page-title workspace-page-title--topbar-duplicate"><Icon name="folder" size={18} /> Documents</h2>
         <div className="explorer-bar">
           <FolderIcon size={18} />
           {spConnected ? (
@@ -161,7 +166,7 @@ export default function Folders() {
             </>
           ) : (
             <>
-              <Link to="/folders">OneDrive - Modae Private Limited</Link> ›{' '}
+              <Link to="/folders">OneDrive - ModAE Private Limited</Link> ›{' '}
               <b>Sales - Opportunities</b>
             </>
           )}
@@ -187,8 +192,7 @@ export default function Folders() {
         {sections.map(({ label, opps, cls, pathStyle }) => (
           <section key={label}>
             <div className="folder-section-head">{label} ({opps.length})</div>
-            <div className="folder-grid">
-              {opps.map(o => (
+            <PaginatedGrid rows={opps} resetKey={`${scope}-${label}`} className="folder-grid" label={`${label} folder pages`} renderItem={o => (
                 <div className="folder-card" key={o.id} onClick={() => nav(`/folders/${o.id}`)}
                   onMouseLeave={disarm(o.id)} title={o.oppName}>
                   <SyncPill sync={(store.spSync || {})[o.id]} style={{ position: 'absolute', top: 3, left: 3 }} />
@@ -196,15 +200,13 @@ export default function Folders() {
                 <div className="fname">{displayOpportunityId(o.id)}</div>
                   <div className="fmeta">{o.sellTo}</div>
                 </div>
-              ))}
-            </div>
+              )} />
           </section>
         ))}
         {notInList.length > 0 && (
           <section>
             <div className="folder-section-head">Not In Opp List ({notInList.length})</div>
-            <div className="folder-grid">
-              {notInList.map(([id, e]) => (
+            <PaginatedGrid rows={notInList} resetKey={scope} className="folder-grid" label="Preserved folder pages" renderItem={([id, e]) => (
                 <div className="folder-card" key={id}
                   onClick={e.webUrl ? () => window.open(e.webUrl, '_blank', 'noopener') : undefined}
                   title={e.webUrl ? `${id} — open the preserved SharePoint folder` : `${id} — folder preserved in SharePoint`}>
@@ -212,8 +214,7 @@ export default function Folders() {
                   <div className="fname">{id}</div>
                   <div className="fmeta">deleted opp · folder preserved{e.ts ? ` · ${String(e.ts).slice(0, 10)}` : ''}</div>
                 </div>
-              ))}
-            </div>
+              )} />
           </section>
         )}
       </div>

@@ -237,9 +237,9 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
           label="Sell To Customer"
         />
         <Field label="Category"><select value={draft.category} onChange={e => set('category', e.target.value)}>{CATEGORIES.map(x => <option key={x}>{x}</option>)}</select></Field>
-        <Field label="Sell To Customer Location"><input type="text" value={draft.sellToCustomerLocation} onChange={e => { set('sellToCustomerLocation', e.target.value); set('location', e.target.value) }} /></Field>
+        <Field label="Sell To Customer Location"><input type="text" value={draft.sellToCustomerLocation} onChange={e => set('sellToCustomerLocation', e.target.value)} /></Field>
         <Field label="Customer Status"><select value={draft.customerStatus} onChange={e => set('customerStatus', e.target.value)}>{CUSTOMER_STATUSES.map(x => <option key={x}>{x}</option>)}</select></Field>
-        <Field label="EUC Name"><input type="text" value={draft.eucName} onChange={e => set('eucName', e.target.value)} /></Field>
+        <CustomerPicker customers={store.customers} value={draft.eucName} onChange={value => set('eucName', value)} allowCreate={false} label="EUC Name" />
         <Field label="EUC Location"><input type="text" value={draft.eucLocation} onChange={e => set('eucLocation', e.target.value)} /></Field>
         <div className="opportunity-details-wide">
           <Field label="Additional customer information"><textarea rows={3} value={draft.additionalCustomerInformation} onChange={e => set('additionalCustomerInformation', e.target.value)} placeholder="Confirmed customer information that does not fit another field" /></Field>

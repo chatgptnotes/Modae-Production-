@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { ModaeImageLogo } from '../icons.jsx'
-import { MODAE_DOCUMENT_STANDARDS } from '../branding/modae.js'
+import { MODAE_COLORS, MODAE_DOCUMENT_STANDARDS } from '../branding/modae.js'
 import { isPlaceholderLocation } from '../locations.js'
 
 const cellsForRow = (sheet, rowIndex, hidePlaceholderLocations = false) => {
@@ -59,7 +59,7 @@ const cellStyle = cell => {
   if (source.alignment?.vertical) style.verticalAlign = source.alignment.vertical
   if (source.alignment?.wrapText) style.whiteSpace = 'pre-wrap'
   if (source.border) style.borderColor = borderColor
-  if (String(cell.value ?? '').trim() === MODAE_DOCUMENT_STANDARDS.header.tagline) style.color = '#3333FF'
+  if (String(cell.value ?? '').trim() === MODAE_DOCUMENT_STANDARDS.header.tagline) style.color = MODAE_COLORS.primary
   if (empty) {
     style.backgroundColor = 'transparent'
     style.borderColor = 'transparent'

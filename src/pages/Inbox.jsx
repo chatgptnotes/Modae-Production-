@@ -6,8 +6,10 @@ import { Icon } from '../icons.jsx'
 import ScanProgress from '../ScanProgress.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { Chip, ConfChip, ConfirmModal, WarnBox, ErrBox, Modal, Portal } from '../ui.jsx'
-import { ROLES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, CUSTOMER_STATUSES, LEAD_SOURCES, routeForType, newProposal } from '../seed.js'
-import { isAdminRole, isApprover } from '../utils.js'
+import WorkspaceInsights from '../ui/WorkspaceInsights.jsx'
+import { usePagedRows } from '../ui/Pagination.jsx'
+import { OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, CUSTOMER_STATUSES, LEAD_SOURCES, routeForType, newProposal } from '../seed.js'
+import { isAdminRole } from '../utils.js'
 import { aiEnabled, runTaskResult, runText } from '../ai.js'
 import { aiAttachmentPayload } from '../aiAttachments.js'
 import { extractDocText } from '../docText.js'
@@ -15,6 +17,8 @@ import { fmtSize } from '../filestore.js'
 import { hold, add as holdMore, remove as removeHeldFile } from '../leadFiles.js'
 import { listFiles } from '../leadBlobs.js'
 import AttachmentViewer from '../AttachmentViewer.jsx'
+import usePhoneLayout from '../tablet/usePhoneLayout.js'
+import PhoneFilters from '../tablet/PhoneFilters.jsx'
 import { findDuplicates } from '../insights.js'
 import { leadWorkflow } from '../leadWorkflow.js'
 import { parseLeadLineItems } from '../tenderParse.js'
@@ -41,6 +45,7 @@ import { matchCustomer, customerStatusForLead } from '../leadCustomerClass.js'
 import { LEAD_LABELS, extractLabeledValue } from '../leadLabels.js'
 import CustomerPicker from '../CustomerPicker.jsx'
 import { findLeadById } from '../leadInboxSelection.js'
+import { useWorkspaceView } from '../ui/WorkspaceViewContext.jsx'
 export { matchCustomer, customerStatusForLead } from '../leadCustomerClass.js'
 // Common-mailbox lead inbox: AI parses each inquiry, a human decides whether it
 // becomes an opportunity (Qualify → registration / intake form) or is dropped.
@@ -50,6 +55,11 @@ const ROUTE_OPTIONS = ['Project', 'Spares', 'Service']
 const CUSTOMER_CATEGORY_OPTIONS = ['OEM', 'EUC', 'EUC/OEM', 'ACP', 'SI', 'RE/TR', 'EPC', 'Trader']
 const DROP_REASONS = ['Outside business scope', 'Window shopping / budgetary only',
   'Duplicate inquiry', 'No response from customer', 'Other']
+
+function PreviewFieldText({ value }) {
+  const parts = String(value || '—').split(/([@._/-])/)
+  return parts.map((part, index) => <React.Fragment key={index}>{part}{/[@._/-]/.test(part) && <wbr />}</React.Fragment>)
+}
 export const isUnavailableAiSummary = lead => /^AI extraction was unavailable\b/i.test(String(lead?.ai?.summary || '').trim())
 
 // A qualified lead can be converted from its own decision page. Keep this
@@ -77,7 +87,7 @@ async function createOpportunityFromLeadPage({ store, lead, fields, decision, cu
   const opp = {
     id, sourceLeadId: lead.id,
     sl: Math.max(0, ...store.opportunities.map(o => o.sl || 0)) + 1,
-    sellTo, category, location: decision.location || eucLocation, sellToCustomerLocation: decision.location || eucLocation,
+    sellTo, category, location: decision.location || eucLocation, sellToCustomerLocation: decision.sellToCustomerLocation || '',
     customerStatus, leadVerification,
     eucName, eucLocation,
     oppName: lead.subject, opportunityScope: decision.scope,
@@ -1010,6 +1020,7 @@ const sliceAtWordBoundary = (text, maxLen) => {
 
 const REQUIRED_IDENTITY_FIELDS = [
   ['sellTo', 'Sell-to customer'],
+  ['sellToCustomerLocation', 'Sell-to customer location'],
   ['eucName', 'EUC Name'],
   ['eucLocation', 'EUC Location'],
   ['contactPerson', 'Contact Person'],
@@ -1495,6 +1506,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
     const sourcePhone = customerPhoneFromText(`${lead.subject || ''}\n${lead.body || ''}`)
     return ({
     sellTo: identity.sellTo || sourceValue('Sell-to customer'),
+    sellToCustomerLocation: lead.sellToCustomerLocation || customer?.location || sourceValue('Sell-to customer location') || '',
     scope: lead.opportunityScope || mappedLeadFieldValue(ai.fields, 'scope') || sourceValue('Opportunity scope') || '',
     location: initialLocation,
     region: initialRegion,
@@ -1990,6 +2002,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
     const effectiveOwner = isOverride && !overrideReason ? routedOwner : draft.owner
     return {
       sellTo: String(draft.sellTo || '').trim(),
+      sellToCustomerLocation: String(draft.sellToCustomerLocation || '').trim(),
       opportunityScope: String(draft.scope || '').trim(),
       region: draft.region,
       location: draft.location,
@@ -2476,13 +2489,17 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
               />
               {decisionAiStatus('sellTo')}
             </div>
+          <label><span className="decision-field-heading">Sell To Customer Location <span className="required-mark">*</span></span>
+            <div className="decision-value-row"><input type="text" value={decisionDraft.sellToCustomerLocation} disabled={lead.status === 'Dropped'}
+              onChange={e => updateDecisionField('sellToCustomerLocation', e.target.value)} placeholder="Enter customer location" /></div>
+          </label>
           <label><span className="decision-field-heading">Opportunity scope {decisionAiMeta('scope', false)}</span>
             <div className="decision-value-row"><textarea rows={5} value={decisionDraft.scope} disabled={lead.status === 'Dropped'}
               onChange={e => updateDecisionField('scope', e.target.value)} placeholder="Enter requested scope or items" />{decisionAiStatus('scope')}</div>
             </label>
           <label><span className="decision-field-heading">EUC Name <span className="required-mark">*</span> {decisionAiMeta('eucName', false)}</span>
-            <div className="decision-value-row"><input type="text" value={decisionDraft.eucName} disabled={lead.status === 'Dropped'}
-              onChange={e => updateDecisionField('eucName', e.target.value)} placeholder="Enter end user/customer name" />{decisionAiStatus('eucName')}</div>
+            <div className="decision-value-row"><CustomerPicker customers={store.customers} value={decisionDraft.eucName} disabled={lead.status === 'Dropped'}
+              onChange={value => updateDecisionField('eucName', value)} allowCreate={false} label="" />{decisionAiStatus('eucName')}</div>
             </label>
           <label><span className="decision-field-heading">EUC Location <span className="required-mark">*</span> {decisionAiMeta('eucLocation', false)}</span>
             <div className="euc-location-search">
@@ -2598,7 +2615,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
         </div>}
 
         <div className="lead-decision-actions" hidden={compact}>
-          <button className="primary" disabled={lead.status === 'Dropped'} onClick={saveDecisions}>
+          <button className="dark" disabled={lead.status === 'Dropped'} onClick={saveDecisions}>
             <Icon name="check" size={12} /> Save changes
           </button>
           <button disabled={lead.status === 'Dropped'} onClick={() => {
@@ -2844,16 +2861,20 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
             </div>
             <div className="lead-decision-grid">
               <label>Sell To Customer <span className="required-mark">*</span> {decisionAiMeta('sellTo')}
-                <input type="text" value={decisionDraft.sellTo} disabled={lead.status === 'Dropped'}
-                  onChange={e => updateDecisionField('sellTo', e.target.value)} placeholder="Enter customer name" />
+                <CustomerPicker customers={store.customers} value={decisionDraft.sellTo} disabled={lead.status === 'Dropped'}
+                  onChange={value => updateDecisionField('sellTo', value)} allowCreate={false} label="" />
+              </label>
+              <label>Sell To Customer Location <span className="required-mark">*</span>
+                <input type="text" value={decisionDraft.sellToCustomerLocation} disabled={lead.status === 'Dropped'}
+                  onChange={e => updateDecisionField('sellToCustomerLocation', e.target.value)} placeholder="Enter customer location" />
               </label>
               <label>Opportunity scope {decisionAiMeta('scope')}
                 <textarea rows={5} value={decisionDraft.scope} disabled={lead.status === 'Dropped'}
                   onChange={e => updateDecisionField('scope', e.target.value)} placeholder="Enter requested scope or items" />
               </label>
               <label>EUC Name <span className="required-mark">*</span> {decisionAiMeta('eucName')}
-                <input type="text" value={decisionDraft.eucName} disabled={lead.status === 'Dropped'}
-                  onChange={e => updateDecisionField('eucName', e.target.value)} placeholder="Enter end user/customer name" />
+                <CustomerPicker customers={store.customers} value={decisionDraft.eucName} disabled={lead.status === 'Dropped'}
+                  onChange={value => updateDecisionField('eucName', value)} allowCreate={false} label="" />
               </label>
               <label>EUC Location <span className="required-mark">*</span> {decisionAiMeta('eucLocation')}
                 <div className="euc-location-search">
@@ -2964,7 +2985,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
             )}
             {isFastTrackLead(previewLead, store.config, customer) && <div className="okbox" style={{ marginTop: 8 }}>Fast-track enabled for this Green customer.</div>}
             <div className="lead-decision-actions">
-              <button className="primary" disabled={lead.status === 'Dropped'} onClick={saveDecisions}>
+              <button className="dark" disabled={lead.status === 'Dropped'} onClick={saveDecisions}>
                 <Icon name="check" size={12} /> Save changes
               </button>
               <button disabled={lead.status === 'Dropped'} onClick={() => {
@@ -3313,19 +3334,24 @@ function LegacyLeadDetail({ lead }) {
 // ---------------------------------------------------------------------------
 export default function Inbox() {
   const store = useStore()
+  const narrow = usePhoneLayout()
+  const phone = narrow && store.viewMode === 'tablet'
+  const [phoneFilterPanel, setPhoneFilterPanel] = useState(false)
+  const { scope, setScope } = useWorkspaceView()
   const nav = useNavigate()
   const { leadId } = useParams()
   const [q, setQ] = useState('')
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const [statusF, setStatusF] = useState('')
   const [routeF, setRouteF] = useState('')
   const [receivedF, setReceivedF] = useState('')
   const [sourceF, setSourceF] = useState('')
   const [urgencyF, setUrgencyF] = useState('')
-  const [duplicateF, setDuplicateF] = useState('')
   const [completenessF, setCompletenessF] = useState('')
   const [ownerF, setOwnerF] = useState('')
   const [ageF, setAgeF] = useState('')
   const [selectedIds, setSelectedIds] = useState(() => new Set())
+  const [previewLeadId, setPreviewLeadId] = useState('')
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false)
   const [openHeaderFilter, setOpenHeaderFilter] = useState(null)
   const [repairingAi, setRepairingAi] = useState(false)
@@ -3340,15 +3366,93 @@ export default function Inbox() {
   const [simShape, setSimShape] = useState('')
   const [simQuality, setSimQuality] = useState('')
   const [simRegister, setSimRegister] = useState(true)
-  // Sales owners see only their assigned leads by default; a "Show all" toggle
-  // reveals the team's. Managers (LJS/AH) and admins always see everything.
-  // The toggle lives in the store, not in component state: as component state a
-  // reload reset it, and a lead the simulator routed to another owner then read
-  // as "never saved".
-  const showAll = !!store.inboxShowAll
-  const setShowAll = on => store.setInboxShowAll(on)
+  const globalScope = scope === 'global'
   const [showArchive, setShowArchive] = useState(false)
-  const seesAll = isAdminRole(store.role) || isApprover(store.role)
+  const mailboxListRef = useRef(null)
+  const mailboxScrollRef = useRef(null)
+  const mailboxScrollDragRef = useRef(null)
+  const [mailboxScrollMetrics, setMailboxScrollMetrics] = useState({ content: 0, viewport: 0, left: 0, track: 0 })
+
+  const updateMailboxScrollMetrics = () => {
+    const list = mailboxListRef.current
+    const track = mailboxScrollRef.current
+    if (!list || !track) return
+    setMailboxScrollMetrics({ content: list.scrollWidth, viewport: list.clientWidth, left: list.scrollLeft, track: track.clientWidth })
+  }
+  useEffect(() => {
+    const list = mailboxListRef.current
+    const track = mailboxScrollRef.current
+    if (!list || !track) return undefined
+    const resetAndMeasure = () => {
+      if (!list.isConnected) return
+      list.scrollLeft = 0
+      updateMailboxScrollMetrics()
+    }
+    resetAndMeasure()
+    const frame = requestAnimationFrame(resetAndMeasure)
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(updateMailboxScrollMetrics)
+    observer?.observe(list)
+    observer?.observe(track)
+    if (list.firstElementChild) observer?.observe(list.firstElementChild)
+    return () => {
+      cancelAnimationFrame(frame)
+      observer?.disconnect()
+    }
+  }, [leadId])
+
+  const mailboxHasHorizontalOverflow = mailboxScrollMetrics.content > mailboxScrollMetrics.viewport + 1
+  const mailboxThumbWidth = mailboxHasHorizontalOverflow && mailboxScrollMetrics.track
+    ? Math.min(mailboxScrollMetrics.track, Math.max(36, mailboxScrollMetrics.track * mailboxScrollMetrics.viewport / mailboxScrollMetrics.content))
+    : 0
+  const mailboxThumbTravel = Math.max(0, mailboxScrollMetrics.track - mailboxThumbWidth)
+  const mailboxMaxScroll = Math.max(0, mailboxScrollMetrics.content - mailboxScrollMetrics.viewport)
+  const mailboxThumbLeft = mailboxMaxScroll
+    ? mailboxThumbTravel * mailboxScrollMetrics.left / mailboxMaxScroll
+    : 0
+  const setMailboxScrollFromTrack = clientX => {
+    const list = mailboxListRef.current
+    const track = mailboxScrollRef.current
+    if (!list || !track || !mailboxMaxScroll) return
+    const bounds = track.getBoundingClientRect()
+    const left = Math.max(0, Math.min(mailboxThumbTravel, clientX - bounds.left - mailboxThumbWidth / 2))
+    list.scrollLeft = mailboxMaxScroll * left / Math.max(1, mailboxThumbTravel)
+  }
+  const startMailboxScrollDrag = event => {
+    if (event.button !== 0 || !mailboxHasHorizontalOverflow) return
+    event.preventDefault()
+    const track = event.currentTarget
+    track.setPointerCapture(event.pointerId)
+    if (event.target !== track) {
+      mailboxScrollDragRef.current = { x: event.clientX, left: mailboxListRef.current?.scrollLeft || 0 }
+    } else {
+      setMailboxScrollFromTrack(event.clientX)
+      mailboxScrollDragRef.current = { x: event.clientX, left: mailboxListRef.current?.scrollLeft || 0 }
+    }
+  }
+  const moveMailboxScrollDrag = event => {
+    const drag = mailboxScrollDragRef.current
+    const list = mailboxListRef.current
+    if (!drag || !list || !mailboxMaxScroll) return
+    const delta = event.clientX - drag.x
+    list.scrollLeft = drag.left + delta * mailboxMaxScroll / Math.max(1, mailboxThumbTravel)
+  }
+  const stopMailboxScrollDrag = event => {
+    mailboxScrollDragRef.current = null
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId)
+  }
+  const handleMailboxScrollKey = event => {
+    const list = mailboxListRef.current
+    if (!list) return
+    const step = Math.max(48, Math.round(list.clientWidth * .1))
+    if (event.key === 'ArrowLeft') list.scrollLeft -= step
+    else if (event.key === 'ArrowRight') list.scrollLeft += step
+    else if (event.key === 'PageUp') list.scrollLeft -= list.clientWidth
+    else if (event.key === 'PageDown') list.scrollLeft += list.clientWidth
+    else if (event.key === 'Home') list.scrollLeft = 0
+    else if (event.key === 'End') list.scrollLeft = mailboxMaxScroll
+    else return
+    event.preventDefault()
+  }
 
   const sel = leadId ? findLeadById(store.leads, store.leadArchive || [], leadId) : null
   // Opening a New lead marks it read, but does not qualify or otherwise change
@@ -3405,10 +3509,10 @@ export default function Inbox() {
   }
 
   const listSource = showArchive ? (store.leadArchive || []) : store.leads
-  // Sales owners: only their assigned leads unless "Show all" is ticked. Kept
-  // apart from the column filters so the list can say how many rows the rule is
-  // holding back — silently omitting them is what made a saved lead look lost.
-  const ownerVisible = l => seesAll || showAll || l.suggestedOwner === store.role
+  // The top-bar scope selects the common inbox or leads assigned/suggested to
+  // the current role. Keep ownership separate from the column filters so the
+  // list can explain when matching leads are outside My View.
+  const ownerVisible = l => globalScope || l.assignedOwner === store.role || l.suggestedOwner === store.role
   const matchesFilters = l => {
     if (q) {
       const hay = `${l.subject} ${l.sender || ''} ${l.from} ${l.ref || ''}`.toLowerCase()
@@ -3422,7 +3526,6 @@ export default function Inbox() {
     if (sourceF && source !== sourceF) return false
     if (routeF && route !== routeF) return false
     if (urgencyF && (l.urgency || 'Normal') !== urgencyF) return false
-    if (duplicateF && (l.duplicateRisk || 'Low') !== duplicateF) return false
     if (ownerF && (l.suggestedOwner || 'Unassigned') !== ownerF) return false
     if (completenessF) {
       if (completeness == null) return false
@@ -3443,7 +3546,15 @@ export default function Inbox() {
   }
   const rows = listSource.filter(l => ownerVisible(l) && matchesFilters(l))
   const mailboxRows = rows.sort(compareInboxRows)
+  const { pagedRows: pageRows, pagination } = usePagedRows(mailboxRows, JSON.stringify([scope, q, statusF, sourceF, routeF, urgencyF, ownerF, completenessF, receivedF, ageF]))
+  const inboxPagination = React.cloneElement(pagination, { alwaysVisible: true, label: 'Inbox pages' })
+  const previewLead = pageRows.find(lead => String(lead.id) === previewLeadId) || pageRows[0]
   const dateFilterActive = !!receivedF || !!ageF
+  const inboxInsights = [
+    { count: mailboxRows.filter(lead => lead.status === 'New' && (lead.ai?.fields || []).some(field => field.state === 'pending' || field.state === 'needs-review')).length, label: 'leads need field review', tone: 'warning' },
+    { count: mailboxRows.filter(lead => ['High', 'Medium'].includes(lead.duplicateRisk)).length, label: 'possible duplicates to check', tone: 'critical' },
+    { count: mailboxRows.filter(lead => (ageDays(lead.ts) || 0) >= 14 && !['Converted', 'Dropped'].includes(lead.status)).length, label: 'leads are 14+ days old', tone: 'warning' },
+  ]
   const staleAiLeads = (store.leads || []).filter(isUnavailableAiSummary)
   // Rows this view would show if they were yours. Surfaced rather than dropped.
   const hiddenByOwner = listSource.filter(l => !ownerVisible(l) && matchesFilters(l)).length
@@ -3454,8 +3565,8 @@ export default function Inbox() {
   })
   const selectVisible = () => setSelectedIds(prev => {
     const next = new Set(prev)
-    const allSelected = mailboxRows.length > 0 && mailboxRows.every(l => next.has(l.id))
-    mailboxRows.forEach(l => allSelected ? next.delete(l.id) : next.add(l.id))
+    const allSelected = pageRows.length > 0 && pageRows.every(l => next.has(l.id))
+    pageRows.forEach(l => allSelected ? next.delete(l.id) : next.add(l.id))
     return next
   })
   const setReadForSelected = read => {
@@ -3464,7 +3575,7 @@ export default function Inbox() {
     setBulkMenuOpen(false)
   }
   const selectAllVisible = () => {
-    setSelectedIds(new Set(mailboxRows.map(lead => lead.id)))
+    setSelectedIds(new Set(pageRows.map(lead => lead.id)))
     setBulkMenuOpen(false)
   }
   const clearSelection = () => {
@@ -3543,7 +3654,7 @@ export default function Inbox() {
       quality: options.quality !== undefined ? options.quality : (simQuality || null),
     })
     store.addLead(lead)
-    if (!seesAll && lead.suggestedOwner !== store.role) setShowAll(true)
+    if (scope === 'my' && lead.suggestedOwner !== store.role) setScope('global')
     if (!simRegister) {
       setSimulationOpen(false)
       nav('/inbox/' + lead.id)
@@ -3684,9 +3795,20 @@ export default function Inbox() {
         confirmLabel="Clear simulated leads" onClose={() => setClearSimulatedConfirm(false)} onConfirm={clearSimulated} />}
       <div className="mailbox-head">
         <div>
-          <h2 className="workspace-page-title"><Icon name="inbox" size={18} /> Lead inbox</h2>
-          <p className="hint">{showArchive ? 'Discarded lead archive' : 'Common sales mailbox · AI structures, humans decide'}</p>
+          <h2 className="workspace-page-title workspace-page-title--topbar-duplicate"><Icon name="inbox" size={18} /> Lead inbox</h2>
+          <p className="hint">{showArchive ? 'Discarded lead archive' : scope === 'my' ? 'Your assigned leads · AI structures, humans decide' : 'Common sales mailbox · AI structures, humans decide'}</p>
         </div>
+      </div>
+      {phone && <div className="phone-list-toolbar"><label className="phone-list-search"><Icon name="search" size={16} /><input type="search" aria-label="Search leads" placeholder="Search leads" value={q} onChange={e => setQ(e.target.value)} /></label><div className="phone-list-actions"><button type="button" onClick={() => setPhoneFilterPanel(true)}>Filters</button><button type="button" className="mail-new-enquiry" onClick={() => setPasteOpen(true)}>New enquiry</button><details className="phone-list-more"><summary aria-label="Inbox actions">•••</summary><div><button type="button" onClick={() => { setShowArchive(v => !v); setSelectedIds(new Set()) }}>{showArchive ? 'Back to inbox' : `Archive (${(store.leadArchive || []).length})`}</button><button type="button" onClick={() => setMobileFiltersOpen(v => !v)}>{mobileFiltersOpen ? 'Done selecting' : 'Select messages'}</button></div></details></div></div>}
+      {!phone && <div className="mail-search-row">
+        <div className="mail-search"><Icon name="search" size={16} /><input placeholder="Search mail" value={q} onChange={e => setQ(e.target.value)} /></div>
+        {phone && <button type="button" onClick={() => setPhoneFilterPanel(true)}>Filters{[statusF, routeF, sourceF, ownerF, urgencyF].filter(Boolean).length ? ` (${[statusF, routeF, sourceF, ownerF, urgencyF].filter(Boolean).length})` : ''}</button>}
+        {!phone && <select value={statusF} onChange={e => setStatusF(e.target.value)} aria-label="Filter by status">
+          <option value="">All statuses</option>{STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
+        </select>}
+        {!phone && <select value={routeF} onChange={e => setRouteF(e.target.value)} aria-label="Filter by route">
+          <option value="">All routes</option>{ROUTE_OPTIONS.map(r => <option key={r}>{r}</option>)}
+        </select>}
         <div className="mailbox-head-actions">
           <button type="button" className="mail-new-enquiry" aria-haspopup="dialog" onClick={() => setPasteOpen(true)}><Icon name="bot" size={13} /> New enquiry</button>
           <button type="button" onClick={() => { setShowArchive(v => !v); setSelectedIds(new Set()) }}>
@@ -3694,24 +3816,15 @@ export default function Inbox() {
           </button>
         </div>
       </div>
-      <div className="mail-search-row">
-        <div className="mail-search"><Icon name="search" size={16} /><input placeholder="Search mail" value={q} onChange={e => setQ(e.target.value)} /></div>
-        <select value={statusF} onChange={e => setStatusF(e.target.value)} aria-label="Filter by status">
-          <option value="">All statuses</option>{STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
-        </select>
-        <select value={routeF} onChange={e => setRouteF(e.target.value)} aria-label="Filter by route">
-          <option value="">All routes</option>{ROUTE_OPTIONS.map(r => <option key={r}>{r}</option>)}
-        </select>
-        {!seesAll && <button
-              type="button"
-              className={`scope-toggle${showAll ? ' active' : ''}`}
-              aria-pressed={showAll}
-              title="Show all leads"
-              onClick={() => setShowAll(!showAll)}>
-              {showAll ? 'Showing all' : 'Show all'}
-            </button>}
-      </div>
+      }
       {pasteOpen && <PasteLeadModal onClose={() => setPasteOpen(false)} />}
+      {phoneFilterPanel && <PhoneFilters title="Filter leads" onClose={() => setPhoneFilterPanel(false)} fields={[
+        { key: 'status', label: 'Status', value: statusF, options: [['', 'All statuses'], ...STATUS_OPTIONS] },
+        { key: 'route', label: 'Route', value: routeF, options: [['', 'All routes'], ...ROUTE_OPTIONS] },
+        { key: 'owner', label: 'Owner', value: ownerF, options: [['', 'All owners'], ...ownerOptions] },
+        { key: 'source', label: 'Source', value: sourceF, options: [['', 'All sources'], ...sourceOptions] },
+        { key: 'urgency', label: 'Urgency', value: urgencyF, options: [['', 'Any urgency'], 'Normal', 'Urgent'] },
+      ]} onApply={draft => { setStatusF(draft.status); setRouteF(draft.route); setOwnerF(draft.owner); setSourceF(draft.source); setUrgencyF(draft.urgency) }} />}
       {simulationOpen && (
         <Modal title="Simulate incoming inquiry" className="simulate-modal" onClose={() => setSimulationOpen(false)}>
           <p className="hint">
@@ -3792,10 +3905,13 @@ export default function Inbox() {
         </Modal>
       )}
 
-      <div className="mailbox-list">
-        <div className="mail-column-head">
+      <div className="mailbox-split">
+      <div className="mailbox-list-panel">
+      <div className="mailbox-list" ref={mailboxListRef} id="mailbox-lead-list" onScroll={updateMailboxScrollMetrics}>
+        {mobileFiltersOpen && <button type="button" className="mobile-record-view" aria-expanded={mobileFiltersOpen} onClick={() => setMobileFiltersOpen(false)}>Done selecting</button>}
+        <div className="mail-column-head" data-mobile-open={mobileFiltersOpen}>
           <div className="mail-list-toolbar">
-          <label className="mail-check"><input type="checkbox" checked={mailboxRows.length > 0 && mailboxRows.every(l => selectedIds.has(l.id))} onChange={selectVisible} aria-label="Select visible messages" /></label>
+          <label className="mail-check"><input type="checkbox" checked={pageRows.length > 0 && pageRows.every(l => selectedIds.has(l.id))} onChange={selectVisible} aria-label="Select visible messages" /></label>
           <button type="button" className="mail-icon-btn" title="Refresh inbox" aria-label="Refresh inbox" onClick={() => { void store.refreshSharedData() }}><Icon name="refresh" size={15} /></button>
           <div className="mail-more-actions">
             <button type="button" className="mail-icon-btn" title="More actions" aria-label="More actions" aria-expanded={bulkMenuOpen} onClick={() => setBulkMenuOpen(open => !open)}><Icon name="list" size={15} /></button>
@@ -3805,7 +3921,6 @@ export default function Inbox() {
               <button type="button" onClick={() => setReadForSelected(true)} disabled={!selectedIds.size}>Mark selected as read</button>
               <button type="button" onClick={() => setReadForSelected(false)} disabled={!selectedIds.size}>Mark selected as unread</button>
               <button type="button" onClick={deleteSelected} disabled={!selectedIds.size}>Delete selected leads</button>
-              {hiddenByOwner > 0 && <button type="button" onClick={() => setShowAll(true)}>{hiddenByOwner} more assigned to others — show</button>}
               {staleAiLeads.length > 0 && <button type="button" onClick={repairStaleAi} disabled={repairingAi}>{repairingAi ? 'Repairing AI summaries…' : `Repair ${staleAiLeads.length} stale AI summar${staleAiLeads.length === 1 ? 'y' : 'ies'}`}</button>}
             </div>}
           </div>
@@ -3815,19 +3930,28 @@ export default function Inbox() {
           <span className="mail-head-filter-cell">{filterMenu('source', sourceF, setSourceF, 'Source / sender', sourceOptions, 'Source', 'All sources')}</span><span className="mail-subject-head" title="Subject / preview">Subject</span>
           <span className="mail-head-filter-cell">{filterMenu('route', routeF, setRouteF, 'AI route', ROUTE_OPTIONS, 'AI route', 'All routes')}</span>
           <span className="mail-head-filter-cell">{filterMenu('urgency', urgencyF, setUrgencyF, 'Urgency', ['Normal', 'Urgent'], 'Urgency', 'All urgencies')}</span>
-          <span className="mail-head-filter-cell">{filterMenu('duplicate', duplicateF, setDuplicateF, 'Dup. risk', ['Low', 'Medium', 'High'], 'Dup risk', 'All duplicate risk')}</span>
           <span className="mail-head-filter-cell">{filterMenu('completeness', completenessF, setCompletenessF, 'Completeness', [['high', 'High ≥90%'], ['medium', 'Medium 60–89%'], ['low', 'Low <60%']], 'Complete', 'All completeness')}</span>
           <span className="mail-head-filter-cell">{filterMenu('owner', ownerF, setOwnerF, 'Suggested owner', ownerOptions, 'Owner', 'All owners')}</span>
           <span className="mail-head-filter-cell mail-status-head">{filterMenu('status', statusF, setStatusF, 'Status', STATUS_OPTIONS, 'Status', 'All statuses')}</span>
           <span className="mail-head-filter-cell mail-age-head">{filterMenu('age', ageF, setAgeF, 'Age', [['today', 'Today'], ['7', '7–29 days'], ['30', '30+ days']], 'Age', 'All ages')}</span>
         </div>
-        {mailboxRows.map(l => {
+        {pageRows.map(l => {
           const completeness = l.completeness ?? (l.parse?.confidence != null ? Math.round(l.parse.confidence * 100) : null)
           const route = l.route || l.parse?.oppType || '—'
           const unread = l.status === 'New' && !l.readAt
           const age = ageDays(l.ts)
+          if (phone) return <article className={`phone-lead-row${unread ? ' is-unread' : ''}`} key={l.id}>
+            {mobileFiltersOpen && <label className="phone-select"><input type="checkbox" checked={selectedIds.has(l.id)} onChange={() => toggleSelected(l.id)} aria-label={`Select ${l.subject}`} /></label>}
+            <button type="button" className="phone-record" onClick={() => nav('/inbox/' + l.id)}>
+              <span className="phone-lead-sender"><b>{l.sender || l.from || l.source || 'Unknown sender'}</b><small>{ddMmmYY((l.ts || '').slice(0, 10))}</small></span>
+              <strong className="phone-clamp-two">{l.subject || 'Untitled enquiry'}</strong>
+              <span className="phone-clamp-one">{l.ai?.summary || l.body?.replace(/\s+/g, ' ').slice(0, 130) || 'No preview available'}</span>
+              <small>{l.status}{l.starred ? ' · Starred' : ''}{l.urgency === 'Urgent' ? ' · Urgent' : ''}</small>
+            </button>
+            {mobileFiltersOpen && <button type="button" aria-label={l.starred ? 'Remove star' : 'Star lead'} onClick={() => store.updateLead(l.id, { starred: !l.starred })}><Icon name="star" size={18} /></button>}
+          </article>
           return (
-            <div key={l.id} className={`mail-row ${unread ? 'unread' : ''} ${selectedIds.has(l.id) ? 'selected' : ''}`} onClick={() => nav('/inbox/' + l.id)}>
+            <div key={l.id} className={`mail-row ${unread ? 'unread' : ''} ${selectedIds.has(l.id) ? 'selected' : ''} ${String(previewLead?.id) === String(l.id) ? 'preview-active' : ''}`} role="button" tabIndex={0} aria-label={`Preview ${l.subject}`} onClick={() => window.innerWidth >= 1280 ? setPreviewLeadId(String(l.id)) : nav('/inbox/' + l.id)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); window.innerWidth >= 1280 ? setPreviewLeadId(String(l.id)) : nav('/inbox/' + l.id) } }}>
               <label className="mail-check" onClick={e => e.stopPropagation()}><input type="checkbox" checked={selectedIds.has(l.id)} onChange={() => toggleSelected(l.id)} aria-label={`Select ${l.subject}`} /></label>
               <button className={`mail-star ${l.starred ? 'starred' : ''}`} title={l.starred ? 'Remove star' : 'Star'} onClick={e => { e.stopPropagation(); store.updateLead(l.id, { starred: !l.starred }) }}><Icon name="star" size={15} /></button>
               <div className="mail-date"><b>{ddMmmYY((l.ts || '').slice(0, 10))}</b><small>{receivedTime(l.ts)}</small></div>
@@ -3844,7 +3968,6 @@ export default function Inbox() {
               </div>
               <div><Chip tone="grey">{route}</Chip></div>
               <div><Chip tone={l.urgency === 'Urgent' ? 'state-Rejected' : 'grey'}>{l.urgency || 'Normal'}</Chip></div>
-              <div><Chip tone={l.duplicateRisk === 'Medium' || l.duplicateRisk === 'High' ? 'conf-med' : 'grey'}>{l.duplicateRisk || 'Low'}</Chip></div>
               <div>{completeness != null ? <ConfChip conf={completeness} thresholds={store.config.aiThresholds} /> : '—'}</div>
               <div className="mail-owner">{l.suggestedOwner || '—'}</div>
               <div className="mail-status"><span className={`pill ${PILL[l.status] || 'Blue'}`}>{l.status}</span></div>
@@ -3860,7 +3983,7 @@ export default function Inbox() {
              {hiddenByOwner > 0 ? <>
                <b>{hiddenByOwner} lead{hiddenByOwner === 1 ? '' : 's'} here, none assigned to you</b>
                <span>Leads are routed to an owner by the AI region rules, so a lead you created can belong to someone else.</span>
-               <button className="primary" onClick={() => setShowAll(true)}>Show all leads</button>
+               <span>Choose Global View in the top bar to see the wider inbox.</span>
              </> : <>
                <b>{receivedF === 'today' || ageF === 'today' ? 'No messages received today' : 'No messages here'}</b>
                <span>{receivedF === 'today' || ageF === 'today' ? 'No inbox records match the current India business date.' : 'Try changing your filters.'}</span>
@@ -3869,6 +3992,41 @@ export default function Inbox() {
           </div>
         )}
       </div>
+      <div
+        ref={mailboxScrollRef}
+        className={`mailbox-horizontal-scrollbar${mailboxHasHorizontalOverflow ? ' is-visible' : ''}`}
+        role="scrollbar"
+        aria-label="Scroll lead list horizontally"
+        aria-controls="mailbox-lead-list"
+        aria-orientation="horizontal"
+        aria-valuemin={0}
+        aria-valuemax={mailboxMaxScroll}
+        aria-valuenow={Math.round(mailboxScrollMetrics.left)}
+        tabIndex={mailboxHasHorizontalOverflow ? 0 : -1}
+        onPointerDown={startMailboxScrollDrag}
+        onPointerMove={moveMailboxScrollDrag}
+        onPointerUp={stopMailboxScrollDrag}
+        onPointerCancel={stopMailboxScrollDrag}
+        onKeyDown={handleMailboxScrollKey}
+      >
+        <span className="mailbox-horizontal-scrollbar-thumb" style={{ width: `${mailboxThumbWidth}px`, transform: `translateX(${mailboxThumbLeft}px)` }} />
+      </div>
+      </div>
+      {previewLead && <aside className="mailbox-preview" aria-label="Selected lead preview">
+        <div className="mailbox-preview-head"><span className="workspace-insight-kicker">LEAD PREVIEW</span><span className={`pill ${PILL[previewLead.status] || 'Blue'}`}>{previewLead.status}</span></div>
+        <h3>{previewLead.subject || 'Untitled enquiry'}</h3>
+        <p className="mailbox-preview-sender"><PreviewFieldText value={`${previewLead.sender || previewLead.from || 'Sender not recorded'} · ${ddMmmYY((previewLead.ts || '').slice(0, 10))}`} /></p>
+        {previewLead.ai?.summary && <section><h4>AI summary <span className="ai-source-badge">AI</span></h4><p>{previewLead.ai.summary}</p></section>}
+        <section><h4>Extracted fields</h4>
+          {(previewLead.ai?.fields || []).slice(0, 6).map((field, index) => <div className="mailbox-preview-field" key={`${field.k}-${index}`}><span>{field.k}</span><b><PreviewFieldText value={field.v} /></b>{field.conf != null && <small>{field.conf}%</small>}</div>)}
+          {!previewLead.ai?.fields?.length && <p className="hint">No structured fields are available yet.</p>}
+        </section>
+        <section><h4>Original enquiry</h4><p className="mailbox-preview-excerpt">{previewLead.body?.replace(/\s+/g, ' ').slice(0, 460) || 'Original message text is unavailable.'}</p></section>
+        <div className="mailbox-preview-actions">{previewLead.status === 'Qualified' ? <button type="button" className="primary" onClick={() => nav(`/register/${previewLead.id}`)}>Continue registration</button> : <button type="button" className="primary" onClick={() => nav(`/inbox/${previewLead.id}`)}>{previewLead.status === 'New' ? 'Review / qualify' : 'Open lead'}</button>}{previewLead.status === 'Converted' && previewLead.oppId ? <button type="button" onClick={() => nav(`/opp/${previewLead.oppId}`)}>Open opportunity</button> : <button type="button" onClick={() => nav(`/inbox/${previewLead.id}`)}>Open full page</button>}</div>
+      </aside>}
+      </div>
+      {inboxPagination}
+      {!showArchive && <WorkspaceInsights signals={inboxInsights} />}
       <p className="hint" style={{ marginTop: 8 }}>
         Dropped leads are kept as a minimal record — reason and source only — for future demand analytics.
       </p>

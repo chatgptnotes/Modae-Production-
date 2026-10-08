@@ -90,7 +90,7 @@ test('price lists use one metadata record per list and one JSONB record per vers
   assert.match(datastore, /CONSOLIDATED_PRICE_LIST_ENTITY = 'price_lists'/)
   assert.match(datastore, /CONSOLIDATED_PRICE_VERSION_ENTITY = 'price_list_versions'/)
   assert.match(datastore, /loadConsolidatedPriceLists\(\)/)
-  assert.match(datastore, /saveNormalizedRowsNow\(CONSOLIDATED_PRICE_VERSION_ENTITY, versionRows\)/)
+  assert.match(datastore, /saveNormalizedRowsNow\(CONSOLIDATED_PRICE_VERSION_ENTITY, versionRows, retainedVersionIds\)/)
 })
 
 test('an empty consolidated price-list table is a valid empty catalogue', () => {

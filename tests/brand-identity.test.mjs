@@ -22,6 +22,9 @@ test('the brand palette is declared once, in the branding module', () => {
   assert.equal(MODAE_COLORS.ink, '#282828')
   assert.equal(MODAE_TYPE.heading.includes('Candara'), true)
   assert.equal(MODAE_TYPE.body.includes('Candara'), true)
+  assert.equal(MODAE_TYPE.mono, 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace')
+  assert.equal(MODAE_COLORS.status.critical, '#C93838')
+  assert.equal(MODAE_COLORS.status.neutral, '#616161')
 })
 
 test('styles.css mirrors the brand tokens', () => {
@@ -128,7 +131,7 @@ test('Candara is the system typography and is not network-dependent', () => {
   assert.doesNotMatch(read('index.html'), /fonts\.googleapis\.com|fonts\.gstatic\.com/)
   assert.doesNotMatch(css, /fonts\.googleapis\.com|fonts\.gstatic\.com/)
   assert.match(css, /--font-family-sans: 'Candara'/)
-  assert.match(css, /--font-family-mono: 'Candara'/)
+  assert.match(css, /--font-family-mono:\s*ui-monospace, SFMono-Regular, Menlo, Consolas, monospace/)
 
   const sw = read('public/sw.js')
   assert.match(sw, /url\.pathname\.startsWith\('\/fonts\/'\)/)
@@ -150,14 +153,13 @@ test('the funnel uses the approved emerald and forest green stage ramp', () => {
   assert.match(read('src/pages/Analytics.jsx'), /const FUNNEL_RAMP = MODAE_COLORS\.ramp/)
 })
 
-test('the application is permanently light and has no dark-mode controls', () => {
-  for (const file of ['index.html', 'src/main.jsx', 'src/App.jsx',
-    'src/pages/Login.jsx', 'src/pages/ShowcaseLanding.jsx', 'src/tablet/TabletApp.jsx']) {
-    const source = read(file)
-    assert.doesNotMatch(source, /ThemeProvider|ThemeToggle|useTheme|prefers-color-scheme|wintrack-modae-theme|theme-dark|html\.dark|dark:/, `${file} must not expose dark mode`)
-  }
+test('the application defaults to light and persists an explicit dark preference', () => {
+  const app = read('src/App.jsx')
+  assert.match(app, /ThemeProvider/)
+  assert.match(read('src/ui/workspaceTheme.js'), /THEME_KEY = 'modae_theme'/)
+  assert.match(app, /workspace-theme-toggle/)
   assert.match(css, /:root\s*\{[\s\S]*color-scheme:\s*light;/)
-  assert.doesNotMatch(css, /theme-toggle|theme-ready|theme-dark|theme-light|html\.dark/)
+  assert.match(css, /\[data-theme="dark"\]/)
 })
 
 test('the branding sources no longer say the opposite', () => {
@@ -223,4 +225,27 @@ test('white text never sits directly on the raw brand red', () => {
   // text on it must use --primary-fill.
   assert.match(css, /button\.primary, \.btn\.primary \{[^}]*background: var\(--primary-fill\)/)
   assert.doesNotMatch(css, /background: var\(--xl-green\); color: #fff/)
+})
+
+test('the UI token layer reserves accessible semantic roles and technical type', () => {
+  const root_ = css.slice(css.indexOf(':root {'), css.indexOf('}', css.indexOf(':root {')))
+  assert.match(root_, /--status-critical:/)
+  assert.match(root_, /--status-warning:/)
+  assert.match(root_, /--status-success:/)
+  assert.match(root_, /--status-info:/)
+  assert.match(root_, /--status-neutral:/)
+  assert.match(root_, /--font-family-mono:\s*ui-monospace, SFMono-Regular, Menlo, Consolas, monospace/)
+  assert.match(root_, /--badge-phase2:/)
+  assert.match(root_, /--badge-ai:/)
+})
+
+test('customer classifications use their own labelled chip contract', () => {
+  const ui = read('src/ui.jsx')
+  assert.match(ui, /customer-class customer-class-\$\{cls\}/)
+  assert.doesNotMatch(ui, /className=\{`pill \$\{cls\}`\}/)
+})
+
+test('document previews use the ModAE primary token instead of legacy blue', () => {
+  assert.doesNotMatch(read('src/proposal/WorkbookPreview.jsx'), /#3333FF/i)
+  assert.doesNotMatch(css, /#3333FF/i)
 })

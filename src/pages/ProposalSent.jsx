@@ -1,10 +1,14 @@
 import React, { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
+import usePhoneLayout from '../tablet/usePhoneLayout.js'
 import { displayOpportunityId } from '../seed.js'
 import { canPriceProposal, ddMmmYY, ddMMyyyy, displayRole, fmtLakh, isSalesOwner } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { latestSubmissionForRevision } from '../submissionStatus.js'
+import WorkspaceInsights from '../ui/WorkspaceInsights.jsx'
+import { useWorkspaceView } from '../ui/WorkspaceViewContext.jsx'
+import { usePagedRows } from '../ui/Pagination.jsx'
 
 const DAY = 86400000
 
@@ -79,16 +83,22 @@ function Stat({ label, value, detail, tone = '' }) {
 
 export default function ProposalSent() {
   const store = useStore()
+  const narrow = usePhoneLayout()
+  const phone = narrow && store.viewMode === 'tablet'
   const nav = useNavigate()
+  const { scope } = useWorkspaceView()
   const role = store.role
   const commercial = canPriceProposal(role)
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [ownerFilter, setOwnerFilter] = useState('all')
   const [sort, setSort] = useState('urgency')
+  const [view, setView] = useState('table')
 
   const rows = useMemo(() => {
-    const opportunities = (store.opportunities || []).filter(opp => !isSalesOwner(role) || opp.owner === role)
+    const opportunities = (store.opportunities || []).filter(opp => scope === 'my'
+      ? opp.owner === role
+      : !isSalesOwner(role) || opp.owner === role)
     return opportunities.flatMap(opp => {
       const proposal = store.getProposal(opp.id)
       const communications = (store.communications?.[opp.id] || []).slice().sort((a, b) => dateValue(b.ts) - dateValue(a.ts))
@@ -103,7 +113,7 @@ export default function ProposalSent() {
       const urgency = urgencyFor({ age, daysLeft, status })
       return [{ opp, proposal, communications, submission, revision, sentDate, age, validityDays, daysLeft, status, urgency }]
     })
-  }, [role, store.opportunities, store.communications, store.config?.proposalValidityDays, store.proposals])
+  }, [role, scope, store.opportunities, store.communications, store.config?.proposalValidityDays, store.proposals])
 
   const owners = useMemo(() => [...new Set(rows.map(row => row.opp.owner).filter(Boolean))].sort(), [rows])
   const visibleRows = useMemo(() => {
@@ -120,6 +130,7 @@ export default function ProposalSent() {
         return (rank[a.urgency.key] ?? 9) - (rank[b.urgency.key] ?? 9) || dateValue(a.sentDate) - dateValue(b.sentDate)
       })
   }, [rows, query, statusFilter, ownerFilter, sort])
+  const { pagedRows: pageRows, pagination } = usePagedRows(visibleRows, JSON.stringify([query, statusFilter, ownerFilter, sort, view, scope]))
 
   const activeRows = rows.filter(row => !['won', 'lost', 'accepted'].includes(row.status.key))
   const dueRows = activeRows.filter(row => ['expired', 'overdue', 'expiring', 'due'].includes(row.urgency.key))
@@ -129,16 +140,39 @@ export default function ProposalSent() {
     const rank = { expired: 0, overdue: 1, expiring: 2, due: 3 }
     return (rank[a.urgency.key] ?? 9) - (rank[b.urgency.key] ?? 9) || dateValue(a.sentDate) - dateValue(b.sentDate)
   }).slice(0, 5)
+  const weekStart = new Date()
+  weekStart.setHours(0, 0, 0, 0)
+  weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7))
+  const weekColumns = Array.from({ length: 8 }, (_, index) => {
+    const start = new Date(weekStart.getTime() + index * 7 * DAY)
+    return { key: `week-${index}`, label: `Week of ${ddMmmYY(start.toISOString().slice(0, 10))}` }
+  })
+  const boardColumns = [{ key: 'overdue', label: 'Overdue' }, ...weekColumns]
+  const followupColumn = row => {
+    const sent = dateValue(row.sentDate)
+    if (!sent) return ''
+    const due = sent + 7 * DAY
+    if (due < weekStart.getTime()) return 'overdue'
+    const index = Math.floor((due - weekStart.getTime()) / (7 * DAY))
+    return index >= 0 && index < 8 ? `week-${index}` : ''
+  }
+  const boardOwners = [...new Set(visibleRows.map(row => row.opp.owner || 'Unassigned'))].sort()
+  const proposalSignals = [
+    { count: dueRows.length, tone: dueRows.length ? 'warning' : 'positive', label: 'submitted proposals need follow-up', source: 'Rule' },
+    { count: expiringRows.length, tone: expiringRows.length ? 'critical' : 'positive', label: 'proposals expire within 7 days', source: 'Rule' },
+    { count: activeRows.filter(row => row.status.key === 'awaiting').length, tone: 'neutral', label: 'proposals await customer response', source: 'Rule' },
+  ]
 
   return (
     <div className="page proposal-sent-page">
+      <WorkspaceInsights signals={proposalSignals} onRefresh={store.refreshSharedData} />
       <div className="proposal-sent-head">
         <div>
-          <h2 className="workspace-page-title"><Icon name="send" size={18} /> Proposal Sent</h2>
+          <h2 className="workspace-page-title workspace-page-title--topbar-duplicate"><Icon name="send" size={18} /> Proposal Sent</h2>
           <p className="hint">Keep submitted proposals moving from customer review to a clear next decision.</p>
         </div>
         <div className="proposal-sent-head-actions">
-          <span className="proposal-sent-scope"><span className="proposal-sent-live-dot" /> {isSalesOwner(role) ? 'My submitted proposals' : 'Company submitted proposals'}</span>
+          <span className="proposal-sent-scope"><span className="proposal-sent-live-dot" /> {scope === 'my' || isSalesOwner(role) ? 'My submitted proposals' : 'Company submitted proposals'}</span>
           <button className="primary" onClick={() => nav('/opportunities')}><Icon name="cards" size={13} /> Open opportunities</button>
         </div>
       </div>
@@ -153,7 +187,7 @@ export default function ProposalSent() {
       <section className="proposal-sent-priority" aria-labelledby="proposal-sent-priority-title">
         <div className="proposal-sent-section-head">
           <div>
-            <h3 id="proposal-sent-priority-title">Needs attention</h3>
+            <h3 id="proposal-sent-priority-title">Act on these first</h3>
             <p className="hint">The proposals most likely to lose momentum without a timely customer touch.</p>
           </div>
           <span className="proposal-sent-count">{dueRows.length} requiring attention</span>
@@ -177,7 +211,10 @@ export default function ProposalSent() {
       <section className="proposal-sent-register" aria-labelledby="proposal-sent-register-title">
         <div className="proposal-sent-section-head proposal-sent-register-head">
           <div><h3 id="proposal-sent-register-title">All submitted proposals</h3><p className="hint">Search the register, then open the opportunity to record the next customer interaction.</p></div>
-          <span className="proposal-sent-count">{visibleRows.length} of {rows.length}</span>
+          <div className="proposal-sent-register-actions"><span className="proposal-sent-count">{visibleRows.length} of {rows.length}</span><div className="proposal-sent-view-toggle" role="group" aria-label="Proposal view">
+            <button type="button" aria-pressed={view === 'table'} className={view === 'table' ? 'active' : ''} onClick={() => setView('table')}>Table</button>
+            <button type="button" aria-pressed={view === 'board'} className={view === 'board' ? 'active' : ''} onClick={() => setView('board')}>Board</button>
+          </div></div>
         </div>
         <div className="proposal-sent-filters">
           <label className="proposal-sent-search"><Icon name="search" size={14} /><span className="visually-hidden">Search proposals</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search customer, opportunity or reference" /></label>
@@ -185,12 +222,30 @@ export default function ProposalSent() {
           <label><span className="visually-hidden">Filter owner</span><select value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)}><option value="all">All owners</option>{owners.map(owner => <option key={owner} value={owner}>{displayRole(owner)}</option>)}</select></label>
           <label><span className="visually-hidden">Sort proposals</span><select value={sort} onChange={e => setSort(e.target.value)}><option value="urgency">Sort: urgency</option><option value="sent">Sort: newest</option><option value="value">Sort: value</option><option value="customer">Sort: customer</option></select></label>
         </div>
-        <div className="proposal-sent-table-wrap">
+        {view === 'board' ? <div className="proposal-board-wrap" role="region" aria-label="Proposal follow-up plan by owner and week">
+          <div className="proposal-board-grid" style={{ '--proposal-board-columns': boardColumns.length }}>
+            <div className="proposal-board-owner-heading">Owner</div>{boardColumns.map(column => <div className="proposal-board-column-heading" key={column.key}>{column.label}</div>)}
+            {boardOwners.map(owner => <React.Fragment key={owner}>
+              <div className="proposal-board-owner">{owner === 'Unassigned' ? owner : displayRole(owner)}</div>
+              {boardColumns.map(column => {
+                const cards = visibleRows.filter(row => (row.opp.owner || 'Unassigned') === owner && followupColumn(row) === column.key)
+                return <div className="proposal-board-cell" key={`${owner}-${column.key}`}>
+                  {cards.map(row => <button type="button" className={`proposal-board-card urgency-${row.urgency.tone}`} key={row.opp.id} onClick={() => nav(`/opp/${row.opp.id}/followup`)}>
+                    <b>{displayOpportunityId(row.opp.id)} · Rev-{row.revision}</b><span>{row.opp.sellTo || 'Customer not recorded'}</span><small>{row.daysLeft == null ? 'Validity not recorded' : row.daysLeft < 0 ? `${Math.abs(row.daysLeft)}d expired` : `${row.daysLeft}d validity left`}</small>
+                  </button>)}
+                  {!cards.length && <span className="proposal-board-empty">—</span>}
+                </div>
+              })}
+            </React.Fragment>)}
+            {!boardOwners.length && <div className="proposal-board-no-results">No proposals match these filters.</div>}
+          </div>
+        </div> : <>
+        {phone ? <section aria-label="Submitted proposals">{pageRows.map(row => <button type="button" className="phone-record" key={row.opp.id} onClick={() => nav(`/opp/${row.opp.id}/followup`)}><strong>{row.opp.sellTo || 'Customer not recorded'}</strong><span>{displayOpportunityId(row.opp.id)} · Rev-{row.revision} · {row.status.label}</span><small>{formatSentDate(row.sentDate) || 'No sent date'} · {displayRole(row.opp.owner)}{commercial ? ` · ${fmtLakh(row.opp.valueK || 0)}` : ''}</small><small>{row.daysLeft == null ? 'Validity not recorded' : row.daysLeft < 0 ? `${Math.abs(row.daysLeft)} days expired` : `${row.daysLeft} days left`}</small></button>)}{!pageRows.length && <p>No proposals match these filters.</p>}</section> : <div className="proposal-sent-table-wrap">
           <table className="proposal-sent-table">
             <colgroup><col className="proposal-sent-col-opportunity" /><col className="proposal-sent-col-customer" /><col className="proposal-sent-col-owner" /><col className="proposal-sent-col-proposal" /><col className="proposal-sent-col-sent" /><col className="proposal-sent-col-validity" /><col className="proposal-sent-col-status" /><col className="proposal-sent-col-action" /></colgroup>
             <thead><tr><th>Opportunity</th><th>Customer</th><th>Owner</th><th>Proposal</th><th>Sent</th><th>Validity</th><th>Status</th><th><span className="visually-hidden">Actions</span></th></tr></thead>
             <tbody>
-              {visibleRows.map(row => (
+              {pageRows.map(row => (
                 <tr key={row.opp.id}>
                   <td><button className="proposal-sent-link" title={`${displayOpportunityId(row.opp.id)} — ${row.opp.oppName || 'Untitled opportunity'}`} aria-label={`Open follow-up for ${displayOpportunityId(row.opp.id)} — ${row.opp.oppName || 'Untitled opportunity'}`} onClick={() => nav(`/opp/${row.opp.id}/followup`)}><b>{displayOpportunityId(row.opp.id)}</b><span>{row.opp.oppName || 'Untitled opportunity'}</span></button></td>
                   <td><span className="proposal-sent-cell-text" title={row.opp.sellTo || '—'}>{row.opp.sellTo || '—'}</span></td>
@@ -206,6 +261,9 @@ export default function ProposalSent() {
             </tbody>
           </table>
         </div>
+        }
+        {pagination}
+        </>}
       </section>
     </div>
   )

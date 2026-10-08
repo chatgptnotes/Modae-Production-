@@ -385,10 +385,10 @@ test('a missing or unreadable snapshot still falls back to the demo data', () =>
   }
 })
 
-// The three demo-data buttons must all be the shared control, or the wording and
-// the confirm guards drift apart between them.
-test('all three demo-data call sites use the shared control', () => {
-  for (const f of ['src/App.jsx', 'src/pages/Admin.jsx', 'src/pages/Launcher.jsx']) {
+// Demo controls belong in the admin-only surfaces, not in the persistent
+// workspace navigation. The two remaining entry points share the same guard.
+test('admin-only demo-data call sites use the shared control', () => {
+  for (const f of ['src/pages/Admin.jsx', 'src/pages/Launcher.jsx']) {
     const src = fs.readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
     assert.match(src, /<DemoDataControls/, `${f} must render DemoDataControls`)
     assert.match(src, /DemoDataControls[^\n]*} from '\.\.?\/(\.\.\/)?ui\.jsx'|DemoDataControls } from/,
@@ -396,6 +396,8 @@ test('all three demo-data call sites use the shared control', () => {
     assert.doesNotMatch(src, /window\.confirm\('Reset all demo data/,
       `${f} must not keep its own copy of the reset confirm`)
   }
+  const app = fs.readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8')
+  assert.doesNotMatch(app, /DemoDataControls/, 'workspace navigation must not expose demo controls')
 })
 
 // Every Launcher scenario deep-links to a seeded record, so they cannot work on

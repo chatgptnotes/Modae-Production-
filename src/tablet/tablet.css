@@ -1,4 +1,64 @@
 /* Tablet-only overrides are imported by TabletApp after the global stylesheet. */
+.tablet-mode.shell { height: auto; min-height: 100dvh; overflow: visible; }
+.tablet-mode .tablet-bar { display: grid; grid-template-columns: minmax(0, 1fr) auto; background: var(--surface-default); color: var(--text-primary); border-bottom: 1px solid var(--border-default); }
+.tablet-mode .mobile-heading { display: flex; align-items: center; min-width: 0; gap: 6px; }
+.tablet-mode .mobile-heading h1 { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 18px; line-height: 1.25; overflow-wrap: anywhere; }
+.tablet-mode .tablet-bar .tb-utilities { gap: 6px; flex-wrap: nowrap; }
+.tablet-mode .tablet-bar button { min-height: 44px; min-width: 44px; color: var(--text-primary); }
+.tablet-mode .mobile-refresh-status { grid-column: 1 / -1; margin: 0; font-size: 13px; }
+.tablet-mode .has-mobile-title .workspace-page-title { display: none; }
+.tablet-mode .tab-bottom { background: var(--surface-default); border-color: var(--border-default); }
+.tablet-mode .tab-bottom a { min-height: 56px; justify-content: center; color: var(--text-secondary); }
+.tablet-mode .tab-bottom a.active { color: var(--primary-fill); background: var(--surface-sunken); }
+.tablet-mode .mobile-more { max-width: 860px; margin-inline: auto; }
+.mobile-menu-search { display: grid; gap: 6px; }
+.mobile-menu-search input { width: 100%; }
+.mobile-destinations { display: grid; gap: 8px; margin-block: 16px; }
+.mobile-destinations a { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 12px; border: 1px solid var(--border-default); border-radius: 8px; background: var(--surface-default); color: var(--text-primary); text-decoration: none; }
+.mobile-destinations a span { flex: 1; }
+.mobile-settings { display: grid; gap: 12px; border-top: 1px solid var(--border-default); padding-top: 16px; }
+.mobile-settings > div { display: flex; justify-content: space-between; align-items: center; }
+.mobile-table-expand { position: sticky; left: 8px; bottom: 8px; z-index: 6; }
+.tablet-mode .mobile-table-expanded { position: fixed !important; inset: 0 !important; z-index: 180; width: 100vw !important; height: 100dvh !important; max-height: none !important; background: var(--surface-default); overflow: auto !important; padding: 12px 12px calc(64px + env(safe-area-inset-bottom)); }
+.tablet-mode .mobile-table-expanded .mobile-table-expand { position: fixed; top: auto; bottom: calc(8px + env(safe-area-inset-bottom)); }
+@media (min-width: 700px) { .mobile-destinations { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) {
+  .tablet-mode .tablet-bar { grid-template-columns: minmax(0, 1fr); }
+  .tablet-mode .tablet-bar .tb-utilities { justify-content: space-between; }
+  .tablet-mode .page { width: 100%; max-width: 100%; padding: 14px 12px calc(90px + env(safe-area-inset-bottom)); }
+  .tablet-mode :is(button, .btn, select, input:not([type=checkbox]):not([type=radio]), textarea) { min-height: 44px; font-size: 16px; max-width: 100%; }
+  .tablet-mode :is(.toolbar, .mail-search-row, .tracker-toolbar-filters, .tracker-toolbar-actions, .proposal-sent-head, .admin-page-head) { flex-wrap: wrap; gap: 8px; }
+  .tablet-mode :is(.dgrid2, .form-grid, .workbench-overview-grid, .customer-commercial-grid, .opportunity-details-grid) { display: grid; grid-template-columns: minmax(0, 1fr) !important; }
+  .tablet-mode :is(.dgrid2, .form-grid) > * { grid-column: auto !important; min-width: 0; }
+  .tablet-mode :is(.sheet-wrap, .dashboard-table-scroll, .reference-table-wrap, .proposal-sent-table-wrap) { max-width: 100%; overflow: auto; }
+  .tablet-mode .tracker-page .sheet-wrap:not(.mobile-table-expanded) { max-height: 55dvh; }
+  .tablet-mode .mobile-opportunity-cards { display: grid; gap: 10px; margin-block: 12px; }
+  .tablet-mode .mobile-opportunity-cards.is-hidden, .tablet-mode .mobile-table-collapsed { display: none; }
+  .tablet-mode .mobile-record-view { display: inline-flex; margin-block: 8px; }
+  .mobile-opportunity-cards article { padding: 14px; border: 1px solid var(--border-default); border-radius: 10px; background: var(--surface-default); }
+  .mobile-opportunity-cards article > a:first-child { display: grid; gap: 5px; color: var(--text-primary); text-decoration: none; overflow-wrap: anywhere; }
+  .mobile-opportunity-cards dl { display: grid; gap: 6px; font-size: 14px; }
+  .mobile-opportunity-cards dl div { display: flex; justify-content: space-between; gap: 12px; }
+  .mobile-opportunity-cards dd { margin: 0; overflow-wrap: anywhere; text-align: right; }
+  .tablet-mode .mailbox-list { min-width: 0 !important; width: 100% !important; }
+  .tablet-mode .mail-row { display: flex; flex-wrap: wrap; width: 100% !important; min-width: 0 !important; padding: 12px; gap: 8px; height: auto; margin-bottom: 8px; border: 1px solid var(--border-default); border-radius: 10px; }
+  .tablet-mode .mail-row .mail-content { flex: 1 0 100%; order: -1; }
+  .tablet-mode .mail-row .mail-sender { flex: 1 0 100%; }
+  .tablet-mode .mail-row :is(.mail-subject-title, .mail-sender small) { white-space: normal; overflow-wrap: anywhere; }
+  .tablet-mode .mail-column-head { display: none; flex-wrap: wrap; min-width: 0 !important; width: 100% !important; height: auto; gap: 8px; padding: 8px; }
+  .tablet-mode .mail-column-head[data-mobile-open="true"] { display: flex; }
+  .tablet-mode .mailbox-list .mobile-record-view { display: flex; width: 100%; justify-content: center; }
+  .tablet-mode .mail-column-head .mail-subject-head { display: none; }
+  .tablet-mode table:has(.mobile-card-row) { min-width: 0 !important; width: 100% !important; }
+  .tablet-mode table:has(.mobile-card-row) thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .tablet-mode table:has(.mobile-card-row) tbody { display: grid; gap: 12px; }
+  .tablet-mode .mobile-card-row { display: grid; border: 1px solid var(--border-default); border-radius: 8px; padding: 10px; }
+  .tablet-mode .mobile-card-row td { display: block; width: auto !important; height: auto !important; min-height: 36px; white-space: normal; overflow-wrap: anywhere; }
+  .tablet-mode .mobile-card-row td::before { content: attr(data-mobile-label); display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+  .tablet-mode :is(.form-actions, .lead-decision-actions, .workbench-actions) { position: static; flex-wrap: wrap; }
+  body:has(.tablet-mode) .modal { position: fixed; inset: 0; transform: none; width: 100%; max-width: 100%; height: 100dvh; max-height: 100dvh; overflow: auto; border-radius: 0; padding-bottom: calc(24px + env(safe-area-inset-bottom)); }
+  .tablet-mode .drawer { width: 100vw; max-width: 100vw; }
+}
 .tablet-mode {
   overscroll-behavior-y: contain;
 }
@@ -70,4 +130,84 @@
 .tablet-mode .ai-field .af-actions button {
   min-height: 0;
   padding: 3px 10px;
+}
+
+/* Tablet keeps the same light ModAE console palette with larger touch targets. */
+.tablet-mode {
+  --action-primary: #ED3F2F;
+  --action-primary-hover: #C7291B;
+  --action-primary-active: #9E1F14;
+  --text-primary: #282828;
+  --text-secondary: #616161;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.tablet-mode .page :is(.panel, .form-card, .card, .admin-card, .approval-card, .mailbox-list, .proposal-sent-register) {
+  border-color: #E7E4DF;
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgba(40, 40, 40, .035);
+}
+
+.tablet-mode .workspace-page-title { color: #282828; letter-spacing: -.03em; }
+.tablet-mode .workspace-page-title > .ic { color: #ED3F2F; }
+.tablet-mode .main-scroll,
+.tablet-mode .page { background-color: #F8F7F4; }
+.tablet-mode .dashboard-page.dashboard-workspace .dw-kpi strong,
+.tablet-mode .dashboard-page.dashboard-workspace .dw-table td,
+.tablet-mode .proposal-sent-stat-value,
+.tablet-mode .approval-summary-card > b {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 768px) {
+  .tablet-mode .page :is(.dashboard-table-scroll, .dw-table-wrap, .proposal-sent-table-wrap, .sheet-wrap) {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+  }
+  .tablet-mode .page :is(.mail-new-enquiry, .primary, .btn.primary) { min-height: 42px; }
+  .tablet-mode .page :is(.form-actions, .lead-decision-actions, .workbench-actions) {
+    position: sticky;
+    bottom: calc(52px + env(safe-area-inset-bottom));
+    z-index: 5;
+    background: rgba(255, 255, 255, .96);
+    backdrop-filter: blur(8px);
+  }
+}
+
+/* Tablet inherits the desktop token palette when the shared theme switch is on. */
+.tablet-mode[data-theme="dark"] {
+  background: var(--surface-canvas);
+}
+.tablet-mode[data-theme="dark"] :is(.main-scroll, .page) { background-color: var(--surface-canvas); }
+.tablet-mode[data-theme="dark"] .workspace-page-title { color: var(--text-primary); }
+.tablet-mode[data-theme="dark"] .page :is(.panel, .form-card, .card, .admin-card, .approval-card, .mailbox-list, .proposal-sent-register) {
+  border-color: var(--border-default);
+  background: var(--surface-default);
+  color: var(--text-primary);
+}
+@media (max-width: 768px) {
+  .tablet-mode[data-theme="dark"] .page :is(.form-actions, .lead-decision-actions, .workbench-actions) {
+    background: color-mix(in srgb, var(--surface-default) 96%, transparent);
+  }
+}
+
+/* Phone controls override legacy tablet sizing declared above. */
+@media (max-width: 600px) {
+  .tablet-mode .forms-bg { padding: 12px 12px calc(90px + env(safe-area-inset-bottom)); }
+  .tablet-mode .forms-card { width: 100%; min-width: 0; padding: 14px; }
+  .tablet-mode .forms-grid { grid-template-columns: minmax(0, 1fr); }
+  .tablet-mode .forms-actions { flex-wrap: wrap; gap: 8px; }
+  .tablet-mode .opportunity-stage-strip { display: flex; overflow-x: auto; scroll-snap-type: x proximity; }
+  .tablet-mode .opportunity-stage-strip button { flex: 0 0 100px; scroll-snap-align: start; }
+  .tablet-mode .opportunity-stage-strip button span { font-size: 12px; white-space: normal; }
+  .tablet-mode .mail-star, .tablet-mode .mail-icon-btn { width: 44px; flex-shrink: 0; padding: 8px; }
+  .tablet-mode .page :is(button, .btn, select, input:not([type=checkbox]):not([type=radio]), textarea) { min-height: 44px; }
+  .tablet-mode .mail-row { font-size: 14px; }
+  .tablet-mode .mail-row .mail-subject-title { font-size: 16px; line-height: 1.4; }
+  .tablet-mode .mail-row small { font-size: 13px; line-height: 1.4; }
+  .tablet-mode .mail-row .mail-content-stack { max-height: none; }
+  .tablet-mode .mail-row :is(.mail-star, .mail-opportunity-link), .tablet-mode .mail-icon-btn { color: var(--text-primary); background: var(--surface-sunken); }
+  .tablet-mode .page :is(.form-actions, .lead-decision-actions, .workbench-actions) { position: static; }
 }

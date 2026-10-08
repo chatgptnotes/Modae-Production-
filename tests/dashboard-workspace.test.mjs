@@ -1,8 +1,20 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { dashboardModel, dashboardPeriod, dashboardTiming, paginationNumbers, dateInPeriod, registerRows } from '../src/pages/myDashboard/model.js'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { dashboardModel, dashboardPeriod, dashboardTiming, paginationNumbers, dateInPeriod, registerRows, reconcileWinLossReasons } from '../src/pages/myDashboard/model.js'
+import { dashboardDefaultScope } from '../src/utils.js'
 
 const now = new Date('2026-10-04T12:00:00Z')
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+
+test('sales representatives default to their own dashboard scope while managers retain global scope', () => {
+  assert.equal(dashboardDefaultScope('RS'), 'my')
+  assert.equal(dashboardDefaultScope('PP'), 'my')
+  assert.equal(dashboardDefaultScope('LJS'), 'global')
+  assert.equal(dashboardDefaultScope('AH'), 'global')
+})
 
 test('task timing uses real deadlines and the IST business day', () => {
   assert.equal(dashboardTiming('2026-10-04', '', now).label, 'Today')
@@ -56,6 +68,89 @@ test('global KPIs, approvals, funnel and register share company or selected-owne
   assert.equal(rs.perf.annual, 400)
   assert.equal(rs.perf.achieved, 120)
   assert.deepEqual(rs.team.map(row => row.owner), ['RS'])
+})
+
+test('reference dashboard exposes top opportunities and probability segments from the active scope', () => {
+  const store = workspace({ opportunities: [
+    opportunity('low', 'RS', { valueK: 100, prob: 'Low', orderDate: '2026-10-20' }),
+    opportunity('high', 'PP', { valueK: 400, prob: 'High', orderDate: '2026-10-25' }),
+    opportunity('medium', 'LJS', { valueK: 250, prob: 'Medium', orderDate: '2026-10-10' }),
+  ] })
+  const model = dashboardModel(store, { now })
+  assert.deepEqual(model.topOpportunities.map(row => row.id), ['high', 'medium', 'low'])
+  assert.deepEqual(model.funnel.find(row => row.key === 'rfq').segments, [
+    { key: 'high', count: 1, valueK: 400 },
+    { key: 'medium', count: 1, valueK: 250 },
+    { key: 'low', count: 1, valueK: 100 },
+  ])
+})
+
+test('dashboard headline preview count and value reconcile to the five displayed opportunities', () => {
+  const store = workspace({ opportunities: Array.from({ length: 6 }, (_, index) => opportunity(`RS-${index + 1}`, 'RS', {
+    valueK: (index + 1) * 100,
+    orderDate: `2026-10-${String(index + 1).padStart(2, '0')}`,
+  })) })
+  const model = dashboardModel(store, { owner: 'RS', period: 'q3', now })
+  assert.equal(model.topOpportunities.length, 5)
+  assert.equal(model.headlineOpenCount, model.topOpportunities.length)
+  assert.equal(model.headlinePipelineK, model.topOpportunities.reduce((sum, row) => sum + row.valueK, 0))
+})
+
+test('Q3 opportunity widgets use Expected Order Date rather than creation date', () => {
+  const store = workspace({ opportunities: [
+    opportunity('q3-order', 'RS', { createDate: '2026-06-01', orderDate: '2026-10-01' }),
+    opportunity('q2-order', 'RS', { createDate: '2026-10-01', orderDate: '2026-09-30' }),
+    opportunity('q4-order', 'RS', { createDate: '2026-10-01', orderDate: '2027-01-01' }),
+  ] })
+  const model = dashboardModel(store, { owner: 'RS', period: 'q3', now })
+  assert.deepEqual(model.pipeline.map(row => row.id), ['q3-order'])
+  assert.deepEqual(model.topOpportunities.map(row => row.id), ['q3-order'])
+})
+
+test('YTD and QTD targets reconcile from the canonical quarterly target plan', () => {
+  const store = workspace({
+    opportunities: [],
+    sales: { fy: 'FY 2026–27', currentQ: 3, monthsElapsed: 7, targets: { RS: { annual: 6000, q: [1500, 1500, 1500, 1500] } }, orders: [] },
+  })
+  assert.equal(dashboardModel(store, { owner: 'RS', period: 'fy', now }).perf.annual, 4500)
+  assert.equal(dashboardModel(store, { owner: 'RS', period: 'q3', now }).perf.annual, 1500)
+})
+
+test('reason breakdown aggregates overflow so its won and lost totals match the summary', () => {
+  const reasons = reconcileWinLossReasons([
+    { reason: 'Price', won: 5, lost: 1 }, { reason: 'Technical', won: 4, lost: 2 },
+    { reason: 'Budget', won: 3, lost: 3 }, { reason: 'Timing', won: 2, lost: 4 },
+    { reason: 'Other one', won: 1, lost: 5 }, { reason: 'Other two', won: 1, lost: 1 },
+  ])
+  assert.equal(reasons.length, 5)
+  assert.deepEqual(reasons.at(-1), { reason: 'Other', won: 2, lost: 6 })
+  assert.equal(reasons.reduce((sum, row) => sum + row.won, 0), 16)
+  assert.equal(reasons.reduce((sum, row) => sum + row.lost, 0), 16)
+})
+
+test('dashboard route includes the complete reference report without the legacy opportunity register', () => {
+  const source = fs.readFileSync(path.join(root, 'src/pages/myDashboard/WorkspaceDashboard.jsx'), 'utf8')
+  assert.match(source, /className="page dashboard-page dw-reference-dashboard"/)
+  assert.match(source, /Sales Pipeline Funnel/)
+  assert.match(source, /Win\/Loss Analysis/)
+  assert.doesNotMatch(source, /Opportunity register/)
+  assert.doesNotMatch(source, /Act on these first/)
+})
+
+test('reference report uses shared header controls and renders the tapered funnel', () => {
+  const source = fs.readFileSync(path.join(root, 'src/pages/myDashboard/WorkspaceDashboard.jsx'), 'utf8')
+  assert.doesNotMatch(source, /className="reference-toolbar"/)
+  assert.match(source, /reference-funnel-totals/)
+  assert.match(source, /reference-funnel-row/)
+  assert.match(source, /reference-analysis-filters/)
+})
+
+test('reference dashboard renders separate funnel count and value totals and uses active period labels', () => {
+  const source = fs.readFileSync(path.join(root, 'src/pages/myDashboard/WorkspaceDashboard.jsx'), 'utf8')
+  assert.match(source, /Total Count/)
+  assert.match(source, /Total Value/)
+  assert.match(source, /model\.periodLabel/)
+  assert.match(source, /headlineOpenCount/)
 })
 
 test('an approver personal view includes decisions on other owners without inflating their pipeline', () => {
@@ -158,4 +253,15 @@ test('pipeline card filters show open records while the full register retains cl
   assert.equal(registerRows(model).length, 2)
   assert.deepEqual(registerRows(model, { workFilter: 'open' }).map(o => o.id), ['open'])
   assert.deepEqual(registerRows(model, { stage: 'Won' }).map(o => o.id), ['won'])
+})
+
+test('dashboard completion uses the reference performance, action queue, funnel, and analysis sections', () => {
+  const source = fs.readFileSync(path.join(root, 'src/pages/myDashboard/WorkspaceDashboard.jsx'), 'utf8')
+  assert.match(source, /function Performance/)
+  assert.match(source, /function TopOpportunities/)
+  assert.match(source, /function ActionQueue/)
+  assert.match(source, /function Funnel/)
+  assert.match(source, /function WinLoss/)
+  assert.match(source, /reference-funnel-totals/)
+  assert.doesNotMatch(source, /PipelineStageFlow|Opportunity register|priority-chip|target-marker/)
 })
