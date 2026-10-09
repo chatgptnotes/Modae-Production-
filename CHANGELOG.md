@@ -13,6 +13,8 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Replaced the browser favicon and installed app/home-screen icons with the full official ModAE artwork, centered on black with mask-safe padding. Updated the icon generator and refreshed the service-worker cache. Existing installations may need reinstalling to refresh their home-screen icon.
+
 - Preserve transient inbox and opportunity search/filter state when opening records and returning. Fixed inbox detail navigation skipping its pagination hook, which could crash when opening a lead from the list.
 
 - Added a dedicated phone dashboard with a two-column KPI summary, performance-first overview, compact opportunity/action rows, and separate reports. Phone inbox and opportunity filters use draft panels; approval requests open their existing review details from compact rows. Grouped More navigation and moved workspace refresh into its action menu. Removed automatic DOM-based table conversion in favor of an explicit opportunity table workspace.
