@@ -69,9 +69,9 @@ export const COLS = [
 // required — a rep filtered to their own rows already knows the owner.
 const KEY_COLS = ['id', 'sellTo', 'oppName', 'stage', 'oppType', 'prob', 'valueK', 'proposalDate', 'orderDate', 'nextActionOwner']
 const KEY_COL_WIDTHS = {
-  id: 8, sellTo: 12, oppName: 23, stage: 8, oppType: 6,
+  id: 8, sellTo: 12, oppName: 23, stage: 7, oppType: 5,
   prob: 7, valueK: 7, proposalDate: 7, orderDate: 12,
-  nextActionOwner: 7,
+  nextActionOwner: 9,
 }
 const ROWHEAD_PCT = 3
 

@@ -168,8 +168,8 @@ export function dashboardModel(store, { scope = 'global', owner = 'all', period 
     && dateInPeriod(o.orderDate, topRange)).sort((a, b) => (+b.valueK || 0) - (+a.valueK || 0)
     || String(a.orderDate || '9999-12-31').localeCompare(String(b.orderDate || '9999-12-31'))
     || String(a.id).localeCompare(String(b.id))).slice(0, 5)
-  const headlineOpenCount = open.length
-  const headlinePipelineK = open.reduce((sum, o) => sum + (+o.valueK || 0), 0)
+  const headlineOpenCount = topOpportunities.length
+  const headlinePipelineK = topOpportunities.reduce((sum, o) => sum + (+o.valueK || 0), 0)
   const outcomeSummary = winLossAnalysis(pipeline, store.competitors, { commercial: false })
   const outcomes = { ...outcomeSummary, byReason: reconcileWinLossReasons(outcomeSummary.byReason) }
   return { pipeline, open, pending, decisions: pending.filter(a => approvalNeedsRole(a, role)), work, blocked, followups, stale, queue,

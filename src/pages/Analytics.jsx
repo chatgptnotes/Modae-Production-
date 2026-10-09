@@ -182,7 +182,7 @@ export default function Analytics({ embedded = false }) {
   }))
 
   const stageMatches = (value, row) => value === 'All' || value.split(',').includes(row.stage)
-  const opps = allOpps.filter(o =>
+  const filteredOpps = allOpps.filter(o =>
     (ownerSel === 'All' || o.owner === ownerSel) &&
     (f.customer === 'All' || o.sellTo === f.customer) &&
     (f.bu === 'All' || o.bu === f.bu) &&
@@ -194,10 +194,10 @@ export default function Analytics({ embedded = false }) {
     (f.status === 'All' || o.status === f.status) &&
     inRange(o.createDate, dateRange))
 
-  const open = opps.filter(o => o.status === 'Open')
-  const lossReasons = [...new Set(opps.filter(o => o.stage === 'Lost').map(o => String(o.closedReason || '').trim() || 'Unspecified'))].sort()
-  const outcomeOpps = f.lossReason === 'All' ? opps : opps.filter(o => o.stage !== 'Lost' || (String(o.closedReason || '').trim() || 'Unspecified') === f.lossReason)
-  const winLoss = winLossAnalysis(outcomeOpps, store.competitors, { commercial: comm })
+  const open = filteredOpps.filter(o => o.status === 'Open')
+  const lossReasons = [...new Set(filteredOpps.filter(o => o.stage === 'Lost').map(o => String(o.closedReason || '').trim() || 'Unspecified'))].sort()
+  const opps = f.lossReason === 'All' ? filteredOpps : filteredOpps.filter(o => o.stage !== 'Lost' || (String(o.closedReason || '').trim() || 'Unspecified') === f.lossReason)
+  const winLoss = winLossAnalysis(opps, store.competitors, { commercial: comm })
 
   // Every card reports the money on the records rather than how many rows there
   // are; roles without commercial access fall back to the count instead.

@@ -97,7 +97,7 @@ function WinLoss({ model, scope, nav }) {
   const maximum = Math.max(1, ...reasons.map(row => Math.max(row.won, row.lost)))
   return <Section title={`${scopeLabel(scope)} Win/Loss Analysis`} accent="purple" className="reference-winloss"
     explanation="Win rate is Won ÷ (Won + Lost); missing reasons are Unspecified, and less common reasons group as Other."
-    action={<button className="reference-analysis-button" data-explain-title="Detailed win/loss analysis" data-explain="Open detailed results." onClick={() => nav('/analytics')}>Open detailed analysis ↗</button>}><p className="reference-analysis-subtitle">Analysis of closed opportunities in this view</p><div className="reference-winloss-grid"><div className="reference-rate"><div tabIndex={0}
+    action={<div className="reference-analysis-filters"><button className="reference-analysis-button" data-explain-title="Detailed win/loss analysis" data-explain="Open detailed results." onClick={() => nav('/analytics')}>Open detailed analysis ↗</button></div>}><p className="reference-analysis-subtitle">Analysis of closed opportunities in this view</p><div className="reference-winloss-grid"><div className="reference-rate"><div tabIndex={0}
       data-explain-title="Win rate"
       data-explain={summary.total ? 'Win rate is Won divided by all closed Won and Lost opportunities.' : 'No closed Won or Lost opportunities yet.'}>
       <strong>{summary.total ? `${summary.winRate}%` : '—'}</strong><span>Win Rate</span></div><p><b>{summary.won}</b> Won<br /><b>{summary.lost}</b> Lost</p><small>Total Closed <b>{summary.total}</b></small></div><div className="reference-reasons"><h3>Won vs Lost by Reason</h3>{reasons.map(row => <div key={row.reason} tabIndex={0}
