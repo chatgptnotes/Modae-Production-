@@ -1,7 +1,7 @@
 import { getAdminSupabaseClient } from './_supabase-client.js'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const ADMIN_ROLES = new Set(['SUPER', 'ADMIN', 'LJS', 'MANAGEMENT'])
+const ADMIN_ROLES = new Set(['SUPER', 'ADMIN', 'LJS'])
 const STANDARD_ROLES = new Set(['STANDARD_USER', 'TEAM_LEAD', 'MANAGEMENT', 'ADMIN'])
 const ASSIGNABLE_ROLES = new Set(['ADMIN', 'LJS', 'AH', 'RS', 'PP', 'SS', 'PJS', 'RJS', 'SR', 'AN', 'TECH', ...STANDARD_ROLES])
 const PROVISIONABLE_ROLES = new Set([...ASSIGNABLE_ROLES, 'SUPER', 'CUST'])

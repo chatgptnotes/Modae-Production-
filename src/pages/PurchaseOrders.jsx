@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { displayOpportunityId } from '../seed.js'
 import { canViewCommercial, isApprover, fmtLakh, ddMmmYY, displayRole } from '../utils.js'
-import { Chip, KpiCard, WarnBox } from '../ui.jsx'
+import { Chip, WarnBox } from '../ui.jsx'
+import { Icon } from '../icons.jsx'
 import { useWorkspaceView } from '../ui/WorkspaceViewContext.jsx'
 import { usePagedRows } from '../ui/Pagination.jsx'
 import usePhoneLayout from '../tablet/usePhoneLayout.js'
+import './purchaseOrders.css'
 
 // Customer purchase orders: proposal-vs-PO validation queue plus the booked
 // order book. Sales owners see their own opportunities; approvers/admins see
@@ -14,6 +16,14 @@ import usePhoneLayout from '../tablet/usePhoneLayout.js'
 
 const PO_TONE = { 'In review': 'state-Review', Accepted: 'state-Accepted', Rejected: 'state-Rejected' }
 const ORDER_TONE = { Delivered: 'state-Accepted', Invoiced: 'state-Accepted' }
+
+function OrderStat({ label, value, detail }) {
+  return <div className="proposal-sent-stat">
+    <strong className="proposal-sent-stat-value">{value}</strong>
+    <span className="proposal-sent-stat-label">{label}</span>
+    <span className="proposal-sent-stat-detail">{detail}</span>
+  </div>
+}
 
 export default function PurchaseOrders() {
   const store = useStore()
@@ -51,19 +61,27 @@ export default function PurchaseOrders() {
     : []
 
   return (
-    <div className="page">
-      <h2>Purchase Orders</h2>
-      <div className="hint" style={{ marginBottom: 10 }}>
-        {approver && scope === 'global'
-          ? 'Customer purchase orders across the book — validation, deviations and joint acceptance.'
-          : 'Customer purchase orders for your own opportunities, plus your booked orders.'}
+    <div className="page purchase-orders-page">
+      <div className="proposal-sent-head">
+        <div>
+          <h2 className="workspace-page-title workspace-page-title--topbar-duplicate"><Icon name="clipboardCheck" size={18} /> Purchase Orders</h2>
+          <p className="hint">
+            {approver && scope === 'global'
+              ? 'Customer purchase orders across the book — validation, deviations and joint acceptance.'
+              : 'Customer purchase orders for your own opportunities, plus your booked orders.'}
+          </p>
+        </div>
+        <div className="proposal-sent-head-actions">
+          <span className="proposal-sent-scope">{approver && scope === 'global' ? 'Company purchase orders' : 'My purchase orders'}</span>
+          <button type="button" className="primary" onClick={() => nav('/opportunities')}><Icon name="cards" size={13} /> Open opportunities</button>
+        </div>
       </div>
 
-      <div className="kpi-row">
-        <KpiCard label={`Orders booked ${store.sales?.fy || ''}`} value={orders.length} hint="Booked orders visible to you" />
-        <KpiCard label="Total booked value (₹)" value={comm ? fmtLakh(totalK) : '—'}
-          hint={comm ? 'Sum of booked order values' : 'Restricted — commercial data'} />
-        <KpiCard label="POs in validation" value={validating.length} hint="Proposal-vs-PO comparisons in progress" />
+      <div className="proposal-sent-stats purchase-orders-stats" aria-label="Purchase order summary">
+        <OrderStat label={`Orders booked ${store.sales?.fy || ''}`} value={orders.length} detail="Booked orders visible to you" />
+        <OrderStat label="Total booked value (₹)" value={comm ? fmtLakh(totalK) : '—'}
+          detail={comm ? 'Sum of booked order values' : 'Restricted — commercial data'} />
+        <OrderStat label="POs in validation" value={validating.length} detail="Proposal-vs-PO comparisons in progress" />
       </div>
 
       {needsMe.length > 0 && (
@@ -72,15 +90,18 @@ export default function PurchaseOrders() {
         </WarnBox>
       )}
 
-      <div className="form-card wide" style={{ marginBottom: 14 }}>
-        <div className="section-title">PO validation in progress</div>
+      <section className="proposal-sent-register" aria-labelledby="order-validation-title">
+        <div className="proposal-sent-section-head">
+          <div><h3 id="order-validation-title">PO validation in progress</h3><p className="hint">Review customer PO deviations and complete joint acceptance.</p></div>
+          <span className="proposal-sent-count">{validating.length} in validation</span>
+        </div>
         {validating.length === 0 && (
-          <div className="hint">No purchase orders are in validation right now. Simulate PO receipt from an opportunity workbench.</div>
+          <div className="hint purchase-orders-note">No purchase orders are in validation right now. Simulate PO receipt from an opportunity workbench.</div>
         )}
         {validating.length > 0 && (
           <>
           {phone ? <section aria-label="Orders in validation">{pageValidating.map(pc => { const opp = store.opportunities.find(o => o.id === pc.oppId); return <button className="phone-record" key={pc.oppId} onClick={() => nav(`/opp/${pc.oppId}/po`)}><strong>{opp?.sellTo || pc.poNo}</strong><span>{pc.poNo} · {pc.status}</span><small>{pc.lines.filter(line => !line.resolved && ['Blocking deviation', 'Review required'].includes(line.state)).length} unresolved issues · {displayRole(opp?.owner)}</small></button> })}</section> : <div className="sheet-wrap">
-            <table className="sheet">
+            <table className="sheet proposal-sent-table">
               <thead>
                 <tr>
                   <th>PO No.</th><th>Opportunity</th><th>Customer</th><th>Owner</th>
@@ -116,12 +137,15 @@ export default function PurchaseOrders() {
           {validatingPagination}
           </>
         )}
-      </div>
+      </section>
 
-      <div className="form-card wide">
-        <div className="section-title">Booked orders</div>
+      <section className="proposal-sent-register" aria-labelledby="booked-orders-title">
+        <div className="proposal-sent-section-head">
+          <div><h3 id="booked-orders-title">Booked orders</h3><p className="hint">Customer purchase orders and closed opportunities visible in your current scope.</p></div>
+          <span className="proposal-sent-count">{orders.length} orders</span>
+        </div>
         {phone ? <section aria-label="Booked orders">{pageOrders.map(o => <button className="phone-record" key={o.id} onClick={() => nav(`/opp/${o.id}/po`)}><strong>{o.customer}</strong><span>{o.title}</span><small>{displayOpportunityId(o.id)} · {o.status} · {ddMmmYY(o.booked)}{comm ? ` · ${fmtLakh(o.valueK)}` : ''}</small></button>)}{!orders.length && <p>No purchase orders booked yet.</p>}</section> : <div className="sheet-wrap">
-          <table className="sheet">
+          <table className="sheet proposal-sent-table">
             <thead>
               <tr>
                 <th>Order</th>{approver && <th>Owner</th>}<th>Customer</th><th>Description</th>
@@ -142,15 +166,15 @@ export default function PurchaseOrders() {
                 </tr>
               ))}
               {orders.length === 0 && (
-                <tr><td colSpan={approver ? 8 : 7}><span className="hint">No purchase orders booked yet.</span></td></tr>
+                <tr><td colSpan={approver ? 9 : 8}><span className="hint">No purchase orders booked yet.</span></td></tr>
               )}
             </tbody>
           </table>
         </div>
         }
         {ordersPagination}
-        {!comm && <div className="hint" style={{ marginTop: 6 }}>Order values are restricted — commercial data (approvers/admin only).</div>}
-      </div>
+        {!comm && <div className="hint purchase-orders-note">Order values are restricted — commercial data (approvers/admin only).</div>}
+      </section>
     </div>
   )
 }

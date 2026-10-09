@@ -36,7 +36,17 @@ test('admin user API provisions through server-only Supabase credentials', () =>
   assert.match(api, /Bulk Supabase Auth provisioning failed/)
   assert.match(api, /Could not check Supabase Auth accounts/)
   assert.match(api, /Only application administrators can manage user accounts/)
+  assert.match(api, /ADMIN_ROLES = new Set\(\['SUPER', 'ADMIN', 'LJS'\]\)/)
   assert.doesNotMatch(api, /return res\.status\([^)]*\)\.json\(\{[^}]*password\s*:/s)
+})
+
+test('account role controls offer only the four application roles', () => {
+  const page = read('src/pages/Users.jsx')
+  assert.match(page, /LEVEL3_ROLE_IDS\.map/)
+  assert.match(page, /applicationRolePatch\(user, userDraft\?\.applicationRole\)/)
+  assert.doesNotMatch(page, /select multiple|ASSIGNABLE|displayRoleLabel/)
+  assert.match(page, /className="sheet users-table"/)
+  assert.match(page, /Owner names/)
 })
 
 test('server deployment documentation keeps the service key server-side', () => {

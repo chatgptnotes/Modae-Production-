@@ -455,7 +455,7 @@ test('every internal role can open detailed reporting from their reporting actio
   assert.doesNotMatch(tabletApp, /path="\/dashboard"[^\n]*#forecast-details/)
   assert.match(app, /<Route path="\/dashboard" element=\{<Navigate to="\/my-dashboard" replace \/>\} \/>/)
   assert.match(tabletApp, /<Route path="\/dashboard" element=\{<Navigate to="\/my-dashboard" replace \/>\} \/>/)
-  assert.match(app, /<Route path="\/po" element=\{<PageGate page="po"><PurchaseOrders \/><\/PageGate>\} \/>/)
+  assert.match(app, /<Route path="\/order" element=\{<PageGate page="po"><PurchaseOrders \/><\/PageGate>\} \/>/)
   assert.match(app, /<Route path="\/analytics" element=\{<PageGate page="analytics"><Analytics \/><\/PageGate>\}/)
   assert.match(tabletApp, /<Route path="\/analytics" element=\{<TabletGate page="analytics"><Analytics \/><\/TabletGate>\}/)
   for (const role of Object.keys(ROLES).filter(r => r !== 'CUST')) {
@@ -512,7 +512,7 @@ test('win and loss reasons are grouped in the owner dashboard overview', () => {
 
 test('dashboard palette is semantic and contained to dashboard surfaces', () => {
   const styles = read('src/styles.css')
-  const palette = styles.slice(styles.indexOf('Dashboard semantic palette'))
+  const palette = styles.slice(styles.indexOf('Dashboard semantic palette'), styles.indexOf('/* Opportunities is a spreadsheet workspace'))
 
   assert.match(palette, /\.dashboard-page\s*\{[^}]*--dashboard-canvas:/s)
   assert.match(palette, /\.dashboard-page\s*\{[^}]*--dashboard-success:/s)
@@ -911,8 +911,8 @@ test('dashboard view-all actions open the matching workspaces', () => {
   assert.match(dashboard, /title="Act on these first"[\s\S]*?nav\('\/my'\)/)
   assert.match(dashboard, /title="My Opportunities \/ My Orders"[\s\S]*?nav\('\/opportunities'\)/)
   assert.match(app, /const PurchaseOrders = lazyWithRecovery\(\(\) => import\('\.\/pages\/PurchaseOrders\.jsx'\)\)/)
-  assert.match(app, /<Route path="\/po" element=\{<PageGate page="po"><PurchaseOrders \/><\/PageGate>\} \/>/)
-  assert.doesNotMatch(app, /<Route path="\/po" element=\{<Navigate to="\/proposal-sent"/)
+  assert.match(app, /<Route path="\/order" element=\{<PageGate page="po"><PurchaseOrders \/><\/PageGate>\} \/>/)
+  assert.match(app, /<Route path="\/po" element=\{<Navigate to="\/order" replace \/>\} \/>/)
   assert.match(myOpps, /<table className="sheet opportunity-list">/)
   assert.match(styles, /\.opportunity-list th, \.opportunity-list td \{[\s\S]*?white-space: normal/)
 })

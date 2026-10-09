@@ -26,7 +26,7 @@ test('Opportunities uses the available canvas instead of reserving outer white s
   const value = (rule, property) => rule.nodes.find(node => node.prop === property)?.value
   assert.ok(outer, 'the actual outer Opportunities wrapper must lose shared page padding')
   assert.ok(inner, 'the nested tracker must lose its own page padding')
-  assert.equal(value(outer, 'padding'), '0')
+  assert.equal(value(outer, 'padding'), '12px 0 0')
   assert.equal(value(inner, 'padding'), '0')
   assert.equal(value(title, 'padding-inline'), '12px')
   assert.equal(value(toolbar, 'padding-inline'), '0')
@@ -75,12 +75,13 @@ test('main page titles use the same icons as their sidebar destinations', () => 
     assert.match(source, new RegExp(`className="workspace-page-title[^\"]*"><Icon name="${icon}" size=\\{18\\}`), `${page} title should use sidebar icon ${icon}`)
   }
   const tracker = fs.readFileSync(path.join(root, 'src/pages/Tracker.jsx'), 'utf8')
-  assert.match(tracker, /workspace-page-title\$\{sheet === 'My Orders'[\s\S]*?<Icon name="cards" size=\{18\}/)
+  assert.match(tracker, /workspace-page-title\$\{sheet === 'Opportunities'[\s\S]*?<Icon name="cards" size=\{18\}/)
 })
 
 test('primary workspace pages share a responsive inset from the sidebar', () => {
-  assert.match(css, /--workspace-page-gutter: clamp\(14px, 1\.5vw, 24px\);/)
-  assert.match(css, /\.main-scroll > \.page:has\(\.workspace-page-title\)\s*\{[^}]*width: 100%;[^}]*max-width: none;[^}]*padding-inline: var\(--workspace-page-gutter\);/)
+  assert.match(css, /--workspace-page-gutter: 18px;/)
+  assert.match(css, /--workspace-page-gutter: 12px;/)
+  assert.match(css, /\.shell \.main-scroll > :is\(\.page, \.forms-bg, \.workspace-page\),\s*\.shell \.mobile-content > :is\(\.page, \.forms-bg, \.workspace-page\)\s*\{[^}]*width: 100%;[^}]*max-width: none;[^}]*padding-inline: var\(--workspace-page-gutter\);/)
   assert.match(css, /\.opportunities-page > \.tracker-page > \.workspace-page-title\s*\{\s*padding-inline: 0;/)
   assert.match(css, /\.opportunities-page > \.tracker-page > \.sheet-wrap\.fill\s*\{[^}]*border-inline-width: 0;/)
 })

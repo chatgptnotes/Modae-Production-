@@ -19,8 +19,11 @@ import {
 import { colType, compareVals, matchesGlobalSearch, sortLabels } from '../trackerFilters.js'
 import { useWorkspaceView } from '../ui/WorkspaceViewContext.jsx'
 import usePhoneLayout from '../tablet/usePhoneLayout.js'
+import { PhoneOverlayHeader } from '../tablet/PhoneWorkspaceChrome.jsx'
 import PhoneFilters from '../tablet/PhoneFilters.jsx'
 import useListState from '../tablet/useListState.js'
+import { PhoneOpportunityRow } from './PhoneOpportunityViews.jsx'
+import { canSeePage } from '../utils.js'
 
 const DEFAULT_DATE_FILTER = { field: 'orderDate', period: 'all', date: '', from: '', to: '' }
 
@@ -732,23 +735,25 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
               <input type="search" placeholder="Search all opportunities…" value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)} />
             </label>
-            <button type="button" className={`tracker-search-filter${dateFilterActive ? ' active' : ''}`} onClick={openDateFilterMenu}
-              aria-haspopup="dialog" aria-expanded={dateFilterOpen}
-              aria-label={dateFilterActive ? `Filter opportunities by date: ${dateFilterSummary}` : 'Filter opportunities by date'}
+            <button type="button" className={`tracker-search-filter${dateFilterActive ? ' active' : ''}`} onClick={phone ? () => setPhoneFiltersOpen(true) : openDateFilterMenu}
+              aria-haspopup="dialog" aria-expanded={phone ? phoneFiltersOpen : dateFilterOpen}
+              aria-label={phone ? `Filter opportunities${activeFilterCount ? ` (${activeFilterCount} active)` : ''}` : dateFilterActive ? `Filter opportunities by date: ${dateFilterSummary}` : 'Filter opportunities by date'}
               title={dateFilterActive ? `Filter active: ${dateFilterSummary}` : 'Filter opportunities by date'}>
               <Icon name="filter" size={16} />{dateFilterActive && <span className="tracker-search-filter-active" aria-hidden="true" />}
             </button>
           </div>
         </div>
         <div className="tracker-toolbar-actions">
-          {phone && <button type="button" onClick={() => setPhoneFiltersOpen(true)}>Filters{activeFilterCount ? ` (${activeFilterCount})` : ''}</button>}
           <div className="tracker-more-menu" ref={moreMenuRef}>
             <button type="button" className="tracker-more-trigger" aria-haspopup="menu" aria-expanded={moreMenuOpen}
+              aria-label="Opportunity actions"
               onClick={() => setMoreMenuOpen(open => !open)}>
-              <Icon name="menu" size={15} /> More
+              <Icon name="menu" size={phone ? 20 : 15} />{!phone && ' More'}
             </button>
             {moreMenuOpen && (
               <div className="tracker-more-menu-list" role="menu">
+                {phone && <button type="button" role="menuitem" onClick={event => { openDateFilterMenu(event); setMoreMenuOpen(false) }}>Filter by date{dateFilterActive ? ' (active)' : ''}</button>}
+                {phone && ['Opportunities', 'My Orders', 'My Pipeline'].map(view => <button type="button" key={view} role="menuitemradio" aria-checked={sheet === view} onClick={() => { setSheet(view); setMoreMenuOpen(false) }}>{view}</button>)}
                 {activeFilterCount > 0 && <button type="button" role="menuitem" onClick={() => { clearAllTableState(); setMoreMenuOpen(false) }}>
                   Clear filters &amp; sort ({activeFilterCount})
                 </button>}
@@ -787,7 +792,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
             {colView === 'key' ? `All ${COLS.length} columns` : 'Key columns'}
           </button>
           <input ref={pipelineFileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={onPipelineFile} />
-          {onCreateOpportunity ? (
+          {(onCreateOpportunity || canSeePage(store.role, 'new')) && (onCreateOpportunity ? (
             <button
               className="tracker-create-logo"
             onClick={onCreateOpportunity}
@@ -800,7 +805,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
             <Link className="tracker-create-logo" to="/new" aria-label="Create opportunity" title="Create opportunity">
               <Icon name="plus" size={16} /> Create opportunity
             </Link>
-          )}
+          ))}
         </div>
         {activeChips.length > 0 && (
           <div className="tracker-filter-chips flex flex-wrap items-center gap-1" aria-label="Active filters">
@@ -821,13 +826,12 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
       ]} onApply={draft => { if (draft.owner) setOwnerFilter(draft.owner); setFilters(current => { const next = { ...current }; if (draft.stage) next.stage = new Set(draft.stage.split(',')); else delete next.stage; return next }); setSort(draft.sort ? { key: draft.sort.split(':')[0], dir: Number(draft.sort.split(':')[1]) } : null) }} />}
 
       <div className={`mobile-opportunity-cards${mobileTable ? ' is-hidden' : ''}`}>
+        <div className="phone-opportunity-list-label">{sheet} · {rows.length} result{rows.length === 1 ? '' : 's'}</div>
         {!pageRows.length && <p>No matching opportunities. Adjust your search or filters.</p>}
-        {pageRows.map(o => <article key={o.id}>
-          <Link className="phone-record" to={`/opp/${o.id}`}><strong>{o.sellTo || o.oppName || 'Untitled opportunity'}</strong><span>{o.oppName || displayOpportunityId(o.id)}</span><small>{displayOpportunityId(o.id)} · {o.stage || o.milestone || 'No stage'} · {displayRole(o.owner) || 'Unassigned'}</small></Link>
-        </article>)}
+        {pageRows.map(o => <PhoneOpportunityRow key={o.id} opportunity={o} canSeeValue due={o.orderDate || o.proposalDate} />)}
       </div>
       <div ref={sheetWrapRef} className={`sheet-wrap fill${mobileTable ? ' phone-table-workspace' : ' mobile-table-collapsed'}`} onScroll={handleSheetScroll}>
-        {mobileTable && <button type="button" className="mobile-record-view phone-table-close" onClick={() => setMobileTable(false)}>Close table</button>}
+        {mobileTable && <div className="phone-table-chrome"><PhoneOverlayHeader /><button type="button" className="mobile-record-view phone-table-close" onClick={() => setMobileTable(false)}>Close table</button></div>}
         {colView === 'key'
           ? <style>{[
             hiddenColumnCss(COLS.map((c, i) => (KEY_COLS.includes(c.key) ? -1 : i)).filter(i => i >= 0)),
@@ -862,7 +866,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
                 }}>
                 <td className="rowhead">{firstRow + index}</td>
                 <td onClick={selectCell(o, COLS[0])} className={`oppid ${customerStatusFor(o)} ${stageClass(o) === 'open' ? '' : stageClass(o)} ${isSel(o, COLS[0]) ? 'cell-sel' : ''}`}>
-                  <span className="tracker-oppid-actions">
+                  <span className="tracker-oppid-actions" title={`Customer class: ${customerStatusFor(o)}`}>
                     <Link to={`/opp/${o.id}`} title="Open opportunity workspace">{displayOpportunityId(o.id, store.config?.roleNames)}</Link>
                   </span>
                 </td>

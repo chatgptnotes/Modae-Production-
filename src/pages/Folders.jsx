@@ -8,7 +8,6 @@ import * as filestore from '../filestore.js'
 import { getConfig } from '../sharepoint.js'
 import { Icon } from '../icons.jsx'
 import { PromptModal } from '../ui.jsx'
-import { PaginatedGrid } from '../ui/Pagination.jsx'
 
 // The client's four real SharePoint status folders and their Excel-ish colors.
 const OPEN_FOLDER = { fill: 'var(--amber-fill)', stroke: 'var(--amber-text)' }
@@ -192,7 +191,7 @@ export default function Folders() {
         {sections.map(({ label, opps, cls, pathStyle }) => (
           <section key={label}>
             <div className="folder-section-head">{label} ({opps.length})</div>
-            <PaginatedGrid rows={opps} resetKey={`${scope}-${label}`} className="folder-grid" label={`${label} folder pages`} renderItem={o => (
+            <div className="folder-grid">{opps.map(o => (
                 <div className="folder-card" key={o.id} onClick={() => nav(`/folders/${o.id}`)}
                   onMouseLeave={disarm(o.id)} title={o.oppName}>
                   <SyncPill sync={(store.spSync || {})[o.id]} style={{ position: 'absolute', top: 3, left: 3 }} />
@@ -200,13 +199,13 @@ export default function Folders() {
                 <div className="fname">{displayOpportunityId(o.id)}</div>
                   <div className="fmeta">{o.sellTo}</div>
                 </div>
-              )} />
+              ))}</div>
           </section>
         ))}
         {notInList.length > 0 && (
           <section>
             <div className="folder-section-head">Not In Opp List ({notInList.length})</div>
-            <PaginatedGrid rows={notInList} resetKey={scope} className="folder-grid" label="Preserved folder pages" renderItem={([id, e]) => (
+            <div className="folder-grid">{notInList.map(([id, e]) => (
                 <div className="folder-card" key={id}
                   onClick={e.webUrl ? () => window.open(e.webUrl, '_blank', 'noopener') : undefined}
                   title={e.webUrl ? `${id} — open the preserved SharePoint folder` : `${id} — folder preserved in SharePoint`}>
@@ -214,7 +213,7 @@ export default function Folders() {
                   <div className="fname">{id}</div>
                   <div className="fmeta">deleted opp · folder preserved{e.ts ? ` · ${String(e.ts).slice(0, 10)}` : ''}</div>
                 </div>
-              )} />
+              ))}</div>
           </section>
         )}
       </div>

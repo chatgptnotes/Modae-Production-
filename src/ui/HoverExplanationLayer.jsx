@@ -14,7 +14,7 @@ function explanationTarget(node) {
 function positionFor(target) {
   const rect = target.getBoundingClientRect()
   const left = Math.max(VIEWPORT_GAP, Math.min(rect.left, window.innerWidth - TOOLTIP_WIDTH - VIEWPORT_GAP))
-  const above = rect.bottom + 130 > window.innerHeight && rect.top > 130
+  const above = rect.top > 150
   return {
     left,
     top: above ? undefined : Math.min(rect.bottom + 10, window.innerHeight - 130),
@@ -83,7 +83,7 @@ export default function HoverExplanationLayer() {
     document.addEventListener('focusin', onFocusIn)
     document.addEventListener('focusout', onFocusOut)
     window.addEventListener('resize', reposition)
-    window.addEventListener('scroll', reposition, true)
+    window.addEventListener('scroll', hide, true)
     const observer = new MutationObserver(records => {
       const target = activeTarget.current
       if (!target?.isConnected) return hide()
@@ -110,7 +110,7 @@ export default function HoverExplanationLayer() {
       document.removeEventListener('focusin', onFocusIn)
       document.removeEventListener('focusout', onFocusOut)
       window.removeEventListener('resize', reposition)
-      window.removeEventListener('scroll', reposition, true)
+      window.removeEventListener('scroll', hide, true)
     }
   }, [])
 

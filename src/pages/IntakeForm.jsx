@@ -431,7 +431,7 @@ export default function IntakeForm({ destinationPicker = null }) {
   return (
     <FormCtx.Provider value={{ f, setF, set, validation, selectedProducts, aiMissing: aiMissingFields }}>
     <div className="forms-bg">
-      <form className="forms-card wide" onSubmit={submit}>
+      <form className="forms-card wide opportunity-intake-form" onSubmit={submit}>
         <div className="forms-head">
           <div className="forms-head-top">
             <h1>Create Opportunity</h1>

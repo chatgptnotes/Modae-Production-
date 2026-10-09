@@ -1,8 +1,11 @@
 import React, { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { seedPriceLists } from '../seed.js'
 import { canPriceProposal, fmt } from '../utils.js'
+import usePhoneLayout from '../tablet/usePhoneLayout.js'
+import PhoneProjectBoq from './PhoneProjectBoq.jsx'
+import { projectSourcingEditable, projectProposalAfterEdit } from './mobileProjectBoq.js'
 import { computeProposalTotals } from '../gates.js'
 import { Chip, AiBadge, Phase2Badge } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
@@ -25,20 +28,34 @@ const CANNED_BOQ = [
 const TERM_STATUSES = ['Comply', 'Deviation', 'Clarification Required']
 
 // Project workbench — pragmatic 10-section view over the proposal workbook.
-export default function WbProject({ opp, openBuilder }) {
+export default function WbProject({ opp, openBuilder, readOnly = false }) {
   const store = useStore()
   const comm = canPriceProposal(store.role)
+  const narrow = usePhoneLayout()
+  const phone = narrow && store.viewMode === 'tablet'
+  const canEdit = projectSourcingEditable(opp, store.role, readOnly)
   const p = store.getProposal(opp.id)
-  const [sec, setSec] = useState(0)
+  const [params, setParams] = useSearchParams()
+  const requestedSection = Number(params.get('projectTask'))
+  const [sec, setSec] = useState(Number.isInteger(requestedSection) && requestedSection >= 0 && requestedSection < SECTIONS.length ? requestedSection : 0)
   const [rfpSim, setRfpSim] = useState(false)
   const [fxSim, setFxSim] = useState(false)
   const [fx, setFx] = useState({ USD: 90, AED: 24.5 })
   const [routed, setRouted] = useState(false)
   const lead = store.leads.find(l => l.oppId === opp.id)
 
-  const save = next => store.saveProposal(opp.id, next)
+  const save = next => {
+    if (!canEdit) return
+    const updated = projectProposalAfterEdit(next)
+    store.saveProposal(opp.id, updated)
+    if (updated.pricedOnce) {
+      const totals = computeProposalTotals(updated)
+      store.updateOpportunity(opp.id, { valueK: Math.round(totals.value / 1000), cogsK: Math.round(totals.cogs / 1000) })
+    }
+  }
 
   const generateBoq = () => {
+    if (!canEdit) return
     const parts = seedPriceLists.BNK.parts
     const bom = CANNED_BOQ.map(([cat, pn, qtyPerUnit, common, spares]) => {
       const part = parts.find(x => x.pn === pn)
@@ -54,6 +71,7 @@ export default function WbProject({ opp, openBuilder }) {
     save({ ...p, terms: (p.terms || []).map((t, j) => (j === i ? { ...t, status } : t)) })
 
   const routeDeviation = t => {
+    if (!canEdit) return
     store.requestApproval({
       oppId: opp.id, type: 'Technical deviation', approver: 'LJS', needed: ['LJS'],
       detail: `${t.term}: customer asks "${t.customerAsk}", our response "${t.ourResponse}" — TECH reviews informally, LJS decides.`,
@@ -68,13 +86,18 @@ export default function WbProject({ opp, openBuilder }) {
         <div className="section-title">{cat} BOQ ({rows.length} line{rows.length === 1 ? '' : 's'})</div>
         {!(p.bom || []).length && (
           <div style={{ marginBottom: 8 }}>
-            <button className="primary" onClick={generateBoq}>
+            <button className="primary" disabled={!canEdit} onClick={generateBoq}>
               <Icon name="sparkles" size={13} /> Generate seeded BOQ (AI)
             </button>
             <span className="hint" style={{ marginLeft: 8 }}>Builds a starter B&K line-up from the price list — review every line.</span>
           </div>
         )}
-        <div className="sheet-wrap">
+        {phone ? <PhoneProjectBoq key={`${opp.id}-${store.auth?.user?.id || store.role}-${cat}`} userId={store.auth?.user?.id || store.role} category={cat} proposal={p} editable={canEdit} canPrice={comm} onSave={async (next, baseline) => {
+          if (!canEdit || JSON.stringify(store.getProposal(opp.id)) !== baseline) return { ok: false, error: 'The proposal changed or is read-only. Review the latest values before saving.' }
+          save(next)
+          await new Promise(resolve => setTimeout(resolve, 0))
+          try { return { ok: true, synced: await store.flushPersistence() } } catch { return { ok: true, synced: false } }
+        }} /> : <div className="sheet-wrap">
           <table className="sheet">
             <thead><tr><th>Part number</th><th>Scope description</th><th>Quantity / Unit</th><th>Common</th><th>Spares</th><th>Compliance</th></tr></thead>
             <tbody>
@@ -91,7 +114,7 @@ export default function WbProject({ opp, openBuilder }) {
               {!rows.length && <tr><td colSpan={6} className="hint">No {cat.toLowerCase()} lines in the BoQ yet.</td></tr>}
             </tbody>
           </table>
-        </div>
+        </div>}
         <p style={{ marginTop: 8 }}>
           <Link to={`/proposal/${opp.id}`}><Icon name="fileSheet" size={13} /> Open priced BOQ workbook</Link>
         </p>
@@ -158,13 +181,13 @@ export default function WbProject({ opp, openBuilder }) {
                     <td>{t.customerAsk}</td>
                     <td>{t.ourResponse}</td>
                     <td>
-                      <select value={t.status} onChange={e => setTermStatus(i, e.target.value)}>
+                      <select disabled={!canEdit} value={t.status} onChange={e => setTermStatus(i, e.target.value)}>
                         {TERM_STATUSES.map(s => <option key={s}>{s}</option>)}
                       </select>
                     </td>
                     <td>
                       {t.status === 'Deviation' && (
-                        <button onClick={() => routeDeviation(t)}>Resolve & route (Technical + LJS)</button>
+                        <button disabled={!canEdit} onClick={() => routeDeviation(t)}>Resolve & route (Technical + LJS)</button>
                       )}
                     </td>
                   </tr>
@@ -179,7 +202,7 @@ export default function WbProject({ opp, openBuilder }) {
       case 7: return (
         <div>
           <div className="section-title">Assumptions / exclusions</div>
-          <textarea rows={8} style={{ width: '100%' }} value={p.assumptions || ''}
+          <textarea disabled={!canEdit} rows={8} style={{ width: '100%' }} value={p.assumptions || ''}
             placeholder={'One per line, e.g.\nUtility power available at rack room\nCivil works excluded\nSite access and permits by customer'}
             onChange={e => save({ ...p, assumptions: e.target.value })} />
           <p className="hint">Flows into the proposal's Assumptions and Exclusions sections.</p>
@@ -232,14 +255,14 @@ export default function WbProject({ opp, openBuilder }) {
   }
 
   return (
-    <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 210 }}>
+    <div className={phone ? 'phone-project-workbench' : ''} style={{ display: 'flex', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+      {phone ? <label className="phone-project-section">Project task<select aria-label="Project sourcing task" value={sec} onChange={event => { setSec(Number(event.target.value)); const next = new URLSearchParams(params); next.set('projectTask', event.target.value); setParams(next, { replace: true }) }}>{SECTIONS.map((section, index) => <option key={section} value={index}>{section}</option>)}</select></label> : <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 210 }}>
         {SECTIONS.map((s, i) => (
           <button key={s} className={sec === i ? 'primary' : ''} style={{ textAlign: 'left' }}
             onClick={() => setSec(i)}>{s}</button>
         ))}
-      </div>
-      <div style={{ flex: 1, minWidth: 320 }}>{body()}</div>
+      </div>}
+      <div style={{ flex: 1, minWidth: phone ? 0 : 320, width: phone ? '100%' : undefined }}>{body()}</div>
     </div>
   )
 }

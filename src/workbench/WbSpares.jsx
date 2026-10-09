@@ -11,6 +11,12 @@ import { descriptionMatch, familyOf } from './sparesMatching.js'
 import { isLegacyAutoSparesSupportRow, orderSparesLines, supportRowForDescription } from '../proposal/sparesBoq.js'
 import { buildLeadProposalData } from '../leadBoq.js'
 import { getSparesMatchEntry, requestSparesMatch } from './sparesMatchCache.js'
+import usePhoneLayout from '../tablet/usePhoneLayout.js'
+import { sourcingNumberDraft } from './PhoneSourcing.jsx'
+import PhonePartsWorkspace from './PhonePartsWorkspace.jsx'
+import { sparesCostingSnapshot } from '../sparesBatchState.js'
+import { useSearchParams } from 'react-router-dom'
+import PhoneSourcingOverview from './PhoneSourcingOverview.jsx'
 
 // requestSparesMatch delegates the same server contract as runJson('spares.match')
 // and keeps compare results cached so opening the dialog never auto-applies a match.
@@ -109,13 +115,13 @@ const sourcingPartReference = line => {
   return vmReference?.[1] || description
 }
 
-function PricingApprovalCard({ approval, approvers, role, canRequest, onRequest, onDecide, onRefresh, refreshingApproval, pricingRows }) {
+function PricingApprovalCard({ readOnly = false, approval, approvers, role, canRequest, onRequest, onDecide, onRefresh, refreshingApproval, pricingRows }) {
   const [decision, setDecision] = useState('Approved')
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
   const needed = approval?.needed?.length ? approval.needed : [approval?.approver].filter(Boolean)
   const myDecision = approval && (approval.decisions || {})[role]
-  const canDecide = approval?.status === 'Pending' && needed.includes(role) && !myDecision
+  const canDecide = !readOnly && approval?.status === 'Pending' && needed.includes(role) && !myDecision
   const status = approval?.status || 'Required'
   const statusClass = status === 'Approved' || status === 'Approved with conditions' ? 'okbox' : status === 'Rejected' ? 'errbox' : 'warnbox'
 
@@ -169,9 +175,17 @@ function PricingApprovalCard({ approval, approvers, role, canRequest, onRequest,
   </div>
 }
 
-export default function WbSpares({ opp, openBuilder, onContinue }) {
+export default function WbSpares({ opp, openBuilder, onContinue, readOnly = false }) {
   const store = useStore()
+  const narrow = usePhoneLayout()
+  const phone = narrow && store.viewMode === 'tablet'
+  const [phoneParams, setPhoneParams] = useSearchParams()
+  const phoneTask = phoneParams.get('task')
+  const showingPhoneOverview = phone && !['parts', 'issues', 'confirm', 'costing'].includes(phoneTask)
+  const openPhoneTask = task => { const next = new URLSearchParams(phoneParams); next.set('task', task); setPhoneParams(next, { replace: true }); document.querySelector('.sourcing-workbench')?.scrollIntoView({ block: 'start', behavior: 'smooth' }) }
+  const [editingLineId, setEditingLineId] = useState(null)
   const comm = canPriceProposal(store.role)
+  useEffect(() => { if (readOnly || !phone || !comm) setEditingLineId(null) }, [readOnly, phone, comm])
   const sourcingDataStatus = store.sourcingDataStatus || 'ready'
   const lines = useMemo(() => store.sparesLines.filter(l => l.oppId === opp.id && !isPlaceholderSparesLine(l) && !isLegacyAutoSparesSupportRow(l)), [store.sparesLines, opp.id])
   const proposal = store.getProposal(opp.id)
@@ -189,8 +203,8 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
   const [pendingRemove, setPendingRemove] = useState(null)
   const [refreshingApproval, setRefreshingApproval] = useState(false)
   const sourcingSheetWrapRef = useRef(null)
+  useEffect(() => { if (readOnly || !comm) { setCompareFor(null); setShowAddPart(false); setPendingRemove(null) } }, [readOnly, comm])
   const compareRequestRef = useRef(0)
-  const dedupedOppRef = useRef('')
   const reconciledOppRef = useRef('')
   useEffect(() => {
     if (sourcingDataStatus !== 'ready') return
@@ -209,12 +223,6 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     const rows = proposalSourcingRows(proposal)
     if (rows.length) store.addSparesLinesFromLead(opp.id, rows, { auditAction: 'Sourcing lines restored from proposal' })
   }, [sourcingDataStatus, opp.id, lines.length, proposal])
-  useEffect(() => {
-    if (sourcingDataStatus !== 'ready') return
-    if (!comm || dedupedOppRef.current === opp.id || !lines.length) return
-    dedupedOppRef.current = opp.id
-    store.dedupeSparesLines(opp.id)
-  }, [sourcingDataStatus, comm, opp.id, lines.length])
   useEffect(() => {
     if (sourcingDataStatus !== 'ready') return
     lines.forEach(line => {
@@ -252,7 +260,6 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
   }, [sourcingDataStatus, opp.id, opp.sourceLeadId, lines, store.leads, store.leadArchive, store.priceLists, store.adhocParts])
   useEffect(() => {
     if (sourcingDataStatus !== 'ready') return
-    store.dedupeSparesLines?.(opp.id)
     store.ensureSparesSupportLines?.(opp.id)
   }, [sourcingDataStatus, opp.id, store.sparesLines.length])
   const quoteValidityDays = Math.max(1, n(store.config?.proposalValidityDays ?? 30))
@@ -295,9 +302,9 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
   // small converted price such as ₹23 is visible as €0.21 rather than 0.
   const displayValue = value => Math.max(0, n(displayAmount(value)))
   const displayDigits = displayCurrency === 'INR' ? 0 : 2
-  const displayMoney = value => `${currencySymbol(displayCurrency)} ${fmt(displayValue(value), displayDigits)} `
+  const displayMoney = value => `${currencySymbol(displayCurrency)} ${fmt(n(displayAmount(value)), displayDigits)} `
   const updateCosting = (field, value) => {
-    if (!comm) return
+    if (!comm || readOnly) return
     if (field === 'currencyRates') {
       store.updateProposalCosting(opp.id, { currencyRates: normalizedCurrencyRates(value) })
       return
@@ -348,7 +355,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     return { ...item, lineProfit: item.lineTotal - item.lineTotalCogs }
   }), [orderedLineItems])
   const activeSourceLines = lines.filter(line => line.qty > 0 && !line.removedFromSourcing && !isPlaceholderSparesLine(line))
-  const pricedItems = calculatedItems.filter(item => item.qty > 0 && item.listUnitPrice > 0)
+  const pricedItems = calculatedItems.filter(item => item.qty > 0 && item.listUnitPrice > 0 && !item.sourceLine.removedFromSourcing)
   const activeItems = calculatedItems.filter(item => item.qty > 0 && item.confirmed)
   const eligibleActiveItems = activeItems.filter(item => !isMissingSparesDescription(item.sourceLine))
   const missingDescriptionLines = activeSourceLines.filter(isMissingSparesDescription)
@@ -386,7 +393,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
   const proposalOnlyMismatch = !lines.length && (proposal.bom || []).length > 0
   const clarifications = (store.clarifications || []).filter(c => c.oppId === opp.id && c.status === 'Answered')
 
-  const requestPricingApproval = () => store.requestApproval({
+  const requestPricingApproval = () => { if (readOnly) return; return store.requestApproval({
     oppId: opp.id,
     type: 'Pricing threshold exception',
     rev: String(proposal?.revision ?? ''),
@@ -395,11 +402,13 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     anyOf: pricingApprovers.length > 1,
     detail: `Pricing threshold exception: discount above ${pricingExceptions.discountPct}% or markup above ${pricingExceptions.markupPct}%`,
     pricingRows: pricingExceptions.rows,
-  })
+  }) }
   const removeLine = line => {
+    if (!comm || readOnly) return
     setPendingRemove(line)
   }
   const confirmRemoveLine = line => {
+    if (!comm || readOnly) return
     const removedLine = { ...line, qty: 0, removedFromSourcing: true, confirmed: false }
     const remainingPricing = pricingThresholdExceptions(opp, proposal, {
       ...store,
@@ -416,12 +425,12 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     }
     setPendingRemove(null)
   }
-  const restoreLine = line => store.updateSparesLine(line.id, {
+  const restoreLine = line => { if (!comm || readOnly) return; return store.updateSparesLine(line.id, {
     qty: Math.max(1, n(line.removedQty)),
     removedFromSourcing: false,
     confirmed: false,
     markupPct: normalizeMarkupPct(line.markupPct),
-  })
+  }) }
   const continueTitle = !canContinueToProposal
     ? (pricingExceptions.rows.length && !pricingApprovalClear
       ? (pricingApproval?.status === 'Pending' ? `Awaiting pricing approval from ${pricingApprovers.join(' or ')}` : `Request pricing approval from ${pricingApprovers.join(' or ')}`)
@@ -434,7 +443,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     : ''
 
   const updateLine = (line, field, value) => {
-    if (!comm) return
+    if (!comm || readOnly) return
     const patch = { [field]: value }
     if (field === 'listUnitPrice') {
       const addedAt = new Date().toISOString()
@@ -462,6 +471,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
   }
 
   const addManual = () => {
+    if (!comm || readOnly) return
     if (!newLine.pn.trim() && !newLine.desc.trim()) {
       setManualLineError('Enter a part number or description.')
       return
@@ -476,6 +486,7 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     setManualLineError('')
   }
   const openManualLine = () => {
+    if (!comm || readOnly) return
     setNewLine({ pn: '', desc: '', qty: '1', listPrice: '' })
     setManualLineError('')
     setShowAddPart(true)
@@ -613,11 +624,13 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     setCompareAiBusy(false)
   }
   const openCompare = line => {
+    if (!comm || readOnly) return
     setCompareFor(line.id)
     setCompareSearch('')
     loadAiSuggestions(line)
   }
   const useAlternative = (line, alt) => {
+    if (!comm || readOnly) return
     const resolved = resolvePriceSource({ pn: alt.pn }, store.priceLists, [], [])
     const isDifferentPart = String(alt.pn || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
       !== String(line.custRef || line.pn || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
@@ -644,13 +657,26 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     setCompareSearch('')
   }
   const sendToProposal = () => {
-    if (!canContinueToProposal) return
+    if (!comm || readOnly || !canContinueToProposal) return
     store.sendLinesToProposal(opp.id)
     setSent(true)
     onContinue?.()
   }
 
-  return <div className="sourcing-workbench">
+  const editingItem = calculatedItems.find(item => item.id === editingLineId)
+  const costingControls = <fieldset disabled={readOnly} style={{ border: 0, padding: 0, minWidth: 0 }}><div className="sourcing-costing-controls" aria-label="Sourcing costing basis">
+    <b>Costing basis</b>
+    <label>1 EUR = ₹ <CostingNumberInput aria-label="EUR exchange rate" min="0.0001" step="0.01" value={costing.currencyRates.EUR || ''} onChange={value => updateCosting('currencyRates', { ...costing.currencyRates, EUR: value })} /></label>
+    <label>1 USD = ₹ <CostingNumberInput aria-label="USD exchange rate" min="0.0001" step="0.01" value={costing.currencyRates.USD || ''} onChange={value => updateCosting('currencyRates', { ...costing.currencyRates, USD: value })} /></label>
+    <label>Customs Duty <CostingNumberInput aria-label="Customs duty percent" min="0" max="200" step="0.1" value={costing.customsDutyPct} onChange={value => updateCosting('customsDutyPct', value)} />%</label>
+    <label>ERV <CostingNumberInput aria-label="ERV percent" min="0" max="200" step="0.1" value={costing.ervPct} onChange={value => updateCosting('ervPct', value)} />%</label>
+    <label>Handling <CostingNumberInput aria-label="Handling percent" min="0" max="200" step="0.1" value={costing.handlingPct} onChange={value => updateCosting('handlingPct', value)} />%</label>
+    <span className={handlingOutOfRange ? 'warnbox sourcing-costing-warning' : 'hint'}>{handlingOutOfRange ? `Combined total ${importFactorPct.toFixed(1)}% — recommended range is ${handlingMin}–${handlingMax}%` : `Combined: ${importFactorPct.toFixed(1)}% · Admin guide: ${handlingMin}–${handlingMax}%`}</span>
+    <span className="hint" aria-live="polite">Live: {importedLineCount} imported row{importedLineCount === 1 ? '' : 's'} recalculating{domesticLineCount ? ` · ${domesticLineCount} INR row${domesticLineCount === 1 ? '' : 's'} unchanged` : ''}</span>
+  </div></fieldset>
+
+  return <div className={`sourcing-workbench${phone ? ' phone-sourcing-workbench' : ''}${showingPhoneOverview ? ' is-phone-overview' : ''}`}>
+    {phone && sourcingDataStatus === 'ready' && <div className="phone-sourcing-overview-slot">{showingPhoneOverview ? <PhoneSourcingOverview lines={lines} canPrice={comm} canContinue={canContinueToProposal} reason={continueTitle} onOpen={openPhoneTask} pricingApproval={pricingApproval} rates={costing.currencyRates} /> : <button type="button" className="phone-parts-back" onClick={() => openPhoneTask('overview')}><Icon name="chevronLeft" size={16} />Sourcing checklist</button>}</div>}
     {pendingRemove && <ConfirmModal title="Remove sourcing line" tone="danger"
       message={`Remove ${sourcingDescription(pendingRemove)} from this BOQ?`}
       confirmLabel="Remove line" onClose={() => setPendingRemove(null)}
@@ -661,26 +687,22 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
       <summary><b>Confirmed customer information</b><span className="hint"> These answers stay attached to the opportunity and should be checked while validating each line.</span></summary>
       <div className="sourcing-clarification-content">{clarifications.map(c => <div key={c.id} className="sourcing-clarification-row"><b>{c.category || 'Clarification'}:</b> {c.response}<span className="hint"> · {c.answerSource || 'Customer'}{c.answeredAt ? ` · ${c.answeredAt}` : ''}</span></div>)}</div>
     </details>}
-    {!!expiredLines.length && <div className="warnbox spares-price-warning"><b>{expiredLines.length} price source{expiredLines.length === 1 ? '' : 's'} expired.</b>{' '}Use <b>Compare</b> in the Actions column to select a current approved price-list part, or enter a manual price. <button type="button" onClick={() => openCompare(lines.find(line => line.priceState === 'Expired') || lines[0])}>Request price update</button></div>}
+    {!!expiredLines.length && <div className="warnbox spares-price-warning"><b>{expiredLines.length} price source{expiredLines.length === 1 ? '' : 's'} expired.</b>{' '}Use <b>Compare</b> in the Actions column to select a current approved price-list part, or enter a manual price. <button type="button" disabled={readOnly || !comm} onClick={() => openCompare(lines.find(line => line.priceState === 'Expired') || lines[0])}>Request price update</button></div>}
     {!!needsPricingLines.length && <div className="warnbox spares-price-warning"><b>{needsPricingLines.length} line{needsPricingLines.length === 1 ? '' : 's'} need pricing.</b>{' '}Use <b>Compare</b> to select a current approved price-list part or enter a manual price before continuing.</div>}
     {!!missingDescriptionLines.length && <div className="warnbox spares-price-warning"><b>{missingDescriptionLines.length} line{missingDescriptionLines.length === 1 ? '' : 's'} need{missingDescriptionLines.length === 1 ? 's' : ''} a description.</b>{' '}The customer reference alone is not enough to send this line to Proposal.</div>}
     {sourcingDataStatus === 'loading' && <p className="hint" role="status">Loading saved sourcing lines…</p>}
     {sourcingDataStatus === 'error' && <div className="errbox">Sourcing data could not be loaded{store.sourcingDataError ? `: ${store.sourcingDataError}` : '.'} <button type="button" onClick={() => store.refreshSourcingData?.() || store.refreshSharedData()}>Retry</button></div>}
     {sourcingDataStatus === 'ready' && <>
-    {!!pricingExceptions.rows.length && <PricingApprovalCard approval={pricingApproval} approvers={pricingApprovers} role={store.role} pricingRows={pricingExceptions.rows} canRequest={(comm || pricingApprovers.includes(store.role)) && (!pricingApproval || pricingApproval.status === 'Rejected')} onRequest={requestPricingApproval} onDecide={decision => pricingApproval && store.recordDecision(pricingApproval.id, decision)} onRefresh={async () => { setRefreshingApproval(true); try { await store.refreshSharedData() } finally { setRefreshingApproval(false) } }} refreshingApproval={refreshingApproval} />}
+    {!!pricingExceptions.rows.length && <PricingApprovalCard readOnly={readOnly} approval={pricingApproval} approvers={pricingApprovers} role={store.role} pricingRows={pricingExceptions.rows} canRequest={!readOnly && (comm || pricingApprovers.includes(store.role)) && (!pricingApproval || pricingApproval.status === 'Rejected')} onRequest={requestPricingApproval} onDecide={decision => !readOnly && pricingApproval && store.recordDecision(pricingApproval.id, decision)} onRefresh={async () => { setRefreshingApproval(true); try { await store.refreshSharedData() } finally { setRefreshingApproval(false) } }} refreshingApproval={refreshingApproval} />}
     {proposalOnlyMismatch && <div className="warnbox sourcing-flow-warning"><b>Proposal data is not linked to Sourcing.</b> Existing proposal rows are not imported automatically. Add or import the real parts here before continuing to Proposal.</div>}
     <div className="sourcing-table-card">
-      <div className="sourcing-table-heading"><div><b>BOQ lines — review quantity, price source, and totals</b><span className="hint"> Each line shows whether the price came from an approved price list, supplier quotation, or manual pricing.</span></div><div className="sourcing-table-heading-actions"><span className="sourcing-currency-indicator" title={`All displayed amounts are in ${displayCurrency}`}>Currency: {displayCurrency} ({currencySymbol(displayCurrency)})</span>{comm && <label className="sourcing-currency-view">View amounts in <select value={displayCurrency} onChange={e => setDisplayCurrency(e.target.value)}>{displayCurrencies.map(currency => <option key={currency}>{currency}</option>)}</select></label>}{comm && <button type="button" className="sourcing-add-part-link" aria-expanded={showAddPart} onClick={openManualLine}>Add manual line</button>}{!comm && <span className="restricted"><Icon name="lock" size={12} /> Pricing restricted</span>}</div></div>
-      {comm && <div className="sourcing-costing-controls" aria-label="Sourcing costing basis">
-        <b>Costing basis</b>
-        <label>1 EUR = ₹ <CostingNumberInput min="0.0001" step="0.01" value={costing.currencyRates.EUR || ''} onChange={value => updateCosting('currencyRates', { ...costing.currencyRates, EUR: value })} /></label>
-        <label>1 USD = ₹ <CostingNumberInput min="0.0001" step="0.01" value={costing.currencyRates.USD || ''} onChange={value => updateCosting('currencyRates', { ...costing.currencyRates, USD: value })} /></label>
-        <label>Customs Duty <CostingNumberInput min="0" max="200" step="0.1" value={costing.customsDutyPct} onChange={value => updateCosting('customsDutyPct', value)} />%</label>
-        <label>ERV <CostingNumberInput min="0" max="200" step="0.1" value={costing.ervPct} onChange={value => updateCosting('ervPct', value)} />%</label>
-        <label>Handling <CostingNumberInput min="0" max="200" step="0.1" value={costing.handlingPct} onChange={value => updateCosting('handlingPct', value)} />%</label>
-        <span className={handlingOutOfRange ? 'warnbox sourcing-costing-warning' : 'hint'}>{handlingOutOfRange ? `Combined total ${importFactorPct.toFixed(1)}% — recommended range is ${handlingMin}–${handlingMax}%` : `Combined: ${importFactorPct.toFixed(1)}% · Admin guide: ${handlingMin}–${handlingMax}%`}</span>
-        <span className="hint" aria-live="polite">Live: {importedLineCount} imported row{importedLineCount === 1 ? '' : 's'} recalculating{domesticLineCount ? ` · ${domesticLineCount} INR row${domesticLineCount === 1 ? '' : 's'} unchanged` : ''}</span>
-      </div>}
+      <div className="sourcing-table-heading"><div><b>BOQ lines — review quantity, price source, and totals</b><span className="hint"> Each line shows whether the price came from an approved price list, supplier quotation, or manual pricing.</span></div><div className="sourcing-table-heading-actions"><span className="sourcing-currency-indicator" title={`All displayed amounts are in ${displayCurrency}`}>Currency: {displayCurrency} ({currencySymbol(displayCurrency)})</span>{comm && <label className="sourcing-currency-view">View amounts in <select value={displayCurrency} onChange={e => setDisplayCurrency(e.target.value)}>{displayCurrencies.map(currency => <option key={currency}>{currency}</option>)}</select></label>}{comm && <button type="button" className="sourcing-add-part-link" disabled={readOnly} aria-expanded={showAddPart} onClick={openManualLine}>Add manual line</button>}{!comm && <span className="restricted"><Icon name="lock" size={12} /> Pricing restricted</span>}</div></div>
+      {comm && (phone ? <details className="phone-costing-basis" open={phoneTask === 'costing' || undefined}><summary><b>Costing basis</b><span>EUR ₹{costing.currencyRates.EUR} · USD ₹{costing.currencyRates.USD}</span><Icon name="chevronDown" size={18} /></summary>{costingControls}</details> : costingControls)}
+      {phone && <PhonePartsWorkspace key={`${opp.id}-${store.auth?.user?.id || store.role}`} task={phoneTask} oppId={opp.id} userId={store.auth?.user?.id || store.role} lines={calculatedItems.map(item => item.sourceLine)} costing={costing} basis={sparesCostingSnapshot(store, opp.id)} canPrice={comm} canEdit={!readOnly && opp.status !== 'Closed' && !['Won', 'Lost', 'Closed'].includes(opp.stage) && opp.milestone === 'Sourcing'} displayCurrency={displayCurrency} formatMoney={displayMoney} formatDraft={(value, currency = displayCurrency) => String(Number(convertCurrency(value, 'INR', currency, costing.currencyRates).toFixed(currency === 'INR' ? 2 : 4)))} sourceDetails={sourceDetails}
+        actor={store.auth?.user?.name || store.auth?.user?.email || store.role} syncStatus={store.liveSyncStatus} saveStatus={store.adminSaveState} localOnly={store.auth?.source === 'local-demo' || store.liveSyncStatus === 'local-only'} canContinue={canContinueToProposal} continueReason={continueTitle} onContinue={sendToProposal}
+        onApply={async (changes, basis) => { if (!comm || readOnly) return { ok: false, error: 'Sourcing is read-only.' }; const result = await store.updateSparesLines(opp.id, changes, basis); if (!result.ok) return result; try { return { ...result, synced: await store.flushPersistence() } } catch { return { ...result, synced: false } } }} onRetrySync={() => store.flushPersistence()}
+        onEdit={line => setEditingLineId(line.id)} onCompare={openCompare} onRestore={restoreLine} onSource={line => { const source = sourceDetails(line); const attribution = manualAttribution(line); return source.source === PRICE_SOURCES.LIST && priceListNameFor(line) ? openPriceList(line) : setEvidence({ ...source, pn: line.pn || line.custRef || line.id, priceState: line.priceState, listPrice: line.listUnitPrice ?? line.listPrice, currency: line.currency || 'INR', addedBy: attribution.addedByName || attribution.addedBy, addedAt: attribution.addedAt }) }} />}
+      {!phone && <>
       <div ref={sourcingSheetWrapRef} className="sheet-wrap sourcing-sheet-wrap"><table id="sourcing-spares-grid" className="sheet sourcing-sheet sourcing-sheet--fixed border-collapse">
         <thead><tr><th>Part number / customer reference</th><th>Description</th><th>Price source</th><th>Quantity</th><th>Supplier unit cost</th><th>Discount %</th><th>Markup %</th><th>Landed unit cost</th><th>Customer unit price</th><th>Base cost</th><th>Original total</th><th>Quoted total</th><th>Actions</th></tr></thead>
         <tbody>
@@ -704,7 +726,8 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
           <td className="num"><b>{displayMoney(totals.originalTotal)}</b></td><td className="num"><b>{displayMoney(totals.revenue)}</b></td><td></td>
         </tr></tfoot>}
       </table></div>
-      {comm && <div className="sourcing-financial-summary-bar mt-3 flex flex-col sm:flex-row items-center justify-between bg-slate-50 border border-slate-200 rounded-lg p-3.5 shadow-sm" aria-label="BOQ financial totals" aria-live="polite">
+      </>}
+      {!phone && comm && <div className="sourcing-financial-summary-bar mt-3 flex flex-col sm:flex-row items-center justify-between bg-slate-50 border border-slate-200 rounded-lg p-3.5 shadow-sm" aria-label="BOQ financial totals" aria-live="polite">
         <div className="sourcing-financial-summary-metrics flex items-center space-x-6 text-xs">
           <div><span>BOQ Revenue</span><strong className="font-semibold text-gray-900">{displayMoney(totals.revenue)}</strong></div>
           <div><span>Projected COGS</span><strong className="font-semibold text-gray-700">{displayMoney(totals.cogs)}</strong></div>
@@ -731,6 +754,24 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
     {sent && <div className="okbox">Proposal workbook BoM synchronized from the confirmed sourcing lines. <a style={{ cursor: 'pointer' }} onClick={openBuilder}>Open the proposal builder</a></div>}
     </div>
     </>}
+    {phone && comm && !readOnly && editingItem && (() => {
+      const line = editingItem.sourceLine
+      const row = editingItem
+      return <Modal title={`Edit line — ${line.pn || line.custRef || line.id}`} className="phone-sourcing-editor" onClose={() => setEditingLineId(null)}>
+        <p className="hint">Changes save as you edit, using the same pricing rules as the table.</p>
+        <div className="phone-sourcing-editor-fields">
+          <label>Customer reference<input value={line.custRef || ''} onChange={event => updateLine(line, 'custRef', event.target.value)} /></label>
+          <label>Description<textarea rows="3" value={line.desc || ''} onChange={event => updateLine(line, 'desc', event.target.value)} /></label>
+          <label>Quantity<EditableNumber value={row.qty} label="Quantity" step="1" onChange={value => updateLine(line, 'qty', Math.max(0, Math.round(value)))} /></label>
+          <label>Supplier unit cost ({displayCurrency})<EditableNumber prefix={currencySymbol(displayCurrency)} value={fmt(displayValue(row.listUnitPriceINR), displayDigits)} label="Supplier unit cost" onChange={value => updateLine(line, 'listUnitPrice', convertCurrency(value, displayCurrency, 'INR', costing.currencyRates))} /></label>
+          <label>Discount<EditableNumber value={Math.round(row.discountPercent)} label="Discount percent" step="1" suffix="%" onChange={value => updateLine(line, 'discountPct', Math.min(100, Math.max(0, Math.round(value))))} /></label>
+          <label>Markup<EditableNumber value={Math.round(row.markupPercent)} label="Markup percent" step="1" suffix="%" onChange={value => updateLine(line, 'markupPct', normalizeMarkupPct(Math.round(value)))} /></label>
+          <label>Base cost ({displayCurrency})<EditableNumber prefix={currencySymbol(displayCurrency)} value={fmt(displayValue(row.baseCost), displayDigits)} label="Base cost" onChange={value => store.updateSparesLine(line.id, { baseCost: Math.max(0, convertCurrency(value, displayCurrency, 'INR', costing.currencyRates)) })} /></label>
+        </div>
+        <dl className="phone-sourcing-editor-totals"><div><dt>Landed unit cost</dt><dd>{displayMoney(row.landedUnitCost)}</dd></div><div><dt>Customer unit price</dt><dd>{displayMoney(row.adjustedUnitPrice)}</dd></div><div><dt>Original total</dt><dd>{displayMoney(row.listTotal)}</dd></div><div><dt>Quoted total</dt><dd>{displayMoney(row.lineTotal)}</dd></div></dl>
+        <div className="phone-sourcing-editor-actions">{line.removedFromSourcing ? <button type="button" onClick={() => restoreLine(line)}>Restore line</button> : <button type="button" className="danger" onClick={() => { setEditingLineId(null); removeLine(line) }}>Remove line</button>}<button type="button" className="primary" onClick={() => setEditingLineId(null)}>Done</button></div>
+      </Modal>
+    })()}
     {compareFor && (() => {
       const line = lines.find(x => x.id === compareFor)
       if (!line) return null
@@ -771,11 +812,11 @@ export default function WbSpares({ opp, openBuilder, onContinue }) {
 
 function EditableNumber({ value, label, disabled, onChange, prefix = '', suffix = '', className = '', step = '0.01' }) {
   const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(String(value ?? 0))
+  const [draft, setDraft] = useState(() => sourcingNumberDraft(value))
 
   const begin = event => {
     if (disabled) return
-    setDraft(String(value ?? 0))
+    setDraft(sourcingNumberDraft(value))
     setEditing(true)
     const editor = event.currentTarget
     window.requestAnimationFrame(() => {
@@ -789,7 +830,7 @@ function EditableNumber({ value, label, disabled, onChange, prefix = '', suffix 
     setEditing(false)
     onChange(n(draft))
   }
-  const cancel = () => { setDraft(String(value ?? 0)); setEditing(false) }
+  const cancel = () => { setDraft(sourcingNumberDraft(value)); setEditing(false) }
 
   return <span className={`sourcing-edit-number ${className}`.trim()}>{prefix && <small className="sourcing-number-prefix">{prefix}</small>}{editing ? <input className="sourcing-number sourcing-edit-input w-full max-w-[60px] px-1 py-0.5 text-xs text-right" style={{ width: `${Math.max(3, String(draft ?? '').length + 1)}ch`, maxWidth: 'none' }} aria-label={label} type="text" inputMode={step === '1' ? 'numeric' : 'decimal'} value={draft} autoFocus onFocus={event => { if (n(value) === 0) event.currentTarget.select() }} onChange={event => setDraft(step === '1' ? event.target.value.replace(/\D/g, '') : event.target.value)} onBlur={commit} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); commit() } if (event.key === 'Escape') { event.preventDefault(); cancel() } }} /> : <button type="button" className="sourcing-read-value" aria-label={`${label}; click to edit`} disabled={disabled} onClick={begin}>{value}</button>}{suffix && <small>{suffix}</small>}</span>
 }

@@ -43,12 +43,13 @@ test('workspace deletes bump the persistent generation marker', () => {
   assert.match(migration, /id in \('users', 'workspace_generation'\)/)
 })
 
-test('Admin exposes a typed permanent purge and blocks further browser saves', () => {
+test('Admin does not expose permanent workspace deletion', () => {
   const admin = read('src/pages/Admin.jsx')
+  assert.doesNotMatch(admin, /Permanently delete workspace|PURGE_CONFIRMATION|Delete permanently|purgeOpen|permanentlyPurgeWorkspace/)
+})
+
+test('permanent purge blocks further browser saves', () => {
   const store = read('src/store.jsx')
-  assert.match(admin, /Permanently delete workspace/)
-  assert.match(admin, /PURGE_CONFIRMATION/)
-  assert.match(admin, /Delete permanently/)
   assert.match(store, /permanentPurgeRef\.current = true/)
   assert.match(store, /if \(permanentPurgeRef\.current\) return Promise\.resolve\(\)/)
   assert.match(store, /persistLocalSnapshot\(next\)/)

@@ -9,7 +9,7 @@ import { mergeOpportunityRow } from './workflowTransitions.js'
 // original localStorage-only behavior without env vars.
 
 // Per-device/session state that must never be shared across browsers.
-export const LOCAL_ONLY = ['viewMode', 'viewModePinned', 'spSync', 'auth', 'role',
+export const LOCAL_ONLY = ['viewMode', 'viewModePinned', 'viewModePinnedAt', 'viewModePreferenceRev', 'spSync', 'auth', 'role',
   'inboxShowAll', 'leadSyncBaseline', 'clarificationSyncBaseline', 'opportunitySyncBaseline',
   'sparesLinesSyncBaseline', 'deletedLeadIds', 'deletedOpportunityIds', 'pendingOpportunitySyncIds',
   // Migration markers and derived deadline timers belong to this browser.

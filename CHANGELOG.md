@@ -1,5 +1,30 @@
 # Changelog
 
+- Restored the original complete ModAE site logo in workspace headers across
+  phone, tablet and desktop; removed the cropped replacement and black tile.
+
+- Matched phone search bars in light and dark themes across all five main tabs:
+  full-width 48px rows, consistent text/icons and integrated filter/menu actions.
+  Removed leftover phone header spacing; retained theme colors and wider layouts.
+
+- Made the former Tablet view control open Phone mode: a centered 440px
+  workspace on larger screens with persistent device selection, shared
+  container-responsive styling and bounded navigation, dialogs and drawers.
+- Cleaned up More for daily work: disabled demos are hidden, the automation
+  map identifies live features and previews, and appearance stays in the header.
+- Added searchable phone status-update rows and stacked tender BOQ/commercial
+  review editors while retaining existing table access, permissions and gates.
+- Corrected local-only sync reporting and retained ad-hoc parts in the browser
+  cache; older compact caches now default the missing collection to empty so
+  tender intake can reopen after refresh.
+
+- Moved phone Approvals search above KPI cards for salesperson and approver
+  views, with warnings below the KPIs; retained desktop/tablet ordering.
+
+- Unified the five main phone dark-mode tabs with graphite panels, consistent
+  spacing and full-width 48px search rows. Integrated opportunity menu and
+  approval filter actions without removing features; wider/light layouts remain unchanged.
+
 ## 2026-09-27
 
 - Polished the Follow-up & Closure workbench layout so long opportunity names, workflow labels, revisions, close-out controls, and competitor inputs wrap within responsive cards instead of clipping or overflowing.
@@ -13,7 +38,72 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Integrated the phone workspace release while preserving production dashboard preview totals, analytics loss-reason filtering, opportunity column widths, and desktop header/search polish.
+
+- Corrected phone Parts save feedback in browser-only sessions and removed the permanent workspace deletion controls from Admin.
+
+- Made administrator account editing explicit with an Edit button and a full inline row editor for name, email, role, and status. Added labelled Save/Cancel actions, row-level errors, keyboard controls, and disabled conflicting actions during editing and saving.
+
+- Updated release regression checks for the dashboard totals, six-stage funnel, shared header controls, and redesigned inbox layout while retaining pagination, scrolling, filter, and focus coverage.
+
+- Removed the Permanently delete workspace button and its unused confirmation dialog from Admin configuration.
+
+- Fixed Admin Access & Routing alignment: separated account labels and counts, aligned user-management actions to the section edge, gave routing-review notices consistent spacing, and kept state-to-region mapping full-width across screen sizes.
+
+- Simplified User management to a single role selector with Standard User, Team Lead, Management, and Admin. Preserved operational owner IDs and named approval gates, kept owner-name configuration separate, restricted account management to administrators, and fixed long account text and edit controls overlapping table columns.
+
+- Added a phone-header account menu on the initials circle, showing name, email and current role with Full site and Log out actions. The menu supports keyboard dismissal, outside taps, both themes and full-screen forms, using the existing view and logout actions.
+
+- Restored Purchase Orders below Proposal Sent in the desktop sidebar. The page now opens at `/order` across desktop, tablet, phone More and dashboard actions; `/po` redirects to the new address. Existing role permissions, order data and opportunity PO workbench links are unchanged.
+
+- Matched Purchase Orders to the shared workspace presentation with a top-bar title, Proposal Sent summary-card and table-section styling, responsive phone cards, and existing light/dark theme tokens. Order calculations and validation gates are unchanged.
+
+- Restored the previous red/orange ModAE favicon and installed app icons. Desktop and phone headers now use the clean original mark with a black backing for clear visibility in both themes; document branding is unchanged. Advanced the offline cache version so clients refresh the restored icons.
+
 - Replaced the browser favicon and installed app/home-screen icons with the full official ModAE artwork, centered on black with mask-safe padding. Updated the icon generator and refreshed the service-worker cache. Existing installations may need reinstalling to refresh their home-screen icon.
+
+- Unified phone dark-mode surfaces, terracotta actions, neutral status/navigation text and search controls across Dashboard, Inbox and Opportunities. Fixed washed-out intake classification pills with dark backgrounds, clear selected/focus states and readable disabled actions; preserved logo, chart colors, light mode and wider layouts.
+
+- Kept the original logo/view/theme/profile row visible across signed-in phone pages and full-screen creation dialogs and editable tables. Centralized page chrome in the phone shell, removed duplicate page headers, and kept overlay controls inside dialogs; tablet/desktop, small confirmations and workflows remain unchanged.
+
+- Reformatted phone New enquiry and New opportunity forms with readable touch-sized fields, single-column layouts, clear attachments and persistent action areas. Phone creation dialogs track the visible viewport above the keyboard. Standardized workspace page/dialog heading typography without changing extraction, intake requirements, permissions, branding or proposal documents.
+
+- Redesigned phone lead details around Overview, Details, and Email tabs with full-width subjects, retained edits, actionable missing-information prompts, optional classification disclosures, original source/attachments, and one status-appropriate next action. Reused existing qualification, customer verification, approval, intake, and creation handlers; converted records remain read-only and missing data is not fabricated. Desktop/tablet layouts and persistence are unchanged.
+
+- Added a guided phone opportunity workflow with a sourcing checklist, compact searchable multi-part workspace, retained row drafts, batch markup/discount and confirmation previews, and whole-enquiry totals. Repeated requested part numbers remain distinct. Batch saves reject stale line/costing previews and enforce pricing permissions and current-stage checks. Prepared multi-row Project BOQ editing with review invalidation while preserving the existing Project Coming soon gate; Service stages offer focused task navigation. Completed stages remain browsable with editing locked. Existing approval gates and wider layouts are preserved.
+
+- Matched phone Opportunities and the opportunity workbench to the approved mobile previews: shared logo/view/theme/sync header, readable customer rows, compact search and filter controls, floating creation action, two-column summaries, and expandable gated workflow navigation. Spares sourcing now uses line cards and a phone edit panel with existing pricing and confirmation handlers, expandable costing controls, and a measured financial footer that appears in the sourcing section. Preserved tracker views, editable-table access, pagination, commercial permissions, and wider layouts.
+
+- Removed repeated visible page titles from phone layouts. Lead Inbox places its actions alongside search while keeping an accessible screen title and the shared logo/view/theme/sync header; tablet and desktop headings remain visible.
+
+- Unified the phone dashboard and Lead Inbox top bars through a shared original-logo header with view switch, theme control, user avatar, and truthful sync/refresh status. Inbox title and actions sit below the shared header.
+
+- Simplified the desktop/tablet Lead inbox to the approved single-row toolbar in both themes. Moved all eight filters into an Apply/Cancel dialog, review views and counts into a dropdown, and Archive/bulk actions into the more menu. Removed duplicate header controls while preserving every scrollable column, detail previews, and the dedicated phone layout.
+
+- Matched the phone Lead inbox to the approved Gmail-inspired preview: compact shared view/theme header, one search/filter bar, quick lead views, sender initials, naturally wrapped subjects, visible stars and status labels, and a floating New enquiry action. Kept existing lead details, selection, archive, filtering, and registration workflows; wider layouts retain their current structure.
+
+- Redesigned desktop/tablet Lead inbox triage in both themes: scoped/filter-aware review tabs, calmer rows and headers, neutral opportunity links, and a detail pane with full original email, real attachment previews, and status-appropriate workflow actions. All existing columns and column filters remain available through the list's horizontal scrollbar; phone layout and persistence are unchanged.
+
+- Reused the desktop My View / Global View switch in the phone dashboard header with a 44px touch target. Tightened expanded opportunity rows and aligned priority buttons beside their text from 380px upward, retaining compact wrapping on narrower phones.
+
+- Grouped desktop/tablet Lead inbox search, filters, New enquiry, and Archive inside one responsive toolbar card in both themes, retaining separate controls and the dedicated phone toolbar.
+
+- Matched the phone dashboard to the approved light/dark references using the original ModAE logo, shared appearance and scope controls, visible KPIs, ranked Top 5 cards, priority actions, and independent Performance, Pipeline Funnel, and Win/Loss disclosures. Search filters all ranked period candidates before selecting five. Report values use the existing dashboard model and role restrictions; review actions use the existing approval workflow. Scoped dashboard chrome to phones at 600px or less, restoring the tablet header and leaving wider layouts intact.
+
+- Removed Documents folder pagination: all Open, WON, Closed, and preserved SharePoint folders now appear together within their existing groups, with scope filters and navigation unchanged.
+
+- Matched the dark desktop/tablet dashboard to its approved preview: neutral metric and Gap text, flat graphite surfaces, softer status-icon backgrounds, raised table headers, and consistent section spacing. Logo, data calculations, tapered funnel, phone cockpit, and light mode remain unchanged.
+
+- Approval request cards and summary now expand to the available page width in both themes, including when zoomed out.
+
+- Replaced the phone dashboard with a dark WinTrack sales cockpit: fixed mobile header, sticky filters, KPI grid, opportunity card feed, approval bottom sheet, and five-tab navigation styling.
+
+- Made authenticated page containers fill the available workspace width in both themes with shared 18px side gutters (12px on phones). Restored centered tapered pipeline stages with data-driven probability bands and compact empty-stage placeholders, restored tinted dark opportunity-ID cells, and moved explanations above their targets when possible with dismissal on scroll.
+
+- Recovered phone-width sessions from stale full-site mode preferences and added a visible Mobile view escape action to the narrow full-site shell.
+
+- Applied the charcoal and terracotta dark palette with neutral text, cyan information accents and distinct semantic statuses. Quieted dark sidebar surfaces, replaced filled customer-class ID cells with readable links and small indicators, and removed warning outlines from ordinary blank date fields.
+- Corrected dashboard funnel rendering to omit empty probability bands and use count sizing when populated stages lack value. Kept totals outside narrow bars, added neutral empty win/loss rings and empty messages, and made outcome proportions and loss-reason ranking follow actual results.
 
 - Preserve transient inbox and opportunity search/filter state when opening records and returning. Fixed inbox detail navigation skipping its pagination hook, which could crash when opening a lead from the list.
 

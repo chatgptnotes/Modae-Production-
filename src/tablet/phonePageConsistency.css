@@ -1,0 +1,96 @@
+/* Shared phone search geometry in both themes; graphite panels stay dark-only. */
+.mobile-menu-search-field > svg,
+.approval-phone-filter > svg,
+.approval-clear > svg { display:none; }
+@media screen and (max-width:600px) {
+  html[data-workspace-theme] .shell.tablet-mode {
+    --workspace-page-gutter:16px;
+    --phone-search-border:var(--phone-control-border,#D8DCE1);
+    --phone-search-surface:var(--surface-default);
+  }
+  html[data-workspace-theme="dark"] .shell.tablet-mode { --phone-search-surface:var(--surface-raised); }
+  html[data-workspace-theme] .shell.tablet-mode .mobile-content { padding-top:0; }
+  html[data-workspace-theme] .shell.tablet-mode :is(.phone-inbox-page,.opportunities-page,.approvals-page,.mobile-more,.wintrack-mobile-dashboard) {
+    box-sizing:border-box; width:100%; max-width:none; margin:0;
+    padding:12px 16px calc(160px + env(safe-area-inset-bottom));
+  }
+  html[data-workspace-theme="dark"] .shell.tablet-mode .mobile-content {
+    background:var(--surface-canvas); padding-top:0;
+  }
+  html[data-workspace-theme] .shell.tablet-mode:has(.approvals-page,.mobile-more) > .tablet-bar { display:none; }
+  html[data-workspace-theme="dark"] .shell.tablet-mode :is(.phone-inbox-page,.opportunities-page,.approvals-page,.mobile-more,.wintrack-mobile-dashboard) {
+    box-sizing:border-box; width:100%; max-width:none; margin:0;
+    padding:12px 16px calc(160px + env(safe-area-inset-bottom));
+    background:var(--surface-canvas); color:var(--text-primary);
+    font-family:Inter,system-ui,sans-serif; font-size:14px; line-height:1.45;
+  }
+  html[data-workspace-theme] .shell.tablet-mode :is(.phone-inbox-page .phone-inbox-search,.wintrack-mobile-dashboard .mobile-search,.tracker-grid-shell > .toolbar,.approvals-page .approval-filters,.mobile-more .mobile-menu-search-field) {
+    display:flex !important; align-items:center; flex-wrap:nowrap; gap:8px;
+    box-sizing:border-box; width:100%; height:48px; min-height:48px; max-height:48px;
+    margin:0; padding:0 12px; border:1px solid var(--phone-search-border);
+    border-radius:12px; background:var(--phone-search-surface); color:var(--text-secondary);
+    box-shadow:none; min-width:0;
+  }
+  html[data-workspace-theme] .shell.tablet-mode :is(.phone-inbox-search,.mobile-search,.tracker-grid-shell > .toolbar,.approval-filters,.mobile-menu-search-field):focus-within {
+    outline:2px solid var(--phone-accent,#E85D35); outline-offset:2px;
+  }
+  html[data-workspace-theme] .shell.tablet-mode :is(.phone-inbox-page .phone-inbox-search,.wintrack-mobile-dashboard .mobile-search,.tracker-grid-shell > .toolbar,.approvals-page .approval-filters,.mobile-more .mobile-menu-search-field) input {
+    flex:1; box-sizing:border-box; width:100%; min-width:0;
+    height:44px; min-height:44px; max-height:44px; margin:0; padding:0;
+    border:0 !important; border-radius:0; background:transparent !important;
+    box-shadow:none !important; font-family:Inter,system-ui,sans-serif; font-size:16px; font-weight:400; color:var(--text-primary);
+  }
+  html[data-workspace-theme] .shell.tablet-mode :is(.phone-inbox-search,.mobile-search,.tracker-grid-shell > .toolbar,.approval-filters,.mobile-menu-search-field) input::placeholder {
+    font-size:16px; font-weight:400; color:var(--text-secondary); opacity:1;
+  }
+  html[data-workspace-theme] .shell.tablet-mode :is(.phone-inbox-search,.mobile-search,.tracker-grid-shell > .toolbar,.approval-filters,.mobile-menu-search-field) svg {
+    width:20px; height:20px; flex:0 0 20px;
+  }
+  html[data-workspace-theme] .shell.tablet-mode :is(.phone-inbox-page .phone-inbox-search button,.phone-inbox-page .phone-list-more summary,.tracker-grid-shell .tracker-search-filter,.tracker-grid-shell .tracker-more-trigger,.approvals-page .approval-filters > button) {
+    display:flex; align-items:center; justify-content:center;
+    flex:0 0 44px !important; width:44px !important; min-width:44px !important;
+    height:44px; min-height:44px; padding:0 !important; margin:0;
+    border:0 !important; border-radius:8px !important; background:transparent !important;
+    color:var(--text-secondary) !important; box-shadow:none;
+  }
+  html[data-workspace-theme] .shell.tablet-mode .tracker-grid-shell > .toolbar :is(.tracker-search-group,.tracker-search,.tracker-toolbar-filters) {
+    display:flex; align-items:center; flex:1; width:auto; min-width:0; height:44px;
+    min-height:0; padding:0; border:0 !important; outline:0 !important; border-radius:0; background:transparent; box-shadow:none !important;
+  }
+  html[data-workspace-theme] .shell.tablet-mode .tracker-grid-shell > .toolbar .tracker-toolbar-actions { gap:0; }
+  html[data-workspace-theme] .shell.tablet-mode .tracker-grid-shell > .toolbar .tracker-toolbar-actions > .tracker-more-menu { flex:0 0 44px; width:44px; }
+  html[data-workspace-theme] .shell.tablet-mode .approvals-page .approval-search {
+    display:flex; flex:1 1 0; min-width:0; gap:8px; padding:0;
+    border:0; background:transparent; box-shadow:none;
+  }
+  html[data-workspace-theme] .shell.tablet-mode .approvals-page .approval-filters > button > span { display:none; }
+  html[data-workspace-theme] .shell.tablet-mode :is(.approval-phone-filter,.approval-clear,.mobile-menu-search-field) > svg { display:block; }
+  html[data-workspace-theme] .shell.tablet-mode .mobile-menu-search > span:first-child { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+  html[data-workspace-theme] .shell.tablet-mode .mobile-menu-search { margin:0 0 12px; }
+  html[data-workspace-theme="dark"] .shell.tablet-mode :is(.mobile-opportunity-cards,.mobile-destination-group,.mobile-settings,.approvals-page .approval-card,.approvals-page .approval-summary-card,.wintrack-mobile-dashboard .mobile-dashboard-section,.wintrack-mobile-dashboard .mobile-kpi) {
+    box-sizing:border-box; background:var(--surface-default); border:1px solid var(--border-default);
+    border-radius:12px; padding:16px; box-shadow:none;
+  }
+  html[data-workspace-theme="dark"] .shell.tablet-mode .phone-inbox-page .mailbox-list-panel {
+    box-sizing:border-box; padding:0 16px; background:var(--surface-default) !important;
+    border:1px solid var(--border-default) !important; border-radius:12px;
+  }
+  html[data-workspace-theme="dark"] .shell.tablet-mode .mobile-opportunity-cards { margin-top:12px; }
+  html[data-workspace-theme="dark"] .shell.tablet-mode .approvals-page .approval-list {
+    padding:0 16px; gap:0; border:1px solid var(--border-default); border-radius:12px; background:var(--surface-default);
+  }
+  html[data-workspace-theme="dark"] .shell.tablet-mode .mobile-destinations { gap:0; }
+  html[data-workspace-theme="dark"] .shell.tablet-mode :is(.mobile-destination-group,.mobile-settings,.approvals-page .approval-card) { margin:0 0 12px; }
+  html[data-workspace-theme="dark"] .shell.tablet-mode .mobile-destination-group h2 { margin:0 0 8px; font-size:16px; }
+  html[data-workspace-theme="dark"] .shell.tablet-mode :is(.phone-inbox-page .phone-lead-name,.phone-opportunity-row .phone-record > strong,.approvals-page .phone-record strong) { font-size:16px; font-weight:600; }
+  html[data-workspace-theme="dark"] .shell.tablet-mode .mobile-destination-group a { min-height:48px; }
+  html[data-workspace-theme="dark"] .shell.tablet-mode .approvals-page :is(.approval-notice,.approval-explainer) { border-radius:12px; color:var(--text-secondary); margin-block:12px; }
+  html[data-workspace-theme="dark"] .shell.tablet-mode .approvals-page .approval-summary { gap:12px; }
+  html[data-workspace-theme="dark"] .shell.tablet-mode .approvals-page .approval-summary-card b { color:var(--text-primary); }
+  html[data-workspace-theme="dark"] .shell.tablet-mode .wintrack-mobile-dashboard .mobile-kpi-grid { gap:12px; margin-bottom:12px; }
+  html[data-workspace-theme="dark"] .shell.tablet-mode .wintrack-mobile-dashboard .mobile-kpi.is-urgent { background:#721C24; }
+  html[data-workspace-theme="dark"] .shell.tablet-mode .wintrack-mobile-dashboard .mobile-dashboard-section { padding:0; }
+  html[data-workspace-theme="dark"] .shell.tablet-mode .wintrack-mobile-dashboard .mobile-dashboard-section > summary { padding:16px; }
+  html[data-workspace-theme="dark"] .shell.tablet-mode .wintrack-mobile-dashboard .mobile-section-content { padding:16px; }
+  html[data-workspace-theme="dark"] .shell.tablet-mode :is(.phone-inbox-page button.phone-inbox-new,.tracker-toolbar-actions .tracker-create-logo) { right:16px; bottom:calc(76px + env(safe-area-inset-bottom)); height:48px; min-height:48px; border-radius:24px !important; }
+}

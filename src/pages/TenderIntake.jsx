@@ -4,12 +4,14 @@ import { useStore, reserveOppId } from '../store.jsx'
 import { CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, displayOpportunityId } from '../seed.js'
 import { extractPdfText, parseTender, matchParts, buildProposal, buildOpportunityDraft } from '../tenderParse.js'
 import { uploadOppFile } from '../filestore.js'
-import { fmt, sameCustomer } from '../utils.js'
+import { sameCustomer } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { runJson } from '../ai.js'
 import { aiAttachmentPayload, supportsVisualAi } from '../aiAttachments.js'
 import ScanProgress from '../ScanProgress.jsx'
 import { opportunityOwnerFor } from '../leadRules.js'
+import usePhoneLayout from '../tablet/usePhoneLayout.js'
+import { PhoneTenderLines, PhoneTenderTerms, TenderConfidence as ConfBadge, TenderPriceEvidence } from './PhoneTenderReview.jsx'
 
 const STAGES_MSG = [
   'Reading document…',
@@ -17,12 +19,6 @@ const STAGES_MSG = [
   'Matching parts against price lists…',
   'Checking clauses against ModAE standard terms…',
 ]
-
-const ConfBadge = ({ v }) => {
-  const cls = v >= 0.9 ? 'hi' : v >= 0.6 ? 'med' : 'lo'
-  const label = v >= 0.9 ? 'High' : v >= 0.6 ? 'Medium' : 'Low'
-  return <span className={`conf-badge ${cls}`} title={`AI extraction confidence ${Math.round(v * 100)}%`}>AI · {label}</span>
-}
 
 // Fold a Gemini tender read into the rule-based parse, in place. Blanks only:
 // wherever the deterministic parser produced a value it wins, so the confidence
@@ -72,6 +68,7 @@ function mergeAi(p, ai) {
 export default function TenderIntake({ fixedTarget = null, destinationPicker = null }) {
   const store = useStore()
   const nav = useNavigate()
+  const phone = usePhoneLayout() && store.viewMode === 'tablet'
 
   const [step, setStep] = useState('upload')     // upload | parsing | review | done
   const [error, setError] = useState(null)
@@ -101,7 +98,7 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
 
   const allParts = useMemo(() => [
     ...Object.entries(store.priceLists).flatMap(([list, pl]) =>
-      pl.parts.map(part => ({ ...part, list, currency: pl.currency }))),
+      (pl.parts || []).map(part => ({ ...part, list, currency: pl.currency }))),
     ...store.adhocParts.map(a => ({
       pn: a.pn, desc: a.note ? `${a.note} (${a.supplier})` : a.supplier,
       price: a.price, adders: [], list: 'Ad-hoc', currency: a.currency,
@@ -256,7 +253,7 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
   // ------------------------------------------------------------------ render
 
   return (
-    <div className="page">
+    <div className="page tender-intake-page">
       <h2>Tender → Proposal</h2>
       <div className="tender-steps">
         {['Upload', 'AI extraction', 'Review & confirm', 'Proposal'].map((s, i) => {
@@ -409,7 +406,7 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
           <div className="section-title">
             BOQ lines ({items.length}) <ConfBadge v={parse.confidence.items} />
           </div>
-          <div className="sheet-wrap" style={{ marginBottom: 14 }}>
+          {phone ? <PhoneTenderLines items={items} include={include} matched={matched} setItem={setItem} toggleInclude={index => setInclude(include.map((value, at) => at === index ? !value : value))} /> : <div className="sheet-wrap" style={{ marginBottom: 14 }}>
             <table className="sheet">
               <thead>
                 <tr><th></th><th>S/N</th><th>Scope description</th><th>Item Code (SAP)</th><th>Part Number</th><th>UOM</th><th>Quantity</th><th>Price source</th><th></th></tr>
@@ -428,26 +425,19 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
                     <td>{it.uom}</td>
                     <td className="num"><input type="number" min="0" value={it.qty} onChange={setItem(i, 'qty', true)} style={{ width: 60, textAlign: 'right' }} /></td>
                     <td>
-                      {matched[i]?.match
-                        ? matched[i].match.tier === 4
-                          ? <span className="evidence warn">
-                              {matched[i].match.list} · {matched[i].match.currency} {fmt(matched[i].match.price)} — {matched[i].match.pn}
-                              {' '}(suggested from the description — confirm)
-                            </span>
-                          : <span className="evidence ok">{matched[i].match.list} · {matched[i].match.currency} {fmt(matched[i].match.price)} (price list)</span>
-                        : <span className="evidence warn">No price — ad-hoc part will be created (supplier quote needed)</span>}
+                      <TenderPriceEvidence match={matched[i]?.match} />
                     </td>
                     <td><ConfBadge v={it.confidence} /></td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </div>
+          </div>}
 
           <div className="section-title">
             Commercial terms &amp; compliance ({comp.length}) <ConfBadge v={parse.confidence.terms} />
           </div>
-          <div className="sheet-wrap" style={{ marginBottom: 8 }}>
+          {phone ? <PhoneTenderTerms comp={comp} parse={parse} setCompRow={setCompRow} /> : <div className="sheet-wrap" style={{ marginBottom: 8 }}>
             <table className="sheet">
               <thead><tr><th>Term</th><th>Customer ask</th><th>Our response</th><th>Verdict</th><th>Source</th></tr></thead>
               <tbody>
@@ -472,7 +462,7 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
                 ))}
               </tbody>
             </table>
-          </div>
+          </div>}
           <details style={{ marginBottom: 14 }}>
             <summary className="hint">Other clauses ({parse.terms.filter(t => !t.categoryKey).length}) — accepted as-is, not carried into the proposal</summary>
             <ul className="stat-list" style={{ maxWidth: 760 }}>

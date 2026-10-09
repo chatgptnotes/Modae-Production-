@@ -300,7 +300,7 @@ test('confirmed spares sourcing replaces stale proposal rows instead of appendin
 
 test('spares financial preview totals include priced rows before confirmation', () => {
   const spares = read('src/workbench/WbSpares.jsx')
-  assert.match(spares, /const pricedItems = calculatedItems\.filter\(item => item\.qty > 0 && item\.listUnitPrice > 0\)/,
+  assert.match(spares, /const pricedItems = calculatedItems\.filter\(item => item\.qty > 0 && item\.listUnitPrice > 0 && !item\.sourceLine\.removedFromSourcing\)/,
     'financial preview should include rows with quantity and a positive price')
   assert.match(spares, /const activeItems = calculatedItems\.filter\(item => item\.qty > 0 && item\.confirmed\)/,
     'proposal handoff should still be gated by confirmed rows')

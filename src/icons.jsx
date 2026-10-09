@@ -21,6 +21,8 @@ const PATHS = {
   printer: <><path d="M7 8V3.5h10V8" /><rect x="3" y="8" width="18" height="8" rx="1.5" /><path d="M7 16h10v4.5H7z" /></>,
   search: <><circle cx="11" cy="11" r="6.5" /><path d="m20 20-3.8-3.8" /></>,
   filter: <path d="M4 5h16l-6.5 7v5l-3 2v-7Z" />,
+  sliders: <><path d="M3 6h4m4 0h10M3 12h10m4 0h4M3 18h4m4 0h10" /><circle cx="9" cy="6" r="2" /><circle cx="15" cy="12" r="2" /><circle cx="9" cy="18" r="2" /></>,
+  moreHorizontal: <><circle cx="5" cy="12" r="1" fill="currentColor" /><circle cx="12" cy="12" r="1" fill="currentColor" /><circle cx="19" cy="12" r="1" fill="currentColor" /></>,
   x: <path d="M6 6l12 12M18 6 6 18" />,
   check: <path d="m4.5 12.5 5 5 10-11" />,
   checkCircle: <><circle cx="12" cy="12" r="9" /><path d="m8 12.5 2.8 2.8L16.5 9" /></>,

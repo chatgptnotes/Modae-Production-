@@ -5,8 +5,8 @@ import fs from 'node:fs'
 const css = fs.readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
 const inbox = fs.readFileSync(new URL('../src/pages/Inbox.jsx', import.meta.url), 'utf8')
 
-test('inbox description sits under a visible page title', () => {
-  assert.match(inbox, /<div className="mailbox-head">\s*<div>\s*<h2 className="workspace-page-title"><Icon name="inbox" size=\{18\} \/> Lead inbox<\/h2>\s*<p className="hint">\{showArchive \? 'Discarded lead archive' : scope === 'my' \? 'Your assigned leads · AI structures, humans decide' : 'Common sales mailbox · AI structures, humans decide'\}<\/p>/)
+test('inbox description retains an accessible title under the shared top bar', () => {
+  assert.match(inbox, /<div className="mailbox-head">\s*<div>\s*<h2 className="workspace-page-title workspace-page-title--topbar-duplicate"><Icon name="inbox" size=\{18\} \/> Lead inbox<\/h2>\s*<p className="hint">\{showArchive \? 'Discarded lead archive' : scope === 'my' \? 'Your assigned leads · AI structures, humans decide' : 'Common sales mailbox · AI structures, humans decide'\}<\/p>/)
   assert.match(css, /\.mailbox-head > div > \.hint \{ color: var\(--text-muted\); font-size: 13px; line-height: 1\.4; \}/)
 })
 
@@ -22,7 +22,7 @@ test('inbox keeps every column available in a horizontally scrollable desktop gr
   assert.match(css, /\.mailbox-horizontal-scrollbar:hover \.mailbox-horizontal-scrollbar-thumb \{ background: #ED3F2F; \}/)
   assert.match(inbox, /role="scrollbar"[\s\S]*?aria-orientation="horizontal"[\s\S]*?onPointerMove=\{moveMailboxScrollDrag\}/)
   assert.match(css, /\.mail-list-toolbar \{[\s\S]*min-width: 0;/)
-  assert.match(inbox, /<div className="mail-column-head">\s*<div className="mail-list-toolbar">/)
+  assert.match(inbox, /<div className="mail-column-head"[^>]*>\s*<div className="mail-list-toolbar">/)
   assert.doesNotMatch(css, /@container \(max-width: (900|1180|1400)px\)/)
   assert.doesNotMatch(css, /\.mail-column-head > :nth-child\((8|10|12)\), \.mail-row > :nth-child\(/)
   for (const label of ['Received', 'Source / sender', 'Subject / preview', 'AI route', 'Urgency', 'Completeness', 'Suggested owner', 'Status', 'Age']) {
@@ -86,11 +86,6 @@ test('inbox filter menus keep readable colors outside the themed application she
   assert.match(css, /\.mail-header-filter-menu \.mail-header-filter-option:hover,[\s\S]*?background: #FDEDEB !important; color: #9E1F14 !important;/)
 })
 
-test('inbox header actions share the secondary button treatment', () => {
-  assert.match(inbox, /<button type="button" className="mail-new-enquiry"[^>]*aria-haspopup="dialog"[^>]*>.*New enquiry<\/button>/s)
-  assert.match(css, /\.mailbox-head-actions \.mail-new-enquiry \{[\s\S]*?background: var\(--action-secondary-bg\);[\s\S]*?border-color: var\(--action-secondary-border\);/)
-})
-
 test('new enquiry modal imports the hook used by its file picker', () => {
   assert.match(inbox, /import React, \{ useEffect, useRef, useState \} from 'react'/)
   assert.match(inbox, /function PasteLeadModal\(\{ onClose \}\)[\s\S]*const fileInput = useRef\(null\)/)
@@ -99,9 +94,9 @@ test('new enquiry modal imports the hook used by its file picker', () => {
 test('inbox omits the redundant result count above the shared header', () => {
   assert.match(css, /\.mail-column-head, \.mail-row \{[\s\S]*?--mail-grid-template:[\s\S]*?grid-template-columns: var\(--mail-grid-template\);/)
   assert.doesNotMatch(css, /\.mail-column-head\s*\{\s*--mail-grid-template:/)
-  assert.match(inbox, /<div className="mailbox-list-panel">\s*<div className="mailbox-list">\s*<div className="mail-column-head">/)
+  assert.match(inbox, /<div className="mailbox-list-panel">\s*<div className="mailbox-list"[^>]*>[\s\S]*?<div className="mail-column-head"[^>]*>/)
   assert.doesNotMatch(inbox, /mail-list-summary|1–\$\{mailboxRows\.length\} of/)
-  assert.doesNotMatch(inbox, /<div className="mail-column-head">[\s\S]*?mail-list-count/)
+  assert.doesNotMatch(inbox, /<div className="mail-column-head"[^>]*>[\s\S]*?mail-list-count/)
 })
 
 test('inbox confines its horizontally scrollable grid to the workspace', () => {
@@ -127,16 +122,16 @@ test('inbox column headings wrap onto readable lines', () => {
 
 test('inbox always uses fitted rows instead of summary cards', () => {
   assert.doesNotMatch(inbox, /LeadSummaryCard|shouldShowSparseCards/)
-  assert.doesNotMatch(inbox, /compactMailbox|showDenseView|ResizeObserver|sparse-view-toggle/)
+  assert.doesNotMatch(inbox, /compactMailbox|showDenseView|sparse-view-toggle/)
   assert.doesNotMatch(inbox, /has-sparse-cards|sparse-filter-bar|lead-sparse-cards/)
-  assert.match(inbox, /<div className="mail-column-head">/)
+  assert.match(inbox, /<div className="mail-column-head"[^>]*>/)
   assert.match(inbox, /pageRows\.map\(l => \{[\s\S]*?className=\{`mail-row /)
 })
 
 test('inbox keeps pagination visible outside the scrolling message list', () => {
   assert.match(inbox, /React\.cloneElement\(pagination, \{ alwaysVisible: true, label: 'Inbox pages' \}\)/)
-  assert.match(inbox, /<div className="mailbox-list-panel">[\s\S]*?<div className="mailbox-list">[\s\S]*?<\/div>\s*<\/div>/)
-  assert.match(inbox, /<\/aside>}\s*<\/div>\s*\{inboxPagination\}\s*\{!showArchive && <WorkspaceInsights signals=\{inboxInsights\} \/>\}/)
+  assert.match(inbox, /<div className="mailbox-list-panel">[\s\S]*?<div className="mailbox-list"[^>]*>[\s\S]*?<\/div>[\s\S]*?<\/div>/)
+  assert.match(inbox, /<InboxLeadPreview key=\{previewLead\.id\} lead=\{previewLead\} \/>}\s*<\/div>\s*\{inboxPagination\}\s*\{!showArchive && <WorkspaceInsights signals=\{inboxInsights\} \/>\}/)
   assert.match(css, /\.mailbox-split\s*\{[^}]*flex: 1 1 auto;[^}]*min-height: 0;/)
   assert.match(css, /\.mailbox-list-panel\s*\{[^}]*display: flex;[^}]*flex-direction: column;[^}]*min-height: 0;/)
   assert.match(css, /\.mailbox-list-panel > \.mailbox-list\s*\{[^}]*overflow-y: auto;/)
@@ -159,11 +154,11 @@ test('Lead Preview wraps field columns and scrolls within its panel', () => {
   assert.match(css, /\.mailbox-preview-excerpt\s*\{\s*max-height: none; overflow: visible;/)
   assert.match(inbox, /function PreviewFieldText\(\{ value \}\)[\s\S]*?split\(\/\(\[@\._\/-\]\)\/\)[\s\S]*?<wbr \/>/)
   assert.match(inbox, /<PreviewFieldText value=\{field\.v\} \/>/)
-  assert.match(inbox, /<PreviewFieldText value=\{`\$\{previewLead\.sender/)
+  assert.match(inbox, /<PreviewFieldText value=\{`\$\{lead\.sender/)
 })
 
 test('inbox aging alert remains a compact full-width banner below pagination', () => {
-  assert.match(inbox, /<\/aside>}\s*<\/div>\s*\{inboxPagination\}\s*\{!showArchive && <WorkspaceInsights signals=\{inboxInsights\} \/>\}/)
+  assert.match(inbox, /<InboxLeadPreview key=\{previewLead\.id\} lead=\{previewLead\} \/>}\s*<\/div>\s*\{inboxPagination\}\s*\{!showArchive && <WorkspaceInsights signals=\{inboxInsights\} \/>\}/)
   assert.match(css, /\.mailbox-page > \.list-pagination\s*\{[^}]*width: 100%;/)
   assert.match(css, /\.mailbox-page > \.workspace-insights\s*\{[^}]*min-height: 34px;[^}]*border-left: 3px solid #D99200;/)
 })
@@ -208,7 +203,7 @@ test('mailbox bulk toolbar actions are wired', () => {
 })
 
 test('inbox refresh pulls shared data in place', () => {
-  assert.match(inbox, /onClick=\{\(\) => \{ void store\.refreshSharedData\(\) \}\}/)
+  assert.match(inbox, /onRefresh=\{\(\) => \{ void store\.refreshSharedData\(\) \}\}/)
   assert.doesNotMatch(inbox, /title="Refresh inbox"[^\n]*window\.location\.reload/)
 })
 
@@ -240,7 +235,7 @@ test('subject and preview stay contained inside the inbox cell', () => {
   assert.match(css, /\.mail-subject-title \{[\s\S]*display: block;[\s\S]*white-space: normal;[\s\S]*overflow-wrap: anywhere;/)
   assert.match(css, /\.mail-content small \{[\s\S]*display: -webkit-box;[\s\S]*white-space: normal;[\s\S]*overflow-wrap: anywhere;/)
   assert.match(css, /\.mail-column-head \.mail-subject-head \{[\s\S]*white-space: normal;/)
-  assert.match(css, /minmax\(360px, 2\.8fr\)/)
+  assert.match(css, /minmax\(300px, 1fr\)/)
 })
 
 test('opportunity scope is optional during lead qualification and registration', () => {

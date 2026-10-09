@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { useLocation } from 'react-router-dom'
 import { useStore } from './store.jsx'
 import OppPanel from './opppanel.jsx'
+import { PhoneOverlayHeader } from './tablet/PhoneWorkspaceChrome.jsx'
 
 // Ephemeral record-detail drawer, mirroring the formula bar's context pattern.
 // Selection deliberately lives outside the store: the store persists to
@@ -44,6 +45,7 @@ export function DrawerHost() {
         aria-hidden={!sel}>
         {shown && (
           <>
+            <PhoneOverlayHeader />
             <div className="drawer-head">
               <span>{shown.type === 'opp' ? `${shown.id} — details` : shown.id}</span>
               <button className="drawer-x" style={{ marginLeft: 'auto' }} type="button"

@@ -13,11 +13,12 @@ test('shared funnel groups legacy stages under the reviewed labels', () => {
     { owner: 'RS', status: 'Closed', stage: 'Won', valueK: 70 },
     { owner: 'RS', status: 'Closed', stage: 'Lost', valueK: 80 },
   ])
-  assert.deepEqual(rows.map(row => row.label), ['Qualified Lead', 'Budgetary', 'RFQ', 'Firm Proposal', 'Negotiate'])
-  assert.deepEqual(rows.map(row => row.count), [2, 1, 1, 1, 1])
+  assert.deepEqual(rows.map(row => row.label), ['Qualified Lead', 'Budgetary', 'RFQ', 'Firm Proposal', 'Negotiate', 'Won'])
+  assert.deepEqual(rows.map(row => row.count), [2, 1, 1, 1, 1, 1])
   assert.equal(rows[0].valueK, 30)
-  assert.equal(rows.at(-1).valueK, 60)
-  assert.ok(!rows.some(row => row.label === 'Won'))
+  assert.equal(rows.at(-1).valueK, 70)
+  assert.deepEqual(rows.at(-1).stages, ['Won'])
+  assert.ok(!rows.some(row => row.label === 'Lost'))
 })
 
 test('shared funnel supports personal and global scopes', () => {

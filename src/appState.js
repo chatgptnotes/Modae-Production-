@@ -71,6 +71,7 @@ export const essentialProposalSnapshot = proposal => {
 // abandons locally entered browser data, so schema migrations must happen in
 // migrate()/stateFromSaved() instead of by changing the storage namespace.
 export const KEY = 'wintrack-modae-v4'
+export const VIEW_MODE_PREFERENCE_REV = 2
 
 // Before description-only catalogue suggestions were made review-only, a
 // tier-4 suggestion could be persisted as a priced sourcing line. Repair only
@@ -176,6 +177,11 @@ const removeSparesPlaceholders = s => {
 // build or the test suite (node --test cannot load JSX, and an unresolved
 // identifier is valid syntax until it runs).
 export const defaultViewMode = () => (typeof window !== 'undefined' && window.innerWidth <= 1024 ? 'tablet' : 'full')
+
+export function followViewportMode(state, mode = defaultViewMode()) {
+  if (state.viewModePinned || state.viewMode === mode) return state
+  return { ...state, viewMode: mode }
+}
 
 // Additive backfill for state saved before the BT-prototype port (phase 2) —
 // never reseeds over the user's data.
@@ -377,11 +383,26 @@ export function migrate(s) {
   }
   if (!s.handover || typeof s.handover !== 'object' || Array.isArray(s.handover)) s.handover = demo && seedHandover && Object.keys(seedHandover).length ? seedHandover : {}
   if (s.viewMode !== 'tablet' && s.viewMode !== 'full') s.viewMode = defaultViewMode()
+  const currentViewModeViewport = defaultViewMode()
+  if (s.viewModePinned && !s.viewModePinnedAt) s.viewModePinnedAt = currentViewModeViewport
   if (s.viewModeRestoreRev === 1) {
     s.viewMode = defaultViewMode()
     s.viewModePinned = false
+    delete s.viewModePinnedAt
     delete s.viewModeRestoreRev
   }
+  // The first pinned full-site preference predated the phone recovery action.
+  // Clear that stale choice once on narrow screens so a phone cannot boot into
+  // the desktop shell with its sidebar and mobile navigation both inaccessible.
+  if (s.viewModePreferenceRev !== VIEW_MODE_PREFERENCE_REV
+    && s.viewModePinned
+    && s.viewMode === 'full'
+    && defaultViewMode() === 'tablet') {
+    s.viewMode = 'tablet'
+    s.viewModePinned = false
+    delete s.viewModePinnedAt
+  }
+  s.viewModePreferenceRev = VIEW_MODE_PREFERENCE_REV
   // Remove the retired tablet theme preference from older local snapshots.
   delete s.tabletTheme
   // The inbox's "Show all" used to be component state, so a reload put a sales
@@ -408,6 +429,7 @@ export function migrate(s) {
   if (!Array.isArray(s.roles)) s.roles = userRoles(s.auth?.user || { role: s.role })
   // Price lists added to the seed after a state was saved (e.g. Meggitt) land
   // by name — existing lists are the user's data and are never overwritten.
+  if (!Array.isArray(s.adhocParts)) s.adhocParts = demo ? seedAdhocParts : []
   if (!s.priceLists) s.priceLists = demo ? seedPriceLists : {}
   if (demo) {
     for (const [name, pl] of Object.entries(seedPriceLists)) {

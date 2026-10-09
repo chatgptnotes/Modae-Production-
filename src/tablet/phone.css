@@ -110,3 +110,13 @@
   .mobile-overflow summary { min-width: 44px; min-height: 44px; display: grid; place-items: center; cursor: pointer; }
   .mobile-overflow[open] > div { position: absolute; right: 0; top: 44px; z-index: 30; padding: 8px; width: 220px; background: var(--surface-default); border: 1px solid var(--border-default); border-radius: 8px; }
 }
+
+/* Phone navigation identifies the page; avoid repeating visible page titles. */
+@media (max-width: 600px) {
+  .tablet-mode .tablet-bar { display: flex; flex-wrap: wrap; align-items: center; }
+  .tablet-mode .tablet-bar .mobile-heading h1,
+  .tablet-mode .tablet-bar .mobile-heading:not(:has(button)),
+  .tablet-mode .mobile-content .workspace-page-title { display: none; }
+  .tablet-mode .tablet-bar .mobile-overflow { margin-left: auto; }
+  .tablet-mode .tablet-bar .mobile-refresh-status { flex-basis: 100%; }
+}

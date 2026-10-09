@@ -1,0 +1,25 @@
+.users-page .sheet-wrap { overflow-x: auto; }
+.users-page table.users-table { table-layout: fixed; min-width: 1100px; width: 100%; }
+.users-table .users-col-name { width: 13%; }
+.users-table .users-col-email { width: 20%; }
+.users-table .users-col-role { width: 13%; }
+.users-table .users-col-status { width: 9%; }
+.users-table .users-col-auth { width: 9%; }
+.users-table .users-col-created { width: 8%; }
+.users-table .users-col-edit { width: 11%; }
+.users-table .users-col-actions { width: 17%; }
+.users-page table.users-table :is(td, th) { white-space: normal; overflow-wrap: anywhere; vertical-align: middle; line-height: 1.5; }
+.users-page .users-table :is(input, select) { display: block; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; height: auto; min-height: 36px; }
+.users-page .user-name-display { flex-wrap: wrap; align-items: baseline; }
+.users-page .user-name-display > b { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.users-page .user-name-display .pill { flex-shrink: 0; }
+.users-page .users-account-actions { white-space: normal; }
+.users-page .users-account-actions button { margin: 3px 4px 3px 0; white-space: nowrap; }
+.users-page .user-row-editor-actions { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; }
+.users-page .users-edit-cell button { padding: 7px 10px; min-height: 36px; white-space: nowrap; }
+.users-page .users-edit-button { min-width: 58px; }
+.users-page .users-row-editing > td { background: var(--surface-raised); }
+.users-page .users-edit-error .err-text { margin: 0; padding: 4px 0; white-space: normal; overflow-wrap: anywhere; }
+.users-page .user-row-editor-actions .err-text { white-space: normal; overflow-wrap: anywhere; }
+.users-page .users-create-heading { flex-wrap: wrap; }
+.users-page .users-provision-summary { flex-wrap: wrap; overflow-wrap: anywhere; }

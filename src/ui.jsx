@@ -1,8 +1,9 @@
-import React, { useEffect, useId, useRef, useState } from 'react'
+import React, { useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { MILESTONES, WON_REASONS } from './seed.js'
 import { Icon } from './icons.jsx'
 import { useStore } from './store.jsx'
+import { PhoneOverlayHeader, PhoneWorkspaceChromeContext } from './tablet/PhoneWorkspaceChrome.jsx'
 
 let portalRoot = null
 
@@ -22,7 +23,10 @@ function getPortalRoot() {
     if (!document.body?.isConnected) return null
     portalRoot = document.createElement('div')
     portalRoot.dataset.modaePortalRoot = 'true'
-    document.body.appendChild(portalRoot)
+    const container = document.createElement('div')
+    container.dataset.phonePortalContainer = 'true'
+    container.appendChild(portalRoot)
+    document.body.appendChild(container)
   }
   return isConnectedNode(portalRoot) ? portalRoot : null
 }
@@ -141,17 +145,37 @@ function useDialogBehavior({ onClose, dialogRef, initialFocusRef }) {
   }, [dialogRef, initialFocusRef])
 }
 
-export function Modal({ title, onClose, children, wide, className = '', initialFocusRef, closeLabel = 'Close dialog' }) {
+export function Modal({ title, onClose, children, wide, className = '', initialFocusRef, closeLabel = 'Close dialog', header }) {
   const dialogRef = useRef(null)
   const titleId = useId()
+  const phoneStore = useContext(PhoneWorkspaceChromeContext)
+  const [fullScreen, setFullScreen] = useState(false)
+  useLayoutEffect(() => {
+    if (!phoneStore || !dialogRef.current) { setFullScreen(false); return }
+    const node = dialogRef.current
+    const measure = () => {
+      const rect = node.getBoundingClientRect()
+      const viewport = window.visualViewport
+      const workspaceWidth = document.querySelector('.phone-workspace')?.getBoundingClientRect().width || viewport?.width || innerWidth
+      setFullScreen(rect.width >= workspaceWidth - 2 && rect.height >= (viewport?.height || innerHeight) - 2)
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(node)
+    window.addEventListener('resize', measure)
+    window.visualViewport?.addEventListener('resize', measure)
+    return () => { observer.disconnect(); window.removeEventListener('resize', measure); window.visualViewport?.removeEventListener('resize', measure) }
+  }, [phoneStore])
+  const chrome = header === undefined ? (fullScreen ? <PhoneOverlayHeader /> : null) : header
   useDialogBehavior({ onClose, dialogRef, initialFocusRef })
 
   return <Portal>
     <>
       <div className="filter-overlay modal-overlay" onClick={onClose} aria-hidden="true" />
-      <div className={`modal form-card ${wide ? 'wide' : ''} ${className}`.trim()} ref={dialogRef}
+      <div className={`modal form-card ${wide ? 'wide' : ''} ${className}${chrome ? ' has-phone-chrome' : ''}`.trim()} ref={dialogRef}
         role="dialog" aria-modal="true" aria-labelledby={title ? titleId : undefined}
         aria-label={title ? undefined : 'Dialog'} tabIndex="-1">
+        {chrome}
         <div className="modal-header">
           {title && <div className="section-title" id={titleId}>{String(title)}</div>}
           <button type="button" className="modal-close" onClick={onClose} aria-label={closeLabel} title={closeLabel}>×</button>

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { PORTAL_ENABLED } from '../seed.js'
@@ -19,6 +19,7 @@ import WorkflowAdmin from '../pages/WorkflowAdmin.jsx'
 import { topbarTitleFor } from '../ui/workspaceTitles.js'
 import MobileMore from './MobileMore.jsx'
 import MobileContent from './MobileContent.jsx'
+import usePhoneLayout from './usePhoneLayout.js'
 import MyDashboard from '../pages/MyDashboard.jsx'
 import Customers from '../pages/Customers.jsx'
 import Analytics from '../pages/Analytics.jsx'
@@ -40,6 +41,11 @@ import Opportunities from '../pages/Opportunities.jsx'
 import TabletHome from './TabletHome.jsx'
 import './tablet.css'
 import './phone.css'
+import PhoneWorkspaceHeader from './PhoneWorkspaceHeader.jsx'
+import { PhoneWorkspaceChromeContext } from './PhoneWorkspaceChrome.jsx'
+import { PhoneLayoutContext } from './PhoneLayoutContext.jsx'
+import './phoneMode.css'
+import '../pages/phoneOpportunities.css'
 
 function TabletGate({ page, children }) {
   const store = useStore()
@@ -56,8 +62,36 @@ const BOTTOM = [
 
 export default function TabletApp() {
   const store = useStore()
+  const workspace = useRef(null)
+  const explicitPhone = Boolean(store.viewModePinned)
+  const [width, setWidth] = useState(() => Math.min(explicitPhone ? 440 : Infinity, window.innerWidth))
+  useLayoutEffect(() => {
+    const node = workspace.current
+    const update = () => setWidth(node.getBoundingClientRect().width)
+    const observer = new ResizeObserver(update)
+    observer.observe(node)
+    update()
+    return () => observer.disconnect()
+  }, [])
+  useLayoutEffect(() => {
+    if (explicitPhone) document.documentElement.dataset.phoneMode = 'true'
+    else delete document.documentElement.dataset.phoneMode
+    return () => { delete document.documentElement.dataset.phoneMode }
+  }, [explicitPhone])
+  return <div ref={workspace} className={`phone-workspace${explicitPhone ? ' phone-workspace-selected' : ''}`}>
+    <PhoneLayoutContext.Provider value={explicitPhone || width <= 600}><TabletWorkspace /></PhoneLayoutContext.Provider>
+  </div>
+}
+
+function TabletWorkspace() {
+  const store = useStore()
   const nav = useNavigate()
   const loc = useLocation()
+  const phone = usePhoneLayout()
+  const phoneDashboard = phone && loc.pathname === '/my-dashboard'
+  const phoneInbox = phone && loc.pathname === '/inbox'
+  const phoneLeadDetail = phone && loc.pathname.startsWith('/inbox/')
+  const phoneOpportunities = phone && (loc.pathname === '/opportunities' || loc.pathname.startsWith('/opp/'))
   const role = store.role
   const custAccount = store.auth?.user?.role === 'CUST'
   const { theme } = useWorkspaceTheme()
@@ -68,7 +102,7 @@ export default function TabletApp() {
   const recordId = decodeURIComponent(loc.pathname.split('/')[2] || '')
   const detailLabel = loc.pathname.startsWith('/inbox/') ? store.leads?.find(lead => String(lead.id) === recordId)?.subject || 'Lead detail'
     : loc.pathname.startsWith('/opp/') ? store.opportunities?.find(opp => String(opp.id) === recordId)?.sellTo || 'Opportunity'
-    : ({ '/new': 'New opportunity', '/tender': 'Tender intake', '/po': 'Purchase orders', '/analytics': 'Analytics', '/my': 'Update opportunity', '/admin/workflow': 'Workflow configuration', '/voice': 'Voice update', '/aimap': 'AI and automation' }[loc.pathname] || (loc.pathname.startsWith('/proposal/') ? 'Proposal' : loc.pathname.startsWith('/register/') ? 'Register lead' : 'Workspace'))
+    : ({ '/new': 'New opportunity', '/tender': 'Tender intake', '/order': 'Purchase orders', '/analytics': 'Analytics', '/my': 'Update opportunity', '/admin/workflow': 'Workflow configuration', '/voice': 'Voice update', '/aimap': 'AI and automation' }[loc.pathname] || (loc.pathname.startsWith('/proposal/') ? 'Proposal' : loc.pathname.startsWith('/register/') ? 'Register lead' : 'Workspace'))
   const refresh = async () => {
     if (refreshLock.current) return
     refreshLock.current = true
@@ -106,7 +140,8 @@ export default function TabletApp() {
       <Route path="/more" element={<MobileMore />} />
       <Route path="*" element={<Navigate to="/more" replace />} />
       <Route path="/approvals" element={<TabletGate page="approvals"><Approvals /></TabletGate>} />
-      <Route path="/po" element={<TabletGate page="po"><PurchaseOrders /></TabletGate>} />
+      <Route path="/order" element={<TabletGate page="po"><PurchaseOrders /></TabletGate>} />
+      <Route path="/po" element={<Navigate to="/order" replace />} />
       <Route path="/audit" element={<TabletGate page="audit"><Audit /></TabletGate>} />
       <Route path="/new" element={<TabletGate page="new"><IntakeForm /></TabletGate>} />
       <Route path="/tender" element={<TabletGate page="tender"><TenderIntake /></TabletGate>} />
@@ -129,33 +164,34 @@ export default function TabletApp() {
   )
 
   return (
-    <div className="shell tablet-mode" data-theme={theme} style={{ display: 'block' }}>
+    <PhoneWorkspaceChromeContext.Provider value={phone ? store : null}><div className={`shell tablet-mode${phoneDashboard ? ' mobile-dashboard-shell' : ''}${phoneInbox ? ' mobile-inbox-shell' : ''}`} data-theme={theme} style={{ display: 'block' }}>
       <BrandWatermark variant="tablet" />
-      <header className="tablet-bar">
+      {phone && <PhoneWorkspaceHeader store={store} onRefresh={store.refreshSharedData} />}
+      {!phoneDashboard && !phoneInbox && !phoneLeadDetail && !phoneOpportunities && !(phone && ['/more', '/home'].includes(loc.pathname)) && <header className="tablet-bar">
         <div className="mobile-heading">
           {!title && loc.pathname !== '/home' && loc.pathname !== '/more' && <button type="button" aria-label="Go back" onClick={() => window.history.state?.idx > 0 ? nav(-1) : nav('/more')}><Icon name="chevronLeft" size={18} /></button>}
           <h1>{title && <Icon name={title.icon} size={18} />}{title?.label || (loc.pathname === '/more' ? 'More' : detailLabel)}</h1>
         </div>
-        <div className="tb-utilities" aria-label="Workspace utilities">
-          {['/my-dashboard', '/inbox', '/opportunities', '/approvals', '/analytics', '/po', '/proposal-sent'].includes(loc.pathname) && <WorkspaceViewToggle />}
+        {!phone && <div className="tb-utilities" aria-label="Workspace utilities">
+          {['/my-dashboard', '/inbox', '/opportunities', '/approvals', '/analytics', '/order', '/proposal-sent'].includes(loc.pathname) && <WorkspaceViewToggle />}
           <details className="mobile-overflow"><summary aria-label="Workspace actions">•••</summary><div>
             <button type="button" onClick={refresh} disabled={refreshing} title="Refresh workspace data"><Icon name="refresh" size={18} />{refreshing ? 'Refreshing…' : 'Refresh workspace'}</button>
           </div></details>
-        </div>
+        </div>}
         {refreshMessage && <p className="mobile-refresh-status" role="status">{refreshMessage}</p>}
-      </header>
-      <MobileContent hasTitle={Boolean(title)} routeKey={`${store.auth?.user?.id || role}:${role}:${loc.pathname}`}>{routes}</MobileContent>
+      </header>}
+      <MobileContent hasTitle={Boolean(title) && !phoneInbox && !phoneLeadDetail} routeKey={`${store.auth?.user?.id || role}:${role}:${loc.pathname}`}>{routes}</MobileContent>
       <nav className="tab-bottom" aria-label="Main navigation">
         {BOTTOM.filter(t => canSeePage(store.roles || role, t.page)).map(t => {
           const badge = t.badge ? t.badge(store) : 0
-          return <NavLink key={t.to} to={t.to} className={({ isActive }) => isActive ? 'active' : ''}>
+          return <NavLink key={t.to} to={t.to} className={({ isActive }) => isActive || (t.to === '/opportunities' && loc.pathname.startsWith('/opp/')) ? 'active' : ''}>
             {badge > 0 && <span className="tb-badge">{badge}</span>}
-            <Icon name={t.icon} size={20} />{t.label}
+            <Icon name={phoneDashboard && t.to === '/my-dashboard' ? 'home' : phoneDashboard && t.to === '/inbox' ? 'mail' : t.icon} size={20} />{t.label}
           </NavLink>
         })}
         <NavLink to="/more" state={{ from: loc.pathname === '/more' ? loc.state?.from : `${loc.pathname}${loc.search}${loc.hash}` }}><Icon name="list" size={20} />More</NavLink>
       </nav>
       <DrawerHost />
-    </div>
+    </div></PhoneWorkspaceChromeContext.Provider>
   )
 }

@@ -1,0 +1,62 @@
+@media screen and (max-width: 600px) {
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header {
+    --header-surface: #fff; --header-border: #d8dce1; --header-text: #202329;
+    --header-body: #374151; --header-muted: #647080; --header-success: #237a33;
+    font-family: Inter, system-ui, sans-serif; font-size: 14px; line-height: 1.4;
+  }
+  html[data-workspace-theme="dark"] :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header {
+    --header-surface: #1b1c20; --header-border: #353940; --header-text: #fff;
+    --header-body: #d1d5db; --header-muted: #aeb8c5; --header-success: #10b981;
+  }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header .mobile-dashboard-header { display: flex; align-items: center; gap: 8px; padding: 14px 0 4px; }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header .modae-logo { flex: 1; min-width: 64px; }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header .modae-official-logo { width: 100%; max-width: 105px; height: 32px !important; max-height: 32px; object-fit: contain; }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header .ml-text { display: none; }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header :is(.mobile-theme-toggle, .mobile-refresh-button) { display: inline-grid; place-items: center; flex-shrink: 0; min-width: 40px; min-height: 44px; padding: 0; border: 0 !important; border-radius: 8px; color: var(--header-body) !important; background: transparent !important; box-shadow: none !important; }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header .mobile-theme-toggle svg { width: 24px; height: 24px; }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header .workspace-view-switch { min-height: 44px; height: 44px; width: 112px; flex: 0 0 112px; border-radius: 999px !important; background: var(--header-surface) !important; border-color: var(--header-border) !important; }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header .workspace-view-switch__thumb { top: 10px; }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header .workspace-view-switch__label { color: var(--header-text) !important; }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header .mobile-avatar { display: grid; place-items: center; width: 34px; height: 34px; flex-shrink: 0; border-radius: 50%; background: #c9431d; color: white; font-size: 12px; }
+  .phone-workspace-header .phone-account { position: relative; flex: 0 0 44px; }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-account .phone-account-trigger { display: grid; place-items: center; width: 44px; min-width: 44px; height: 44px; padding: 0; border: 0 !important; background: transparent !important; box-shadow: none !important; border-radius: 50%; }
+  .phone-workspace-header .phone-account-trigger:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .phone-workspace-header .phone-account-menu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 50; width: 260px; max-width: calc(100vw - 32px); box-sizing: border-box; padding: 6px; border: 1px solid var(--header-border); border-radius: 12px; background: var(--header-surface); color: var(--header-text); box-shadow: 0 8px 24px rgba(0,0,0,.14); }
+  .phone-workspace-header .phone-account-menu:focus { outline: none; }
+  .phone-workspace-header .phone-account-details { display: grid; gap: 5px; padding: 12px; margin-bottom: 4px; border-bottom: 1px solid var(--header-border); overflow-wrap: anywhere; }
+  .phone-workspace-header .phone-account-details strong { font-size: 15px; }
+  .phone-workspace-header .phone-account-details :is(span,small) { color: var(--header-muted); font-size: 12px; line-height: 1.4; }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-account-menu > button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 44px; padding: 10px 12px; border: 0 !important; border-radius: 7px; color: var(--header-text) !important; background: transparent !important; box-shadow: none !important; text-align: left; font-size: 14px; }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-account-menu > button:hover { background: var(--surface-sunken) !important; }
+  .phone-workspace-header .phone-account-menu > button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header .mobile-sync-row { display: flex; align-items: center; justify-content: space-between; min-height: 36px; margin-bottom: 4px; }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header .mobile-sync { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 6px; color: var(--header-muted); font-size: 12px; }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header .mobile-sync i { width: 7px; height: 7px; border-radius: 50%; background: var(--header-muted); }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header .mobile-sync[data-status="live"] { color: var(--header-success); }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header .mobile-sync[data-status="live"] i { background: var(--header-success); }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header .mobile-sync > span { color: var(--header-muted); }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header .mobile-refresh-message { margin: 0 0 10px; color: var(--header-body); font-size: 12px; }
+  .phone-workspace-header { display:contents; }
+  /* hidden horizontal overflow makes body a non-scrolling sticky ancestor. */
+  body:has(.shell.tablet-mode) { overflow-x:clip; }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header .mobile-dashboard-header {
+    position:sticky; top:0; z-index:40; flex-shrink:0;
+    min-height:calc(60px + env(safe-area-inset-top)); box-sizing:border-box;
+    padding:calc(8px + env(safe-area-inset-top)) 16px 8px;
+    background:var(--header-surface); border-bottom:1px solid var(--header-border);
+    color:var(--header-text);
+  }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header .mobile-sync-row { padding:0 16px; }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header .mobile-dashboard-header:has(.phone-account-menu) { z-index:60; }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header .mobile-sync[data-status="live"] { color:var(--header-muted); }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header .mobile-refresh-message { margin-inline:16px; }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header .mobile-theme-toggle { min-width:44px; }
+  .shell.tablet-mode { scroll-padding-top:calc(64px + env(safe-area-inset-top)); }
+  .shell.tablet-mode .mobile-content { scroll-margin-top:calc(64px + env(safe-area-inset-top)); }
+  .has-phone-chrome .modal-header { position:sticky; top:calc(60px + env(safe-area-inset-top)); z-index:39; background:var(--surface-default); }
+  .has-phone-chrome { scroll-padding-top:calc(124px + env(safe-area-inset-top)); }
+  .tablet-mode .tracker-page .sheet-wrap.phone-table-workspace { padding-top:0; }
+  .phone-table-chrome { position:sticky; top:0; left:0; z-index:20; width:calc(100vw - 24px); background:var(--surface-default); }
+  .tablet-mode .phone-table-chrome .phone-table-close { position:static; margin:8px 0; }
+  .tablet-mode .approval-decision-drawer:has(.phone-workspace-header) { grid-template-rows:auto auto minmax(0,1fr); }
+}

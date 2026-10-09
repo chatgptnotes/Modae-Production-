@@ -17,8 +17,14 @@ import { fmtSize } from '../filestore.js'
 import { hold, add as holdMore, remove as removeHeldFile } from '../leadFiles.js'
 import { listFiles } from '../leadBlobs.js'
 import AttachmentViewer from '../AttachmentViewer.jsx'
+import { inboxViewCounts, matchesInboxView } from './inboxViews.js'
+import InboxToolbar from './InboxToolbar.jsx'
 import usePhoneLayout from '../tablet/usePhoneLayout.js'
 import PhoneFilters from '../tablet/PhoneFilters.jsx'
+import { PhoneInboxToolbar, PhoneLeadRow } from './PhoneInbox.jsx'
+import PhoneLeadDetail from './PhoneLeadDetail.jsx'
+import './phoneEnquiry.css'
+import usePhoneDialogViewport from '../tablet/usePhoneDialogViewport.js'
 import useListState from '../tablet/useListState.js'
 import { findDuplicates } from '../insights.js'
 import { leadWorkflow } from '../leadWorkflow.js'
@@ -60,6 +66,48 @@ const DROP_REASONS = ['Outside business scope', 'Window shopping / budgetary onl
 function PreviewFieldText({ value }) {
   const parts = String(value || '—').split(/([@._/-])/)
   return parts.map((part, index) => <React.Fragment key={index}>{part}{/[@._/-]/.test(part) && <wbr />}</React.Fragment>)
+}
+
+function InboxLeadPreview({ lead }) {
+  const nav = useNavigate()
+  const [panel, setPanel] = useState('overview')
+  const [viewing, setViewing] = useState(null)
+  const converted = lead.status === 'Converted' && lead.oppId
+  const fields = lead.ai?.fields || []
+  return <aside className="mailbox-preview" aria-label="Selected lead preview">
+    <div className="mailbox-preview-head"><h2>Lead details</h2><span className={`pill ${PILL[lead.status] || 'Blue'}`}>{lead.status || 'Unknown'}</span></div>
+    <h3>{lead.subject || 'Untitled enquiry'}</h3>
+    <p className="mailbox-preview-sender"><PreviewFieldText value={`${lead.sender || lead.from || 'Sender not recorded'} · ${ddMmmYY((lead.ts || '').slice(0, 10))}`} /></p>
+    {converted && <div className="inbox-linked-opportunity"><div><small>Opportunity</small><button type="button" onClick={() => nav(`/opp/${lead.oppId}`)}>{lead.oppId}</button></div><button type="button" onClick={() => nav(`/opp/${lead.oppId}`)}>Open opportunity <Icon name="arrowRight" size={13} /></button></div>}
+    <div className="inbox-preview-switch" role="group" aria-label="Lead detail sections">
+      <button type="button" aria-pressed={panel === 'overview'} onClick={() => setPanel('overview')}>Overview</button>
+      <button type="button" aria-pressed={panel === 'email'} onClick={() => setPanel('email')}>Original email</button>
+    </div>
+    {panel === 'overview' ? <>
+      <section><h4>AI summary <span className="ai-source-badge">AI</span></h4><p>{lead.ai?.summary || 'No AI summary is available yet.'}</p></section>
+      <section><h4>Extracted details</h4>
+        {fields.map((field, index) => <div className="mailbox-preview-field" key={`${field.k}-${index}`}><span>{field.k}</span><b><PreviewFieldText value={field.v} /></b>{field.conf != null && <small>{field.conf}%</small>}</div>)}
+        {!fields.length && <p className="hint">No structured fields are available yet.</p>}
+        <div className="mailbox-preview-field"><span>Owner</span><b>{lead.assignedOwner || lead.suggestedOwner || 'Unassigned'}</b></div>
+        <div className="mailbox-preview-field"><span>Route</span><b>{lead.route || lead.parse?.oppType || 'Not assigned'}</b></div>
+      </section>
+    </> : <section><h4>Original email</h4><p className="inbox-original-email">{lead.body || 'Original message text is unavailable.'}</p></section>}
+    <section><h4>Attachments <small>{(lead.attachments || []).length}</small></h4>
+      {(lead.attachments || []).map((attachment, index) => <button key={`${attachment.name}-${index}`} type="button" className="inbox-preview-attachment" onClick={() => setViewing(attachment)}>
+        <Icon name="fileText" size={16} /><span><b>{attachment.name || 'Unnamed attachment'}</b><small>{typeof attachment.size === 'number' ? fmtSize(attachment.size) : attachment.size || 'Preview available'}</small></span><Icon name="eye" size={14} />
+      </button>)}
+      {!lead.attachments?.length && <p className="hint">No attachments came with this enquiry.</p>}
+    </section>
+    <div className="inbox-next-action">
+      <b>{converted ? 'Already converted' : lead.status === 'Qualified' ? 'Ready for registration' : lead.status === 'New' ? 'Review this enquiry' : 'Lead record'}</b>
+      <p>{converted ? 'Continue work in the linked opportunity.' : lead.status === 'Qualified' ? 'Continue the existing registration workflow.' : lead.status === 'New' ? 'Review extracted details before qualifying this lead.' : 'Open the full lead to review its decisions and history.'}</p>
+      <div className="mailbox-preview-actions">
+        {!converted && <button type="button" className="primary" onClick={() => nav(lead.status === 'Qualified' ? `/register/${lead.id}` : `/inbox/${lead.id}`)}>{lead.status === 'Qualified' ? 'Continue registration' : lead.status === 'New' ? 'Review / qualify' : 'Open lead'}</button>}
+        {converted && <button type="button" onClick={() => nav(`/inbox/${lead.id}`)}>Open full lead</button>}
+      </div>
+    </div>
+    {viewing && <AttachmentViewer leadId={lead.id} attachment={viewing} onClose={() => setViewing(null)} />}
+  </aside>
 }
 export const isUnavailableAiSummary = lead => /^AI extraction was unavailable\b/i.test(String(lead?.ai?.summary || '').trim())
 
@@ -862,6 +910,9 @@ async function fullLeadAttachments(lead, attachments) {
 function PasteLeadModal({ onClose }) {
   const store = useStore()
   const nav = useNavigate()
+  const phone = usePhoneLayout()
+  const fieldId = React.useId()
+  usePhoneDialogViewport('.lead-paste-modal')
   const fileInput = useRef(null)
   const [from, setFrom] = useState('')
   const [subject, setSubject] = useState('')
@@ -874,6 +925,7 @@ function PasteLeadModal({ onClose }) {
   const [reading, setReading] = useState(false)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+
 
   const addFiles = async picked => {
     const list = Array.from(picked || [])
@@ -933,38 +985,41 @@ function PasteLeadModal({ onClose }) {
   }
 
   return (
-    <Modal title="New enquiry — paste the email" onClose={onClose} className="lead-paste-modal">
+    <Modal title={phone ? 'New enquiry' : 'New enquiry — paste the email'} onClose={onClose} className="lead-paste-modal">
       <div className="drawer-form lead-paste-form">
+        <div className="lead-paste-fields">
+        {phone && <p className="lead-paste-intro">Paste the message or attach an enquiry document.</p>}
         {/* Section 1 of the lead workflow. Where the enquiry came from is a
             separate fact from the mailbox it arrived in, and it is the one that
             answers "which channels actually produce work". */}
-        <label>Lead source</label>
-        <select value={source} onChange={e => setSource(e.target.value)} style={{ width: '100%' }}>
+        <label htmlFor={`${fieldId}-source`}>Lead source</label>
+        <select id={`${fieldId}-source`} value={source} onChange={e => setSource(e.target.value)} style={{ width: '100%' }}>
           <option value="">— select the source —</option>
           {LEAD_SOURCES.map(s => <option key={s}>{s}</option>)}
         </select>
         {source === 'Internal / Non-sales Enquiry' && <>
-          <label style={{ marginTop: 6 }}>Forwarding department</label>
-          <input value={forwardingDepartment} onChange={e => setForwardingDepartment(e.target.value)} placeholder="e.g. Service, Projects, Finance" style={{ width: '100%' }} />
-          <label style={{ marginTop: 6 }}>Forwarded by</label>
-          <input value={forwardedBy} onChange={e => setForwardedBy(e.target.value)} placeholder="Name or email" style={{ width: '100%' }} />
+          <label htmlFor={`${fieldId}-department`} style={{ marginTop: 6 }}>Forwarding department</label>
+          <input id={`${fieldId}-department`} value={forwardingDepartment} onChange={e => setForwardingDepartment(e.target.value)} placeholder="e.g. Service, Projects, Finance" style={{ width: '100%' }} />
+          <label htmlFor={`${fieldId}-forwarder`} style={{ marginTop: 6 }}>Forwarded by</label>
+          <input id={`${fieldId}-forwarder`} value={forwardedBy} onChange={e => setForwardedBy(e.target.value)} placeholder="Name or email" style={{ width: '100%' }} />
         </>}
-        <label style={{ marginTop: 6 }}>From</label>
-        <input value={from} onChange={e => setFrom(e.target.value)}
+        <label htmlFor={`${fieldId}-from`} style={{ marginTop: 6 }}>{phone ? 'Sender email' : 'From'}</label>
+        <input id={`${fieldId}-from`} inputMode="email" autoCapitalize="none" value={from} onChange={e => setFrom(e.target.value)}
           placeholder="name@customer.com" style={{ width: '100%' }} />
-        <label style={{ marginTop: 6 }}>Subject</label>
-        <input value={subject} onChange={e => setSubject(e.target.value)}
+        <label htmlFor={`${fieldId}-subject`} style={{ marginTop: 6 }}>Subject</label>
+        <input id={`${fieldId}-subject`} value={subject} onChange={e => setSubject(e.target.value)}
           placeholder="Request for quotation — …" style={{ width: '100%' }} />
-        <label style={{ marginTop: 6 }}>Body</label>
-        <textarea rows={12} value={body} onChange={e => setBody(e.target.value)}
+        <label htmlFor={`${fieldId}-body`} style={{ marginTop: 6 }}>{phone ? 'Enquiry message' : 'Body'}</label>
+        <textarea id={`${fieldId}-body`} rows={phone ? 6 : 12} value={body} onChange={e => setBody(e.target.value)}
           placeholder="Paste the enquiry exactly as received." style={{ width: '100%' }} />
-        <label style={{ marginTop: 6 }}>Attachments</label>
-        <div className={`tender-drop compact ${drag ? 'drag' : ''}`}
+        <label htmlFor={`${fieldId}-files`} style={{ marginTop: 6 }}>Attachments</label>
+        {phone && <button type="button" className="lead-paste-add-files" onClick={() => fileInput.current?.click()} disabled={reading || busy}><Icon name="upload" size={18} /> Add attachments</button>}
+        <div className={`tender-drop compact ${phone ? 'phone-enquiry-upload' : ''} ${drag ? 'drag' : ''}`}
           onDragOver={e => { e.preventDefault(); setDrag(true) }}
           onDragLeave={() => setDrag(false)}
           onDrop={onDrop}
           onClick={() => fileInput.current?.click()}>
-          <input ref={fileInput} type="file" multiple style={{ display: 'none' }}
+          <input id={`${fieldId}-files`} ref={fileInput} type="file" multiple style={{ display: 'none' }}
             onChange={e => { addFiles(e.target.files); e.target.value = '' }} />
           <div className="tender-drop-icon"><Icon name="fileText" size={22} /></div>
           <b>Drop the RFQ, BOM or spec here</b>
@@ -972,12 +1027,14 @@ function PasteLeadModal({ onClose }) {
             {reading ? 'Reading…' : 'or tap to choose files — PDF contents are read and sent with the enquiry'}
           </div>
         </div>
+        {phone && <p className="lead-paste-upload-help">Attach an RFQ, BOM or specification. Documents are read with your message.</p>}
+        <p className="lead-paste-status" role="status" aria-live="polite">{reading ? 'Reading attachments…' : busy ? 'Extracting enquiry…' : ''}</p>
         {files.map((f, i) => (
           <div key={i} className="attach-row">
             <Icon name="fileText" size={13} />
             <span className="attach-name" style={{ flex: 1 }}>{f.name}</span>
             <span className="attach-meta hint">{f.pages ? `${f.pages} p. · ` : ''}{f.size}</span>
-            <button title="Remove"
+            <button type="button" title="Remove" aria-label={`Remove ${f.name}`}
               onClick={() => setFiles(files.filter((_, j) => j !== i))}>✕</button>
             {f.err && <div className="hint" style={{ flexBasis: '100%' }}><Icon name="alert" size={11} /> {f.err}</div>}
           </div>
@@ -985,7 +1042,8 @@ function PasteLeadModal({ onClose }) {
         {store.config?.aiModel?.provider === 'Built-in fallback'
           ? <WarnBox>Built-in fallback is selected — the email will be parsed locally and remain pending human review.</WarnBox>
           : !aiEnabled() && <WarnBox>AI proxy is not configured — extraction will use the built-in email fallback and remain pending human review.</WarnBox>}
-        {err && <ErrBox>{err}</ErrBox>}
+        {err && <div role="alert"><ErrBox>{err}</ErrBox></div>}
+        </div>
         <div className="lead-paste-actions">
           <button onClick={onClose}>Cancel</button>
           {err && <button onClick={addRaw}>Add unextracted</button>}
@@ -1117,7 +1175,7 @@ function LeadWorkflowBar({ lead, customerStatus }) {
   )
 }
 
-function LeadSourceContext({ lead, canAct }) {
+function LeadSourceContext({ lead, canAct, phoneLayout = false }) {
   const store = useStore()
   const attachments = lead.attachments || []
   const [viewing, setViewing] = useState(null)
@@ -1209,7 +1267,7 @@ function LeadSourceContext({ lead, canAct }) {
 
   return (
     <>
-      <details className="converted-source" name="lead-rail-accordion" open>
+      <details className="converted-source" name={phoneLayout ? undefined : 'lead-rail-accordion'} open>
         <summary><span><Icon name="mail" size={14} /> Original email</span><span className="converted-summary-action">Expand source <Icon name="chevronDown" size={13} /></span></summary>
         <div className="converted-source-body">
           <div className="converted-source-meta"><b>{lead.sender || lead.from || 'Inbound mailbox'}</b><span>{lead.from || ''}</span></div>
@@ -1269,9 +1327,9 @@ function LeadSourceContext({ lead, canAct }) {
   )
 }
 
-function StructuredItemsTable({ items, title = 'Requested items', className = '' }) {
+function StructuredItemsTable({ items, title = 'Requested items', className = '', phoneLayout = false }) {
   return (
-    <section className={['converted-items', className].filter(Boolean).join(' ')} aria-labelledby={`${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-title`}>
+    <section data-phone-field={phoneLayout ? 'Requested items' : undefined} className={['converted-items', className].filter(Boolean).join(' ')} aria-labelledby={`${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-title`}>
       <div className="converted-section-title" id={`${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-title`}>{title}</div>
       <div className="converted-table-wrap">
         <table>
@@ -1279,7 +1337,7 @@ function StructuredItemsTable({ items, title = 'Requested items', className = ''
           <tbody>{items.map((item, index) => (
             <tr key={`${item.description || item.desc}-${index}`}>
               <td>{item.description || item.desc || item.partNumber || 'Unspecified item'}</td>
-              <td>{item.qty || 1}</td>
+              <td>{phoneLayout ? (item.qty ?? item.quantity ?? '—') : item.qty || 1}</td>
             </tr>
           ))}</tbody>
         </table>
@@ -1370,11 +1428,25 @@ function ReadOnlyDecisionForm({ lead, items = [] }) {
 }
 
 // Structured detail shell shared by active and converted AI-parsed leads.
-function StructuredLeadDetail({ lead, converted = false }) {
+function OptionalLeadFields({ phone, title = 'Additional classification', children }) {
+  return phone ? <details data-phone-field={title} className="phone-optional-details"><summary>{title}</summary>{children}</details> : <>{children}</>
+}
+function StructuredLeadDetail({ lead, converted = false, phoneLayout = false }) {
   const nav = useNavigate()
   const fields = lead.ai?.fields || []
   const value = (key, fallback = '') => mappedLeadFieldValue(fields, key) || fallback
   const identity = leadIdentity(lead, fields)
+  if (phoneLayout) {
+    const actualItems = lead.ai?.lineItems || []
+    if (!converted) return <AiLeadDetail key={lead.id} lead={lead} compact compactItems={actualItems} phoneLayout />
+    return <PhoneLeadDetail key={lead.id} lead={lead}
+      summary={{ customer: identity.sellTo, contact: identity.contactPerson, scope: identity.scope || lead.ai?.summary,
+        delivery: lead.deliveryAddress || identity.eucLocation, owner: lead.assignedOwner || lead.suggestedOwner }}
+      items={actualItems} details={<><ReadOnlyDecisionForm lead={lead} items={actualItems} /><StructuredItemsTable items={actualItems} phoneLayout /></>}
+      email={<LeadSourceContext lead={lead} canAct={false} phoneLayout />}
+      action={lead.oppId ? { label: 'Open opportunity', onClick: () => nav('/opp/' + lead.oppId) } : undefined}
+      onBack={() => nav('/inbox')} />
+  }
   const customer = identity.sellTo || value('sellTo', lead.sellTo || 'Eastern Hydro Systems Limited (Chennai, Tamil Nadu)')
   const contact = identity.contactPerson || value('contactPerson', 'Arjun Menon')
   const delivery = lead.deliveryAddress || leadFieldValue(fields, /delivery|address/i) || identity.eucLocation || value('eucLocation', lead.location || '45 Industrial Estate Road, Chennai, Tamil Nadu - 600058')
@@ -1449,7 +1521,7 @@ function StructuredLeadDetail({ lead, converted = false }) {
 // ---------------------------------------------------------------------------
 // Rich three-panel detail for AI-parsed leads (LD-201..LD-206 shape).
 // ---------------------------------------------------------------------------
-function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
+function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = false }) {
   const store = useStore()
   const nav = useNavigate()
   const drawer = useDrawer()
@@ -2202,7 +2274,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
     updateDecisionField('eucLocation', normalized)
   }
 
-  return (
+  const detailContent = (
     <div className={compact ? 'compact-workflow-content' : ''}>
     {directCreatedId && <div className="okbox lead-created-inline">
       Opportunity <b>{directCreatedId}</b> created successfully. This lead is now converted.
@@ -2274,6 +2346,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
     <LeadWorkflowBar lead={lead} customerStatus={previewCustomerStatus} />
     <div className="lead-detail-layout">
     <div className="lead-detail-main">
+    <OptionalLeadFields phone={phoneLayout} title="Additional extracted fields">
     <div className="ws-grid">
       {/* ---- Column 1 — original email ---- */}
       <section className="ws-col">
@@ -2436,6 +2509,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
 
       {/* ---- Column 3 — AI summary, alerts, actions ---- */}
     </div>
+    </OptionalLeadFields>
     </div>
       <section className={`lead-qualification-panel${compact ? ' compact-routing-panel' : ''}`} aria-label={compact ? 'Lead decisions' : 'Qualification and ownership'}>
         <div className={`ws-group${compact ? ' lead-decision-section-head' : ''}`}>
@@ -2475,7 +2549,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
         </div>
         <div className="lead-decision-grid">
           <div className="lead-decision-subsection">Customer and contact</div>
-            <div>
+            <div data-phone-field="Sell-to customer">
               <span className="decision-field-heading">Sell To Customer <span className="required-mark">*</span> {decisionAiMeta('sellTo', false)}</span>
               <CustomerPicker
                 customers={store.customers}
@@ -2490,7 +2564,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
               />
               {decisionAiStatus('sellTo')}
             </div>
-          <label><span className="decision-field-heading">Sell To Customer Location <span className="required-mark">*</span></span>
+          <label data-phone-field="Sell-to customer location"><span className="decision-field-heading">Sell To Customer Location <span className="required-mark">*</span></span>
             <div className="decision-value-row"><input type="text" value={decisionDraft.sellToCustomerLocation} disabled={lead.status === 'Dropped'}
               onChange={e => updateDecisionField('sellToCustomerLocation', e.target.value)} placeholder="Enter customer location" /></div>
           </label>
@@ -2559,6 +2633,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
               {CUSTOMER_STATUSES.map(status => <option key={status}>{status}</option>)}
             </select>{decisionAiStatus('customerStatus')}</div>
           </label>
+          <OptionalLeadFields phone={phoneLayout}>
           <label><span className="decision-field-heading">Business unit {decisionAiMeta('bu', false)}</span>
             <div className="decision-value-row"><select value={decisionDraft.bu} disabled={lead.status === 'Dropped'}
               onChange={e => setDecisionDraft({ ...decisionDraft, bu: e.target.value })}>
@@ -2580,6 +2655,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
               {PRODUCTS.map(product => <option key={product} value={product}>{product === 'Various' ? 'Multiple equipment items' : product}</option>)}
             </select>{decisionAiStatus('product')}</div>
           </label>
+          </OptionalLeadFields>
         </div>
         {missingIdentity.length > 0 && lead.status !== 'Dropped' && (
           <div className="warnbox" style={{ marginTop: 8 }}>
@@ -3001,7 +3077,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
             </div>
           </section>
 
-          {compact && <StructuredItemsTable items={compactItems} title="Spares" className="compact-spares" />}
+          {compact && <StructuredItemsTable items={compactItems} title={phoneLayout ? 'Requested items' : 'Spares'} className="compact-spares" phoneLayout={phoneLayout} />}
 
           {ai.next?.length > 0 && (
             <>
@@ -3011,7 +3087,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
           )}
 
           {isRed && !redCleared && (
-            <ErrBox>
+            <div data-phone-field="Continuation approval"><ErrBox>
               <b>Red-class customer</b> — continuation needs joint LJS + AH approval (AP-1).
               No opportunity ID until approved.{' '}
               {redApproval && <>Approval <b>{redApproval.id}</b> is <b>{redApproval.status}</b>.{' '}
@@ -3019,7 +3095,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
               {redRequestable && <button onClick={requestRedClearance}>
                 {redApproval ? 'Re-request joint approval' : 'Request joint approval'}
               </button>}
-            </ErrBox>
+            </ErrBox></div>
           )}
           {isRed && redCleared && (
             <div className="okbox">
@@ -3028,7 +3104,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
             </div>
           )}
 
-          <details className="compact-rail-section compact-verification-rail" name="lead-rail-accordion" open={!compact}>
+          <details data-phone-field="Customer verification" className="compact-rail-section compact-verification-rail" name={phoneLayout ? undefined : 'lead-rail-accordion'} open={!compact}>
             <summary><span><Icon name={previewCustomerStatus === 'Blue' ? 'fileText' : 'checkCircle'} size={13} /> KYC documents</span><Icon name="chevronDown" size={13} /></summary>
             <div className="compact-rail-body"><LeadVerification lead={lead} customerStatus={previewCustomerStatus} store={store} /></div>
           </details>
@@ -3064,7 +3140,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
           </div>}
         </div>
 
-        <footer className="ws-foot">
+        <footer className={`ws-foot${phoneLayout ? ' phone-hidden-action' : ''}`}>
           {canAct && lead.status !== 'Qualified' && (
             <>
               {isFastTrackLead(previewLead, store.config, customer) && (
@@ -3180,12 +3256,53 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
     </div>
     </div>
   )
+  if (!phoneLayout) return detailContent
+  const issues = [
+    ...missingIdentity.map(label => ({ label, note: 'Needed before registration' })),
+    ...(inquiryMissing ? [{ label: 'Inquiry type', note: 'Complete the enquiry type and any required RFQ reference/date' }] : []),
+    ...registrationPendingLow.map(field => {
+      const key = Object.entries(decisionFieldPatterns).find(([, pattern]) => pattern.test(field.k))?.[0]
+      return { label: `Review ${field.k}`, field: REQUIRED_IDENTITY_FIELDS.find(([name]) => name === key)?.[1] || 'Additional extracted fields', note: 'Confirm this low-confidence identity field before registration' }
+    }),
+    ...(verificationBlocked ? [{ label: 'Customer verification', note: 'Complete the existing customer verification checks' }] : []),
+    ...(qualifyBlocked ? [{ label: 'Continuation approval', note: 'Red customer approval required before qualification' }] : []),
+  ]
+  const blockedNote = qualifyBlocked ? 'Red continuation approval required first.'
+    : registrationBlocked ? 'Complete the checks in Needs attention before registration.' : ''
+  const phoneActions = canAct ? [
+    { label: 'Reassign lead', onClick: () => setReassignOpen(true) },
+    { label: 'Compare with original', onClick: () => setCompareOpen(true) },
+    { label: 'Re-run extraction', onClick: reExtract, disabled: reExtracting },
+    { label: 'Add a document', onClick: () => docInput.current?.click(), disabled: addingDocs },
+    ...(clarificationAvailable ? [{ label: 'Draft clarification', panel: 'details', onClick: draftClarificationMail }] : []),
+    ...(lead.status === 'Qualified' ? [{ label: 'Create opportunity', onClick: createDirectly, disabled: registrationBlocked || directCreateBusy || Boolean(directCreatedId) }] : []),
+    ...(lead.status !== 'Qualified' && isFastTrackLead(previewLead, store.config, customer) ? [{ label: 'Fast-track to registration', disabled: qualifyBlocked, onClick: () => {
+      store.updateLead(lead.id, { status: 'Qualified', customerStatus: previewCustomerStatus, redFlag: previewCustomerStatus === 'Red', fastTrack: true, fastTrackStartedAt: lead.fastTrackStartedAt || nowIST() }, 'Green customer fast-track started')
+      nav('/register/' + lead.id)
+    } }] : []),
+    { label: 'Drop lead', onClick: () => setDropping(true) },
+  ] : []
+  return <><PhoneLeadDetail lead={lead}
+    summary={{ customer: decisionDraft.sellTo, contact: decisionDraft.contactPerson, scope: decisionDraft.scope,
+      delivery: lead.deliveryAddress || decisionDraft.eucLocation, owner: decisionDraft.owner }}
+    issues={canAct ? issues : []} items={compactItems}
+    details={<>{detailContent}{reErr && <ErrBox>{reErr}</ErrBox>}{reNote && <p role="status">{reNote}</p>}</>}
+    email={<LeadSourceContext lead={lead} canAct={canAct} phoneLayout />} actions={phoneActions}
+    action={canAct ? lead.status === 'Qualified'
+      ? { label: 'Continue registration', onClick: () => nav('/register/' + lead.id), disabled: registrationBlocked, note: blockedNote }
+      : { label: 'Qualify lead', onClick: () => store.updateLead(lead.id, { status: 'Qualified' }), disabled: qualifyBlocked, note: qualifyBlocked ? blockedNote : 'Qualification does not create an opportunity.' }
+      : undefined} onBack={() => nav('/inbox')} />
+    <input ref={docInput} type="file" multiple hidden onChange={event => { addDocuments(event.target.files); event.target.value = '' }} />
+    {docErr && <p role="alert">{docErr}</p>}
+    {dropping && <Modal title="Drop lead" onClose={() => setDropping(false)}><ReasonBox title="Disqualify this lead" categories={DROP_REASONS} confirmLabel="Confirm disqualify"
+      onCancel={() => setDropping(false)} onConfirm={(category, note) => { store.updateLead(lead.id, { status: 'Dropped', droppedReason: `${category} — ${note}` }); setDropping(false) }} /></Modal>}
+  </>
 }
 
 // ---------------------------------------------------------------------------
 // Legacy detail — simple parse table + qualify-via-intake for non-AI leads.
 // ---------------------------------------------------------------------------
-function LegacyLeadDetail({ lead }) {
+function LegacyLeadDetail({ lead, phoneLayout = false }) {
   const store = useStore()
   const nav = useNavigate()
   const drawer = useDrawer()
@@ -3219,7 +3336,7 @@ function LegacyLeadDetail({ lead }) {
     })
   }
 
-  return (
+  const detailContent = (
     <div className="form-card" style={{ maxWidth: 760 }}>
       <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
         <b>{lead.subject}</b>
@@ -3328,6 +3445,16 @@ function LegacyLeadDetail({ lead }) {
       </Modal>}
     </div>
   )
+  if (!phoneLayout) return detailContent
+  return <PhoneLeadDetail lead={lead}
+    summary={{ customer: p.sellTo, contact: p.contactPerson, scope: p.oppName || p.note,
+      delivery: p.eucLocation, owner: lead.assignedOwner || lead.suggestedOwner }} items={p.items || []}
+    details={detailContent} email={<LeadSourceContext lead={lead} canAct={lead.status !== 'Converted' && lead.status !== 'Dropped'} phoneLayout />}
+    actions={lead.status !== 'Dropped' && lead.status !== 'Converted' ? [{ label: 'Reassign lead', panel: 'details', onClick: () => setReassignOpen(true) },
+      { label: 'Drop lead', panel: 'details', onClick: () => setDropping(true) }] : []}
+    action={lead.status === 'Converted' && lead.oppId ? { label: 'Open opportunity', onClick: () => nav('/opp/' + lead.oppId) }
+      : ['New', 'Qualified'].includes(lead.status) ? { label: 'Continue to intake', onClick: qualify, note: 'Review the intake form before creating an opportunity.' } : undefined}
+    onBack={() => nav('/inbox')} />
 }
 
 // ---------------------------------------------------------------------------
@@ -3353,7 +3480,7 @@ export default function Inbox() {
   const [ageF, setAgeF] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:inbox:ageF`, '')
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [previewLeadId, setPreviewLeadId] = useState('')
-  const [bulkMenuOpen, setBulkMenuOpen] = useState(false)
+  const [inboxView, setInboxView] = useState('all')
   const [openHeaderFilter, setOpenHeaderFilter] = useState(null)
   const [repairingAi, setRepairingAi] = useState(false)
   const [repairAiNote, setRepairAiNote] = useState('')
@@ -3518,9 +3645,13 @@ export default function Inbox() {
     return true
   }
   const rows = listSource.filter(l => ownerVisible(l) && matchesFilters(l))
-  const mailboxRows = rows.sort(compareInboxRows)
-  const { pagedRows: pageRows, pagination } = usePagedRows(mailboxRows, JSON.stringify([scope, q, statusF, sourceF, routeF, urgencyF, ownerF, completenessF, receivedF, ageF]))
+  const viewCounts = inboxViewCounts(rows)
+  const activeInboxView = showArchive ? 'all' : inboxView
+  const mailboxRows = rows.filter(lead => matchesInboxView(lead, activeInboxView)).sort(compareInboxRows)
+  const { pagedRows: pageRows, pagination } = usePagedRows(mailboxRows, JSON.stringify([scope, q, statusF, sourceF, routeF, urgencyF, ownerF, completenessF, receivedF, ageF, activeInboxView, showArchive]))
   if (sel) {
+    if (phone && sel.ai) return <StructuredLeadDetail key={sel.id} lead={sel} converted={sel.status === 'Converted'} phoneLayout />
+    if (phone) return <LegacyLeadDetail key={sel.id} lead={sel} phoneLayout />
     const age = ageDays(sel.ts)
     return (
     <div className="lead-workspace">
@@ -3558,7 +3689,7 @@ export default function Inbox() {
   ]
   const staleAiLeads = (store.leads || []).filter(isUnavailableAiSummary)
   // Rows this view would show if they were yours. Surfaced rather than dropped.
-  const hiddenByOwner = listSource.filter(l => !ownerVisible(l) && matchesFilters(l)).length
+  const hiddenByOwner = listSource.filter(l => !ownerVisible(l) && matchesFilters(l) && matchesInboxView(l, activeInboxView)).length
   const toggleSelected = id => setSelectedIds(prev => {
     const next = new Set(prev)
     if (next.has(id)) next.delete(id); else next.add(id)
@@ -3573,15 +3704,12 @@ export default function Inbox() {
   const setReadForSelected = read => {
     store.updateLeads(selectedIds, { readAt: read ? nowIST() : null })
     setSelectedIds(new Set())
-    setBulkMenuOpen(false)
   }
   const selectAllVisible = () => {
     setSelectedIds(new Set(pageRows.map(lead => lead.id)))
-    setBulkMenuOpen(false)
   }
   const clearSelection = () => {
     setSelectedIds(new Set())
-    setBulkMenuOpen(false)
   }
   const repairStaleAi = async () => {
     if (repairingAi || !staleAiLeads.length) return
@@ -3790,7 +3918,7 @@ export default function Inbox() {
   const filterSelect = (...args) => filterMenu(...args)
 
   return (
-    <div className="page mailbox-page">
+    <div className={`page mailbox-page${phone ? ' phone-inbox-page' : ' mailbox-page--desktop'}`}>
       {clearSimulatedConfirm && <ConfirmModal title="Clear simulated leads" tone="danger"
         message={`Clear ${simulatedLeadCount} simulated lead${simulatedLeadCount === 1 ? '' : 's'}? Only rows generated by this simulator go. Seeded and hand-entered leads stay, and a simulated lead already converted to an opportunity is kept.`}
         confirmLabel="Clear simulated leads" onClose={() => setClearSimulatedConfirm(false)} onConfirm={clearSimulated} />}
@@ -3800,32 +3928,40 @@ export default function Inbox() {
           <p className="hint">{showArchive ? 'Discarded lead archive' : scope === 'my' ? 'Your assigned leads · AI structures, humans decide' : 'Common sales mailbox · AI structures, humans decide'}</p>
         </div>
       </div>
-      {phone && <div className="phone-list-toolbar"><label className="phone-list-search"><Icon name="search" size={16} /><input type="search" aria-label="Search leads" placeholder="Search leads" value={q} onChange={e => setQ(e.target.value)} /></label><div className="phone-list-actions"><button type="button" onClick={() => setPhoneFilterPanel(true)}>Filters</button><button type="button" className="mail-new-enquiry" onClick={() => setPasteOpen(true)}>New enquiry</button><details className="phone-list-more"><summary aria-label="Inbox actions">•••</summary><div><button type="button" onClick={() => { setShowArchive(v => !v); setSelectedIds(new Set()) }}>{showArchive ? 'Back to inbox' : `Archive (${(store.leadArchive || []).length})`}</button><button type="button" onClick={() => setMobileFiltersOpen(v => !v)}>{mobileFiltersOpen ? 'Done selecting' : 'Select messages'}</button></div></details></div></div>}
-      {!phone && <div className="mail-search-row">
-        <div className="mail-search"><Icon name="search" size={16} /><input placeholder="Search mail" value={q} onChange={e => setQ(e.target.value)} /></div>
-        {phone && <button type="button" onClick={() => setPhoneFilterPanel(true)}>Filters{[statusF, routeF, sourceF, ownerF, urgencyF].filter(Boolean).length ? ` (${[statusF, routeF, sourceF, ownerF, urgencyF].filter(Boolean).length})` : ''}</button>}
-        {!phone && <select value={statusF} onChange={e => setStatusF(e.target.value)} aria-label="Filter by status">
-          <option value="">All statuses</option>{STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
-        </select>}
-        {!phone && <select value={routeF} onChange={e => setRouteF(e.target.value)} aria-label="Filter by route">
-          <option value="">All routes</option>{ROUTE_OPTIONS.map(r => <option key={r}>{r}</option>)}
-        </select>}
-        <div className="mailbox-head-actions">
-          <button type="button" className="mail-new-enquiry" aria-haspopup="dialog" onClick={() => setPasteOpen(true)}><Icon name="bot" size={13} /> New enquiry</button>
-          <button type="button" onClick={() => { setShowArchive(v => !v); setSelectedIds(new Set()) }}>
-            <Icon name="folder" size={13} /> {showArchive ? 'Back to inbox' : `Archive (${(store.leadArchive || []).length})`}
-          </button>
-        </div>
-      </div>
-      }
+      {phone && <PhoneInboxToolbar store={store} query={q} onQuery={setQ} view={inboxView}
+        onView={view => { setInboxView(view); setSelectedIds(new Set()) }} archive={showArchive}
+        onArchive={() => { setShowArchive(value => !value); setSelectedIds(new Set()) }}
+        selecting={mobileFiltersOpen} onSelecting={() => setMobileFiltersOpen(value => !value)}
+        onRefresh={() => store.refreshSharedData()} onFilters={() => setPhoneFilterPanel(true)}
+        filterCount={[statusF, routeF, sourceF, ownerF, urgencyF, receivedF, completenessF, ageF].filter(Boolean).length}
+        onNew={() => setPasteOpen(true)} />}
+
+      {!phone && <InboxToolbar query={q} onQuery={setQ} view={inboxView} counts={viewCounts}
+        onView={view => { setInboxView(view); setSelectedIds(new Set()) }}
+        archive={showArchive} archiveCount={(store.leadArchive || []).length}
+        onArchive={() => { setShowArchive(value => !value); setSelectedIds(new Set()) }}
+        onRefresh={() => { void store.refreshSharedData() }} onFilters={() => setPhoneFilterPanel(true)}
+        filterCount={[statusF, routeF, sourceF, ownerF, urgencyF, receivedF, completenessF, ageF].filter(Boolean).length}
+        onNew={() => setPasteOpen(true)} selectionCount={selectedIds.size}
+        actions={[
+          { label: 'Select all visible', onClick: selectAllVisible },
+          { label: 'Clear selection', onClick: clearSelection, disabled: !selectedIds.size },
+          { label: 'Mark selected as read', onClick: () => setReadForSelected(true), disabled: !selectedIds.size },
+          { label: 'Mark selected as unread', onClick: () => setReadForSelected(false), disabled: !selectedIds.size },
+          { label: 'Delete selected leads', onClick: deleteSelected, disabled: !selectedIds.size },
+          ...(staleAiLeads.length ? [{ label: repairingAi ? 'Repairing AI summaries…' : `Repair ${staleAiLeads.length} stale AI summaries`, onClick: repairStaleAi, disabled: repairingAi }] : []),
+        ]} />}
       {pasteOpen && <PasteLeadModal onClose={() => setPasteOpen(false)} />}
-      {phoneFilterPanel && <PhoneFilters title="Filter leads" onClose={() => setPhoneFilterPanel(false)} fields={[
+      {phoneFilterPanel && <PhoneFilters title="Filter leads" className={phone ? '' : 'inbox-filter-dialog'} showCancel={!phone} onClose={() => setPhoneFilterPanel(false)} fields={[
         { key: 'status', label: 'Status', value: statusF, options: [['', 'All statuses'], ...STATUS_OPTIONS] },
         { key: 'route', label: 'Route', value: routeF, options: [['', 'All routes'], ...ROUTE_OPTIONS] },
         { key: 'owner', label: 'Owner', value: ownerF, options: [['', 'All owners'], ...ownerOptions] },
         { key: 'source', label: 'Source', value: sourceF, options: [['', 'All sources'], ...sourceOptions] },
         { key: 'urgency', label: 'Urgency', value: urgencyF, options: [['', 'Any urgency'], 'Normal', 'Urgent'] },
-      ]} onApply={draft => { setStatusF(draft.status); setRouteF(draft.route); setOwnerF(draft.owner); setSourceF(draft.source); setUrgencyF(draft.urgency) }} />}
+        { key: 'received', label: 'Received date', value: receivedF, options: [['', 'All dates'], ['today', 'Today'], ['7', 'Last 7 days'], ['30', 'Last 30 days']] },
+        { key: 'completeness', label: 'Completeness', value: completenessF, options: [['', 'All completeness'], ['high', 'High ≥90%'], ['medium', 'Medium 60–89%'], ['low', 'Low <60%']] },
+        { key: 'age', label: 'Age', value: ageF, options: [['', 'All ages'], ['today', 'Today'], ['7', '7–29 days'], ['30', '30+ days']] },
+      ]} onApply={draft => { setStatusF(draft.status); setRouteF(draft.route); setOwnerF(draft.owner); setSourceF(draft.source); setUrgencyF(draft.urgency); setReceivedF(draft.received); setCompletenessF(draft.completeness); setAgeF(draft.age) }} />}
       {simulationOpen && (
         <Modal title="Simulate incoming inquiry" className="simulate-modal" onClose={() => setSimulationOpen(false)}>
           <p className="hint">
@@ -3909,22 +4045,11 @@ export default function Inbox() {
       <div className="mailbox-split">
       <div className="mailbox-list-panel">
       <div className="mailbox-list" ref={mailboxListRef} id="mailbox-lead-list" onScroll={updateMailboxScrollMetrics}>
-        {mobileFiltersOpen && <button type="button" className="mobile-record-view" aria-expanded={mobileFiltersOpen} onClick={() => setMobileFiltersOpen(false)}>Done selecting</button>}
+        {phone && mobileFiltersOpen && <div className="phone-inbox-selection" role="group" aria-label="Selected lead actions"><button type="button" onClick={selectAllVisible}>Select visible</button><button type="button" onClick={() => setReadForSelected(true)} disabled={showArchive || !selectedIds.size}>Mark read</button><button type="button" onClick={() => setReadForSelected(false)} disabled={showArchive || !selectedIds.size}>Mark unread</button><button type="button" onClick={deleteSelected} disabled={!selectedIds.size}>Delete</button><button type="button" onClick={() => { clearSelection(); setMobileFiltersOpen(false) }}>Done</button><span>{selectedIds.size} selected</span></div>}
+        {!phone && mobileFiltersOpen && <button type="button" className="mobile-record-view" aria-expanded={mobileFiltersOpen} onClick={() => setMobileFiltersOpen(false)}>Done selecting</button>}
         <div className="mail-column-head" data-mobile-open={mobileFiltersOpen}>
           <div className="mail-list-toolbar">
           <label className="mail-check"><input type="checkbox" checked={pageRows.length > 0 && pageRows.every(l => selectedIds.has(l.id))} onChange={selectVisible} aria-label="Select visible messages" /></label>
-          <button type="button" className="mail-icon-btn" title="Refresh inbox" aria-label="Refresh inbox" onClick={() => { void store.refreshSharedData() }}><Icon name="refresh" size={15} /></button>
-          <div className="mail-more-actions">
-            <button type="button" className="mail-icon-btn" title="More actions" aria-label="More actions" aria-expanded={bulkMenuOpen} onClick={() => setBulkMenuOpen(open => !open)}><Icon name="list" size={15} /></button>
-            {bulkMenuOpen && <div className="mail-action-menu" role="menu">
-              <button type="button" onClick={selectAllVisible}>Select all visible</button>
-              <button type="button" onClick={clearSelection}>Clear selection</button>
-              <button type="button" onClick={() => setReadForSelected(true)} disabled={!selectedIds.size}>Mark selected as read</button>
-              <button type="button" onClick={() => setReadForSelected(false)} disabled={!selectedIds.size}>Mark selected as unread</button>
-              <button type="button" onClick={deleteSelected} disabled={!selectedIds.size}>Delete selected leads</button>
-              {staleAiLeads.length > 0 && <button type="button" onClick={repairStaleAi} disabled={repairingAi}>{repairingAi ? 'Repairing AI summaries…' : `Repair ${staleAiLeads.length} stale AI summar${staleAiLeads.length === 1 ? 'y' : 'ies'}`}</button>}
-            </div>}
-          </div>
           {selectedIds.size > 0 && <span className="mail-selection-count">{selectedIds.size} selected</span>}
           </div>
           <span className="mail-head-filter-cell">{filterMenu('received', receivedF, setReceivedF, 'Received date', [['today', 'Today'], ['7', 'Last 7 days'], ['30', 'Last 30 days']], 'Date', 'All dates')}</span>
@@ -3941,16 +4066,9 @@ export default function Inbox() {
           const route = l.route || l.parse?.oppType || '—'
           const unread = l.status === 'New' && !l.readAt
           const age = ageDays(l.ts)
-          if (phone) return <article className={`phone-lead-row${unread ? ' is-unread' : ''}`} key={l.id}>
-            {mobileFiltersOpen && <label className="phone-select"><input type="checkbox" checked={selectedIds.has(l.id)} onChange={() => toggleSelected(l.id)} aria-label={`Select ${l.subject}`} /></label>}
-            <button type="button" className="phone-record" onClick={() => nav('/inbox/' + l.id)}>
-              <span className="phone-lead-sender"><b>{l.sender || l.from || l.source || 'Unknown sender'}</b><small>{ddMmmYY((l.ts || '').slice(0, 10))}</small></span>
-              <strong className="phone-clamp-two">{l.subject || 'Untitled enquiry'}</strong>
-              <span className="phone-clamp-one">{l.ai?.summary || l.body?.replace(/\s+/g, ' ').slice(0, 130) || 'No preview available'}</span>
-              <small>{l.status}{l.starred ? ' · Starred' : ''}{l.urgency === 'Urgent' ? ' · Urgent' : ''}</small>
-            </button>
-            {mobileFiltersOpen && <button type="button" aria-label={l.starred ? 'Remove star' : 'Star lead'} onClick={() => store.updateLead(l.id, { starred: !l.starred })}><Icon name="star" size={18} /></button>}
-          </article>
+          if (phone) return <PhoneLeadRow key={l.id} lead={l} archived={showArchive} selecting={mobileFiltersOpen}
+            selected={selectedIds.has(l.id)} onSelect={() => toggleSelected(l.id)}
+            onOpen={() => nav('/inbox/' + l.id)} onStar={() => store.updateLead(l.id, { starred: !l.starred })} />
           return (
             <div key={l.id} className={`mail-row ${unread ? 'unread' : ''} ${selectedIds.has(l.id) ? 'selected' : ''} ${String(previewLead?.id) === String(l.id) ? 'preview-active' : ''}`} role="button" tabIndex={0} aria-label={`Preview ${l.subject}`} onClick={() => window.innerWidth >= 1280 ? setPreviewLeadId(String(l.id)) : nav('/inbox/' + l.id)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); window.innerWidth >= 1280 ? setPreviewLeadId(String(l.id)) : nav('/inbox/' + l.id) } }}>
               <label className="mail-check" onClick={e => e.stopPropagation()}><input type="checkbox" checked={selectedIds.has(l.id)} onChange={() => toggleSelected(l.id)} aria-label={`Select ${l.subject}`} /></label>
@@ -4013,18 +4131,7 @@ export default function Inbox() {
         <span className="mailbox-horizontal-scrollbar-thumb" style={{ width: `${mailboxThumbWidth}px`, transform: `translateX(${mailboxThumbLeft}px)` }} />
       </div>
       </div>
-      {previewLead && <aside className="mailbox-preview" aria-label="Selected lead preview">
-        <div className="mailbox-preview-head"><span className="workspace-insight-kicker">LEAD PREVIEW</span><span className={`pill ${PILL[previewLead.status] || 'Blue'}`}>{previewLead.status}</span></div>
-        <h3>{previewLead.subject || 'Untitled enquiry'}</h3>
-        <p className="mailbox-preview-sender"><PreviewFieldText value={`${previewLead.sender || previewLead.from || 'Sender not recorded'} · ${ddMmmYY((previewLead.ts || '').slice(0, 10))}`} /></p>
-        {previewLead.ai?.summary && <section><h4>AI summary <span className="ai-source-badge">AI</span></h4><p>{previewLead.ai.summary}</p></section>}
-        <section><h4>Extracted fields</h4>
-          {(previewLead.ai?.fields || []).slice(0, 6).map((field, index) => <div className="mailbox-preview-field" key={`${field.k}-${index}`}><span>{field.k}</span><b><PreviewFieldText value={field.v} /></b>{field.conf != null && <small>{field.conf}%</small>}</div>)}
-          {!previewLead.ai?.fields?.length && <p className="hint">No structured fields are available yet.</p>}
-        </section>
-        <section><h4>Original enquiry</h4><p className="mailbox-preview-excerpt">{previewLead.body?.replace(/\s+/g, ' ').slice(0, 460) || 'Original message text is unavailable.'}</p></section>
-        <div className="mailbox-preview-actions">{previewLead.status === 'Qualified' ? <button type="button" className="primary" onClick={() => nav(`/register/${previewLead.id}`)}>Continue registration</button> : <button type="button" className="primary" onClick={() => nav(`/inbox/${previewLead.id}`)}>{previewLead.status === 'New' ? 'Review / qualify' : 'Open lead'}</button>}{previewLead.status === 'Converted' && previewLead.oppId ? <button type="button" onClick={() => nav(`/opp/${previewLead.oppId}`)}>Open opportunity</button> : <button type="button" onClick={() => nav(`/inbox/${previewLead.id}`)}>Open full page</button>}</div>
-      </aside>}
+      {previewLead && !phone && <InboxLeadPreview key={previewLead.id} lead={previewLead} />}
       </div>
       {inboxPagination}
       {!showArchive && <WorkspaceInsights signals={inboxInsights} />}

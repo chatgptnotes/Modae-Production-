@@ -92,8 +92,9 @@ test('dashboard headline preview count and value reconcile to the five displayed
   })) })
   const model = dashboardModel(store, { owner: 'RS', period: 'q3', now })
   assert.equal(model.topOpportunities.length, 5)
-  assert.equal(model.headlineOpenCount, model.topOpportunities.length)
-  assert.equal(model.headlinePipelineK, model.topOpportunities.reduce((sum, row) => sum + row.valueK, 0))
+  assert.equal(model.headlineOpenCount, 5)
+  assert.equal(model.headlinePipelineK, 2000)
+  assert.equal(model.topOpportunities.reduce((sum, row) => sum + row.valueK, 0), 2000)
 })
 
 test('Q3 opportunity widgets use Expected Order Date rather than creation date', () => {
@@ -142,7 +143,8 @@ test('reference report uses shared header controls and renders the tapered funne
   assert.doesNotMatch(source, /className="reference-toolbar"/)
   assert.match(source, /reference-funnel-totals/)
   assert.match(source, /reference-funnel-row/)
-  assert.match(source, /reference-analysis-filters/)
+  assert.match(source, /reference-analysis-button/)
+  assert.match(source, /useWorkspaceView\(\)/)
 })
 
 test('reference dashboard renders separate funnel count and value totals and uses active period labels', () => {
