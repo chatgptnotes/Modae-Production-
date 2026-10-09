@@ -20,6 +20,7 @@ import { colType, compareVals, matchesGlobalSearch, sortLabels } from '../tracke
 import { useWorkspaceView } from '../ui/WorkspaceViewContext.jsx'
 import usePhoneLayout from '../tablet/usePhoneLayout.js'
 import PhoneFilters from '../tablet/PhoneFilters.jsx'
+import useListState from '../tablet/useListState.js'
 
 const DEFAULT_DATE_FILTER = { field: 'orderDate', period: 'all', date: '', from: '', to: '' }
 
@@ -199,12 +200,12 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
   const { scope } = useWorkspaceView()
   const fb = useFormulaBar()
   const drawer = useDrawer()
-  const [sheet, setSheet] = useState('Opportunities') // Opportunities | My Orders | My Pipeline
-  const [page, setPage] = useState(1)
+  const [sheet, setSheet] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:opportunities:sheet`, 'Opportunities') // Opportunities | My Orders | My Pipeline
+  const [page, setPage] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:opportunities:page`, 1)
   const pageSize = 10
 
   const defaultOwnerFilter = initialOwnerFilter || 'All'
-  const [ownerFilter, setOwnerFilter] = useState(defaultOwnerFilter)
+  const [ownerFilter, setOwnerFilter] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:opportunities:ownerFilter`, defaultOwnerFilter)
   const previousScope = useRef(scope)
   useEffect(() => {
     if (previousScope.current === scope) return
@@ -212,12 +213,12 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
     setOwnerFilter('All')
   }, [scope])
 
-  const [filters, setFilters] = useState({})           // col key -> Set of allowed display values
-  const [sort, setSort] = useState(null)               // { key, dir: 1 | -1 }
+  const [filters, setFilters] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:opportunities:filters`, {})           // col key -> Set of allowed display values
+  const [sort, setSort] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:opportunities:sort`, null)               // { key, dir: 1 | -1 }
   const [openFilter, setOpenFilter] = useState(null)   // { key, x, y } of the open dropdown
   const [filterSearch, setFilterSearch] = useState({})
-  const [searchTerm, setSearchTerm] = useState('')
-  const [dateFilter, setDateFilter] = useState(DEFAULT_DATE_FILTER)
+  const [searchTerm, setSearchTerm] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:opportunities:searchTerm`, '')
+  const [dateFilter, setDateFilter] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:opportunities:dateFilter`, DEFAULT_DATE_FILTER)
   const [dateFilterDraft, setDateFilterDraft] = useState(DEFAULT_DATE_FILTER)
   const [dateFilterOpen, setDateFilterOpen] = useState(false)
   const [pipelinePreview, setPipelinePreview] = useState(null)
@@ -385,8 +386,10 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
     })
   }
 
+  const listMounted = useRef(false)
   useEffect(() => {
-    setPage(1)
+    if (listMounted.current) setPage(1)
+    listMounted.current = true
   }, [sheet, ownerFilter, searchTerm, filters, sort, dateFilter])
 
   const pageCount = Math.max(1, Math.ceil(rows.length / pageSize))

@@ -13,6 +13,7 @@ import WorkspaceInsights from '../ui/WorkspaceInsights.jsx'
 import { useWorkspaceView } from '../ui/WorkspaceViewContext.jsx'
 import { usePagedRows } from '../ui/Pagination.jsx'
 import usePhoneLayout from '../tablet/usePhoneLayout.js'
+import PhoneFilters from '../tablet/PhoneFilters.jsx'
 
 const NEW_APPROVAL_MS = 48 * 60 * 60 * 1000
 // Approval updates remain near-real-time without making every open approvals
@@ -359,14 +360,22 @@ function FilterBar({
   onTypeChange,
   onClearFilters,
 }) {
+  const narrow = usePhoneLayout()
+  const store = useStore()
+  const phone = narrow && store.viewMode === 'tablet'
+  const [open, setOpen] = useState(false)
   return (
     <div className="approval-filters" role="search">
       <label className="approval-search">
         <Icon name="search" size={14} />
         <input aria-label="Search approvals" placeholder="Search by request, opportunity, customer or type" value={q} onChange={onQueryChange} />
       </label>
-      <select aria-label="Filter by status" value={statusF} onChange={onStatusChange}><option value="">All statuses</option>{['Pending', 'Approved', 'Rejected'].map(s => <option key={s}>{s}</option>)}</select>
-      <select aria-label="Filter by type" value={typeF} onChange={onTypeChange}><option value="">All types</option>{typeOptions.map(t => <option key={t}>{t}</option>)}</select>
+      {phone ? <button type="button" onClick={() => setOpen(true)}>Filters{statusF || typeF ? ` (${[statusF, typeF].filter(Boolean).length})` : ''}</button> : <><select aria-label="Filter by status" value={statusF} onChange={onStatusChange}><option value="">All statuses</option>{['Pending', 'Approved', 'Rejected'].map(s => <option key={s}>{s}</option>)}</select>
+      <select aria-label="Filter by type" value={typeF} onChange={onTypeChange}><option value="">All types</option>{typeOptions.map(t => <option key={t}>{t}</option>)}</select></>}
+      {open && <PhoneFilters title="Filter approvals" onClose={() => setOpen(false)} fields={[
+        { key: 'status', label: 'Status', value: statusF, options: [['', 'All statuses'], 'Pending', 'Approved', 'Rejected'] },
+        { key: 'type', label: 'Request type', value: typeF, options: [['', 'All types'], ...typeOptions] },
+      ]} onApply={draft => { onStatusChange({ target: { value: draft.status } }); onTypeChange({ target: { value: draft.type } }) }} />}
       {hasFilters && <button type="button" className="approval-clear" onClick={onClearFilters}>Clear filters</button>}
     </div>
   )
