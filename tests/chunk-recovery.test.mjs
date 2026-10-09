@@ -27,7 +27,7 @@ test('chunk recovery clears app caches and reloads only once per session', () =>
 
 test('service worker revalidates assets while retaining offline fallback', () => {
   const sw = read('public/sw.js')
-  assert.match(sw, /const CACHE = 'wintrack-v7'/)
+  assert.match(sw, /const CACHE = 'wintrack-v8'/)
   assert.match(sw, /const fresh = await fetch\(req\)/)
   assert.match(sw, /await cache\.match\(req\)/)
   assert.doesNotMatch(sw, /const revalidate = fetch\(req\)/)

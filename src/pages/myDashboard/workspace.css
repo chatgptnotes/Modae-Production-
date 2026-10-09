@@ -342,6 +342,58 @@
 @media (prefers-reduced-motion: reduce) { .dw-reference-dashboard .pipeline-stage-connector.is-active { animation: none; } }
 .dw-reference-dashboard .reference-quarter select { min-height: 28px; padding: 0 2px; border: 0; color: inherit; background: transparent; font: inherit; font-weight: inherit; cursor: pointer; }
 
+/* Approved dark dashboard treatment: neutral readings, quiet surfaces, and
+   business colour confined to chart series, status marks and actions. Keep
+   these scoped to the report dashboard, not the phone cockpit or light mode. */
+@media screen {
+  .shell[data-theme="dark"] .dw-reference-dashboard {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    font-variant-numeric: tabular-nums;
+  }
+  .shell[data-theme="dark"] .dw-reference-dashboard :is(.reference-kpi, .reference-section) {
+    box-shadow: none;
+    border-color: var(--border-default);
+    border-radius: 6px;
+  }
+  .shell[data-theme="dark"] .dw-reference-dashboard .reference-section > header {
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .shell[data-theme="dark"] .dw-reference-dashboard .reference-section h2 {
+    line-height: 1.35;
+  }
+  .shell[data-theme="dark"] .dw-reference-dashboard .reference-kpi > div {
+    min-width: 0;
+  }
+  .shell[data-theme="dark"] .dw-reference-dashboard .reference-kpi > span {
+    background: var(--surface-raised);
+    border-color: transparent;
+  }
+  .shell[data-theme="dark"] .dw-reference-dashboard .reference-kpi--yellow > span {
+    background: color-mix(in srgb, var(--status-warning) 13%, var(--surface-default));
+  }
+  .shell[data-theme="dark"] .dw-reference-dashboard .reference-kpi--red > span {
+    background: color-mix(in srgb, var(--status-danger) 13%, var(--surface-default));
+  }
+  .shell[data-theme="dark"] .dw-reference-dashboard .reference-kpi--green > span {
+    background: color-mix(in srgb, var(--status-success) 13%, var(--surface-default));
+  }
+  .shell[data-theme="dark"] .dw-reference-dashboard :is(
+    .reference-gap strong, .reference-gap b, .reference-gap dd,
+    .reference-rate strong, .reference-outcomes b,
+    .reference-priority-table .priority-chip, .reference-empty-positive
+  ) {
+    color: var(--text-primary);
+  }
+  .shell[data-theme="dark"] .dw-reference-dashboard .reference-table th {
+    background: var(--surface-raised);
+    color: var(--text-secondary);
+    font-weight: 600;
+  }
+}
+
 /* Colour conveys business meaning independently of the selected theme. */
 .dw-reference-dashboard .reference-kpi { background: var(--kpi-surface, var(--surface-default)); }
 .dw-reference-dashboard .reference-kpi--yellow { --kpi-surface: var(--status-warning-soft); }

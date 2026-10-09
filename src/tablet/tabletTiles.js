@@ -18,7 +18,7 @@ export function buildTabletTiles(store) {
     { key: 'voice', page: 'voice', icon: 'mic', label: 'Voice update', hint: 'Record a lead or opportunity update', to: '/voice', color: 'wine' },
     { key: 'approvals', page: 'approvals', icon: 'checkCircle', label: approver ? 'Approvals' : 'My approvals', hint: 'Review decisions, clearances, and conditions', to: '/approvals', color: 'green', badge: approver ? c.pending + c.openConditions : c.myPending, badgeHint: 'pending decisions and unconfirmed conditions' },
     { key: 'folders', page: 'folders', icon: 'folder', label: 'SharePoint folders', hint: 'Opportunity documents stored in SharePoint', to: '/folders', color: 'teal' },
-    { key: 'po', page: 'po', icon: 'clipboardCheck', label: isSalesOwner(role) ? 'My Purchase Orders' : 'Purchase Orders', hint: 'PO validation & booked orders', to: '/po', color: 'navy', badge: approver ? c.poReview : 0, badgeHint: 'POs in validation' },
+    { key: 'po', page: 'po', icon: 'clipboardCheck', label: isSalesOwner(role) ? 'My Purchase Orders' : 'Purchase Orders', hint: 'PO validation & booked orders', to: '/order', color: 'navy', badge: approver ? c.poReview : 0, badgeHint: 'POs in validation' },
     { key: 'aimap', page: 'aimap', icon: 'sparkles', label: 'AI and automation', hint: '28 AI interventions and live demonstrations', to: '/aimap', color: 'purple', show: admin || role === 'AH' || role === 'LJS' },
     { key: 'pricelists', page: 'pricelists', icon: 'tag', label: 'Price Lists', hint: 'B&K · Metrix · ad-hoc quotes', to: '/pricelists', color: 'amber' },
     { key: 'customers', page: 'customers', icon: 'users', label: 'Customers', hint: 'Master + Green/Blue/Amber/Red', to: '/customers', color: 'rust' },

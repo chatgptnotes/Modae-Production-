@@ -86,7 +86,7 @@ test('an empty date-filtered inbox offers a direct recovery action', () => {
 test('inbox rows are ordered by newest received enquiry first', () => {
   assert.match(inbox, /const inboxReceivedAt = lead => lead\?\.ts \|\| lead\?\.receivedAt/)
   assert.match(inbox, /const compareInboxRows = \(a, b\) =>/)
-  assert.match(inbox, /const mailboxRows = rows\.sort\(compareInboxRows\)/)
+  assert.match(inbox, /const mailboxRows = rows\.filter\(lead => matchesInboxView\(lead, activeInboxView\)\)\.sort\(compareInboxRows\)/)
 })
 
 test('the owner rule reports what it is holding back', () => {

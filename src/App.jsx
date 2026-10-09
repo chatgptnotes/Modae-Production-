@@ -93,6 +93,7 @@ const NAV = [
   { section: 'Operate', to: '/opportunities', label: 'Opportunities', icon: 'cards', page: 'tracker' },
   { section: 'Govern', to: '/approvals', label: 'Approvals', icon: 'checkCircle', page: 'approvals', badge: c => c.forMe + c.myPending, badgeHint: 'gates waiting on you, plus your own requests' },
   { section: 'Govern', to: '/proposal-sent', label: 'Proposal Sent', icon: 'send', page: 'proposalSent' },
+  { section: 'Govern', to: '/order', label: 'Purchase Orders', icon: 'clipboardCheck', page: 'po' },
   { section: 'Records', to: '/folders', label: 'Documents', icon: 'folder', page: 'folders' },
   { section: 'Records', to: '/customers', label: 'Customers', icon: 'users', page: 'customers' },
   { section: 'Records', to: '/pricelists', label: 'Price Lists', icon: 'tag', page: 'pricelists' },
@@ -186,7 +187,7 @@ function WorkspaceTopbar({ store, role, location, nav }) {
     <div className="workspace-topbar__controls">
       {!isDashboardRoute && <span className="workspace-role-access" title={roleLine}>{roleLine}</span>}
     {isDashboardRoute && canManageDashboardScope && workspaceView.scope === 'global' && <label className="workspace-company-selector"><span className="visually-hidden">Dashboard company view</span><select aria-label="Dashboard company view" value={workspaceView.owner} onChange={event => workspaceView.setOwner(event.target.value)}><option value="all">Global · Company</option>{dashboardOwners.map(owner => <option key={owner} value={owner}>{displayRole(owner)}</option>)}</select></label>}
-      <button type="button" className="workspace-mobile-mode" onClick={() => store.setViewMode('tablet')} aria-label="Switch to mobile view"><Icon name="tablet" size={14} /> Mobile view</button>
+      <button type="button" className="workspace-mobile-mode" onClick={() => store.setViewMode('tablet')} aria-label="Switch to Phone mode"><Icon name="tablet" size={14} /> Phone mode</button>
       <WorkspaceViewToggle />
     </div>
     <div className="workspace-topbar__utilities">
@@ -225,7 +226,7 @@ function AppShell() {
   const userInitials = signedInName.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]?.toUpperCase()).join('')
   const items = NAV
     .filter(t => canSeePage(store.roles || role, t.page) && (typeof t.show !== 'function' || t.show(role)))
-    .map(t => t.to === '/po' && isSalesOwner(role) ? { ...t, label: 'My Purchase Orders' } : t)
+    .map(t => t.to === '/order' && isSalesOwner(role) ? { ...t, label: 'My Purchase Orders' } : t)
   const withConnectivity = content => content
 
   useEffect(() => startAutoTitle(mainRef.current), [])
@@ -295,7 +296,8 @@ function AppShell() {
       <Route path="/opp/:oppId/:tab" element={<PageGate page="tracker"><Workbench /></PageGate>} />
       <Route path="/approvals" element={<PageGate page="approvals"><Approvals /></PageGate>} />
       <Route path="/proposal-sent" element={<PageGate page="proposalSent"><ProposalSent /></PageGate>} />
-      <Route path="/po" element={<PageGate page="po"><PurchaseOrders /></PageGate>} />
+      <Route path="/order" element={<PageGate page="po"><PurchaseOrders /></PageGate>} />
+      <Route path="/po" element={<Navigate to="/order" replace />} />
       <Route path="/audit" element={<PageGate page="audit"><Audit /></PageGate>} />
       <Route path="/new" element={<PageGate page="new"><IntakeForm /></PageGate>} />
       <Route path="/tender" element={<PageGate page="tender"><TenderIntake /></PageGate>} />
@@ -362,7 +364,7 @@ function AppShell() {
           </div>
           {signedInName && <div className="side-user-chip"><span className="side-user-avatar">{userInitials}</span><span className="side-label"><b>{signedInName}</b><small>{displayRole(role)}</small></span></div>}
           <button className="reset sidebar-mode-switch" onClick={() => { store.setViewMode('tablet') }}>
-            <Icon name="tablet" size={14} /> <span className="side-label">Switch to tablet view</span>
+            <Icon name="tablet" size={14} /> <span className="side-label">Phone mode</span>
           </button>
           {store.auth?.user && (
             <button className="reset" onClick={store.logout} title={store.auth.user.email}>

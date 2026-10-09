@@ -84,7 +84,7 @@ test('the opportunities table does not directly edit workflow stages', () => {
 
 test('forecast dates retain inline editing while Expected Order Date has usable table width', () => {
   assert.match(tracker, /orderDate: 12,/)
-  assert.match(tracker, /nextActionOwner: 9,/)
+  assert.match(tracker, /nextActionOwner: 7,/)
   assert.match(tracker, /wAll: 7/)
   assert.match(tracker, /<input type="date" value=\{o\.orderDate\} max=\{o\.invoiceDate/)
   assert.match(tracker, /<input type="date" value=\{o\.invoiceDate\} min=\{o\.orderDate/)
@@ -340,8 +340,9 @@ test('date filter is available inside the Opportunities search surface', () => {
   assert.doesNotMatch(tracker, /className=\{`tracker-date-filter-button\$\{dateFilterActive/)
   assert.match(tracker, /className=\{`tracker-search-filter\$\{dateFilterActive/)
   assert.match(tracker, /<Icon name="filter" size=\{16\} \/>\{dateFilterActive && <span className="tracker-search-filter-active"/)
-  assert.match(tracker, /aria-label=\{dateFilterActive \? `Filter opportunities by date:/)
-  assert.match(tracker, /aria-haspopup="dialog" aria-expanded=\{dateFilterOpen\}/)
+  assert.match(tracker, /: dateFilterActive \? `Filter opportunities by date:/)
+  assert.match(tracker, /aria-haspopup="dialog" aria-expanded=\{phone \? phoneFiltersOpen : dateFilterOpen\}/)
+  assert.match(tracker, /phone && <button[^\n]+role="menuitem"[^\n]+openDateFilterMenu\(event\)/)
   assert.match(styles, /\.opportunities-page > \.tracker-page > \.toolbar \.tracker-search-group \{[\s\S]*?border: 1px solid var\(--border-color\);[\s\S]*?border-radius: 8px;/)
   assert.match(styles, /\.tracker-search-filter-active \{[\s\S]*?text-transform: uppercase;/)
 })
@@ -377,7 +378,7 @@ test('all Opportunities toolbar controls share the neutral treatment', () => {
 test('the Opportunities search bar has a clear input hierarchy and focus state', () => {
   assert.match(styles, /\.opportunities-page \.tracker-grid-shell > \.toolbar \.tracker-search-group\s*\{[\s\S]*min-height: 42px;[\s\S]*border-radius: 10px;[\s\S]*box-shadow:/)
   assert.match(styles, /\.opportunities-page \.tracker-grid-shell > \.toolbar \.tracker-search-group \.tracker-search input::placeholder\s*\{[\s\S]*color: var\(--text-tertiary\);[\s\S]*opacity: 1;/)
-  assert.match(styles, /\.opportunities-page \.tracker-grid-shell > \.toolbar \.tracker-search-group:focus-within\s*\{[\s\S]*border-color: var\(--action-secondary-border\) !important;[\s\S]*box-shadow: inset 0 -2px 0 var\(--focus-ring\)/)
+  assert.match(styles, /\.opportunities-page \.tracker-grid-shell > \.toolbar \.tracker-search-group:focus-within\s*\{[\s\S]*border-color: var\(--focus-ring\) !important;[\s\S]*box-shadow: 0 0 0 2px/)
   assert.doesNotMatch(styles, /\.opportunities-page \.tracker-grid-shell > \.toolbar \.tracker-search-group:focus-within\s*\{[^}]*var\(--color-primary\)/)
 })
 

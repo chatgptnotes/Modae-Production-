@@ -135,8 +135,8 @@ test('Candara is the system typography and is not network-dependent', () => {
 
   const sw = read('public/sw.js')
   assert.match(sw, /url\.pathname\.startsWith\('\/fonts\/'\)/)
-  assert.match(sw, /const CACHE = 'wintrack-v7'/)
-  assert.doesNotMatch(sw, /wintrack-v[1-6]/)
+  assert.match(sw, /const CACHE = 'wintrack-v8'/)
+  assert.doesNotMatch(sw, /wintrack-v[1-7]/)
 })
 
 test('nothing renders a hardcoded sky hex any more', () => {

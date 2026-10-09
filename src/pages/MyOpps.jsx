@@ -9,6 +9,7 @@ import { Icon } from '../icons.jsx'
 import { COLS } from './Tracker.jsx'
 import { useWorkspaceView } from '../ui/WorkspaceViewContext.jsx'
 import { usePagedRows } from '../ui/Pagination.jsx'
+import usePhoneLayout from '../tablet/usePhoneLayout.js'
 
 // My Opportunities — a single table view of the pipeline (no Cards/Sheet
 // toggle). Each row opens the same slide-in drawer the tracker uses, so every
@@ -18,6 +19,9 @@ export default function MyOpps() {
   const { scope } = useWorkspaceView()
   const drawer = useDrawer()
   const [colView, setColView] = useState('key')
+  const phone = usePhoneLayout() && store.viewMode === 'tablet'
+  const [table, setTable] = useState(false)
+  const [query, setQuery] = useState('')
 
   const role = store.role
   const comm = canPriceProposal(role)
@@ -34,7 +38,9 @@ export default function MyOpps() {
   // Role-based filtering: sales reps see only their opportunities by default
   // Admin/System Owner/Management roles see all opportunities by default
   if (scope === 'my') rows = rows.filter(o => o.owner === role)
-  const { pagedRows: pageRows, pagination } = usePagedRows(rows, JSON.stringify([scope, colView]))
+  const search = query.trim().toLowerCase()
+  if (phone && search) rows = rows.filter(o => [o.id, displayOpportunityId(o.id), o.sellTo, o.oppName, o.stage].some(value => String(value || '').toLowerCase().includes(search)))
+  const { pagedRows: pageRows, pagination } = usePagedRows(rows, JSON.stringify([scope, colView, phone && query]))
 
   const devCount = o => ((store.proposals?.[o.id] || {}).terms || []).filter(t => t.status === 'Deviation').length
 
@@ -54,20 +60,34 @@ export default function MyOpps() {
   }
 
   return (
-    <div className="page">
+    <div className="page status-update-page">
       <h2>{scope === 'my' ? `My Opportunities${mine ? ` — ${displayRole(role)}` : ''}` : 'Opportunities'}</h2>
       <div className="toolbar">
         <span className="hint">{scope === 'my'
           ? 'Your pipeline — click a row to view and edit every field.'
           : 'Company pipeline — click a row to view and edit every field.'}</span>
         <span className="spacer" />
-        <button type="button" onClick={() => setColView(colView === 'key' ? 'all' : 'key')}>
+        {phone && <button type="button" onClick={() => setTable(!table)} aria-pressed={table}>{table ? 'Show list' : 'Edit in table'}</button>}
+        {(!phone || table) && <button type="button" onClick={() => setColView(colView === 'key' ? 'all' : 'key')}>
           {colView === 'key' ? 'All columns' : 'Key columns'}
-        </button>
+        </button>}
         <Link className="btn primary" to="/new">Create Opportunity</Link>
       </div>
 
-      <div className="sheet-wrap">
+      {phone && <label className="phone-status-search">Search opportunities<input type="search" placeholder="Customer, opportunity, ID or stage" value={query} onChange={event => setQuery(event.target.value)} /></label>}
+      {phone && !table ? <section aria-label="Opportunities to update">
+        {pageRows.map(o => <button type="button" className="phone-record" key={o.id} onClick={() => drawer.open({ type: 'opp', id: o.id })}>
+          <strong>{o.sellTo || 'Customer not recorded'}</strong>
+          <span>{o.oppName}</span>
+          <small>{displayOpportunityId(o.id)} · {o.stage} · {o.prob || 'Probability not set'}</small>
+          <span>{na(o).text || 'No next action recorded'}</span>
+          {na(o).owner && <small>Next action: {displayRole(na(o).owner)}</small>}
+          <small>Expected order: {o.orderDate ? ddMMyyyy(o.orderDate) : 'Not set'}{comm && o.valueK ? ` · ${fmtRupeesFromK(o.valueK)}` : ''}</small>
+          {store.approvals.some(a => a.oppId === o.id && a.status === 'Pending') && <small>Approval pending</small>}
+          {devCount(o) > 0 && <small>{devCount(o)} commercial deviations</small>}
+        </button>)}
+        {!pageRows.length && <p className="phone-empty">No opportunities match this view.</p>}
+      </section> : <div className="sheet-wrap">
         {colView === 'all' ? (
           <table className="sheet">
             <thead>
@@ -131,7 +151,7 @@ export default function MyOpps() {
           </tbody>
         </table>
         )}
-      </div>
+      </div>}
       {pagination}
     </div>
   )

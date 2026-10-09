@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, WON_REASONS, REVISION_TYPES, DEFAULT_WORKFLOW, isWorkflowAvailable, displayOpportunityId } from '../seed.js'
-import { canPriceProposal, isAdminRole, fmt, ageDays, ddMmmYY, ddMMyyyy, gmailComposeHref, displayRole, displayRoles, displayRoleLabel, formatISTDateTime, productDisplayLabel } from '../utils.js'
+import { canPriceProposal, isAdminRole, fmt, fmtRupeesFromK, ageDays, ddMmmYY, ddMMyyyy, gmailComposeHref, displayRole, displayRoles, displayRoleLabel, formatISTDateTime, productDisplayLabel } from '../utils.js'
 import { EMAIL_RE, recipientsValid, splitRecipients } from '../emailValidation.js'
 import { APPROVAL_5B, pricingThresholdExceptions, readiness, sparesSourcingBlockers, isBlocked, nextActionWith, transitionBlockers, isClarificationResolved, isClarificationCoveredByAnswer, actionableClarifications, displayClarifications, isClarificationCoveredBySource, releaseVoidReason, serviceOfferCleared } from '../gates.js'
 import { COMMERCIAL_RX } from './Approvals.jsx'
@@ -47,6 +47,9 @@ import { COMMERCIAL_DECISIONS, CUSTOMER_CONFIRMATION_STATUSES, commercialApprova
 import { latestSubmissionForRevision, submissionStatusLabel } from '../submissionStatus.js'
 import { prefetchSparesMatches } from '../workbench/sparesMatchCache.js'
 import WorkbookPreview from '../proposal/WorkbookPreview.jsx'
+import usePhoneLayout from '../tablet/usePhoneLayout.js'
+import { PhoneOpportunityProgress } from './PhoneOpportunityViews.jsx'
+import PhoneTaskFocus from './PhoneTaskFocus.jsx'
 import { hasValidatedUploadedWorkbook, validatedWorkbookPreview } from '../proposal/validatedWorkbook.js'
 
 const statusPill = s =>
@@ -165,9 +168,12 @@ const titleCase = value => String(value || '').toLowerCase().split(/\s+/).map((w
 }).join(' ').replace(/\bBoq\b/g, 'BOQ').replace(/\bKyc\b/g, 'KYC').replace(/\bRfq\b/g, 'RFQ')
 
 function OpportunityProgress({ activeStep, completedThrough, reviewing = false, onStep, onBack, onNext, onEdit, allowFutureNavigation = false, steps = WORKFLOW_STEPS }) {
+  const narrow = usePhoneLayout()
+  const store = useStore()
   const activeIndex = steps.findIndex(step => step.slug === activeStep)
   const currentIndex = reviewing ? completedThrough : activeIndex
   const currentStep = steps[currentIndex]
+  if (narrow && store.viewMode === 'tablet') return <PhoneOpportunityProgress {...{ activeStep, completedThrough, reviewing, onStep, onBack, onNext, onEdit, allowFutureNavigation, steps }} />
   return (
     <nav className="opportunity-progress" aria-label="Opportunity progress">
       <div className="progress-head">
@@ -353,7 +359,10 @@ export default function Workbench() {
 }
 
 function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp, sharedRefreshError = '', onRetrySharedRefresh }) {
+  const narrow = usePhoneLayout()
+  const phone = narrow && store.viewMode === 'tablet'
   const visibleOppId = displayOpportunityId(opp.id, store.config?.roleNames)
+  const SummaryShell = phone ? 'details' : React.Fragment
   const nav = useNavigate()
   const [transition, setTransition] = useState(null)
   const [pendingTransition, setPendingTransition] = useState(null)
@@ -736,7 +745,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
   }
 
   return (
-    <div className="page">
+    <div className="page opportunity-workbench-page">
       {sharedRefreshError && <div className="page-sync-warning" role="alert">
         <span>{sharedRefreshError} Changes on another device may not be visible yet.</span>
         <button type="button" onClick={onRetrySharedRefresh}>Retry</button>
@@ -754,6 +763,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
           {opp.context && <Chip tone="grey" title={`${opp.context} lane`}>{opp.context}</Chip>}
           <Chip tone={blockers.length ? 'state-Review' : 'state-Accepted'}>{blockers.length ? 'At risk' : 'On track'}</Chip>
         </div>
+        <p className="phone-opportunity-customer">{opp.sellTo || 'Customer not recorded'}</p>
       </div>
       {pendingTransition && <section className="approval-pending-banner" role="status">
         <div>
@@ -763,13 +773,16 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
         <button type="button" className="secondary" onClick={() => goTab('approvals')}>Open approvals</button>
       </section>}
       {createdNotice && <CreatedOpportunityPanel opp={opp} activeStep={activeStep} onDismiss={dismissCreatedNotice} onContinue={continueFromCreatedNotice} />}
+      <SummaryShell {...(phone ? { className: 'phone-opportunity-summary-disclosure' } : {})}>
+      {phone && <summary>Opportunity details<span>{displayRole(opp.owner)} · {opp.milestone || opp.stage}</span><Icon name="chevronDown" size={16} /></summary>}
       <div className="opp-summary-grid clean-summary-grid summary-strip bg-gray-50 border border-gray-200 rounded-lg p-4 divide-x divide-gray-200" aria-label="Opportunity summary">
         <div className="summary-meta-item"><span>Owner</span><b>{displayRole(opp.owner)}</b></div>
         <div className="summary-meta-item"><span>Milestone</span><b>{opp.milestone || opp.stage}</b></div>
-        <div className="summary-meta-item"><span>Customer value</span><b>{canSeeValue ? `₹${fmt(opp.valueK || 0)},000` : 'Restricted'}</b></div>
+        <div className="summary-meta-item"><span>Customer value</span><b>{canSeeValue ? phone ? fmtRupeesFromK(opp.valueK || 0) : `₹${fmt(opp.valueK || 0)},000` : 'Restricted'}</b></div>
         <div className="summary-meta-item opp-summary-action"><span>Next action</span><b>{nextAction.text || NEXT_ACTION[opp.milestone] || 'Progress the opportunity'}</b></div>
         <div className={`summary-meta-item summary-due ${isOverdue ? 'is-overdue' : ''}`}><span>Due</span><div className="summary-meta-value"><b>{ddMmmYY(due) || '-'}</b>{isOverdue && <Chip tone="state-Blocks">Overdue</Chip>}</div></div>
       </div>
+      </SummaryShell>
       <OpportunityProgress steps={workflowSteps} activeStep={activeStep} completedThrough={persistedStepIndex} reviewing={workflowReadOnly}
         allowFutureNavigation={serviceOpenNavigation}
         onEdit={step => openBackwardTransition(step)}
@@ -780,6 +793,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
           else selectStep(step.slug)
         }}
         onNext={nextWorkflowStep} />
+      {phone && activeStep !== workflowSteps[0]?.slug && <button type="button" className="phone-opportunity-details-link" onClick={() => selectStep(workflowSteps[0].slug)}>Opportunity details<Icon name="chevronRight" size={16} /></button>}
       {transition && (
         <Modal title={transition.kind === 'blocked' ? `Cannot move from ${opp.milestone} to ${transition.target}` : `Return to ${transition.target} for correction`} onClose={() => setTransition(null)} wide>
           {transition.kind === 'blocked' ? (
@@ -834,7 +848,8 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
       {viewingFutureStep && <div className="workflow-readonly-notice" role="status">
         <span>Previewing future stage: <b>{activeStepConfig?.label || 'this stage'}</b>. Current workflow stage: <b>{workflowSteps[persistedStepIndex]?.label || opp.milestone}</b>.</span>
       </div>}
-      <fieldset className={`wb-body workflow-edit-boundary ${workflowReadOnly ? 'workflow-edit-boundary--readonly' : ''}`} disabled={workflowReadOnly && viewTab !== 'comms'} aria-readonly={workflowReadOnly || undefined}>
+      <PhoneTaskFocus enabled={phone} stage={activeStepConfig?.label || viewTab}>
+      <fieldset className={`wb-body workflow-edit-boundary ${workflowReadOnly ? 'workflow-edit-boundary--readonly' : ''}`} disabled={workflowReadOnly && viewTab !== 'comms' && !(phone && viewTab === 'sourcing')} aria-readonly={workflowReadOnly || undefined}>
         {viewTab === 'overview' && opp.route === 'Spares' && <SparesIntakeTab opp={opp} detailsRef={detailsRef} />}
         {viewTab === 'overview' && opp.route !== 'Spares' && <OverviewTab opp={opp} detailsRef={detailsRef} />}
         {viewTab === 'requirement' && <RequirementTab opp={opp} onContinueToScope={opp.route === 'Service' ? () => advanceStep('service-scope') : undefined} onContinueToRate={opp.route === 'Service' ? () => advanceStep('service-rate') : undefined} />}
@@ -842,7 +857,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
         {viewTab === 'customer' && <CustomerKycTab opp={opp} />}
         {viewTab === 'registration' && <RegistrationTab opp={opp} goTab={goTab} />}
         {viewTab === 'clarifications' && <ClarificationsTab opp={opp} sourceText={sourceText} />}
-        {viewTab === 'sourcing' && <SourcingTab opp={opp} goTab={goTab} onConfirmScope={() => advanceStep('service-rate')} onContinueToProposal={() => {
+        {viewTab === 'sourcing' && <SourcingTab opp={opp} goTab={goTab} readOnly={workflowReadOnly} onConfirmScope={() => advanceStep('service-rate')} onContinueToProposal={() => {
           const proposalStep = workflowSteps.find(step => step.milestone === 'Proposal')
           if (proposalStep) advanceStep(proposalStep.slug)
         }} />}
@@ -859,6 +874,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
         {!activeStepConfig && viewTab === 'files' && <FilesTab opp={opp} />}
         {!activeStepConfig && viewTab === 'audit' && <AuditTab opp={opp} />}
       </fieldset>
+      </PhoneTaskFocus>
     </div>
   )
 }
@@ -2089,7 +2105,7 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
 }
 
 // ---------------------------------------------------------------------------
-function SourcingTab({ opp, goTab, onConfirmScope, onContinueToProposal }) {
+function SourcingTab({ opp, goTab, readOnly = false, onConfirmScope, onContinueToProposal }) {
   const store = useStore()
   const sourcingLines = store.sparesLines.filter(l => l.oppId === opp.id && !isPlaceholderSparesLine(l))
   const superseded = sourcingLines.some(l => String(l.match).toLowerCase().includes('superseded'))
@@ -2097,16 +2113,17 @@ function SourcingTab({ opp, goTab, onConfirmScope, onContinueToProposal }) {
   if (opp.route === 'Service') {
     return <div className="ana-grid service-sourcing-workbench">
       <div className="ana-card c-12">
-        <ServiceScopePanel opp={opp} onContinue={onConfirmScope} />
+        <fieldset disabled={readOnly} style={{ border: 0, padding: 0, minWidth: 0 }}><ServiceScopePanel opp={opp} onContinue={onConfirmScope} /></fieldset>
       </div>
     </div>
   }
 
   return (
     <div className="ana-grid">
+      {opp.route === 'Project' && <div className="ana-card c-12"><WbProject opp={opp} readOnly={readOnly} openBuilder={() => goTab('proposal')} /></div>}
       {opp.route === 'Spares' && (
         <div className="ana-card c-12 sourcing-spares-workbench">
-          <WbSpares opp={opp} openBuilder={() => goTab('proposal')} onContinue={onContinueToProposal} />
+          <WbSpares opp={opp} readOnly={readOnly} openBuilder={() => goTab('proposal')} onContinue={onContinueToProposal} />
         </div>
       )}
       {superseded && (

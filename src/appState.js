@@ -178,6 +178,11 @@ const removeSparesPlaceholders = s => {
 // identifier is valid syntax until it runs).
 export const defaultViewMode = () => (typeof window !== 'undefined' && window.innerWidth <= 1024 ? 'tablet' : 'full')
 
+export function followViewportMode(state, mode = defaultViewMode()) {
+  if (state.viewModePinned || state.viewMode === mode) return state
+  return { ...state, viewMode: mode }
+}
+
 // Additive backfill for state saved before the BT-prototype port (phase 2) —
 // never reseeds over the user's data.
 export function migrate(s) {
@@ -424,6 +429,7 @@ export function migrate(s) {
   if (!Array.isArray(s.roles)) s.roles = userRoles(s.auth?.user || { role: s.role })
   // Price lists added to the seed after a state was saved (e.g. Meggitt) land
   // by name — existing lists are the user's data and are never overwritten.
+  if (!Array.isArray(s.adhocParts)) s.adhocParts = demo ? seedAdhocParts : []
   if (!s.priceLists) s.priceLists = demo ? seedPriceLists : {}
   if (demo) {
     for (const [name, pl] of Object.entries(seedPriceLists)) {

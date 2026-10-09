@@ -7,6 +7,7 @@ export const topbarTitleFor = (pathname, role) => {
     '/inbox': ['Lead inbox', 'inbox'],
     '/opportunities': ['Opportunities', 'cards'],
     '/proposal-sent': ['Proposal Sent', 'send'],
+    '/order': ['Purchase Orders', 'clipboardCheck'],
     '/folders': ['Documents', 'folder'],
     '/customers': ['Customer Master', 'users'],
     '/pricelists': ['Price Lists', 'tag'],

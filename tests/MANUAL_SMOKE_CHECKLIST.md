@@ -4,6 +4,35 @@
 Start each scenario from a clean **Reset all demo data** (Demo Launcher or Admin).
 Record browser, viewport, role, result and console errors.
 
+## Phone mode and More
+
+- At desktop width, select Phone mode. Confirm the current page stays open in
+  a centered workspace no wider than 440px. Resize to tablet and phone widths,
+  then reload; the selected mode must remain. More → Full site returns to the
+  wider workspace. Verify automatic tablet behavior with an unpinned preference.
+- At 390px and 440px, in both themes, open every permitted More destination.
+  Header controls, floating actions, bottom tabs, drawers and dialogs must stay
+  within the workspace; wide tables may scroll inside their own containers.
+- Search More for a primary page and verify it remains discoverable. Check
+  salesperson and combined admin roles. With demo data disabled, Demo launcher
+  must be absent. The automation map identifies roadmap previews; appearance
+  appears once in the header.
+- Update opportunity status: search by customer or ID, open a row, edit through
+  the existing details workflow, and verify owner scope and pagination. Switch
+  to Edit in table and back without losing the search.
+- Tender intake: upload a PDF, edit descriptions, part numbers and quantities,
+  toggle included lines and edit commercial responses/verdicts. Confirm source
+  text, pricing evidence and confidence remain available. Missing required
+  fields must block creation; replacing a priced BOQ still needs confirmation.
+- A local demo login shows “Local only • This device” with no database refresh.
+  A real shared session continues to show genuine connection/configuration/auth
+  errors. Refresh must never overwrite server deletions with the browser cache.
+- Automated local Chrome check: start Vite on port 5182 and an isolated Chrome
+  profile with debugging port 9331, then run `node scripts/check-phone-mode.mjs`.
+  Override the local endpoints with `PHONE_CHECK_ORIGIN` / `PHONE_CHECK_DEBUG`
+  when needed. This script uses local demo authentication only; screenshots go
+  under `.local/generated/phone-mode-check`.
+
 ## The two journeys the client walked on 13 Aug
 
 **As RS (sales owner) — this is the run that used to fail.**
@@ -27,6 +56,15 @@ browser prompt, no localhost URL.
 
 ## Per role
 
+- As an administrator, edit and create users with the four-role dropdown
+  (Standard User, Team Lead, Management, Admin). Save a changed role and reload;
+  check permissions, unchanged owner IDs, and that Cancel preserves the role.
+  The protected System Owner assignment cannot be changed. At desktop and phone
+  widths in both themes, check long emails and edit controls stay within cells
+  and the table scrolls horizontally without overlapping controls.
+- After changing application roles, verify LJ and Ashwath can still decide
+  requests assigned to LJS and AH; Ruthvik's Team Lead role must not clear
+  requests specifically assigned to either of those approvers.
 - Sign in as RS, PP, LJS, AH, ADMIN, SUPER, TECH, CUST.
 - CUST is redirected to `/portal` only.
 - `/my-dashboard` renders a different, populated page for each internal role.
@@ -53,6 +91,28 @@ browser prompt, no localhost URL.
   Empty/negative amounts and GST over 100 must block Save. Check desktop/mobile.
   SUPER, AH, and RS must have no edit controls on Price Lists; SUPER must also
   have read-only pricing controls in Admin. Other Admin settings remain usable.
+
+## Mobile opportunities
+
+- At 360px, 390px, and 440px in both themes, check the original logo, view/theme
+  controls, sync status, search/filter bar, wrapped customer/title rows, values,
+  overdue cues, and Create opportunity action. No page-wide horizontal scroll.
+- Open filters, Apply or cancel, then use More → Filter by date. Check all three
+  register views, pagination, Excel actions, and Open editable table. Open a
+  record and return: retain search, filters, page, and scroll position.
+- Check the compact detail summary and View all steps. Locked future stages
+  remain locked; previous/next and correction actions still use workflow gates.
+- In Spares sourcing, check descriptions, source evidence, currencies, quantity,
+  customer unit prices, line totals, costing inputs, confirmations, comparisons,
+  and manual lines. Edit quantities, discounts, markup, and costs; confirm the
+  same calculations appear in the wider table. Remove with confirmation and
+  restore a line. Restricted roles must not see sourcing prices or edit actions.
+- Expand financial totals and check negative profit/margin. The footer appears
+  while sourcing is in view, reserves space for the last card, and hides while
+  editing or a modal is open. Next: Proposal remains blocked until all required
+  sourcing and approvals are complete, with a visible reason.
+- With the phone keyboard open, scroll every edit field and reach Done/Close.
+  At tablet and desktop widths, confirm the original table and workflow layout.
 
 ## Route-driven proposals
 
@@ -229,6 +289,25 @@ Our Ref 2511096RS) are retained with the local reference documents.
 - After deployment cleanup, verify sign-out and appearance reset to light.
 # Phone workspace
 
+- At 320px, 390px, 440px and 600px, compare Dashboard in both themes with the approved
+  images: original logo, KPIs, Top 5, Priority actions, Performance, Pipeline
+  Funnel and Win/Loss, with no horizontal page scroll. Top 5 and Priority start
+  expanded; each section toggles independently by touch and keyboard and keeps
+  its state when changing scope, theme, search or period.
+- Check the phone My View / Global View switch by touch and keyboard. Expanded
+  Top 5 rows must have consistent gaps; priority buttons sit beside their text
+  from 380px upward and wrap closely below the text on narrower phones. Long
+  names and blocker messages must wrap without clipping or overlapping actions.
+- Search for an opportunity outside the first five; check ranked results,
+  stage/blocker filters, FY/quarter selection and empty states. Open card and
+  priority actions; verify approval decisions use the existing approval gates.
+  With TECH active, check that cards and expanded reports expose no currency or
+  sales targets. Verify zero-data reports show neutral states without invented
+  percentages. Refresh must report success or failure accurately.
+- Change theme in the phone dashboard header; verify it follows navigation,
+  layout changes, reload and another tab. At 768px and 1440px verify the existing
+  wider dashboard layout; the tablet dashboard must retain its header.
+
 - At 360px and 390px, verify Inbox cards, advanced filter disclosure, selection,
   pagination, local search, new enquiry, and opening a lead.
 - Open an opportunity card; switch to Edit in table, change column view, expand
@@ -238,3 +317,59 @@ Our Ref 2511096RS) are retained with the local reference documents.
 - Open More from a record and switch to Full site; verify the same record URL.
 - Check phone forms and dialogs with the keyboard open and safe-area padding;
   rotate to landscape and verify the chosen mode persists.
+
+### Phone Lead inbox (320–600px, both themes)
+
+- Open New enquiry and New opportunity at 320/390/440px in both themes. Check
+  readable 44px controls, labels above fields, one dialog heading and no horizontal
+  overflow. With the phone keyboard open, focused fields and action areas remain
+  reachable. Check internal enquiry fields, attachment addition/removal, errors,
+  unextracted recovery, intake requirements and close/focus return. Wider forms
+  retain their existing layouts. Page and dialog headings share size and weight;
+  logos and proposal/print document typography remain unchanged.
+
+- Open a new lead: check full-width subject, one back arrow, Overview/Details/Email,
+  readable source/attachments, and one bottom action above navigation.
+- Edit a contact in Details, switch tabs and return; confirm the draft survives.
+- Tap missing customer/location/contact or verification prompts; confirm Details
+  opens the matching field or verification section. Expand additional classification
+  and extracted fields; confirm existing decisions remain available.
+- Qualify without creating an opportunity. Confirm registration remains blocked
+  by missing identity, enquiry, low-confidence or verification checks, and Red
+  qualification still requires continuation approval.
+- Use More to reassign, compare, add documents, and drop with a required reason.
+  Converted leads offer their actual linked opportunity, stay read-only, and never
+  invent customer/contact/items. Dropped leads offer no qualification action.
+- Check legacy leads still open intake, and tablet/desktop retain the existing
+  detail layout at widths above 600px.
+
+- Confirm a single header/search bar, the shared Global/My View switch, theme toggle, and unchanged bottom navigation.
+- Switch All leads, Needs review, Converted, and Starred; search and advanced filters must combine with the selected view.
+- Star/unstar directly from a row. Open a long subject to see the complete enquiry and sender address.
+- Check long names, missing sender/date/preview, empty results, and no horizontal overflow; subjects wrap at word boundaries with a two-line limit.
+- Use New enquiry, refresh, archive, selection, read/unread, and the existing guarded delete workflow. Scroll to the final row and pagination without obstruction.
+- Confirm tablet/desktop and phone lead-detail headers keep their existing controls.
+# Shared phone header
+
+- At 320px, 390px and 440px in both themes, visit each signed-in destination and scroll: exactly one original-logo/view/theme/profile row stays visible without horizontal overflow.
+- Open New enquiry, Create Opportunity and the editable table: their own header remains visible; titles, close controls, last fields and actions stay reachable, including with the on-screen keyboard.
+- Change theme/view with a populated form and verify the draft is retained. Close with the close control and Escape; verify focus returns to the opener. Small confirmations, tablet/desktop and printed documents stay unchanged.
+
+# Guided phone opportunity workflow
+
+- At 360/390/440px, open a Spares enquiry with at least 50 requested rows and
+  repeated part numbers. Check the checklist, counts, filters, search and paging.
+- Edit quantities/prices in several rows. Filter, switch tasks and reload; verify
+  drafts survive and duplicate models keep separate quantities and references.
+- Select visible rows, then all matching rows. Preview batch markup/discount and
+  confirmation: totals cover the entire enquiry, with missing/expired/removed
+  rows excluded and invalid edits blocked. Preview must not save.
+- Change a line or costing basis in another session after preview; Apply must
+  reject the stale batch. Check permission loss and completed-stage read-only
+  browsing, including Project section navigation and locked Service scope.
+- Verify Project retains its Coming soon availability gate. Its prepared BOQ
+  editor must remain unavailable until the Project workflow is released.
+- For Service, navigate each scope/rate/deployment/report/invoice task; retain
+  form edits, published rates and existing approval/transition requirements.
+- Inspect light/dark themes, keyboard access, safe areas and 768/1440px layouts.
+  Check truthful local-save/shared-sync failure and retry feedback.

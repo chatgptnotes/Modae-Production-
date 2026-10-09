@@ -1,16 +1,15 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { selectableRoles, ROLES, DEMO_PASSWORD, LEVEL3_ROLES, LEVEL3_ROLE_IDS, userRoles } from '../seed.js'
-import { ddMmmYY, isAdminRole, displayRoleLabel } from '../utils.js'
+import { ROLES, DEMO_PASSWORD, LEVEL3_ROLES, LEVEL3_ROLE_IDS } from '../seed.js'
+import { ddMmmYY, isAdminRole } from '../utils.js'
+import { applicationRoleFor, applicationRolePatch, newUserRole } from '../userApplicationRole.js'
+import './users.css'
 import { Icon } from '../icons.jsx'
 import { ConfirmModal } from '../ui.jsx'
 import { supabase } from '../supabase.js'
 import { usePagedRows } from '../ui/Pagination.jsx'
 
-// Roles assignable through the UI (incl. TECH) — SUPER is deliberately not
-// offered, and CUST only while the portal is enabled (seed.js PORTAL_ENABLED).
-const ASSIGNABLE = selectableRoles().map(([id]) => id).filter(r => r !== 'SUPER')
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const nextUserId = users => {
@@ -47,7 +46,7 @@ export default function Users() {
   const [usersView, setUsersView] = useState('accounts')
   const [rejecting, setRejecting] = useState(null)
   const [createOpen, setCreateOpen] = useState(false)
-  const [createDraft, setCreateDraft] = useState({ name: '', email: '', password: '', confirmPassword: '', role: 'RS', roles: ['STANDARD_USER'] })
+  const [createDraft, setCreateDraft] = useState({ name: '', email: '', password: '', confirmPassword: '', applicationRole: 'STANDARD_USER' })
   const [createErr, setCreateErr] = useState('')
   const [createBusy, setCreateBusy] = useState(false)
   const [credentialNotice, setCredentialNotice] = useState(null)
@@ -92,22 +91,27 @@ export default function Users() {
   }
 
   const startUserEdit = user => {
+    if (!canManage || userBusy) return
     setEditingUserId(user.id)
-    setUserDraft({ name: user.name || '', email: user.email || '', role: user.role, roles: userRoles(user), status: user.status })
+    setUserDraft({ name: user.name || '', email: user.email || '', applicationRole: applicationRoleFor(user), status: user.status })
     setUserErr('')
   }
 
   const cancelUserEdit = () => {
+    if (userBusy) return
     setEditingUserId(null)
     setUserDraft(null)
     setUserErr('')
   }
 
   const saveUser = async user => {
+    if (!canManage || userBusy || editingUserId !== user.id) return
     const name = String(userDraft?.name || '').trim()
     const email = String(userDraft?.email || '').trim()
-    const role = userDraft?.role
-    const roles = userDraft?.roles || [role]
+    let assignment
+    try { assignment = applicationRolePatch(user, userDraft?.applicationRole) }
+    catch (error) { setUserErr(error.message); return }
+    const { role, roles } = assignment
     const status = userDraft?.status
     if (!name) {
       setUserErr('Name is required.')
@@ -123,14 +127,6 @@ export default function Users() {
       setUserErr('That email is already registered.')
       return
     }
-    if (role !== user.role && user.role === 'SUPER') {
-      setUserErr('The System Owner role cannot be changed.')
-      return
-    }
-    if (!ASSIGNABLE.includes(role) && role !== 'SUPER') {
-      setUserErr('Select a valid role.')
-      return
-    }
     if (!['Active', 'Pending', 'Suspended'].includes(status)) {
       setUserErr('Select a valid status.')
       return
@@ -142,7 +138,9 @@ export default function Users() {
         : null
       store.updateUser(user.id, { name, email, role, roles, status, ...(remote?.user?.id ? { authId: remote.user.id } : {}) })
       if (remote?.user?.id) setAuthStatus(s => ({ ...s, [user.id]: { ...(s[user.id] || {}), authId: remote.user.id, email, authStatus: 'Created' } }))
-      cancelUserEdit()
+      setEditingUserId(null)
+      setUserDraft(null)
+      setUserErr('')
     } catch (error) {
       setUserErr(error?.message || 'Could not update the account.')
     } finally {
@@ -167,7 +165,7 @@ export default function Users() {
   const closeCreate = () => {
     setCreateOpen(false)
     setCreateErr('')
-    setCreateDraft({ name: '', email: '', password: '', confirmPassword: '', role: 'RS', roles: ['STANDARD_USER'] })
+    setCreateDraft({ name: '', email: '', password: '', confirmPassword: '', applicationRole: 'STANDARD_USER' })
   }
 
   const createAccount = async event => {
@@ -181,8 +179,9 @@ export default function Users() {
     if (!EMAIL_RE.test(email)) return setCreateErr('Enter a valid email address.')
     if (password.length < 8) return setCreateErr('Password must be at least 8 characters.')
     if (password !== confirmPassword) return setCreateErr('Passwords do not match.')
-    if (!ASSIGNABLE.includes(createDraft.role)) return setCreateErr('Select a valid operational role.')
-    if (!Array.isArray(createDraft.roles) || !createDraft.roles.length) return setCreateErr('Select at least one application role.')
+    let assignment
+    try { assignment = newUserRole(createDraft.applicationRole) }
+    catch (error) { return setCreateErr(error.message) }
     if (store.users.some(user => String(user.email || '').trim().toLowerCase() === email)) {
       return setCreateErr('That email is already registered.')
     }
@@ -190,12 +189,12 @@ export default function Users() {
     setCreateBusy(true)
     try {
       const remote = supabase
-        ? await adminUserRequest({ action: 'create', name, email, password, role: createDraft.role, roles: createDraft.roles })
+        ? await adminUserRequest({ action: 'create', name, email, password, ...assignment })
         : null
       store.addUser({
         id: nextUserId(store.users),
         ...(remote?.user?.id ? { authId: remote.user.id } : {}),
-        name, email, role: createDraft.role, roles: createDraft.roles, status: 'Active', created: today(),
+        name, email, ...assignment, status: 'Active', created: today(),
         // Supabase owns the password in cloud mode. Local demo mode retains
         // the existing browser-only credential model.
         ...(supabase ? { pw: '' } : { pw: password }),
@@ -271,7 +270,7 @@ export default function Users() {
   }
 
   return (
-    <div className="page">
+    <div className="page users-page">
       <h2 className="workspace-page-title workspace-page-title--topbar-duplicate"><Icon name="shield" size={18} /> User management</h2>
       <div className="toolbar">
         <span className="hint">Admins manage accounts, assign roles and approve registrations. {supabase ? 'Accounts are provisioned through Supabase Auth.' : 'Demo accounts are stored only in this browser.'}</span>
@@ -286,7 +285,7 @@ export default function Users() {
           onClick={() => setUsersView('accounts')}>Accounts</button>
         <button id="users-tab-role-names" type="button" role="tab" aria-selected={usersView === 'roleNames'}
           aria-controls="users-panel-role-names" className={usersView === 'roleNames' ? 'active' : ''}
-          onClick={() => setUsersView('roleNames')}>Role names</button>
+          onClick={() => setUsersView('roleNames')}>Owner names</button>
       </nav>
 
       <section id="users-panel-accounts" className="users-tab-panel" role="tabpanel"
@@ -305,10 +304,9 @@ export default function Users() {
             <label>User ID / email<input type="email" value={createDraft.email} onChange={e => setCreateDraft(d => ({ ...d, email: e.target.value }))} placeholder="person@company.com" /></label>
             <label>Password<input type="password" autoComplete="new-password" value={createDraft.password} onChange={e => setCreateDraft(d => ({ ...d, password: e.target.value }))} placeholder="At least 8 characters" /></label>
             <label>Confirm password<input type="password" autoComplete="new-password" value={createDraft.confirmPassword} onChange={e => setCreateDraft(d => ({ ...d, confirmPassword: e.target.value }))} placeholder="Repeat password" /></label>
-            <label>Role<select value={createDraft.role} onChange={e => setCreateDraft(d => ({ ...d, role: e.target.value }))}>{ASSIGNABLE.map(role => <option key={role} value={role}>{displayRoleLabel(role)}</option>)}</select></label>
-            <label>Application roles<select multiple value={createDraft.roles} onChange={e => setCreateDraft(d => ({ ...d, roles: [...e.target.selectedOptions].map(o => o.value) }))} aria-label="Application roles">
+            <label>Role<select value={createDraft.applicationRole} onChange={e => setCreateDraft(d => ({ ...d, applicationRole: e.target.value }))} aria-label="Application role">
               {LEVEL3_ROLE_IDS.map(id => <option key={id} value={id}>{LEVEL3_ROLES[id].name}</option>)}
-            </select><span className="hint">Hold Ctrl/Cmd to select more than one.</span></label>
+            </select></label>
           </div>
           {createErr && <div className="err-text" role="alert">{createErr}</div>}
           <div className="forms-actions users-create-actions"><button type="submit" className="primary" disabled={createBusy}>{createBusy ? 'Creating…' : 'Create account'}</button></div>
@@ -339,7 +337,7 @@ export default function Users() {
                 {pagePending.map(u => (
                   <tr key={u.id}>
                     <td><b>{u.name}</b></td><td>{u.email}</td>
-                    <td>Requested <b>{displayRoleLabel(u.role)}</b></td>
+                    <td>Requested <b>{LEVEL3_ROLES[applicationRoleFor(u)].name}</b></td>
                     <td>
                       <button className="primary" onClick={() => store.updateUser(u.id, { status: 'Active' })}>Approve</button>{' '}
                       <button onClick={() => setRejecting(u)}>Reject</button>
@@ -354,38 +352,44 @@ export default function Users() {
       )}
       <div className="section-title">Accounts ({store.users.length})</div>
       <div className="sheet-wrap sheet-wrap-fill">
-        <table className="sheet">
+        <table className="sheet users-table">
+          <colgroup>
+            <col className="users-col-name" /><col className="users-col-email" /><col className="users-col-role" />
+            <col className="users-col-status" /><col className="users-col-auth" /><col className="users-col-created" />
+            <col className="users-col-edit" /><col className="users-col-actions" />
+          </colgroup>
           <thead>
             <tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Supabase Auth</th><th>Created</th>{canManage && <><th>Edit</th><th>Actions</th></>}</tr>
           </thead>
           <tbody>
             {pageUsers.map(u => (
               <React.Fragment key={u.id}>
-              <tr>
+              <tr className={editingUserId === u.id ? 'users-row-editing' : undefined}
+                onKeyDown={event => {
+                  if (editingUserId !== u.id || userBusy) return
+                  if (event.key === 'Escape') { event.preventDefault(); cancelUserEdit() }
+                  if (event.key === 'Enter' && event.target.tagName === 'INPUT') { event.preventDefault(); saveUser(u) }
+                }}>
                 {editingUserId === u.id ? (
                   <>
                     <td>
                       <input
                         className="user-field-input"
+                        disabled={userBusy}
                         value={userDraft.name}
                         onChange={e => { setUserDraft(d => ({ ...d, name: e.target.value })); setUserErr('') }}
-                        onKeyDown={e => { if (e.key === 'Enter') saveUser(u); if (e.key === 'Escape') cancelUserEdit() }}
                         autoFocus
                         aria-label={`Name for ${u.name}`}
                       />
                       {u.role === store.role && <span className="pill you"> You</span>}
                     </td>
-                    <td><input className="user-field-input" type="email" value={userDraft.email} onChange={e => { setUserDraft(d => ({ ...d, email: e.target.value })); setUserErr('') }} aria-label={`Email for ${u.name}`} /></td>
+                    <td><input className="user-field-input" type="email" disabled={userBusy} value={userDraft.email} onChange={e => { setUserDraft(d => ({ ...d, email: e.target.value })); setUserErr('') }} aria-label={`Email for ${u.name}`} /></td>
                     <td>
-                      <select value={userDraft.role} disabled={u.role === 'SUPER'} onChange={e => { setUserDraft(d => ({ ...d, role: e.target.value })); setUserErr('') }} aria-label={`Role for ${u.name}`}>
-                        {u.role === 'SUPER' && <option value="SUPER">{displayRoleLabel('SUPER')}</option>}
-                        {ASSIGNABLE.map(r => <option key={r} value={r}>{displayRoleLabel(r)}</option>)}
-                      </select>
-                      <select multiple value={userDraft.roles || []} onChange={e => { setUserDraft(d => ({ ...d, roles: [...e.target.selectedOptions].map(o => o.value) })); setUserErr('') }} aria-label={`Application roles for ${u.name}`}>
-                        {[...new Set([...LEVEL3_ROLE_IDS, ...userRoles(u).filter(id => !LEVEL3_ROLE_IDS.includes(id))])].map(r => <option key={r} value={r}>{LEVEL3_ROLES[r]?.name || displayRoleLabel(r)}</option>)}
+                      <select value={userDraft.applicationRole} disabled={u.role === 'SUPER' || userBusy} onChange={e => { setUserDraft(d => ({ ...d, applicationRole: e.target.value })); setUserErr('') }} aria-label={`Role for ${u.name}`}>
+                        {LEVEL3_ROLE_IDS.map(r => <option key={r} value={r}>{LEVEL3_ROLES[r].name}</option>)}
                       </select>
                     </td>
-                    <td><select value={userDraft.status} onChange={e => { setUserDraft(d => ({ ...d, status: e.target.value })); setUserErr('') }} aria-label={`Status for ${u.name}`}>
+                    <td><select disabled={userBusy} value={userDraft.status} onChange={e => { setUserDraft(d => ({ ...d, status: e.target.value })); setUserErr('') }} aria-label={`Status for ${u.name}`}>
                       {['Active', 'Pending', 'Suspended'].map(status => <option key={status} value={status}>{status}</option>)}
                     </select></td>
                   </>
@@ -393,7 +397,7 @@ export default function Users() {
                   <>
                     <td><div className="user-name-display"><b>{u.name}</b>{u.role === store.role && <span className="pill you"> You</span>}</div></td>
                     <td>{u.email || 'No email assigned'}</td>
-                    <td><div>{displayRoleLabel(u.role) || u.role}</div><span className="hint">{userRoles(u).map(r => LEVEL3_ROLES[r]?.name || displayRoleLabel(r)).join(' · ')}</span></td>
+                    <td>{LEVEL3_ROLES[applicationRoleFor(u)].name}</td>
                     <td><span className={`pill status-${u.status}`}>{u.status}</span></td>
                   </>
                 )}
@@ -408,28 +412,30 @@ export default function Users() {
                 </td>
                 <td>{ddMmmYY(u.created)}</td>
                 {canManage && (
-                  <td>
+                  <td className="users-edit-cell">
                     {editingUserId === u.id ? (
                       <div className="user-row-editor-actions">
-                        <button type="button" className="primary" disabled={userBusy} onClick={() => saveUser(u)} title="Save user details" aria-label={`Save details for ${u.name}`}><Icon name="check" size={15} /></button>
-                        <button type="button" disabled={userBusy} onClick={cancelUserEdit} title="Cancel user edit" aria-label={`Cancel edit for ${u.name}`}><Icon name="x" size={15} /></button>
-                        {userErr && <div className="err-text">{userErr}</div>}
+                        <button type="button" className="primary" disabled={userBusy} onClick={() => saveUser(u)} aria-label={`Save details for ${u.name}`}>{userBusy ? 'Saving…' : 'Save'}</button>
+                        <button type="button" disabled={userBusy} onClick={cancelUserEdit} aria-label={`Cancel edit for ${u.name}`}>Cancel</button>
                       </div>
                     ) : (
-                      <button type="button" className="user-email-action" onClick={() => startUserEdit(u)} title="Edit user details" aria-label={`Edit details for ${u.name}`}><Icon name="edit" size={15} /></button>
+                      <button type="button" className="users-edit-button" disabled={editingUserId !== null || userBusy} onClick={() => startUserEdit(u)} aria-label={`Edit details for ${u.name}`}>Edit</button>
                     )}
                   </td>
                 )}
                 {canManage && (
-                  <td>
+                  <td className="users-account-actions">
                     {u.status === 'Active' &&
-                      <><button onClick={() => { store.signInAs(u.id); nav('/opportunities') }}>Sign in as</button>{' '}<button onClick={() => startPasswordReset(u)}>Reset password</button></>}
+                      <><button disabled={editingUserId !== null} onClick={() => { store.signInAs(u.id); nav('/opportunities') }}>Sign in as</button>{' '}<button disabled={editingUserId !== null} onClick={() => startPasswordReset(u)}>Reset password</button></>}
                   </td>
                 )}
               </tr>
+              {editingUserId === u.id && userErr && (
+                <tr className="users-edit-error"><td colSpan={8}><div className="err-text" role="alert">{userErr}</div></td></tr>
+              )}
               {resettingUserId === u.id && (
                 <tr key={`${u.id}-reset`} className="users-reset-row">
-                  <td colSpan={9}>
+                  <td colSpan={8}>
                     <div className="users-reset-panel">
                       <strong>Reset password for {u.name}</strong>
                       <input type="password" autoFocus autoComplete="new-password" value={resetDraft.password} onChange={e => setResetDraft(d => ({ ...d, password: e.target.value }))} placeholder="New password" aria-label={`New password for ${u.name}`} />
@@ -452,8 +458,8 @@ export default function Users() {
       <section id="users-panel-role-names" className="users-tab-panel" role="tabpanel"
         aria-labelledby="users-tab-role-names" hidden={usersView !== 'roleNames'}>
       <form className="users-role-names-panel" onSubmit={saveRoleNames}>
-        <div className="section-title">Role names</div>
-        <p className="hint">Change the global display names while stable role IDs continue to power permissions and historical records.</p>
+        <div className="section-title">Owner names</div>
+        <p className="hint">Change owner display names used elsewhere in the workspace. Account roles are managed in the Accounts tab.</p>
         <div className="users-role-name-list">
           {Object.entries(ROLES).map(([id, roleDef]) => (
             <label className="users-role-name-row" key={id}>

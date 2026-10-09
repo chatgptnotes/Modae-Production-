@@ -1,0 +1,70 @@
+@media (max-width: 600px) {
+  .shell .phone-lead-detail { --lead-nav-height: calc(64px + env(safe-area-inset-bottom)); color:var(--text-primary); background:var(--surface-canvas); min-width:0; padding:0 12px calc(180px + env(safe-area-inset-bottom)); }
+  .phone-lead-header { padding:4px 0 12px; }
+  .phone-lead-top { display:flex; justify-content:space-between; margin-inline:-4px; }
+  .shell .phone-lead-top > button { display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; padding:0; border:0 !important; background:transparent !important; box-shadow:none !important; color:var(--text-primary); }
+  .phone-lead-header h1 { margin:8px 0 10px; font-size:22px; line-height:1.25; font-weight:650; overflow-wrap:anywhere; }
+  .phone-lead-header p { margin:4px 0; font-size:13px; color:var(--text-secondary); overflow-wrap:anywhere; }
+  .phone-lead-meta { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:12px; font-size:13px; color:var(--text-secondary); }
+  .phone-lead-meta > [data-status] { padding:5px 10px; border-radius:5px; background:var(--surface-raised); color:var(--text-primary); }
+  .phone-lead-meta > [data-status="Converted"] { border-left:3px solid var(--status-success); }
+  .phone-lead-meta > [data-status="Dropped"] { border-left:3px solid var(--status-danger); }
+  .phone-lead-tabs { display:flex; position:sticky; top:0; z-index:8; background:var(--surface-canvas); border-bottom:1px solid var(--border-default); scroll-margin-top:0; }
+  .shell .phone-lead-tabs > button { flex:1; padding:12px 6px; min-height:48px; border:0 !important; border-bottom:2px solid transparent !important; border-radius:0 !important; background:transparent !important; box-shadow:none !important; color:var(--text-secondary); font-size:15px; }
+  .shell .phone-lead-tabs > [aria-selected="true"] { border-bottom-color:var(--action-primary) !important; color:var(--text-primary); font-weight:600; }
+  .phone-lead-detail [hidden] { display:none !important; }
+  .phone-lead-panel { min-width:0; padding-top:16px; }
+  .phone-lead-panel h2 { margin:0 0 12px; font-size:18px; line-height:1.35; }
+  .phone-lead-panel p { font-size:15px; line-height:1.5; overflow-wrap:anywhere; }
+  .phone-lead-panel > section { margin-bottom:22px; }
+  .phone-lead-attention { padding:12px; border-radius:8px; background:var(--status-warning-soft); }
+  .phone-lead-attention h2 { font-size:15px; margin-bottom:4px; }
+  .shell .phone-lead-attention button { display:flex; align-items:center; gap:10px; width:100%; padding:10px 0; min-height:48px; border:0 !important; background:transparent !important; text-align:left; box-shadow:none !important; color:var(--text-primary); white-space:normal !important; }
+  .phone-lead-attention button > span { flex:1; min-width:0; }
+  .phone-lead-attention b, .phone-lead-attention small { display:block; font-size:14px; overflow-wrap:anywhere; white-space:normal !important; }
+  .phone-lead-attention small { margin-top:3px; font-size:12px; color:var(--text-secondary); }
+  .phone-lead-attention svg { flex-shrink:0; }
+  .phone-lead-summary dl { margin:0; }
+  .phone-lead-summary dl > div { display:grid; grid-template-columns:90px minmax(0,1fr); gap:12px; border-bottom:1px solid var(--border-subtle); padding:12px 0; font-size:14px; }
+  .phone-lead-summary dt { color:var(--text-secondary); }
+  .phone-lead-summary dd { margin:0; overflow-wrap:anywhere; }
+  .phone-lead-items > div:first-child { display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+  .phone-lead-items > div:first-child > span { font-size:12px; color:var(--text-secondary); }
+  .phone-lead-item { display:flex; justify-content:space-between; gap:16px; padding:12px 0; border-bottom:1px solid var(--border-subtle); font-size:14px; line-height:1.4; }
+  .phone-lead-item > span:first-child { min-width:0; overflow-wrap:anywhere; }
+  .phone-lead-item > span:last-child { flex-shrink:0; color:var(--text-secondary); }
+  .shell .phone-lead-text-action { display:inline-flex; align-items:center; gap:8px; border:0; background:transparent; padding:12px 0; box-shadow:none; color:var(--text-primary); text-decoration:underline; }
+  .phone-lead-record { font-size:12px !important; color:var(--text-secondary); }
+  .phone-lead-converted { display:flex; align-items:flex-start; gap:10px; padding:12px; border-left:3px solid var(--status-success); background:var(--surface-default); }
+  .phone-lead-converted svg { flex-shrink:0; color:var(--status-success); }
+  .phone-lead-converted p { margin:6px 0 0; font-size:13px; color:var(--text-secondary); }
+  .phone-lead-action { position:fixed; left:0; right:0; bottom:var(--lead-nav-height); z-index:10; padding:12px; border-top:1px solid var(--border-default); background:var(--surface-default); }
+  .shell .phone-lead-action .phone-lead-primary { width:100%; display:flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:10px 14px; background:var(--action-primary) !important; border:1px solid var(--action-primary) !important; color:var(--text-on-accent) !important; border-radius:7px; box-shadow:none; font-size:15px; font-weight:600; }
+  .phone-lead-action p { margin:8px 0 0; font-size:12px; line-height:1.35; color:var(--text-secondary); text-align:center; }
+  .phone-lead-detail:has(:is(input, textarea, select):focus) .phone-lead-action { position:static; margin-top:20px; }
+  .phone-lead-more > div { display:grid; gap:8px; }
+  .phone-lead-detail button:focus-visible { outline:2px solid var(--focus-ring); outline-offset:2px; }
+  .phone-lead-details :is(.compact-workflow-content, .lead-detail-layout, .lead-detail-main, .ws-grid, .lead-qualification-panel, .lead-decision-card, .lead-decision-grid, .lead-action-sidebar, .readonly-decision-grid) { display:block !important; width:100% !important; max-width:100% !important; min-width:0 !important; padding:0; margin:0; border:0; box-shadow:none; background:transparent; position:static; }
+  .phone-lead-details :is(.lead-flow-card, .compact-summary-rail, .compact-source-rail, .phone-hidden-action) { display:none !important; }
+  .phone-lead-details .lead-decision-grid > :is(label, div:not(.lead-decision-subsection)), .phone-lead-details .readonly-decision-field { display:block; margin-bottom:16px; }
+  .phone-lead-details .decision-field-heading, .phone-lead-details .readonly-decision-label { display:flex; align-items:center; flex-wrap:wrap; gap:4px; margin-bottom:6px; font-size:13px; }
+  .phone-lead-details :is(input:not([type=checkbox]):not([type=radio]), select, textarea) { width:100%; max-width:100%; min-width:0; min-height:44px; font-size:16px; }
+  .phone-lead-details .decision-value-row { display:flex; min-width:0; }
+  .phone-lead-details .decision-value-row > :is(input, textarea, select) { flex:1; }
+  .phone-lead-details .lead-decision-subsection { margin:20px 0 14px; padding:0 0 8px; border-bottom:1px solid var(--border-default); background:transparent; font-size:15px; text-transform:none; }
+  .phone-lead-details .ws-body { padding:0; }
+  .phone-lead-details .ws-foot { position:static !important; padding:0; }
+  .phone-lead-details .lead-decision-head { padding:0 0 16px; }
+  .phone-lead-details .phone-optional-details { margin:16px 0; }
+  .phone-lead-details .phone-optional-details > label { display:block; margin-bottom:16px; }
+  .phone-lead-details :is(.ws-col, .form-card) { min-width:0; max-width:100%; border:0; background:transparent; box-shadow:none; }
+  .phone-lead-details .decision-ai-meta { display:inline-flex; flex-wrap:wrap; gap:6px; }
+  .shell .phone-lead-details .decision-ai-evidence { display:inline-flex; align-items:center; justify-content:center; width:44px; height:44px; padding:0; color:var(--text-primary); }
+  .phone-lead-details label { text-transform:none; letter-spacing:normal; }
+  .phone-optional-details > summary { cursor:pointer; padding:12px 0; font-size:15px; }
+  .phone-lead-details .converted-table-wrap { overflow-x:auto; }
+  .phone-lead-email .converted-source { border:0; background:transparent; box-shadow:none; padding:0; }
+  .phone-lead-email .converted-source-body { padding:12px 0; }
+  .phone-lead-email .converted-source-copy { max-height:none; overflow:visible; font-size:15px; line-height:1.55; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .phone-lead-email .converted-source-subject { display:none; }
+}

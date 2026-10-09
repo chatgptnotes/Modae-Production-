@@ -163,17 +163,18 @@ export function dashboardModel(store, { scope = 'global', owner = 'all', period 
   }
   const funnel = segmentedFunnel(pipeline)
   const topRange = dashboardPeriod(topPeriod, store.sales?.fy, now)
-  const topOpportunities = visible.filter(o => o.status === 'Open'
+  const topOpportunityCandidates = visible.filter(o => o.status === 'Open'
     && (!selectedOwner || o.owner === selectedOwner)
     && dateInPeriod(o.orderDate, topRange)).sort((a, b) => (+b.valueK || 0) - (+a.valueK || 0)
     || String(a.orderDate || '9999-12-31').localeCompare(String(b.orderDate || '9999-12-31'))
-    || String(a.id).localeCompare(String(b.id))).slice(0, 5)
+    || String(a.id).localeCompare(String(b.id)))
+  const topOpportunities = topOpportunityCandidates.slice(0, 5)
   const headlineOpenCount = open.length
   const headlinePipelineK = open.reduce((sum, o) => sum + (+o.valueK || 0), 0)
   const outcomeSummary = winLossAnalysis(pipeline, store.competitors, { commercial: false })
   const outcomes = { ...outcomeSummary, byReason: reconcileWinLossReasons(outcomeSummary.byReason) }
   return { pipeline, open, pending, decisions: pending.filter(a => approvalNeedsRole(a, role)), work, blocked, followups, stale, queue,
-    funnel, topOpportunities, headlineOpenCount, headlinePipelineK, perf, team,
+    funnel, topOpportunities, topOpportunityCandidates, headlineOpenCount, headlinePipelineK, perf, team,
     pipelineK: open.reduce((sum, o) => sum + (+o.valueK || 0), 0),
     weightedK: open.reduce((sum, o) => sum + (+o.valueK || 0) * (PROB_WEIGHT[o.prob] ?? PROB_WEIGHT.Low), 0),
     outcomes,

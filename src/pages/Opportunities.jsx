@@ -8,6 +8,7 @@ import { Modal } from '../ui.jsx'
 import { dashboardModel } from './myDashboard/model.js'
 import WorkspaceInsights from '../ui/WorkspaceInsights.jsx'
 import { useWorkspaceView } from '../ui/WorkspaceViewContext.jsx'
+import usePhoneDialogViewport from '../tablet/usePhoneDialogViewport.js'
 
 // One workspace for the related sales actions. The underlying pages stay
 // separate so their existing filters, forms, and proposal handoff behavior do
@@ -26,6 +27,7 @@ export default function Opportunities() {
     { count: insightModel.followups.length, label: 'follow-ups are due', tone: 'warning' },
   ]
   const [createOpen, setCreateOpen] = useState(requested === 'create')
+  usePhoneDialogViewport('.opportunity-create-modal', createOpen)
   const stageStrip = (
     <section className="opportunity-stage-strip" aria-label="Pipeline stages">
       {insightModel.funnel.map(stage => <button type="button" key={stage.key} onClick={() => setParams({ stage: stage.stages.join(',') })}>

@@ -1,0 +1,56 @@
+/* The inbox owns this composition only on phones; shared theme tokens stay authoritative. */
+@media screen and (max-width: 600px) {
+  .shell.tablet-mode.mobile-inbox-shell .mobile-content { padding-top: 0; }
+  .shell.tablet-mode .phone-inbox-page {
+    --inbox-accent: #e94b24;
+    background: var(--surface-default); color: var(--text-primary);
+    padding: 0 14px calc(170px + env(safe-area-inset-bottom)); min-width: 0;
+  }
+  .shell.tablet-mode .phone-inbox-page .phone-list-more { margin: 0; }
+  .shell.tablet-mode .phone-inbox-page .phone-list-more summary { list-style: none; }
+  .shell.tablet-mode .phone-inbox-page .phone-list-more summary::-webkit-details-marker { display: none; }
+  .shell.tablet-mode .phone-inbox-page .phone-list-more > div { border-radius: 10px; background: var(--surface-default); }
+  .shell.tablet-mode .phone-inbox-page .phone-list-more button { min-height: 44px; white-space: normal; text-align: left; }
+  .shell.tablet-mode .phone-inbox-page .phone-inbox-search { display: flex; align-items: center; gap: 10px; border-radius: 16px; padding: 4px 4px 4px 14px; background: var(--surface-sunken); color: var(--text-secondary); }
+  .shell.tablet-mode .phone-inbox-page .phone-inbox-search > svg { flex-shrink: 0; }
+  .shell.tablet-mode .phone-inbox-page .phone-inbox-search input { flex: 1; min-width: 0; width: 100%; min-height: 44px; padding: 0; border: 0 !important; background: transparent !important; box-shadow: none !important; font-size: 16px; color: var(--text-primary); }
+  .shell.tablet-mode .phone-inbox-page .phone-inbox-search button { display: flex; align-items: center; justify-content: center; gap: 3px; min-width: 44px; min-height: 44px; padding: 8px; border: 0 !important; background: transparent !important; color: var(--text-secondary) !important; }
+  .shell.tablet-mode .phone-inbox-page .phone-inbox-search button span { font-size: 11px; color: var(--inbox-accent); }
+  .shell.tablet-mode .phone-inbox-page .phone-inbox-views { display: flex; gap: 8px; overflow-x: auto; padding: 12px 0 4px; }
+  .shell.tablet-mode .phone-inbox-page .phone-inbox-views button { flex-shrink: 0; display: flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; border: 1px solid var(--border-default) !important; border-radius: 24px !important; padding: 9px 12px; font-size: 13px; font-weight: 500; white-space: nowrap; background: var(--surface-default) !important; color: var(--text-primary) !important; }
+  .shell.tablet-mode .phone-inbox-page .phone-inbox-views button[aria-pressed="true"] { background: var(--inbox-accent) !important; border-color: var(--inbox-accent) !important; color: white !important; }
+  .shell.tablet-mode .phone-inbox-page .phone-inbox-list-label { display: flex; justify-content: space-between; gap: 12px; padding: 16px 0 10px; font-size: 12px; color: var(--text-secondary); border-bottom: 1px solid var(--border-default); }
+  .shell.tablet-mode .phone-inbox-page .phone-inbox-list-label > span:first-child { text-transform: uppercase; letter-spacing: .04em; }
+  .shell.tablet-mode .phone-inbox-page :is(.mailbox-split, .mailbox-list-panel, .mailbox-list) { display: block; min-width: 0; width: 100%; max-width: 100%; height: auto; max-height: none; overflow: visible; border: 0 !important; padding: 0; margin: 0; border-radius: 0; box-shadow: none; background: transparent !important; }
+  .shell.tablet-mode .phone-inbox-page :is(.mail-column-head, .mailbox-horizontal-scrollbar) { display: none !important; }
+  .shell.tablet-mode .phone-inbox-page .phone-lead-row { display: flex; align-items: flex-start; gap: 0; padding: 16px 0; border-bottom: 1px solid var(--border-default); }
+  .shell.tablet-mode .phone-inbox-page .phone-lead-row.is-selected { background: var(--surface-sunken); }
+  .shell.tablet-mode .phone-inbox-page button.phone-lead-open { flex: 1; min-width: 0; display: flex; align-items: flex-start; gap: 12px; padding: 0; border: 0 !important; border-radius: 0; background: transparent !important; color: var(--text-primary) !important; text-align: left; white-space: normal; box-shadow: none !important; }
+  .shell.tablet-mode .phone-inbox-page .phone-lead-avatar { flex-shrink: 0; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: color-mix(in srgb, var(--inbox-accent) 13%, var(--surface-sunken)); color: var(--text-primary); font-size: 16px; font-weight: 500; }
+  .shell.tablet-mode .phone-inbox-page .phone-lead-copy { flex: 1; min-width: 0; display: grid; gap: 4px; }
+  .shell.tablet-mode .phone-inbox-page .phone-lead-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; line-height: 1.35; font-weight: 600; }
+  .shell.tablet-mode .phone-inbox-page .phone-clamp-two { min-width: 0; font-size: 15px; line-height: 1.4; font-weight: 500; word-break: normal; overflow-wrap: break-word; hyphens: none; }
+  .shell.tablet-mode .phone-inbox-page .is-unread .phone-clamp-two { font-weight: 650; }
+  .shell.tablet-mode .phone-inbox-page .phone-clamp-one { display: block; min-width: 0; font-size: 13px; line-height: 1.4; color: var(--text-secondary); }
+  .shell.tablet-mode .phone-inbox-page .phone-lead-labels { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 2px; }
+  .shell.tablet-mode .phone-inbox-page :is(.phone-lead-status, .phone-lead-urgent) { border-radius: 5px; padding: 2px 6px; font-size: 11px; line-height: 1.5; background: var(--surface-sunken); color: var(--text-secondary); }
+  .shell.tablet-mode .phone-inbox-page .phone-lead-status[data-status="Converted"] { background: color-mix(in srgb, var(--success, #228656) 15%, var(--surface-default)); color: var(--success, #228656); }
+  .shell.tablet-mode .phone-inbox-page .phone-lead-status[data-status="New"] { background: color-mix(in srgb, var(--info, #3976a7) 15%, var(--surface-default)); color: var(--info, #3976a7); }
+  .shell.tablet-mode .phone-inbox-page .phone-lead-status[data-status="Qualified"] { color: var(--warning, #ab761e); }
+  .shell.tablet-mode .phone-inbox-page .phone-lead-urgent { color: var(--danger, #bf4646); }
+  .shell.tablet-mode .phone-inbox-page .phone-lead-side { flex-shrink: 0; width: 57px; display: grid; justify-items: end; gap: 4px; }
+  .shell.tablet-mode .phone-inbox-page .phone-lead-side time { font-size: 12px; line-height: 20px; color: var(--text-secondary); white-space: nowrap; }
+  .shell.tablet-mode .phone-inbox-page button.phone-lead-star { display: grid; place-items: center; min-height: 44px; width: 44px; padding: 0; border: 0 !important; background: transparent !important; color: var(--text-secondary) !important; box-shadow: none !important; }
+  .shell.tablet-mode .phone-inbox-page button.phone-lead-star:disabled { cursor: default; opacity: .5; }
+  .shell.tablet-mode .phone-inbox-page button.phone-lead-star[aria-pressed="true"] { color: var(--warning, #b98723) !important; }
+  .shell.tablet-mode .phone-inbox-page button.phone-lead-star[aria-pressed="true"] svg { fill: currentColor; }
+  .shell.tablet-mode .phone-inbox-page .phone-inbox-selection { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 0; font-size: 13px; }
+  .shell.tablet-mode .phone-inbox-page .phone-inbox-selection button { min-height: 44px; }
+  .shell.tablet-mode .phone-inbox-page button.phone-inbox-new { position: fixed; z-index: 30; right: 16px; bottom: calc(84px + env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 9px; min-height: 52px; padding: 12px 18px; border: 0 !important; border-radius: 28px !important; background: var(--inbox-accent) !important; color: white !important; font-size: 15px; font-weight: 600; box-shadow: 0 4px 12px #0002; }
+  .shell.tablet-mode .phone-inbox-page :is(button, summary, input):focus-visible { outline: 2px solid var(--inbox-accent); outline-offset: 3px; }
+}
+@media screen and (max-width: 360px) {
+  .shell.tablet-mode .phone-inbox-page .phone-lead-avatar { width: 32px; height: 32px; font-size: 14px; }
+  .shell.tablet-mode .phone-inbox-page button.phone-lead-open { gap: 8px; }
+  .shell.tablet-mode .phone-inbox-page .phone-lead-row:has(.phone-select) .phone-lead-avatar { display: none; }
+}

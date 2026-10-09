@@ -1,0 +1,38 @@
+.phone-workspace { width: 100%; min-width: 0; container: phone-workspace / inline-size; }
+.phone-workspace-selected { width: min(100%, 440px); margin-inline: auto; min-height: 100dvh; background: var(--surface-default); }
+[data-phone-portal-container] { container: phone-workspace / inline-size; width: 100%; }
+html[data-phone-mode] { --phone-width: min(100vw, 440px); --phone-left: max(0px, calc((100vw - 440px) / 2)); }
+html[data-phone-mode] body { overflow-x: clip; background: var(--surface-canvas); }
+html[data-phone-mode] [data-phone-portal-container] { width: var(--phone-width); margin-inline: auto; }
+html[data-phone-mode] :is(.tab-bottom, .drawer-backdrop, .modal-backdrop, .modal-overlay, .approval-drawer-layer) { left: var(--phone-left); right: auto; width: var(--phone-width); }
+html[data-phone-mode] .tablet-mode .tab-bottom { max-width: var(--phone-width); }
+html[data-phone-mode] .tablet-mode .drawer { left: var(--phone-left); right: auto; width: var(--phone-width); max-width: var(--phone-width); }
+html[data-phone-mode] :is([data-modae-portal-root] .modal, .tablet-mode .mobile-table-expanded, .tablet-mode .tracker-page .sheet-wrap.phone-table-workspace) { left: var(--phone-left) !important; right: auto !important; width: var(--phone-width) !important; max-width: var(--phone-width) !important; }
+html[data-phone-mode] .approval-decision-drawer { inset-inline: 0; width: 100%; max-width: 100%; }
+html[data-phone-mode] .tablet-mode :is(.phone-inbox-new, .tracker-toolbar-actions .tracker-create-logo) { right: calc(var(--phone-left) + 16px) !important; }
+html[data-phone-mode] .tablet-mode :is(.phone-sourcing-footer, .phone-lead-action) { left: var(--phone-left); right: auto; width: var(--phone-width); }
+html[data-phone-mode] .tablet-mode .phone-lead-detail:has(:is(input, textarea, select):focus) .phone-lead-action { width: 100%; }
+html[data-phone-mode] .tablet-mode .phone-table-close { left: calc(var(--phone-left) + 8px); }
+html[data-phone-mode] .phone-table-chrome { width: calc(var(--phone-width) - 24px); }
+html[data-phone-mode] .tablet-mode .brand-watermark { left: var(--phone-left); right: auto; width: var(--phone-width); max-width: var(--phone-width); }
+html[data-phone-mode] .tablet-mode .brand-watermark__mark { width: 94%; }
+.mobile-destination-group a span small { display: block; margin-top: 4px; font-size: 12px; color: var(--text-secondary); }
+.phone-status-search { display: grid; gap: 8px; margin-block: 16px; }
+.phone-status-search input { width: 100%; }
+.phone-tender-review { display: grid; gap: 16px; margin-bottom: 24px; }
+.phone-tender-review article { display: grid; gap: 12px; padding-block: 16px; border-bottom: 1px solid var(--border-default); min-width: 0; overflow-wrap: anywhere; }
+.phone-tender-review header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.phone-tender-review label { display: grid; gap: 6px; }
+.phone-tender-review header label { display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.phone-tender-review :is(input:not([type="checkbox"]), select, textarea) { width: 100%; min-width: 0; }
+.phone-tender-review textarea { min-height: 88px; resize: vertical; }
+.phone-tender-review :is(p, h3) { margin: 0; }
+.phone-tender-review summary { min-height: 44px; padding-block: 12px; cursor: pointer; }
+.phone-tender-review [data-included="false"] { border-left: 3px solid var(--border-default); padding-left: 12px; }
+.phone-tender-review [data-included="false"] header { color: var(--text-secondary); }
+@container phone-workspace (max-width: 600px) {
+  .tablet-mode .aimap-row { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .tablet-mode .aimap-row .aimap-open { justify-self: start; }
+  .tablet-mode .tender-intake-page .forms-actions { flex-wrap: wrap; }
+}
+@media print { .phone-workspace-selected { width: 100%; } }

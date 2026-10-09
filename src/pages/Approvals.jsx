@@ -13,6 +13,7 @@ import WorkspaceInsights from '../ui/WorkspaceInsights.jsx'
 import { useWorkspaceView } from '../ui/WorkspaceViewContext.jsx'
 import { usePagedRows } from '../ui/Pagination.jsx'
 import usePhoneLayout from '../tablet/usePhoneLayout.js'
+import { PhoneOverlayHeader } from '../tablet/PhoneWorkspaceChrome.jsx'
 import PhoneFilters from '../tablet/PhoneFilters.jsx'
 
 const NEW_APPROVAL_MS = 48 * 60 * 60 * 1000
@@ -370,13 +371,13 @@ function FilterBar({
         <Icon name="search" size={14} />
         <input aria-label="Search approvals" placeholder="Search by request, opportunity, customer or type" value={q} onChange={onQueryChange} />
       </label>
-      {phone ? <button type="button" onClick={() => setOpen(true)}>Filters{statusF || typeF ? ` (${[statusF, typeF].filter(Boolean).length})` : ''}</button> : <><select aria-label="Filter by status" value={statusF} onChange={onStatusChange}><option value="">All statuses</option>{['Pending', 'Approved', 'Rejected'].map(s => <option key={s}>{s}</option>)}</select>
+      {phone ? <button type="button" className="approval-phone-filter" aria-label={`Filter approvals${statusF || typeF ? ` (${[statusF, typeF].filter(Boolean).length} active)` : ''}`} onClick={() => setOpen(true)}><Icon name="filter" size={20} /><span>Filters{statusF || typeF ? ` (${[statusF, typeF].filter(Boolean).length})` : ''}</span></button> : <><select aria-label="Filter by status" value={statusF} onChange={onStatusChange}><option value="">All statuses</option>{['Pending', 'Approved', 'Rejected'].map(s => <option key={s}>{s}</option>)}</select>
       <select aria-label="Filter by type" value={typeF} onChange={onTypeChange}><option value="">All types</option>{typeOptions.map(t => <option key={t}>{t}</option>)}</select></>}
       {open && <PhoneFilters title="Filter approvals" onClose={() => setOpen(false)} fields={[
         { key: 'status', label: 'Status', value: statusF, options: [['', 'All statuses'], 'Pending', 'Approved', 'Rejected'] },
         { key: 'type', label: 'Request type', value: typeF, options: [['', 'All types'], ...typeOptions] },
       ]} onApply={draft => { onStatusChange({ target: { value: draft.status } }); onTypeChange({ target: { value: draft.type } }) }} />}
-      {hasFilters && <button type="button" className="approval-clear" onClick={onClearFilters}>Clear filters</button>}
+      {hasFilters && <button type="button" className="approval-clear" aria-label="Clear filters" onClick={onClearFilters}>{phone && <Icon name="x" size={20} />}<span>Clear filters</span></button>}
     </div>
   )
 }
@@ -672,11 +673,13 @@ export default function Approvals() {
     const waitingLong = myPending.filter(a => Number.isFinite(Date.parse(a.ts || '')) && Date.now() - Date.parse(a.ts) >= 7 * 86400000).length
     return (
       <div className="page approvals-page">
+        {phone && <FilterBar {...filterBarProps} />}
         <div className="approval-head"><div><h2 className="workspace-page-title workspace-page-title--topbar-duplicate"><Icon name="checkCircle" size={18} /> My approval requests</h2><p className="hint">Track decisions and approvers for requests raised by you.</p></div></div>
         {!phone && <WorkspaceInsights signals={[{ count: waitingLong, tone: 'warning', label: 'Requests waiting over 7 days', source: 'Rule' }]} onRefresh={store.refreshSharedData} />}
-        {refreshNotice}
+        {!phone && refreshNotice}
         <div className="approval-summary approval-summary-three">{['Pending', 'Approved', 'Rejected'].map(status => <button key={status} className={`approval-summary-card summary-${status.toLowerCase()}`} aria-pressed={statusF === status} onClick={() => setStatusF(statusF === status ? '' : status)}><b>{scopedApprovals.filter(a => a.requestedBy === role && a.status === status).length}</b><span>{status}</span></button>)}</div>
-        <FilterBar {...filterBarProps} />
+        {phone && refreshNotice}
+        {!phone && <FilterBar {...filterBarProps} />}
         <details className="approval-notice approval-notice-info"><summary>How approvals work</summary>
           <Icon name="info" size={14} /> Approvals are decided by LJS / AH, and technical approvals by LJS or AN. Your requests remain visible here until resolved.
         </details>
@@ -687,6 +690,7 @@ export default function Approvals() {
           const approval = store.approvals.find(item => item.id === requestTimelineId)
           if (!approval) return null
           return <div className="approval-drawer-layer"><button type="button" className="approval-drawer-backdrop" aria-label="Close approval timeline" onClick={() => setRequestTimelineId('')} /><aside className="approval-decision-drawer" role="dialog" aria-modal="true" aria-label={`Approval timeline ${approval.id}`}>
+            <PhoneOverlayHeader />
             <header><div><span className="approval-section-kicker">REQUEST TIMELINE</span><h3>{approval.id}</h3></div><button type="button" aria-label="Close approval timeline" onClick={() => setRequestTimelineId('')}>×</button></header>
             <div className="approval-decision-drawer-body"><div className={cardClass(approval, 'form-card')}><div className="approval-card-top"><span className={`pill ${pillFor(approval.status)}`}>{approval.status}</span><span>{approval.type}</span><span className="hint">Raised {stamp(approval.ts)}</span></div><div className="approval-ref"><RefLink a={approval} /></div><Detail a={approval} /><RoleChips a={approval} /><div className="approval-decision-history"><h4>Decision history</h4>{Object.entries(approval.decisions || {}).length ? Object.entries(approval.decisions || {}).map(([approver, decision]) => <div key={approver}><b>{displayRole(approver)}</b><span>{decision.d}{decision.c ? ` — ${decision.c}` : ''}</span><small>{stamp(decision.when)}</small></div>) : <p className="hint">No decisions recorded yet.</p>}</div></div><QuickLinks a={approval} />{approval.oppId && <button className="primary" onClick={() => nav(`/proposal/${approval.oppId}`)}>Go to proposal workbench</button>}</div>
           </aside></div>
@@ -698,17 +702,21 @@ export default function Approvals() {
   // ---- Approver / admin workbench ----------------------------------------
   const oldestForMe = [...forMe].sort((a, b) => (a.ts || '').localeCompare(b.ts || ''))[0]
   const pendingLong = pending.filter(a => Number.isFinite(Date.parse(a.ts || '')) && Date.now() - Date.parse(a.ts) >= 7 * 86400000).length
+  const approvalInsights = <WorkspaceInsights signals={[
+    { count: forMe.length, tone: forMe.length ? 'warning' : 'positive', label: 'Decisions waiting on you', source: 'Rule' },
+    { count: pendingLong, tone: pendingLong ? 'critical' : 'positive', label: 'Requests waiting over 7 days', source: 'Rule' },
+  ]} onRefresh={store.refreshSharedData} />
 
   return (
     <div className="page approvals-page">
+      {phone && <FilterBar {...filterBarProps} />}
       <div className="approval-head"><div><h2 className="workspace-page-title workspace-page-title--topbar-duplicate"><Icon name="checkCircle" size={18} /> Approvals — {displayRole(role)}</h2><p className="hint">Resolve requests, inspect linked records, and keep the pipeline moving.</p></div></div>
-      <WorkspaceInsights signals={[
-        { count: forMe.length, tone: forMe.length ? 'warning' : 'positive', label: 'Decisions waiting on you', source: 'Rule' },
-        { count: pendingLong, tone: pendingLong ? 'critical' : 'positive', label: 'Requests waiting over 7 days', source: 'Rule' },
-      ]} onRefresh={store.refreshSharedData} />
-      {refreshNotice}
+      {!phone && approvalInsights}
+      {!phone && refreshNotice}
       <div className="approval-summary"><div className="approval-summary-card summary-pending"><b>{forMe.length}</b><span>Needs your decision</span></div><div className="approval-summary-card summary-waiting"><b>{others.length}</b><span>Awaiting others</span></div><div className="approval-summary-card summary-decided"><b>{decided.length}</b><span>Approved requests</span></div></div>
-      <FilterBar {...filterBarProps} />
+      {phone && approvalInsights}
+      {phone && refreshNotice}
+      {!phone && <FilterBar {...filterBarProps} />}
       <div className="approval-explainer"><span className="hint">
           Approve moves the request forward. Reject stops it and allows the owner to submit a new request with a comment.
           Joint gates resolve once every named approver has decided.
@@ -802,6 +810,7 @@ export default function Approvals() {
         return <div className="approval-drawer-layer">
           <button type="button" className="approval-drawer-backdrop" aria-label="Close decision details" onClick={() => setDecisionDrawerId('')} />
           <aside className="approval-decision-drawer" role="dialog" aria-modal="true" aria-label={`Approval ${approval.id} decision details`}>
+            <PhoneOverlayHeader />
             <header><div><span className="approval-section-kicker">DECISION REVIEW</span><h3>{approval.id}</h3></div><button type="button" aria-label="Close decision details" onClick={() => setDecisionDrawerId('')}>×</button></header>
             <div className="approval-decision-drawer-body">
               <PendingCard a={approval} role={role} store={store} myTurn={myTurn}

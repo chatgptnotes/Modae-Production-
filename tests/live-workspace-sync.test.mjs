@@ -280,7 +280,7 @@ test('the store retains internal sync state without rendering status messaging',
   const dashboard = read('src/pages/MyDashboard.jsx')
   assert.match(store, /useState\(\(\) => supabaseConfigError \? 'config-error' : datastore\.dbEnabled\(\) \? 'connecting' : 'offline'\)/)
   assert.match(store, /setLiveSyncStatus\('live'\)/)
-  assert.match(store, /StoreCtx\.Provider value=\{\{ \.\.\.api, authReady, liveSyncStatus, syncDiagnostics, adminSaveState \}\}/)
+  assert.match(store, /StoreCtx\.Provider value=\{\{ \.\.\.api, authReady, liveSyncStatus: workspaceSyncStatus\(/)
   assert.doesNotMatch(dashboard, /LiveSyncBadge|store\.liveSyncStatus|Local only|Sync error|Reconnecting/)
   const app = read('src/App.jsx')
   assert.doesNotMatch(app, /SyncNotice|workspace-sync-notice|Supabase sync unavailable|local data only/)

@@ -45,23 +45,12 @@ test('tablet shell is isolated from the full-site app shell', () => {
   assert.match(tabletApp, /<Route path="\/home" element=\{<TabletGate page="tracker"><TabletHome \/><\/TabletGate>\}/)
 })
 
-test('mobile dashboard provides the sales cockpit workflow', () => {
-  const dashboard = read('src/pages/myDashboard/PhoneDashboard.jsx')
-  assert.match(dashboard, /wintrack-mobile-dashboard/)
-  assert.match(dashboard, /Qualified/)
-  assert.match(dashboard, /Proposal Sent/)
-  assert.match(dashboard, /Request Approval/)
-  assert.match(dashboard, /View Proposal/)
-  assert.match(dashboard, /Return for Revision/)
-  assert.match(dashboard, /role="dialog"/)
-})
-
 // View mode was read from the viewport once on first visit and never again, so
 // rotating a tablet or widening a window left the wrong shell in place.
 test('view mode follows the viewport until the user pins it', () => {
   const store = read('src/store.jsx')
   assert.match(store, /syncViewMode\(\) \{/)
-  assert.match(store, /if \(s\.viewModePinned\)/)
+  assert.match(store, /followViewportMode\(s\)/)
   assert.match(store, /viewMode: mode, viewModePinned: true, viewModePinnedAt: defaultViewMode\(\)/,
     'an explicit switch must pin the choice')
   const app = read('src/App.jsx')

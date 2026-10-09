@@ -13,8 +13,8 @@ import {
 } from './seed.js'
 import { leadConfig, opportunityOwnerFor, routeOwner, expiredLeadDeadline, aiAuditDetail } from './leadRules.js'
 import { withoutSimulated, simulatedCount } from './simulatedLeads.js'
-import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, defaultViewMode, VIEW_MODE_PREFERENCE_REV } from './appState.js'
-import { unitCostINR, unitSellINR, setRoleNameConfig, nowIST, toISTISOString, canManagePriceLists } from './utils.js'
+import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, defaultViewMode, followViewportMode, VIEW_MODE_PREFERENCE_REV } from './appState.js'
+import { unitCostINR, unitSellINR, setRoleNameConfig, nowIST, toISTISOString, canManagePriceLists, isAdminRole } from './utils.js'
 import { PRICE_SOURCES, isConfirmableSparesLine, normalizePriceFields, sparesLineFinancials } from './pricing.js'
 import { validServiceRatePatch, validPriceListParts } from './priceListEditing.js'
 import { clarificationTopic } from './leadClarification.js'
@@ -33,8 +33,10 @@ import {
 import { releaseState, transitionBlockers } from './gates.js'
 import { clearSupabaseSession, isSupabaseAuthError, supabase, supabaseConfigError } from './supabase.js'
 import { isLocalDemoSession } from './authMode.js'
+import { workspaceSyncStatus } from './syncStatus.js'
 import { readLiveData, startLiveEvents } from './liveSync.js'
 import { purgeWorkspace } from './workspacePurge.js'
+import { applySparesBatchToState } from './sparesBatchState.js'
 
 const StoreCtx = createContext(null)
 const workflowTransition = (from, to, reason = '', id = null) => ({
@@ -138,6 +140,7 @@ const localSnapshot = state => ({
   rateSheets: state.rateSheets,
   // Browser-only workspaces have no remote catalogue to recover on reload.
   ...(datastore.dbEnabled() ? {} : { priceLists: state.priceLists }),
+  adhocParts: state.adhocParts,
   auth: state.auth,
   role: state.role,
   roles: state.roles,
@@ -1519,7 +1522,7 @@ export function StoreProvider({ children }) {
 
     addUser(user) {
       setState(s => {
-        if (!ROLES[s.role]?.admin || !user?.email) return s
+        if (!isAdminRole(s.roles || s.role) || !user?.email) return s
         if (s.users.some(u => String(u.email || '').toLowerCase() === String(user.email).toLowerCase())) return s
         const nextUser = { ...user, roles: userRoles(user) }
         return withAudit({ ...s, users: [...s.users, nextUser] }, 'User added', user.id || user.email, `roles ${(nextUser.roles || []).join(', ') || '—'}`)
@@ -1528,10 +1531,11 @@ export function StoreProvider({ children }) {
 
     updateUser(id, patch) {
       setState(s => {
+        if (!isAdminRole(s.roles || s.role)) return s
         const users = s.users.map(u => (u.id === id ? { ...u, ...patch, roles: patch.roles ? userRoles({ ...u, ...patch }) : userRoles(u) } : u))
         const authUser = s.auth?.user
         const isCurrentUser = authUser?.id === id
-        const auth = isCurrentUser && (patch.email !== undefined || patch.name !== undefined || patch.role !== undefined)
+        const auth = isCurrentUser && (patch.email !== undefined || patch.name !== undefined || patch.role !== undefined || patch.roles !== undefined)
           ? { ...s.auth, user: {
             ...authUser,
             ...(patch.email !== undefined ? { email: patch.email } : {}),
@@ -1588,14 +1592,7 @@ export function StoreProvider({ children }) {
     // wrong shell in place: the mode was read from the viewport once on first
     // visit and never again. Only follows the viewport until someone chooses.
     syncViewMode() {
-      setState(s => {
-        const next = defaultViewMode()
-        if (s.viewModePinned) {
-          if (!s.viewModePinnedAt || s.viewModePinnedAt === next) return s
-          return { ...s, viewMode: next, viewModePinned: false, viewModePinnedAt: next }
-        }
-        return next === s.viewMode ? s : { ...s, viewMode: next }
-      })
+      setState(s => followViewportMode(s))
     },
 
     // ---- Joint approvals (BT flow: needed:[roles] × decisions) ------------
@@ -2030,6 +2027,23 @@ export function StoreProvider({ children }) {
     },
 
     // ---- Spares workbench --------------------------------------------------
+    async updateSparesLines(oppId, changes, expectedCosting) {
+      let outcome = { ok: false, error: 'The changes could not be applied. Please try again.' }
+      setState(s => {
+        outcome = applySparesBatchToState(s, oppId, changes, expectedCosting)
+        if (!outcome.ok) return s
+        let next = { ...s, sparesLines: outcome.lines }
+        for (const change of changes) {
+          const detail = Object.entries(change.patch).filter(([field, value]) => value !== change.before[field])
+            .map(([field, value]) => `${field}: ${String(change.before[field] ?? '')} -> ${String(value ?? '')}`).join('; ')
+          next = withAudit(next, 'Spares line updated', oppId, `${change.id} — ${detail}`)
+        }
+        return next
+      })
+      // React commits before the caller checks sync or leaves the review.
+      await new Promise(resolve => setTimeout(resolve, 0))
+      return { ok: outcome.ok, error: outcome.error }
+    },
     updateSparesLine(id, patch) {
       setState(s => {
         const current = s.sparesLines.find(l => l.id === id)
@@ -2804,7 +2818,7 @@ export function StoreProvider({ children }) {
     return () => window.removeEventListener('focus', onFocus)
   }, [])
 
-  return <StoreCtx.Provider value={{ ...api, authReady, liveSyncStatus, syncDiagnostics, adminSaveState }}>{children}</StoreCtx.Provider>
+  return <StoreCtx.Provider value={{ ...api, authReady, liveSyncStatus: workspaceSyncStatus({ status: liveSyncStatus, enabled: datastore.dbEnabled(), localDemo: isLocalDemoSession(state), configError: supabaseConfigError }), syncDiagnostics, adminSaveState }}>{children}</StoreCtx.Provider>
 }
 
 export const useStore = () => useContext(StoreCtx)

@@ -55,8 +55,8 @@ test('the dashboard uses shared top-bar controls without a duplicate insight rai
 
 test('inbox preview has separate qualify and open-page destinations', () => {
   const inbox = read('src/pages/Inbox.jsx')
-  assert.match(inbox, /previewLead\.status === 'Qualified' \? <button[\s\S]*?nav\(`\/register\/\$\{previewLead\.id\}`\)/)
-  assert.match(inbox, /nav\(`\/inbox\/\$\{previewLead\.id\}`\)/)
+  assert.match(inbox, /nav\(lead\.status === 'Qualified' \? `\/register\/\$\{lead\.id\}` : `\/inbox\/\$\{lead\.id\}`\)/)
+  assert.match(inbox, /nav\(`\/inbox\/\$\{lead\.id\}`\)/)
 })
 
 test('approver queue provides a decision drawer entry point', () => {

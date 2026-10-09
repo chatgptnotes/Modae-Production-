@@ -66,7 +66,7 @@ test('win/loss analysis provides an intentional empty-state insight model', () =
 
 test('detailed analytics leads with operational win/loss tables instead of the old reason card', () => {
   const analytics = read('src/pages/Analytics.jsx')
-  assert.match(analytics, /winLossAnalysis\(opps, store\.competitors, \{ commercial: comm \}\)/)
+  assert.match(analytics, /winLossAnalysis\(outcomeOpps, store\.competitors, \{ commercial: comm \}\)/)
   assert.match(analytics, /className="analysis-table analysis-reason-table"/)
   assert.match(analytics, /className="analysis-table closed-opportunity-register"/)
   assert.match(analytics, /className="analysis-table open-pipeline-register"/)
@@ -211,13 +211,13 @@ test('workspace view is controlled from the top bar and dashboard navigation sta
   assert.match(toggle, /onClick=\{\(\) => setScope\(isGlobal \? 'my' : 'global'\)\}/)
   assert.match(toggle, /workspace-view-switch__thumb/)
   assert.match(toggle, /isGlobal \? 'Global View' : 'My View'/)
-  assert.match(styles, /\.workspace-view-switch\[aria-checked="true"\][^{]*\{[^}]*background-color: #FFF !important/)
-  assert.match(styles, /workspace-view-switch__thumb[^}]*width: 8px; height: 26px;[^}]*border-radius: 999px/)
-  assert.match(styles, /workspace-view-switch__label[^}]*max-width: 90px/)
-  assert.match(styles, /workspace-view-switch\[aria-checked="true"\] \.workspace-view-switch__thumb[^}]*translateX\(104px\)/)
-  assert.match(styles, /\.workspace-view-switch__thumb[^}]*background-color: #282828/)
+  assert.match(styles, /\.workspace-view-switch\[aria-checked="true"\][^{]*\{[^}]*background-color: var\(--surface-default\) !important/)
+  assert.match(styles, /workspace-view-switch__thumb[^}]*width: 7px; height: 22px;[^}]*border-radius: 999px/)
+  assert.match(styles, /workspace-view-switch__label[^}]*max-width: 76px/)
+  assert.match(styles, /workspace-view-switch\[aria-checked="true"\] \.workspace-view-switch__thumb[^}]*translateX\(92px\)/)
+  assert.match(styles, /\.workspace-view-switch__thumb[^}]*background-color: var\(--border-control\)/)
   assert.match(styles, /\.workspace-view-switch\[aria-checked="true"\] \.workspace-view-switch__thumb[^}]*background-color: var\(--primary-fill\)/)
-  assert.match(styles, /\.workspace-view-switch\[aria-checked="true"\] \.workspace-view-switch__label[^}]*color: #282828 !important/)
+  assert.match(styles, /\.workspace-view-switch\[aria-checked="true"\] \.workspace-view-switch__label[^}]*color: var\(--text-primary\) !important/)
   assert.match(tablet, /<WorkspaceViewToggle \/>/)
 })
 
@@ -455,7 +455,7 @@ test('every internal role can open detailed reporting from their reporting actio
   assert.doesNotMatch(tabletApp, /path="\/dashboard"[^\n]*#forecast-details/)
   assert.match(app, /<Route path="\/dashboard" element=\{<Navigate to="\/my-dashboard" replace \/>\} \/>/)
   assert.match(tabletApp, /<Route path="\/dashboard" element=\{<Navigate to="\/my-dashboard" replace \/>\} \/>/)
-  assert.match(app, /<Route path="\/po" element=\{<PageGate page="po"><PurchaseOrders \/><\/PageGate>\} \/>/)
+  assert.match(app, /<Route path="\/order" element=\{<PageGate page="po"><PurchaseOrders \/><\/PageGate>\} \/>/)
   assert.match(app, /<Route path="\/analytics" element=\{<PageGate page="analytics"><Analytics \/><\/PageGate>\}/)
   assert.match(tabletApp, /<Route path="\/analytics" element=\{<TabletGate page="analytics"><Analytics \/><\/TabletGate>\}/)
   for (const role of Object.keys(ROLES).filter(r => r !== 'CUST')) {
@@ -512,7 +512,7 @@ test('win and loss reasons are grouped in the owner dashboard overview', () => {
 
 test('dashboard palette is semantic and contained to dashboard surfaces', () => {
   const styles = read('src/styles.css')
-  const palette = styles.slice(styles.indexOf('Dashboard semantic palette'))
+  const palette = styles.slice(styles.indexOf('Dashboard semantic palette'), styles.indexOf('/* Opportunities is a spreadsheet workspace'))
 
   assert.match(palette, /\.dashboard-page\s*\{[^}]*--dashboard-canvas:/s)
   assert.match(palette, /\.dashboard-page\s*\{[^}]*--dashboard-success:/s)
@@ -911,8 +911,8 @@ test('dashboard view-all actions open the matching workspaces', () => {
   assert.match(dashboard, /title="Act on these first"[\s\S]*?nav\('\/my'\)/)
   assert.match(dashboard, /title="My Opportunities \/ My Orders"[\s\S]*?nav\('\/opportunities'\)/)
   assert.match(app, /const PurchaseOrders = lazyWithRecovery\(\(\) => import\('\.\/pages\/PurchaseOrders\.jsx'\)\)/)
-  assert.match(app, /<Route path="\/po" element=\{<PageGate page="po"><PurchaseOrders \/><\/PageGate>\} \/>/)
-  assert.doesNotMatch(app, /<Route path="\/po" element=\{<Navigate to="\/proposal-sent"/)
+  assert.match(app, /<Route path="\/order" element=\{<PageGate page="po"><PurchaseOrders \/><\/PageGate>\} \/>/)
+  assert.match(app, /<Route path="\/po" element=\{<Navigate to="\/order" replace \/>\} \/>/)
   assert.match(myOpps, /<table className="sheet opportunity-list">/)
   assert.match(styles, /\.opportunity-list th, \.opportunity-list td \{[\s\S]*?white-space: normal/)
 })

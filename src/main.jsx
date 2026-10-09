@@ -9,6 +9,9 @@ import { DrawerProvider } from './drawer.jsx'
 import { registerSW } from './pwa.js'
 import { deploymentNeedsReset, resetAndReload, watchDeployment } from './deployment.js'
 import './styles.css'
+import './ui/workspaceHeadings.css'
+import './tablet/phoneDarkTheme.css'
+import './tablet/phonePageConsistency.css'
 
 async function boot() {
   if (deploymentNeedsReset()) {

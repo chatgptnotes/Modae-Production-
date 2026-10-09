@@ -1,0 +1,268 @@
+.phone-opportunity-customer { display: none; }
+
+@media screen and (max-width: 600px) {
+  .phone-opportunity-summary-disclosure { border-bottom: 1px solid var(--border-default); margin: 12px 0; }
+  .phone-opportunity-summary-disclosure > summary { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; cursor: pointer; }
+  .phone-opportunity-summary-disclosure > summary span { color: var(--text-secondary); font-size: 12px; margin-left: auto; }
+  .phone-opportunity-summary-disclosure > summary svg { flex: 0 0 16px; }
+  .phone-project-workbench { width: 100%; }
+  .phone-project-section, .phone-project-edit-field { width: 100%; display: grid; gap: 6px; font-size: 14px; }
+  .phone-project-edit-field { margin: 12px 0; }
+  .phone-project-section select, .phone-project-edit-field select { width: 100%; min-height: 44px; font-size: 16px; }
+  .phone-project-shared { margin-bottom: 12px; font-size: 14px; }
+  .phone-project-shared summary { min-height: 44px; cursor: pointer; padding: 10px 0; }
+  .phone-project-shared label { display: grid; gap: 4px; }
+  .phone-project-shared input { min-height: 44px; font-size: 16px; width: 100%; }
+  .phone-project-shared button { min-height: 44px; margin: 6px 6px 0 0; }
+  .phone-project-boq .phone-part-input span { font-size: 11px; }
+  .shell.tablet-mode .phone-project-boq button { min-height: 44px; }
+  .shell.tablet-mode .service-rate-layout { display: flex; flex-direction: column; gap: 16px; }
+  .shell.tablet-mode .service-form-grid { grid-template-columns: minmax(0, 1fr); }
+  .shell.tablet-mode .service-rate-workbench :is(input, select, textarea),
+  .shell.tablet-mode .service-delivery-close :is(input, select, textarea) { font-size: 16px; min-height: 44px; max-width: 100%; }
+  .phone-sourcing-overview h2 { font-size: 22px; margin: 8px 0; }
+  .phone-sourcing-overview > p { font-size: 15px; color: var(--text-secondary); margin: 0 0 16px; }
+  .phone-sourcing-counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 14px 0; border-block: 1px solid var(--border-default); text-align: center; }
+  .phone-sourcing-counts b { display: block; font-size: 27px; }
+  .phone-sourcing-counts span { display: block; font-size: 13px; color: var(--text-secondary); }
+  .phone-sourcing-overview h3 { font-size: 16px; margin: 20px 0 8px; }
+  .shell.tablet-mode .phone-sourcing-overview > button { display: flex; gap: 12px; align-items: center; min-height: 72px; border: 0; border-bottom: 1px solid var(--border-default); border-radius: 0; background: transparent; box-shadow: none; color: var(--text-primary); width: 100%; text-align: left; padding: 14px 0; white-space: normal; }
+  .phone-sourcing-overview > button > div { flex: 1; min-width: 0; }
+  .phone-sourcing-overview button strong { display: block; font-size: 16px; }
+  .phone-sourcing-overview button span { display: block; font-size: 13px; color: var(--text-secondary); margin-top: 5px; }
+  .shell.tablet-mode .phone-sourcing-overview > button.primary { background: var(--primary-fill); color: var(--text-on-accent); border-radius: 8px; min-height: 48px; justify-content: center; text-align: center; margin-top: 20px; padding: 12px; }
+  .shell.tablet-mode .is-phone-overview :is(.sourcing-table-card, .sourcing-handoff-warning, .spares-price-warning, .sourcing-clarification-context, .sourcing-pricing-approval, .sourcing-flow-warning) { display: none; }
+  .shell.tablet-mode .phone-parts-back { min-height: 44px; margin: 4px 0 12px; }
+  .shell.tablet-mode [data-phone-task-hidden="true"] { display: none !important; }
+  .phone-task-navigation { border-bottom: 1px solid var(--border-default); padding: 12px 0 16px; margin-bottom: 16px; }
+  .phone-task-navigation p { font-size: 13px; color: var(--text-secondary); margin: 0 0 8px; }
+  .phone-task-navigation h2 { font-size: 20px; margin: 0 0 12px; }
+  .phone-task-navigation label { display: grid; gap: 5px; font-size: 13px; }
+  .phone-task-navigation select { min-height: 44px; font-size: 16px; width: 100%; }
+  .phone-task-navigation > div { display: flex; gap: 8px; margin: 10px 0; }
+  .shell.tablet-mode .phone-task-navigation button { flex: 1; min-height: 44px; font-size: 14px; }
+  .phone-task-navigation > small { color: var(--text-secondary); font-size: 12px; }
+  .shell.tablet-mode .phone-opportunities-header { padding: 0 16px; }
+  .shell.tablet-mode .opportunities-page,
+  .shell.tablet-mode .opportunity-workbench-page { font-family: Inter, system-ui, sans-serif; font-size: 15px; line-height: 1.45; }
+  .shell.tablet-mode[data-theme="dark"] :is(.opportunities-page, .opportunity-workbench-page) { --text-secondary: #b6bec9; }
+  .shell.tablet-mode .opportunities-page { padding-top: 8px; padding-bottom: calc(160px + env(safe-area-inset-bottom)); }
+  .shell.tablet-mode .tracker-grid-shell > .toolbar { display: flex !important; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0; border: 0; background: transparent; }
+  .shell.tablet-mode .tracker-grid-shell > .toolbar .tracker-toolbar-filters { flex: 1; min-width: 0; }
+  .shell.tablet-mode .tracker-grid-shell > .toolbar .tracker-search-group { width: 100%; min-width: 0; height: 48px; border: 1px solid var(--border-default); border-radius: 8px; background: var(--surface-default); }
+  .shell.tablet-mode .tracker-search { min-width: 0; flex: 1; }
+  .shell.tablet-mode .tracker-search input { font-size: 16px; min-width: 0; }
+  .shell.tablet-mode .tracker-search-filter { width: 44px !important; min-width: 44px !important; min-height: 44px; flex: 0 0 44px !important; }
+  .shell.tablet-mode .tracker-search-filter svg { width: 20px; height: 20px; }
+  .shell.tablet-mode .tracker-page .tracker-toolbar-actions { display: flex !important; width: auto; flex: 0 0 auto; }
+  .shell.tablet-mode .tracker-page .tracker-toolbar-actions .tracker-more-menu { width: 44px !important; min-width: 44px !important; }
+  .shell.tablet-mode .tracker-page .tracker-toolbar-actions .tracker-more-trigger { width: 44px !important; min-width: 44px !important; }
+  .shell.tablet-mode .tracker-toolbar-actions .tracker-more-trigger { min-width: 44px; min-height: 48px; padding: 10px !important; font-size: 14px; }
+  .shell.tablet-mode .tracker-toolbar-actions .tracker-create-logo { position: fixed; z-index: 43; bottom: calc(76px + env(safe-area-inset-bottom)); right: 16px; max-width: calc(100vw - 32px); min-height: 48px; margin: 0; padding: 12px 18px !important; border-radius: 24px !important; background: var(--primary-fill) !important; color: var(--primary-text, #fff) !important; font-size: 15px; box-shadow: 0 4px 12px #0002; }
+  body:has([aria-modal="true"]) .shell.tablet-mode .tracker-create-logo,
+  body:has(input:focus, textarea:focus) .shell.tablet-mode .tracker-create-logo { display: none; }
+  .shell.tablet-mode .tracker-filter-chips { flex-basis: 100%; }
+  .shell.tablet-mode .tracker-more-menu-list { right: 0; left: auto; max-width: calc(100vw - 32px); }
+  .shell.tablet-mode .phone-opportunity-list-label { margin: 16px 0 2px; font-size: 13px; color: var(--text-secondary); }
+  .shell.tablet-mode .mobile-opportunity-cards article > a.phone-record { position: relative; gap: 6px; padding: 18px 24px 18px 0; }
+  .shell.tablet-mode .phone-opportunity-row .phone-record > strong { font-size: 17px; font-weight: 700; }
+  .shell.tablet-mode .phone-opportunity-row .phone-opportunity-name { font-size: 15px; }
+  .shell.tablet-mode .phone-opportunity-row .phone-record > svg { position: absolute; right: 0; top: 23px; color: var(--text-secondary); }
+  .phone-opportunity-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 5px; font-size: 13px; }
+  .phone-opportunity-meta b { margin-left: auto; color: var(--text-primary); font-size: 16px; font-variant-numeric: tabular-nums; }
+  .phone-opportunity-stage { padding: 3px 8px; border-radius: 5px; color: var(--text-secondary); background: var(--surface-sunken); }
+  .phone-opportunity-overdue { color: var(--status-danger, var(--lost-text)); }
+  .shell.tablet-mode .tracker-pagination { display: grid; gap: 10px; padding: 16px 0; }
+  .shell.tablet-mode .tracker-pagination-controls { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+  .shell.tablet-mode .tracker-pagination-controls button { min-height: 44px; }
+  .shell.tablet-mode .tracker-pagination-controls button:first-child,
+  .shell.tablet-mode .tracker-pagination-controls button:last-child { display: none; }
+  .shell.tablet-mode .tracker-page .sheet-tabs { display: none; }
+
+  .shell.tablet-mode .opportunity-workbench-page { padding-top: 8px; }
+  .shell.tablet-mode .opportunity-workbench-page .opp-summary { padding: 0; border: 0; background: transparent; box-shadow: none; }
+  .shell.tablet-mode .opportunity-workbench-page .back-to-opportunities { min-height: 44px; display: inline-flex; align-items: center; font-size: 14px; }
+  .shell.tablet-mode .opportunity-workbench-page .opp-summary-title { gap: 8px; }
+  .shell.tablet-mode .opportunity-workbench-page .opp-summary-title h1 { display: block; flex-basis: 100%; width: 100%; margin: 4px 0 8px; font-size: 24px; line-height: 1.2; letter-spacing: -.035em; overflow-wrap: anywhere; }
+  .shell.tablet-mode .opportunity-workbench-page .opp-id { display: block; width: fit-content; margin-bottom: 10px; font-size: 13px; letter-spacing: 0; }
+  .shell.tablet-mode .opportunity-workbench-page .opp-title-separator { display: none; }
+  .shell.tablet-mode .phone-opportunity-customer { display: block; margin: 12px 0 0; color: var(--text-secondary); font-size: 15px; }
+  .shell.tablet-mode .opportunity-workbench-page .opp-summary-grid.clean-summary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0; padding: 0; margin: 16px 0; background: var(--surface-default); }
+  .shell.tablet-mode .opportunity-workbench-page .clean-summary-grid .summary-meta-item { border: 0; border-bottom: 1px solid var(--border-default); min-height: 74px; padding: 12px; }
+  .shell.tablet-mode .opportunity-workbench-page .clean-summary-grid .summary-meta-item:nth-child(1) { order: 1; border-right: 1px solid var(--border-default); }
+  .shell.tablet-mode .opportunity-workbench-page .clean-summary-grid .summary-meta-item:nth-child(3) { order: 2; }
+  .shell.tablet-mode .opportunity-workbench-page .clean-summary-grid .summary-meta-item:nth-child(2) { order: 3; border-right: 1px solid var(--border-default); }
+  .shell.tablet-mode .opportunity-workbench-page .clean-summary-grid .summary-due { order: 4; }
+  .shell.tablet-mode .opportunity-workbench-page .clean-summary-grid .opp-summary-action { order: 5; grid-column: 1 / -1; border-bottom: 0; background: var(--amber-fill); }
+  .shell.tablet-mode .opportunity-workbench-page .clean-summary-grid .summary-meta-item > span { font-size: 12px; line-height: 1.3; text-transform: none; letter-spacing: 0; color: var(--text-secondary); margin-bottom: 5px; }
+  .shell.tablet-mode .opportunity-workbench-page .clean-summary-grid .summary-meta-item > b,
+  .shell.tablet-mode .opportunity-workbench-page .summary-meta-value > b { font-size: 15px; }
+  .shell.tablet-mode .opportunity-workbench-page .summary-meta-value { display: flex; flex-wrap: wrap; gap: 5px; }
+  .shell.tablet-mode .phone-opportunity-progress { margin: 16px 0; padding: 14px 12px; border: 1px solid var(--border-default); border-radius: 10px; background: var(--surface-default); }
+  .phone-progress-current { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; gap: 8px; align-items: center; }
+  .phone-progress-current > div { display: grid; gap: 4px; text-align: center; }
+  .phone-progress-current small { color: var(--text-secondary); font-size: 13px; }
+  .phone-progress-current strong { font-size: 17px; overflow-wrap: anywhere; }
+  .shell.tablet-mode .phone-progress-current button { min-width: 44px; min-height: 44px; padding: 0; }
+  .phone-progress-dots { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin: 14px 0 4px; }
+  .phone-progress-dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--border-default); }
+  .phone-progress-dots .done { background: var(--won-text); }
+  .phone-progress-dots .current { background: var(--primary-fill); }
+  .phone-progress-disclosure > summary { min-height: 44px; display: grid; place-items: center; cursor: pointer; color: var(--primary-accent); font-size: 14px; }
+  .phone-progress-disclosure > summary::-webkit-details-marker { display: none; }
+  .phone-progress-disclosure > div { display: grid; gap: 6px; }
+  .shell.tablet-mode .phone-progress-disclosure button { display: flex; gap: 12px; justify-content: start; padding: 10px; min-height: 44px; text-align: left; white-space: normal; }
+  .phone-progress-disclosure button svg { margin-left: auto; flex-shrink: 0; }
+  .phone-progress-disclosure button[aria-current="step"] { border-color: var(--primary-accent); }
+  .shell.tablet-mode .phone-progress-edit { display: block; min-height: 44px; margin: 8px auto 0; }
+  .shell.tablet-mode .phone-opportunity-details-link { min-height: 44px; margin-bottom: 12px; padding: 8px 0; border: 0 !important; background: transparent !important; box-shadow: none !important; color: var(--text-secondary) !important; font-size: 14px; }
+
+  .shell.tablet-mode .opportunity-workbench-page .sourcing-spares-workbench { padding: 0; background: transparent; border: 0; box-shadow: none; }
+  .shell.tablet-mode .phone-sourcing-workbench { padding-bottom: calc(var(--phone-sourcing-footer-height, 180px) + 16px); }
+  .shell.tablet-mode .phone-sourcing-workbench > .section-title { font-size: 17px; line-height: 1.4; }
+  .shell.tablet-mode .phone-sourcing-workbench .sourcing-table-card { border: 0; background: transparent; padding: 0; box-shadow: none; }
+  .shell.tablet-mode .phone-sourcing-workbench .sourcing-table-heading { display: flex; flex-wrap: wrap; padding: 12px 0; gap: 10px; }
+  .shell.tablet-mode .phone-sourcing-workbench .sourcing-table-heading > div:first-child { display: none; }
+  .shell.tablet-mode .phone-sourcing-workbench .sourcing-table-heading-actions { width: 100%; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+  .shell.tablet-mode .phone-sourcing-workbench .sourcing-currency-indicator { display: none; }
+  .shell.tablet-mode .phone-sourcing-workbench :is(.sourcing-currency-view, .sourcing-add-part-link) { min-height: 44px; font-size: 14px; }
+  .phone-costing-basis { margin-bottom: 12px; border: 1px solid var(--border-default); border-radius: 8px; background: var(--surface-default); }
+  .phone-costing-basis summary { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 12px; min-height: 48px; cursor: pointer; }
+  .phone-costing-basis summary span { margin-left: auto; font-size: 12px; color: var(--text-secondary); }
+  .shell.tablet-mode .phone-costing-basis .sourcing-costing-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 12px; }
+  .shell.tablet-mode .phone-costing-basis .sourcing-costing-controls > b { display: none; }
+  .shell.tablet-mode .phone-costing-basis .sourcing-costing-controls label { display: flex; flex-wrap: wrap; gap: 5px; font-size: 13px; }
+  .shell.tablet-mode .phone-costing-basis .sourcing-costing-controls input { min-width: 0; width: 100%; font-size: 16px; min-height: 44px; }
+  .shell.tablet-mode .phone-costing-basis .sourcing-costing-controls > span { grid-column: 1 / -1; font-size: 12px; }
+  .phone-sourcing-lines { display: grid; gap: 12px; }
+  .phone-sourcing-line { padding: 14px; border: 1px solid var(--border-default); border-radius: 10px; background: var(--surface-default); min-width: 0; }
+  .phone-sourcing-line header { display: flex; align-items: start; flex-wrap: wrap; gap: 8px; }
+  .phone-sourcing-line header strong { flex: 1; min-width: 100px; font-size: 17px; overflow-wrap: anywhere; }
+  .phone-source-status { display: inline-flex; align-items: center; gap: 4px; padding: 3px 7px; font-size: 12px; border-radius: 5px; color: var(--amber-text); background: var(--amber-fill); }
+  .phone-source-status--confirmed { color: var(--won-text); background: var(--won-fill); }
+  .phone-sourcing-line p { margin: 8px 0; font-size: 15px; overflow-wrap: anywhere; }
+  .shell.tablet-mode .phone-sourcing-line .phone-source-link { display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 0; border: 0 !important; background: transparent !important; box-shadow: none !important; color: var(--text-secondary) !important; text-align: left; white-space: normal; overflow-wrap: anywhere; font-size: 13px; }
+  .phone-sourcing-line-values, .phone-sourcing-editor-totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding: 12px 0; margin: 0; border-top: 1px solid var(--border-default); }
+  .phone-sourcing-line-values dt, .phone-sourcing-editor-totals dt { color: var(--text-secondary); font-size: 12px; }
+  .phone-sourcing-line-values dd, .phone-sourcing-editor-totals dd { margin: 4px 0 0; font-size: 16px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .phone-sourcing-line-total { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border-default); font-size: 15px; }
+  .phone-sourcing-line-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+  .shell.tablet-mode .phone-sourcing-line-actions button, .shell.tablet-mode .phone-sourcing-confirm { min-height: 44px; font-size: 14px; white-space: normal; }
+  .shell.tablet-mode .phone-sourcing-line-actions button,
+  .shell.tablet-mode .phone-sourcing-workbench .sourcing-add-part-link { background: var(--surface-default) !important; color: var(--text-primary) !important; border: 1px solid var(--border-default) !important; box-shadow: none !important; }
+  .shell.tablet-mode .phone-sourcing-confirm { width: 100%; margin-top: 8px; }
+  .phone-sourcing-restricted { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); }
+  .phone-sourcing-line.is-removed { opacity: .75; }
+  .shell.tablet-mode .phone-sourcing-footer { position: fixed; z-index: 41; bottom: calc(56px + env(safe-area-inset-bottom)); left: 0; right: 0; padding: 12px 16px; border-top: 1px solid var(--border-default); background: var(--surface-default); box-shadow: 0 -4px 16px #0001; }
+  .phone-sourcing-footer summary { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 18px; gap: 12px; align-items: center; min-height: 44px; cursor: pointer; font-size: 12px; color: var(--text-secondary); }
+  .phone-sourcing-footer summary strong { display: block; font-size: 17px; color: var(--text-primary); overflow-wrap: anywhere; }
+  .phone-sourcing-footer dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 8px 0 12px; font-size: 12px; }
+  .phone-sourcing-footer dd { margin: 4px 0 0; font-size: 15px; }
+  .phone-sourcing-footer p { margin: 6px 0; font-size: 12px; line-height: 1.35; }
+  .shell.tablet-mode .phone-sourcing-footer > button { width: 100%; min-height: 46px; margin-top: 8px; font-size: 15px; }
+  .phone-sourcing-footer .is-negative, .phone-sourcing-footer .is-negative strong { color: var(--lost-text); }
+  body:has([aria-modal="true"]) .phone-sourcing-footer, .phone-sourcing-footer.is-editing { visibility: hidden; pointer-events: none; }
+  .phone-sourcing-editor-fields { display: grid; gap: 14px; }
+  .phone-sourcing-editor-fields > label { display: grid; gap: 5px; font-size: 14px; }
+  .phone-sourcing-editor-fields :is(input, textarea) { width: 100%; min-height: 44px; font-size: 16px; }
+  .phone-sourcing-editor-fields .sourcing-edit-number { display: flex; gap: 8px; align-items: center; width: 100%; }
+  .phone-sourcing-editor-fields .sourcing-read-value { flex: 1; min-height: 44px; text-align: left; font-size: 16px; }
+  .phone-sourcing-editor-fields .sourcing-edit-input { flex: 1; min-width: 0; font-size: 16px; }
+  .phone-sourcing-editor-totals { margin-top: 16px; }
+  .phone-sourcing-editor-actions { display: flex; justify-content: space-between; gap: 12px; margin-top: 16px; }
+  .phone-sourcing-editor-actions button { min-height: 44px; }
+}
+
+@media screen and (max-width: 600px) {
+  .shell.tablet-mode .phone-sourcing-workbench { padding-bottom: 16px; }
+  .shell.tablet-mode .phone-sourcing-workbench > .section-title,
+  .shell.tablet-mode .phone-sourcing-workbench .sourcing-table-heading > div:first-child { display: none; }
+  .shell.tablet-mode .phone-sourcing-workbench .sourcing-handoff-warning { font-size: 13px; }
+  .shell.tablet-mode .phone-sourcing-workbench .sourcing-table-card { border: 0; box-shadow: none; padding: 0; background: transparent; }
+  .phone-parts-workspace { min-width: 0; scroll-margin-top: 12px; }
+  .phone-parts-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 18px 0 12px; }
+  .phone-parts-title h2 { font-size: 21px; margin: 0; letter-spacing: -.025em; }
+  .phone-parts-title p { color: var(--text-secondary); margin: 4px 0; font-size: 13px; }
+  .shell.tablet-mode .phone-parts-workspace button { min-height: 44px; font-size: 14px; white-space: normal; }
+  .phone-parts-search { display: flex; gap: 8px; align-items: center; border: 1px solid var(--border-default); border-radius: 8px; background: var(--surface-default); padding: 0 12px; }
+  .shell.tablet-mode .phone-parts-search input { width: 100%; min-width: 0; border: 0; background: transparent; font-size: 16px; min-height: 46px; box-shadow: none; padding: 8px 0; }
+  .phone-parts-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 10px 0; border-bottom: 1px solid var(--border-default); }
+  .shell.tablet-mode .phone-parts-filters button { display: flex; align-items: center; gap: 6px; justify-content: space-between; background: transparent; box-shadow: none; border-color: transparent; color: var(--text-secondary); padding: 6px 8px; text-align: left; }
+  .shell.tablet-mode .phone-parts-filters button[aria-pressed="true"] { color: var(--action-accent-ink); background: var(--action-accent-soft); border-color: var(--action-accent-border); }
+  .phone-parts-filters b { font-variant-numeric: tabular-nums; }
+  .phone-parts-tools { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 0; }
+  .phone-parts-tools > p { flex-basis: 100%; margin: 0; }
+  .phone-parts-tools > label { display: grid; gap: 4px; width: 100%; }
+  .phone-parts-tools select { min-height: 44px; font-size: 16px; width: 100%; }
+  .phone-parts-tools > button { flex: 1; }
+  .phone-parts-selection { padding: 12px 0; border-bottom: 1px solid var(--border-default); }
+  .phone-parts-selection > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 8px; }
+  .phone-parts-list { background: var(--surface-default); }
+  .phone-part-row { border-bottom: 1px solid var(--border-default); padding: 14px 0; }
+  .phone-part-main { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .phone-part-identity { flex: 1; min-width: 0; display: grid; gap: 4px; overflow-wrap: anywhere; }
+  .phone-part-identity strong { font-size: 16px; line-height: 1.3; }
+  .phone-part-identity > span { font-size: 13px; color: var(--text-secondary); }
+  .phone-part-identity small { font-size: 12px; }
+  .phone-part-status { width: fit-content; padding: 3px 6px; border-radius: 4px; background: var(--status-warning-soft); color: var(--status-warning); }
+  .phone-part-status:is(.ready, .confirmed) { background: var(--status-success-soft); color: var(--status-success); }
+  .phone-part-status.removed { background: var(--surface-sunken); color: var(--text-secondary); }
+  .phone-part-values { display: grid; gap: 5px; flex: 0 1 115px; min-width: 0; font-size: 13px; text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+  .shell.tablet-mode .phone-part-expand { flex: 0 0 36px; width: 36px; padding: 0; background: transparent; border: 0; box-shadow: none; }
+  .phone-part-main > input[type="checkbox"] { width: 22px; height: 22px; min-height: 22px; flex: 0 0 22px; accent-color: var(--action-accent); margin: 0 4px; }
+  .phone-part-input { display: grid; gap: 4px; flex: 0 0 105px; min-width: 0; text-align: right; font-size: 12px; }
+  .shell.tablet-mode .phone-part-input input { width: 100%; min-width: 0; min-height: 46px; font-size: 16px; text-align: right; border: 1px solid var(--border-control); }
+  .phone-part-row.is-modified .phone-part-input input { border-color: var(--action-accent); }
+  .phone-part-input small { color: var(--action-accent-ink); }
+  .phone-part-details { padding-top: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .phone-part-details > p { width: 100%; font-size: 13px; margin: 0; overflow-wrap: anywhere; }
+  .phone-part-details dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; gap: 12px; font-size: 13px; }
+  .phone-part-details dd { margin: 4px 0 0; font-size: 15px; }
+  .phone-parts-showing { font-size: 13px; color: var(--text-secondary); }
+  .shell.tablet-mode .phone-parts-more { width: 100%; }
+  .phone-parts-selection-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 0; }
+  .phone-parts-selection-actions > button { flex: 1 1 110px; }
+  .phone-parts-bottom { position: sticky; z-index: 3; bottom: calc(56px + env(safe-area-inset-bottom)); padding: 14px 0 6px; background: var(--surface-default); border-top: 1px solid var(--border-default); display: grid; gap: 8px; }
+  .phone-parts-bottom > p { font-size: 13px; margin: 0; color: var(--text-secondary); }
+  .phone-parts-bottom > small { color: var(--text-secondary); font-size: 12px; }
+  .phone-parts-totals { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .7fr); gap: 12px; }
+  .phone-parts-totals span { display: block; font-size: 12px; color: var(--text-secondary); }
+  .phone-parts-totals b { display: block; font-size: 19px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .phone-parts-totals .is-negative { color: var(--status-danger); }
+  .phone-parts-notice { padding: 12px; font-size: 14px; background: var(--surface-sunken); border-left: 3px solid var(--action-accent); overflow-wrap: anywhere; }
+  .phone-parts-batch-fields { display: grid; gap: 14px; margin: 12px 0; }
+  .phone-parts-batch-fields label { display: grid; gap: 6px; font-size: 14px; }
+  .shell.tablet-mode .phone-parts-batch-fields input { min-height: 46px; width: 100%; font-size: 16px; }
+  .phone-parts-batch-fields p { margin: 0; }
+  .phone-parts-review-title { font-size: 17px; margin: 16px 0; }
+  .phone-parts-review-totals { margin: 12px 0; border-bottom: 1px solid var(--border-default); }
+  .phone-parts-review-totals > div { display: grid; grid-template-columns: minmax(0, .8fr) repeat(2, minmax(0, 1fr)); gap: 8px; padding: 12px 0; border-top: 1px solid var(--border-default); font-size: 12px; }
+  .phone-parts-review-totals strong { text-align: right; font-size: 14px; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+  .phone-parts-review-totals b { text-align: right; color: var(--text-secondary); }
+  .phone-parts-errors { padding: 14px 0; border-bottom: 1px solid var(--border-default); }
+  .phone-parts-errors h3 { font-size: 16px; margin: 0 0 10px; }
+  .phone-parts-errors p { margin: 10px 0; display: grid; gap: 4px; font-size: 14px; overflow-wrap: anywhere; }
+  .phone-parts-errors span { color: var(--text-secondary); }
+  .phone-parts-change-list summary { min-height: 44px; cursor: pointer; padding: 12px 0; font-size: 15px; }
+  .phone-parts-change-list > div { display: grid; gap: 6px; padding: 12px 0; border-top: 1px solid var(--border-default); font-size: 13px; overflow-wrap: anywhere; }
+}
+
+@media screen and (max-width: 600px) {
+  .shell.tablet-mode[data-theme="dark"] :is(.phone-parts-workspace, .phone-sourcing-overview, .phone-task-navigation, .phone-project-boq) button:not(.primary) {
+    background: var(--surface-raised) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-control) !important;
+  }
+  .shell.tablet-mode[data-theme="dark"] .phone-parts-filters button[aria-pressed="true"] {
+    background: var(--phone-selection) !important;
+    border-color: var(--phone-accent) !important;
+  }
+  .shell.tablet-mode[data-theme="dark"] .phone-part-status:is(.ready, .confirmed) {
+    color: var(--status-success-text);
+    background: var(--status-success-bg);
+  }
+  .shell.tablet-mode[data-theme="dark"] .phone-part-status.attention {
+    color: var(--status-warning-text);
+    background: var(--status-warning-bg);
+  }
+}

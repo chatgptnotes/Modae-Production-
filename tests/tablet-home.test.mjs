@@ -3,10 +3,24 @@ import assert from 'node:assert/strict'
 
 import { ROLES, seedOpportunities } from '../src/seed.js'
 import { buildTabletTiles, TABLET_SECTIONS, tabletRoleGroup } from '../src/tablet/tabletTiles.js'
+import { topbarTitleFor } from '../src/ui/workspaceTitles.js'
 
 // A minimal store with the slices counts() reads. The tile registry only needs
 // the workload counts, not a full seeded store.
 const store = { opportunities: seedOpportunities, approvals: [], leads: [], poCompare: {} }
+
+test('order page uses the shared workspace title and purchase order icon', () => {
+  assert.deepEqual(topbarTitleFor('/order', 'LJS'), { label: 'Purchase Orders', icon: 'clipboardCheck' })
+})
+
+test('purchase order tiles use the canonical order route without changing role access', () => {
+  for (const [role, label] of [['RS', 'My Purchase Orders'], ['LJS', 'Purchase Orders'], ['ADMIN', 'Purchase Orders']]) {
+    const tile = buildTabletTiles({ ...store, role }).find(t => t.key === 'po')
+    assert.equal(tile?.to, '/order')
+    assert.equal(tile?.label, label)
+  }
+  assert.equal(buildTabletTiles({ ...store, role: 'CUST' }).some(t => t.key === 'po'), false)
+})
 
 // The tablet home screen went blank for every role once a tile kept a `show:`
 // reference to a local the same commit deleted. Modules are strict mode, so the

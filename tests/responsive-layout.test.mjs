@@ -26,7 +26,7 @@ test('Opportunities uses the available canvas instead of reserving outer white s
   const value = (rule, property) => rule.nodes.find(node => node.prop === property)?.value
   assert.ok(outer, 'the actual outer Opportunities wrapper must lose shared page padding')
   assert.ok(inner, 'the nested tracker must lose its own page padding')
-  assert.equal(value(outer, 'padding'), '0')
+  assert.equal(value(outer, 'padding'), '12px 0 0')
   assert.equal(value(inner, 'padding'), '0')
   assert.equal(value(title, 'padding-inline'), '12px')
   assert.equal(value(toolbar, 'padding-inline'), '0')
@@ -75,7 +75,7 @@ test('main page titles use the same icons as their sidebar destinations', () => 
     assert.match(source, new RegExp(`className="workspace-page-title[^\"]*"><Icon name="${icon}" size=\\{18\\}`), `${page} title should use sidebar icon ${icon}`)
   }
   const tracker = fs.readFileSync(path.join(root, 'src/pages/Tracker.jsx'), 'utf8')
-  assert.match(tracker, /workspace-page-title\$\{sheet === 'My Orders'[\s\S]*?<Icon name="cards" size=\{18\}/)
+  assert.match(tracker, /workspace-page-title\$\{sheet === 'Opportunities'[\s\S]*?<Icon name="cards" size=\{18\}/)
 })
 
 test('primary workspace pages share a responsive inset from the sidebar', () => {

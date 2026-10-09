@@ -1,0 +1,45 @@
+/* Phone workspace corrections only. Never recolor chart series or the logo. */
+@media screen and (max-width:600px) {
+  html[data-workspace-theme="dark"] :is(.shell.tablet-mode,[data-modae-portal-root]) {
+    --phone-accent:#E85D35; --phone-accent-ink:#121316;
+    --phone-selection:#3B2118; --phone-control-border:#737985;
+    --text-primary:#FFFFFF; --text-secondary:#D1D5DB; --text-tertiary:#AEB4BE;
+    --surface-canvas:#121316; --surface-default:#1B1C20;
+    --surface-raised:#23252B; --border-default:#2D2F36;
+    --action-primary:var(--phone-accent); --text-on-accent:var(--phone-accent-ink);
+  }
+  html[data-workspace-theme="dark"] .shell.tablet-mode.mobile-dashboard-shell {
+    --mobile-accent:#E85D35; --mobile-accent-text:#D1D5DB;
+    --mobile-bg:#121316; --mobile-surface:#1B1C20; --mobile-input:#23252B;
+    --mobile-border:#2D2F36;
+  }
+  html[data-workspace-theme="dark"] .shell.tablet-mode .phone-inbox-page { --inbox-accent:var(--phone-accent); background:var(--surface-canvas); }
+  html[data-workspace-theme="dark"] .shell.tablet-mode :is(.opportunities-page,.opportunity-workbench-page) { --text-secondary:#D1D5DB; }
+  html[data-workspace-theme="dark"] :is(.shell.tablet-mode,[data-modae-portal-root]) .opportunity-intake-form .pill-opt {
+    background:var(--surface-raised); color:var(--text-secondary);
+    border-color:var(--phone-control-border); box-shadow:none;
+  }
+  html[data-workspace-theme="dark"] :is(.shell.tablet-mode,[data-modae-portal-root]) .opportunity-intake-form .pill-opt:is(.on,:hover) {
+    background:var(--phone-selection); color:var(--text-primary); border-color:var(--phone-accent);
+  }
+  html[data-workspace-theme="dark"] :is(.shell.tablet-mode,[data-modae-portal-root]) .opportunity-intake-form .pill-opt:focus-within {
+    outline:2px solid var(--phone-accent); outline-offset:3px;
+  }
+  html[data-workspace-theme="dark"] :is(.shell.tablet-mode,[data-modae-portal-root]) .opportunity-intake-form .star { color:var(--text-secondary); }
+  html[data-workspace-theme="dark"] .shell.tablet-mode :is(.phone-inbox-page .phone-inbox-new,.phone-inbox-page .phone-inbox-views button[aria-pressed="true"],.tracker-toolbar-actions .tracker-create-logo,.wintrack-mobile-dashboard .mobile-card-action,.wintrack-mobile-dashboard .mobile-filter-chip.is-active) {
+    background:var(--phone-accent) !important; border-color:var(--phone-accent) !important;
+    color:var(--phone-accent-ink) !important;
+  }
+  html[data-workspace-theme="dark"] .shell.tablet-mode :is(.phone-inbox-page .phone-lead-status,.phone-inbox-page .phone-lead-urgent,.phone-opportunity-overdue,.wintrack-mobile-dashboard .mobile-stage-badge,.wintrack-mobile-dashboard .mobile-blocker-note,.wintrack-mobile-dashboard .mobile-kpi.is-urgent :is(span,strong,small),.wintrack-mobile-dashboard .mobile-loss-reason,.wintrack-mobile-dashboard .mobile-customer-avatar) { color:var(--text-primary); }
+  html[data-workspace-theme="dark"] .shell.tablet-mode .phone-inbox-page .phone-lead-status[data-status="Converted"] { background:#0D3327; border:1px solid #10B981; }
+  html[data-workspace-theme="dark"] .shell.tablet-mode .phone-inbox-page .phone-lead-status[data-status="New"] { background:#12343A; border:1px solid #22B8CF; }
+  html[data-workspace-theme="dark"] .shell.tablet-mode .phone-inbox-page .phone-lead-status[data-status="Qualified"] { background:#3A2B0A; border:1px solid #B8860B; }
+  html[data-workspace-theme="dark"] .shell.tablet-mode .phone-opportunity-overdue::before { content:''; display:inline-block; width:6px; height:6px; margin-right:5px; border-radius:50%; background:#EF4444; vertical-align:middle; }
+  html[data-workspace-theme="dark"] .shell.tablet-mode :is(.phone-lead-meta > span,.phone-lead-converted,.wintrack-mobile-dashboard .mobile-performance-gap) { color:var(--text-primary); }
+  html[data-workspace-theme="dark"] .shell.tablet-mode .wintrack-mobile-dashboard .mobile-stage-badge[data-tone="danger"] { background:#721C24; }
+  html[data-workspace-theme="dark"] .shell.tablet-mode .tab-bottom a.active { color:var(--text-primary); background:var(--surface-raised); box-shadow:inset 0 2px var(--phone-accent); }
+  html[data-workspace-theme="dark"] .shell.tablet-mode.mobile-dashboard-shell .tab-bottom a.active { color:var(--text-primary); background:var(--surface-raised); }
+  html[data-workspace-theme="dark"] .shell.tablet-mode .tab-bottom a.active > svg { color:var(--phone-accent); }
+  html[data-workspace-theme="dark"] .shell.tablet-mode :is(.phone-inbox-search,.wintrack-mobile-dashboard .mobile-search,.tracker-grid-shell > .toolbar .tracker-search-group) { background:var(--surface-raised); color:var(--text-secondary); border:1px solid var(--phone-control-border); }
+  html[data-workspace-theme="dark"] :is(.shell.tablet-mode,[data-modae-portal-root]) .opportunity-intake-form :is(.submit:disabled,button:disabled) { opacity:1; color:var(--text-tertiary) !important; background:var(--surface-raised) !important; }
+}

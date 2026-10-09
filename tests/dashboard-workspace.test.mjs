@@ -85,15 +85,16 @@ test('reference dashboard exposes top opportunities and probability segments fro
   ])
 })
 
-test('dashboard headline preview count and value reconcile to the five displayed opportunities', () => {
+test('dashboard headline totals cover the full pipeline while the preview shows five', () => {
   const store = workspace({ opportunities: Array.from({ length: 6 }, (_, index) => opportunity(`RS-${index + 1}`, 'RS', {
     valueK: (index + 1) * 100,
     orderDate: `2026-10-${String(index + 1).padStart(2, '0')}`,
   })) })
   const model = dashboardModel(store, { owner: 'RS', period: 'q3', now })
   assert.equal(model.topOpportunities.length, 5)
-  assert.equal(model.headlineOpenCount, model.topOpportunities.length)
-  assert.equal(model.headlinePipelineK, model.topOpportunities.reduce((sum, row) => sum + row.valueK, 0))
+  assert.equal(model.headlineOpenCount, 6)
+  assert.equal(model.headlinePipelineK, 2100)
+  assert.equal(model.topOpportunities.reduce((sum, row) => sum + row.valueK, 0), 2000)
 })
 
 test('Q3 opportunity widgets use Expected Order Date rather than creation date', () => {
@@ -142,7 +143,8 @@ test('reference report uses shared header controls and renders the tapered funne
   assert.doesNotMatch(source, /className="reference-toolbar"/)
   assert.match(source, /reference-funnel-totals/)
   assert.match(source, /reference-funnel-row/)
-  assert.match(source, /reference-analysis-filters/)
+  assert.match(source, /reference-analysis-button/)
+  assert.match(source, /useWorkspaceView\(\)/)
 })
 
 test('reference dashboard renders separate funnel count and value totals and uses active period labels', () => {
