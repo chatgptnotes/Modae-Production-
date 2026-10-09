@@ -1,6 +1,6 @@
 // Bumped when the cache policy changes so existing clients do not retain a
 // shell or asset cache created by the previous deployment strategy.
-const CACHE = 'wintrack-v6'
+const CACHE = 'wintrack-v7'
 const PRECACHE = [
   '/', '/index.html', '/manifest.webmanifest',
   '/icon-192.png', '/icon-512.png', '/apple-touch-icon.png',

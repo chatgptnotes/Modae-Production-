@@ -13,6 +13,8 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Replaced the browser favicon and installed app/home-screen icons with the full official ModAE artwork, centered on black with mask-safe padding. Updated the icon generator and refreshed the service-worker cache. Existing installations may need reinstalling to refresh their home-screen icon.
+
 - Approval request cards and summary now expand to the available page width in both themes, including when zoomed out.
 
 - Replaced the phone dashboard with a dark WinTrack sales cockpit: fixed mobile header, sticky filters, KPI grid, opportunity card feed, approval bottom sheet, and five-tab navigation styling.
