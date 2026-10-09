@@ -13,6 +13,9 @@
   .phone-kpis span { font-size: 13px; }
   .phone-kpis strong { font-size: 25px; font-variant-numeric: tabular-nums; line-height: 1.2; }
   .phone-kpis small, .phone-record small, .phone-performance-values small { font-size: 13px; color: var(--text-secondary); }
+  .phone-kpis small { line-height: 1.3; }
+  .tablet-mode .tab-bottom a { padding-inline: 2px; font-size: 10px; white-space: nowrap; }
+  .tablet-mode .tracker-page .sheet-tabs .tab { min-width: max-content; min-height: 44px; display: flex; align-items: center; }
   .phone-section { min-width: 0; border-top: 1px solid var(--border-default); padding-top: 16px; }
   .phone-section header { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
   .phone-section h2 { font-size: 17px; margin: 0; }

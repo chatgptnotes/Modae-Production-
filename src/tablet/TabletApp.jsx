@@ -144,7 +144,7 @@ export default function TabletApp() {
         </div>
         {refreshMessage && <p className="mobile-refresh-status" role="status">{refreshMessage}</p>}
       </header>
-      <MobileContent hasTitle={Boolean(title)} routeKey={loc.pathname}>{routes}</MobileContent>
+      <MobileContent hasTitle={Boolean(title)} routeKey={`${store.auth?.user?.id || role}:${role}:${loc.pathname}`}>{routes}</MobileContent>
       <nav className="tab-bottom" aria-label="Main navigation">
         {BOTTOM.filter(t => canSeePage(store.roles || role, t.page)).map(t => {
           const badge = t.badge ? t.badge(store) : 0

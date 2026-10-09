@@ -19,6 +19,7 @@ import { listFiles } from '../leadBlobs.js'
 import AttachmentViewer from '../AttachmentViewer.jsx'
 import usePhoneLayout from '../tablet/usePhoneLayout.js'
 import PhoneFilters from '../tablet/PhoneFilters.jsx'
+import useListState from '../tablet/useListState.js'
 import { findDuplicates } from '../insights.js'
 import { leadWorkflow } from '../leadWorkflow.js'
 import { parseLeadLineItems } from '../tenderParse.js'
@@ -1500,6 +1501,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
   const initialRegion = lead.region || indiaRegionForLocation(initialLocation, store.config) || initialLocation
   const regionalOwner = routeOwner(initialRegion, store.config, '')
   const savedOverride = lead.assignedOwner && lead.assignedOwner !== regionalOwner && (lead.ownerOverrideReason || '').trim()
+  const customer = matchCustomer(store.customers, lead)
   const initialDecisions = () => {
     const identity = leadIdentity(lead, ai.fields)
     const buSegment = splitBuSegment(ai.fields)
@@ -1637,7 +1639,6 @@ function AiLeadDetail({ lead, compact = false, compactItems = [] }) {
     })
   }
 
-  const customer = matchCustomer(store.customers, lead)
   const leadCustomerStatus = customerStatusForLead(lead, store.customers)
   const previewCustomer = matchCustomer(store.customers, { ...lead, sellTo: decisionDraft.sellTo })
   const previewCustomerStatus = previewCustomer?.status || leadCustomerStatus
@@ -3340,16 +3341,16 @@ export default function Inbox() {
   const { scope, setScope } = useWorkspaceView()
   const nav = useNavigate()
   const { leadId } = useParams()
-  const [q, setQ] = useState('')
+  const [q, setQ] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:inbox:q`, '')
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
-  const [statusF, setStatusF] = useState('')
-  const [routeF, setRouteF] = useState('')
-  const [receivedF, setReceivedF] = useState('')
-  const [sourceF, setSourceF] = useState('')
-  const [urgencyF, setUrgencyF] = useState('')
-  const [completenessF, setCompletenessF] = useState('')
-  const [ownerF, setOwnerF] = useState('')
-  const [ageF, setAgeF] = useState('')
+  const [statusF, setStatusF] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:inbox:statusF`, '')
+  const [routeF, setRouteF] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:inbox:routeF`, '')
+  const [receivedF, setReceivedF] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:inbox:receivedF`, '')
+  const [sourceF, setSourceF] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:inbox:sourceF`, '')
+  const [urgencyF, setUrgencyF] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:inbox:urgencyF`, '')
+  const [completenessF, setCompletenessF] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:inbox:completenessF`, '')
+  const [ownerF, setOwnerF] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:inbox:ownerF`, '')
+  const [ageF, setAgeF] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:inbox:ageF`, '')
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [previewLeadId, setPreviewLeadId] = useState('')
   const [bulkMenuOpen, setBulkMenuOpen] = useState(false)
@@ -3367,7 +3368,7 @@ export default function Inbox() {
   const [simQuality, setSimQuality] = useState('')
   const [simRegister, setSimRegister] = useState(true)
   const globalScope = scope === 'global'
-  const [showArchive, setShowArchive] = useState(false)
+  const [showArchive, setShowArchive] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:inbox:showArchive`, false)
   const mailboxListRef = useRef(null)
   const mailboxScrollRef = useRef(null)
   const mailboxScrollDragRef = useRef(null)
@@ -3479,34 +3480,6 @@ export default function Inbox() {
       window.removeEventListener('scroll', closeOnViewportChange, true)
     }
   }, [openHeaderFilter])
-  if (sel) {
-    const age = ageDays(sel.ts)
-    return (
-    <div className="lead-workspace">
-        <div className="ws-topbar">
-          <button className="ws-back" onClick={() => nav('/inbox')}>
-            <Icon name="inbox" size={13} /> Back to inbox
-          </button>
-          <div className="ws-topbar-title">
-            <h2>{sel.subject}</h2>
-            <div className="ws-topbar-meta">
-              {sel.ref && <span className="ws-tag">{sel.ref}</span>}
-              <span>{sel.sender || sel.from}</span>
-              <span>·</span>
-              <span>{ddMmmYY((sel.ts || '').slice(0, 10))}</span>
-              {age != null && <><span>·</span><span>{age} d old</span></>}
-            </div>
-          </div>
-          <span className={`pill ${PILL[sel.status] || 'Blue'}`}>{sel.status}</span>
-      </div>
-        {sel.ai
-          ? <StructuredLeadDetail lead={sel} converted={sel.status === 'Converted'} />
-          : <><LeadWorkflowBar lead={sel} /><div className="ws-grid single"><section className="ws-col"><div className="ws-body">
-              <LegacyLeadDetail lead={sel} />
-            </div></section></div></>}
-      </div>
-    )
-  }
 
   const listSource = showArchive ? (store.leadArchive || []) : store.leads
   // The top-bar scope selects the common inbox or leads assigned/suggested to
@@ -3547,6 +3520,34 @@ export default function Inbox() {
   const rows = listSource.filter(l => ownerVisible(l) && matchesFilters(l))
   const mailboxRows = rows.sort(compareInboxRows)
   const { pagedRows: pageRows, pagination } = usePagedRows(mailboxRows, JSON.stringify([scope, q, statusF, sourceF, routeF, urgencyF, ownerF, completenessF, receivedF, ageF]))
+  if (sel) {
+    const age = ageDays(sel.ts)
+    return (
+    <div className="lead-workspace">
+        <div className="ws-topbar">
+          <button className="ws-back" onClick={() => nav('/inbox')}>
+            <Icon name="inbox" size={13} /> Back to inbox
+          </button>
+          <div className="ws-topbar-title">
+            <h2>{sel.subject}</h2>
+            <div className="ws-topbar-meta">
+              {sel.ref && <span className="ws-tag">{sel.ref}</span>}
+              <span>{sel.sender || sel.from}</span>
+              <span>·</span>
+              <span>{ddMmmYY((sel.ts || '').slice(0, 10))}</span>
+              {age != null && <><span>·</span><span>{age} d old</span></>}
+            </div>
+          </div>
+          <span className={`pill ${PILL[sel.status] || 'Blue'}`}>{sel.status}</span>
+      </div>
+        {sel.ai
+          ? <StructuredLeadDetail lead={sel} converted={sel.status === 'Converted'} />
+          : <><LeadWorkflowBar lead={sel} /><div className="ws-grid single"><section className="ws-col"><div className="ws-body">
+              <LegacyLeadDetail lead={sel} />
+            </div></section></div></>}
+      </div>
+    )
+  }
   const inboxPagination = React.cloneElement(pagination, { alwaysVisible: true, label: 'Inbox pages' })
   const previewLead = pageRows.find(lead => String(lead.id) === previewLeadId) || pageRows[0]
   const dateFilterActive = !!receivedF || !!ageF
