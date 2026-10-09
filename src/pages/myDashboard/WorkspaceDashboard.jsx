@@ -78,17 +78,19 @@ function ActionQueue({ model, nav, scope }) {
 }
 
 function Funnel({ model, showMoney, scope }) {
-  const metric = row => showMoney ? row.valueK : row.count
+  const useValue = showMoney && model.funnel.every(row => row.segments.every(segment => !segment.count || segment.valueK > 0))
+  const metric = row => useValue ? row.valueK : row.count
   const maximum = Math.max(1, ...model.funnel.map(metric))
   return <Section title={`${scopeLabel(scope)} Sales Pipeline Funnel`} accent="blue" className="reference-funnel"
-    explanation="Groups opportunities by stage and probability; unknown probabilities count as Low."
+    explanation={`Groups opportunities by stage and probability; unknown probabilities count as Low. Funnel widths use ${useValue ? 'expected value' : 'opportunity count'}. Compact colored shapes for empty stages are placeholders; totals show the actual data.`}
     action={<span className="reference-legend"><b className="high" />High <b className="medium" />Medium <b className="low" />Low</span>}><div className="reference-funnel-body"><div className="reference-funnel-list">{model.funnel.map(row => <div className="reference-funnel-row" key={row.key}>
       <strong tabIndex={0} data-explain-title={row.label}
         data-explain={`Includes ${row.stages.join(', ')} opportunities.${row.key === 'won' ? ' Only closed Won opportunities count.' : ' Only open opportunities count.'}`}>
-        {row.label}</strong><div style={{ width: `${Math.max(18, metric(row) / maximum * 100)}%` }}>{row.segments.map(segment => <span key={segment.key} className={segment.key} tabIndex={0}
+        {row.label}</strong><div className="reference-funnel-track"><div className={`reference-funnel-fill${row.count ? '' : ' is-empty'}`} style={{ width: `${row.count ? metric(row) / maximum * 100 : 18}%` }}>{row.segments.filter(segment => !row.count || segment.count > 0).map(segment => <span key={segment.key} className={segment.key} tabIndex={0}
         data-explain-title={`${row.label} · ${segment.key} probability`}
         data-explain={`${segment.count} ${segment.count === 1 ? 'opportunity' : 'opportunities'} in this band.${segment.key === 'low' ? ' Missing probability counts as Low.' : ''}`}
-        style={{ flex: Math.max(.15, showMoney ? segment.valueK : segment.count) }}>{segment.count ? `${segment.count}${showMoney ? ` (${money(segment.valueK)})` : ''}` : ''}</span>)}</div></div>)}</div><aside className="reference-funnel-totals"><span>Total Count</span>{model.funnel.map(row => <strong key={row.key} tabIndex={0} data-explain-title={`${row.label} · opportunity count`} data-explain={`${row.count} ${row.label} opportunities.`}>{row.count}</strong>)}</aside>{showMoney && <aside className="reference-funnel-totals"><span>Total Value</span>{model.funnel.map(row => <strong key={row.key} tabIndex={0} data-explain-title={`${row.label} · total value`} data-explain={`Combined ${row.label} value: ${money(row.valueK)}.`}>{money(row.valueK)}</strong>)}</aside>}</div></Section>
+        title={`${segment.count} opportunities${showMoney ? ` · ${money(segment.valueK)}` : ''}`}
+        style={{ flex: !row.count ? 1 : useValue ? segment.valueK : segment.count }} aria-label={`${segment.count} ${segment.key} probability opportunities${showMoney ? `, ${money(segment.valueK)}` : ''}`} />)}</div></div></div>)}</div><aside className="reference-funnel-totals"><span>Total Count</span>{model.funnel.map(row => <strong key={row.key} tabIndex={0} data-explain-title={`${row.label} · opportunity count`} data-explain={`${row.count} ${row.label} opportunities.`}>{row.count}</strong>)}</aside>{showMoney && <aside className="reference-funnel-totals"><span>Total Value</span>{model.funnel.map(row => <strong key={row.key} tabIndex={0} data-explain-title={`${row.label} · total value`} data-explain={`Combined ${row.label} value: ${money(row.valueK)}.`}>{money(row.valueK)}</strong>)}</aside>}</div></Section>
 }
 
 function WinLoss({ model, scope, nav }) {
@@ -97,16 +99,16 @@ function WinLoss({ model, scope, nav }) {
   const maximum = Math.max(1, ...reasons.map(row => Math.max(row.won, row.lost)))
   return <Section title={`${scopeLabel(scope)} Win/Loss Analysis`} accent="purple" className="reference-winloss"
     explanation="Win rate is Won ÷ (Won + Lost); missing reasons are Unspecified, and less common reasons group as Other."
-    action={<button className="reference-analysis-button" data-explain-title="Detailed win/loss analysis" data-explain="Open detailed results." onClick={() => nav('/analytics')}>Open detailed analysis ↗</button>}><p className="reference-analysis-subtitle">Analysis of closed opportunities in this view</p><div className="reference-winloss-grid"><div className="reference-rate"><div tabIndex={0}
+    action={<button className="reference-analysis-button" data-explain-title="Detailed win/loss analysis" data-explain="Open detailed results." onClick={() => nav('/analytics')}>Open detailed analysis ↗</button>}><p className="reference-analysis-subtitle">Analysis of closed opportunities in this view</p><div className="reference-winloss-grid"><div className="reference-rate"><div tabIndex={0} className={`reference-rate-ring${summary.total ? '' : ' is-empty'}`} style={{ '--win-share': `${summary.total ? summary.won / summary.total * 100 : 0}%` }}
       data-explain-title="Win rate"
       data-explain={summary.total ? 'Win rate is Won divided by all closed Won and Lost opportunities.' : 'No closed Won or Lost opportunities yet.'}>
       <strong>{summary.total ? `${summary.winRate}%` : '—'}</strong><span>Win Rate</span></div><p><b>{summary.won}</b> Won<br /><b>{summary.lost}</b> Lost</p><small>Total Closed <b>{summary.total}</b></small></div><div className="reference-reasons"><h3>Won vs Lost by Reason</h3>{reasons.map(row => <div key={row.reason} tabIndex={0}
       data-explain-title={row.reason}
       data-explain={`Won: ${row.won}; Lost: ${row.lost}.`}>
-      <span>{row.reason}</span><i><b className="won" style={{ width: `${row.won / maximum * 100}%` }} /><b className="lost" style={{ width: `${row.lost / maximum * 100}%` }} /></i><strong>{row.won} / {row.lost}</strong></div>)}</div><div className="reference-reasons"><h3>Top Loss Reasons (by count)</h3>{reasons.map((row, index) => <div key={row.reason} tabIndex={0}
+      <span>{row.reason}</span><i><b className="won" style={{ width: `${row.won / maximum * 100}%` }} /><b className="lost" style={{ width: `${row.lost / maximum * 100}%` }} /></i><strong>{row.won} / {row.lost}</strong></div>)}{!reasons.length && <p className="reference-chart-empty">No closed opportunities yet.</p>}</div><div className="reference-reasons"><h3>Top Loss Reasons (by count)</h3>{reasons.filter(row => row.lost > 0).sort((a, b) => b.lost - a.lost).map((row, index) => <div key={row.reason} tabIndex={0}
       data-explain-title={`${index + 1}. ${row.reason}`}
-      data-explain={`Lost: ${row.lost}; ranked by total Won + Lost count.`}>
-      <span>{index + 1}. {row.reason}</span><i><b className="lost" style={{ width: `${row.lost / maximum * 100}%` }} /></i><strong>{row.lost}</strong></div>)}</div></div></Section>
+      data-explain={`Lost: ${row.lost}; ranked by lost count.`}>
+      <span>{index + 1}. {row.reason}</span><i><b className="lost" style={{ width: `${row.lost / maximum * 100}%` }} /></i><strong>{row.lost}</strong></div>)}{!summary.lost && <p className="reference-chart-empty">No lost opportunities yet.</p>}</div></div></Section>
 }
 
 export default function WorkspaceDashboard({ store, nav }) {
@@ -117,7 +119,7 @@ export default function WorkspaceDashboard({ store, nav }) {
   const effectiveOwner = knownOwners.includes(owner) ? owner : 'all'
   const model = useMemo(() => dashboardModel(store, { scope, owner: effectiveOwner, period, topPeriod }), [store, scope, effectiveOwner, period, topPeriod])
   const fy = store.sales?.fy || 'current FY'
-  if (phone && store.viewMode === 'tablet') return <PhoneDashboard {...{ model, showMoney, nav, period, setPeriod, topPeriod, setTopPeriod, fy }} />
+  if (phone && store.viewMode === 'tablet') return <PhoneDashboard {...{ model, showMoney, nav, store }} />
   return <main className="page dashboard-page dw-reference-dashboard">
     <section className="reference-kpis" aria-label="Dashboard summary">
       <Card label={`${scopeLabel(scope)} Pipeline`} value={showMoney ? money(model.headlinePipelineK) : model.headlineOpenCount}

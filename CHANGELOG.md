@@ -13,6 +13,17 @@ This is an implementation and release log, not a dump of every commit.
 
 ## [Unreleased]
 
+- Approval request cards and summary now expand to the available page width in both themes, including when zoomed out.
+
+- Replaced the phone dashboard with a dark WinTrack sales cockpit: fixed mobile header, sticky filters, KPI grid, opportunity card feed, approval bottom sheet, and five-tab navigation styling.
+
+- Made authenticated page containers fill the available workspace width in both themes with shared 18px side gutters (12px on phones). Restored centered tapered pipeline stages with data-driven probability bands and compact empty-stage placeholders, restored tinted dark opportunity-ID cells, and moved explanations above their targets when possible with dismissal on scroll.
+
+- Recovered phone-width sessions from stale full-site mode preferences and added a visible Mobile view escape action to the narrow full-site shell.
+
+- Applied the charcoal and terracotta dark palette with neutral text, cyan information accents and distinct semantic statuses. Quieted dark sidebar surfaces, replaced filled customer-class ID cells with readable links and small indicators, and removed warning outlines from ordinary blank date fields.
+- Corrected dashboard funnel rendering to omit empty probability bands and use count sizing when populated stages lack value. Kept totals outside narrow bars, added neutral empty win/loss rings and empty messages, and made outcome proportions and loss-reason ranking follow actual results.
+
 - Preserve transient inbox and opportunity search/filter state when opening records and returning. Fixed inbox detail navigation skipping its pagination hook, which could crash when opening a lead from the list.
 
 - Added a dedicated phone dashboard with a two-column KPI summary, performance-first overview, compact opportunity/action rows, and separate reports. Phone inbox and opportunity filters use draft panels; approval requests open their existing review details from compact rows. Grouped More navigation and moved workspace refresh into its action menu. Removed automatic DOM-based table conversion in favor of an explicit opportunity table workspace.

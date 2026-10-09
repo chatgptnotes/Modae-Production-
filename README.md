@@ -27,9 +27,11 @@ submission, and follow-up.
 - Includes permission-filtered workspace quick search, operational status
   summaries, an inbox preview, and a weekly proposal follow-up board.
 - Offers light and dark workspace themes with a shared desktop/tablet toggle.
+  Both themes use full-width workspace pages with consistent side spacing as
+  browser zoom changes the available width.
   Light is the default; the browser remembers your choice and synchronizes it
-  across open tabs. The dark palette uses warm ModAE charcoal and red accents,
-  with green, amber, red, and blue distinguishing success, warnings, errors, and
+  across open tabs. The dark palette uses charcoal surfaces and terracotta accents,
+  with green, amber, red, and cyan distinguishing success, warnings, errors, and
   information. Sign-in, public showcase, proposal documents, and printed output
   retain their light presentation. Deployment cleanup resets the preference.
 - Provides shared personal/global opportunity views, a combined open-and-won My

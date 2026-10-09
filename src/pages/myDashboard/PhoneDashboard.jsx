@@ -1,38 +1,74 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { displayOpportunityId } from '../../seed.js'
-import { ddMMyyyy } from '../../utils.js'
+import { ddMMyyyy, displayRole } from '../../utils.js'
+import { approvalNeedsRole } from './model.js'
+import { Icon, ModaeLogo } from '../../icons.jsx'
+import './mobileDashboard.css'
 
 const money = value => `₹${((Number(value) || 0) / 100).toLocaleString('en-IN', { maximumFractionDigits: 1 })} L`
+const stageKey = value => String(value || '').toLowerCase()
+const isQualified = opp => opp.qualified === true || /qualified/.test(stageKey(opp.qualificationStatus || opp.qualification)) || !['lead', 'rfi'].includes(stageKey(opp.stage))
+const isProposal = opp => Boolean(opp.proposalDate) || /proposal|sent|quote/.test(stageKey(opp.stage))
 
-export default function PhoneDashboard({ model, showMoney, nav, period, setPeriod, topPeriod, setTopPeriod, fy }) {
-  const [tab, setTab] = useState('overview')
-  const value = amount => showMoney ? money(amount) : amount
-  const { perf, outcomes } = model
-  const gap = Math.max(0, perf.annual - perf.achieved)
-  return <main className="page phone-dashboard">
-    <div className="phone-segments" aria-label="Dashboard sections">{['overview', 'reports'].map(item => <button key={item} aria-pressed={tab === item} onClick={() => setTab(item)}>{item === 'overview' ? 'Overview' : 'Reports'}</button>)}</div>
-    {tab === 'overview' ? <>
-      <section className="phone-kpis" aria-label="Dashboard summary">
-        {[["Open pipeline", showMoney ? money(model.headlinePipelineK) : model.headlineOpenCount, `${model.headlineOpenCount} opportunities`], ['Follow-ups due', model.followups.length, '14+ days since proposal'], ['Pending approvals', model.pending.length, 'Awaiting a decision'], ['Blocked work', model.blocked.length, 'Needs attention']].map(([label, count, hint]) => <article key={label}><span>{label}</span><strong>{count}</strong><small>{hint}</small></article>)}
-      </section>
-      <section className="phone-section"><header><h2>Sales performance</h2><div className="phone-segments"><button aria-pressed={period === 'fy'} onClick={() => setPeriod('fy')}>YTD</button><button aria-pressed={period.startsWith('q')} onClick={() => setPeriod(`q${model.currentQuarter}`)}>QTD</button></div></header>
-        <div className="phone-performance-values"><div><small>Actual</small><strong>{value(perf.achieved)}</strong></div><div><small>Target</small><strong>{value(perf.annual)}</strong></div></div>
-        <progress aria-label="Sales target achieved" max={Math.max(1, perf.annual)} value={Math.min(perf.achieved, Math.max(1, perf.annual))} />
-        <div className="phone-section-footer"><span>{perf.annual ? `${value(gap)} to target` : 'No target configured'}</span><button onClick={() => nav('/po')}>View orders ↗</button></div>
-      </section>
-      <section className="phone-section"><header><h2>Pipeline by stage</h2><button onClick={() => nav('/opportunities')}>View all ↗</button></header>
-        {model.funnel.map(row => <button className="phone-metric-row" key={row.key} onClick={() => nav(`/opportunities?stage=${encodeURIComponent(row.stages.join(','))}`)}><span>{row.label}</span><b>{row.count}</b>{showMoney && <span>{money(row.valueK)}</span>}</button>)}
-      </section>
-      <section className="phone-section"><header><h2>Top opportunities</h2><select aria-label="Top opportunities period" value={topPeriod} onChange={e => setTopPeriod(e.target.value)}><option value="fy">{fy}</option>{[1, 2, 3, 4].map(q => <option key={q} value={`q${q}`}>Q{q}</option>)}</select></header>
-        {model.topOpportunities.map(opp => <button className="phone-record" key={opp.id} onClick={() => nav(`/opp/${opp.id}`)}><strong>{opp.sellTo || opp.oppName || 'Untitled opportunity'}</strong><span>{displayOpportunityId(opp.id)} · {opp.stage || 'No stage'}</span><small>{opp.orderDate ? ddMMyyyy(opp.orderDate) : 'No order date'}{showMoney ? ` · ${money(opp.valueK)}` : ''}</small></button>)}
-        {!model.topOpportunities.length && <p className="phone-empty">No open opportunities expected in this period.</p>}
-      </section>
-      <section className="phone-section"><header><h2>Next actions</h2></header>{model.queue.slice(0, 3).map(task => <button key={task.id} className="phone-record" onClick={() => nav(task.path)}><strong>{task.opp?.sellTo || task.opp?.oppName || 'Workspace approval'}</strong><span>{task.text}</span><small>{task.owner || 'Unassigned'} · {task.timing || 'Needs attention'}</small></button>)}{!model.queue.length && <p className="phone-empty">Nothing needs your attention.</p>}</section>
-    </> : <>
-      <section className="phone-section"><header><h2>Win / loss</h2><button onClick={() => nav('/analytics')}>Analysis ↗</button></header>
-        {outcomes.summary.total ? <><div className="phone-performance-values"><div><small>Win rate</small><strong>{outcomes.summary.winRate}%</strong></div><div><small>Closed</small><strong>{outcomes.summary.total}</strong></div></div><p>{outcomes.summary.won} won · {outcomes.summary.lost} lost</p>{outcomes.byReason.filter(row => row.won || row.lost).map(row => <div className="phone-metric-row" key={row.reason}><span>{row.reason}</span><span>{row.won} won / {row.lost} lost</span></div>)}</> : <p className="phone-empty">No closed opportunities yet. Results will appear here after a win or loss.</p>}
-      </section>
-      <section className="phone-section"><header><h2>Pipeline probability</h2></header>{model.funnel.map(row => <div className="phone-report-row" key={row.key}><strong>{row.label}</strong>{row.segments.map(segment => <div className="phone-metric-row" key={segment.key}><span>{segment.key}</span><b>{segment.count}</b>{showMoney && <span>{money(segment.valueK)}</span>}</div>)}</div>)}</section>
-    </>}
+function ApprovalDrawer({ approval, role, nav, store, onClose }) {
+  const [comment, setComment] = useState('')
+  const [busy, setBusy] = useState(false)
+  if (!approval) return null
+  const canDecide = approvalNeedsRole(approval, role)
+  const decide = async decision => {
+    if (!comment.trim() || busy || !canDecide) return
+    setBusy(true)
+    const saved = await store.recordDecision(approval.id, { d: decision, comment: comment.trim() })
+    setBusy(false)
+    if (saved) onClose()
+  }
+  return <div className="mobile-approval-layer" role="presentation" onMouseDown={event => event.target === event.currentTarget && onClose()}>
+    <section className="mobile-approval-drawer" role="dialog" aria-modal="true" aria-labelledby="mobile-approval-title">
+      <div className="mobile-drawer-handle" />
+      <header><div><span className="mobile-eyebrow">Approval review</span><h2 id="mobile-approval-title">{approval.type || 'Commercial deviation'}</h2></div><button className="mobile-icon-button" type="button" aria-label="Close approval review" onClick={onClose}><Icon name="x" size={19} /></button></header>
+      <div className="mobile-approval-facts"><strong>{approval.oppId ? displayOpportunityId(approval.oppId) : 'Workspace request'}</strong><span>{approval.requestedBy ? `Raised by ${displayRole(approval.requestedBy)}` : 'Needs review'}</span></div>
+      <div className="mobile-deviation"><span>Commercial deviation</span><strong>{approval.detail || approval.reason || '90 Days Credit requested'}</strong><small>Review the requested terms before the proposal can continue.</small></div>
+      <div className="mobile-decision-history">{Object.entries(approval.decisions || {}).map(([approver, decision]) => <span key={approver}><b>{displayRole(approver)}</b> {decision.d}</span>)}</div>
+      {canDecide ? <><label className="mobile-note-label" htmlFor="mobile-approval-note">Decision note <span>required</span></label><textarea id="mobile-approval-note" value={comment} onChange={event => setComment(event.target.value)} placeholder="Add the reason for your decision…" rows={3} /><div className="mobile-drawer-actions"><button type="button" className="mobile-button mobile-button--approve" disabled={!comment.trim() || busy} onClick={() => decide('Approved')}><Icon name="check" size={16} />Approve</button><button type="button" className="mobile-button mobile-button--reject" disabled={!comment.trim() || busy} onClick={() => decide('Rejected')}><Icon name="x" size={16} />Reject</button><button type="button" className="mobile-button mobile-button--revision" onClick={() => { onClose(); nav(`/proposal/${approval.oppId}`) }}>Return for Revision</button></div></> : <p className="mobile-readonly-note">Awaiting a decision from {displayRole(approval.approver || approval.requestedBy || 'the assigned approver')}.</p>}
+      {approval.oppId && <button type="button" className="mobile-link-button" onClick={() => { onClose(); nav(`/proposal/${approval.oppId}`) }}>Open proposal workbench <Icon name="arrowRight" size={15} /></button>}
+    </section>
+  </div>
+}
+
+function FilterChip({ active, label, count, onClick }) {
+  return <button type="button" className={`mobile-filter-chip${active ? ' is-active' : ''}`} aria-pressed={active} onClick={onClick}>{label} <b>{count}</b></button>
+}
+
+export default function PhoneDashboard({ model, showMoney, nav, store }) {
+  const [filter, setFilter] = useState('all')
+  const [approvalId, setApprovalId] = useState('')
+  const [query, setQuery] = useState('')
+  const blockedIds = useMemo(() => new Set(model.blocked.map(row => row.opp?.id).filter(Boolean)), [model.blocked])
+  const approvalByOpp = useMemo(() => new Map(model.pending.filter(row => row.oppId).map(row => [row.oppId, row])), [model.pending])
+  const filtered = useMemo(() => {
+    const search = query.trim().toLowerCase()
+    return model.open.filter(opp => {
+      const matchesFilter = filter === 'all' || (filter === 'qualified' && isQualified(opp)) || (filter === 'proposal' && isProposal(opp)) || (filter === 'blocked' && blockedIds.has(opp.id))
+      const matchesSearch = !search || `${opp.sellTo || ''} ${opp.oppName || ''} ${displayOpportunityId(opp.id)}`.toLowerCase().includes(search)
+      return matchesFilter && matchesSearch
+    })
+  }, [blockedIds, filter, model.open, query])
+  const initials = String(store?.auth?.user?.name || store?.role || 'M').split(/\s+/).map(part => part[0]).join('').slice(0, 2).toUpperCase()
+  const chips = [['all', 'All', model.open.length], ['qualified', 'Qualified', model.open.filter(isQualified).length], ['proposal', 'Proposal Sent', model.open.filter(isProposal).length], ['blocked', 'Blocked', model.blocked.length]]
+  const kpis = [['Open Pipeline', showMoney ? money(model.headlinePipelineK) : model.headlineOpenCount, 'chartBar', ''], ['Follow-ups Due', model.followups.length, 'send', ''], ['Pending Approvals', model.pending.length, 'clock', ''], ['Blocked Work', model.blocked.length, 'alert', 'is-urgent']]
+  const actionFor = opp => {
+    const approval = approvalByOpp.get(opp.id)
+    if (approval) return { label: 'Review Approval', onClick: () => setApprovalId(approval.id) }
+    if (isProposal(opp)) return { label: 'View Proposal', onClick: () => nav(`/proposal/${opp.id}`) }
+    return { label: 'Request Approval', onClick: () => nav(`/opp/${opp.id}`) }
+  }
+  return <main className="page wintrack-mobile-dashboard" aria-label="Mobile sales dashboard">
+    <header className="mobile-dashboard-header"><ModaeLogo size={31} sub="WinTrack" /><span className="mobile-global-indicator"><Icon name="globe" size={15} />Global View</span><button type="button" className="mobile-header-action" aria-label="Search dashboard" onClick={() => document.getElementById('mobile-opportunity-search')?.focus()}><Icon name="search" size={19} /></button><span className="mobile-avatar" aria-label="Signed in user">{initials}</span></header>
+    <div className="mobile-dashboard-intro"><div><span className="mobile-eyebrow">Sales workspace</span><h1>Dashboard</h1></div><span className="mobile-sync"><i />Live workspace</span></div>
+    <label className="mobile-search"><Icon name="search" size={16} /><span className="visually-hidden">Search opportunities</span><input id="mobile-opportunity-search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search customers or Opp ID" /></label>
+    <div className="mobile-filter-row" aria-label="Opportunity filters">{chips.map(([key, label, count]) => <FilterChip key={key} active={filter === key} label={label} count={count} onClick={() => setFilter(key)} />)}</div>
+    <section className="mobile-kpi-grid" aria-label="Dashboard summary">{kpis.map(([label, value, icon, tone]) => <article key={label} className={`mobile-kpi ${tone}`}><span>{label}</span><strong>{value}</strong><Icon name={icon} size={18} /></article>)}</section>
+    <section className="mobile-opportunity-section"><header><div><span className="mobile-eyebrow">Priority feed</span><h2>Open opportunities</h2></div><span className="mobile-result-count">{filtered.length} shown</span></header><div className="mobile-opportunity-feed">{filtered.map(opp => { const action = actionFor(opp); return <article className={`mobile-opportunity-card${blockedIds.has(opp.id) ? ' is-blocked' : ''}`} key={opp.id}><div className="mobile-opportunity-card__top"><span className="mobile-stage-badge">{opp.stage || 'No stage'}</span>{blockedIds.has(opp.id) && <span className="mobile-blocked-badge">Blocked</span>}</div><h3>{opp.sellTo || opp.oppName || 'Untitled opportunity'}</h3><div className="mobile-opportunity-meta"><span>{displayOpportunityId(opp.id)}</span><span>{opp.orderDate ? ddMMyyyy(opp.orderDate) : 'Date not set'}</span></div><div className="mobile-opportunity-footer"><strong>{showMoney ? money(opp.valueK) : 'Value restricted'}</strong><button type="button" className="mobile-card-action" onClick={action.onClick}>{action.label}<Icon name="arrowRight" size={15} /></button></div></article> })}{!filtered.length && <div className="mobile-empty-state"><Icon name="search" size={22} /><strong>No opportunities match this view</strong><span>Try another filter or clear the search.</span></div>}</div></section>
+    <ApprovalDrawer approval={model.pending.find(row => row.id === approvalId)} role={store?.role} nav={nav} store={store} onClose={() => setApprovalId('')} />
   </main>
 }

@@ -186,6 +186,7 @@ function WorkspaceTopbar({ store, role, location, nav }) {
     <div className="workspace-topbar__controls">
       {!isDashboardRoute && <span className="workspace-role-access" title={roleLine}>{roleLine}</span>}
     {isDashboardRoute && canManageDashboardScope && workspaceView.scope === 'global' && <label className="workspace-company-selector"><span className="visually-hidden">Dashboard company view</span><select aria-label="Dashboard company view" value={workspaceView.owner} onChange={event => workspaceView.setOwner(event.target.value)}><option value="all">Global · Company</option>{dashboardOwners.map(owner => <option key={owner} value={owner}>{displayRole(owner)}</option>)}</select></label>}
+      <button type="button" className="workspace-mobile-mode" onClick={() => store.setViewMode('tablet')} aria-label="Switch to mobile view"><Icon name="tablet" size={14} /> Mobile view</button>
       <WorkspaceViewToggle />
     </div>
     <div className="workspace-topbar__utilities">

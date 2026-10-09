@@ -27,6 +27,14 @@
   white-space: pre-line;
 }
 
+html[data-workspace-theme="dark"] .hover-explanation {
+  background: var(--surface-raised);
+  border-color: var(--border-control);
+  color: var(--text-primary);
+}
+html[data-workspace-theme="dark"] .hover-explanation span { color: var(--text-secondary); }
+html[data-workspace-theme="dark"] [data-explain]:focus-visible { outline-color: var(--focus-ring); }
+
 [data-explain]:focus-visible {
   outline: 2px solid #2563eb;
   outline-offset: 3px;

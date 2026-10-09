@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 import { seedPoCompare } from '../src/seed.js'
 import { LOCAL_ONLY } from '../src/datastore.js'
+import { stateFromSaved, VIEW_MODE_PREFERENCE_REV } from '../src/appState.js'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
@@ -44,13 +45,24 @@ test('tablet shell is isolated from the full-site app shell', () => {
   assert.match(tabletApp, /<Route path="\/home" element=\{<TabletGate page="tracker"><TabletHome \/><\/TabletGate>\}/)
 })
 
+test('mobile dashboard provides the sales cockpit workflow', () => {
+  const dashboard = read('src/pages/myDashboard/PhoneDashboard.jsx')
+  assert.match(dashboard, /wintrack-mobile-dashboard/)
+  assert.match(dashboard, /Qualified/)
+  assert.match(dashboard, /Proposal Sent/)
+  assert.match(dashboard, /Request Approval/)
+  assert.match(dashboard, /View Proposal/)
+  assert.match(dashboard, /Return for Revision/)
+  assert.match(dashboard, /role="dialog"/)
+})
+
 // View mode was read from the viewport once on first visit and never again, so
 // rotating a tablet or widening a window left the wrong shell in place.
 test('view mode follows the viewport until the user pins it', () => {
   const store = read('src/store.jsx')
   assert.match(store, /syncViewMode\(\) \{/)
-  assert.match(store, /if \(s\.viewModePinned\) return s/)
-  assert.match(store, /viewMode: mode, viewModePinned: true/,
+  assert.match(store, /if \(s\.viewModePinned\)/)
+  assert.match(store, /viewMode: mode, viewModePinned: true, viewModePinnedAt: defaultViewMode\(\)/,
     'an explicit switch must pin the choice')
   const app = read('src/App.jsx')
   assert.match(app, /window\.addEventListener\('resize', onResize\)/)
@@ -61,6 +73,31 @@ test('view mode follows the viewport until the user pins it', () => {
 test('the pin stays on the device rather than syncing to other users', () => {
   assert.ok(LOCAL_ONLY.includes('viewMode'))
   assert.ok(LOCAL_ONLY.includes('viewModePinned'))
+  assert.ok(LOCAL_ONLY.includes('viewModePinnedAt'))
+})
+
+test('a legacy full-site pin recovers to mobile mode on a phone', () => {
+  const previousWindow = globalThis.window
+  globalThis.window = { innerWidth: 440 }
+  try {
+    const restored = stateFromSaved(JSON.stringify({
+      opportunities: [],
+      viewMode: 'full',
+      viewModePinned: true,
+    }))
+    assert.equal(restored.viewMode, 'tablet')
+    assert.equal(restored.viewModePinned, false)
+    assert.equal(restored.viewModePreferenceRev, VIEW_MODE_PREFERENCE_REV)
+  } finally {
+    if (previousWindow === undefined) delete globalThis.window
+    else globalThis.window = previousWindow
+  }
+})
+
+test('the full-site shell exposes a mobile mode recovery action', () => {
+  const app = read('src/App.jsx')
+  assert.match(app, /className="workspace-mobile-mode"/)
+  assert.match(app, /store\.setViewMode\('tablet'\)/)
 })
 
 test('approval cards show request time and highlight new pending requests', () => {

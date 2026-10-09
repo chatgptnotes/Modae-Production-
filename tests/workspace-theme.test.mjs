@@ -65,7 +65,7 @@ test('dark theme provides accessible text, status pairs, buttons, and control bo
     assert.ok(contrast(resolve(`--status-${state}-text`), resolve(`--status-${state}-bg`)) >= 4.5, `${state} contrast`)
   }
   for (const button of ['--action-primary', '--action-primary-hover', '--action-primary-active']) {
-    assert.ok(contrast('#FFFFFF', resolve(button)) >= 4.5, `${button} text contrast`)
+    assert.ok(contrast(resolve('--text-on-accent'), resolve(button)) >= 4.5, `${button} text contrast`)
   }
   assert.ok(contrast(resolve('--border-control'), resolve('--surface-raised')) >= 3, 'input boundary contrast')
   assert.ok(contrast(resolve('--focus-ring'), resolve('--surface-raised')) >= 3, 'focus indicator contrast')

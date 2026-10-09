@@ -13,7 +13,7 @@ import {
 } from './seed.js'
 import { leadConfig, opportunityOwnerFor, routeOwner, expiredLeadDeadline, aiAuditDetail } from './leadRules.js'
 import { withoutSimulated, simulatedCount } from './simulatedLeads.js'
-import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, defaultViewMode } from './appState.js'
+import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, defaultViewMode, VIEW_MODE_PREFERENCE_REV } from './appState.js'
 import { unitCostINR, unitSellINR, setRoleNameConfig, nowIST, toISTISOString, canManagePriceLists } from './utils.js'
 import { PRICE_SOURCES, isConfirmableSparesLine, normalizePriceFields, sparesLineFinancials } from './pricing.js'
 import { validServiceRatePatch, validPriceListParts } from './priceListEditing.js'
@@ -143,6 +143,8 @@ const localSnapshot = state => ({
   roles: state.roles,
   viewMode: state.viewMode,
   viewModePinned: state.viewModePinned,
+  viewModePinnedAt: state.viewModePinnedAt,
+  viewModePreferenceRev: state.viewModePreferenceRev,
   inboxShowAll: state.inboxShowAll,
 })
 
@@ -1578,7 +1580,7 @@ export function StoreProvider({ children }) {
     // An explicit switch is remembered (`viewModePinned`) and never overridden.
     setViewMode(mode) {
       setState(s => (mode === 'tablet' || mode === 'full'
-        ? { ...withAudit(s, 'View switched', mode, `from ${s.viewMode}`), viewMode: mode, viewModePinned: true }
+        ? { ...withAudit(s, 'View switched', mode, `from ${s.viewMode}`), viewMode: mode, viewModePinned: true, viewModePinnedAt: defaultViewMode(), viewModePreferenceRev: VIEW_MODE_PREFERENCE_REV }
         : s))
     },
 
@@ -1587,8 +1589,11 @@ export function StoreProvider({ children }) {
     // visit and never again. Only follows the viewport until someone chooses.
     syncViewMode() {
       setState(s => {
-        if (s.viewModePinned) return s
         const next = defaultViewMode()
+        if (s.viewModePinned) {
+          if (!s.viewModePinnedAt || s.viewModePinnedAt === next) return s
+          return { ...s, viewMode: next, viewModePinned: false, viewModePinnedAt: next }
+        }
         return next === s.viewMode ? s : { ...s, viewMode: next }
       })
     },

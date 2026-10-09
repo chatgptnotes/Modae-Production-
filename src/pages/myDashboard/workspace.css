@@ -378,3 +378,152 @@
   border-color: var(--status-warning-border) !important;
 }
 }
+.shell[data-theme="dark"] .dw-reference-dashboard {
+  --reference-success: var(--status-success);
+  --reference-warning: var(--status-warning);
+  --reference-danger: var(--status-danger);
+  --reference-info: var(--status-info);
+  --reference-note: var(--status-info);
+}
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-kpi,
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-section,
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-table th,
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-priority-table .priority-chip,
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-priority-table .priority-chip--warning,
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-priority-table .priority-chip--danger {
+  background: var(--surface-default);
+  color: var(--text-primary);
+}
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-table th {
+  color: var(--text-secondary);
+}
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-accent--blue,
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-stage i {
+  color: var(--reference-info);
+  background: var(--reference-info);
+}
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-rate strong {
+  color: var(--reference-info);
+}
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-accent--purple {
+  background: var(--reference-note);
+}
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-stage i.stage-budgetary,
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-stage i.stage-technical-evaluation,
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-stage i.stage-commercial-review,
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-legend .medium,
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-funnel-row span.medium {
+  background: var(--reference-warning);
+  color: var(--text-primary);
+}
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-stage i.stage-won,
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-legend .high,
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-funnel-row span.high {
+  background: var(--reference-success);
+}
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-blocked i,
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-legend .low,
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-funnel-row span.low {
+  background: var(--reference-danger);
+}
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-rate > div {
+  border-color: var(--reference-success);
+  border-left-color: var(--reference-danger);
+}
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-analysis-button,
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-action-primary,
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-performance-bar > i > b,
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-quarterly > div i,
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-quarterly article > i > b,
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-filter-pills button.active {
+  border-color: var(--action-primary);
+  background: var(--action-primary);
+  color: var(--text-on-accent);
+}
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-empty-positive {
+  color: var(--reference-success);
+}
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-priority-table .priority-chip--warning {
+  color: var(--reference-warning);
+  border-color: var(--status-warning-border);
+  background: var(--status-warning-bg);
+}
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-priority-table .priority-chip--danger {
+  color: var(--status-danger-text);
+  border-color: var(--status-danger-border);
+  background: var(--status-danger-bg);
+}
+.shell[data-theme="dark"] .dw-reference-dashboard .pipeline-stage-node > span i {
+  background: var(--border-default);
+}
+.shell[data-theme="dark"] .dw-reference-dashboard .pipeline-stage-node > span i.is-active {
+  background: var(--reference-success);
+  box-shadow: 0 0 0 3px var(--status-success-bg);
+}
+.shell[data-theme="dark"] .dw-reference-dashboard .pipeline-stage-connector.is-active {
+  background: linear-gradient(90deg, var(--reference-info), var(--reference-success), var(--reference-info));
+}
+
+/* Centered tapered stages retain the reference funnel silhouette. Totals
+   remain in their aligned columns so narrow bands never truncate text. */
+@media screen {
+  .dw-reference-dashboard .reference-funnel-row {
+    grid-template-columns: 128px minmax(0, 1fr);
+    min-height: 32px;
+  }
+  .dw-reference-dashboard .reference-funnel-row > .reference-funnel-track {
+    width: 100%;
+    height: 25px;
+    margin-left: 0;
+    clip-path: none;
+    justify-content: center;
+    background: transparent;
+  }
+  .dw-reference-dashboard .reference-funnel-fill {
+    display: flex;
+    height: 100%;
+    overflow: hidden;
+    border-radius: 0;
+    clip-path: polygon(0 0, 100% 0, 92% 100%, 8% 100%);
+  }
+  .dw-reference-dashboard .reference-funnel-fill span { min-width: 0; }
+  .shell[data-theme="dark"] .dw-reference-dashboard .reference-funnel-row > .reference-funnel-track {
+    background: transparent !important;
+  }
+  .dw-reference-dashboard .reference-funnel-totals {
+    grid-template-rows: 25px repeat(6, 32px);
+  }
+  .dw-reference-dashboard .reference-funnel-body { overflow-x: auto; }
+  .dw-reference-dashboard .reference-funnel-list { min-width: 250px; padding-top: 31px; }
+  .dw-reference-dashboard .reference-rate > .reference-rate-ring {
+    position: relative;
+    isolation: isolate;
+    border: 0;
+    background: conic-gradient(var(--status-success) var(--win-share), var(--status-danger) 0);
+  }
+  .dw-reference-dashboard .reference-rate > .reference-rate-ring.is-empty {
+    background: var(--border-default);
+  }
+  .dw-reference-dashboard .reference-rate-ring::before {
+    position: absolute;
+    inset: 13px;
+    z-index: -1;
+    border-radius: 50%;
+    background: var(--surface-default);
+    content: '';
+  }
+  .dw-reference-dashboard .reference-chart-empty {
+    margin: 8px 0;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .dw-reference-dashboard .reference-table th {
+    white-space: normal;
+    line-height: 1.4;
+    padding: 12px 14px;
+  }
+  .dw-reference-dashboard .reference-table th + th {
+    border-left: 1px solid var(--border-subtle);
+  }
+}

@@ -862,7 +862,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
                 }}>
                 <td className="rowhead">{firstRow + index}</td>
                 <td onClick={selectCell(o, COLS[0])} className={`oppid ${customerStatusFor(o)} ${stageClass(o) === 'open' ? '' : stageClass(o)} ${isSel(o, COLS[0]) ? 'cell-sel' : ''}`}>
-                  <span className="tracker-oppid-actions">
+                  <span className="tracker-oppid-actions" title={`Customer class: ${customerStatusFor(o)}`}>
                     <Link to={`/opp/${o.id}`} title="Open opportunity workspace">{displayOpportunityId(o.id, store.config?.roleNames)}</Link>
                   </span>
                 </td>

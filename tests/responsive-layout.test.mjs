@@ -79,8 +79,9 @@ test('main page titles use the same icons as their sidebar destinations', () => 
 })
 
 test('primary workspace pages share a responsive inset from the sidebar', () => {
-  assert.match(css, /--workspace-page-gutter: clamp\(14px, 1\.5vw, 24px\);/)
-  assert.match(css, /\.main-scroll > \.page:has\(\.workspace-page-title\)\s*\{[^}]*width: 100%;[^}]*max-width: none;[^}]*padding-inline: var\(--workspace-page-gutter\);/)
+  assert.match(css, /--workspace-page-gutter: 18px;/)
+  assert.match(css, /--workspace-page-gutter: 12px;/)
+  assert.match(css, /\.shell \.main-scroll > :is\(\.page, \.forms-bg, \.workspace-page\),\s*\.shell \.mobile-content > :is\(\.page, \.forms-bg, \.workspace-page\)\s*\{[^}]*width: 100%;[^}]*max-width: none;[^}]*padding-inline: var\(--workspace-page-gutter\);/)
   assert.match(css, /\.opportunities-page > \.tracker-page > \.workspace-page-title\s*\{\s*padding-inline: 0;/)
   assert.match(css, /\.opportunities-page > \.tracker-page > \.sheet-wrap\.fill\s*\{[^}]*border-inline-width: 0;/)
 })

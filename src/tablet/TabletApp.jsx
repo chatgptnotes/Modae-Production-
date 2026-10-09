@@ -129,7 +129,7 @@ export default function TabletApp() {
   )
 
   return (
-    <div className="shell tablet-mode" data-theme={theme} style={{ display: 'block' }}>
+    <div className={`shell tablet-mode${loc.pathname === '/my-dashboard' ? ' mobile-dashboard-shell' : ''}`} data-theme={theme} style={{ display: 'block' }}>
       <BrandWatermark variant="tablet" />
       <header className="tablet-bar">
         <div className="mobile-heading">

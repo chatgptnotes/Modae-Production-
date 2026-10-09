@@ -71,6 +71,7 @@ export const essentialProposalSnapshot = proposal => {
 // abandons locally entered browser data, so schema migrations must happen in
 // migrate()/stateFromSaved() instead of by changing the storage namespace.
 export const KEY = 'wintrack-modae-v4'
+export const VIEW_MODE_PREFERENCE_REV = 2
 
 // Before description-only catalogue suggestions were made review-only, a
 // tier-4 suggestion could be persisted as a priced sourcing line. Repair only
@@ -377,11 +378,26 @@ export function migrate(s) {
   }
   if (!s.handover || typeof s.handover !== 'object' || Array.isArray(s.handover)) s.handover = demo && seedHandover && Object.keys(seedHandover).length ? seedHandover : {}
   if (s.viewMode !== 'tablet' && s.viewMode !== 'full') s.viewMode = defaultViewMode()
+  const currentViewModeViewport = defaultViewMode()
+  if (s.viewModePinned && !s.viewModePinnedAt) s.viewModePinnedAt = currentViewModeViewport
   if (s.viewModeRestoreRev === 1) {
     s.viewMode = defaultViewMode()
     s.viewModePinned = false
+    delete s.viewModePinnedAt
     delete s.viewModeRestoreRev
   }
+  // The first pinned full-site preference predated the phone recovery action.
+  // Clear that stale choice once on narrow screens so a phone cannot boot into
+  // the desktop shell with its sidebar and mobile navigation both inaccessible.
+  if (s.viewModePreferenceRev !== VIEW_MODE_PREFERENCE_REV
+    && s.viewModePinned
+    && s.viewMode === 'full'
+    && defaultViewMode() === 'tablet') {
+    s.viewMode = 'tablet'
+    s.viewModePinned = false
+    delete s.viewModePinnedAt
+  }
+  s.viewModePreferenceRev = VIEW_MODE_PREFERENCE_REV
   // Remove the retired tablet theme preference from older local snapshots.
   delete s.tabletTheme
   // The inbox's "Show all" used to be component state, so a reload put a sales
