@@ -15,6 +15,7 @@ import { modaeStandardCommercialTerms } from './commercialTerms.js'
 import { isLegacyAutoSparesSupportRow } from './proposal/sparesBoq.js'
 import { proposalApprovalSnapshot } from './approvalMemory.js'
 import { opportunityOwnerFor } from './leadRules.js'
+import { localWorkbookImport } from './localWorkbook.js'
 import {
   CIN_PATTERN,
   GSTIN_PATTERN,
@@ -680,6 +681,26 @@ export function emptyState(prev) {
       ? { ...prev.config, uploads: { ...uploads, priceLists: (uploads.priceLists || []).filter(p => !p.dummy) } }
       : prev.config,
   })
+}
+
+export const LOCAL_WORKBOOK_ID = 'betser-sales-pipeline-usage-v2'
+
+export function applyLocalWorkbook(state) {
+  if (state.importedWorkbook === LOCAL_WORKBOOK_ID) return state
+  const base = emptyState(state)
+  return {
+    ...base,
+    demoData: false,
+    opportunities: localWorkbookImport.opportunities,
+    customers: localWorkbookImport.customers,
+    files: Object.fromEntries(localWorkbookImport.opportunities.map(({ id }) => [id, {}])),
+    sales: { ...base.sales, targets: {}, orders: [] },
+    audit: [],
+    deletedLeadIds: [],
+    deletedOpportunityIds: [],
+    pendingOpportunitySyncIds: [],
+    importedWorkbook: LOCAL_WORKBOOK_ID,
+  }
 }
 
 export function seedState() {

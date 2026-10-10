@@ -79,8 +79,8 @@ const KEY_COL_WIDTHS = {
 }
 const ROWHEAD_PCT = 3
 
-function PipelineUploadPreview({ preview, onClose }) {
-  const { fileName, sheetName, headers, rows, previewRows, missing } = preview
+function PipelineUploadPreview({ preview, onClose, onImport }) {
+  const { fileName, sheetName, headers, rows, previewRows, missing, importData } = preview
   const shown = previewRows.slice(0, 25)
   return (
     <Modal title={`Pipeline upload preview — ${fileName}`} onClose={onClose} wide className="workbook-preview-modal">
@@ -93,6 +93,9 @@ function PipelineUploadPreview({ preview, onClose }) {
           The preview could not find: {missing.map(key => key === 'sellTo' ? 'Customer' : 'Opportunity Name').join(' and ')}.
           Check the workbook headings before the later migration step.
         </div>
+      )}
+      {importData?.error && (
+        <div className="warnbox" role="alert">{importData.error}</div>
       )}
       {!rows.length ? (
         <div className="hint">No data rows were found in the first sheet.</div>
@@ -109,6 +112,11 @@ function PipelineUploadPreview({ preview, onClose }) {
       )}
       <div className="form-actions" style={{ marginTop: 12 }}>
         <button type="button" onClick={onClose}>Close preview</button>
+        {importData?.opportunities?.length > 0 && !importData.error && (
+          <button type="button" className="btn-primary" onClick={onImport}>
+            Replace local data with this workbook ({importData.opportunities.length} opportunities)
+          </button>
+        )}
       </div>
     </Modal>
   )
@@ -1065,7 +1073,19 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
       </div>
       {afterTable}
       </div>
-      {pipelinePreview && <PipelineUploadPreview preview={pipelinePreview} onClose={() => setPipelinePreview(null)} />}
+      {pipelinePreview && <PipelineUploadPreview preview={pipelinePreview} onClose={() => setPipelinePreview(null)} onImport={async () => {
+        try {
+          const result = await store.importWorkbookData(pipelinePreview.importData)
+          if (!result.ok) {
+            setPipelineUploadError(result.error)
+            return
+          }
+          setPipelinePreview(null)
+          setPipelineUploadError(`Imported ${result.opportunities} opportunities and ${result.customers} customers locally. Demo data was removed.`)
+        } catch (error) {
+          setPipelineUploadError(error?.message || 'The workbook could not be imported locally.')
+        }
+      }} />}
       {dateFilterOpen && dateFilterPos && renderDateFilterPop(dateFilterPos)}
 
       <div className="sheet-tabs">

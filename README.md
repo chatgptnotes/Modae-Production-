@@ -100,8 +100,9 @@ submission, and follow-up.
   fiscal-period filters. Existing role reports and target tools remain under
   the register menu → “More reports & settings.” The configured FY is selected
   by default; task dates appear only when a real workflow deadline exists.
-- Provides an Excel pipeline upload preview; pipeline migration is a later step
-  and previewed rows are not saved.
+- Loads the Betser workbook as the local-only opportunity/customer dataset on
+  first localhost launch, and also provides an Excel pipeline upload action for
+  replacing that local dataset later.
 - Admins can independently require final quote-release approval and approval of
   special customer commercial terms.
 - Level 2 intake supports searchable customer-master selection, inline creation
@@ -132,8 +133,8 @@ data, including deletions; browser snapshots are offline working copies and
 are never republished merely because they exist locally. Each new Railway
 deployment invalidates active browser sessions, clears app-owned browser
 storage/cache, and returns users to sign-in. The application can run locally
-without Supabase. In that mode it uses the local demo state and does not write
-to a database. A configured Supabase environment enables authentication and
+without Supabase. In that mode it uses browser-local persistence and does not
+write to a database. A configured Supabase environment enables authentication and
 cloud persistence. When running on localhost, seeded demo credentials may fall
 back to browser-only local auth if Supabase rejects them; deployed environments
 always require Supabase Auth.
@@ -154,6 +155,7 @@ documented in [DEPLOYMENT.md](./DEPLOYMENT.md).
 
 ```bash
 npm run dev       # Start the local Vite development server
+npm run local:supabase  # Bootstrap local Supabase from the Excel pipeline workbook
 npm test          # Run the automated test suite
 npm run build     # Create a production build
 npm run preview   # Preview the production build locally
@@ -161,6 +163,9 @@ npm run preview   # Preview the production build locally
 
 Before production promotion, also walk the manual checklist in
 [tests/MANUAL_SMOKE_CHECKLIST.md](./tests/MANUAL_SMOKE_CHECKLIST.md).
+
+For a local Supabase workspace populated from the Betser workbook, see
+[docs/LOCAL_SUPABASE_WORKBOOK.md](./docs/LOCAL_SUPABASE_WORKBOOK.md).
 
 ## Project structure
 

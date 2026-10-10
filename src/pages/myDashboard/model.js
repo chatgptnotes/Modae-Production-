@@ -175,6 +175,7 @@ export function dashboardModel(store, { scope = 'global', owner = 'all', period 
   const outcomes = { ...outcomeSummary, byReason: reconcileWinLossReasons(outcomeSummary.byReason) }
   return { pipeline, open, pending, decisions: pending.filter(a => approvalNeedsRole(a, role)), work, blocked, followups, stale, queue,
     funnel, topOpportunities, topOpportunityCandidates, headlineOpenCount, headlinePipelineK, perf, team,
+    workbookOnly: String(store.importedWorkbook || '').startsWith('betser-sales-pipeline-usage-'),
     pipelineK: open.reduce((sum, o) => sum + (+o.valueK || 0), 0),
     weightedK: open.reduce((sum, o) => sum + (+o.valueK || 0) * (PROB_WEIGHT[o.prob] ?? PROB_WEIGHT.Low), 0),
     outcomes,

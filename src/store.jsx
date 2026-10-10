@@ -13,7 +13,7 @@ import {
 } from './seed.js'
 import { leadConfig, opportunityOwnerFor, routeOwner, expiredLeadDeadline, aiAuditDetail } from './leadRules.js'
 import { withoutSimulated, simulatedCount } from './simulatedLeads.js'
-import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, defaultViewMode, followViewportMode, VIEW_MODE_PREFERENCE_REV } from './appState.js'
+import { KEY, migrate, seedState, emptyState, applyLocalWorkbook, stateFromSaved, syncedOf, defaultViewMode, followViewportMode, VIEW_MODE_PREFERENCE_REV, LOCAL_WORKBOOK_ID } from './appState.js'
 import { unitCostINR, unitSellINR, setRoleNameConfig, nowIST, toISTISOString, canManagePriceLists, isAdminRole } from './utils.js'
 import { PRICE_SOURCES, isConfirmableSparesLine, normalizePriceFields, sparesLineFinancials } from './pricing.js'
 import { validServiceRatePatch, validPriceListParts } from './priceListEditing.js'
@@ -103,10 +103,10 @@ const initialState = () => {
   // reseed an empty workspace when Supabase was unavailable.
   const saved = localStorage.getItem(KEY)
   const state = stateFromSaved(saved)
-  // Production starts clean. Existing demo-mode snapshots are migrated once
-  // into an empty workspace; real records entered after that remain intact.
+  // Local-only startup upgrades the browser snapshot to the pinned workbook
+  // dataset once; the marker then lets later local edits survive reloads.
   const next = reconcileApprovedSubmissions(state.demoData === true ? emptyState(state) : state)
-  return next
+  return datastore.dbEnabled() ? next : applyLocalWorkbook(next)
 }
 
 // Supabase is the authoritative store for catalogues, files, and the full
@@ -135,6 +135,7 @@ const localSnapshot = state => ({
   proposals: state.proposals,
   approvals: state.approvals,
   customers: state.customers,
+  importedWorkbook: state.importedWorkbook,
   users: state.users,
   config: state.config,
   rateSheets: state.rateSheets,
@@ -813,6 +814,32 @@ export function StoreProvider({ children }) {
       // React time to publish the new state through stateRef before saving it.
       setTimeout(flushSaves, 0)
       spTrack(opp.id, 'Open', () => filestore.ensureOppFolder(opp))
+    },
+
+    // Replace the local browser workspace with the supplied workbook. This is
+    // deliberately local-only: production/shared Supabase workspaces must use
+    // the reviewed server import path instead of a browser file upload.
+    async importWorkbookData(importData) {
+      if (datastore.dbEnabled()) return { ok: false, error: 'Excel import is disabled while Supabase is configured.' }
+      const opportunities = Array.isArray(importData?.opportunities) ? importData.opportunities : []
+      const customers = Array.isArray(importData?.customers) ? importData.customers : []
+      if (!opportunities.length) return { ok: false, error: 'The workbook has no importable opportunities.' }
+      const base = emptyState(stateRef.current)
+      const files = Object.fromEntries(opportunities.map(opp => [opp.id, Object.fromEntries(SUBFOLDERS.map(folder => [folder, []]))]))
+      const imported = withAudit({
+        ...base,
+        demoData: false,
+        opportunities,
+        customers,
+        importedWorkbook: LOCAL_WORKBOOK_ID,
+        files,
+        audit: [],
+        pendingOpportunitySyncIds: [],
+        deletedOpportunityIds: [],
+      }, 'Excel workbook imported', 'Betser Sales Pipeline Usage.xlsx', `${opportunities.length} opportunities and ${customers.length} customers loaded locally`)
+      persistLocalSnapshot(imported)
+      setState(imported)
+      return { ok: true, opportunities: opportunities.length, customers: customers.length }
     },
 
     updateOpportunity(id, patch) {

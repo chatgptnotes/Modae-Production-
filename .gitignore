@@ -20,6 +20,7 @@ doc/
 
 # Local-only archive for prototypes, backups, generated files, and retired migrations.
 .local/
+supabase/.temp/
 
 # Isolated agent worktrees stay local to this checkout.
 .worktrees/

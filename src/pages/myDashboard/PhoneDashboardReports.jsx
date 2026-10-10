@@ -48,13 +48,13 @@ function ReasonBars({ rows, maximum }) {
 }
 
 function WinLoss({ model, nav, fy, canOpen }) {
-  const { summary, byReason } = model.outcomes
+  const { summary, byReason, closedOther = { count: 0, byStage: [] } } = model.outcomes
   const reasons = byReason.filter(row => row.won || row.lost)
   const maximum = Math.max(1, ...reasons.map(row => row.won + row.lost))
   const losses = reasons.filter(row => row.lost).sort((a, b) => b.lost - a.lost)
   return <DashboardSection title="Win/Loss Analysis" subtitle={`Closed opportunities · ${fy}`} icon="target">
-    <div className="mobile-winloss-summary"><div className={`mobile-winrate${summary.total ? '' : ' is-empty'}`} style={{ '--win-share': `${summary.total ? summary.won / summary.total * 100 : 0}%` }} role="img" aria-label={summary.total ? `Win rate ${summary.winRate}%` : 'No closed opportunities yet'}><div><strong>{summary.total ? `${summary.winRate}%` : '—'}</strong><span>Win Rate</span></div></div><dl><div><dt>Won</dt><dd>{summary.won}</dd></div><div><dt>Lost</dt><dd>{summary.lost}</dd></div><div><dt>Total Closed</dt><dd>{summary.total}</dd></div></dl></div>
-    {summary.total ? <><h3 className="mobile-report-heading">Won vs Lost by Reason</h3><ReasonBars rows={reasons} maximum={maximum} /><h3 className="mobile-report-heading">Top Loss Reasons (by count)</h3>{losses.map((row, index) => <div className="mobile-loss-reason" key={row.reason}><span>{index + 1}. {row.reason}</span><strong>{row.lost}</strong></div>)}{!losses.length && <p className="mobile-report-empty">No lost opportunities yet.</p>}</> : <p className="mobile-report-empty">No closed opportunities yet.</p>}
+    <div className="mobile-winloss-summary"><div className={`mobile-winrate${summary.total ? '' : ' is-empty'}`} style={{ '--win-share': `${summary.total ? summary.won / summary.total * 100 : 0}%` }} role="img" aria-label={summary.total ? `Win rate ${summary.winRate}%` : 'No closed opportunities yet'}><div><strong>{summary.total ? `${summary.winRate}%` : '—'}</strong><span>Win Rate</span></div></div><dl><div><dt>Won</dt><dd>{summary.won}</dd></div><div><dt>Lost</dt><dd>{summary.lost}</dd></div><div><dt>Won/Lost Closed</dt><dd>{summary.total}</dd></div><div><dt>Closed / No Win</dt><dd>{closedOther.count}</dd></div></dl></div>
+    {summary.total ? <><h3 className="mobile-report-heading">Won vs Lost by Reason</h3><ReasonBars rows={reasons} maximum={maximum} /><h3 className="mobile-report-heading">Top Loss Reasons (by count)</h3>{losses.map((row, index) => <div className="mobile-loss-reason" key={row.reason}><span>{index + 1}. {row.reason}</span><strong>{row.lost}</strong></div>)}{!losses.length && <p className="mobile-report-empty">No lost opportunities yet.</p>}</> : <p className="mobile-report-empty">No explicit Won or Lost opportunities yet.</p>}{closedOther.count > 0 && <><h3 className="mobile-report-heading">Closed / No Win by Excel Stage</h3>{closedOther.byStage.map(row => <div className="mobile-loss-reason" key={row.stage}><span>{row.stage}</span><strong>{row.count}</strong></div>)}</>}
     {canOpen('analytics') && <button type="button" className="mobile-card-action mobile-analysis-action" onClick={() => nav('/analytics')}>Open detailed analysis<Icon name="arrowRight" size={16} /></button>}
   </DashboardSection>
 }

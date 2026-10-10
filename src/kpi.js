@@ -11,14 +11,16 @@ export const FUNNEL_STAGES = [
   { key: 'firm-proposal', label: 'Firm Proposal', stages: ['Firm Bid'], note: 'commercial proposal' },
   { key: 'negotiate', label: 'Negotiate', stages: ['Negotiate'], note: 'commercial review' },
   { key: 'won', label: 'Won', stages: ['Won'], note: 'closed won' },
+  { key: 'closed-no-win', label: 'Closed / No Win', stages: [], note: 'closed without an explicit Won stage' },
 ]
 
 export function funnelRows(opportunities = [], { owner = null } = {}) {
   const scoped = opportunities.filter(o => !owner || o.owner === owner)
   return FUNNEL_STAGES.map(group => {
     const rows = scoped.filter(o => {
-      if (!group.stages.includes(o.stage)) return false
-      return group.key === 'won' ? o.status === 'Closed' : o.status === 'Open'
+      if (group.key === 'won') return o.status === 'Closed' && o.stage === 'Won'
+      if (group.key === 'closed-no-win') return o.status === 'Closed' && o.stage !== 'Won'
+      return group.stages.includes(o.stage) && o.status === 'Open'
     })
     return {
       ...group,
@@ -209,7 +211,10 @@ export function winLossAnalysis(opportunities = [], competitors = [], { commerci
       competitorByOpp.set(competitor.oppId, competitor.name)
     }
   }
-  const closed = opportunities.filter(o => o?.stage === 'Won' || o?.stage === 'Lost')
+  const closed = opportunities.filter(o =>
+    (o?.status == null || o.status === 'Closed') && (o?.stage === 'Won' || o?.stage === 'Lost'))
+  const closedOtherRows = opportunities.filter(o =>
+    o?.status === 'Closed' && o?.stage !== 'Won' && o?.stage !== 'Lost')
   const wonRows = closed.filter(o => o.stage === 'Won')
   const lostRows = closed.filter(o => o.stage === 'Lost')
   const valueOf = row => Number(row.valueK) || 0
@@ -268,7 +273,21 @@ export function winLossAnalysis(opportunities = [], competitors = [], { commerci
     valueK: commercial ? valueOf(row) : null,
     closeDate: row.lastUpdated || row.orderDate || row.createDate || '',
   }))
-  return { summary, byReason, insights, rows }
+  const closedOtherByStage = new Map()
+  for (const row of closedOtherRows) {
+    const stage = String(row.stage || '').trim() || 'Unspecified'
+    const current = closedOtherByStage.get(stage) || { stage, count: 0, valueK: 0 }
+    current.count += 1
+    current.valueK += valueOf(row)
+    closedOtherByStage.set(stage, current)
+  }
+  const closedOther = {
+    count: closedOtherRows.length,
+    byStage: [...closedOtherByStage.values()]
+      .sort((a, b) => b.count - a.count || a.stage.localeCompare(b.stage))
+      .map(row => ({ ...row, valueK: commercial ? row.valueK : null })),
+  }
+  return { summary, byReason, insights, rows, closedOther }
 }
 
 // Proposals sent within the route's target window — the metric Swami said he
