@@ -24,7 +24,7 @@ export default function ServiceExecutionPanel({ opp }) {
   }
   const accepted = est.customerDecision === 'Accepted'
   const complete = !!est.executionDate && !!est.engineer && Number(est.actualEngineerDays) > 0
-  const engineerSuggestions = [...(store.users || [])]
+  const engineerSuggestions = [...(store.users || []).filter(user => user.status === 'Active' && !user.deletedAt && !user.deletionPendingAt && !user.accessPending)]
     .filter(user => /engineer|technical|service/i.test(`${user.role || ''} ${user.title || ''} ${user.name || ''}`))
     .map(user => user.name || user.email)
     .filter(Boolean)

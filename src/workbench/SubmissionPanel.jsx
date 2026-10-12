@@ -112,7 +112,7 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
   const alreadySent = submission?.status === 'sent'
   const draftOpened = sentNow || submission?.status === 'draft'
   const releasePending = finalQuoteApprovalRequired && !release
-  const mailboxLocked = readOnly || releasePending
+  const mailboxLocked = readOnly || releasePending || store.canPerform?.('proposals.send') === false
   const doc = docModel(p, opp, { files: [], config: store.config })
   const { totalQty, lineQuoted, lineCost, linePrice, computeTotals } = buildPricing(store, p)
   const totals = computeTotals(p)
@@ -123,7 +123,7 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
   const toValid = recipientsValid(emailTo)
   const ccValid = splitRecipients(emailCc).length === 0 || recipientsValid(emailCc)
   const filenameValid = !attachProposal || validProposalFilename(proposalFilename)
-  const canSend = (!finalQuoteApprovalRequired || !!release) && !pendingConds.length && (!attachProposal || proposalValidated) && (!attachProposal || uploadStorageReady) && filenameValid && fromValid && toValid && ccValid && Boolean(emailSubject.trim()) && Boolean(emailBody.trim()) && !readingFiles && !readOnly
+  const canSend = (!finalQuoteApprovalRequired || !!release) && !pendingConds.length && (!attachProposal || proposalValidated) && (!attachProposal || uploadStorageReady) && filenameValid && fromValid && toValid && ccValid && Boolean(emailSubject.trim()) && Boolean(emailBody.trim()) && !readingFiles && !readOnly && store.canPerform?.('proposals.send') !== false
   const supportingAttachmentNames = [
     ...enclosuresFor(route).map(e => e.filename),
     ...extraFiles.map(f => f.filename),
@@ -296,6 +296,7 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
   }
 
   const send = async () => {
+    if (!canSend) return
     setSending(true)
     setSendError('')
     setGmailDraftHref('')
@@ -357,6 +358,7 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
   }
 
   const markAsSent = () => {
+    if (store.canPerform?.('proposals.send') === false) return
     const id = communicationId || submission?.id
     if (!id) return
     store.markProposalSent(opp.id, id)

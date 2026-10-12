@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import usePhoneLayout from '../tablet/usePhoneLayout.js'
@@ -9,6 +9,7 @@ import { latestSubmissionForRevision } from '../submissionStatus.js'
 import WorkspaceInsights from '../ui/WorkspaceInsights.jsx'
 import { useWorkspaceView } from '../ui/WorkspaceViewContext.jsx'
 import { usePagedRows } from '../ui/Pagination.jsx'
+import { useViewportPageSize } from '../ui/useViewportPageSize.js'
 
 const DAY = 86400000
 
@@ -130,7 +131,9 @@ export default function ProposalSent() {
         return (rank[a.urgency.key] ?? 9) - (rank[b.urgency.key] ?? 9) || dateValue(a.sentDate) - dateValue(b.sentDate)
       })
   }, [rows, query, statusFilter, ownerFilter, sort])
-  const { pagedRows: pageRows, pagination } = usePagedRows(visibleRows, JSON.stringify([query, statusFilter, ownerFilter, sort, view, scope]))
+  const registerRef = useRef(null)
+  const { pageSize, listRef, pagerRef } = useViewportPageSize(visibleRows.length, { enabled: !phone && view === 'table', rootRef: registerRef })
+  const { pagedRows: pageRows, pagination } = usePagedRows(visibleRows, JSON.stringify([query, statusFilter, ownerFilter, sort, view, scope]), phone ? 10 : pageSize, pagerRef)
 
   const activeRows = rows.filter(row => !['won', 'lost', 'accepted'].includes(row.status.key))
   const dueRows = activeRows.filter(row => ['expired', 'overdue', 'expiring', 'due'].includes(row.urgency.key))
@@ -197,7 +200,7 @@ export default function ProposalSent() {
             {priorityRows.map(row => (
               <button key={row.opp.id} className="proposal-sent-priority-row" onClick={() => nav(`/opp/${row.opp.id}/followup`)}>
                 <span className={`proposal-sent-priority-mark proposal-sent-priority-mark-${row.urgency.tone}`} />
-                <span className="proposal-sent-priority-main"><b title={row.opp.sellTo || 'Customer not recorded'}>{row.opp.sellTo || 'Customer not recorded'}</b><span title={`${row.opp.id} · ${row.opp.oppName || ''}`}>{row.opp.id} · {row.opp.oppName}</span></span>
+                <span className="proposal-sent-priority-main"><b title={row.opp.sellTo || 'Customer not recorded'}>{row.opp.sellTo || 'Customer not recorded'}</b><span title={`${displayOpportunityId(row.opp.id)} · ${row.opp.oppName || ''}`}>{displayOpportunityId(row.opp.id)} · {row.opp.oppName}</span></span>
                 <span className="proposal-sent-priority-meta"><Pill tone={row.urgency.tone}>{row.urgency.label}</Pill><span>Sent {formatSentDate(row.sentDate) || '—'}</span></span>
                 <Icon name="chevronRight" size={14} />
               </button>
@@ -208,7 +211,7 @@ export default function ProposalSent() {
         )}
       </section>
 
-      <section className="proposal-sent-register" aria-labelledby="proposal-sent-register-title">
+      <section className="proposal-sent-register" ref={registerRef} aria-labelledby="proposal-sent-register-title">
         <div className="proposal-sent-section-head proposal-sent-register-head">
           <div><h3 id="proposal-sent-register-title">All submitted proposals</h3><p className="hint">Search the register, then open the opportunity to record the next customer interaction.</p></div>
           <div className="proposal-sent-register-actions"><span className="proposal-sent-count">{visibleRows.length} of {rows.length}</span><div className="proposal-sent-view-toggle" role="group" aria-label="Proposal view">
@@ -244,7 +247,7 @@ export default function ProposalSent() {
           <table className="proposal-sent-table">
             <colgroup><col className="proposal-sent-col-opportunity" /><col className="proposal-sent-col-customer" /><col className="proposal-sent-col-owner" /><col className="proposal-sent-col-proposal" /><col className="proposal-sent-col-sent" /><col className="proposal-sent-col-validity" /><col className="proposal-sent-col-status" /><col className="proposal-sent-col-action" /></colgroup>
             <thead><tr><th>Opportunity</th><th>Customer</th><th>Owner</th><th>Proposal</th><th>Sent</th><th>Validity</th><th>Status</th><th><span className="visually-hidden">Actions</span></th></tr></thead>
-            <tbody>
+            <tbody ref={listRef}>
               {pageRows.map(row => (
                 <tr key={row.opp.id}>
                   <td><button className="proposal-sent-link" title={`${displayOpportunityId(row.opp.id)} — ${row.opp.oppName || 'Untitled opportunity'}`} aria-label={`Open follow-up for ${displayOpportunityId(row.opp.id)} — ${row.opp.oppName || 'Untitled opportunity'}`} onClick={() => nav(`/opp/${row.opp.id}/followup`)}><b>{displayOpportunityId(row.opp.id)}</b><span>{row.opp.oppName || 'Untitled opportunity'}</span></button></td>
@@ -254,7 +257,7 @@ export default function ProposalSent() {
                   <td className="proposal-sent-date-cell"><span>{formatSentDate(row.sentDate) || '—'}</span><span className="proposal-sent-age">{row.age == null ? '' : `${row.age}d ago`}</span></td>
                   <td><Pill tone={row.urgency.tone}>{row.daysLeft == null ? '—' : row.daysLeft < 0 ? `${Math.abs(row.daysLeft)}d expired` : `${row.daysLeft}d left`}</Pill></td>
                   <td><Pill tone={row.status.tone}>{row.status.label}</Pill></td>
-                  <td><button className="proposal-sent-open" onClick={() => nav(`/opp/${row.opp.id}/followup`)} title="Open follow-up" aria-label={`Open follow-up for ${row.opp.id}`}><Icon name="chevronRight" size={14} /></button></td>
+                  <td><button className="proposal-sent-open" onClick={() => nav(`/opp/${row.opp.id}/followup`)} title="Open follow-up" aria-label={`Open follow-up for ${displayOpportunityId(row.opp.id)}`}><Icon name="chevronRight" size={14} /></button></td>
                 </tr>
               ))}
               {!visibleRows.length && <tr><td colSpan={8}><div className="proposal-sent-no-results"><b>No proposals match these filters.</b><span>Try clearing the search or choosing a different status.</span></div></td></tr>}

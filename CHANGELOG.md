@@ -1,687 +1,470 @@
-# Changelog
+## 2026-10-12 — Readable cells with pencil editing
+
+- Show wrapped spreadsheet values and full dropdown labels before editing;
+  reveal each permitted editor through a small accessible pencil.
+- Coordinate one active cell, preserving validation, conflict checks and existing
+  save actions; keep formula-bar inspection read-only and preview access explicit.
+- Allow content-sized rows in both column views, with wider minimum tracks and
+  horizontal scrolling instead of clipped names, descriptions and remarks.
+
+## 2026-10-12 — Reduce repeated workspace requests
+
+- Stop automatic event-stream connections/reconnects and approval polling. Keep
+  entry, focus/visibility, reconnect, explicit refresh and post-decision reads.
+- Let the shared store own lifecycle refreshes instead of repeating them in
+  Workbench and Approvals.
+- Batch up to 20 simultaneous datastore reads into one authenticated request
+  and workspace permission snapshot. Keep per-query projection, fresh account
+  checks on every batch, and revision-aware writes outside read batches.
+- No database migration is required for this request-reduction change.
+
+## 2026-10-12 — AI opportunity search and readable dates
+
+- Add Search with AI beneath the register search box, including date/owner
+  clarification, interpreted conditions, fresh-filter results and retry states.
+- Validate bounded typed filter plans on server and client; apply only to
+  permitted records. Keep credentials server-side and send no opportunity rows.
+- Support verified booking dates through the existing deduplicated register;
+  ignore stale AI responses after query or view changes.
+- Shorten display headings, wrap descriptions at word boundaries and replace
+  cramped date inputs with complete date labels and Save/Cancel editors.
+
+## 2026-10-12 — Editable opportunity spreadsheet and preview
+
+- Remove registration-only locks on spreadsheet business fields within existing
+  edit/ownership scope; commit cells on blur/Enter and cancel with Escape.
+- Add preview editing with Save/Cancel, COGS, forecast and remarks; protect dirty
+  drafts on close/switch and reject conflicting changes to the same field.
+- Save only changed fields through existing audited actions; preserve workflow,
+  booking, customer-master, pricing and ownership-transfer protections.
+
+## 2026-10-12 — Opportunity column controls
+
+- Give key columns proportional widths and provide clear, scrollable value
+  filters with text, numeric, date and multi-value conditions.
+- Keep sorting when clearing a column filter; sort percentages numerically,
+  probability by Low/Medium/High and financial quarters chronologically.
+- Keep condition filters scoped to the current user/view and combine them with
+  search, owner, date and value filters without changing workbook data.
+
+## 2026-10-12 — Configurable access and opportunity numbering
+
+- Add Admin page/action matrices for Standard and Management users, with protected
+  administrator access, revision checks, change reasons and transactional audit.
+- Enforce current account permissions in navigation, store mutations, server saves,
+  filtered reads and database access; refresh role assignments on authoritative pulls.
+- Add structured ID rules and service-only atomic reservations, preserving legacy
+  IDs, counter continuity and reservation history through workspace purges. Connected
+  clients fail safely instead of falling back to local numbering.
+- Add server-side proposal email permission, readiness and release checks.
+- Require migrations 021–023 (after 020) with the matching application release.
+
+## 2026-10-12 — Zoom-safe top navigation
+
+- Keep company, Global/My View and refresh controls inside one header row.
+- Respond to actual header width: compact search into an expandable icon and
+  move secondary utilities into More before the controls run out of space.
+- Prevent vertical header shrinking and dashboard overlap; preserve the native
+  phone header and existing search, scope, refresh, Guide and theme actions.
+
+## 2026-10-12 — Purchase Orders layout
+
+- Compact the order summary into a divided strip and give pending verification
+  rows clear customer labels, status badges and expandable review forms.
+- Align booking fields, simplify empty sections and support narrow layouts in
+  both themes while preserving booking verification and joint acceptance rules.
+
+## 2026-10-12 — Data-shaped Dynamic funnel
+
+- Replace separate Dynamic bars with smoothly connected, probability-colored
+  bands and offset labels across desktop, Analytics and phone reports.
+- Stage counts control the silhouette within the existing 30%–80% scale;
+  shapes can narrow, widen or form an hourglass. Empty stages remain grey.
+- Keep Normal’s fixed shape, the small switch, saved preference, role-based
+  value visibility and Analytics navigation.
+
+## 2026-10-12 — Account management and access removal
+
+- Add searchable/filterable account management, compact actions, phone cards and
+  explicit separation of access roles from owner identity.
+- Support confirmed deletion in local and shared mode while retaining attribution
+  and business records. Protect self, System Owner and the last active admin.
+- Make shared account changes server-owned, revision checked and audited. Persist
+  pending changes before Auth operations so failures can be retried safely.
+- Migration 020 blocks stale browser roster writes and denies inactive/deleted
+  accounts workspace access, including existing JWTs. Apply before release.
+
+## 2026-10-12 — Customer-mail dashboard and workflow follow-up
+
+- Rank Top 5 by expected order date within the current fiscal quarter, then
+  value, with probability visible on phone and desktop. Keep Won in the funnel.
+- Keep deferred/incomplete/cancelled KYC distinct from verified evidence. Require
+  the full customer-master checklist and check authority/reason before recording
+  a KYC bypass; retain a separate exception record and audit entry.
+- Add audited Admin controls for registration requirements and customer-health
+  scoring, preserving defaults and leaving probability methodology unchanged.
+- Offer three roles for new assignments; retain existing Team Lead records as
+  legacy access until an explicit replacement is chosen.
+- Decode workbook dates directly from Excel serials to prevent timezone-driven
+  day and quarter shifts. Continue to use the atomic import RPC for live merges.
 
-- Restored the original complete ModAE site logo in workspace headers across
-  phone, tablet and desktop; removed the cropped replacement and black tile.
+## 2026-10-12 — Normal and Dynamic funnel views
 
-- Matched phone search bars in light and dark themes across all five main tabs:
-  full-width 48px rows, consistent text/icons and integrated filter/menu actions.
-  Removed leftover phone header spacing; retained theme colors and wider layouts.
+- Add a compact funnel view switch across Dashboard, Analytics and phone reports.
+- Default to a fixed narrowing funnel with right-side labels, counts and values;
+  retain the existing count-sized Dynamic view and remember the browser preference.
+- Share live probability splits, role-based value visibility and Analytics stage
+  navigation across both views, with compact labels at phone widths.
 
-- Made the former Tablet view control open Phone mode: a centered 440px
-  workspace on larger screens with persistent device selection, shared
-  container-responsive styling and bounded navigation, dialogs and drawers.
-- Cleaned up More for daily work: disabled demos are hidden, the automation
-  map identifies live features and previews, and appearance stays in the header.
-- Added searchable phone status-update rows and stacked tender BOQ/commercial
-  review editors while retaining existing table access, permissions and gates.
-- Corrected local-only sync reporting and retained ad-hoc parts in the browser
-  cache; older compact caches now default the missing collection to empty so
-  tender intake can reopen after refresh.
+## 2026-10-12 — Remove My Pipeline register view
 
-- Moved phone Approvals search above KPI cards for salesperson and approver
-  views, with warnings below the KPIs; retained desktop/tablet ordering.
+- Remove My Pipeline from the opportunity register tabs and phone menu.
+- Previously remembered selections fall back to Opportunities; My Orders
+  keeps its Closed/Won filter. Opportunity records and pipeline charts are unchanged.
 
-- Unified the five main phone dark-mode tabs with graphite panels, consistent
-  spacing and full-width 48px search rows. Integrated opportunity menu and
-  approval filter actions without removing features; wider/light layouts remain unchanged.
+## 2026-10-12 — Dotted pipeline outline
 
-## 2026-09-27
+- Keep the data-driven centered pipeline shape and balanced widths, using
+  dotted bar borders and curved connectors without filled ribbons.
+- Retain solid probability colors, hover and totals across all chart views.
 
-- Polished the Follow-up & Closure workbench layout so long opportunity names, workflow labels, revisions, close-out controls, and competitor inputs wrap within responsive cards instead of clipping or overflowing.
-- Reduced Supabase traffic by limiting workspace hydration to one initial session load, removing automatic focus/visibility/route pulls, disabling presence polling, and preventing non-changing sourcing reconciliation from triggering autosaves.
-- Fixed the Service SOW handoff so carrying the Statement of Work opens Prepare Offer, keeps the travel confirmation gate visible, and recognizes proposal and quotation language during service classification.
-- Simplified new Service opportunities to the Standard Rate Sheet workflow, keeping Site Visit optional and removing proposal-specific handoff controls from the Service UI.
-- Routed Service Send Offer through the rate-schedule email panel with PDF preview, while keeping discounts approval-gated and preserving closed historical proposal lanes.
+## 2026-10-12 — Balanced pipeline widths
 
-Important project changes are recorded here in reverse chronological order.
-This is an implementation and release log, not a dump of every commit.
+- Keep the centered, curved pipeline design while widening small stages and
+  capping the largest at 80%. Empty stages use gray 30%-width zero bars.
+- Explain the adjusted display scale; exact counts, probability splits and
+  values remain unchanged across Dashboard, Analytics and phone.
 
-## [Unreleased]
+## 2026-10-12 — Flowing pipeline ribbon
 
-- Integrated the phone workspace release while preserving production dashboard preview totals, analytics loss-reason filtering, opportunity column widths, and desktop header/search polish.
+- Replace straight pipeline connectors with curved, lightly filled transitions
+  and increase desktop bar spacing. Keep count-proportional widths, solid
+  probability colors, empty markers and existing chart interactions.
 
-- Corrected phone Parts save feedback in browser-only sessions and removed the permanent workspace deletion controls from Admin.
+## 2026-10-12 — Phone page picker
 
-- Made administrator account editing explicit with an Edit button and a full inline row editor for name, email, role, and status. Added labelled Save/Cancel actions, row-level errors, keyboard controls, and disabled conflicting actions during editing and saving.
+- Replace crowded phone pagination with Previous, a direct page picker and
+  Next, with the visible record range above. Keep existing page sizes, filter
+  resets and desktop controls, including the opportunity register.
 
-- Updated release regression checks for the dashboard totals, six-stage funnel, shared header controls, and redesigned inbox layout while retaining pagination, scrolling, filter, and focus coverage.
+## 2026-10-12 — Connected pipeline outline
 
-- Removed the Permanently delete workspace button and its unused confirmation dialog from Admin configuration.
+- Join data-sized pipeline bars with thin edge lines across Dashboard, Analytics,
+  and phone. The outline follows counts and empty markers, resizes with the
+  layout, and leaves hover, labels, totals and filtering intact.
+
+## 2026-10-12 — Readable phone workspace
 
-- Fixed Admin Access & Routing alignment: separated account labels and counts, aligned user-management actions to the section edge, gave routing-review notices consistent spacing, and kept state-to-region mapping full-width across screen sizes.
+- Add shared phone spacing and natural word wrapping across records, forms,
+  actions and dialogs, while retaining dedicated spreadsheet scrolling.
+- Show full inbox sender names and subjects, with a three-line message preview;
+  place timestamps and stars below the text and wrap view filters.
+- Give dashboard cards full-width actions, roomier KPIs and stacked report
+  controls. Stack registration fields, sourcing editors and Analytics funnel
+  totals; wrap Admin navigation and preserve both workspace themes.
+- Apply the same rules to explicit Phone mode on large screens without changing
+  desktop/tablet workflows, business calculations or printed documents.
 
-- Simplified User management to a single role selector with Standard User, Team Lead, Management, and Admin. Preserved operational owner IDs and named approval gates, kept owner-name configuration separate, restricted account management to administrators, and fixed long account text and edit controls overlapping table columns.
+## 2026-10-12 — Count-sized pipeline bars
 
-- Added a phone-header account menu on the initials circle, showing name, email and current role with Full site and Log out actions. The menu supports keyboard dismissal, outside taps, both themes and full-screen forms, using the existing view and logout actions.
+- Replace the fixed taper with centered rounded bars whose widths are directly
+  proportional to opportunity count; add clear outlines in both themes.
+- Keep solid probability colors, full-row highlighting and aligned totals across
+  Dashboard, Analytics and phone. Empty stages use an outlined zero marker.
+
+## 2026-10-12 — Shared Analytics funnel
 
-- Restored Purchase Orders below Proposal Sent in the desktop sidebar. The page now opens at `/order` across desktop, tablet, phone More and dashboard actions; `/po` redirects to the new address. Existing role permissions, order data and opportunity PO workbench links are unchanged.
-
-- Matched Purchase Orders to the shared workspace presentation with a top-bar title, Proposal Sent summary-card and table-section styling, responsive phone cards, and existing light/dark theme tokens. Order calculations and validation gates are unchanged.
-
-- Restored the previous red/orange ModAE favicon and installed app icons. Desktop and phone headers now use the clean original mark with a black backing for clear visibility in both themes; document branding is unchanged. Advanced the offline cache version so clients refresh the restored icons.
-
-- Replaced the browser favicon and installed app/home-screen icons with the full official ModAE artwork, centered on black with mask-safe padding. Updated the icon generator and refreshed the service-worker cache. Existing installations may need reinstalling to refresh their home-screen icon.
-
-- Unified phone dark-mode surfaces, terracotta actions, neutral status/navigation text and search controls across Dashboard, Inbox and Opportunities. Fixed washed-out intake classification pills with dark backgrounds, clear selected/focus states and readable disabled actions; preserved logo, chart colors, light mode and wider layouts.
-
-- Kept the original logo/view/theme/profile row visible across signed-in phone pages and full-screen creation dialogs and editable tables. Centralized page chrome in the phone shell, removed duplicate page headers, and kept overlay controls inside dialogs; tablet/desktop, small confirmations and workflows remain unchanged.
-
-- Reformatted phone New enquiry and New opportunity forms with readable touch-sized fields, single-column layouts, clear attachments and persistent action areas. Phone creation dialogs track the visible viewport above the keyboard. Standardized workspace page/dialog heading typography without changing extraction, intake requirements, permissions, branding or proposal documents.
-
-- Redesigned phone lead details around Overview, Details, and Email tabs with full-width subjects, retained edits, actionable missing-information prompts, optional classification disclosures, original source/attachments, and one status-appropriate next action. Reused existing qualification, customer verification, approval, intake, and creation handlers; converted records remain read-only and missing data is not fabricated. Desktop/tablet layouts and persistence are unchanged.
-
-- Added a guided phone opportunity workflow with a sourcing checklist, compact searchable multi-part workspace, retained row drafts, batch markup/discount and confirmation previews, and whole-enquiry totals. Repeated requested part numbers remain distinct. Batch saves reject stale line/costing previews and enforce pricing permissions and current-stage checks. Prepared multi-row Project BOQ editing with review invalidation while preserving the existing Project Coming soon gate; Service stages offer focused task navigation. Completed stages remain browsable with editing locked. Existing approval gates and wider layouts are preserved.
-
-- Matched phone Opportunities and the opportunity workbench to the approved mobile previews: shared logo/view/theme/sync header, readable customer rows, compact search and filter controls, floating creation action, two-column summaries, and expandable gated workflow navigation. Spares sourcing now uses line cards and a phone edit panel with existing pricing and confirmation handlers, expandable costing controls, and a measured financial footer that appears in the sourcing section. Preserved tracker views, editable-table access, pagination, commercial permissions, and wider layouts.
-
-- Removed repeated visible page titles from phone layouts. Lead Inbox places its actions alongside search while keeping an accessible screen title and the shared logo/view/theme/sync header; tablet and desktop headings remain visible.
-
-- Unified the phone dashboard and Lead Inbox top bars through a shared original-logo header with view switch, theme control, user avatar, and truthful sync/refresh status. Inbox title and actions sit below the shared header.
-
-- Simplified the desktop/tablet Lead inbox to the approved single-row toolbar in both themes. Moved all eight filters into an Apply/Cancel dialog, review views and counts into a dropdown, and Archive/bulk actions into the more menu. Removed duplicate header controls while preserving every scrollable column, detail previews, and the dedicated phone layout.
-
-- Matched the phone Lead inbox to the approved Gmail-inspired preview: compact shared view/theme header, one search/filter bar, quick lead views, sender initials, naturally wrapped subjects, visible stars and status labels, and a floating New enquiry action. Kept existing lead details, selection, archive, filtering, and registration workflows; wider layouts retain their current structure.
-
-- Redesigned desktop/tablet Lead inbox triage in both themes: scoped/filter-aware review tabs, calmer rows and headers, neutral opportunity links, and a detail pane with full original email, real attachment previews, and status-appropriate workflow actions. All existing columns and column filters remain available through the list's horizontal scrollbar; phone layout and persistence are unchanged.
-
-- Reused the desktop My View / Global View switch in the phone dashboard header with a 44px touch target. Tightened expanded opportunity rows and aligned priority buttons beside their text from 380px upward, retaining compact wrapping on narrower phones.
-
-- Grouped desktop/tablet Lead inbox search, filters, New enquiry, and Archive inside one responsive toolbar card in both themes, retaining separate controls and the dedicated phone toolbar.
-
-- Matched the phone dashboard to the approved light/dark references using the original ModAE logo, shared appearance and scope controls, visible KPIs, ranked Top 5 cards, priority actions, and independent Performance, Pipeline Funnel, and Win/Loss disclosures. Search filters all ranked period candidates before selecting five. Report values use the existing dashboard model and role restrictions; review actions use the existing approval workflow. Scoped dashboard chrome to phones at 600px or less, restoring the tablet header and leaving wider layouts intact.
-
-- Removed Documents folder pagination: all Open, WON, Closed, and preserved SharePoint folders now appear together within their existing groups, with scope filters and navigation unchanged.
-
-- Matched the dark desktop/tablet dashboard to its approved preview: neutral metric and Gap text, flat graphite surfaces, softer status-icon backgrounds, raised table headers, and consistent section spacing. Logo, data calculations, tapered funnel, phone cockpit, and light mode remain unchanged.
-
-- Approval request cards and summary now expand to the available page width in both themes, including when zoomed out.
-
-- Replaced the phone dashboard with a dark WinTrack sales cockpit: fixed mobile header, sticky filters, KPI grid, opportunity card feed, approval bottom sheet, and five-tab navigation styling.
-
-- Made authenticated page containers fill the available workspace width in both themes with shared 18px side gutters (12px on phones). Restored centered tapered pipeline stages with data-driven probability bands and compact empty-stage placeholders, restored tinted dark opportunity-ID cells, and moved explanations above their targets when possible with dismissal on scroll.
-
-- Recovered phone-width sessions from stale full-site mode preferences and added a visible Mobile view escape action to the narrow full-site shell.
-
-- Applied the charcoal and terracotta dark palette with neutral text, cyan information accents and distinct semantic statuses. Quieted dark sidebar surfaces, replaced filled customer-class ID cells with readable links and small indicators, and removed warning outlines from ordinary blank date fields.
-- Corrected dashboard funnel rendering to omit empty probability bands and use count sizing when populated stages lack value. Kept totals outside narrow bars, added neutral empty win/loss rings and empty messages, and made outcome proportions and loss-reason ranking follow actual results.
-
-- Preserve transient inbox and opportunity search/filter state when opening records and returning. Fixed inbox detail navigation skipping its pagination hook, which could crash when opening a lead from the list.
-
-- Added a dedicated phone dashboard with a two-column KPI summary, performance-first overview, compact opportunity/action rows, and separate reports. Phone inbox and opportunity filters use draft panels; approval requests open their existing review details from compact rows. Grouped More navigation and moved workspace refresh into its action menu. Removed automatic DOM-based table conversion in favor of an explicit opportunity table workspace.
-
-- Added direct supplier price-list editing and draft-based service-rate editing
-  with Save/Cancel. Limited pricing maintenance to active LJS and ADMIN roles
-  across Price Lists, Admin, and store actions; supplier history and existing
-  synchronization remain intact. Reject invalid amounts and out-of-range GST.
-- Preserved lazy-loaded supplier archives when saving another revision, and
-  load edited archives by their stored record IDs so history remains readable.
-- Retained service rates and browser-only catalogue edits in the local fallback
-  cache so refresh does not discard saved pricing changes.
-- Redesigned the phone workspace with shared page titles, five-destination
-  navigation, searchable More, permission-filtered tools, Proposal Sent and
-  Workflow Admin routes, refresh feedback, inbox cards and collapsible filters,
-  opportunity cards with an editable table alternative, and expandable tables.
-  Phone forms and dialogs use the available width; the desktop switch returns
-  to the page from which More was opened.
-
-- Removed pagination from Price Lists, including catalogue, service-rate, and
-  ad-hoc tables; search and direct part links remain available.
-- Polished dark mode with one semantic palette, accessible text and action
-  contrast, and shared desktop/tablet theme controls. Browser preferences follow
-  layout changes and synchronize across tabs; body-mounted menus and dialogs
-  follow the workspace appearance. Consolidated competing overrides while
-  retaining light document/print surfaces and deployment preference cleanup.
-- Corrected dashboard and tablet token overrides and component-level colours
-  across inbox previews, table headers, approval notices, and proposal rows.
-  Dark mode uses warm ModAE charcoal with amber, green, red, and blue semantic
-  accents; dashboard pending work is amber and ordinary pipeline totals neutral.
-
-- Added consistent 10-row pagination to the main opportunity, inbox, approval,
-  customer, audit, proposal, order, user, folder, and price-list registers. Page
-  totals reflect the current filtered result set, and changing filters returns
-  each list to its first page. Simplified insight strips and moved the inbox
-  aging summary below its filters.
-- Added a shared My View / Global View switch to the desktop and tablet top bars.
-  The selection follows navigation and scopes owner-based registers while
-  retaining existing role access; renamed the sidebar dashboard destination to
-  Dashboard.
-- Made the Top 5 FY/quarter selector interactive and independent from the
-  dashboard-wide period. Top 5 now filters strictly by expected order date;
-  performance, funnel, and dashboard totals retain the shared period selection.
-- Scaled dashboard funnel bars and their High/Medium/Low segments by expected
-  value when commercial values are available, added the Won stage, and added a
-  combined My Pipeline register for open opportunities and won orders. Detailed
-  Win/Loss Analytics now filters closed outcomes by loss reason. Customer entry
-  forms suggest existing Sell-To and EUC names and capture Sell-To location.
-- Included open opportunities without an expected order date in the configured
-  FY dashboard pipeline; quarter views remain limited to dates within that
-  quarter.
-- Added a workspace top bar with permission-filtered quick search, current sync
-  status, a role access summary, and a live IST clock. Added rule-based
-  operational insight strips, an inbox side preview, and an owner-by-week
-  proposal follow-up board; moved dashboard view/FY controls into the shared
-  top bar and added an approvals review drawer with decision history. Added a
-  clickable opportunity stage strip and aligned dashboard labels/zero states
-  to the PDF; all actions continue into existing routes.
-- Applied the WinTrack operations-console visual system across the shared shell,
-  role dashboards, lead inbox, opportunity workspace, approvals, proposal
-  register, records, admin screens, and tablet view. Navigation is grouped by
-  work area; primary actions use ModAE red; status summaries distinguish
-  pending, approved, and rejected; tables and figures use consistent data
-  styling. Existing routes, role access, data, and workflow actions are kept.
-
-- Redesigned only My Dashboard with the existing ModAE palette: compact scoped
-  KPIs, urgent work, a count-scaled funnel with values, performance charts, and
-  a searchable paginated register. My View includes personal decisions and
-  assigned work; Global View uses company or selected-owner approval/blocker
-  counts. Added explicit refresh and fiscal-period filters without changing
-  persistence, other pages, or the sidebar. Existing role reports and target
-  editing remain available through the register menu → “More reports & settings.”
-  Matched the approved full-page reference with numeric actual/target columns,
-  quarterly values above bars, coloured stage labels, and numbered six-row
-  pagination. Defaulted to the configured FY and display real clarification or
-  approval deadlines, with workflow status when no deadline exists.
-
-- Removed dark mode and all theme controls. The desktop, tablet, sign-in, and
-  showcase surfaces now use the permanent light ModAE palette.
-
-- Replaced native Lead inbox header selects with accessible filter buttons and
-  readable wrapped dropdown menus so column labels no longer show browser arrows
-  or clipped option text.
-
-- Restyled the Opportunities search as a separate bordered search field beside
-  the owner scope selector, matching the Lead inbox search treatment.
-
-- Moved the Opportunities date filter into the search surface behind a Filter
-  button, removing the detached Date filter toolbar control.
-
-- Replaced truncated Lead inbox column labels with compact readable headers
-  while retaining full filter names for accessibility.
-
-- Removed Closed Reason from the default Opportunities key-column view while
-  retaining it in the full 31-column sheet and its approval-gated editing flow.
-
-- Flattened the Lead inbox opportunity link so its badge and ID wrap cleanly
-  as inline context instead of inheriting the global rounded button chrome.
-
-- Restored the Lead inbox row hierarchy so opportunity context, subject, and
-  preview text stack clearly without widening the fitted inbox grid.
-
-- Restored the compact Lead inbox shell with a 216px desktop sidebar, a flat
-  full-width mailbox surface, and fitted columns that remain visible together.
-
-- Unified the My Dashboard header controls into one aligned button row while
-  preserving My View and Global View accessibility states.
-
-- Removed the authenticated desktop workspace top bar so desktop navigation
-  stays focused in the sidebar.
-
-- Compact Opportunities toolbar actions behind a More menu so the primary
-  filters and Create opportunity control stay on one readable desktop row.
-- Integrated the sales-owner scope switch into the Opportunities search control
-  and matched the table column-header surface to the toolbar controls.
-- Replaced the visible scope button with a compact All checkbox and restored
-  the All 31 columns toggle beside More in the Opportunities toolbar.
-- Added smooth page-scoped responsive text sizing and a zoom-stable desktop
-  toolbar so the Opportunities layout stays readable through browser zoom.
-- Aligned all Opportunities toolbar controls to one shared height and reduced
-  the owner scope control to a compact checkbox-only affordance.
-
-- Added a shared light/dark preference across desktop, tablet, sign-in, and
-  showcase views, with an early head script to apply the selected or system
-  theme before the interface renders. Corrected approval cards, filters, pinned
-  sourcing cells, lead review, drawers, and workbench panels that still used
-  fixed light surfaces in dark mode. Restored readable desktop navigation
-  contrast and hid the workspace watermark in dark mode.
-
-- Restored the Lead inbox to compact fitted rows for every result count, keeping
-  every mailbox column visible without horizontal scrolling or summary cards.
-
-- Refined dashboard colors into a scoped enterprise palette with neutral card
-  surfaces, semantic KPI and chart accents, and a consistent pipeline ramp.
-
-- Added a true won/lost pie chart to the dashboard and Analytics outcome mix,
-  charting opportunity counts for restricted roles and commercial value where
-  permitted, with a legend and empty-state treatment.
-
-- Fixed Opportunities tracker alignment by opening all roles in the readable
-  key-column view and constraining the toolbar, table, and sheet tabs to the
-  main content column; the full pipeline sheet remains locally scrollable.
-- Made the Opportunities workspace zoom-resilient: toolbar controls stack while
-  both table views retain readable column widths and scroll horizontally inside
-  the grid without colliding with the sidebar. Column-name buttons now open
-  their menus without separate arrow indicators.
-- Tightened the 11-column Opportunities view to fit a wide desktop, enlarged
-  table text, allowed long headings to wrap cleanly, and reset horizontal
-  position when switching table views.
-
-- Added the Level 3 role foundation: standard application roles, durable
-  multi-role user profiles, combined page permissions, Admin user assignment
-  controls, and server-side Supabase Auth verification using trusted profile
-  roles while preserving legacy operational role IDs.
-
-- Added Level 2 customer and opportunity workflow improvements: concise lead
-  sources with internal-enquiry attribution, searchable customer selection with
-  inline new-customer creation, verified-customer KYC reuse, deferred KYC with
-  commercial/order gating, owner/admin opportunity editing and reassignment,
-  initials-free opportunity IDs, and structured loss-reason filtering.
-
-- Added the Railway deployment contract and staging runbook. Staging now has a
-  documented separate Supabase project, full price-list/catalogue copying,
-  sanitized workflow data, and Railway health/build/start configuration.
-
-- Added a shared ModAE pipeline funnel across dashboard and analytics, with My
-  View/Global View scope controls, quarter-ranked opportunity previews, closed
-  opportunities in the order book, and Budgetary versus Firm/RFQ intake
-  validation.
-- Added an Opportunities-page Excel upload preview. Existing pipeline workbooks
-  can be opened and reviewed without importing or saving any rows; migration is
-  intentionally deferred.
-- Reduced Supabase usage on the Free plan by changing approvals polling from
-  five seconds to 30 seconds and reusing identical in-flight live-data reads.
-
-- Changed follow-up and escalation actions to open editable Gmail drafts and
-  track draft/sent status in Communications. Internal escalation is gated until
-  14 days after proposal submission when no customer reply is recorded; approval
-  cards now prefer specific quote-release rationale over generic blockers.
-
-- Fixed built-in proposal workbook loading to bypass stale browser/service-worker
-  responses and expose the failing asset URL and HTTP status for deployment
-  diagnosis.
-- Canonicalized legacy opportunity IDs for display so owner display names such
-  as `R. Sundaram` render as the stable `RS` suffix without changing stored
-  primary keys or breaking linked records.
-- Prevented stale workspace snapshots from recreating rows after a permanent
-  purge by invalidating the server workspace cache, tagging browser sessions
-  with a purge generation, rejecting pre-purge saves, and reloading rejected
-  clients before they can retry old data.
-- Made direct Supabase deletes of opportunities, leads, and approvals invalidate
-  the server cache automatically through a persistent database generation marker;
-  the marker is hidden from application state and stale browser saves are rejected.
-- Completed the approved B&K catalogue for production by adding missing curated
-  part rows additively, so exact customer part numbers can resolve to list prices.
-- Hardened the Spares Sourcing-to-Proposal handoff with one shared gate for
-  empty, invalid, unconfirmed, missing-price, and expired-price lines. Direct
-  and embedded Proposal access now returns users to Sourcing, and stale proposal
-  repair cannot create a partial BoQ before sourcing is complete.
-- Fixed proposal workbook round-trip validation so an unchanged downloaded ModAE
-  Terms & Conditions block is compared with the exact rendered baseline instead
-  of internal workflow terms, while genuine customer-facing edits remain visible.
-- Improved authentication failure recovery so rejected Supabase bearer tokens
-  preserve HTTP diagnostics, stop live-event reconnect loops, clear the stale
-  browser session, and return the user to sign-in instead of leaving Sourcing
-  in a misleading load-error state.
-- Simplified the Lead inbox to one unified list by removing the redundant
-  Primary, Qualified, and Opportunity mailbox tabs; status filtering remains
-  available in the inbox filter bar.
-- Made future opportunity IDs unique across devices by reserving monthly
-  sequences atomically in Supabase and normalizing owner suffixes to role codes.
-- Restored lightweight cross-device workspace updates for leads, opportunities,
-  and approvals, including focus/visibility/reconnect recovery and an in-place
-  inbox refresh so a lead created on another device appears without a browser
-  reload.
-- Reordered the sales-owner dashboard into an action-to-outcome flow, moving
-  Pipeline snapshot ahead of detailed tables, placing My orders after
-  Performance, and making pipeline counts full-width with a compact empty
-  orders state.
-- Corrected dashboard View all destinations so My opportunities opens the full
-  Opportunities tracker and My orders opens Purchase Orders; also fixed long
-  opportunity names overlapping adjacent columns in the personal pipeline.
-- Combined pricing-exception and final-quote-release approvals into one complete
-  joint AH + LJS request, including the affected pricing rows and decision context.
-- Restored the last customer-facing Spares proposal into Sourcing when opening
-  a revision, including quantities and commercial adjustments, so requested
-  changes such as additional discount start from the sent proposal values.
-- Standardized all non-health Gemini AI tasks on the stable `gemini-3.6-flash`
-  model, including lead extraction and complex document review.
-- Corrected proposal workbook review so Delivery and Incoterms are compared as
-  separate terms, related line-value changes are grouped by item, ambiguous
-  line matches are blocked, and Gemini review failures require an explicit AI
-  retry before validation can complete.
-- Fixed open Workbench pages showing stale clarification answers by refreshing
-  shared Supabase state on entry, focus, and visibility restoration, with a
-  retry warning when the shared pull fails.
-- Expanded pricing-threshold approvals with the exact requested percentage,
-  allowed limit, excess points, affected-line count, and discount impact so
-  approvers can understand the commercial reason before deciding.
-- Fixed lead extraction for unlabelled facility addresses so a standalone
-  station or plant name is separated from its district, state, and country
-  location.
-- Restored Scope Confirmation as a distinct Service stage between Service
-  Request and Standard Rate Schedule. The site-visit requirement is selected
-  once there, and any required site survey is completed before pricing.
-- Simplified the Service workflow into five industrial stages — Service Request,
-  Scope Confirmation, Standard Rate Schedule, Customer Acceptance, and Service
-  Execution & Close — while preserving detailed phase data, legacy links, gated
-  survey/travel checks, and explicit operational handoffs.
-- Standardized Service workflow form controls with wide bordered fields, clean
-  numeric entry, clearer discount guidance, and revision routing back to the
-  Standard Rate Schedule when customers request changes.
-- Reworked the Standard Rate Schedule card into a responsive two-column layout
-  with rate details beside the complete editable customer email composer. The
-  rate stage no longer duplicates the survey or travel decision controls.
-- Removed internal deployment planning and cost build-up cards from the
-  Standard Rate Schedule stage. Engineer assignment, actual days, execution
-  readiness, and billing inputs remain in Service Execution & Close.
-- Reorganized imported runtime binaries under a semantic `assets/` tree,
-  replaced supplied filenames with clean internal names while preserving
-  customer-facing attachment names, and updated the brand-refresh and icon
-  tools to use the new structure.
-- Fixed Service workflow phase persistence so advancing or returning between
-  service stages updates the opportunity’s current stage as well as its service
-  estimate record.
-- Archived completed planning and QA documents, generated reference PDFs and
-  their one-off generators, the responsive prototype, retired Supabase setup
-  SQL, dead desktop tile code, and optional repository agent skills under the
-  ignored `.local/` directory. Removed the archived application-map npm command
-  and updated active schema documentation to use the fresh-project baseline.
-- Added backend-backed approval refresh on the Approvals page every five
-  seconds while visible, with an immediate refresh when returning to the tab
-  and a non-blocking connection warning when the backend is unavailable.
-- Separated proposal follow-up alerts from lifecycle status counts so the LJS proposal card clearly distinguishes status from action.
-- Restyled dashboard work-queue summaries as responsive metric tiles for clearer counts and labels.
-- Expanded the LJS “Decisions waiting on you” card to the full dashboard width for a cleaner company-level layout.
-- Removed the duplicate Owner priority queue from the LJS dashboard while retaining the Priority proposals table and its proposal actions.
-
-- Migrated deployment runtime to SuperBees with explicit `0.0.0.0` binding,
-  graceful shutdown, environment-driven CORS, startup environment validation,
-  provider timeouts, shared Supabase API clients, and neutral deployment
-  identity handling.
-- Redesigned My Dashboard performance reporting into a shared role-aware scorecard with annual progress, quarterly target-versus-actual cards, monthly target/actual run rate, and a scoped funnel for personal or company views.
-- Replaced the dashboard funnel list with a five-level tapered funnel matching the reviewed visual: Leads assigned, Qualified, Opportunities, Proposal sent, and Won; grouped funnel clicks now filter all underlying workflow stages.
-- Refined the funnel to match the supplied reference layout with numbered steps, centered counts, tapered red sections, dotted label connectors, and compact right-side descriptions.
-- Switched complex AI review from restricted Gemini 2.5 Flash to the cheaper
-  Gemini 3.5 Flash-Lite model and added a clear model-access error.
-- Fixed Opportunities Excel export by using a browser-compatible workbook writer,
-  keeping exports to one compact filtered sheet without extra rows or columns.
-- Standardized generated Excel cleanup across proposal, pipeline, price-list,
-  and editable-workbook exports: proposal print areas now stop at real customer
-  content, unused template padding is hidden, table exports expose filters, and
-  price-list templates use the ModAE document styling.
-- Proposal revision review now asks AI to confirm only meaningful workbook
-  changes, ignores harmless unit/formatting differences, preserves uploaded
-  comparison data across navigation, and blocks an unvalidated uploaded
-  revision from customer submission.
-- Protected shared opportunity workflows from stale browser snapshots. A
-  newer saved milestone now wins over an old tab's retry in both server and
-  direct persistence paths; intentional backward corrections still work only
-  with a recorded reason tied to the current server milestone. Approval side
-  effects now advance only from Approval, lifecycle refresh bursts share one
-  full pull, and approval decisions refresh only their affected rows.
-- Made proposal approval collaboration safe across browsers: approval request
-  IDs are collision-resistant, simultaneous requests converge by approval
-  key, and decisions from each required approver merge without overwriting
-  one another. Approval cancellations now save immediately and the decision
-  workspace keeps the form open with an error if a shared save fails.
-- Opportunity IDs now use the Admin city/state ownership rules consistently
-  across lead conversion, registration, manual intake, tender intake, and
-  simulated leads; longer AI-extracted addresses also resolve their embedded
-  Indian city before applying the regional owner rule.
-- Loaded proposals and sourcing rows in the initial workspace hydration so
-  Spares Sourcing does not render a false empty BOQ while its background data
-  is still arriving. Pending pricing approvals now expose an explicit shared
-  status refresh and surface decision-save failures.
-- Added a localhost-only fallback to the seeded demo accounts when configured
-  Supabase Auth rejects demo credentials; deployed environments remain
-  Supabase-authenticated and local-demo sessions stay browser-only.
-- Added a dedicated Service Rates list to Price Lists with India and
-  International tabs showing the complete configured service charge schedule.
-- Added an admin-only Users online dashboard card backed by a protected,
-  two-minute Supabase presence heartbeat; business records and workflows are
-  not affected.
-- Reworked My Dashboard into role-specific cockpits: LJS now starts with the
-  company-wide owner view, AH with commercial decisions, sales owners with
-  daily execution and own-pipeline work, and TECH with technical review work;
-  grouped win/loss analysis is shown only on broad internal cockpits.
-- Added LJS's single Proposal Status & Follow-up dashboard card with proposal
-  readiness, approval, sent, and follow-up counts plus clickable priority rows.
-- Fixed the LJS proposal card layout so long opportunity and customer names
-  wrap cleanly without colliding with status, value, or action columns.
-- Reworked detailed Analytics into an operational table-led workspace with
-  grouped win/loss analysis by close reason, supporting closed-opportunity
-  rows, competitor context, and a live open-pipeline register.
-- Removed the duplicate Service "Operator view" work-area navigation so the
-  10-step Service workflow rail is the single workflow navigation surface.
-- Fixed Section 5B commercial approvals reappearing after AH approval. The
-  dispatch gate now recognizes current and legacy commercial approval records
-- Added request IDs and safe server-side Supabase error metadata to workspace
-  purge failures so an unapplied or broken purge RPC can be diagnosed without
-  exposing service credentials in the browser.
-
-  by their signed customer terms, repairs missing legacy term details, and
-  avoids duplicate pending requests.
-  `R. Sundaram` during state migration.
-  server-authorized Supabase procedure to remove all workspace data and files
-  except price lists, price-list versions, and required user profiles; browser
-  state is cleared before reload so deleted rows cannot be recreated locally.
-- Fixed clear/reset actions leaving active normalized Supabase rows behind when
-  the browser had not populated its revision cache yet; reset now discovers and
-  soft-deletes remaining active workspace rows through `save_rows`.
-- Coalesced overlapping Supabase workspace refreshes so rapid focus, route,
-  reconnect, and visibility events reuse one in-flight read instead of queuing
-  duplicate full database loads.
-- Coalesced pending workspace saves, serialized entity writes, backed off failed
-  retries, and ordered `save_rows` IDs to reduce write spikes and deadlocks.
-- Normalized reviewed-workbook currency comparisons to the same two-decimal
-  rounding used by downloaded proposal workbooks, preserved blank previous
-  prices, and made review currency values display with two decimals so an
-  unchanged draft does not produce false price changes.
-- Reduced reviewed-workbook scan latency by starting local and AI validation
-  immediately after import while storage uploads continue in the background;
-  customer submission remains gated until the validated workbook is stored,
-  with visible upload failure and retry states.
-- Fixed blank opportunity ownership during lead conversion and state hydration;
-  known locations now use regional routing, while missing or unclassified data
-  falls back to LJS, including existing ownerless opportunities.
-- Refined the Admin card grid and ownership controls so category labels,
-  routing regions, descriptions, and form controls keep readable widths and
-  reflow cleanly across desktop, tablet, and mobile layouts.
-- Fixed Admin ownership rows so region fields and owner controls stay aligned
-  on one line on desktop and stack cleanly only on narrow screens.
-- Added an on-demand AI advisory review for Admin ownership rules and
-  state-to-region mappings; deterministic routing remains authoritative and AI
-  suggestions never change configuration automatically.
-- Uploaded proposal workbooks now compare Payment, Delivery, Warranty, Freight,
-  and Validity terms against the original proposal. Changed terms are shown as
-  red, non-blocking human-review findings with original/uploaded values and
-  workbook evidence; saved internal approval terms remain unchanged.
-- Consolidated ownership routing to the regional Ownership rules and removed
-  the separate opportunity-type owner fallback from Admin and runtime state.
-- Restored reviewed-workbook upload validation with staged loading progress from
-  file selection through workbook import, local checks, and AI review.
-- Rebuilt the Admin T&C clause library as a structured editable data table with
-  inline title/text fields, add/remove actions, and responsive overflow.
-- Added visible staged AI scan progress to proposal validation and enabled
-  semantic AI review for system-generated proposals as well as uploaded workbooks.
-- Changed T&C clause editing to full-width aligned rows with title, text, and
-  remove controls on one clean editable line.
-- Reworked T&C clause entries into responsive editable cards with flexible
-  titles, full-width wrapped text areas, and compact danger-styled remove
-  actions.
-- Simplified the Admin T&C clause library into an always-visible, aligned
-  editor grid instead of expandable rows.
-- Reworked Admin workflow navigation into a horizontal landscape layout with
-  adaptive two- and three-column card alignment on desktop.
-- Added nested Admin workflow categories for access and routing, T&C clauses,
-  commercial automation, and customer governance, with region search, owner
-  and customer-risk badges, and visible save feedback.
-- Made the Terms & Conditions clause library compact and single-open: clauses
-  now expand into their editor only when selected.
-- Reworked the Admin workflow settings presentation with anchored section
-  navigation, readable two-column cards, and responsive wrapping for long
-  labels, ownership rows, approval controls, and clause editors.
-- Added independent Admin switches for final AH + LJS quote-release approval
-  and AH approval of special customer commercial terms; both default to on.
-- Added scan-progress surfaces for tender and KYC document work, structured
-  Supabase file/RPC diagnostics, and an idempotent migration that verifies the
-  `user_files` and `save_rows` browser persistence contract.
-- Added recovery for rejected or expired Supabase sessions: invalid persisted
-  auth is cleared, the app returns to login, and local save retries pause until
-  a successful sign-in instead of repeatedly flooding Auth and `save_rows`.
-- Hardened workspace rendering against incomplete hydrated state by normalizing
-  map-shaped slices and guarding opportunity-scoped lookups. Supabase save
-  diagnostics now retain the failed entity and HTTP status, and the active
-  `save_rows` migration explicitly grants browser execution.
-- Hardened modal, workspace, proposal, price-list, attachment, and inline-editor
-  DOM interactions so delayed focus and scrolling skip nodes detached during
-  route changes, state updates, or hydration.
-- Downgraded expected empty-workspace hydration and refresh-protection messages
-  to debug-level logging while retaining the local-state fallback.
-- Replaced runtime Supabase Realtime synchronization with pull-based refreshes
-  on boot, route changes, focus/visibility restoration, reconnect, and explicit
-  refresh. Shared writes now include the authenticated Supabase user ID as
-  `updated_by` where available.
-
-- Customer-facing proposal Excel Terms & Conditions now replace only the
-  matching clause for a resolved commercial deviation: accepted customer terms
-  or accepted counter-offers are carried through, while unrelated ModAE
-  standard terms remain unchanged.
-- Added the additive relational workspace migration with typed customer,
-  opportunity-item, proposal-item, catalogue, communication, audit, and
-  settings tables plus indexed backfill paths. Legacy JSONB data remains
-  available for rollback during verification.
-- Split proposals, sourcing lines, clarifications, audit rows, settings, and
-  price-list records into dedicated Supabase JSONB tables with a compatibility
-  backfill from `records`. Also fixed startup persistence deleting the active
-  browser snapshot before it could be read.
-- Clarified the validated-proposal status when Payment or Delivery decisions
-  are still unresolved, and added a direct action from the workflow blocker
-  dialog to the commercial-decision section.
-- Persisted reviewed proposal workbook snapshots with revision-scoped file keys;
-  validation no longer increments the quote revision, and current or historical
-  revision previews use the exact uploaded workbook that was reviewed. Customer
-  submission continues to attach that same validated workbook.
-- Added guarded recovery for stale or missing Vite route chunks, including
-  service-worker cache cleanup and a one-time reload instead of leaving pages
-  on a dynamic-import crash screen.
-- Made a successfully validated uploaded proposal workbook the active artifact
-  for Workbench previews, submission previews, and customer attachments instead
-  of regenerating an older template-based proposal.
-- Fixed Requirement Validation commercial-deviation approvals so approved
-  Payment and Delivery terms are recognized by the Sourcing hand-off gate,
-  including older approvals with snapshot-only deviation details.
-- Extended the Supabase Realtime WebSocket subscription from proposal-only
-  records to all shared record entities, so configuration, clarifications,
-  spare lines, audit history, and price-list changes reach other open browsers
-  without waiting for focus refresh; unsupported or ambiguous changes still
-  fall back to an authoritative full refresh.
-- Opportunity saves now send only new, edited, or deleted rows instead of
-  rewriting the complete opportunity list, reducing revision conflicts between
-  open browsers.
-- Kept deleted-lead recovery markers local to the browser so they cannot block
-  shared lead and opportunity saves.
-- Prevented hydration from marking unchanged browser-cached state as dirty;
-  this stops every browser from repeatedly rewriting the consolidated state
-  and causing optimistic save conflicts.
-- Kept migration markers and derived lead-deadline timers local to the browser
-  so they no longer create false shared-workspace save failures; persistence
-  errors now include the exact remaining state keys.
-- Made cross-browser sync failures visible in the workspace shell, added an
-  explicit shared-data refresh action, and retried pending saves when the
-  browser reconnects so locally completed commercial decisions do not remain
-  silently isolated to one browser.
-- Added bounded latest-local-wins retries for consolidated state and
-  configuration writes so simultaneous browser sessions no longer leave the
-  workspace stuck on revision-conflict errors.
-- Hardened production refresh and login recovery: browser storage quota errors
-  now retain the last known-good workspace cache, empty Supabase refreshes no
-  longer erase populated local business records, and session restoration times
-  out safely instead of leaving the login screen loading indefinitely.
-- Persisted proposal decisions immediately to Supabase and retained a compact
-  browser fallback, preventing commercial terms from reverting after refresh.
-- Protected newly created opportunities from disappearing during refresh while
-  their normalized Supabase row is still awaiting confirmation; explicit
-  deletions and confirmed remote deletions retain their existing behavior.
-- Added direct deep-link recovery and explicit sync-error messaging when an
-  opportunity is omitted from the initial shared workspace response.
-- Added lead-stage KYC document review with professional **Approve**, **Reject**,
-  and **Pending Review** outcomes. Rejections require a reason and generate an
-  AI-assisted customer email draft for human review before sending; legacy
-  `Verified` records remain readable.
-- Enforced commercial hand-off in Requirement Validation: every Payment,
-  Delivery, or other deviation must be resolved before Sourcing, counter-offers
-  wait for customer acceptance, and matched customer terms require AH approval;
-  corrected the AH review preview to show ModAE's response.
-- Restored separate proposal previews: Preview PDF now shows the customer-facing
-  ModAE document, while Draft workbook remains the Excel reference preview.
-- Stabilized Supabase workspace saves by serializing overlapping writes and
-  retrying optimistic revision conflicts with bounded local latest-save-wins
-  rebases. Approved price lists now remain usable from the browser cache when
-  the consolidated shared records are temporarily unavailable, with degraded
-  sync status shown in the Price Lists workspace.
-- Made Admin GST, PAN, and CIN validation rules readable with plain-language
-  formats and examples while retaining regex editing under an advanced control.
-- Restored missing structured spare lines by merging AI, parser, and attachment
-  extraction and reconciling existing Sourcing records.
-- Tightened default GSTIN, PAN, and CIN validation to enforce their standard
-  segment structures and migrated only the old built-in patterns, preserving
-  custom Admin rules.
-- Backfilled missing Admin routing, KYC, and AI-threshold configuration when
-  loading legacy saved workspace state, preventing empty Admin cards and zeroed
-  threshold values.
-- Removed the Admin Integrations & AI tab and its SharePoint/AI configuration
-  panels while keeping the underlying integration and model-routing code intact.
-- Continue recording meaningful schema, workflow, deployment, and architectural
-  changes before they are pushed.
-- Protected the Gemini proxy with Supabase Auth, added request-size and rate
-  limits, deduplicated concurrent browser requests, and removed the example
-  Gemini credential from `.env.example`.
-- Routed routine AI work to `gemini-3.1-flash-lite` and reserved
-  `gemini-2.5-flash` for complex document reasoning tasks.
-
-## [2026-09-24]
-
-### Changed
-
-- Rebuilt the B&K and Metrix catalogue modules from the supplied workbooks;
-  sourcing now tolerates harmless part-number formatting differences, keeps
-  AI alternatives unconfirmed until a human accepts them, and consolidates
-  duplicate customer-reference rows.
-- Locked runtime Supabase access to the six production tables:
-  `ai_secrets`, `approvals`, `leads`, `opportunities`, `records`, and `user_files`.
-- Updated admin user loading to use the `records` state row instead of the old
-  application-state table.
-- Added automated checks for the six-table Supabase allowlist.
-- Moved prototypes, personal/reference documents, generated files, scraped
-  branding material, backups, and retired migrations into the ignored `.local/`
-  archive.
-- Kept only runtime branding assets and imported proposal references in tracked
-  application directories.
-- Removed unused Home and proposal part-picker components and their obsolete
-  test coverage.
-- Updated Supabase schema notes, workflow references, and asset-fetch behavior.
-
-### Validation
-
-- `npm run build` passed.
-- Targeted brand identity and proposal pipeline tests passed.
-- `git diff --check` passed.
-
-### Commit
-
-- `75c5519 chore(cleanup): remove unused files and enforce production assets`
-
-## Earlier milestones
-
-- Consolidated Supabase synchronization around the live workspace row model.
-- Added offline/local browser fallback when Supabase is not configured.
-- Added proposal routes for project, spares, and services workflows.
-- Added technical, commercial, and release approval gates with revision-aware
-  approval records.
-- Added staging and production deployment guidance using separate Vercel and
-  Supabase projects.
-
-Completed implementation and workflow-review documents are retained locally
-under `.local/project-history/` in the checkout where they were archived.
-- Reduced the Opportunities toolbar sizing so all filters and actions fit in one aligned desktop row without the previous oversized minimum width.
-- Flattened the Opportunities toolbar into the page header so closed controls no longer look like separate raised buttons.
-- Moved the Opportunities status filter into the More menu to remove the prominent All statuses toolbar button while preserving status filtering.
-- Removed the remaining status-filter control and status-filter state from the Opportunities page for a cleaner header.
-- Removed the Opportunities header scope checkbox so the owner selector is the only scope control and the header stays text-only.
-- Flattened Opportunities table column headers so labels such as Opp Type no longer render inside individual boxes.
-- Converted the Opportunities column header row to a plain table format with no boxed header controls.
-- Added an opaque sticky white strip behind the plain Opportunities table header while rows scroll.
-- Simplified Opportunities probability values to Low, Medium, and High without visible recommendation suffixes.
-- Changed Proposal Send Date to record the latest successful customer send, with
-  exact communication timestamps retained, and standardized proposal/order date
-  display to DD/MM/YYYY while preserving ISO storage.
+- Use the dashboard funnel on Analytics with the same solid probability colors,
+  stage taper, aligned totals and row highlighting. Analytics filters and stage
+  selection still control the report; keyboard stage selection is supported.
+- Add a Back to dashboard link to the standalone Analytics page.
+
+## 2026-10-12 — Consistent funnel silhouette
+
+- Give every stage a shared top-to-bottom taper, including gray empty stages,
+  so uneven stage populations no longer make the funnel widen and collapse.
+- Show band counts inside the shape and values in totals/tooltips to avoid
+  clipping labels against the slope.
+- Explain that width shows progression; keep probability splits, counts, values,
+  permissions and full-row hover driven by existing live data.
+
+## 2026-10-12 — Funnel row highlighting
+
+- Highlight the complete funnel stage row on hover or keyboard focus, including
+  stage name, probability bands, count and value. Keep restricted totals hidden.
+- Use brighter solid green, amber and red for probability bands and matching
+  legends on desktop and phone, with readable contrasting labels.
+
+## 2026-10-12 — Performance quarter selector
+
+- Tap QTD again or double-click to select any fiscal quarter from Q1–Q4 on
+  desktop and phone; display the selected quarter on the button.
+- Support keyboard navigation and Escape dismissal; reuse existing period
+  calculations for Actual, Target and Gap. Top 5 keeps its independent filter.
+
+## 2026-10-12 — Clearer pipeline funnel and KPI colors
+
+- Use solid, deeper funnel probability colors and matching legend without
+  gradients or shine, and simplify the tapered stage edges on desktop and phone.
+- Restore neutral, amber and red KPI backgrounds for pipeline, follow-ups,
+  approvals and blocked work, including phone cards and dark mode.
+- Increase band height and keep counts and values aligned without changing
+  saved stage totals, probability proportions, or empty-stage behavior.
+
+## 2026-10-12 — Compact continuous dashboard
+
+- Combine dashboard reports and KPIs into one shared glass card with fine
+  dividers, compact section padding, and contiguous table rows.
+- Keep the sidebar unchanged and desktop reason charts beside the donut;
+  preserve phone disclosures, readable wrapping, and touch control sizes.
+
+## 2026-10-12 — Opportunity ID labels
+
+- Show opportunity IDs without legacy owner names or codes throughout desktop
+  and phone labels, linked records, previews, search results and alerts.
+- Remove the appended owner name from phone opportunity card ID labels; preserve
+  stored identifiers, navigation targets and separate Owner fields.
+
+## 2026-10-12 — Sculpted glass dashboard
+
+- Add dashboard-scoped glass surfaces, beveled KPI cards, recessed performance
+  tracks, dimensional funnel bands and donut, and raised navigation controls.
+- Preserve live chart proportions, business calculations, role permissions,
+  and existing filters; adapt depth to both themes and phone layouts.
+- Wrap long labels and amounts, space controls and table rows consistently,
+  and stack crowded win/loss content on small screens. Respect reduced motion.
+
+## 2026-10-12 — Per-owner dashboard target editor
+
+- Add a Manage targets action to Global Performance for LJS, AH and Admin.
+- Open an owner-by-owner editor for annual and quarterly goals, saving through
+  the existing FY confirmation and audit workflow.
+- Show one company target calculated from confirmed owner targets, with the
+  confirmed-owner count and draft total in the editor.
+- Make the company total editable by distributing changes proportionally across
+  owner targets, with individual or all-owner confirmation actions.
+- Exclude unconfirmed values from the company total and keep the remaining-to-
+  target gap hidden until every target and Won value is verified.
+
+## 2026-10-12 — Viewport-sized register pagination
+
+- Extend viewport-sized pagination to the desktop and tablet Opportunities,
+  My Opportunities, Audit Trail, Users, Purchase Orders and Proposal Sent
+  registers, plus the approval queues. Inbox uses the visible height of its
+  own message panel.
+- Keep the existing ten-item page size for phone card lists.
+
+## 2026-10-12 — Customer Master viewport pagination
+
+- Size desktop and tablet Customer Master pages to the available viewport height,
+  keeping the pagination controls and status legend visible. Phone cards and
+  other lists retain their existing page sizes.
+
+## 2026-10-12 — Won value in dashboard Performance
+
+- Default desktop and phone Performance to all Won opportunity value. Use the
+  confirmed PO amount where available and the saved opportunity amount while
+  verification is pending, without counting a win twice.
+- Add All history alongside YTD and QTD. Period views use confirmed booking
+  dates or expected order dates for unverified wins. Mark estimated totals and
+  withhold the remaining-to-target gap until included values are verified.
+- Keep Purchase Orders as the confirmed booking register and preserve the
+  existing approval and target confirmation workflows.
+
+## 2026-10-12 — Opportunity stage and owner column clarity
+
+- Keep the Mark Won checkbox label on one line and wrap the complete control
+  below the stage when needed. Already-won rows show their stage once, without
+  a duplicate disabled checkbox; other closed outcomes retain the existing action.
+- Rename the visible LJS column to Opportunity Owner. Preserve the workbook's
+  LJS export heading, owner filter behavior and existing owner assignments.
+
+## 2026-10-12 — Data-responsive funnel polish
+
+- Funnel widths now respond to saved current-stage counts on desktop and phone,
+  using a square-root scale so small populated stages remain readable. The
+  probability-band proportions, totals and restricted values remain based on
+  those same saved records.
+- Matched the reference's emerald, yellow and coral probability bands with
+  subtle shading and a centered opportunity/value caption. Tightened stage
+  spacing and softened grey zero-count shapes with a visible 0.
+
+## 2026-10-12 — Clearer Win/Loss dashboard
+
+- Place the donut beside Won/Lost counts and their percentage shares, then show
+  the Won/Lost closed count and total opportunity value for roles allowed to
+  see commercial values. Add matching count axes to both reason charts.
+- Turned the existing Won/Lost counts into accessible filter buttons. Selection
+  shows only that outcome's reasons and percentages; clicking again restores
+  both and resets the top-five view. The donut retains the overall win rate.
+  Added explicit green Won/red Lost bar labels and omitted zero-count bars.
+- Simplified the clickable counts to plain text without boxes or fills, using
+  an underline for selection. Show both outcomes is also a plain text control.
+- Matched the reference's compact three-column report: a larger win-rate donut
+  and totals, a Won/Lost reason comparison, and ranked top loss reasons.
+  Both views show all-closed totals and explain the win-rate denominator;
+  desktop and phone share the same report content.
+- Comparison bars use the same opportunity-count scale for wins and losses;
+  loss bars include percentages of all losses. Both charts show the top five
+  by default, with Show all reasons retaining access to every reason.
+  Empty states and other closed stages remain separate, and phones stack the
+  three report columns.
+- Kept workbook data, report calculations, view filters and detailed-analysis
+  navigation unchanged. Added rendered-report tests for denominator clarity,
+  reason percentages and empty/single-outcome states on desktop and phone.
+
+## 2026-10-12 — Enquiry EUC extraction mapping
+
+- Prioritize explicit end-user names and locations over site, delivery and
+  generic address fields; recognize the combined Site / Plant labels produced
+  by extraction. Ignore blank and rejected fields when selecting suggestions.
+- Keep missing EUC names blank instead of copying the buyer. Restrict prose
+  suggestions to installation or equipment requirements, and keep same-customer
+  delivery suggestions only when the delivery block names that customer.
+- Prevent generic buyer location labels from overwriting AI EUC locations.
+  Preserve human-entered identity values and pending review for AI suggestions.
+- Add regression coverage for field mapping and the real intake extraction
+  path using local fallback and a controlled AI response.
+
+## 2026-10-12 — Complete local workbook recovery
+
+- Recovered the missing closed rows from the reviewed Betser workbook into the
+  local browser workspace through the existing upload and merge workflow.
+  Existing edits, proposals, approvals and files were preserved; the backup
+  and conflict review remain local-only.
+- Verified all 73 workbook opportunities: 9 open, 11 won, 33 lost and 20 other
+  closed outcomes. Added regression coverage for restoring closed current-sheet
+  wins and losses, preserving saved edits and importing again without duplicates.
+
+## 2026-10-12 — Continuous funnel silhouette
+
+- Tapered the six desktop and phone funnel rows by stage so their silhouette
+  reads like the reference. Row totals and probability-band proportions still
+  reflect saved current-stage opportunities; a visible note separates the
+  stage shape from the data counts. Empty rows remain grey.
+
+## 2026-10-12 — Funnel visual alignment
+
+- Matched the reference's green/yellow/red probability bands, denser tapered
+  rows and in-band count/value labels where space permits on desktop and phone.
+  Narrow bands keep their counts and values in the existing totals/tooltip.
+
+## 2026-10-12 — Visible empty funnel stages
+
+- Added neutral grey funnel placeholders for zero-count stages on desktop and
+  phone, with an empty-stage tooltip and legend text. Saved counts, values and
+  the widths of populated stages remain unchanged.
+
+## 2026-10-12 — Dashboard funnel count widths
+
+- Kept desktop and phone funnel shapes and made their widths and probability
+  bands consistently reflect opportunity counts at the current saved stage.
+- Added a visible count-width label. Zero or missing values no longer change
+  the scale; populated stages retain shapes and empty stages remain uncoloured.
+  Commercial values remain alongside the counts for permitted roles.
+
+## 2026-10-12 — Opportunity dashboard totals and dates
+
+- Show scoped total, open and closed counts from saved opportunity records on
+  desktop and phone. Pipeline value continues to include only open records.
+- Added All dates to Top 5, including future and undated open opportunities;
+  the financial year remains the default. Empty period views explain why open
+  records are excluded. No opportunity records are imported or restored.
+
+## 2026-10-12 — Frozen opportunity columns
+
+- Kept Sl., Opp ID and Sell To Customer at identical widths in Key and All
+  Columns, and froze their headers and cells while the other columns scroll.
+- Added compact frozen widths for phone tables and retained customer colour,
+  editing and filter controls in both themes.
+
+## 2026-10-12 — Six-stage pipeline funnel
+
+- Removed Closed / No Win from the shared funnel, leaving six stages ending at
+  Won across Dashboard, Opportunities, and Analytics. Lost and other closed
+  records remain available in opportunity lists and Win/Loss analysis.
+
+## 2026-10-12 — Empty inbox width
+
+- Expanded the mailbox to the full available width when no lead preview is
+  rendered, including empty search/filter results. Populated desktop inboxes
+  retain their side-by-side lead preview.
+
+## 2026-10-12 — Editable customer policy matrix
+
+- Refined the matrix with coloured sticky headers, a pinned Criteria column,
+  compact spreadsheet cells and save bar, keyboard-accessible definition help,
+  and account text that grows to fit without internal scrollbars.
+- Replaced the customer governance cards, expandable editors and comparison
+  list with one Excel-style Criteria / Blue / Red / Amber / Green / Remarks
+  table, including quoting actions and typical-account guidance.
+- Saved cells update classification comparisons, payment terms and the Amber
+  quotation fee. A saved No Bid action blocks quoting until admin changes it;
+  approximate workbook thresholds remain visible and require definition.
+- Moved KYC number validation to Documents & templates and service rates to
+  Commercial & automation. Field-list saves update only field configuration.
+
+## 2026-10-12 — Dashboard opportunity reporting
+
+- Decoupled all-history opportunity reports and active work from performance
+  period filters; Top 5 retains its own expected-order-date selection.
+- Fixed Closed / No Win probability segments and totals, removed colored empty
+  funnel placeholders, and separated counted win and loss reasons on desktop
+  and phone without merging saved reasons into a generic overflow category.
+- Excluded future booked orders from actual performance and protected desktop
+  sales values for roles without commercial access.
+- Derived dashboard YTD/QTD quarters from today's IST date and the configured
+  financial year, so stale saved quarter settings cannot hide booked actuals.
+
+## 2026-10-12 — Excel pipeline alignment
+
+- Matched All Columns to the workbook’s 32 columns and order, including K₹
+  amounts, calculated margins, FQ-FY, and independent historical dates.
+- Retained all Current Opps and Old Closed Opps, including won history. Removed
+  automatic hardcoded workbook/customer loading; admin preview imports merge
+  saved data while preserving edits, linked files, approvals and tombstones.
+- Added atomic, generation-checked server imports (migration 019) and customer
+  classification facts/guidance. Excel payment defaults preserve custom terms;
+  Red remains No Bid unless joint LJS/AH continuation clearance is approved.
+
+## 2026-10-12
+
+- Hid the sidebar scrollbar while preserving navigation scrolling and removed
+  the sidebar AI extraction and last-sync status labels.
+
+## 2026-10-10
+
+- Added a repeatable local Supabase bootstrap that applies the active schema,
+  reads the Betser Excel pipeline workbook, and imports local opportunity,
+  customer, and application-profile data without changing browser demo seeds.
+- Added a browser-local Excel import action that replaces demo business records
+  with the workbook's opportunities and derived customer records without any
+  Supabase write.
+## 2026-10-10
+
+- Fixed Excel customer imports so the app-readable consolidated `state/customers` slice is populated while typed and legacy customer rows remain preserved.
+## 2026-10-12 — Confirmed bookings and trustworthy performance
+
+- Make Performance, Purchase Orders and shared sales KPI helpers use one
+  confirmed booking register. Exclude Lost/No Bid/other closed outcomes,
+  expected dates and future or malformed bookings; deduplicate before owner scope.
+- Add historical imported-Won booking review with a verified PO/contract,
+  actual date, accepted net INR value and evidence. New orders require verified
+  PO details plus both LJS/AH signatures. Saving changed details resets acceptance;
+  simulations and newly marking Won do not create bookings.
+- Store acceptance snapshots on opportunity rows through existing revision-aware
+  persistence, protect them from stale edits, retain confirmed sales when an
+  opportunity is deleted in the app, and retain compact sales/PO/handover
+  data in the local fallback. No database migration or new table is needed.
+- Explain incomplete booking data on desktop and phone, suppress unreliable gaps,
+  require confirmation of untouched demo targets and label comparisons against
+  full-year/full-quarter targets. Target saves record the FY and reviewer and
+  require quarterly totals to reconcile with the annual target.
+## 2026-10-12 — Shared opportunity filters
+
+- Unify desktop and phone filtering with a draft popup, matching-record count,
+  multi-selection, validated dates, Apply/Cancel, and explicit Reset behavior.
+- Share the evaluator between preview, table/cards, and exported rows; preserve
+  owner scope, advanced column conditions, and independent search/sorting.
+- Keep filters when using stage shortcuts, expose active fields as removable
+  chips, and simplify More to export, admin import, and phone table access.

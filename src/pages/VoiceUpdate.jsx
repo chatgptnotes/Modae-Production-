@@ -1,7 +1,9 @@
+import { useFieldLists } from '../useFieldLists.js'
 import React, { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { CLOSE_REASONS, WON_REASONS } from '../seed.js'
+import { displayOpportunityId, CLOSE_REASONS, WON_REASONS } from '../seed.js'
+
 import { Icon } from '../icons.jsx'
 
 const SR = typeof window !== 'undefined'
@@ -101,6 +103,8 @@ const EXAMPLES = [
 ]
 
 export default function VoiceUpdate() {
+  const { WON_REASONS, CLOSE_REASONS, labelFor } = useFieldLists()
+
   const store = useStore()
   const nav = useNavigate()
   const [listening, setListening] = useState(false)
@@ -235,7 +239,7 @@ export default function VoiceUpdate() {
           <div className="form-card" style={{ marginTop: 14 }}>
             <div className="section-title">Confirm update</div>
             <div style={{ fontSize: 13, marginBottom: 6 }}>
-              <b className="oppid-link">{pending.opp.id}</b> — {pending.opp.sellTo}
+              <b className="oppid-link">{displayOpportunityId(pending.opp.id)}</b> — {pending.opp.sellTo}
               <div className="hint">{pending.opp.oppName}</div>
               <div className="hint">Matched by {pending.how}</div>
             </div>
@@ -271,7 +275,7 @@ export default function VoiceUpdate() {
 
         {applied && (
           <div className="okbox">
-            Recorded on <b>{applied.opp.id}</b> — {applied.opp.sellTo}:{' '}
+            Recorded on <b>{displayOpportunityId(applied.opp.id)}</b> — {applied.opp.sellTo}:{' '}
             {Object.keys(applied.patch).length > 0
               ? Object.keys(applied.patch).map(k => `${FIELD_LABELS[k] || k} set to ${applied.patch[k]}`).join(', ') + '; '
               : ''}

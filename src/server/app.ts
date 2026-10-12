@@ -1,3 +1,8 @@
+import { projectWorkspace } from '../workspaceAccess.js'
+import { createWorkspaceDataHandler } from '../../api/workspace-data.js'
+import adminPolicyHandler from '../../api/admin-policy.js'
+import opportunityNumberHandler from '../../api/opportunity-number.js'
+import { controller } from './controllers/legacy.js'
 import cors from 'cors'
 import express, { type ErrorRequestHandler } from 'express'
 import path from 'node:path'
@@ -8,7 +13,7 @@ import {
 import { createWorkspaceGenerationReader, createWorkspaceReader, createWorkspaceWriter, WorkspaceCache, type WorkspaceReader, type WorkspaceWriter } from './workspace.js'
 import {
   adminUsers, ai, appVersion, locations, purgeWorkspace, sendProposalEmail,
-  presence,
+  presence, workbookImport,
 } from './controllers/legacy.js'
 
 type AppOptions = {
@@ -57,6 +62,8 @@ export function createApp({
   app.disable('x-powered-by')
   app.set('trust proxy', 1)
   app.use(cors(corsOptions))
+  app.use('/api/workspace/data', express.json({ limit: '32mb' }))
+  app.use('/api/send-proposal-email', express.json({ limit: '32mb' }))
   app.use(express.json({ limit: '2mb' }))
 
   app.get('/healthz', (_req, res) => res.status(200).json({ ok: true }))
@@ -65,8 +72,9 @@ export function createApp({
     if (!token) return res.status(401).json({ ok: false, error: 'A signed-in session is required.' })
     if (!gateway.authenticate) return res.status(503).json({ ok: false, error: 'Workspace sync is not configured.' })
     try {
-      if (!await gateway.authenticate(token)) return res.status(401).json({ ok: false, error: 'The application session is invalid or expired.' })
-      const workspace = await workspaceCache.bootstrap()
+      const user = await gateway.authenticate(token)
+      if (!user?.profile) return res.status(401).json({ ok: false, error: 'The application session is invalid or expired.' })
+      const workspace = projectWorkspace({ ...await workspaceCache.bootstrap(), config: user.config || {} }, user.profile)
       res.setHeader('x-workspace-generation', workspaceCache.generationHeader())
       return res.status(200).json({ ok: true, data: workspace })
     } catch (error) { return next(error) }
@@ -79,21 +87,36 @@ export function createApp({
     const writer = workspaceWriter || createWorkspaceWriter()
     if (!gateway.authenticate || !writer) return res.status(503).json({ ok: false, error: 'Workspace writes are not configured.' })
     try {
-      if (!await gateway.authenticate(token)) return res.status(401).json({ ok: false, error: 'The application session is invalid or expired.' })
+      const user = await gateway.authenticate(token)
+      if (!user?.profile) return res.status(401).json({ ok: false, error: 'The application session is invalid or expired.' })
       const generation = String(req.get('x-workspace-generation') || '')
       if (!await workspaceCache.acceptsSaveGeneration(generation)) {
         res.setHeader('x-workspace-generation', workspaceCache.generationHeader())
         return res.status(409).json({ ok: false, error: 'The workspace was purged. Refresh before saving.', errorCode: 'WORKSPACE_PURGED' })
       }
-      await writer(dirty)
+      await writer(dirty, user.profile)
       workspaceCache.invalidate()
       const liveChanges = (['leads', 'opportunities', 'approvals'] as const).filter(key => key in dirty)
       if (liveChanges.length && gateway.publish) gateway.publish(liveChanges)
       return res.status(204).end()
     } catch (error) { return next(error) }
   })
+  app.post('/api/workspace/import', async (req, res, next) => {
+    try {
+      await workbookImport(req, res, next)
+      if (req.body?.action === 'commit') workspaceCache.invalidate()
+    } catch (error) { next(error) }
+  })
+  app.post('/api/workspace/data', controller(createWorkspaceDataHandler({ invalidate: () => workspaceCache.invalidate() })))
+  app.get('/api/admin-policy', controller(adminPolicyHandler))
+  app.post('/api/admin-policy', async (req, res, next) => {
+    try { await adminPolicyHandler(req, res) } catch (error) { next(error) } finally { workspaceCache.invalidate() }
+  })
+  app.post('/api/opportunity-number', controller(opportunityNumberHandler))
   app.post('/api/ai', ai)
-  app.post('/api/admin-users', adminUsers)
+  app.post('/api/admin-users', async (req, res, next) => {
+    try { await adminUsers(req, res, next) } finally { workspaceCache.invalidate() }
+  })
   app.get('/api/app-version', appVersion)
   app.get('/api/locations', locations)
   app.post('/api/purge-workspace', async (req, res, next) => {
@@ -125,9 +148,10 @@ export function createApp({
       if (!user) return res.status(401).json({ ok: false, error: 'The application session is invalid or expired.' })
       // Production reads come from the server cache. The injected reader is
       // retained only for endpoint tests and explicit adapter overrides.
+      const workspace = liveReader ? {} : await workspaceCache.bootstrap()
       const data = liveReader && gateway.readLive
         ? await gateway.readLive(token, user.id, entities)
-        : await workspaceCache.select(entities)
+        : Object.fromEntries(entities.map(entity => [entity, (projectWorkspace({ ...workspace, config: user.config || {} }, user.profile || {}) as Record<string, any>)[entity] || []]))
       return res.status(200).json({ ok: true, data })
     } catch (error) { return next(error) }
   })
@@ -186,6 +210,7 @@ export function createApp({
 
   const errors: ErrorRequestHandler = (error, _req, res, _next) => {
     if (error instanceof SyntaxError && 'body' in error) return res.status(400).json({ ok: false, error: 'Malformed JSON request body' })
+    if ([400, 401, 403, 409, 503].includes(error.status)) return res.status(error.status).json({ ok: false, error: error.message })
     console.error('Unhandled server error:', error)
     return res.status(500).json({ ok: false, error: 'Internal server error' })
   }

@@ -1,7 +1,9 @@
+import { useFieldLists } from '../useFieldLists.js'
 import React, { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, CLOSE_REASONS, WON_REASONS, REVISION_TYPES, DEFAULT_WORKFLOW, isWorkflowAvailable, displayOpportunityId } from '../seed.js'
+import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, REVISION_TYPES, DEFAULT_WORKFLOW, isWorkflowAvailable, displayOpportunityId } from '../seed.js'
+
 import { canPriceProposal, isAdminRole, fmt, fmtRupeesFromK, ageDays, ddMmmYY, ddMMyyyy, gmailComposeHref, displayRole, displayRoles, displayRoleLabel, formatISTDateTime, productDisplayLabel } from '../utils.js'
 import { EMAIL_RE, recipientsValid, splitRecipients } from '../emailValidation.js'
 import { APPROVAL_5B, pricingThresholdExceptions, readiness, sparesSourcingBlockers, isBlocked, nextActionWith, transitionBlockers, isClarificationResolved, isClarificationCoveredByAnswer, actionableClarifications, displayClarifications, isClarificationCoveredBySource, releaseVoidReason, serviceOfferCleared } from '../gates.js'
@@ -290,7 +292,7 @@ function OpportunityNotFound({ oppId }) {
   return (
     <div className="page">
       <h2>Opportunity not found</h2>
-      <p className="hint">No opportunity with ID <b>{oppId}</b> — it may have been deleted or the link is stale.</p>
+      <p className="hint">No opportunity with ID <b>{displayOpportunityId(oppId)}</b> — it may have been deleted or the link is stale.</p>
       <Link to="/">Back to the tracker</Link>
     </div>
   )
@@ -316,16 +318,9 @@ export default function Workbench() {
         if (active) setSharedRefreshError('Shared workspace data could not be refreshed.')
       })
     }
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') refreshSharedData()
-    }
     refreshSharedData()
-    window.addEventListener('focus', refreshSharedData)
-    document.addEventListener('visibilitychange', onVisibilityChange)
     return () => {
       active = false
-      window.removeEventListener('focus', refreshSharedData)
-      document.removeEventListener('visibilitychange', onVisibilityChange)
     }
   }, [oppId, store.authReady, store.liveSyncStatus])
 
@@ -385,7 +380,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
     nav(`/opp/${opp.id}?${next.toString()}`, { replace: true })
   }
 
-  if (!isWorkflowAvailable(opp.oppType)) return <OpportunityComingSoon opp={opp} created={createdNotice} onDismiss={dismissCreatedNotice} />
+  if (!isWorkflowAvailable(opp.oppType, store.config)) return <OpportunityComingSoon opp={opp} created={createdNotice} onDismiss={dismissCreatedNotice} />
 
   const goTab = k => nav(`/opp/${opp.id}/${k}`)
   const allWorkflowSteps = workflowStepsFor(store.config, opp.route)
@@ -828,9 +823,9 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
                   )}
                   {item.key === 'commercial-decision' && <button type="button" className="exception-action" onClick={openCommercialDecisions}>Review commercial decisions</button>}
                   {approvable && openRequest && <span>{item.approvalType === 'Commercial deviation' ? 'AH approval for commercial deviations' : item.approvalType} <b>{openRequest.id}</b> is pending with {openRequest.needed?.join(openRequest.anyOf ? ' or ' : ' + ') || openRequest.approver}.</span>}
-                  {approvable && !openRequest && <button className="exception-action" onClick={() => requestBlockerApproval(item)}>{item.coversPricingThreshold ? 'Request combined quote approval from AH + LJS' : item.key === 'release' ? 'Request final quote release from AH + LJS' : item.approvalType === 'Commercial deviation' ? 'Request AH approval for commercial deviations' : `Request ${item.approvalType.toLowerCase()} from ${blockerOwner(item)}`}</button>}
+                  {approvable && !openRequest && <button className="exception-action" disabled={store.canPerform?.('approvals.request') === false} onClick={() => requestBlockerApproval(item)}>{item.coversPricingThreshold ? 'Request combined quote approval from AH + LJS' : item.key === 'release' ? 'Request final quote release from AH + LJS' : item.approvalType === 'Commercial deviation' ? 'Request AH approval for commercial deviations' : `Request ${item.approvalType.toLowerCase()} from ${blockerOwner(item)}`}</button>}
                   {requestable && exception?.status === 'Pending' && <span>Exception approval <b>{exception.id}</b> is pending.</span>}
-                  {requestable && !exception && <button className="exception-action" onClick={() => requestException(item)}>Request {blockerOwner(item)} approval to continue</button>}
+                  {requestable && !exception && <button className="exception-action" disabled={store.canPerform?.('approvals.request') === false} onClick={() => requestException(item)}>Request {blockerOwner(item)} approval to continue</button>}
                   {requestable && exception?.status === 'Rejected' && <span>Exception <b>{exception.id}</b> was rejected; resolve the requirement or request a new review.</span>}
                 </div>
               })}</div>
@@ -905,7 +900,7 @@ function OverviewTab({ opp, detailsRef }) {
   return (
     <div className="workbench-overview">
       {opp.status !== 'Closed'
-        ? <OpportunityDetailsEditor ref={detailsRef} opp={opp} store={store} className="workbench-details-editor" editable={opp.owner === store.role || isAdminRole(store.role)} />
+        ? <OpportunityDetailsEditor ref={detailsRef} opp={opp} store={store} className="workbench-details-editor" editable={store.canPerform?.('opportunities.edit') !== false && (opp.owner === store.role || isAdminRole(store.role))} />
         : <OpportunityDetailsView opp={opp} className="workbench-details-editor" />}
       <div className="workbench-overview-grid">
         <section className="workbench-panel">
@@ -974,6 +969,7 @@ function CommercialDecisionPanel({ opp }) {
 
   const saveTerms = terms => store.saveProposal(opp.id, { ...proposal, terms }, { immediate: true })
   const requestCommercialApproval = () => {
+    if (store.canPerform?.('approvals.request') === false) return
     const deviationDetails = commercialApprovalDetails(proposal.terms)
     if (!deviationDetails.length) return
     const lead = (store.leads || []).find(item => item.oppId === opp.id)
@@ -1052,7 +1048,7 @@ function CommercialDecisionPanel({ opp }) {
       {commercialApprovalRequired && matchingTerms.length > 0 && !currentCommercialApproval && (
         <div className="commercial-approval-request">
           <div className="hint">AH will review: {matchingTerms.map(term => `${term.term} — customer asked “${term.customerAsk || 'Not recorded'}”; ModAE response “${term.ourResponse || term.proposedTerm || term.standardTerm || 'Not recorded'}”`).join(' · ')}</div>
-          <button type="button" className="primary" onClick={requestCommercialApproval}>Request AH approval for {matchingTerms.map(term => term.term).join(' and ')}</button>
+          <button type="button" className="primary" disabled={store.canPerform?.('approvals.request') === false} onClick={requestCommercialApproval}>Request AH approval for {matchingTerms.map(term => term.term).join(' and ')}</button>
         </div>
       )}
       {commercialApprovalRequired && currentCommercialApproval?.status === 'Pending' && <div className="warnbox">AH approval is pending for {matchingTerms.map(term => term.term).join(' and ')}. The request includes the customer terms shown above.</div>}
@@ -1111,7 +1107,7 @@ function RegistrationTab({ opp, goTab, detailsRef, spares = false }) {
       </div>
       <div className="ana-card c-12">
         {opp.status !== 'Closed'
-          ? <OpportunityDetailsEditor ref={detailsRef} opp={opp} store={store} className="workbench-details-editor" editable={opp.owner === store.role || isAdminRole(store.role)} />
+          ? <OpportunityDetailsEditor ref={detailsRef} opp={opp} store={store} className="workbench-details-editor" editable={store.canPerform?.('opportunities.edit') !== false && (opp.owner === store.role || isAdminRole(store.role))} />
           : <OpportunityDetailsView opp={opp} className="workbench-details-editor" />}
       </div>
     </div>
@@ -2218,6 +2214,8 @@ function PreviewPane({ opp, openBuilder, openEditSheet }) {
 }
 
 function FollowUpPane({ opp, onRevision }) {
+  const { CLOSE_REASONS, WON_REASONS, labelFor } = useFieldLists(opp)
+
   const store = useStore()
   const p = store.getProposal(opp.id)
   const revisions = p.revisions || []
@@ -2628,7 +2626,7 @@ function FollowUpPane({ opp, onRevision }) {
                 >
                 <select value={lossReason} onChange={e => setLossReason(e.target.value)} autoFocus>
                   <option value="">— loss reason (required) —</option>
-                  {CLOSE_REASONS.map(r => <option key={r}>{r}</option>)}
+                  {CLOSE_REASONS.map(r => <option key={r} value={r}>{labelFor('closedReason', r)}</option>)}
                 </select>
                 {lossReason === 'Other' && <textarea value={lossReasonNote} onChange={e => setLossReasonNote(e.target.value)}
                   maxLength={240} rows={3} placeholder="Enter the loss explanation" />}
@@ -2652,7 +2650,7 @@ function FollowUpPane({ opp, onRevision }) {
                 >
                 <select value={wonReason} onChange={e => setWonReason(e.target.value)} autoFocus>
                   <option value="">— won reason (required) —</option>
-                  {WON_REASONS.map(r => <option key={r}>{r}</option>)}
+                  {WON_REASONS.map(r => <option key={r} value={r}>{labelFor('closedReason', r)}</option>)}
                 </select>
                 {wonReason === 'Other' && <textarea value={wonReasonNote} onChange={e => setWonReasonNote(e.target.value)}
                   maxLength={240} rows={3} placeholder="Enter the reason" />}

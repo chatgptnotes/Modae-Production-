@@ -69,7 +69,7 @@ test('customer health scores from class, KYC, payment and history', () => {
 
 test('the health score is shown on the customer master', () => {
   const page = read('src/pages/Customers.jsx')
-  assert.match(page, /customerHealth\(c, scopedOpportunities\)/)
+  assert.match(page, /customerHealth\(c, scopedOpportunities, store\.config\)/)
   assert.match(page, /<th>Health<\/th>/)
 })
 
@@ -116,7 +116,7 @@ test('win probability is suggested from stage, account and age', () => {
 
 test('the suggestion never overwrites what the salesperson typed', () => {
   const tracker = read('src/pages/Tracker.jsx')
-  assert.match(tracker, /value=\{o\.prob \|\| ''\} onChange=\{upd\(o\.id, 'prob'\)\}/,
+  assert.match(tracker, /value=\{o\.prob \|\| ''\}.*?onChange=\{upd\(o\.id, 'prob'\)\}/,
     'the stored value still drives the control')
   assert.match(tracker, /<option value="">Select probability<\/option>/)
   assert.doesNotMatch(tracker, /\$\{sug\.level\} \(suggested\)/)

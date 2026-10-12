@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 
 const normalized = value => String(value || '').trim().toLowerCase()
 
 export default function CustomerPicker({ customers = [], value = '', onChange, onCreate, allowCreate = true, disabled = false, label = 'Sell-to Customer' }) {
   const [query, setQuery] = useState(value || '')
   const [open, setOpen] = useState(false)
+  useEffect(() => { setQuery(value || '') }, [value])
   const search = query.trim().toLowerCase()
   const matches = useMemo(() => {
     if (!search) return customers.slice(0, 12)

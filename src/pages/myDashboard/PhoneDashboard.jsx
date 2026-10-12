@@ -24,9 +24,9 @@ export default function PhoneDashboard({ model, showMoney, nav, store }) {
   const chips = [['all', 'All', candidates.length], ['qualified', 'Qualified', candidates.filter(isQualified).length],
     ['proposal', 'Proposal Sent', candidates.filter(isProposal).length], ['blocked', 'Blocked', candidates.filter(opp => blockedByOpp.has(opp.id)).length]]
   const kpis = [
-    ['Open Pipeline', showMoney ? phoneMoney(model.headlinePipelineK) : model.headlineOpenCount, showMoney ? 'Total expected value' : 'Open opportunities', ''],
-    ['Follow-ups Due', model.followups.length, 'Needs your attention', ''],
-    ['Pending Approvals', model.pending.length, 'Across this view', ''],
+    ['Open Pipeline', showMoney ? phoneMoney(model.headlinePipelineK) : model.headlineOpenCount, model.opportunitySummary, ''],
+    ['Follow-ups Due', model.followups.length, 'Needs your attention', 'is-warning'],
+    ['Pending Approvals', model.pending.length, 'Across this view', 'is-warning'],
     ['Blocked Work', model.blocked.length, 'Requires resolution', 'is-urgent'],
   ]
   const actionFor = opp => {
@@ -37,13 +37,13 @@ export default function PhoneDashboard({ model, showMoney, nav, store }) {
   }
   const tasks = model.queue.slice(0, 3)
   const filteredView = Boolean(query.trim()) || filter !== 'all'
-  return <main className="page wintrack-mobile-dashboard" aria-label="Mobile sales dashboard">
+  return <main className="page wintrack-mobile-dashboard" data-dashboard-depth="glass" aria-label="Mobile sales dashboard">
     <h1 className="visually-hidden">Dashboard</h1>
     <label className="mobile-search"><Icon name="search" size={20} /><span className="visually-hidden">Search opportunities</span><input id="mobile-opportunity-search" type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search customers, opportunities or IDs…" /></label>
     <div className="mobile-filter-row" aria-label="Opportunity filters">{chips.map(([key, label, count]) => <button key={key} type="button" className={`mobile-filter-chip${filter === key ? ' is-active' : ''}`} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}<b>{count}</b></button>)}</div>
     <section className="mobile-kpi-grid" aria-label="Dashboard summary">{kpis.map(([label, value, hint, tone]) => <article key={label} className={`mobile-kpi ${tone}`}><span>{label}<Icon name="chevronRight" size={14} /></span><strong>{value}</strong><small>{hint}</small></article>)}</section>
-    <DashboardSection title="Top 5 Opportunities" subtitle={showMoney ? 'Largest expected value' : 'Open opportunities'} icon="folder" defaultOpen>
-      <label className="mobile-period-label">Expected close period<select aria-label="Top 5 fiscal period" value={topPeriod} onChange={event => setTopPeriod(event.target.value)}><option value="fy">{fy}</option>{FY_QUARTERS.map((label, index) => <option key={label} value={`q${index + 1}`}>{label} · {fy}</option>)}</select></label>
+    <DashboardSection title="Top 5 Opportunities" subtitle="Nearest expected order date" icon="folder" defaultOpen>
+      <label className="mobile-period-label">Expected order period<select aria-label="Top 5 fiscal period" value={topPeriod} onChange={event => setTopPeriod(event.target.value)}><option value="fy">{fy}</option><option value="all">All dates</option>{FY_QUARTERS.map((label, index) => <option key={label} value={`q${index + 1}`}>{label} · {fy}</option>)}</select></label>
       <div className="mobile-opportunity-feed">{top.map((opp, index) => {
         const action = actionFor(opp)
         const blocked = blockedByOpp.get(opp.id)
@@ -55,11 +55,11 @@ export default function PhoneDashboard({ model, showMoney, nav, store }) {
           <div className="mobile-customer-line"><span className="mobile-rank">{index + 1}</span><span className={`mobile-customer-avatar mobile-customer-avatar--${index % 4}`}>{initialsFor(opp.sellTo || opp.oppName)}</span><div className="mobile-customer-name"><h3>{opp.sellTo || opp.oppName || 'Untitled opportunity'}</h3><span>{displayOpportunityId(opp.id)}</span></div></div>
           <span className="mobile-stage-badge" data-tone={tone}>{status}</span>
           {blocker && <p className="mobile-blocker-note"><Icon name="alert" size={15} />{blocker.text}</p>}
-          <div className="mobile-opportunity-facts"><div><strong>{showMoney ? phoneMoney(opp.valueK) : 'Value restricted'}</strong><small>Expected value</small></div><div><span><Icon name="clock" size={16} />{opp.orderDate ? ddMMyyyy(opp.orderDate) : 'Date not set'}</span><small>Expected close</small></div></div>
+          <div className="mobile-opportunity-facts"><div><strong>{showMoney ? phoneMoney(opp.valueK) : 'Value restricted'}</strong><small>Expected value</small></div><div><span><Icon name="clock" size={16} />{opp.orderDate ? ddMMyyyy(opp.orderDate) : 'Date not set'}</span><small>Expected order date</small></div><div><span>{opp.prob || 'Not set'}</span><small>Probability</small></div></div>
           {action && <button type="button" className="mobile-card-action" onClick={() => nav(action.path)}>{action.label}</button>}
         </article>
       })}</div>
-      {!top.length && <p className="mobile-empty-state">{filteredView ? 'No opportunities match these filters. Try another filter or clear the search.' : 'No open opportunities expected in this period.'}</p>}
+      {!top.length && <p className="mobile-empty-state">{filteredView ? 'No opportunities match these filters. Try another filter or clear the search.' : model.topOpportunitiesEmptyMessage}</p>}
       {canOpen('tracker') && <button type="button" className="mobile-view-all" onClick={() => nav('/opportunities')}>View all opportunities<Icon name="chevronRight" size={17} /></button>}
     </DashboardSection>
     <DashboardSection title="Priority actions" subtitle={`${model.queue.length} actions need attention`} icon="fileText" defaultOpen>

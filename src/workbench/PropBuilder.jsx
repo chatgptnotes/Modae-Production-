@@ -3,8 +3,9 @@ import { useStore, snapshotProposal } from '../store.jsx'
 import { proposalApprovalSnapshot } from '../approvalMemory.js'
 import { canPriceProposal, fmt, ddMmmYY, displayRole, displayRoles } from '../utils.js'
 import { readiness, isBlocked, commercialGate, releaseState, approvalSet, serviceApprovalSet, legacyServiceReview } from '../gates.js'
-import { REVISION_TYPES } from '../seed.js'
+import { displayOpportunityId, REVISION_TYPES } from '../seed.js'
 import { Chip, AiBadge, Phase2Badge, ErrBox, WarnBox, Modal } from '../ui.jsx'
+import { canOverrideCustomerKyc, customerGateOverridden } from '../kycPolicy.js'
 import { Icon } from '../icons.jsx'
 // Shared with the printed document, so the checklist and the real document
 // can never list different sections.
@@ -18,6 +19,7 @@ export default function PropBuilder({ opp, onRevision }) {
   const p = store.getProposal(opp.id)
   const blockers = readiness(opp, p, store)
   const blocked = isBlocked(blockers)
+  const canOverrideKyc = canOverrideCustomerKyc(store, opp, store.config)
   const gate = commercialGate(opp, p, store.config)
 
   const [manualDone, setManualDone] = useState({})
@@ -71,7 +73,7 @@ export default function PropBuilder({ opp, onRevision }) {
   })
 
   const applyOverride = () => {
-    if (!overrideReason.trim()) return
+    if (!canOverrideKyc || !overrideReason.trim()) return
     store.kycOverride(opp.id, overrideReason.trim())
     setOverrideOpen(false)
     setOverrideReason('')
@@ -179,7 +181,7 @@ export default function PropBuilder({ opp, onRevision }) {
           <p style={{ margin: '6px 0' }}><b>{p.addressee || `M/s. ${opp.sellTo}`}</b></p>
           <p style={{ margin: '6px 0' }}>Kind attn: {p.kindAttn || opp.contactPerson}</p>
           <p style={{ margin: '6px 0' }}><b>Subject:</b> {p.subject || `Proposal For ${opp.oppName}`}</p>
-          <p style={{ margin: '6px 0' }}><b>Ref:</b> {opp.id} · Rev {p.revision}</p>
+          <p style={{ margin: '6px 0' }}><b>Ref:</b> {displayOpportunityId(opp.id)} · Rev {p.revision}</p>
           <p style={{ margin: '6px 0' }}><b>BOQ lines:</b> {totalLine}</p>
           {!comm && <p className="hint"><Icon name="lock" size={11} /> Commercial totals restricted — sales owners, approvers and admin only.</p>}
           <p className="hint">Full document includes: {PROP_SECTIONS.join(' · ')}.</p>
@@ -194,14 +196,14 @@ export default function PropBuilder({ opp, onRevision }) {
             {bl.text}
             <div style={{ marginTop: 6, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               {bl.approvalType && bl.severity !== 'wait' && (
-                <button onClick={() => requestForBlocker(bl)}>Request {bl.anyOf ? 'AH or LJS' : bl.approver} approval</button>
+                <button disabled={store.canPerform?.('approvals.request') === false} onClick={() => requestForBlocker(bl)}>Request {bl.anyOf ? 'AH or LJS' : bl.approver} approval</button>
               )}
-              {bl.kyc && !overrideOpen && (
+              {bl.kyc && canOverrideKyc && !overrideOpen && (
                 <button onClick={() => setOverrideOpen(true)}>Override with reason</button>
                )}
 
             </div>
-           {bl.kyc && overrideOpen && (
+           {bl.kyc && canOverrideKyc && overrideOpen && (
 
               <div style={{ marginTop: 6, display: 'flex', gap: 6 }}>
                 <input placeholder="Override reason (logged)" value={overrideReason} style={{ flex: 1 }}
@@ -211,10 +213,10 @@ export default function PropBuilder({ opp, onRevision }) {
             )}
           </div>
         ))}
-        {opp.kycOverride && (
+        {customerGateOverridden(opp, store.config) && (
           <div className="okbox">
-            KYC overridden by {opp.kycOverride.by}: {opp.kycOverride.reason}
-            <span className="hint"> (logged decision to proceed before AH clearance)</span>
+            KYC bypass authorized by {opp.kycOverride.by}: {opp.kycOverride.reason}
+            <span className="hint"> (exception recorded; KYC is not marked completed)</span>
           </div>
         )}
 
@@ -302,7 +304,7 @@ export default function PropBuilder({ opp, onRevision }) {
         {revisions.length > 1 && <button onClick={() => setCompareOpen(true)}>Compare revisions</button>}
 
         <div style={{ marginTop: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <button className="primary" disabled={blocked || !!pendingRelease || released}
+          <button className="primary" disabled={blocked || !!pendingRelease || released || store.canPerform?.('approvals.request') === false}
             title={blocked ? 'Blocked by readiness items' : pendingRelease ? 'Release approval already pending' : released ? 'Already released' : ''}
             onClick={submitForApproval}>
             <Icon name="send" size={13} /> Submit for approval

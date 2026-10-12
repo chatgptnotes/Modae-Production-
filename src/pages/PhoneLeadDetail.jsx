@@ -1,3 +1,4 @@
+import { displayOpportunityId } from '../seed.js'
 import React, { useEffect, useId, useRef, useState } from 'react'
 import { Icon } from '../icons.jsx'
 import { Modal } from '../ui.jsx'
@@ -53,7 +54,7 @@ export default function PhoneLeadDetail({ lead, summary = {}, issues = [], items
     </div>
     <section className="phone-lead-panel" id={`${id}-overview`} role="tabpanel" aria-labelledby={`${id}-overview-tab`} hidden={tab !== 'overview'}>
       {issues.length > 0 && <section className="phone-lead-attention" aria-label="Needs attention"><h2>Needs attention</h2>{issues.map((issue,index) => <button type="button" key={`${issue.label}-${index}`} onClick={() => openDetails(issue.field || issue.label)}><Icon name="alert" size={18} /><span><b>{issue.label}</b><small>{issue.note || 'Review in Details'}</small></span><Icon name="chevronRight" size={18} /></button>)}</section>}
-      {lead.status === 'Converted' && <section className="phone-lead-converted"><Icon name="checkCircle" size={20} /><div><b>Converted to opportunity{lead.oppId ? ` ${lead.oppId}` : ''}</b><p>This lead is read-only.{lead.oppId ? ' Continue in the linked opportunity.' : 'No linked opportunity is available.'}</p></div></section>}
+      {lead.status === 'Converted' && <section className="phone-lead-converted"><Icon name="checkCircle" size={20} /><div><b>Converted to opportunity{lead.oppId ? ` ${displayOpportunityId(lead.oppId)}` : ''}</b><p>This lead is read-only.{lead.oppId ? ' Continue in the linked opportunity.' : 'No linked opportunity is available.'}</p></div></section>}
       {lead.status === 'Dropped' && <p className="phone-lead-notice">Dropped — {lead.droppedReason || 'No reason recorded'}.</p>}
       <section className="phone-lead-summary"><h2>Enquiry summary</h2><p>{summary.scope || 'Review the original email for the enquiry scope.'}</p>
         <dl>{[['Customer',summary.customer],['Contact',summary.contact],['Delivery',summary.delivery]].map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{value || 'Not provided'}</dd></div>)}</dl>

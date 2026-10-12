@@ -1,20 +1,16 @@
+import { useFieldLists } from '../useFieldLists.js'
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, PROB_LEVELS } from '../seed.js'
+
 import { fmtLakh, ageDays, canViewCommercial, isAdminRole, isApprover, isSalesOwner, sameCustomer, productList, displayRoleLabel, displayRole } from '../utils.js'
-import { PROB_WEIGHT, winLossAnalysis, FUNNEL_STAGES, funnelRows } from '../kpi.js'
+import { PROB_WEIGHT, winLossAnalysis, FUNNEL_STAGES } from '../kpi.js'
 import { Icon } from '../icons.jsx'
-import { MODAE_COLORS } from '../branding/modae.js'
+import { Funnel } from './myDashboard/WorkspaceDashboard.jsx'
+import { segmentedFunnel } from './myDashboard/model.js'
 import WinLossFlow from '../WinLossFlow.jsx'
 import WinLossPie from '../WinLossPie.jsx'
 import { useWorkspaceView } from '../ui/WorkspaceViewContext.jsx'
-
-// Funnel ramp validated with the dataviz palette checker (ordinal, light
-// surface): monotone lightness, ≥0.06 step gaps, light end ≥2:1 on white.
-// Now brand-anchored — see MODAE_COLORS.ramp for the validation note.
-const FUNNEL_RAMP = MODAE_COLORS.ramp
-// Weighting lives in src/kpi.js so the dashboard and this page agree.
 
 // ---- Filter model -------------------------------------------------------
 const RANGES = [
@@ -81,78 +77,9 @@ function Restricted() {
   return <div className="restricted">Restricted — commercial data (approvers/admin only)</div>
 }
 
-// Stage funnel. A snapshot of where the live enquiries are sitting right now, so
-// the bands carry no conversion meaning between them: the silhouette is a fixed
-// taper set by row position alone — widest at the top, narrowest at the bottom,
-// shading light to dark — and only the figure inside each band moves with the
-// data. A numbered rail sits on the left and the per-stage detail on the right.
-// The metric is the summed opportunity value when the role may see commercials,
-// else the plain row count.
-// `conversion` swaps the share-of-pipeline caption for the prototype's
-// "N% of prior" conversion between lifecycle stages (`pctTxt`, Bt_html
-// clickable prototype.html:3643) — geometry and shading stay the same.
-export function Funnel({ stages, showValue, conversion = false, onStageClick }) {
-  const W = 620, ROW = 46, GAP = 7, NUM = 0, DETAIL = 190
-  const H = stages.length * ROW + (stages.length - 1) * GAP
-  const plotW = W - NUM - DETAIL
-  const metric = s => (showValue ? s.valueK : s.count)
-  const label = s => (showValue ? fmtLakh(s.valueK) : String(s.count))
-  const cx = NUM + plotW / 2
-  const y = i => i * (ROW + GAP)
-  // Purely positional taper: band i runs from wAt(i) down to wAt(i + 1), so the
-  // rows meet edge to edge and read as one funnel whatever the numbers say. The
-  // narrowest edge still holds a centred "₹9.67 Cr".
-  const END = 0.34
-  const wAt = i => plotW * (1 - (1 - END) * (i / stages.length))
-  // Each band's weight in the open pipeline — the only comparison a snapshot
-  // distribution supports, and it changes the caption, never the geometry.
-  const total = stages.reduce((t, s) => t + metric(s), 0)
-  const share = s => (total ? Math.round((metric(s) / total) * 100) : 0)
-  const caption = (s, i) => {
-    if (!conversion) return `${share(s)}% of open pipeline`
-    const prior = i > 0 ? metric(stages[i - 1]) : 0
-    return i === 0 ? 'start of funnel' : prior ? `${Math.round((metric(s) / prior) * 100)}% of prior` : '—'
-  }
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} role="img" className="funnel-svg" style={{ width: '100%' }}
-      aria-label={`Enquiries by current stage: ${stages.map(s => `${s.label} ${label(s)}`).join(', ')}`}>
-      <defs>
-        {/* One ramp over the whole figure rather than per band, so the shade
-            deepens smoothly top to bottom with no seam at the joins. */}
-        <linearGradient id="fnlRamp" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="0" y2={H}>
-          {FUNNEL_RAMP.map((c, i) => (
-            <stop key={c} offset={`${(i / (FUNNEL_RAMP.length - 1)) * 100}%`} stopColor={c} />
-          ))}
-        </linearGradient>
-      </defs>
-
-      {stages.map((s, i) => {
-        const top = y(i) + 3, bot = y(i) + ROW - 3
-        const wTop = wAt(i), wBot = wAt(i + 1)
-        return (
-          <g key={s.label} onClick={() => onStageClick?.(s)} className={onStageClick ? 'funnel-stage-interactive' : undefined}>
-            <polygon fill="url(#fnlRamp)"
-              points={`${cx - wTop / 2},${top} ${cx + wTop / 2},${top} ${cx + wBot / 2},${bot} ${cx - wBot / 2},${bot}`} />
-            <text x={cx} y={y(i) + ROW / 2 + 5} textAnchor="middle" fontSize={showValue ? 12.5 : 14} fontWeight="800"
-              fill={i < 2 ? 'var(--text-main)' : 'var(--text-on-inverse)'}>{label(s)}</text>
-
-            <line x1={cx + wTop / 2 + 6} y1={y(i) + ROW / 2} x2={W - DETAIL + 4} y2={y(i) + ROW / 2}
-              stroke="var(--border-soft)" strokeWidth="1" strokeDasharray="3 3" />
-            <text x={W - DETAIL + 12} y={y(i) + ROW / 2 - 3} fontSize="12" fontWeight="700" fill="var(--text-main)">
-              {s.label} ({s.count}){showValue ? ` · ${fmtLakh(s.valueK)}` : ''}
-            </text>
-            <text x={W - DETAIL + 12} y={y(i) + ROW / 2 + 12} fontSize="10.5" fill="var(--text-muted)">
-              {caption(s, i)}
-            </text>
-          </g>
-        )
-      })}
-    </svg>
-  )
-}
-
 export default function Analytics({ embedded = false }) {
+  const { OWNERS, BUS, OPP_TYPES, SEGMENTS, PRODUCTS, PROB_LEVELS, labelFor } = useFieldLists()
+
   const store = useStore()
   const { scope } = useWorkspaceView()
   // Sales owners may see commercial analytics for their locked own-owner scope;
@@ -229,7 +156,9 @@ export default function Analytics({ embedded = false }) {
 
   return (
     <div className={`page ana-page${embedded ? ' embedded-analytics' : ''}`}>
-      <h2>{embedded ? 'Detailed analytics' : 'Analytics'}</h2>
+      <div className="analytics-page-heading"><h2>{embedded ? 'Detailed analytics' : 'Analytics'}</h2>
+        {!embedded && <Link className="btn" to="/my-dashboard"><Icon name="chevronLeft" size={16} /> Back to dashboard</Link>}
+      </div>
       <div className="hint" style={{ marginBottom: 10 }}>Click any bar to open the supporting records.</div>
 
       <div className="ana-filters">
@@ -285,10 +214,10 @@ export default function Analytics({ embedded = false }) {
         </div>
       </div>
 
-      <section className="analysis-section" aria-label="Pipeline funnel">
-        <div className="analysis-section-head"><div><span className="analysis-kicker">Live pipeline</span><h3>Opportunity funnel</h3><p>Open opportunities by the shared ModAE funnel stages. Won is shown as the closed outcome.</p></div></div>
-        <Funnel stages={funnelRows(opps)} showValue={comm} onStageClick={stage => set('stage', stage.stages.join(','))} />
-      </section>
+      <div className="dw-reference-dashboard analytics-funnel" data-dashboard-depth="glass">
+        <Funnel title="Opportunity funnel" model={{ funnel: segmentedFunnel(opps, store.config) }} showMoney={comm} scope={scope}
+          onStageClick={stage => set('stage', stage.stages.join(','))} />
+      </div>
 
       <section className="analysis-summary" aria-label="Win and loss summary">
         <div><b>{winLoss.summary.total}</b><span>Closed opportunities</span></div>

@@ -1,0 +1,123 @@
+.winloss-report { --wl-win: #00b074; --wl-loss: #ff4d4d; --wl-text: var(--text-primary); --wl-muted: var(--text-secondary); --wl-surface: var(--surface-default); --wl-line: var(--border-subtle); --wl-track: var(--surface-raised); font-variant-numeric: tabular-nums; }
+.winloss-chart-grid { display: grid; grid-template-columns: minmax(0, .95fr) minmax(0, 1.3fr) minmax(0, .95fr); align-items: start; gap: 12px; padding: 8px 0 12px; }
+.winloss-chart-heading { margin: 0 0 10px; color: var(--wl-text); font-size: 15px; font-weight: 600; }
+.winloss-summary { display: grid; gap: 8px; padding-right: 12px; border-right: 1px solid var(--wl-line); }
+.winloss-summary-main { display: grid; grid-template-columns: 160px minmax(0, 1fr); align-items: center; gap: 8px; }
+.winloss-summary > .winloss-chart-heading { justify-self: start; margin: 0; }
+.winloss-donut { display: grid; place-items: center; width: 160px; height: 160px; border-radius: 50%; background: conic-gradient(var(--wl-win) var(--win-share), var(--wl-loss) 0); }
+.winloss-donut.is-empty { background: var(--wl-line); }
+.winloss-donut > div { display: grid; place-content: center; gap: 5px; width: 122px; height: 122px; border-radius: 50%; background: var(--wl-surface); text-align: center; }
+.winloss-donut strong { color: var(--wl-rate, #175cd3); font-size: 38px; font-weight: 650; line-height: 1.1; letter-spacing: -1.5px; }
+.winloss-donut span { color: var(--wl-muted); font-size: 13px; }
+.winloss-summary-content { min-width: 0; width: 100%; }
+.winloss-summary-content h3 { margin: 0 0 14px; color: var(--wl-text); font-size: 14px; font-weight: 600; }
+.winloss-counts { display: grid; gap: 2px; margin: 0 0 8px; }
+.winloss-counts > div { min-width: 0; }
+.winloss-counts > button, .winloss-counts > div { padding: 6px 0; text-align: left; font: inherit; }
+/* Keep these text controls plain beneath the workspace's shared button styles. */
+.winloss-report .winloss-counts > button { display: flex; flex-wrap: wrap; justify-content: start; align-items: center; gap: 4px 6px; min-height: 44px; padding: 4px 0 !important; cursor: pointer; border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; }
+.winloss-counts > button[data-result="won"] { --outcome-color: var(--wl-win); }
+.winloss-counts > button[data-result="lost"] { --outcome-color: var(--wl-loss); }
+.winloss-counts > button:hover .winloss-count-label, .winloss-counts > button[aria-pressed="true"] .winloss-count-label { color: var(--outcome-color); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 4px; }
+.winloss-counts > button:focus-visible, .winloss-filter-status button:focus-visible { outline: 2px solid var(--wl-text); outline-offset: 3px; }
+.winloss-count-label { display: flex; align-items: center; gap: 5px; color: var(--wl-muted); font-size: 11px; }
+.winloss-count-label i { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; background: var(--wl-muted); }
+.winloss-counts [data-result="won"] i { background: var(--wl-win); }
+.winloss-counts [data-result="lost"] i { background: var(--wl-loss); }
+.winloss-count-value { color: var(--wl-text); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.winloss-count-value small { font-size: inherit; font-weight: 500; }
+.winloss-summary-totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 2px 0 0; }
+.winloss-summary-totals > div + div { border-left: 1px solid var(--wl-line); padding-left: 12px; }
+.winloss-summary-totals dt { color: var(--wl-muted); font-size: 11px; line-height: 1.5; }
+.winloss-summary-totals dd { color: var(--wl-text); margin: 4px 0 0; font-size: 22px; font-weight: 650; }
+.winloss-counts button .winloss-count-value { color: var(--outcome-color); }
+.winloss-filter-status { color: var(--wl-muted); font-size: 10px; line-height: 1.5; }
+.winloss-report .winloss-filter-status button { display: inline; min-height: 28px; padding: 3px 0 !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; color: var(--wl-text); font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.winloss-selected-empty { grid-column: span 2; margin: 0; padding: 32px 16px; color: var(--wl-muted); font-size: 14px; text-align: center; }
+.winloss-calculation { margin: 0; color: var(--wl-muted); font-size: 11px; line-height: 1.5; }
+.winloss-exclusion { margin: -6px 0 0; color: var(--wl-muted); font-size: 11px; line-height: 1.5; }
+.winloss-comparison { min-width: 0; padding-right: 12px; border-right: 1px solid var(--wl-line); }
+.winloss-comparison .winloss-chart-heading { white-space: nowrap; }
+.winloss-chart-legend { display: flex; justify-content: flex-end; gap: 10px; margin: 0 0 8px; color: var(--wl-muted); font-size: 12px; }
+.winloss-chart-legend > span { display: flex; align-items: center; gap: 5px; }
+.winloss-chart-legend i { width: 9px; height: 9px; border-radius: 50%; }
+.winloss-chart-legend [data-result="won"] { background: var(--wl-win); }
+.winloss-chart-legend [data-result="lost"] { background: var(--wl-loss); }
+.winloss-comparison ul { display: grid; gap: 4px; list-style: none; padding: 0; margin: 0; }
+.winloss-comparison li { display: grid; grid-template-columns: 40% minmax(0, 1fr); align-items: center; gap: 8px; min-height: 26px; color: var(--wl-muted); font-size: 11px; }
+.winloss-comparison li > span { overflow-wrap: anywhere; }
+.winloss-comparison-bars { display: grid; grid-template-columns: minmax(0, 1fr) max-content; align-items: center; gap: 7px; min-width: 0; }
+.winloss-bar-counts { display: flex; align-items: center; gap: 4px; color: var(--wl-muted); font-size: 10px; white-space: nowrap; }
+.winloss-bar-counts b { font-weight: 700; }
+.winloss-bar-counts b[data-result="won"] { color: var(--wl-win); }
+.winloss-bar-counts b[data-result="lost"] { color: var(--wl-loss); }
+.winloss-bar-counts > i { color: var(--wl-muted); font-style: normal; }
+.winloss-comparison-track { display: flex; height: 10px; min-width: 0; overflow: hidden; border-radius: 5px; background: var(--wl-line); }
+.winloss-comparison-track i { display: block; height: 100%; }
+.winloss-comparison-track [data-result="won"] { background: var(--wl-win); }
+.winloss-comparison-track [data-result="lost"] { background: var(--wl-loss); }
+.winloss-comparison .winloss-count-axis { margin-right: 48px; }
+.outcome-reason-track { display: block; height: 9px; overflow: hidden; background: repeating-linear-gradient(to right, var(--wl-line) 0 1px, transparent 1px calc(100% / 3)); border-right: 1px solid var(--wl-line); }
+.winloss-axis-caption, .winloss-chart-empty { color: var(--wl-muted); font-size: 11px; line-height: 1.5; margin: 6px 0 0; }
+.winloss-count-axis { margin: 8px 48px 0 calc(42% + 10px); color: var(--wl-muted); font-size: 10px; }
+.winloss-count-axis > div { display: flex; justify-content: space-between; border-top: 1px solid var(--wl-line); padding-top: 5px; }
+.winloss-count-axis p { margin: 6px 0 0; text-align: center; font-size: 10px; line-height: 1.4; }
+.winloss-comparison .winloss-count-axis { margin: 6px 48px 0 calc(40% + 8px); }
+.winloss-reason-disclosure { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 0 0 10px; color: var(--wl-muted); font-size: 12px; }
+.winloss-reason-disclosure button { min-height: 36px; color: var(--wl-text); border: 1px solid var(--wl-line); background: var(--wl-surface); border-radius: 6px; padding: 6px 12px; font: inherit; cursor: pointer; }
+.winloss-reason-disclosure button:hover { background: var(--wl-track); }
+.winloss-reason-disclosure button:focus-visible { outline: 2px solid var(--wl-text); outline-offset: 3px; }
+.outcome-reasons { min-width: 0; }
+.outcome-reasons h3 { margin: 0 0 5px; color: var(--wl-text); font-size: 15px; font-weight: 600; }
+.outcome-reasons h3 small { color: var(--wl-muted); font-size: inherit; font-weight: 400; }
+.outcome-reasons ul { display: grid; gap: 4px; margin: 10px 0 0; padding: 0; list-style: none; }
+.outcome-reasons li { display: grid; grid-template-columns: 42% minmax(0, 1fr); align-items: center; gap: 8px; min-height: 26px; font-size: 11px; color: var(--wl-muted); }
+.outcome-reasons li > span:first-child { overflow-wrap: anywhere; }
+.outcome-reason-plot { display: grid; grid-template-columns: minmax(0, 1fr) 42px; gap: 6px; align-items: center; }
+.outcome-reasons li strong { display: flex; align-items: baseline; justify-content: flex-end; gap: 4px; color: var(--wl-text); font-size: 10px; font-weight: 600; text-align: right; }
+.outcome-reasons li strong small { color: var(--wl-muted); font-size: 9px; font-weight: 400; }
+.outcome-reason-track > span { display: block; height: 100%; }
+.outcome-reason-track > [data-result="won"] { background: var(--wl-win); }
+.outcome-reason-track > [data-result="lost"] { background: var(--wl-loss); }
+.outcome-reasons p { margin: 0; color: var(--wl-muted); font-size: 13px; line-height: 1.5; }
+.outcome-reasons .outcome-reasons-caption { font-size: 12px; }
+.winloss-other { padding: 10px 0 0; border-top: 1px solid var(--wl-line); }
+.winloss-other h3 { margin: 0 0 8px; color: var(--wl-text); font-size: 14px; font-weight: 600; }
+.winloss-other h3 small { color: var(--wl-muted); font-size: inherit; font-weight: 400; }
+.winloss-other dl { display: flex; flex-wrap: wrap; gap: 10px 24px; margin: 0; }
+.winloss-other dl > div { display: flex; gap: 10px; font-size: 12px; }
+.winloss-other dt { color: var(--wl-muted); }
+.winloss-other dd { margin: 0; color: var(--wl-text); font-weight: 600; }
+.shell[data-theme="dark"] .winloss-report { --wl-rate: #79a8ff; }
+.mobile-section-content .winloss-report { --wl-text: var(--mobile-primary); --wl-muted: var(--mobile-muted); --wl-surface: var(--mobile-surface); --wl-line: var(--mobile-border); --wl-track: var(--mobile-input); }
+.mobile-section-content .winloss-chart-grid { grid-template-columns: 1fr; gap: 18px; }
+.mobile-section-content .winloss-summary { border-right: 0; border-bottom: 1px solid var(--wl-line); padding: 0 0 14px; }
+.mobile-section-content .winloss-comparison { padding-right: 0; border-right: 0; }
+.mobile-section-content .winloss-selected-empty { grid-column: 1; }
+.mobile-section-content .winloss-donut { width: 160px; height: 160px; }
+.mobile-section-content .winloss-donut > div { width: 124px; height: 124px; }
+.mobile-section-content .winloss-donut strong { font-size: 36px; }
+.mobile-section-content .winloss-summary-main { grid-template-columns: 160px minmax(0, 1fr); }
+@media (max-width: 900px) {
+  .winloss-chart-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .winloss-summary { grid-column: 1 / -1; border-right: 0; border-bottom: 1px solid var(--wl-line); padding: 0 0 22px; }
+  .winloss-summary-main, .winloss-summary-totals { max-width: 480px; width: 100%; }
+}
+@media (max-width: 600px) {
+  .winloss-chart-grid { grid-template-columns: 1fr; }
+  .winloss-summary-main { grid-template-columns: 144px minmax(0, 1fr); }
+  .winloss-comparison { padding-right: 0; border-right: 0; }
+  .winloss-comparison .winloss-count-axis { margin-left: calc(40% + 8px); margin-right: 48px; }
+  .winloss-donut { width: 144px; height: 144px; }
+  .winloss-donut > div { width: 112px; height: 112px; }
+  .winloss-donut strong { font-size: 36px; }
+  .winloss-count-label { font-size: 11px; }
+  .winloss-summary-totals { gap: 6px; }
+  .winloss-summary-totals > div + div { padding-left: 8px; }
+  .winloss-summary-totals dd { font-size: 18px; white-space: nowrap; }
+  .winloss-selected-empty { grid-column: 1; }
+}
+.shell .dw-reference-dashboard .reference-funnel-row > .reference-funnel-track { background: var(--surface-raised); }
+.shell[data-theme="dark"] .dw-reference-dashboard .reference-funnel-row > .reference-funnel-track { background: var(--surface-raised) !important; }
+.mobile-dashboard-shell .mobile-funnel-track { min-height: 25px; background: var(--mobile-input); }
+.mobile-dashboard-shell .mobile-funnel-shape.is-empty { display: none; }

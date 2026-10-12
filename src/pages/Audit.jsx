@@ -1,3 +1,4 @@
+import { displayOpportunityId } from '../seed.js'
 import React, { useState } from 'react'
 import { useStore } from '../store.jsx'
 import { useWorkspaceView } from '../ui/WorkspaceViewContext.jsx'
@@ -5,6 +6,7 @@ import { useDrawer } from '../drawer.jsx'
 import { Icon } from '../icons.jsx'
 import { ddMmmYY, exportCSV, canSeePage, displayRole } from '../utils.js'
 import { usePagedRows } from '../ui/Pagination.jsx'
+import { useViewportPageSize } from '../ui/useViewportPageSize.js'
 import usePhoneLayout from '../tablet/usePhoneLayout.js'
 
 const when = ts => `${ddMmmYY(ts.slice(0, 10))} ${ts.slice(11, 16)}`
@@ -43,7 +45,8 @@ export default function Audit() {
     (scope === 'my' ? e.role === store.role : role === 'All' || e.role === role)
     && (action === 'All' || e.action === action)
     && (!needle || [e.action, e.objectId, e.detail].some(v => String(v ?? '').toLowerCase().includes(needle))))
-  const { pagedRows, pagination } = usePagedRows(rows, JSON.stringify([scope, q, role, action]))
+  const { pageSize, listRef, pagerRef } = useViewportPageSize(rows.length, { enabled: !phone })
+  const { pagedRows, pagination } = usePagedRows(rows, JSON.stringify([scope, q, role, action]), phone ? 10 : pageSize, pagerRef)
 
   const doExport = () => exportCSV(
     'Audit_Trail.csv',
@@ -76,10 +79,10 @@ export default function Audit() {
         <button onClick={doExport}>Extract to Excel</button>
       </div>
 
-      {phone ? <section aria-label="Audit entries">{pagedRows.map((entry, index) => <article className="phone-audit-row" key={`${entry.ts}-${index}`}><strong>{entry.action}</strong><small>{when(entry.ts)} · {displayRole(entry.role)}</small>{oppIds.has(entry.objectId) ? <button onClick={() => drawer.open({ type: 'opp', id: entry.objectId })}>{entry.objectId}</button> : <span>{entry.objectId}</span>}<details><summary>Details</summary><p>{String(entry.detail ?? 'No additional details')}</p></details></article>)}{!rows.length && <p>No audit entries match.</p>}</section> : <div className="sheet-wrap">
+      {phone ? <section aria-label="Audit entries">{pagedRows.map((entry, index) => <article className="phone-audit-row" key={`${entry.ts}-${index}`}><strong>{entry.action}</strong><small>{when(entry.ts)} · {displayRole(entry.role)}</small>{oppIds.has(entry.objectId) ? <button onClick={() => drawer.open({ type: 'opp', id: entry.objectId })}>{displayOpportunityId(entry.objectId)}</button> : <span>{entry.objectId}</span>}<details><summary>Details</summary><p>{String(entry.detail ?? 'No additional details')}</p></details></article>)}{!rows.length && <p>No audit entries match.</p>}</section> : <div className="sheet-wrap">
         <table className="sheet">
           <thead><tr><th>When</th><th>Role</th><th>Action</th><th>Object</th><th>Detail</th></tr></thead>
-          <tbody>
+          <tbody ref={listRef}>
             {pagedRows.map((e, i) => {
               const d = String(e.detail ?? '')
               return (
@@ -90,7 +93,7 @@ export default function Audit() {
                   <td>
                     {oppIds.has(e.objectId)
                       ? <span className="oppid-link" style={{ cursor: 'pointer' }}
-                          onClick={() => drawer.open({ type: 'opp', id: e.objectId })}>{e.objectId}</span>
+                          onClick={() => drawer.open({ type: 'opp', id: e.objectId })}>{displayOpportunityId(e.objectId)}</span>
                       : e.objectId}
                   </td>
                   <td title={d.length > 80 ? d : undefined}>{d.length > 80 ? d.slice(0, 79) + '…' : d}</td>

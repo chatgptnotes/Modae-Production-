@@ -4,12 +4,12 @@ import assert from 'node:assert/strict'
 import { LEVEL3_ROLE_IDS, LEVEL3_ROLES, userRoles } from '../src/seed.js'
 import { canSeePage, isAdminRole, isApprover } from '../src/utils.js'
 
-test('Level 3 defines the four standard application roles', () => {
-  assert.deepEqual(LEVEL3_ROLE_IDS, ['STANDARD_USER', 'TEAM_LEAD', 'MANAGEMENT', 'ADMIN'])
+test('Level 3 offers the three customer-approved application roles', () => {
+  assert.deepEqual(LEVEL3_ROLE_IDS, ['STANDARD_USER', 'MANAGEMENT', 'ADMIN'])
   assert.equal(LEVEL3_ROLES.STANDARD_USER.name, 'Standard User')
-  assert.equal(LEVEL3_ROLES.TEAM_LEAD.name, 'Team Lead')
-  assert.equal(LEVEL3_ROLES.MANAGEMENT.name, 'Management')
-  assert.equal(LEVEL3_ROLES.ADMIN.name, 'Admin')
+  assert.equal(LEVEL3_ROLES.TEAM_LEAD.deprecated, true)
+  assert.equal(LEVEL3_ROLES.MANAGEMENT.name, 'Management User')
+  assert.equal(LEVEL3_ROLES.ADMIN.name, 'Admin User')
 })
 
 test('legacy profiles receive a compatible multi-role assignment', () => {

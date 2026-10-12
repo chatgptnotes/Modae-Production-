@@ -1,5 +1,9 @@
+import NormalFunnel, { FunnelViewSwitch, useFunnelView } from './FunnelView.jsx'
+import QuarterPeriodControl from './QuarterPeriodControl.jsx'
 import React from 'react'
 import { Icon } from '../../icons.jsx'
+import WinLossReport from './WinLossReport.jsx'
+import { WonValueNotice } from '../../BookingReview.jsx'
 
 export const phoneMoney = value => `₹${((Number(value) || 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`
 
@@ -13,48 +17,37 @@ export function DashboardSection({ title, subtitle, icon, defaultOpen = false, c
 }
 
 function Performance({ model, showMoney, nav, period, setPeriod, fy, canOpen }) {
-  const { perf } = model
-  const maximum = Math.max(1, perf.achieved, perf.annual)
-  const gap = Math.max(0, perf.annual - perf.achieved)
-  return <DashboardSection title="Performance" subtitle={`Actual vs target · ${fy}`} icon="chartBar">
-    <div className="mobile-report-tabs" aria-label="Performance period"><button type="button" aria-pressed={period === 'fy'} onClick={() => setPeriod('fy')}>YTD</button><button type="button" aria-pressed={period.startsWith('q')} onClick={() => setPeriod(`q${model.currentQuarter}`)}>QTD</button></div>
+  const { perf, wonPerformance: won } = model
+  const hasTarget = period !== 'all' && perf.targetConfigured && !perf.targetNeedsConfirmation
+  const maximum = Math.max(1, won.valueK, hasTarget ? perf.annual : 0)
+  const gap = Math.max(0, perf.annual - won.valueK)
+  const bars = [['Won value', won.valueK, 'actual'],
+    ...(hasTarget ? [[period.startsWith('q') ? 'Full-quarter target' : 'Full-year target', perf.annual, 'target']] : [])]
+  return <DashboardSection title="Performance" subtitle={`Won value · ${period === 'all' ? 'All history' : fy}`} icon="chartBar">
+    <div className="mobile-report-tabs" aria-label="Performance period"><button type="button" aria-pressed={period === 'all'} onClick={() => setPeriod('all')}>All history</button><button type="button" aria-pressed={period === 'fy'} onClick={() => setPeriod('fy')}>YTD</button><QuarterPeriodControl period={period} setPeriod={setPeriod} currentQuarter={model.currentQuarter} fy={fy} /></div>
     {showMoney ? <>
-      <div className="mobile-performance-bars">{[['Actual', perf.achieved, 'actual'], ['Target', perf.annual, 'target']].map(([label, value, kind]) => <div className="mobile-performance-row" key={kind}><div><span>{label}</span><strong>{phoneMoney(value)}</strong></div><div className="mobile-performance-track" aria-label={`${label}: ${phoneMoney(value)}`}><i data-kind={kind} style={{ width: `${Math.max(0, value) / maximum * 100}%` }} /></div></div>)}</div>
-      <div className="mobile-performance-gap"><span>Gap to target</span><strong>{phoneMoney(gap)}{perf.annual > 0 && <small> · {Math.round(gap / perf.annual * 100)}%</small>}</strong></div>
-      {!perf.annual && <p className="mobile-report-empty">No sales target configured for this period.</p>}
+      <WonValueNotice won={won} perf={perf} period={period} />
+      <div className="mobile-performance-bars">{bars.map(([label, value, kind]) => <div className="mobile-performance-row" key={kind}><div><span>{label}</span><strong>{phoneMoney(value)}</strong></div><div className="mobile-performance-track" aria-label={`${label}: ${phoneMoney(value)}`}><i data-kind={kind} style={{ width: `${Math.max(0, value) / maximum * 100}%` }} /></div></div>)}</div>
+      {won.estimatedCount === 0 && hasTarget && perf.annual > 0 && <div className="mobile-performance-gap"><span>Remaining to target</span><strong>{phoneMoney(gap)}<small> · {Math.round(gap / perf.annual * 100)}%</small></strong></div>}
     </> : <p className="mobile-report-empty">Sales values and targets are restricted for your role.</p>}
     {canOpen('po') && <button type="button" className="mobile-report-link" onClick={() => nav('/order')}>View Orders<Icon name="chevronRight" size={16} /></button>}
   </DashboardSection>
 }
 
-function Funnel({ model, showMoney, fy }) {
-  const useValue = showMoney && model.funnel.every(row => row.segments.every(segment => !segment.count || segment.valueK > 0))
-  const metric = row => useValue ? row.valueK : row.count
-  const maximum = Math.max(1, ...model.funnel.map(metric))
-  return <DashboardSection title="Sales Pipeline Funnel" subtitle={`Stages and probability · ${fy}`} icon="filter">
+function Funnel({ model, showMoney }) {
+  const [view, setView] = useFunnelView()
+  return <DashboardSection title="Sales Pipeline Funnel" subtitle="Current stage · All history" icon="filter">
+    <FunnelViewSwitch view={view} onChange={setView} />
+    <p className="mobile-report-empty">{view === 'normal' ? 'Widths show stage order, not counts · Splits show probability · Grey = empty' : 'Widths adjusted for readability · Splits show probability · Grey = empty'}</p>
     <div className="mobile-funnel-legend">{['high', 'medium', 'low'].map(key => <span key={key}><i data-probability={key} />{key[0].toUpperCase() + key.slice(1)}</span>)}</div>
-    <div className="mobile-funnel-rows">{model.funnel.map(row => <div className="mobile-funnel-row" key={row.key}>
-      <div className="mobile-funnel-label"><strong>{row.label}</strong><span>{row.count}{showMoney && ` · ${phoneMoney(row.valueK)}`}</span></div>
-      <div className="mobile-funnel-track"><div className={`mobile-funnel-shape${row.count ? '' : ' is-empty'}`} style={{ width: `${row.count ? metric(row) / maximum * 100 : 18}%` }} aria-label={`${row.label}: ${row.count} opportunities${showMoney ? `, ${phoneMoney(row.valueK)}` : ''}`}>
-        {row.segments.filter(segment => segment.count > 0).map(segment => <span key={segment.key} data-probability={segment.key} style={{ flex: useValue ? segment.valueK : segment.count }} title={`${segment.count} ${segment.key} probability opportunities${showMoney ? ` · ${phoneMoney(segment.valueK)}` : ''}`} />)}
-      </div></div>
-    </div>)}</div>
+    <NormalFunnel view={view} rows={model.funnel} showMoney={showMoney} formatMoney={phoneMoney} />
     <div className="mobile-funnel-total"><span>Open Pipeline <small>(excl. Won)</small></span><strong>{model.headlineOpenCount} opportunities{showMoney && <span>{phoneMoney(model.headlinePipelineK)}</span>}</strong></div>
   </DashboardSection>
 }
 
-function ReasonBars({ rows, maximum }) {
-  return <div className="mobile-reason-list">{rows.map(row => <div className="mobile-reason-row" key={row.reason}><span>{row.reason}</span><div><i data-result="won" style={{ width: `${row.won / maximum * 100}%` }} /><i data-result="lost" style={{ width: `${row.lost / maximum * 100}%` }} /></div><strong>{row.won} / {row.lost}</strong></div>)}</div>
-}
-
-function WinLoss({ model, nav, fy, canOpen }) {
-  const { summary, byReason } = model.outcomes
-  const reasons = byReason.filter(row => row.won || row.lost)
-  const maximum = Math.max(1, ...reasons.map(row => row.won + row.lost))
-  const losses = reasons.filter(row => row.lost).sort((a, b) => b.lost - a.lost)
-  return <DashboardSection title="Win/Loss Analysis" subtitle={`Closed opportunities · ${fy}`} icon="target">
-    <div className="mobile-winloss-summary"><div className={`mobile-winrate${summary.total ? '' : ' is-empty'}`} style={{ '--win-share': `${summary.total ? summary.won / summary.total * 100 : 0}%` }} role="img" aria-label={summary.total ? `Win rate ${summary.winRate}%` : 'No closed opportunities yet'}><div><strong>{summary.total ? `${summary.winRate}%` : '—'}</strong><span>Win Rate</span></div></div><dl><div><dt>Won</dt><dd>{summary.won}</dd></div><div><dt>Lost</dt><dd>{summary.lost}</dd></div><div><dt>Total Closed</dt><dd>{summary.total}</dd></div></dl></div>
-    {summary.total ? <><h3 className="mobile-report-heading">Won vs Lost by Reason</h3><ReasonBars rows={reasons} maximum={maximum} /><h3 className="mobile-report-heading">Top Loss Reasons (by count)</h3>{losses.map((row, index) => <div className="mobile-loss-reason" key={row.reason}><span>{index + 1}. {row.reason}</span><strong>{row.lost}</strong></div>)}{!losses.length && <p className="mobile-report-empty">No lost opportunities yet.</p>}</> : <p className="mobile-report-empty">No closed opportunities yet.</p>}
+function WinLoss({ model, nav, canOpen, showMoney }) {
+  return <DashboardSection title="Win/Loss Analysis" subtitle="Closed opportunities · All history" icon="target">
+    <WinLossReport outcomes={model.outcomes} showMoney={showMoney} />
     {canOpen('analytics') && <button type="button" className="mobile-card-action mobile-analysis-action" onClick={() => nav('/analytics')}>Open detailed analysis<Icon name="arrowRight" size={16} /></button>}
   </DashboardSection>
 }

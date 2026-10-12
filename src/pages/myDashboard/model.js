@@ -1,6 +1,9 @@
 import { funnelRows, PROB_WEIGHT, salesPerformance, winLossAnalysis } from '../../kpi.js'
 import { readiness, isBlocked, nextActionWith, actionableClarifications, isClarificationResolved, isClarificationCoveredByAnswer } from '../../gates.js'
-import { ageDays, ddMMyyyy, isTodayIST, isHiddenDashboardOpportunity } from '../../utils.js'
+import { ageDays, ddMMyyyy, isTodayIST, isHiddenDashboardOpportunity, canPriceProposal } from '../../utils.js'
+import { fieldBase } from '../../workbookGovernance.js'
+import { bookingRegister } from '../../orderBookings.js'
+import { currentFiscalQuarter } from '../../ui/workspacePeriods.js'
 
 export const PAGE_SIZE = 6
 
@@ -36,8 +39,15 @@ export function dashboardPeriod(period, fy, now = new Date()) {
 
 export function dateInPeriod(value, period) {
   if (!period) return true
+  const date = expectedOrderDate(value)
+  return Boolean(date) && date >= period.start && date < period.end
+}
+
+function expectedOrderDate(value) {
   const date = String(value || '').slice(0, 10)
-  return /^\d{4}-\d{2}-\d{2}$/.test(date) && date >= period.start && date < period.end
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return ''
+  const parsed = new Date(`${date}T00:00:00Z`)
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date ? date : ''
 }
 
 export function approvalNeedsRole(approval, role) {
@@ -50,11 +60,13 @@ const probabilityKey = value => ['high', 'medium', 'low'].includes(String(value 
   ? String(value).toLowerCase()
   : 'low'
 
-function segmentedFunnel(opportunities) {
-  return funnelRows(opportunities).map(row => {
+export function segmentedFunnel(opportunities, config) {
+  const bands = new Map(['high', 'medium', 'low'].map(key => [key,
+    funnelRows(opportunities.filter(opp => probabilityKey(opp.prob) === key), { config })]))
+  return funnelRows(opportunities, { config }).map((row, index) => {
     const segments = ['high', 'medium', 'low'].map(key => {
-      const rows = opportunities.filter(opp => (row.key === 'won' ? opp.status === 'Closed' : opp.status === 'Open') && row.stages.includes(opp.stage) && probabilityKey(opp.prob) === key)
-      return { key, count: rows.length, valueK: rows.reduce((sum, opp) => sum + (+opp.valueK || 0), 0) }
+      const band = bands.get(key)[index]
+      return { key, count: band.count, valueK: band.valueK }
     })
     return {
       ...row,
@@ -65,34 +77,28 @@ function segmentedFunnel(opportunities) {
   })
 }
 
-export function reconcileWinLossReasons(reasons, limit = 5) {
-  if (reasons.length <= limit) return reasons.map(({ reason, won, lost }) => ({ reason, won, lost }))
-  const visible = reasons.slice(0, limit - 1).map(({ reason, won, lost }) => ({ reason, won, lost }))
-  const other = reasons.slice(limit - 1).reduce((sum, row) => ({
-    reason: 'Other', won: sum.won + row.won, lost: sum.lost + row.lost,
-  }), { reason: 'Other', won: 0, lost: 0 })
-  return [...visible, other]
-}
-
-const periodLabel = (period, fy) => period === 'fy' ? fy || 'This FY' : `Q${period.slice(1)} · ${fy || 'This FY'}`
+const periodLabel = (period, fy) => period === 'all' ? 'All history' : period === 'fy' ? fy || 'This FY' : `Q${period.slice(1)} · ${fy || 'This FY'}`
 
 // Page-local read model: no persistence, permission changes, or shared KPI changes.
 // Pipeline ownership and personal decision responsibility are intentionally distinct.
-export function dashboardModel(store, { scope = 'global', owner = 'all', period = 'all', topPeriod = period, now = new Date() } = {}) {
+export function dashboardModel(store, { scope = 'global', owner = 'all', period = 'all', now = new Date(), topPeriod = currentFiscalQuarter(now) } = {}) {
   const role = store.role
   const range = dashboardPeriod(period, store.sales?.fy, now)
   const visible = (store.opportunities || []).filter(o => !isHiddenDashboardOpportunity(o))
-  const opportunities = visible.filter(o => dateInPeriod(o.orderDate, range)
-    || (period === 'fy' && o.status === 'Open' && !String(o.orderDate || '').trim()))
+  // Performance and Top 5 have their own periods. Operational work and the
+  // funnel/outcomes always use the complete eligible opportunity history.
+  const opportunities = visible
   const selectedOwner = scope === 'my' ? role : owner === 'all' ? null : owner
   const pipeline = opportunities.filter(o => !selectedOwner || o.owner === selectedOwner)
   const open = pipeline.filter(o => o.status === 'Open')
+  const opportunityCounts = { total: pipeline.length, open: open.length,
+    closed: pipeline.filter(o => o.status === 'Closed').length }
+  const opportunitySummary = `${opportunityCounts.total} total · ${opportunityCounts.open} open · ${opportunityCounts.closed} closed`
   const lookup = new Map(visible.map(o => [o.id, o]))
   const pending = (store.approvals || []).filter(a => {
     if (a.status !== 'Pending') return false
     const opp = lookup.get(a.oppId)
     if (a.oppId && !opp) return false
-    if (!dateInPeriod(opp?.orderDate || a.ts, range)) return false
     if (scope === 'my') return approvalNeedsRole(a, role) || a.requestedBy === role
     return !selectedOwner || (opp ? opp.owner === selectedOwner : a.requestedBy === selectedOwner)
   })
@@ -136,14 +142,31 @@ export function dashboardModel(store, { scope = 'global', owner = 'all', period 
       tone: 'info', path: `/opp/${row.opp.id}`, cta: 'Open', rank: 5 })
   }
   queue.sort((a, b) => a.rank - b.rank || (a.opp?.lastUpdated || '').localeCompare(b.opp?.lastUpdated || ''))
-  const currentQuarter = Math.max(1, Math.min(4, store.sales?.currentQ || 1))
-  const bookingRange = { ...(range || dashboardPeriod('fy', store.sales?.fy, now)) }
-  if (period === 'fy') bookingRange.end = dashboardPeriod(`q${currentQuarter}`, store.sales?.fy, now).end
-  const orders = (store.sales?.orders || []).filter(o => dateInPeriod(o.booked, bookingRange))
-  const performanceStore = { ...store, sales: { ...store.sales, orders } }
-  const perf = salesPerformance(performanceStore, selectedOwner)
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
+  const fiscalRange = dashboardPeriod('fy', store.sales?.fy, now)
+  const fiscalMonth = (Number(today.slice(0, 4)) - Number(fiscalRange.start.slice(0, 4))) * 12
+    + Number(today.slice(5, 7)) - 4
+  const elapsedQuarter = Math.max(0, Math.min(4, Math.floor(fiscalMonth / 3) + 1))
+  const currentQuarter = Math.max(1, elapsedQuarter)
+  const bookingRange = range || fiscalRange
+  const booking = bookingRegister(store, { now })
+  const orders = booking.orders.filter(o => dateInPeriod(o.booked, bookingRange)
+    && String(o.booked || '').slice(0, 10) <= today)
+  const confirmedByOpportunity = new Map(booking.orders
+    .map(order => [order.oppId || order.id, order]))
+  const wonRows = pipeline.filter(o => o.status === 'Closed' && fieldBase(store.config, 'stage', o.stage) === 'Won')
+    .map(opp => {
+      const booking = confirmedByOpportunity.get(opp.id)
+      return { valueK: booking ? booking.valueK : Number(opp.valueK) || 0,
+        date: booking?.booked || opp.orderDate, estimated: !booking }
+    })
+    .filter(row => period === 'all' || (dateInPeriod(row.date, range) && row.date <= today))
+  const wonPerformance = { valueK: wonRows.reduce((sum, row) => sum + row.valueK, 0),
+    wonCount: wonRows.length, estimatedCount: wonRows.filter(row => row.estimated).length }
+  const performanceStore = { ...store, sales: { ...store.sales, currentQ: currentQuarter } }
+  const perf = salesPerformance(performanceStore, selectedOwner, { orders, now })
   if (period === 'fy') {
-    perf.annual = perf.quarterTarget.slice(0, currentQuarter).reduce((sum, value) => sum + value, 0)
+    perf.annual = elapsedQuarter ? perf.quarterTarget.reduce((sum, value) => sum + value, 0) : 0
     perf.gap = Math.max(0, perf.annual - perf.achieved)
     perf.attainPct = perf.annual ? perf.achieved / perf.annual * 100 : 0
   } else if (/^q[1-4]$/.test(period)) {
@@ -155,30 +178,41 @@ export function dashboardModel(store, { scope = 'global', owner = 'all', period 
   }
   const owners = [...new Set([...pipeline.map(o => o.owner), ...Object.keys(store.sales?.targets || {})])].filter(Boolean).sort()
   const team = owners.filter(key => !selectedOwner || key === selectedOwner).map(key => ({ owner: key,
-    ...salesPerformance(performanceStore, key), open: open.filter(o => o.owner === key).length }))
+    ...salesPerformance(performanceStore, key, { orders, now }), open: open.filter(o => o.owner === key).length }))
+  if (period === 'fy') for (const row of team) {
+    row.annual = elapsedQuarter ? row.quarterTarget.reduce((sum, value) => sum + value, 0) : 0
+    row.gap = Math.max(0, row.annual - row.achieved)
+    row.attainPct = row.annual ? row.achieved / row.annual * 100 : 0
+  }
   if (/^q[1-4]$/.test(period)) for (const row of team) {
     row.annual = row.quarterTarget[Number(period[1]) - 1] || 0
     row.gap = Math.max(0, row.annual - row.achieved)
     row.attainPct = row.annual ? row.achieved / row.annual * 100 : 0
   }
-  const funnel = segmentedFunnel(pipeline)
+  const funnel = segmentedFunnel(pipeline, store.config)
   const topRange = dashboardPeriod(topPeriod, store.sales?.fy, now)
   const topOpportunityCandidates = visible.filter(o => o.status === 'Open'
     && (!selectedOwner || o.owner === selectedOwner)
-    && dateInPeriod(o.orderDate, topRange)).sort((a, b) => (+b.valueK || 0) - (+a.valueK || 0)
-    || String(a.orderDate || '9999-12-31').localeCompare(String(b.orderDate || '9999-12-31'))
+    && dateInPeriod(o.orderDate, topRange)).sort((a, b) => (expectedOrderDate(a.orderDate) || '9999-12-31').localeCompare(expectedOrderDate(b.orderDate) || '9999-12-31')
+    || (+b.valueK || 0) - (+a.valueK || 0)
     || String(a.id).localeCompare(String(b.id)))
   const topOpportunities = topOpportunityCandidates.slice(0, 5)
-  const headlineOpenCount = topOpportunities.length
-  const headlinePipelineK = topOpportunities.reduce((sum, o) => sum + (+o.valueK || 0), 0)
-  const outcomeSummary = winLossAnalysis(pipeline, store.competitors, { commercial: false })
-  const outcomes = { ...outcomeSummary, byReason: reconcileWinLossReasons(outcomeSummary.byReason) }
+  const topPeriodLabel = topPeriod === 'all' ? 'All dates' : periodLabel(topPeriod, store.sales?.fy)
+  const topOpportunitiesEmptyMessage = !open.length
+    ? 'No open opportunities in this view.'
+    : `No open opportunities with an expected order date in ${topPeriodLabel}. ${open.length} open ${open.length === 1 ? 'opportunity is outside this period or has' : 'opportunities are outside this period or have'} no expected order date. Choose All dates to see them.`
+  const headlineOpenCount = open.length
+  const headlinePipelineK = open.reduce((sum, o) => sum + (+o.valueK || 0), 0)
+  const outcomes = winLossAnalysis(pipeline.filter(o => o.status === 'Closed')
+    .map(o => ({ ...o, stage: fieldBase(store.config, 'stage', o.stage) })), store.competitors, { commercial: canPriceProposal(role) })
   return { pipeline, open, pending, decisions: pending.filter(a => approvalNeedsRole(a, role)), work, blocked, followups, stale, queue,
-    funnel, topOpportunities, topOpportunityCandidates, headlineOpenCount, headlinePipelineK, perf, team,
+    funnel, topOpportunities, topOpportunityCandidates, topOpportunitiesEmptyMessage,
+    opportunityCounts, opportunitySummary, headlineOpenCount, headlinePipelineK, perf, wonPerformance, team,
+    workbookOnly: String(store.importedWorkbook || '').startsWith('betser-sales-pipeline-usage-'),
     pipelineK: open.reduce((sum, o) => sum + (+o.valueK || 0), 0),
     weightedK: open.reduce((sum, o) => sum + (+o.valueK || 0) * (PROB_WEIGHT[o.prob] ?? PROB_WEIGHT.Low), 0),
     outcomes,
-    periodLabel: periodLabel(topPeriod, store.sales?.fy),
+    periodLabel: topPeriodLabel,
     currentQuarter,
     reportStore: { ...store, opportunities: scope === 'my' ? opportunities.filter(o => o.owner === role || work.some(row => row.opp.id === o.id)) : pipeline,
       approvals: (store.approvals || []).filter(a => pending.includes(a) || pipeline.some(o => o.id === a.oppId) || work.some(row => row.opp.id === a.oppId)),

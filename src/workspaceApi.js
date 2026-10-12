@@ -1,6 +1,7 @@
 import { supabaseAuth } from './supabase.js'
 
 let workspaceGeneration = ''
+export const getWorkspaceGeneration = () => workspaceGeneration
 
 const rememberWorkspaceGeneration = response => {
   const generation = response.headers.get('x-workspace-generation')
@@ -55,4 +56,16 @@ export async function saveWorkspaceToServer(dirty) {
   if (!token) return false
   await saveWorkspace(token, dirty)
   return true
+}
+
+export async function importWorkspaceWorkbook(importData, { action = 'preview', reviewToken = '' } = {}, fetcher = fetch) {
+  const { data } = await supabaseAuth?.getSession?.() || {}
+  const token = data?.session?.access_token
+  if (!token) throw new Error('A signed-in admin session is required.')
+  const response = await fetcher('/api/workspace/import', {
+    method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, importData, reviewToken }),
+  })
+  if (!response.ok) throw await responseError(response, 'Workbook import failed')
+  return response.json()
 }

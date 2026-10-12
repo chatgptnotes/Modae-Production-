@@ -1,6 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { leadFieldValue, leadIdentity, splitBuSegment, normalizeLeadLabel, inferEucFromText, labeledEucLocationFromText } from '../src/leadFieldMapping.js'
+import { extractLeadIdentityFacts, mergeLeadResults } from '../src/leadExtraction.js'
+import { mergeDeterministicIntoAi } from '../src/docScan.js'
+import { hardenLeadExtraction } from '../src/leadRules.js'
 
 const fields = [
   { k: 'CUSTOMER NAME', v: 'KSB Limited', state: 'accepted' },
@@ -111,4 +114,64 @@ test('saved or structured EUC Location overrides the text fallback', () => {
   const body = 'Site Location: Pune, Maharashtra'
   assert.equal(leadIdentity({ body, eucLocation: 'Mumbai, Maharashtra' }, []).eucLocation, 'Mumbai, Maharashtra')
   assert.equal(leadIdentity({ body }, [{ k: 'EUC Location', v: 'Nashik, Maharashtra' }]).eucLocation, 'Nashik, Maharashtra')
+})
+
+test('plant-only source survives extraction merging into the EUC decision', () => {
+  const body = 'Customer: ABC EPC\nPlant Name: Salal Power Station\nPlant Location: Reasi, Jammu & Kashmir'
+  const facts = extractLeadIdentityFacts(body)
+  const merged = mergeDeterministicIntoAi(mergeLeadResults([{ fields: [] }]), facts.fields)
+  const ai = hardenLeadExtraction(merged, { text: body })
+  const identity = leadIdentity({ body }, ai.fields)
+  assert.equal(identity.eucName, 'Salal Power Station')
+  assert.equal(identity.eucLocation, 'Reasi, Jammu & Kashmir')
+})
+
+test('explicit EUC fields outrank earlier generic location and site aliases', () => {
+  const identity = leadIdentity({}, [
+    { k: 'Location', v: 'Delhi' },
+    { k: 'Site / Plant Name', v: 'Salal Power Station' },
+    { k: 'Delivery / Site Location', v: 'Delhi warehouse' },
+    { k: 'EUC Name', v: 'NHPC' },
+    { k: 'EUC Location', v: 'Reasi' },
+  ])
+  assert.equal(identity.eucName, 'NHPC')
+  assert.equal(identity.eucLocation, 'Reasi')
+})
+
+test('missing EUC stays blank instead of copying an EPC buyer', () => {
+  assert.equal(leadIdentity({ sellTo: 'ABC EPC', body: 'Please quote two probes.' }, []).eucName, '')
+})
+
+test('a contact office is not inferred as an end user', () => {
+  assert.deepEqual(inferEucFromText('Contact us at Sales Office, Delhi:'), { eucName: '', eucLocation: '' })
+})
+
+test('an explicit site location outranks the stored generic buyer location', () => {
+  assert.equal(leadIdentity({ location: 'Delhi', body: 'Site Location: Reasi' }, []).eucLocation, 'Reasi')
+})
+
+test('an explicit source site location outranks a generic AI location', () => {
+  assert.equal(leadIdentity({ body: 'Site Location: Reasi' }, [{ k: 'Location', v: 'Delhi' }]).eucLocation, 'Reasi')
+})
+
+test('source hardening keeps the EUC location separate from an earlier delivery warehouse', () => {
+  const body = 'Delivery Location: Delhi warehouse\nEUC Name: NHPC\nEUC Location: Reasi'
+  const ai = hardenLeadExtraction({ fields: [
+    { k: 'Location', v: 'Delhi', conf: 95, ev: 'Buyer office' },
+    { k: 'EUC Location', v: 'Reasi', conf: 95, ev: 'Plant address' },
+  ] }, { text: body })
+  assert.equal(leadIdentity({ body }, ai.fields).eucLocation, 'Reasi')
+  assert.equal(ai.fields.find(field => field.k === 'Location').v, 'Delhi')
+})
+
+test('blank and rejected EUC fields do not hide usable site facts', () => {
+  const identity = leadIdentity({}, [
+    { k: 'EUC Name', v: 'Wrong company', state: 'rejected' },
+    { k: 'EUC Name', v: ' ' },
+    { k: 'Site / Plant Name', v: 'Salal Power Station' },
+    { k: 'EUC Location', v: '' },
+    { k: 'Site / Plant Location', v: 'Reasi' },
+  ])
+  assert.equal(identity.eucName, 'Salal Power Station')
+  assert.equal(identity.eucLocation, 'Reasi')
 })

@@ -9,10 +9,10 @@ const comingSoon = fs.readFileSync('src/workbench/OpportunityComingSoon.jsx', 'u
 
 test('future opportunity types use the read-only Coming Soon view', () => {
   assert.match(seed, /ACTIVE_WORKFLOW_TYPES = \['Spares', 'Service'\]/)
-  assert.match(seed, /isWorkflowAvailable = oppType => ACTIVE_WORKFLOW_TYPES\.includes\(oppType\)/)
-  assert.match(workbench, /!isWorkflowAvailable\(opp\.oppType\)/)
+  assert.match(seed, /isWorkflowAvailable = \(oppType, config = null\) => ACTIVE_WORKFLOW_TYPES\.includes\(fieldBase\(config, 'oppType', oppType\)\)/)
+  assert.match(workbench, /!isWorkflowAvailable\(opp\.oppType, store\.config\)/)
   assert.match(workbench, /<OpportunityComingSoon opp=\{opp\} created=\{createdNotice\}/)
-  assert.match(proposal, /if \(opp && !isWorkflowAvailable\(opp\.oppType\)\) return <OpportunityComingSoon opp=\{opp\} \/>/)
+  assert.match(proposal, /if \(opp && !isWorkflowAvailable\(opp\.oppType, store\.config\)\) return <OpportunityComingSoon opp=\{opp\} \/>/)
   assert.match(comingSoon, /created \? 'Opportunity created' : 'Coming soon'/)
   assert.match(comingSoon, /The workflow for this opportunity type is not available yet/)
   assert.match(comingSoon, /to="\/opportunities"/)
@@ -20,11 +20,11 @@ test('future opportunity types use the read-only Coming Soon view', () => {
 
 test('Retrofit keeps its type identity without inheriting the active Spares screen', () => {
   assert.match(seed, /if \(oppType === 'Spares' \|\| oppType === 'Retrofit'\) return 'Spares'/)
-  assert.match(workbench, /if \(!isWorkflowAvailable\(opp\.oppType\)\) return <OpportunityComingSoon opp=\{opp\} created=\{createdNotice\}/)
+  assert.match(workbench, /if \(!isWorkflowAvailable\(opp\.oppType, store\.config\)\) return <OpportunityComingSoon opp=\{opp\} created=\{createdNotice\}/)
 })
 
 test('Greenfield proposal editor is not mounted before the guard', () => {
-  const guard = proposal.indexOf("if (opp && !isWorkflowAvailable(opp.oppType))")
+  const guard = proposal.indexOf("if (opp && !isWorkflowAvailable(opp.oppType, store.config))")
   const editor = proposal.indexOf('return <ProposalEditor {...props} />')
   assert.ok(guard >= 0 && editor > guard)
 })

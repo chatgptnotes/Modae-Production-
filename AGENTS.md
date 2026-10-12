@@ -97,6 +97,8 @@ deleted_at   soft-delete timestamp
 ```
 
 Use the existing `save_rows` RPC and datastore helpers for bulk state changes.
+Reviewed workbook imports use server-only `import_workbook_rows`, which checks
+workspace generation and wraps revision-aware saves in one transaction.
 Do not bypass revision handling with ad hoc writes unless the change is for one
 of the dedicated tables and follows its existing helper pattern.
 
@@ -108,7 +110,10 @@ The active repository migrations are `supabase/007_live_workspace_sync.sql`,
 `supabase/012_permanent_workspace_purge.sql`,
 `supabase/015_atomic_opportunity_sequences.sql`, and
 `supabase/016_workspace_generation.sql`,
-`supabase/017_complete_bnk_catalogue.sql`.
+`supabase/017_complete_bnk_catalogue.sql`,
+`supabase/018_customer_state_repair.sql`, and
+`supabase/019_atomic_workbook_import.sql`, and
+`supabase/020_user_account_lifecycle.sql`.
 `supabase/014_user_presence.sql` stores the short-lived admin-only online
 indicator; browser code must access it only through `api/presence.js`.
 Historical migrations and backups are local-only under `.local/backups/`.
@@ -167,6 +172,16 @@ directory convention, or validation requirement changes.
 
 ## Current known boundaries
 
+- Confirmed order bookings live in immutable `opportunity.booking` snapshots;
+  legacy `sales.orders` are a compatibility input. Use `bookingRegister` for
+  order totals, deduplicate globally before applying owner scope, and preserve
+  confirmed snapshots during stale opportunity rebases. Never infer a booking
+  from Closed/Won, expected dates, record creation or last-edit dates.
+- Historical booking review is limited to imported Closed/Won records; newly
+  won records require verified PO details and joint LJS/AH acceptance. Changing
+  PO booking details resets both signatures. Target confirmation records the FY
+  and actor; untouched demo targets must not produce a business performance gap.
+
 - Some AI and automation entries intentionally remain deterministic previews.
 - Shared database synchronization is pull-based only: boot, route changes,
   focus/visibility restoration, reconnect, and explicit refresh. Do not add
@@ -186,3 +201,23 @@ directory convention, or validation requirement changes.
   approval-gated in the UI.
 - A full production workflow still depends on correctly configured Supabase,
   Railway, SharePoint, and SMTP credentials.
+
+- The shared users roster is server-owned. Use service-only `save_user_roster`
+  with roster revision and audit; never save users through browser bulk state.
+  Deletion retains attribution tombstones; pending deletion/update blocks access.
+  Preserve these lifecycle fields during state migration and never seed credentials
+  into shared profiles. Migration 020 enforces active-account workspace access.
+
+## Configurable access contract
+
+- Migrations `021_configurable_opportunity_numbers.sql`,
+  `022_configurable_access_policy.sql`, `023_preserve_number_reservations.sql`
+  add complete-ID reservation, server-owned access policy and purge preservation.
+- Business JSON reads/writes go through authenticated workspace APIs; never
+  restore direct browser table/RPC access to bypass permission failures.
+- `src/accessPolicy.js` resolves explicit application roles before legacy owner
+  IDs. `src/workspaceAccess.js` governs projection and mutation authorization.
+- Access policy and numbering edits use the dedicated revision-checked Admin
+  endpoint. Generic configuration saves cannot alter those fields.
+- Preserve opportunity counters and reservation history through all resets.
+  Connected ID creation must never fall back to a local counter.

@@ -1,13 +1,17 @@
+import { probabilityWeight, fieldBase } from '../workbookGovernance.js'
+import { useFieldLists } from '../useFieldLists.js'
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { ROLES, OWNERS, displayOpportunityId } from '../seed.js'
+import { ROLES, displayOpportunityId } from '../seed.js'
+
 import { readiness, isBlocked, nextActionWith } from '../gates.js'
 import { ageDays, isApprover, isAdminRole, isSalesOwner, canViewCommercial, canPriceProposal, fmtLakh, ddMmmYY, ddMMyyyy, displayRole, displayRoleLabel, isHiddenDashboardOpportunity } from '../utils.js'
 import { analyticsSnapshot, counts, salesPerformance, winLossAnalysis, FY_QUARTERS, FY_MONTHS, PROB_WEIGHT, funnelRows } from '../kpi.js'
 import { Icon } from '../icons.jsx'
 import ForecastDashboard from './Dashboard.jsx'
 import WorkspaceDashboard from './myDashboard/WorkspaceDashboard.jsx'
+import { targetPlan } from '../orderBookings.js'
 
 // My Dashboard — "there has to be something called My Dashboard… it will be
 // different for all the roles" (13 Aug review). The salesperson's version is
@@ -282,7 +286,7 @@ function PerformanceScorecard({ perf, scope = 'personal', funnel }) {
 
 function DashboardFunnel({ store, role, nav, title = 'ModAE Funnel', scope = 'role' }) {
   const owner = scope === 'my' ? role : (scope === 'role' && isSalesOwner(role) ? role : null)
-  const rows = funnelRows(store.opportunities || [], { owner })
+  const rows = funnelRows(store.opportunities || [], { owner, config: store.config })
   const showValue = canViewCommercial(role) || isSalesOwner(role)
   return (
     <Card title={title} icon="layers" tone="tone-slate" span={4} className="dashboard-funnel funnel-visual">
@@ -489,7 +493,7 @@ function SalesOpportunitySection({ store, open, nav, money }) {
   return (
     <Card title="My opportunities" icon="sheet" tone="tone-sky" span={12}
       action={<button onClick={() => nav('/opportunities')}>View all</button>}>
-      <div className="dashboard-table-scroll"><table className="dashboard-table opportunity-register-table"><thead><tr><th>ID</th><th>Opportunity</th><th>Customer</th><th>Stage</th><th>Value (₹)</th><th>Win %</th><th>Next action</th><th>Due</th></tr></thead><tbody>{rows.map(o => { const na = action(o); const go = () => nav(`/opp/${o.id}`); return <tr key={o.id} tabIndex={0} role="link" aria-label={`Open opportunity ${o.id}`} onClick={go} onKeyDown={event => activateDashboardRow(event, go)}><td><b>{o.id}</b></td><td><span className="dashboard-cell-ellipsis">{o.oppName}</span></td><td><span className="dashboard-cell-ellipsis">{o.sellTo}</span></td><td><span className="pill open">{o.stage}</span></td><td>{money ? fmtLakh(o.valueK) : '—'}</td><td>{o.prob || '—'}</td><td title={na.text}><span className="dashboard-cell-clamp">{na.text || o.remarks || 'Review next step'}</span></td><td>{o.orderDate ? ddMMyyyy(o.orderDate) : '—'}</td></tr>})}</tbody></table></div>
+      <div className="dashboard-table-scroll"><table className="dashboard-table opportunity-register-table"><thead><tr><th>ID</th><th>Opportunity</th><th>Customer</th><th>Stage</th><th>Value (₹)</th><th>Win %</th><th>Next action</th><th>Due</th></tr></thead><tbody>{rows.map(o => { const na = action(o); const go = () => nav(`/opp/${o.id}`); return <tr key={o.id} tabIndex={0} role="link" aria-label={`Open opportunity ${displayOpportunityId(o.id)}`} onClick={go} onKeyDown={event => activateDashboardRow(event, go)}><td><b>{displayOpportunityId(o.id)}</b></td><td><span className="dashboard-cell-ellipsis">{o.oppName}</span></td><td><span className="dashboard-cell-ellipsis">{o.sellTo}</span></td><td><span className="pill open">{o.stage}</span></td><td>{money ? fmtLakh(o.valueK) : '—'}</td><td>{o.prob || '—'}</td><td title={na.text}><span className="dashboard-cell-clamp">{na.text || o.remarks || 'Review next step'}</span></td><td>{o.orderDate ? ddMMyyyy(o.orderDate) : '—'}</td></tr>})}</tbody></table></div>
       {!rows.length && <div className="dashboard-empty">No open opportunities are assigned to you.</div>}
     </Card>
   )
@@ -545,7 +549,7 @@ function NextActions({ nextActions, nav }) {
       <button key={opp.id} className="dashboard-action" onClick={() => nav(`/opp/${opp.id}`)}>
         <span className="dashboard-action-title">
           <span className="dashboard-action-identity">
-            <b className="dashboard-action-id">{opp.id}</b>
+            <b className="dashboard-action-id">{displayOpportunityId(opp.id)}</b>
             <span className="dashboard-action-name"> — {opp.oppName}</span>
           </span>
           {tag && <span className={`pill ${tag.cls}`}>{tag.label}</span>}
@@ -665,7 +669,7 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head,
   const visibleBlocked = blocked.filter(({ opp }) => !isHiddenDashboardOpportunity(opp))
   const visibleNextActions = nextActions.filter(({ opp }) => !isHiddenDashboardOpportunity(opp))
   const openValue = visibleOpen.reduce((s, o) => s + (+o.valueK || 0), 0)
-  const weightedValue = visibleOpen.reduce((s, o) => s + (+o.valueK || 0) * (PROB_WEIGHT[o.prob] ?? PROB_WEIGHT.Low), 0)
+  const weightedValue = visibleOpen.reduce((s, o) => s + (+o.valueK || 0) * probabilityWeight(store.config, o.prob), 0)
   const myLeads = store.leads.filter(l => scope === 'global' || (l.assignedOwner || l.suggestedOwner) === role)
   const leads = myLeads.filter(l => l.status === 'New')
   const unproposed = visibleOpen.filter(o => !o.proposalDate)
@@ -750,8 +754,11 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head,
 // Targets are stored in K₹; the editor speaks lakhs, the unit every widget
 // prints (1 L = 100 K₹).
 function TeamTargetsCard({ store, span = 12 }) {
+  const { OWNERS, labelFor } = useFieldLists()
+
   const [editing, setEditing] = useState(null)
   const [draft, setDraft] = useState(null)
+  const [targetError, setTargetError] = useState('')
   const targets = store.sales?.targets || {}
   const owners = [...new Set([...OWNERS, ...Object.keys(targets)])]
   const toL = k => Math.round(k || 0) / 100
@@ -760,19 +767,23 @@ function TeamTargetsCard({ store, span = 12 }) {
   const begin = owner => {
     const t = targets[owner] || { annual: 0, q: [0, 0, 0, 0] }
     setEditing(owner)
+    setTargetError('')
     setDraft({ annual: String(toL(t.annual)), q: (t.q || [0, 0, 0, 0]).map(v => String(toL(v))) })
   }
   const stop = () => { setEditing(null); setDraft(null) }
   const save = () => {
-    store.setSalesTarget(editing, { annual: toK(draft.annual), q: draft.q.map(toK) })
-    stop()
+    try {
+      store.setSalesTarget(editing, { annual: toK(draft.annual), q: draft.q.map(toK) })
+      stop()
+    } catch (err) { setTargetError(err.message) }
   }
   const split = () => setDraft(d => {
-    const each = String(Math.round(((parseFloat(d.annual) || 0) / 4) * 100) / 100)
-    return { ...d, q: [each, each, each, each] }
+    const total = Math.round((parseFloat(d.annual) || 0) * 100)
+    const each = Math.floor(total / 4)
+    return { ...d, q: [each, each, each, total - 3 * each].map(v => String(v / 100)) }
   })
   const qSum = draft ? draft.q.reduce((s, v) => s + (parseFloat(v) || 0), 0) : 0
-  const mismatch = draft && Math.abs(qSum - (parseFloat(draft.annual) || 0)) > 0.5
+  const mismatch = draft && Math.abs(qSum - (parseFloat(draft.annual) || 0)) > 0.0001
 
   return (
     <Card title="Team targets" icon="target" tone="tone-sky" span={span}
@@ -793,7 +804,7 @@ function TeamTargetsCard({ store, span = 12 }) {
                 <td className="targets-owner"><b>{displayRole(owner)}</b> <span className="hint">{roleLabel(owner).replace(`${displayRole(owner)} - `, '')}</span></td>
                 <td className="num">{fmtLakh(t.annual)}</td>
                 {(t.q || [0, 0, 0, 0]).map((v, i) => <td key={FY_QUARTERS[i]} className="num">{fmtLakh(v)}</td>)}
-                <td className="num targets-action-cell"><button onClick={() => begin(owner)}>Edit</button></td>
+                <td className="num targets-action-cell">{targetPlan(store, owner).needsConfirmation && <span className="hint">Requires FY confirmation </span>}<button onClick={() => begin(owner)}>Edit</button></td>
               </tr>
             )
             return (
@@ -812,7 +823,7 @@ function TeamTargetsCard({ store, span = 12 }) {
                 <td className="num">
                   <div className="targets-actions">
                     <button onClick={split}>Split evenly</button>
-                    <button onClick={save}>Save</button>
+                    <button onClick={save} disabled={mismatch} title={mismatch ? 'Quarterly targets must add up to the annual target' : 'Confirm targets for this FY'}>Save</button>
                     <button onClick={stop}>Cancel</button>
                   </div>
                 </td>
@@ -824,9 +835,10 @@ function TeamTargetsCard({ store, span = 12 }) {
       {mismatch && (
         <p className="hint" role="status">
           Quarters add to ₹{qSum.toFixed(1)} L against an annual of ₹{(parseFloat(draft.annual) || 0).toFixed(1)} L —
-          saved as entered, so check the split before you save.
+          adjust the quarterly split before saving.
         </p>
       )}
+      {targetError && <p role="alert">{targetError}</p>}
       <p className="hint" style={{ marginTop: 6 }}>
         Changes apply immediately to that owner's dashboard and the company roll-up, and are recorded in the audit trail.
       </p>
@@ -880,8 +892,8 @@ function ProposalStatusCard({ store, nav }) {
             {filteredPriority.map(({ opp, status, action, path }) => {
               const go = () => nav(path)
               return (
-                <tr key={opp.id} tabIndex={0} role="link" aria-label={`${action} ${opp.id}`} onClick={go} onKeyDown={event => activateDashboardRow(event, go)}>
-                  <td><b className="proposal-opportunity-id">{opp.id}</b><span className="proposal-opportunity-name" title={opp.oppName || 'Opportunity unavailable'}>{opp.oppName || '—'}</span></td>
+                <tr key={opp.id} tabIndex={0} role="link" aria-label={`${action} ${displayOpportunityId(opp.id)}`} onClick={go} onKeyDown={event => activateDashboardRow(event, go)}>
+                  <td><b className="proposal-opportunity-id">{displayOpportunityId(opp.id)}</b><span className="proposal-opportunity-name" title={opp.oppName || 'Opportunity unavailable'}>{opp.oppName || '—'}</span></td>
                   <td><span className="proposal-customer-name dashboard-cell-ellipsis" title={opp.sellTo || 'Customer unavailable'}>{opp.sellTo || '—'}</span></td>
                   <td><span className="proposal-owner-name dashboard-cell-ellipsis" title={displayRole(opp.owner)}>{displayRole(opp.owner)}</span></td>
                   <td className="dashboard-status-cell"><span className={`pill ${status === 'Follow-up due' ? 'lost' : status === 'Awaiting approval' ? 'open' : 'won'}`}>{status}</span></td>
@@ -924,7 +936,7 @@ function OwnerDashboard({ store, nav, role, c, blocked, nextActions, head, scope
           {mine.slice(0, PREVIEW_LIMIT).map(a => (
             <button key={a.id} className="dashboard-action" onClick={() => nav('/approvals')}>
               <span><b>{a.id}</b> — {a.type}</span>
-              <span className="hint">{a.oppId || '—'} · requested by {displayRole(a.requestedBy)}</span>
+              <span className="hint">{displayOpportunityId(a.oppId) || '—'} · requested by {displayRole(a.requestedBy)}</span>
             </button>
           ))}
           {!mine.length && <p className="hint">Nothing is waiting on you right now.</p>}
@@ -983,7 +995,7 @@ function ApproverDashboard({ store, nav, role, c, blocked, nextActions, head, co
           {mine.slice(0, PREVIEW_LIMIT).map(a => (
             <button key={a.id} className="dashboard-action" onClick={() => nav('/approvals')}>
               <span><b>{a.id}</b> — {a.type}</span>
-              <span className="hint">{a.oppId || '—'} · requested by {displayRole(a.requestedBy)}</span>
+              <span className="hint">{displayOpportunityId(a.oppId) || '—'} · requested by {displayRole(a.requestedBy)}</span>
             </button>
           ))}
           {!mine.length && <p className="hint">Nothing is waiting on you right now.</p>}
@@ -993,7 +1005,7 @@ function ApproverDashboard({ store, nav, role, c, blocked, nextActions, head, co
           action={<button onClick={() => nav('/')}>View all</button>}>
           {blocked.slice(0, PREVIEW_LIMIT).map(({ opp }) => (
             <button key={opp.id} className="dashboard-action" onClick={() => nav(`/opp/${opp.id}`)}>
-              <span><b>{opp.id}</b> — {opp.oppName}</span>
+              <span><b>{displayOpportunityId(opp.id)}</b> — {opp.oppName}</span>
               <span className="hint">{displayRole(opp.owner)} · {opp.stage}</span>
             </button>
           ))}
@@ -1124,7 +1136,7 @@ function TechDashboard({ store, nav, blocked, nextActions, head }) {
         <Card title="Proposals to review" icon="fileText" tone="tone-sky" span={12}>
           {forReview.slice(0, PREVIEW_LIMIT).map(({ opp, p }) => (
             <button key={opp.id} className="dashboard-action" onClick={() => nav(`/proposal/${opp.id}`)}>
-              <span><b>{opp.id}</b> — {opp.oppName}</span>
+              <span><b>{displayOpportunityId(opp.id)}</b> — {opp.oppName}</span>
               <span className="hint">{(p.bom || []).length} BoQ line(s) · Rev-{p.revision} · {opp.route}</span>
             </button>
           ))}

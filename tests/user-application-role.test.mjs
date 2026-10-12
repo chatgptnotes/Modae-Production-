@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { applicationRoleFor, applicationRolePatch, newUserRole } from '../src/userApplicationRole.js'
 import { canSeePage, isApprover, isAdminRole } from '../src/utils.js'
 
-test('the four role selector values resolve canonical assignments before owner codes', () => {
+test('existing role assignments resolve before operational owner codes', () => {
   assert.equal(applicationRoleFor({ role: 'RS', roles: ['TEAM_LEAD'] }), 'TEAM_LEAD')
   assert.equal(applicationRoleFor({ role: 'LJS', roles: ['STANDARD_USER'] }), 'STANDARD_USER')
   assert.equal(applicationRoleFor({ role: 'AH', roles: ['MANAGEMENT'] }), 'MANAGEMENT')
@@ -14,8 +14,8 @@ test('the four role selector values resolve canonical assignments before owner c
 
 test('changing an application role preserves operational ownership and replaces permissions', () => {
   const user = { role: 'RS', roles: ['STANDARD_USER'] }
-  const patch = applicationRolePatch(user, 'TEAM_LEAD')
-  assert.deepEqual(patch, { role: 'RS', roles: ['TEAM_LEAD'] })
+  const patch = applicationRolePatch(user, 'MANAGEMENT')
+  assert.deepEqual(patch, { role: 'RS', roles: ['MANAGEMENT'] })
   assert.equal(isApprover(patch.roles), true)
   assert.equal(isAdminRole(patch.roles), false)
   assert.equal(canSeePage(patch.roles, 'users'), false)
@@ -33,7 +33,8 @@ test('unchanged role selection preserves legacy, multiple, and protected assignm
 
 test('new accounts select a canonical role with a compatible operational owner', () => {
   assert.deepEqual(newUserRole('ADMIN'), { role: 'ADMIN', roles: ['ADMIN'] })
-  assert.deepEqual(newUserRole('TEAM_LEAD'), { role: 'RS', roles: ['TEAM_LEAD'] })
+  assert.throws(() => newUserRole('TEAM_LEAD'))
+  assert.throws(() => applicationRolePatch({ role: 'RS', roles: ['STANDARD_USER'] }, 'TEAM_LEAD'))
   assert.deepEqual(newUserRole('MANAGEMENT'), { role: 'RS', roles: ['MANAGEMENT'] })
   assert.throws(() => newUserRole('INVALID'))
 })

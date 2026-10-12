@@ -1,5 +1,7 @@
 // Shared aliases used when turning AI/document fields into lead decisions.
 // Human-edited lead properties are checked before these extracted values.
+import { EUC_LOCATION_LABELS } from './leadLabels.js'
+
 const LABELS = {
   sellTo: [/^sell[ -]?to(?: customer)?$/, /^customer(?: name)?$/, /^buyer$/],
   eucName: [
@@ -7,10 +9,13 @@ const LABELS = {
     /^ultimate customer(?: name)?$/, /^beneficiary(?: name)?$/,
     /^(?:project )?site(?: name)?$/, /^plant(?: name)?$/,
     /^station(?: name)?$/, /^installation(?: site| name)?$/,
+    /^site plant(?: name)?$/,
   ],
   eucLocation: [
-    /^(?:euc|eun|end user)(?: site)? location$/,
+    /^(?:euc|eun|end user)(?: site)? (?:location|address)$/,
     /^(?:site|plant|station|project site|installation) (?:location|address)$/,
+    /^site plant (?:location|address)$/,
+    /^delivery site (?:location|address)$/,
     /^delivery (?:location|address|site)$/, /^site address$/,
     /^location$/, /^region$/, /^city(?: and state)?$/, /^state$/, /^country$/,
   ],
@@ -36,7 +41,12 @@ const labelText = normalizeLeadLabel
 
 export const leadFieldValue = (fields = [], key) => {
   const matchers = LABELS[key] || []
-  const field = (fields || []).find(item => item.state !== 'rejected' && matchers.some(re => re.test(labelText(item.k))))
+  const usable = (fields || []).filter(item => item.state !== 'rejected' && String(item.v ?? '').trim())
+  // EUC and site labels have semantic priority; document order must not let a
+  // buyer address or delivery warehouse hide the explicit end-user identity.
+  const field = key === 'eucName' || key === 'eucLocation'
+    ? matchers.map(re => usable.find(item => re.test(labelText(item.k)))).find(Boolean)
+    : usable.find(item => matchers.some(re => re.test(labelText(item.k))))
   return field?.v == null ? '' : String(field.v).trim()
 }
 
@@ -56,7 +66,7 @@ export const inferEucFromText = (text = '') => {
 
   // Common RFQ wording puts the customer/site after "at" without an
   // explicit field label, for example: "... at Tata Power, Mumbai:".
-  const inline = source.match(/(?:^|[\s,:])at\s+([^,\n;:]+),\s*([^,\n;:]+)(?:,\s*([^,\n;:]+))?(?=[:.;\n]|$)/i)
+  const inline = source.match(/\b(?:components?|equipment|spares?|materials?|parts?)\s+(?:required|installed|used)\s+at\s+([^,.;:]+),\s*([^,.;:]+)(?:,\s*([^,.;:]+))?(?=[:.;]|$)/i)
   if (!inline) return { eucName: '', eucLocation: '' }
   return {
     eucName: inline[1].trim(),
@@ -70,20 +80,21 @@ export const inferEucFromText = (text = '') => {
 // evidence and should be safe to carry into the mandatory EUC Location field.
 export const labeledEucLocationFromText = (text = '') => {
   const source = String(text || '')
-  const label = '(?:(?:euc|eun|end\\s+user)\\s+(?:site\\s+)?(?:location|address)|(?:site|plant|station|project\\s+site|installation)\\s+(?:location|address)|(?:required\\s+)?delivery\\s+(?:location|address|site)|site\\s+address)'
-  const inline = source.match(new RegExp(`(?:^|\\n)[ \\t]*${label}[ \\t]*:[ \\t]*([^\\n;]+)`, 'i'))
-  if (inline?.[1]) return inline[1].trim().replace(/[.,]+$/, '').replace(/,\\s*India$/i, '')
-
-  // RFQs commonly put the delivery heading on one line and the company/site
-  // address on the following lines. Prefer the city/state line when the first
-  // line is only the delivery customer's name.
   const lines = source.split(/\r?\n/)
-  const heading = new RegExp(`^\\s*${label}\\s*:?\\s*$`, 'i')
-  for (let i = 0; i < lines.length; i += 1) {
-    if (!heading.test(lines[i])) continue
-    const following = lines.slice(i + 1, i + 4).map(line => line.trim()).filter(Boolean)
-    const locationLine = following.find(line => /,/.test(line)) || following[0]
-    if (locationLine) return locationLine.replace(/[.,]+$/, '').replace(/,\s*India$/i, '')
+  for (const label of EUC_LOCATION_LABELS) {
+    const inline = source.match(new RegExp(`(?:^|\\n)[ \\t]*${label}[ \\t]*:[ \\t]*([^\\n;]+)`, 'i'))
+    if (inline?.[1]) return inline[1].trim().replace(/[.,]+$/, '').replace(/,\s*India$/i, '')
+
+    // RFQs commonly put the delivery heading on one line and the company/site
+    // address on the following lines. Prefer the city/state line when the first
+    // line is only the delivery customer's name.
+    const heading = new RegExp(`^\\s*${label}\\s*:?\\s*$`, 'i')
+    for (let i = 0; i < lines.length; i += 1) {
+      if (!heading.test(lines[i])) continue
+      const following = lines.slice(i + 1, i + 4).map(line => line.trim()).filter(Boolean)
+      const locationLine = following.find(line => /,/.test(line)) || following[0]
+      if (locationLine) return locationLine.replace(/[.,]+$/, '').replace(/,\s*India$/i, '')
+    }
   }
   return ''
 }
@@ -105,16 +116,24 @@ export const leadIdentity = (lead, fields = []) => {
   const inferred = inferEucFromText(sourceText)
   const labeledLocation = labeledEucLocationFromText(sourceText)
   const sellTo = String(lead?.sellTo || leadFieldValue(fields, 'sellTo') || lead?.parse?.sellTo || '').trim()
+  // Retain the same-customer delivery suggestion only when the delivery
+  // block actually names that customer. A buyer alone is not EUC evidence.
+  const lines = sourceText.split(/\r?\n/).map(line => line.trim()).filter(Boolean)
+  const sameCustomerDelivery = sellTo && lines.some((line, index) =>
+    /^(?:required\s+)?delivery\s+(?:location|address|site)\s*:?\s*$/i.test(line)
+      && lines[index + 1]?.toLowerCase() === sellTo.toLowerCase())
   const extractedEucName = leadFieldValue(fields, 'eucName')
   const eucName = String(
     extractedEucName && lead?.eucName && lead?.contactPerson
       && String(lead.eucName).trim() === String(lead.contactPerson).trim()
       ? extractedEucName
-      : lead?.eucName || extractedEucName || lead?.parse?.eucName || inferred.eucName || sellTo,
+      : lead?.eucName || extractedEucName || lead?.parse?.eucName || inferred.eucName || (sameCustomerDelivery ? sellTo : ''),
   ).trim()
+  const siteLocationFields = fields.filter(field =>
+    !/^(?:location|region|city(?: and state)?|state|country)$/.test(labelText(field.k)))
   const eucLocation = String(
-    lead?.eucLocation || leadFieldValue(fields, 'eucLocation') || lead?.parse?.eucLocation
-      || lead?.location || labeledLocation || inferred.eucLocation || '',
+    lead?.eucLocation || leadFieldValue(siteLocationFields, 'eucLocation') || lead?.parse?.eucLocation
+      || labeledLocation || inferred.eucLocation || leadFieldValue(fields, 'eucLocation') || lead?.location || '',
   ).trim()
   return {
     sellTo,

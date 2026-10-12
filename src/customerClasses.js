@@ -16,14 +16,16 @@ export const DEFAULT_DOC_CHECKLISTS = {
 
 export const DEFAULT_CUSTOMER_CLASSES = {
   Green: {
+    defaultAction: 'OK to Quote',
     order: 1,
     verification: { required: false, requires: 'none', deadlineDays: 0 },
     gate: null,
     advisory: null,
-    paymentTerms: '30 days credit from invoice',
+    paymentTerms: '30–45 days',
     probabilityBias: 'Medium',
   },
   Blue: {
+    defaultAction: 'Pending validation',
     order: 2,
     verification: {
       required: true,
@@ -60,10 +62,11 @@ export const DEFAULT_CUSTOMER_CLASSES = {
       approvalType: '',
       approvers: [],
     },
-    paymentTerms: '50% advance, balance on delivery',
+    paymentTerms: '',
     probabilityBias: '',
   },
   Amber: {
+    defaultAction: 'Quote fee required',
     order: 3,
     verification: {
       required: true,
@@ -98,10 +101,11 @@ export const DEFAULT_CUSTOMER_CLASSES = {
       approvalType: 'Amber credit terms',
       approvers: ['AH'],
     },
-    paymentTerms: '100% advance before dispatch',
+    paymentTerms: '30 days',
     probabilityBias: '',
   },
   Red: {
+    defaultAction: 'No Bid',
     order: 4,
     verification: {
       required: true,
@@ -120,7 +124,7 @@ export const DEFAULT_CUSTOMER_CLASSES = {
       key: 'red-clearance',
       milestone: 'Registration',
       severity: 'block',
-      text: 'Red customer clearance from LJS/AH is required',
+      text: 'No Bid — Red customer continuation requires joint LJS/AH approval',
       waitText: 'Red customer clearance is awaiting LJS/AH approval',
       approvers: ['LJS', 'AH'],
       anyOf: false,
@@ -143,7 +147,7 @@ export const DEFAULT_CUSTOMER_CLASSES = {
       waitSeverity: 'wait',
       waitText: 'Red customer clearance awaiting joint LJS + AH decision.',
     },
-    paymentTerms: '100% prepayment only',
+    paymentTerms: 'Advance',
     probabilityBias: 'Low',
   },
 }
@@ -193,4 +197,27 @@ export const noExceptionKeys = (config = null) => [
     .map(cls => classRule(config, cls)?.gate)
     .filter(gate => gate?.key && gate.exceptionWaivable === false)
     .map(gate => gate.key),
+]
+
+// Upgrade only old shipped defaults. Customer-specific terms and custom rules survive.
+export function upgradeCustomerRules(config) {
+  if (config.customerPolicyVersion === 1) return config
+  const legacy = { Green: '30 days credit from invoice', Blue: '50% advance, balance on delivery', Amber: '100% advance before dispatch', Red: '100% prepayment only' }
+  const customerClasses = { ...(config.customerClasses || {}) }
+  const classRules = { ...(config.classRules || {}) }
+  for (const [cls, old] of Object.entries(legacy)) {
+    const previous = customerClasses[cls] || {}
+    customerClasses[cls] = { ...DEFAULT_CUSTOMER_CLASSES[cls], ...previous, defaultAction: previous.defaultAction ?? DEFAULT_CUSTOMER_CLASSES[cls].defaultAction,
+      paymentTerms: previous.paymentTerms === old || previous.paymentTerms == null ? DEFAULT_CUSTOMER_CLASSES[cls].paymentTerms : previous.paymentTerms }
+    if (classRules[cls] === old || classRules[cls] == null) classRules[cls] = DEFAULT_CUSTOMER_CLASSES[cls].paymentTerms
+  }
+  return { ...config, customerClasses, classRules, customerPolicyVersion: 1 }
+}
+
+export const CUSTOMER_CRITERIA = [
+  'Customer Legacy (Years)', 'ModAE Association', 'KYC Completed', 'GST Registered', 'CIN Data',
+  'Regd Address Verified', 'Business Address Verified', 'Active Relationship', 'Annual Order/Sales Potential',
+  'Avg PO Ticket Size', "Past RFQ's Recd", "Qty of RFQ's Recd In 18 Months", "Past PO's Recd", 'Avg RFQ Per PO',
+  'Acceptance To ModAE Standard T&C', 'ModAE Acceptance To Customer T&C', 'Payment Terms',
+  'Payment/Credit History', 'Good Cultural Fit?', 'Good Technical Fit', 'Good Strategic Fit',
 ]

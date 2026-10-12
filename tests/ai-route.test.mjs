@@ -330,3 +330,41 @@ test('AI route reviews approval comments without making the approval decision', 
     })
   } finally { globalThis.fetch = oldFetch }
 })
+
+test('opportunity search asks which date won refers to without an upstream call', async () => {
+  await withEnv('server-side-only', async () => {
+    const before = global.fetch
+    global.fetch = async () => { throw new Error('Unexpected upstream call') }
+    try {
+      const res = response()
+      await handler({method:'POST',headers:{authorization:'Bearer test-token'},body:{task:'opportunity.search',payload:{query:'I won after 14 Sep 2025 but before March 26'}}},res)
+      assert.equal(res.out.status,200)
+      assert.equal(res.out.body.data.status,'clarify')
+    } finally { global.fetch=before }
+  })
+})
+test('opportunity search sends only sanitized context and validates the model output', async () => {
+  await withEnv('server-side-only', async () => {
+    const before = global.fetch
+    let prompt=''
+    let output={status:'ready',groups:[{all:[{field:'orderDate',op:'gt',values:['2025-09-14']}]}],sort:null}
+    global.fetch=async (_,options)=>{ const body=JSON.parse(options.body);prompt=body.contents[0].parts[0].text;return {ok:true,json:async()=>({candidates:[{content:{parts:[{text:JSON.stringify(output)}]}}]})} }
+    try {
+      const req={method:'POST',headers:{authorization:'Bearer test-token'},body:{task:'opportunity.search',payload:{query:'order date after 14 Sep 2025',opportunities:[{private:'must-not-send'}]}}}
+      let res=response();await handler(req,res)
+      assert.equal(res.out.status,200)
+      assert.equal(res.out.body.data.groups[0].all[0].field,'orderDate')
+      assert.doesNotMatch(prompt,/must-not-send/)
+      output={status:'ready',groups:[{all:[{field:'secret',op:'eq',values:['x']}]}]}
+      res=response();await handler(req,res)
+      assert.equal(res.out.status,502)
+      assert.equal(res.out.body.errorCode,'AI_SEARCH_INVALID')
+    } finally { global.fetch=before }
+  })
+})
+test('opportunity search rejects oversized query input', async()=>{
+  await withEnv('server-side-only',async()=>{
+    const res=response();await handler({method:'POST',headers:{authorization:'Bearer test-token'},body:{task:'opportunity.search',payload:{query:'x'.repeat(1501)}}},res)
+    assert.equal(res.out.status,400)
+  })
+})

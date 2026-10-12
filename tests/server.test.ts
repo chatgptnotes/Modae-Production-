@@ -159,7 +159,7 @@ test('Express serves static files and falls back to the SPA shell for deep links
 test('approval API requires a session and returns only approval rows', async () => {
   const app = createApp({
     staticDir: '',
-    approvalAuth: async token => token === 'valid-token' ? { id: 'user-1' } : null,
+    approvalAuth: async token => token === 'valid-token' ? { id: 'user-1', profile: { id: 'user-1', role: 'ADMIN', roles: ['ADMIN'], status: 'Active' }, config: {} } : null,
     approvalReader: async (token, userId) => token === 'valid-token' && userId === 'user-1'
       ? [{ id: 'AP-1', status: 'Pending' }] : [],
   })
@@ -175,7 +175,7 @@ test('approval publish requires a session and notifies the in-memory event hub',
   let publications = 0
   const app = createApp({
     staticDir: '',
-    approvalAuth: async token => token === 'valid-token' ? { id: 'user-1' } : null,
+    approvalAuth: async token => token === 'valid-token' ? { id: 'user-1', profile: { id: 'user-1', role: 'ADMIN', roles: ['ADMIN'], status: 'Active' }, config: {} } : null,
     approvalPublisher: () => { publications += 1 },
   })
 
@@ -188,7 +188,7 @@ test('live event publish accepts only the supported changed entities', async () 
   const publications: string[][] = []
   const app = createApp({
     staticDir: '',
-    approvalAuth: async token => token === 'valid-token' ? { id: 'user-1' } : null,
+    approvalAuth: async token => token === 'valid-token' ? { id: 'user-1', profile: { id: 'user-1', role: 'ADMIN', roles: ['ADMIN'], status: 'Active' }, config: {} } : null,
     approvalPublisher: entities => { publications.push(entities || []) },
   })
 
@@ -210,7 +210,7 @@ test('live data API returns only requested approval, lead, and opportunity rows'
   const reads: string[][] = []
   const app = createApp({
     staticDir: '',
-    approvalAuth: async token => token === 'valid-token' ? { id: 'user-1' } : null,
+    approvalAuth: async token => token === 'valid-token' ? { id: 'user-1', profile: { id: 'user-1', role: 'ADMIN', roles: ['ADMIN'], status: 'Active' }, config: {} } : null,
     liveReader: async (_token, _userId, entities) => {
       reads.push(entities)
       return { leads: [{ id: 'L-1' }], opportunities: [{ id: 'O-1' }] }
@@ -229,7 +229,7 @@ test('workspace bootstrap is cached once for multiple signed-in browsers', async
   let reads = 0
   const app = createApp({
     staticDir: '',
-    approvalAuth: async token => token === 'valid-token' ? { id: 'user-1' } : null,
+    approvalAuth: async token => token === 'valid-token' ? { id: 'user-1', profile: { id: 'user-1', role: 'ADMIN', roles: ['ADMIN'], status: 'Active' }, config: {} } : null,
     workspaceReader: async () => {
       reads += 1
       return { leads: [{ id: 'L-1' }], opportunities: [], approvals: [] }
@@ -262,7 +262,7 @@ test('workspace save authenticates and sends only changed collaborative slices t
   const writes: unknown[] = []
   const app = createApp({
     staticDir: '',
-    approvalAuth: async token => token === 'valid-token' ? { id: 'user-1' } : null,
+    approvalAuth: async token => token === 'valid-token' ? { id: 'user-1', profile: { id: 'user-1', role: 'ADMIN', roles: ['ADMIN'], status: 'Active' }, config: {} } : null,
     workspaceWriter: async dirty => { writes.push(dirty) },
   })
   assert.equal((await request(app).post('/api/workspace/save').send({ dirty: { leads: [] } })).status, 401)

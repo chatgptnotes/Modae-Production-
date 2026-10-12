@@ -1,5 +1,7 @@
+import { probabilityWeight, fieldBase } from './workbookGovernance.js'
 import { ageDays, monthKey, monthLabel, canViewCommercial, isSalesOwner } from './utils.js'
 import { OWNERS, routeForType } from './seed.js'
+import { bookingRegister, targetPlan, businessDate } from './orderBookings.js'
 
 // One pipeline definition shared by the dashboard, analytics, and tracker.
 // The stored stage values remain backward-compatible; these are the customer-
@@ -13,15 +15,16 @@ export const FUNNEL_STAGES = [
   { key: 'won', label: 'Won', stages: ['Won'], note: 'closed won' },
 ]
 
-export function funnelRows(opportunities = [], { owner = null } = {}) {
+export function funnelRows(opportunities = [], { owner = null, config = null } = {}) {
   const scoped = opportunities.filter(o => !owner || o.owner === owner)
   return FUNNEL_STAGES.map(group => {
     const rows = scoped.filter(o => {
-      if (!group.stages.includes(o.stage)) return false
-      return group.key === 'won' ? o.status === 'Closed' : o.status === 'Open'
+      if (group.key === 'won') return o.status === 'Closed' && fieldBase(config, 'stage', o.stage) === 'Won'
+      return group.stages.includes(fieldBase(config, 'stage', o.stage)) && o.status === 'Open'
     })
     return {
       ...group,
+      stages: rows.length ? [...new Set(rows.map(row => row.stage))] : group.stages,
       count: rows.length,
       valueK: rows.reduce((sum, row) => sum + (+row.valueK || 0), 0),
     }
@@ -86,18 +89,14 @@ export const fyQuarter = dateStr => {
 // One owner's target-versus-booked picture for the year. `owner` null means the
 // whole company (an approver or admin looking at the team). All money is K₹, as
 // everywhere else in the app.
-export function salesPerformance(store, owner = null) {
+export function salesPerformance(store, owner = null, options = {}) {
   const sales = store.sales || { targets: {}, orders: [] }
-  const owners = owner ? [owner] : Object.keys(sales.targets || {})
-  const target = owners.reduce((t, o) => {
-    const own = sales.targets?.[o] || {}
-    return {
-      annual: t.annual + (own.annual || 0),
-      q: t.q.map((v, i) => v + ((own.q || [])[i] || 0)),
-    }
-  }, { annual: 0, q: [0, 0, 0, 0] })
-
-  const orders = (sales.orders || []).filter(o => !owner || o.owner === owner)
+  const target = targetPlan(store, owner)
+  const register = bookingRegister(store, { owner, now: options.now })
+  const today = businessDate(options.now)
+  const year = Number(String(sales.fy || '').match(/20\d{2}/)?.[0]) || (Number(today.slice(5, 7)) >= 4 ? Number(today.slice(0, 4)) : Number(today.slice(0, 4)) - 1)
+  const orders = (options.orders || register.orders).filter(o => (!owner || o.owner === owner)
+    && o.booked >= `${year}-04-01` && o.booked < `${year + 1}-04-01` && o.booked <= today)
   const bucket = pick => orders.filter(pick).reduce((s, o) => s + (+o.valueK || 0), 0)
   const quarterActual = [0, 1, 2, 3].map(i => bucket(o => fyQuarter(o.booked) === i))
   const monthly = FY_MONTHS.map((_, i) => bucket(o => fyMonthIndex(o.booked) === i))
@@ -113,6 +112,13 @@ export function salesPerformance(store, owner = null) {
     fy: sales.fy || '',
     currentQ: Math.max(0, (sales.currentQ || 1) - 1),
     orders,
+    bookingComplete: register.complete,
+    pendingBookings: register.pending,
+    invalidBookings: register.invalid,
+    targetConfigured: target.configured,
+    targetNeedsConfirmation: target.needsConfirmation,
+    targetPendingCount: target.pendingCount,
+    targetOwnerCount: target.ownerCount,
     annual: target.annual,
     quarterTarget: target.q,
     quarterActual,
@@ -145,7 +151,7 @@ export function pipelineSeries(store, comm, months = 6) {
 
   const open = opps.filter(o => o.status === 'Open')
   const total = open.reduce((s, o) => s + (+o.valueK || 0), 0)
-  const weighted = open.reduce((s, o) => s + (+o.valueK || 0) * (PROB_WEIGHT[o.prob] ?? PROB_WEIGHT.Low), 0)
+  const weighted = open.reduce((s, o) => s + (+o.valueK || 0) * probabilityWeight(store.config, o.prob), 0)
 
   const [prev, last] = [points[points.length - 2], points[points.length - 1]]
   const deltaPct = prev && prev.value && last ? Math.round(((last.value - prev.value) / prev.value) * 100) : null
@@ -164,12 +170,12 @@ export function analyticsSnapshot(store, role = store.role, { scope = 'role' } =
   const scoped = (store.opportunities || []).filter(o => !owner || o.owner === owner)
   const open = scoped.filter(o => o.status === 'Open')
   const sum = rows => rows.reduce((total, o) => total + (+o.valueK || 0), 0)
-  const funnel = funnelRows(scoped, { owner })
-  const won = scoped.filter(o => o.stage === 'Won').length
+  const funnel = funnelRows(scoped, { owner, config: store.config })
+  const won = scoped.filter(o => fieldBase(store.config, 'stage', o.stage) === 'Won').length
   const lost = scoped.filter(o => o.stage === 'Lost').length
   const decided = won + lost
   const pipelineK = sum(open)
-  const weightedK = open.reduce((total, o) => total + (+o.valueK || 0) * (PROB_WEIGHT[o.prob] ?? PROB_WEIGHT.Low), 0)
+  const weightedK = open.reduce((total, o) => total + (+o.valueK || 0) * probabilityWeight(store.config, o.prob), 0)
   const byOwner = [...new Set(open.map(o => o.owner).filter(Boolean))]
     .map(name => {
       const rows = open.filter(o => o.owner === name)
@@ -194,7 +200,7 @@ export function analyticsSnapshot(store, role = store.role, { scope = 'role' } =
 }
 
 export function winRate(store) {
-  const won = store.opportunities.filter(o => o.stage === 'Won').length
+  const won = store.opportunities.filter(o => fieldBase(store.config, 'stage', o.stage) === 'Won').length
   const lost = store.opportunities.filter(o => o.stage === 'Lost').length
   const decided = won + lost
   return { won, lost, decided, pct: decided ? Math.round((won / decided) * 100) : 0 }
@@ -202,15 +208,18 @@ export function winRate(store) {
 
 // Closed-opportunity analysis. Keep the aggregation pure so Analytics, exports,
 // and future tablet reporting use one definition of a win, loss, and reason.
-export function winLossAnalysis(opportunities = [], competitors = [], { commercial = true } = {}) {
+export function winLossAnalysis(opportunities = [], competitors = [], { commercial = true, config = null } = {}) {
   const competitorByOpp = new Map()
   for (const competitor of competitors || []) {
     if (competitor?.oppId && competitor?.name && !competitorByOpp.has(competitor.oppId)) {
       competitorByOpp.set(competitor.oppId, competitor.name)
     }
   }
-  const closed = opportunities.filter(o => o?.stage === 'Won' || o?.stage === 'Lost')
-  const wonRows = closed.filter(o => o.stage === 'Won')
+  const closed = opportunities.filter(o =>
+    (o?.status == null || o.status === 'Closed') && (o?.stage === 'Won' || o?.stage === 'Lost'))
+  const closedOtherRows = opportunities.filter(o =>
+    o?.status === 'Closed' && o?.stage !== 'Won' && o?.stage !== 'Lost')
+  const wonRows = closed.filter(o => fieldBase(config, 'stage', o.stage) === 'Won')
   const lostRows = closed.filter(o => o.stage === 'Lost')
   const valueOf = row => Number(row.valueK) || 0
   const summary = {
@@ -268,7 +277,21 @@ export function winLossAnalysis(opportunities = [], competitors = [], { commerci
     valueK: commercial ? valueOf(row) : null,
     closeDate: row.lastUpdated || row.orderDate || row.createDate || '',
   }))
-  return { summary, byReason, insights, rows }
+  const closedOtherByStage = new Map()
+  for (const row of closedOtherRows) {
+    const stage = String(row.stage || '').trim() || 'Unspecified'
+    const current = closedOtherByStage.get(stage) || { stage, count: 0, valueK: 0 }
+    current.count += 1
+    current.valueK += valueOf(row)
+    closedOtherByStage.set(stage, current)
+  }
+  const closedOther = {
+    count: closedOtherRows.length,
+    byStage: [...closedOtherByStage.values()]
+      .sort((a, b) => b.count - a.count || a.stage.localeCompare(b.stage))
+      .map(row => ({ ...row, valueK: commercial ? row.valueK : null })),
+  }
+  return { summary, byReason, insights, rows, closedOther }
 }
 
 // Proposals sent within the route's target window — the metric Swami said he

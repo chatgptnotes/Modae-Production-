@@ -1,3 +1,4 @@
+import { displayOpportunityId } from '../seed.js'
 import React, { useState } from 'react'
 import DetailTabs from '../DetailTabs.jsx'
 
@@ -13,7 +14,7 @@ const PIPELINE_COLUMNS = [
   ['oppType', 'Opp Type'], ['bu', 'BU'], ['stage', 'Stage'], ['status', 'Status'],
 ]
 
-const valueFor = (row, key) => row[key] ?? (key === 'oppName' ? row.oppName : '—')
+const valueFor = (row, key) => key === 'id' ? displayOpportunityId(row.id) || '—' : row[key] ?? (key === 'oppName' ? row.oppName : '—')
 
 export default function InputsWorkbook({ store }) {
   const [tab, setTab] = useState('Pipeline Explanation')

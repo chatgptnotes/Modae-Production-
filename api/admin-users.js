@@ -1,8 +1,12 @@
+import { isActiveUser, isDeletedUser, isAccountAdmin, matchesAccount } from '../src/userManagement.js'
+import { readRoster, saveRoster } from './_user-roster.js'
+import { changeAccount, targetAuth } from './_user-lifecycle.js'
+import { applicationRolePatch, newUserRole } from '../src/userApplicationRole.js'
 import { getAdminSupabaseClient } from './_supabase-client.js'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const ADMIN_ROLES = new Set(['SUPER', 'ADMIN', 'LJS'])
-const STANDARD_ROLES = new Set(['STANDARD_USER', 'TEAM_LEAD', 'MANAGEMENT', 'ADMIN'])
+const STANDARD_ROLES = new Set(['STANDARD_USER', 'MANAGEMENT', 'ADMIN'])
 const ASSIGNABLE_ROLES = new Set(['ADMIN', 'LJS', 'AH', 'RS', 'PP', 'SS', 'PJS', 'RJS', 'SR', 'AN', 'TECH', ...STANDARD_ROLES])
 const PROVISIONABLE_ROLES = new Set([...ASSIGNABLE_ROLES, 'SUPER', 'CUST'])
 
@@ -35,8 +39,8 @@ async function currentAdmin(client, token) {
   const { data: authData, error: authError } = await client.auth.getUser(token)
   if (authError || !authData?.user?.email) return null
   const profiles = await loadUserProfiles(client)
-  const profile = profiles.find(user => String(user.email || '').toLowerCase() === authData.user.email.toLowerCase())
-  return profile && rolesOf(profile).some(role => ADMIN_ROLES.has(role)) ? { auth: authData.user, profile } : null
+  const profile = profiles.find(user => matchesAccount(user, authData.user))
+  return isActiveUser(profile) && isAccountAdmin(profile) ? { auth: authData.user, profile } : null
 }
 
 function validateCredentials(email, password) {
@@ -47,23 +51,6 @@ function validateCredentials(email, password) {
 function validatePassword(password) {
   if (password.length < 8) return 'Password must be at least 8 characters.'
   return ''
-}
-
-async function findAuthUser(client, { authId, email }) {
-  if (authId) {
-    const { data, error } = await client.auth.admin.getUserById(authId)
-    if (!error && data?.user) return data.user
-  }
-  let page = 1
-  while (page <= 10) {
-    const { data, error } = await client.auth.admin.listUsers({ page, perPage: 1000 })
-    if (error) throw error
-    const found = (data?.users || []).find(user => user.email?.toLowerCase() === email.toLowerCase())
-    if (found) return found
-    if (!data?.users?.length || data.users.length < 1000) break
-    page += 1
-  }
-  return null
 }
 
 async function listAuthUsers(client) {
@@ -103,13 +90,13 @@ export default async function handler(req, res) {
     try {
       const [profiles, authUsers] = await Promise.all([loadUserProfiles(client), listAuthUsers(client)])
       const byEmail = new Map(authUsers.filter(user => user.email).map(user => [user.email.toLowerCase(), user]))
-      const users = profiles.map(profile => {
+      const users = profiles.filter(profile => !isDeletedUser(profile)).map(profile => {
         const auth = byEmail.get(String(profile.email || '').toLowerCase())
         return {
           id: profile.id,
           email: profile.email,
           authId: auth?.id || null,
-          authStatus: !auth ? 'Missing' : auth.banned_until ? 'Blocked' : 'Created',
+          authStatus: !auth ? 'Missing' : Date.parse(auth.banned_until) > Date.now() ? 'Blocked' : 'Created',
         }
       })
       return res.status(200).json({ ok: true, action, users })
@@ -126,7 +113,7 @@ export default async function handler(req, res) {
       const [profiles, authUsers] = await Promise.all([loadUserProfiles(client), listAuthUsers(client)])
       const byEmail = new Map(authUsers.filter(user => user.email).map(user => [user.email.toLowerCase(), user]))
       const results = []
-      for (const profile of profiles) {
+      for (const profile of profiles.filter(isActiveUser)) {
         const email = clean(profile.email).toLowerCase()
         const base = { id: profile.id, email: profile.email, name: profile.name, role: profile.role, roles: rolesOf(profile) }
         if (!EMAIL_RE.test(email)) {
@@ -139,7 +126,7 @@ export default async function handler(req, res) {
         }
         const existing = byEmail.get(email)
         if (existing) {
-          results.push({ ...base, authId: existing.id, authStatus: existing.banned_until ? 'Blocked' : 'Created' })
+          results.push({ ...base, authId: existing.id, authStatus: Date.parse(existing.banned_until) > Date.now() ? 'Blocked' : 'Created' })
           continue
         }
         const { data: created, error: createError } = await client.auth.admin.createUser({
@@ -153,6 +140,13 @@ export default async function handler(req, res) {
           continue
         }
         const authUser = created.user
+        const latest = await readRoster(client)
+        if (!latest.users.some(user => user.id === profile.id && isActiveUser(user))) {
+          const { error: cleanupError } = await client.auth.admin.deleteUser(authUser.id)
+          if (cleanupError) throw cleanupError
+          results.push({ ...base, authStatus: 'Skipped', error: 'Account access changed during provisioning.' })
+          continue
+        }
         byEmail.set(email, authUser)
         results.push({ ...base, authId: authUser.id, authStatus: 'Created' })
       }
@@ -163,6 +157,31 @@ export default async function handler(req, res) {
     }
   }
 
+  if (['delete', 'access', 'update'].includes(action)) {
+    try {
+      const { users } = await readRoster(client)
+      const target = users.find(user => user.id === body.profileId)
+      if (!target) return res.status(404).json({ ok: false, error: 'Account not found.' })
+      let patch = {}
+      if (action !== 'delete') {
+        const status = body.status || target.pendingAccountPatch?.status || target.status
+        if (!['Active', 'Pending', 'Suspended'].includes(status)) throw new Error('Select a valid status.')
+        patch = { status }
+        if (action === 'update') {
+          const name = clean(body.name)
+          const email = clean(body.nextEmail).toLowerCase()
+          if (!name || !EMAIL_RE.test(email)) throw new Error('Name and a valid email are required.')
+          if (users.some(user => user.id !== target.id && user.email?.toLowerCase() === email)) throw new Error('That email is already registered.')
+          patch = { ...patch, name, email, ...applicationRolePatch(target, body.applicationRole) }
+        }
+      }
+      const result = await changeAccount(client, admin.auth, body, patch)
+      return res.status(200).json({ ok: true, action, ...result })
+    } catch (error) {
+      return res.status(error.status || 400).json({ ok: false, error: error.message || 'Account change failed.' })
+    }
+  }
+
   const email = clean(body.email).toLowerCase()
   const password = String(body.password || '')
 
@@ -170,10 +189,14 @@ export default async function handler(req, res) {
     const credentialError = validateCredentials(email, password)
     if (credentialError) return res.status(400).json({ ok: false, error: credentialError })
     const name = clean(body.name)
-    const role = clean(body.role)
-    const roles = rolesOf({ role, roles: body.roles })
+    let selectedRole
+    try { selectedRole = newUserRole(body.applicationRole || 'STANDARD_USER') }
+    catch (error) { return res.status(400).json({ ok: false, error: error.message }) }
+    const { role, roles } = selectedRole
     if (!name) return res.status(400).json({ ok: false, error: 'Name is required.' })
     if (!roles.length) return res.status(400).json({ ok: false, error: 'Select at least one valid role.' })
+    const roster = await readRoster(client)
+    if (roster.users.some(user => user.email?.toLowerCase() === email)) return res.status(409).json({ ok: false, error: 'That email is already registered.' })
     const { data, error } = await client.auth.admin.createUser({
       email,
       password,
@@ -184,35 +207,26 @@ export default async function handler(req, res) {
       const duplicate = /already|exists|registered/i.test(error.message || '')
       return res.status(duplicate ? 409 : 502).json({ ok: false, error: duplicate ? 'That email is already registered.' : 'Could not create the Supabase account.' })
     }
-    return res.status(201).json({ ok: true, action, user: { id: data.user.id, email: data.user.email } })
+    const profile = { id: `U-${data.user.id}`, authId: data.user.id, name, email, role, roles, status: 'Active', created: new Date().toISOString().slice(0, 10), accountRevision: 1 }
+    try {
+      const users = await saveRoster(client, roster, [...roster.users, profile], admin.profile, 'User created', profile.id)
+      return res.status(201).json({ ok: true, action, user: { id: data.user.id, email }, users, profile })
+    } catch (error) {
+      const cleanup = await client.auth.admin.deleteUser(data.user.id)
+      return res.status(error.status || 502).json({ ok: false, error: error.message + (cleanup.error ? ' Login cleanup failed; contact the administrator before retrying.' : '') })
+    }
   }
 
   if (action === 'reset') {
     const credentialError = validateCredentials(email, password)
     if (credentialError) return res.status(400).json({ ok: false, error: credentialError })
-    const target = await findAuthUser(client, { authId: clean(body.authId), email })
+    const { users } = await readRoster(client)
+    const profile = users.find(user => user.id === body.profileId && !isDeletedUser(user) && !user.deletionPendingAt)
+    if (!profile) return res.status(404).json({ ok: false, error: 'Account not found.' })
+    const target = await targetAuth(client, profile)
     if (!target) return res.status(404).json({ ok: false, error: 'No Supabase account was found for this user.' })
     const { data, error } = await client.auth.admin.updateUserById(target.id, { password })
     if (error) return res.status(502).json({ ok: false, error: 'Could not reset the Supabase password.' })
-    return res.status(200).json({ ok: true, action, user: { id: data.user.id, email: data.user.email } })
-  }
-
-  if (action === 'update') {
-    const nextEmail = clean(body.nextEmail).toLowerCase()
-    const name = clean(body.name)
-    const role = clean(body.role)
-    const roles = rolesOf({ role, roles: body.roles })
-    if (!EMAIL_RE.test(nextEmail)) return res.status(400).json({ ok: false, error: 'Enter a valid email address.' })
-    if (!name) return res.status(400).json({ ok: false, error: 'Name is required.' })
-    if (!roles.length && role !== 'SUPER') return res.status(400).json({ ok: false, error: 'Select at least one valid role.' })
-    const target = await findAuthUser(client, { authId: clean(body.authId), email })
-    if (!target) return res.status(404).json({ ok: false, error: 'No Supabase account was found for this user.' })
-    const { data, error } = await client.auth.admin.updateUserById(target.id, {
-      email: nextEmail,
-      email_confirm: true,
-      user_metadata: { ...(target.user_metadata || {}), name, role, roles },
-    })
-    if (error) return res.status(502).json({ ok: false, error: 'Could not update the Supabase account.' })
     return res.status(200).json({ ok: true, action, user: { id: data.user.id, email: data.user.email } })
   }
 

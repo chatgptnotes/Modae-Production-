@@ -11,9 +11,10 @@ test('the shared workspace loads once per session and saves only explicit edits'
   assert.match(datastore, /\.is\('deleted_at', null\)/)
 
   const store = read('src/store.jsx')
-  assert.match(store, /import \{ readLiveData, startLiveEvents \} from '\.\/liveSync\.js'/)
+  assert.match(store, /import \{ readLiveData \} from '\.\/liveSync\.js'/)
   assert.match(datastore, /saveWorkspaceToServer\(collaborativeDirty\)/)
-  assert.match(store, /const stopLiveEvents = startLiveEvents\(/)
+  assert.doesNotMatch(store, /startLiveEvents|stopLiveEvents/,
+    'idle browsers must not connect/reconnect an automatic data stream')
   assert.match(store, /document\.addEventListener\('visibilitychange'/)
   assert.match(store, /window\.addEventListener\('online'/)
   assert.match(store, /if \(!invalidateSupabaseAuth\(res\.error\)\) setLiveSyncStatus\('error'\)/)
@@ -185,13 +186,12 @@ test('approval decisions refresh only approvals and opportunities', () => {
   assert.doesNotMatch(decision, /await pullSharedData\(\)/)
 })
 
-test('the Approvals page polls the backend for approval updates while visible', () => {
+test('the Approvals page refreshes on entry without periodic or duplicate lifecycle requests', () => {
   const store = read('src/store.jsx')
   const approvals = read('src/pages/Approvals.jsx')
   assert.match(store, /async refreshApprovals\(\)/)
   assert.match(store, /readLiveData\(\['approvals', 'opportunities'\]\)/)
-  assert.match(approvals, /APPROVAL_REFRESH_MS = 30000/)
-  assert.match(approvals, /setInterval\(refresh, APPROVAL_REFRESH_MS\)/)
+  assert.doesNotMatch(approvals, /APPROVAL_REFRESH_MS|setInterval\(|addEventListener\('visibilitychange'/)
   assert.match(approvals, /document\.visibilityState === 'visible'/)
   assert.match(approvals, /store\.refreshApprovals\(\)/)
 })

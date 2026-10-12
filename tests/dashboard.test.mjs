@@ -11,7 +11,7 @@ import { canViewForecast, forecastOwnerScope, isAdminRole } from '../src/utils.j
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
 
-const store = { sales: seedSales }
+const store = { sales: seedSales, demoData: true }
 
 test('win/loss analysis groups close reasons and joins optional competitors', () => {
   const opportunities = [
@@ -809,14 +809,14 @@ test('paired performance rows stretch to aligned card heights', () => {
   assert.match(styles, /@media\s*\(max-width:\s*900px\)[\s\S]*?\.performance-lower-grid\s*\{\s*grid-template-columns:\s*1fr;/)
 })
 
-test('the detailed analytics page owns the funnel instead of the daily dashboard', () => {
-  const source = read('src/pages/MyDashboard.jsx')
-  assert.doesNotMatch(source, /AnalyticsFunnel|funnelStages|title="My funnel"/)
-
+test('detailed analytics shares the dashboard funnel and keeps stage filtering and a return link', () => {
   const analytics = read('src/pages/Analytics.jsx')
-  assert.match(analytics, /conversion = false/)
-  assert.match(analytics, /% of prior/)
-  assert.match(analytics, /% of open pipeline/, 'the stage-share caption must survive for the analytics funnel')
+  assert.match(analytics, /import \{ Funnel \} from '\.\/myDashboard\/WorkspaceDashboard\.jsx'/)
+  assert.match(analytics, /segmentedFunnel\(opps, store\.config\)/)
+  assert.match(analytics, /showMoney=\{comm\}/)
+  assert.match(analytics, /onStageClick=\{stage => set\('stage', stage\.stages\.join\(','\)\)\}/)
+  assert.match(analytics, /to="\/my-dashboard"/)
+  assert.match(analytics, /Back to dashboard/)
 })
 
 test('the pipeline snapshot is bars plus a stat list, not a table', () => {
@@ -829,15 +829,15 @@ test('the pipeline snapshot is bars plus a stat list, not a table', () => {
   assert.doesNotMatch(card, /cost-table/, 'the flat table gave way to the prototype bars')
   const css = read('src/styles.css')
   for (const cls of ['snap-open', 'snap-weighted', 'snap-booked']) assert.match(css, new RegExp(`\.mb-fill\.${cls}`))
-  // Both weighted consumers share kpi.js's PROB_WEIGHT, not a re-typed map.
-  assert.match(source, /PROB_WEIGHT\[o\.prob\] \?\? PROB_WEIGHT\.Low/)
+  // Weighted consumers use the configured shared probability helper.
+  assert.match(source, /probabilityWeight\(store\.config, o\.prob\)/)
   assert.doesNotMatch(source, /\{ Low: \.25, Medium: \.5, High: \.75 \}/)
 })
 
 test('LJS and AH can set targets for the owners, and it is audited', () => {
   const store = read('src/store.jsx')
   assert.match(store, /setSalesTarget\(owner, \{ annual, q \}\)/)
-  assert.match(store, /withAudit\(\{[\s\S]{0,200}targets: \{ \.\.\.\(s\.sales\?\.targets \|\| \{\}\), \[owner\]: \{ annual, q \} \}/,
+  assert.match(store, /withAudit\(confirmSalesTarget\(s, owner, \{ annual, q \}\)/,
     'the write must land in store.sales.targets under audit')
   assert.match(store, /'Sales target updated'/)
 

@@ -38,11 +38,12 @@ test('milestone changes open their lifecycle workspace', () => {
   assert.match(workbench, /'--progress-step-count': steps\.length/)
 })
 
-test('an open Workbench refreshes shared clarification state when it regains focus', () => {
+test('Workbench refreshes on entry and leaves focus refresh to the shared store', () => {
   assert.match(workbench, /const refreshSharedData = \(\) => \{[\s\S]*store\.refreshSharedData\(\)/)
-  assert.match(workbench, /window\.addEventListener\('focus', refreshSharedData\)/)
-  assert.match(workbench, /document\.addEventListener\('visibilitychange', onVisibilityChange\)/)
-  assert.match(workbench, /document\.visibilityState === 'visible'/)
+  assert.doesNotMatch(workbench, /addEventListener\('focus'|addEventListener\('visibilitychange'/)
+  const store = fs.readFileSync('src/store.jsx', 'utf8')
+  assert.match(store, /window\.addEventListener\('focus', onFocus\)/)
+  assert.match(store, /document\.addEventListener\('visibilitychange', onVisibility\)/)
   assert.match(workbench, /refreshSharedData\(\)/)
 })
 

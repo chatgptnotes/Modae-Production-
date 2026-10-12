@@ -1,10 +1,18 @@
 // Label patterns shared by the deterministic and fallback lead readers.
 // Text extracted from PDFs and forwarded emails can remove line breaks, so a
 // newline alone is not a safe boundary between one field and the next.
+export const EUC_LOCATION_LABELS = [
+  String.raw`(?:euc|eun|end\s+user)(?:\s+site)?\s+(?:location|address)`,
+  String.raw`(?:(?:site|plant|station|project\s+site|installation)\s+(?:location|address)|site\s+address)`,
+  String.raw`(?:required\s+)?delivery\s+(?:location|address|site)`,
+]
+
 export const LEAD_LABELS = {
   sellTo: String.raw`(?:sell[-\s]?to(?:\s+customer)?|customer(?:\s+name)?|buyer|company)`,
   eucName: String.raw`(?:end\s+user\s*/\s*euc\s+name|(?:euc|eun|end\s+user|ultimate\s+customer|beneficiary)(?:\s+name)?)`,
-  eucLocation: String.raw`(?:(?:euc|eun|end\s+user)(?:\s+site)?\s+(?:location|address)|(?:site|plant|station|project\s+site|installation)\s+(?:location|address)|delivery\s+(?:location|address|site)|site\s+address|location|region|city(?:\s+and\s+state)?|state|country)`,
+  eucLocation: `(?:${EUC_LOCATION_LABELS.join('|')})`,
+  // Generic addresses remain field boundaries, but do not establish an EUC.
+  location: String.raw`(?:location|region|city(?:\s+and\s+state)?|state|country)`,
   contactPerson: String.raw`(?:customer\s+)?(?:contact\s+person|contact|attn\.?|kind\s+attention)`,
   contactPhone: String.raw`(?:contact\s+phone|phone|mobile|telephone)(?:\s+(?:number|#))?`,
   contactEmail: String.raw`(?:contact\s+)?e[-\s]?mail`,

@@ -1,3 +1,4 @@
+import { DEFAULT_HEALTH_SCORE, REGISTRATION_FIELDS } from './businessRules.js'
 // Reference data and dummy rows cloned from Modae's actual workflow
 // (Sales Pipeline Report FY26 Excel + New Sales Opportunity Intake form,
 // as shown in the Aug 10 meeting screenshots).
@@ -8,6 +9,7 @@ import { DEFAULT_KYC_VALIDATION } from './kycValidation.js'
 import { DEFAULT_CLAUSES } from './clauses.js'
 import { BNK_IMPORTED_PARTS } from './priceListData/bnk.js'
 import { METRIX_IMPORTED_PARTS } from './priceListData/metrix.js'
+import { workbookDefaults, fieldBase } from './workbookGovernance.js'
 
 // Fx-1..Fx-5 are the client's own reserved slots — they appear on Category,
 // Segment, Product and Solution in the Field List sheet, so a pipeline export
@@ -22,7 +24,7 @@ export const OWNERS = ['LJS', 'PP', 'RS', 'SS', 'PJS', 'RJS', 'SR']
 // AMC and Training were ours, not theirs — both are Service opportunities and
 // were collapsed into it; `store.migrate` remaps any saved rows.
 export const OPP_TYPES = ['Project', 'Spares', 'Service', 'Upgrade', 'Retrofit', 'Flow']
-export const BUS = ['Aero', 'Energy', 'Services']
+export const BUS = ['Aero', 'Energy', 'Service']
 export const SEGMENTS = ['Thermal', 'Nuclear', 'Hydro', 'Industrial', 'O&G-US', 'O&G-MS',
   'O&G-DS', 'Petrochem', 'Test Bed', 'Others', ...FLEX_SLOTS]
 // On the Field List but not (yet) a Sales Pipeline column, so it is captured on
@@ -37,14 +39,17 @@ export const PRODUCTS = [
   ...FLEX_SLOTS,
 ]
 export const PROB_LEVELS = ['Low', 'Medium', 'High']
-export const STAGES = ['Lead', 'RFI', 'Budgetary', 'RFQ', 'Firm Bid', 'Negotiate', 'Won', 'Lost']
+export const STAGES = ['Lead', 'RFI', 'Budgetary', 'RFQ', 'Firm Bid', 'Negotiate', 'Won', 'Lost', 'Abandoned', 'No Bid', 'On Hold', 'Validate']
 export const CLOSE_REASONS = [
+  'Relationship', 'Unique Product', 'Pedigreee', 'Best Price', 'Trade Compliance', 'Technical Compliance',
+  'Commercial Compliance', 'Capability', 'Lead Time', 'No Bid', 'Abandoned/Delayed',
+  'Duplicate Oppurtunity', 'Validity Expired', 'Others',
+  // Existing recorded reasons remain valid; never rewrite saved history.
   'Technical capability/depth', 'Pricing', 'Competitor', 'Customer decision', 'Scope', 'Commercial terms', 'Other',
 ]
-export const WON_REASONS = [
-  'Customer acceptance', 'Purchase order received', 'Commercial confirmation',
-  'Written customer confirmation', 'Other',
-]
+export const WON_REASONS = [...new Set([
+  ...CLOSE_REASONS, 'Customer acceptance', 'Purchase order received', 'Commercial confirmation', 'Written customer confirmation',
+])]
 // Blue = new customer pending admin verification (per the meeting's
 // green/amber/red/blue qualification rules).
 export const CUSTOMER_STATUSES = ['Green', 'Amber', 'Red', 'Blue']
@@ -188,12 +193,12 @@ export const PERMS = {
 // while `roles` carries durable permission assignments.
 export const LEVEL3_ROLES = {
   STANDARD_USER: { name: 'Standard User', label: 'Standard User', pages: SALES_PAGES },
-  TEAM_LEAD: { name: 'Team Lead', label: 'Team Lead', pages: [...SALES_PAGES, 'approvals'] },
-  MANAGEMENT: { name: 'Management', label: 'Management', pages: ['mydashboard', 'tracker', 'my', 'approvals', 'analytics', 'customers', 'audit', 'folders', 'po', 'launcher'] },
-  ADMIN: { name: 'Admin', label: 'Admin', admin: true, pages: pages(['mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'proposalSent', 'pricelists', 'analytics', 'customers', 'audit', 'users', 'aimap', 'admin', 'po', 'launcher', 'voice', 'portal']) },
+  TEAM_LEAD: { name: 'Team Lead (legacy)', label: 'Team Lead (legacy)', deprecated: true, pages: [...SALES_PAGES, 'approvals'] },
+  MANAGEMENT: { name: 'Management User', label: 'Management User', pages: ['mydashboard', 'tracker', 'my', 'approvals', 'analytics', 'customers', 'audit', 'folders', 'po', 'launcher'] },
+  ADMIN: { name: 'Admin User', label: 'Admin User', admin: true, pages: pages(['mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'proposalSent', 'pricelists', 'analytics', 'customers', 'audit', 'users', 'aimap', 'admin', 'po', 'launcher', 'voice', 'portal']) },
 }
 
-export const LEVEL3_ROLE_IDS = Object.freeze(Object.keys(LEVEL3_ROLES))
+export const LEVEL3_ROLE_IDS = Object.freeze(Object.keys(LEVEL3_ROLES).filter(id => !LEVEL3_ROLES[id].deprecated))
 export const standardRoleIds = roles => (Array.isArray(roles) ? roles : [roles])
   .map(role => String(role || '').trim().toUpperCase())
   .filter(role => LEVEL3_ROLES[role] || ROLES[role])
@@ -235,14 +240,15 @@ export function milestoneForStage(stage, status) {
 // Route (workbench flavour) from the opp type. Only Spares and Service have
 // active workflows today; Retrofit retains its historical Spares route for
 // saved-record compatibility while its own workflow is parked separately.
-export function routeForType(oppType) {
+export function routeForType(oppType, config = null) {
+  oppType = fieldBase(config, 'oppType', oppType)
   if (oppType === 'Spares' || oppType === 'Retrofit') return 'Spares'
   if (oppType === 'Service') return 'Service'
   return 'Project'
 }
 
 export const ACTIVE_WORKFLOW_TYPES = ['Spares', 'Service']
-export const isWorkflowAvailable = oppType => ACTIVE_WORKFLOW_TYPES.includes(oppType)
+export const isWorkflowAvailable = (oppType, config = null) => ACTIVE_WORKFLOW_TYPES.includes(fieldBase(config, 'oppType', oppType))
 
 // Diagram 02 §1 forks the lifecycle at "Opportunity Type Identified". This is
 // a separate axis from routeForType: `context` decides which lane the
@@ -253,7 +259,8 @@ export const isWorkflowAvailable = oppType => ACTIVE_WORKFLOW_TYPES.includes(opp
 // runs the site-survey sub-flow instead, so it must not resolve to Brownfield.
 export const CONTEXTS = ['Greenfield', 'Brownfield', 'Service']
 
-export function contextForType(oppType) {
+export function contextForType(oppType, config = null) {
+  oppType = fieldBase(config, 'oppType', oppType)
   if (oppType === 'Service') return 'Service'
   return oppType === 'Project' || oppType === 'Upgrade' || oppType === 'Flow'
     ? 'Greenfield' : 'Brownfield'
@@ -307,7 +314,7 @@ export const REVISION_TYPES = [
 // Deriving it here rather than re-testing oppType keeps Service, Spares and
 // Retrofit off the heavy project template — they used to fall through to it.
 export function proposalTypeForOpp(opp) {
-  const route = routeForType(opp?.oppType)
+  const route = opp?.route || routeForType(opp?.oppType)
   return route === 'Spares' ? 'Spares' : route === 'Service' ? 'Services' : 'Project'
 }
 
@@ -690,7 +697,7 @@ export const defaultCosting = {
 }
 
 export function newProposal(oppId, opp, options = {}) {
-  const route = routeForType(opp?.oppType)
+  const route = opp?.route || routeForType(opp?.oppType)
   const artifactSheets = route === 'Project'
     ? ['Cover Letter', 'Signal List', 'Rack Layout', 'Priced BoQ', 'Compliance Table']
     : route === 'Service'
@@ -761,6 +768,8 @@ export const AI_PROVIDERS = {
 
 // Runtime configuration — every value editable on the Admin page.
 export const seedConfig = {
+  registrationRequiredFields: REGISTRATION_FIELDS.map(([key]) => key),
+  healthScore: DEFAULT_HEALTH_SCORE,
   // Display labels are configurable; role IDs remain canonical in all records.
   roleNames: Object.fromEntries(Object.entries(ROLES).map(([id, role]) => [id, role.name])),
   currencyRates: { ...DEFAULT_CURRENCY_RATES },
@@ -793,15 +802,14 @@ export const seedConfig = {
   requireCommercialDeviationApproval: true,
   amberFee: { amount: 25000, cur: 'INR', days: 7 },
   classRules: {
-    Green: '30 days credit from invoice',
-    Blue: '50% advance, balance on delivery',
-    Amber: '100% advance before dispatch',
-    Red: '100% prepayment only',
+    Green: '30–45 days',
+    Blue: '',
+    Amber: '30 days',
+    Red: 'Advance',
   },
   // The Green/Blue/Amber/Red rules themselves — what each class must verify,
   // who approves it, where it gates. See customerClasses.js.
-  customerClasses: DEFAULT_CUSTOMER_CLASSES,
-  documentChecklists: DEFAULT_DOC_CHECKLISTS,
+  ...workbookDefaults(),
   // Which region (and thus which owner, via ownershipRules) each Indian
   // state/UT routes to. Defaults mirror indiaLocations.js's STATE_REGION.
   stateRegions: Object.entries(STATES)
@@ -971,7 +979,7 @@ export const seedPoCompare = {
 }
 export function buildPoCompare(oppId) {
   return {
-    oppId, poNo: 'PO-46990', received: '', status: 'Not received',
+    oppId, poNo: 'PO-46990', received: '', status: 'Not received', simulated: true,
     acceptance: { LJS: null, AH: null },
     lines: [
       { aspect: 'Customer identity & billing', prop: 'Andritz Hydro, Mandideep GSTIN 23AA…', po: 'Andritz Hydro, Mandideep GSTIN 23AA…', state: 'Match' },

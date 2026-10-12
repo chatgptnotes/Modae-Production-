@@ -1,3 +1,4 @@
+import { displayOpportunityId } from './seed.js'
 const daysSince = (value, now = Date.now()) => {
   const time = new Date(value || 0).getTime()
   return Number.isFinite(time) && time > 0 ? Math.floor((now - time) / 86400000) : 0
@@ -20,16 +21,16 @@ export function computeAlerts(state, today = new Date()) {
   for (const opp of state?.opportunities || []) {
     if (opp.status !== 'Open' || !ownsOpportunity(opp, role)) continue
     const when = opp.lastUpdated
-    if (opp.kycDue && new Date(opp.kycDue).getTime() < now) add('overdue-kyc', 'high', opp.id, `${opp.id} has overdue KYC`, 'Open Customer/KYC', opp.kycDue)
-    if (opp.amberFeeDue && new Date(opp.amberFeeDue).getTime() < now) add('amber-fee-expiry', 'high', opp.id, `${opp.id} Amber fee has expired`, 'Review Amber fee', opp.amberFeeDue)
-    if (opp.proposalExpiry && new Date(opp.proposalExpiry).getTime() < now) add('proposal-expiry', 'high', opp.id, `${opp.id} proposal has expired`, 'Revise proposal', opp.proposalExpiry)
+    if (opp.kycDue && new Date(opp.kycDue).getTime() < now) add('overdue-kyc', 'high', opp.id, `${displayOpportunityId(opp.id)} has overdue KYC`, 'Open Customer/KYC', opp.kycDue)
+    if (opp.amberFeeDue && new Date(opp.amberFeeDue).getTime() < now) add('amber-fee-expiry', 'high', opp.id, `${displayOpportunityId(opp.id)} Amber fee has expired`, 'Review Amber fee', opp.amberFeeDue)
+    if (opp.proposalExpiry && new Date(opp.proposalExpiry).getTime() < now) add('proposal-expiry', 'high', opp.id, `${displayOpportunityId(opp.id)} proposal has expired`, 'Revise proposal', opp.proposalExpiry)
     // One actionable follow-up alert per opportunity. Missing a next action is
     // the more useful explanation, so it takes precedence over inactivity.
     // Once a next action exists, inactivity becomes a stale follow-up alert.
     if (!opp.nextActionOwner && daysSince(opp.lastUpdated, now) >= 3) {
-      add('missing-follow-up', 'medium', opp.id, `${opp.id} has no follow-up recorded`, 'Add next action', when)
+      add('missing-follow-up', 'medium', opp.id, `${displayOpportunityId(opp.id)} has no follow-up recorded`, 'Add next action', when)
     } else if (daysSince(opp.lastUpdated, now) >= 7) {
-      add('stale-opportunity', 'medium', opp.id, `${opp.id} is stale`, 'Record a follow-up', when)
+      add('stale-opportunity', 'medium', opp.id, `${displayOpportunityId(opp.id)} is stale`, 'Record a follow-up', when)
     }
   }
   // Spec Scenario 6 — a customer goes quiet after the rate schedule, then comes
@@ -43,11 +44,11 @@ export function computeAlerts(state, today = new Date()) {
     const age = daysSince(est.rateSheetSentOn, now)
     if (age >= validityDays) {
       add('rate-sheet-expiry', 'high', opp.id,
-        `${opp.id} rate schedule has passed its ${validityDays}-day validity`,
+        `${displayOpportunityId(opp.id)} rate schedule has passed its ${validityDays}-day validity`,
         'Re-validate the rates and re-issue', est.rateSheetSentOn)
     } else if (age >= 7) {
       add('rate-sheet-idle', 'medium', opp.id,
-        `${opp.id} rate schedule sent ${age} days ago with no decision`,
+        `${displayOpportunityId(opp.id)} rate schedule sent ${age} days ago with no decision`,
         'Follow up with the customer', est.rateSheetSentOn)
     }
   }

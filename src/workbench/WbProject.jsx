@@ -71,7 +71,7 @@ export default function WbProject({ opp, openBuilder, readOnly = false }) {
     save({ ...p, terms: (p.terms || []).map((t, j) => (j === i ? { ...t, status } : t)) })
 
   const routeDeviation = t => {
-    if (!canEdit) return
+    if (!canEdit || store.canPerform?.('approvals.request') === false) return
     store.requestApproval({
       oppId: opp.id, type: 'Technical deviation', approver: 'LJS', needed: ['LJS'],
       detail: `${t.term}: customer asks "${t.customerAsk}", our response "${t.ourResponse}" — TECH reviews informally, LJS decides.`,
@@ -187,7 +187,7 @@ export default function WbProject({ opp, openBuilder, readOnly = false }) {
                     </td>
                     <td>
                       {t.status === 'Deviation' && (
-                        <button disabled={!canEdit} onClick={() => routeDeviation(t)}>Resolve & route (Technical + LJS)</button>
+                        <button disabled={!canEdit || store.canPerform?.('approvals.request') === false} onClick={() => routeDeviation(t)}>Resolve & route (Technical + LJS)</button>
                       )}
                     </td>
                   </tr>

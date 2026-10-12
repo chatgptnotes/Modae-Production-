@@ -50,10 +50,19 @@ test('empty phone dashboard explains missing opportunities and actions', () => {
   const emptyStore = { ...store, opportunities: [] }
   const emptyModel = dashboardModel(emptyStore, { period: 'fy', topPeriod: 'fy' })
   const html = render({ store: emptyStore, model: emptyModel })
-  assert.match(html, /No open opportunities expected in this period/)
+  assert.match(html, /No open opportunities in this view/)
   assert.match(html, /Nothing needs your attention/)
   assert.match(html, /No closed opportunities yet/)
   assert.doesNotMatch(html, /NaN|Infinity/)
+})
+
+test('phone summary and Top 5 explanation reflect saved opportunity data', () => {
+  const state = { ...store, opportunities: [opp('future', 0, { orderDate: '2027-05-31' }),
+    opp('closed', 100, { status: 'Closed', stage: 'Lost' })] }
+  const html = render({ store: state, model: dashboardModel(state, { scope: 'my', now: new Date('2026-10-12T06:00:00Z') }) })
+  assert.match(html, /2 total · 1 open · 1 closed/)
+  assert.match(html, /1 open opportunity.*outside this period or has no expected order date/)
+  assert.match(html, /<option value="all">All dates<\/option>/)
 })
 
 test('a blocked proposal keeps its danger status and routes to blocker resolution', () => {

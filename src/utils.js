@@ -70,21 +70,27 @@ export function stageClass(o) {
 }
 
 import { ROLES, PERMS, LEVEL3_ROLES, userRoles } from './seed.js'
+import { canAccessPage, canPerform as policyCanPerform, effectiveAccess } from './accessPolicy.js'
 
 // The provider refreshes this reference whenever persisted config changes. The
 // optional config argument keeps the resolver useful in pure/test contexts.
 let activeRoleNames = {}
 export const setRoleNameConfig = config => { activeRoleNames = config?.roleNames || {} }
+let permissionContext = null
+export const setPermissionContext = (profile, config) => { permissionContext = profile ? { profile, config } : null }
+const permissionSubject = role => permissionContext && role === permissionContext.profile.role ? permissionContext.profile : role
+const actionGrant = (role, action, config) => config || permissionContext
+  ? policyCanPerform(permissionSubject(role), action, config || permissionContext.config) : null
 
 // Commercial visibility (Value/COGS/GM and pricing) follows the active persona,
 // per the wireframe's "Restricted — commercial data" rule. Forecast reporting
 // has its own scope because it is intentionally available to all internal roles.
 const roleList = role => Array.isArray(role) ? role : [role]
 const hasRoleDefinition = (role, field) => roleList(role).some(id => !!ROLES[id]?.[field] || (field === 'admin' && !!LEVEL3_ROLES[id]?.[field]))
-export const canViewCommercial = role => roleList(role).some(id => !!ROLES[id]?.commercial || id === 'MANAGEMENT' || id === 'ADMIN')
-export const isAdminRole = role => hasRoleDefinition(role, 'admin') || roleList(role).includes('ADMIN')
+export const canViewCommercial = (role, config) => actionGrant(role, 'commercial.view', config) ?? roleList(role).some(id => !!ROLES[id]?.commercial || id === 'MANAGEMENT' || id === 'ADMIN')
+export const isAdminRole = role => permissionContext ? effectiveAccess(permissionSubject(role), permissionContext.config).isAdmin : hasRoleDefinition(role, 'admin') || roleList(role).includes('ADMIN')
 // Pricing maintenance is limited to these active roles, excluding SUPER.
-export const canManagePriceLists = role => roleList(role).some(id => id === 'LJS' || id === 'ADMIN')
+export const canManagePriceLists = (role, config) => actionGrant(role, 'priceLists.manage', config) ?? roleList(role).some(id => id === 'LJS' || id === 'ADMIN')
 export const isSalesOwner = role => roleList(role).some(id => !!ROLES[id]?.sales || id === 'STANDARD_USER' || id === 'TEAM_LEAD')
 export const dashboardDefaultScope = role => isSalesOwner(role) ? 'my' : 'global'
 export const canViewForecast = role => roleList(role).some(id => !!ROLES[id] || !!LEVEL3_ROLES[id]) && !roleList(role).includes('CUST')
@@ -96,7 +102,7 @@ export const forecastOwnerScope = role => isSalesOwner(role) ? role : null
 // their proposal, so he is the one who should see it… he can only request
 // approval.") Use this on proposal- and workbench-building surfaces; use
 // canViewCommercial for cross-pipeline money that is not theirs to price.
-export const canPriceProposal = role => canViewCommercial(role) || isSalesOwner(role)
+export const canPriceProposal = (role, config) => actionGrant(role, 'proposals.price', config) ?? (canViewCommercial(role) || isSalesOwner(role))
 
 // Product is multi-value on an opportunity (13 Aug review: "can select multiple
 // products because there are various products can happen in a single project").
@@ -114,7 +120,7 @@ export const solutionList = v => (Array.isArray(v)
   : String(v || '').split(',').map(s => s.trim()).filter(Boolean))
 export const solutionLabel = v => solutionList(v).join(', ')
 // LJS (strategic) and AH (commercial & ops) decide gates; admins can see the queue.
-export const isApprover = role => roleList(role).some(id => id === 'LJS' || id === 'AH' || id === 'TEAM_LEAD' || id === 'MANAGEMENT') || isAdminRole(role)
+export const isApprover = (role, config) => actionGrant(role, 'approvals.decide', config) ?? (roleList(role).some(id => id === 'LJS' || id === 'AH' || id === 'TEAM_LEAD' || id === 'MANAGEMENT') || isAdminRole(role))
 export const displayRole = (role, config) => {
   if (!role) return ''
   return config?.roleNames?.[role] || activeRoleNames[role] || ROLES[role]?.name || role
@@ -132,7 +138,9 @@ export const displayRoleLabel = (role, config) => {
 export const displayRoles = (roles, separator = ' + ', config) =>
   (roles || []).map(role => displayRole(role, config)).filter(Boolean).join(separator)
 // Page-level permission from the PERMS matrix (unknown role sees nothing).
-export const canSeePage = (role, page) => roleList(role).some(id => (PERMS[id] || LEVEL3_ROLES[id]?.pages || []).includes(page))
+export const canSeePage = (role, page, config) => config || permissionContext
+  ? canAccessPage(permissionSubject(role), page, config || permissionContext.config)
+  : roleList(role).some(id => (PERMS[id] || LEVEL3_ROLES[id]?.pages || []).includes(page))
 export const rolesForUser = user => userRoles(user)
 export const hasPermission = (role, permission) => canSeePage(role, permission)
 

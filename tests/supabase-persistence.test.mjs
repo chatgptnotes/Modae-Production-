@@ -60,8 +60,8 @@ test('opportunity sequences are reserved atomically and owner suffixes are canon
   assert.match(migration, /create or replace function public\.next_opportunity_sequence\(p_yymm text\)/)
   assert.match(migration, /on conflict \(id\) do update/)
   assert.match(migration, /grant execute on function public\.next_opportunity_sequence\(text\)/)
-  assert.match(store, /datastore\.reserveOpportunitySequence\(yymm\)/)
-  assert.match(store, /ownerIdFor\(owner, roleNames\)/)
+  assert.match(store, /datastore\.reserveOpportunityNumber\(\)/)
+  assert.doesNotMatch(store, /Central opportunity sequence unavailable/)
 })
 
 test('normalized business hydration uses canonical rows and consolidated state', () => {

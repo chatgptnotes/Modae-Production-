@@ -1,6 +1,8 @@
+import { useFieldLists } from './useFieldLists.js'
 import React, { useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { MILESTONES, WON_REASONS } from './seed.js'
+import { displayOpportunityId, MILESTONES } from './seed.js'
+
 import { Icon } from './icons.jsx'
 import { useStore } from './store.jsx'
 import { PhoneOverlayHeader, PhoneWorkspaceChromeContext } from './tablet/PhoneWorkspaceChrome.jsx'
@@ -226,6 +228,8 @@ export function PromptModal({ title = 'Enter a value', message, defaultValue = '
 // Closed opportunities can be corrected to Won from more than one surface.
 // Keep the control and its reason guard shared so those surfaces cannot drift.
 export function MarkWonControl({ opp, store, className = '' }) {
+  const { WON_REASONS, labelFor } = useFieldLists(opp)
+
   const [open, setOpen] = useState(false)
   const [reason, setReason] = useState('')
   const [reasonNote, setReasonNote] = useState('')
@@ -247,7 +251,7 @@ export function MarkWonControl({ opp, store, className = '' }) {
           type="checkbox"
           checked={alreadyWon}
           disabled={alreadyWon}
-          aria-label={alreadyWon ? `${opp.id} is marked Won` : `Mark ${opp.id} as Won`}
+          aria-label={alreadyWon ? `${displayOpportunityId(opp.id)} is marked Won` : `Mark ${displayOpportunityId(opp.id)} as Won`}
           onChange={event => {
             event.stopPropagation()
             if (event.target.checked) {
@@ -263,7 +267,7 @@ export function MarkWonControl({ opp, store, className = '' }) {
       {open && (
         <Modal title="Mark opportunity as Won" onClose={() => setOpen(false)} className="mark-won-modal">
           <form onSubmit={submit}>
-            <p className="modal-message">Record why {opp.id} was won. This will move it to Handover and add an audit entry.</p>
+            <p className="modal-message">Record why {displayOpportunityId(opp.id)} was won. This will move it to Handover and add an audit entry.</p>
             <label className="modal-prompt-field" htmlFor={`mark-won-reason-${opp.id}`}>
               Won reason
               <select
@@ -273,7 +277,7 @@ export function MarkWonControl({ opp, store, className = '' }) {
                 autoFocus
               >
                 <option value="">— select a won reason —</option>
-                {WON_REASONS.map(option => <option key={option}>{option}</option>)}
+                {WON_REASONS.map(option => <option key={option} value={option}>{labelFor('closedReason', option)}</option>)}
               </select>
             </label>
             {reason === 'Other' && (
@@ -318,7 +322,7 @@ const REMOVE_MSG = 'Remove all demo data?\n\n'
   + 'Your logins and Admin configuration stay, and you can restore the demo dataset later.'
 export function DemoDataControls({ className = '', size = 13, label = x => x }) {
   const store = useStore()
-  const demo = store.demoData !== false
+  const demo = store.demoData !== false && (store.liveSyncStatus === 'offline' || store.liveSyncStatus?.status === 'offline' || store.auth?.source === 'local-demo')
   const [pending, setPending] = useState(null)
   const ask = (msg, run, title) => () => setPending({ msg, run, title })
   return (

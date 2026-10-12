@@ -1,20 +1,26 @@
+import { useFieldLists } from '../useFieldLists.js'
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { OWNERS, displayOpportunityId } from '../seed.js'
+import { displayOpportunityId } from '../seed.js'
+
 import { canPriceProposal, canViewCommercial, isSalesOwner, fmtRupeesFromK, ddMmmYY, ddMMyyyy, stageClass, productDisplayLabel, displayRole, isHiddenDashboardOpportunity } from '../utils.js'
 import { nextActionWith } from '../gates.js'
 import { useDrawer } from '../drawer.jsx'
 import { Icon } from '../icons.jsx'
+import { fiscalQuarter } from '../excelLogic.js'
 import { COLS } from './Tracker.jsx'
 import { useWorkspaceView } from '../ui/WorkspaceViewContext.jsx'
 import { usePagedRows } from '../ui/Pagination.jsx'
+import { useViewportPageSize } from '../ui/useViewportPageSize.js'
 import usePhoneLayout from '../tablet/usePhoneLayout.js'
 
 // My Opportunities — a single table view of the pipeline (no Cards/Sheet
 // toggle). Each row opens the same slide-in drawer the tracker uses, so every
 // sheet field stays viewable and editable.
 export default function MyOpps() {
+  const { OWNERS, labelFor } = useFieldLists()
+
   const store = useStore()
   const { scope } = useWorkspaceView()
   const drawer = useDrawer()
@@ -40,7 +46,8 @@ export default function MyOpps() {
   if (scope === 'my') rows = rows.filter(o => o.owner === role)
   const search = query.trim().toLowerCase()
   if (phone && search) rows = rows.filter(o => [o.id, displayOpportunityId(o.id), o.sellTo, o.oppName, o.stage].some(value => String(value || '').toLowerCase().includes(search)))
-  const { pagedRows: pageRows, pagination } = usePagedRows(rows, JSON.stringify([scope, colView, phone && query]))
+  const { pageSize, listRef, pagerRef } = useViewportPageSize(rows.length, { enabled: !phone })
+  const { pagedRows: pageRows, pagination } = usePagedRows(rows, JSON.stringify([scope, colView, phone && query]), phone ? 10 : pageSize, pagerRef)
 
   const devCount = o => ((store.proposals?.[o.id] || {}).terms || []).filter(t => t.status === 'Deviation').length
 
@@ -48,9 +55,10 @@ export default function MyOpps() {
     if (['cogsK', 'gmK', 'gmPct'].includes(key) && !canSeeCommercial) return <Icon name="lock" size={12} />
     if (key === 'id') return <b>{displayOpportunityId(o.id)}</b>
     if (key === 'product') return productDisplayLabel(o.product) || '—'
-    if (key === 'valueK') return o.valueK ? fmtRupeesFromK(o.valueK) : '—'
-    if (key === 'cogsK') return o.cogsK ? fmtRupeesFromK(o.cogsK) : '—'
-    if (key === 'gmK') return o.valueK ? fmtRupeesFromK((o.valueK || 0) - (o.cogsK || 0)) : '—'
+    if (key === 'valueK') return o.valueK ?? '—'
+    if (key === 'cogsK') return o.cogsK ?? '—'
+    if (key === 'gmK') return (o.valueK || 0) - (o.cogsK || 0)
+    if (key === 'fqFy') return fiscalQuarter(o.orderDate) || '—'
     if (key === 'gmPct') return o.valueK ? `${Math.round((((o.valueK || 0) - (o.cogsK || 0)) / o.valueK) * 100)}%` : '—'
     if (key === 'createDate' || key === 'proposalDate' || key === 'orderDate' || key === 'invoiceDate') return o[key] ? ddMMyyyy(o[key]) : '—'
     if (key === 'lastUpdated') return ddMmmYY(o[key]) || '—'
@@ -91,17 +99,16 @@ export default function MyOpps() {
         {colView === 'all' ? (
           <table className="sheet">
             <thead>
-              <tr><th>Sl</th>{COLS.map(col => <th key={col.key}>{col.label}</th>)}<th>Proposal</th></tr>
+              <tr><th>Sl.</th>{COLS.map(col => <th key={col.key}>{col.label}</th>)}</tr>
             </thead>
-            <tbody>
+            <tbody ref={listRef}>
               {pageRows.map(o => (
                 <tr key={o.id} className="rowclick" onClick={() => drawer.open({ type: 'opp', id: o.id })}>
                   <td>{o.sl || '—'}</td>
                   {COLS.map(col => <td key={col.key} title={String(fullCell(o, col.key))}>{fullCell(o, col.key)}</td>)}
-                  <td>Open ▸</td>
                 </tr>
               ))}
-              {!rows.length && <tr><td colSpan={COLS.length + 2}>Nothing here — no opportunities for this owner yet.</td></tr>}
+              {!rows.length && <tr><td colSpan={COLS.length + 1}>Nothing here — no opportunities for this owner yet.</td></tr>}
             </tbody>
           </table>
         ) : (
@@ -117,7 +124,7 @@ export default function MyOpps() {
               <th>Expected Order Date</th><th>Next Action</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody ref={listRef}>
             {pageRows.map(o => {
               const dc = devCount(o)
               return (

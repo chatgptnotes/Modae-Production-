@@ -3,6 +3,17 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
 import { migrate, seedState, emptyState, stateFromSaved, syncedOf, mergeLeadSlice, mergeOpportunitySlice, mergeSparesLineSlice, mergeClarificationSlice, KEY } from '../src/appState.js'
+
+test('authoritative remote booking survives a local unrelated edit during hydration', () => {
+  const baseline = [{ id: 'A', owner: 'PP', oppName: 'Old title' }]
+  const local = [{ ...baseline[0], oppName: 'Local edited title' }]
+  const booking = { id: 'BOOK-A', valueK: 120, booked: '2026-10-10' }
+  const server = [{ ...baseline[0], booking, bookingRequiresPO: true }]
+  const result = mergeOpportunitySlice(local, server, baseline)
+  assert.equal(result.rows[0].oppName, 'Local edited title')
+  assert.deepEqual(result.rows[0].booking, booking)
+  assert.equal(result.rows[0].bookingRequiresPO, true)
+})
 import { seedAiLeads, seedJointApprovals } from '../src/seed.js'
 
 // The app ships full of seeded demo records, and until now there was no way out

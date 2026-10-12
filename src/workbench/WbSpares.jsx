@@ -115,13 +115,13 @@ const sourcingPartReference = line => {
   return vmReference?.[1] || description
 }
 
-function PricingApprovalCard({ readOnly = false, approval, approvers, role, canRequest, onRequest, onDecide, onRefresh, refreshingApproval, pricingRows }) {
+function PricingApprovalCard({ readOnly = false, allowDecide = true, approval, approvers, role, canRequest, onRequest, onDecide, onRefresh, refreshingApproval, pricingRows }) {
   const [decision, setDecision] = useState('Approved')
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
   const needed = approval?.needed?.length ? approval.needed : [approval?.approver].filter(Boolean)
   const myDecision = approval && (approval.decisions || {})[role]
-  const canDecide = !readOnly && approval?.status === 'Pending' && needed.includes(role) && !myDecision
+  const canDecide = allowDecide && !readOnly && approval?.status === 'Pending' && needed.includes(role) && !myDecision
   const status = approval?.status || 'Required'
   const statusClass = status === 'Approved' || status === 'Approved with conditions' ? 'okbox' : status === 'Rejected' ? 'errbox' : 'warnbox'
 
@@ -393,7 +393,7 @@ export default function WbSpares({ opp, openBuilder, onContinue, readOnly = fals
   const proposalOnlyMismatch = !lines.length && (proposal.bom || []).length > 0
   const clarifications = (store.clarifications || []).filter(c => c.oppId === opp.id && c.status === 'Answered')
 
-  const requestPricingApproval = () => { if (readOnly) return; return store.requestApproval({
+  const requestPricingApproval = () => { if (readOnly || store.canPerform?.('approvals.request') === false) return; return store.requestApproval({
     oppId: opp.id,
     type: 'Pricing threshold exception',
     rev: String(proposal?.revision ?? ''),
@@ -693,7 +693,7 @@ export default function WbSpares({ opp, openBuilder, onContinue, readOnly = fals
     {sourcingDataStatus === 'loading' && <p className="hint" role="status">Loading saved sourcing lines…</p>}
     {sourcingDataStatus === 'error' && <div className="errbox">Sourcing data could not be loaded{store.sourcingDataError ? `: ${store.sourcingDataError}` : '.'} <button type="button" onClick={() => store.refreshSourcingData?.() || store.refreshSharedData()}>Retry</button></div>}
     {sourcingDataStatus === 'ready' && <>
-    {!!pricingExceptions.rows.length && <PricingApprovalCard readOnly={readOnly} approval={pricingApproval} approvers={pricingApprovers} role={store.role} pricingRows={pricingExceptions.rows} canRequest={!readOnly && (comm || pricingApprovers.includes(store.role)) && (!pricingApproval || pricingApproval.status === 'Rejected')} onRequest={requestPricingApproval} onDecide={decision => !readOnly && pricingApproval && store.recordDecision(pricingApproval.id, decision)} onRefresh={async () => { setRefreshingApproval(true); try { await store.refreshSharedData() } finally { setRefreshingApproval(false) } }} refreshingApproval={refreshingApproval} />}
+    {!!pricingExceptions.rows.length && <PricingApprovalCard readOnly={readOnly} allowDecide={store.canPerform?.('approvals.decide') !== false} approval={pricingApproval} approvers={pricingApprovers} role={store.role} pricingRows={pricingExceptions.rows} canRequest={store.canPerform?.('approvals.request') !== false && !readOnly && (comm || pricingApprovers.includes(store.role)) && (!pricingApproval || pricingApproval.status === 'Rejected')} onRequest={requestPricingApproval} onDecide={decision => !readOnly && pricingApproval && store.recordDecision(pricingApproval.id, decision)} onRefresh={async () => { setRefreshingApproval(true); try { await store.refreshSharedData() } finally { setRefreshingApproval(false) } }} refreshingApproval={refreshingApproval} />}
     {proposalOnlyMismatch && <div className="warnbox sourcing-flow-warning"><b>Proposal data is not linked to Sourcing.</b> Existing proposal rows are not imported automatically. Add or import the real parts here before continuing to Proposal.</div>}
     <div className="sourcing-table-card">
       <div className="sourcing-table-heading"><div><b>BOQ lines — review quantity, price source, and totals</b><span className="hint"> Each line shows whether the price came from an approved price list, supplier quotation, or manual pricing.</span></div><div className="sourcing-table-heading-actions"><span className="sourcing-currency-indicator" title={`All displayed amounts are in ${displayCurrency}`}>Currency: {displayCurrency} ({currencySymbol(displayCurrency)})</span>{comm && <label className="sourcing-currency-view">View amounts in <select value={displayCurrency} onChange={e => setDisplayCurrency(e.target.value)}>{displayCurrencies.map(currency => <option key={currency}>{currency}</option>)}</select></label>}{comm && <button type="button" className="sourcing-add-part-link" disabled={readOnly} aria-expanded={showAddPart} onClick={openManualLine}>Add manual line</button>}{!comm && <span className="restricted"><Icon name="lock" size={12} /> Pricing restricted</span>}</div></div>
