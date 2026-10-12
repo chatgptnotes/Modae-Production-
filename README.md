@@ -66,6 +66,8 @@ submission, and follow-up.
   record cards, local search and expandable data tables. Opportunity cards
   offer an “Edit in table” alternative for spreadsheet work. More includes
   documents, proposals and administration according to the user's permissions.
+- Use the top navigation to select Phone mode; switching layouts preserves login
+  and saves only the device preference.
 - Phone mode opens the phone interface in a centered 440px workspace on larger
   screens, and fills smaller phone screens. The device remembers an explicit
   selection across resize and reload; More → Full site returns to the wider

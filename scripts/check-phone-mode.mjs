@@ -26,7 +26,7 @@ function tenderPdf() {
 async function navigate(route) {
   await browser.send('Page.navigate', { url: origin + route })
   await browser.wait('document.querySelector(".shell")')
-  await browser.wait('document.querySelector(".phone-workspace-header, .sidebar-mode-switch, .tablet-bar")')
+  await browser.wait('document.querySelector(".phone-workspace-header, .workspace-topbar, .tablet-bar")')
 }
 async function geometry(route, width) {
   const result = await browser.evaluate(`(() => {
@@ -58,9 +58,9 @@ try {
   // previously open test app cannot overwrite it while navigation unloads.
   const bootstrap = await browser.send('Page.addScriptToEvaluateOnNewDocument', { source: `sessionStorage.clear();localStorage.setItem(${JSON.stringify(fixture.key)},${JSON.stringify(fixture.state)});localStorage.setItem('wintrack-modae-deployment-id',${JSON.stringify(fixture.deployment)});localStorage.setItem('modae_theme','light')` })
   await navigate('/my-dashboard')
-  await browser.wait('document.querySelector(".sidebar-mode-switch")')
+  await browser.wait('document.querySelector(".workspace-topbar")')
   await browser.send('Page.removeScriptToEvaluateOnNewDocument', { identifier: bootstrap.identifier })
-  await browser.evaluate('document.querySelector(".sidebar-mode-switch").click()')
+  await browser.evaluate('[...document.querySelectorAll(".workspace-topbar button")].find(el=>el.textContent.trim()==="Phone mode").click()')
   await browser.wait('document.querySelector(".phone-workspace-header")')
   await geometry('/my-dashboard', 1440)
   assert.equal(await browser.evaluate('location.pathname'), '/my-dashboard', 'Mode switch retains route')
@@ -128,10 +128,10 @@ try {
   await browser.evaluate('document.querySelector(".phone-table-close").click()')
   await navigate('/more')
   await browser.evaluate('[...document.querySelectorAll(".mobile-settings button")].find(el=>el.textContent.includes("Full site")).click()')
-  await browser.wait('document.querySelector(".sidebar-mode-switch")')
+  await browser.wait('document.querySelector(".workspace-topbar")')
   assert.equal(await browser.evaluate('!!document.documentElement.dataset.phoneMode'), false, 'Full site clears phone CSS')
 
-  await browser.evaluate('document.querySelector(".sidebar-mode-switch").click()')
+  await browser.evaluate('[...document.querySelectorAll(".workspace-topbar button")].find(el=>el.textContent.trim()==="Phone mode").click()')
   await browser.wait('document.querySelector(".phone-workspace-header")')
   await navigate('/tender')
   await browser.evaluate('document.querySelector(".upload-section-toggle").click()')
@@ -168,7 +168,7 @@ try {
   await browser.wait('document.querySelector(".phone-workspace-header")')
   await geometry('automatic phone', 390)
   await browser.send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false })
-  await browser.wait('document.querySelector(".sidebar-mode-switch")')
+  await browser.wait('document.querySelector(".workspace-topbar")')
   assert.deepEqual(browser.errors, [], 'No browser runtime exceptions')
   console.log('Phone mode: 160 destination/theme/width checks, mode persistence, drawers, table option, portals, tender PDF editing and automatic layouts passed.')
 } finally { await browser.close() }

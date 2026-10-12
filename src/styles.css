@@ -714,7 +714,6 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }
 .side-foot button.reset:hover { color: var(--palette-4843938); border-color: var(--palette-d2deb813); }
 .main-col { flex: 1; min-width: 0; width: calc(100% - var(--shell-nav-w, 216px)); margin-left: var(--shell-nav-w, 216px); display: flex; flex-direction: column; transition: margin-left .2s ease, width .2s ease; }
 .main-col { position: relative; }
-.sidebar-mode-switch { display: flex; align-items: center; justify-content: flex-start; gap: 7px; width: 100%; text-align: left; }
 .topbar {
   display: flex; align-items: center; gap: 10px; background: var(--surface-default);
   position: sticky; top: 0; z-index: 40; border-bottom: 1px solid var(--grid-line); padding: 8px 14px; min-height: 40px;

@@ -17,7 +17,7 @@ import {
 } from './seed.js'
 import { leadConfig, opportunityOwnerFor, routeOwner, expiredLeadDeadline, aiAuditDetail } from './leadRules.js'
 import { withoutSimulated, simulatedCount } from './simulatedLeads.js'
-import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, defaultViewMode, followViewportMode, VIEW_MODE_PREFERENCE_REV } from './appState.js'
+import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, followViewportMode, selectViewMode } from './appState.js'
 import { unitCostINR, unitSellINR, setRoleNameConfig, setPermissionContext, nowIST, toISTISOString, canManagePriceLists, isAdminRole } from './utils.js'
 import { PRICE_SOURCES, isConfirmableSparesLine, normalizePriceFields, sparesLineFinancials } from './pricing.js'
 import { validServiceRatePatch, validPriceListParts } from './priceListEditing.js'
@@ -1691,9 +1691,7 @@ export function StoreProvider({ children }) {
     // ---- View mode (tablet / full site) -----------------------------------
     // An explicit switch is remembered (`viewModePinned`) and never overridden.
     setViewMode(mode) {
-      setState(s => (mode === 'tablet' || mode === 'full'
-        ? { ...withAudit(s, 'View switched', mode, `from ${s.viewMode}`), viewMode: mode, viewModePinned: true, viewModePinnedAt: defaultViewMode(), viewModePreferenceRev: VIEW_MODE_PREFERENCE_REV }
-        : s))
+      setState(s => selectViewMode(s, mode))
     },
 
     // Rotating a tablet, or dragging a desktop window narrow, used to leave the

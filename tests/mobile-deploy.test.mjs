@@ -51,8 +51,8 @@ test('view mode follows the viewport until the user pins it', () => {
   const store = read('src/store.jsx')
   assert.match(store, /syncViewMode\(\) \{/)
   assert.match(store, /followViewportMode\(s\)/)
-  assert.match(store, /viewMode: mode, viewModePinned: true, viewModePinnedAt: defaultViewMode\(\)/,
-    'an explicit switch must pin the choice')
+  assert.match(store, /setState\(s => selectViewMode\(s, mode\)\)/,
+    'an explicit switch must use the local-only preference transition')
   const app = read('src/App.jsx')
   assert.match(app, /window\.addEventListener\('resize', onResize\)/)
   assert.match(app, /window\.addEventListener\('orientationchange', onResize\)/)

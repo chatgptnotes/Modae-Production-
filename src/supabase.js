@@ -64,8 +64,10 @@ export const SUPABASE_AUTH_TIMEOUT_MS = 15000
 export const isSupabaseAuthError = error => {
   const status = Number(error?.status || error?.statusCode)
   const code = String(error?.code || '').toUpperCase()
-  return [401, 403].includes(status)
-    || ['401', '403', 'INVALID_JWT', 'JWT_EXPIRED', 'INVALID_TOKEN', 'PGRST301'].includes(code)
+  // Forbidden operations do not imply an expired login. Only authentication
+  // failures or explicit workspace revocation may clear the session.
+  return status === 401
+    || ['401', 'INVALID_JWT', 'JWT_EXPIRED', 'INVALID_TOKEN', 'PGRST301', 'BAD_JWT', 'SESSION_NOT_FOUND', 'REFRESH_TOKEN_NOT_FOUND', 'REFRESH_TOKEN_ALREADY_USED', 'WORKSPACE_ACCESS_REVOKED'].includes(code)
 }
 
 export const describeSupabaseError = (error, operation = '') => ({

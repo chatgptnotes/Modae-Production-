@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createWorkspaceDataHandler } from '../api/workspace-data.js'
+import { isSupabaseAuthError } from '../src/supabase.js'
 import { createAdminPolicyHandler } from '../api/admin-policy.js'
 import { defaultAccessPolicy } from '../src/accessPolicy.js'
 import { DEFAULT_OPPORTUNITY_NUMBERING } from '../src/opportunityNumbering.js'
@@ -136,5 +137,25 @@ test('reserved wrapper IDs cannot conceal an arbitrary logical opportunity ID', 
   f.database.settings.push({ id: 'opportunity_reserved_O2', data: { id: 'O2', actor: 'u' }, rev: 1 })
   await f.handler(f.request({ operation: 'rpc', name: 'save_rows', args: { p_entity: 'opportunities', p_rows: [{ id: 'O2', rev: 0, data: { id: 'arbitrary-id', owner: 'RS' } }] } }), res)
   assert.equal(res.statusCode, 400)
+  assert.equal(f.calls.length, 0)
+})
+
+
+test('workspace revocation is distinct from an operation permission denial', async () => {
+  const f = fixture(), res = response()
+  f.profile.status = 'Suspended'
+  await f.handler(f.request({ operation: 'select', table: 'opportunities', filters: [] }), res)
+  assert.equal(res.statusCode, 403)
+  assert.equal(res.body.code, 'WORKSPACE_ACCESS_REVOKED')
+  assert.equal(isSupabaseAuthError({ status: res.statusCode, code: res.body.code }), true)
+  assert.equal(f.calls.length, 0)
+})
+
+test('a forbidden audit rewrite is denied without invalidating the session', async () => {
+  const f = fixture('ADMIN'), res = response()
+  f.database.audit = [{ id: 'A1', rev: 1, data: { id: 'A1', action: 'Original' } }]
+  await f.handler(f.request({ operation: 'rpc', name: 'save_rows', args: { p_entity: 'audit', p_rows: [{ id: 'A1', rev: 1, data: { id: 'A1', action: 'Changed' } }] } }), res)
+  assert.equal(res.statusCode, 403)
+  assert.equal(isSupabaseAuthError({ status: res.statusCode, code: res.body.code }), false)
   assert.equal(f.calls.length, 0)
 })

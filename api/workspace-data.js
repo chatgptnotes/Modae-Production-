@@ -8,7 +8,7 @@ import { createWorkspaceReader } from '../src/server/workspace.js'
 const TABLES = ['records', 'leads', 'opportunities', 'approvals', 'settings', 'proposals', 'spares_lines', 'clarifications', 'audit', 'price_lists', 'price_list_versions']
 const keys = { spares_lines: 'sparesLines', price_lists: 'priceLists' }
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
-const fail = (message, status = 403) => { throw Object.assign(new Error(message), { status }) }
+const fail = (message, status = 403, code) => { throw Object.assign(new Error(message), { status, ...(code ? { code } : {}) }) }
 const rows = result => { if (result.error) throw result.error; return result.data || [] }
 
 function validateSelect(input) {
@@ -63,7 +63,7 @@ export function createWorkspaceDataHandler({ getClient = getAdminSupabaseClient,
       const auth = await client.auth.getUser(token)
       if (auth.error || !auth.data?.user) fail('Your session has expired.', 401)
       const profile = await activeProfile(client, auth.data.user)
-      if (!profile) fail('This account no longer has workspace access.')
+      if (!profile) fail('This account no longer has workspace access.', 403, 'WORKSPACE_ACCESS_REVOKED')
       const reader = getReader()
       if (!reader) fail('Workspace data is not configured.', 503)
       const state = await reader()

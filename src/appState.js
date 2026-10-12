@@ -180,6 +180,13 @@ const removeSparesPlaceholders = s => {
 // identifier is valid syntax until it runs).
 export const defaultViewMode = () => (typeof window !== 'undefined' && window.innerWidth <= 1024 ? 'tablet' : 'full')
 
+// Layout is a device preference. It must never create a shared audit write
+// or change the current authenticated identity.
+export function selectViewMode(state, mode, viewport = defaultViewMode()) {
+  if (mode !== 'tablet' && mode !== 'full') return state
+  return { ...state, viewMode: mode, viewModePinned: true, viewModePinnedAt: viewport, viewModePreferenceRev: VIEW_MODE_PREFERENCE_REV }
+}
+
 export function followViewportMode(state, mode = defaultViewMode()) {
   if (state.viewModePinned || state.viewMode === mode) return state
   return { ...state, viewMode: mode }

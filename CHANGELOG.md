@@ -1,3 +1,11 @@
+## 2026-10-12 — Keep sessions when changing layout
+
+- Remove the duplicate Phone mode shortcut from the desktop sidebar; retain topbar access.
+- Store layout selection locally without adding a shared audit write.
+- Keep signed-in sessions on forbidden operations and transient errors; distinguish
+  revoked workspace access from ordinary permission denials. Expired sessions and
+  deployment changes retain their existing sign-out behavior.
+
 ## 2026-10-12 — Phone spreadsheet usability
 
 - Pin only opportunity IDs on phones so other columns remain readable while scrolling.

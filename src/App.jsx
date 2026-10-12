@@ -394,9 +394,6 @@ function AppShell() {
         </nav>
         <div className="side-foot">
           {signedInName && <div className="side-user-chip"><span className="side-user-avatar">{userInitials}</span><span className="side-label"><b>{signedInName}</b><small>{displayRole(role)}</small></span></div>}
-          <button className="reset sidebar-mode-switch" onClick={() => { store.setViewMode('tablet') }}>
-            <Icon name="tablet" size={14} /> <span className="side-label">Phone mode</span>
-          </button>
           {store.auth?.user && (
             <button className="reset" onClick={store.logout} title={store.auth.user.email}>
               <Icon name="logout" size={14} /> <span className="side-label">Sign out ({signedInName})</span>
