@@ -19259,9 +19259,3 @@ html[data-workspace-theme="dark"], html[data-workspace-theme="dark"] body {
   background: var(--surface-default);
   border-top: 1px solid var(--border-default);
 }
-.tracker-oppid-actions .tracker-preview {
-  padding: 1px 5px;
-  min-height: 22px;
-  margin-left: 4px;
-  font-size: 12px;
-}

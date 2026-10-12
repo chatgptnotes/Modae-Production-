@@ -134,7 +134,7 @@
   text-overflow: clip;
   overflow: visible;
 }
-.shell .opportunities-page .tracker-page .tracker-grid-shell > .sheet-wrap.fill table.sheet .opportunity-cell-pencil {
+.shell .opportunities-page .tracker-page .tracker-grid-shell > .sheet-wrap.fill table.sheet .opportunity-row-pencil {
   flex: 0 0 22px;
   display: inline-flex;
   align-items: center;
@@ -151,8 +151,8 @@
   color: var(--text-secondary);
   cursor: pointer;
 }
-.shell .opportunities-page .opportunity-cell-pencil:hover { background: var(--surface-sunken); color: var(--text-primary); }
-.shell .opportunities-page .opportunity-cell-pencil:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.shell .opportunities-page .opportunity-row-pencil:hover { background: var(--surface-sunken); color: var(--text-primary); }
+.shell .opportunities-page .opportunity-row-pencil:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 .shell .opportunities-page .tracker-page .tracker-grid-shell > .sheet-wrap.fill table.sheet .opportunity-cell.is-editing {
   flex-wrap: wrap;
 }
@@ -180,3 +180,93 @@
 .opportunity-cell-products { width: 280px; max-height: min(260px, calc(100dvh - 16px)); overflow-y: auto; }
 .opportunity-cell-products .fitem { white-space: normal; overflow-wrap: anywhere; }
 .shell .opportunities-page .tracker-oppid-actions > a { overflow: visible; text-overflow: clip; overflow-wrap: anywhere; white-space: normal; }
+
+.shell .opportunities-page .tracker-page .tracker-grid-shell > .sheet-wrap.fill table.sheet.cols-key {
+  width: max(100%, 1200px);
+  min-width: 1200px;
+}
+.shell .opportunities-page .tracker-oppid-actions { flex-wrap: wrap; justify-content: flex-start; }
+.shell .opportunities-page .tracker-oppid-actions > a { flex: 1 0 6ch; }
+.shell .opportunities-page .tracker-page .tracker-grid-shell > .sheet-wrap.fill table.sheet tr[data-editing] > td { background-color: var(--surface-sunken); }
+
+/* Stage and its optional workflow action occupy separate, predictable lines. */
+.shell .opportunities-page .tracker-page .tracker-grid-shell > .sheet-wrap.fill table.sheet .tracker-stage-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex-wrap: nowrap;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+.shell .opportunities-page .tracker-page .tracker-grid-shell > .sheet-wrap.fill table.sheet .tracker-stage-cell :is(.ro, .tracker-terminal-stage, .tracker-outcome-label) {
+  white-space: normal;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+  line-height: 1.45;
+  min-width: 0;
+  max-width: 100%;
+}
+.shell .opportunities-page .tracker-page .tracker-grid-shell > .sheet-wrap.fill table.sheet .tracker-stage-cell .tracker-outcome-label {
+  font-size: inherit;
+  white-space: nowrap;
+}
+.shell .opportunities-page .tracker-page .tracker-grid-shell > .sheet-wrap.fill table.sheet .tracker-stage-cell .mark-won-control {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex: none;
+  gap: 5px;
+  width: auto;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  white-space: nowrap;
+  text-transform: none;
+  letter-spacing: normal;
+  line-height: 1.45;
+}
+.shell .opportunities-page .tracker-page .tracker-grid-shell > .sheet-wrap.fill table.sheet .tracker-stage-cell .mark-won-control input {
+  flex: 0 0 14px;
+  width: 14px;
+  min-width: 14px;
+  max-width: 14px;
+  height: 14px;
+  min-height: 14px;
+  margin: 0;
+  padding: 0;
+}
+
+/* Leave room to read scrolled fields on phones; keep the row identity in reach. */
+@media (max-width: 600px) {
+  .shell .opportunities-page .tracker-page .tracker-grid-shell > .sheet-wrap.fill table.sheet :is(thead, tbody) tr > :is(:nth-child(1), :nth-child(3)) {
+    position: static;
+    left: auto;
+    z-index: auto;
+    box-shadow: none;
+  }
+  .shell .opportunities-page .tracker-page .tracker-grid-shell > .sheet-wrap.fill table.sheet :is(thead, tbody) tr > :nth-child(2) {
+    left: 0;
+    box-shadow: 1px 0 0 var(--grid-line);
+  }
+  .shell .opportunities-page .tracker-page .tracker-grid-shell > .sheet-wrap.fill table.sheet .tracker-oppid-actions > a {
+    flex-basis: 100%;
+    white-space: nowrap;
+  }
+  .shell .opportunities-page .tracker-page .tracker-grid-shell > .sheet-wrap.fill table.sheet .opportunity-row-pencil {
+    flex-basis: 44px;
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+  .shell .opportunities-page .tracker-page .tracker-grid-shell > .sheet-wrap.fill table.sheet .opportunity-cell :is(input:not([type="checkbox"]), textarea, select, button) {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .shell .opportunities-page .tracker-page .tracker-grid-shell > .sheet-wrap.fill table.sheet .mark-won-control {
+    min-height: 44px;
+    align-items: center;
+  }
+}

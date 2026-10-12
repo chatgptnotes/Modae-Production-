@@ -1,4 +1,4 @@
-import EditableOpportunityCell, { OpportunityCellEditingProvider } from '../ui/EditableOpportunityCell.jsx'
+import EditableOpportunityCell, { OpportunityCellEditingProvider, EditableOpportunityRow, OpportunityRowEditButton, OpportunityRowEditOnly } from '../ui/EditableOpportunityCell.jsx'
 import { validateOpportunityEdit } from '../opportunityEdits.js'
 import { displayOpportunityId } from '../seed.js'
 import { useFieldLists } from '../useFieldLists.js'
@@ -9,7 +9,6 @@ import { useStore } from '../store.jsx'
 import { fmt, ddMmmYY, ddMMyyyy, stageClass, productList, productLabel, productDisplayLabel, sameCustomer, displayRole, OPPORTUNITY_DATE_FIELDS, opportunityDateRange } from '../utils.js'
 import { downloadTableXlsx } from '../proposal/tableExcelExport.js'
 import { useFormulaBar } from '../formulabar.jsx'
-import { useDrawer } from '../drawer.jsx'
 import { suggestProbability } from '../insights.js'
 import { MarkWonControl, Modal, Portal } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
@@ -216,7 +215,6 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
   const filterTrigger = useRef(null)
   const { scope } = useWorkspaceView()
   const fb = useFormulaBar()
-  const drawer = useDrawer()
   const [savedSheet, setSheet] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:opportunities:sheet`, 'Opportunities')
   const sheet = savedSheet === 'My Orders' ? 'My Orders' : 'Opportunities'
   const [page, setPage] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:opportunities:page`, 1)
@@ -735,12 +733,12 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
           </thead>
           <tbody ref={pageListRef}>
             {pageRows.map((o, index) => (
-              <tr key={o.id}>
+              <EditableOpportunityRow key={o.id}>
                 <td className="rowhead">{o.sl ?? firstRow + index}</td>
                 <td onClick={selectCell(o, COLS[0])} className={`oppid ${customerStatusFor(o)} ${stageClass(o) === 'open' ? '' : stageClass(o)} ${isSel(o, COLS[0]) ? 'cell-sel' : ''}`}>
                   <span className="tracker-oppid-actions" title={`Customer class: ${customerStatusFor(o)}`}>
                     <Link to={`/opp/${o.id}`} title="Open opportunity workspace">{displayOpportunityId(o.id)}</Link>
-                    <button type="button" className="tracker-preview" aria-label={`Preview ${displayOpportunityId(o.id)}`} title="Preview and edit details" onClick={() => drawer.open({ type: 'opp', id: o.id })}>↗</button>
+                    <OpportunityRowEditButton disabled={!canEditRow(o)} label={displayOpportunityId(o.id)} />
                   </span>
                 </td>
                 <td onClick={selectCell(o, COLS[1])} className={`tracker-free-text ${isSel(o, COLS[1]) ? 'cell-sel' : ''}`} title={o.sellTo}><span className="tracker-cell-label">{COLS[1].label}</span>{canEditRow(o) ? <EditableOpportunityCell as={WrapInput} disabled={!canEditRow(o)} value={o.sellTo} onChange={upd(o.id, 'sellTo')} title={o.sellTo} label={COLS[1].label} /> : <div className="ro" title="Read only for your role or ownership scope">{o.sellTo || '—'}</div>}</td>
@@ -842,7 +840,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
                     ) : (
                       <div className="ro" title="Workflow stages are changed from the opportunity workspace">{o.stage || '—'}</div>
                     )}
-                    {o.status === 'Closed' && !['Won', 'Lost'].includes(o.stage) && <MarkWonControl opp={o} store={store} />}
+                    {canEditRow(o) && <OpportunityRowEditOnly>{o.status === 'Closed' && !['Won', 'Lost'].includes(o.stage) && <MarkWonControl opp={o} store={store} />}</OpportunityRowEditOnly>}
                   </div>
                 </td>
                 <td onClick={selectCell(o, COLS[25])}
@@ -868,7 +866,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
                 </td>
                 <td onClick={selectCell(o, COLS[30])} className={isSel(o, COLS[30]) ? 'cell-sel' : ''} title={o.remarks}><EditableOpportunityCell type="text" value={o.remarks} label={COLS.find(c => c.key === 'remarks')?.label} onChange={upd(o.id, 'remarks')} disabled={!canEditRow(o)} /></td>
 
-              </tr>
+              </EditableOpportunityRow>
             ))}
             {!rows.length && (
               <tr>

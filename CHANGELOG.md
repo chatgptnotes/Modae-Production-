@@ -1,8 +1,20 @@
+## 2026-10-12 — Phone spreadsheet usability
+
+- Pin only opportunity IDs on phones so other columns remain readable while scrolling.
+- Keep small pencil icons with 44px touch areas and readable 16px table editors.
+- Apply the same layout to the selected Phone mode workspace on wider screens.
+
+## 2026-10-12 — Stage column readability
+
+- Show eligible Won actions only while an authorized editor has unlocked the row.
+- Stack the action beneath the stage with a compact checkbox; wrap stage names
+  at word boundaries and retain Won/Lost outcome colors and confirmation flow.
+
 ## 2026-10-12 — Readable cells with pencil editing
 
 - Show wrapped spreadsheet values and full dropdown labels before editing;
-  reveal each permitted editor through a small accessible pencil.
-- Coordinate one active cell, preserving validation, conflict checks and existing
+  reveal permitted editors with one small pencil per opportunity row.
+- Coordinate one active row with a Done checkmark, preserving validation, conflict checks and existing
   save actions; keep formula-bar inspection read-only and preview access explicit.
 - Allow content-sized rows in both column views, with wider minimum tracks and
   horizontal scrolling instead of clipped names, descriptions and remarks.
