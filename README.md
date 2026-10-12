@@ -14,8 +14,8 @@ submission, and follow-up.
   admin import, and the phone editable-table action.
 
 - Authorized opportunity editors can edit business fields throughout the pipeline,
-  including closed history. Spreadsheet cells show wrapped text by default; use each cell’s small pencil
-  to edit. Text and date cells save on blur/Enter; Escape cancels.
+  including closed history. Spreadsheet cells show wrapped text by default; use the single pencil beside the opportunity ID
+  to edit its row, then the checkmark to finish. Text and date cells save on blur/Enter; Escape cancels.
   The Details preview uses Save/Cancel and warns before discarding a draft.
   Workflow transitions, customer-master status, calculated fields and bookings
   retain their existing controls.
@@ -32,7 +32,8 @@ submission, and follow-up.
 - Phone mode uses spacious record rows, full customer names and enquiry subjects,
   wrapping filters, stacked form fields and full-width dashboard actions. Long
   IDs and filenames wrap without pushing pages sideways; spreadsheet editors
-  retain their own scrolling regions. This also applies to the selected 440px
+  retain their own scrolling regions, with only the opportunity ID pinned and
+  larger row-edit touch targets. This also applies to the selected 440px
   Phone mode workspace on larger displays, in both themes.
 - Phone pagination uses Previous and Next buttons with a direct page picker
   between them and the visible record range above.
